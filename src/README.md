@@ -50,6 +50,7 @@ cmake --build . --config Release
 
 Format targets are generated beneath `src/platform` and link against the common `NAMGuitarFX` static library. Additional SDK configuration (such as environment variables for the AAX SDK) may be required before building those wrappers successfully.
 
+e.g. `cmake --build build --config Release --target NAMGuitarFX_App`
 ## Preset Workflow
 
 Presets are stored as JSON (`presets/local_presets.json`) and embed:

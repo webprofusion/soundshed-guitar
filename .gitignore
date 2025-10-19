@@ -21,3 +21,11 @@ src/.vs/
 src/out/
 
 src/x64/
+
+src/build/src/platform/app/
+
+src/build/src/NAMGuitarFXCore.dir/
+
+src/build/src/Release/
+
+src/_deps/

@@ -125,7 +125,7 @@ void WebUIBridge::LoadWebContent(const std::filesystem::path& htmlPath)
     }
     return;
   }
-  const std::string pathString = htmlPath.string();
+  const std::string pathString = htmlPath.generic_string();
   mWebView->LoadFile(pathString.c_str());
 }
 

@@ -329,6 +329,11 @@ void NAMGuitarPlugin::InitializeGraphics(iplug::igraphics::IGraphics& graphics)
 
   WDL_String bundlePath;
   iplug::BundleResourcePath(bundlePath, ::gHINSTANCE);
+  if (bundlePath.GetLength() == 0)
+  {
+    iplug::HostPath(bundlePath, nullptr);
+    bundlePath.Append("resources\\");
+  }
   const std::filesystem::path resourceRoot = std::filesystem::path{bundlePath.Get()};
   mWebUI->Initialize(graphics, resourceRoot);
   mPendingStateBroadcast = true;
