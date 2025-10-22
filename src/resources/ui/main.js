@@ -111,13 +111,11 @@ function showNotification(message, detail = "") {
 
 function requestSignalPathTest() {
   clearNotification();
-  window.NAMBridge.postMessage(
-    JSON.stringify({
-      type: "runSignalPathTest",
-      frequency: 440,
-      duration: 1.0,
-    }),
-  );
+  window.NAMBridge.postMessage({
+    type: "runSignalPathTest",
+    frequency: 440,
+    duration: 1.0,
+  });
 }
 
 function renderPresetList(presets) {
@@ -493,12 +491,10 @@ async function applyPresetFromLibrary(presetId) {
     uiState.activePresetId = presetPayload.id;
     renderPresetList(uiState.filteredPresets);
     renderPresetDetails(clonePreset(presetPayload));
-    window.NAMBridge.postMessage(
-      JSON.stringify({
-        type: "loadPreset",
-        preset: presetPayload,
-      }),
-    );
+    window.NAMBridge.postMessage({
+      type: "loadPreset",
+      preset: presetPayload,
+    });
   } catch (error) {
     console.error("Failed to apply preset", error);
     showNotification("Failed to apply preset", error instanceof Error ? error.message : "Unknown error");
@@ -546,7 +542,7 @@ async function initialize() {
     });
     renderPresetList(uiState.filteredPresets);
   }
-  window.NAMBridge.postMessage(JSON.stringify({ type: "requestState" }));
+  window.NAMBridge.postMessage({ type: "requestState" });
 }
 
 presetSearchElement?.addEventListener("input", (event) => {

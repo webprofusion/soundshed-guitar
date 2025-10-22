@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -50,7 +51,7 @@ public:
     bool passed = false;
   };
 
-  [[nodiscard]] SignalPathTestResult RunSignalPathTest(double frequencyHz = 440.0, double durationSeconds = 1.0);
+  [[nodiscard]] bool StartSignalPathTest(double frequencyHz = 440.0, double durationSeconds = 1.0);
 
   enum ParameterId
   {
@@ -80,6 +81,18 @@ private:
   [[nodiscard]] static std::vector<std::uint8_t> DecodeBase64(const std::string& encoded);
   bool WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const;
 
+  struct SignalTestRuntimeState
+  {
+    double frequencyHz = 0.0;
+    double phase = 0.0;
+    double phaseIncrement = 0.0;
+    int samplesRemaining = 0;
+    int totalSamples = 0;
+    double sampleRate = 0.0;
+    double inputSumSquares = 0.0;
+    std::array<double, 2> outputSumSquares {0.0, 0.0};
+  };
+
   std::unique_ptr<NAMDSPManager> mDSP;
   std::unique_ptr<WebUIBridge> mWebUI;
   FileSystem mFileSystem;
@@ -90,6 +103,14 @@ private:
   std::string mActiveModelPath;
   std::string mActiveIRPath;
   bool mPendingStateBroadcast = true;
+  std::vector<iplug::sample> mSignalTestInputLeft;
+  std::vector<iplug::sample> mSignalTestInputRight;
+  std::vector<iplug::sample> mSignalTestOutputLeft;
+  std::vector<iplug::sample> mSignalTestOutputRight;
+  SignalTestRuntimeState mSignalTestState;
+  SignalPathTestResult mSignalTestResult;
+  std::atomic<bool> mSignalTestActive {false};
+  std::atomic<bool> mSignalTestResultPending {false};
 };
 } // namespace namguitar
 
