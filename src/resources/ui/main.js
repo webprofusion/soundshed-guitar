@@ -52,6 +52,35 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
     ],
   },
   {
+    id: "factory-slo-lowgain",
+    name: "SLO Low Gain Cab",
+    category: "Factory",
+    description: "Bundled SLO-100 low-gain model paired with a 1960 cab IR.",
+    namModelId: "SLO-100 LOWGAIN VALETON",
+    irId: "421 1960",
+    fxChain: ["noise_gate"],
+    attachments: [
+      {
+        type: "nam",
+        filePath: "SLO-100 LOWGAIN VALETON.nam",
+        path: "../models/SLO-100 LOWGAIN VALETON.nam",
+      },
+      {
+        type: "ir",
+        filePath: "421 1960.wav",
+        path: "../ir/421 1960.wav",
+      },
+    ],
+    parameters: [
+      { id: "input_trim", value: -4.0 },
+      { id: "output_trim", value: -1.5 },
+      { id: "drive", value: 0.35 },
+      { id: "tone", value: 0.6 },
+      { id: "gate_enabled", value: 1.0 },
+      { id: "gate_threshold", value: -55.0 },
+    ],
+  },
+  {
     id: "factory-highgain",
     name: "Saturated Lead",
     category: "Factory",
@@ -434,10 +463,20 @@ function resolveAttachmentUrl(attachment) {
     }
 
     if (candidate.startsWith("/")) {
-      return baseUrl ? `${baseUrl}${candidate}` : null;
+      if (baseUrl) {
+        return `${baseUrl}${candidate}`;
+      }
+      return candidate;
     }
 
-    return baseUrl ? `${baseUrl}/${candidate}` : null;
+    if (!baseUrl) {
+      if (candidate.startsWith("./") || candidate.startsWith("../") || !candidate.includes(":")) {
+        return candidate;
+      }
+      continue;
+    }
+
+    return `${baseUrl}/${candidate.replace(/^\.\//, "")}`;
   }
 
   return null;

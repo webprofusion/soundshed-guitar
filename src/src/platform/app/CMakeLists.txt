@@ -79,6 +79,6 @@ set_target_properties(NAMGuitarFX_App PROPERTIES
 add_custom_command(TARGET NAMGuitarFX_App POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:NAMGuitarFX_App>/resources"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/resources/ui"
-    "$<TARGET_FILE_DIR:NAMGuitarFX_App>/resources/ui"
-  COMMENT "Copying web UI assets into the standalone bundle")
+    "${CMAKE_SOURCE_DIR}/resources"
+    "$<TARGET_FILE_DIR:NAMGuitarFX_App>/resources"
+  COMMENT "Copying resource assets into the standalone bundle")
