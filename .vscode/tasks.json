@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build NAMGuitarFX Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/src/build",
+        "--config",
+        "Debug",
+        "--target",
+        "NAMGuitarFX_App"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build NAMGuitarFX Release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/src/build",
+        "--config",
+        "Release",
+        "--target",
+        "NAMGuitarFX_App"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Configure CMake",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-G",
+        "Visual Studio 17 2022",
+        "-A",
+        "x64",
+        "-S",
+        "${workspaceFolder}/src",
+        "-B",
+        "${workspaceFolder}/src/build"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
