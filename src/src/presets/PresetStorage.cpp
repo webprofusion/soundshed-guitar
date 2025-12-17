@@ -12,77 +12,22 @@ namespace namguitar
 {
 namespace
 {
+/**
+ * @brief Returns default presets for the application.
+ *
+ * Default preset definitions have been moved to JavaScript (main.js DEFAULT_PRESETS).
+ * The UI layer is the source of truth for factory presets, which are sent to the
+ * C++ backend when the user selects them. This function returns an empty vector
+ * since the C++ backend no longer needs to define its own defaults.
+ *
+ * @return An empty vector - defaults are defined in JavaScript.
+ */
 std::vector<Preset> BuildDefaultPresets()
 {
-  auto presetParameters = [](double inputTrim, double outputTrim, double drive, double tone, double gateEnabled,
-                              double gateThreshold) {
-    std::vector<PresetParameter> parameters;
-    parameters.push_back({"input_trim", inputTrim});
-    parameters.push_back({"output_trim", outputTrim});
-    parameters.push_back({"drive", drive});
-    parameters.push_back({"tone", tone});
-    parameters.push_back({"gate_enabled", gateEnabled});
-    parameters.push_back({"gate_threshold", gateThreshold});
-    return parameters;
-  };
-
-  std::vector<Preset> defaults;
-
-  // Factory Clean - uses bundled NAM model and IR
-  {
-    Preset preset;
-    preset.id = "factory-clean";
-    preset.name = "Factory Clean";
-    preset.category = "Factory";
-    preset.description = "Balanced clean tone with plenty of headroom.";
-    preset.namModelId = "test.nam";
-    preset.irId = "test.wav";
-    preset.fxChain = {};
-    preset.attachments = {
-      {"nam", std::filesystem::path("models/test.nam"), ""},
-      {"ir", std::filesystem::path("ir/test.wav"), ""},
-    };
-    preset.parameters = presetParameters(0.0, 0.0, 0.15, 0.55, 0.0, -60.0);
-    defaults.push_back(std::move(preset));
-  }
-
-  // Edge of Breakup - uses bundled NAM model and a different IR
-  {
-    Preset preset;
-    preset.id = "factory-breakup";
-    preset.name = "Edge of Breakup";
-    preset.category = "Factory";
-    preset.description = "Touch-sensitive crunch that works great with single coils.";
-    preset.namModelId = "test.nam";
-    preset.irId = "421 1960.wav";
-    preset.fxChain = {};
-    preset.attachments = {
-      {"nam", std::filesystem::path("models/test.nam"), ""},
-      {"ir", std::filesystem::path("ir/421 1960.wav"), ""},
-    };
-    preset.parameters = presetParameters(-3.0, 0.0, 0.45, 0.5, 0.0, -55.0);
-    defaults.push_back(std::move(preset));
-  }
-
-  // Saturated Lead - high gain with noise gate
-  {
-    Preset preset;
-    preset.id = "factory-highgain";
-    preset.name = "Saturated Lead";
-    preset.category = "Factory";
-    preset.description = "Tight high-gain lead preset with a gentle noise gate.";
-    preset.namModelId = "test.nam";
-    preset.irId = "906 1960.wav";
-    preset.fxChain = {"noise_gate"};
-    preset.attachments = {
-      {"nam", std::filesystem::path("models/test.nam"), ""},
-      {"ir", std::filesystem::path("ir/906 1960.wav"), ""},
-    };
-    preset.parameters = presetParameters(-6.0, -3.0, 0.85, 0.65, 1.0, -50.0);
-    defaults.push_back(std::move(preset));
-  }
-
-  return defaults;
+  // Default presets are now defined in JavaScript (resources/ui/main.js).
+  // The UI sends preset data to the backend when the user loads a preset.
+  // This keeps preset definitions in one place and simplifies maintenance.
+  return {};
 }
 
 nlohmann::json SerializePreset(const Preset& preset)

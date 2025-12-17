@@ -17,16 +17,28 @@ if (appRootElement && typeof appRootElement.prepend === "function") {
 
 const REMOTE_BASE_URL = window.NAM_REMOTE_BASE_URL ?? "";
 
+/**
+ * Default factory presets bundled with the application.
+ * These presets use relative paths for NAM models and IRs that are resolved
+ * by the C++ backend relative to the application's resource directory.
+ *
+ * Attachment paths should be relative (e.g., "models/test.nam", "ir/test.wav")
+ * and the backend will resolve them to the appropriate location based on whether
+ * the preset is bundled with the app or stored in the user's preset directory.
+ */
 const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
   {
     id: "factory-clean",
     name: "Factory Clean",
     category: "Factory",
-    description: "Balanced clean tone with plenty of headroom.",
-    namModelId: "",
-    irId: "",
+    description: "Balanced clean tone with plenty of headroom. Uses the bundled NAM model and IR.",
+    namModelId: "test.nam",
+    irId: "test.wav",
     fxChain: [],
-    attachments: [],
+    attachments: [
+      { type: "nam", filePath: "models/test.nam", hash: "" },
+      { type: "ir", filePath: "ir/test.wav", hash: "" },
+    ],
     parameters: [
       { id: "input_trim", value: 0.0 },
       { id: "output_trim", value: 0.0 },
@@ -34,6 +46,7 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
       { id: "tone", value: 0.55 },
       { id: "gate_enabled", value: 0.0 },
       { id: "gate_threshold", value: -60.0 },
+      { id: "mix", value: 1.0 },
     ],
   },
   {
@@ -41,10 +54,13 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
     name: "Edge of Breakup",
     category: "Factory",
     description: "Touch-sensitive crunch that works great with single coils.",
-    namModelId: "",
-    irId: "",
+    namModelId: "test.nam",
+    irId: "421 1960.wav",
     fxChain: [],
-    attachments: [],
+    attachments: [
+      { type: "nam", filePath: "models/test.nam", hash: "" },
+      { type: "ir", filePath: "ir/421 1960.wav", hash: "" },
+    ],
     parameters: [
       { id: "input_trim", value: -3.0 },
       { id: "output_trim", value: 0.0 },
@@ -52,35 +68,7 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
       { id: "tone", value: 0.5 },
       { id: "gate_enabled", value: 0.0 },
       { id: "gate_threshold", value: -55.0 },
-    ],
-  },
-  {
-    id: "factory-slo-lowgain",
-    name: "SLO Low Gain Cab",
-    category: "Factory",
-    description: "Bundled SLO-100 low-gain model paired with a 1960 cab IR.",
-    namModelId: "SLO-100 LOWGAIN VALETON",
-    irId: "421 1960",
-    fxChain: ["noise_gate"],
-    attachments: [
-      {
-        type: "nam",
-        filePath: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
-        path: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
-      },
-      {
-        type: "ir",
-        filePath: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/SLOW100 CUSTOM IR.wav",
-        path: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/SLOW100 CUSTOM IR.wav",
-      },
-    ],
-    parameters: [
-      { id: "input_trim", value: -4.0 },
-      { id: "output_trim", value: -1.5 },
-      { id: "drive", value: 0.35 },
-      { id: "tone", value: 0.6 },
-      { id: "gate_enabled", value: 1.0 },
-      { id: "gate_threshold", value: -55.0 },
+      { id: "mix", value: 1.0 },
     ],
   },
   {
@@ -88,10 +76,13 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
     name: "Saturated Lead",
     category: "Factory",
     description: "Tight high-gain lead preset with a gentle noise gate.",
-    namModelId: "",
-    irId: "",
+    namModelId: "test.nam",
+    irId: "906 1960.wav",
     fxChain: ["noise_gate"],
-    attachments: [],
+    attachments: [
+      { type: "nam", filePath: "models/test.nam", hash: "" },
+      { type: "ir", filePath: "ir/906 1960.wav", hash: "" },
+    ],
     parameters: [
       { id: "input_trim", value: -6.0 },
       { id: "output_trim", value: -3.0 },
@@ -99,6 +90,7 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
       { id: "tone", value: 0.65 },
       { id: "gate_enabled", value: 1.0 },
       { id: "gate_threshold", value: -50.0 },
+      { id: "mix", value: 1.0 },
     ],
   },
 ];
@@ -811,13 +803,32 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+/**
+ * Checks if an attachment URL is a remote HTTP(S) URL that can be fetched.
+ * Local/relative paths should be passed directly to the C++ backend for resolution.
+ */
+function isRemoteUrl(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
+/**
+ * Enriches an attachment by fetching its data if it's from a remote URL.
+ * For local/bundled attachments (relative paths), the attachment is returned as-is
+ * since the C++ backend can resolve the path directly from the resource directory.
+ */
 async function enrichAttachment(attachment) {
+  // Already has embedded data - no need to fetch
   if (attachment.data) {
     return attachment;
   }
 
   const url = resolveAttachmentUrl(attachment);
   if (!url) {
+    return attachment;
+  }
+
+  // Only fetch remote URLs - local paths are resolved by the C++ backend
+  if (!isRemoteUrl(url)) {
     return attachment;
   }
 
