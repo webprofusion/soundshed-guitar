@@ -72,6 +72,7 @@ private:
   void HandlePresetLoadRequest(const nlohmann::json& payload);
   void HandleStateRequest();
   void HandleSignalTestRequest(const nlohmann::json& payload);
+  void HandlePreviewDemoRequest(const nlohmann::json& payload);
   void BroadcastState();
   void ApplyPreset(namguitar::Preset& preset);
   void ReportErrorToUI(std::string_view message, std::string_view detail = {}) const;
@@ -111,6 +112,24 @@ private:
   SignalPathTestResult mSignalTestResult;
   std::atomic<bool> mSignalTestActive {false};
   std::atomic<bool> mSignalTestResultPending {false};
+
+  struct PreviewPlaybackBuffer
+  {
+    std::string id;
+    std::string title;
+    double sampleRate = 0.0;
+    int channels = 0;
+    std::vector<std::vector<iplug::sample>> channelSamples;
+  };
+
+  std::atomic<std::shared_ptr<PreviewPlaybackBuffer>> mPreviewBuffer {nullptr};
+  std::atomic<std::shared_ptr<PreviewPlaybackBuffer>> mPreviewStartedBuffer {nullptr};
+  std::atomic<std::shared_ptr<PreviewPlaybackBuffer>> mPreviewCompletedBuffer {nullptr};
+  std::atomic<std::size_t> mPreviewCursor {0};
+  std::vector<iplug::sample> mPreviewInputLeft;
+  std::vector<iplug::sample> mPreviewInputRight;
+  std::vector<iplug::sample> mPreviewOutputLeft;
+  std::vector<iplug::sample> mPreviewOutputRight;
 };
 } // namespace namguitar
 

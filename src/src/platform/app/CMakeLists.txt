@@ -41,6 +41,10 @@ add_executable(NAMGuitarFX_App WIN32 ${_nam_app_sources})
 target_include_directories(NAMGuitarFX_App
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../resources
+    ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio
+    ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio/include
+    ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTMidi
+    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad_GL2/src
 )
 
 target_compile_definitions(NAMGuitarFX_App

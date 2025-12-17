@@ -5,11 +5,13 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <vector>
 #include <exception>
+#include <string>
 #include <string_view>
 
 #include <nlohmann/json.hpp>
@@ -142,6 +144,233 @@ nlohmann::json SerializePresetToJson(const Preset& preset)
   return jsonPreset;
 }
 
+std::uint32_t ReadUint32LE(const std::uint8_t* data)
+{
+  return static_cast<std::uint32_t>(data[0])
+         | (static_cast<std::uint32_t>(data[1]) << 8U)
+         | (static_cast<std::uint32_t>(data[2]) << 16U)
+         | (static_cast<std::uint32_t>(data[3]) << 24U);
+}
+
+std::uint16_t ReadUint16LE(const std::uint8_t* data)
+{
+  return static_cast<std::uint16_t>(data[0]) | (static_cast<std::uint16_t>(data[1]) << 8U);
+}
+
+struct DecodedWav
+{
+  double sampleRate = 0.0;
+  int channels = 0;
+  int bitsPerSample = 0;
+  std::vector<std::vector<double>> channelSamples;
+};
+
+std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
+{
+  if (bytes.size() < 44)
+  {
+    return std::nullopt;
+  }
+
+  if (std::memcmp(bytes.data(), "RIFF", 4) != 0 || std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
+  {
+    return std::nullopt;
+  }
+
+  std::size_t offset = 12;
+  std::uint16_t audioFormat = 0;
+  std::uint16_t channels = 0;
+  std::uint32_t sampleRate = 0;
+  std::uint16_t bitsPerSample = 0;
+  std::uint16_t blockAlign = 0;
+  std::size_t dataOffset = 0;
+  std::uint32_t dataSize = 0;
+
+  while (offset + 8 <= bytes.size())
+  {
+    const char* chunkHeader = reinterpret_cast<const char*>(bytes.data() + offset);
+    const std::string chunkId(chunkHeader, chunkHeader + 4);
+    const std::uint32_t chunkSize = ReadUint32LE(bytes.data() + offset + 4);
+    const std::size_t chunkDataStart = offset + 8;
+
+    if (chunkDataStart + chunkSize > bytes.size())
+    {
+      return std::nullopt;
+    }
+
+    if (chunkId == "fmt ")
+    {
+      audioFormat = ReadUint16LE(bytes.data() + chunkDataStart);
+      channels = ReadUint16LE(bytes.data() + chunkDataStart + 2);
+      sampleRate = ReadUint32LE(bytes.data() + chunkDataStart + 4);
+      blockAlign = ReadUint16LE(bytes.data() + chunkDataStart + 12);
+      bitsPerSample = ReadUint16LE(bytes.data() + chunkDataStart + 14);
+    }
+    else if (chunkId == "data")
+    {
+      dataOffset = chunkDataStart;
+      dataSize = chunkSize;
+      break;
+    }
+
+    offset = chunkDataStart + chunkSize + (chunkSize % 2);
+  }
+
+  if (audioFormat == 0 || channels == 0 || sampleRate == 0 || bitsPerSample == 0 || blockAlign == 0 || dataOffset == 0)
+  {
+    return std::nullopt;
+  }
+
+  const std::size_t bytesPerSample = static_cast<std::size_t>(bitsPerSample) / 8;
+  if (bytesPerSample == 0)
+  {
+    return std::nullopt;
+  }
+
+  const std::size_t frameCount = dataSize / blockAlign;
+  if (frameCount == 0)
+  {
+    return std::nullopt;
+  }
+
+  DecodedWav wav;
+  wav.sampleRate = static_cast<double>(sampleRate);
+  wav.channels = static_cast<int>(channels);
+  wav.bitsPerSample = static_cast<int>(bitsPerSample);
+  wav.channelSamples.assign(static_cast<std::size_t>(channels), std::vector<double>(frameCount, 0.0));
+
+  const bool isFloat = (audioFormat == 3);
+  for (std::size_t frame = 0; frame < frameCount; ++frame)
+  {
+    const std::size_t frameOffset = dataOffset + frame * blockAlign;
+    for (std::size_t channel = 0; channel < static_cast<std::size_t>(channels); ++channel)
+    {
+      const std::size_t sampleOffset = frameOffset + channel * bytesPerSample;
+      if (sampleOffset + bytesPerSample > dataOffset + dataSize)
+      {
+        return std::nullopt;
+      }
+
+      double sample = 0.0;
+      if (isFloat)
+      {
+        if (bitsPerSample == 32)
+        {
+          float value = 0.0f;
+          std::memcpy(&value, bytes.data() + sampleOffset, sizeof(float));
+          sample = static_cast<double>(value);
+        }
+        else if (bitsPerSample == 64)
+        {
+          double value = 0.0;
+          std::memcpy(&value, bytes.data() + sampleOffset, sizeof(double));
+          sample = value;
+        }
+        else
+        {
+          return std::nullopt;
+        }
+      }
+      else
+      {
+        switch (bitsPerSample)
+        {
+          case 8:
+          {
+            const int value = static_cast<int>(bytes[sampleOffset]);
+            sample = (static_cast<double>(value) - 128.0) / 128.0;
+            break;
+          }
+          case 16:
+          {
+            const auto value = static_cast<std::int16_t>(ReadUint16LE(bytes.data() + sampleOffset));
+            sample = static_cast<double>(value) / 32768.0;
+            break;
+          }
+          case 24:
+          {
+            std::int32_t value = static_cast<std::int32_t>(bytes[sampleOffset])
+                                 | (static_cast<std::int32_t>(bytes[sampleOffset + 1]) << 8)
+                                 | (static_cast<std::int32_t>(bytes[sampleOffset + 2]) << 16);
+            if (value & 0x800000)
+            {
+              value |= ~0xFFFFFF;
+            }
+            sample = static_cast<double>(value) / 8388608.0;
+            break;
+          }
+          case 32:
+          {
+            const auto value = static_cast<std::int32_t>(ReadUint32LE(bytes.data() + sampleOffset));
+            sample = static_cast<double>(value) / 2147483648.0;
+            break;
+          }
+          default:
+            return std::nullopt;
+        }
+      }
+
+      wav.channelSamples[channel][frame] = std::clamp(sample, -1.0, 1.0);
+    }
+  }
+
+  return wav;
+}
+
+std::vector<std::vector<iplug::sample>> ConvertToSampleRate(const DecodedWav& wav, double targetRate)
+{
+  if (wav.channelSamples.empty() || wav.channelSamples.front().empty())
+  {
+    return {};
+  }
+
+  const double sourceRate = wav.sampleRate > 0.0 ? wav.sampleRate : targetRate;
+  if (sourceRate <= 0.0)
+  {
+    return {};
+  }
+
+  const std::size_t channelCount = std::max<std::size_t>(1, wav.channelSamples.size());
+  const std::size_t sourceFrames = wav.channelSamples.front().size();
+  std::vector<std::vector<iplug::sample>> output(channelCount);
+
+  if (targetRate <= 0.0 || std::fabs(sourceRate - targetRate) < 1e-6)
+  {
+    for (std::size_t channel = 0; channel < channelCount; ++channel)
+    {
+      const std::size_t sourceChannel = std::min(channel, wav.channelSamples.size() - 1);
+      output[channel].resize(sourceFrames);
+      for (std::size_t frame = 0; frame < sourceFrames; ++frame)
+      {
+        output[channel][frame] = static_cast<iplug::sample>(std::clamp(wav.channelSamples[sourceChannel][frame], -1.0, 1.0));
+      }
+    }
+    return output;
+  }
+
+  const double ratio = targetRate / sourceRate;
+  const std::size_t destFrames = std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(static_cast<double>(sourceFrames) * ratio)));
+
+  for (std::size_t channel = 0; channel < channelCount; ++channel)
+  {
+    const std::size_t sourceChannel = std::min(channel, wav.channelSamples.size() - 1);
+    output[channel].resize(destFrames);
+    for (std::size_t frame = 0; frame < destFrames; ++frame)
+    {
+      const double sourcePosition = (static_cast<double>(frame) * sourceRate) / targetRate;
+      const std::size_t index = std::min<std::size_t>(static_cast<std::size_t>(sourcePosition), sourceFrames - 1);
+      const std::size_t nextIndex = std::min<std::size_t>(index + 1, sourceFrames - 1);
+      const double fraction = std::clamp(sourcePosition - static_cast<double>(index), 0.0, 1.0);
+      const double sample0 = wav.channelSamples[sourceChannel][index];
+      const double sample1 = wav.channelSamples[sourceChannel][nextIndex];
+      const double value = sample0 + (sample1 - sample0) * fraction;
+      output[channel][frame] = static_cast<iplug::sample>(std::clamp(value, -1.0, 1.0));
+    }
+  }
+
+  return output;
+}
+
 } // namespace
 
 NAMGuitarPlugin::NAMGuitarPlugin(const iplug::InstanceInfo& info)
@@ -177,6 +406,85 @@ void NAMGuitarPlugin::ProcessBlock(iplug::sample** inputs, iplug::sample** outpu
 {
   if (!mDSP)
   {
+    return;
+  }
+
+  if (auto previewBuffer = mPreviewBuffer.load(std::memory_order_acquire))
+  {
+    if (!outputs || !outputs[0] || !outputs[1])
+    {
+      mPreviewBuffer.store(nullptr, std::memory_order_release);
+      mPreviewCompletedBuffer.store(previewBuffer, std::memory_order_release);
+      return;
+    }
+
+    if (previewBuffer->channelSamples.empty() || previewBuffer->channelSamples.front().empty())
+    {
+      std::fill(outputs[0], outputs[0] + nFrames, static_cast<iplug::sample>(0.0f));
+      std::fill(outputs[1], outputs[1] + nFrames, static_cast<iplug::sample>(0.0f));
+      mPreviewBuffer.store(nullptr, std::memory_order_release);
+      mPreviewCompletedBuffer.store(previewBuffer, std::memory_order_release);
+      mPreviewCursor.store(0, std::memory_order_release);
+      return;
+    }
+
+    const std::size_t channelCount = std::max<std::size_t>(1, previewBuffer->channelSamples.size());
+    const std::size_t totalFrames = previewBuffer->channelSamples.front().size();
+    std::size_t cursor = mPreviewCursor.load(std::memory_order_acquire);
+
+    if (cursor >= totalFrames)
+    {
+      std::fill(outputs[0], outputs[0] + nFrames, static_cast<iplug::sample>(0.0f));
+      std::fill(outputs[1], outputs[1] + nFrames, static_cast<iplug::sample>(0.0f));
+      mPreviewBuffer.store(nullptr, std::memory_order_release);
+      mPreviewCompletedBuffer.store(previewBuffer, std::memory_order_release);
+      mPreviewCursor.store(0, std::memory_order_release);
+      return;
+    }
+
+  const std::size_t framesRemaining = totalFrames - cursor;
+  const std::size_t framesToProcessSize = std::min<std::size_t>(framesRemaining, static_cast<std::size_t>(nFrames));
+  const int framesToProcess = static_cast<int>(framesToProcessSize);
+
+    mPreviewInputLeft.resize(static_cast<std::size_t>(nFrames));
+    mPreviewInputRight.resize(static_cast<std::size_t>(nFrames));
+    mPreviewOutputLeft.resize(static_cast<std::size_t>(nFrames));
+    mPreviewOutputRight.resize(static_cast<std::size_t>(nFrames));
+
+    std::fill(mPreviewInputLeft.begin(), mPreviewInputLeft.end(), static_cast<iplug::sample>(0.0f));
+    std::fill(mPreviewInputRight.begin(), mPreviewInputRight.end(), static_cast<iplug::sample>(0.0f));
+
+    for (int frame = 0; frame < framesToProcess; ++frame)
+    {
+      const std::size_t sourceIndex = cursor + static_cast<std::size_t>(frame);
+      const std::size_t leftChannel = 0;
+      const std::size_t rightChannel = channelCount > 1 ? 1 : 0;
+      mPreviewInputLeft[static_cast<std::size_t>(frame)] = previewBuffer->channelSamples[leftChannel][sourceIndex];
+      mPreviewInputRight[static_cast<std::size_t>(frame)] = previewBuffer->channelSamples[rightChannel][sourceIndex];
+    }
+
+    iplug::sample* previewInputs[2] = {mPreviewInputLeft.data(), mPreviewInputRight.data()};
+    iplug::sample* previewOutputs[2] = {mPreviewOutputLeft.data(), mPreviewOutputRight.data()};
+    mDSP->Process(previewInputs, previewOutputs, nFrames);
+
+    for (int frame = 0; frame < nFrames; ++frame)
+    {
+      outputs[0][frame] = mPreviewOutputLeft[static_cast<std::size_t>(frame)];
+      outputs[1][frame] = mPreviewOutputRight[static_cast<std::size_t>(frame)];
+    }
+
+  cursor += framesToProcessSize;
+  if (cursor >= totalFrames)
+    {
+      mPreviewBuffer.store(nullptr, std::memory_order_release);
+      mPreviewCompletedBuffer.store(previewBuffer, std::memory_order_release);
+      mPreviewCursor.store(0, std::memory_order_release);
+    }
+    else
+    {
+      mPreviewCursor.store(cursor, std::memory_order_release);
+    }
+
     return;
   }
 
@@ -265,6 +573,11 @@ void NAMGuitarPlugin::OnReset()
   }
 
   mDSP->Prepare(GetSampleRate(), GetBlockSize());
+
+  mPreviewBuffer.store(nullptr, std::memory_order_release);
+  mPreviewStartedBuffer.store(nullptr, std::memory_order_release);
+  mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
+  mPreviewCursor.store(0, std::memory_order_release);
 }
 
 void NAMGuitarPlugin::OnIdle()
@@ -272,6 +585,47 @@ void NAMGuitarPlugin::OnIdle()
   if (mWebUI)
   {
     mWebUI->PumpMessages();
+  }
+
+  if (mWebUI)
+  {
+    if (auto started = mPreviewStartedBuffer.exchange(nullptr, std::memory_order_acq_rel))
+    {
+      nlohmann::json message;
+      message["type"] = "previewStarted";
+      if (!started->id.empty())
+      {
+        message["id"] = started->id;
+      }
+      if (!started->title.empty())
+      {
+        message["title"] = started->title;
+      }
+      const double duration = (started->sampleRate > 0.0 && !started->channelSamples.empty())
+                                ? static_cast<double>(started->channelSamples.front().size()) / started->sampleRate
+                                : 0.0;
+      message["duration"] = duration;
+      mWebUI->EnqueueMessage(message.dump());
+    }
+
+    if (auto completed = mPreviewCompletedBuffer.exchange(nullptr, std::memory_order_acq_rel))
+    {
+      nlohmann::json message;
+      message["type"] = "previewComplete";
+      if (!completed->id.empty())
+      {
+        message["id"] = completed->id;
+      }
+      if (!completed->title.empty())
+      {
+        message["title"] = completed->title;
+      }
+      const double duration = (completed->sampleRate > 0.0 && !completed->channelSamples.empty())
+                                ? static_cast<double>(completed->channelSamples.front().size()) / completed->sampleRate
+                                : 0.0;
+      message["duration"] = duration;
+      mWebUI->EnqueueMessage(message.dump());
+    }
   }
 
   if (mSignalTestResultPending.exchange(false, std::memory_order_acq_rel))
@@ -499,6 +853,10 @@ void NAMGuitarPlugin::HandleUIMessage(const std::string& message)
   {
     HandleSignalTestRequest(payload);
   }
+  else if (type == "previewDemoAudio")
+  {
+    HandlePreviewDemoRequest(payload);
+  }
 }
 
 void NAMGuitarPlugin::BroadcastState()
@@ -630,6 +988,78 @@ void NAMGuitarPlugin::HandleSignalTestRequest(const nlohmann::json& payload)
   }
 
   ReportErrorToUI("Unable to start signal path test", "Another test is already running or DSP is not ready");
+}
+
+void NAMGuitarPlugin::HandlePreviewDemoRequest(const nlohmann::json& payload)
+{
+  if (!mDSP)
+  {
+    return;
+  }
+
+  if (mSignalTestActive.load(std::memory_order_acquire))
+  {
+    ReportErrorToUI("Demo preview unavailable", "Signal path test is currently running");
+    return;
+  }
+
+  const auto audioIter = payload.find("audio");
+  if (audioIter == payload.end() || !audioIter->is_object())
+  {
+    ReportErrorToUI("Demo preview unavailable", "Audio payload is missing");
+    return;
+  }
+
+  const std::string dataEncoded = audioIter->value("data", "");
+  if (dataEncoded.empty())
+  {
+    ReportErrorToUI("Demo preview unavailable", "Audio payload did not include data");
+    return;
+  }
+
+  const auto decodedBytes = DecodeBase64(dataEncoded);
+  if (decodedBytes.empty())
+  {
+    ReportErrorToUI("Demo preview unavailable", "Unable to decode audio data");
+    return;
+  }
+
+  const auto wavData = DecodePcmWav(decodedBytes);
+  if (!wavData)
+  {
+    ReportErrorToUI("Demo preview unavailable", "Unsupported WAV format");
+    return;
+  }
+
+  const double hostSampleRate = GetSampleRate();
+  const double targetSampleRate = hostSampleRate > 0.0 ? hostSampleRate : wavData->sampleRate;
+
+  if (targetSampleRate <= 0.0)
+  {
+    ReportErrorToUI("Demo preview unavailable", "Target sample rate is invalid");
+    return;
+  }
+
+  auto resampled = ConvertToSampleRate(*wavData, targetSampleRate);
+  if (resampled.empty() || resampled.front().empty())
+  {
+    ReportErrorToUI("Demo preview unavailable", "Audio buffer is empty");
+    return;
+  }
+
+  auto previewBuffer = std::make_shared<PreviewPlaybackBuffer>();
+  previewBuffer->id = audioIter->value("id", "");
+  previewBuffer->title = audioIter->value("title", previewBuffer->id);
+  previewBuffer->sampleRate = targetSampleRate;
+  previewBuffer->channels = static_cast<int>(resampled.size());
+  previewBuffer->channelSamples = std::move(resampled);
+
+  mDSP->Reset();
+
+  mPreviewCursor.store(0, std::memory_order_release);
+  mPreviewBuffer.store(previewBuffer, std::memory_order_release);
+  mPreviewStartedBuffer.store(previewBuffer, std::memory_order_release);
+  mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
 }
 
 void NAMGuitarPlugin::ReportErrorToUI(std::string_view message, std::string_view detail) const

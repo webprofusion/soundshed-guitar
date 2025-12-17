@@ -62,7 +62,7 @@ void WebUIBridge::Initialize(iplug::igraphics::IGraphics& graphics, const std::f
         mHandler(jsonMsg ? jsonMsg : "");
       }
     },
-    false,
+    true, // enable dev tools
     false);
 
   graphics.AttachControl(mWebView);

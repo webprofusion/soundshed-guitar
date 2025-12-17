@@ -65,13 +65,13 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
     attachments: [
       {
         type: "nam",
-        filePath: "C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
-        path: "C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
+        filePath: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
+        path: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/models/test.nam",
       },
       {
         type: "ir",
-        filePath: "C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/test.wav",
-        path: "C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/test.wav",
+        filePath: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/SLOW100 CUSTOM IR.wav",
+        path: "file:///C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ir/SLOW100 CUSTOM IR.wav",
       },
     ],
     parameters: [
@@ -103,6 +103,14 @@ const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
   },
 ];
 
+const DEMO_AUDIO_SAMPLES = [
+  {
+    id: "guitar-riff-01",
+    title: "Guitar Riff 01",
+    path: "C:/Work/GIT/misc/neuron-guitar/src/build/src/platform/app/Debug/resources/ui/demo/guitar-riff-02.wav",
+  },
+];
+
 const LOG_ENTRY_LIMIT = 200;
 
 const uiState = {
@@ -118,6 +126,7 @@ const uiState = {
     irPath: "",
   },
   signalTest: null,
+  demoAudioSelectedId: DEMO_AUDIO_SAMPLES.length ? DEMO_AUDIO_SAMPLES[0].id : null,
   logs: [],
 };
 
@@ -357,18 +366,206 @@ function renderParameterSection() {
   `;
 }
 
+function getSelectedDemoAudio() {
+  if (!DEMO_AUDIO_SAMPLES.length) {
+    return null;
+  }
+  const selectedId = uiState.demoAudioSelectedId ?? DEMO_AUDIO_SAMPLES[0].id;
+  return DEMO_AUDIO_SAMPLES.find((sample) => sample.id === selectedId) ?? DEMO_AUDIO_SAMPLES[0];
+}
+
+function renderDemoAudioControls() {
+  if (!DEMO_AUDIO_SAMPLES.length) {
+    return "";
+  }
+
+  const options = DEMO_AUDIO_SAMPLES
+    .map((sample) => {
+      const selected = sample.id === (uiState.demoAudioSelectedId ?? DEMO_AUDIO_SAMPLES[0].id);
+      return `<option value="${escapeHtml(sample.id)}"${selected ? " selected" : ""}>${escapeHtml(sample.title)}</option>`;
+    })
+    .join("");
+
+  return `
+    <section class="demo-audio">
+      <h3>Demo Audio</h3>
+      <div class="demo-audio-controls">
+        <label for="demo-audio-select">Preview</label>
+        <select id="demo-audio-select" class="demo-audio-select">
+          ${options}
+        </select>
+        <button id="play-demo-audio" class="demo-audio-button">Play</button>
+      </div>
+    </section>
+  `;
+}
+
+function bindDemoAudioControls() {
+  const selectElement = document.getElementById("demo-audio-select");
+  if (selectElement) {
+    selectElement.value = uiState.demoAudioSelectedId ?? selectElement.value;
+    selectElement.addEventListener("change", (event) => {
+      const value = event.target.value;
+      uiState.demoAudioSelectedId = value;
+    });
+  }
+
+  const playButton = document.getElementById("play-demo-audio");
+  if (playButton) {
+    playButton.addEventListener("click", async () => {
+      await previewSelectedDemoAudio();
+    });
+  }
+}
+
+function resolveDemoSamplePath(rawPath) {
+  if (!rawPath || typeof rawPath !== "string") {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(rawPath) || /^file:\/\//i.test(rawPath)) {
+    return rawPath;
+  }
+
+  const normalized = rawPath.replace(/\\/g, "/");
+
+  if (!normalized.includes(":")) {
+    return normalized;
+  }
+
+  const resourcesIndex = normalized.toLowerCase().indexOf("/resources/");
+  if (resourcesIndex >= 0) {
+    const relative = normalized.slice(resourcesIndex + "/resources/".length);
+    return `../${relative}`;
+  }
+
+  return `file:///${normalized}`;
+}
+
+function parseWavMetadata(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 44) {
+    return null;
+  }
+
+  const chunkId = String.fromCharCode(
+    view.getUint8(0),
+    view.getUint8(1),
+    view.getUint8(2),
+    view.getUint8(3),
+  );
+  const format = String.fromCharCode(
+    view.getUint8(8),
+    view.getUint8(9),
+    view.getUint8(10),
+    view.getUint8(11),
+  );
+  if (chunkId !== "RIFF" || format !== "WAVE") {
+    return null;
+  }
+
+  let offset = 12;
+  let channels = 0;
+  let sampleRate = 0;
+  let bitsPerSample = 0;
+
+  while (offset + 8 <= view.byteLength) {
+    const id = String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3),
+    );
+    const size = view.getUint32(offset + 4, true);
+    const chunkStart = offset + 8;
+    if (id === "fmt ") {
+      const audioFormat = view.getUint16(chunkStart, true);
+      if (audioFormat !== 1 && audioFormat !== 3) {
+        return null;
+      }
+      channels = view.getUint16(chunkStart + 2, true);
+      sampleRate = view.getUint32(chunkStart + 4, true);
+      bitsPerSample = view.getUint16(chunkStart + 14, true);
+      break;
+    }
+    offset = chunkStart + size + (size % 2);
+  }
+
+  if (!channels || !sampleRate || !bitsPerSample) {
+    return null;
+  }
+
+  return { channels, sampleRate, bitsPerSample };
+}
+
+async function previewSelectedDemoAudio() {
+  const sample = getSelectedDemoAudio();
+  if (!sample) {
+    showNotification("No demo audio available");
+    return;
+  }
+
+  try {
+    const resolvedPath = resolveDemoSamplePath(sample.path);
+    if (!resolvedPath) {
+      throw new Error("Demo audio path is not set");
+    }
+
+    appendLog(`preview start → ${resolvedPath}`);
+    const response = await fetch(resolvedPath);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    const base64 = arrayBufferToBase64(buffer);
+    const metadata = parseWavMetadata(buffer);
+
+    const audioPayload = {
+      id: sample.id,
+      title: sample.title,
+      path: sample.path,
+      size: buffer.byteLength,
+      contentType: "audio/wav",
+      data: base64,
+    };
+
+    if (metadata) {
+      audioPayload.sampleRate = metadata.sampleRate;
+      audioPayload.channels = metadata.channels;
+      audioPayload.bitsPerSample = metadata.bitsPerSample;
+    }
+
+    window.NAMBridge.postMessage({
+      type: "previewDemoAudio",
+      audio: audioPayload,
+    });
+
+    showNotification("Starting demo preview", sample.title);
+    appendLog(`preview sent → ${sample.title}`);
+  } catch (error) {
+    console.error("Failed to preview demo audio", error);
+    //appendLog(`preview error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
+    appendLog(`preview error ← ${sample.title}: ${JSON.stringify(error)}`);
+    showNotification("Failed to preview demo audio", error instanceof Error ? error: String(error));
+  }
+}
+
 function renderPresetDetails(preset) {
   if (!preset) {
     const parameterSection = renderParameterSection();
+    const demoSection = renderDemoAudioControls();
     presetDetailsElement.innerHTML = `
       <h2>No Preset Loaded</h2>
       <p>Select a preset to see details.</p>
+      ${demoSection}
       ${parameterSection}
     `;
     const signalTestButton = document.getElementById("run-signal-test");
     if (signalTestButton) {
       signalTestButton.addEventListener("click", requestSignalPathTest);
     }
+    bindDemoAudioControls();
     return;
   }
 
@@ -399,6 +596,7 @@ function renderPresetDetails(preset) {
       <ul>${attachments}</ul>
     </section>
     <button id="apply-preset">Apply Preset</button>
+    ${renderDemoAudioControls()}
     ${renderParameterSection()}
   `;
 
@@ -413,6 +611,7 @@ function renderPresetDetails(preset) {
   if (signalTestButton) {
     signalTestButton.addEventListener("click", requestSignalPathTest);
   }
+  bindDemoAudioControls();
 }
 
 function handleIncomingMessage(message) {
@@ -480,6 +679,21 @@ function handleIncomingMessage(message) {
       renderPresetDetails(uiState.presetCache.get(uiState.activePresetId) ?? null);
       const statusMessage = uiState.signalTest.passed ? "Signal path test passed" : "Signal path test failed";
       showNotification(statusMessage, uiState.signalTest.message ?? "");
+      break;
+    }
+    case "previewStarted": {
+      appendLog(`preview started ← ${payload.title ?? payload.id ?? "demo"}`);
+      uiState.demoAudioSelectedId = payload.id ?? uiState.demoAudioSelectedId;
+      const selector = document.getElementById("demo-audio-select");
+      if (selector && uiState.demoAudioSelectedId) {
+        selector.value = uiState.demoAudioSelectedId;
+      }
+      showNotification("Playing demo audio", payload.title ?? "Demo");
+      break;
+    }
+    case "previewComplete": {
+      appendLog(`preview complete ← ${payload.title ?? payload.id ?? "demo"}`);
+      showNotification("Demo playback finished", payload.title ?? "Demo");
       break;
     }
     case "error": {

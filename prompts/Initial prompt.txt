@@ -1,8 +1,14 @@
 Create a new VST3/AU/AAX plugin with webview UI using the iPlug2 framework which integrates the Neural Amp Modeler DSP https://github.com/sdatkinson/NeuralAmpModelerCore to create an all in one Guitar fx/amp modelling plugin, in the style of https://github.com/sdatkinson/NeuralAmpModelerPlugin. It should allow presets to be stored under categories, presets should store which FX/amp models are selected for the FX chain and should allow search/download of presets from an API. presets should optionally include associated impulse response and NAM model files (which are hashed to identify the same model files for caching). Prefer simple cleanly organized code, and comment anything audio related to explain the concept being implemented.
-
 ---------------
-
-Problem with initial prompt was mainaly that preset and Ir managemtn was egernated as C++ instead of being managed by the web ui
-
+Problem with initial prompt was mainly that preset and Ir management was generated as C++ instead of being managed by the web ui
 -------------
 Replace the preset and IR library handling so that it's all in the web UI and JS. The backend c++ should only load the provided preset information, the JS should do all of the fetching and management of presets, IRs and NAM models as much as possible.
+---
+Add a default preset that uses an IR wav - from /resources/ir and a nam model from /resources/models/
+--------
+Use the actual files (.nam and .wav) directly loaded from javacript in the UI. You can then convert them to base634 if required to pass to the backend but that's optional.
+Add a log tab to the UI and show the url of each fetch request performed in js
+-------
+Add a preview button in the UI that loads the wav file from /resources/demo/guitar-riff-01.wav via js fetcj, then passes to the backend for playback via the plugin signal path.
+
+Define the demo audio files as a list with title and wav file path as a json in the js.
