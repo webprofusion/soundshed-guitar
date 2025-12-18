@@ -46,6 +46,7 @@ nlohmann::json SerializePreset(const Preset& preset)
   {
     attachments.push_back({
       {"type", attachment.type},
+      {"id", attachment.id},
       {"filePath", attachment.filePath.generic_string()},
       {"hash", attachment.hash},
     });
@@ -101,6 +102,7 @@ Preset DeserializePreset(const nlohmann::json& jsonPreset)
     {
       PresetAttachment attachment;
       attachment.type = jsonAttachment.value("type", "");
+      attachment.id = jsonAttachment.value("id", "");
       attachment.hash = jsonAttachment.value("hash", "");
       attachment.filePath = jsonAttachment.value("filePath", "");
       preset.attachments.push_back(std::move(attachment));

@@ -1,0 +1,56 @@
+[
+  {
+    "id": "factory-clean",
+    "name": "Factory Clean",
+    "category": "Factory",
+    "description": "Balanced clean tone with plenty of headroom. Uses the bundled NAM model and IR.",
+    "namModelId": "nam-model-test-default",
+    "irId": "ir-test-default",
+    "fxChain": [],
+    "parameters": [
+      { "id": "input_trim", "value": 0.0 },
+      { "id": "output_trim", "value": 0.0 },
+      { "id": "drive", "value": 0.15 },
+      { "id": "tone", "value": 0.55 },
+      { "id": "gate_enabled", "value": 0.0 },
+      { "id": "gate_threshold", "value": -60.0 },
+      { "id": "mix", "value": 1.0 }
+    ]
+  },
+  {
+    "id": "factory-breakup",
+    "name": "Edge of Breakup",
+    "category": "Factory",
+    "description": "Touch-sensitive crunch that works great with single coils.",
+    "namModelId": "nam-model-test-default",
+    "irId": "ir-421-1960",
+    "fxChain": [],
+    "parameters": [
+      { "id": "input_trim", "value": -3.0 },
+      { "id": "output_trim", "value": 0.0 },
+      { "id": "drive", "value": 0.45 },
+      { "id": "tone", "value": 0.5 },
+      { "id": "gate_enabled", "value": 0.0 },
+      { "id": "gate_threshold", "value": -55.0 },
+      { "id": "mix", "value": 1.0 }
+    ]
+  },
+  {
+    "id": "factory-highgain",
+    "name": "Saturated Lead",
+    "category": "Factory",
+    "description": "Tight high-gain lead preset with a gentle noise gate.",
+    "namModelId": "nam-model-test-default",
+    "irId": "ir-906-1960",
+    "fxChain": ["noise_gate"],
+    "parameters": [
+      { "id": "input_trim", "value": -6.0 },
+      { "id": "output_trim", "value": -3.0 },
+      { "id": "drive", "value": 0.85 },
+      { "id": "tone", "value": 0.65 },
+      { "id": "gate_enabled", "value": 1.0 },
+      { "id": "gate_threshold", "value": -50.0 },
+      { "id": "mix", "value": 1.0 }
+    ]
+  }
+]

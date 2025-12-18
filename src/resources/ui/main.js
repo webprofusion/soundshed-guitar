@@ -18,82 +18,169 @@ if (appRootElement && typeof appRootElement.prepend === "function") {
 const REMOTE_BASE_URL = window.NAM_REMOTE_BASE_URL ?? "";
 
 /**
- * Default factory presets bundled with the application.
- * These presets use relative paths for NAM models and IRs that are resolved
- * by the C++ backend relative to the application's resource directory.
- *
- * Attachment paths should be relative (e.g., "models/test.nam", "ir/test.wav")
- * and the backend will resolve them to the appropriate location based on whether
- * the preset is bundled with the app or stored in the user's preset directory.
+ * Library of known NAM models bundled with the application.
+ * Each model has a unique hash-based ID derived from the file's SHA-256 hash.
+ * The filePath is relative to the application's resource directory.
+ * Loaded from data/nam-models.json on startup.
  */
-const DEFAULT_PRESETS = window.NAM_DEFAULT_PRESETS ?? [
-  {
-    id: "factory-clean",
-    name: "Factory Clean",
-    category: "Factory",
-    description: "Balanced clean tone with plenty of headroom. Uses the bundled NAM model and IR.",
-    namModelId: "test.nam",
-    irId: "test.wav",
-    fxChain: [],
-    attachments: [
-      { type: "nam", filePath: "models/test.nam", hash: "" },
-      { type: "ir", filePath: "ir/test.wav", hash: "" },
-    ],
-    parameters: [
-      { id: "input_trim", value: 0.0 },
-      { id: "output_trim", value: 0.0 },
-      { id: "drive", value: 0.15 },
-      { id: "tone", value: 0.55 },
-      { id: "gate_enabled", value: 0.0 },
-      { id: "gate_threshold", value: -60.0 },
-      { id: "mix", value: 1.0 },
-    ],
-  },
-  {
-    id: "factory-breakup",
-    name: "Edge of Breakup",
-    category: "Factory",
-    description: "Touch-sensitive crunch that works great with single coils.",
-    namModelId: "test.nam",
-    irId: "421 1960.wav",
-    fxChain: [],
-    attachments: [
-      { type: "nam", filePath: "models/test.nam", hash: "" },
-      { type: "ir", filePath: "ir/421 1960.wav", hash: "" },
-    ],
-    parameters: [
-      { id: "input_trim", value: -3.0 },
-      { id: "output_trim", value: 0.0 },
-      { id: "drive", value: 0.45 },
-      { id: "tone", value: 0.5 },
-      { id: "gate_enabled", value: 0.0 },
-      { id: "gate_threshold", value: -55.0 },
-      { id: "mix", value: 1.0 },
-    ],
-  },
-  {
-    id: "factory-highgain",
-    name: "Saturated Lead",
-    category: "Factory",
-    description: "Tight high-gain lead preset with a gentle noise gate.",
-    namModelId: "test.nam",
-    irId: "906 1960.wav",
-    fxChain: ["noise_gate"],
-    attachments: [
-      { type: "nam", filePath: "models/test.nam", hash: "" },
-      { type: "ir", filePath: "ir/906 1960.wav", hash: "" },
-    ],
-    parameters: [
-      { id: "input_trim", value: -6.0 },
-      { id: "output_trim", value: -3.0 },
-      { id: "drive", value: 0.85 },
-      { id: "tone", value: 0.65 },
-      { id: "gate_enabled", value: 1.0 },
-      { id: "gate_threshold", value: -50.0 },
-      { id: "mix", value: 1.0 },
-    ],
-  },
-];
+let NAM_MODEL_LIBRARY = [];
+
+/**
+ * Library of known Impulse Responses bundled with the application.
+ * Each IR has a unique hash-based ID derived from the file's SHA-256 hash.
+ * The filePath is relative to the application's resource directory.
+ * Loaded from data/ir-library.json on startup.
+ */
+let IR_LIBRARY = [];
+
+/**
+ * Default factory presets bundled with the application.
+ * Presets reference NAM models and IRs by their library IDs.
+ * Loaded from data/default-presets.json on startup.
+ */
+let DEFAULT_PRESETS = [];
+
+/**
+ * Resolves a NAM model by its library ID.
+ * @param {string} modelId - The model library ID
+ * @returns {object|null} The model entry or null if not found
+ */
+function resolveNamModel(modelId) {
+  return NAM_MODEL_LIBRARY.find((m) => m.id === modelId) ?? null;
+}
+
+/**
+ * Resolves an IR by its library ID.
+ * @param {string} irId - The IR library ID
+ * @returns {object|null} The IR entry or null if not found
+ */
+function resolveIR(irId) {
+  return IR_LIBRARY.find((ir) => ir.id === irId) ?? null;
+}
+
+/**
+ * Builds attachments array for a preset from model and IR library IDs.
+ * Falls back to custom file paths if IDs are not found in the library.
+ * @param {string|null} namModelId - NAM model library ID or null
+ * @param {string|null} irId - IR library ID or null
+ * @param {string|null} customNamPath - Custom NAM file path (used if namModelId not in library)
+ * @param {string|null} customIrPath - Custom IR file path (used if irId not in library)
+ * @returns {Array} Array of attachment objects
+ */
+function buildAttachments(namModelId, irId, customNamPath = null, customIrPath = null) {
+  const attachments = [];
+
+  // Resolve NAM model
+  if (namModelId) {
+    const model = resolveNamModel(namModelId);
+    if (model) {
+      attachments.push({
+        type: "nam",
+        id: model.id,
+        filePath: model.filePath,
+        hash: model.hash,
+      });
+    } else if (customNamPath) {
+      attachments.push({ type: "nam", filePath: customNamPath, hash: "" });
+    }
+  } else if (customNamPath) {
+    attachments.push({ type: "nam", filePath: customNamPath, hash: "" });
+  }
+
+  // Resolve IR
+  if (irId) {
+    const ir = resolveIR(irId);
+    if (ir) {
+      attachments.push({
+        type: "ir",
+        id: ir.id,
+        filePath: ir.filePath,
+        hash: ir.hash,
+      });
+    } else if (customIrPath) {
+      attachments.push({ type: "ir", filePath: customIrPath, hash: "" });
+    }
+  } else if (customIrPath) {
+    attachments.push({ type: "ir", filePath: customIrPath, hash: "" });
+  }
+
+  return attachments;
+}
+
+/**
+ * Loads the NAM model library from the JSON file.
+ * @returns {Promise<Array>} Array of NAM model objects
+ */
+async function loadNamModelLibrary() {
+  try {
+    const response = await fetch("data/nam-models.json");
+    if (!response.ok) {
+      throw new Error(`Failed to load NAM models: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error loading NAM model library: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Loads the IR library from the JSON file.
+ * @returns {Promise<Array>} Array of IR objects
+ */
+async function loadIrLibrary() {
+  try {
+    const response = await fetch("data/ir-library.json");
+    if (!response.ok) {
+      throw new Error(`Failed to load IR library: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error loading IR library: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Loads the default presets from the JSON file and builds attachments.
+ * @returns {Promise<Array>} Array of preset objects with resolved attachments
+ */
+async function loadDefaultPresets() {
+  try {
+    const response = await fetch("data/default-presets.json");
+    if (!response.ok) {
+      throw new Error(`Failed to load default presets: ${response.status}`);
+    }
+    const presets = await response.json();
+    // Build attachments for each preset based on library IDs
+    return presets.map((preset) => ({
+      ...preset,
+      attachments: buildAttachments(preset.namModelId, preset.irId),
+    }));
+  } catch (error) {
+    console.error(`Error loading default presets: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Initializes all data libraries from JSON files.
+ * Must be called before using NAM_MODEL_LIBRARY, IR_LIBRARY, or DEFAULT_PRESETS.
+ */
+async function initializeDataLibraries() {
+  // Load model and IR libraries first (needed for preset attachments)
+  const [models, irs] = await Promise.all([
+    loadNamModelLibrary(),
+    loadIrLibrary(),
+  ]);
+  NAM_MODEL_LIBRARY = models;
+  IR_LIBRARY = irs;
+  
+  // Load presets after libraries are ready
+  DEFAULT_PRESETS = await loadDefaultPresets();
+  
+  console.log(`Loaded ${NAM_MODEL_LIBRARY.length} NAM models, ${IR_LIBRARY.length} IRs, ${DEFAULT_PRESETS.length} default presets`);
+}
 
 const DEMO_AUDIO_SAMPLES = [
   {
@@ -1020,6 +1107,9 @@ async function loadPresetIndex() {
 }
 
 async function initialize() {
+  // Load data libraries first (models, IRs, presets)
+  await initializeDataLibraries();
+  
   if (REMOTE_BASE_URL) {
     await loadPresetIndex();
   } else {
