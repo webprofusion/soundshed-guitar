@@ -176,7 +176,7 @@ Preset ParsePresetJson(const nlohmann::json& jsonPreset)
 	preset.name = jsonPreset.value("name", "");
 	preset.category = jsonPreset.value("category", "");
 	preset.description = jsonPreset.value("description", "");
-	preset.namModelId = jsonPreset.value("namModelId", "");
+	preset.audioFxModelId = jsonPreset.value("audioFxModelId", "");
 	preset.irId = jsonPreset.value("irId", "");
 	preset.fxChain = jsonPreset.value("fxChain", std::vector<std::string>{});
 

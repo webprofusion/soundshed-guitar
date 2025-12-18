@@ -116,7 +116,7 @@ nlohmann::json SerializePresetToJson(const Preset& preset)
   jsonPreset["name"] = preset.name;
   jsonPreset["category"] = preset.category;
   jsonPreset["description"] = preset.description;
-  jsonPreset["namModelId"] = preset.namModelId;
+  jsonPreset["audioFxModelId"] = preset.audioFxModelId;
   jsonPreset["irId"] = preset.irId;
   jsonPreset["fxChain"] = preset.fxChain;
 
@@ -407,6 +407,7 @@ NAMGuitarPlugin::NAMGuitarPlugin(const iplug::InstanceInfo& info)
       return;
     }
     graphics->AttachPanelBackground(iplug::igraphics::COLOR_BLACK);
+    graphics->SetLayoutOnResize(true);
     InitializeGraphics(*graphics);
   };
 #endif
@@ -1308,7 +1309,7 @@ Preset NAMGuitarPlugin::ParsePresetFromJson(const nlohmann::json& jsonPreset)
   preset.name = jsonPreset.value("name", "");
   preset.category = jsonPreset.value("category", "");
   preset.description = jsonPreset.value("description", "");
-  preset.namModelId = jsonPreset.value("namModelId", "");
+  preset.audioFxModelId = jsonPreset.value("audioFxModelId", "");
   preset.irId = jsonPreset.value("irId", "");
 
   if (jsonPreset.contains("fxChain") && jsonPreset["fxChain"].is_array())

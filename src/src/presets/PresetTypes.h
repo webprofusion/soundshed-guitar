@@ -31,7 +31,7 @@ struct Preset
   std::string name;
   std::string category;
   std::string description;
-  std::string namModelId;             // library ID for NAM model
+  std::string audioFxModelId;         // library ID for AudioFX model
   std::string irId;                   // library ID for IR
   std::vector<std::string> fxChain;
   std::vector<PresetAttachment> attachments;

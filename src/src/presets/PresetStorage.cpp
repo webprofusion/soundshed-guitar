@@ -37,7 +37,7 @@ nlohmann::json SerializePreset(const Preset& preset)
   jsonPreset["name"] = preset.name;
   jsonPreset["category"] = preset.category;
   jsonPreset["description"] = preset.description;
-  jsonPreset["namModelId"] = preset.namModelId;
+  jsonPreset["audioFxModelId"] = preset.audioFxModelId;
   jsonPreset["irId"] = preset.irId;
   jsonPreset["fxChain"] = preset.fxChain;
 
@@ -85,7 +85,7 @@ Preset DeserializePreset(const nlohmann::json& jsonPreset)
   preset.name = jsonPreset.value("name", "");
   preset.category = jsonPreset.value("category", "");
   preset.description = jsonPreset.value("description", "");
-  preset.namModelId = jsonPreset.value("namModelId", "");
+  preset.audioFxModelId = jsonPreset.value("audioFxModelId", "");
   preset.irId = jsonPreset.value("irId", "");
 
   if (jsonPreset.contains("fxChain") && jsonPreset["fxChain"].is_array())

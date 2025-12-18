@@ -15,15 +15,15 @@ if (appRootElement && typeof appRootElement.prepend === "function") {
   document.body.prepend(notificationElement);
 }
 
-const REMOTE_BASE_URL = window.NAM_REMOTE_BASE_URL ?? "";
+const REMOTE_BASE_URL = window.AUDIOFX_REMOTE_BASE_URL ?? "";
 
 /**
- * Library of known NAM models bundled with the application.
+ * Library of known AudioFX models bundled with the application.
  * Each model has a unique hash-based ID derived from the file's SHA-256 hash.
  * The filePath is relative to the application's resource directory.
- * Loaded from data/nam-models.json on startup.
+ * Loaded from data/audiofx-models.json on startup.
  */
-let NAM_MODEL_LIBRARY = [];
+let AUDIOFX_MODEL_LIBRARY = [];
 
 /**
  * Library of known Impulse Responses bundled with the application.
@@ -35,18 +35,18 @@ let IR_LIBRARY = [];
 
 /**
  * Default factory presets bundled with the application.
- * Presets reference NAM models and IRs by their library IDs.
+ * Presets reference AudioFX models and IRs by their library IDs.
  * Loaded from data/default-presets.json on startup.
  */
 let DEFAULT_PRESETS = [];
 
 /**
- * Resolves a NAM model by its library ID.
+ * Resolves an AudioFX model by its library ID.
  * @param {string} modelId - The model library ID
  * @returns {object|null} The model entry or null if not found
  */
-function resolveNamModel(modelId) {
-  return NAM_MODEL_LIBRARY.find((m) => m.id === modelId) ?? null;
+function resolveAudioFxModel(modelId) {
+  return AUDIOFX_MODEL_LIBRARY.find((m) => m.id === modelId) ?? null;
 }
 
 /**
@@ -61,30 +61,30 @@ function resolveIR(irId) {
 /**
  * Builds attachments array for a preset from model and IR library IDs.
  * Falls back to custom file paths if IDs are not found in the library.
- * @param {string|null} namModelId - NAM model library ID or null
+ * @param {string|null} audioFxModelId - AudioFX model library ID or null
  * @param {string|null} irId - IR library ID or null
- * @param {string|null} customNamPath - Custom NAM file path (used if namModelId not in library)
+ * @param {string|null} customModelPath - Custom model file path (used if audioFxModelId not in library)
  * @param {string|null} customIrPath - Custom IR file path (used if irId not in library)
  * @returns {Array} Array of attachment objects
  */
-function buildAttachments(namModelId, irId, customNamPath = null, customIrPath = null) {
+function buildAttachments(audioFxModelId, irId, customModelPath = null, customIrPath = null) {
   const attachments = [];
 
-  // Resolve NAM model
-  if (namModelId) {
-    const model = resolveNamModel(namModelId);
+  // Resolve AudioFX model
+  if (audioFxModelId) {
+    const model = resolveAudioFxModel(audioFxModelId);
     if (model) {
       attachments.push({
-        type: "nam",
+        type: "audiofx",
         id: model.id,
         filePath: model.filePath,
         hash: model.hash,
       });
-    } else if (customNamPath) {
-      attachments.push({ type: "nam", filePath: customNamPath, hash: "" });
+    } else if (customModelPath) {
+      attachments.push({ type: "audiofx", filePath: customModelPath, hash: "" });
     }
-  } else if (customNamPath) {
-    attachments.push({ type: "nam", filePath: customNamPath, hash: "" });
+  } else if (customModelPath) {
+    attachments.push({ type: "audiofx", filePath: customModelPath, hash: "" });
   }
 
   // Resolve IR
@@ -108,18 +108,18 @@ function buildAttachments(namModelId, irId, customNamPath = null, customIrPath =
 }
 
 /**
- * Loads the NAM model library from the JSON file.
- * @returns {Promise<Array>} Array of NAM model objects
+ * Loads the AudioFX model library from the JSON file.
+ * @returns {Promise<Array>} Array of AudioFX model objects
  */
-async function loadNamModelLibrary() {
+async function loadAudioFxModelLibrary() {
   try {
-    const response = await fetch("data/nam-models.json");
+    const response = await fetch("data/audiofx-models.json");
     if (!response.ok) {
-      throw new Error(`Failed to load NAM models: ${response.status}`);
+      throw new Error(`Failed to load AudioFX models: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
-    console.error(`Error loading NAM model library: ${error.message}`);
+    console.error(`Error loading AudioFX model library: ${error.message}`);
     return [];
   }
 }
@@ -155,7 +155,7 @@ async function loadDefaultPresets() {
     // Build attachments for each preset based on library IDs
     return presets.map((preset) => ({
       ...preset,
-      attachments: buildAttachments(preset.namModelId, preset.irId),
+      attachments: buildAttachments(preset.audioFxModelId, preset.irId),
     }));
   } catch (error) {
     console.error(`Error loading default presets: ${error.message}`);
@@ -165,21 +165,21 @@ async function loadDefaultPresets() {
 
 /**
  * Initializes all data libraries from JSON files.
- * Must be called before using NAM_MODEL_LIBRARY, IR_LIBRARY, or DEFAULT_PRESETS.
+ * Must be called before using AUDIOFX_MODEL_LIBRARY, IR_LIBRARY, or DEFAULT_PRESETS.
  */
 async function initializeDataLibraries() {
   // Load model and IR libraries first (needed for preset attachments)
   const [models, irs] = await Promise.all([
-    loadNamModelLibrary(),
+    loadAudioFxModelLibrary(),
     loadIrLibrary(),
   ]);
-  NAM_MODEL_LIBRARY = models;
+  AUDIOFX_MODEL_LIBRARY = models;
   IR_LIBRARY = irs;
   
   // Load presets after libraries are ready
   DEFAULT_PRESETS = await loadDefaultPresets();
   
-  console.log(`Loaded ${NAM_MODEL_LIBRARY.length} NAM models, ${IR_LIBRARY.length} IRs, ${DEFAULT_PRESETS.length} default presets`);
+  console.log(`Loaded ${AUDIOFX_MODEL_LIBRARY.length} AudioFX models, ${IR_LIBRARY.length} IRs, ${DEFAULT_PRESETS.length} default presets`);
 }
 
 const DEMO_AUDIO_SAMPLES = [
