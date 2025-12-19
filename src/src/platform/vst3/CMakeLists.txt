@@ -48,6 +48,8 @@ set(_iplug2_vst3_sources
 )
 
 # iPlug2 IGraphics sources
+# Note: IGraphicsWin.cpp already #includes IGraphicsNanoVG.cpp, nanovg.c, and glad.c
+# so we don't add those separately
 set(_igraphics_sources
   ${iPlug2_SOURCE_DIR}/IGraphics/IControl.cpp
   ${iPlug2_SOURCE_DIR}/IGraphics/IGraphics.cpp
@@ -71,7 +73,11 @@ set(_nam_vst3_sources
 
 add_library(NAMGuitarFX_VST3 MODULE ${_nam_vst3_sources})
 
-target_compile_definitions(NAMGuitarFX_VST3 PRIVATE VST3_API)
+target_compile_definitions(NAMGuitarFX_VST3 PRIVATE 
+  VST3_API 
+  IPLUG_EDITOR=1 
+  IPLUG_DSP=1
+)
 
 # Include all paths needed for compiling NAMGuitarPlugin.cpp with VST3_API
 target_include_directories(NAMGuitarFX_VST3 PRIVATE
@@ -117,9 +123,41 @@ target_link_libraries(NAMGuitarFX_VST3
     gdi32
     advapi32
     wininet
+    opengl32
 )
 
 set_target_properties(NAMGuitarFX_VST3 PROPERTIES
   OUTPUT_NAME NAMGuitarFX
   FOLDER NAMGuitarFX/Formats
 )
+
+# Create VST3 bundle structure
+# VST3 on Windows expects:
+# <name>.vst3/Contents/x86_64-win/<name>.vst3 (the DLL)
+# <name>.vst3/Contents/Resources/ (resources)
+
+set(VST3_BUNDLE_DIR "${CMAKE_BINARY_DIR}/NAMGuitarFX.vst3")
+set(VST3_CONTENTS_DIR "${VST3_BUNDLE_DIR}/Contents")
+set(VST3_ARCH_DIR "${VST3_CONTENTS_DIR}/x86_64-win")
+set(VST3_RESOURCES_DIR "${VST3_CONTENTS_DIR}/Resources")
+
+# Post-build commands to create bundle
+add_custom_command(TARGET NAMGuitarFX_VST3 POST_BUILD
+  # Create directory structure
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${VST3_ARCH_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${VST3_RESOURCES_DIR}"
+  
+  # Copy the DLL to the bundle
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "$<TARGET_FILE:NAMGuitarFX_VST3>"
+    "${VST3_ARCH_DIR}/NAMGuitarFX.vst3"
+  
+  # Copy resources
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../resources/ui"
+    "${VST3_RESOURCES_DIR}/ui"
+  
+  COMMENT "Creating VST3 bundle structure"
+)
+
+message(STATUS "VST3 bundle will be created at: ${VST3_BUNDLE_DIR}")
