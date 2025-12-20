@@ -68,6 +68,10 @@ To produce binary plugins you must provide the following SDKs:
 
 The `cmake/Toolchain` logic emits warnings when a requested SDK is unavailable; builds will continue for the supported targets only.
 
+## Branding
+
+Standalone and plugin builds read their company/product labels from `src/config/NAMGuitarConfig.h`. Update `NAM_BRAND_COMPANY_STR` and `NAM_BRAND_PRODUCT_STR` (or the combined `NAM_BRAND_DISPLAY_STR`) to rename the app once and propagate the change everywhere `PLUG_NAME`/`PLUG_MFR` are consumed. Rebuild after editing the config so resources and wrappers pick up the new values.
+
 ## Preset API
 
 The preset service is abstracted behind `PresetRemoteService`. By default it points to `https://api.example.com/presets`. Override the endpoint through the preferences JSON (`resources/config/defaults.json`) or set the `NEURON_GUITAR_PRESET_ENDPOINT` environment variable.

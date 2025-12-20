@@ -14,7 +14,7 @@
 #define AAX_TYPE_IDS 'NmFx'
 #define AAX_TYPE_IDS_AUDIOSUITE 'NmFa'
 #define AAX_PLUG_MFR_STR "NrnG"
-#define AAX_PLUG_NAME_STR "NAMGuitarFX\nNAMG"
+#define AAX_PLUG_NAME_STR PLUG_NAME "\nNAMG"
 #define AAX_PLUG_CATEGORY_STR "Effect"
 #define AAX_DOES_AUDIOSUITE 0
 

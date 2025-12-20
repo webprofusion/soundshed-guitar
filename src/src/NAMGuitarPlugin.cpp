@@ -1005,7 +1005,7 @@ namespace namguitar
       attachment.filePath = *resolvedPath;
       attachment.data.clear();
 
-      if (attachment.type == "nam")
+      if (attachment.type == "nam" || attachment.type == "audiofx")
       {
         if (mDSP->LoadModel(*resolvedPath))
         {
@@ -1529,14 +1529,15 @@ namespace namguitar
       return std::nullopt;
     }
 
-    if (!attachment.hash.empty())
+    // skip file hash check just now
+    /*if (!attachment.hash.empty())
     {
       const auto hash = mHasher.HashFile(target);
       if (!hash.empty() && hash != attachment.hash)
       {
         return std::nullopt;
       }
-    }
+    }*/
 
     return target;
   }

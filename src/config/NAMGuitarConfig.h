@@ -1,14 +1,20 @@
 #pragma once
 
-#define PLUG_NAME "NAMGuitarFX"
-#define PLUG_MFR "NeuronGuitar"
+#define NAM_BRAND_COMPANY_STR "Soundshed"
+#define NAM_BRAND_PRODUCT_STR "Neuron FX"
+#define NAM_BRAND_COPYRIGHT_YEAR_STR "2025"
+#define NAM_BRAND_DOMAIN_STR "com.soundshed.neuronfx"
+#define NAM_BRAND_DISPLAY_STR NAM_BRAND_COMPANY_STR " " NAM_BRAND_PRODUCT_STR
+
+#define PLUG_NAME NAM_BRAND_PRODUCT_STR
+#define PLUG_MFR NAM_BRAND_COMPANY_STR
 #define PLUG_VERSION_HEX 0x00010000
 #define PLUG_VERSION_STR "0.1.0"
-#define PLUG_UNIQUE_ID 'NmFx'
-#define PLUG_MFR_ID 'NrnG'
-#define PLUG_URL_STR ""
-#define PLUG_EMAIL_STR "support@example.com"
-#define PLUG_COPYRIGHT_STR "Copyright 2025 Neuron Guitar"
+#define PLUG_UNIQUE_ID 'SNFX'
+#define PLUG_MFR_ID 'Wbp'
+#define PLUG_URL_STR "https://soundshed.com"
+#define PLUG_EMAIL_STR "support@soundshed.com"
+#define PLUG_COPYRIGHT_STR "Copyright " NAM_BRAND_COPYRIGHT_YEAR_STR " " NAM_BRAND_COMPANY_STR
 
 #define PLUG_CHANNEL_IO "2-2"
 
@@ -28,12 +34,22 @@
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
 
-#define BUNDLE_NAME "NAMGuitarFX"
-#define BUNDLE_MFR "NeuronGuitar"
-#define BUNDLE_DOMAIN "com.neuronguitar.namguitafx"
+#define BUNDLE_NAME NAM_BRAND_PRODUCT_STR
+#define BUNDLE_MFR NAM_BRAND_COMPANY_STR
+#define BUNDLE_DOMAIN NAM_BRAND_DOMAIN_STR
 
-#define SHARED_RESOURCES_SUBPATH "NAMGuitarFX"
+#define SHARED_RESOURCES_SUBPATH NAM_BRAND_PRODUCT_STR
 
 #define PLUG_BG_COLOR 0x202020FF
 
 #define VST3_SUBCATEGORY "Fx"
+
+#ifdef __cplusplus
+namespace namguitar::branding
+{
+inline constexpr const char* kCompany = NAM_BRAND_COMPANY_STR;
+inline constexpr const char* kProduct = NAM_BRAND_PRODUCT_STR;
+inline constexpr const char* kDisplay = NAM_BRAND_DISPLAY_STR;
+inline constexpr const char* kDomain = NAM_BRAND_DOMAIN_STR;
+}
+#endif
