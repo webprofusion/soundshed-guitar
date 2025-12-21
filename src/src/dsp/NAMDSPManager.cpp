@@ -24,6 +24,7 @@ namespace namguitar
 
   void NAMDSPManager::Prepare(double sampleRate, int maxBlockSize)
   {
+    const double previousSampleRate = mSampleRate;
     mSampleRate = sampleRate;
     mMaxBlockSize = std::max(1, maxBlockSize);
 
@@ -39,6 +40,16 @@ namespace namguitar
       if (model)
       {
         model->ResetAndPrewarm(mSampleRate, mMaxBlockSize);
+      }
+    }
+
+    // If sample rate changed and we have an IR loaded, reload it at the new sample rate
+    if (std::abs(sampleRate - previousSampleRate) > 1.0)
+    {
+      const auto currentIR = mIRManager.CurrentImpulseResponse();
+      if (currentIR)
+      {
+        LoadImpulseResponse(*currentIR);
       }
     }
   }
@@ -220,7 +231,7 @@ namespace namguitar
 
       if (impulseSize > 0 && static_cast<std::size_t>(channel) < mIRState.size())
       {
-        ApplyImpulseResponse(channelBuffer, channel);
+       // ApplyImpulseResponse(channelBuffer, channel);
       }
     }
 
