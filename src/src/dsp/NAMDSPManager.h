@@ -45,6 +45,10 @@ namespace namguitar
 
     void Process(iplug::sample **inputs, iplug::sample **outputs, int nFrames);
 
+    // Test accessors
+    [[nodiscard]] bool HasModel() const noexcept;
+    [[nodiscard]] bool HasImpulseResponse() const noexcept;
+
   private:
     double ApplyDrive(double sample) const;
     double ApplyTone(double sample, int channel);

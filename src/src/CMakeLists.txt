@@ -23,6 +23,7 @@ set(_namguitar_core_sources
   dsp/IRManager.h
   dsp/NAMDSPManager.cpp
   dsp/NAMDSPManager.h
+  dsp/NAMFactoryForce.cpp
   models/ModelHasher.cpp
   models/ModelHasher.h
   network/PresetServiceClient.cpp

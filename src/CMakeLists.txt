@@ -14,6 +14,7 @@ option(NAMGUITAR_ENABLE_AAX "Build the AAX plugin" OFF)
 option(NAMGUITAR_ENABLE_APP "Build the standalone application" ON)
 option(NAMGUITAR_ENABLE_TOOLS "Build debug and diagnostic tools" ON)
 option(NAMGUITAR_FETCH_DEPENDENCIES "Automatically fetch iPlug2 and NeuralAmpModelerCore" ON)
+option(NAMGUITAR_ENABLE_TESTS "Build the test suite" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchDependencies)
@@ -23,4 +24,9 @@ add_subdirectory(src)
 # Debug tools
 if(NAMGUITAR_ENABLE_TOOLS)
     add_subdirectory(tools/vst3_debug_host)
+endif()
+
+if(NAMGUITAR_ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

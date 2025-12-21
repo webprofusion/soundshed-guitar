@@ -12,15 +12,32 @@ namespace namguitar
 {
   namespace
   {
+    // FourCC codes in WAV files are stored as 4 ASCII characters in sequence.
+    // On a little-endian machine, reading these 4 bytes as a uint32_t results
+    // in the first character being in the low byte.
     constexpr std::uint32_t MakeFourCC(char a, char b, char c, char d)
     {
-      return (static_cast<std::uint32_t>(a) << 24) | (static_cast<std::uint32_t>(b) << 16) | (static_cast<std::uint32_t>(c) << 8) | static_cast<std::uint32_t>(d);
+      return static_cast<std::uint32_t>(static_cast<unsigned char>(a)) |
+             (static_cast<std::uint32_t>(static_cast<unsigned char>(b)) << 8) |
+             (static_cast<std::uint32_t>(static_cast<unsigned char>(c)) << 16) |
+             (static_cast<std::uint32_t>(static_cast<unsigned char>(d)) << 24);
     }
 
     template <typename T>
     bool ReadValue(std::ifstream &stream, T &value)
     {
       return static_cast<bool>(stream.read(reinterpret_cast<char *>(&value), sizeof(T)));
+    }
+
+    // Read a FourCC code as raw bytes (no endianness conversion)
+    std::uint32_t ReadFourCC(std::ifstream &stream)
+    {
+      std::uint32_t value;
+      if (!ReadValue(stream, value))
+      {
+        return 0;
+      }
+      return value;
     }
 
     template <typename T>
@@ -152,7 +169,7 @@ namespace namguitar
 
     while (stream && !dataLoaded)
     {
-      const std::uint32_t chunkId = ReadLittleEndian<std::uint32_t>(stream);
+      const std::uint32_t chunkId = ReadFourCC(stream);
       const std::uint32_t chunkSize = ReadLittleEndian<std::uint32_t>(stream);
 
       if (!stream)
@@ -182,9 +199,9 @@ namespace namguitar
 
   bool IRManager::ParseRiffHeader(std::ifstream &stream)
   {
-    const auto riff = ReadLittleEndian<std::uint32_t>(stream);
+    const auto riff = ReadFourCC(stream);
     const auto fileSize = ReadLittleEndian<std::uint32_t>(stream);
-    const auto wave = ReadLittleEndian<std::uint32_t>(stream);
+    const auto wave = ReadFourCC(stream);
 
     (void)fileSize;
 

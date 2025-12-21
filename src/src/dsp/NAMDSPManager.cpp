@@ -362,4 +362,14 @@ namespace namguitar
     }
   }
 
+  bool NAMDSPManager::HasModel() const noexcept
+  {
+    return mModels[0] != nullptr;
+  }
+
+  bool NAMDSPManager::HasImpulseResponse() const noexcept
+  {
+    return mIRManager.HasImpulse();
+  }
+
 } // namespace namguitar
