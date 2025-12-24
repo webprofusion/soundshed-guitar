@@ -58,7 +58,7 @@
     "name": "Metal 1.1",
     "category": "Factory",
     "description": "Tight high-gain lead preset with a gentle noise gate.",
-    "audioFxModelId": "audiofx-model-test-default",
+    "audioFxModelId": "audiofx-model-test-02",
     "irId": "ir-906-1960",
     "fxChain": ["noise_gate"],
     "parameters": [

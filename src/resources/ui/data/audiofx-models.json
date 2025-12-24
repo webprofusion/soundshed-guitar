@@ -5,5 +5,12 @@
     "filePath": "amps/Guitar/Scharrface/Randall Protube 2000/Randall Protube 2000 Overdrive channel V4 G6 B6 M5 T6 Gain Voicing2 boosted by Airis Parallel OD.nam",
     "title": "Randall Protube 2000 Overdrive",
     "description": "Default bundled NAM model for testing"
+  },
+    {
+    "id": "audiofx-model-test-02",
+    "hash": "f3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "filePath": "amps/Guitar/TimR/JCM800 2203 1985/JCM800 Hi P6 B8 M4 T7 G10.nam",
+    "title": "JCM800",
+    "description": "Default bundled NAM model for testing"
   }
 ]
