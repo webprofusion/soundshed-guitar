@@ -39,3 +39,7 @@ src/src/platform/app/NAMGuitarFX_App.dir/
 src/src/platform/vst3/Debug/
 
 src/src/platform/vst3/NAMGuitarFX_VST3.dir/
+
+src/resources/ui/dist/
+
+src/resources/ui/node_modules/
