@@ -324,3 +324,89 @@ export function syncControlsFromState(): void {
 
   syncDoublerControlsFromState();
 }
+
+// Input mode state
+let currentMonoMode = true;
+let currentInputChannel = 1;
+
+function sendInputModeToPlugin(): void {
+  const message = JSON.stringify({
+    type: "setInputMode",
+    monoMode: currentMonoMode,
+    inputChannel: currentInputChannel,
+  });
+  
+  // Use IPlugSendMsg if available (standard IPlug2 bridge)
+  if (typeof (window as any).IPlugSendMsg === "function") {
+    (window as any).IPlugSendMsg(message);
+  }
+  
+  appendLog(`Input mode: ${currentMonoMode ? "Mono" : "Stereo"}, Channel: ${currentInputChannel + 1}`);
+}
+
+export function initializeInputModeControls(): void {
+  const inputModeRadios = document.querySelectorAll('input[name="input-mode"]') as NodeListOf<HTMLInputElement>;
+  const inputChannelSelector = document.getElementById("input-channel-selector");
+  const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
+
+  // Show/hide channel selector based on mono mode
+  function updateChannelSelectorVisibility(): void {
+    if (inputChannelSelector) {
+      if (currentMonoMode) {
+        inputChannelSelector.classList.remove("hidden");
+      } else {
+        inputChannelSelector.classList.add("hidden");
+      }
+    }
+  }
+
+  // Initialize radio button listeners
+  inputModeRadios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) {
+        currentMonoMode = radio.value === "mono";
+        updateChannelSelectorVisibility();
+        sendInputModeToPlugin();
+      }
+    });
+  });
+
+  // Initialize channel select listener
+  if (inputChannelSelect) {
+    inputChannelSelect.addEventListener("change", () => {
+      currentInputChannel = parseInt(inputChannelSelect.value, 10);
+      sendInputModeToPlugin();
+    });
+  }
+
+  // Set initial state
+  updateChannelSelectorVisibility();
+  sendInputModeToPlugin();
+}
+
+export function handleInputModeChanged(monoMode: boolean, inputChannel: number): void {
+  currentMonoMode = monoMode;
+  currentInputChannel = inputChannel;
+
+  // Update radio buttons
+  const inputModeRadios = document.querySelectorAll('input[name="input-mode"]') as NodeListOf<HTMLInputElement>;
+  inputModeRadios.forEach((radio) => {
+    radio.checked = (radio.value === "mono") === monoMode;
+  });
+
+  // Update channel select
+  const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
+  if (inputChannelSelect) {
+    inputChannelSelect.value = inputChannel.toString();
+  }
+
+  // Update visibility
+  const inputChannelSelector = document.getElementById("input-channel-selector");
+  if (inputChannelSelector) {
+    if (monoMode) {
+      inputChannelSelector.classList.remove("hidden");
+    } else {
+      inputChannelSelector.classList.add("hidden");
+    }
+  }
+}

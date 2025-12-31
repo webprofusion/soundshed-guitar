@@ -1006,6 +1006,10 @@ namespace namguitar
     {
       HandleTunerRequest(payload);
     }
+    else if (type == "setInputMode")
+    {
+      HandleSetInputModeRequest(payload);
+    }
   }
 
   void NAMGuitarPlugin::BroadcastState()
@@ -1535,6 +1539,38 @@ namespace namguitar
         message["referenceFrequency"] = mDSP->GetTunerReferenceFrequency();
         mWebUI->EnqueueMessage(message.dump());
       }
+    }
+  }
+
+  void NAMGuitarPlugin::HandleSetInputModeRequest(const nlohmann::json &payload)
+  {
+    if (!mDSP)
+    {
+      return;
+    }
+
+    // Set mono/stereo mode
+    if (payload.contains("monoMode"))
+    {
+      const bool mono = payload.value("monoMode", true);
+      mDSP->SetMonoMode(mono);
+    }
+
+    // Set input channel (0 = input 1, 1 = input 2)
+    if (payload.contains("inputChannel"))
+    {
+      const int channel = payload.value("inputChannel", 1);
+      mDSP->SetInputChannel(channel);
+    }
+
+    // Acknowledge the change
+    if (mWebUI)
+    {
+      nlohmann::json message;
+      message["type"] = "inputModeChanged";
+      message["monoMode"] = mDSP->IsMonoMode();
+      message["inputChannel"] = mDSP->GetInputChannel();
+      mWebUI->EnqueueMessage(message.dump());
     }
   }
 

@@ -77,8 +77,6 @@ namespace namguitar
     void SetTunerCallback(TunerCallback callback);
     void SetTunerReferenceFrequency(double frequency);
     [[nodiscard]] double GetTunerReferenceFrequency() const noexcept { return mTunerReferenceFrequency; }
-    void SetTunerInputChannel(int channel) { mTunerInputChannel = channel; }
-    [[nodiscard]] int GetTunerInputChannel() const noexcept { return mTunerInputChannel; }
 
     // Test accessors
     [[nodiscard]] bool HasModel() const noexcept;
@@ -168,7 +166,6 @@ namespace namguitar
     // Tuner state
     bool mTunerEnabled = false;
     double mTunerReferenceFrequency = 440.0;  // A4 reference pitch
-    int mTunerInputChannel = 1;  // Default to input 2 (index 1) for typical guitar setups
     TunerCallback mTunerCallback;
     std::vector<double> mTunerBuffer;         // Circular buffer for pitch detection
     std::size_t mTunerBufferWriteIndex = 0;

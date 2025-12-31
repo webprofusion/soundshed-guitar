@@ -293,25 +293,35 @@ namespace namguitar
     std::fill(mProcessedL.begin(), mProcessedL.begin() + frames, 0.0);
     std::fill(mProcessedR.begin(), mProcessedR.begin() + frames, 0.0);
 
-    for (int channel = 0; channel < kNumChannels; ++channel)
+    // Determine which input channels to process
+    const int startChannel = mMonoMode ? mInputChannel : 0;
+    const int endChannel = mMonoMode ? mInputChannel + 1 : kNumChannels;
+    
+    for (int channel = startChannel; channel < endChannel; ++channel)
     {
-      iplug::sample *inputChannel = inputs[channel];
+      // In mono mode, always use the selected input but process to both output channels
+      const int inputIdx = mMonoMode ? mInputChannel : channel;
+      iplug::sample *inputChannel = inputs[inputIdx];
       if (!inputChannel)
       {
         continue;
       }
 
-      std::vector<double>& channelBuffer = *channelBuffers[channel];
+      // In mono mode, process to the left channel buffer (will be copied to right later)
+      const int outputIdx = mMonoMode ? 0 : channel;
+      std::vector<double>& channelBuffer = *channelBuffers[outputIdx];
       for (int frame = 0; frame < frames; ++frame)
       {
         double sample = static_cast<double>(inputChannel[frame]) * mInputTrimLinear;
-        sample = ApplyGate(sample, channel);
+        sample = ApplyGate(sample, outputIdx);
         sample = ApplyDrive(sample);
-        sample = ApplyTone(sample, channel);
+        sample = ApplyTone(sample, outputIdx);
         mNamInput[static_cast<std::size_t>(frame)] = static_cast<NAM_SAMPLE>(sample);
       }
 
-      auto &model = mModels[static_cast<std::size_t>(channel)];
+      // In mono mode, use model index 0 only
+      const int modelIdx = mMonoMode ? 0 : outputIdx;
+      auto &model = mModels[static_cast<std::size_t>(modelIdx)];
       if (model)
       {
 
@@ -331,11 +341,17 @@ namespace namguitar
                        [](NAM_SAMPLE sample) { return static_cast<double>(sample); });
       }
 
-      if (impulseSize > 0 && static_cast<std::size_t>(channel) < mIRState.size())
+      if (impulseSize > 0 && static_cast<std::size_t>(modelIdx) < mIRState.size())
       {
         // temp disable IR convolution for now
-        //ApplyImpulseResponse(channelBuffer, channel);
+        //ApplyImpulseResponse(channelBuffer, modelIdx);
       }
+    }
+
+    // In mono mode, copy left channel to right channel
+    if (mMonoMode)
+    {
+      std::copy(mProcessedL.begin(), mProcessedL.begin() + frames, mProcessedR.begin());
     }
 
     // Apply doubler effect if enabled
@@ -604,8 +620,8 @@ namespace namguitar
 
   void NAMDSPManager::ProcessTuner(iplug::sample** inputs, int nFrames)
   {
-    // Use configured input channel (default is 1 for input 2)
-    const int ch = mTunerInputChannel;
+    // Use the main input channel setting (same as DSP processing)
+    const int ch = mInputChannel;
     if (!mTunerEnabled || !mTunerCallback || !inputs || !inputs[ch])
     {
       return;

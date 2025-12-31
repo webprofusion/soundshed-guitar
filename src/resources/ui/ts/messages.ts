@@ -1,6 +1,6 @@
 import { uiState, clonePreset } from "./state.js";
 import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, updatePresetDropdownSelection, savePresetToLocalStorage } from "./presets.js";
-import { syncControlsFromState } from "./controls.js";
+import { syncControlsFromState, handleInputModeChanged } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
@@ -189,6 +189,15 @@ export function handleIncomingMessage(message: string): void {
       const msg = (payload as { message?: string }).message ?? "";
       console.log("[C++]", msg);
       appendLog(`[C++] ${msg}`);
+      break;
+    }
+    case "inputModeChanged": {
+      const modePayload = payload as { monoMode?: boolean; inputChannel?: number };
+      handleInputModeChanged(
+        modePayload.monoMode ?? true,
+        modePayload.inputChannel ?? 1
+      );
+      appendLog(`Input mode changed: ${modePayload.monoMode ? "Mono" : "Stereo"}, Channel: ${(modePayload.inputChannel ?? 1) + 1}`);
       break;
     }
     default:

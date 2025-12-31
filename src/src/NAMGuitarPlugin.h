@@ -89,6 +89,7 @@ namespace namguitar
     void HandleBrowseModelRequest();
     void HandleBrowseIRRequest();
     void HandleTunerRequest(const nlohmann::json &payload);
+    void HandleSetInputModeRequest(const nlohmann::json &payload);
     void BroadcastState();
     void ApplyPreset(namguitar::Preset &preset);
     void ReportErrorToUI(std::string_view message, std::string_view detail = {}) const;
