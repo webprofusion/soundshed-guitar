@@ -12,5 +12,12 @@
     "filePath": "amps/Guitar/TimR/JCM800 2203 1985/JCM800 Hi P6 B8 M4 T7 G10.nam",
     "title": "JCM800",
     "description": "Default bundled NAM model for testing"
+  },
+   {
+    "id": "audiofx-model-test-03",
+    "hash": "b3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "filePath": "amps/Guitar/Pipp Priss/Pipps Boosted Goodiness Bugera 6262/Bug6262-CR-Grind.nam",
+    "title": "Bugera 6262",
+    "description": "Default bundled NAM model for testing"
   }
 ]

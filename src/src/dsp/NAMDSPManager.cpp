@@ -262,6 +262,20 @@ namespace namguitar
     // Process tuner if enabled (before any audio processing)
     ProcessTuner(inputs, frames);
 
+    // If tuner is enabled but live mode is disabled, output silence
+    if (mTunerEnabled && !mLiveTunerMode)
+    {
+      for (int channel = 0; channel < kNumChannels; ++channel)
+      {
+        iplug::sample* outputChannel = outputs[channel];
+        if (outputChannel)
+        {
+          std::fill_n(outputChannel, frames, static_cast<iplug::sample>(0.0));
+        }
+      }
+      return;
+    }
+
     const auto impulseSize = static_cast<int>(mIRManager.Impulse().size());
 
     // Ensure buffers are allocated even if Prepare() hasn't been called yet
@@ -326,10 +340,10 @@ namespace namguitar
       {
 
         // copy namInput to namOutput as  a simple test
-        //std::copy(mNamInput.begin(), mNamInput.begin() + frames, mNamOutput.begin());
+        std::copy(mNamInput.begin(), mNamInput.begin() + frames, mNamOutput.begin());
 
 
-        model->process(mNamInput.data(), mNamOutput.data(), frames);
+       // model->process(mNamInput.data(), mNamOutput.data(), frames);
         std::transform(mNamOutput.begin(), mNamOutput.begin() + frames,
                        channelBuffer.begin(),
                        [](NAM_SAMPLE sample) { return static_cast<double>(sample); });
@@ -344,7 +358,7 @@ namespace namguitar
       if (impulseSize > 0 && static_cast<std::size_t>(modelIdx) < mIRState.size())
       {
         // temp disable IR convolution for now
-        //ApplyImpulseResponse(channelBuffer, modelIdx);
+        ApplyImpulseResponse(channelBuffer, modelIdx);
       }
     }
 

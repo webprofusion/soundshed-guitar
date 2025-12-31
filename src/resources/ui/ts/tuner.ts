@@ -154,10 +154,15 @@ export function openTuner(): void {
   tunerModal.style.display = "flex";
   tunerState.isOpen = true;
 
-  // Start the tuner
-  if (tunerState.isLive) {
-    startTuner();
-  }
+  // Always start the tuner when modal opens
+  startTuner();
+  
+  // Also send the current live mode state
+  postMessage({
+    type: "tuner",
+    action: "setLiveMode",
+    liveMode: tunerState.isLive,
+  });
 
   appendLog("Tuner opened");
 }
@@ -206,15 +211,16 @@ function toggleLive(): void {
 
   tunerState.isLive = tunerLiveToggle.checked;
 
-  if (tunerState.isOpen) {
-    if (tunerState.isLive) {
-      startTuner();
-    } else {
-      stopTuner();
-    }
-  }
+  // Send live mode change to plugin
+  // When live mode is ON: audio passes through DSP while tuning
+  // When live mode is OFF: output is silent while tuning (just tuner display)
+  postMessage({
+    type: "tuner",
+    action: "setLiveMode",
+    liveMode: tunerState.isLive,
+  });
 
-  appendLog(`Tuner live mode: ${tunerState.isLive}`);
+  appendLog(`Tuner live mode: ${tunerState.isLive ? "ON (audio through)" : "OFF (silent)"}`);
 }
 
 function setDisplayMode(mode: "cents" | "hz"): void {
@@ -364,4 +370,12 @@ export function handleTunerReferenceChanged(referenceFrequency: number): void {
     tunerRefInput.value = referenceFrequency.toFixed(1);
   }
   appendLog(`Tuner reference changed: ${referenceFrequency} Hz`);
+}
+
+export function handleTunerLiveModeChanged(liveMode: boolean): void {
+  tunerState.isLive = liveMode;
+  if (tunerLiveToggle) {
+    tunerLiveToggle.checked = liveMode;
+  }
+  appendLog(`Tuner live mode: ${liveMode ? "ON (audio through)" : "OFF (silent)"}`);
 }

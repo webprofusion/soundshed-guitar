@@ -74,6 +74,8 @@ namespace namguitar
 
     void SetTunerEnabled(bool enabled);
     [[nodiscard]] bool IsTunerEnabled() const noexcept { return mTunerEnabled; }
+    void SetLiveTunerMode(bool enabled) { mLiveTunerMode = enabled; }
+    [[nodiscard]] bool IsLiveTunerMode() const noexcept { return mLiveTunerMode; }
     void SetTunerCallback(TunerCallback callback);
     void SetTunerReferenceFrequency(double frequency);
     [[nodiscard]] double GetTunerReferenceFrequency() const noexcept { return mTunerReferenceFrequency; }
@@ -165,6 +167,7 @@ namespace namguitar
 
     // Tuner state
     bool mTunerEnabled = false;
+    bool mLiveTunerMode = true;  // When true, audio passes through DSP while tuning; when false, output is silent
     double mTunerReferenceFrequency = 440.0;  // A4 reference pitch
     TunerCallback mTunerCallback;
     std::vector<double> mTunerBuffer;         // Circular buffer for pitch detection

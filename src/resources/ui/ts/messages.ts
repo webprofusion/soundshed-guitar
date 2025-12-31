@@ -4,7 +4,7 @@ import { syncControlsFromState, handleInputModeChanged } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
-import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged } from "./tuner.js";
+import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
 import type { Preset } from "./types.js";
 
 export function handleIncomingMessage(message: string): void {
@@ -183,6 +183,10 @@ export function handleIncomingMessage(message: string): void {
     }
     case "tunerReferenceChanged": {
       handleTunerReferenceChanged((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
+      break;
+    }
+    case "tunerLiveModeChanged": {
+      handleTunerLiveModeChanged((payload as { liveMode?: boolean }).liveMode ?? true);
       break;
     }
     case "debug": {

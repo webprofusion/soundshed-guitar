@@ -1540,6 +1540,19 @@ namespace namguitar
         mWebUI->EnqueueMessage(message.dump());
       }
     }
+    else if (action == "setLiveMode")
+    {
+      const bool liveMode = payload.value("liveMode", true);
+      mDSP->SetLiveTunerMode(liveMode);
+      
+      if (mWebUI)
+      {
+        nlohmann::json message;
+        message["type"] = "tunerLiveModeChanged";
+        message["liveMode"] = mDSP->IsLiveTunerMode();
+        mWebUI->EnqueueMessage(message.dump());
+      }
+    }
   }
 
   void NAMGuitarPlugin::HandleSetInputModeRequest(const nlohmann::json &payload)
