@@ -4,10 +4,13 @@ import { syncControlsFromState } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
+import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged } from "./tuner.js";
 import type { Preset } from "./types.js";
 
 export function handleIncomingMessage(message: string): void {
+  console.log("[JS] handleIncomingMessage received:", message.substring(0, 200));
   const payload = JSON.parse(message) as Record<string, unknown>;
+  console.log("[JS] Parsed message type:", payload.type);
   switch (payload.type) {
     case "state": {
       uiState.activePresetId = (payload as { activePresetId?: string }).activePresetId ?? null;
@@ -141,6 +144,51 @@ export function handleIncomingMessage(message: string): void {
         updatePresetDropdownSelection();
       }
       showNotification("Preset saved", (payload as { path?: string }).path ?? savedPreset?.name ?? "");
+      break;
+    }
+    case "tunerUpdate": {
+      const tunerPayload = payload as { 
+        detected?: boolean; 
+        noteName?: string; 
+        octave?: number;
+        frequency?: number;
+        centOffset?: number;
+        confidence?: number;
+        debugRms?: number;
+        debugRawFreq?: number;
+      };
+      
+      // Log debug info to console
+      const rms = tunerPayload.debugRms?.toFixed(6) ?? "?";
+      const rawFreq = tunerPayload.debugRawFreq?.toFixed(2) ?? "?";
+      console.log(`[Tuner] RMS=${rms}, rawFreq=${rawFreq}Hz, detected=${tunerPayload.detected}, note=${tunerPayload.noteName ?? "-"}`);
+      
+      handleTunerUpdate({
+        detected: tunerPayload.detected ?? false,
+        noteName: tunerPayload.noteName,
+        octave: tunerPayload.octave,
+        frequency: tunerPayload.frequency,
+        centOffset: tunerPayload.centOffset,
+        confidence: tunerPayload.confidence,
+      });
+      break;
+    }
+    case "tunerStarted": {
+      handleTunerStarted((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
+      break;
+    }
+    case "tunerStopped": {
+      handleTunerStopped();
+      break;
+    }
+    case "tunerReferenceChanged": {
+      handleTunerReferenceChanged((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
+      break;
+    }
+    case "debug": {
+      const msg = (payload as { message?: string }).message ?? "";
+      console.log("[C++]", msg);
+      appendLog(`[C++] ${msg}`);
       break;
     }
     default:

@@ -26,6 +26,20 @@
       "console": "integratedTerminal",
       "preLaunchTask": "Build NAMGuitarFX Debug"
     },
+     {
+      "name": "Debug SampleRateBufferTests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/build/tests/Debug/NAMGuitarFX_SampleRateBufferTests.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/src/build/tools",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build NAMGuitarFX Debug"
+      /*
+      cmake --build . --config Debug --target NAMGuitarFX_SampleRateBufferTests*/
+    },
     {
       "name": "Launch NAMGuitarFX App (Release)",
       "type": "cppvsdbg",

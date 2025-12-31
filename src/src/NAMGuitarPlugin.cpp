@@ -653,7 +653,7 @@ namespace namguitar
 
   void NAMGuitarPlugin::OnIdle()
   {
-    std::cout << "[Plugin] OnIdle called" << std::endl;
+    // std::cout << "[Plugin] OnIdle called" << std::endl;
 
     if (mWebUI)
     {
@@ -716,6 +716,34 @@ namespace namguitar
         if (!mSignalTestResult.passed)
         {
           message["message"] = "Signal path test did not produce any output";
+        }
+        mWebUI->EnqueueMessage(message.dump());
+      }
+    }
+
+    // Send tuner data updates to UI
+    if (mTunerDataPending.exchange(false, std::memory_order_acq_rel))
+    {
+      if (mWebUI && mTunerActive.load(std::memory_order_acquire))
+      {
+        TunerData data;
+        {
+          std::lock_guard<std::mutex> lock(mTunerMutex);
+          data = mPendingTunerData;
+        }
+
+        nlohmann::json message;
+        message["type"] = "tunerUpdate";
+        message["detected"] = data.detected;
+        message["debugRms"] = data.debugRms;
+        message["debugRawFreq"] = data.debugRawFreq;
+        if (data.detected)
+        {
+          message["noteName"] = data.noteName;
+          message["octave"] = data.octave;
+          message["frequency"] = data.frequency;
+          message["centOffset"] = data.centOffset;
+          message["confidence"] = data.confidence;
         }
         mWebUI->EnqueueMessage(message.dump());
       }
@@ -974,6 +1002,10 @@ namespace namguitar
     {
       HandleBrowseIRRequest();
     }
+    else if (type == "tuner")
+    {
+      HandleTunerRequest(payload);
+    }
   }
 
   void NAMGuitarPlugin::BroadcastState()
@@ -1045,6 +1077,8 @@ namespace namguitar
         if (mDSP->LoadModel(*resolvedPath))
         {
           mActiveModelPath = resolvedPath->generic_string();
+        } else {
+          ReportErrorToUI("Failed to load model from preset", "Could not parse model file: " + resolvedPath->generic_string());
         }
       }
       else if (attachment.type == "ir")
@@ -1052,6 +1086,8 @@ namespace namguitar
         if (mDSP->LoadImpulseResponse(*resolvedPath))
         {
           mActiveIRPath = resolvedPath->generic_string();
+        }else {
+          ReportErrorToUI("Failed to load IR from preset", "Could not parse IR file: " + resolvedPath->generic_string());
         }
       }
     }
@@ -1427,6 +1463,79 @@ namespace namguitar
 #else
     ReportErrorToUI("Browse not supported", "File browser is only available on Windows");
 #endif
+  }
+
+  void NAMGuitarPlugin::HandleTunerRequest(const nlohmann::json &payload)
+  {
+    if (!mDSP)
+    {
+      return;
+    }
+
+    const std::string action = payload.value("action", "");
+    
+    if (action == "start")
+    {
+      // Set up the tuner callback
+      mDSP->SetTunerCallback([this](const NAMDSPManager::TunerResult& result) {
+        std::lock_guard<std::mutex> lock(mTunerMutex);
+        mPendingTunerData.noteName = result.noteName;
+        mPendingTunerData.octave = result.octave;
+        mPendingTunerData.frequency = result.frequency;
+        mPendingTunerData.centOffset = result.centOffset;
+        mPendingTunerData.confidence = result.confidence;
+        mPendingTunerData.detected = result.detected;
+        mPendingTunerData.debugRms = result.debugRms;
+        mPendingTunerData.debugRawFreq = result.debugRawFreq;
+        mTunerDataPending.store(true, std::memory_order_release);
+      });
+      
+      // Set reference frequency if provided
+      if (payload.contains("referenceFrequency"))
+      {
+        const double refFreq = payload.value("referenceFrequency", 440.0);
+        mDSP->SetTunerReferenceFrequency(refFreq);
+      }
+      
+      mTunerActive.store(true, std::memory_order_release);
+      mDSP->SetTunerEnabled(true);
+      
+      // Acknowledge tuner started
+      if (mWebUI)
+      {
+        nlohmann::json message;
+        message["type"] = "tunerStarted";
+        message["referenceFrequency"] = mDSP->GetTunerReferenceFrequency();
+        mWebUI->EnqueueMessage(message.dump());
+      }
+    }
+    else if (action == "stop")
+    {
+      mDSP->SetTunerEnabled(false);
+      mDSP->SetTunerCallback(nullptr);
+      mTunerActive.store(false, std::memory_order_release);
+      
+      // Acknowledge tuner stopped
+      if (mWebUI)
+      {
+        nlohmann::json message;
+        message["type"] = "tunerStopped";
+        mWebUI->EnqueueMessage(message.dump());
+      }
+    }
+    else if (action == "setReference")
+    {
+      const double refFreq = payload.value("referenceFrequency", 440.0);
+      mDSP->SetTunerReferenceFrequency(refFreq);
+      
+      if (mWebUI)
+      {
+        nlohmann::json message;
+        message["type"] = "tunerReferenceChanged";
+        message["referenceFrequency"] = mDSP->GetTunerReferenceFrequency();
+        mWebUI->EnqueueMessage(message.dump());
+      }
+    }
   }
 
   void NAMGuitarPlugin::HandlePreviewDemoRequest(const nlohmann::json &payload)

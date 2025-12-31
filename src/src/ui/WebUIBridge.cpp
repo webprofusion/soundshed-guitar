@@ -113,7 +113,8 @@ void WebUIBridge::PumpMessages()
   while (!messages.empty())
   {
     const auto& message = messages.front();
-    std::string script = "window.postMessage(\"" + EscapeForJavaScriptString(message) + "\", '*');";
+    // Call IPlugReceiveData directly instead of postMessage since the UI expects it
+    std::string script = "if (window.IPlugReceiveData) { window.IPlugReceiveData(\"" + EscapeForJavaScriptString(message) + "\"); }";
     mWebView->EvaluateJavaScript(script.c_str());
     if (mLogger)
     {

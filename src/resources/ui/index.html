@@ -264,6 +264,67 @@
         <span class="footer-hint notification" id="notification-area">[Click] to access the Cab Section · [R Click] or [Double Click] to activate/deactivate.</span>
       </footer>
       
+      <!-- Tuner Modal -->
+      <div id="tuner-modal" class="modal tuner-modal" style="display: none;">
+        <div class="tuner-content">
+          <div class="tuner-header">
+            <span class="tuner-title">Tuner</span>
+            <div class="tuner-header-controls">
+              <button class="tuner-mute-btn" id="tuner-mute-btn" title="Mute output">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" fill="currentColor"/></svg>
+              </button>
+              <button class="tuner-close-btn" id="tuner-close-btn" title="Close tuner">×</button>
+            </div>
+          </div>
+          
+          <div class="tuner-display">
+            <!-- Cents display -->
+            <div class="tuner-cents-display">
+              <span class="cents-marker cents-left">-50</span>
+              <span class="cents-indicator" id="tuner-cents-indicator">></span>
+              <span class="cents-value" id="tuner-cents-value">0.0</span>
+              <span class="cents-marker cents-right">+50</span>
+            </div>
+            
+            <!-- Visual pitch indicator -->
+            <div class="tuner-pitch-track">
+              <div class="tuner-pitch-indicator" id="tuner-pitch-indicator"></div>
+              <div class="tuner-pitch-target"></div>
+            </div>
+            
+            <!-- Note display -->
+            <div class="tuner-note-display">
+              <span class="adjacent-note adjacent-note-left" id="tuner-note-left">-</span>
+              <span class="current-note" id="tuner-current-note">-</span>
+              <span class="adjacent-note adjacent-note-right" id="tuner-note-right">-</span>
+            </div>
+          </div>
+          
+          <div class="tuner-controls">
+            <div class="tuner-control-group">
+              <button class="tuner-unit-btn active" id="tuner-cents-btn">Cents</button>
+              <button class="tuner-unit-btn" id="tuner-hz-btn">Hz</button>
+            </div>
+            
+            <div class="tuner-control-group">
+              <label class="toggle-switch tuner-toggle">
+                <input type="checkbox" id="tuner-live-toggle" checked />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="tuner-toggle-label">Live Tuner</span>
+            </div>
+            
+            <div class="tuner-control-group tuner-ref-group">
+              <input type="number" id="tuner-ref-freq" value="440.0" min="400" max="480" step="0.1" class="tuner-ref-input" />
+              <div class="tuner-ref-buttons">
+                <button class="tuner-ref-btn" id="tuner-ref-up">▲</button>
+                <button class="tuner-ref-btn" id="tuner-ref-down">▼</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <!-- Save Preset Modal -->
       <div id="save-preset-modal" class="modal" style="display: none;">
         <div class="modal-content">

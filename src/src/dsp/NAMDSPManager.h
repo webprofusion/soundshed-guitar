@@ -3,11 +3,16 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "IPlugConstants.h"
 #include "NAM/dsp.h"
+
+// Forward declare factory registration function
+namespace nam { namespace factory { void ForceFactoryRegistration(); } }
 #include "dsp/IRManager.h"
 
 namespace nam
@@ -43,8 +48,37 @@ namespace namguitar
     void SetDoublerEnabled(bool enabled);
     void SetDoublerDelay(double milliseconds);
     void SetTranspose(int semitones);
+    
+    // Input mode settings
+    void SetMonoMode(bool enabled) { mMonoMode = enabled; }
+    [[nodiscard]] bool IsMonoMode() const noexcept { return mMonoMode; }
+    void SetInputChannel(int channel) { mInputChannel = std::clamp(channel, 0, 1); }
+    [[nodiscard]] int GetInputChannel() const noexcept { return mInputChannel; }
 
     void Process(iplug::sample **inputs, iplug::sample **outputs, int nFrames);
+
+    // Tuner functionality
+    struct TunerResult
+    {
+      std::string noteName;       // e.g., "E", "A#", "Bb"
+      int octave = 0;             // Octave number (e.g., 2 for low E on guitar)
+      double frequency = 0.0;     // Detected frequency in Hz
+      double centOffset = 0.0;    // Cents deviation from perfect pitch (-50 to +50)
+      double confidence = 0.0;    // Detection confidence (0.0 to 1.0)
+      bool detected = false;      // Whether a valid pitch was detected
+      double debugRms = 0.0;      // Debug: RMS of input signal
+      double debugRawFreq = 0.0;  // Debug: Raw detected frequency before note mapping
+    };
+
+    using TunerCallback = std::function<void(const TunerResult&)>;
+
+    void SetTunerEnabled(bool enabled);
+    [[nodiscard]] bool IsTunerEnabled() const noexcept { return mTunerEnabled; }
+    void SetTunerCallback(TunerCallback callback);
+    void SetTunerReferenceFrequency(double frequency);
+    [[nodiscard]] double GetTunerReferenceFrequency() const noexcept { return mTunerReferenceFrequency; }
+    void SetTunerInputChannel(int channel) { mTunerInputChannel = channel; }
+    [[nodiscard]] int GetTunerInputChannel() const noexcept { return mTunerInputChannel; }
 
     // Test accessors
     [[nodiscard]] bool HasModel() const noexcept;
@@ -59,6 +93,11 @@ namespace namguitar
     double ApplyTone(double sample, int channel);
     double ApplyGate(double sample, int channel);
     void ApplyImpulseResponse(std::vector<double> &channelSamples, int channel) const;
+    
+    // Pitch detection using autocorrelation
+    void ProcessTuner(iplug::sample** inputs, int nFrames);
+    double DetectPitch(const std::vector<double>& samples) const;
+    TunerResult FrequencyToNote(double frequency) const;
 
     std::array<std::unique_ptr<nam::DSP>, 2> mModels;
     IRManager mIRManager;
@@ -70,7 +109,7 @@ namespace namguitar
     std::vector<double> mToneLowState;
     std::vector<double> mToneHighState;
 
-    double mSampleRate = 44100.0;
+    double mSampleRate = 48000;///44100.0;
     int mMaxBlockSize = 512;
 
     double mInputTrimDb = 0.0;
@@ -82,6 +121,10 @@ namespace namguitar
     bool mGateEnabled = false;
     double mGateThreshold = -60.0;
     double mMix = 1.0; // 0.0 = fully dry, 1.0 = fully wet
+    
+    // Input mode settings
+    bool mMonoMode = true;  // Default to mono mode
+    int mInputChannel = 1;  // Default to input 2 (index 1) for typical guitar setups
 
     // Doubler effect state
     bool mDoublerEnabled = false;
@@ -100,6 +143,20 @@ namespace namguitar
     std::size_t mPitchWriteIndex = 0;
     double mPitchPhase = 0.0;
 
+    // Preallocated processing buffers to avoid per-block heap allocations
+    std::vector<double> mProcessedL;
+    std::vector<double> mProcessedR;
+    std::vector<double> mMonoSignal;
+    std::vector<double> mPitchShiftedL;
+    std::vector<double> mPitchShiftedR;
+
+    // Denormal protection helper
+    static inline double SanitizeDenormal(double x)
+    {
+      constexpr double kThreshold = 1e-20;
+      return (std::abs(x) < kThreshold) ? 0.0 : x;
+    }
+
     struct IRHistory
     {
       std::vector<double> buffer;
@@ -107,5 +164,16 @@ namespace namguitar
     };
 
     mutable std::vector<IRHistory> mIRState;
+
+    // Tuner state
+    bool mTunerEnabled = false;
+    double mTunerReferenceFrequency = 440.0;  // A4 reference pitch
+    int mTunerInputChannel = 1;  // Default to input 2 (index 1) for typical guitar setups
+    TunerCallback mTunerCallback;
+    std::vector<double> mTunerBuffer;         // Circular buffer for pitch detection
+    std::size_t mTunerBufferWriteIndex = 0;
+    std::size_t mTunerSampleCounter = 0;      // For throttling callback rate
+    static constexpr std::size_t kTunerBufferSize = 4096;  // ~85ms at 48kHz for good low-frequency detection
+    static constexpr std::size_t kTunerUpdateInterval = 2048;  // Update every ~42ms at 48kHz
   };
 } // namespace namguitar

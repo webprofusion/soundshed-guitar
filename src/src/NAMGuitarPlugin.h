@@ -88,6 +88,7 @@ namespace namguitar
     void HandleSavePresetRequest(const nlohmann::json &payload);
     void HandleBrowseModelRequest();
     void HandleBrowseIRRequest();
+    void HandleTunerRequest(const nlohmann::json &payload);
     void BroadcastState();
     void ApplyPreset(namguitar::Preset &preset);
     void ReportErrorToUI(std::string_view message, std::string_view detail = {}) const;
@@ -146,6 +147,23 @@ namespace namguitar
     std::vector<iplug::sample> mPreviewInputRight;
     std::vector<iplug::sample> mPreviewOutputLeft;
     std::vector<iplug::sample> mPreviewOutputRight;
+
+    // Tuner state
+    std::atomic<bool> mTunerActive{false};
+    struct TunerData
+    {
+      std::string noteName;
+      int octave = 0;
+      double frequency = 0.0;
+      double centOffset = 0.0;
+      double confidence = 0.0;
+      bool detected = false;
+      double debugRms = 0.0;
+      double debugRawFreq = 0.0;
+    };
+    std::atomic<bool> mTunerDataPending{false};
+    TunerData mPendingTunerData;
+    mutable std::mutex mTunerMutex;
 
     // Mutex to protect DSP state during model/IR loading
     // ProcessBlock (audio thread) and ApplyPreset/LoadModel/LoadIR (UI thread) share mDSP

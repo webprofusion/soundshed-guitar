@@ -92,3 +92,55 @@ target_link_libraries(NAMGuitarFX_IRConvolutionTests
 target_compile_features(NAMGuitarFX_IRConvolutionTests PRIVATE cxx_std_20)
 
 add_test(NAME IRConvolutionTests COMMAND NAMGuitarFX_IRConvolutionTests)
+
+# NAM Model Diagnostic Tests - detailed diagnostics for model processing issues
+add_executable(NAMGuitarFX_ModelDiagnosticTests
+  NAMModelDiagnosticTests.cpp
+)
+
+target_include_directories(NAMGuitarFX_ModelDiagnosticTests
+  PRIVATE
+    ${NAMGUITAR_PROJECT_ROOT}/src
+    ${NeuralAmpModelerCore_SOURCE_DIR}
+)
+
+target_link_libraries(NAMGuitarFX_ModelDiagnosticTests
+  PRIVATE
+    NAMGuitarFXCore
+    nlohmann_json::nlohmann_json
+)
+
+target_compile_features(NAMGuitarFX_ModelDiagnosticTests PRIVATE cxx_std_20)
+
+target_compile_definitions(NAMGuitarFX_ModelDiagnosticTests
+  PRIVATE
+    NAMGUITAR_TEST_RESOURCES_DIR="${NAMGUITAR_RESOURCES_DIR_NORMALIZED}"
+)
+
+add_test(NAME NAMModelDiagnosticTests COMMAND NAMGuitarFX_ModelDiagnosticTests)
+
+# Sample Rate and Buffer Size Tests - diagnoses sample rate and buffer issues
+add_executable(NAMGuitarFX_SampleRateBufferTests
+  SampleRateBufferTests.cpp
+)
+
+target_include_directories(NAMGuitarFX_SampleRateBufferTests
+  PRIVATE
+    ${NAMGUITAR_PROJECT_ROOT}/src
+    ${NeuralAmpModelerCore_SOURCE_DIR}
+)
+
+target_link_libraries(NAMGuitarFX_SampleRateBufferTests
+  PRIVATE
+    NAMGuitarFXCore
+    nlohmann_json::nlohmann_json
+)
+
+target_compile_features(NAMGuitarFX_SampleRateBufferTests PRIVATE cxx_std_20)
+
+target_compile_definitions(NAMGuitarFX_SampleRateBufferTests
+  PRIVATE
+    NAMGUITAR_TEST_RESOURCES_DIR="${NAMGUITAR_RESOURCES_DIR_NORMALIZED}"
+)
+
+add_test(NAME SampleRateBufferTests COMMAND NAMGuitarFX_SampleRateBufferTests)

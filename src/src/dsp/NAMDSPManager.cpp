@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <array>
+#include <iostream>
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 
@@ -17,9 +19,24 @@ namespace namguitar
 
     constexpr int kNumChannels = 2;
 
+    // Note names for pitch detection
+    constexpr std::array<const char*, 12> kNoteNames = {
+      "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+    };
+    
+    // Alternative note names (flats)
+    constexpr std::array<const char*, 12> kNoteNamesFlat = {
+      "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"
+    };
+
   } // namespace
 
-  NAMDSPManager::NAMDSPManager() = default;
+  NAMDSPManager::NAMDSPManager()
+  {
+    // Ensure NAM factory registrations are not optimized out by the linker
+    nam::factory::ForceFactoryRegistration();
+  }
+
   NAMDSPManager::~NAMDSPManager() = default;
 
   void NAMDSPManager::Prepare(double sampleRate, int maxBlockSize)
@@ -34,6 +51,11 @@ namespace namguitar
     mGateEnvelope.assign(kNumChannels, 0.0);
     mToneLowState.assign(kNumChannels, 0.0);
     mToneHighState.assign(kNumChannels, 0.0);
+
+    // Initialize tuner buffer
+    mTunerBuffer.resize(kTunerBufferSize, 0.0);
+    mTunerBufferWriteIndex = 0;
+    mTunerSampleCounter = 0;
 
     for (auto &model : mModels)
     {
@@ -199,6 +221,37 @@ namespace namguitar
 
   void NAMDSPManager::Process(iplug::sample **inputs, iplug::sample **outputs, int nFrames)
   {
+
+    /*
+    Processing Pipeline
+    1. Buffer Validation & Initialization
+
+    Validates input/output pointers
+    Resizes working buffers if needed (processed samples, pitch-shifted, gate envelope, etc.)
+    2. Per-Channel Processing (stereo)
+    For each audio channel:
+
+    Input Trim: Scales input by mInputTrimLinear
+    Gate: Noise gate (mutes below threshold if enabled)
+    Drive: Soft clipping/saturation using tanh to emulate preamp
+    Tone: Splits spectrum with one-pole filter pair, allowing tilt toward lows/highs
+    NAM Model: Passes processed samples through the neural amp model via model->process()
+    IR Convolution: Optional cabinet simulation (currently disabled)
+    3. Doubler Effect (if enabled)
+
+    Creates stereo widening by delaying the right channel relative to left
+    Uses circular delay buffer with configurable delay (0.5-50ms)
+    4. Pitch Shifting (if transpose != 0)
+
+    Simple time-domain resampling with linear interpolation
+    Writes to circular pitch buffer at write rate, reads at adjusted rate
+    Advances phase by mPitchRatio (2^(semitones/12))
+    5. Output Mix & Trim
+
+    Blends wet (processed) and dry (original) signals: wet * mMix + dry * (1.0 - mMix)
+    Applies output trim scaling
+    Writes to output buffers
+    */
     const auto frames = std::min(nFrames, mMaxBlockSize);
 
     if (!inputs || !outputs)
@@ -206,12 +259,39 @@ namespace namguitar
       return;
     }
 
+    // Process tuner if enabled (before any audio processing)
+    ProcessTuner(inputs, frames);
+
     const auto impulseSize = static_cast<int>(mIRManager.Impulse().size());
 
-    // Process both channels through the amp model
-    std::vector<double> processedL(frames, 0.0);
-    std::vector<double> processedR(frames, 0.0);
-    std::vector<double>* channelBuffers[kNumChannels] = {&processedL, &processedR};
+    // Ensure buffers are allocated even if Prepare() hasn't been called yet
+    const std::size_t need = static_cast<std::size_t>(frames);
+    if (mNamInput.size() < need)  mNamInput.resize(need, 0.0f);
+    if (mNamOutput.size() < need) mNamOutput.resize(need, 0.0f);
+    if (mProcessedL.size() < need) mProcessedL.resize(need, 0.0);
+    if (mProcessedR.size() < need) mProcessedR.resize(need, 0.0);
+    if (mMonoSignal.size() < need) mMonoSignal.resize(need, 0.0);
+    if (mPitchShiftedL.size() < need) mPitchShiftedL.resize(need, 0.0);
+    if (mPitchShiftedR.size() < need) mPitchShiftedR.resize(need, 0.0);
+    if (mGateEnvelope.size() < kNumChannels) mGateEnvelope.assign(kNumChannels, 0.0);
+    if (mToneLowState.size() < kNumChannels) mToneLowState.assign(kNumChannels, 0.0);
+    if (mToneHighState.size() < kNumChannels) mToneHighState.assign(kNumChannels, 0.0);
+
+    // Ensure pitch buffers are large enough
+    const std::size_t pitchNeed = std::max<std::size_t>(need * 4, mPitchBufferL.size());
+    if (mPitchBufferL.size() < pitchNeed)
+    {
+      mPitchBufferL.resize(pitchNeed, 0.0);
+      mPitchBufferR.resize(pitchNeed, 0.0);
+      mPitchReadIndex = 0;
+      mPitchWriteIndex = 0;
+      mPitchPhase = 0.0;
+    }
+
+    // Process both channels through the amp model (use preallocated buffers)
+    std::vector<double>* channelBuffers[kNumChannels] = {&mProcessedL, &mProcessedR};
+    std::fill(mProcessedL.begin(), mProcessedL.begin() + frames, 0.0);
+    std::fill(mProcessedR.begin(), mProcessedR.begin() + frames, 0.0);
 
     for (int channel = 0; channel < kNumChannels; ++channel)
     {
@@ -234,23 +314,27 @@ namespace namguitar
       auto &model = mModels[static_cast<std::size_t>(channel)];
       if (model)
       {
+
+        // copy namInput to namOutput as  a simple test
+        //std::copy(mNamInput.begin(), mNamInput.begin() + frames, mNamOutput.begin());
+
+
         model->process(mNamInput.data(), mNamOutput.data(), frames);
-        for (int frame = 0; frame < frames; ++frame)
-        {
-          channelBuffer[frame] = static_cast<double>(mNamOutput[static_cast<std::size_t>(frame)]);
-        }
+        std::transform(mNamOutput.begin(), mNamOutput.begin() + frames,
+                       channelBuffer.begin(),
+                       [](NAM_SAMPLE sample) { return static_cast<double>(sample); });
       }
       else
       {
-        for (int frame = 0; frame < frames; ++frame)
-        {
-          channelBuffer[frame] = static_cast<double>(mNamInput[static_cast<std::size_t>(frame)]);
-        }
+        std::transform(mNamInput.begin(), mNamInput.begin() + frames,
+                       channelBuffer.begin(),
+                       [](NAM_SAMPLE sample) { return static_cast<double>(sample); });
       }
 
       if (impulseSize > 0 && static_cast<std::size_t>(channel) < mIRState.size())
       {
-       // ApplyImpulseResponse(channelBuffer, channel);
+        // temp disable IR convolution for now
+        //ApplyImpulseResponse(channelBuffer, channel);
       }
     }
 
@@ -271,17 +355,16 @@ namespace namguitar
       }
 
       // Create mono sum for doubler processing
-      std::vector<double> monoSignal(frames);
       for (int frame = 0; frame < frames; ++frame)
       {
-        monoSignal[frame] = (processedL[frame] + processedR[frame]) * 0.5;
+        mMonoSignal[static_cast<std::size_t>(frame)] = (mProcessedL[frame] + mProcessedR[frame]) * 0.5;
       }
 
       // Process doubler: left gets direct signal, right gets delayed signal
       for (int frame = 0; frame < frames; ++frame)
       {
         // Write current sample to delay buffer
-        mDoublerDelayBufferL[mDoublerWriteIndex] = monoSignal[frame];
+        mDoublerDelayBufferL[mDoublerWriteIndex] = mMonoSignal[static_cast<std::size_t>(frame)];
         
         // Read delayed sample for right channel
         std::size_t readIndex = mDoublerWriteIndex >= static_cast<std::size_t>(mDoublerDelaySamples)
@@ -289,9 +372,9 @@ namespace namguitar
           : mDoublerDelayBufferL.size() - (static_cast<std::size_t>(mDoublerDelaySamples) - mDoublerWriteIndex);
         
         // Left channel: direct mono signal
-        processedL[frame] = monoSignal[frame];
+        mProcessedL[frame] = mMonoSignal[static_cast<std::size_t>(frame)];
         // Right channel: delayed mono signal
-        processedR[frame] = mDoublerDelayBufferL[readIndex];
+        mProcessedR[frame] = mDoublerDelayBufferL[readIndex];
         
         // Advance write index
         mDoublerWriteIndex = (mDoublerWriteIndex + 1) % mDoublerDelayBufferL.size();
@@ -303,14 +386,12 @@ namespace namguitar
     {
       // Simple pitch shifting using time-domain resampling with linear interpolation
       // This is a basic implementation; production code would use PSOLA or phase vocoder
-      std::vector<double> pitchShiftedL(frames);
-      std::vector<double> pitchShiftedR(frames);
 
       for (int frame = 0; frame < frames; ++frame)
       {
         // Write input samples to pitch buffer
-        mPitchBufferL[mPitchWriteIndex] = processedL[frame];
-        mPitchBufferR[mPitchWriteIndex] = processedR[frame];
+        mPitchBufferL[mPitchWriteIndex] = mProcessedL[frame];
+        mPitchBufferR[mPitchWriteIndex] = mProcessedR[frame];
         mPitchWriteIndex = (mPitchWriteIndex + 1) % mPitchBufferL.size();
 
         // Read from buffer at adjusted rate for pitch shifting
@@ -320,8 +401,8 @@ namespace namguitar
         const double frac = readPos - std::floor(readPos);
 
         // Linear interpolation for smoother pitch shifting
-        pitchShiftedL[frame] = mPitchBufferL[readIndex0] * (1.0 - frac) + mPitchBufferL[readIndex1] * frac;
-        pitchShiftedR[frame] = mPitchBufferR[readIndex0] * (1.0 - frac) + mPitchBufferR[readIndex1] * frac;
+        mPitchShiftedL[static_cast<std::size_t>(frame)] = mPitchBufferL[readIndex0] * (1.0 - frac) + mPitchBufferL[readIndex1] * frac;
+        mPitchShiftedR[static_cast<std::size_t>(frame)] = mPitchBufferR[readIndex0] * (1.0 - frac) + mPitchBufferR[readIndex1] * frac;
 
         // Advance phase by pitch ratio
         mPitchPhase += mPitchRatio;
@@ -332,8 +413,8 @@ namespace namguitar
       }
 
       // Replace processed audio with pitch-shifted version
-      processedL = std::move(pitchShiftedL);
-      processedR = std::move(pitchShiftedR);
+      std::copy(mPitchShiftedL.begin(), mPitchShiftedL.begin() + frames, mProcessedL.begin());
+      std::copy(mPitchShiftedR.begin(), mPitchShiftedR.begin() + frames, mProcessedR.begin());
     }
 
     // Output final signal with mix and output trim
@@ -352,7 +433,7 @@ namespace namguitar
       for (int frame = 0; frame < frames; ++frame)
       {
         const double wetSample = channelBuffer[frame] * mOutputTrimLinear;
-        const double drySample = static_cast<double>(inputChannel[frame]);
+        const double drySample = static_cast<double>(inputChannel[frame]) * mInputTrimLinear * mOutputTrimLinear;
         outputChannel[frame] = static_cast<iplug::sample>(wetSample * mMix + drySample * (1.0 - mMix));
       }
     }
@@ -363,7 +444,7 @@ namespace namguitar
     // Soft clip the signal to emulate preamp saturation before it hits the NAM block.
     const double drive = 1.0 + mDriveAmount * 9.0;
     const double driven = std::tanh(sample * drive);
-    return driven;
+    return SanitizeDenormal(driven);
   }
 
   double NAMDSPManager::ApplyTone(double sample, int channel)
@@ -375,11 +456,11 @@ namespace namguitar
 
     const double low = alpha * sample + (1.0 - alpha) * mToneLowState[static_cast<std::size_t>(channel)];
     const double high = sample - low;
-    mToneLowState[static_cast<std::size_t>(channel)] = low;
-    mToneHighState[static_cast<std::size_t>(channel)] = high;
+    mToneLowState[static_cast<std::size_t>(channel)] = SanitizeDenormal(low);
+    mToneHighState[static_cast<std::size_t>(channel)] = SanitizeDenormal(high);
 
     const double mix = (mToneTilt + 1.0) * 0.5; // 0..1
-    return low * (1.0 - mix) + high * mix;
+    return SanitizeDenormal(low * (1.0 - mix) + high * mix);
   }
 
   double NAMDSPManager::ApplyGate(double sample, int channel)
@@ -394,7 +475,7 @@ namespace namguitar
     const double attack = 0.01;
     const double release = 0.2;
     const double coeff = absSample > mGateEnvelope[static_cast<std::size_t>(channel)] ? attack : release;
-    mGateEnvelope[static_cast<std::size_t>(channel)] = coeff * absSample + (1.0 - coeff) * mGateEnvelope[static_cast<std::size_t>(channel)];
+    mGateEnvelope[static_cast<std::size_t>(channel)] = SanitizeDenormal(coeff * absSample + (1.0 - coeff) * mGateEnvelope[static_cast<std::size_t>(channel)]);
 
     const double thresholdLinear = DbToLinear(mGateThreshold);
     if (mGateEnvelope[static_cast<std::size_t>(channel)] < thresholdLinear)
@@ -497,6 +578,249 @@ namespace namguitar
   void NAMDSPManager::ApplyImpulseResponseForTest(std::vector<double>& channelSamples, int channel)
   {
     ApplyImpulseResponse(channelSamples, channel);
+  }
+
+  void NAMDSPManager::SetTunerEnabled(bool enabled)
+  {
+    mTunerEnabled = enabled;
+    if (enabled)
+    {
+      // Clear the buffer when enabling tuner
+      std::fill(mTunerBuffer.begin(), mTunerBuffer.end(), 0.0);
+      mTunerBufferWriteIndex = 0;
+      mTunerSampleCounter = 0;
+    }
+  }
+
+  void NAMDSPManager::SetTunerCallback(TunerCallback callback)
+  {
+    mTunerCallback = std::move(callback);
+  }
+
+  void NAMDSPManager::SetTunerReferenceFrequency(double frequency)
+  {
+    mTunerReferenceFrequency = std::clamp(frequency, 400.0, 480.0);
+  }
+
+  void NAMDSPManager::ProcessTuner(iplug::sample** inputs, int nFrames)
+  {
+    // Use configured input channel (default is 1 for input 2)
+    const int ch = mTunerInputChannel;
+    if (!mTunerEnabled || !mTunerCallback || !inputs || !inputs[ch])
+    {
+      return;
+    }
+
+    // Fill the tuner buffer with input samples (mono - use selected channel)
+    for (int i = 0; i < nFrames; ++i)
+    {
+      mTunerBuffer[mTunerBufferWriteIndex] = static_cast<double>(inputs[ch][i]);
+      mTunerBufferWriteIndex = (mTunerBufferWriteIndex + 1) % kTunerBufferSize;
+      ++mTunerSampleCounter;
+    }
+
+    // Update tuner at regular intervals
+    if (mTunerSampleCounter >= kTunerUpdateInterval)
+    {
+      mTunerSampleCounter = 0;
+
+      // Reorder buffer to be contiguous for pitch detection
+      std::vector<double> orderedBuffer(kTunerBufferSize);
+      for (std::size_t i = 0; i < kTunerBufferSize; ++i)
+      {
+        orderedBuffer[i] = mTunerBuffer[(mTunerBufferWriteIndex + i) % kTunerBufferSize];
+      }
+
+      // Calculate RMS for debug
+      double sumSq = 0.0;
+      for (const auto& s : orderedBuffer) sumSq += s * s;
+      double rms = std::sqrt(sumSq / static_cast<double>(orderedBuffer.size()));
+      
+      double frequency = DetectPitch(orderedBuffer);
+      TunerResult result = FrequencyToNote(frequency);
+      
+      // Store debug info in result for UI logging
+      result.debugRms = rms;
+      result.debugRawFreq = frequency;
+      
+      mTunerCallback(result);
+    }
+  }
+
+  double NAMDSPManager::DetectPitch(const std::vector<double>& samples) const
+  {
+    // Autocorrelation-based pitch detection (YIN-inspired algorithm)
+    const std::size_t n = samples.size();
+    if (n < 2)
+    {
+      return 0.0;
+    }
+
+    // Calculate RMS to check if there's enough signal
+    double sumSquares = 0.0;
+    for (const auto& sample : samples)
+    {
+      sumSquares += sample * sample;
+    }
+    const double rms = std::sqrt(sumSquares / static_cast<double>(n));
+    
+    // If signal is too quiet, don't try to detect pitch
+    if (rms < 0.01)
+    {
+      return 0.0;
+    }
+
+    // Define search range for guitar: 70Hz (D2) to 1500Hz (F#6)
+    const int minPeriod = static_cast<int>(mSampleRate / 1500.0);  // Highest frequency
+    const int maxPeriod = static_cast<int>(mSampleRate / 70.0);   // Lowest frequency
+    
+    if (maxPeriod >= static_cast<int>(n / 2) || minPeriod < 2)
+    {
+      return 0.0;
+    }
+
+    // Calculate difference function (YIN step 2)
+    std::vector<double> diff(maxPeriod + 1, 0.0);
+    
+    for (int tau = minPeriod; tau <= maxPeriod; ++tau)
+    {
+      double sum = 0.0;
+      for (std::size_t i = 0; i < n - static_cast<std::size_t>(tau); ++i)
+      {
+        const double delta = samples[i] - samples[i + tau];
+        sum += delta * delta;
+      }
+      diff[tau] = sum;
+    }
+
+    // Cumulative mean normalized difference function (YIN step 4)
+    std::vector<double> cmndf(maxPeriod + 1, 1.0);
+    double runningSum = 0.0;
+    
+    for (int tau = minPeriod; tau <= maxPeriod; ++tau)
+    {
+      runningSum += diff[tau];
+      if (runningSum > 0.0)
+      {
+        cmndf[tau] = diff[tau] * static_cast<double>(tau) / runningSum;
+      }
+    }
+
+    // Find the first minimum below threshold (YIN step 5)
+    constexpr double threshold = 0.15;
+    int bestPeriod = -1;
+    
+    for (int tau = minPeriod; tau < maxPeriod; ++tau)
+    {
+      if (cmndf[tau] < threshold)
+      {
+        // Find the local minimum
+        while (tau + 1 <= maxPeriod && cmndf[tau + 1] < cmndf[tau])
+        {
+          ++tau;
+        }
+        bestPeriod = tau;
+        break;
+      }
+    }
+
+    // If no period found below threshold, find the global minimum
+    if (bestPeriod < 0)
+    {
+      double minVal = cmndf[minPeriod];
+      bestPeriod = minPeriod;
+      for (int tau = minPeriod + 1; tau <= maxPeriod; ++tau)
+      {
+        if (cmndf[tau] < minVal)
+        {
+          minVal = cmndf[tau];
+          bestPeriod = tau;
+        }
+      }
+      // If the minimum is too high, no pitch detected
+      if (minVal > 0.5)
+      {
+        return 0.0;
+      }
+    }
+
+    // Parabolic interpolation for sub-sample accuracy (YIN step 6)
+    double period = static_cast<double>(bestPeriod);
+    if (bestPeriod > minPeriod && bestPeriod < maxPeriod)
+    {
+      const double s0 = cmndf[bestPeriod - 1];
+      const double s1 = cmndf[bestPeriod];
+      const double s2 = cmndf[bestPeriod + 1];
+      const double denom = 2.0 * (2.0 * s1 - s0 - s2);
+      if (std::abs(denom) > 1e-10)
+      {
+        period += (s2 - s0) / denom;
+      }
+    }
+
+    return mSampleRate / period;
+  }
+
+  NAMDSPManager::TunerResult NAMDSPManager::FrequencyToNote(double frequency) const
+  {
+    TunerResult result;
+    
+    if (frequency < 20.0 || frequency > 20000.0)
+    {
+      result.detected = false;
+      return result;
+    }
+
+    result.frequency = frequency;
+    result.detected = true;
+
+    // Calculate the number of semitones from A4 (reference frequency, typically 440 Hz)
+    const double semitonesFromA4 = 12.0 * std::log2(frequency / mTunerReferenceFrequency);
+    
+    // Round to nearest semitone
+    const int nearestSemitone = static_cast<int>(std::round(semitonesFromA4));
+    
+    // Calculate the exact frequency of the nearest note
+    const double nearestFrequency = mTunerReferenceFrequency * std::pow(2.0, nearestSemitone / 12.0);
+    
+    // Calculate cents offset from the nearest note
+    result.centOffset = 1200.0 * std::log2(frequency / nearestFrequency);
+    
+    // Clamp to reasonable range
+    result.centOffset = std::clamp(result.centOffset, -50.0, 50.0);
+
+    // Calculate note index (A4 is note 9 in octave 4, i.e., index 57 from C0)
+    // A4 = 440Hz, note index = 9 (0=C, 1=C#, ..., 9=A)
+    // Total semitone from C0 = nearestSemitone + 57 (A4 is 57 semitones above C0)
+    const int totalSemitones = nearestSemitone + 57;
+    
+    // Handle negative semitones
+    const int noteIndex = ((totalSemitones % 12) + 12) % 12;
+    result.octave = (totalSemitones / 12);
+    if (totalSemitones < 0 && totalSemitones % 12 != 0)
+    {
+      result.octave -= 1;
+    }
+
+    // Get note name with both sharp and flat
+    const char* sharpName = kNoteNames[noteIndex];
+    const char* flatName = kNoteNamesFlat[noteIndex];
+    
+    // Use combined notation for accidentals (e.g., "D#/Eb")
+    if (std::string(sharpName) != std::string(flatName))
+    {
+      result.noteName = std::string(sharpName) + "/" + std::string(flatName);
+    }
+    else
+    {
+      result.noteName = sharpName;
+    }
+
+    // Calculate confidence based on how close we are to the note
+    result.confidence = 1.0 - std::abs(result.centOffset) / 50.0;
+    result.confidence = std::clamp(result.confidence, 0.0, 1.0);
+
+    return result;
   }
 
 } // namespace namguitar

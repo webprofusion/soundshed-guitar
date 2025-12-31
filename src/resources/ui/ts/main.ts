@@ -9,6 +9,7 @@ import {
 import { installFetchLogger, renderLogEntries } from "./logging.js";
 import { handleIncomingMessage } from "./messages.js";
 import { requestSignalPathTest } from "./presets.js";
+import { initializeTuner } from "./tuner.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -74,13 +75,16 @@ async function bootstrap(): Promise<void> {
   initializeIconBarTabs();
   initializeSavePresetModal();
   initializeSaveAsButton();
+  initializeTuner();
 
   renderActivePreset();
   await initializePresets();
 
   window.IPlugReceiveData = (message: string) => {
+    console.log("[JS] IPlugReceiveData called with:", message.substring(0, 100));
     handleIncomingMessage(message);
   };
+  console.log("[JS] IPlugReceiveData registered on window");
 
   const signalTestButton = document.getElementById("run-signal-test");
   if (signalTestButton) {
