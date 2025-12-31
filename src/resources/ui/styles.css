@@ -348,12 +348,14 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  min-height: 0; /* Allow flex child to shrink for proper scrolling */
 }
 
 .tab-panel {
   display: none;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0; /* Allow flex child to shrink for proper scrolling */
 }
 
 .tab-panel.active {
@@ -364,7 +366,8 @@ body {
 .panel-content {
   padding: 24px;
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  min-height: 0; /* Allow flex child to shrink for proper scrolling */
 }
 
 .panel-content h2 {
@@ -865,10 +868,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 20px;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  min-height: 0; /* Allow flex child to shrink below content size for scrolling */
 }
 
 .amp-panel {
@@ -1121,6 +1125,7 @@ body {
   background: linear-gradient(180deg, #38383f 0%, #28282f 100%);
   color: #b0b0b8;
   font-size: 11px;
+  flex-shrink: 0; /* Prevent footer from shrinking */
 }
 
 .footer-btn {
