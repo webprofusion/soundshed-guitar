@@ -14,22 +14,34 @@ NeuronGuitar is an experimental iPlug2-based guitar processing plugin that fuses
 
 ```
 .
-├─ CMakeLists.txt              # Root CMake entry point
-├─ extern/                     # Third-party sources populated via CMake
-│  ├─ iPlug2/ (fetched)        # iPlug2 framework
-│  └─ NeuralAmpModelerCore/    # NAM DSP engine
-├─ resources/
-│  └─ ui/                      # Web UI assets served by the WebView
-│     ├─ index.html
-│     ├─ app.js
-│     └─ styles.css
-└─ src/
-   ├─ NeuronGuitar.cpp         # iPlug2 plugin entry points
-   ├─ NeuronGuitar.h
-   ├─ dsp/                     # Audio processing core
-   ├─ io/                      # File hashing/caching helpers
-   ├─ presets/                 # Preset data management
-   └─ ui/                      # WebView bridge helpers
+├─ src/
+│  ├─ CMakeLists.txt            # Root CMake entry point
+│  ├─ _deps/                    # Third-party sources populated via CMake FetchContent
+│  │  ├─ iplug2-src/            # iPlug2 framework
+│  │  └─ nam-src/               # NeuralAmpModelerCore DSP engine
+│  ├─ config/
+│  │  └─ NAMGuitarConfig.h      # Branding and plugin configuration
+│  ├─ resources/
+│  │  ├─ ui/                    # Web UI assets served by the WebView
+│  │  │  ├─ index.html
+│  │  │  ├─ main.js
+│  │  │  ├─ styles.css
+│  │  │  └─ ts/                 # TypeScript source files
+│  │  ├─ amps/                  # Default NAM models
+│  │  └─ ir/                    # Default impulse responses
+│  ├─ src/
+│  │  ├─ NAMGuitarPlugin.cpp    # iPlug2 plugin entry points
+│  │  ├─ NAMGuitarPlugin.h
+│  │  ├─ dsp/                   # Audio processing core (NAMDSPManager, IRManager)
+│  │  ├─ models/                # Model hashing helpers
+│  │  ├─ presets/               # Preset data management (PresetManager, PresetStorage)
+│  │  ├─ network/               # Preset service client for remote API
+│  │  ├─ ui/                    # WebView bridge helpers
+│  │  ├─ util/                  # File system utilities
+│  │  └─ platform/              # Format-specific wrappers (VST3, AU, AAX)
+│  ├─ tests/                    # Unit and integration tests
+│  └─ tools/                    # Debug tools (VST3 host)
+└─ build/                       # CMake build output directory
 ```
 
 ## Getting Started
@@ -37,11 +49,11 @@ NeuronGuitar is an experimental iPlug2-based guitar processing plugin that fuses
 1. **Clone the repository**
    ```powershell
    git clone https://github.com/<your-account>/neuron-guitar.git
-   cd neuron-guitar
+   cd neuron-guitar\src
    ```
 
-2. **Configure submodules / dependencies**
-   CMake scripts will fetch the required third-party libraries (iPlug2, NAM core, httplib, nlohmann-json) automatically. If you prefer to manage them manually, place them under the `extern/` folder before configuring the build.
+2. **Configure dependencies**
+   CMake scripts will fetch the required third-party libraries (iPlug2, NeuralAmpModelerCore, and their dependencies) automatically via FetchContent when `NAMGUITAR_FETCH_DEPENDENCIES` is enabled (default). Dependencies are downloaded to the `_deps/` folder.
 
 3. **Configure the build**
    ```powershell
@@ -55,8 +67,13 @@ NeuronGuitar is an experimental iPlug2-based guitar processing plugin that fuses
 
    iPlug2 provides format-specific targets once the SDK locations are configured (see below).
 
-## Using the app/plugin
-To use the plugin copy \src\build\src\platform\vst3\Release\*.dll to C:\Program Files\CommonFiles\VST3 as *.vst
+## Using the Plugin
+
+After building, the VST3 plugin can be found in the build output directory. To install:
+- **Windows**: Copy the `.vst3` bundle from `build\src\platform\vst3\Release\` to `C:\Program Files\Common Files\VST3\`
+- **macOS**: Copy the `.vst3` bundle to `~/Library/Audio/Plug-Ins/VST3/`
+
+For AU (macOS only), the plugin will be in `build/src/platform/au/Release/`.
 
 ## SDK Requirements
 
@@ -70,18 +87,26 @@ The `cmake/Toolchain` logic emits warnings when a requested SDK is unavailable; 
 
 ## Branding
 
-Standalone and plugin builds read their company/product labels from `src/config/NAMGuitarConfig.h`. Update `NAM_BRAND_COMPANY_STR` and `NAM_BRAND_PRODUCT_STR` (or the combined `NAM_BRAND_DISPLAY_STR`) to rename the app once and propagate the change everywhere `PLUG_NAME`/`PLUG_MFR` are consumed. Rebuild after editing the config so resources and wrappers pick up the new values.
+Plugin branding is configured in `src/config/NAMGuitarConfig.h`:
+- `NAM_BRAND_COMPANY_STR` – Manufacturer name (currently "Soundshed")
+- `NAM_BRAND_PRODUCT_STR` – Product name (currently "Neuron FX")
+- `NAM_BRAND_DISPLAY_STR` – Combined display name
+- `NAM_BRAND_DOMAIN_STR` – Bundle identifier domain
+
+These macros propagate to `PLUG_NAME`, `PLUG_MFR`, and all plugin format wrappers. Rebuild after editing to update resources and plugin metadata.
 
 ## Preset API
 
-The preset service is abstracted behind `PresetRemoteService`. By default it points to `https://api.example.com/presets`. Override the endpoint through the preferences JSON (`resources/config/defaults.json`) or set the `NEURON_GUITAR_PRESET_ENDPOINT` environment variable.
+The preset service is implemented in `src/src/network/PresetServiceClient`. Remote preset search and download capabilities are abstracted for future integration with community-driven preset sharing services.
 
 ## Development Notes
 
 - Audio-related code is documented inline to clarify processing decisions.
-- The UI bridge exposes a message-based API between JavaScript and the C++ core. See `src/ui/WebViewBridge.*` and `resources/ui/app.js`.
-- Unit tests (future work) can be added under `tests/` and driven by CTest.
+- The UI bridge exposes a message-based API between JavaScript and the C++ core. See `src/src/ui/WebUIBridge.*` and `src/resources/ui/main.js`.
+- The UI is authored in TypeScript (see `src/resources/ui/ts/`) and compiled to JavaScript.
+- Unit tests are located in `src/tests/` and can be run via CTest after building with `NAMGUITAR_ENABLE_TESTS=ON`.
+- Debug tools including a VST3 test host are available when building with `NAMGUITAR_ENABLE_TOOLS=ON`.
 
 ## License
 
-NeuronGuitar is distributed under the MIT license. Third-party components keep their upstream licenses (iPlug2, NAM Core, httplib, nlohmann-json).
+NAMGuitarFX is distributed under the MIT license. Third-party components retain their upstream licenses (iPlug2, NeuralAmpModelerCore, and other dependencies).
