@@ -43,3 +43,7 @@ src/src/platform/vst3/NAMGuitarFX_VST3.dir/
 src/resources/ui/dist/
 
 src/resources/ui/node_modules/
+
+src/resources/amps/
+
+src/resources/ir/

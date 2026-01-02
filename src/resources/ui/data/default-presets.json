@@ -70,5 +70,23 @@
       { "id": "gate_threshold", "value": -50.0 },
       { "id": "mix", "value": 1.0 }
     ]
+  },
+     {
+    "id": "factory-verygain2",
+    "name": "Metal 1.2",
+    "category": "Factory",
+    "description": "Tight high-gain lead preset with a gentle noise gate.",
+    "audioFxModelId": "audiofx-model-test-03",
+    "irId": "ir-906-1960",
+    "fxChain": ["noise_gate"],
+    "parameters": [
+      { "id": "input_trim", "value": 0 },
+      { "id": "output_trim", "value": 0 },
+      { "id": "drive", "value": 0.85 },
+      { "id": "tone", "value": 0.65 },
+      { "id": "gate_enabled", "value": 1.0 },
+      { "id": "gate_threshold", "value": -50.0 },
+      { "id": "mix", "value": 1.0 }
+    ]
   }
 ]
