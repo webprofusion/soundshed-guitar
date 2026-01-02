@@ -308,10 +308,16 @@ namespace namguitar
     std::fill(mProcessedR.begin(), mProcessedR.begin() + frames, 0.0);
 
     // Determine which input channels to process
-    const int startChannel = mMonoMode ? mInputChannel : 0;
-    const int endChannel = mMonoMode ? mInputChannel + 1 : kNumChannels;
+    int startChannel =  0;
+    int endChannel = kNumChannels - 1;
     
-    for (int channel = startChannel; channel < endChannel; ++channel)
+    if (mMonoMode)
+    {
+      startChannel = mInputChannel;
+      endChannel = mInputChannel;
+    }
+    
+    for (int channel = startChannel; channel <= endChannel; ++channel)
     {
       // In mono mode, always use the selected input but process to both output channels
       const int inputIdx = mMonoMode ? mInputChannel : channel;
