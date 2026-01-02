@@ -144,3 +144,48 @@ target_compile_definitions(NAMGuitarFX_SampleRateBufferTests
 )
 
 add_test(NAME SampleRateBufferTests COMMAND NAMGuitarFX_SampleRateBufferTests)
+# Real Audio Processing Tests - tests the full DSP pipeline with actual audio processing
+add_executable(NAMGuitarFX_RealAudioProcessingTests
+  RealAudioProcessingTests.cpp
+)
+
+target_include_directories(NAMGuitarFX_RealAudioProcessingTests
+  PRIVATE
+    ${NAMGUITAR_PROJECT_ROOT}/src
+    ${NeuralAmpModelerCore_SOURCE_DIR}
+)
+
+target_link_libraries(NAMGuitarFX_RealAudioProcessingTests
+  PRIVATE
+    NAMGuitarFXCore
+)
+
+target_compile_features(NAMGuitarFX_RealAudioProcessingTests PRIVATE cxx_std_20)
+
+add_test(NAME RealAudioProcessingTests COMMAND NAMGuitarFX_RealAudioProcessingTests)
+
+# Offline Processing Test App - processes WAV files through complete DSP pipeline
+add_executable(NAMGuitarFX_OfflineProcessingTest
+  OfflineProcessingTest.cpp
+)
+
+target_include_directories(NAMGuitarFX_OfflineProcessingTest
+  PRIVATE
+    ${NAMGUITAR_PROJECT_ROOT}/src
+    ${NeuralAmpModelerCore_SOURCE_DIR}
+)
+
+target_link_libraries(NAMGuitarFX_OfflineProcessingTest
+  PRIVATE
+    NAMGuitarFXCore
+    nlohmann_json::nlohmann_json
+)
+
+target_compile_features(NAMGuitarFX_OfflineProcessingTest PRIVATE cxx_std_20)
+
+target_compile_definitions(NAMGuitarFX_OfflineProcessingTest
+  PRIVATE
+    NAMGUITAR_TEST_RESOURCES_DIR="${NAMGUITAR_RESOURCES_DIR_NORMALIZED}"
+)
+
+# Note: This is a utility app, not added as a CTest

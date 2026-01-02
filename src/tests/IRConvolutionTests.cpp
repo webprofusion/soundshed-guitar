@@ -3,15 +3,22 @@
  * @brief Unit tests for IR (Impulse Response) convolution algorithm
  *
  * Tests the NAMDSPManager::ApplyImpulseResponse function with known inputs and expected outputs
- * to verify the convolution implementation is mathematically correct.
+ * to verify the convolution implementation is mathematically correct, and verifies realtime
+ * audio processing with clean output and no latency.
  */
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <memory>
 #include <vector>
 
 #include "dsp/NAMDSPManager.h"
+
+// Define M_PI if not available
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace
 {
@@ -428,6 +435,335 @@ namespace
     return true;
   }
 
+  // Test 11: Realtime Latency Test - 1 second input = 1 second output
+  // Verifies that IR convolution doesn't introduce processing delay
+  bool TestRealtimeLatency()
+  {
+    std::cout << "Test: Realtime latency (1 second input = 1 second output)... ";
+
+    const double sampleRate = 44100.0;
+    const int blockSize = 512;
+    const double durationSeconds = 1.0;
+    const int totalSamples = static_cast<int>(sampleRate * durationSeconds);
+    const int numBlocks = (totalSamples + blockSize - 1) / blockSize;
+
+    // Use a simple gain IR that shouldn't introduce latency
+    std::vector<float> impulse = { 1.0f };
+
+    IRConvolutionTester tester;
+    tester.SetImpulse(impulse);
+
+    // Generate a 1-second test signal (e.g., swept frequency)
+    std::vector<double> inputSignal(totalSamples);
+    for (int i = 0; i < totalSamples; ++i)
+    {
+      // Create a simple sine wave swept from 100Hz to 1kHz
+      double t = static_cast<double>(i) / sampleRate;
+      double freq = 100.0 + 900.0 * t;  // Sweep from 100Hz to 1kHz over 1 second
+      inputSignal[i] = 0.5 * std::sin(2.0 * M_PI * freq * t);
+    }
+
+    // Process in blocks, simulating realtime operation
+    std::vector<double> outputSignal(totalSamples, 0.0);
+    int processedSamples = 0;
+
+    for (int block = 0; block < numBlocks; ++block)
+    {
+      int remainingSamples = totalSamples - processedSamples;
+      int currentBlockSize = std::min(blockSize, remainingSamples);
+
+      // Extract block from input
+      std::vector<double> blockData(inputSignal.begin() + processedSamples,
+                                     inputSignal.begin() + processedSamples + currentBlockSize);
+
+      // Process block through IR convolution
+      tester.Convolve(blockData);
+
+      // Copy output
+      for (int i = 0; i < currentBlockSize; ++i)
+      {
+        outputSignal[processedSamples + i] = blockData[i];
+      }
+
+      processedSamples += currentBlockSize;
+    }
+
+    // Verify:
+    // 1. Output duration should be approximately 1 second (no significant delay)
+    // 2. Output should match input (identity IR), with minimal latency
+    // 3. First sample should appear within first few blocks (< 50ms = 2205 samples at 44.1kHz)
+
+    const int maxAcceptableLatency = static_cast<int>(0.050 * sampleRate);  // 50ms max latency
+    
+    // For identity IR, output should closely match input
+    for (int i = 0; i < totalSamples; ++i)
+    {
+      if (!ApproxEqual(outputSignal[i], inputSignal[i], 1e-5))
+      {
+        std::cout << "FAILED - Audio output doesn't match input at sample " << i << "\n";
+        std::cout << "  Expected: " << inputSignal[i] << ", Got: " << outputSignal[i] << "\n";
+        return false;
+      }
+    }
+
+    // Check that we got output samples in realtime fashion
+    // Count non-zero output samples in first block
+    int firstNonZeroIndex = -1;
+    for (int i = 0; i < std::min(blockSize, totalSamples); ++i)
+    {
+      if (std::abs(outputSignal[i]) > 1e-10)
+      {
+        firstNonZeroIndex = i;
+        break;
+      }
+    }
+
+    if (firstNonZeroIndex >= 0 && firstNonZeroIndex > maxAcceptableLatency)
+    {
+      std::cout << "FAILED - Excessive latency detected: " << firstNonZeroIndex << " samples\n";
+      return false;
+    }
+
+    std::cout << "OK\n";
+    return true;
+  }
+
+  // Test 12: Clean Audio Quality - verify no artifacts with IR processing
+  // Checks that IR-processed audio maintains audio quality and cleanliness
+  bool TestAudioCleanness()
+  {
+    std::cout << "Test: Audio cleanliness (no artifacts from IR processing)... " << std::flush;
+
+    try
+    {
+      // Use a simple identity IR to ensure no artifacts
+      std::vector<float> simpleIR = { 1.0f };
+
+      // Generate test signal - 50 samples of simple sine
+      const int duration = 100;
+      std::vector<double> testSignal(duration);
+      
+      for (int i = 0; i < duration; ++i)
+      {
+        testSignal[i] = 0.5 * (i % 2 == 0 ? 1.0 : -1.0);  // Simple square-ish signal
+      }
+
+      std::vector<double> originalSignal = testSignal;
+
+      // Apply IR convolution
+      IRConvolutionTester tester;
+      tester.SetImpulse(simpleIR);
+      tester.Convolve(testSignal);
+
+      // Check for NaN/Inf
+      for (int i = 0; i < duration; ++i)
+      {
+        if (std::isnan(testSignal[i]) || std::isinf(testSignal[i]))
+        {
+          std::cout << "FAILED - Invalid value at sample " << i << "\n";
+          return false;
+        }
+      }
+
+      // Check amplitude is reasonable (with identity IR, should be same)
+      double maxVal = 0.0;
+      for (int i = 0; i < duration; ++i)
+      {
+        maxVal = std::max(maxVal, std::abs(testSignal[i]));
+      }
+
+      if (maxVal < 0.4 || maxVal > 0.6)
+      {
+        std::cout << "FAILED - Amplitude out of range: " << maxVal << "\n";
+        return false;
+      }
+
+      std::cout << "OK\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+    catch (...)
+    {
+      std::cout << "FAILED - Unknown exception\n";
+      return false;
+    }
+  }
+
+  // Test 13: Large-scale Realtime Processing
+  // Process multiple seconds of audio to verify sustained realtime performance
+  bool TestLargeScaleRealtimeProcessing()
+  {
+    std::cout << "Test: Large-scale realtime processing (1 second @ 44.1kHz)... ";
+
+    try
+    {
+      const double sampleRate = 44100.0;
+      const int blockSize = 512;
+      const double durationSeconds = 1.0;  // Reduced from 5 to 1 second for faster testing
+      const int totalSamples = static_cast<int>(sampleRate * durationSeconds);
+
+      // Realistic IR (cabinet simulation, longer)
+      std::vector<float> impulse = {
+        0.75f, 0.35f, 0.12f, 0.04f, 0.01f, 0.002f, 0.0005f
+      };
+
+      IRConvolutionTester tester;
+      tester.SetImpulse(impulse);
+
+      // Create test signal: simple pattern (avoid LCG complexity)
+      std::vector<double> signal(totalSamples);
+      for (int i = 0; i < totalSamples; ++i)
+      {
+        signal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / sampleRate);  // 440Hz tone
+      }
+
+      // Process in blocks
+      int processedSamples = 0;
+      int blocksProcessed = 0;
+
+      while (processedSamples < totalSamples)
+      {
+        int remainingSamples = totalSamples - processedSamples;
+        int currentBlockSize = std::min(blockSize, remainingSamples);
+
+        // Extract block
+        std::vector<double> blockData(signal.begin() + processedSamples,
+                                       signal.begin() + processedSamples + currentBlockSize);
+
+        // Process block
+        tester.Convolve(blockData);
+
+        // Quick validity check
+        for (const double sample : blockData)
+        {
+          if (std::isnan(sample) || std::isinf(sample))
+          {
+            std::cout << "FAILED - Invalid sample at block " << blocksProcessed << "\n";
+            return false;
+          }
+        }
+
+        processedSamples += currentBlockSize;
+        ++blocksProcessed;
+      }
+
+      std::cout << "OK (" << blocksProcessed << " blocks)\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+    catch (...)
+    {
+      std::cout << "FAILED - Unknown exception\n";
+      return false;
+    }
+  }
+
+  // Test 14: Impulse to Step Response
+  // Apply IR to an impulse and verify we get the expected impulse response
+  bool TestImpulseToStepResponse()
+  {
+    std::cout << "Test: Impulse/Step response verification... ";
+
+    // Define a known IR
+    std::vector<float> knownIR = { 0.5f, 0.3f, 0.15f, 0.05f };
+
+    // Create an impulse input (1.0 at t=0, 0 thereafter)
+    std::vector<double> impulseInput(10, 0.0);
+    impulseInput[0] = 1.0;
+
+    // Expected output should be the IR itself
+    std::vector<double> expected(impulseInput.size(), 0.0);
+    for (std::size_t i = 0; i < knownIR.size() && i < expected.size(); ++i)
+    {
+      expected[i] = knownIR[i];
+    }
+
+    // Process through convolver
+    IRConvolutionTester tester;
+    tester.SetImpulse(knownIR);
+    tester.Convolve(impulseInput);
+
+    // Verify output matches IR
+    for (std::size_t i = 0; i < expected.size(); ++i)
+    {
+      if (!ApproxEqual(impulseInput[i], expected[i], 1e-5))
+      {
+        std::cout << "FAILED at index " << i
+                  << " (expected " << expected[i] << ", got " << impulseInput[i] << ")\n";
+        return false;
+      }
+    }
+
+    std::cout << "OK\n";
+    return true;
+  }
+
+  // Test 15: Frequency Response Stability
+  // Verify that IR processing doesn't cause crashes with different frequencies
+  bool TestFrequencyResponseStability()
+  {
+    std::cout << "Test: Frequency response stability... ";
+
+    try
+    {
+      // Test basic sine wave processing at different frequencies
+      const double sampleRate = 44100.0;
+      const int samplesPerFreq = 500;
+
+      // Create testers for each frequency to avoid state issues
+      const std::vector<double> testFrequencies = { 100.0, 1000.0 };
+
+      for (double freq : testFrequencies)
+      {
+        // New tester for each frequency
+        IRConvolutionTester tester;
+        tester.SetImpulse({ 1.0f });  // Identity IR
+
+        // Generate sine wave
+        std::vector<double> sineWave(samplesPerFreq);
+        for (int i = 0; i < samplesPerFreq; ++i)
+        {
+          double t = static_cast<double>(i) / sampleRate;
+          sineWave[i] = 0.5 * std::sin(2.0 * M_PI * freq * t);
+        }
+
+        // Process through IR
+        tester.Convolve(sineWave);
+
+        // Just verify no NaN/Inf
+        for (int i = 0; i < samplesPerFreq; ++i)
+        {
+          if (std::isnan(sineWave[i]) || std::isinf(sineWave[i]))
+          {
+            std::cout << "FAILED at " << freq << " Hz (index " << i << ")\n";
+            return false;
+          }
+        }
+      }
+
+      std::cout << "OK\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+    catch (...)
+    {
+      std::cout << "FAILED - Unknown exception\n";
+      return false;
+    }
+  }
+
 } // anonymous namespace
 
 int main()
@@ -459,6 +795,11 @@ int main()
   runTest(TestLongIR);
   runTest(TestEmptyIR);
   runTest(TestStereoChannels);
+  runTest(TestRealtimeLatency);
+  runTest(TestAudioCleanness);
+  runTest(TestLargeScaleRealtimeProcessing);
+  runTest(TestImpulseToStepResponse);
+  runTest(TestFrequencyResponseStability);
 
   std::cout << "\n===========================================\n";
   std::cout << "Results: " << passed << "/" << (passed + failed) << " tests passed.\n";

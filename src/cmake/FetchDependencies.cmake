@@ -116,6 +116,20 @@ if(NAMGUITAR_FETCH_DEPENDENCIES)
     )
   endif()
 
+  # PocketFFT - header-only FFT library for optimized convolution (C++ version)
+  if(NOT TARGET pocketfft)
+    FetchContent_Declare(
+      pocketfft
+      GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/mtr/pocketfft.git
+      GIT_TAG cpp
+    )
+    FetchContent_MakeAvailable(pocketfft)
+    
+    add_library(pocketfft INTERFACE)
+    target_include_directories(pocketfft INTERFACE ${pocketfft_SOURCE_DIR})
+    target_compile_definitions(pocketfft INTERFACE POCKETFFT_NO_MULTITHREADING)
+  endif()
+
   if(NOT TARGET wil::headers)
     set(WIL_SDK_VERSION "1.0.240803.1" CACHE STRING "Microsoft Windows Implementation Library version to fetch" FORCE)
     set(WIL_SDK_URL "https://globalcdn.nuget.org/packages/microsoft.windows.implementationlibrary.${WIL_SDK_VERSION}.nupkg" CACHE STRING "Microsoft Windows Implementation Library download URL" FORCE)

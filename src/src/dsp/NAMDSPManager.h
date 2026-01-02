@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
+#include <atomic>
 
 #include "IPlugConstants.h"
 #include "NAM/dsp.h"
@@ -14,6 +16,7 @@
 // Forward declare factory registration function
 namespace nam { namespace factory { void ForceFactoryRegistration(); } }
 #include "dsp/IRManager.h"
+#include "dsp/OptimizedConvolver.h"
 
 namespace nam
 {
@@ -167,13 +170,8 @@ namespace namguitar
       return (std::abs(x) < kThreshold) ? 0.0 : x;
     }
 
-    struct IRHistory
-    {
-      std::vector<double> buffer;
-      std::size_t writeIndex = 0;
-    };
-
-    mutable std::vector<IRHistory> mIRState;
+    // FFT-based convolution for IR processing (mutable because Process() modifies overlap buffer)
+    mutable std::array<OptimizedConvolver, 2> mIRConvolution;  // One per channel
 
     // Tuner state
     bool mTunerEnabled = false;

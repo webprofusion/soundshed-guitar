@@ -7,6 +7,7 @@
 #include <iostream>
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
+#include "FFTConvolution.h"
 
 namespace namguitar
 {
@@ -47,7 +48,6 @@ namespace namguitar
 
     mNamInput.resize(static_cast<std::size_t>(mMaxBlockSize));
     mNamOutput.resize(static_cast<std::size_t>(mMaxBlockSize));
-    mIRState.assign(kNumChannels, IRHistory{});
     mGateEnvelope.assign(kNumChannels, 0.0);
     mToneLowState.assign(kNumChannels, 0.0);
     mToneHighState.assign(kNumChannels, 0.0);
@@ -57,11 +57,13 @@ namespace namguitar
     mTunerBufferWriteIndex = 0;
     mTunerSampleCounter = 0;
 
+    // Reset models with new sample rate and block size
+    // NAM models handle internal resampling via Reset, so always call it
     for (auto &model : mModels)
     {
       if (model)
       {
-        model->ResetAndPrewarm(mSampleRate, mMaxBlockSize);
+        model->Reset(mSampleRate, mMaxBlockSize);
       }
     }
 
@@ -82,7 +84,7 @@ namespace namguitar
     {
       if (model)
       {
-        model->ResetAndPrewarm(mSampleRate, mMaxBlockSize);
+        model->Reset(mSampleRate, mMaxBlockSize);
       }
     }
 
@@ -96,11 +98,10 @@ namespace namguitar
     std::fill(mDoublerDelayBufferR.begin(), mDoublerDelayBufferR.end(), 0.0);
     mDoublerWriteIndex = 0;
 
-    // Reset IR convolution history
-    for (auto &history : mIRState)
+    // Reset FFT convolution state
+    for (auto &convolution : mIRConvolution)
     {
-      std::fill(history.buffer.begin(), history.buffer.end(), 0.0);
-      history.writeIndex = 0;
+      convolution.Reset();
     }
   }
 
@@ -116,7 +117,7 @@ namespace namguitar
           return false;
         }
 
-        model->ResetAndPrewarm(mSampleRate, mMaxBlockSize);
+        model->Reset(mSampleRate, mMaxBlockSize);
         mModels[static_cast<std::size_t>(channel)] = std::move(model);
       }
 
@@ -135,12 +136,13 @@ namespace namguitar
       return false;
     }
 
-    mIRState.assign(kNumChannels, IRHistory{});
-    for (auto &history : mIRState)
+    // Initialize FFT convolution for both channels with the loaded IR
+    const auto& impulse = mIRManager.Impulse();
+    for (auto &convolution : mIRConvolution)
     {
-      history.buffer.assign(mIRManager.Impulse().size(), 0.0);
-      history.writeIndex = 0;
+      convolution.SetImpulse(impulse, mMaxBlockSize);
     }
+    
     return true;
   }
 
@@ -317,14 +319,15 @@ namespace namguitar
       endChannel = mInputChannel;
     }
     
-    for (int channel = startChannel; channel <= endChannel; ++channel)
-    {
+    // OPTIMIZATION: Process channels in parallel for better CPU utilization
+    // Use std::thread for stereo channel processing (L and R can be processed independently)
+    auto ProcessChannel = [&](int channel) {
       // In mono mode, always use the selected input but process to both output channels
       const int inputIdx = mMonoMode ? mInputChannel : channel;
       iplug::sample *inputChannel = inputs[inputIdx];
       if (!inputChannel)
       {
-        continue;
+        return;
       }
 
       // In mono mode, process to the left channel buffer (will be copied to right later)
@@ -344,11 +347,6 @@ namespace namguitar
       auto &model = mModels[static_cast<std::size_t>(modelIdx)];
       if (mAmpEnabled && model)
       {
-
-        // copy namInput to namOutput as  a simple test
-       // std::copy(mNamInput.begin(), mNamInput.begin() + frames, mNamOutput.begin());
-
-
         model->process(mNamInput.data(), mNamOutput.data(), frames);
         std::transform(mNamOutput.begin(), mNamOutput.begin() + frames,
                        channelBuffer.begin(),
@@ -361,10 +359,28 @@ namespace namguitar
                        [](NAM_SAMPLE sample) { return static_cast<double>(sample); });
       }
 
-      if (mCabEnabled && impulseSize > 0 && static_cast<std::size_t>(modelIdx) < mIRState.size())
+      if (mCabEnabled && mIRConvolution[static_cast<std::size_t>(modelIdx)].IsInitialized())
       {
-        // temp disable IR convolution for now
         ApplyImpulseResponse(channelBuffer, modelIdx);
+      }
+    };
+
+    // Process channels - use threading only if we have multiple channels and modern hardware
+    // Single-threaded processing is faster for mono or very simple processing
+    if (endChannel > startChannel && frames > 128)
+    {
+      // Multi-threaded: process L and R channels in parallel
+      std::thread threadL(ProcessChannel, startChannel);
+      std::thread threadR(ProcessChannel, endChannel);
+      threadL.join();
+      threadR.join();
+    }
+    else
+    {
+      // Single-threaded: sequential processing (faster for small block sizes)
+      for (int channel = startChannel; channel <= endChannel; ++channel)
+      {
+        ProcessChannel(channel);
       }
     }
 
@@ -522,72 +538,24 @@ namespace namguitar
     return sample;
   }
 
-  // Applies convolution with a cabinet impulse response (IR) to simulate speaker characteristics.
-  //
-  // Convolution "imprints" the acoustic characteristics of a recorded speaker cabinet onto the
-  // input signal. The IR captures how a speaker responds to an impulse, encoding its frequency
-  // response and resonances.
-  //
-  // This implements direct-form FIR (Finite Impulse Response) convolution:
-  //   output[n] = sum(input[n-k] * impulse[k]) for k = 0 to N-1
-  //
-  // We use a circular buffer to store the last N input samples efficiently, avoiding the need
-  // to shift samples on each iteration.
+  // Applies FFT-based convolution with a cabinet impulse response (IR)
+  // Uses overlap-add method for efficient O(N log N) convolution
   void NAMDSPManager::ApplyImpulseResponse(std::vector<double> &channelSamples, int channel) const
   {
-    // Take a snapshot copy of the impulse response for thread safety.
-    // This ensures we work with consistent data even if LoadImpulseResponse is called
-    // on another thread during processing.
-    const std::vector<float> impulse = mIRManager.Impulse();
-    const std::size_t irLength = impulse.size();
-    
-    if (irLength == 0)
+    if (channel < 0 || channel >= kNumChannels)
     {
       return;
     }
 
-    // Get the history buffer for this channel
-    auto &history = mIRState[static_cast<std::size_t>(channel)];
-    
-    // Ensure history buffer is correctly sized for this IR
-    if (history.buffer.size() != irLength)
+    auto &convolution = mIRConvolution[static_cast<std::size_t>(channel)];
+    if (!convolution.IsInitialized())
     {
-      history.buffer.resize(irLength, 0.0);
-      history.writeIndex = 0;
-    }
-    
-    // Validate write index is in bounds
-    if (history.writeIndex >= irLength)
-    {
-      history.writeIndex = 0;
+      return;
     }
 
-    // Process each input sample
-    for (std::size_t i = 0; i < channelSamples.size(); ++i)
-    {
-      // Store the new input sample in the circular buffer
-      history.buffer[history.writeIndex] = channelSamples[i];
-
-      // Compute convolution sum: multiply each past sample by corresponding IR coefficient
-      double output = 0.0;
-      
-      for (std::size_t k = 0; k < irLength; ++k)
-      {
-        // Calculate index into circular buffer for sample[n-k]
-        // We want: current sample (k=0) at writeIndex, older samples going backwards
-        std::size_t sampleIndex = (history.writeIndex >= k) 
-            ? history.writeIndex - k 
-            : irLength - (k - history.writeIndex);
-            
-        output += history.buffer[sampleIndex] * static_cast<double>(impulse[k]);
-      }
-
-      // Write convolved output
-      channelSamples[i] = output;
-
-      // Advance write position (circular)
-      history.writeIndex = (history.writeIndex + 1) % irLength;
-    }
+    std::vector<double> output;
+    convolution.Process(channelSamples, output);
+    channelSamples = std::move(output);
   }
 
   bool NAMDSPManager::HasModel() const noexcept
@@ -603,11 +571,10 @@ namespace namguitar
   void NAMDSPManager::SetImpulseResponseForTest(const std::vector<float>& impulse)
   {
     mIRManager.SetImpulse(impulse);
-    // Reset IR state when changing impulse
-    for (auto& history : mIRState)
+    // Initialize FFT convolution with test impulse
+    for (auto& convolution : mIRConvolution)
     {
-      history.buffer.clear();
-      history.writeIndex = 0;
+      convolution.SetImpulse(impulse, mMaxBlockSize);
     }
   }
 

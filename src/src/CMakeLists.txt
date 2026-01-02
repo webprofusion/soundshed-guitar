@@ -19,6 +19,10 @@ set(_nam_dsp_sources
 # compiles NAMGuitarPlugin.cpp directly with its own API definition.
 
 set(_namguitar_core_sources
+  dsp/FFTConvolution.cpp
+  dsp/FFTConvolution.h
+  dsp/OptimizedConvolver.cpp
+  dsp/OptimizedConvolver.h
   dsp/IRManager.cpp
   dsp/IRManager.h
   dsp/NAMDSPManager.cpp
@@ -80,6 +84,7 @@ target_link_libraries(NAMGuitarFXCore
   PUBLIC
     nlohmann_json::nlohmann_json
     httplib::httplib
+    pocketfft
 )
 
 if(TARGET nam)

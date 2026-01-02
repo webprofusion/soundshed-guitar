@@ -2,6 +2,7 @@
   "version": "0.2.0",
   "configurations": [
 
+
     {
       "name": "Debug NAMGuitarFX App",
       "type": "cppvsdbg",
@@ -13,6 +14,18 @@
       "environment": [],
       "console": "integratedTerminal",
       "preLaunchTask": "Build NAMGuitarFX Debug"
+    },
+        {
+      "name": "Run NAMGuitarFX App Release",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Release/NAMGuitarFX.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build NAMGuitarFX App Release"
     },
      {
       "name": "Debug NAMGuitarFX VST Host",
