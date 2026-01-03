@@ -22,6 +22,7 @@
 #include <nlohmann/json.hpp>
 
 #include "config.h"
+#include "dsp/IRTypes.h"
 #include "IControls.h"
 #include "IPlug_include_in_plug_src.h"
 #include "IGraphics_include_in_plug_src.h"
@@ -97,6 +98,8 @@ namespace namguitar
         return "simplecab_presence";
       case NAMGuitarPlugin::kParamSimpleCabBrightness:
         return "simplecab_brightness";
+      case NAMGuitarPlugin::kParamIRQuality:
+        return "ir_quality";
       case NAMGuitarPlugin::kParamEQEnabled:
         return "eq_enabled";
       case NAMGuitarPlugin::kParamEQLowGain:
@@ -181,6 +184,10 @@ namespace namguitar
       if (key == "simplecab_brightness")
       {
         return NAMGuitarPlugin::kParamSimpleCabBrightness;
+      }
+      if (key == "ir_quality")
+      {
+        return NAMGuitarPlugin::kParamIRQuality;
       }
       if (key == "eq_enabled")
       {
@@ -983,6 +990,9 @@ namespace namguitar
     case kParamSimpleCabBrightness:
       mDSP->SetSimpleCabBrightness(param->Value());
       break;
+    case kParamIRQuality:
+      mDSP->SetIRQuality(namguitar::GetIRQualityFromInt(static_cast<int>(param->Value())));
+      break;
     case kParamEQEnabled:
       mDSP->SetEQEnabled(param->Bool());
       break;
@@ -1039,6 +1049,9 @@ namespace namguitar
     GetParam(kParamSimpleCabBass)->InitDouble("Simple Cab Bass", 0.5, 0.0, 1.0, 0.01);
     GetParam(kParamSimpleCabPresence)->InitDouble("Simple Cab Presence", 0.5, 0.0, 1.0, 0.01);
     GetParam(kParamSimpleCabBrightness)->InitDouble("Simple Cab Brightness", 0.5, 0.0, 1.0, 0.01);
+    // IR Quality: 0=Economy, 1=Standard, 2=High, 3=Full
+    GetParam(kParamIRQuality)->InitEnum("IR Quality", 1, 4, "", iplug::IParam::kFlagsNone,
+      "", "Economy", "Standard", "High", "Full");
     // Parametric EQ parameters
     GetParam(kParamEQEnabled)->InitBool("EQ", false);
     GetParam(kParamEQLowGain)->InitDouble("EQ Low Gain", 0.0, -12.0, 12.0, 0.1, "dB");

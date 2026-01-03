@@ -5,7 +5,7 @@
 #include <memory>
 #include <cstddef>
 
-namespace namguitar { class SimpleFFT; }
+namespace namguitar { class SimdFFT; }
 
 namespace namguitar
 {
@@ -73,6 +73,7 @@ namespace namguitar
     // Input/output sample buffering
     std::vector<double> mInputBuffer;
     std::vector<double> mOutputBuffer;
+    std::vector<double> mPreviousInputBlock;  // Previous block for overlap-save
     size_t mInputBufferPos = 0;
     size_t mOutputBufferReadPos = 0;
     
@@ -85,7 +86,7 @@ namespace namguitar
     std::vector<double> mOverlapBuffer;
     
     // FFT plan
-    std::unique_ptr<SimpleFFT> mFFT;
+    std::unique_ptr<SimdFFT> mFFT;
   };
 
 } // namespace namguitar

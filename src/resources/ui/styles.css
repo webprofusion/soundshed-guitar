@@ -1170,6 +1170,58 @@ body {
     20px 14px 0 #3a3a40;
 }
 
+/* ===== IR Quality Section ===== */
+.ir-quality-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #3a3a42 0%, #2a2a32 100%);
+  border-radius: 8px;
+  border: 1px solid #48485a;
+}
+
+.ir-quality-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ir-quality-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #c8c8d0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.ir-quality-select {
+  background: linear-gradient(180deg, #4a4a52 0%, #3a3a42 100%);
+  border: 1px solid #58586a;
+  border-radius: 4px;
+  color: #e8e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.ir-quality-select:hover {
+  background: linear-gradient(180deg, #5a5a62 0%, #4a4a52 100%);
+}
+
+.ir-quality-select:focus {
+  border-color: #ff8c00;
+}
+
+.ir-quality-info {
+  margin-top: 6px;
+  font-size: 9px;
+  color: #8888a0;
+}
+
 /* ===== Simple Cab Section ===== */
 .simplecab-section {
   display: flex;

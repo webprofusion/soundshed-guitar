@@ -19,10 +19,11 @@ set(_nam_dsp_sources
 # compiles NAMGuitarPlugin.cpp directly with its own API definition.
 
 set(_namguitar_core_sources
-  dsp/SimpleFFT.h
+  dsp/SimdFFT.h
   dsp/RealtimeConvolver.cpp
   dsp/RealtimeConvolver.h
   dsp/SimpleCabSim.h
+  dsp/IRTypes.h
   dsp/IRManager.cpp
   dsp/IRManager.h
   dsp/NAMDSPManager.cpp

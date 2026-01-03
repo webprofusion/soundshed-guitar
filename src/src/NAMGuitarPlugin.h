@@ -76,6 +76,7 @@ namespace namguitar
       kParamSimpleCabBass,
       kParamSimpleCabPresence,
       kParamSimpleCabBrightness,
+      kParamIRQuality,  // IR quality mode (Economy/Standard/High/Full)
       // Parametric EQ parameters
       kParamEQEnabled,
       kParamEQLowGain,

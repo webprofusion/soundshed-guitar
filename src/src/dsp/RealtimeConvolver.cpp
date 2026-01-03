@@ -1,5 +1,5 @@
 #include "RealtimeConvolver.h"
-#include "SimpleFFT.h"
+#include "SimdFFT.h"
 
 #include <algorithm>
 #include <cmath>
@@ -51,7 +51,7 @@ namespace namguitar
     // Create FFT plan
     try
     {
-      mFFT = std::make_unique<SimpleFFT>(mFFTSize);
+      mFFT = std::make_unique<SimdFFT>(mFFTSize);
     }
     catch (...)
     {
@@ -99,6 +99,9 @@ namespace namguitar
     mInputBufferPos = 0;
     mOutputBufferReadPos = mPartitionSize; // Start empty
     
+    // Previous input block for overlap-save (needed for proper convolution)
+    mPreviousInputBlock.assign(mPartitionSize, 0.0);
+    
     // Overlap buffer
     mOverlapBuffer.assign(mPartitionSize, 0.0);
     
@@ -108,12 +111,16 @@ namespace namguitar
 
   void RealtimeConvolver::ProcessBlock()
   {
-    // Prepare FFT input: [zeros | new samples]
+    // Prepare FFT input: [previous samples | current samples]
+    // This is the correct overlap-save arrangement for linear convolution
     for (size_t i = 0; i < mPartitionSize; ++i)
     {
-      mFFTInputBuffer[i] = std::complex<double>(0.0, 0.0);
+      mFFTInputBuffer[i] = std::complex<double>(mPreviousInputBlock[i], 0.0);
       mFFTInputBuffer[mPartitionSize + i] = std::complex<double>(mInputBuffer[i], 0.0);
     }
+    
+    // Save current input for next block
+    std::copy(mInputBuffer.begin(), mInputBuffer.end(), mPreviousInputBlock.begin());
     
     // Forward FFT of input block
     mFFT->Forward(mFFTOutputBuffer.data(), mFFTInputBuffer.data());
@@ -122,21 +129,18 @@ namespace namguitar
     auto& currentSlot = mInputFFTDelayLine[mDelayLineIndex];
     std::copy(mFFTOutputBuffer.begin(), mFFTOutputBuffer.end(), currentSlot.begin());
     
-    // Clear accumulator
-    std::fill(mAccumulator.begin(), mAccumulator.end(), std::complex<double>(0.0, 0.0));
+    // Clear accumulator using SIMD
+    SimdFFT::ClearBuffer(mAccumulator.data(), mFFTSize);
     
-    // Accumulate contributions from all IR partitions
+    // Accumulate contributions from all IR partitions using SIMD
     for (size_t p = 0; p < mNumPartitions; ++p)
     {
       const size_t delayIdx = (mDelayLineIndex + mNumPartitions - p) % mNumPartitions;
       const auto& inputFFT = mInputFFTDelayLine[delayIdx];
       const auto& irFFT = mIRPartitionsFFT[p];
       
-      // Complex multiply-accumulate
-      for (size_t k = 0; k < mFFTSize; ++k)
-      {
-        mAccumulator[k] += inputFFT[k] * irFFT[k];
-      }
+      // SIMD complex multiply-accumulate (the hot path)
+      SimdFFT::ComplexMultiplyAccumulate(mAccumulator.data(), inputFFT.data(), irFFT.data(), mFFTSize);
     }
     
     // Advance delay line write position
@@ -208,6 +212,7 @@ namespace namguitar
     std::fill(mInputBuffer.begin(), mInputBuffer.end(), 0.0);
     std::fill(mOutputBuffer.begin(), mOutputBuffer.end(), 0.0);
     std::fill(mOverlapBuffer.begin(), mOverlapBuffer.end(), 0.0);
+    std::fill(mPreviousInputBlock.begin(), mPreviousInputBlock.end(), 0.0);
     mInputBufferPos = 0;
     mOutputBufferReadPos = mPartitionSize;
   }

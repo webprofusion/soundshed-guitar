@@ -167,6 +167,106 @@ namespace namguitar
     mCurrentIR = std::nullopt; // Clear the file path since this is synthetic data
   }
 
+  std::vector<float> IRManager::GetProcessedImpulse(double sampleRate) const
+  {
+    if (mImpulse.empty())
+    {
+      return {};
+    }
+
+    // For Full quality, return the complete IR
+    if (mQuality == IRQuality::Full)
+    {
+      return mImpulse;
+    }
+
+    // Get max samples for this quality mode
+    const size_t maxSamples = GetMaxIRSamples(mQuality, sampleRate);
+    
+    if (maxSamples == 0 || mImpulse.size() <= maxSamples)
+    {
+      return mImpulse;
+    }
+
+    // Find smart truncation point based on energy
+    // Use the minimum of: quality limit OR energy-based truncation point
+    const size_t energyTruncPoint = FindEnergyTruncationPoint(mImpulse, 0.001f);
+    const size_t truncLength = std::min({mImpulse.size(), maxSamples, energyTruncPoint});
+
+    // Apply fade-out to avoid clicks (last 64 samples)
+    std::vector<float> truncated(mImpulse.begin(), mImpulse.begin() + truncLength);
+    
+    constexpr size_t kFadeLength = 64;
+    if (truncLength > kFadeLength)
+    {
+      for (size_t i = 0; i < kFadeLength; ++i)
+      {
+        const float fadeGain = static_cast<float>(kFadeLength - 1 - i) / static_cast<float>(kFadeLength - 1);
+        truncated[truncLength - kFadeLength + i] *= fadeGain;
+      }
+    }
+
+    return truncated;
+  }
+
+  size_t IRManager::GetProcessedLength(double sampleRate) const
+  {
+    if (mImpulse.empty())
+    {
+      return 0;
+    }
+
+    if (mQuality == IRQuality::Full)
+    {
+      return mImpulse.size();
+    }
+
+    const size_t maxSamples = GetMaxIRSamples(mQuality, sampleRate);
+    if (maxSamples == 0)
+    {
+      return mImpulse.size();
+    }
+
+    const size_t energyTruncPoint = FindEnergyTruncationPoint(mImpulse, 0.001f);
+    return std::min({mImpulse.size(), maxSamples, energyTruncPoint});
+  }
+
+  size_t IRManager::FindEnergyTruncationPoint(const std::vector<float>& samples, float threshold)
+  {
+    if (samples.empty())
+    {
+      return 0;
+    }
+
+    // Calculate total energy
+    double totalEnergy = 0.0;
+    for (const float s : samples)
+    {
+      totalEnergy += static_cast<double>(s) * static_cast<double>(s);
+    }
+
+    if (totalEnergy < 1e-10)
+    {
+      return samples.size();
+    }
+
+    // Find point where cumulative energy reaches (1 - threshold) of total
+    const double targetEnergy = totalEnergy * (1.0 - static_cast<double>(threshold));
+    double cumulativeEnergy = 0.0;
+
+    for (size_t i = 0; i < samples.size(); ++i)
+    {
+      cumulativeEnergy += static_cast<double>(samples[i]) * static_cast<double>(samples[i]);
+      if (cumulativeEnergy >= targetEnergy)
+      {
+        // Add a small buffer (256 samples) after the energy threshold
+        return std::min(i + 256, samples.size());
+      }
+    }
+
+    return samples.size();
+  }
+
   bool IRManager::ParseWavFile(std::ifstream &stream, double targetSampleRate)
   {
     if (!ParseRiffHeader(stream))

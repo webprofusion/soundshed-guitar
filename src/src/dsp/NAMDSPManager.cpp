@@ -160,14 +160,34 @@ namespace namguitar
       return false;
     }
 
-    // Initialize FFT convolution for both channels with the loaded IR
-    const auto& impulse = mIRManager.Impulse();
+    // Initialize FFT convolution for both channels with the processed (possibly truncated) IR
+    const auto processedImpulse = mIRManager.GetProcessedImpulse(mSampleRate);
     for (auto &convolution : mIRConvolution)
     {
-      convolution.SetImpulse(impulse, mMaxBlockSize);
+      convolution.SetImpulse(processedImpulse, mMaxBlockSize);
     }
     
     return true;
+  }
+
+  void NAMDSPManager::SetIRQuality(IRQuality quality)
+  {
+    if (mIRManager.GetQuality() == quality)
+    {
+      return;
+    }
+    
+    mIRManager.SetQuality(quality);
+    
+    // Re-initialize convolution with the new truncation settings if we have an IR loaded
+    if (mIRManager.HasImpulse())
+    {
+      const auto processedImpulse = mIRManager.GetProcessedImpulse(mSampleRate);
+      for (auto &convolution : mIRConvolution)
+      {
+        convolution.SetImpulse(processedImpulse, mMaxBlockSize);
+      }
+    }
   }
 
   void NAMDSPManager::SetInputTrim(double decibels)
@@ -409,8 +429,8 @@ namespace namguitar
       {
         double sample = static_cast<double>(inputChannel[frame]) * mInputTrimLinear;
         sample = ApplyGate(sample, outputIdx);
-        sample = ApplyDrive(sample);
-        sample = ApplyTone(sample, outputIdx);
+      //  sample = ApplyDrive(sample);
+       // sample = ApplyTone(sample, outputIdx);
         mNamInput[static_cast<std::size_t>(frame)] = static_cast<NAM_SAMPLE>(sample);
       }
 

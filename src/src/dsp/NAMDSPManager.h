@@ -15,6 +15,7 @@
 
 // Forward declare factory registration function
 namespace nam { namespace factory { void ForceFactoryRegistration(); } }
+#include "dsp/IRTypes.h"
 #include "dsp/IRManager.h"
 #include "dsp/RealtimeConvolver.h"
 #include "dsp/SimpleCabSim.h"
@@ -59,6 +60,10 @@ namespace namguitar
     [[nodiscard]] bool IsAmpEnabled() const noexcept { return mAmpEnabled; }
     void SetCabEnabled(bool enabled) { mCabEnabled = enabled; }
     [[nodiscard]] bool IsCabEnabled() const noexcept { return mCabEnabled; }
+    
+    // IR Quality settings
+    void SetIRQuality(IRQuality quality);
+    [[nodiscard]] IRQuality GetIRQuality() const noexcept { return mIRManager.GetQuality(); }
     
     // Simple cabinet simulation (alternative to IR convolution)
     void SetSimpleCabEnabled(bool enabled) { mSimpleCabEnabled = enabled; }
