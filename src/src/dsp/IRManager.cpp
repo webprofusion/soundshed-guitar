@@ -146,6 +146,13 @@ namespace namguitar
     return true;
   }
 
+  void IRManager::Clear()
+  {
+    mImpulse.clear();
+    mCurrentIR.reset();
+    mImpulseSampleRate = 0.0;
+  }
+
   std::optional<std::filesystem::path> IRManager::CurrentImpulseResponse() const
   {
     return mCurrentIR;

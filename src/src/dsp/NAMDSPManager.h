@@ -43,6 +43,8 @@ namespace namguitar
     void Reset();
     bool LoadModel(const std::filesystem::path &modelPath);
     bool LoadImpulseResponse(const std::filesystem::path &impulsePath);
+    void ClearModel();
+    void ClearImpulseResponse();
 
     void SetInputTrim(double decibels);
     void SetOutputTrim(double decibels);

@@ -127,8 +127,10 @@ export function handleIncomingMessage(message: string): void {
       break;
     }
     case "irLoaded": {
+      console.log("[JS] IR loaded event received, path:", (payload as { path?: string }).path);
       appendLog(`IR loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
       uiState.parameters.irPath = (payload as { path?: string }).path ?? "";
+      console.log("[JS] uiState.parameters.irPath set to:", uiState.parameters.irPath);
       renderActivePreset();
       showNotification("IR loaded", (payload as { path?: string }).path ?? "");
       break;

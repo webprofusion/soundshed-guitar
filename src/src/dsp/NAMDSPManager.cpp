@@ -170,6 +170,23 @@ namespace namguitar
     return true;
   }
 
+  void NAMDSPManager::ClearModel()
+  {
+    for (auto& model : mModels)
+    {
+      model.reset();
+    }
+  }
+
+  void NAMDSPManager::ClearImpulseResponse()
+  {
+    mIRManager.Clear();
+    for (auto& convolution : mIRConvolution)
+    {
+      convolution.Reset();
+    }
+  }
+
   void NAMDSPManager::SetIRQuality(IRQuality quality)
   {
     if (mIRManager.GetQuality() == quality)

@@ -1223,6 +1223,12 @@ namespace namguitar
 
     // Reset DSP state before applying new preset to avoid artifacts
     mDSP->Reset();
+    
+    // Clear current model and IR - preset should fully replace current state
+    mDSP->ClearModel();
+    mDSP->ClearImpulseResponse();
+    mActiveModelPath.clear();
+    mActiveIRPath.clear();
 
     // First, reset all parameters to their default values
     // This ensures parameters not specified in the preset get reset

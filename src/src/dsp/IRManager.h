@@ -15,6 +15,7 @@ namespace namguitar
     IRManager() = default;
 
     bool LoadImpulseResponse(const std::filesystem::path &filePath, double targetSampleRate);
+    void Clear();
     [[nodiscard]] std::optional<std::filesystem::path> CurrentImpulseResponse() const;
     [[nodiscard]] const std::vector<float> &Impulse() const noexcept;
     [[nodiscard]] bool HasImpulse() const noexcept;
