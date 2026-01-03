@@ -4,31 +4,34 @@ if(NOT DEFINED iPlug2_SOURCE_DIR)
   message(FATAL_ERROR "iPlug2 source directory is not available; ensure dependencies are fetched before enabling the VST3 target.")
 endif()
 
+# Define VST3 SDK root for cleaner path references
+set(VST3_SDK_ROOT "${iPlug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
+
 # VST3 SDK source files
 set(_vst3_sdk_sources
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/baseiids.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/fbuffer.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/fdebug.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/fobject.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/fstreamer.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/fstring.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source/updatehandler.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/thread/source/flock.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/pluginterfaces/base/conststringtable.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/pluginterfaces/base/coreiids.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/pluginterfaces/base/funknown.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/pluginterfaces/base/ustring.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/common/commoniids.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/common/memorystream.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/common/pluginview.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstbus.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstcomponent.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstcomponentbase.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstinitiids.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstparameters.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/vst/vstsinglecomponenteffect.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/main/pluginfactory.cpp
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source/main/dllmain.cpp
+  ${VST3_SDK_ROOT}/base/source/baseiids.cpp
+  ${VST3_SDK_ROOT}/base/source/fbuffer.cpp
+  ${VST3_SDK_ROOT}/base/source/fdebug.cpp
+  ${VST3_SDK_ROOT}/base/source/fobject.cpp
+  ${VST3_SDK_ROOT}/base/source/fstreamer.cpp
+  ${VST3_SDK_ROOT}/base/source/fstring.cpp
+  ${VST3_SDK_ROOT}/base/source/updatehandler.cpp
+  ${VST3_SDK_ROOT}/base/thread/source/flock.cpp
+  ${VST3_SDK_ROOT}/pluginterfaces/base/conststringtable.cpp
+  ${VST3_SDK_ROOT}/pluginterfaces/base/coreiids.cpp
+  ${VST3_SDK_ROOT}/pluginterfaces/base/funknown.cpp
+  ${VST3_SDK_ROOT}/pluginterfaces/base/ustring.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/common/commoniids.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/common/pluginview.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstbus.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstcomponent.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstcomponentbase.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstinitiids.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstparameters.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/vst/vstsinglecomponenteffect.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/main/pluginfactory.cpp
+  ${VST3_SDK_ROOT}/public.sdk/source/main/dllmain.cpp
 )
 
 # iPlug2 core sources
@@ -89,11 +92,11 @@ target_include_directories(NAMGuitarFX_VST3 PRIVATE
   ${iPlug2_SOURCE_DIR}/IPlug/Extras
   ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView
   ${iPlug2_SOURCE_DIR}/IPlug/VST3
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/source
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/base/thread/include
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/pluginterfaces
-  ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK/public.sdk/source
+  ${VST3_SDK_ROOT}
+  ${VST3_SDK_ROOT}/base/source
+  ${VST3_SDK_ROOT}/base/thread/include
+  ${VST3_SDK_ROOT}/pluginterfaces
+  ${VST3_SDK_ROOT}/public.sdk/source
   ${iPlug2_SOURCE_DIR}/IGraphics
   ${iPlug2_SOURCE_DIR}/IGraphics/Controls
   ${iPlug2_SOURCE_DIR}/IGraphics/Drawing

@@ -63,8 +63,16 @@ function renderParameterSection(): string {
               <span class="stat-value">${uiState.signalTest.frequency.toFixed(1)} Hz</span>
             </div>
             <div class="test-stat">
-              <span class="stat-label">Duration</span>
-              <span class="stat-value">${uiState.signalTest.duration.toFixed(2)} s</span>
+              <span class="stat-label">Audio Duration</span>
+              <span class="stat-value">${uiState.signalTest.duration.toFixed(3)} s</span>
+            </div>
+            <div class="test-stat">
+              <span class="stat-label">Processing Time</span>
+              <span class="stat-value">${uiState.signalTest.elapsed.toFixed(3)} s</span>
+            </div>
+            <div class="test-stat">
+              <span class="stat-label">Realtime Ratio</span>
+              <span class="stat-value ${uiState.signalTest.elapsed > 0 && uiState.signalTest.duration / uiState.signalTest.elapsed < 1 ? "warning" : ""}">${uiState.signalTest.elapsed > 0 ? (uiState.signalTest.duration / uiState.signalTest.elapsed).toFixed(2) : "N/A"}x</span>
             </div>
             <div class="test-stat">
               <span class="stat-label">Input RMS</span>

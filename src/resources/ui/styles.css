@@ -902,6 +902,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stat-value.warning {
+  color: #d63031;
+  font-weight: 600;
+}
+
 .test-message {
   margin: 12px 0 0 0;
   padding: 10px;

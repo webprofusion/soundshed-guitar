@@ -43,6 +43,7 @@ export interface ParametersState {
 export interface SignalTestResult {
   frequency: number;
   duration: number;
+  elapsed: number;
   sampleRate: number;
   inputRMS: number;
   outputLeft: number;

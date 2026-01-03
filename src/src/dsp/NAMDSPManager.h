@@ -16,7 +16,7 @@
 // Forward declare factory registration function
 namespace nam { namespace factory { void ForceFactoryRegistration(); } }
 #include "dsp/IRManager.h"
-#include "dsp/OptimizedConvolver.h"
+#include "dsp/RealtimeConvolver.h"
 #include "dsp/SimpleCabSim.h"
 #include "dsp/ParametricEQ.h"
 
@@ -194,8 +194,8 @@ namespace namguitar
       return (std::abs(x) < kThreshold) ? 0.0 : x;
     }
 
-    // FFT-based convolution for IR processing (mutable because Process() modifies overlap buffer)
-    mutable std::array<OptimizedConvolver, 2> mIRConvolution;  // One per channel
+    // FFT-based convolution for IR processing (real-time optimized using UPOLS algorithm)
+    mutable std::array<RealtimeConvolver, 2> mIRConvolution;  // One per channel
 
     // Tuner state
     bool mTunerEnabled = false;

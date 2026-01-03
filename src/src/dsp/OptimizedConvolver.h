@@ -5,14 +5,23 @@
 #include <cstddef>
 #include <complex>
 
+// KFR DFT forward declarations
+namespace kfr { template<typename T> class dft_plan; }
+
 namespace namguitar
 {
-  // High-performance convolver using PocketFFT for real-time audio IR processing
+  // High-performance convolver using KFR for real-time audio IR processing
   class OptimizedConvolver
   {
   public:
     OptimizedConvolver();
     ~OptimizedConvolver();
+
+    // Non-copyable, movable
+    OptimizedConvolver(const OptimizedConvolver&) = delete;
+    OptimizedConvolver& operator=(const OptimizedConvolver&) = delete;
+    OptimizedConvolver(OptimizedConvolver&&) noexcept;
+    OptimizedConvolver& operator=(OptimizedConvolver&&) noexcept;
 
     // Initialize with impulse response
     void SetImpulse(const std::vector<float>& irSamples, int blockSize);
@@ -27,7 +36,7 @@ namespace namguitar
     [[nodiscard]] bool IsUsingFFT() const noexcept { return mUseFFT; }
 
   private:
-    // PocketFFT-based convolution
+    // KFR-based convolution
     void InitializeFFT(const std::vector<float>& irSamples, int blockSize);
     void ProcessFFT(const std::vector<double>& input, std::vector<double>& output);
 
@@ -42,10 +51,14 @@ namespace namguitar
     int mBlockSize = 0;
     size_t mFFTSize = 0;
 
-    // PocketFFT buffers
+    // KFR DFT plan
+    std::unique_ptr<kfr::dft_plan<double>> mDFTPlan;
+
+    // KFR buffers
     std::vector<std::complex<double>> mInputBuffer;
     std::vector<std::complex<double>> mOutputBuffer;
     std::vector<std::complex<double>> mIRFreqDomain;  // Pre-computed IR in frequency domain
+    std::vector<uint8_t> mTempBuffer;  // Temporary buffer for KFR
   };
 
 } // namespace namguitar

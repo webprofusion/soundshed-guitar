@@ -1,14 +1,19 @@
 #include "FFTConvolution.h"
 #include <cmath>
-#include <numbers>
 #include <stdexcept>
+
+// KFR headers for DFT
+#include <kfr/dft.hpp>
 
 namespace namguitar
 {
-  namespace
-  {
-    constexpr double kPi = std::numbers::pi;
-  }
+  FFTConvolution::FFTConvolution() = default;
+
+  FFTConvolution::~FFTConvolution() = default;
+
+  FFTConvolution::FFTConvolution(FFTConvolution&&) noexcept = default;
+
+  FFTConvolution& FFTConvolution::operator=(FFTConvolution&&) noexcept = default;
 
   size_t FFTConvolution::NextPowerOf2(size_t n)
   {
@@ -18,76 +23,6 @@ namespace namguitar
       power *= 2;
     }
     return power;
-  }
-
-  void FFTConvolution::FFT(std::vector<std::complex<double>>& data, bool inverse)
-  {
-    const size_t n = data.size();
-    if (n <= 1) return;
-
-    // Check if power of 2
-    if ((n & (n - 1)) != 0)
-    {
-      throw std::runtime_error("FFT size must be power of 2");
-    }
-
-    // Bit-reversal permutation
-    for (size_t i = 0, j = 0; i < n; ++i)
-    {
-      if (j > i)
-      {
-        std::swap(data[i], data[j]);
-      }
-
-      size_t m = n / 2;
-      while (m >= 1 && j >= m)
-      {
-        j -= m;
-        m /= 2;
-      }
-      j += m;
-    }
-
-    // Cooley-Tukey decimation-in-time radix-2 FFT
-    // Calculate log2(n) for the number of stages
-    size_t log2n = 0;
-    size_t temp = n;
-    while (temp > 1)
-    {
-      temp >>= 1;
-      ++log2n;
-    }
-    
-    for (size_t s = 1; s <= log2n; ++s)
-    {
-      const size_t m = 1 << s;  // 2^s
-      const size_t m2 = m / 2;
-      const double sign = inverse ? 1.0 : -1.0;
-      const std::complex<double> wm = std::exp(std::complex<double>(0.0, sign * 2.0 * kPi / static_cast<double>(m)));
-
-      for (size_t k = 0; k < n; k += m)
-      {
-        std::complex<double> w(1.0, 0.0);
-        for (size_t j = 0; j < m2; ++j)
-        {
-          const std::complex<double> t = w * data[k + j + m2];
-          const std::complex<double> u = data[k + j];
-          data[k + j] = u + t;
-          data[k + j + m2] = u - t;
-          w *= wm;
-        }
-      }
-    }
-
-    // Scaling for inverse FFT
-    if (inverse)
-    {
-      const double scale = 1.0 / static_cast<double>(n);
-      for (auto& val : data)
-      {
-        val *= scale;
-      }
-    }
   }
 
   void FFTConvolution::SetImpulse(const std::vector<float>& irSamples, int blockSize)
@@ -100,6 +35,7 @@ namespace namguitar
       mIRPartitions.clear();
       mInputHistory.clear();
       mUsePartitionedConvolution = false;
+      mDFTPlan.reset();
       return;
     }
 
@@ -112,6 +48,14 @@ namespace namguitar
 
     // Initialize overlap buffer (size = IR length - 1)
     mOverlapBuffer.assign(irSamples.size() - 1, 0.0);
+
+    // Create KFR DFT plan
+    mDFTPlan = std::make_unique<kfr::dft_plan<double>>(mFFTSize);
+    
+    // Allocate working buffers
+    mInputBuffer.resize(mFFTSize);
+    mOutputBuffer.resize(mFFTSize);
+    mTempBuffer.resize(mDFTPlan->temp_size);
 
     // OPTIMIZATION: For large IRs (>1024 samples), use partitioned convolution
     // This splits the IR into segments and processes them independently
@@ -129,6 +73,9 @@ namespace namguitar
 
       // Pre-compute FFT for each IR partition
       size_t partitionFFTSize = NextPowerOf2(2 * mPartitionSize);
+      kfr::dft_plan<double> partitionPlan(partitionFFTSize);
+      std::vector<uint8_t> partitionTemp(partitionPlan.temp_size);
+      
       for (size_t p = 0; p < mNumPartitions; ++p)
       {
         std::vector<std::complex<double>> partition(partitionFFTSize, std::complex<double>(0.0, 0.0));
@@ -141,9 +88,9 @@ namespace namguitar
           partition[i - start] = std::complex<double>(irSamples[i], 0.0);
         }
         
-        // Pre-compute FFT of this partition
-        FFT(partition, false);
-        mIRPartitions[p] = partition;
+        // Pre-compute FFT of this partition using KFR
+        mIRPartitions[p].resize(partitionFFTSize);
+        partitionPlan.execute(mIRPartitions[p].data(), partition.data(), partitionTemp.data(), false);
         
         // Initialize history for this partition
         mInputHistory[p].assign(mPartitionSize, 0.0);
@@ -152,12 +99,15 @@ namespace namguitar
     else
     {
       // For small IRs, pre-compute IR FFT once instead of every frame
-      mIRFFT.resize(mFFTSize, std::complex<double>(0.0, 0.0));
+      std::vector<std::complex<double>> irTimeDomain(mFFTSize, std::complex<double>(0.0, 0.0));
       for (size_t i = 0; i < irSamples.size(); ++i)
       {
-        mIRFFT[i] = std::complex<double>(irSamples[i], 0.0);
+        irTimeDomain[i] = std::complex<double>(irSamples[i], 0.0);
       }
-      FFT(mIRFFT, false);
+      
+      // Forward FFT of IR using KFR
+      mIRFFT.resize(mFFTSize);
+      mDFTPlan->execute(mIRFFT.data(), irTimeDomain.data(), mTempBuffer.data(), false);
       
       mUsePartitionedConvolution = false;
       mIRPartitions.clear();
@@ -167,7 +117,7 @@ namespace namguitar
 
   void FFTConvolution::Process(const std::vector<double>& input, std::vector<double>& output)
   {
-    if (mImpulse.empty() || input.empty())
+    if (mImpulse.empty() || input.empty() || !mDFTPlan)
     {
       output = input;
       return;
@@ -179,32 +129,37 @@ namespace namguitar
       output.resize(input.size(), 0.0);
       size_t partitionFFTSize = NextPowerOf2(2 * mPartitionSize);
       
+      kfr::dft_plan<double> partitionPlan(partitionFFTSize);
+      std::vector<uint8_t> partitionTemp(partitionPlan.temp_size);
+      std::vector<std::complex<double>> inputFFT(partitionFFTSize);
+      std::vector<std::complex<double>> resultFFT(partitionFFTSize);
+      std::vector<std::complex<double>> inputTimeDomain(partitionFFTSize);
+      
       for (size_t p = 0; p < mNumPartitions; ++p)
       {
-        std::vector<std::complex<double>> inputFFT(partitionFFTSize, std::complex<double>(0.0, 0.0));
-        
-        // Copy current input block
-        for (size_t i = 0; i < input.size(); ++i)
+        // Prepare input in time domain (zero-padded)
+        std::fill(inputTimeDomain.begin(), inputTimeDomain.end(), std::complex<double>(0.0, 0.0));
+        for (size_t i = 0; i < input.size() && i < partitionFFTSize; ++i)
         {
-          inputFFT[i] = std::complex<double>(input[i], 0.0);
+          inputTimeDomain[i] = std::complex<double>(input[i], 0.0);
         }
         
-        // Forward FFT of input
-        FFT(inputFFT, false);
+        // Forward FFT of input using KFR
+        partitionPlan.execute(inputFFT.data(), inputTimeDomain.data(), partitionTemp.data(), false);
         
         // Multiply by pre-computed IR partition FFT
         for (size_t i = 0; i < partitionFFTSize; ++i)
         {
-          inputFFT[i] *= mIRPartitions[p][i];
+          resultFFT[i] = inputFFT[i] * mIRPartitions[p][i];
         }
         
-        // Inverse FFT
-        FFT(inputFFT, true);
+        // Inverse FFT using KFR
+        partitionPlan.execute(inputTimeDomain.data(), resultFFT.data(), partitionTemp.data(), true);
         
         // Add to output (with overlap handling)
         for (size_t i = 0; i < input.size(); ++i)
         {
-          output[i] += inputFFT[i].real();
+          output[i] += inputTimeDomain[i].real() / static_cast<double>(partitionFFTSize);
         }
       }
     }
@@ -214,34 +169,33 @@ namespace namguitar
       const size_t inputSize = input.size();
       const size_t irSize = mImpulse.size();
       
-      // Prepare FFT buffers (reuse from member if possible for efficiency)
-      std::vector<std::complex<double>> inputFFT(mFFTSize, std::complex<double>(0.0, 0.0));
-
-      // Copy input to FFT buffer (zero-padded)
+      // Prepare input in time domain (zero-padded)
+      std::fill(mInputBuffer.begin(), mInputBuffer.end(), std::complex<double>(0.0, 0.0));
       for (size_t i = 0; i < inputSize; ++i)
       {
-        inputFFT[i] = std::complex<double>(input[i], 0.0);
+        mInputBuffer[i] = std::complex<double>(input[i], 0.0);
       }
 
-      // Forward FFT on input only (IR FFT is pre-computed)
-      FFT(inputFFT, false);
+      // Forward FFT on input using KFR
+      mDFTPlan->execute(mOutputBuffer.data(), mInputBuffer.data(), mTempBuffer.data(), false);
 
       // Multiply in frequency domain by pre-computed IR FFT
       for (size_t i = 0; i < mFFTSize; ++i)
       {
-        inputFFT[i] *= mIRFFT[i];
+        mOutputBuffer[i] *= mIRFFT[i];
       }
 
-      // Inverse FFT
-      FFT(inputFFT, true);
+      // Inverse FFT using KFR
+      mDFTPlan->execute(mInputBuffer.data(), mOutputBuffer.data(), mTempBuffer.data(), true);
 
       // Extract real part and apply overlap-add
       output.resize(inputSize);
       const size_t overlapSize = mOverlapBuffer.size();
+      const double scale = 1.0 / static_cast<double>(mFFTSize);
 
       for (size_t i = 0; i < inputSize; ++i)
       {
-        double sample = inputFFT[i].real();
+        double sample = mInputBuffer[i].real() * scale;
         
         // Add overlap from previous block
         if (i < overlapSize)
@@ -257,9 +211,9 @@ namespace namguitar
       for (size_t i = 0; i < overlapSize; ++i)
       {
         const size_t srcIdx = inputSize + i;
-        if (srcIdx < outputSize && srcIdx < inputFFT.size())
+        if (srcIdx < outputSize && srcIdx < mInputBuffer.size())
         {
-          mOverlapBuffer[i] = inputFFT[srcIdx].real();
+          mOverlapBuffer[i] = mInputBuffer[srcIdx].real() * scale;
         }
         else
         {

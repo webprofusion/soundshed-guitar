@@ -707,10 +707,12 @@ namespace namguitar
       if (state.samplesRemaining <= 0)
       {
         state.samplesRemaining = 0;
+        const auto endTime = std::chrono::steady_clock::now();
         const double totalFrames = std::max(1.0, static_cast<double>(state.totalSamples));
         mSignalTestResult.frequencyHz = state.frequencyHz;
         mSignalTestResult.sampleRate = state.sampleRate;
         mSignalTestResult.durationSeconds = static_cast<double>(state.totalSamples) / std::max(1.0, state.sampleRate);
+        mSignalTestResult.elapsedSeconds = std::chrono::duration<double>(endTime - state.startTime).count();
         mSignalTestResult.inputRMS = std::sqrt(state.inputSumSquares / totalFrames);
         mSignalTestResult.outputRMS[0] = std::sqrt(state.outputSumSquares[0] / totalFrames);
         mSignalTestResult.outputRMS[1] = std::sqrt(state.outputSumSquares[1] / totalFrames);
@@ -802,6 +804,7 @@ namespace namguitar
         message["type"] = "signalPathTestResult";
         message["frequency"] = mSignalTestResult.frequencyHz;
         message["duration"] = mSignalTestResult.durationSeconds;
+        message["elapsed"] = mSignalTestResult.elapsedSeconds;
         message["sampleRate"] = mSignalTestResult.sampleRate;
         message["inputRMS"] = mSignalTestResult.inputRMS;
         message["outputRMS"] = {mSignalTestResult.outputRMS[0], mSignalTestResult.outputRMS[1]};
@@ -2119,6 +2122,7 @@ namespace namguitar
     state.sampleRate = sampleRate;
     state.inputSumSquares = 0.0;
     state.outputSumSquares = {0.0, 0.0};
+    state.startTime = std::chrono::steady_clock::now();
 
     mSignalTestState = state;
 

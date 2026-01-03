@@ -4,8 +4,8 @@
 #include <cmath>
 #include <cstring>
 
-// PocketFFT - header-only FFT library (C++ version)
-#include "pocketfft_hdronly.h"
+// KFR - high-performance DSP framework
+#include <kfr/dft.hpp>
 
 namespace namguitar
 {
@@ -24,6 +24,10 @@ namespace namguitar
 
   OptimizedConvolver::~OptimizedConvolver() = default;
 
+  OptimizedConvolver::OptimizedConvolver(OptimizedConvolver&&) noexcept = default;
+
+  OptimizedConvolver& OptimizedConvolver::operator=(OptimizedConvolver&&) noexcept = default;
+
   void OptimizedConvolver::SetImpulse(const std::vector<float>& irSamples, int blockSize)
   {
     if (irSamples.empty() || blockSize <= 0)
@@ -31,6 +35,7 @@ namespace namguitar
       mInitialized = false;
       mImpulse.clear();
       mOverlapBuffer.clear();
+      mDFTPlan.reset();
       return;
     }
 
@@ -63,10 +68,14 @@ namespace namguitar
     const size_t minFFTSize = blockSize + irSamples.size() - 1;
     mFFTSize = NextPowerOf2(minFFTSize);
 
+    // Create KFR DFT plan
+    mDFTPlan = std::make_unique<kfr::dft_plan<double>>(mFFTSize);
+
     // Allocate buffers
     mInputBuffer.resize(mFFTSize);
     mOutputBuffer.resize(mFFTSize);
     mIRFreqDomain.resize(mFFTSize);
+    mTempBuffer.resize(mDFTPlan->temp_size);
 
     // Prepare IR in time domain (zero-padded)
     std::vector<std::complex<double>> irTimeDomain(mFFTSize, std::complex<double>(0.0, 0.0));
@@ -75,14 +84,8 @@ namespace namguitar
       irTimeDomain[i] = std::complex<double>(static_cast<double>(irSamples[i]), 0.0);
     }
 
-    // Pre-compute IR FFT using PocketFFT
-    pocketfft::shape_t shape = { mFFTSize };
-    pocketfft::stride_t stride = { sizeof(std::complex<double>) };
-    pocketfft::shape_t axes = { 0 };
-
-    mIRFreqDomain = irTimeDomain;
-    pocketfft::c2c(shape, stride, stride, axes, pocketfft::FORWARD,
-                   irTimeDomain.data(), mIRFreqDomain.data(), 1.0);
+    // Pre-compute IR FFT using KFR
+    mDFTPlan->execute(mIRFreqDomain.data(), irTimeDomain.data(), mTempBuffer.data(), false);
 
     // Initialize overlap buffer
     mOverlapBuffer.assign(irSamples.size() - 1, 0.0);
@@ -100,13 +103,8 @@ namespace namguitar
       mInputBuffer[i] = std::complex<double>(input[i], 0.0);
     }
 
-    // Forward FFT using PocketFFT
-    pocketfft::shape_t shape = { mFFTSize };
-    pocketfft::stride_t stride = { sizeof(std::complex<double>) };
-    pocketfft::shape_t axes = { 0 };
-
-    pocketfft::c2c(shape, stride, stride, axes, pocketfft::FORWARD,
-                   mInputBuffer.data(), mOutputBuffer.data(), 1.0);
+    // Forward FFT using KFR
+    mDFTPlan->execute(mOutputBuffer.data(), mInputBuffer.data(), mTempBuffer.data(), false);
 
     // Multiply in frequency domain
     for (size_t i = 0; i < mFFTSize; ++i)
@@ -114,17 +112,17 @@ namespace namguitar
       mOutputBuffer[i] *= mIRFreqDomain[i];
     }
 
-    // Inverse FFT
-    pocketfft::c2c(shape, stride, stride, axes, pocketfft::BACKWARD,
-                   mOutputBuffer.data(), mInputBuffer.data(), 1.0 / static_cast<double>(mFFTSize));
+    // Inverse FFT using KFR
+    mDFTPlan->execute(mInputBuffer.data(), mOutputBuffer.data(), mTempBuffer.data(), true);
 
     // Extract results with overlap-add
     output.resize(inputSize);
     const size_t overlapSize = mOverlapBuffer.size();
+    const double scale = 1.0 / static_cast<double>(mFFTSize);
 
     for (size_t i = 0; i < inputSize; ++i)
     {
-      double sample = mInputBuffer[i].real();
+      double sample = mInputBuffer[i].real() * scale;
 
       // Add overlap from previous block
       if (i < overlapSize)
@@ -141,7 +139,7 @@ namespace namguitar
       const size_t srcIdx = inputSize + i;
       if (srcIdx < mFFTSize)
       {
-        mOverlapBuffer[i] = mInputBuffer[srcIdx].real();
+        mOverlapBuffer[i] = mInputBuffer[srcIdx].real() * scale;
       }
       else
       {

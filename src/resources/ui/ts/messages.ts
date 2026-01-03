@@ -78,6 +78,7 @@ export function handleIncomingMessage(message: string): void {
       uiState.signalTest = {
         frequency: (result.frequency as number) ?? 0,
         duration: (result.duration as number) ?? 0,
+        elapsed: (result.elapsed as number) ?? 0,
         sampleRate: (result.sampleRate as number) ?? 0,
         inputRMS: (result.inputRMS as number) ?? 0,
         outputLeft: Array.isArray(result.outputRMS) ? ((result.outputRMS as number[])[0] ?? 0) : 0,
@@ -86,9 +87,11 @@ export function handleIncomingMessage(message: string): void {
         message: (result.message as string) ?? "",
       };
       renderActivePreset();
+      const ratio = uiState.signalTest.elapsed > 0 ? (uiState.signalTest.duration / uiState.signalTest.elapsed).toFixed(2) : "N/A";
+      const timingInfo = `Audio: ${uiState.signalTest.duration.toFixed(3)}s, Elapsed: ${uiState.signalTest.elapsed.toFixed(3)}s (${ratio}x realtime)`;
       showNotification(
         uiState.signalTest.passed ? "Signal path test passed" : "Signal path test failed",
-        uiState.signalTest.message ?? "",
+        timingInfo + (uiState.signalTest.message ? ` - ${uiState.signalTest.message}` : ""),
       );
       break;
     }

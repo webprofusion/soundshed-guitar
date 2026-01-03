@@ -7,7 +7,7 @@
 #include <iostream>
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
-#include "FFTConvolution.h"
+#include "RealtimeConvolver.h"
 
 namespace namguitar
 {
@@ -628,7 +628,7 @@ namespace namguitar
   }
 
   // Applies FFT-based convolution with a cabinet impulse response (IR)
-  // Uses overlap-add method for efficient O(N log N) convolution
+  // Uses Uniformly Partitioned Overlap-Save (UPOLS) for real-time performance
   void NAMDSPManager::ApplyImpulseResponse(std::vector<double> &channelSamples, int channel) const
   {
     if (channel < 0 || channel >= kNumChannels)
@@ -642,8 +642,9 @@ namespace namguitar
       return;
     }
 
-    std::vector<double> output;
-    convolution.Process(channelSamples, output);
+    // Process in-place using the real-time convolver
+    std::vector<double> output(channelSamples.size());
+    convolution.Process(channelSamples.data(), output.data(), static_cast<int>(channelSamples.size()));
     channelSamples = std::move(output);
   }
 

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -51,6 +52,7 @@ namespace namguitar
       double sampleRate = 0.0;
       double frequencyHz = 0.0;
       double durationSeconds = 0.0;
+      double elapsedSeconds = 0.0;
       double inputRMS = 0.0;
       std::array<double, 2> outputRMS{0.0, 0.0};
       bool passed = false;
@@ -131,6 +133,7 @@ namespace namguitar
       double sampleRate = 0.0;
       double inputSumSquares = 0.0;
       std::array<double, 2> outputSumSquares{0.0, 0.0};
+      std::chrono::steady_clock::time_point startTime;
     };
 
     std::unique_ptr<NAMDSPManager> mDSP;
