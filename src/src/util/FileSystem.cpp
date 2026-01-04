@@ -7,7 +7,7 @@ namespace namguitar
 
 std::filesystem::path FileSystem::ResolvePresetDirectory() const
 {
-  return std::filesystem::path{"presets"};
+  return ResolveSettingsDirectory() / "presets";
 }
 
 std::filesystem::path FileSystem::ResolveCacheDirectory() const
