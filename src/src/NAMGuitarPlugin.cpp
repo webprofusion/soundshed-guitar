@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <sstream>
 #include <vector>
 #include <iostream> // For std::cout
 #include <ctime> // For time()
@@ -23,14 +24,11 @@
 
 #include "config.h"
 #include "dsp/IRTypes.h"
-#include "IControls.h"
 #include "IPlug_include_in_plug_src.h"
-#include "IGraphics_include_in_plug_src.h"
 #include "IPlugPaths.h"
 #include "wdlstring.h"
 
 #include "dsp/NAMDSPManager.h"
-#include "ui/WebUIBridge.h"
 
 namespace namguitar
 {
@@ -548,7 +546,7 @@ namespace namguitar
   } // namespace
 
   NAMGuitarPlugin::NAMGuitarPlugin(const iplug::InstanceInfo &info)
-      : iplug::Plugin(info, iplug::MakeConfig(kParamCount, kNumPrograms)), mDSP(std::make_unique<NAMDSPManager>()), mWebUI(std::make_unique<WebUIBridge>())
+      : iplug::Plugin(info, iplug::MakeConfig(kParamCount, kNumPrograms)), mDSP(std::make_unique<NAMDSPManager>())
   {
     // Write to a log file to verify execution
     FILE* logFile = fopen("c:\\temp\\plugin_log.txt", "a");
@@ -571,7 +569,6 @@ namespace namguitar
     std::cout << "[Plugin] Resource root set to: " << mResourceRoot.generic_string() << std::endl;
 
     InitializeParameters();
-    HandleWebViewMessages();
 
     for (int paramIdx = 0; paramIdx < kParamCount; ++paramIdx)
     {
@@ -582,20 +579,27 @@ namespace namguitar
     LoadLastSessionState();
 
 #if PLUG_HAS_UI
-    mMakeGraphicsFunc = [this]()
+    SetEnableDevTools(true);
+    
+    // WebViewEditorDelegate pattern: use mEditorInitFunc to load the HTML UI
+    mEditorInitFunc = [this]()
     {
-      return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, GetScaleForScreen(PLUG_WIDTH, PLUG_HEIGHT));
-    };
-
-    mLayoutFunc = [this](iplug::igraphics::IGraphics *graphics)
-    {
-      if (!graphics)
+      std::cout << "[Plugin] mEditorInitFunc called" << std::endl;
+      
+      // Build path to index.html in resources
+      std::filesystem::path htmlPath = mResourceRoot / "ui" / "index.html";
+      std::cout << "[Plugin] Loading HTML from: " << htmlPath.generic_string() << std::endl;
+      
+      if (std::filesystem::exists(htmlPath))
       {
-        return;
+        LoadFile(htmlPath.string().c_str(), nullptr);
+        EnableScroll(false);
+        mPendingStateBroadcast = true;
       }
-      graphics->AttachPanelBackground(iplug::igraphics::COLOR_BLACK);
-      graphics->SetLayoutOnResize(true);
-      InitializeGraphics(*graphics);
+      else
+      {
+        std::cerr << "[Plugin] index.html not found at: " << htmlPath.generic_string() << std::endl;
+      }
     };
 #endif
   }
@@ -809,77 +813,69 @@ namespace namguitar
   {
     // std::cout << "[Plugin] OnIdle called" << std::endl;
 
-    if (mWebUI)
+    // Handle preview started notification
+    if (auto started = mPreviewStartedBuffer.exchange(nullptr, std::memory_order_acq_rel))
     {
-      mWebUI->PumpMessages();
+      nlohmann::json message;
+      message["type"] = "previewStarted";
+      if (!started->id.empty())
+      {
+        message["id"] = started->id;
+      }
+      if (!started->title.empty())
+      {
+        message["title"] = started->title;
+      }
+      const double duration = (started->sampleRate > 0.0 && !started->channelSamples.empty())
+                                  ? static_cast<double>(started->channelSamples.front().size()) / started->sampleRate
+                                  : 0.0;
+      message["duration"] = duration;
+      SendMessageToUI(message.dump());
     }
 
-    if (mWebUI)
+    // Handle preview completed notification
+    if (auto completed = mPreviewCompletedBuffer.exchange(nullptr, std::memory_order_acq_rel))
     {
-      if (auto started = mPreviewStartedBuffer.exchange(nullptr, std::memory_order_acq_rel))
+      nlohmann::json message;
+      message["type"] = "previewComplete";
+      if (!completed->id.empty())
       {
-        nlohmann::json message;
-        message["type"] = "previewStarted";
-        if (!started->id.empty())
-        {
-          message["id"] = started->id;
-        }
-        if (!started->title.empty())
-        {
-          message["title"] = started->title;
-        }
-        const double duration = (started->sampleRate > 0.0 && !started->channelSamples.empty())
-                                    ? static_cast<double>(started->channelSamples.front().size()) / started->sampleRate
-                                    : 0.0;
-        message["duration"] = duration;
-        mWebUI->EnqueueMessage(message.dump());
+        message["id"] = completed->id;
       }
-
-      if (auto completed = mPreviewCompletedBuffer.exchange(nullptr, std::memory_order_acq_rel))
+      if (!completed->title.empty())
       {
-        nlohmann::json message;
-        message["type"] = "previewComplete";
-        if (!completed->id.empty())
-        {
-          message["id"] = completed->id;
-        }
-        if (!completed->title.empty())
-        {
-          message["title"] = completed->title;
-        }
-        const double duration = (completed->sampleRate > 0.0 && !completed->channelSamples.empty())
-                                    ? static_cast<double>(completed->channelSamples.front().size()) / completed->sampleRate
-                                    : 0.0;
-        message["duration"] = duration;
-        mWebUI->EnqueueMessage(message.dump());
+        message["title"] = completed->title;
       }
+      const double duration = (completed->sampleRate > 0.0 && !completed->channelSamples.empty())
+                                  ? static_cast<double>(completed->channelSamples.front().size()) / completed->sampleRate
+                                  : 0.0;
+      message["duration"] = duration;
+      SendMessageToUI(message.dump());
     }
 
+    // Handle signal test result
     if (mSignalTestResultPending.exchange(false, std::memory_order_acq_rel))
     {
-      if (mWebUI)
+      nlohmann::json message;
+      message["type"] = "signalPathTestResult";
+      message["frequency"] = mSignalTestResult.frequencyHz;
+      message["duration"] = mSignalTestResult.durationSeconds;
+      message["elapsed"] = mSignalTestResult.elapsedSeconds;
+      message["sampleRate"] = mSignalTestResult.sampleRate;
+      message["inputRMS"] = mSignalTestResult.inputRMS;
+      message["outputRMS"] = {mSignalTestResult.outputRMS[0], mSignalTestResult.outputRMS[1]};
+      message["passed"] = mSignalTestResult.passed;
+      if (!mSignalTestResult.passed)
       {
-        nlohmann::json message;
-        message["type"] = "signalPathTestResult";
-        message["frequency"] = mSignalTestResult.frequencyHz;
-        message["duration"] = mSignalTestResult.durationSeconds;
-        message["elapsed"] = mSignalTestResult.elapsedSeconds;
-        message["sampleRate"] = mSignalTestResult.sampleRate;
-        message["inputRMS"] = mSignalTestResult.inputRMS;
-        message["outputRMS"] = {mSignalTestResult.outputRMS[0], mSignalTestResult.outputRMS[1]};
-        message["passed"] = mSignalTestResult.passed;
-        if (!mSignalTestResult.passed)
-        {
-          message["message"] = "Signal path test did not produce any output";
-        }
-        mWebUI->EnqueueMessage(message.dump());
+        message["message"] = "Signal path test did not produce any output";
       }
+      SendMessageToUI(message.dump());
     }
 
     // Send tuner data updates to UI
     if (mTunerDataPending.exchange(false, std::memory_order_acq_rel))
     {
-      if (mWebUI && mTunerActive.load(std::memory_order_acquire))
+      if (mTunerActive.load(std::memory_order_acquire))
       {
         TunerData data;
         {
@@ -900,7 +896,7 @@ namespace namguitar
           message["centOffset"] = data.centOffset;
           message["confidence"] = data.confidence;
         }
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
 
@@ -1156,54 +1152,62 @@ namespace namguitar
     GetParam(kParamReverbMix)->InitDouble("Reverb Mix", 30.0, 0.0, 100.0, 1.0, "%");
   }
 
-  void NAMGuitarPlugin::HandleWebViewMessages()
+  // Send a JSON message to the WebView UI
+  void NAMGuitarPlugin::SendMessageToUI(const std::string& jsonMessage)
   {
-    if (!mWebUI)
-    {
-      return;
-    }
-
-    mWebUI->RegisterMessageHandler([this](const std::string &message)
-                                   { HandleUIMessage(message); });
-
-    mWebUI->RegisterLogHandler([this](const std::string &logMessage)
-                               { 
-                                 // Log to console for debugging
-                                 printf("[WebUI] %s\n", logMessage.c_str());
-                               });
+    // Call the JavaScript handler function in the WebView
+    // The UI should define a window.handlePluginMessage function
+    std::string jsCode = "if (window.handlePluginMessage) { window.handlePluginMessage(" + jsonMessage + "); }";
+    EvaluateJavaScript(jsCode.c_str());
   }
 
-  void NAMGuitarPlugin::InitializeGraphics(iplug::igraphics::IGraphics &graphics)
+  // Override to intercept custom JSON messages before base class processing
+  // The base class expects messages with a "msg" field for iPlug2 internal protocol.
+  // Our UI sends custom messages with a "type" field instead.
+  void NAMGuitarPlugin::OnMessageFromWebView(const char* jsonStr)
   {
-    std::cout << "[Plugin] InitializeGraphics called" << std::endl;
-    
-    if (!mWebUI)
+    if (!jsonStr)
     {
-      std::cerr << "[Plugin] mWebUI is null in InitializeGraphics" << std::endl;
       return;
     }
 
-    try {
-      WDL_String bundlePath;
-      iplug::BundleResourcePath(bundlePath, ::gHINSTANCE);
-      if (bundlePath.GetLength() == 0)
-      {
-        iplug::HostPath(bundlePath, nullptr);
-        bundlePath.Append("resources\\");
-      }
-      std::cout << "[Plugin] Resource path: " << bundlePath.Get() << std::endl;
-      
-      const std::filesystem::path resourceRoot = std::filesystem::path{bundlePath.Get()};
-      mResourceRoot = resourceRoot;
-      mWebUI->Initialize(graphics, resourceRoot);
-      mPendingStateBroadcast = true;
-      
-      std::cout << "[Plugin] InitializeGraphics completed" << std::endl;
-    } catch (const std::exception& e) {
-      std::cerr << "[Plugin] Exception in InitializeGraphics: " << e.what() << std::endl;
-    } catch (...) {
-      std::cerr << "[Plugin] Unknown exception in InitializeGraphics" << std::endl;
+    // First, try to parse and check if it's one of our custom messages
+    auto json = nlohmann::json::parse(jsonStr, nullptr, false);
+    
+    // Handle double-encoded JSON strings (e.g., "{\"type\":...}" arrives as a JSON string)
+    // If the result is a string, try parsing its contents as JSON
+    if (!json.is_discarded() && json.is_string())
+    {
+      std::string innerStr = json.get<std::string>();
+      json = nlohmann::json::parse(innerStr, nullptr, false);
     }
+    
+    // Check if it's a valid JSON object with a "type" field (our custom messages)
+    if (!json.is_discarded() && json.is_object() && json.contains("type"))
+    {
+      // This is our custom message format - handle it directly
+      std::cout << "[Plugin] OnMessageFromWebView handling custom message: " << json.value("type", "") << std::endl;
+      HandleUIMessage(json.dump());
+      return;
+    }
+    
+    // Otherwise, let the base class handle iPlug2 internal messages (SPVFUI, BPCFUI, etc.)
+    iplug::WebViewEditorDelegate::OnMessageFromWebView(jsonStr);
+  }
+
+  // Handle messages from the WebView via OnMessage callback
+  // The WebViewEditorDelegate calls this for arbitrary messages (SAMFUI from JS)
+  bool NAMGuitarPlugin::OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData)
+  {
+    // msgTag == -1 means this is a JSON message from SendArbitraryMsgFromUI
+    if (msgTag == -1 && dataSize > 0 && pData != nullptr)
+    {
+      std::string message(reinterpret_cast<const char*>(pData), dataSize);
+      std::cout << "[Plugin] OnMessage received JSON: " << message.substr(0, 100) << "..." << std::endl;
+      HandleUIMessage(message);
+      return true;
+    }
+    return false;
   }
 
   void NAMGuitarPlugin::HandleUIMessage(const std::string &message)
@@ -1291,11 +1295,6 @@ namespace namguitar
 
   void NAMGuitarPlugin::BroadcastState()
   {
-    if (!mWebUI)
-    {
-      return;
-    }
-
     nlohmann::json message;
     message["type"] = "state";
     message["activePresetId"] = mActivePresetId;
@@ -1310,7 +1309,7 @@ namespace namguitar
       message["preset"] = SerializePresetToJson(*mActivePreset);
     }
 
-    mWebUI->EnqueueMessage(message.dump());
+    SendMessageToUI(message.dump());
     mPendingStateBroadcast = false;
   }
 
@@ -1414,7 +1413,6 @@ namespace namguitar
       // Save settings so this preset is restored on next startup
       SaveAppSettings();
 
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "presetLoaded";
@@ -1426,7 +1424,7 @@ namespace namguitar
         parameters["irPath"] = mActiveIRPath;
         message["parameters"] = std::move(parameters);
         
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     catch (const std::exception &exception)
@@ -1513,12 +1511,11 @@ namespace namguitar
       // Save settings so this model is restored on next startup
       SaveAppSettings();
 
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "modelLoaded";
         message["path"] = mActiveModelPath;
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     else
@@ -1564,12 +1561,11 @@ namespace namguitar
       // Save settings so this IR is restored on next startup
       SaveAppSettings();
 
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "irLoaded";
         message["path"] = mActiveIRPath;
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     else
@@ -1689,13 +1685,12 @@ namespace namguitar
     // Save settings so this preset is restored on next startup
     SaveAppSettings();
 
-    if (mWebUI)
     {
       nlohmann::json message;
       message["type"] = "presetSaved";
       message["preset"] = presetJson;
       message["path"] = presetFilePath.generic_string();
-      mWebUI->EnqueueMessage(message.dump());
+      SendMessageToUI(message.dump());
     }
   }
 
@@ -1787,12 +1782,11 @@ namespace namguitar
       mDSP->SetTunerEnabled(true);
       
       // Acknowledge tuner started
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "tunerStarted";
         message["referenceFrequency"] = mDSP->GetTunerReferenceFrequency();
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     else if (action == "stop")
@@ -1802,11 +1796,10 @@ namespace namguitar
       mTunerActive.store(false, std::memory_order_release);
       
       // Acknowledge tuner stopped
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "tunerStopped";
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     else if (action == "setReference")
@@ -1814,12 +1807,11 @@ namespace namguitar
       const double refFreq = payload.value("referenceFrequency", 440.0);
       mDSP->SetTunerReferenceFrequency(refFreq);
       
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "tunerReferenceChanged";
         message["referenceFrequency"] = mDSP->GetTunerReferenceFrequency();
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
     else if (action == "setLiveMode")
@@ -1827,12 +1819,11 @@ namespace namguitar
       const bool liveMode = payload.value("liveMode", true);
       mDSP->SetLiveTunerMode(liveMode);
       
-      if (mWebUI)
       {
         nlohmann::json message;
         message["type"] = "tunerLiveModeChanged";
         message["liveMode"] = mDSP->IsLiveTunerMode();
-        mWebUI->EnqueueMessage(message.dump());
+        SendMessageToUI(message.dump());
       }
     }
   }
@@ -1859,13 +1850,12 @@ namespace namguitar
     }
 
     // Acknowledge the change
-    if (mWebUI)
     {
       nlohmann::json message;
       message["type"] = "inputModeChanged";
       message["monoMode"] = mDSP->IsMonoMode();
       message["inputChannel"] = mDSP->GetInputChannel();
-      mWebUI->EnqueueMessage(message.dump());
+      SendMessageToUI(message.dump());
     }
   }
 
@@ -1891,13 +1881,12 @@ namespace namguitar
     }
 
     // Acknowledge the change
-    if (mWebUI)
     {
       nlohmann::json message;
       message["type"] = "ampCabStateChanged";
       message["ampEnabled"] = mDSP->IsAmpEnabled();
       message["cabEnabled"] = mDSP->IsCabEnabled();
-      mWebUI->EnqueueMessage(message.dump());
+      SendMessageToUI(message.dump());
     }
   }
 
@@ -1973,13 +1962,8 @@ namespace namguitar
     mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
   }
 
-  void NAMGuitarPlugin::ReportErrorToUI(std::string_view message, std::string_view detail) const
+  void NAMGuitarPlugin::ReportErrorToUI(std::string_view message, std::string_view detail)
   {
-    if (!mWebUI)
-    {
-      return;
-    }
-
     nlohmann::json payload;
     payload["type"] = "error";
     payload["message"] = std::string{message};
@@ -1988,7 +1972,7 @@ namespace namguitar
       payload["detail"] = std::string{detail};
     }
 
-    mWebUI->EnqueueMessage(payload.dump());
+    SendMessageToUI(payload.dump());
   }
 
   std::optional<std::filesystem::path> NAMGuitarPlugin::MaterializeAttachment(const PresetAttachment &attachment) const
@@ -2324,8 +2308,23 @@ namespace namguitar
         return;
       }
 
-      nlohmann::json settings;
-      inputFile >> settings;
+      // Read file contents first, then validate JSON
+      std::stringstream buffer;
+      buffer << inputFile.rdbuf();
+      const std::string contents = buffer.str();
+      
+      if (!nlohmann::json::accept(contents))
+      {
+        std::cerr << "[Plugin] Settings file contains invalid JSON" << std::endl;
+        return;
+      }
+
+      nlohmann::json settings = nlohmann::json::parse(contents, nullptr, false);
+      if (settings.is_discarded() || !settings.is_object())
+      {
+        std::cerr << "[Plugin] Settings file is not a valid JSON object" << std::endl;
+        return;
+      }
 
       // Restore paths
       mActivePresetId = settings.value("lastPresetId", "");

@@ -8,17 +8,19 @@ if(NAMGUITAR_FETCH_DEPENDENCIES)
   if(EXISTS "${_local_iplug2}/IPlug/VST3_SDK" AND NOT DEFINED iPlug2_SOURCE_DIR)
     message(STATUS "Using local iPlug2 from ${_local_iplug2}")
     set(iPlug2_SOURCE_DIR "${_local_iplug2}" CACHE PATH "iPlug2 source directory")
-  elseif(NOT TARGET iplug2)
+  elseif(NOT DEFINED iPlug2_SOURCE_DIR)
+    # Use FetchContent_Populate instead of FetchContent_MakeAvailable to avoid
+    # building iPlug2's Examples and Tests which are added unconditionally
     FetchContent_Declare(
       iPlug2
       GIT_REPOSITORY https://github.com/iPlug2/iPlug2.git
       GIT_TAG master
     )
-    FetchContent_MakeAvailable(iPlug2)
-    FetchContent_GetProperties(iPlug2 SOURCE_DIR IPLUG2_SOURCE_DIR)
-    if(NOT DEFINED iPlug2_SOURCE_DIR)
-      set(iPlug2_SOURCE_DIR "${IPLUG2_SOURCE_DIR}")
+    FetchContent_GetProperties(iPlug2)
+    if(NOT iplug2_POPULATED)
+      FetchContent_Populate(iPlug2)
     endif()
+    set(iPlug2_SOURCE_DIR "${iplug2_SOURCE_DIR}" CACHE PATH "iPlug2 source directory")
   endif()
 
   if(NOT TARGET NeuralAmpModelerCore)

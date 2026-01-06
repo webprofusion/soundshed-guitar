@@ -9,11 +9,6 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
 }
 
 body {
@@ -26,14 +21,9 @@ body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
 }
 
 /* ===== Icon Bar (Top) ===== */
@@ -411,6 +401,7 @@ body {
   overflow: hidden;
   position: relative;
   min-height: 0; /* Allow flex child to shrink for proper scrolling */
+  width: 100%;
 }
 
 .tab-panel {
@@ -418,6 +409,7 @@ body {
   flex: 1;
   overflow: hidden;
   min-height: 0; /* Allow flex child to shrink for proper scrolling */
+  width: 100%;
 }
 
 .tab-panel.active {
@@ -430,6 +422,7 @@ body {
   flex: 1;
   overflow-y: auto;
   min-height: 0; /* Allow flex child to shrink for proper scrolling */
+  width: 100%;
 }
 
 .panel-content h2 {
@@ -927,6 +920,7 @@ body {
   position: relative;
   overflow-y: auto;
   min-height: 0; /* Allow flex child to shrink below content size for scrolling */
+  width: 100%;
 }
 
 .amp-panel {
@@ -1311,7 +1305,8 @@ body {
   padding: 20px;
   background: linear-gradient(180deg, #e8e8ec 0%, #d8d8e0 100%);
   border-radius: 12px;
-  max-width: 800px;
+  max-width: 900px;
+  width: 100%;
   margin: 0 auto;
 }
 

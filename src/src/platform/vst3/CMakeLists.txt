@@ -50,19 +50,14 @@ set(_iplug2_vst3_sources
   ${iPlug2_SOURCE_DIR}/IPlug/VST3/IPlugVST3_ProcessorBase.cpp
 )
 
-# iPlug2 IGraphics sources
-# Note: IGraphicsWin.cpp already #includes IGraphicsNanoVG.cpp, nanovg.c, and glad.c
-# so we don't add those separately
-set(_igraphics_sources
-  ${iPlug2_SOURCE_DIR}/IGraphics/IControl.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/IGraphics.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/IGraphicsEditorDelegate.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Platforms/IGraphicsWin.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/IControls.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/IPopupMenuControl.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/ITextEntryControl.cpp
+# WebView-only editor delegate (no IGraphics)
+# This eliminates the complexity of IGraphics + IWebViewControl and uses
+# the simpler WebViewEditorDelegate which directly owns the WebView.
+set(_webview_sources
   ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebViewEditorDelegate.cpp
   ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebView_win.cpp
+  # WDL UTF8 support for Windows path/file operations
+  ${iPlug2_SOURCE_DIR}/WDL/win32_utf8.c
 )
 
 set(_nam_vst3_sources
@@ -71,7 +66,7 @@ set(_nam_vst3_sources
   ${_vst3_sdk_sources}
   ${_iplug2_core_sources}
   ${_iplug2_vst3_sources}
-  ${_igraphics_sources}
+  ${_webview_sources}
 )
 
 add_library(NAMGuitarFX_VST3 MODULE ${_nam_vst3_sources})
@@ -80,9 +75,13 @@ target_compile_definitions(NAMGuitarFX_VST3 PRIVATE
   VST3_API 
   IPLUG_EDITOR=1 
   IPLUG_DSP=1
+  # WebView-only mode: simpler delegate without IGraphics overhead
+  WEBVIEW_EDITOR_DELEGATE
+  NO_IGRAPHICS
 )
 
 # Include all paths needed for compiling NAMGuitarPlugin.cpp with VST3_API
+# Note: IGraphics directories are still included for header compatibility but IGraphics is not compiled
 target_include_directories(NAMGuitarFX_VST3 PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../config
@@ -97,16 +96,7 @@ target_include_directories(NAMGuitarFX_VST3 PRIVATE
   ${VST3_SDK_ROOT}/base/thread/include
   ${VST3_SDK_ROOT}/pluginterfaces
   ${VST3_SDK_ROOT}/public.sdk/source
-  ${iPlug2_SOURCE_DIR}/IGraphics
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls
-  ${iPlug2_SOURCE_DIR}/IGraphics/Drawing
-  ${iPlug2_SOURCE_DIR}/IGraphics/Platforms
   ${iPlug2_SOURCE_DIR}/WDL
-  ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/STB
-  ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src
-  ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src
-  ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad_GL3/include
-  ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad_GL3/src
   ${NeuralAmpModelerCore_SOURCE_DIR}
   ${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann
 )
@@ -126,7 +116,6 @@ target_link_libraries(NAMGuitarFX_VST3
     gdi32
     advapi32
     wininet
-    opengl32
 )
 
 set_target_properties(NAMGuitarFX_VST3 PROPERTIES

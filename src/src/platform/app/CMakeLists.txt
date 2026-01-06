@@ -19,15 +19,11 @@ set(_nam_app_sources
   ${iPlug2_SOURCE_DIR}/IPlug/IPlugPluginBase.cpp
   ${iPlug2_SOURCE_DIR}/IPlug/IPlugProcessor.cpp
   ${iPlug2_SOURCE_DIR}/IPlug/IPlugTimer.cpp
+  # WebView-only editor delegate (no IGraphics)
   ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebViewEditorDelegate.cpp
   ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebView_win.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/IControl.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/IGraphics.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/IGraphicsEditorDelegate.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Platforms/IGraphicsWin.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/IControls.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/IPopupMenuControl.cpp
-  ${iPlug2_SOURCE_DIR}/IGraphics/Controls/ITextEntryControl.cpp
+  # WDL UTF8 support for Windows path/file operations
+  ${iPlug2_SOURCE_DIR}/WDL/win32_utf8.c
   ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio/RtAudio.cpp
   ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio/include/asio.cpp
   ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio/include/asiodrivers.cpp
@@ -44,7 +40,6 @@ target_include_directories(NAMGuitarFX_App
     ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio
     ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio/include
     ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTMidi
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad_GL2/src
 )
 
 target_compile_definitions(NAMGuitarFX_App
@@ -53,6 +48,9 @@ target_compile_definitions(NAMGuitarFX_App
     __WINDOWS_DS__
     __WINDOWS_MM__
     __WINDOWS_ASIO__
+    # WebView-only mode: simpler delegate without IGraphics overhead
+    WEBVIEW_EDITOR_DELEGATE
+    NO_IGRAPHICS
 )
 
 target_link_libraries(NAMGuitarFX_App

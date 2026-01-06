@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,18 +20,9 @@
 #include "presets/PresetTypes.h"
 #include "util/FileSystem.h"
 
-namespace iplug
-{
-  namespace igraphics
-  {
-    class IGraphics;
-  } // namespace igraphics
-} // namespace iplug
-
 namespace namguitar
 {
   class NAMDSPManager;
-  class WebUIBridge;
   class NAMGuitarPlugin final : public iplug::Plugin
   {
   public:
@@ -42,6 +34,12 @@ namespace namguitar
     bool SerializeState(iplug::IByteChunk &chunk) const override;
     int UnserializeState(const iplug::IByteChunk &chunk, int startPos) override;
     void OnParamChange(int paramIdx) override;
+    
+    // WebViewEditorDelegate callback for receiving messages from the WebView
+    bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override;
+    
+    // Override to intercept custom JSON messages before base class processing
+    void OnMessageFromWebView(const char* jsonStr) override;
 
 #ifdef VST3_API
     Steinberg::tresult PLUGIN_API initialize(FUnknown* context) override;
@@ -104,8 +102,7 @@ namespace namguitar
 
   private:
     void InitializeParameters();
-    void HandleWebViewMessages();
-    void InitializeGraphics(iplug::igraphics::IGraphics &graphics);
+    void SendMessageToUI(const std::string& jsonMessage);
     void HandleUIMessage(const std::string &message);
     void HandlePresetLoadRequest(const nlohmann::json &payload);
     void HandleStateRequest();
@@ -122,7 +119,7 @@ namespace namguitar
     void HandleSetAmpCabStateRequest(const nlohmann::json &payload);
     void BroadcastState();
     void ApplyPreset(namguitar::Preset &preset);
-    void ReportErrorToUI(std::string_view message, std::string_view detail = {}) const;
+    void ReportErrorToUI(std::string_view message, std::string_view detail = {});
     [[nodiscard]] std::optional<std::filesystem::path> MaterializeAttachment(const PresetAttachment &attachment) const;
     [[nodiscard]] std::filesystem::path ResolveAttachmentTarget(const PresetAttachment &attachment) const;
     [[nodiscard]] static namguitar::Preset ParsePresetFromJson(const nlohmann::json &jsonPreset);
@@ -148,7 +145,6 @@ namespace namguitar
     };
 
     std::unique_ptr<NAMDSPManager> mDSP;
-    std::unique_ptr<WebUIBridge> mWebUI;
     FileSystem mFileSystem;
     ModelHasher mHasher;
     std::filesystem::path mResourceRoot;

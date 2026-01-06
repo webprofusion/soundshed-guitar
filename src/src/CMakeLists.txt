@@ -41,8 +41,6 @@ set(_namguitar_core_sources
   presets/PresetStorage.cpp
   presets/PresetStorage.h
   presets/PresetTypes.h
-  ui/WebUIBridge.cpp
-  ui/WebUIBridge.h
   util/FileSystem.cpp
   util/FileSystem.h
   ${_nam_dsp_sources}
@@ -69,16 +67,7 @@ target_include_directories(NAMGuitarFXCore
     ${iPlug2_SOURCE_DIR}/IPlug/Extras
     ${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView
     ${iPlug2_SOURCE_DIR}/IPlug/VST3_SDK
-    ${iPlug2_SOURCE_DIR}/IGraphics
-    ${iPlug2_SOURCE_DIR}/IGraphics/Controls
-    ${iPlug2_SOURCE_DIR}/IGraphics/Drawing
-    ${iPlug2_SOURCE_DIR}/IGraphics/Platforms
     ${iPlug2_SOURCE_DIR}/WDL
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/STB
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/NanoSVG/src
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/NanoVG/src
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad/include
-    ${iPlug2_SOURCE_DIR}/Dependencies/IGraphics/glad_GL2/include
     ${NeuralAmpModelerCore_SOURCE_DIR}
     ${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann
     ${_nam_eigen_dir}
@@ -99,9 +88,6 @@ target_compile_definitions(NAMGuitarFXCore
     IPLUG_EDITOR=1
     IPLUG_DSP=1
     SAMPLE_TYPE_FLOAT
-    # Use IGraphics with NanoVG backend
-    IGRAPHICS_NANOVG
-    IGRAPHICS_GL2
     # Prevent Windows min/max macros from conflicting with std::numeric_limits
     NOMINMAX
     # Note: APP_API is NOT defined here. Format-specific targets (standalone,
