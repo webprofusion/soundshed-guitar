@@ -63,7 +63,58 @@ export interface Preset {
   irId?: string | null;
   customModelPath?: string | null;
   customIrPath?: string | null;
+  formatVersion?: number;
+  graph?: SignalGraph;
+  globals?: GlobalSettings;
+  embeddedResources?: EmbeddedResource[];
   [key: string]: unknown;
+}
+
+// V2 Preset Format Types
+export interface GlobalSettings {
+  inputTrim: number;
+  outputTrim: number;
+  masterVolume: number;
+}
+
+export interface ResourceRef {
+  type: string;
+  id: string;
+  filePath?: string;
+  embeddedId?: string;
+}
+
+export interface GraphNode {
+  id: string;
+  type: string;
+  displayName: string;
+  category: string;
+  bypassed: boolean;
+  params: Record<string, number>;
+  config: Record<string, string>;
+  resource?: ResourceRef;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  fromPort: number;
+  toPort: number;
+  gain: number;
+}
+
+export interface SignalGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface EmbeddedResource {
+  id: string;
+  type: string;
+  name: string;
+  hash: string;
+  data?: string;
+  originalPath?: string;
 }
 
 export interface LogEntry {

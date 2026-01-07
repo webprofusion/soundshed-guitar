@@ -1,33 +1,57 @@
 /**
- * Preset V2 JavaScript Utilities
+ * Preset V2 TypeScript Utilities
  * 
  * This module provides utilities for working with the new V2 preset format
  * that supports signal graphs with arbitrary effect types.
  */
 
-// Effect type registry - mirrors the C++ EffectRegistry
-const EffectTypeRegistry = {
-  types: new Map(),
+import type { Preset, GraphNode, GraphEdge, ResourceRef } from "./types.js";
 
-  register(type, info) {
+export interface ParameterDef {
+  key: string;
+  name: string;
+  default: number;
+  min: number;
+  max: number;
+  unit: string;
+}
+
+export interface EffectTypeInfo {
+  type: string;
+  displayName: string;
+  category: string;
+  requiresResource: boolean;
+  resourceType?: string;
+  parameters: ParameterDef[];
+}
+
+/**
+ * Effect type registry - mirrors the C++ EffectRegistry
+ */
+class EffectRegistry {
+  private types = new Map<string, EffectTypeInfo>();
+
+  register(type: string, info: EffectTypeInfo): void {
     this.types.set(type, info);
-  },
+  }
 
-  get(type) {
+  get(type: string): EffectTypeInfo | undefined {
     return this.types.get(type);
-  },
+  }
 
-  getByCategory(category) {
+  getByCategory(category: string): EffectTypeInfo[] {
     return Array.from(this.types.values()).filter(t => t.category === category);
-  },
+  }
 
-  getAll() {
+  getAll(): EffectTypeInfo[] {
     return Array.from(this.types.values());
   }
-};
+}
 
-// Register built-in effect types
-const BUILTIN_EFFECTS = [
+export const EffectTypeRegistry = new EffectRegistry();
+
+// Built-in effect types definitions
+export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
   {
     type: "dynamics_gate",
     displayName: "Noise Gate",
@@ -162,7 +186,7 @@ BUILTIN_EFFECTS.forEach(effect => EffectTypeRegistry.register(effect.type, effec
 /**
  * Create a new empty preset V2 structure
  */
-function createEmptyPresetV2() {
+export function createEmptyPresetV2(): Preset {
   return {
     id: crypto.randomUUID(),
     formatVersion: 2,
@@ -189,7 +213,11 @@ function createEmptyPresetV2() {
 /**
  * Create a simple linear preset with amp and cab
  */
-function createSimplePresetV2(name, ampResource = null, cabResource = null) {
+export function createSimplePresetV2(
+  name: string,
+  ampResource: ResourceRef | null = null,
+  cabResource: ResourceRef | null = null
+): Preset {
   const preset = createEmptyPresetV2();
   preset.name = name;
   
@@ -197,7 +225,7 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
   let prevNodeId = "__input__";
 
   // Add noise gate
-  const gateNode = {
+  const gateNode: GraphNode = {
     id: `gate_${nodeId++}`,
     type: "dynamics_gate",
     displayName: "Gate",
@@ -206,8 +234,8 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
     params: { threshold: -60 },
     config: {}
   };
-  preset.graph.nodes.push(gateNode);
-  preset.graph.edges.push({
+  preset.graph!.nodes.push(gateNode);
+  preset.graph!.edges.push({
     from: prevNodeId,
     to: gateNode.id,
     fromPort: 0,
@@ -218,7 +246,7 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
 
   // Add amp if resource provided
   if (ampResource) {
-    const ampNode = {
+    const ampNode: GraphNode = {
       id: `amp_${nodeId++}`,
       type: "amp_nam",
       displayName: "Amp",
@@ -228,8 +256,8 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
       config: {},
       resource: ampResource
     };
-    preset.graph.nodes.push(ampNode);
-    preset.graph.edges.push({
+    preset.graph!.nodes.push(ampNode);
+    preset.graph!.edges.push({
       from: prevNodeId,
       to: ampNode.id,
       fromPort: 0,
@@ -241,7 +269,7 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
 
   // Add cab if resource provided
   if (cabResource) {
-    const cabNode = {
+    const cabNode: GraphNode = {
       id: `cab_${nodeId++}`,
       type: "cab_ir",
       displayName: "Cab",
@@ -251,8 +279,8 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
       config: {},
       resource: cabResource
     };
-    preset.graph.nodes.push(cabNode);
-    preset.graph.edges.push({
+    preset.graph!.nodes.push(cabNode);
+    preset.graph!.edges.push({
       from: prevNodeId,
       to: cabNode.id,
       fromPort: 0,
@@ -263,7 +291,7 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
   }
 
   // Connect to output
-  preset.graph.edges.push({
+  preset.graph!.edges.push({
     from: prevNodeId,
     to: "__output__",
     fromPort: 0,
@@ -277,13 +305,22 @@ function createSimplePresetV2(name, ampResource = null, cabResource = null) {
 /**
  * Add a node to the preset's signal graph
  */
-function addNodeToGraph(preset, afterNodeId, nodeType, displayName = null) {
+export function addNodeToGraph(
+  preset: Preset,
+  afterNodeId: string,
+  nodeType: string,
+  displayName: string | null = null
+): GraphNode {
+  if (!preset.graph) {
+    throw new Error("Preset does not have a signal graph");
+  }
+
   const typeInfo = EffectTypeRegistry.get(nodeType);
   if (!typeInfo) {
     throw new Error(`Unknown effect type: ${nodeType}`);
   }
 
-  const newNode = {
+  const newNode: GraphNode = {
     id: `${nodeType}_${Date.now()}`,
     type: nodeType,
     displayName: displayName || typeInfo.displayName,
@@ -330,7 +367,11 @@ function addNodeToGraph(preset, afterNodeId, nodeType, displayName = null) {
 /**
  * Remove a node from the preset's signal graph
  */
-function removeNodeFromGraph(preset, nodeId) {
+export function removeNodeFromGraph(preset: Preset, nodeId: string): void {
+  if (!preset.graph) {
+    throw new Error("Preset does not have a signal graph");
+  }
+
   // Find incoming and outgoing edges
   const incomingEdge = preset.graph.edges.find(e => e.to === nodeId);
   const outgoingEdge = preset.graph.edges.find(e => e.from === nodeId);
@@ -354,7 +395,11 @@ function removeNodeFromGraph(preset, nodeId) {
 /**
  * Update a node's parameter
  */
-function setNodeParam(preset, nodeId, key, value) {
+export function setNodeParam(preset: Preset, nodeId: string, key: string, value: number): void {
+  if (!preset.graph) {
+    throw new Error("Preset does not have a signal graph");
+  }
+
   const node = preset.graph.nodes.find(n => n.id === nodeId);
   if (!node) {
     throw new Error(`Node not found: ${nodeId}`);
@@ -367,7 +412,11 @@ function setNodeParam(preset, nodeId, key, value) {
 /**
  * Bypass or enable a node
  */
-function setNodeBypassed(preset, nodeId, bypassed) {
+export function setNodeBypassed(preset: Preset, nodeId: string, bypassed: boolean): void {
+  if (!preset.graph) {
+    throw new Error("Preset does not have a signal graph");
+  }
+
   const node = preset.graph.nodes.find(n => n.id === nodeId);
   if (!node) {
     throw new Error(`Node not found: ${nodeId}`);
@@ -380,10 +429,14 @@ function setNodeBypassed(preset, nodeId, bypassed) {
 /**
  * Get the processing order of nodes (topological sort)
  */
-function getProcessingOrder(preset) {
-  const order = [];
-  const visited = new Set();
-  const inDegree = new Map();
+export function getProcessingOrder(preset: Preset): GraphNode[] {
+  if (!preset.graph) {
+    return [];
+  }
+
+  const order: GraphNode[] = [];
+  const visited = new Set<string>();
+  const inDegree = new Map<string, number>();
 
   // Calculate in-degrees
   preset.graph.nodes.forEach(n => inDegree.set(n.id, 0));
@@ -399,7 +452,7 @@ function getProcessingOrder(preset) {
   const queue = ["__input__"];
 
   while (queue.length > 0) {
-    const nodeId = queue.shift();
+    const nodeId = queue.shift()!;
     if (visited.has(nodeId)) continue;
     visited.add(nodeId);
 
@@ -412,7 +465,7 @@ function getProcessingOrder(preset) {
     preset.graph.edges
       .filter(e => e.from === nodeId)
       .forEach(e => {
-        const deg = inDegree.get(e.to) - 1;
+        const deg = inDegree.get(e.to)! - 1;
         inDegree.set(e.to, deg);
         if (deg === 0) {
           queue.push(e.to);
@@ -423,11 +476,16 @@ function getProcessingOrder(preset) {
   return order;
 }
 
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
 /**
  * Validate a preset structure
  */
-function validatePresetV2(preset) {
-  const errors = [];
+export function validatePresetV2(preset: Preset): ValidationResult {
+  const errors: string[] = [];
 
   if (!preset.id) errors.push("Missing preset ID");
   if (!preset.name) errors.push("Missing preset name");
@@ -443,7 +501,7 @@ function validatePresetV2(preset) {
         errors.push("Signal graph contains cycles or disconnected nodes");
       }
     } catch (e) {
-      errors.push(`Graph validation error: ${e.message}`);
+      errors.push(`Graph validation error: ${(e as Error).message}`);
     }
 
     // Check that all edge endpoints exist
@@ -473,17 +531,3 @@ function validatePresetV2(preset) {
     errors
   };
 }
-
-// Export for use in main.js
-window.PresetV2 = {
-  EffectTypeRegistry,
-  createEmptyPresetV2,
-  createSimplePresetV2,
-  addNodeToGraph,
-  removeNodeFromGraph,
-  setNodeParam,
-  setNodeBypassed,
-  getProcessingOrder,
-  validatePresetV2,
-  BUILTIN_EFFECTS
-};

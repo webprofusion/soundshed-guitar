@@ -7,6 +7,7 @@ import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl } from "./utils.
 import type { Preset, Attachment } from "./types.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
+import { renderSignalPathBar } from "./signalPath.js";
 
 const presetDropdown = document.getElementById("preset-dropdown") as HTMLSelectElement | null;
 const prevPresetBtn = document.getElementById("prev-preset");
@@ -73,6 +74,7 @@ function renderPresetUI(preset: Preset | null): void {
     onBindLoadButtons: bindLoadButtons,
   });
   bindDemoAudioControls();
+  renderSignalPathBar();
 }
 
 export function renderActivePreset(): void {
