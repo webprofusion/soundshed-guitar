@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "dsp/IRTypes.h"
+#include "resources/ResourceLibrary.h"
 #include "IPlug_include_in_plug_src.h"
 #include "IPlugPaths.h"
 #include "wdlstring.h"
@@ -533,6 +534,9 @@ namespace namguitar
     }
     mResourceRoot = std::filesystem::path{bundlePath.Get()};
     std::cout << "[Plugin] Resource root set to: " << mResourceRoot.generic_string() << std::endl;
+
+    // Load resource libraries (NAM models, IRs) from JSON files
+    LoadResourceLibraries();
 
     InitializeParameters();
 
@@ -2260,11 +2264,17 @@ namespace namguitar
       }
     }
 
-    // Check for library reference
+    // Check for library reference - use ResourceLibrary to look up actual file path
     if (ref.IsLibraryRef())
     {
-      // Library resources should be resolved through ResourceLibrary
-      // For now, try common resource locations
+      // Look up resource in the library by type and ID
+      auto resource = mResourceLibrary.LookupResource(ref.resourceType, ref.resourceId);
+      if (resource && std::filesystem::exists(resource->filePath))
+      {
+        return resource->filePath;
+      }
+      
+      // Fallback: try common resource locations with direct ID-to-filename mapping
       if (!mResourceRoot.empty())
       {
         std::filesystem::path resourcePath;
@@ -2536,6 +2546,135 @@ namespace namguitar
     catch (const std::exception &e)
     {
       std::cerr << "[Plugin] Failed to load app settings: " << e.what() << std::endl;
+    }
+  }
+
+  void NAMGuitarPlugin::LoadResourceLibraries()
+  {
+    if (mResourceRoot.empty())
+    {
+      std::cerr << "[Plugin] Cannot load resource libraries: resource root not set" << std::endl;
+      return;
+    }
+
+    const std::filesystem::path dataDir = mResourceRoot / "ui" / "data";
+    
+    // Load AudioFX models library
+    const std::filesystem::path modelsPath = dataDir / "audiofx-models.json";
+    if (std::filesystem::exists(modelsPath))
+    {
+      try
+      {
+        std::ifstream file(modelsPath);
+        if (file.is_open())
+        {
+          nlohmann::json json;
+          file >> json;
+          
+          if (json.is_array())
+          {
+            for (const auto& item : json)
+            {
+              LibraryResource resource;
+              resource.type = "nam";
+              resource.id = item.value("id", "");
+              resource.name = item.value("title", "");
+              resource.category = item.value("category", "");
+              resource.description = item.value("description", "");
+              resource.hash = item.value("hash", "");
+              
+              // filePath is relative to resource root
+              const std::string relPath = item.value("filePath", "");
+              if (!relPath.empty())
+              {
+                resource.filePath = mResourceRoot / relPath;
+              }
+              
+              if (item.contains("tags") && item["tags"].is_array())
+              {
+                for (const auto& tag : item["tags"])
+                {
+                  resource.tags.push_back(tag.get<std::string>());
+                }
+              }
+              
+              if (!resource.id.empty() && !resource.filePath.empty())
+              {
+                mResourceLibrary.AddResource(resource);
+              }
+            }
+          }
+          std::cout << "[Plugin] Loaded AudioFX models library: " 
+                    << mResourceLibrary.GetResourcesByType("nam").size() << " models" << std::endl;
+        }
+      }
+      catch (const std::exception& ex)
+      {
+        std::cerr << "[Plugin] Error loading AudioFX models: " << ex.what() << std::endl;
+      }
+    }
+    else
+    {
+      std::cerr << "[Plugin] AudioFX models file not found: " << modelsPath.generic_string() << std::endl;
+    }
+    
+    // Load IR library
+    const std::filesystem::path irPath = dataDir / "ir-library.json";
+    if (std::filesystem::exists(irPath))
+    {
+      try
+      {
+        std::ifstream file(irPath);
+        if (file.is_open())
+        {
+          nlohmann::json json;
+          file >> json;
+          
+          if (json.is_array())
+          {
+            for (const auto& item : json)
+            {
+              LibraryResource resource;
+              resource.type = "ir";
+              resource.id = item.value("id", "");
+              resource.name = item.value("title", "");
+              resource.category = item.value("category", "");
+              resource.description = item.value("description", "");
+              resource.hash = item.value("hash", "");
+              
+              // filePath is relative to resource root
+              const std::string relPath = item.value("filePath", "");
+              if (!relPath.empty())
+              {
+                resource.filePath = mResourceRoot / relPath;
+              }
+              
+              if (item.contains("tags") && item["tags"].is_array())
+              {
+                for (const auto& tag : item["tags"])
+                {
+                  resource.tags.push_back(tag.get<std::string>());
+                }
+              }
+              
+              if (!resource.id.empty() && !resource.filePath.empty())
+              {
+                mResourceLibrary.AddResource(resource);
+              }
+            }
+          }
+          std::cout << "[Plugin] Loaded IR library: " 
+                    << mResourceLibrary.GetResourcesByType("ir").size() << " IRs" << std::endl;
+        }
+      }
+      catch (const std::exception& ex)
+      {
+        std::cerr << "[Plugin] Error loading IR library: " << ex.what() << std::endl;
+      }
+    }
+    else
+    {
+      std::cerr << "[Plugin] IR library file not found: " << irPath.generic_string() << std::endl;
     }
   }
 

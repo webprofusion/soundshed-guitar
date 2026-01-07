@@ -19,6 +19,7 @@
 #include "models/ModelHasher.h"
 #include "presets/PresetTypes.h"
 #include "presets/PresetStorage.h"
+#include "resources/ResourceLibrary.h"
 #include "util/FileSystem.h"
 
 namespace namguitar
@@ -129,6 +130,7 @@ namespace namguitar
     void SaveAppSettings() const;
     void LoadAppSettings();
     void LoadLastSessionState();
+    void LoadResourceLibraries();
 
     struct SignalTestRuntimeState
     {
@@ -144,6 +146,7 @@ namespace namguitar
     };
 
     std::unique_ptr<NAMDSPManager> mDSP;
+    ResourceLibrary mResourceLibrary;
     FileSystem mFileSystem;
     ModelHasher mHasher;
     std::filesystem::path mResourceRoot;

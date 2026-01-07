@@ -43,7 +43,7 @@ namespace namguitar
     void Clear();
 
     // Queries
-    [[nodiscard]] std::optional<LibraryResource> FindResource(const std::string& type, const std::string& id) const;
+    [[nodiscard]] std::optional<LibraryResource> LookupResource(const std::string& type, const std::string& id) const;
     [[nodiscard]] std::vector<LibraryResource> GetResourcesByType(const std::string& type) const;
     [[nodiscard]] std::vector<LibraryResource> GetResourcesByCategory(const std::string& type, const std::string& category) const;
     [[nodiscard]] std::vector<LibraryResource> GetAllResources() const;

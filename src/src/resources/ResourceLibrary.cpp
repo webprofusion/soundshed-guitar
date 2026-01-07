@@ -40,7 +40,7 @@ namespace namguitar
     mResources.clear();
   }
 
-  std::optional<LibraryResource> ResourceLibrary::FindResource(const std::string& type, const std::string& id) const
+  std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string& type, const std::string& id) const
   {
     const auto key = MakeKey(type, id);
     auto it = mResources.find(key);
@@ -98,7 +98,7 @@ namespace namguitar
     // Priority: Library > FilePath
     if (ref.IsLibraryRef())
     {
-      auto resource = FindResource(ref.resourceType, ref.resourceId);
+      auto resource = LookupResource(ref.resourceType, ref.resourceId);
       if (resource)
       {
         return resource->filePath;
