@@ -19,6 +19,7 @@ set(_nam_dsp_sources
 # compiles NAMGuitarPlugin.cpp directly with its own API definition.
 
 set(_namguitar_core_sources
+  # Existing DSP
   dsp/SimdFFT.h
   dsp/RealtimeConvolver.cpp
   dsp/RealtimeConvolver.h
@@ -32,17 +33,56 @@ set(_namguitar_core_sources
   dsp/ParametricEQ.h
   dsp/DelayEffect.h
   dsp/ReverbEffect.h
+  
+  # V2 Signal Graph DSP
+  dsp/EffectProcessor.h
+  dsp/EffectRegistry.h
+  dsp/EffectRegistry.cpp
+  dsp/SignalGraphExecutor.h
+  dsp/SignalGraphExecutor.cpp
+  dsp/GraphDSPManager.h
+  
+  # Effect implementations
+  dsp/effects/BuiltinEffects.h
+  dsp/effects/GainEffect.h
+  dsp/effects/NoiseGateEffect.h
+  dsp/effects/ParametricEQEffect.h
+  dsp/effects/DelayEffect.h
+  dsp/effects/ReverbEffect.h
+  dsp/effects/CompressorEffect.h
+  dsp/effects/NAMAmpEffect.h
+  dsp/effects/IRCabEffect.h
+  dsp/effects/SimpleCabEffect.h
+  
+  # Models
   models/ModelHasher.cpp
   models/ModelHasher.h
+  
+  # Network
   network/PresetServiceClient.cpp
   network/PresetServiceClient.h
+  
+  # Presets V1
   presets/PresetManager.cpp
   presets/PresetManager.h
   presets/PresetStorage.cpp
   presets/PresetStorage.h
   presets/PresetTypes.h
+  
+  # Presets V2
+  presets/PresetTypesV2.h
+  presets/PresetStorageV2.h
+  presets/PresetStorageV2.cpp
+  presets/PresetMigration.h
+  
+  # Resources
+  resources/ResourceLibrary.h
+  resources/ResourceLibrary.cpp
+  
+  # Utilities
   util/FileSystem.cpp
   util/FileSystem.h
+  
   ${_nam_dsp_sources}
 )
 
