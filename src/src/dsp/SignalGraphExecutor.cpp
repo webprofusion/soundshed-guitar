@@ -21,6 +21,48 @@ namespace namguitar
     mNodeStates.clear();
     mExecutionOrder.clear();
 
+    // Add implicit input/output nodes if they're referenced in edges but not in nodes
+    bool hasInputNode = false;
+    bool hasOutputNode = false;
+    
+    for (const auto& node : mGraph.nodes)
+    {
+      if (node.id == "__input__" || node.type == kNodeTypeInput)
+        hasInputNode = true;
+      if (node.id == "__output__" || node.type == kNodeTypeOutput)
+        hasOutputNode = true;
+    }
+    
+    // Check if edges reference __input__ or __output__
+    bool edgesReferenceInput = false;
+    bool edgesReferenceOutput = false;
+    for (const auto& edge : mGraph.edges)
+    {
+      if (edge.from == "__input__")
+        edgesReferenceInput = true;
+      if (edge.to == "__output__")
+        edgesReferenceOutput = true;
+    }
+    
+    // Add implicit nodes if needed
+    if (edgesReferenceInput && !hasInputNode)
+    {
+      GraphNode inputNode;
+      inputNode.id = "__input__";
+      inputNode.type = kNodeTypeInput;
+      inputNode.enabled = true;
+      mGraph.nodes.insert(mGraph.nodes.begin(), inputNode);
+    }
+    
+    if (edgesReferenceOutput && !hasOutputNode)
+    {
+      GraphNode outputNode;
+      outputNode.id = "__output__";
+      outputNode.type = kNodeTypeOutput;
+      outputNode.enabled = true;
+      mGraph.nodes.push_back(outputNode);
+    }
+
     BuildExecutionOrder();
     CreateProcessors();
 
@@ -201,7 +243,7 @@ namespace namguitar
     for (auto& [id, state] : mNodeStates)
     {
       const auto* node = mGraph.FindNode(id);
-      if (node && node->type == kNodeTypeInput)
+      if (node && (node->type == kNodeTypeInput || node->id == "__input__"))
       {
         if (inputs[0])
         {
@@ -234,7 +276,7 @@ namespace namguitar
         continue;
 
       // Skip input node (already handled)
-      if (node->type == kNodeTypeInput)
+      if (node->type == kNodeTypeInput || node->id == "__input__")
         continue;
 
       // Gather inputs from incoming edges
@@ -273,7 +315,8 @@ namespace namguitar
       // Process the node
       if (state->processor && state->hasInput)
       {
-        if (node->type == kNodeTypeSplitter || node->type == kNodeTypeMixer || node->type == kNodeTypeOutput)
+        if (node->type == kNodeTypeSplitter || node->type == kNodeTypeMixer || 
+            node->type == kNodeTypeOutput || node->id == "__output__")
         {
           // These nodes just pass through (routing handled above)
         }
@@ -298,7 +341,7 @@ namespace namguitar
     for (const auto& [id, state] : mNodeStates)
     {
       const auto* node = mGraph.FindNode(id);
-      if (node && node->type == kNodeTypeOutput && state.hasInput)
+      if (node && (node->type == kNodeTypeOutput || node->id == "__output__") && state.hasInput)
       {
         if (outputs[0])
         {

@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 
 namespace namguitar
@@ -25,8 +26,9 @@ namespace namguitar
     ResourceRef DeserializeResourceRef(const nlohmann::json& json)
     {
       ResourceRef ref;
-      ref.resourceType = json.value("resourceType", "");
-      ref.resourceId = json.value("resourceId", "");
+      // Support both long-form (resourceType/resourceId) and short-form (type/id)
+      ref.resourceType = json.value("resourceType", json.value("type", ""));
+      ref.resourceId = json.value("resourceId", json.value("id", ""));
       ref.filePath = json.value("filePath", "");
       ref.embeddedId = json.value("embeddedId", "");
       return ref;
@@ -76,8 +78,21 @@ namespace namguitar
       node.id = json.value("id", "");
       node.type = json.value("type", "");
       node.category = json.value("category", "");
-      node.label = json.value("label", "");
-      node.enabled = json.value("enabled", true);
+      // Support both "label" and "displayName"
+      node.label = json.value("label", json.value("displayName", ""));
+      // Support both "enabled" and "bypassed" (inverted)
+      if (json.contains("enabled"))
+      {
+        node.enabled = json.value("enabled", true);
+      }
+      else if (json.contains("bypassed"))
+      {
+        node.enabled = !json.value("bypassed", false);
+      }
+      else
+      {
+        node.enabled = true;
+      }
 
       if (json.contains("params") && json["params"].is_object())
       {
@@ -228,7 +243,24 @@ namespace namguitar
       // Metadata
       preset.id = json.value("id", "");
       preset.name = json.value("name", "");
-      preset.version = json.value("version", 2);
+      // version can be an int or a string like "1.0"
+      if (json.contains("version"))
+      {
+        if (json["version"].is_number())
+        {
+          preset.version = json["version"].get<int>();
+        }
+        else if (json["version"].is_string())
+        {
+          // Parse string version like "1.0" to int
+          preset.version = std::stoi(json["version"].get<std::string>());
+        }
+      }
+      // Also check formatVersion as an alternative
+      if (json.contains("formatVersion") && json["formatVersion"].is_number())
+      {
+        preset.version = json["formatVersion"].get<int>();
+      }
       preset.author = json.value("author", "");
       preset.category = json.value("category", "");
       preset.description = json.value("description", "");
@@ -243,13 +275,22 @@ namespace namguitar
         }
       }
 
-      // Global settings
+      // Global settings (support both "global" and "globals" for compatibility)
+      nlohmann::json globalJson;
       if (json.contains("global") && json["global"].is_object())
       {
-        const auto& global = json["global"];
-        preset.global.inputTrim = global.value("inputTrim", 0.0);
-        preset.global.outputTrim = global.value("outputTrim", 0.0);
-        preset.global.transpose = global.value("transpose", 0);
+        globalJson = json["global"];
+      }
+      else if (json.contains("globals") && json["globals"].is_object())
+      {
+        globalJson = json["globals"];
+      }
+      
+      if (!globalJson.is_null())
+      {
+        preset.global.inputTrim = globalJson.value("inputTrim", 0.0);
+        preset.global.outputTrim = globalJson.value("outputTrim", 0.0);
+        preset.global.transpose = globalJson.value("transpose", 0);
       }
 
       // Signal graph

@@ -68,7 +68,9 @@ namespace namguitar
       mCurrentPreset = preset;
 
       // Create a new executor for the signal graph
-      mExecutor = std::make_unique<SignalGraphExecutor>(preset.graph);
+      mExecutor = std::make_unique<SignalGraphExecutor>();
+      mExecutor->SetGraph(preset.graph);
+      mExecutor->SetResourceLibrary(mResourceLibrary.get());
 
       // Apply global settings
       mInputTrim = preset.global.inputTrim;
@@ -155,20 +157,20 @@ namespace namguitar
     }
 
     /**
-     * Bypass or enable a node.
+     * Enable or disable a node.
      */
-    void SetNodeBypassed(const std::string& nodeId, bool bypassed)
+    void SetNodeEnabled(const std::string& nodeId, bool enabled)
     {
       if (mExecutor)
       {
-        mExecutor->SetNodeBypassed(nodeId, bypassed);
+        mExecutor->SetNodeEnabled(nodeId, enabled);
       }
 
       for (auto& node : mCurrentPreset.graph.nodes)
       {
         if (node.id == nodeId)
         {
-          node.bypassed = bypassed;
+          node.enabled = enabled;
           break;
         }
       }
@@ -180,7 +182,7 @@ namespace namguitar
     void SetInputTrim(double db)
     {
       mInputTrim = db;
-      mCurrentPreset.globals.inputTrim = db;
+      mCurrentPreset.global.inputTrim = db;
     }
 
     /**
@@ -189,7 +191,7 @@ namespace namguitar
     void SetOutputTrim(double db)
     {
       mOutputTrim = db;
-      mCurrentPreset.globals.outputTrim = db;
+      mCurrentPreset.global.outputTrim = db;
     }
 
     /**
@@ -198,7 +200,7 @@ namespace namguitar
     void SetMasterVolume(double linear)
     {
       mMasterVolume = linear;
-      mCurrentPreset.globals.masterVolume = linear;
+      // Note: masterVolume is not in GlobalSettings, tracked separately
     }
 
     /**
@@ -221,17 +223,18 @@ namespace namguitar
     {
       for (const auto& node : preset.graph.nodes)
       {
-        if (!node.resource.isSet())
+        if (!node.resource.has_value())
           continue;
 
+        const auto& ref = *node.resource;
         std::filesystem::path resourcePath;
 
-        if (!node.resource.embeddedId.empty())
+        if (ref.IsEmbedded())
         {
           // Look up embedded resource
           for (const auto& embedded : preset.embeddedResources)
           {
-            if (embedded.id == node.resource.embeddedId)
+            if (embedded.id == ref.embeddedId)
             {
               // TODO: Materialize embedded resource to temp file
               // For now, skip embedded resources
@@ -239,15 +242,15 @@ namespace namguitar
             }
           }
         }
-        else if (!node.resource.filePath.empty())
+        else if (ref.IsFilePath())
         {
           // Direct file path
-          resourcePath = node.resource.filePath;
+          resourcePath = ref.filePath;
         }
-        else if (!node.resource.id.empty())
+        else if (ref.IsLibraryRef())
         {
           // Library reference
-          auto resolved = mResourceLibrary->ResolveResource(node.resource.type, node.resource.id);
+          auto resolved = mResourceLibrary->ResolveResource(ref);
           if (resolved)
           {
             resourcePath = *resolved;
@@ -256,7 +259,7 @@ namespace namguitar
 
         if (!resourcePath.empty() && std::filesystem::exists(resourcePath))
         {
-          mExecutor->LoadNodeResource(node.id, resourcePath);
+          mExecutor->LoadNodeResource(node.id, ref);
         }
       }
     }
