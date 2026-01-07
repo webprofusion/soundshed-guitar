@@ -40,8 +40,8 @@ struct PresetV2 {
     // === Signal Graph ===
     SignalGraph graph;
     
-    // === Attachments (embedded model/IR data) ===
-    std::vector<PresetAttachment> attachments;
+    // === Embedded Resources (optional, for custom files only) ===
+    std::vector<EmbeddedResource> embeddedResources;
 };
 ```
 
@@ -65,6 +65,41 @@ Any effect can appear in any order and multiple times.
 
 ```cpp
 /**
+ * Reference to a resource (NAM model, IR, etc.)
+ * 
+ * Resources can be referenced in two ways:
+ * 1. Library resource: Use resourceType + resourceId to reference a pre-defined
+ *    resource from the library. When the library resource is updated, all presets
+ *    using it automatically get the updated version.
+ * 2. Custom file: Use filePath for user-provided files not in the library.
+ *    Optionally reference an embeddedResource by embeddedId for portable presets.
+ */
+struct ResourceRef {
+    // Option 1: Library resource (preferred)
+    std::string resourceType;          // "nam", "ir", etc.
+    std::string resourceId;            // Library ID (e.g., "plexi-bright", "4x12-sm57")
+    
+    // Option 2: Custom file path
+    std::filesystem::path filePath;    // Direct file path (relative or absolute)
+    
+    // Option 3: Embedded resource reference (for portable presets)
+    std::string embeddedId;            // References EmbeddedResource.id in preset
+};
+
+/**
+ * Embedded resource for custom files (optional, for portability).
+ * Only needed when sharing presets with custom files not in the library.
+ */
+struct EmbeddedResource {
+    std::string id;                    // Reference ID within this preset
+    std::string type;                  // "nam", "ir", etc.
+    std::string name;                  // Display name
+    std::string hash;                  // SHA-256 for verification
+    std::string data;                  // Base64-encoded file data (optional)
+    std::filesystem::path originalPath; // Original file path (for reference)
+};
+
+/**
  * A node in the signal graph.
  * 
  * Node types are arbitrary strings allowing unlimited extensibility.
@@ -87,7 +122,8 @@ struct GraphNode {
     std::map<std::string, double> params;      // Numeric parameters
     std::map<std::string, std::string> config; // String config (e.g., algorithm selection)
     
-    std::string resourceId;            // Reference to attachment (for effects that need external files)
+    // Resource reference (for effects that need external files)
+    std::optional<ResourceRef> resource;
 };
 
 struct GraphEdge {
@@ -101,6 +137,47 @@ struct GraphEdge {
 struct SignalGraph {
     std::vector<GraphNode> nodes;
     std::vector<GraphEdge> edges;
+};
+```
+
+---
+
+## Resource Library
+
+Pre-defined resources are stored in a library and referenced by type + ID.
+
+```cpp
+/**
+ * A resource in the library (NAM model, IR, etc.)
+ * These are managed separately from presets.
+ */
+struct LibraryResource {
+    std::string type;                  // "nam", "ir", etc.
+    std::string id;                    // Unique ID within type (e.g., "plexi-bright")
+    std::string name;                  // Display name
+    std::string category;              // Grouping (e.g., "Marshall", "Fender", "Mesa")
+    std::string description;           // User-facing description
+    std::filesystem::path filePath;    // Actual file location
+    std::string hash;                  // SHA-256 for verification
+    std::vector<std::string> tags;     // Searchable tags
+};
+
+/**
+ * Library of pre-defined resources.
+ * When a resource is updated, all presets using it get the update.
+ */
+class ResourceLibrary {
+public:
+    void AddResource(const LibraryResource& resource);
+    void UpdateResource(const std::string& type, const std::string& id, const LibraryResource& updated);
+    void RemoveResource(const std::string& type, const std::string& id);
+    
+    std::optional<LibraryResource> FindResource(const std::string& type, const std::string& id) const;
+    std::vector<LibraryResource> GetResourcesByType(const std::string& type) const;
+    std::vector<LibraryResource> GetResourcesByCategory(const std::string& type, const std::string& category) const;
+    
+    // Resolve a ResourceRef to an actual file path
+    std::optional<std::filesystem::path> ResolveResource(const ResourceRef& ref) const;
 };
 ```
 
@@ -172,7 +249,9 @@ struct ParameterDef {
 
 ## Example Presets
 
-### Simple Linear Chain (Most Common)
+### Simple Linear Chain (Library Resources)
+
+Using pre-defined library resources - no embedded data needed.
 
 ```json
 {
@@ -188,8 +267,19 @@ struct ParameterDef {
     "nodes": [
       { "id": "in", "type": "input" },
       { "id": "gate", "type": "gate_noise", "category": "dynamics", "params": { "threshold": -55.0, "release": 50 } },
-      { "id": "amp", "type": "nam_amp", "category": "amp", "resourceId": "att-nam-001", "params": { "drive": 0.6, "tone": 0.5 } },
-      { "id": "cab", "type": "ir_cab", "category": "cab", "resourceId": "att-ir-001" },
+      { 
+        "id": "amp", 
+        "type": "nam_amp", 
+        "category": "amp", 
+        "resource": { "resourceType": "nam", "resourceId": "plexi-bright" },
+        "params": { "drive": 0.6, "tone": 0.5 } 
+      },
+      { 
+        "id": "cab", 
+        "type": "ir_cab", 
+        "category": "cab", 
+        "resource": { "resourceType": "ir", "resourceId": "4x12-sm57" }
+      },
       { "id": "eq", "type": "eq_parametric", "category": "eq", "params": { "lowGain": 2.0, "lowFreq": 80, "midGain": -1.0, "midFreq": 400, "highGain": 1.5, "highFreq": 8000 } },
       { "id": "out", "type": "output" }
     ],
@@ -200,30 +290,122 @@ struct ParameterDef {
       { "from": "cab", "to": "eq" },
       { "from": "eq", "to": "out" }
     ]
+  }
+}
+```
+
+### Custom File Path (User's Own NAM Model)
+
+Using a file path for a custom NAM model not in the library.
+
+```json
+{
+  "id": "preset-002",
+  "name": "My Custom Amp",
+  "version": 2,
+  "graph": {
+    "nodes": [
+      { "id": "in", "type": "input" },
+      { 
+        "id": "amp", 
+        "type": "nam_amp", 
+        "category": "amp", 
+        "resource": { "filePath": "C:/Users/me/NAM Models/my-custom-amp.nam" },
+        "params": { "drive": 0.5 } 
+      },
+      { 
+        "id": "cab", 
+        "type": "ir_cab", 
+        "category": "cab", 
+        "resource": { "resourceType": "ir", "resourceId": "4x12-sm57" }
+      },
+      { "id": "out", "type": "output" }
+    ],
+    "edges": [
+      { "from": "in", "to": "amp" },
+      { "from": "amp", "to": "cab" },
+      { "from": "cab", "to": "out" }
+    ]
+  }
+}
+```
+
+### Portable Preset with Embedded Resource
+
+For sharing presets with custom files - embed the data.
+
+```json
+{
+  "id": "preset-003",
+  "name": "Shared Custom Tone",
+  "version": 2,
+  "graph": {
+    "nodes": [
+      { "id": "in", "type": "input" },
+      { 
+        "id": "amp", 
+        "type": "nam_amp", 
+        "category": "amp", 
+        "resource": { "embeddedId": "emb-001" },
+        "params": { "drive": 0.7 } 
+      },
+      { 
+        "id": "cab", 
+        "type": "ir_cab", 
+        "category": "cab", 
+        "resource": { "resourceType": "ir", "resourceId": "2x12-jazz" }
+      },
+      { "id": "out", "type": "output" }
+    ],
+    "edges": [
+      { "from": "in", "to": "amp" },
+      { "from": "amp", "to": "cab" },
+      { "from": "cab", "to": "out" }
+    ]
   },
-  "attachments": [
-    { "id": "att-nam-001", "type": "nam", "hash": "abc123...", "filePath": "models/plexi.nam" },
-    { "id": "att-ir-001", "type": "ir", "hash": "def456...", "filePath": "ir/4x12.wav" }
+  "embeddedResources": [
+    {
+      "id": "emb-001",
+      "type": "nam",
+      "name": "Custom Plexi Capture",
+      "hash": "abc123def456...",
+      "data": "base64encodedNAMfiledata..."
+    }
   ]
 }
 ```
 
 ### Dual Cab with Different Cab Types
 
-Blend a NAM-captured cab with an algorithmic simple cab.
+Blend a library IR cab with an algorithmic simple cab.
 
 ```json
 {
-  "id": "preset-002",
+  "id": "preset-004",
   "name": "Blended Cabs",
   "version": 2,
   "graph": {
     "nodes": [
       { "id": "in", "type": "input" },
-      { "id": "amp", "type": "nam_amp", "category": "amp", "resourceId": "att-nam-001" },
+      { 
+        "id": "amp", 
+        "type": "nam_amp", 
+        "category": "amp", 
+        "resource": { "resourceType": "nam", "resourceId": "jcm800-hot" }
+      },
       { "id": "split", "type": "splitter", "category": "utility" },
-      { "id": "cab1", "type": "ir_cab", "category": "cab", "resourceId": "att-ir-sm57" },
-      { "id": "cab2", "type": "cab_simple", "category": "cab", "params": { "bass": 0.6, "presence": 0.5, "brightness": 0.4 } },
+      { 
+        "id": "cab1", 
+        "type": "ir_cab", 
+        "category": "cab", 
+        "resource": { "resourceType": "ir", "resourceId": "4x12-sm57" }
+      },
+      { 
+        "id": "cab2", 
+        "type": "cab_simple", 
+        "category": "cab", 
+        "params": { "bass": 0.6, "presence": 0.5, "brightness": 0.4 } 
+      },
       { "id": "mix", "type": "mixer", "category": "utility" },
       { "id": "out", "type": "output" }
     ],
@@ -246,7 +428,7 @@ Reverb before amp for ambient textures - any order is valid.
 
 ```json
 {
-  "id": "preset-003",
+  "id": "preset-005",
   "name": "Ambient Swells",
   "version": 2,
   "graph": {
@@ -277,7 +459,7 @@ Two EQs and two compressors in one chain.
 
 ```json
 {
-  "id": "preset-004",
+  "id": "preset-006",
   "name": "Studio Polish",
   "version": 2,
   "graph": {
@@ -285,8 +467,18 @@ Two EQs and two compressors in one chain.
       { "id": "in", "type": "input" },
       { "id": "eq_pre", "type": "eq_parametric", "category": "eq", "label": "Pre EQ", "params": { "lowCut": 80 } },
       { "id": "comp1", "type": "comp_fet", "category": "dynamics", "label": "FET Comp", "params": { "ratio": 8, "attack": 1 } },
-      { "id": "amp", "type": "nam_amp", "category": "amp", "resourceId": "att-nam-001" },
-      { "id": "cab", "type": "ir_cab", "category": "cab", "resourceId": "att-ir-001" },
+      { 
+        "id": "amp", 
+        "type": "nam_amp", 
+        "category": "amp", 
+        "resource": { "resourceType": "nam", "resourceId": "twin-reverb" }
+      },
+      { 
+        "id": "cab", 
+        "type": "ir_cab", 
+        "category": "cab", 
+        "resource": { "resourceType": "ir", "resourceId": "2x12-jazz" }
+      },
       { "id": "eq_post", "type": "eq_parametric", "category": "eq", "label": "Post EQ", "params": { "highShelf": 3.0, "highFreq": 8000 } },
       { "id": "comp2", "type": "comp_opto", "category": "dynamics", "label": "Opto Comp", "params": { "ratio": 2, "attack": 30 } },
       { "id": "out", "type": "output" }
@@ -299,35 +491,6 @@ Two EQs and two compressors in one chain.
       { "from": "cab", "to": "eq_post" },
       { "from": "eq_post", "to": "comp2" },
       { "from": "comp2", "to": "out" }
-    ]
-  }
-}
-```
-
-### Parallel Wet/Dry Rig
-
-Clean blend with processed signal.
-
-```json
-{
-  "id": "preset-005",
-  "name": "Wet/Dry Blend",
-  "graph": {
-    "nodes": [
-      { "id": "in", "type": "input" },
-      { "id": "split", "type": "splitter", "category": "utility" },
-      { "id": "amp", "type": "nam_amp", "category": "amp", "resourceId": "att-nam-001" },
-      { "id": "cab", "type": "ir_cab", "category": "cab", "resourceId": "att-ir-001" },
-      { "id": "mix", "type": "mixer", "category": "utility" },
-      { "id": "out", "type": "output" }
-    ],
-    "edges": [
-      { "from": "in", "to": "split" },
-      { "from": "split", "to": "amp", "fromPort": 0, "gain": 0.7 },
-      { "from": "split", "to": "mix", "fromPort": 1, "toPort": 1, "gain": 0.3 },
-      { "from": "amp", "to": "cab" },
-      { "from": "cab", "to": "mix", "toPort": 0 },
-      { "from": "mix", "to": "out" }
     ]
   }
 }
@@ -375,6 +538,8 @@ Clean blend with processed signal.
 3. **Single input/output** - Stereo handled internally per node
 4. **Parameters as maps** - Flexible key/value, no fixed schema per effect
 5. **Graceful degradation** - Unknown types bypass, don't crash
+6. **Resource references** - Library resources by type+id, custom files by path
+7. **Optional embedding** - Only embed data when sharing presets with custom files
 
 ---
 
@@ -388,6 +553,11 @@ src/presets/
 ├── PresetStorageV2.h/cpp  # New serialization
 ├── PresetMigration.h/cpp  # v1 → v2 conversion
 └── SignalGraph.h/cpp      # Graph data structures
+
+src/resources/
+├── ResourceLibrary.h/cpp  # Library resource management
+├── ResourceRef.h          # Resource reference types
+└── EmbeddedResource.h     # Embedded resource handling
 
 src/dsp/
 ├── EffectRegistry.h/cpp       # Effect type registration
@@ -517,3 +687,5 @@ private:
 4. **Max complexity** - Limit on node count for performance?
 5. **Unknown types** - Bypass silently, show warning, or block preset load?
 6. **Version compatibility** - How to handle presets using newer effect types?
+7. **Resource resolution priority** - Library > filePath > embedded? Or configurable?
+8. **Missing resources** - What happens if library resource is deleted?
