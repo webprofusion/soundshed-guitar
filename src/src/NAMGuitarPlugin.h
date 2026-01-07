@@ -17,6 +17,7 @@
 #include "config.h"
 #include "IPlug_include_in_plug_hdr.h"
 #include "models/ModelHasher.h"
+#include "presets/PresetManager.h"
 #include "presets/PresetTypes.h"
 #include "util/FileSystem.h"
 
@@ -145,6 +146,7 @@ namespace namguitar
     };
 
     std::unique_ptr<NAMDSPManager> mDSP;
+    PresetManager mPresetManager;
     FileSystem mFileSystem;
     ModelHasher mHasher;
     std::filesystem::path mResourceRoot;

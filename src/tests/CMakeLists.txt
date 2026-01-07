@@ -189,3 +189,22 @@ target_compile_definitions(NAMGuitarFX_OfflineProcessingTest
 )
 
 # Note: This is a utility app, not added as a CTest
+
+# Preset Storage Serialization Tests - verifies preset serialization/deserialization with attachments
+add_executable(NAMGuitarFX_PresetStorageTests
+  PresetStorageTests.cpp
+)
+
+target_include_directories(NAMGuitarFX_PresetStorageTests
+  PRIVATE
+    ${NAMGUITAR_PROJECT_ROOT}/src
+)
+
+target_link_libraries(NAMGuitarFX_PresetStorageTests
+  PRIVATE
+    nlohmann_json::nlohmann_json
+)
+
+target_compile_features(NAMGuitarFX_PresetStorageTests PRIVATE cxx_std_20)
+
+add_test(NAME PresetStorageTests COMMAND NAMGuitarFX_PresetStorageTests)

@@ -23,7 +23,8 @@ body {
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* ===== Icon Bar (Top) ===== */
@@ -69,18 +70,23 @@ body {
 /* ===== Control Bar ===== */
 .control-bar {
   display: flex;
-  justify-content: space-between;
+  
   align-items: center;
-  padding: 12px 24px;
+  padding: 12px 16px;
   background: linear-gradient(180deg, #e0e4ec 0%, #c8ccd8 100%);
   border-bottom: 1px solid #a0a8b8;
-  gap: 20px;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-height: fit-content;
+  overflow: visible;
 }
 
 .control-bar-group {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* Knob Controls */
@@ -100,8 +106,8 @@ body {
 }
 
 .knob {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: linear-gradient(145deg, #f0f2f8, #d8dce4);
   border: 2px solid #b8bcc8;
@@ -114,14 +120,14 @@ body {
 
 .knob .knob-indicator {
   position: absolute;
-  top: 6px;
+  top: 5px;
   left: 50%;
   width: 3px;
-  height: 12px;
+  height: 10px;
   background: #4a4a58;
   border-radius: 2px;
   transform: translateX(-50%);
-  transform-origin: center 18px;
+  transform-origin: center 15px;
 }
 
 .knob-value {
@@ -258,19 +264,19 @@ body {
 /* Preset Group */
 .preset-group {
   background: rgba(255, 255, 255, 0.3);
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .nav-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: 1px solid #b0b4c0;
   border-radius: 4px;
   background: linear-gradient(180deg, #f8f8fc, #e8eaf0);
   color: #5a5a68;
-  font-size: 14px;
+  font-size: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -309,13 +315,13 @@ body {
 /* Preset Action Buttons */
 .preset-actions {
   display: flex;
-  gap: 4px;
-  margin-left: 8px;
+  gap: 2px;
+  margin-left: 4px;
 }
 
 .preset-action-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.3);
@@ -329,8 +335,8 @@ body {
 }
 
 .preset-action-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .preset-action-btn:hover {
@@ -382,7 +388,8 @@ body {
   font-weight: 500;
   padding-right: 20px;
   cursor: pointer;
-  min-width: 120px;
+  min-width: 100px;
+  max-width: 150px;
 }
 
 .folder-btn {

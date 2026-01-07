@@ -1248,6 +1248,26 @@ function handleIncomingMessage(message) {
         };
       }
       uiState.signalTest = null;
+      
+      // Merge user presets from backend with default presets
+      if (Array.isArray(payload.userPresets)) {
+        // Start with factory presets, then add user presets from backend
+        const factoryPresets = DEFAULT_PRESETS.slice();
+        const userPresets = payload.userPresets;
+        
+        // Merge: factory presets first, then user presets (deduplicating by ID)
+        const presetMap = new Map();
+        factoryPresets.forEach(p => presetMap.set(p.id, p));
+        userPresets.forEach(p => presetMap.set(p.id, p));
+        
+        uiState.presets = Array.from(presetMap.values());
+        uiState.filteredPresets = uiState.presets.slice();
+        uiState.presets.forEach((preset) => {
+          uiState.presetCache.set(preset.id, preset);
+        });
+        populatePresetDropdown();
+      }
+      
       if (payload.preset) {
         uiState.presetCache.set(payload.preset.id, payload.preset);
         if (!uiState.presets.some((preset) => preset.id === payload.preset.id)) {
@@ -1556,6 +1576,8 @@ function savePresetToLocalStorage(preset) {
 
 /**
  * Loads user presets from browser localStorage.
+ * @deprecated User presets are now loaded from the C++ backend via the state message.
+ * This function is kept as a potential fallback for offline/disconnected scenarios.
  * @returns {array} Array of user presets or empty array if none found
  */
 function loadPresetsFromLocalStorage() {
@@ -1582,10 +1604,10 @@ async function loadPresetIndex() {
 
     const data = await response.json();
     const presets = Array.isArray(data) ? data : data.presets ?? [];
-    // Start with default presets and append user-saved presets
+    // Start with factory presets from remote or defaults
+    // User presets will be loaded from backend via state message
     const basePresets = presets.length ? presets : DEFAULT_PRESETS.slice();
-    const userPresets = loadPresetsFromLocalStorage();
-    uiState.presets = [...basePresets, ...userPresets];
+    uiState.presets = basePresets;
     uiState.filteredPresets = uiState.presets.slice();
     uiState.presets.forEach((preset) => {
       uiState.presetCache.set(preset.id, preset);
@@ -1593,10 +1615,10 @@ async function loadPresetIndex() {
     renderPresetList(uiState.filteredPresets);
   } catch (error) {
     console.error("Failed to load preset index", error);
-    // Start with default presets and append user-saved presets
+    // Start with default factory presets
+    // User presets will be loaded from backend via state message
     const basePresets = DEFAULT_PRESETS.slice();
-    const userPresets = loadPresetsFromLocalStorage();
-    uiState.presets = [...basePresets, ...userPresets];
+    uiState.presets = basePresets;
     uiState.filteredPresets = uiState.presets.slice();
     uiState.presets.forEach((preset) => {
       uiState.presetCache.set(preset.id, preset);
@@ -1612,10 +1634,10 @@ async function initialize() {
   if (REMOTE_BASE_URL) {
     await loadPresetIndex();
   } else {
-    // Load default presets and append user-saved presets from localStorage
+    // Load default factory presets initially
+    // User presets will be loaded from backend via state message
     const basePresets = DEFAULT_PRESETS.slice();
-    const userPresets = loadPresetsFromLocalStorage();
-    uiState.presets = [...basePresets, ...userPresets];
+    uiState.presets = basePresets;
     uiState.filteredPresets = uiState.presets.slice();
     uiState.presets.forEach((preset) => {
       uiState.presetCache.set(preset.id, preset);
@@ -1626,6 +1648,7 @@ async function initialize() {
   // Populate the preset dropdown
   populatePresetDropdown();
   
+  // Request state from backend - this will include user presets
   window.NAMBridge.postMessage({ type: "requestState" });
 }
 

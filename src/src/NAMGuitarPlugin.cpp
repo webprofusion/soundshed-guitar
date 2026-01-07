@@ -29,6 +29,7 @@
 #include "wdlstring.h"
 
 #include "dsp/NAMDSPManager.h"
+#include "presets/PresetManager.h"
 
 namespace namguitar
 {
@@ -1317,6 +1318,15 @@ namespace namguitar
       message["preset"] = SerializePresetToJson(*mActivePreset);
     }
 
+    // Include user presets from PresetManager
+    nlohmann::json userPresetsJson = nlohmann::json::array();
+    const auto userPresets = mPresetManager.ListPresets();
+    for (const auto &preset : userPresets)
+    {
+      userPresetsJson.push_back(SerializePresetToJson(preset));
+    }
+    message["userPresets"] = std::move(userPresetsJson);
+
     SendMessageToUI(message.dump());
     mPendingStateBroadcast = false;
   }
@@ -1639,55 +1649,13 @@ namespace namguitar
       newPreset.attachments.push_back(irAttachment);
     }
 
-    // Save to user presets directory
-    const auto presetDir = mFileSystem.EnsureDirectory(mFileSystem.ResolvePresetDirectory());
-    if (!presetDir)
-    {
-      ReportErrorToUI("Cannot save preset", "Could not create preset directory");
-      return;
-    }
-
-    const std::filesystem::path presetFilePath = *presetDir / (newPreset.id + ".json");
-
-    // Serialize preset to JSON
-    nlohmann::json presetJson;
-    presetJson["id"] = newPreset.id;
-    presetJson["name"] = newPreset.name;
-    presetJson["category"] = newPreset.category;
-    presetJson["description"] = newPreset.description;
-
-    nlohmann::json parametersArray = nlohmann::json::array();
-    for (const auto &param : newPreset.parameters)
-    {
-      parametersArray.push_back({{"id", param.id}, {"value", param.value}});
-    }
-    presetJson["parameters"] = parametersArray;
-
-    nlohmann::json attachmentsArray = nlohmann::json::array();
-    for (const auto &attachment : newPreset.attachments)
-    {
-      nlohmann::json attachmentJson;
-      attachmentJson["type"] = attachment.type;
-      attachmentJson["filePath"] = attachment.filePath.generic_string();
-      attachmentsArray.push_back(attachmentJson);
-    }
-    presetJson["attachments"] = attachmentsArray;
-
-    // Write to file
-    std::ofstream outputFile(presetFilePath);
-    if (!outputFile)
-    {
-      ReportErrorToUI("Cannot save preset", "Could not create preset file");
-      return;
-    }
-
-    outputFile << presetJson.dump(2);
-    outputFile.close();
+    // Save preset to PresetManager (which handles persistence)
+    mPresetManager.SavePreset(newPreset);
 
     // Update active preset
     mActivePreset = newPreset;
     mActivePresetId = newPreset.id;
-    mActivePresetJson = presetJson.dump();
+    mActivePresetJson = SerializePresetToJson(newPreset).dump();
     mPendingStateBroadcast = true;
 
     // Save settings so this preset is restored on next startup
@@ -1696,8 +1664,7 @@ namespace namguitar
     {
       nlohmann::json message;
       message["type"] = "presetSaved";
-      message["preset"] = presetJson;
-      message["path"] = presetFilePath.generic_string();
+      message["preset"] = SerializePresetToJson(newPreset);
       SendMessageToUI(message.dump());
     }
   }

@@ -44,12 +44,18 @@ namespace namguitar
       nlohmann::json attachments = nlohmann::json::array();
       for (const auto &attachment : preset.attachments)
       {
-        attachments.push_back({
+        nlohmann::json jsonAttachment = {
             {"type", attachment.type},
             {"id", attachment.id},
             {"filePath", attachment.filePath.generic_string()},
             {"hash", attachment.hash},
-        });
+        };
+        // Only include data field if non-empty to avoid bloating JSON
+        if (!attachment.data.empty())
+        {
+          jsonAttachment["data"] = attachment.data;
+        }
+        attachments.push_back(std::move(jsonAttachment));
       }
       jsonPreset["attachments"] = std::move(attachments);
 
@@ -105,6 +111,7 @@ namespace namguitar
           attachment.id = jsonAttachment.value("id", "");
           attachment.hash = jsonAttachment.value("hash", "");
           attachment.filePath = jsonAttachment.value("filePath", "");
+          attachment.data = jsonAttachment.value("data", "");
           preset.attachments.push_back(std::move(attachment));
         }
       }
