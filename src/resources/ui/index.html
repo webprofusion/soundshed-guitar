@@ -151,6 +151,43 @@
         </div>
       </section>
 
+      <!-- Signal Path Bar -->
+      <section class="signal-path-bar" id="signal-path-bar">
+        <div class="signal-path-scroll">
+          <div class="signal-path-nodes" id="signal-path-nodes">
+            <!-- Signal path nodes will be rendered here by JavaScript -->
+            <div class="signal-node input-node" data-node-id="__input__">
+              <div class="node-icon">🎸</div>
+              <span class="node-label">Input</span>
+            </div>
+            <div class="signal-connector"></div>
+            <div class="signal-node" data-node-id="placeholder">
+              <div class="node-icon">⚡</div>
+              <span class="node-label">No Preset</span>
+            </div>
+            <div class="signal-connector"></div>
+            <div class="signal-node output-node" data-node-id="__output__">
+              <div class="node-icon">🔊</div>
+              <span class="node-label">Output</span>
+            </div>
+          </div>
+        </div>
+        <div class="signal-path-info">
+          <span class="preset-summary" id="signal-path-preset-name">No Preset Loaded</span>
+        </div>
+      </section>
+
+      <!-- Node Parameter Panel (shown when a node is selected) -->
+      <section class="node-params-panel" id="node-params-panel" style="display: none;">
+        <div class="node-params-header">
+          <span class="node-params-title" id="node-params-title">Node Parameters</span>
+          <button class="node-params-close" id="node-params-close">×</button>
+        </div>
+        <div class="node-params-content" id="node-params-content">
+          <!-- Node parameters will be rendered here -->
+        </div>
+      </section>
+
       <!-- Main Content Area -->
       <main class="main-content">
         <!-- Hidden file inputs -->

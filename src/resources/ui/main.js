@@ -15,6 +15,14 @@ const nextPresetBtn = document.getElementById("next-preset");
 const iconBarButtons = Array.from(document.querySelectorAll(".icon-bar .icon-btn"));
 const mainTabPanels = Array.from(document.querySelectorAll(".main-content .tab-panel"));
 
+// Signal path bar elements
+const signalPathNodesElement = document.getElementById("signal-path-nodes");
+const signalPathPresetNameElement = document.getElementById("signal-path-preset-name");
+const nodeParamsPanelElement = document.getElementById("node-params-panel");
+const nodeParamsTitleElement = document.getElementById("node-params-title");
+const nodeParamsContentElement = document.getElementById("node-params-content");
+const nodeParamsCloseBtn = document.getElementById("node-params-close");
+
 const notificationElement =  document.getElementById("notification-area");
 
 const REMOTE_BASE_URL = window.AUDIOFX_REMOTE_BASE_URL ?? "";
@@ -215,6 +223,9 @@ const uiState = {
   demoAudioSelectedId: DEMO_AUDIO_SAMPLES.length ? DEMO_AUDIO_SAMPLES[0].id : null,
   demoAudioRepeat: false,
   logs: [],
+  // Signal path state
+  selectedNodeId: null,
+  currentPresetV2: null, // Stores the V2 preset with graph data
 };
 
 window.NAMBridge = {
@@ -1233,6 +1244,472 @@ function renderPresetDetails(preset) {
   bindLoadButtons();
 }
 
+/**
+ * Gets the icon for a node type
+ * @param {string} nodeType - The node type
+ * @param {string} category - The node category
+ * @returns {string} Emoji icon
+ */
+function getNodeIcon(nodeType, category) {
+  const iconMap = {
+    // By type
+    'dynamics_gate': '🔇',
+    'compressor_vca': '📊',
+    'compressor_opto': '📊',
+    'amp_nam': '🎸',
+    'cab_ir': '🔊',
+    'cab_simple': '📦',
+    'eq_parametric': '🎚️',
+    'gain': '📶',
+    'delay_digital': '⏱️',
+    'reverb_room': '🏛️',
+    // By category fallbacks
+    'dynamics': '📊',
+    'amp': '🎸',
+    'cab': '🔊',
+    'eq': '🎚️',
+    'delay': '⏱️',
+    'reverb': '🏛️',
+    'utility': '⚙️'
+  };
+  
+  return iconMap[nodeType] || iconMap[category] || '⚡';
+}
+
+/**
+ * Renders the signal path bar with nodes from the current preset
+ */
+function renderSignalPathBar() {
+  if (!signalPathNodesElement) return;
+  
+  const preset = uiState.currentPresetV2 || uiState.presetCache.get(uiState.activePresetId);
+  
+  // Update preset name display
+  if (signalPathPresetNameElement) {
+    signalPathPresetNameElement.textContent = preset?.name || "No Preset Loaded";
+  }
+  
+  // Build nodes array
+  let nodesHtml = '';
+  
+  // Input node
+  nodesHtml += `
+    <div class="signal-node input-node" data-node-id="__input__">
+      <div class="node-icon">🎸</div>
+      <span class="node-label">Input</span>
+    </div>
+    <div class="signal-connector"></div>
+  `;
+  
+  // Get graph nodes in processing order if available
+  if (preset?.graph?.nodes && preset.graph.nodes.length > 0) {
+    // Use PresetV2.getProcessingOrder if available, otherwise use nodes as-is
+    let orderedNodes = preset.graph.nodes;
+    if (window.PresetV2 && window.PresetV2.getProcessingOrder) {
+      try {
+        orderedNodes = window.PresetV2.getProcessingOrder(preset);
+      } catch (e) {
+        console.warn("Could not get processing order:", e);
+      }
+    }
+    
+    orderedNodes.forEach((node, index) => {
+      const icon = getNodeIcon(node.type, node.category);
+      const isSelected = uiState.selectedNodeId === node.id;
+      const isBypassed = node.bypassed;
+      
+      let nodeClasses = 'signal-node';
+      if (isSelected) nodeClasses += ' selected';
+      if (isBypassed) nodeClasses += ' bypassed';
+      
+      nodesHtml += `
+        <div class="${nodeClasses}" data-node-id="${node.id}" data-node-type="${node.type}">
+          <div class="node-icon">${icon}</div>
+          <span class="node-label">${node.displayName || node.type}</span>
+        </div>
+      `;
+      
+      // Add connector between nodes (except after last node)
+      if (index < orderedNodes.length - 1) {
+        nodesHtml += '<div class="signal-connector"></div>';
+      }
+    });
+    
+    nodesHtml += '<div class="signal-connector"></div>';
+  } else {
+    // No preset or empty graph - show placeholder
+    nodesHtml += `
+      <div class="signal-node" data-node-id="placeholder">
+        <div class="node-icon">⚡</div>
+        <span class="node-label">No Nodes</span>
+      </div>
+      <div class="signal-connector"></div>
+    `;
+  }
+  
+  // Output node
+  nodesHtml += `
+    <div class="signal-node output-node" data-node-id="__output__">
+      <div class="node-icon">🔊</div>
+      <span class="node-label">Output</span>
+    </div>
+  `;
+  
+  signalPathNodesElement.innerHTML = nodesHtml;
+  
+  // Bind click handlers to nodes
+  bindSignalPathNodeClicks();
+}
+
+/**
+ * Binds click handlers to signal path nodes
+ */
+function bindSignalPathNodeClicks() {
+  if (!signalPathNodesElement) return;
+  
+  const nodes = signalPathNodesElement.querySelectorAll('.signal-node');
+  nodes.forEach(nodeEl => {
+    nodeEl.addEventListener('click', () => {
+      const nodeId = nodeEl.dataset.nodeId;
+      if (nodeId && nodeId !== 'placeholder') {
+        selectSignalPathNode(nodeId);
+      }
+    });
+  });
+}
+
+/**
+ * Selects a node in the signal path and shows its parameters
+ * @param {string} nodeId - The node ID to select
+ */
+function selectSignalPathNode(nodeId) {
+  // Toggle selection if clicking same node
+  if (uiState.selectedNodeId === nodeId) {
+    uiState.selectedNodeId = null;
+    hideNodeParamsPanel();
+    renderSignalPathBar();
+    return;
+  }
+  
+  uiState.selectedNodeId = nodeId;
+  renderSignalPathBar();
+  showNodeParamsPanel(nodeId);
+}
+
+/**
+ * Shows the node parameters panel for a selected node
+ * @param {string} nodeId - The node ID
+ */
+function showNodeParamsPanel(nodeId) {
+  if (!nodeParamsPanelElement || !nodeParamsContentElement || !nodeParamsTitleElement) return;
+  
+  // Handle special input/output nodes
+  if (nodeId === '__input__' || nodeId === '__output__') {
+    nodeParamsTitleElement.textContent = nodeId === '__input__' ? 'Input' : 'Output';
+    nodeParamsContentElement.innerHTML = `
+      <p class="node-empty-message">
+        ${nodeId === '__input__' ? 'Input settings are configured in the control bar above.' : 'Output settings are configured in the control bar above.'}
+      </p>
+    `;
+    nodeParamsPanelElement.style.display = 'block';
+    return;
+  }
+  
+  const preset = uiState.currentPresetV2 || uiState.presetCache.get(uiState.activePresetId);
+  if (!preset?.graph?.nodes) {
+    // Handle V1 presets or show generic message
+    nodeParamsTitleElement.textContent = nodeId.replace(/_/g, ' ').toUpperCase();
+    nodeParamsContentElement.innerHTML = `
+      <p class="node-empty-message">Node parameters are not available for this preset format.</p>
+    `;
+    nodeParamsPanelElement.style.display = 'block';
+    return;
+  }
+  
+  const node = preset.graph.nodes.find(n => n.id === nodeId);
+  if (!node) {
+    hideNodeParamsPanel();
+    return;
+  }
+  
+  // Get type info from registry
+  const typeInfo = window.PresetV2?.EffectTypeRegistry?.get(node.type);
+  
+  nodeParamsTitleElement.textContent = node.displayName || typeInfo?.displayName || node.type;
+  
+  let paramsHtml = '';
+  
+  // Add bypass button
+  paramsHtml += `
+    <div class="node-param-group">
+      <button class="node-bypass-btn ${node.bypassed ? 'bypassed' : ''}" data-node-id="${node.id}">
+        ${node.bypassed ? 'BYPASSED' : 'ENABLED'}
+      </button>
+    </div>
+  `;
+  
+  // Add resource info if applicable
+  if (typeInfo?.requiresResource && node.resource) {
+    const resourceIcon = typeInfo.resourceType === 'nam' ? '🎸' : typeInfo.resourceType === 'ir' ? '🔊' : '📦';
+    const resourceName = typeof node.resource === 'string' ? node.resource : (node.resource.filePath || node.resource.id || 'Unknown');
+    paramsHtml += `
+      <div class="node-resource-info">
+        <div class="node-resource-icon">${resourceIcon}</div>
+        <div class="node-resource-details">
+          <span class="node-resource-label">${typeInfo.resourceType?.toUpperCase() || 'Resource'}</span>
+          <span class="node-resource-name" title="${resourceName}">${resourceName.split(/[/\\]/).pop()}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Add parameter knobs
+  if (typeInfo?.parameters) {
+    typeInfo.parameters.forEach(paramDef => {
+      const value = node.params?.[paramDef.key] ?? paramDef.default;
+      const normalizedValue = (value - paramDef.min) / (paramDef.max - paramDef.min);
+      const rotation = normalizedValue * 270 - 135;
+      
+      let displayValue = value;
+      if (paramDef.unit === 'dB') {
+        displayValue = `${value >= 0 ? '+' : ''}${value.toFixed(1)} dB`;
+      } else if (paramDef.unit === '%' || (paramDef.min === 0 && paramDef.max === 1 && !paramDef.unit)) {
+        displayValue = `${Math.round(value * 100)}%`;
+      } else if (paramDef.unit === 'ms') {
+        displayValue = `${value.toFixed(0)} ms`;
+      } else if (paramDef.unit === 'Hz') {
+        displayValue = value >= 1000 ? `${(value / 1000).toFixed(1)} kHz` : `${value.toFixed(0)} Hz`;
+      } else if (paramDef.unit) {
+        displayValue = `${value.toFixed(2)} ${paramDef.unit}`;
+      } else {
+        displayValue = value.toFixed(2);
+      }
+      
+      paramsHtml += `
+        <div class="node-param-group">
+          <span class="node-param-label">${paramDef.name}</span>
+          <div class="node-param-knob" 
+               data-node-id="${node.id}" 
+               data-param-key="${paramDef.key}"
+               data-param-min="${paramDef.min}"
+               data-param-max="${paramDef.max}"
+               data-param-value="${value}">
+            <div class="knob-indicator" style="transform: translateX(-50%) rotate(${rotation}deg);"></div>
+          </div>
+          <span class="node-param-value" id="node-param-${node.id}-${paramDef.key}-value">${displayValue}</span>
+        </div>
+      `;
+    });
+  } else if (node.params) {
+    // Fallback for nodes without registry info
+    Object.entries(node.params).forEach(([key, value]) => {
+      const normalizedValue = typeof value === 'number' ? Math.min(1, Math.max(0, (value + 60) / 84)) : 0.5;
+      const rotation = normalizedValue * 270 - 135;
+      
+      paramsHtml += `
+        <div class="node-param-group">
+          <span class="node-param-label">${key.replace(/_/g, ' ')}</span>
+          <div class="node-param-knob" 
+               data-node-id="${node.id}" 
+               data-param-key="${key}"
+               data-param-value="${value}">
+            <div class="knob-indicator" style="transform: translateX(-50%) rotate(${rotation}deg);"></div>
+          </div>
+          <span class="node-param-value">${typeof value === 'number' ? value.toFixed(2) : value}</span>
+        </div>
+      `;
+    });
+  }
+  
+  if (!typeInfo?.parameters && !node.params) {
+    paramsHtml += '<p class="node-empty-message">No adjustable parameters for this node.</p>';
+  }
+  
+  nodeParamsContentElement.innerHTML = paramsHtml;
+  nodeParamsPanelElement.style.display = 'block';
+  
+  // Bind knob interactions
+  bindNodeParamKnobs();
+  bindNodeBypassButton();
+}
+
+/**
+ * Hides the node parameters panel
+ */
+function hideNodeParamsPanel() {
+  if (nodeParamsPanelElement) {
+    nodeParamsPanelElement.style.display = 'none';
+  }
+}
+
+/**
+ * Binds knob drag interactions for node parameters
+ */
+function bindNodeParamKnobs() {
+  const knobs = nodeParamsContentElement?.querySelectorAll('.node-param-knob');
+  if (!knobs) return;
+  
+  knobs.forEach(knob => {
+    let isDragging = false;
+    let startY = 0;
+    let startValue = 0;
+    
+    const minVal = parseFloat(knob.dataset.paramMin) || 0;
+    const maxVal = parseFloat(knob.dataset.paramMax) || 1;
+    
+    const updateKnob = (newValue) => {
+      const clampedValue = Math.max(minVal, Math.min(maxVal, newValue));
+      knob.dataset.paramValue = clampedValue;
+      
+      const normalizedValue = (clampedValue - minVal) / (maxVal - minVal);
+      const rotation = normalizedValue * 270 - 135;
+      const indicator = knob.querySelector('.knob-indicator');
+      if (indicator) {
+        indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+      }
+      
+      // Update value display
+      const nodeId = knob.dataset.nodeId;
+      const paramKey = knob.dataset.paramKey;
+      const valueEl = document.getElementById(`node-param-${nodeId}-${paramKey}-value`);
+      if (valueEl) {
+        // Get param info for formatting
+        const preset = uiState.currentPresetV2 || uiState.presetCache.get(uiState.activePresetId);
+        const node = preset?.graph?.nodes?.find(n => n.id === nodeId);
+        const typeInfo = window.PresetV2?.EffectTypeRegistry?.get(node?.type);
+        const paramDef = typeInfo?.parameters?.find(p => p.key === paramKey);
+        
+        let displayValue = clampedValue;
+        if (paramDef?.unit === 'dB') {
+          displayValue = `${clampedValue >= 0 ? '+' : ''}${clampedValue.toFixed(1)} dB`;
+        } else if (paramDef?.unit === '%' || (minVal === 0 && maxVal === 1 && !paramDef?.unit)) {
+          displayValue = `${Math.round(clampedValue * 100)}%`;
+        } else if (paramDef?.unit === 'ms') {
+          displayValue = `${clampedValue.toFixed(0)} ms`;
+        } else if (paramDef?.unit === 'Hz') {
+          displayValue = clampedValue >= 1000 ? `${(clampedValue / 1000).toFixed(1)} kHz` : `${clampedValue.toFixed(0)} Hz`;
+        } else if (paramDef?.unit) {
+          displayValue = `${clampedValue.toFixed(2)} ${paramDef.unit}`;
+        } else {
+          displayValue = clampedValue.toFixed(2);
+        }
+        valueEl.textContent = displayValue;
+      }
+      
+      return clampedValue;
+    };
+    
+    knob.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startY = e.clientY;
+      startValue = parseFloat(knob.dataset.paramValue) || 0;
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const deltaY = startY - e.clientY;
+      const range = maxVal - minVal;
+      const sensitivity = range / 100; // 100 pixels for full range
+      const newValue = startValue + deltaY * sensitivity;
+      updateKnob(newValue);
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        const nodeId = knob.dataset.nodeId;
+        const paramKey = knob.dataset.paramKey;
+        const value = parseFloat(knob.dataset.paramValue);
+        
+        // Send parameter update to backend
+        sendNodeParamUpdate(nodeId, paramKey, value);
+      }
+    });
+  });
+}
+
+/**
+ * Binds the bypass button interaction
+ */
+function bindNodeBypassButton() {
+  const bypassBtn = nodeParamsContentElement?.querySelector('.node-bypass-btn');
+  if (!bypassBtn) return;
+  
+  bypassBtn.addEventListener('click', () => {
+    const nodeId = bypassBtn.dataset.nodeId;
+    const preset = uiState.currentPresetV2 || uiState.presetCache.get(uiState.activePresetId);
+    const node = preset?.graph?.nodes?.find(n => n.id === nodeId);
+    
+    if (node) {
+      node.bypassed = !node.bypassed;
+      bypassBtn.textContent = node.bypassed ? 'BYPASSED' : 'ENABLED';
+      bypassBtn.classList.toggle('bypassed', node.bypassed);
+      renderSignalPathBar();
+      
+      // Send bypass state to backend
+      sendNodeBypassUpdate(nodeId, node.bypassed);
+    }
+  });
+}
+
+/**
+ * Sends a node parameter update to the backend
+ * @param {string} nodeId - The node ID
+ * @param {string} paramKey - The parameter key
+ * @param {number} value - The new value
+ */
+function sendNodeParamUpdate(nodeId, paramKey, value) {
+  window.NAMBridge.postMessage({
+    type: "setNodeParameter",
+    nodeId,
+    paramKey,
+    value
+  });
+  appendLog(`setNodeParameter → ${nodeId}.${paramKey} = ${value}`);
+  
+  // Update local preset state
+  const preset = uiState.currentPresetV2 || uiState.presetCache.get(uiState.activePresetId);
+  if (preset?.graph?.nodes) {
+    const node = preset.graph.nodes.find(n => n.id === nodeId);
+    if (node && node.params) {
+      node.params[paramKey] = value;
+    }
+  }
+}
+
+/**
+ * Sends a node bypass state update to the backend
+ * @param {string} nodeId - The node ID
+ * @param {boolean} bypassed - Whether the node is bypassed
+ */
+function sendNodeBypassUpdate(nodeId, bypassed) {
+  window.NAMBridge.postMessage({
+    type: "setNodeBypassed",
+    nodeId,
+    bypassed
+  });
+  appendLog(`setNodeBypassed → ${nodeId} = ${bypassed}`);
+}
+
+/**
+ * Initializes the signal path bar
+ */
+function initializeSignalPathBar() {
+  // Close button handler
+  if (nodeParamsCloseBtn) {
+    nodeParamsCloseBtn.addEventListener('click', () => {
+      uiState.selectedNodeId = null;
+      hideNodeParamsPanel();
+      renderSignalPathBar();
+    });
+  }
+  
+  // Initial render
+  renderSignalPathBar();
+}
+
 function handleIncomingMessage(message) {
   const payload = JSON.parse(message);
   switch (payload.type) {
@@ -1278,7 +1755,12 @@ function handleIncomingMessage(message) {
       }
       renderPresetList(uiState.filteredPresets);
       const preset = payload.preset ?? uiState.presetCache.get(uiState.activePresetId) ?? null;
+      // Store V2 preset data for signal path
+      if (preset?.graph) {
+        uiState.currentPresetV2 = preset;
+      }
       renderPresetDetails(preset ? clonePreset(preset) : null);
+      renderSignalPathBar();
       syncControlsFromState();
       updatePresetDropdownSelection();
       clearNotification();
@@ -1289,6 +1771,10 @@ function handleIncomingMessage(message) {
       if (preset) {
         uiState.activePresetId = preset.id;
         uiState.presetCache.set(preset.id, preset);
+        // Store V2 preset data for signal path
+        if (preset.graph) {
+          uiState.currentPresetV2 = preset;
+        }
         updatePresetDropdownSelection();
       }
       if (payload.parameters) {
@@ -1308,6 +1794,7 @@ function handleIncomingMessage(message) {
         renderPresetDetails(clonePreset(preset));
       }
       renderPresetList(uiState.filteredPresets);
+      renderSignalPathBar();
       syncControlsFromState();
       clearNotification();
       break;
@@ -1806,6 +2293,7 @@ initializeIconBarTabs();
 initializeFileInputs();
 initializeSavePresetModal();
 initializeSaveAsButton();
+initializeSignalPathBar();
 
 presetSearchElement?.addEventListener("input", (event) => {
   filterPresets(event.target.value ?? "");
@@ -1817,4 +2305,5 @@ window.IPlugReceiveData = (message) => {
 
 renderPresetList([]);
 renderPresetDetails(null);
+renderSignalPathBar();
 initialize();
