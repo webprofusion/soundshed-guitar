@@ -1133,8 +1133,21 @@ namespace namguitar
   void NAMGuitarPlugin::SendMessageToUI(const std::string& jsonMessage)
   {
     // Call the JavaScript handler function in the WebView
-    // The UI should define a window.handlePluginMessage function
-    std::string jsCode = "if (window.handlePluginMessage) { window.handlePluginMessage(" + jsonMessage + "); }";
+    // The UI registers window.IPlugReceiveData to receive messages as a JSON string
+    // We need to escape the JSON string for JavaScript string literal
+    std::string escaped;
+    escaped.reserve(jsonMessage.size() + 10);
+    for (char c : jsonMessage) {
+      switch (c) {
+        case '\\': escaped += "\\\\"; break;
+        case '"': escaped += "\\\""; break;
+        case '\n': escaped += "\\n"; break;
+        case '\r': escaped += "\\r"; break;
+        case '\t': escaped += "\\t"; break;
+        default: escaped += c; break;
+      }
+    }
+    std::string jsCode = "if (window.IPlugReceiveData) { window.IPlugReceiveData(\"" + escaped + "\"); }";
     EvaluateJavaScript(jsCode.c_str());
   }
 
