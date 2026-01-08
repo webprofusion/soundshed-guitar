@@ -2197,11 +2197,120 @@ namespace namguitar
         // Re-serialize the preset JSON to reflect the change
         mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
         
-        // Apply the updated preset to DSP
-        ApplyPreset(*mActivePreset);
+        // Apply just the changed parameter based on node type (without full preset reload)
+        ApplyNodeParameter(*node, paramKey, value);
         
-        // Broadcast state change to UI
-        mPendingStateBroadcast = true;
+        // Don't broadcast state on every param change during drag - too noisy
+      }
+    }
+  }
+
+  void NAMGuitarPlugin::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
+  {
+    // Map node type and param key to plugin parameter
+    if (node.type == "amp_nam" || node.type == "nam_amp" || node.type == "nam")
+    {
+      if (paramKey == "drive")
+      {
+        auto *param = GetParam(kParamDrive);
+        if (param) { param->Set(value); OnParamChange(kParamDrive); }
+      }
+      else if (paramKey == "tone")
+      {
+        auto *param = GetParam(kParamTone);
+        if (param) { param->Set(value); OnParamChange(kParamTone); }
+      }
+      else if (paramKey == "inputGain")
+      {
+        auto *param = GetParam(kParamInputTrim);
+        if (param) { param->Set(value); OnParamChange(kParamInputTrim); }
+      }
+      else if (paramKey == "outputGain")
+      {
+        auto *param = GetParam(kParamOutputTrim);
+        if (param) { param->Set(value); OnParamChange(kParamOutputTrim); }
+      }
+    }
+    else if (node.type == "dynamics_gate" || node.type == "noise_gate" || node.type == "gate")
+    {
+      if (paramKey == "threshold")
+      {
+        auto *param = GetParam(kParamGateThreshold);
+        if (param) { param->Set(value); OnParamChange(kParamGateThreshold); }
+      }
+    }
+    else if (node.type == "eq_parametric" || node.type == "eq")
+    {
+      std::optional<ParameterId> paramId;
+      if (paramKey == "lowGain") paramId = kParamEQLowGain;
+      else if (paramKey == "lowFreq") paramId = kParamEQLowFreq;
+      else if (paramKey == "lowMidGain") paramId = kParamEQLowMidGain;
+      else if (paramKey == "lowMidFreq") paramId = kParamEQLowMidFreq;
+      else if (paramKey == "lowMidQ") paramId = kParamEQLowMidQ;
+      else if (paramKey == "highMidGain") paramId = kParamEQHighMidGain;
+      else if (paramKey == "highMidFreq") paramId = kParamEQHighMidFreq;
+      else if (paramKey == "highMidQ") paramId = kParamEQHighMidQ;
+      else if (paramKey == "highGain") paramId = kParamEQHighGain;
+      else if (paramKey == "highFreq") paramId = kParamEQHighFreq;
+
+      if (paramId)
+      {
+        auto *param = GetParam(static_cast<int>(*paramId));
+        if (param) { param->Set(value); OnParamChange(static_cast<int>(*paramId)); }
+      }
+    }
+    else if (node.type == "delay_digital" || node.type == "delay")
+    {
+      if (paramKey == "time")
+      {
+        auto *param = GetParam(kParamDelayTime);
+        if (param) { param->Set(value); OnParamChange(kParamDelayTime); }
+      }
+      else if (paramKey == "feedback")
+      {
+        auto *param = GetParam(kParamDelayFeedback);
+        if (param) { param->Set(value); OnParamChange(kParamDelayFeedback); }
+      }
+      else if (paramKey == "mix")
+      {
+        auto *param = GetParam(kParamDelayMix);
+        if (param) { param->Set(value); OnParamChange(kParamDelayMix); }
+      }
+    }
+    else if (node.type == "reverb_room" || node.type == "reverb")
+    {
+      if (paramKey == "decay")
+      {
+        auto *param = GetParam(kParamReverbDecay);
+        if (param) { param->Set(value); OnParamChange(kParamReverbDecay); }
+      }
+      else if (paramKey == "damping")
+      {
+        auto *param = GetParam(kParamReverbDamping);
+        if (param) { param->Set(value); OnParamChange(kParamReverbDamping); }
+      }
+      else if (paramKey == "mix")
+      {
+        auto *param = GetParam(kParamReverbMix);
+        if (param) { param->Set(value); OnParamChange(kParamReverbMix); }
+      }
+    }
+    else if (node.type == "cab_simple" || node.type == "simple_cab")
+    {
+      if (paramKey == "bass")
+      {
+        auto *param = GetParam(kParamSimpleCabBass);
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBass); }
+      }
+      else if (paramKey == "presence")
+      {
+        auto *param = GetParam(kParamSimpleCabPresence);
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabPresence); }
+      }
+      else if (paramKey == "brightness")
+      {
+        auto *param = GetParam(kParamSimpleCabBrightness);
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBrightness); }
       }
     }
   }
