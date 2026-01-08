@@ -274,23 +274,25 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     const step = (max - min) / 100;
     const unit = paramDef?.unit || "";
     
+    // Calculate initial rotation based on value (range: -135 to 135 degrees)
+    const normalizedValue = (value - min) / (max - min);
+    const rotation = -135 + normalizedValue * 270;
+    
     return `
-      <div class="param-control">
-        <label for="${paramId}">${label}</label>
-        <div class="knob-container">
-          <input 
-            type="range" 
-            id="${paramId}" 
-            class="param-knob" 
-            data-node-id="${node.id}" 
-            data-param-key="${key}" 
-            value="${value}" 
-            min="${min}" 
-            max="${max}" 
-            step="${step}"
-          />
-          <div class="param-value">${value.toFixed(2)}${unit}</div>
+      <div class="node-param-group">
+        <span class="node-param-label">${label}</span>
+        <div 
+          class="node-param-knob" 
+          data-node-id="${node.id}" 
+          data-param-key="${key}"
+          data-value="${value}"
+          data-min="${min}"
+          data-max="${max}"
+          data-unit="${unit}"
+        >
+          <div class="knob-indicator" style="transform: translateX(-50%) rotate(${rotation}deg);"></div>
         </div>
+        <span class="node-param-value">${value.toFixed(2)}${unit}</span>
       </div>
     `;
   }).join("");
@@ -379,44 +381,74 @@ function formatParamLabel(key: string): string {
 }
 
 function bindNodeParamControls(node: GraphNode, preset: Preset): void {
-  const knobs = nodeParamsPanelElement?.querySelectorAll(".param-knob");
+  const knobs = nodeParamsPanelElement?.querySelectorAll(".node-param-knob");
   if (!knobs) {
     return;
   }
 
-  // Get parameter definitions from registry
-  const typeInfo = EffectTypeRegistry.get(node.type);
-  const paramDefs = typeInfo?.parameters || [];
-
-  knobs.forEach((knob) => {
-    const input = knob as HTMLInputElement;
-    const valueDisplay = input.parentElement?.querySelector(".param-value");
-    const paramKey = input.dataset.paramKey;
-    const paramDef = paramDefs.find(p => p.key === paramKey);
-    const unit = paramDef?.unit || "";
+  knobs.forEach((knobElement) => {
+    const knob = knobElement as HTMLElement;
+    const valueDisplay = knob.parentElement?.querySelector(".node-param-value") as HTMLElement | null;
+    const indicator = knob.querySelector(".knob-indicator") as HTMLElement | null;
     
-    input.addEventListener("input", () => {
-      const value = parseFloat(input.value);
+    const nodeId = knob.dataset.nodeId;
+    const paramKey = knob.dataset.paramKey;
+    const min = parseFloat(knob.dataset.min || "0");
+    const max = parseFloat(knob.dataset.max || "1");
+    const unit = knob.dataset.unit || "";
+    let currentValue = parseFloat(knob.dataset.value || "0");
+    
+    let isDragging = false;
+    let startY = 0;
+    let startValue = 0;
+    const sensitivity = (max - min) / 200; // Adjust sensitivity based on range
+
+    const updateKnobDisplay = (value: number) => {
+      const normalizedValue = (value - min) / (max - min);
+      const rotation = -135 + normalizedValue * 270;
+      if (indicator) {
+        indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+      }
       if (valueDisplay) {
         valueDisplay.textContent = `${value.toFixed(2)}${unit}`;
       }
-      
-      // Send value while dragging
-      const nodeId = input.dataset.nodeId;
-      if (nodeId && paramKey) {
-        sendNodeParamUpdate(nodeId, paramKey, value);
-      }
-    });
+      knob.dataset.value = value.toString();
+    };
 
-    input.addEventListener("change", () => {
-      const nodeId = input.dataset.nodeId;
-      const value = parseFloat(input.value);
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      startY = e.clientY;
+      startValue = currentValue;
+      e.preventDefault();
+      document.body.style.cursor = "ns-resize";
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
       
-      // Final value send on release
+      const deltaY = startY - e.clientY;
+      let newValue = startValue + deltaY * sensitivity;
+      newValue = Math.max(min, Math.min(max, newValue));
+      
+      currentValue = newValue;
+      updateKnobDisplay(newValue);
+      
+      // Send parameter value while dragging
       if (nodeId && paramKey) {
-        sendNodeParamUpdate(nodeId, paramKey, value);
+        sendNodeParamUpdate(nodeId, paramKey, newValue);
       }
-    });
+    };
+
+    const onMouseUp = () => {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.cursor = "";
+      }
+    };
+
+    knob.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
   });
 }
 
