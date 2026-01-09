@@ -7,6 +7,11 @@ const signalPathNodesElement = document.getElementById("signal-path-nodes");
 const signalPathPresetNameElement = document.getElementById("signal-path-preset-name");
 const nodeParamsPanelElement = document.getElementById("node-params-panel");
 
+// Drag-drop state
+let draggedNodeId: string | null = null;
+let dragOverNodeId: string | null = null;
+let selectedNodeId: string | null = null;
+
 const effectTypeIcons: Record<string, string> = {
   // Dynamics
   "dynamics_gate": "🚪",
@@ -304,6 +309,7 @@ function renderNodeElement(node: GraphNode): string {
   const icon = getNodeIcon(node.type);
   const categoryClass = getCategoryClass(node.category);
   const bypassedClass = node.bypassed ? "bypassed" : "";
+  const selectedClass = selectedNodeId === node.id ? "selected" : "";
   
   let resourceLabel = "";
   if (node.resource) {
@@ -311,7 +317,10 @@ function renderNodeElement(node: GraphNode): string {
   }
 
   return `
-    <div class="signal-node ${categoryClass} ${bypassedClass}" data-node-id="${node.id}">
+    <div class="signal-node ${categoryClass} ${bypassedClass} ${selectedClass}" 
+         data-node-id="${node.id}" 
+         draggable="true" 
+         tabindex="0">
       <div class="node-icon">${icon}</div>
       <div class="node-info">
         <div class="node-name">${node.displayName}</div>
@@ -361,17 +370,86 @@ function bindNodeClickHandlers(preset: Preset): void {
   }
 
   nodeElements.forEach((element) => {
-    element.addEventListener("click", () => {
-      const nodeId = (element as HTMLElement).dataset.nodeId;
+    const el = element as HTMLElement;
+    
+    // Click handler - select node
+    el.addEventListener("click", () => {
+      const nodeId = el.dataset.nodeId;
       if (nodeId && preset.graph) {
         const node = preset.graph.nodes.find((n) => n.id === nodeId);
         if (node) {
+          selectedNodeId = nodeId;
           showNodeParamsPanel(node, preset);
           
           // Highlight selected node
-          nodeElements.forEach((el) => el.classList.remove("selected"));
-          element.classList.add("selected");
+          nodeElements.forEach((n) => n.classList.remove("selected"));
+          el.classList.add("selected");
+          el.focus();
         }
+      }
+    });
+    
+    // Drag start
+    el.addEventListener("dragstart", (e: DragEvent) => {
+      const nodeId = el.dataset.nodeId;
+      if (nodeId) {
+        draggedNodeId = nodeId;
+        el.classList.add("dragging");
+        e.dataTransfer?.setData("text/plain", nodeId);
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = "move";
+        }
+      }
+    });
+    
+    // Drag over
+    el.addEventListener("dragover", (e: DragEvent) => {
+      e.preventDefault();
+      const nodeId = el.dataset.nodeId;
+      if (nodeId && nodeId !== draggedNodeId) {
+        dragOverNodeId = nodeId;
+        el.classList.add("drag-over");
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = "move";
+        }
+      }
+    });
+    
+    // Drag leave
+    el.addEventListener("dragleave", () => {
+      el.classList.remove("drag-over");
+      if (el.dataset.nodeId === dragOverNodeId) {
+        dragOverNodeId = null;
+      }
+    });
+    
+    // Drop
+    el.addEventListener("drop", (e: DragEvent) => {
+      e.preventDefault();
+      const targetNodeId = el.dataset.nodeId;
+      if (draggedNodeId && targetNodeId && draggedNodeId !== targetNodeId) {
+        sendNodeReorder(draggedNodeId, targetNodeId);
+      }
+      el.classList.remove("drag-over");
+    });
+    
+    // Drag end
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+      draggedNodeId = null;
+      dragOverNodeId = null;
+      // Clean up any remaining drag-over states
+      nodeElements.forEach((n) => n.classList.remove("drag-over"));
+    });
+    
+    // Keyboard handler - Delete/Backspace to remove
+    el.addEventListener("keydown", (e: KeyboardEvent) => {
+      const nodeId = el.dataset.nodeId;
+      if (nodeId && (e.key === "Delete" || e.key === "Backspace")) {
+        e.preventDefault();
+        sendNodeDelete(nodeId);
+        selectedNodeId = null;
+        nodeParamsPanelElement?.classList.remove("visible");
       }
     });
   });
@@ -664,5 +742,20 @@ function sendBrowseNodeResource(nodeId: string, resourceType: string): void {
     type: "browseNodeResource",
     nodeId,
     resourceType,
+  });
+}
+
+function sendNodeReorder(nodeId: string, targetNodeId: string): void {
+  postMessage({
+    type: "reorderNode",
+    nodeId,
+    targetNodeId,
+  });
+}
+
+function sendNodeDelete(nodeId: string): void {
+  postMessage({
+    type: "deleteNode",
+    nodeId,
   });
 }

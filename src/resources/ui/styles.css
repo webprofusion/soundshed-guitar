@@ -2108,6 +2108,38 @@ body {
   border-color: #e07848;
   background: linear-gradient(180deg, #4a3830 0%, #3e2e28 100%);
   box-shadow: 0 0 12px rgba(224, 120, 72, 0.3);
+  outline: none;
+}
+
+.signal-node:focus {
+  outline: 2px solid #e07848;
+  outline-offset: 2px;
+}
+
+.signal-node.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  border-color: #e07848;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.signal-node.drag-over {
+  border-color: #48e078;
+  background: linear-gradient(180deg, #2e4a2e 0%, #243824 100%);
+  box-shadow: 0 0 16px rgba(72, 224, 120, 0.4);
+  transform: translateY(-2px);
+}
+
+.signal-node.drag-over::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right: 8px solid #48e078;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
 }
 
 .signal-node.bypassed {
