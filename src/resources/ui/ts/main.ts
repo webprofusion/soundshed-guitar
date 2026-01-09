@@ -11,6 +11,7 @@ import { installFetchLogger, renderLogEntries } from "./logging.js";
 import { handleIncomingMessage } from "./messages.js";
 import { requestSignalPathTest } from "./presets.js";
 import { initializeTuner } from "./tuner.js";
+import { initFxSelector } from "./fxSelector.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -80,6 +81,7 @@ async function bootstrap(): Promise<void> {
   initializeSaveAsButton();
   initializePresetActionButtons();
   initializeTuner();
+  initFxSelector();
 
   renderActivePreset();
   await initializePresets();
