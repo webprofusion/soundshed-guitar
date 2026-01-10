@@ -168,6 +168,29 @@ target_compile_definitions(GuitarFX_SampleRateBufferTests
 )
 
 add_test(NAME SampleRateBufferTests COMMAND GuitarFX_SampleRateBufferTests)
+# SignalGraph execution tests - simple, complex, and parallel routing
+add_executable(GuitarFX_SignalGraphExecutorTests
+  SignalGraphExecutorTests.cpp
+)
+
+target_include_directories(GuitarFX_SignalGraphExecutorTests
+  PRIVATE
+    ${GUITARFX_PROJECT_ROOT}/src
+)
+
+target_link_libraries(GuitarFX_SignalGraphExecutorTests
+  PRIVATE
+    GuitarFXCore
+)
+
+target_compile_features(GuitarFX_SignalGraphExecutorTests PRIVATE cxx_std_20)
+
+target_compile_definitions(GuitarFX_SignalGraphExecutorTests
+  PRIVATE
+    GUITARFX_TEST_RESOURCES_DIR="${GUITARFX_RESOURCES_DIR_NORMALIZED}"
+)
+
+add_test(NAME SignalGraphExecutorTests COMMAND GuitarFX_SignalGraphExecutorTests)
 # Real Audio Processing Tests - tests the full DSP pipeline with actual audio processing
 add_executable(GuitarFX_RealAudioProcessingTests
   RealAudioProcessingTests.cpp
