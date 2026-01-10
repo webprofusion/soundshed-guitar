@@ -11,15 +11,11 @@ import { postMessage } from "./bridge.js";
 // DOM Elements
 const fxSelectorPanel = document.getElementById("fx-selector-panel");
 const fxSelectorCategories = document.getElementById("fx-selector-categories");
+const fxSelectorEffectsList = document.getElementById("fx-selector-effects-list");
 const fxSearchInput = document.getElementById("fx-search-input") as HTMLInputElement | null;
-const fxLibraryToggle = document.getElementById("fx-library-toggle");
-const fxSelectorCollapse = document.getElementById("fx-selector-collapse");
-const fxSelectorClose = document.getElementById("fx-selector-close");
 
 // State
-let isPanelOpen = false;
-let isCollapsed = false;
-let expandedCategories = new Set<string>(["dynamics", "amp", "cab"]);
+let activeCategory = "dynamics"; // Currently selected category tab
 let searchFilter = "";
 
 // Category definitions
@@ -47,157 +43,108 @@ const FX_CATEGORIES: FxCategory[] = [
 export function initFxSelector(): void {
   console.log("[fxSelector] Initializing...");
   console.log("[fxSelector] Panel element:", fxSelectorPanel);
-  console.log("[fxSelector] Toggle button:", fxLibraryToggle);
   
   if (!fxSelectorPanel) {
     console.warn("[fxSelector] Panel element not found");
     return;
   }
 
-  // Toggle button
-  if (fxLibraryToggle) {
-    console.log("[fxSelector] Adding click handler to toggle button");
-    fxLibraryToggle.addEventListener("click", () => {
-      console.log("[fxSelector] Toggle button clicked");
-      toggleFxSelectorPanel();
-    });
-  } else {
-    console.warn("[fxSelector] Toggle button not found");
-  }
-
-  // Close button
-  fxSelectorClose?.addEventListener("click", () => {
-    toggleFxSelectorPanel(false);
-  });
-
-  // Collapse button
-  fxSelectorCollapse?.addEventListener("click", () => {
-    toggleCollapsed();
-  });
-
   // Search input
   fxSearchInput?.addEventListener("input", (e) => {
     searchFilter = (e.target as HTMLInputElement).value.toLowerCase();
-    renderFxCategories();
-  });
-
-  // Keyboard shortcut
-  document.addEventListener("keydown", (e) => {
-    // 'E' to toggle panel (when not in input)
-    if (e.key === "e" || e.key === "E") {
-      const target = e.target as HTMLElement;
-      if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-        e.preventDefault();
-        toggleFxSelectorPanel();
-      }
-    }
-    // Escape to close
-    if (e.key === "Escape" && isPanelOpen) {
-      toggleFxSelectorPanel(false);
-    }
+    renderEffectsList();
   });
 
   // Initial render
-  renderFxCategories();
+  renderCategories();
+  renderEffectsList();
 }
 
 /**
- * Toggle the FX selector panel visibility.
+ * Select a category and update the effects list.
  */
-export function toggleFxSelectorPanel(visible?: boolean): void {
-  isPanelOpen = visible ?? !isPanelOpen;
-  fxSelectorPanel?.classList.toggle("open", isPanelOpen);
-  fxLibraryToggle?.classList.toggle("active", isPanelOpen);
-  
-  if (isPanelOpen) {
-    fxSearchInput?.focus();
-  }
+function selectCategory(categoryId: string): void {
+  activeCategory = categoryId;
+  renderCategories();
+  renderEffectsList();
 }
 
 /**
- * Toggle collapsed state (show only category headers).
+ * Render the category tabs in the left panel.
  */
-function toggleCollapsed(): void {
-  isCollapsed = !isCollapsed;
-  fxSelectorPanel?.classList.toggle("collapsed", isCollapsed);
-  
-  if (fxSelectorCollapse) {
-    fxSelectorCollapse.textContent = isCollapsed ? "□" : "─";
-    fxSelectorCollapse.title = isCollapsed ? "Expand" : "Collapse";
-  }
-}
-
-/**
- * Toggle a category's expanded/collapsed state.
- */
-function toggleCategory(categoryId: string): void {
-  if (expandedCategories.has(categoryId)) {
-    expandedCategories.delete(categoryId);
-  } else {
-    expandedCategories.add(categoryId);
-  }
-  renderFxCategories();
-}
-
-/**
- * Render all FX categories and their effects.
- */
-export function renderFxCategories(): void {
+function renderCategories(): void {
   if (!fxSelectorCategories) return;
 
   const allEffects = EffectTypeRegistry.getAll();
   
   const categoriesHtml = FX_CATEGORIES.map((category) => {
     const effects = allEffects.filter((e) => e.category === category.id);
-    
-    // Apply search filter
-    const filteredEffects = searchFilter
-      ? effects.filter((e) => 
-          e.displayName.toLowerCase().includes(searchFilter) ||
-          e.type.toLowerCase().includes(searchFilter) ||
-          e.category.toLowerCase().includes(searchFilter)
-        )
-      : effects;
-
-    // Skip empty categories when searching
-    if (searchFilter && filteredEffects.length === 0) {
-      return "";
-    }
-
-    const isExpanded = expandedCategories.has(category.id) || searchFilter.length > 0;
-    const expandedClass = isExpanded ? "expanded" : "";
-    const chevron = isExpanded ? "▼" : "▶";
-
-    const effectsHtml = filteredEffects.map((effect) => renderFxItem(effect, category.color)).join("");
+    const activeClass = activeCategory === category.id ? "active" : "";
 
     return `
-      <div class="fx-category ${expandedClass}" data-category="${category.id}">
-        <div class="fx-category-header" style="--category-color: ${category.color}">
-          <span class="fx-category-chevron">${chevron}</span>
-          <span class="fx-category-icon">${category.icon}</span>
-          <span class="fx-category-name">${category.name}</span>
-          <span class="fx-category-count">${filteredEffects.length}</span>
-        </div>
-        <div class="fx-category-items">
-          ${effectsHtml}
-        </div>
+      <div class="fx-category ${activeClass}" 
+           data-category="${category.id}"
+           style="--category-color: ${category.color}">
+        <span class="fx-category-icon">${category.icon}</span>
+        <span class="fx-category-name">${category.name}</span>
+        <span class="fx-category-count">${effects.length}</span>
       </div>
     `;
   }).join("");
 
   fxSelectorCategories.innerHTML = categoriesHtml;
 
-  // Bind category header click handlers
-  const categoryHeaders = fxSelectorCategories.querySelectorAll(".fx-category-header");
-  categoryHeaders.forEach((header) => {
-    header.addEventListener("click", () => {
-      const categoryEl = header.closest(".fx-category") as HTMLElement;
-      const categoryId = categoryEl?.dataset.category;
+  // Bind category click handlers
+  const categoryElements = fxSelectorCategories.querySelectorAll(".fx-category");
+  categoryElements.forEach((element) => {
+    element.addEventListener("click", () => {
+      const categoryId = (element as HTMLElement).dataset.category;
       if (categoryId) {
-        toggleCategory(categoryId);
+        selectCategory(categoryId);
       }
     });
   });
+}
+
+/**
+ * Render the effects list in the right panel for the active category.
+ */
+export function renderEffectsList(): void {
+  if (!fxSelectorEffectsList) return;
+
+  const allEffects = EffectTypeRegistry.getAll();
+  const activeColorCategory = FX_CATEGORIES.find((c) => c.id === activeCategory);
+  const categoryColor = activeColorCategory?.color || "#808080";
+  
+  // Get effects for active category
+  let effects = allEffects.filter((e) => e.category === activeCategory);
+  
+  // Apply search filter across all categories if searching
+  if (searchFilter) {
+    effects = allEffects.filter((e) => 
+      e.displayName.toLowerCase().includes(searchFilter) ||
+      e.type.toLowerCase().includes(searchFilter) ||
+      e.category.toLowerCase().includes(searchFilter)
+    );
+  }
+
+  if (effects.length === 0) {
+    fxSelectorEffectsList.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: #6a6a80; font-size: 12px;">
+        ${searchFilter ? "No effects match your search" : "No effects in this category"}
+      </div>
+    `;
+    return;
+  }
+
+  const effectsHtml = effects.map((effect) => {
+    const color = searchFilter 
+      ? FX_CATEGORIES.find((c) => c.id === effect.category)?.color || "#808080"
+      : categoryColor;
+    return renderFxItem(effect, color);
+  }).join("");
+
+  fxSelectorEffectsList.innerHTML = effectsHtml;
 
   // Bind drag handlers to FX items
   bindFxItemDragHandlers();
@@ -216,7 +163,7 @@ function renderFxItem(effect: EffectTypeInfo, categoryColor: string): string {
          data-effect-type="${effect.type}" 
          draggable="true"
          style="--category-color: ${categoryColor}">
-      <div class="fx-item-icon">${getEffectIcon(effect.type)}</div>
+      <div class="fx-item-icEffectsListffectIcon(effect.type)}</div>
       <div class="fx-item-info">
         <div class="fx-item-name">${effect.displayName}</div>
         <div class="fx-item-type">${effect.type}</div>

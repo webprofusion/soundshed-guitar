@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Neuron Guitar</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>Soundshed GuitarX</title>
+   <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="app">
@@ -27,10 +27,6 @@
         </button>
         <button class="icon-btn" data-panel="reverb" title="Reverb">
           <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M4 12h16" stroke="currentColor" stroke-width="2"/></svg>
-        </button>
-        <div class="icon-bar-spacer"></div>
-        <button class="icon-btn" id="fx-library-toggle" title="FX Library (E)">
-          <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>
         </button>
       </header>
 
@@ -181,6 +177,26 @@
         </div>
       </section>
 
+      <!-- FX Library Selector Panel -->
+      <section class="fx-selector-panel" id="fx-selector-panel">
+        <div class="fx-selector-header">
+          <span class="fx-selector-title">FX Library</span>
+        </div>
+        <div class="fx-selector-content">
+          <div class="fx-selector-categories" id="fx-selector-categories">
+            <!-- Categories rendered by JavaScript -->
+          </div>
+          <div class="fx-selector-effects">
+            <div class="fx-selector-search">
+              <input type="text" id="fx-search-input" placeholder="Search effects..." />
+            </div>
+            <div class="fx-selector-effects-list" id="fx-selector-effects-list">
+              <!-- Effects rendered by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Node Parameter Panel (shown when a node is selected) -->
       <section class="node-params-panel" id="node-params-panel" style="display: none;">
         <div class="node-params-header">
@@ -191,23 +207,6 @@
           <!-- Node parameters will be rendered here -->
         </div>
       </section>
-
-      <!-- FX Library Selector Panel -->
-      <aside class="fx-selector-panel" id="fx-selector-panel">
-        <div class="fx-selector-header">
-          <span class="fx-selector-title">FX Library</span>
-          <div class="fx-selector-actions">
-            <button class="fx-selector-btn" id="fx-selector-collapse" title="Collapse">─</button>
-            <button class="fx-selector-btn" id="fx-selector-close" title="Close">×</button>
-          </div>
-        </div>
-        <div class="fx-selector-search">
-          <input type="text" id="fx-search-input" placeholder="Search effects..." />
-        </div>
-        <div class="fx-selector-categories" id="fx-selector-categories">
-          <!-- Categories rendered by JavaScript -->
-        </div>
-      </aside>
 
       <!-- Main Content Area -->
       <main class="main-content">
