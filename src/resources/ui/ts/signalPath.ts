@@ -1,7 +1,7 @@
 import { uiState } from "./state.js";
 import type { Preset, GraphNode, GraphEdge, LibraryResource } from "./types.js";
 import { postMessage } from "./bridge.js";
-import { EffectTypeRegistry } from "./presetV2.js";
+import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
 import { sendAddSignalPathNode } from "./fxSelector.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
@@ -107,7 +107,14 @@ export function renderSignalPathBar(): void {
               <div class="node-name">Input</div>
             </div>
           </div>
-          <div class="signal-connector"></div>
+          <div class="signal-connector-wrapper">
+            <div class="signal-connector"></div>
+            <button class="signal-add-btn" 
+                    data-insert-after="__input__"
+                    title="Add Effect">
+              <span class="add-icon">+</span>
+            </button>
+          </div>
           <div class="signal-node output-node">
             <div class="node-icon">🔈</div>
             <div class="node-info">
@@ -270,7 +277,16 @@ function renderGraphSignalPath(preset: Preset): void {
             <div class="node-name">Input</div>
           </div>
         </div>
-        ${segmentsHtml ? '<div class="signal-connector"></div>' : ''}
+        ${segmentsHtml ? segmentsHtml : `
+          <div class="signal-connector-wrapper">
+            <div class="signal-connector"></div>
+            <button class="signal-add-btn" 
+                    data-insert-after="__input__"
+                    title="Add Effect">
+              <span class="add-icon">+</span>
+            </button>
+          </div>
+        `}
         ${segmentsHtml}
         ${segmentsHtml ? '<div class="signal-connector"></div>' : ''}
         <div class="signal-node output-node">
@@ -293,17 +309,34 @@ function renderGraphSignalPath(preset: Preset): void {
 /**
  * Renders path segments to HTML, handling parallel branches recursively.
  */
-function renderSegments(segments: PathSegment[]): string {
-  return segments.map((segment, index) => {
-    const connector = index > 0 ? '<div class="signal-connector"></div>' : '';
+function renderSegments(segments: PathSegment[], prevNodeId: string = "__input__"): string {
+  let html = '';
+  let currentPrevId = prevNodeId;
+  
+  segments.forEach((segment, index) => {
+    // Add connector with + button before each segment
+    if (index > 0 || prevNodeId === "__input__") {
+      html += `
+        <div class="signal-connector-wrapper">
+          <div class="signal-connector"></div>
+          <button class="signal-add-btn" 
+                  data-insert-after="${currentPrevId}"
+                  title="Add Effect">
+            <span class="add-icon">+</span>
+          </button>
+        </div>
+      `;
+    }
     
     if (segment.type === "node" && segment.node) {
-      return connector + renderNodeElement(segment.node);
+      html += renderNodeElement(segment.node);
+      currentPrevId = segment.node.id;
     } else if (segment.type === "parallel" && segment.branches) {
-      return connector + renderParallelBranches(segment.branches);
+      html += renderParallelBranches(segment.branches);
     }
-    return '';
-  }).join('');
+  });
+  
+  return html;
 }
 
 /**
@@ -372,6 +405,9 @@ function bindNodeClickHandlers(preset: Preset): void {
   if (!nodeElements) {
     return;
   }
+
+  // Bind + button click handlers
+  bindAddButtonHandlers();
 
   nodeElements.forEach((element) => {
     const el = element as HTMLElement;
@@ -865,3 +901,110 @@ function sendReplaceSignalPathNode(nodeId: string, newEffectType: string): void 
     newEffectType,
   });
 }
+
+/**
+ * Bind click handlers for + buttons between nodes.
+ */
+function bindAddButtonHandlers(): void {
+  const addButtons = signalPathNodesElement?.querySelectorAll(".signal-add-btn");
+  if (!addButtons) return;
+
+  addButtons.forEach((button) => {
+    button.addEventListener("click", (e: Event) => {
+      e.stopPropagation();
+      const insertAfter = (button as HTMLElement).dataset.insertAfter;
+      if (insertAfter) {
+        showEffectSelectionDropdown(button as HTMLElement, insertAfter);
+      }
+    });
+  });
+}
+
+/**
+ * Show a dropdown menu to select an effect to add.
+ */
+function showEffectSelectionDropdown(buttonElement: HTMLElement, insertAfter: string): void {
+  // Remove any existing dropdown
+  const existing = document.querySelector(".effect-selection-dropdown");
+  if (existing) existing.remove();
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "effect-selection-dropdown";
+  
+  const allEffects = EffectTypeRegistry.getAll();
+  const effectsByCategory = new Map<string, EffectTypeInfo[]>();
+  
+  allEffects.forEach((effect) => {
+    if (!effectsByCategory.has(effect.category)) {
+      effectsByCategory.set(effect.category, []);
+    }
+    effectsByCategory.get(effect.category)!.push(effect);
+  });
+
+  const categoryOrder = ["dynamics", "amp", "cab", "eq", "modulation", "delay", "reverb", "utility"];
+  
+  let dropdownHtml = '<div class="effect-dropdown-header">Add Effect</div>';
+  
+  categoryOrder.forEach((categoryId) => {
+    const effects = effectsByCategory.get(categoryId);
+    if (effects && effects.length > 0) {
+      const categoryInfo = FX_CATEGORIES.find(c => c.id === categoryId);
+      dropdownHtml += `
+        <div class="effect-dropdown-category">
+          <div class="effect-dropdown-category-name">
+            ${categoryInfo?.icon || ''} ${categoryInfo?.name || categoryId}
+          </div>
+          ${effects.map(effect => `
+            <div class="effect-dropdown-item" data-effect-type="${effect.type}">
+              <span class="effect-dropdown-icon">${getNodeIcon(effect.type)}</span>
+              <span class="effect-dropdown-name">${effect.displayName}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  });
+  
+  dropdown.innerHTML = dropdownHtml;
+  document.body.appendChild(dropdown);
+
+  // Position dropdown near the button
+  const buttonRect = buttonElement.getBoundingClientRect();
+  dropdown.style.left = `${buttonRect.left}px`;
+  dropdown.style.top = `${buttonRect.bottom + 5}px`;
+
+  // Bind effect selection
+  const effectItems = dropdown.querySelectorAll(".effect-dropdown-item");
+  effectItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      const effectType = (item as HTMLElement).dataset.effectType;
+      if (effectType) {
+        sendAddSignalPathNode(effectType, insertAfter);
+        dropdown.remove();
+      }
+    });
+  });
+
+  // Close dropdown when clicking outside
+  setTimeout(() => {
+    const closeHandler = (e: MouseEvent) => {
+      if (!dropdown.contains(e.target as Node)) {
+        dropdown.remove();
+        document.removeEventListener("click", closeHandler);
+      }
+    };
+    document.addEventListener("click", closeHandler);
+  }, 0);
+}
+
+const FX_CATEGORIES = [
+  { id: "dynamics", name: "Dynamics", icon: "⚡", color: "#e04848" },
+  { id: "amp", name: "Amplifiers", icon: "🎸", color: "#e07848" },
+  { id: "cab", name: "Cabinets", icon: "🔊", color: "#a86830" },
+  { id: "eq", name: "Equalizers", icon: "🎚️", color: "#48a8e0" },
+  { id: "modulation", name: "Modulation", icon: "🌊", color: "#9048e0" },
+  { id: "delay", name: "Delay", icon: "⏱️", color: "#48e0a8" },
+  { id: "reverb", name: "Reverb", icon: "🏛️", color: "#4878e0" },
+  { id: "utility", name: "Utility", icon: "🔧", color: "#808080" },
+];
+

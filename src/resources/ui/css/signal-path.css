@@ -1070,3 +1070,164 @@
   background: #5a5a6a;
   border-color: var(--color-primary);
 }
+
+/* ===== Signal Add Button (+ between nodes) ===== */
+
+.signal-connector-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.signal-add-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
+  border: 2px solid #4a4a58;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+  z-index: 10;
+  padding: 0;
+}
+
+.signal-connector-wrapper:hover .signal-add-btn,
+.signal-add-btn:focus {
+  opacity: 1;
+}
+
+.signal-add-btn:hover {
+  background: linear-gradient(180deg, var(--color-primary) 0%, #c85830 100%);
+  border-color: var(--color-primary);
+  color: white;
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 0 12px rgba(224, 120, 72, 0.5);
+}
+
+.signal-add-btn:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
+.signal-add-btn .add-icon {
+  line-height: 1;
+  user-select: none;
+}
+
+/* ===== Effect Selection Dropdown ===== */
+
+.effect-selection-dropdown {
+  position: fixed;
+  background: linear-gradient(180deg, #2a2a34 0%, #1e1e24 100%);
+  border: 2px solid #3a3a44;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  max-height: 500px;
+  max-width: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.effect-dropdown-header {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid #3a3a44;
+  background: #28282e;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.effect-dropdown-category {
+  padding: 8px 0;
+  border-bottom: 1px solid #2a2a34;
+}
+
+.effect-dropdown-category:last-child {
+  border-bottom: none;
+}
+
+.effect-dropdown-category-name {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8888a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.effect-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text-primary);
+}
+
+.effect-dropdown-item:hover {
+  background: linear-gradient(90deg, rgba(224, 120, 72, 0.15) 0%, transparent 100%);
+  padding-left: 20px;
+  border-left: 3px solid var(--color-primary);
+}
+
+.effect-dropdown-icon {
+  font-size: 18px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.effect-dropdown-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.effect-selection-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.effect-selection-dropdown::-webkit-scrollbar-track {
+  background: #1e1e24;
+  border-radius: 4px;
+}
+
+.effect-selection-dropdown::-webkit-scrollbar-thumb {
+  background: #4a4a58;
+  border-radius: 4px;
+}
+
+.effect-selection-dropdown::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
