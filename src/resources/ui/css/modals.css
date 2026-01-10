@@ -1,0 +1,373 @@
+/* ===== Modal Dialogs & Tuner ===== */
+
+/* Modal Dialog */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: linear-gradient(180deg, #e8ecf4 0%, #d0d4dc 100%);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  width: 400px;
+  max-width: 90%;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(180deg, #f0f4fc 0%, #e0e4ec 100%);
+  border-bottom: 1px solid #c0c4cc;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #3a3a40;
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #6a6a70;
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #3a3a40;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(180deg, #d8dce4 0%, #c8ccd4 100%);
+  border-top: 1px solid #b8bcc4;
+}
+
+/* Tuner Modal */
+.tuner-modal {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.tuner-modal .tuner-content {
+  background: #3a3a40;
+  border-radius: 12px;
+  width: 520px;
+  max-width: 95vw;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.tuner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #2a2a30;
+  border-bottom: 1px solid #4a4a50;
+}
+
+.tuner-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e8e8ec;
+}
+
+.tuner-header-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.tuner-mute-btn {
+  background: transparent;
+  border: none;
+  color: #8a8a90;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.tuner-mute-btn:hover {
+  color: #e8e8ec;
+}
+
+.tuner-mute-btn.muted {
+  color: #e07848;
+}
+
+.tuner-close-btn {
+  background: transparent;
+  border: none;
+  color: #8a8a90;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.tuner-close-btn:hover {
+  color: #e8e8ec;
+}
+
+.tuner-display {
+  padding: 30px 20px;
+  background: #3a3a40;
+}
+
+.tuner-cents-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.cents-marker {
+  font-size: 14px;
+  color: #6a6a70;
+  font-variant-numeric: tabular-nums;
+}
+
+.cents-indicator {
+  color: #e07848;
+  font-size: 18px;
+  font-weight: bold;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.cents-value {
+  font-size: 18px;
+  color: #a8a8b0;
+  font-variant-numeric: tabular-nums;
+  min-width: 80px;
+  text-align: center;
+}
+
+.tuner-pitch-track {
+  position: relative;
+  height: 80px;
+  margin: 0 40px;
+  display: flex;
+  align-items: center;
+}
+
+.tuner-pitch-track::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #5a5a60;
+  transform: translateY(-50%);
+}
+
+.tuner-pitch-indicator {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #e05040;
+  border: 3px solid #2a2a30;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: left 0.15s ease-out, background-color 0.2s;
+  z-index: 2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.tuner-pitch-indicator.in-tune {
+  background: #40c080;
+}
+
+.tuner-pitch-target {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid #e8e8ec;
+  background: transparent;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.tuner-note-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 30px 30px 0;
+}
+
+.adjacent-note {
+  font-size: 24px;
+  color: #5a5a60;
+  min-width: 60px;
+}
+
+.adjacent-note-left {
+  text-align: left;
+}
+
+.adjacent-note-right {
+  text-align: right;
+}
+
+.current-note {
+  font-size: 72px;
+  font-weight: 300;
+  color: #e8e8ec;
+  letter-spacing: -2px;
+  text-align: center;
+}
+
+.tuner-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: #2a2a30;
+  border-top: 1px solid #4a4a50;
+}
+
+.tuner-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuner-unit-btn {
+  padding: 8px 16px;
+  border: 1px solid #5a5a60;
+  background: transparent;
+  color: #8a8a90;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tuner-unit-btn:first-child {
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+}
+
+.tuner-unit-btn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.tuner-unit-btn.active {
+  background: #4a4a50;
+  color: #e8e8ec;
+  border-color: #4a4a50;
+}
+
+.tuner-unit-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tuner-toggle {
+  margin-right: 4px;
+}
+
+.tuner-toggle-label {
+  color: #a8a8b0;
+  font-size: 13px;
+}
+
+.tuner-ref-group {
+  display: flex;
+  align-items: stretch;
+}
+
+.tuner-ref-input {
+  width: 70px;
+  padding: 6px 8px;
+  border: 1px solid #5a5a60;
+  border-radius: 6px 0 0 6px;
+  background: #3a3a40;
+  color: #e8e8ec;
+  font-size: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tuner-ref-input:focus {
+  outline: none;
+  border-color: #e07848;
+}
+
+.tuner-ref-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.tuner-ref-btn {
+  padding: 2px 8px;
+  border: 1px solid #5a5a60;
+  border-left: none;
+  background: #4a4a50;
+  color: #a8a8b0;
+  font-size: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.tuner-ref-btn:first-child {
+  border-radius: 0 6px 0 0;
+  border-bottom: none;
+}
+
+.tuner-ref-btn:last-child {
+  border-radius: 0 0 6px 0;
+}
+
+.tuner-ref-btn:hover {
+  background: #5a5a60;
+  color: #e8e8ec;
+}
+
+.tuner-display.no-signal .tuner-pitch-indicator {
+  background: #5a5a60;
+  opacity: 0.5;
+}
+
+.tuner-display.no-signal .current-note {
+  color: #5a5a60;
+}

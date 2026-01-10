@@ -1,0 +1,134 @@
+/* ===== Base Styles & Layout ===== */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(180deg, #c8ccd4 0%, #a8adb8 100%);
+  color: #3a3a40;
+  font-size: 12px;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Main Content Area */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.tab-panel {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  width: 100%;
+}
+
+.tab-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-content {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.panel-content h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #3a3a40;
+}
+
+.panel-content p {
+  color: #5a5a68;
+  line-height: 1.5;
+}
+
+/* Footer Bar */
+.footer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(180deg, #38383f 0%, #28282f 100%);
+  color: #b0b0b8;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.footer-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #b0b0b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.footer-btn:hover {
+  color: #e0e0e8;
+}
+
+.footer-divider {
+  color: #58585f;
+}
+
+.bpm-display {
+  color: #d0d0d8;
+  font-variant-numeric: tabular-nums;
+}
+
+.play-icon {
+  color: #e07848;
+}
+
+.footer-hint {
+  margin-left: auto;
+  color: #78787f;
+  font-size: 10px;
+}
+
+/* Global Drag State */
+body.fx-dragging .signal-path-nodes {
+  background: rgba(72, 224, 120, 0.05);
+  border-radius: 8px;
+}
+
+body.fx-dragging .signal-connector {
+  background: linear-gradient(90deg, #48e078, #78f0a8, #48e078);
+  animation: pulse-connector 1s ease-in-out infinite;
+}
+
+@keyframes pulse-connector {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

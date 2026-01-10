@@ -1,0 +1,222 @@
+/* ===== FX Library Selector Panel ===== */
+
+.fx-selector-panel {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #252530 0%, #1a1a22 100%);
+  border-top: 1px solid #3a3a48;
+  border-bottom: 1px solid #3a3a48;
+  max-height: 250px;
+  overflow: hidden;
+}
+
+.fx-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(180deg, #2e2e3a 0%, #252530 100%);
+  border-bottom: 1px solid #3a3a48;
+  flex-shrink: 0;
+}
+
+.fx-selector-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e0e0f0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.fx-selector-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.fx-selector-categories {
+  width: 180px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #1e1e28 0%, #161620 100%);
+  border-right: 1px solid #3a3a48;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.fx-selector-effects {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fx-selector-search {
+  padding: 8px 16px;
+  border-bottom: 1px solid #3a3a48;
+  flex-shrink: 0;
+}
+
+.fx-selector-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: #1a1a22;
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+  color: #e0e0f0;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.fx-selector-search input:focus {
+  border-color: #e07848;
+}
+
+.fx-selector-search input::placeholder {
+  color: #6a6a80;
+}
+
+.fx-selector-effects-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+}
+
+.fx-selector-categories::-webkit-scrollbar,
+.fx-selector-effects-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fx-selector-categories::-webkit-scrollbar-track,
+.fx-selector-effects-list::-webkit-scrollbar-track {
+  background: #1a1a22;
+}
+
+.fx-selector-categories::-webkit-scrollbar-thumb,
+.fx-selector-effects-list::-webkit-scrollbar-thumb {
+  background: #4a4a58;
+  border-radius: 3px;
+}
+
+/* FX Category Tab */
+.fx-category {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: transparent;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+  margin: 2px 0;
+}
+
+.fx-category:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fx-category.active {
+  background: linear-gradient(90deg, rgba(224, 120, 72, 0.15) 0%, transparent 100%);
+  border-left-color: var(--category-color, #e07848);
+}
+
+.fx-category-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.fx-category-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a0a0b0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fx-category.active .fx-category-name {
+  color: #e0e0f0;
+}
+
+.fx-category-count {
+  font-size: 9px;
+  color: #6a6a80;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 5px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.fx-category.active .fx-category-count {
+  background: rgba(224, 120, 72, 0.2);
+  color: #e07848;
+}
+
+/* FX Item Card */
+.fx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
+  border: 1px solid #4a4a58;
+  border-left: 3px solid var(--category-color, #808080);
+  border-radius: 6px;
+  cursor: grab;
+  transition: all 0.2s;
+  flex: 0 0 calc(33.333% - 6px);
+  min-width: 140px;
+}
+
+.fx-item:hover {
+  background: linear-gradient(180deg, #44444e 0%, #38384a 100%);
+  border-color: #5a5a68;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.fx-item:active {
+  cursor: grabbing;
+}
+
+.fx-item.dragging {
+  opacity: 0.6;
+  transform: scale(0.95);
+}
+
+.fx-item-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.fx-item-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fx-item-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e0e0f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fx-item-type {
+  font-size: 8px;
+  color: #6a6a80;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fx-item-badge {
+  font-size: 10px;
+  flex-shrink: 0;
+}
