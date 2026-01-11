@@ -36,8 +36,6 @@ export interface ParametersState {
   values: Parameter[];
   gateEnabled: boolean;
   gateThreshold: number | null;
-  modelPath: string;
-  irPath: string;
 }
 
 export interface SignalTestResult {

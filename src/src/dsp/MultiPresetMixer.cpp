@@ -485,6 +485,14 @@ namespace guitarfx
     return ids;
   }
 
+  std::vector<std::string> MultiPresetMixer::GetPresetNodeTypes(const std::string &presetId) const
+  {
+    const auto *inst = FindInstance(presetId);
+    if (!inst)
+      return {};
+    return inst->executor.GetNodeTypes();
+  }
+
   MultiPresetMixer::PresetInstance *MultiPresetMixer::FindInstance(const std::string &id)
   {
     for (auto &inst : mInstances)

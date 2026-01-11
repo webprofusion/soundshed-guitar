@@ -181,6 +181,17 @@ namespace guitarfx
     }
   }
 
+  std::vector<std::string> SignalGraphExecutor::GetNodeTypes() const
+  {
+    std::vector<std::string> types;
+    types.reserve(mNodeStates.size());
+    for (const auto &entry : mNodeStates)
+    {
+      types.push_back(entry.second.type);
+    }
+    return types;
+  }
+
   void SignalGraphExecutor::Prepare(double sampleRate, int maxBlockSize)
   {
     mSampleRate = sampleRate;

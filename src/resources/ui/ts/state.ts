@@ -24,8 +24,6 @@ export const uiState: UiState = {
     values: [],
     gateEnabled: false,
     gateThreshold: null,
-    modelPath: "",
-    irPath: "",
   },
   signalTest: null,
   demoAudioSelectedId: DEMO_AUDIO_SAMPLES.length ? DEMO_AUDIO_SAMPLES[0].id : null,

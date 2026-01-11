@@ -24,8 +24,6 @@ export function handleIncomingMessage(message: string): void {
           gateThreshold: typeof (parameters as { gateThreshold?: unknown }).gateThreshold === "number"
             ? ((parameters as { gateThreshold: number }).gateThreshold as number)
             : null,
-          modelPath: (parameters as { modelPath?: string }).modelPath ?? "",
-          irPath: (parameters as { irPath?: string }).irPath ?? "",
         };
       }
       // Process resource library
@@ -76,8 +74,6 @@ export function handleIncomingMessage(message: string): void {
           gateThreshold: typeof (parameters as { gateThreshold?: unknown }).gateThreshold === "number"
             ? ((parameters as { gateThreshold: number }).gateThreshold as number)
             : uiState.parameters.gateThreshold,
-          modelPath: (parameters as { modelPath?: string }).modelPath ?? uiState.parameters.modelPath,
-          irPath: (parameters as { irPath?: string }).irPath ?? uiState.parameters.irPath,
         };
       }
       if (preset) {
@@ -136,7 +132,6 @@ export function handleIncomingMessage(message: string): void {
     }
     case "modelLoaded": {
       appendLog(`model loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
-      uiState.parameters.modelPath = (payload as { path?: string }).path ?? "";
       renderActivePreset();
       showNotification("Model loaded", (payload as { path?: string }).path ?? "");
       break;
@@ -144,8 +139,6 @@ export function handleIncomingMessage(message: string): void {
     case "irLoaded": {
       console.log("[JS] IR loaded event received, path:", (payload as { path?: string }).path);
       appendLog(`IR loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
-      uiState.parameters.irPath = (payload as { path?: string }).path ?? "";
-      console.log("[JS] uiState.parameters.irPath set to:", uiState.parameters.irPath);
       renderActivePreset();
       showNotification("IR loaded", (payload as { path?: string }).path ?? "");
       break;

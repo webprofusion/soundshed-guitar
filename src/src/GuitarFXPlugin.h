@@ -145,6 +145,9 @@ namespace guitarfx
                      const std::string& resourceType,
                      const std::filesystem::path& filePath,
                      bool applyPreset = true);
+    bool UpdateResourceForNodeId(const std::string& nodeId,
+                   const ResourceRef& ref,
+                   bool applyPreset = true);
     void ProcessThroughGlobalChain(iplug::sample **inputs, iplug::sample **outputs, int nFrames);
     void BroadcastState();
     void ApplyPreset(const guitarfx::Preset &preset);
@@ -183,8 +186,6 @@ namespace guitarfx
     std::optional<Preset> mActivePreset;
     std::string mActivePresetJson;
     std::string mActivePresetId;
-    std::string mActiveModelPath;
-    std::string mActiveIRPath;
     bool mPendingStateBroadcast = true;
     std::vector<iplug::sample> mSignalTestInputLeft;
     std::vector<iplug::sample> mSignalTestInputRight;

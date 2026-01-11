@@ -78,6 +78,7 @@ namespace guitarfx
 
     // Queries
     [[nodiscard]] std::vector<std::string> GetActivePresetIds() const;
+    [[nodiscard]] std::vector<std::string> GetPresetNodeTypes(const std::string &presetId) const;
     [[nodiscard]] size_t GetPresetCount() const { return mInstances.size(); }
 
   private:

@@ -343,16 +343,6 @@ export function openSavePresetModal(): void {
   const modal = document.getElementById("save-preset-modal");
   if (!modal) return;
 
-  const modelPathSpan = document.getElementById("save-modal-model-path");
-  const irPathSpan = document.getElementById("save-modal-ir-path");
-
-  if (modelPathSpan) {
-    modelPathSpan.textContent = uiState.parameters.modelPath || "None";
-  }
-  if (irPathSpan) {
-    irPathSpan.textContent = uiState.parameters.irPath || "None";
-  }
-
   const nameInput = document.getElementById("preset-name-input") as HTMLInputElement | null;
   const categoryInput = document.getElementById("preset-category-input") as HTMLInputElement | null;
   const descriptionInput = document.getElementById("preset-description-input") as HTMLTextAreaElement | null;
@@ -612,16 +602,6 @@ export function openEditPresetModal(): void {
 
   const modal = document.getElementById("save-preset-modal");
   if (!modal) return;
-
-  const modelPathSpan = document.getElementById("save-modal-model-path");
-  const irPathSpan = document.getElementById("save-modal-ir-path");
-
-  if (modelPathSpan) {
-    modelPathSpan.textContent = uiState.parameters.modelPath || "None";
-  }
-  if (irPathSpan) {
-    irPathSpan.textContent = uiState.parameters.irPath || "None";
-  }
 
   // Pre-fill with existing preset data
   const nameInput = document.getElementById("preset-name-input") as HTMLInputElement | null;

@@ -89,44 +89,6 @@ function renderParameterSection(): string {
       `
     : "";
 
-  if (!parameterItems && !gateStatus && !uiState.parameters.modelPath && !uiState.parameters.irPath) {
-    return `
-      <div class="signal-chain-section">
-        <h3 class="section-title">
-          <span class="section-icon">🔬</span>
-          Diagnostics
-        </h3>
-        <button id="run-signal-test" class="test-btn">Run Signal Path Test</button>
-        ${signalTestSection}
-      </div>
-    `;
-  }
-
-  const signalPathCards = `
-    <div class="signal-path-cards">
-      <div class="path-card">
-        <div class="path-icon">🎸</div>
-        <div class="path-info">
-          <span class="path-label">Amp Model</span>
-          <span class="path-value">${uiState.parameters.modelPath || "None"}</span>
-        </div>
-        <div class="path-actions">
-          <button class="load-btn" id="load-model-btn">Load Model</button>
-        </div>
-      </div>
-      <div class="path-card">
-        <div class="path-icon">🔊</div>
-        <div class="path-info">
-          <span class="path-label">Cabinet IR</span>
-          <span class="path-value">${uiState.parameters.irPath || "None"}</span>
-        </div>
-        <div class="path-actions">
-          <button class="load-btn" id="load-ir-btn">Load IR</button>
-        </div>
-      </div>
-    </div>
-  `;
-
   return `
     <div class="signal-chain-section">
       <h3 class="section-title">
@@ -137,13 +99,6 @@ function renderParameterSection(): string {
         ${parameterItems}
         ${gateStatus}
       </div>
-    </div>
-    <div class="signal-chain-section">
-      <h3 class="section-title">
-        <span class="section-icon">🛤️</span>
-        Active Signal Path
-      </h3>
-      ${signalPathCards}
     </div>
     <div class="signal-chain-section">
       <h3 class="section-title">

@@ -1202,8 +1202,6 @@ namespace guitarfx
   {
     bool success = chunk.PutStr(mActivePresetJson.c_str());
     success &= chunk.PutStr(mActivePresetId.c_str());
-    success &= chunk.PutStr(mActiveModelPath.c_str());
-    success &= chunk.PutStr(mActiveIRPath.c_str());
     return success;
   }
 
@@ -1226,22 +1224,6 @@ namespace guitarfx
       return startPos;
     }
     mActivePresetId = activePresetId.Get();
-
-    WDL_String modelPath;
-    position = chunk.GetStr(modelPath, position);
-    if (position < 0)
-    {
-      return startPos;
-    }
-    mActiveModelPath = modelPath.Get();
-
-    WDL_String irPath;
-    position = chunk.GetStr(irPath, position);
-    if (position < 0)
-    {
-      return startPos;
-    }
-    mActiveIRPath = irPath.Get();
 
     if (!mActivePresetJson.empty())
     {
@@ -1748,8 +1730,6 @@ namespace guitarfx
     message["activePresetId"] = mActivePresetId;
 
     auto parameters = SerializeParametersToJson(*this);
-    parameters["modelPath"] = mActiveModelPath;
-    parameters["irPath"] = mActiveIRPath;
     message["parameters"] = std::move(parameters);
 
     if (mActivePreset)
@@ -1867,14 +1847,35 @@ namespace guitarfx
     ref.filePath = filePath;
     target->resource = ref;
 
-    if (nodeType == "amp_nam")
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+
+    if (applyPreset && mActivePreset)
     {
-      mActiveModelPath = filePath.generic_string();
+      ApplyPreset(*mActivePreset);
+      mPendingStateBroadcast = true;
     }
-    else if (nodeType == "cab_ir" || nodeType == "ir_cab")
+
+    return true;
+  }
+
+  bool GuitarFXPlugin::UpdateResourceForNodeId(const std::string &nodeId,
+                                               const ResourceRef &ref,
+                                               bool applyPreset)
+  {
+    EnsureBasicGraph();
+
+    if (!mActivePreset)
     {
-      mActiveIRPath = filePath.generic_string();
+      return false;
     }
+
+    GraphNode *target = mActivePreset->graph.FindNode(nodeId);
+    if (!target)
+    {
+      return false;
+    }
+
+    target->resource = ref;
 
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
 
@@ -1900,29 +1901,6 @@ namespace guitarfx
     mPresetMixer.AddActivePreset(preset, presetId, preset.name);
 
     std::cout << "[Plugin] Loaded preset into MultiPresetMixer: " << preset.name << std::endl;
-
-    // Update active paths for UI display
-    mActiveModelPath.clear();
-    mActiveIRPath.clear();
-
-    // Find and store NAM model and IR paths for UI display
-    for (const auto &node : preset.graph.nodes)
-    {
-      if ((node.type == "amp_nam" || node.type == "nam_amp" || node.type == "nam") && node.resource)
-      {
-        if (auto resolvedPath = ResolveResourceRef(*node.resource))
-        {
-          mActiveModelPath = resolvedPath->generic_string();
-        }
-      }
-      else if ((node.type == "cab_ir" || node.type == "ir_cab" || node.type == "ir") && node.resource)
-      {
-        if (auto resolvedPath = ResolveResourceRef(*node.resource))
-        {
-          mActiveIRPath = resolvedPath->generic_string();
-        }
-      }
-    }
 
     // Sync plugin parameters with preset globals
     auto *inputTrimParam = GetParam(kParamInputTrim);
@@ -1976,11 +1954,6 @@ namespace guitarfx
         message["type"] = "presetLoaded";
         message["preset"] = *presetJsonIter;
         
-        // Include current model/IR paths so UI can update signal path display
-        nlohmann::json parameters;
-        parameters["modelPath"] = mActiveModelPath;
-        parameters["irPath"] = mActiveIRPath;
-        message["parameters"] = std::move(parameters);
         // Include active mixer preset ids
         message["activePresetIds"] = mPresetMixer.GetActivePresetIds();
         
@@ -2066,7 +2039,7 @@ namespace guitarfx
 
     nlohmann::json message;
     message["type"] = "modelLoaded";
-    message["path"] = mActiveModelPath;
+    message["path"] = filePath;
     SendMessageToUI(message.dump());
   }
 
@@ -2103,7 +2076,7 @@ namespace guitarfx
 
     nlohmann::json message;
     message["type"] = "irLoaded";
-    message["path"] = mActiveIRPath;
+    message["path"] = filePath;
     SendMessageToUI(message.dump());
   }
 
@@ -2147,17 +2120,29 @@ namespace guitarfx
     inputNode.category = "routing";
     newPreset.graph.nodes.push_back(inputNode);
 
-    // Add NAM amp node if model is loaded
-    if (!mActiveModelPath.empty())
+    const auto findNodeResource = [this](const std::string &type) -> std::optional<ResourceRef>
+    {
+      if (!mActivePreset)
+        return std::nullopt;
+      for (const auto &node : mActivePreset->graph.nodes)
+      {
+        if (node.type == type && node.resource)
+        {
+          return node.resource;
+        }
+      }
+      return std::nullopt;
+    };
+
+    // Add NAM amp node if the current preset graph contains one with a resource
+    if (auto ampRes = findNodeResource("amp_nam"))
     {
       GraphNode ampNode;
       ampNode.id = "amp";
       ampNode.type = "amp_nam";
       ampNode.category = "amp";
       ampNode.enabled = true;
-
-      ampNode.resource = ResourceRef{};
-      ampNode.resource->filePath = std::filesystem::path{mActiveModelPath};
+      ampNode.resource = ampRes;
 
       // Capture amp parameters
       if (auto *param = GetParam(kParamDrive)) ampNode.params["drive"] = param->Value();
@@ -2182,17 +2167,15 @@ namespace guitarfx
       newPreset.graph.nodes.push_back(gateNode);
     }
 
-    // Add IR cab node if IR is loaded
-    if (!mActiveIRPath.empty())
+    // Add IR cab node if the current preset graph contains one with a resource
+    if (auto irRes = findNodeResource("ir_cab"))
     {
       GraphNode cabNode;
       cabNode.id = "cab";
       cabNode.type = "ir_cab";
       cabNode.category = "cab";
       cabNode.enabled = true;
-
-      cabNode.resource = ResourceRef{};
-      cabNode.resource->filePath = std::filesystem::path{mActiveIRPath};
+      cabNode.resource = irRes;
 
       newPreset.graph.nodes.push_back(cabNode);
     }
@@ -2631,43 +2614,21 @@ namespace guitarfx
       return;
     }
 
-    // Update the resource in the active preset's graph
-    if (mActivePreset)
+    ResourceRef ref;
+    ref.resourceType = resourceType;
+    if (!resourceId.empty())
     {
-      GraphNode* node = mActivePreset->graph.FindNode(nodeId);
-      if (node)
-      {
-        if (!resourceId.empty())
-        {
-          // Library resource
-          ResourceRef ref;
-          ref.resourceType = resourceType;
-          ref.resourceId = resourceId;
-          node->resource = ref;
-        }
-        else if (!filePath.empty())
-        {
-          // Custom file path
-          ResourceRef ref;
-          ref.resourceType = resourceType;
-          ref.filePath = filePath;
-          node->resource = ref;
-        }
-        else
-        {
-          // Clear resource
-          node->resource.reset();
-        }
-        
-        // Re-serialize the preset JSON to reflect the change
-        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
-        
-        // Apply the updated preset to DSP
-        ApplyPreset(*mActivePreset);
-        
-        // Broadcast state change to UI
-        mPendingStateBroadcast = true;
-      }
+      ref.resourceId = resourceId;
+    }
+    if (!filePath.empty())
+    {
+      ref.filePath = filePath;
+    }
+
+    // Update only the targeted node
+    if (UpdateResourceForNodeId(nodeId, ref, true))
+    {
+      return;
     }
   }
 
@@ -3045,8 +3006,6 @@ namespace guitarfx
       // Save last preset info
       settings["lastPresetId"] = mActivePresetId;
       settings["lastPresetJson"] = mActivePresetJson;
-      settings["lastModelPath"] = mActiveModelPath;
-      settings["lastIRPath"] = mActiveIRPath;
 
       // Save all current parameter values
       nlohmann::json parameters = nlohmann::json::array();
@@ -3116,8 +3075,6 @@ namespace guitarfx
       // Restore paths
       mActivePresetId = settings.value("lastPresetId", "");
       mActivePresetJson = settings.value("lastPresetJson", "");
-      mActiveModelPath = settings.value("lastModelPath", "");
-      mActiveIRPath = settings.value("lastIRPath", "");
 
       // Restore parameters
       if (settings.contains("parameters") && settings["parameters"].is_array())
@@ -3325,42 +3282,6 @@ namespace guitarfx
     }
 
     bool shouldApplyPreset = static_cast<bool>(mActivePreset);
-
-    // Apply legacy stored paths onto the graph if present
-    if (!mActiveModelPath.empty())
-    {
-      const std::filesystem::path modelPath{mActiveModelPath};
-      if (std::filesystem::exists(modelPath))
-      {
-        EnsureBasicGraph();
-        if (UpdateResourceForNodeType("amp_nam", "nam", modelPath, false))
-        {
-          shouldApplyPreset = true;
-        }
-      }
-      else
-      {
-        mActiveModelPath.clear();
-      }
-    }
-
-    if (!mActiveIRPath.empty())
-    {
-      const std::filesystem::path irPath{mActiveIRPath};
-      if (std::filesystem::exists(irPath))
-      {
-        EnsureBasicGraph();
-        if (UpdateResourceForNodeType("cab_ir", "ir", irPath, false) ||
-            UpdateResourceForNodeType("ir_cab", "ir", irPath, false))
-        {
-          shouldApplyPreset = true;
-        }
-      }
-      else
-      {
-        mActiveIRPath.clear();
-      }
-    }
 
     if (shouldApplyPreset && mActivePreset)
     {
