@@ -287,7 +287,6 @@ function renderGraphSignalPath(preset: Preset): void {
             </button>
           </div>
         `}
-        ${segmentsHtml}
         ${segmentsHtml ? '<div class="signal-connector"></div>' : ''}
         <div class="signal-node output-node">
           <div class="node-icon">🔈</div>
