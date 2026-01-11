@@ -128,6 +128,10 @@ input → split          → mixer → output
 5. **Acyclic**: No feedback loops (for v1)
 6. **Valid References**: All edge node IDs exist
 
+### Implementation Status
+
+The current executor validates acyclicity via topological sort only. It does not enforce single input/output, full connectivity, or orphan detection. Edges that reference `__input__` / `__output__` will trigger implicit insertion of those nodes during `SetGraph()`.
+
 ### Validation Algorithm
 
 ```
@@ -202,6 +206,10 @@ function allocate_buffers(graph, block_size):
     return buffers
 ```
 
+### Implementation Note
+
+The executor allocates per-node stereo buffers (not per-edge). Multiple downstream nodes reading the same upstream node buffer implement split behavior implicitly. Mixers explicitly sum inputs; non-mixer nodes receiving multiple inputs use “last edge wins” semantics.
+
 ### Processing Loop
 
 ```
@@ -245,6 +253,11 @@ function process_graph(graph, input_buffer, output_buffer, samples):
         processor = get_processor(node)
         processor.process(get_input(node), get_output(node), samples)
 ```
+
+    ### Implementation Note
+
+    - `splitter` and `output` are handled as pass-through processors; routing is achieved by edges, not special per-port buffer allocation.
+    - `fromPort`/`toPort` are present in the model but are not explicitly used in the executor’s current per-node buffer approach.
 
 ## Node Parameter Model
 
@@ -378,4 +391,5 @@ Support for stereo split processing:
 - [Audio Engine Specification](./audio-engine.md)
 - [Effect Registry](./effect-registry.md)
 - [Resource Model](./resource-model.md)
+- [Signal Graph Executor](./signal-graph-executor.md)
 - [Preset Data Model v2](../preset-model-v2-design.md)
