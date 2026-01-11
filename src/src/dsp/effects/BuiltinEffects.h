@@ -21,21 +21,21 @@ namespace guitarfx
   {
     // Utility effects
     RegisterGainEffect();
-    
+
     // Dynamics
     RegisterNoiseGateEffect();
-    RegisterCompressorEffects();  // VCA and Opto compressors
-    
+    RegisterCompressorEffects(); // VCA and Opto compressors
+
     // EQ
     RegisterParametricEQEffect();
-    
+
     // Amp models
     RegisterNAMAmpEffect();
-    
+
     // Cabinet simulation
     RegisterIRCabEffect();
     RegisterSimpleCabEffect();
-    
+
     // Time-based effects
     RegisterDelayEffect();
     RegisterReverbEffect();

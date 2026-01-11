@@ -20,16 +20,16 @@ namespace guitarfx
     virtual void Reset() = 0;
 
     // Processing (stereo in/out)
-    virtual void Process(float** inputs, float** outputs, int numSamples) = 0;
+    virtual void Process(float **inputs, float **outputs, int numSamples) = 0;
 
     // Parameters
-    virtual void SetParam(const std::string& key, double value) = 0;
-    virtual void SetConfig(const std::string& key, const std::string& value) = 0;
-    [[nodiscard]] virtual double GetParam(const std::string& key) const = 0;
-    [[nodiscard]] virtual std::string GetConfig(const std::string& key) const { return ""; }
+    virtual void SetParam(const std::string &key, double value) = 0;
+    virtual void SetConfig(const std::string &key, const std::string &value) = 0;
+    [[nodiscard]] virtual double GetParam(const std::string &key) const = 0;
+    [[nodiscard]] virtual std::string GetConfig(const std::string &key) const { return ""; }
 
     // Resource loading (for effects that need external files)
-    virtual bool LoadResource(const std::filesystem::path& path) { return true; }
+    virtual bool LoadResource(const std::filesystem::path &path) { return true; }
     [[nodiscard]] virtual bool RequiresResource() const { return false; }
     [[nodiscard]] virtual bool HasResource() const { return true; }
     [[nodiscard]] virtual std::filesystem::path GetResourcePath() const { return {}; }
@@ -62,7 +62,7 @@ namespace guitarfx
 
     void Reset() override {}
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       if (inputs && outputs)
       {
@@ -79,9 +79,9 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string&, double) override {}
-    void SetConfig(const std::string&, const std::string&) override {}
-    [[nodiscard]] double GetParam(const std::string&) const override { return 0.0; }
+    void SetParam(const std::string &, double) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
+    [[nodiscard]] double GetParam(const std::string &) const override { return 0.0; }
 
     [[nodiscard]] std::string GetType() const override { return "passthrough"; }
     [[nodiscard]] std::string GetCategory() const override { return "utility"; }

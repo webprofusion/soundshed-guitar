@@ -140,6 +140,11 @@ namespace guitarfx
     void HandleReplaceSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleReorderSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleDeleteSignalPathNodeRequest(const nlohmann::json &payload);
+    void EnsureBasicGraph();
+    bool UpdateResourceForNodeType(const std::string& nodeType,
+                     const std::string& resourceType,
+                     const std::filesystem::path& filePath,
+                     bool applyPreset = true);
     void ProcessThroughGlobalChain(iplug::sample **inputs, iplug::sample **outputs, int nFrames);
     void BroadcastState();
     void ApplyPreset(const guitarfx::Preset &preset);

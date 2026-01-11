@@ -20,28 +20,28 @@ namespace guitarfx
     SignalGraphExecutor();
     ~SignalGraphExecutor();
 
-    SignalGraphExecutor(const SignalGraphExecutor&) = delete;
-    SignalGraphExecutor& operator=(const SignalGraphExecutor&) = delete;
-    SignalGraphExecutor(SignalGraphExecutor&&) noexcept = default;
-    SignalGraphExecutor& operator=(SignalGraphExecutor&&) noexcept = default;
+    SignalGraphExecutor(const SignalGraphExecutor &) = delete;
+    SignalGraphExecutor &operator=(const SignalGraphExecutor &) = delete;
+    SignalGraphExecutor(SignalGraphExecutor &&) noexcept = default;
+    SignalGraphExecutor &operator=(SignalGraphExecutor &&) noexcept = default;
 
     // Setup
-    void SetGraph(const SignalGraph& graph);
-    void SetResourceLibrary(ResourceLibrary* library) { mResourceLibrary = library; }
+    void SetGraph(const SignalGraph &graph);
+    void SetResourceLibrary(ResourceLibrary *library) { mResourceLibrary = library; }
     void Prepare(double sampleRate, int maxBlockSize);
     void Reset();
 
     // Processing
-    void Process(float** inputs, float** outputs, int numSamples);
+    void Process(float **inputs, float **outputs, int numSamples);
 
     // Node control
-    void SetNodeEnabled(const std::string& nodeId, bool enabled);
-    void SetNodeParam(const std::string& nodeId, const std::string& key, double value);
-    void SetNodeConfig(const std::string& nodeId, const std::string& key, const std::string& value);
-    bool LoadNodeResource(const std::string& nodeId, const ResourceRef& ref);
+    void SetNodeEnabled(const std::string &nodeId, bool enabled);
+    void SetNodeParam(const std::string &nodeId, const std::string &key, double value);
+    void SetNodeConfig(const std::string &nodeId, const std::string &key, const std::string &value);
+    bool LoadNodeResource(const std::string &nodeId, const ResourceRef &ref);
 
     // Queries
-    [[nodiscard]] std::string FindFirstNodeOfType(const std::string& type) const;
+    [[nodiscard]] std::string FindFirstNodeOfType(const std::string &type) const;
 
     // Global settings
     void SetInputTrim(double dB) { mInputTrim = dB; }
@@ -65,10 +65,10 @@ namespace guitarfx
     void BuildExecutionOrder();
     void CreateProcessors();
     void AllocateBuffers(int maxBlockSize);
-    [[nodiscard]] NodeState* FindNodeState(const std::string& id);
+    [[nodiscard]] NodeState *FindNodeState(const std::string &id);
 
     SignalGraph mGraph;
-    ResourceLibrary* mResourceLibrary = nullptr;
+    ResourceLibrary *mResourceLibrary = nullptr;
 
     std::map<std::string, NodeState> mNodeStates;
     std::vector<std::string> mExecutionOrder;

@@ -10,30 +10,30 @@
 
 namespace nam
 {
-namespace factory
-{
-// Force references to symbols that trigger static initialization
-// The actual initialization happens via static Helper objects in each .cpp file
+  namespace factory
+  {
+    // Force references to symbols that trigger static initialization
+    // The actual initialization happens via static Helper objects in each .cpp file
 
-// These volatile pointers prevent the compiler from optimizing away the references.
-// We take the address of the Factory functions which ensures the translation units
-// containing the static Helper registrations are linked.
-static volatile auto wavenet_factory_ptr = &nam::wavenet::Factory;
-static volatile auto lstm_factory_ptr = &nam::lstm::Factory;
-static volatile auto convnet_factory_ptr = &nam::convnet::Factory;
+    // These volatile pointers prevent the compiler from optimizing away the references.
+    // We take the address of the Factory functions which ensures the translation units
+    // containing the static Helper registrations are linked.
+    static volatile auto wavenet_factory_ptr = &nam::wavenet::Factory;
+    static volatile auto lstm_factory_ptr = &nam::lstm::Factory;
+    static volatile auto convnet_factory_ptr = &nam::convnet::Factory;
 
-// This function MUST be called during initialization to force linkage of the factory objects.
-// Even though the function appears to do nothing, the act of calling it ensures the
-// static variables above are not optimized away, which in turn forces the linker to
-// include the translation units containing the static Helper registrations.
-void ForceFactoryRegistration()
-{
-  // Touch the factory functions to prevent dead-stripping
-  // The volatile keyword prevents the compiler from optimizing these away
-  (void)wavenet_factory_ptr;
-  (void)lstm_factory_ptr;
-  (void)convnet_factory_ptr;
-}
+    // This function MUST be called during initialization to force linkage of the factory objects.
+    // Even though the function appears to do nothing, the act of calling it ensures the
+    // static variables above are not optimized away, which in turn forces the linker to
+    // include the translation units containing the static Helper registrations.
+    void ForceFactoryRegistration()
+    {
+      // Touch the factory functions to prevent dead-stripping
+      // The volatile keyword prevents the compiler from optimizing these away
+      (void)wavenet_factory_ptr;
+      (void)lstm_factory_ptr;
+      (void)convnet_factory_ptr;
+    }
 
-} // namespace factory
+  } // namespace factory
 } // namespace nam

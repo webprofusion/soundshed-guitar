@@ -1,12 +1,15 @@
 /**
  * @file RealAudioProcessingTests.cpp
- * @brief Tests for real audio processing through the complete DSP pipeline
+ * @brief Tests for real audio processing through the graph-based DSP pipeline
  *
- * These tests process actual audio through AmpModelManager::Process() with specific
- * DSP settings and capture the output to validate against expected behavior.
- * This tests the full signal chain: input trim, gate, drive, tone, NAM model,
- * IR convolution, doubler, pitch shift, and output trim.
+ * These tests exercise audio processing via GraphDSPManager/SignalGraphExecutor with
+ * a small test preset (input -> gain -> simple cab -> output). The goals are
+ * correctness (no NaN/Inf/clipping) and basic block-processing stability.
  */
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -15,169 +18,224 @@
 #include <memory>
 #include <vector>
 
-#include "dsp/AmpModelManager.h"
+#include "dsp/GraphDSPManager.h"
+#include "presets/PresetTypes.h"
 #include "IPlugConstants.h"
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 namespace
 {
 constexpr double kSampleRate = 44100.0;
 constexpr int kBlockSize = 512;
-constexpr double kTolerance = 1e-5;
 constexpr double kPi = 3.14159265358979323846;
 
-bool ApproxEqual(double a, double b, double tolerance = kTolerance)
+struct AudioStats
 {
-  return std::abs(a - b) < tolerance;
-}
-
-/**
- * @brief Helper to generate test audio signals
- */
-class AudioSignalGenerator
-{
-public:
-  // Generate a sine wave at specified frequency
-  static std::vector<double> GenerateSineWave(double frequency, double amplitude, 
-                                              double durationSeconds, double sampleRate)
-  {
-    const int numSamples = static_cast<int>(durationSeconds * sampleRate);
-    std::vector<double> signal(numSamples);
-    
-    for (int i = 0; i < numSamples; ++i)
-    {
-      double t = static_cast<double>(i) / sampleRate;
-      signal[i] = amplitude * std::sin(2.0 * kPi * frequency * t);
-    }
-    
-    return signal;
-  }
-
-  // Generate a square wave at specified frequency
-  static std::vector<double> GenerateSquareWave(double frequency, double amplitude,
-                                                double durationSeconds, double sampleRate)
-  {
-    const int numSamples = static_cast<int>(durationSeconds * sampleRate);
-    std::vector<double> signal(numSamples);
-    const double period = sampleRate / frequency;
-    
-    for (int i = 0; i < numSamples; ++i)
-    {
-      double phase = std::fmod(static_cast<double>(i), period) / period;
-      signal[i] = amplitude * (phase < 0.5 ? 1.0 : -1.0);
-    }
-    
-    return signal;
-  }
-
-  // Generate white noise
-  static std::vector<double> GenerateWhiteNoise(double amplitude, double durationSeconds,
-                                                double sampleRate)
-  {
-    const int numSamples = static_cast<int>(durationSeconds * sampleRate);
-    std::vector<double> signal(numSamples);
-    unsigned int seed = 12345;
-    
-    for (int i = 0; i < numSamples; ++i)
-    {
-      seed = (1103515245u * seed + 12345u) & 0x7fffffffu;
-      signal[i] = amplitude * (2.0 * (static_cast<double>(seed) / 0x7fffffffu) - 1.0);
-    }
-    
-    return signal;
-  }
-
-  // Generate chirp (frequency sweep)
-  static std::vector<double> GenerateChirp(double startFreq, double endFreq,
-                                           double amplitude, double durationSeconds,
-                                           double sampleRate)
-  {
-    const int numSamples = static_cast<int>(durationSeconds * sampleRate);
-    std::vector<double> signal(numSamples);
-    
-    for (int i = 0; i < numSamples; ++i)
-    {
-      double t = static_cast<double>(i) / sampleRate;
-      double freq = startFreq + (endFreq - startFreq) * (t / durationSeconds);
-      signal[i] = amplitude * std::sin(2.0 * kPi * freq * t);
-    }
-    
-    return signal;
-  }
+  double rms = 0.0;
+  double peakLevel = 0.0;
+  double dcOffset = 0.0;
+  bool hasNaN = false;
+  bool hasInf = false;
+  bool isClipped = false;
+  int clippedSampleCount = 0;
 };
 
-/**
- * @brief Helper to analyze audio characteristics
- */
-class AudioAnalyzer
+AudioStats Analyze(const std::vector<double>& signal)
 {
-public:
-  struct AudioStats
+  AudioStats stats;
+  if (signal.empty()) return stats;
+
+  double sumSquares = 0.0;
+  double sum = 0.0;
+  double maxAbs = 0.0;
+
+  for (double sample : signal)
   {
-    double rms = 0.0;              // RMS (effective) level
-    double peakLevel = 0.0;        // Peak amplitude
-    double dcOffset = 0.0;         // DC component (mean)
-    double crestFactor = 0.0;      // Peak/RMS ratio
-    bool hasNaN = false;           // Contains NaN?
-    bool hasInf = false;           // Contains Inf?
-    bool isClipped = false;        // Exceeds [-1, 1]?
-    int clippedSampleCount = 0;    // Number of clipped samples
+    if (std::isnan(sample))
+    {
+      stats.hasNaN = true;
+      return stats;
+    }
+    if (std::isinf(sample))
+    {
+      stats.hasInf = true;
+      return stats;
+    }
+
+    const double absSample = std::abs(sample);
+    maxAbs = std::max(maxAbs, absSample);
+    sumSquares += sample * sample;
+    sum += sample;
+
+    if (absSample > 1.0)
+    {
+      stats.isClipped = true;
+      ++stats.clippedSampleCount;
+    }
+  }
+
+  stats.dcOffset = sum / static_cast<double>(signal.size());
+  stats.rms = std::sqrt(sumSquares / static_cast<double>(signal.size()));
+  stats.peakLevel = maxAbs;
+  return stats;
+}
+
+std::vector<double> GenerateSineWave(double frequency, double amplitude, double durationSeconds)
+{
+  const int numSamples = static_cast<int>(durationSeconds * kSampleRate);
+  std::vector<double> signal(numSamples);
+
+  for (int i = 0; i < numSamples; ++i)
+  {
+    const double t = static_cast<double>(i) / kSampleRate;
+    signal[i] = amplitude * std::sin(2.0 * kPi * frequency * t);
+  }
+
+  return signal;
+}
+
+std::vector<double> GenerateSquareWave(double frequency, double amplitude, double durationSeconds)
+{
+  const int numSamples = static_cast<int>(durationSeconds * kSampleRate);
+  std::vector<double> signal(numSamples);
+  const double period = kSampleRate / frequency;
+
+  for (int i = 0; i < numSamples; ++i)
+  {
+    const double phase = std::fmod(static_cast<double>(i), period) / period;
+    signal[i] = amplitude * (phase < 0.5 ? 1.0 : -1.0);
+  }
+
+  return signal;
+}
+
+std::vector<double> GenerateWhiteNoise(double amplitude, double durationSeconds)
+{
+  const int numSamples = static_cast<int>(durationSeconds * kSampleRate);
+  std::vector<double> signal(numSamples);
+  unsigned int seed = 12345;
+
+  for (int i = 0; i < numSamples; ++i)
+  {
+    seed = (1103515245u * seed + 12345u) & 0x7fffffffu;
+    signal[i] = amplitude * (2.0 * (static_cast<double>(seed) / 0x7fffffffu) - 1.0);
+  }
+
+  return signal;
+}
+
+std::vector<double> GenerateChirp(double startFreq, double endFreq, double amplitude, double durationSeconds)
+{
+  const int numSamples = static_cast<int>(durationSeconds * kSampleRate);
+  std::vector<double> signal(numSamples);
+
+  for (int i = 0; i < numSamples; ++i)
+  {
+    const double t = static_cast<double>(i) / kSampleRate;
+    const double freq = startFreq + (endFreq - startFreq) * (t / durationSeconds);
+    signal[i] = amplitude * std::sin(2.0 * kPi * freq * t);
+  }
+
+  return signal;
+}
+
+guitarfx::Preset MakeTestPreset(double inputTrimDb, double outputTrimDb, double gainDb, bool enableCab)
+{
+  guitarfx::Preset preset;
+  preset.id = "test";
+  preset.name = "test";
+  preset.version = 2;
+  preset.global.inputTrim = inputTrimDb;
+  preset.global.outputTrim = outputTrimDb;
+  preset.global.outputVolume = 1.0;
+
+  guitarfx::GraphNode input;
+  input.id = "input";
+  input.type = guitarfx::kNodeTypeInput;
+  input.category = "utility";
+
+  guitarfx::GraphNode gain;
+  gain.id = "gain";
+  gain.type = "gain";
+  gain.category = "utility";
+  gain.params["gainDb"] = gainDb;
+
+  guitarfx::GraphNode cab;
+  cab.id = "cab";
+  cab.type = "cab_simple";
+  cab.category = "cab";
+  cab.enabled = enableCab;
+  cab.params["mix"] = 1.0;
+  cab.params["bass"] = 0.5;
+  cab.params["presence"] = 0.5;
+  cab.params["brightness"] = 0.5;
+
+  guitarfx::GraphNode output;
+  output.id = "output";
+  output.type = guitarfx::kNodeTypeOutput;
+
+  preset.graph.nodes = { input, gain, cab, output };
+
+  preset.graph.edges = {
+    { input.id, gain.id, 0, 0, 1.0 },
+    { gain.id, cab.id, 0, 0, 1.0 },
+    { cab.id, output.id, 0, 0, 1.0 }
   };
 
-  static AudioStats Analyze(const std::vector<double>& signal)
+  return preset;
+}
+
+class GraphDSPHarness
+{
+public:
+  GraphDSPHarness(double inputTrimDb, double outputTrimDb, double gainDb, bool enableCab)
   {
-    AudioStats stats;
-    
-    if (signal.empty())
-      return stats;
+    mDSP = std::make_unique<guitarfx::GraphDSPManager>();
+    mDSP->Prepare(kSampleRate, kBlockSize);
+    mDSP->LoadPreset(MakeTestPreset(inputTrimDb, outputTrimDb, gainDb, enableCab));
+  }
 
-    double sumSquares = 0.0;
-    double sum = 0.0;
-    double maxAbs = 0.0;
+  std::vector<double> Process(const std::vector<double>& input)
+  {
+    std::vector<double> output(input.size(), 0.0);
+    const int numBlocks = static_cast<int>((input.size() + kBlockSize - 1) / kBlockSize);
 
-    for (double sample : signal)
+    for (int block = 0; block < numBlocks; ++block)
     {
-      if (std::isnan(sample))
+      const int startIdx = block * kBlockSize;
+      const int numSamples = std::min(kBlockSize, static_cast<int>(input.size()) - startIdx);
+
+      iplug::sample inBuf[2][kBlockSize] = {};
+      iplug::sample outBuf[2][kBlockSize] = {};
+
+      for (int i = 0; i < numSamples; ++i)
       {
-        stats.hasNaN = true;
-        return stats;
-      }
-      if (std::isinf(sample))
-      {
-        stats.hasInf = true;
-        return stats;
+        inBuf[0][i] = input[startIdx + i];
+        inBuf[1][i] = input[startIdx + i];
       }
 
-      double absSample = std::abs(sample);
-      maxAbs = std::max(maxAbs, absSample);
-      sumSquares += sample * sample;
-      sum += sample;
+      iplug::sample* inputs[] = { inBuf[0], inBuf[1] };
+      iplug::sample* outputs[] = { outBuf[0], outBuf[1] };
 
-      if (absSample > 1.0)
+      mDSP->Process(inputs, outputs, numSamples);
+
+      for (int i = 0; i < numSamples; ++i)
       {
-        stats.isClipped = true;
-        stats.clippedSampleCount++;
+        output[startIdx + i] = outputs[0][i];
       }
     }
 
-    stats.dcOffset = sum / static_cast<double>(signal.size());
-    stats.rms = std::sqrt(sumSquares / static_cast<double>(signal.size()));
-    stats.peakLevel = maxAbs;
-    stats.crestFactor = stats.rms > 1e-10 ? stats.peakLevel / stats.rms : 0.0;
-
-    return stats;
+    return output;
   }
 
-  static void PrintStats(const AudioStats& stats, const std::string& label = "")
-  {
-    if (!label.empty())
-      std::cout << "  " << label << ":\n";
-    std::cout << "    RMS: " << stats.rms << "\n";
-    std::cout << "    Peak: " << stats.peakLevel << "\n";
-    std::cout << "    DC Offset: " << stats.dcOffset << "\n";
-    std::cout << "    Crest Factor: " << stats.crestFactor << "\n";
-    if (stats.isClipped)
-      std::cout << "    Clipped: YES (" << stats.clippedSampleCount << " samples)\n";
-  }
+private:
+  std::unique_ptr<guitarfx::GraphDSPManager> mDSP;
 };
 
 /**
@@ -190,65 +248,17 @@ bool TestPassthrough()
 
   try
   {
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
-    dspManager->Prepare(kSampleRate, kBlockSize);
+    GraphDSPHarness dsp(-6.0, -3.0, 0.0, false);
+    const auto inputSignal = GenerateSineWave(1000.0, 0.5, 0.1);
+    const auto outputSignal = dsp.Process(inputSignal);
 
-    // Setup with typical settings
-    dspManager->SetInputTrim(-6.0);
-    dspManager->SetOutputTrim(-3.0);
-    dspManager->SetDrive(1.0);
-    dspManager->SetTone(0.0);
-    dspManager->SetGateEnabled(false);
-    dspManager->SetDoublerEnabled(false);
-    dspManager->SetTranspose(0);
-    dspManager->SetAmpEnabled(true);
-    dspManager->SetCabEnabled(false);
-
-    // Test with a sine wave
-    auto inputSignal = AudioSignalGenerator::GenerateSineWave(1000.0, 0.5, 0.1, kSampleRate);
-    std::vector<double> outputSignal(inputSignal.size());
-
-    // Process through DSP in blocks
-    const int numBlocks = (inputSignal.size() + kBlockSize - 1) / kBlockSize;
-
-    for (int block = 0; block < numBlocks; ++block)
-    {
-      int startIdx = block * kBlockSize;
-      int numSamples = std::min(kBlockSize, static_cast<int>(inputSignal.size()) - startIdx);
-
-      // Prepare input/output buffers in iPlug format
-      iplug::sample inputBuffer[2][512];  // Stereo
-      iplug::sample outputBuffer[2][512];
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        inputBuffer[0][i] = inputSignal[startIdx + i];
-        inputBuffer[1][i] = inputSignal[startIdx + i];
-      }
-
-      // Process
-      iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
-      iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-      dspManager->Process(inputs, outputs, numSamples);
-
-      // Capture output
-      for (int i = 0; i < numSamples; ++i)
-      {
-        outputSignal[startIdx + i] = outputBuffer[0][i];
-      }
-    }
-
-    // Analyze output
-    auto outputStats = AudioAnalyzer::Analyze(outputSignal);
-
-    // Check for validity
-    if (outputStats.hasNaN || outputStats.hasInf)
+    const auto stats = Analyze(outputSignal);
+    if (stats.hasNaN || stats.hasInf)
     {
       std::cout << "FAILED - Invalid samples in output\n";
       return false;
     }
-
-    if (outputStats.isClipped)
+    if (stats.isClipped)
     {
       std::cout << "FAILED - Output clipped\n";
       return false;
@@ -274,70 +284,23 @@ bool TestOutputTrim()
 
   try
   {
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
-    dspManager->Prepare(kSampleRate, kBlockSize);
+    GraphDSPHarness dsp(-3.0, -6.0, 0.0, false);
+    const auto inputSignal = GenerateSineWave(440.0, 0.5, 2.0);
+    const auto outputSignal = dsp.Process(inputSignal);
 
-    // Setup with moderate settings
-    dspManager->SetInputTrim(-3.0);
-    dspManager->SetOutputTrim(-6.0);
-    dspManager->SetDrive(1.0);
-    dspManager->SetTone(0.0);
-    dspManager->SetGateEnabled(false);
-    dspManager->SetDoublerEnabled(false);
-    dspManager->SetAmpEnabled(true);
-    dspManager->SetCabEnabled(false);
-
-    // Process a 2-second signal in blocks
-    const int totalSamples = static_cast<int>(2.0 * kSampleRate);
-    auto inputSignal = AudioSignalGenerator::GenerateSineWave(440.0, 0.5, 2.0, kSampleRate);
-    std::vector<double> outputSignal(totalSamples);
-
-    int processedSamples = 0;
-    int blockCount = 0;
-
-    while (processedSamples < totalSamples)
-    {
-      int remainingSamples = totalSamples - processedSamples;
-      int numSamples = std::min(kBlockSize, remainingSamples);
-
-      iplug::sample inputBuffer[2][512];
-      iplug::sample outputBuffer[2][512];
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        inputBuffer[0][i] = inputSignal[processedSamples + i];
-        inputBuffer[1][i] = inputSignal[processedSamples + i];
-      }
-
-      iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
-      iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-      dspManager->Process(inputs, outputs, numSamples);
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        outputSignal[processedSamples + i] = outputBuffer[0][i];
-      }
-
-      processedSamples += numSamples;
-      blockCount++;
-    }
-
-    auto stats = AudioAnalyzer::Analyze(outputSignal);
-
+    const auto stats = Analyze(outputSignal);
     if (stats.hasNaN || stats.hasInf)
     {
       std::cout << "FAILED - Invalid samples\n";
       return false;
     }
-
-    // Should have non-zero output
     if (stats.rms < 0.001)
     {
       std::cout << "FAILED - No output signal\n";
       return false;
     }
 
-    std::cout << "OK (" << blockCount << " blocks)\n";
+    std::cout << "OK\n";
     return true;
   }
   catch (const std::exception& e)
@@ -357,55 +320,16 @@ bool TestNoClipping()
 
   try
   {
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
-    dspManager->Prepare(kSampleRate, kBlockSize);
+    GraphDSPHarness dsp(0.0, 0.0, 0.0, false);
+    const auto inputSignal = GenerateSineWave(1000.0, 0.7, 0.1);
+    const auto outputSignal = dsp.Process(inputSignal);
 
-    // Setup: Moderate settings
-    dspManager->SetInputTrim(0.0);
-    dspManager->SetOutputTrim(0.0);
-    dspManager->SetDrive(1.0);
-    dspManager->SetGateEnabled(false);
-    dspManager->SetDoublerEnabled(false);
-    dspManager->SetAmpEnabled(false);
-    dspManager->SetCabEnabled(false);
-
-    // Generate modest signal (-3dB)
-    auto inputSignal = AudioSignalGenerator::GenerateSineWave(1000.0, 0.7, 0.1, kSampleRate);
-    std::vector<double> outputSignal(inputSignal.size());
-
-    const int numBlocks = (inputSignal.size() + kBlockSize - 1) / kBlockSize;
-    for (int block = 0; block < numBlocks; ++block)
-    {
-      int startIdx = block * kBlockSize;
-      int numSamples = std::min(kBlockSize, static_cast<int>(inputSignal.size()) - startIdx);
-
-      iplug::sample inputBuffer[2][512];
-      iplug::sample outputBuffer[2][512];
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        inputBuffer[0][i] = inputSignal[startIdx + i];
-        inputBuffer[1][i] = inputSignal[startIdx + i];
-      }
-
-      iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
-      iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-      dspManager->Process(inputs, outputs, numSamples);
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        outputSignal[startIdx + i] = outputBuffer[0][i];
-      }
-    }
-
-    auto stats = AudioAnalyzer::Analyze(outputSignal);
-
+    const auto stats = Analyze(outputSignal);
     if (stats.isClipped)
     {
       std::cout << "FAILED - Signal clipped (" << stats.clippedSampleCount << " samples)\n";
       return false;
     }
-
     if (stats.peakLevel > 1.0)
     {
       std::cout << "FAILED - Peak exceeds 1.0: " << stats.peakLevel << "\n";
@@ -432,66 +356,24 @@ bool TestAudioQuality()
 
   try
   {
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
-    dspManager->Prepare(kSampleRate, kBlockSize);
-
-    // Setup: Moderate settings
-    dspManager->SetInputTrim(0.0);
-    dspManager->SetOutputTrim(-3.0);
-    dspManager->SetDrive(1.2);
-    dspManager->SetTone(0.3);
-    dspManager->SetGateEnabled(false);
-    dspManager->SetDoublerEnabled(true);
-    dspManager->SetDoublerDelay(6.0);
-    dspManager->SetAmpEnabled(false);
-    dspManager->SetCabEnabled(false);
-
-    // Process multiple signal types
+    GraphDSPHarness dsp(0.0, -3.0, 1.2, false);
     const std::vector<std::string> signalTypes = { "sine", "square", "noise", "chirp" };
-    
+
     for (const auto& sigType : signalTypes)
     {
       std::vector<double> inputSignal;
-      
       if (sigType == "sine")
-        inputSignal = AudioSignalGenerator::GenerateSineWave(1000.0, 0.5, 0.2, kSampleRate);
+        inputSignal = GenerateSineWave(1000.0, 0.5, 0.2);
       else if (sigType == "square")
-        inputSignal = AudioSignalGenerator::GenerateSquareWave(500.0, 0.5, 0.2, kSampleRate);
+        inputSignal = GenerateSquareWave(500.0, 0.5, 0.2);
       else if (sigType == "noise")
-        inputSignal = AudioSignalGenerator::GenerateWhiteNoise(0.3, 0.2, kSampleRate);
+        inputSignal = GenerateWhiteNoise(0.3, 0.2);
       else if (sigType == "chirp")
-        inputSignal = AudioSignalGenerator::GenerateChirp(100.0, 5000.0, 0.4, 0.2, kSampleRate);
+        inputSignal = GenerateChirp(100.0, 5000.0, 0.4, 0.2);
 
-      std::vector<double> outputSignal(inputSignal.size());
+      const auto outputSignal = dsp.Process(inputSignal);
+      const auto stats = Analyze(outputSignal);
 
-      const int numBlocks = (inputSignal.size() + kBlockSize - 1) / kBlockSize;
-      for (int block = 0; block < numBlocks; ++block)
-      {
-        int startIdx = block * kBlockSize;
-        int numSamples = std::min(kBlockSize, static_cast<int>(inputSignal.size()) - startIdx);
-
-        iplug::sample inputBuffer[2][512];
-        iplug::sample outputBuffer[2][512];
-
-        for (int i = 0; i < numSamples; ++i)
-        {
-          inputBuffer[0][i] = inputSignal[startIdx + i];
-          inputBuffer[1][i] = inputSignal[startIdx + i];
-        }
-
-        iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
-        iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-        dspManager->Process(inputs, outputs, numSamples);
-
-        for (int i = 0; i < numSamples; ++i)
-        {
-          outputSignal[startIdx + i] = outputBuffer[0][i];
-        }
-      }
-
-      auto stats = AudioAnalyzer::Analyze(outputSignal);
-
-      // Check for validity
       if (stats.hasNaN)
       {
         std::cout << "FAILED - NaN in " << sigType << " signal\n";
@@ -502,20 +384,14 @@ bool TestAudioQuality()
         std::cout << "FAILED - Inf in " << sigType << " signal\n";
         return false;
       }
-
-      // DC offset should be small
       if (std::abs(stats.dcOffset) > 0.1)
       {
-        std::cout << "FAILED - Excessive DC offset in " << sigType << " ("
-                  << stats.dcOffset << ")\n";
+        std::cout << "FAILED - Excessive DC offset in " << sigType << " (" << stats.dcOffset << ")\n";
         return false;
       }
-
-      // Peak should not exceed reasonable bounds
       if (stats.peakLevel > 1.5)
       {
-        std::cout << "FAILED - Excessive peak in " << sigType << " ("
-                  << stats.peakLevel << ")\n";
+        std::cout << "FAILED - Excessive peak in " << sigType << " (" << stats.peakLevel << ")\n";
         return false;
       }
     }
@@ -536,94 +412,37 @@ bool TestAudioQuality()
  */
 bool TestCabinetIRProcessing()
 {
-  std::cout << "Test: Cabinet IR processing (cab enabled)... ";
+  std::cout << "Test: Cabinet processing (simple cab enabled)... ";
 
   try
   {
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
-    dspManager->Prepare(kSampleRate, kBlockSize);
+    GraphDSPHarness dsp(-3.0, -3.0, 0.0, true);
+    const auto inputSignal = GenerateSineWave(440.0, 0.5, 1.0);
+    const auto outputSignal = dsp.Process(inputSignal);
 
-    // Setup with cabinet IR enabled
-    dspManager->SetInputTrim(-3.0);
-    dspManager->SetOutputTrim(-3.0);
-    dspManager->SetDrive(1.0);
-    dspManager->SetTone(0.0);
-    dspManager->SetGateEnabled(false);
-    dspManager->SetDoublerEnabled(false);
-    dspManager->SetTranspose(0);
-    dspManager->SetAmpEnabled(true);
-    dspManager->SetCabEnabled(true);  // Enable cabinet IR convolution
-
-    // Generate test signal - 1 second of 440Hz sine wave
-    const double durationSeconds = 1.0;
-    const int totalSamples = static_cast<int>(durationSeconds * kSampleRate);
-    auto inputSignal = AudioSignalGenerator::GenerateSineWave(440.0, 0.5, durationSeconds, kSampleRate);
-    std::vector<double> outputSignal(totalSamples);
-
-    // Process in blocks to simulate realtime operation
-    int processedSamples = 0;
-    int blockCount = 0;
-
-    while (processedSamples < totalSamples)
-    {
-      int remainingSamples = totalSamples - processedSamples;
-      int numSamples = std::min(kBlockSize, remainingSamples);
-
-      iplug::sample inputBuffer[2][512];
-      iplug::sample outputBuffer[2][512];
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        inputBuffer[0][i] = inputSignal[processedSamples + i];
-        inputBuffer[1][i] = inputSignal[processedSamples + i];
-      }
-
-      iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
-      iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-      dspManager->Process(inputs, outputs, numSamples);
-
-      for (int i = 0; i < numSamples; ++i)
-      {
-        outputSignal[processedSamples + i] = outputBuffer[0][i];
-      }
-
-      processedSamples += numSamples;
-      blockCount++;
-    }
-
-    // Analyze output
-    auto inputStats = AudioAnalyzer::Analyze(inputSignal);
-    auto outputStats = AudioAnalyzer::Analyze(outputSignal);
-
-    // Check for validity
+    const auto outputStats = Analyze(outputSignal);
     if (outputStats.hasNaN || outputStats.hasInf)
     {
       std::cout << "FAILED - Invalid samples in output\n";
       return false;
     }
-
-    // Output should not exceed reasonable bounds with cab enabled
     if (outputStats.peakLevel > 1.5)
     {
       std::cout << "FAILED - Excessive peak level: " << outputStats.peakLevel << "\n";
       return false;
     }
-
-    // Should have some output
     if (outputStats.rms < 0.001)
     {
       std::cout << "FAILED - No significant output\n";
       return false;
     }
-
-    // DC offset should be minimal
     if (std::abs(outputStats.dcOffset) > 0.1)
     {
       std::cout << "FAILED - Excessive DC offset: " << outputStats.dcOffset << "\n";
       return false;
     }
 
-    std::cout << "OK (" << blockCount << " blocks)\n";
+    std::cout << "OK\n";
     return true;
   }
   catch (const std::exception& e)
@@ -637,8 +456,8 @@ bool TestCabinetIRProcessing()
 
 int main()
 {
-  std::cout << "Real Audio Processing Tests (AmpModelManager::Process)\n";
-  std::cout << "====================================================\n\n";
+  std::cout << "Real Audio Processing Tests (GraphDSPManager)\n";
+  std::cout << "============================================\n\n";
 
   int passed = 0;
   int failed = 0;

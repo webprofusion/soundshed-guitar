@@ -29,14 +29,14 @@ namespace guitarfx
 
     void Reset() override
     {
-      for (auto& band : mBands)
+      for (auto &band : mBands)
       {
         band.z1L = band.z2L = 0.0f;
         band.z1R = band.z2R = 0.0f;
       }
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       for (int i = 0; i < numSamples; ++i)
       {
@@ -44,14 +44,13 @@ namespace guitarfx
         float sampleR = inputs[1] ? inputs[1][i] : 0.0f;
 
         // Process through each band
-        for (auto& band : mBands)
+        for (auto &band : mBands)
         {
           if (!band.enabled)
             continue;
 
           // Left channel
-          float outL = band.b0 * sampleL + band.b1 * band.z1L + band.b2 * band.z2L
-                     - band.a1 * band.x1L - band.a2 * band.x2L;
+          float outL = band.b0 * sampleL + band.b1 * band.z1L + band.b2 * band.z2L - band.a1 * band.x1L - band.a2 * band.x2L;
           band.z2L = band.z1L;
           band.z1L = sampleL;
           band.x2L = band.x1L;
@@ -59,8 +58,7 @@ namespace guitarfx
           sampleL = outL;
 
           // Right channel
-          float outR = band.b0 * sampleR + band.b1 * band.z1R + band.b2 * band.z2R
-                     - band.a1 * band.x1R - band.a2 * band.x2R;
+          float outR = band.b0 * sampleR + band.b1 * band.z1R + band.b2 * band.z2R - band.a1 * band.x1R - band.a2 * band.x2R;
           band.z2R = band.z1R;
           band.z1R = sampleR;
           band.x2R = band.x1R;
@@ -75,7 +73,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "lowGain")
         mBands[0].gainDb = value;
@@ -101,9 +99,9 @@ namespace guitarfx
       UpdateCoefficients();
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "lowGain")
         return mBands[0].gainDb;
@@ -169,7 +167,7 @@ namespace guitarfx
       CalculateHighShelf(mBands[3]);
     }
 
-    void CalculatePeaking(Band& band)
+    void CalculatePeaking(Band &band)
     {
       if (std::abs(band.gainDb) < 0.001)
       {
@@ -192,7 +190,7 @@ namespace guitarfx
       band.a2 = static_cast<float>((1.0 - alpha / A) / a0);
     }
 
-    void CalculateLowShelf(Band& band)
+    void CalculateLowShelf(Band &band)
     {
       if (std::abs(band.gainDb) < 0.001)
       {
@@ -216,7 +214,7 @@ namespace guitarfx
       band.a2 = static_cast<float>(((A + 1.0) + (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0);
     }
 
-    void CalculateHighShelf(Band& band)
+    void CalculateHighShelf(Band &band)
     {
       if (std::abs(band.gainDb) < 0.001)
       {
@@ -241,10 +239,10 @@ namespace guitarfx
     }
 
     std::array<Band, 4> mBands = {{
-      {true, 0.0, 100.0, 0.707, true},   // Low shelf
-      {true, 0.0, 400.0, 1.0, false},    // Low mid
-      {true, 0.0, 2000.0, 1.0, false},   // High mid
-      {true, 0.0, 8000.0, 0.707, true}   // High shelf
+        {true, 0.0, 100.0, 0.707, true}, // Low shelf
+        {true, 0.0, 400.0, 1.0, false},  // Low mid
+        {true, 0.0, 2000.0, 1.0, false}, // High mid
+        {true, 0.0, 8000.0, 0.707, true} // High shelf
     }};
   };
 
@@ -257,21 +255,19 @@ namespace guitarfx
     info.description = "4-band parametric equalizer";
     info.requiresResource = false;
     info.parameters = {
-      {"lowGain", "Low Gain", 0.0, -12.0, 12.0, "dB"},
-      {"lowFreq", "Low Freq", 100.0, 20.0, 500.0, "Hz"},
-      {"lowMidGain", "Low Mid Gain", 0.0, -12.0, 12.0, "dB"},
-      {"lowMidFreq", "Low Mid Freq", 400.0, 100.0, 2000.0, "Hz"},
-      {"lowMidQ", "Low Mid Q", 1.0, 0.1, 10.0, ""},
-      {"highMidGain", "High Mid Gain", 0.0, -12.0, 12.0, "dB"},
-      {"highMidFreq", "High Mid Freq", 2000.0, 500.0, 8000.0, "Hz"},
-      {"highMidQ", "High Mid Q", 1.0, 0.1, 10.0, ""},
-      {"highGain", "High Gain", 0.0, -12.0, 12.0, "dB"},
-      {"highFreq", "High Freq", 8000.0, 2000.0, 16000.0, "Hz"}
-    };
+        {"lowGain", "Low Gain", 0.0, -12.0, 12.0, "dB"},
+        {"lowFreq", "Low Freq", 100.0, 20.0, 500.0, "Hz"},
+        {"lowMidGain", "Low Mid Gain", 0.0, -12.0, 12.0, "dB"},
+        {"lowMidFreq", "Low Mid Freq", 400.0, 100.0, 2000.0, "Hz"},
+        {"lowMidQ", "Low Mid Q", 1.0, 0.1, 10.0, ""},
+        {"highMidGain", "High Mid Gain", 0.0, -12.0, 12.0, "dB"},
+        {"highMidFreq", "High Mid Freq", 2000.0, 500.0, 8000.0, "Hz"},
+        {"highMidQ", "High Mid Q", 1.0, 0.1, 10.0, ""},
+        {"highGain", "High Gain", 0.0, -12.0, 12.0, "dB"},
+        {"highFreq", "High Freq", 8000.0, 2000.0, 16000.0, "Hz"}};
 
-    EffectRegistry::Instance().Register("eq_parametric", info, []() {
-      return std::make_unique<ParametricEQEffect>();
-    });
+    EffectRegistry::Instance().Register("eq_parametric", info, []()
+                                        { return std::make_unique<ParametricEQEffect>(); });
   }
 
 } // namespace guitarfx

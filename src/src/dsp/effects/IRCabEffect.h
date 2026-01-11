@@ -39,7 +39,7 @@ namespace guitarfx
       mConvolverR.Reset();
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       if (!mEnabled || !mConvolverL.IsInitialized())
       {
@@ -78,7 +78,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "mix")
         mMix = std::clamp(value, 0.0, 1.0);
@@ -88,9 +88,9 @@ namespace guitarfx
         mEnabled = value > 0.5;
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "mix")
         return mMix;
@@ -101,7 +101,7 @@ namespace guitarfx
       return 0.0;
     }
 
-    bool LoadResource(const std::filesystem::path& resourcePath) override
+    bool LoadResource(const std::filesystem::path &resourcePath) override
     {
       // Load WAV file
       if (!LoadWavFile(resourcePath))
@@ -118,7 +118,7 @@ namespace guitarfx
     [[nodiscard]] std::string GetCategory() const override { return "cab"; }
 
   private:
-    bool LoadWavFile(const std::filesystem::path& path)
+    bool LoadWavFile(const std::filesystem::path &path)
     {
       std::ifstream file(path, std::ios::binary);
       if (!file)
@@ -142,26 +142,26 @@ namespace guitarfx
         char chunkId[4];
         uint32_t chunkSize;
         file.read(chunkId, 4);
-        file.read(reinterpret_cast<char*>(&chunkSize), 4);
+        file.read(reinterpret_cast<char *>(&chunkSize), 4);
 
         if (std::memcmp(chunkId, "fmt ", 4) == 0)
         {
           uint16_t audioFormat;
-          file.read(reinterpret_cast<char*>(&audioFormat), 2);
+          file.read(reinterpret_cast<char *>(&audioFormat), 2);
           if (audioFormat != 1 && audioFormat != 3) // PCM or IEEE float
             return false;
 
           uint16_t numChannels;
-          file.read(reinterpret_cast<char*>(&numChannels), 2);
+          file.read(reinterpret_cast<char *>(&numChannels), 2);
 
           uint32_t sampleRate;
-          file.read(reinterpret_cast<char*>(&sampleRate), 4);
+          file.read(reinterpret_cast<char *>(&sampleRate), 4);
           mIRSampleRate = static_cast<double>(sampleRate);
 
           file.seekg(6, std::ios::cur); // Skip byte rate and block align
 
           uint16_t bitsPerSample;
-          file.read(reinterpret_cast<char*>(&bitsPerSample), 2);
+          file.read(reinterpret_cast<char *>(&bitsPerSample), 2);
           mBitsPerSample = bitsPerSample;
           mAudioFormat = audioFormat;
 
@@ -175,14 +175,14 @@ namespace guitarfx
           {
             numSamples = chunkSize / sizeof(float);
             std::vector<float> rawSamples(numSamples);
-            file.read(reinterpret_cast<char*>(rawSamples.data()), chunkSize);
+            file.read(reinterpret_cast<char *>(rawSamples.data()), chunkSize);
             mImpulse = std::move(rawSamples);
           }
           else if (mBitsPerSample == 16)
           {
             numSamples = chunkSize / sizeof(int16_t);
             std::vector<int16_t> rawSamples(numSamples);
-            file.read(reinterpret_cast<char*>(rawSamples.data()), chunkSize);
+            file.read(reinterpret_cast<char *>(rawSamples.data()), chunkSize);
             mImpulse.resize(numSamples);
             for (size_t i = 0; i < numSamples; ++i)
               mImpulse[i] = static_cast<float>(rawSamples[i]) / 32768.0f;
@@ -194,11 +194,12 @@ namespace guitarfx
             for (size_t i = 0; i < numSamples; ++i)
             {
               uint8_t bytes[3];
-              file.read(reinterpret_cast<char*>(bytes), 3);
+              file.read(reinterpret_cast<char *>(bytes), 3);
               int32_t value = (static_cast<int32_t>(bytes[2]) << 16) |
                               (static_cast<int32_t>(bytes[1]) << 8) |
                               static_cast<int32_t>(bytes[0]);
-              if (value & 0x800000) value |= 0xFF000000; // Sign extend
+              if (value & 0x800000)
+                value |= 0xFF000000; // Sign extend
               mImpulse[i] = static_cast<float>(value) / 8388608.0f;
             }
           }
@@ -206,7 +207,7 @@ namespace guitarfx
           {
             numSamples = chunkSize / sizeof(int32_t);
             std::vector<int32_t> rawSamples(numSamples);
-            file.read(reinterpret_cast<char*>(rawSamples.data()), chunkSize);
+            file.read(reinterpret_cast<char *>(rawSamples.data()), chunkSize);
             mImpulse.resize(numSamples);
             for (size_t i = 0; i < numSamples; ++i)
               mImpulse[i] = static_cast<float>(rawSamples[i]) / 2147483648.0f;
@@ -296,13 +297,11 @@ namespace guitarfx
     info.requiresResource = true;
     info.resourceType = "ir"; // .wav IR files
     info.parameters = {
-      {"mix", "Mix", 1.0, 0.0, 1.0, ""},
-      {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"}
-    };
+        {"mix", "Mix", 1.0, 0.0, 1.0, ""},
+        {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"}};
 
-    EffectRegistry::Instance().Register("cab_ir", info, []() {
-      return std::make_unique<IRCabEffect>();
-    });
+    EffectRegistry::Instance().Register("cab_ir", info, []()
+                                        { return std::make_unique<IRCabEffect>(); });
   }
 
 } // namespace guitarfx

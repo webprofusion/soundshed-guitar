@@ -4,10 +4,10 @@
 
 namespace guitarfx
 {
-  bool MultiPresetMixer::AddActivePreset(const Preset& preset, const std::string& presetId, const std::string& name)
+  bool MultiPresetMixer::AddActivePreset(const Preset &preset, const std::string &presetId, const std::string &name)
   {
     // Avoid duplicate IDs
-    for (const auto& inst : mInstances)
+    for (const auto &inst : mInstances)
     {
       if (inst.cfg.id == presetId)
         return false;
@@ -32,7 +32,7 @@ namespace guitarfx
     return true;
   }
 
-  void MultiPresetMixer::RemoveActivePreset(const std::string& presetId)
+  void MultiPresetMixer::RemoveActivePreset(const std::string &presetId)
   {
     for (auto it = mInstances.begin(); it != mInstances.end(); ++it)
     {
@@ -44,33 +44,33 @@ namespace guitarfx
     }
   }
 
-  void MultiPresetMixer::SetPresetMix(const std::string& presetId, double value)
+  void MultiPresetMixer::SetPresetMix(const std::string &presetId, double value)
   {
-    if (auto* inst = FindInstance(presetId))
+    if (auto *inst = FindInstance(presetId))
     {
       inst->cfg.mix = std::clamp(value, 0.0, 1.0);
     }
   }
 
-  void MultiPresetMixer::SetPresetPan(const std::string& presetId, double pan)
+  void MultiPresetMixer::SetPresetPan(const std::string &presetId, double pan)
   {
-    if (auto* inst = FindInstance(presetId))
+    if (auto *inst = FindInstance(presetId))
     {
       inst->cfg.pan = std::clamp(pan, -1.0, 1.0);
     }
   }
 
-  void MultiPresetMixer::SetPresetMute(const std::string& presetId, bool mute)
+  void MultiPresetMixer::SetPresetMute(const std::string &presetId, bool mute)
   {
-    if (auto* inst = FindInstance(presetId))
+    if (auto *inst = FindInstance(presetId))
     {
       inst->cfg.mute = mute;
     }
   }
 
-  void MultiPresetMixer::SetPresetSolo(const std::string& presetId, bool solo)
+  void MultiPresetMixer::SetPresetSolo(const std::string &presetId, bool solo)
   {
-    if (auto* inst = FindInstance(presetId))
+    if (auto *inst = FindInstance(presetId))
     {
       inst->cfg.solo = solo;
     }
@@ -78,7 +78,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetInputTrim(double dB)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       inst.executor.SetInputTrim(dB);
     }
@@ -86,7 +86,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetOutputTrim(double dB)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       inst.executor.SetOutputTrim(dB);
     }
@@ -94,7 +94,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetGateEnabled(bool enabled)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("dynamics_gate");
       if (!nodeId.empty())
@@ -106,7 +106,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetGateThreshold(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("dynamics_gate");
       if (!nodeId.empty())
@@ -118,7 +118,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetAmpDrive(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("amp_nam");
       if (!nodeId.empty())
@@ -130,7 +130,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetSimpleCabEnabled(bool enabled)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("cab_simple");
       if (!nodeId.empty())
@@ -142,7 +142,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetSimpleCabBass(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("cab_simple");
       if (!nodeId.empty())
@@ -154,7 +154,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetSimpleCabPresence(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("cab_simple");
       if (!nodeId.empty())
@@ -166,7 +166,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetSimpleCabBrightness(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("cab_simple");
       if (!nodeId.empty())
@@ -178,7 +178,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetIRQuality(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       auto nodeId = inst.executor.FindFirstNodeOfType("cab_ir");
       if (nodeId.empty())
@@ -194,7 +194,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetEQEnabled(bool enabled)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       auto nodeId = inst.executor.FindFirstNodeOfType("eq_parametric");
       if (nodeId.empty())
@@ -210,12 +210,12 @@ namespace guitarfx
 
   void MultiPresetMixer::SetEQBandGain(int band, double value)
   {
-    static const char* kParamNames[] = {"lowGain", "lowMidGain", "highMidGain", "highGain"};
+    static const char *kParamNames[] = {"lowGain", "lowMidGain", "highMidGain", "highGain"};
     if (band < 0 || band > 3)
       return;
 
     const std::string param = kParamNames[band];
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       auto nodeId = inst.executor.FindFirstNodeOfType("eq_parametric");
       if (nodeId.empty())
@@ -231,12 +231,12 @@ namespace guitarfx
 
   void MultiPresetMixer::SetEQBandFrequency(int band, double value)
   {
-    static const char* kParamNames[] = {"lowFreq", "lowMidFreq", "highMidFreq", "highFreq"};
+    static const char *kParamNames[] = {"lowFreq", "lowMidFreq", "highMidFreq", "highFreq"};
     if (band < 0 || band > 3)
       return;
 
     const std::string param = kParamNames[band];
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       auto nodeId = inst.executor.FindFirstNodeOfType("eq_parametric");
       if (nodeId.empty())
@@ -252,12 +252,12 @@ namespace guitarfx
 
   void MultiPresetMixer::SetEQBandQ(int band, double value)
   {
-    static const char* kParamNames[] = {"", "lowMidQ", "highMidQ", ""};
+    static const char *kParamNames[] = {"", "lowMidQ", "highMidQ", ""};
     if (band < 1 || band > 2)
       return;
 
     const std::string param = kParamNames[band];
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       auto nodeId = inst.executor.FindFirstNodeOfType("eq_parametric");
       if (nodeId.empty())
@@ -273,7 +273,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetDelayEnabled(bool enabled)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("delay_digital");
       if (!nodeId.empty())
@@ -285,7 +285,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetDelayTime(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("delay_digital");
       if (!nodeId.empty())
@@ -297,7 +297,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetDelayFeedback(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("delay_digital");
       if (!nodeId.empty())
@@ -309,7 +309,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetDelayMix(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("delay_digital");
       if (!nodeId.empty())
@@ -321,7 +321,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetReverbEnabled(bool enabled)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("reverb_room");
       if (!nodeId.empty())
@@ -333,7 +333,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetReverbDecay(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("reverb_room");
       if (!nodeId.empty())
@@ -345,7 +345,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetReverbDamping(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("reverb_room");
       if (!nodeId.empty())
@@ -357,7 +357,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetReverbMix(double value)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const auto nodeId = inst.executor.FindFirstNodeOfType("reverb_room");
       if (!nodeId.empty())
@@ -375,7 +375,7 @@ namespace guitarfx
 
     AllocateBuffers(maxBlockSize);
 
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       inst.executor.Prepare(sampleRate, maxBlockSize);
     }
@@ -383,20 +383,20 @@ namespace guitarfx
 
   void MultiPresetMixer::Reset()
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       inst.executor.Reset();
     }
   }
 
-  void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
+  void MultiPresetMixer::Process(float **inputs, float **outputs, int numSamples)
   {
     if (!outputs || numSamples <= 0)
       return;
 
     // Detect solo mode
     bool anySolo = false;
-    for (const auto& inst : mInstances)
+    for (const auto &inst : mInstances)
     {
       if (inst.cfg.solo)
       {
@@ -416,14 +416,14 @@ namespace guitarfx
     }
 
     // Process each preset and mix
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       const bool include = (!inst.cfg.mute) && (!anySolo || inst.cfg.solo);
       if (!include)
         continue;
 
       // Process into per-instance buffers
-      float* presetOutPtrs[2] = { inst.outL.data(), inst.outR.data() };
+      float *presetOutPtrs[2] = {inst.outL.data(), inst.outR.data()};
       inst.executor.Process(inputs, presetOutPtrs, numSamples);
 
       // Apply per-preset pan (equal-power) and mix gain
@@ -480,14 +480,14 @@ namespace guitarfx
   {
     std::vector<std::string> ids;
     ids.reserve(mInstances.size());
-    for (const auto& inst : mInstances)
+    for (const auto &inst : mInstances)
       ids.push_back(inst.cfg.id);
     return ids;
   }
 
-  MultiPresetMixer::PresetInstance* MultiPresetMixer::FindInstance(const std::string& id)
+  MultiPresetMixer::PresetInstance *MultiPresetMixer::FindInstance(const std::string &id)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       if (inst.cfg.id == id)
         return &inst;
@@ -495,9 +495,9 @@ namespace guitarfx
     return nullptr;
   }
 
-  const MultiPresetMixer::PresetInstance* MultiPresetMixer::FindInstance(const std::string& id) const
+  const MultiPresetMixer::PresetInstance *MultiPresetMixer::FindInstance(const std::string &id) const
   {
-    for (const auto& inst : mInstances)
+    for (const auto &inst : mInstances)
     {
       if (inst.cfg.id == id)
         return &inst;
@@ -507,14 +507,14 @@ namespace guitarfx
 
   void MultiPresetMixer::AllocateBuffers(int maxBlockSize)
   {
-    for (auto& inst : mInstances)
+    for (auto &inst : mInstances)
     {
       inst.outL.resize(static_cast<size_t>(maxBlockSize), 0.0f);
       inst.outR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
     }
   }
 
-  void MultiPresetMixer::ComputePanGains(double pan, float& gL, float& gR)
+  void MultiPresetMixer::ComputePanGains(double pan, float &gL, float &gR)
   {
     // Equal-power pan law
     // pan in [-1, 1] maps to theta in [0, pi/2]

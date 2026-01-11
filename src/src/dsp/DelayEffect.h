@@ -53,7 +53,7 @@ namespace guitarfx
       mMix = std::clamp(mix, 0.0, 1.0);
     }
 
-    void Process(double& left, double& right)
+    void Process(double &left, double &right)
     {
       if (!mEnabled || mDelayBufferL.empty())
       {
@@ -91,9 +91,9 @@ namespace guitarfx
 
     bool mEnabled = false;
     double mSampleRate = 48000.0;
-    double mDelayTimeMs = 300.0;  // Default 300ms
-    double mFeedback = 0.4;       // Default 40% feedback
-    double mMix = 0.3;            // Default 30% wet
+    double mDelayTimeMs = 300.0; // Default 300ms
+    double mFeedback = 0.4;      // Default 40% feedback
+    double mMix = 0.3;           // Default 30% wet
 
     std::vector<double> mDelayBufferL;
     std::vector<double> mDelayBufferR;

@@ -24,23 +24,21 @@ namespace guitarfx
 
       // Comb filter delay times (in samples)
       const std::array<size_t, 8> combDelays = {
-        static_cast<size_t>(1116 * scale),
-        static_cast<size_t>(1188 * scale),
-        static_cast<size_t>(1277 * scale),
-        static_cast<size_t>(1356 * scale),
-        static_cast<size_t>(1422 * scale),
-        static_cast<size_t>(1491 * scale),
-        static_cast<size_t>(1557 * scale),
-        static_cast<size_t>(1617 * scale)
-      };
+          static_cast<size_t>(1116 * scale),
+          static_cast<size_t>(1188 * scale),
+          static_cast<size_t>(1277 * scale),
+          static_cast<size_t>(1356 * scale),
+          static_cast<size_t>(1422 * scale),
+          static_cast<size_t>(1491 * scale),
+          static_cast<size_t>(1557 * scale),
+          static_cast<size_t>(1617 * scale)};
 
       // Allpass filter delay times
       const std::array<size_t, 4> allpassDelays = {
-        static_cast<size_t>(556 * scale),
-        static_cast<size_t>(441 * scale),
-        static_cast<size_t>(341 * scale),
-        static_cast<size_t>(225 * scale)
-      };
+          static_cast<size_t>(556 * scale),
+          static_cast<size_t>(441 * scale),
+          static_cast<size_t>(341 * scale),
+          static_cast<size_t>(225 * scale)};
 
       // Allocate comb buffers
       for (size_t i = 0; i < 8; ++i)
@@ -78,7 +76,7 @@ namespace guitarfx
       }
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       const float wet = static_cast<float>(mMix);
       const float dry = 1.0f - wet;
@@ -141,7 +139,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "decay")
       {
@@ -159,9 +157,9 @@ namespace guitarfx
       }
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "decay")
         return mDecay;
@@ -212,14 +210,12 @@ namespace guitarfx
     info.description = "Algorithmic room reverb";
     info.requiresResource = false;
     info.parameters = {
-      {"decay", "Decay", 0.5, 0.0, 1.0, ""},
-      {"damping", "Damping", 0.5, 0.0, 1.0, ""},
-      {"mix", "Mix", 0.3, 0.0, 1.0, ""}
-    };
+        {"decay", "Decay", 0.5, 0.0, 1.0, ""},
+        {"damping", "Damping", 0.5, 0.0, 1.0, ""},
+        {"mix", "Mix", 0.3, 0.0, 1.0, ""}};
 
-    EffectRegistry::Instance().Register("reverb_room", info, []() {
-      return std::make_unique<ReverbEffect>();
-    });
+    EffectRegistry::Instance().Register("reverb_room", info, []()
+                                        { return std::make_unique<ReverbEffect>(); });
   }
 
 } // namespace guitarfx

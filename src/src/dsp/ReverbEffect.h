@@ -19,29 +19,27 @@ namespace guitarfx
     void Prepare(double sampleRate, int maxBlockSize)
     {
       mSampleRate = sampleRate;
-      
+
       // Comb filter delay times (in samples at 48kHz, scaled for actual sample rate)
       const double scale = sampleRate / 48000.0;
-      
+
       // Initialize comb filters with prime-ish delay times for rich sound
       mCombDelays = {
-        static_cast<size_t>(1557 * scale),
-        static_cast<size_t>(1617 * scale),
-        static_cast<size_t>(1491 * scale),
-        static_cast<size_t>(1422 * scale),
-        static_cast<size_t>(1277 * scale),
-        static_cast<size_t>(1356 * scale),
-        static_cast<size_t>(1188 * scale),
-        static_cast<size_t>(1116 * scale)
-      };
+          static_cast<size_t>(1557 * scale),
+          static_cast<size_t>(1617 * scale),
+          static_cast<size_t>(1491 * scale),
+          static_cast<size_t>(1422 * scale),
+          static_cast<size_t>(1277 * scale),
+          static_cast<size_t>(1356 * scale),
+          static_cast<size_t>(1188 * scale),
+          static_cast<size_t>(1116 * scale)};
 
       // Allpass filter delay times
       mAllpassDelays = {
-        static_cast<size_t>(225 * scale),
-        static_cast<size_t>(556 * scale),
-        static_cast<size_t>(441 * scale),
-        static_cast<size_t>(341 * scale)
-      };
+          static_cast<size_t>(225 * scale),
+          static_cast<size_t>(556 * scale),
+          static_cast<size_t>(441 * scale),
+          static_cast<size_t>(341 * scale)};
 
       // Allocate buffers
       for (size_t i = 0; i < kNumCombs; ++i)
@@ -97,7 +95,7 @@ namespace guitarfx
       mMix = std::clamp(mix, 0.0, 1.0);
     }
 
-    void Process(double& left, double& right)
+    void Process(double &left, double &right)
     {
       if (!mEnabled)
       {
@@ -147,42 +145,44 @@ namespace guitarfx
       mDecayFactor = 0.7 + mDecay * 0.28; // Range: 0.7 to 0.98
     }
 
-    double ProcessComb(double input, std::vector<double>& buffer, size_t& index, size_t delay, double& lowpass)
+    double ProcessComb(double input, std::vector<double> &buffer, size_t &index, size_t delay, double &lowpass)
     {
-      if (buffer.empty()) return input;
+      if (buffer.empty())
+        return input;
 
       const double delayed = buffer[index];
-      
+
       // Apply damping (lowpass filter on feedback)
       lowpass = delayed * (1.0 - mDamping) + lowpass * mDamping;
-      
+
       // Write new sample with feedback
       buffer[index] = input + lowpass * mDecayFactor;
-      
+
       // Advance index
       index = (index + 1) % delay;
-      
+
       return delayed;
     }
 
-    double ProcessAllpass(double input, std::vector<double>& buffer, size_t& index, size_t delay)
+    double ProcessAllpass(double input, std::vector<double> &buffer, size_t &index, size_t delay)
     {
-      if (buffer.empty()) return input;
+      if (buffer.empty())
+        return input;
 
       const double delayed = buffer[index];
       const double output = -input + delayed;
-      
+
       buffer[index] = input + delayed * kAllpassCoeff;
       index = (index + 1) % delay;
-      
+
       return output;
     }
 
     bool mEnabled = false;
     double mSampleRate = 48000.0;
-    double mDecay = 0.5;      // Reverb decay time (0-1)
-    double mDamping = 0.5;    // High frequency damping (0-1)
-    double mMix = 0.3;        // Wet/dry mix
+    double mDecay = 0.5;   // Reverb decay time (0-1)
+    double mDamping = 0.5; // High frequency damping (0-1)
+    double mMix = 0.3;     // Wet/dry mix
     double mDecayFactor = 0.84;
 
     // Comb filter state

@@ -1792,6 +1792,101 @@ namespace guitarfx
     mPendingStateBroadcast = false;
   }
 
+  void GuitarFXPlugin::EnsureBasicGraph()
+  {
+    if (mActivePreset)
+    {
+      return;
+    }
+
+    Preset preset;
+    preset.id = "default";
+    preset.name = "Default";
+    preset.version = 2;
+
+    GraphNode input;
+    input.id = "input";
+    input.type = kNodeTypeInput;
+    input.category = "routing";
+
+    GraphNode amp;
+    amp.id = "amp";
+    amp.type = "amp_nam";
+    amp.category = "amp";
+
+    GraphNode cab;
+    cab.id = "cab";
+    cab.type = "cab_ir";
+    cab.category = "cab";
+
+    GraphNode output;
+    output.id = "output";
+    output.type = kNodeTypeOutput;
+    output.category = "routing";
+
+    preset.graph.nodes = {input, amp, cab, output};
+    preset.graph.edges = {
+      {input.id, amp.id, 0, 0, 1.0},
+      {amp.id, cab.id, 0, 0, 1.0},
+      {cab.id, output.id, 0, 0, 1.0}
+    };
+
+    mActivePreset = preset;
+    mActivePresetJson = PresetStorage::SerializeToJson(preset);
+  }
+
+  bool GuitarFXPlugin::UpdateResourceForNodeType(const std::string &nodeType,
+                                                 const std::string &resourceType,
+                                                 const std::filesystem::path &filePath,
+                                                 bool applyPreset)
+  {
+    EnsureBasicGraph();
+
+    if (!mActivePreset)
+    {
+      return false;
+    }
+
+    GraphNode *target = nullptr;
+    for (auto &node : mActivePreset->graph.nodes)
+    {
+      if (node.type == nodeType)
+      {
+        target = &node;
+        break;
+      }
+    }
+
+    if (!target)
+    {
+      return false;
+    }
+
+    ResourceRef ref;
+    ref.resourceType = resourceType;
+    ref.filePath = filePath;
+    target->resource = ref;
+
+    if (nodeType == "amp_nam")
+    {
+      mActiveModelPath = filePath.generic_string();
+    }
+    else if (nodeType == "cab_ir" || nodeType == "ir_cab")
+    {
+      mActiveIRPath = filePath.generic_string();
+    }
+
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+
+    if (applyPreset && mActivePreset)
+    {
+      ApplyPreset(*mActivePreset);
+      mPendingStateBroadcast = true;
+    }
+
+    return true;
+  }
+
   void GuitarFXPlugin::ApplyPreset(const Preset &preset)
   {
     // Lock DSP mutex to prevent ProcessBlock from accessing DSP during modification
@@ -1961,32 +2056,18 @@ namespace guitarfx
       return;
     }
 
-    // Lock DSP mutex during model loading
-    std::lock_guard<std::mutex> lock(mDSPMutex);
-
-    if (mDSP->LoadModel(modelPath))
+    if (!UpdateResourceForNodeType("amp_nam", "nam", modelPath))
     {
-      mActiveModelPath = modelPath.generic_string();
-      // Clear active preset since state no longer matches
-      mActivePreset.reset();
-      mActivePresetId.clear();
-      mActivePresetJson.clear();
-      mPendingStateBroadcast = true;
-
-      // Save settings so this model is restored on next startup
-      SaveAppSettings();
-
-      {
-        nlohmann::json message;
-        message["type"] = "modelLoaded";
-        message["path"] = mActiveModelPath;
-        SendMessageToUI(message.dump());
-      }
+      ReportErrorToUI("Failed to load model", "No NAM amp node available in current graph");
+      return;
     }
-    else
-    {
-      ReportErrorToUI("Failed to load model", "Could not parse model file: " + filePath);
-    }
+
+    SaveAppSettings();
+
+    nlohmann::json message;
+    message["type"] = "modelLoaded";
+    message["path"] = mActiveModelPath;
+    SendMessageToUI(message.dump());
   }
 
   void GuitarFXPlugin::HandleLoadIRRequest(const nlohmann::json &payload)
@@ -2011,32 +2092,19 @@ namespace guitarfx
       return;
     }
 
-    // Lock DSP mutex during IR loading
-    std::lock_guard<std::mutex> lock(mDSPMutex);
-
-    if (mDSP->LoadImpulseResponse(irPath))
+    if (!UpdateResourceForNodeType("cab_ir", "ir", irPath) &&
+        !UpdateResourceForNodeType("ir_cab", "ir", irPath))
     {
-      mActiveIRPath = irPath.generic_string();
-      // Clear active preset since state no longer matches
-      mActivePreset.reset();
-      mActivePresetId.clear();
-      mActivePresetJson.clear();
-      mPendingStateBroadcast = true;
-
-      // Save settings so this IR is restored on next startup
-      SaveAppSettings();
-
-      {
-        nlohmann::json message;
-        message["type"] = "irLoaded";
-        message["path"] = mActiveIRPath;
-        SendMessageToUI(message.dump());
-      }
+      ReportErrorToUI("Failed to load IR", "No IR cab node available in current graph");
+      return;
     }
-    else
-    {
-      ReportErrorToUI("Failed to load IR", "Could not parse IR file: " + filePath);
-    }
+
+    SaveAppSettings();
+
+    nlohmann::json message;
+    message["type"] = "irLoaded";
+    message["path"] = mActiveIRPath;
+    SendMessageToUI(message.dump());
   }
 
   void GuitarFXPlugin::HandleSavePresetRequest(const nlohmann::json &payload)
@@ -3233,49 +3301,10 @@ namespace guitarfx
 
     LoadAppSettings();
 
-    // Lock DSP mutex during state restoration
-    std::lock_guard<std::mutex> lock(mDSPMutex);
-
     // Apply loaded parameters to DSP
     for (int paramIdx = 0; paramIdx < kParamCount; ++paramIdx)
     {
       OnParamChange(paramIdx);
-    }
-
-    // Load model if path is set
-    if (!mActiveModelPath.empty())
-    {
-      const std::filesystem::path modelPath{mActiveModelPath};
-      if (std::filesystem::exists(modelPath))
-      {
-        if (!mDSP->LoadModel(modelPath))
-        {
-          std::cerr << "[Plugin] Failed to load last model: " << mActiveModelPath << std::endl;
-          mActiveModelPath.clear();
-        }
-      }
-      else
-      {
-        mActiveModelPath.clear();
-      }
-    }
-
-    // Load IR if path is set
-    if (!mActiveIRPath.empty())
-    {
-      const std::filesystem::path irPath{mActiveIRPath};
-      if (std::filesystem::exists(irPath))
-      {
-        if (!mDSP->LoadImpulseResponse(irPath))
-        {
-          std::cerr << "[Plugin] Failed to load last IR: " << mActiveIRPath << std::endl;
-          mActiveIRPath.clear();
-        }
-      }
-      else
-      {
-        mActiveIRPath.clear();
-      }
     }
 
     // Restore preset from JSON if available
@@ -3293,6 +3322,50 @@ namespace guitarfx
       {
         mActivePresetJson.clear();
       }
+    }
+
+    bool shouldApplyPreset = static_cast<bool>(mActivePreset);
+
+    // Apply legacy stored paths onto the graph if present
+    if (!mActiveModelPath.empty())
+    {
+      const std::filesystem::path modelPath{mActiveModelPath};
+      if (std::filesystem::exists(modelPath))
+      {
+        EnsureBasicGraph();
+        if (UpdateResourceForNodeType("amp_nam", "nam", modelPath, false))
+        {
+          shouldApplyPreset = true;
+        }
+      }
+      else
+      {
+        mActiveModelPath.clear();
+      }
+    }
+
+    if (!mActiveIRPath.empty())
+    {
+      const std::filesystem::path irPath{mActiveIRPath};
+      if (std::filesystem::exists(irPath))
+      {
+        EnsureBasicGraph();
+        if (UpdateResourceForNodeType("cab_ir", "ir", irPath, false) ||
+            UpdateResourceForNodeType("ir_cab", "ir", irPath, false))
+        {
+          shouldApplyPreset = true;
+        }
+      }
+      else
+      {
+        mActiveIRPath.clear();
+      }
+    }
+
+    if (shouldApplyPreset && mActivePreset)
+    {
+      ApplyPreset(*mActivePreset);
+      mPendingStateBroadcast = true;
     }
 
     mPendingStateBroadcast = true;

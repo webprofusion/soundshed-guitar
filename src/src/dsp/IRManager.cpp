@@ -168,7 +168,7 @@ namespace guitarfx
     return !mImpulse.empty();
   }
 
-  void IRManager::SetImpulse(const std::vector<float>& impulse)
+  void IRManager::SetImpulse(const std::vector<float> &impulse)
   {
     mImpulse = impulse;
     mCurrentIR = std::nullopt; // Clear the file path since this is synthetic data
@@ -189,7 +189,7 @@ namespace guitarfx
 
     // Get max samples for this quality mode
     const size_t maxSamples = GetMaxIRSamples(mQuality, sampleRate);
-    
+
     if (maxSamples == 0 || mImpulse.size() <= maxSamples)
     {
       return mImpulse;
@@ -202,7 +202,7 @@ namespace guitarfx
 
     // Apply fade-out to avoid clicks (last 64 samples)
     std::vector<float> truncated(mImpulse.begin(), mImpulse.begin() + truncLength);
-    
+
     constexpr size_t kFadeLength = 64;
     if (truncLength > kFadeLength)
     {
@@ -238,7 +238,7 @@ namespace guitarfx
     return std::min({mImpulse.size(), maxSamples, energyTruncPoint});
   }
 
-  size_t IRManager::FindEnergyTruncationPoint(const std::vector<float>& samples, float threshold)
+  size_t IRManager::FindEnergyTruncationPoint(const std::vector<float> &samples, float threshold)
   {
     if (samples.empty())
     {
@@ -350,21 +350,21 @@ namespace guitarfx
       const auto validBitsPerSample = ReadLittleEndian<std::uint16_t>(stream);
       // Read dwChannelMask
       const auto channelMask = ReadLittleEndian<std::uint32_t>(stream);
-      
+
       (void)cbSize;
       (void)validBitsPerSample;
       (void)channelMask;
-      
+
       // Read SubFormat GUID (16 bytes)
       // The first 2 bytes contain the actual audio format
       const auto subFormat = ReadLittleEndian<std::uint16_t>(stream);
-      
+
       // Skip remaining GUID bytes (14 bytes)
       stream.seekg(14, std::ios::cur);
-      
+
       // Use the SubFormat as the actual format
       audioFormat = subFormat;
-      
+
       // Skip any remaining extra bytes
       if (chunkSize > 40)
       {

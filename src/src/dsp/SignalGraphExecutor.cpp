@@ -13,7 +13,7 @@ namespace guitarfx
   SignalGraphExecutor::SignalGraphExecutor() = default;
   SignalGraphExecutor::~SignalGraphExecutor() = default;
 
-  void SignalGraphExecutor::SetGraph(const SignalGraph& graph)
+  void SignalGraphExecutor::SetGraph(const SignalGraph &graph)
   {
     mGraph = graph;
     mIsValid = false;
@@ -24,26 +24,26 @@ namespace guitarfx
     // Add implicit input/output nodes if they're referenced in edges but not in nodes
     bool hasInputNode = false;
     bool hasOutputNode = false;
-    
-    for (const auto& node : mGraph.nodes)
+
+    for (const auto &node : mGraph.nodes)
     {
       if (node.id == "__input__" || node.type == kNodeTypeInput)
         hasInputNode = true;
       if (node.id == "__output__" || node.type == kNodeTypeOutput)
         hasOutputNode = true;
     }
-    
+
     // Check if edges reference __input__ or __output__
     bool edgesReferenceInput = false;
     bool edgesReferenceOutput = false;
-    for (const auto& edge : mGraph.edges)
+    for (const auto &edge : mGraph.edges)
     {
       if (edge.from == "__input__")
         edgesReferenceInput = true;
       if (edge.to == "__output__")
         edgesReferenceOutput = true;
     }
-    
+
     // Add implicit nodes if needed
     if (edgesReferenceInput && !hasInputNode)
     {
@@ -53,7 +53,7 @@ namespace guitarfx
       inputNode.enabled = true;
       mGraph.nodes.insert(mGraph.nodes.begin(), inputNode);
     }
-    
+
     if (edgesReferenceOutput && !hasOutputNode)
     {
       GraphNode outputNode;
@@ -79,14 +79,14 @@ namespace guitarfx
     std::map<std::string, std::vector<std::string>> adjacency;
 
     // Initialize
-    for (const auto& node : mGraph.nodes)
+    for (const auto &node : mGraph.nodes)
     {
       inDegree[node.id] = 0;
       adjacency[node.id] = {};
     }
 
     // Build adjacency and in-degree
-    for (const auto& edge : mGraph.edges)
+    for (const auto &edge : mGraph.edges)
     {
       adjacency[edge.from].push_back(edge.to);
       inDegree[edge.to]++;
@@ -94,7 +94,7 @@ namespace guitarfx
 
     // Find all nodes with no incoming edges
     std::queue<std::string> queue;
-    for (const auto& [id, degree] : inDegree)
+    for (const auto &[id, degree] : inDegree)
     {
       if (degree == 0)
       {
@@ -110,7 +110,7 @@ namespace guitarfx
       queue.pop();
       mExecutionOrder.push_back(current);
 
-      for (const auto& neighbor : adjacency[current])
+      for (const auto &neighbor : adjacency[current])
       {
         inDegree[neighbor]--;
         if (inDegree[neighbor] == 0)
@@ -126,9 +126,9 @@ namespace guitarfx
 
   void SignalGraphExecutor::CreateProcessors()
   {
-    auto& registry = EffectRegistry::Instance();
+    auto &registry = EffectRegistry::Instance();
 
-    for (const auto& node : mGraph.nodes)
+    for (const auto &node : mGraph.nodes)
     {
       NodeState state;
       state.id = node.id;
@@ -156,12 +156,12 @@ namespace guitarfx
       {
         state.processor->SetEnabled(node.enabled);
 
-        for (const auto& [key, value] : node.params)
+        for (const auto &[key, value] : node.params)
         {
           state.processor->SetParam(key, value);
         }
 
-        for (const auto& [key, value] : node.config)
+        for (const auto &[key, value] : node.config)
         {
           state.processor->SetConfig(key, value);
         }
@@ -189,7 +189,7 @@ namespace guitarfx
 
     AllocateBuffers(maxBlockSize);
 
-    for (auto& [id, state] : mNodeStates)
+    for (auto &[id, state] : mNodeStates)
     {
       if (state.processor)
       {
@@ -200,7 +200,7 @@ namespace guitarfx
 
   void SignalGraphExecutor::Reset()
   {
-    for (auto& [id, state] : mNodeStates)
+    for (auto &[id, state] : mNodeStates)
     {
       if (state.processor)
       {
@@ -211,7 +211,7 @@ namespace guitarfx
 
   void SignalGraphExecutor::AllocateBuffers(int maxBlockSize)
   {
-    for (auto& [id, state] : mNodeStates)
+    for (auto &[id, state] : mNodeStates)
     {
       state.bufferLeft.resize(static_cast<size_t>(maxBlockSize), 0.0f);
       state.bufferRight.resize(static_cast<size_t>(maxBlockSize), 0.0f);
@@ -221,7 +221,7 @@ namespace guitarfx
     mTempRightBuffer.resize(static_cast<size_t>(maxBlockSize), 0.0f);
   }
 
-  void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSamples)
+  void SignalGraphExecutor::Process(float **inputs, float **outputs, int numSamples)
   {
     if (!mIsValid || !mPrepared || !inputs || !outputs)
     {
@@ -229,7 +229,7 @@ namespace guitarfx
     }
 
     // Clear all buffers and reset input flags
-    for (auto& [id, state] : mNodeStates)
+    for (auto &[id, state] : mNodeStates)
     {
       std::fill(state.bufferLeft.begin(), state.bufferLeft.begin() + numSamples, 0.0f);
       std::fill(state.bufferRight.begin(), state.bufferRight.begin() + numSamples, 0.0f);
@@ -240,9 +240,9 @@ namespace guitarfx
     const float inputGain = static_cast<float>(std::pow(10.0, mInputTrim / 20.0));
 
     // Find input node and copy input
-    for (auto& [id, state] : mNodeStates)
+    for (auto &[id, state] : mNodeStates)
     {
-      const auto* node = mGraph.FindNode(id);
+      const auto *node = mGraph.FindNode(id);
       if (node && (node->type == kNodeTypeInput || node->id == "__input__"))
       {
         if (inputs[0])
@@ -265,13 +265,13 @@ namespace guitarfx
     }
 
     // Process nodes in topological order
-    for (const auto& nodeId : mExecutionOrder)
+    for (const auto &nodeId : mExecutionOrder)
     {
-      auto* state = FindNodeState(nodeId);
+      auto *state = FindNodeState(nodeId);
       if (!state)
         continue;
 
-      const auto* node = mGraph.FindNode(nodeId);
+      const auto *node = mGraph.FindNode(nodeId);
       if (!node)
         continue;
 
@@ -280,11 +280,11 @@ namespace guitarfx
         continue;
 
       // Gather inputs from incoming edges
-      for (const auto& edge : mGraph.edges)
+      for (const auto &edge : mGraph.edges)
       {
         if (edge.to == nodeId)
         {
-          auto* sourceState = FindNodeState(edge.from);
+          auto *sourceState = FindNodeState(edge.from);
           if (sourceState && sourceState->hasInput)
           {
             const float gain = static_cast<float>(edge.gain);
@@ -315,7 +315,7 @@ namespace guitarfx
       // Process the node
       if (state->processor && state->hasInput)
       {
-        if (node->type == kNodeTypeSplitter || node->type == kNodeTypeMixer || 
+        if (node->type == kNodeTypeSplitter || node->type == kNodeTypeMixer ||
             node->type == kNodeTypeOutput || node->id == "__output__")
         {
           // These nodes just pass through (routing handled above)
@@ -323,8 +323,8 @@ namespace guitarfx
         else if (state->processor->IsEnabled())
         {
           // Process effect
-          float* inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
-          float* outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
+          float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
+          float *outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
 
           state->processor->Process(inPtrs, outPtrs, numSamples);
 
@@ -338,9 +338,9 @@ namespace guitarfx
     // Find output node and copy to output
     const float outputGain = static_cast<float>(std::pow(10.0, mOutputTrim / 20.0));
 
-    for (const auto& [id, state] : mNodeStates)
+    for (const auto &[id, state] : mNodeStates)
     {
-      const auto* node = mGraph.FindNode(id);
+      const auto *node = mGraph.FindNode(id);
       if (node && (node->type == kNodeTypeOutput || node->id == "__output__") && state.hasInput)
       {
         if (outputs[0])
@@ -362,36 +362,36 @@ namespace guitarfx
     }
   }
 
-  void SignalGraphExecutor::SetNodeEnabled(const std::string& nodeId, bool enabled)
+  void SignalGraphExecutor::SetNodeEnabled(const std::string &nodeId, bool enabled)
   {
-    auto* state = FindNodeState(nodeId);
+    auto *state = FindNodeState(nodeId);
     if (state && state->processor)
     {
       state->processor->SetEnabled(enabled);
     }
   }
 
-  void SignalGraphExecutor::SetNodeParam(const std::string& nodeId, const std::string& key, double value)
+  void SignalGraphExecutor::SetNodeParam(const std::string &nodeId, const std::string &key, double value)
   {
-    auto* state = FindNodeState(nodeId);
+    auto *state = FindNodeState(nodeId);
     if (state && state->processor)
     {
       state->processor->SetParam(key, value);
     }
   }
 
-  void SignalGraphExecutor::SetNodeConfig(const std::string& nodeId, const std::string& key, const std::string& value)
+  void SignalGraphExecutor::SetNodeConfig(const std::string &nodeId, const std::string &key, const std::string &value)
   {
-    auto* state = FindNodeState(nodeId);
+    auto *state = FindNodeState(nodeId);
     if (state && state->processor)
     {
       state->processor->SetConfig(key, value);
     }
   }
 
-  bool SignalGraphExecutor::LoadNodeResource(const std::string& nodeId, const ResourceRef& ref)
+  bool SignalGraphExecutor::LoadNodeResource(const std::string &nodeId, const ResourceRef &ref)
   {
-    auto* state = FindNodeState(nodeId);
+    auto *state = FindNodeState(nodeId);
     if (!state || !state->processor)
     {
       return false;
@@ -415,9 +415,9 @@ namespace guitarfx
     return false;
   }
 
-  std::string SignalGraphExecutor::FindFirstNodeOfType(const std::string& type) const
+  std::string SignalGraphExecutor::FindFirstNodeOfType(const std::string &type) const
   {
-    for (const auto& node : mGraph.nodes)
+    for (const auto &node : mGraph.nodes)
     {
       if (node.type == type)
       {
@@ -427,7 +427,7 @@ namespace guitarfx
     return {};
   }
 
-  SignalGraphExecutor::NodeState* SignalGraphExecutor::FindNodeState(const std::string& id)
+  SignalGraphExecutor::NodeState *SignalGraphExecutor::FindNodeState(const std::string &id)
   {
     auto it = mNodeStates.find(id);
     if (it != mNodeStates.end())

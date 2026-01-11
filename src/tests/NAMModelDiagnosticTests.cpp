@@ -5,12 +5,16 @@
  * processing is working correctly. It tests:
  * 
  * 1. Model loading and initialization
- * 2. Direct model processing (bypassing AmpModelManager)
- * 3. AmpModelManager processing pipeline
+ * 2. Direct model processing (bypassing GraphDSPManager)
+ * 3. GraphDSPManager processing pipeline
  * 4. Signal integrity through each stage
  * 
  * Run with various test signals to diagnose garbled output issues.
  */
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -26,10 +30,18 @@
 
 #include <nlohmann/json.hpp>
 
-#include "dsp/AmpModelManager.h"
+#include "dsp/GraphDSPManager.h"
+#include "presets/PresetTypes.h"
 #include "IPlugConstants.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 // Force factory registration
 #include "NAM/wavenet.h"
@@ -195,6 +207,98 @@ void PrintSamples(const std::string& label, const std::vector<T>& buffer, int co
 }
 
 // ============================================================================
+// Graph helper
+// ============================================================================
+
+guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& irPath)
+{
+  guitarfx::Preset preset;
+  preset.id = "nam-diagnostic";
+  preset.name = "nam-diagnostic";
+  preset.version = 2;
+
+  guitarfx::GraphNode input;
+  input.id = "input";
+  input.type = guitarfx::kNodeTypeInput;
+  input.category = "routing";
+
+  guitarfx::GraphNode amp;
+  amp.id = "amp";
+  amp.type = "amp_nam";
+  amp.category = "amp";
+  amp.enabled = fs::exists(modelPath);
+  if (amp.enabled)
+  {
+    guitarfx::ResourceRef ref;
+    ref.resourceType = "nam";
+    ref.filePath = modelPath;
+    amp.resource = ref;
+  }
+
+  guitarfx::GraphNode cab;
+  cab.id = "cab";
+  cab.type = "cab_ir";
+  cab.category = "cab";
+  cab.enabled = fs::exists(irPath);
+  cab.params["mix"] = 1.0;
+  cab.params["outputGain"] = 0.0;
+  if (cab.enabled)
+  {
+    guitarfx::ResourceRef ref;
+    ref.resourceType = "ir";
+    ref.filePath = irPath;
+    cab.resource = ref;
+  }
+
+  guitarfx::GraphNode output;
+  output.id = "output";
+  output.type = guitarfx::kNodeTypeOutput;
+  output.category = "routing";
+
+  preset.graph.nodes = {input, amp, cab, output};
+  preset.graph.edges = {
+    {input.id, amp.id, 0, 0, 1.0},
+    {amp.id, cab.id, 0, 0, 1.0},
+    {cab.id, output.id, 0, 0, 1.0}
+  };
+
+  return preset;
+}
+
+class GraphHarness
+{
+public:
+  GraphHarness(const fs::path& modelPath,
+               const fs::path& irPath,
+               double sampleRate,
+               int blockSize)
+  {
+    mDSP = std::make_unique<guitarfx::GraphDSPManager>();
+    mDSP->Prepare(sampleRate, blockSize);
+    mPreset = MakeNamGraphPreset(modelPath, irPath);
+    mDSP->LoadPreset(mPreset);
+  }
+
+  void Process(iplug::sample** inputs, iplug::sample** outputs, int numSamples)
+  {
+    mDSP->Process(inputs, outputs, numSamples);
+  }
+
+  void SetInputTrim(double db) { mDSP->SetInputTrim(db); }
+  void SetOutputTrim(double db) { mDSP->SetOutputTrim(db); }
+  void SetDrive(double value) { mDSP->SetDrive(value); }
+  void SetTone(double value) { mDSP->SetTone(value); }
+  void SetMix(double value) { mDSP->SetNodeParam("cab", "mix", value); }
+  void SetGateEnabled(bool enabled) { mDSP->SetGateEnabled(enabled); }
+  void SetDoublerEnabled(bool enabled) { mDSP->SetDoublerEnabled(enabled); }
+  void SetTranspose(int semitones) { mDSP->SetTranspose(semitones); }
+
+private:
+  guitarfx::Preset mPreset;
+  std::unique_ptr<guitarfx::GraphDSPManager> mDSP;
+};
+
+// ============================================================================
 // Test: Direct NAM Model Processing
 // ============================================================================
 
@@ -322,41 +426,17 @@ bool TestDirectModelProcessing(const fs::path& modelPath)
 }
 
 // ============================================================================
-// Test: AmpModelManager Processing Pipeline
+// Test: GraphDSPManager Processing Pipeline
 // ============================================================================
 
 bool TestDSPManagerPipeline(const fs::path& modelPath, const fs::path& irPath)
 {
-  std::cout << "\n=== Test: AmpModelManager Processing Pipeline ===\n";
+  std::cout << "\n=== Test: GraphDSPManager Processing Pipeline ===\n";
   std::cout << "Model: " << modelPath.filename().string() << "\n";
   std::cout << "IR: " << (irPath.empty() ? "(none)" : irPath.filename().string()) << "\n\n";
 
-  guitarfx::AmpModelManager dsp;
-  
-  // Initialize
-  dsp.Prepare(kTestSampleRate, kTestBlockSize);
-  std::cout << "DSP Manager prepared at " << kTestSampleRate << " Hz\n";
-
-  // Load model
-  if (!dsp.LoadModel(modelPath))
-  {
-    std::cerr << "ERROR: Failed to load model\n";
-    return false;
-  }
-  std::cout << "Model loaded\n";
-
-  // Optionally load IR
-  if (!irPath.empty() && fs::exists(irPath))
-  {
-    if (!dsp.LoadImpulseResponse(irPath))
-    {
-      std::cerr << "WARNING: Failed to load IR (continuing without)\n";
-    }
-    else
-    {
-      std::cout << "IR loaded\n";
-    }
-  }
+  GraphHarness dsp(modelPath, irPath, kTestSampleRate, kTestBlockSize);
+  std::cout << "Graph DSP prepared at " << kTestSampleRate << " Hz\n";
 
   // Set neutral DSP parameters
   dsp.SetInputTrim(0.0);
@@ -465,7 +545,7 @@ bool TestDSPManagerPipeline(const fs::path& modelPath, const fs::path& irPath)
 bool TestDirectVsManager(const fs::path& modelPath)
 {
   std::cout << "\n=== Test: Direct Model vs DSP Manager Comparison ===\n";
-  std::cout << "This test compares NAM model output when called directly vs through AmpModelManager\n\n";
+  std::cout << "This test compares NAM model output when called directly vs through GraphDSPManager\n\n";
 
   // Load model directly
   auto directModel = nam::get_dsp(modelPath);
@@ -476,14 +556,8 @@ bool TestDirectVsManager(const fs::path& modelPath)
   }
   directModel->ResetAndPrewarm(kTestSampleRate, kTestBlockSize);
 
-  // Set up DSP manager
-  guitarfx::AmpModelManager dsp;
-  dsp.Prepare(kTestSampleRate, kTestBlockSize);
-  if (!dsp.LoadModel(modelPath))
-  {
-    std::cerr << "ERROR: Failed to load model in DSP manager\n";
-    return false;
-  }
+  // Set up graph-based DSP manager
+  GraphHarness dsp(modelPath, {}, kTestSampleRate, kTestBlockSize);
 
   // Neutral settings for DSP manager (to minimize processing changes)
   dsp.SetInputTrim(0.0);
@@ -605,12 +679,7 @@ bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json
 
   auto renderModel = [](const fs::path& modelPath) -> std::vector<double>
   {
-    guitarfx::AmpModelManager dsp;
-    dsp.Prepare(kTestSampleRate, kTestBlockSize);
-    if (!dsp.LoadModel(modelPath))
-    {
-      return {};
-    }
+    GraphHarness dsp(modelPath, {}, kTestSampleRate, kTestBlockSize);
 
     dsp.SetInputTrim(0.0);
     dsp.SetOutputTrim(0.0);

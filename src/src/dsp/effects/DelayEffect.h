@@ -34,7 +34,7 @@ namespace guitarfx
       mWritePos = 0;
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       const float feedback = static_cast<float>(mFeedback);
       const float wet = static_cast<float>(mMix);
@@ -65,7 +65,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "time" || key == "timeMs")
       {
@@ -82,9 +82,9 @@ namespace guitarfx
       }
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "time" || key == "timeMs")
         return mDelayMs;
@@ -127,14 +127,12 @@ namespace guitarfx
     info.description = "Simple digital delay";
     info.requiresResource = false;
     info.parameters = {
-      {"timeMs", "Time", 300.0, 1.0, 2000.0, "ms"},
-      {"feedback", "Feedback", 0.3, 0.0, 0.95, ""},
-      {"mix", "Mix", 0.3, 0.0, 1.0, ""}
-    };
+        {"timeMs", "Time", 300.0, 1.0, 2000.0, "ms"},
+        {"feedback", "Feedback", 0.3, 0.0, 0.95, ""},
+        {"mix", "Mix", 0.3, 0.0, 1.0, ""}};
 
-    EffectRegistry::Instance().Register("delay_digital", info, []() {
-      return std::make_unique<DelayEffect>();
-    });
+    EffectRegistry::Instance().Register("delay_digital", info, []()
+                                        { return std::make_unique<DelayEffect>(); });
   }
 
 } // namespace guitarfx

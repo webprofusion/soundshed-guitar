@@ -17,9 +17,8 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
-#include "dsp/AmpModelManager.h"
+#include "dsp/GraphDSPManager.h"
+#include "presets/PresetTypes.h"
 #include "IPlugConstants.h"
 
 // Force factory registration
@@ -33,12 +32,76 @@ namespace
 [[maybe_unused]] volatile auto force_lstm = &nam::lstm::Factory;
 [[maybe_unused]] volatile auto force_convnet = &nam::convnet::Factory;
 
-namespace fs = std::filesystem;
+  namespace fs = std::filesystem;
+
+  guitarfx::Preset MakeOfflinePreset(const fs::path& modelPath,
+                                     const fs::path& irPath,
+                                     double inputTrim,
+                                     double outputTrim,
+                                     double drive,
+                                     double tone)
+  {
+    guitarfx::Preset preset;
+    preset.id = "offline-processing";
+    preset.name = "offline-processing";
+    preset.version = 2;
+    preset.global.inputTrim = inputTrim;
+    preset.global.outputTrim = outputTrim;
+    preset.global.outputVolume = 1.0;
+
+    guitarfx::GraphNode input;
+    input.id = "input";
+    input.type = guitarfx::kNodeTypeInput;
+    input.category = "utility";
+
+    guitarfx::GraphNode amp;
+    amp.id = "amp";
+    amp.type = "amp_nam";
+    amp.category = "amp";
+    amp.enabled = !modelPath.empty();
+    amp.params["drive"] = drive;
+    amp.params["tone"] = tone;
+    if (!modelPath.empty())
+    {
+      guitarfx::ResourceRef ref;
+      ref.filePath = modelPath;
+      amp.resource = ref;
+    }
+
+    guitarfx::GraphNode cab;
+    cab.id = "cab";
+    cab.type = "cab_ir";
+    cab.category = "cab";
+    cab.enabled = !irPath.empty();
+    cab.params["mix"] = 1.0;
+    cab.params["outputGain"] = 0.0;
+    if (!irPath.empty())
+    {
+      guitarfx::ResourceRef ref;
+      ref.filePath = irPath;
+      cab.resource = ref;
+    }
+
+    guitarfx::GraphNode output;
+    output.id = "output";
+    output.type = guitarfx::kNodeTypeOutput;
+    output.category = "utility";
+
+    preset.graph.nodes = { input, amp, cab, output };
+    preset.graph.edges = {
+      { input.id, amp.id, 0, 0, 1.0 },
+      { amp.id, cab.id, 0, 0, 1.0 },
+      { cab.id, output.id, 0, 0, 1.0 }
+    };
+
+    return preset;
+  }
 
 /**
  * @brief Simple WAV file reader/writer
  */
 class WavFile
+  // Placeholder for future helper functions
 {
 public:
   struct Header
@@ -230,19 +293,6 @@ public:
   }
 };
 
-nlohmann::json LoadJson(const fs::path& path)
-{
-  std::ifstream input(path, std::ios::binary);
-  if (!input)
-  {
-    throw std::runtime_error("Failed to open JSON file: " + path.string());
-  }
-
-  nlohmann::json document;
-  input >> document;
-  return document;
-}
-
 } // anonymous namespace
 
 int main(int argc, char* argv[])
@@ -295,73 +345,27 @@ int main(int argc, char* argv[])
       inputChannels.push_back(inputChannels[0]);
     }
 
-    // Create DSP manager
-    auto dspManager = std::make_unique<guitarfx::AmpModelManager>();
+    // Resolve model/IR paths relative to resources directory when needed
+    fs::path modelFile = modelPath.empty() ? fs::path{} : fs::path(modelPath);
+    fs::path irFile = irPath.empty() ? fs::path{} : fs::path(irPath);
+    if (!modelFile.empty() && modelFile.is_relative())
+    {
+      modelFile = fs::path(resourcesDir) / modelFile;
+    }
+    if (!irFile.empty() && irFile.is_relative())
+    {
+      irFile = fs::path(resourcesDir) / irFile;
+    }
+
+    std::cout << (modelFile.empty() ? "No model specified, amp disabled" : "Model path: " + modelFile.string()) << "\n";
+    std::cout << (irFile.empty() ? "No IR specified, cab disabled" : "IR path: " + irFile.string()) << "\n";
+
     constexpr int kBlockSize = 512;
-    dspManager->Prepare(sampleRate, kBlockSize);
+    guitarfx::GraphDSPManager dsp;
+    dsp.Prepare(sampleRate, kBlockSize);
 
-    // Set default DSP parameters
-    dspManager->SetInputTrim(0.0);
-    dspManager->SetOutputTrim(0.0);
-    dspManager->SetDrive(0.1);
-    dspManager->SetTone(0.5);
-    dspManager->SetGateEnabled(false);
-
-    // Load model if specified
-    if (!modelPath.empty())
-    {
-      // Make path absolute if relative
-      fs::path fullModelPath = modelPath;
-      if (fullModelPath.is_relative())
-      {
-        fullModelPath = fs::path(resourcesDir) / modelPath;
-      }
-
-      std::cout << "Loading NAM model from: " << fullModelPath << "\n";
-      if (dspManager->LoadModel(fullModelPath.string()))
-      {
-        std::cout << "NAM model loaded successfully\n";
-        dspManager->SetAmpEnabled(true);
-      }
-      else
-      {
-        std::cerr << "Failed to load NAM model\n";
-        return 1;
-      }
-    }
-    else
-    {
-      std::cout << "No model specified, amp disabled\n";
-      dspManager->SetAmpEnabled(false);
-    }
-
-    // Load IR if specified
-    if (!irPath.empty())
-    {
-      // Make path absolute if relative
-      fs::path fullIrPath = irPath;
-      if (fullIrPath.is_relative())
-      {
-        fullIrPath = fs::path(resourcesDir) / irPath;
-      }
-
-      std::cout << "Loading IR from: " << fullIrPath << "\n";
-      if (dspManager->LoadImpulseResponse(fullIrPath.string()))
-      {
-        std::cout << "IR loaded successfully\n";
-        dspManager->SetCabEnabled(true);
-      }
-      else
-      {
-        std::cerr << "Failed to load IR\n";
-        return 1;
-      }
-    }
-    else
-    {
-      std::cout << "No IR specified, cab disabled\n";
-      dspManager->SetCabEnabled(false);
-    }
+    auto preset = MakeOfflinePreset(modelFile, irFile, 0.0, 0.0, 0.1, 0.5);
+    dsp.LoadPreset(preset);
 
     std::cout << "\nProcessing audio...\n";
 
@@ -380,8 +384,8 @@ int main(int argc, char* argv[])
       int currentBlockSize = std::min(kBlockSize, remainingSamples);
 
       // Prepare iPlug buffers
-      iplug::sample inputBuffer[2][512];
-      iplug::sample outputBuffer[2][512];
+      iplug::sample inputBuffer[2][kBlockSize];
+      iplug::sample outputBuffer[2][kBlockSize];
 
       for (int i = 0; i < currentBlockSize; ++i)
       {
@@ -392,7 +396,7 @@ int main(int argc, char* argv[])
       // Process through DSP
       iplug::sample* inputs[] = { inputBuffer[0], inputBuffer[1] };
       iplug::sample* outputs[] = { outputBuffer[0], outputBuffer[1] };
-      dspManager->Process(inputs, outputs, currentBlockSize);
+      dsp.Process(inputs, outputs, currentBlockSize);
 
       // Copy to output
       for (int i = 0; i < currentBlockSize; ++i)

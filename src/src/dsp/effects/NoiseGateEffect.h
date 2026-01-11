@@ -24,7 +24,7 @@ namespace guitarfx
       mEnvelope = 0.0f;
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       const float threshold = static_cast<float>(std::pow(10.0, mThresholdDb / 20.0));
       const float attackCoef = static_cast<float>(std::exp(-1.0 / (mSampleRate * mAttackMs * 0.001)));
@@ -59,7 +59,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "threshold" || key == "thresholdDb")
         mThresholdDb = value;
@@ -71,9 +71,9 @@ namespace guitarfx
         mReleaseMs = std::max(1.0, value);
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "threshold" || key == "thresholdDb")
         return mThresholdDb;
@@ -100,20 +100,18 @@ namespace guitarfx
   inline void RegisterNoiseGateEffect()
   {
     EffectTypeInfo info;
-    info.type = "dynamics_gate";  // Changed from "gate_noise" to match preset JSON
+    info.type = "dynamics_gate"; // Changed from "gate_noise" to match preset JSON
     info.displayName = "Noise Gate";
     info.category = "dynamics";
     info.description = "Simple noise gate";
     info.requiresResource = false;
     info.parameters = {
-      {"thresholdDb", "Threshold", -60.0, -80.0, 0.0, "dB"},
-      {"attackMs", "Attack", 1.0, 0.1, 50.0, "ms"},
-      {"releaseMs", "Release", 50.0, 1.0, 500.0, "ms"}
-    };
+        {"thresholdDb", "Threshold", -60.0, -80.0, 0.0, "dB"},
+        {"attackMs", "Attack", 1.0, 0.1, 50.0, "ms"},
+        {"releaseMs", "Release", 50.0, 1.0, 500.0, "ms"}};
 
-    EffectRegistry::Instance().Register("dynamics_gate", info, []() {
-      return std::make_unique<NoiseGateEffect>();
-    });
+    EffectRegistry::Instance().Register("dynamics_gate", info, []()
+                                        { return std::make_unique<NoiseGateEffect>(); });
   }
 
 } // namespace guitarfx

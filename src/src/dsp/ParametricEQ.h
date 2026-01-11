@@ -109,7 +109,7 @@ namespace guitarfx
   private:
     // Transposed Direct Form II biquad - most efficient for real-time audio
     static double ProcessBiquad(double input, double b0, double b1, double b2,
-                                 double a1, double a2, double& s1, double& s2)
+                                double a1, double a2, double &s1, double &s2)
     {
       const double output = b0 * input + s1;
       s1 = b1 * input - a1 * output + s2;
@@ -127,34 +127,35 @@ namespace guitarfx
 
     void UpdateBandCoefficients(int band)
     {
-      if (mSampleRate <= 0.0 || band < 0 || band >= kNumBands) return;
+      if (mSampleRate <= 0.0 || band < 0 || band >= kNumBands)
+        return;
 
       switch (band)
       {
-        case kBandLowShelf:
-          ComputeLowShelf(mFrequency[band], mGainDb[band], 
-                          mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
-          break;
-        case kBandLowMid:
-        case kBandHighMid:
-          ComputePeakingEQ(mFrequency[band], mQ[band], mGainDb[band],
-                           mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
-          break;
-        case kBandHighShelf:
-          ComputeHighShelf(mFrequency[band], mGainDb[band],
-                           mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
-          break;
+      case kBandLowShelf:
+        ComputeLowShelf(mFrequency[band], mGainDb[band],
+                        mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
+        break;
+      case kBandLowMid:
+      case kBandHighMid:
+        ComputePeakingEQ(mFrequency[band], mQ[band], mGainDb[band],
+                         mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
+        break;
+      case kBandHighShelf:
+        ComputeHighShelf(mFrequency[band], mGainDb[band],
+                         mB0[band], mB1[band], mB2[band], mA1[band], mA2[band]);
+        break;
       }
     }
 
     // Low shelf filter coefficients
-    void ComputeLowShelf(double freq, double gainDb, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputeLowShelf(double freq, double gainDb, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double A = std::pow(10.0, gainDb / 40.0);
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;
       const double sinOmega = std::sin(omega);
       const double cosOmega = std::cos(omega);
-      const double alpha = sinOmega / 2.0 * std::sqrt((A + 1.0/A) * (1.0/0.707 - 1.0) + 2.0);
+      const double alpha = sinOmega / 2.0 * std::sqrt((A + 1.0 / A) * (1.0 / 0.707 - 1.0) + 2.0);
       const double sqrtA = std::sqrt(A);
 
       const double a0 = (A + 1.0) + (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha;
@@ -166,13 +167,13 @@ namespace guitarfx
     }
 
     // High shelf filter coefficients
-    void ComputeHighShelf(double freq, double gainDb, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputeHighShelf(double freq, double gainDb, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double A = std::pow(10.0, gainDb / 40.0);
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;
       const double sinOmega = std::sin(omega);
       const double cosOmega = std::cos(omega);
-      const double alpha = sinOmega / 2.0 * std::sqrt((A + 1.0/A) * (1.0/0.707 - 1.0) + 2.0);
+      const double alpha = sinOmega / 2.0 * std::sqrt((A + 1.0 / A) * (1.0 / 0.707 - 1.0) + 2.0);
       const double sqrtA = std::sqrt(A);
 
       const double a0 = (A + 1.0) - (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha;
@@ -184,7 +185,7 @@ namespace guitarfx
     }
 
     // Peaking EQ filter coefficients
-    void ComputePeakingEQ(double freq, double q, double gainDb, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputePeakingEQ(double freq, double q, double gainDb, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double A = std::pow(10.0, gainDb / 40.0);
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;
@@ -206,8 +207,8 @@ namespace guitarfx
     // Per-band parameters
     std::array<bool, kNumBands> mBandEnabled = {true, true, true, true};
     std::array<double, kNumBands> mGainDb = {0.0, 0.0, 0.0, 0.0};
-    std::array<double, kNumBands> mFrequency = {100.0, 500.0, 2000.0, 8000.0};  // Default frequencies
-    std::array<double, kNumBands> mQ = {0.707, 1.0, 1.0, 0.707};  // Q for peaking bands
+    std::array<double, kNumBands> mFrequency = {100.0, 500.0, 2000.0, 8000.0}; // Default frequencies
+    std::array<double, kNumBands> mQ = {0.707, 1.0, 1.0, 0.707};               // Q for peaking bands
 
     // Biquad coefficients per band
     std::array<double, kNumBands> mB0 = {1.0, 1.0, 1.0, 1.0};

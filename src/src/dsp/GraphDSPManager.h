@@ -14,7 +14,7 @@ namespace guitarfx
 {
   /**
    * DSP Manager for v2 presets using the new signal graph architecture.
-   * 
+   *
    * This class manages the signal graph executor and handles:
    * - Loading presets (with automatic migration from v1 if needed)
    * - Resource resolution via ResourceLibrary
@@ -25,7 +25,7 @@ namespace guitarfx
   {
   public:
     GraphDSPManager()
-      : mResourceLibrary(std::make_unique<ResourceLibrary>())
+        : mResourceLibrary(std::make_unique<ResourceLibrary>())
     {
       // Register all built-in effects on first use
       RegisterAllEffects();
@@ -45,7 +45,7 @@ namespace guitarfx
       mInputBufferR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
       mOutputBufferL.resize(static_cast<size_t>(maxBlockSize), 0.0f);
       mOutputBufferR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
-      
+
       // Clear buffers to ensure no garbage data
       std::fill(mInputBufferL.begin(), mInputBufferL.end(), 0.0f);
       std::fill(mInputBufferR.begin(), mInputBufferR.end(), 0.0f);
@@ -74,7 +74,7 @@ namespace guitarfx
      * @param preset The preset to load
      * @return true if the preset was loaded successfully
      */
-    bool LoadPreset(const Preset& preset)
+    bool LoadPreset(const Preset &preset)
     {
       mCurrentPreset = preset;
 
@@ -85,14 +85,14 @@ namespace guitarfx
 
       // Create a new executor for the signal graph
       mExecutor = std::make_unique<SignalGraphExecutor>();
-      
+
       // CRITICAL: Set resource library BEFORE setting graph, so resources can load during node creation
       mExecutor->SetResourceLibrary(mResourceLibrary.get());
-      
+
       // Apply trim settings to executor
       mExecutor->SetInputTrim(mInputTrim);
       mExecutor->SetOutputTrim(mOutputTrim);
-      
+
       mExecutor->SetGraph(preset.graph);
 
       // ResolveResources is not needed - SetGraph already loads resources during node creation
@@ -113,7 +113,7 @@ namespace guitarfx
      * @param outputs Output buffer array [L, R]
      * @param numSamples Number of samples to process
      */
-    void Process(iplug::sample** inputs, iplug::sample** outputs, int numSamples)
+    void Process(iplug::sample **inputs, iplug::sample **outputs, int numSamples)
     {
       if (!mExecutor)
       {
@@ -132,8 +132,8 @@ namespace guitarfx
         mInputBufferR[i] = inputs[1] ? static_cast<float>(inputs[1][i]) : 0.0f;
       }
 
-      float* floatInputs[2] = { mInputBufferL.data(), mInputBufferR.data() };
-      float* floatOutputs[2] = { mOutputBufferL.data(), mOutputBufferR.data() };
+      float *floatInputs[2] = {mInputBufferL.data(), mInputBufferR.data()};
+      float *floatOutputs[2] = {mOutputBufferL.data(), mOutputBufferR.data()};
 
       // Process through the graph
       mExecutor->Process(floatInputs, floatOutputs, numSamples);
@@ -154,7 +154,7 @@ namespace guitarfx
      * @param key The parameter key
      * @param value The new parameter value
      */
-    void SetNodeParam(const std::string& nodeId, const std::string& key, double value)
+    void SetNodeParam(const std::string &nodeId, const std::string &key, double value)
     {
       if (mExecutor)
       {
@@ -162,7 +162,7 @@ namespace guitarfx
       }
 
       // Update the stored preset
-      for (auto& node : mCurrentPreset.graph.nodes)
+      for (auto &node : mCurrentPreset.graph.nodes)
       {
         if (node.id == nodeId)
         {
@@ -175,14 +175,14 @@ namespace guitarfx
     /**
      * Enable or disable a node.
      */
-    void SetNodeEnabled(const std::string& nodeId, bool enabled)
+    void SetNodeEnabled(const std::string &nodeId, bool enabled)
     {
       if (mExecutor)
       {
         mExecutor->SetNodeEnabled(nodeId, enabled);
       }
 
-      for (auto& node : mCurrentPreset.graph.nodes)
+      for (auto &node : mCurrentPreset.graph.nodes)
       {
         if (node.id == nodeId)
         {
@@ -222,12 +222,12 @@ namespace guitarfx
     /**
      * Get the current preset state.
      */
-    [[nodiscard]] const Preset& GetCurrentPreset() const { return mCurrentPreset; }
+    [[nodiscard]] const Preset &GetCurrentPreset() const { return mCurrentPreset; }
 
     /**
      * Get the resource library for managing pre-defined resources.
      */
-    [[nodiscard]] ResourceLibrary& GetResourceLibrary() { return *mResourceLibrary; }
+    [[nodiscard]] ResourceLibrary &GetResourceLibrary() { return *mResourceLibrary; }
 
     /**
      * Check if a preset is loaded.
@@ -400,7 +400,7 @@ namespace guitarfx
         nodeId = FindFirstNodeOfType("eq");
       if (!nodeId.empty())
       {
-        const char* paramNames[] = {"lowGain", "lowMidGain", "highMidGain", "highGain"};
+        const char *paramNames[] = {"lowGain", "lowMidGain", "highMidGain", "highGain"};
         if (band >= 0 && band < 4)
         {
           SetNodeParam(nodeId, paramNames[band], value);
@@ -416,7 +416,7 @@ namespace guitarfx
         nodeId = FindFirstNodeOfType("eq");
       if (!nodeId.empty())
       {
-        const char* paramNames[] = {"lowFreq", "lowMidFreq", "highMidFreq", "highFreq"};
+        const char *paramNames[] = {"lowFreq", "lowMidFreq", "highMidFreq", "highFreq"};
         if (band >= 0 && band < 4)
         {
           SetNodeParam(nodeId, paramNames[band], value);
@@ -432,7 +432,7 @@ namespace guitarfx
         nodeId = FindFirstNodeOfType("eq");
       if (!nodeId.empty())
       {
-        const char* paramNames[] = {"", "lowMidQ", "highMidQ", ""};
+        const char *paramNames[] = {"", "lowMidQ", "highMidQ", ""};
         if (band >= 1 && band <= 2)
         {
           SetNodeParam(nodeId, paramNames[band], value);
@@ -520,30 +520,6 @@ namespace guitarfx
       }
     }
 
-    // ======================================================================
-    // Legacy AmpModelManager compatibility methods
-    // These provide backward compatibility for code that directly loads
-    // models/IRs or uses amp/cab enable/disable functionality
-    // ======================================================================
-
-    /** Load a NAM model file directly */
-    bool LoadModel(const std::filesystem::path& path)
-    {
-      // In V2 architecture, models are loaded via presets/resources
-      // This method is kept for backward compatibility but delegates to resource system
-      // For now, return false to indicate the V1 approach is no longer supported
-      std::cout << "[GraphDSPManager] LoadModel called - V1 method deprecated, use LoadPreset" << std::endl;
-      return false;
-    }
-
-    /** Load an IR file directly */
-    bool LoadImpulseResponse(const std::filesystem::path& path)
-    {
-      // Similar to LoadModel, IR loading is now done via presets
-      std::cout << "[GraphDSPManager] LoadImpulseResponse called - V1 method deprecated, use LoadPreset" << std::endl;
-      return false;
-    }
-
     /** Enable/disable the first amp node */
     void SetAmpEnabled(bool enabled)
     {
@@ -562,10 +538,10 @@ namespace guitarfx
       auto nodeId = FindFirstNodeOfType("amp_nam");
       if (nodeId.empty())
         nodeId = FindFirstNodeOfType("nam_amp");
-      
+
       if (!nodeId.empty())
       {
-        for (const auto& node : mCurrentPreset.graph.nodes)
+        for (const auto &node : mCurrentPreset.graph.nodes)
         {
           if (node.id == nodeId)
           {
@@ -594,10 +570,10 @@ namespace guitarfx
       auto nodeId = FindFirstNodeOfType("cab_ir");
       if (nodeId.empty())
         nodeId = FindFirstNodeOfType("ir_cab");
-      
+
       if (!nodeId.empty())
       {
-        for (const auto& node : mCurrentPreset.graph.nodes)
+        for (const auto &node : mCurrentPreset.graph.nodes)
         {
           if (node.id == nodeId)
           {
@@ -652,8 +628,8 @@ namespace guitarfx
     double GetTunerReferenceFrequency() const { return mTunerReferenceFreq; }
 
     /** Set tuner callback (legacy - not used in V2) */
-    template<typename TCallback>
-    void SetTunerCallback(TCallback&& callback)
+    template <typename TCallback>
+    void SetTunerCallback(TCallback &&callback)
     {
       // Tuner functionality not implemented in V2 graph architecture yet
       // This is a no-op for now
@@ -661,9 +637,9 @@ namespace guitarfx
 
   private:
     /** Helper to find the first node of a given type in the current preset */
-    std::string FindFirstNodeOfType(const std::string& type) const
+    std::string FindFirstNodeOfType(const std::string &type) const
     {
-      for (const auto& node : mCurrentPreset.graph.nodes)
+      for (const auto &node : mCurrentPreset.graph.nodes)
       {
         if (node.type == type)
         {
@@ -673,20 +649,20 @@ namespace guitarfx
       return "";
     }
 
-    void ResolveResources(const Preset& preset)
+    void ResolveResources(const Preset &preset)
     {
-      for (const auto& node : preset.graph.nodes)
+      for (const auto &node : preset.graph.nodes)
       {
         if (!node.resource.has_value())
           continue;
 
-        const auto& ref = *node.resource;
+        const auto &ref = *node.resource;
         std::filesystem::path resourcePath;
 
         if (ref.IsEmbedded())
         {
           // Look up embedded resource
-          for (const auto& embedded : preset.embeddedResources)
+          for (const auto &embedded : preset.embeddedResources)
           {
             if (embedded.id == ref.embeddedId)
             {

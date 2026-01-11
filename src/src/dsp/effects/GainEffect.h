@@ -20,7 +20,7 @@ namespace guitarfx
 
     void Reset() override {}
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       const float gain = static_cast<float>(std::pow(10.0, mGainDb / 20.0));
 
@@ -36,7 +36,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "gain" || key == "gainDb")
       {
@@ -44,9 +44,9 @@ namespace guitarfx
       }
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "gain" || key == "gainDb")
         return mGainDb;
@@ -70,12 +70,10 @@ namespace guitarfx
     info.description = "Simple gain stage";
     info.requiresResource = false;
     info.parameters = {
-      {"gainDb", "Gain", 0.0, -24.0, 24.0, "dB"}
-    };
+        {"gainDb", "Gain", 0.0, -24.0, 24.0, "dB"}};
 
-    EffectRegistry::Instance().Register("gain", info, []() {
-      return std::make_unique<GainEffect>();
-    });
+    EffectRegistry::Instance().Register("gain", info, []()
+                                        { return std::make_unique<GainEffect>(); });
   }
 
 } // namespace guitarfx

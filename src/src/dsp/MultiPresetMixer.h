@@ -21,27 +21,27 @@ namespace guitarfx
   public:
     struct InstanceConfig
     {
-      std::string id;     // Stable preset instance ID (e.g., "p1")
-      std::string name;   // Display name
-      double mix = 1.0;   // Linear gain [0.0, 1.0]
+      std::string id;   // Stable preset instance ID (e.g., "p1")
+      std::string name; // Display name
+      double mix = 1.0; // Linear gain [0.0, 1.0]
       bool mute = false;
       bool solo = false;
-      double pan = 0.0;   // [-1.0, 1.0] equal-power pan
+      double pan = 0.0; // [-1.0, 1.0] equal-power pan
     };
 
     MultiPresetMixer() = default;
 
-    void SetResourceLibrary(ResourceLibrary* library) { mResourceLibrary = library; }
+    void SetResourceLibrary(ResourceLibrary *library) { mResourceLibrary = library; }
 
     // Add/Remove instances
-    bool AddActivePreset(const Preset& preset, const std::string& presetId, const std::string& name);
-    void RemoveActivePreset(const std::string& presetId);
+    bool AddActivePreset(const Preset &preset, const std::string &presetId, const std::string &name);
+    void RemoveActivePreset(const std::string &presetId);
 
     // Controls
-    void SetPresetMix(const std::string& presetId, double value);
-    void SetPresetPan(const std::string& presetId, double pan);
-    void SetPresetMute(const std::string& presetId, bool mute);
-    void SetPresetSolo(const std::string& presetId, bool solo);
+    void SetPresetMix(const std::string &presetId, double value);
+    void SetPresetPan(const std::string &presetId, double pan);
+    void SetPresetMute(const std::string &presetId, bool mute);
+    void SetPresetSolo(const std::string &presetId, bool solo);
     void SetMasterGain(double value) { mMasterGain = value; }
     void SetLimiterEnabled(bool enabled) { mLimiterEnabled = enabled; }
 
@@ -74,7 +74,7 @@ namespace guitarfx
     void Reset();
 
     // Processing
-    void Process(float** inputs, float** outputs, int numSamples);
+    void Process(float **inputs, float **outputs, int numSamples);
 
     // Queries
     [[nodiscard]] std::vector<std::string> GetActivePresetIds() const;
@@ -89,18 +89,18 @@ namespace guitarfx
       std::vector<float> outR;
 
       PresetInstance() = default;
-      PresetInstance(PresetInstance&&) noexcept = default;
-      PresetInstance& operator=(PresetInstance&&) noexcept = default;
-      PresetInstance(const PresetInstance&) = delete;
-      PresetInstance& operator=(const PresetInstance&) = delete;
+      PresetInstance(PresetInstance &&) noexcept = default;
+      PresetInstance &operator=(PresetInstance &&) noexcept = default;
+      PresetInstance(const PresetInstance &) = delete;
+      PresetInstance &operator=(const PresetInstance &) = delete;
     };
 
-    [[nodiscard]] PresetInstance* FindInstance(const std::string& id);
-    [[nodiscard]] const PresetInstance* FindInstance(const std::string& id) const;
+    [[nodiscard]] PresetInstance *FindInstance(const std::string &id);
+    [[nodiscard]] const PresetInstance *FindInstance(const std::string &id) const;
     void AllocateBuffers(int maxBlockSize);
-    static void ComputePanGains(double pan, float& gL, float& gR);
+    static void ComputePanGains(double pan, float &gL, float &gR);
 
-    ResourceLibrary* mResourceLibrary = nullptr;
+    ResourceLibrary *mResourceLibrary = nullptr;
     std::vector<PresetInstance> mInstances;
 
     double mSampleRate = 44100.0;

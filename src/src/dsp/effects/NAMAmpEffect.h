@@ -9,6 +9,15 @@
 #include <vector>
 #include <cmath>
 
+// Forward declare factory registration helper to avoid linker dead-stripping
+namespace nam
+{
+  namespace factory
+  {
+    void ForceFactoryRegistration();
+  }
+}
+
 namespace guitarfx
 {
   /**
@@ -43,12 +52,14 @@ namespace guitarfx
       std::fill(mOutputBuffer.begin(), mOutputBuffer.end(), 0.0f);
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       if (!inputs[0] && !inputs[1])
       {
-        if (outputs[0]) std::fill_n(outputs[0], numSamples, 0.0f);
-        if (outputs[1]) std::fill_n(outputs[1], numSamples, 0.0f);
+        if (outputs[0])
+          std::fill_n(outputs[0], numSamples, 0.0f);
+        if (outputs[1])
+          std::fill_n(outputs[1], numSamples, 0.0f);
         return;
       }
 
@@ -68,8 +79,10 @@ namespace guitarfx
         for (int i = 0; i < numSamples; ++i)
         {
           float out = mOutputBuffer[i] * static_cast<float>(mOutputGain);
-          if (outputs[0]) outputs[0][i] = out;
-          if (outputs[1]) outputs[1][i] = out;
+          if (outputs[0])
+            outputs[0][i] = out;
+          if (outputs[1])
+            outputs[1][i] = out;
         }
       }
       else
@@ -78,13 +91,15 @@ namespace guitarfx
         for (int i = 0; i < numSamples; ++i)
         {
           float out = mInputBuffer[i];
-          if (outputs[0]) outputs[0][i] = out;
-          if (outputs[1]) outputs[1][i] = out;
+          if (outputs[0])
+            outputs[0][i] = out;
+          if (outputs[1])
+            outputs[1][i] = out;
         }
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "inputGain")
         mInputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
@@ -94,9 +109,9 @@ namespace guitarfx
         mEnabled = value > 0.5;
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "inputGain")
         return 20.0 * std::log10(mInputGain);
@@ -107,7 +122,7 @@ namespace guitarfx
       return 0.0;
     }
 
-    bool LoadResource(const std::filesystem::path& resourcePath) override
+    bool LoadResource(const std::filesystem::path &resourcePath) override
     {
       try
       {
@@ -146,21 +161,23 @@ namespace guitarfx
 
   inline void RegisterNAMAmpEffect()
   {
+
+    // Ensure NAM factory registrations are not optimized out by the linker
+    nam::factory::ForceFactoryRegistration();
+
     EffectTypeInfo info;
     info.type = "amp_nam";
-    info.displayName = "NAM Amp Model";
+    info.displayName = "Neural Amp Model";
     info.category = "amp";
     info.description = "Neural Amp Modeler - AI-trained amp simulation";
     info.requiresResource = true;
-    info.resourceType = "nam";  // .nam model files
+    info.resourceType = "nam"; // .nam model files
     info.parameters = {
-      {"inputGain", "Input Gain", 0.0, -24.0, 24.0, "dB"},
-      {"outputGain", "Output Gain", 0.0, -24.0, 24.0, "dB"}
-    };
+        {"inputGain", "Input Gain", 0.0, -24.0, 24.0, "dB"},
+        {"outputGain", "Output Gain", 0.0, -24.0, 24.0, "dB"}};
 
-    EffectRegistry::Instance().Register("amp_nam", info, []() {
-      return std::make_unique<NAMAmpEffect>();
-    });
+    EffectRegistry::Instance().Register("amp_nam", info, []()
+                                        { return std::make_unique<NAMAmpEffect>(); });
   }
 
 } // namespace guitarfx

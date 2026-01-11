@@ -5,6 +5,10 @@
  * and asserts that audio is produced with reasonable, non-uniform peaks.
  */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -20,6 +24,13 @@
 #include "dsp/GraphDSPManager.h"
 #include "presets/PresetStorage.h"
 #include "resources/ResourceLibrary.h"
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 namespace fs = std::filesystem;
 using Sample = iplug::sample;

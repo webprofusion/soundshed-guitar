@@ -38,13 +38,13 @@ namespace guitarfx
     {
       // High-pass filter (removes sub-bass)
       double hp = ProcessBiquad(sample, mHPB0, mHPB1, mHPB2, mHPA1, mHPA2, mHPState1, mHPState2);
-      
+
       // Low-pass filter (rolls off highs)
       double lp = ProcessBiquad(hp, mLPB0, mLPB1, mLPB2, mLPA1, mLPA2, mLPState1, mLPState2);
-      
+
       // Presence peak (speaker resonance)
       double out = ProcessBiquad(lp, mPeakB0, mPeakB1, mPeakB2, mPeakA1, mPeakA2, mPeakState1, mPeakState2);
-      
+
       return out;
     }
 
@@ -70,7 +70,7 @@ namespace guitarfx
   private:
     // Transposed Direct Form II biquad - most efficient for real-time audio
     static double ProcessBiquad(double input, double b0, double b1, double b2,
-                                 double a1, double a2, double& s1, double& s2)
+                                double a1, double a2, double &s1, double &s2)
     {
       const double output = b0 * input + s1;
       s1 = b1 * input - a1 * output + s2;
@@ -80,7 +80,8 @@ namespace guitarfx
 
     void UpdateCoefficients()
     {
-      if (mSampleRate <= 0.0) return;
+      if (mSampleRate <= 0.0)
+        return;
 
       // High-pass filter: 60-120 Hz depending on bass setting
       // Lower bass = higher cutoff (thinner sound)
@@ -98,7 +99,7 @@ namespace guitarfx
     }
 
     // Compute 2nd order Butterworth high-pass filter coefficients
-    void ComputeHighPass(double freq, double q, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputeHighPass(double freq, double q, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;
       const double sinOmega = std::sin(omega);
@@ -114,7 +115,7 @@ namespace guitarfx
     }
 
     // Compute 2nd order Butterworth low-pass filter coefficients
-    void ComputeLowPass(double freq, double q, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputeLowPass(double freq, double q, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;
       const double sinOmega = std::sin(omega);
@@ -130,7 +131,7 @@ namespace guitarfx
     }
 
     // Compute peaking EQ filter coefficients (for presence boost)
-    void ComputePeakingEQ(double freq, double q, double gainDb, double& b0, double& b1, double& b2, double& a1, double& a2)
+    void ComputePeakingEQ(double freq, double q, double gainDb, double &b0, double &b1, double &b2, double &a1, double &a2)
     {
       const double A = std::pow(10.0, gainDb / 40.0);
       const double omega = 2.0 * std::numbers::pi * freq / mSampleRate;

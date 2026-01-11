@@ -25,7 +25,7 @@ namespace guitarfx
       mGainReduction = 0.0f;
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       for (int i = 0; i < numSamples; ++i)
       {
@@ -88,7 +88,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "threshold")
       {
@@ -122,9 +122,9 @@ namespace guitarfx
       }
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "threshold")
         return mThresholdDb;
@@ -193,7 +193,7 @@ namespace guitarfx
       mOptoCellState = 0.0f;
     }
 
-    void Process(float** inputs, float** outputs, int numSamples) override
+    void Process(float **inputs, float **outputs, int numSamples) override
     {
       for (int i = 0; i < numSamples; ++i)
       {
@@ -238,7 +238,7 @@ namespace guitarfx
       }
     }
 
-    void SetParam(const std::string& key, double value) override
+    void SetParam(const std::string &key, double value) override
     {
       if (key == "threshold")
         mThresholdDb = static_cast<float>(std::clamp(value, -60.0, 0.0));
@@ -260,9 +260,9 @@ namespace guitarfx
         mMix = static_cast<float>(std::clamp(value, 0.0, 1.0));
     }
 
-    void SetConfig(const std::string&, const std::string&) override {}
+    void SetConfig(const std::string &, const std::string &) override {}
 
-    [[nodiscard]] double GetParam(const std::string& key) const override
+    [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "threshold")
         return mThresholdDb;
@@ -319,18 +319,16 @@ namespace guitarfx
       info.description = "Clean, precise VCA-style compressor";
       info.requiresResource = false;
       info.parameters = {
-        {"threshold", "Threshold", -20.0, -60.0, 0.0, "dB"},
-        {"ratio", "Ratio", 4.0, 1.0, 20.0, ":1"},
-        {"attack", "Attack", 10.0, 0.1, 500.0, "ms"},
-        {"release", "Release", 100.0, 10.0, 2000.0, "ms"},
-        {"knee", "Knee", 6.0, 0.0, 24.0, "dB"},
-        {"makeup", "Makeup", 0.0, 0.0, 24.0, "dB"},
-        {"mix", "Mix", 1.0, 0.0, 1.0, ""}
-      };
+          {"threshold", "Threshold", -20.0, -60.0, 0.0, "dB"},
+          {"ratio", "Ratio", 4.0, 1.0, 20.0, ":1"},
+          {"attack", "Attack", 10.0, 0.1, 500.0, "ms"},
+          {"release", "Release", 100.0, 10.0, 2000.0, "ms"},
+          {"knee", "Knee", 6.0, 0.0, 24.0, "dB"},
+          {"makeup", "Makeup", 0.0, 0.0, 24.0, "dB"},
+          {"mix", "Mix", 1.0, 0.0, 1.0, ""}};
 
-      EffectRegistry::Instance().Register("compressor_vca", info, []() {
-        return std::make_unique<CompressorEffect>();
-      });
+      EffectRegistry::Instance().Register("compressor_vca", info, []()
+                                          { return std::make_unique<CompressorEffect>(); });
     }
 
     // Opto compressor
@@ -342,17 +340,15 @@ namespace guitarfx
       info.description = "Smooth optical-style compressor";
       info.requiresResource = false;
       info.parameters = {
-        {"threshold", "Threshold", -20.0, -60.0, 0.0, "dB"},
-        {"ratio", "Ratio", 3.0, 1.0, 20.0, ":1"},
-        {"attack", "Attack", 20.0, 5.0, 200.0, "ms"},
-        {"release", "Release", 300.0, 50.0, 3000.0, "ms"},
-        {"makeup", "Makeup", 0.0, 0.0, 24.0, "dB"},
-        {"mix", "Mix", 1.0, 0.0, 1.0, ""}
-      };
+          {"threshold", "Threshold", -20.0, -60.0, 0.0, "dB"},
+          {"ratio", "Ratio", 3.0, 1.0, 20.0, ":1"},
+          {"attack", "Attack", 20.0, 5.0, 200.0, "ms"},
+          {"release", "Release", 300.0, 50.0, 3000.0, "ms"},
+          {"makeup", "Makeup", 0.0, 0.0, 24.0, "dB"},
+          {"mix", "Mix", 1.0, 0.0, 1.0, ""}};
 
-      EffectRegistry::Instance().Register("compressor_opto", info, []() {
-        return std::make_unique<OptoCompressorEffect>();
-      });
+      EffectRegistry::Instance().Register("compressor_opto", info, []()
+                                          { return std::make_unique<OptoCompressorEffect>(); });
     }
   }
 

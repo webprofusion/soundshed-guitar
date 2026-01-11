@@ -1,6 +1,7 @@
 #include <iostream>
 #include <filesystem>
-#include "dsp/IRManager.h"
+
+#include "dsp/effects/IRCabEffect.h"
 
 int main() {
     namespace fs = std::filesystem;
@@ -22,12 +23,11 @@ int main() {
         std::cout << "Exists: " << (fs::exists(fullPath) ? "YES" : "NO") << std::endl;
         
         if (fs::exists(fullPath)) {
-            guitarfx::IRManager irManager;
-            bool loaded = irManager.LoadImpulseResponse(fullPath, 48000.0);
+            guitarfx::IRCabEffect effect;
+            effect.Prepare(48000.0, 512);
+
+            bool loaded = effect.LoadResource(fullPath);
             std::cout << "Load result: " << (loaded ? "SUCCESS" : "FAILED") << std::endl;
-            if (loaded) {
-                std::cout << "IR length: " << irManager.Impulse().size() << " samples" << std::endl;
-            }
         }
     }
     
