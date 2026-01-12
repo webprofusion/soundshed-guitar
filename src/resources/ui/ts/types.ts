@@ -167,6 +167,13 @@ export interface MixerState {
   limiterEnabled: boolean;
 }
 
+export interface DSPPerformanceStats {
+  totalProcessingTimeUs: number;
+  realTimeUs: number;
+  dspLoadPercent: number;
+  nodeProcessingTimesUs: Record<string, number>;
+}
+
 export interface UiState {
   presets: Preset[];
   filteredPresets: Preset[];
@@ -180,6 +187,8 @@ export interface UiState {
   resourceLibrary: ResourceLibrary;
   mixer?: MixerState;
   uiSettings?: UiSettings;
+  dspPerformance?: DSPPerformanceStats;
+  dspPerformanceHistory: DSPPerformanceStats[];
 }
 
 declare global {

@@ -921,6 +921,7 @@ namespace guitarfx
 
   void GuitarFXPlugin::ProcessBlock(iplug::sample **inputs, iplug::sample **outputs, int nFrames)
   {
+    // std::cout << "[CPP] ProcessBlock called with " << nFrames << " frames" << std::endl;
     if (!mDSP)
     {
       return;
@@ -1290,6 +1291,28 @@ namespace guitarfx
     if (mPendingStateBroadcast)
     {
       BroadcastState();
+    }
+
+    // Send DSP performance stats to UI periodically (every ~1 second)
+    mDSPPerformanceUpdateCounter++;
+    if (mDSPPerformanceUpdateCounter >= 60)
+    {
+      mDSPPerformanceUpdateCounter = 0;
+      if (mDSP)
+      {
+        auto stats = mDSP->GetPerformanceStats();
+        nlohmann::json message = {
+          {"type", "dspPerformance"},
+          {"stats", {
+            {"totalProcessingTimeUs", stats.totalProcessingTimeUs},
+            {"realTimeUs", stats.realTimeUs},
+            {"dspLoadPercent", stats.dspLoadPercent},
+            {"nodeProcessingTimesUs", stats.nodeProcessingTimesUs}
+          }}
+        };
+        std::cout << "[CPP] Sending DSP performance from OnIdle: " << stats.dspLoadPercent << "% load" << std::endl;
+        SendMessageToUI(message.dump());
+      }
     }
   }
 
@@ -2021,6 +2044,23 @@ namespace guitarfx
 
     SendMessageToUI(message.dump());
     mPendingStateBroadcast = false;
+
+    // Send a test DSP performance message to verify UI communication
+    if (mDSP)
+    {
+      auto stats = mDSP->GetPerformanceStats();
+      nlohmann::json perfMessage = {
+        {"type", "dspPerformance"},
+        {"stats", {
+          {"totalProcessingTimeUs", stats.totalProcessingTimeUs},
+          {"realTimeUs", stats.realTimeUs},
+          {"dspLoadPercent", stats.dspLoadPercent},
+          {"nodeProcessingTimesUs", stats.nodeProcessingTimesUs}
+        }}
+      };
+      std::cout << "[CPP] Sending test DSP performance message: " << stats.dspLoadPercent << "% load" << std::endl;
+      SendMessageToUI(perfMessage.dump());
+    }
   }
 
   void GuitarFXPlugin::EnsureBasicGraph()

@@ -32,6 +32,9 @@
         <button class="icon-btn" data-panel="mixer" title="Mixer">
           <svg viewBox="0 0 24 24"><rect x="4" y="4" width="3" height="16" rx="1" fill="currentColor"/><rect x="10.5" y="7" width="3" height="13" rx="1" fill="currentColor"/><rect x="17" y="5" width="3" height="15" rx="1" fill="currentColor"/></svg>
         </button>
+        <button class="icon-btn" data-panel="performance" title="Performance">
+          <svg viewBox="0 0 24 24"><path d="M12 2v6m0 0l-4 4m4-4l4 4m-4 4v6" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        </button>
  
       </header>
 
@@ -560,6 +563,32 @@
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance Panel -->
+        <div class="tab-panel" id="panel-performance">
+          <div class="panel-content">
+            <h2>DSP Performance</h2>
+            <div class="performance-stats">
+              <div class="performance-metric">
+                <span class="metric-label">DSP Load:</span>
+                <span class="metric-value" id="dsp-load-value">0.0%</span>
+              </div>
+              <div class="performance-metric">
+                <span class="metric-label">Peak Load:</span>
+                <span class="metric-value" id="dsp-peak-value">0.0%</span>
+              </div>
+            </div>
+            <div class="performance-plot-container">
+              <canvas id="performance-plot" width="400" height="200"></canvas>
+            </div>
+            <div class="performance-details">
+              <h3>Per-Effect Times (μs)</h3>
+              <div id="performance-details-list">
+                <!-- Per-effect timing details will be populated here -->
               </div>
             </div>
           </div>

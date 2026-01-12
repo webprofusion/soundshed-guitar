@@ -451,3 +451,76 @@ export function renderPresetDetails(
     bindMixerControls(mixerHost);
   }
 }
+
+export function updateDSPPerformancePlot(): void {
+  const canvas = document.getElementById("performance-plot") as HTMLCanvasElement;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const history = uiState.dspPerformanceHistory;
+  if (history.length === 0) return;
+
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Set up drawing
+  ctx.strokeStyle = "#00ff00";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const maxLoad = Math.max(...history.map(h => h.dspLoadPercent), 100); // At least 100% for scale
+
+  // Draw line
+  history.forEach((stat, index) => {
+    const x = (index / (history.length - 1)) * width;
+    const y = height - (stat.dspLoadPercent / maxLoad) * height;
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+
+  ctx.stroke();
+
+  // Draw grid lines
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+
+  // Horizontal grid (25%, 50%, 75%)
+  for (let percent = 25; percent < 100; percent += 25) {
+    const y = height - (percent / maxLoad) * height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  ctx.setLineDash([]);
+
+  // Update current values
+  const currentStat = history[history.length - 1];
+  const loadValue = document.getElementById("dsp-load-value");
+  if (loadValue) {
+    loadValue.textContent = `${currentStat.dspLoadPercent.toFixed(1)}%`;
+  }
+
+  const peakValue = document.getElementById("dsp-peak-value");
+  if (peakValue) {
+    const peakLoad = Math.max(...history.map(h => h.dspLoadPercent));
+    peakValue.textContent = `${peakLoad.toFixed(1)}%`;
+  }
+
+  // Update per-effect details
+  const detailsList = document.getElementById("performance-details-list");
+  if (detailsList && currentStat.nodeProcessingTimesUs) {
+    detailsList.innerHTML = Object.entries(currentStat.nodeProcessingTimesUs)
+      .map(([nodeId, timeUs]) => `<div class="performance-detail-item">${nodeId}: ${(timeUs as number).toFixed(1)} μs</div>`)
+      .join("");
+  }
+}

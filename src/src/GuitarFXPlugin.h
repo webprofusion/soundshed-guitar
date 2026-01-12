@@ -248,6 +248,9 @@ namespace guitarfx
     // ProcessBlock (audio thread) and ApplyPreset/LoadModel/LoadIR (UI thread) share mDSP
     mutable std::mutex mDSPMutex;
     
+    // DSP performance reporting
+    int mDSPPerformanceUpdateCounter = 0;
+    
     // Flag to prevent loading HTML multiple times
     bool mUIContentLoaded = false;
   };

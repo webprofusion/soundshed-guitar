@@ -37,6 +37,8 @@ export const uiState: UiState = {
     limiterEnabled: false,
   },
   uiSettings: { zoom: 1 },
+  dspPerformance: undefined,
+  dspPerformanceHistory: [],
 };
 
 export function clonePreset<T extends Preset | null>(preset: T): T {

@@ -8,6 +8,7 @@ import {
   renderActivePreset,
 } from "./presets.js";
 import { installFetchLogger, renderLogEntries } from "./logging.js";
+import { updateDSPPerformancePlot } from "./views.js";
 import { handleIncomingMessage } from "./messages.js";
 import { requestSignalPathTest } from "./presets.js";
 import { initializeTuner } from "./tuner.js";
@@ -48,6 +49,11 @@ function switchMainPanel(panelId: string): void {
     const isPanelMatch = (panel as HTMLElement).id === `panel-${panelId}`;
     panel.classList.toggle("active", isPanelMatch);
   });
+
+  // Update performance plot when performance panel is activated
+  if (panelId === "performance") {
+    updateDSPPerformancePlot();
+  }
 }
 
 function initializeIconBarTabs(): void {

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <queue>
 #include <set>
+#include <chrono>
 
 namespace guitarfx
 {
@@ -234,10 +235,19 @@ namespace guitarfx
 
   void SignalGraphExecutor::Process(float **inputs, float **outputs, int numSamples)
   {
+    auto totalStart = std::chrono::high_resolution_clock::now();
+
     if (!mIsValid || !mPrepared || !inputs || !outputs)
     {
       return;
     }
+
+    // Calculate real-time for this block
+    double realTimeSeconds = static_cast<double>(numSamples) / mSampleRate;
+    double realTimeUs = realTimeSeconds * 1e6;
+
+    mLastPerformanceStats.realTimeUs = realTimeUs;
+    mLastPerformanceStats.nodeProcessingTimesUs.clear();
 
     // Clear all buffers and reset input flags
     for (auto &[id, state] : mNodeStates)
@@ -337,7 +347,11 @@ namespace guitarfx
           float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
           float *outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
 
+          auto nodeStart = std::chrono::high_resolution_clock::now();
           state->processor->Process(inPtrs, outPtrs, numSamples);
+          auto nodeEnd = std::chrono::high_resolution_clock::now();
+          auto nodeDuration = std::chrono::duration_cast<std::chrono::microseconds>(nodeEnd - nodeStart);
+          mLastPerformanceStats.nodeProcessingTimesUs[nodeId] = static_cast<double>(nodeDuration.count());
 
           // Copy back
           std::copy(mTempLeftBuffer.begin(), mTempLeftBuffer.begin() + numSamples, state->bufferLeft.begin());
@@ -371,6 +385,11 @@ namespace guitarfx
         break;
       }
     }
+
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(totalEnd - totalStart);
+    mLastPerformanceStats.totalProcessingTimeUs = static_cast<double>(totalDuration.count());
+    mLastPerformanceStats.dspLoadPercent = (mLastPerformanceStats.totalProcessingTimeUs / realTimeUs) * 100.0;
   }
 
   void SignalGraphExecutor::SetNodeEnabled(const std::string &nodeId, bool enabled)

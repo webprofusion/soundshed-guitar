@@ -666,6 +666,13 @@ namespace guitarfx
       // This is a no-op for now
     }
 
+    // Queries
+    [[nodiscard]] bool IsValid() const { return mExecutor && mExecutor->IsValid(); }
+    [[nodiscard]] SignalGraphExecutor::DSPPerformanceStats GetPerformanceStats() const
+    {
+      return mExecutor ? mExecutor->GetPerformanceStats() : SignalGraphExecutor::DSPPerformanceStats{};
+    }
+
   private:
     /** Helper to find the first node of a given type in the current preset */
     std::string FindFirstNodeOfType(const std::string &type) const

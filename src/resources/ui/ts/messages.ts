@@ -6,12 +6,17 @@ import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
 import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
 import { applyUiSettings } from "./windowSettings.js";
+import { updateDSPPerformancePlot } from "./views.js";
 import type { Preset, UiSettings } from "./types.js";
 
 export function handleIncomingMessage(message: string): void {
   console.log("[JS] handleIncomingMessage received:", message.substring(0, 200));
   const payload = JSON.parse(message) as Record<string, unknown>;
   console.log("[JS] Parsed message type:", payload.type);
+
+  if (payload.type === "dspPerformance") {
+    console.log("[JS] DSP Performance message received:", payload);
+  }
   switch (payload.type) {
     case "state": {
       uiState.activePresetId = (payload as { activePresetId?: string }).activePresetId ?? null;
@@ -260,6 +265,20 @@ export function handleIncomingMessage(message: string): void {
       if (uiSettings) {
         uiState.uiSettings = uiSettings;
         applyUiSettings(uiSettings);
+      }
+      break;
+    }
+    case "dspPerformance": {
+      const stats = payload as { stats?: import("./types.js").DSPPerformanceStats };
+      if (stats.stats) {
+        uiState.dspPerformance = stats.stats;
+        uiState.dspPerformanceHistory.push(stats.stats);
+        if (uiState.dspPerformanceHistory.length > 100) {
+          uiState.dspPerformanceHistory.shift();
+        }
+        console.log("DSP Performance:", stats.stats.dspLoadPercent.toFixed(1) + "% load", stats.stats.nodeProcessingTimesUs);
+        // Update plot if panel is visible
+        updateDSPPerformancePlot();
       }
       break;
     }

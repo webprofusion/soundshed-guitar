@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace guitarfx
 {
@@ -17,6 +18,14 @@ namespace guitarfx
   class SignalGraphExecutor
   {
   public:
+    struct DSPPerformanceStats
+    {
+      double totalProcessingTimeUs = 0.0; // Total time in microseconds
+      double realTimeUs = 0.0;             // Real-time equivalent in microseconds
+      double dspLoadPercent = 0.0;         // % of real-time
+      std::map<std::string, double> nodeProcessingTimesUs; // Per-node times
+    };
+
     SignalGraphExecutor();
     ~SignalGraphExecutor();
 
@@ -51,6 +60,7 @@ namespace guitarfx
     // Queries
     [[nodiscard]] bool IsValid() const { return mIsValid; }
     [[nodiscard]] std::vector<std::string> GetExecutionOrder() const { return mExecutionOrder; }
+    [[nodiscard]] DSPPerformanceStats GetPerformanceStats() const { return mLastPerformanceStats; }
 
   private:
     struct NodeState
@@ -80,6 +90,8 @@ namespace guitarfx
     double mOutputTrim = 0.0;
     bool mIsValid = false;
     bool mPrepared = false;
+
+    DSPPerformanceStats mLastPerformanceStats;
 
     // Temporary buffers for mixing
     std::vector<float> mTempLeftBuffer;

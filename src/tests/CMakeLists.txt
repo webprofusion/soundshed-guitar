@@ -191,6 +191,31 @@ target_compile_definitions(GuitarFX_SignalGraphExecutorTests
 )
 
 add_test(NAME SignalGraphExecutorTests COMMAND GuitarFX_SignalGraphExecutorTests)
+
+# DSP Performance Tests - verifies DSP performance statistics are correctly populated
+add_executable(GuitarFX_DSPPerformanceTests
+  DSPPerformanceTests.cpp
+)
+
+target_include_directories(GuitarFX_DSPPerformanceTests
+  PRIVATE
+    ${GUITARFX_PROJECT_ROOT}/src
+)
+
+target_link_libraries(GuitarFX_DSPPerformanceTests
+  PRIVATE
+    GuitarFXCore
+)
+
+target_compile_features(GuitarFX_DSPPerformanceTests PRIVATE cxx_std_20)
+
+target_compile_definitions(GuitarFX_DSPPerformanceTests
+  PRIVATE
+    GUITARFX_TEST_RESOURCES_DIR="${GUITARFX_RESOURCES_DIR_NORMALIZED}"
+)
+
+add_test(NAME DSPPerformanceTests COMMAND GuitarFX_DSPPerformanceTests)
+
 # Real Audio Processing Tests - tests the full DSP pipeline with actual audio processing
 add_executable(GuitarFX_RealAudioProcessingTests
   RealAudioProcessingTests.cpp
