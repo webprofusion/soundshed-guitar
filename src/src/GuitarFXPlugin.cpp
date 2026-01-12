@@ -1298,21 +1298,30 @@ namespace guitarfx
     if (mDSPPerformanceUpdateCounter >= 60)
     {
       mDSPPerformanceUpdateCounter = 0;
-      if (mDSP)
+      
+      SignalGraphExecutor::DSPPerformanceStats stats;
+      if (mPresetMixer.GetPresetCount() > 0)
       {
-        auto stats = mDSP->GetPerformanceStats();
-        nlohmann::json message = {
-          {"type", "dspPerformance"},
-          {"stats", {
-            {"totalProcessingTimeUs", stats.totalProcessingTimeUs},
-            {"realTimeUs", stats.realTimeUs},
-            {"dspLoadPercent", stats.dspLoadPercent},
-            {"nodeProcessingTimesUs", stats.nodeProcessingTimesUs}
-          }}
-        };
-        std::cout << "[CPP] Sending DSP performance from OnIdle: " << stats.dspLoadPercent << "% load" << std::endl;
-        SendMessageToUI(message.dump());
+        // Get aggregated stats from MultiPresetMixer when it has active presets
+        stats = mPresetMixer.GetPerformanceStats();
       }
+      else if (mDSP)
+      {
+        // Fall back to single DSP manager stats
+        stats = mDSP->GetPerformanceStats();
+      }
+      
+      nlohmann::json message = {
+        {"type", "dspPerformance"},
+        {"stats", {
+          {"totalProcessingTimeUs", stats.totalProcessingTimeUs},
+          {"realTimeUs", stats.realTimeUs},
+          {"dspLoadPercent", stats.dspLoadPercent},
+          {"nodeProcessingTimesUs", stats.nodeProcessingTimesUs}
+        }}
+      };
+      std::cout << "[CPP] Sending DSP performance from OnIdle: " << stats.dspLoadPercent << "% load" << std::endl;
+      SendMessageToUI(message.dump());
     }
   }
 

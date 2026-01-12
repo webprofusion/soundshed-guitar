@@ -532,4 +532,46 @@ namespace guitarfx
     gR = static_cast<float>(std::sin(theta));
   }
 
+  SignalGraphExecutor::DSPPerformanceStats MultiPresetMixer::GetPerformanceStats() const
+  {
+    SignalGraphExecutor::DSPPerformanceStats aggregatedStats;
+
+    if (mInstances.empty())
+    {
+      return aggregatedStats;
+    }
+
+    // Aggregate stats from all active preset instances
+    for (const auto& instance : mInstances)
+    {
+      auto instanceStats = instance.executor.GetPerformanceStats();
+
+      // Sum up total processing time
+      aggregatedStats.totalProcessingTimeUs += instanceStats.totalProcessingTimeUs;
+
+      // Use the maximum real time (since they process in parallel)
+      if (instanceStats.realTimeUs > aggregatedStats.realTimeUs)
+      {
+        aggregatedStats.realTimeUs = instanceStats.realTimeUs;
+      }
+
+      // Calculate average DSP load across instances
+      aggregatedStats.dspLoadPercent += instanceStats.dspLoadPercent;
+
+      // Merge node processing times
+      for (const auto& [nodeId, timeUs] : instanceStats.nodeProcessingTimesUs)
+      {
+        aggregatedStats.nodeProcessingTimesUs[nodeId] += timeUs;
+      }
+    }
+
+    // Average the DSP load across all instances
+    if (!mInstances.empty())
+    {
+      aggregatedStats.dspLoadPercent /= static_cast<double>(mInstances.size());
+    }
+
+    return aggregatedStats;
+  }
+
 } // namespace guitarfx

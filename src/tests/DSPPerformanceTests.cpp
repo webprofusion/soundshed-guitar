@@ -12,6 +12,7 @@
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/MultiPresetMixer.h"
 #include "presets/PresetTypes.h"
 
 namespace
@@ -265,6 +266,103 @@ TestResult TestDSPPerformanceStatsReset()
   return result;
 }
 
+TestResult TestMultiPresetMixerPerformanceStats()
+{
+  TestResult result;
+  result.passed = false;
+
+  try
+  {
+    // Register effects
+    guitarfx::RegisterAllEffects();
+
+    // Create a simple signal graph
+    guitarfx::SignalGraph graph;
+    graph.nodes.push_back({"in", guitarfx::kNodeTypeInput, "", "Input", true});
+    graph.nodes.push_back({"gain", "gain", "utility", "Gain", true});
+    graph.nodes.back().params["gainDb"] = 0.0; // Unity gain
+    graph.nodes.push_back({"out", guitarfx::kNodeTypeOutput, "", "Output", true});
+    graph.edges.push_back({"in", "gain", 0, 0, 1.0});
+    graph.edges.push_back({"gain", "out", 0, 0, 1.0});
+
+    // Create preset
+    guitarfx::Preset preset;
+    preset.id = "test_preset";
+    preset.name = "Test Preset";
+    preset.graph = graph;
+
+    // Create MultiPresetMixer
+    guitarfx::MultiPresetMixer mixer;
+    mixer.Prepare(kSR, kBlock);
+
+    // Add preset
+    if (!mixer.AddActivePreset(preset, "preset1", "Test Preset"))
+    {
+      result.message = "Failed to add preset to mixer";
+      return result;
+    }
+
+    // Get initial stats (should be zero)
+    auto initialStats = mixer.GetPerformanceStats();
+    if (initialStats.totalProcessingTimeUs != 0.0)
+    {
+      result.message = "Initial totalProcessingTimeUs should be 0, got: " + std::to_string(initialStats.totalProcessingTimeUs);
+      return result;
+    }
+
+    // Process some audio
+    std::vector<float> inputL(kBlock, 0.5f);
+    std::vector<float> inputR(kBlock, 0.5f);
+    std::vector<float> outputL(kBlock, 0.0f);
+    std::vector<float> outputR(kBlock, 0.0f);
+
+    float* inputs[2] = { inputL.data(), inputR.data() };
+    float* outputs[2] = { outputL.data(), outputR.data() };
+    for (int i = 0; i < 10; ++i)
+    {
+      mixer.Process(inputs, outputs, kBlock);
+    }
+
+    // Get updated stats
+    auto updatedStats = mixer.GetPerformanceStats();
+
+    // Verify stats are populated
+    if (updatedStats.totalProcessingTimeUs <= 0.0)
+    {
+      result.message = "totalProcessingTimeUs should be positive after processing, got: " + std::to_string(updatedStats.totalProcessingTimeUs);
+      return result;
+    }
+
+    if (updatedStats.nodeProcessingTimesUs.empty())
+    {
+      result.message = "nodeProcessingTimesUs should not be empty after processing";
+      return result;
+    }
+
+    // Check that we have timing data for the gain node
+    bool hasGainTiming = updatedStats.nodeProcessingTimesUs.find("gain") != updatedStats.nodeProcessingTimesUs.end();
+    if (!hasGainTiming)
+    {
+      result.message = "No timing data found for 'gain' node in MultiPresetMixer stats";
+      return result;
+    }
+
+    result.passed = true;
+    result.message = "MultiPresetMixer performance stats aggregation works correctly";
+
+  }
+  catch (const std::exception& e)
+  {
+    result.message = "Exception thrown: " + std::string(e.what());
+  }
+  catch (...)
+  {
+    result.message = "Unknown exception thrown";
+  }
+
+  return result;
+}
+
 } // namespace
 
 int main()
@@ -292,6 +390,18 @@ int main()
   {
     std::cout << "Testing DSP performance stats reset... ";
     auto result = TestDSPPerformanceStatsReset();
+    std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+    if (!result.passed)
+    {
+      std::cout << "  " << result.message << "\n";
+    }
+    if (result.passed) ++passed; else ++failed;
+  }
+
+  // Test 3: MultiPresetMixer performance stats
+  {
+    std::cout << "Testing MultiPresetMixer performance stats... ";
+    auto result = TestMultiPresetMixerPerformanceStats();
     std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
     if (!result.passed)
     {
