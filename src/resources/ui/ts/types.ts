@@ -34,8 +34,6 @@ export interface Parameter {
 
 export interface ParametersState {
   values: Parameter[];
-  gateEnabled: boolean;
-  gateThreshold: number | null;
 }
 
 export interface SignalTestResult {

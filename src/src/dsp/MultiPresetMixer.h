@@ -3,7 +3,7 @@
 #include "presets/PresetTypes.h"
 #include "dsp/EffectProcessor.h"
 #include "dsp/SignalGraphExecutor.h"
-#include "dsp/effects/NoiseGateEffect.h"
+#include "dsp/effects/ParametricEQEffect.h"
 
 #include <algorithm>
 #include <functional>
@@ -31,13 +31,6 @@ namespace guitarfx
       bool mute = false;
       bool solo = false;
       double pan = 0.0; // [-1.0, 1.0] equal-power pan
-
-      // Per-preset global FX settings
-      bool gateEnabled = false;
-      double gateThresholdDb = -40.0;
-      int transposeSemitones = 0;
-      bool doublerEnabled = false;
-      double doublerDelayMs = 6.0;
     };
 
     // Tuner result data
@@ -69,13 +62,6 @@ namespace guitarfx
     void SetPresetPan(const std::string &presetId, double pan);
     void SetPresetMute(const std::string &presetId, bool mute);
     void SetPresetSolo(const std::string &presetId, bool solo);
-
-    // Per-preset global FX controls
-    void SetPresetGateEnabled(const std::string &presetId, bool enabled);
-    void SetPresetGateThreshold(const std::string &presetId, double thresholdDb);
-    void SetPresetTranspose(const std::string &presetId, int semitones);
-    void SetPresetDoublerEnabled(const std::string &presetId, bool enabled);
-    void SetPresetDoublerDelay(const std::string &presetId, double delayMs);
 
     // Master/global controls
     void SetMasterGain(double value) { mMasterGain = value; }
@@ -114,6 +100,8 @@ namespace guitarfx
     void SetReverbDecay(double value);
     void SetReverbDamping(double value);
     void SetReverbMix(double value);
+
+    // Global FX control (routes to first signal chain node of matching type)
     void SetGateEnabled(bool enabled);
     void SetGateThreshold(double thresholdDb);
     void SetDoublerEnabled(bool enabled);
@@ -155,18 +143,6 @@ namespace guitarfx
       std::vector<float> outL;
       std::vector<float> outR;
 
-      // Per-preset global FX state
-      NoiseGateEffect gate;
-      std::vector<float> gateInL, gateInR, gateOutL, gateOutR;
-      double pitchRatio = 1.0;
-      std::vector<float> pitchBufferL, pitchBufferR;
-      std::vector<float> pitchShiftedL, pitchShiftedR;
-      std::size_t pitchWriteIndex = 0;
-      double pitchReadPhase = 0.0;
-      std::vector<float> doublerBuffer;
-      std::size_t doublerWriteIndex = 0;
-      int doublerDelaySamples = 0;
-
       PresetInstance() = default;
       PresetInstance(PresetInstance &&) noexcept = default;
       PresetInstance &operator=(PresetInstance &&) noexcept = default;
@@ -179,11 +155,6 @@ namespace guitarfx
     void AllocateBuffers(int maxBlockSize);
     void AllocateInstanceBuffers(PresetInstance &inst, int maxBlockSize);
     static void ComputePanGains(double pan, float &gL, float &gR);
-
-    // Per-preset global FX processing
-    void ProcessPresetGate(PresetInstance &inst, float *inL, float *inR, int numSamples);
-    void ProcessPresetPitchShift(PresetInstance &inst, float *bufL, float *bufR, int numSamples);
-    void ProcessPresetDoubler(PresetInstance &inst, float *outL, float *outR, int numSamples);
 
     // Tuner processing (YIN-based pitch detection)
     void ProcessTuner(float **inputs, int numSamples);
@@ -211,6 +182,10 @@ namespace guitarfx
 
     // Temporary buffers for input processing
     std::vector<float> mTempInL, mTempInR;
+
+    // Global post-mix EQ (applied after preset mixing, before pitch/doubler)
+    ParametricEQEffect mGlobalEQ;
+    bool mGlobalEQEnabled = false;
 
     // Tuner state
     bool mTunerEnabled = false;

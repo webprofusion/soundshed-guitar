@@ -5,6 +5,8 @@
 #include "dsp/effects/NoiseGateEffect.h"
 #include "dsp/effects/ParametricEQEffect.h"
 #include "dsp/effects/DelayEffect.h"
+#include "dsp/effects/DoublerEffect.h"
+#include "dsp/effects/PitchShiftEffect.h"
 #include "dsp/effects/ReverbEffect.h"
 #include "dsp/effects/CompressorEffect.h"
 #include "dsp/effects/NAMAmpEffect.h"
@@ -38,7 +40,11 @@ namespace guitarfx
 
     // Time-based effects
     RegisterDelayEffect();
+    RegisterDoublerEffect();
     RegisterReverbEffect();
+
+    // Modulation effects
+    RegisterPitchShiftEffect();
   }
 
 } // namespace guitarfx

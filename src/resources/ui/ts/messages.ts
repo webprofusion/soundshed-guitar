@@ -26,10 +26,6 @@ export function handleIncomingMessage(message: string): void {
           values: Array.isArray((parameters as { parameters?: unknown }).parameters)
             ? ((parameters as { parameters: [] }).parameters as [])
             : [],
-          gateEnabled: (parameters as { gateEnabled?: boolean }).gateEnabled ?? false,
-          gateThreshold: typeof (parameters as { gateThreshold?: unknown }).gateThreshold === "number"
-            ? ((parameters as { gateThreshold: number }).gateThreshold as number)
-            : null,
         };
       }
       // Process resource library
@@ -81,10 +77,6 @@ export function handleIncomingMessage(message: string): void {
           values: Array.isArray((parameters as { parameters?: unknown }).parameters)
             ? ((parameters as { parameters: [] }).parameters as [])
             : uiState.parameters.values,
-          gateEnabled: (parameters as { gateEnabled?: boolean }).gateEnabled ?? uiState.parameters.gateEnabled,
-          gateThreshold: typeof (parameters as { gateThreshold?: unknown }).gateThreshold === "number"
-            ? ((parameters as { gateThreshold: number }).gateThreshold as number)
-            : uiState.parameters.gateThreshold,
         };
       }
       if (preset) {

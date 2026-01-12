@@ -37,19 +37,6 @@ function renderParameterSection(): string {
     })
     .join("");
 
-  const gateStatus = typeof uiState.parameters.gateEnabled === "boolean"
-    ? `
-        <div class="param-card ${uiState.parameters.gateEnabled ? "active" : ""}">
-          <span class="param-label">Noise Gate</span>
-          <span class="param-value">${uiState.parameters.gateEnabled ? "On" : "Off"}${
-            typeof uiState.parameters.gateThreshold === "number"
-              ? ` (${uiState.parameters.gateThreshold.toFixed(1)} dB)`
-              : ""
-          }</span>
-        </div>
-      `
-    : "";
-
   const signalTestSection = uiState.signalTest
     ? `
         <div class="test-results ${uiState.signalTest.passed ? "passed" : "failed"}">
@@ -97,7 +84,6 @@ function renderParameterSection(): string {
       </h3>
       <div class="params-grid">
         ${parameterItems}
-        ${gateStatus}
       </div>
     </div>
     <div class="signal-chain-section">
@@ -312,7 +298,7 @@ export function renderPresetDetails(
 
   const fxChainNodes = (preset.fxChain ?? [])
     .map((stage) => {
-      const icon = stage === "noise_gate" ? "🔇" : stage === "compressor" ? "📊" : stage === "eq" ? "🎚️" : "⚡";
+      const icon = stage === "dynamics_gate" || stage === "noise_gate" ? "🔇" : stage === "compressor" ? "📊" : stage === "eq" ? "🎚️" : "⚡";
       return `
         <div class="fx-node">
           <div class="fx-node-icon">${icon}</div>

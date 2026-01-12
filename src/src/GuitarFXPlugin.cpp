@@ -2219,7 +2219,7 @@ namespace guitarfx
     {
       GraphNode gateNode;
       gateNode.id = "gate";
-      gateNode.type = "noise_gate";
+      gateNode.type = "dynamics_gate";
       gateNode.category = "dynamics";
       gateNode.enabled = param->Value() > 0.5;
 

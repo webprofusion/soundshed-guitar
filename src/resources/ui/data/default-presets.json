@@ -36,12 +36,32 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -83,12 +103,32 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-devils-lab-112g12m" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -139,13 +179,33 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-421-1960" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -187,12 +247,32 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-devils-lab-212v30" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -263,6 +343,24 @@
             "band3_freq": 6000
           },
           "config": {}
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
@@ -270,7 +368,9 @@
         { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "cab_1", "to": "eq_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "eq_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "eq_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -321,13 +421,33 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-906-1960" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []
@@ -378,13 +498,33 @@
           "params": { "mix": 1, "outputGain": 0 },
           "config": {},
           "resource": { "type": "ir", "id": "ir-scharrface-blend-tight" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
         }
       ],
       "edges": [
         { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
         { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
-        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
       ]
     },
     "embeddedResources": []

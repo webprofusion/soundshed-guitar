@@ -168,6 +168,26 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     ]
   },
   {
+    type: "delay_doubler",
+    displayName: "Doubler",
+    category: "delay",
+    requiresResource: false,
+    parameters: [
+      { key: "time", name: "Delay Time", default: 6, min: 0, max: 100, unit: "ms" },
+      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "" }
+    ]
+  },
+  {
+    type: "pitch_shift",
+    displayName: "Pitch Shift",
+    category: "modulation",
+    requiresResource: false,
+    parameters: [
+      { key: "semitones", name: "Semitones", default: 0, min: -24, max: 24, unit: "st" },
+      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "" }
+    ]
+  },
+  {
     type: "reverb_room",
     displayName: "Room Reverb",
     category: "reverb",

@@ -22,8 +22,6 @@ export const uiState: UiState = {
   presetCache: new Map<string, Preset>(),
   parameters: {
     values: [],
-    gateEnabled: false,
-    gateThreshold: null,
   },
   signalTest: null,
   demoAudioSelectedId: DEMO_AUDIO_SAMPLES.length ? DEMO_AUDIO_SAMPLES[0].id : null,

@@ -48,7 +48,7 @@ guitarfx::Preset CreateTestPreset(
   // Noise gate node
   guitarfx::GraphNode gateNode;
   gateNode.id = "gate";
-  gateNode.type = "noise_gate";
+  gateNode.type = "dynamics_gate";
   gateNode.category = "dynamics";
   gateNode.enabled = true;
   gateNode.params["threshold"] = -60.0;
