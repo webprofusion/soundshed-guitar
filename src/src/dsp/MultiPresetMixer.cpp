@@ -2,9 +2,20 @@
 #include "resources/ResourceLibrary.h"
 
 #include <cmath>
+#include <array>
 
 namespace guitarfx
 {
+  namespace
+  {
+    // Note names for pitch detection
+    constexpr std::array<const char *, 12> kNoteNames = {
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+
+    // Alternative note names (flats)
+    constexpr std::array<const char *, 12> kNoteNamesFlat = {
+        "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"};
+  } // namespace
   bool MultiPresetMixer::AddActivePreset(const Preset &preset, const std::string &presetId, const std::string &name)
   {
     // Avoid duplicate IDs
@@ -584,6 +595,23 @@ namespace guitarfx
       }
     }
 
+    // Process tuner (sits at the start of signal chain, uses raw input for pitch detection)
+    if (mTunerEnabled)
+    {
+      float *tunerInputs[2] = {processInL, processInR};
+      ProcessTuner(tunerInputs, numSamples);
+
+      // If not in live tuner mode, mute the output
+      if (!mLiveTunerMode)
+      {
+        if (outputs[0])
+          std::fill(outputs[0], outputs[0] + numSamples, 0.0f);
+        if (outputs[1])
+          std::fill(outputs[1], outputs[1] + numSamples, 0.0f);
+        return;
+      }
+    }
+
     // Detect solo mode
     bool anySolo = false;
     for (const auto &inst : mInstances)
@@ -939,6 +967,261 @@ namespace guitarfx
     }
 
     return aggregatedStats;
+  }
+
+  // ============================================================================
+  // Tuner implementation
+  // ============================================================================
+
+  void MultiPresetMixer::SetTunerEnabled(bool enabled)
+  {
+    mTunerEnabled = enabled;
+    if (enabled)
+    {
+      // Reset tuner state when enabled
+      mTunerBuffer.resize(kTunerBufferSize, 0.0);
+      std::fill(mTunerBuffer.begin(), mTunerBuffer.end(), 0.0);
+      mTunerBufferWriteIndex = 0;
+      mTunerSampleCounter = 0;
+    }
+  }
+
+  void MultiPresetMixer::SetTunerCallback(TunerCallback callback)
+  {
+    mTunerCallback = std::move(callback);
+  }
+
+  void MultiPresetMixer::SetTunerReferenceFrequency(double frequency)
+  {
+    mTunerReferenceFrequency = std::clamp(frequency, 400.0, 480.0);
+  }
+
+  void MultiPresetMixer::ProcessTuner(float **inputs, int numSamples)
+  {
+    // Use the main input channel setting (same as DSP processing)
+    const int ch = mInputChannel;
+    if (!mTunerEnabled || !mTunerCallback || !inputs || !inputs[ch])
+    {
+      return;
+    }
+
+    // Ensure buffer is allocated
+    if (mTunerBuffer.size() != kTunerBufferSize)
+    {
+      mTunerBuffer.resize(kTunerBufferSize, 0.0);
+    }
+
+    // Fill the tuner buffer with input samples (mono - use selected channel)
+    for (int i = 0; i < numSamples; ++i)
+    {
+      mTunerBuffer[mTunerBufferWriteIndex] = static_cast<double>(inputs[ch][i]);
+      mTunerBufferWriteIndex = (mTunerBufferWriteIndex + 1) % kTunerBufferSize;
+      ++mTunerSampleCounter;
+    }
+
+    // Update tuner at regular intervals
+    if (mTunerSampleCounter >= kTunerUpdateInterval)
+    {
+      mTunerSampleCounter = 0;
+
+      // Reorder buffer to be contiguous for pitch detection
+      std::vector<double> orderedBuffer(kTunerBufferSize);
+      for (std::size_t i = 0; i < kTunerBufferSize; ++i)
+      {
+        orderedBuffer[i] = mTunerBuffer[(mTunerBufferWriteIndex + i) % kTunerBufferSize];
+      }
+
+      // Calculate RMS for debug
+      double sumSq = 0.0;
+      for (const auto &s : orderedBuffer)
+        sumSq += s * s;
+      double rms = std::sqrt(sumSq / static_cast<double>(orderedBuffer.size()));
+
+      double frequency = DetectPitch(orderedBuffer);
+      TunerResult result = FrequencyToNote(frequency);
+
+      // Store debug info in result for UI logging
+      result.debugRms = rms;
+      result.debugRawFreq = frequency;
+
+      mTunerCallback(result);
+    }
+  }
+
+  double MultiPresetMixer::DetectPitch(const std::vector<double> &samples) const
+  {
+    // Autocorrelation-based pitch detection (YIN-inspired algorithm)
+    const std::size_t n = samples.size();
+    if (n < 2)
+    {
+      return 0.0;
+    }
+
+    // Calculate RMS to check if there's enough signal
+    double sumSquares = 0.0;
+    for (const auto &sample : samples)
+    {
+      sumSquares += sample * sample;
+    }
+    const double rms = std::sqrt(sumSquares / static_cast<double>(n));
+
+    // If signal is too quiet, don't try to detect pitch
+    if (rms < 0.01)
+    {
+      return 0.0;
+    }
+
+    // Define search range for guitar: 70Hz (D2) to 1500Hz (F#6)
+    const int minPeriod = static_cast<int>(mSampleRate / 1500.0); // Highest frequency
+    const int maxPeriod = static_cast<int>(mSampleRate / 70.0);   // Lowest frequency
+
+    if (maxPeriod >= static_cast<int>(n / 2) || minPeriod < 2)
+    {
+      return 0.0;
+    }
+
+    // Calculate difference function (YIN step 2)
+    std::vector<double> diff(static_cast<std::size_t>(maxPeriod) + 1, 0.0);
+
+    for (int tau = minPeriod; tau <= maxPeriod; ++tau)
+    {
+      double sum = 0.0;
+      for (std::size_t i = 0; i < n - static_cast<std::size_t>(tau); ++i)
+      {
+        const double delta = samples[i] - samples[i + tau];
+        sum += delta * delta;
+      }
+      diff[static_cast<std::size_t>(tau)] = sum;
+    }
+
+    // Cumulative mean normalized difference function (YIN step 4)
+    std::vector<double> cmndf(static_cast<std::size_t>(maxPeriod) + 1, 1.0);
+    double runningSum = 0.0;
+
+    for (int tau = minPeriod; tau <= maxPeriod; ++tau)
+    {
+      runningSum += diff[static_cast<std::size_t>(tau)];
+      if (runningSum > 0.0)
+      {
+        cmndf[static_cast<std::size_t>(tau)] = diff[static_cast<std::size_t>(tau)] * static_cast<double>(tau) / runningSum;
+      }
+    }
+
+    // Find the first minimum below threshold (YIN step 5)
+    constexpr double threshold = 0.15;
+    int bestPeriod = -1;
+
+    for (int tau = minPeriod; tau < maxPeriod; ++tau)
+    {
+      if (cmndf[static_cast<std::size_t>(tau)] < threshold)
+      {
+        // Find the local minimum
+        while (tau + 1 <= maxPeriod && cmndf[static_cast<std::size_t>(tau + 1)] < cmndf[static_cast<std::size_t>(tau)])
+        {
+          ++tau;
+        }
+        bestPeriod = tau;
+        break;
+      }
+    }
+
+    // If no period found below threshold, find the global minimum
+    if (bestPeriod < 0)
+    {
+      double minVal = cmndf[static_cast<std::size_t>(minPeriod)];
+      bestPeriod = minPeriod;
+      for (int tau = minPeriod + 1; tau <= maxPeriod; ++tau)
+      {
+        if (cmndf[static_cast<std::size_t>(tau)] < minVal)
+        {
+          minVal = cmndf[static_cast<std::size_t>(tau)];
+          bestPeriod = tau;
+        }
+      }
+      // If the minimum is too high, no pitch detected
+      if (minVal > 0.5)
+      {
+        return 0.0;
+      }
+    }
+
+    // Parabolic interpolation for sub-sample accuracy (YIN step 6)
+    double period = static_cast<double>(bestPeriod);
+    if (bestPeriod > minPeriod && bestPeriod < maxPeriod)
+    {
+      const double s0 = cmndf[static_cast<std::size_t>(bestPeriod - 1)];
+      const double s1 = cmndf[static_cast<std::size_t>(bestPeriod)];
+      const double s2 = cmndf[static_cast<std::size_t>(bestPeriod + 1)];
+      const double denom = 2.0 * (2.0 * s1 - s0 - s2);
+      if (std::abs(denom) > 1e-10)
+      {
+        period += (s2 - s0) / denom;
+      }
+    }
+
+    return mSampleRate / period;
+  }
+
+  MultiPresetMixer::TunerResult MultiPresetMixer::FrequencyToNote(double frequency) const
+  {
+    TunerResult result;
+
+    if (frequency < 20.0 || frequency > 20000.0)
+    {
+      result.detected = false;
+      return result;
+    }
+
+    result.frequency = frequency;
+    result.detected = true;
+
+    // Calculate the number of semitones from A4 (reference frequency, typically 440 Hz)
+    const double semitonesFromA4 = 12.0 * std::log2(frequency / mTunerReferenceFrequency);
+
+    // Round to nearest semitone
+    const int nearestSemitone = static_cast<int>(std::round(semitonesFromA4));
+
+    // Calculate the exact frequency of the nearest note
+    const double nearestFrequency = mTunerReferenceFrequency * std::pow(2.0, nearestSemitone / 12.0);
+
+    // Calculate cents offset from the nearest note
+    result.centOffset = 1200.0 * std::log2(frequency / nearestFrequency);
+
+    // Clamp to reasonable range
+    result.centOffset = std::clamp(result.centOffset, -50.0, 50.0);
+
+    // Calculate note index (A4 is note 9 in octave 4, i.e., index 57 from C0)
+    // A4 = 440Hz, note index = 9 (0=C, 1=C#, ..., 9=A)
+    // Total semitone from C0 = nearestSemitone + 57 (A4 is 57 semitones above C0)
+    const int totalSemitones = nearestSemitone + 57;
+
+    // Handle negative semitones
+    const int noteIndex = ((totalSemitones % 12) + 12) % 12;
+    result.octave = (totalSemitones / 12);
+    if (totalSemitones < 0 && totalSemitones % 12 != 0)
+    {
+      result.octave -= 1;
+    }
+
+    // Get note name with both sharp and flat
+    const char *sharpName = kNoteNames[static_cast<std::size_t>(noteIndex)];
+    const char *flatName = kNoteNamesFlat[static_cast<std::size_t>(noteIndex)];
+
+    // Use combined notation for accidentals (e.g., "D#/Eb")
+    if (std::string(sharpName) != std::string(flatName))
+    {
+      result.noteName = std::string(sharpName) + "/" + std::string(flatName);
+    }
+    else
+    {
+      result.noteName = sharpName;
+    }
+
+    // Calculate confidence based on how close we are to the note
+    result.confidence = 1.0 - std::abs(result.centOffset) / 50.0;
+    result.confidence = std::clamp(result.confidence, 0.0, 1.0);
+
+    return result;
   }
 
 } // namespace guitarfx

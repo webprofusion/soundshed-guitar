@@ -684,6 +684,23 @@ namespace guitarfx
     // Share the plugin's resource library with the multi-preset mixer
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
 
+    // Set up tuner callback to forward results to UI
+    mPresetMixer.SetTunerCallback([this](const MultiPresetMixer::TunerResult &result) {
+      // Store tuner data for sending in OnIdle (thread-safe handoff from audio thread)
+      {
+        std::lock_guard<std::mutex> lock(mTunerMutex);
+        mPendingTunerData.detected = result.detected;
+        mPendingTunerData.noteName = result.noteName;
+        mPendingTunerData.octave = result.octave;
+        mPendingTunerData.frequency = result.frequency;
+        mPendingTunerData.centOffset = result.centOffset;
+        mPendingTunerData.confidence = result.confidence;
+        mPendingTunerData.debugRms = result.debugRms;
+        mPendingTunerData.debugRawFreq = result.debugRawFreq;
+      }
+      mTunerDataPending.store(true, std::memory_order_release);
+    });
+
     InitializeParameters();
 
     for (int paramIdx = 0; paramIdx < kParamCount; ++paramIdx)
@@ -2397,22 +2414,70 @@ namespace guitarfx
 
   void GuitarFXPlugin::HandleTunerRequest(const nlohmann::json &payload)
   {
-    // Tuner functionality is not yet implemented in the V2 architecture
-    // This is a placeholder for future implementation
-    
     const std::string action = payload.value("action", "");
-    
+
     if (action == "start")
     {
-      std::cout << "[Plugin] Tuner requested but not implemented in V2 architecture" << std::endl;
-      
-      // Send message back to UI indicating tuner is not available
+      std::cout << "[Plugin] Tuner starting" << std::endl;
+
+      // Set live tuner mode if specified (UI sends as "liveMode")
+      if (payload.contains("liveMode"))
+      {
+        mPresetMixer.SetLiveTunerMode(payload.value("liveMode", true));
+      }
+
+      // Set reference frequency if specified
+      if (payload.contains("referenceFrequency"))
+      {
+        mPresetMixer.SetTunerReferenceFrequency(payload.value("referenceFrequency", 440.0));
+      }
+
+      // Enable tuner
+      mTunerActive.store(true, std::memory_order_release);
+      mPresetMixer.SetTunerEnabled(true);
+
+      // Acknowledge tuner start
       nlohmann::json message;
-      message["type"] = "tunerError";
-      message["error"] = "Tuner not yet implemented in this version";
+      message["type"] = "tunerStarted";
+      message["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
+      message["liveMode"] = mPresetMixer.IsLiveTunerMode();
       SendMessageToUI(message.dump());
     }
-    // For other actions, just silently ignore for now
+    else if (action == "stop")
+    {
+      std::cout << "[Plugin] Tuner stopping" << std::endl;
+
+      // Disable tuner
+      mTunerActive.store(false, std::memory_order_release);
+      mPresetMixer.SetTunerEnabled(false);
+
+      // Acknowledge tuner stop
+      nlohmann::json message;
+      message["type"] = "tunerStopped";
+      SendMessageToUI(message.dump());
+    }
+    else if (action == "setLiveMode")
+    {
+      bool liveMode = payload.value("liveMode", true);
+      mPresetMixer.SetLiveTunerMode(liveMode);
+
+      // Acknowledge the change
+      nlohmann::json message;
+      message["type"] = "tunerLiveModeChanged";
+      message["liveMode"] = liveMode;
+      SendMessageToUI(message.dump());
+    }
+    else if (action == "setReference")
+    {
+      double freq = payload.value("referenceFrequency", 440.0);
+      mPresetMixer.SetTunerReferenceFrequency(freq);
+
+      // Acknowledge the change
+      nlohmann::json message;
+      message["type"] = "tunerReferenceChanged";
+      message["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
+      SendMessageToUI(message.dump());
+    }
   }
 
   void GuitarFXPlugin::HandleSetInputModeRequest(const nlohmann::json &payload)

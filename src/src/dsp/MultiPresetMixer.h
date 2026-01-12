@@ -6,6 +6,7 @@
 #include "dsp/effects/NoiseGateEffect.h"
 
 #include <algorithm>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -38,6 +39,21 @@ namespace guitarfx
       bool doublerEnabled = false;
       double doublerDelayMs = 6.0;
     };
+
+    // Tuner result data
+    struct TunerResult
+    {
+      std::string noteName;       // e.g., "E", "A#/Bb"
+      int octave = 0;             // Octave number (e.g., 2 for low E on guitar)
+      double frequency = 0.0;     // Detected frequency in Hz
+      double centOffset = 0.0;    // Cents deviation from perfect pitch (-50 to +50)
+      double confidence = 0.0;    // Detection confidence (0.0 to 1.0)
+      bool detected = false;      // Whether a valid pitch was detected
+      double debugRms = 0.0;      // Debug: RMS of input signal
+      double debugRawFreq = 0.0;  // Debug: Raw detected frequency before note mapping
+    };
+
+    using TunerCallback = std::function<void(const TunerResult &)>;
 
     MultiPresetMixer() = default;
 
@@ -122,6 +138,15 @@ namespace guitarfx
     [[nodiscard]] size_t GetPresetCount() const { return mInstances.size(); }
     [[nodiscard]] SignalGraphExecutor::DSPPerformanceStats GetPerformanceStats() const;
 
+    // Tuner functionality
+    void SetTunerEnabled(bool enabled);
+    [[nodiscard]] bool IsTunerEnabled() const noexcept { return mTunerEnabled; }
+    void SetTunerCallback(TunerCallback callback);
+    void SetTunerReferenceFrequency(double frequency);
+    [[nodiscard]] double GetTunerReferenceFrequency() const noexcept { return mTunerReferenceFrequency; }
+    void SetLiveTunerMode(bool enabled) { mLiveTunerMode = enabled; }
+    [[nodiscard]] bool IsLiveTunerMode() const noexcept { return mLiveTunerMode; }
+
   private:
     struct PresetInstance
     {
@@ -160,6 +185,11 @@ namespace guitarfx
     void ProcessPresetPitchShift(PresetInstance &inst, float *bufL, float *bufR, int numSamples);
     void ProcessPresetDoubler(PresetInstance &inst, float *outL, float *outR, int numSamples);
 
+    // Tuner processing (YIN-based pitch detection)
+    void ProcessTuner(float **inputs, int numSamples);
+    [[nodiscard]] double DetectPitch(const std::vector<double> &samples) const;
+    [[nodiscard]] TunerResult FrequencyToNote(double frequency) const;
+
     ResourceLibrary *mResourceLibrary = nullptr;
     std::vector<PresetInstance> mInstances;
 
@@ -181,6 +211,17 @@ namespace guitarfx
 
     // Temporary buffers for input processing
     std::vector<float> mTempInL, mTempInR;
+
+    // Tuner state
+    bool mTunerEnabled = false;
+    bool mLiveTunerMode = true;  // When true, audio passes through DSP while tuning; when false, output is silent
+    double mTunerReferenceFrequency = 440.0;  // A4 reference pitch
+    TunerCallback mTunerCallback;
+    std::vector<double> mTunerBuffer;         // Circular buffer for pitch detection
+    std::size_t mTunerBufferWriteIndex = 0;
+    std::size_t mTunerSampleCounter = 0;      // For throttling callback rate
+    static constexpr std::size_t kTunerBufferSize = 4096;      // ~85ms at 48kHz for good low-frequency detection
+    static constexpr std::size_t kTunerUpdateInterval = 2048;  // Update every ~42ms at 48kHz
   };
 
 } // namespace guitarfx

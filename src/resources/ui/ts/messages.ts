@@ -200,7 +200,11 @@ export function handleIncomingMessage(message: string): void {
       break;
     }
     case "tunerStarted": {
-      handleTunerStarted((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
+      const startPayload = payload as { referenceFrequency?: number; liveMode?: boolean };
+      handleTunerStarted(startPayload.referenceFrequency ?? 440.0);
+      if (startPayload.liveMode !== undefined) {
+        handleTunerLiveModeChanged(startPayload.liveMode);
+      }
       break;
     }
     case "tunerStopped": {
