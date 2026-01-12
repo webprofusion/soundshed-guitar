@@ -248,6 +248,139 @@ namespace guitarfx
 
   namespace
   {
+    bool IsEqNode(const GraphNode& node)
+    {
+      return node.type == "eq_parametric" || node.type == "eq";
+    }
+
+    GraphNode* FindEqNode(SignalGraph& graph)
+    {
+      for (auto& node : graph.nodes)
+      {
+        if (IsEqNode(node))
+        {
+          return &node;
+        }
+      }
+      return nullptr;
+    }
+
+    const GraphNode* FindEqNode(const SignalGraph& graph)
+    {
+      for (const auto& node : graph.nodes)
+      {
+        if (IsEqNode(node))
+        {
+          return &node;
+        }
+      }
+      return nullptr;
+    }
+
+    std::string MakeUniqueNodeId(const SignalGraph& graph, const std::string& baseId)
+    {
+      std::string candidate = baseId;
+      int suffix = 1;
+      while (graph.FindNode(candidate))
+      {
+        candidate = baseId + std::to_string(suffix++);
+      }
+      return candidate;
+    }
+
+    double GetParamValueOr(const GuitarFXPlugin& plugin, GuitarFXPlugin::ParameterId id, double fallback)
+    {
+      const auto* param = plugin.GetParam(static_cast<int>(id));
+      return param ? param->Value() : fallback;
+    }
+
+    GraphNode BuildEqNodeFromParams(const GuitarFXPlugin& plugin, const std::string& nodeId)
+    {
+      GraphNode eqNode;
+      eqNode.id = nodeId;
+      eqNode.type = "eq_parametric";
+      eqNode.category = "eq";
+      eqNode.enabled = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQEnabled, 0.0) > 0.5;
+
+      eqNode.params["lowGain"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQLowGain, 0.0);
+      eqNode.params["lowFreq"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQLowFreq, 100.0);
+      eqNode.params["lowMidGain"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQLowMidGain, 0.0);
+      eqNode.params["lowMidFreq"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQLowMidFreq, 500.0);
+      eqNode.params["lowMidQ"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQLowMidQ, 1.0);
+      eqNode.params["highMidGain"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQHighMidGain, 0.0);
+      eqNode.params["highMidFreq"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQHighMidFreq, 2000.0);
+      eqNode.params["highMidQ"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQHighMidQ, 1.0);
+      eqNode.params["highGain"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQHighGain, 0.0);
+      eqNode.params["highFreq"] = GetParamValueOr(plugin, GuitarFXPlugin::kParamEQHighFreq, 8000.0);
+
+      return eqNode;
+    }
+
+    void EnsureParametricEQNode(Preset& preset, const GuitarFXPlugin& plugin)
+    {
+      if (FindEqNode(preset.graph))
+      {
+        return;
+      }
+
+      std::string outputId;
+      for (const auto& node : preset.graph.nodes)
+      {
+        if (node.type == kNodeTypeOutput || node.id == "output")
+        {
+          outputId = node.id;
+          break;
+        }
+      }
+
+      const std::string eqId = MakeUniqueNodeId(preset.graph, "eq");
+      GraphNode eqNode = BuildEqNodeFromParams(plugin, eqId);
+
+      preset.graph.nodes.push_back(eqNode);
+
+      bool rewired = false;
+      if (!outputId.empty())
+      {
+        for (auto& edge : preset.graph.edges)
+        {
+          if (edge.to == outputId)
+          {
+            edge.to = eqId;
+            rewired = true;
+          }
+        }
+
+        GraphEdge eqToOutput;
+        eqToOutput.from = eqId;
+        eqToOutput.to = outputId;
+        preset.graph.edges.push_back(eqToOutput);
+      }
+
+      if (!rewired && !outputId.empty())
+      {
+        std::string fromId;
+        for (auto it = preset.graph.nodes.rbegin(); it != preset.graph.nodes.rend(); ++it)
+        {
+          if (it->id != eqId && it->id != outputId)
+          {
+            fromId = it->id;
+            break;
+          }
+        }
+
+        if (!fromId.empty())
+        {
+          GraphEdge edge;
+          edge.from = fromId;
+          edge.to = eqId;
+          preset.graph.edges.push_back(edge);
+        }
+      }
+    }
+  } // namespace
+
+  namespace
+  {
     constexpr int kNumPrograms = 0;
     constexpr double kTwoPi = 6.28318530717958647692;
 
@@ -1240,8 +1373,10 @@ namespace guitarfx
         }
         else
         {
+          EnsureParametricEQNode(*presetOpt, *this);
           ApplyPreset(*presetOpt);
           mActivePreset = *presetOpt;
+          mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
           if (mActivePresetId.empty())
           {
             mActivePresetId = presetOpt->id;
@@ -1347,46 +1482,124 @@ namespace guitarfx
     case kParamEQEnabled:
       mDSP->SetEQEnabled(param->Bool());
       mPresetMixer.SetEQEnabled(param->Bool());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->enabled = param->Bool();
+          mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        }
+      }
       break;
     case kParamEQLowGain:
       mDSP->SetEQBandGain(0, param->Value());
       mPresetMixer.SetEQBandGain(0, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["lowGain"] = param->Value();
+        }
+      }
       break;
     case kParamEQLowFreq:
       mDSP->SetEQBandFrequency(0, param->Value());
       mPresetMixer.SetEQBandFrequency(0, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["lowFreq"] = param->Value();
+        }
+      }
       break;
     case kParamEQLowMidGain:
       mDSP->SetEQBandGain(1, param->Value());
       mPresetMixer.SetEQBandGain(1, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["lowMidGain"] = param->Value();
+        }
+      }
       break;
     case kParamEQLowMidFreq:
       mDSP->SetEQBandFrequency(1, param->Value());
       mPresetMixer.SetEQBandFrequency(1, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["lowMidFreq"] = param->Value();
+        }
+      }
       break;
     case kParamEQLowMidQ:
       mDSP->SetEQBandQ(1, param->Value());
       mPresetMixer.SetEQBandQ(1, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["lowMidQ"] = param->Value();
+        }
+      }
       break;
     case kParamEQHighMidGain:
       mDSP->SetEQBandGain(2, param->Value());
       mPresetMixer.SetEQBandGain(2, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["highMidGain"] = param->Value();
+        }
+      }
       break;
     case kParamEQHighMidFreq:
       mDSP->SetEQBandFrequency(2, param->Value());
       mPresetMixer.SetEQBandFrequency(2, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["highMidFreq"] = param->Value();
+        }
+      }
       break;
     case kParamEQHighMidQ:
       mDSP->SetEQBandQ(2, param->Value());
       mPresetMixer.SetEQBandQ(2, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["highMidQ"] = param->Value();
+        }
+      }
       break;
     case kParamEQHighGain:
       mDSP->SetEQBandGain(3, param->Value());
       mPresetMixer.SetEQBandGain(3, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["highGain"] = param->Value();
+        }
+      }
       break;
     case kParamEQHighFreq:
       mDSP->SetEQBandFrequency(3, param->Value());
       mPresetMixer.SetEQBandFrequency(3, param->Value());
+      if (mActivePreset)
+      {
+        if (auto* eqNode = FindEqNode(mActivePreset->graph))
+        {
+          eqNode->params["highFreq"] = param->Value();
+        }
+      }
       break;
     // Delay effect
     case kParamDelayEnabled:
@@ -1636,6 +1849,26 @@ namespace guitarfx
     {
       HandleSetAmpCabStateRequest(payload);
     }
+    else if (type == "uiSettingsChanged")
+    {
+      const auto settingsIt = payload.find("settings");
+      if (settingsIt != payload.end() && settingsIt->is_object())
+      {
+        if (settingsIt->contains("zoom"))
+        {
+          mUiZoom = settingsIt->value("zoom", mUiZoom);
+        }
+        if (settingsIt->contains("bounds") && (*settingsIt)["bounds"].is_object())
+        {
+          const auto &b = (*settingsIt)["bounds"];
+          mWindowBounds.x = b.value("x", mWindowBounds.x);
+          mWindowBounds.y = b.value("y", mWindowBounds.y);
+          mWindowBounds.width = b.value("width", mWindowBounds.width);
+          mWindowBounds.height = b.value("height", mWindowBounds.height);
+        }
+        SaveAppSettings();
+      }
+    }
     else if (type == "setAutoLevel")
     {
       HandleSetAutoLevelRequest(payload);
@@ -1736,6 +1969,20 @@ namespace guitarfx
     auto parameters = SerializeParametersToJson(*this);
     message["parameters"] = std::move(parameters);
 
+    // Include UI settings so the WebView can restore zoom and window bounds
+    nlohmann::json uiSettings;
+    uiSettings["zoom"] = mUiZoom;
+    if (mWindowBounds.HasBounds())
+    {
+      uiSettings["bounds"] = {
+        {"x", mWindowBounds.x},
+        {"y", mWindowBounds.y},
+        {"width", mWindowBounds.width},
+        {"height", mWindowBounds.height},
+      };
+    }
+    message["uiSettings"] = std::move(uiSettings);
+
     if (mActivePreset)
     {
       message["preset"] = nlohmann::json::parse(PresetStorage::SerializeToJson(*mActivePreset));
@@ -1814,6 +2061,8 @@ namespace guitarfx
       {amp.id, cab.id, 0, 0, 1.0},
       {cab.id, output.id, 0, 0, 1.0}
     };
+
+    EnsureParametricEQNode(preset, *this);
 
     mActivePreset = preset;
     mActivePresetJson = PresetStorage::SerializeToJson(preset);
@@ -1897,12 +2146,15 @@ namespace guitarfx
     // Lock DSP mutex to prevent ProcessBlock from accessing DSP during modification
     std::lock_guard<std::mutex> lock(mDSPMutex);
 
+    Preset presetWithEQ = preset;
+    EnsureParametricEQNode(presetWithEQ, *this);
+
     // Initialize multi-preset mixer with a single active preset by default
     mPresetMixer = MultiPresetMixer();
     mPresetMixer.SetResourceLibrary(&mDSP->GetResourceLibrary());
     mPresetMixer.Prepare(GetSampleRate(), GetBlockSize());
     const std::string presetId = !preset.id.empty() ? preset.id : "preset";
-    mPresetMixer.AddActivePreset(preset, presetId, preset.name);
+    mPresetMixer.AddActivePreset(presetWithEQ, presetId, preset.name);
 
     std::cout << "[Plugin] Loaded preset into MultiPresetMixer: " << preset.name << std::endl;
 
@@ -1928,6 +2180,46 @@ namespace guitarfx
     {
       transposeParam->Set(static_cast<double>(preset.global.transpose));
     }
+
+    const GraphNode* eqNode = FindEqNode(presetWithEQ.graph);
+    if (eqNode)
+    {
+      auto applyEqParam = [&](ParameterId id, const char* key)
+      {
+        auto *param = GetParam(static_cast<int>(id));
+        if (!param)
+        {
+          return;
+        }
+
+        double value = param->Value();
+        const auto it = eqNode->params.find(key);
+        if (it != eqNode->params.end())
+        {
+          value = it->second;
+        }
+
+        param->Set(value);
+        OnParamChange(static_cast<int>(id));
+      };
+
+      if (auto *enabledParam = GetParam(kParamEQEnabled))
+      {
+        enabledParam->Set(eqNode->enabled ? 1.0 : 0.0);
+        OnParamChange(kParamEQEnabled);
+      }
+
+      applyEqParam(kParamEQLowGain, "lowGain");
+      applyEqParam(kParamEQLowFreq, "lowFreq");
+      applyEqParam(kParamEQLowMidGain, "lowMidGain");
+      applyEqParam(kParamEQLowMidFreq, "lowMidFreq");
+      applyEqParam(kParamEQLowMidQ, "lowMidQ");
+      applyEqParam(kParamEQHighMidGain, "highMidGain");
+      applyEqParam(kParamEQHighMidFreq, "highMidFreq");
+      applyEqParam(kParamEQHighMidQ, "highMidQ");
+      applyEqParam(kParamEQHighGain, "highGain");
+      applyEqParam(kParamEQHighFreq, "highFreq");
+    }
   }
 
   void GuitarFXPlugin::HandlePresetLoadRequest(const nlohmann::json &payload)
@@ -1947,11 +2239,12 @@ namespace guitarfx
         return;
       }
 
+      EnsureParametricEQNode(*presetOpt, *this);
       ApplyPreset(*presetOpt);
 
       mActivePreset = *presetOpt;
       mActivePresetId = presetOpt->id;
-      mActivePresetJson = presetJsonIter->dump();
+      mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
       mPendingStateBroadcast = true;
 
       // Save settings so this preset is restored on next startup
@@ -1960,7 +2253,7 @@ namespace guitarfx
       {
         nlohmann::json message;
         message["type"] = "presetLoaded";
-        message["preset"] = *presetJsonIter;
+        message["preset"] = nlohmann::json::parse(mActivePresetJson);
         
         // Include active mixer preset ids
         message["activePresetIds"] = mPresetMixer.GetActivePresetIds();
@@ -3046,6 +3339,20 @@ namespace guitarfx
       settings["lastPresetId"] = mActivePresetId;
       settings["lastPresetJson"] = mActivePresetJson;
 
+      // UI settings
+      nlohmann::json uiSettings;
+      uiSettings["zoom"] = mUiZoom;
+      if (mWindowBounds.HasBounds())
+      {
+        uiSettings["bounds"] = {
+          {"x", mWindowBounds.x},
+          {"y", mWindowBounds.y},
+          {"width", mWindowBounds.width},
+          {"height", mWindowBounds.height},
+        };
+      }
+      settings["uiSettings"] = std::move(uiSettings);
+
       // Save all current parameter values
       nlohmann::json parameters = nlohmann::json::array();
       for (int paramIdx = 0; paramIdx < kParamCount; ++paramIdx)
@@ -3114,6 +3421,21 @@ namespace guitarfx
       // Restore paths
       mActivePresetId = settings.value("lastPresetId", "");
       mActivePresetJson = settings.value("lastPresetJson", "");
+
+      // Restore UI settings
+      if (settings.contains("uiSettings") && settings["uiSettings"].is_object())
+      {
+        const auto &uiSettings = settings["uiSettings"];
+        mUiZoom = uiSettings.value("zoom", mUiZoom);
+        if (uiSettings.contains("bounds") && uiSettings["bounds"].is_object())
+        {
+          const auto &b = uiSettings["bounds"];
+          mWindowBounds.x = b.value("x", mWindowBounds.x);
+          mWindowBounds.y = b.value("y", mWindowBounds.y);
+          mWindowBounds.width = b.value("width", mWindowBounds.width);
+          mWindowBounds.height = b.value("height", mWindowBounds.height);
+        }
+      }
 
       // Restore parameters
       if (settings.contains("parameters") && settings["parameters"].is_array())
@@ -3311,7 +3633,9 @@ namespace guitarfx
         auto presetOpt = PresetStorage::DeserializeFromJson(mActivePresetJson);
         if (presetOpt)
         {
+          EnsureParametricEQNode(*presetOpt, *this);
           mActivePreset = *presetOpt;
+          mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
         }
       }
       catch (...)

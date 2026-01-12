@@ -27,8 +27,6 @@ set(_guitarfx_core_sources
   dsp/IRTypes.h
   dsp/IRManager.cpp
   dsp/IRManager.h
-  dsp/AmpModelManager.cpp
-  dsp/AmpModelManager.h
   dsp/NAMFactoryForce.cpp
   dsp/ParametricEQ.h
   dsp/DelayEffect.h

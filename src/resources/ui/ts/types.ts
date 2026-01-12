@@ -77,6 +77,16 @@ export interface GlobalSettings {
   autoLevelOutput: boolean;
 }
 
+export interface UiSettings {
+  zoom: number;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
 export interface ResourceRef {
   type: string;
   id: string;
@@ -169,6 +179,7 @@ export interface UiState {
   logs: LogEntry[];
   resourceLibrary: ResourceLibrary;
   mixer?: MixerState;
+  uiSettings?: UiSettings;
 }
 
 declare global {

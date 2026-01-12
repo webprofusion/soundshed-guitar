@@ -1,83 +1,69 @@
-# GuitarFX - AI Coding Agent Instructions
+# GuitarFX Agent Playbook
 
-## Project Overview
+## Prime Directives
 
-GuitarFX is a cross-platform audio plugin (VST3/AU/AAX/Standalone) built on **iPlug2** with **Neural Amp Modeler (NAM)** DSP. The architecture consists of:
+- Do not write code before stating assumptions.
+- Do not claim correctness you haven't verified.
+- Do not handle only the happy path.
+- Under what conditions does this work?
 
-- **C++ core** (`src/src/`) - Plugin logic, DSP processing, preset management
-- **TypeScript UI** (`src/resources/ui/ts/`) - WebView-based interface
-- **CMake build system** - FetchContent auto-downloads dependencies
+## Project Map
+- C++ core: src/src/ (DSP, presets, plugin entry)
+- UI: src/resources/ui/ts/ (WebView TypeScript)
+- Build: CMake + FetchContent; targets for App, VST3, tests
 
-## Architecture Patterns
+## DSP Graph Essentials
+- Graph runner: SignalGraphExecutor with nodes of type amp_nam, ir_cab, eq_parametric, delay, reverb, noise_gate, etc.
+- Effects live in src/src/dsp/effects/; new effects implement EffectProcessor and register via REGISTER_EFFECT.
+- Validate parameter ranges and resource presence; fail fast with clear errors instead of silent defaults.
 
-### Signal Graph DSP
-The DSP engine uses a **graph-based signal chain** (`SignalGraphExecutor`). Effects are nodes connected by edges:
-- Node types: `amp_nam`, `ir_cab`, `eq_parametric`, `delay`, `reverb`, `noise_gate`, etc.
-- Reference [src/src/dsp/effects/](src/src/dsp/effects/) for effect implementations
-- New effects: Implement `EffectProcessor` interface, register via `REGISTER_EFFECT` macro
+## UI ↔ Plugin Messaging
+- Messaging via OnMessageFromWebView / SendMessageToUI.
+- Common payloads: state, presetLoaded, loadPreset, setParameter, browseModel.
+- UI handler: src/resources/ui/ts/messages.ts; plugin handler: HandleUIMessage in src/src/GuitarFXPlugin.cpp.
+- Keep messages backward compatible; guard against missing fields and unknown message types.
 
-### WebView↔Plugin Communication
-JSON messages flow between UI and plugin via `OnMessageFromWebView` / `SendMessageToUI`:
-- Message types: `state`, `presetLoaded`, `loadPreset`, `setParameter`, `browseModel`
-- UI handler: [src/resources/ui/ts/messages.ts](src/resources/ui/ts/messages.ts)
-- Plugin handler: `HandleUIMessage()` in [src/src/GuitarFXPlugin.cpp](src/src/GuitarFXPlugin.cpp)
+## Resource References
+- ResourceRef supports library refs (resourceType + resourceId), filePath for user files, embeddedId for portable presets.
+- When loading, prefer library refs; fall back to file/embedded only when provided. Validate existence and log meaningful errors.
 
-### Resource References
-Resources (NAM models, IRs) use `ResourceRef` with three modes:
-1. **Library ref**: `resourceType` + `resourceId` (e.g., `"nam"`, `"plexi-bright"`)
-2. **File path**: Direct `filePath` for custom files
-3. **Embedded**: `embeddedId` for portable preset sharing
-
-## Build Commands
-
-```powershell
-# Configure (run once from src/)
-cmake -G "Visual Studio 18 2026" -A x64 -S . -B build
-
-# Build targets (use VS Code tasks or):
-cmake --build build --config Debug --target GuitarFX_App     # Standalone app
-cmake --build build --config Debug --target GuitarFX_VST3    # VST3 plugin
-cmake --build build --config Release --target GuitarFX_App   # Release build
-
-# Build UI (TypeScript → JavaScript)
-cd src/resources/ui && npm run build
-```
+## Build Quickstart
+- Configure (once, from src/):
+	powershell: cmake -G "Visual Studio 18 2026" -A x64 -S . -B build
+- Build (tasks available in VS Code):
+	Debug App: cmake --build build --config Debug --target GuitarFX_App
+	Debug VST3: cmake --build build --config Debug --target GuitarFX_VST3
+	Release App: cmake --build build --config Release --target GuitarFX_App
+- UI bundle: cd src/resources/ui && npm run build
 
 ## Testing
+- From src/build (Debug only):
+	powershell: ctest --build-config Debug --output-on-failure
+- Key suites: PresetDSPLoadingTests.cpp (model/IR loading), PresetDSPProcessingTests.cpp (processing), IRConvolutionTests.cpp (convolution correctness).
 
-Tests are in `src/tests/` and run via CTest (Debug builds only):
-```powershell
-cd src/build && ctest --build-config Debug --output-on-failure
-```
-
-Key test files:
-- `PresetDSPLoadingTests.cpp` - Verifies model/IR loading
-- `PresetDSPProcessingTests.cpp` - Audio processing validation
-- `IRConvolutionTests.cpp` - Convolution algorithm correctness
+## Coding Conventions
+- Namespace guitarfx::; require C++20.
+- Parameter IDs: ParameterId enum in GuitarFXPlugin.h.
+- UI state centralized in src/resources/ui/ts/state.ts; keep one source of truth.
+- JSON serialization uses nlohmann::json; maintain stable field names and defaults.
+- Keep DSP real-time safe: avoid allocations and locks in audio thread; prefer preallocation and lock-free patterns.
 
 ## Key Files
+- Plugin entry: src/src/GuitarFXPlugin.cpp
+- Effect base: src/src/dsp/EffectProcessor.h
+- Registry: src/src/dsp/EffectRegistry.h
+- Preset types: src/src/presets/PresetTypes.h
+- Graph executor: src/src/dsp/SignalGraphExecutor.h
+- Config/branding: src/config/GuitarFXConfig.h
+- UI entry: src/resources/ui/ts/main.ts
 
-| Purpose | Location |
-|---------|----------|
-| Plugin entry point | [src/src/GuitarFXPlugin.cpp](src/src/GuitarFXPlugin.cpp) |
-| Effect base class | [src/src/dsp/EffectProcessor.h](src/src/dsp/EffectProcessor.h) |
-| Effect registry | [src/src/dsp/EffectRegistry.h](src/src/dsp/EffectRegistry.h) |
-| Preset types | [src/src/presets/PresetTypes.h](src/src/presets/PresetTypes.h) |
-| Graph executor | [src/src/dsp/SignalGraphExecutor.h](src/src/dsp/SignalGraphExecutor.h) |
-| Config/branding | [src/config/GuitarFXConfig.h](src/config/GuitarFXConfig.h) |
-| UI entry point | [src/resources/ui/ts/main.ts](src/resources/ui/ts/main.ts) |
+## Change Checklist
+- Assumptions stated and confirmed where needed.
+- Error paths covered; log actionable messages.
+- Build or relevant tests executed (note which ones). For UI changes, run npm build.
+- Backward compatibility considered for presets, resources, and UI messages.
+- Docs or comments updated when behavior changes.
 
-## Conventions
-
-- **Namespace**: All C++ code in `guitarfx::`
-- **C++ standard**: C++20 required
-- **Parameters**: Defined as `ParameterId` enum in `GuitarFXPlugin.h`
-- **UI state**: Centralized in `uiState` object ([src/resources/ui/ts/state.ts](src/resources/ui/ts/state.ts))
-- **JSON library**: `nlohmann::json` for serialization
-- **Design docs**: See [src/docs/](src/docs/) for preset model and customization plans
-
-Before starting a new task in the above plan, update progress in the plan.
--->
-- Work through each checklist item systematically.
-- Keep communication concise and focused.
-- Follow development best practices.
+## Communication
+- Keep updates concise and scoped; reference affected files.
+- If blockers or unexpected changes appear, pause and ask before proceeding.

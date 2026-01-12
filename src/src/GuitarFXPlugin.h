@@ -198,6 +198,17 @@ namespace guitarfx
     std::atomic<bool> mSignalTestResultPending{false};
 
     std::unique_ptr<GlobalFXChain> mGlobalFX;
+
+    // UI settings persistence
+    double mUiZoom = 1.0;
+    struct WindowBounds
+    {
+      int x = -1;
+      int y = -1;
+      int width = -1;
+      int height = -1;
+      bool HasBounds() const { return width > 0 && height > 0; }
+    } mWindowBounds;
     struct PreviewPlaybackBuffer
     {
       std::string id;

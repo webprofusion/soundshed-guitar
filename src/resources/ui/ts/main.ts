@@ -14,6 +14,7 @@ import { initializeTuner } from "./tuner.js";
 import { initFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { initializeThemeSwitcherIcons } from "./theme-switcher-ui.js";
+import { startUiSettingsTracking } from "./windowSettings.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -91,6 +92,7 @@ async function bootstrap(): Promise<void> {
   initializePresetActionButtons();
   initializeTuner();
   initFxSelector();
+  startUiSettingsTracking();
 
   renderActivePreset();
   await initializePresets();

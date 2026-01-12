@@ -5,7 +5,8 @@ import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
 import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
-import type { Preset } from "./types.js";
+import { applyUiSettings } from "./windowSettings.js";
+import type { Preset, UiSettings } from "./types.js";
 
 export function handleIncomingMessage(message: string): void {
   console.log("[JS] handleIncomingMessage received:", message.substring(0, 200));
@@ -30,6 +31,11 @@ export function handleIncomingMessage(message: string): void {
       const resourceLibrary = (payload as { resourceLibrary?: Record<string, unknown[]> }).resourceLibrary;
       if (resourceLibrary) {
         uiState.resourceLibrary = resourceLibrary as import("./types.js").ResourceLibrary;
+      }
+      const uiSettings = (payload as { uiSettings?: UiSettings }).uiSettings;
+      if (uiSettings) {
+        uiState.uiSettings = uiSettings;
+        applyUiSettings(uiSettings);
       }
       uiState.signalTest = null;
       const preset = (payload as { preset?: Preset }).preset;
@@ -247,6 +253,14 @@ export function handleIncomingMessage(message: string): void {
         uiState.presetCache.set(activeId, preset);
       }
       syncAutoLevelControlsFromState();
+      break;
+    }
+    case "uiSettingsChanged": {
+      const uiSettings = (payload as { settings?: UiSettings }).settings;
+      if (uiSettings) {
+        uiState.uiSettings = uiSettings;
+        applyUiSettings(uiSettings);
+      }
       break;
     }
     default:

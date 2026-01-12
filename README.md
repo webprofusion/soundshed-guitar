@@ -32,7 +32,7 @@ NeuronGuitar is an experimental iPlug2-based guitar processing plugin that fuses
 │  ├─ src/
 │  │  ├─ GuitarFXPlugin.cpp    # iPlug2 plugin entry points
 │  │  ├─ GuitarFXPlugin.h
-│  │  ├─ dsp/                   # Audio processing core (AmpModelManager, IRManager)
+│  │  ├─ dsp/                   # Audio processing core GraphDSPManager, IRManager)
 │  │  ├─ models/                # Model hashing helpers
 │  │  ├─ presets/               # Preset data management (PresetManager, PresetStorage)
 │  │  ├─ network/               # Preset service client for remote API
