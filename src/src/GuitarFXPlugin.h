@@ -243,6 +243,13 @@ namespace guitarfx
     // ProcessBlock (audio thread) and ApplyPreset/LoadModel/LoadIR (UI thread) share mDSP
     mutable std::mutex mDSPMutex;
     
+    // Float conversion buffers for MultiPresetMixer interface
+    // (iplug::sample is double, but MultiPresetMixer uses float internally)
+    std::vector<float> mFloatInputLeft;
+    std::vector<float> mFloatInputRight;
+    std::vector<float> mFloatOutputLeft;
+    std::vector<float> mFloatOutputRight;
+    
     // DSP performance reporting
     int mDSPPerformanceUpdateCounter = 0;
     

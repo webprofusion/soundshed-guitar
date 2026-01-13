@@ -90,11 +90,19 @@ export function initializeTuner(): void {
 
   // Find and wire up the TUNER button in the footer
   const footerButtons = document.querySelectorAll(".footer-btn");
+  console.log("[Tuner] Found", footerButtons.length, "footer buttons");
+  let tunerButtonFound = false;
   footerButtons.forEach((btn) => {
+    console.log("[Tuner] Button text:", JSON.stringify(btn.textContent));
     if (btn.textContent?.trim() === "TUNER") {
+      console.log("[Tuner] Found TUNER button, adding click listener");
       btn.addEventListener("click", openTuner);
+      tunerButtonFound = true;
     }
   });
+  if (!tunerButtonFound) {
+    console.error("[Tuner] TUNER button not found in footer!");
+  }
 
   // Wire up tuner controls
   if (tunerCloseBtn) {
@@ -180,18 +188,24 @@ export function closeTuner(): void {
 }
 
 function startTuner(): void {
-  postMessage({
+  const message = {
     type: "tuner",
     action: "start",
     referenceFrequency: tunerState.referenceFrequency,
-  });
+  };
+  console.log("[Tuner] Sending start message:", JSON.stringify(message));
+  appendLog(`Tuner sending: ${JSON.stringify(message)}`);
+  postMessage(message);
 }
 
 function stopTuner(): void {
-  postMessage({
+  const message = {
     type: "tuner",
     action: "stop",
-  });
+  };
+  console.log("[Tuner] Sending stop message:", JSON.stringify(message));
+  appendLog(`Tuner sending: ${JSON.stringify(message)}`);
+  postMessage(message);
 }
 
 function toggleMute(): void {

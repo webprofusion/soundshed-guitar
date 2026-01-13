@@ -793,6 +793,7 @@ namespace guitarfx
   {
     // Use the main input channel setting (same as DSP processing)
     const int ch = mInputChannel;
+    
     if (!mTunerEnabled || !mTunerCallback || !inputs || !inputs[ch])
     {
       return;
@@ -859,14 +860,14 @@ namespace guitarfx
     const double rms = std::sqrt(sumSquares / static_cast<double>(n));
 
     // If signal is too quiet, don't try to detect pitch
-    if (rms < 0.01)
+    if (rms < 0.003)
     {
       return 0.0;
     }
 
-    // Define search range for guitar: 70Hz (D2) to 1500Hz (F#6)
+    // Define search range for guitar: 50Hz (low tunings) to 1500Hz (F#6)
     const int minPeriod = static_cast<int>(mSampleRate / 1500.0); // Highest frequency
-    const int maxPeriod = static_cast<int>(mSampleRate / 70.0);   // Lowest frequency
+    const int maxPeriod = static_cast<int>(mSampleRate / 50.0);   // Lowest frequency
 
     if (maxPeriod >= static_cast<int>(n / 2) || minPeriod < 2)
     {

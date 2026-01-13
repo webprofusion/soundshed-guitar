@@ -736,8 +736,6 @@ namespace guitarfx
 
   void GuitarFXPlugin::ProcessBlock(iplug::sample **inputs, iplug::sample **outputs, int nFrames)
   {
-    // std::cout << "[CPP] ProcessBlock called with " << nFrames << " frames" << std::endl;
-
     // Try to acquire the DSP mutex. If we can't (e.g., model/IR is being loaded),
     // output silence to avoid crashes. This prevents blocking the audio thread.
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
@@ -914,7 +912,59 @@ namespace guitarfx
   {
     // All audio processing now goes through MultiPresetMixer exclusively
     // Per-preset FX (gate, transpose, doubler) are handled inside the mixer
-    mPresetMixer.Process(inputs, outputs, nFrames);
+    
+    // Convert from iplug::sample (double) to float for MultiPresetMixer
+    // This is necessary because iPlug2 uses double samples internally by default,
+    // but the NAM core and our DSP chain use floats for performance.
+    const std::size_t frames = static_cast<std::size_t>(nFrames);
+    
+    // Ensure buffers are large enough (should be set in OnReset, but safety check)
+    if (mFloatInputLeft.size() < frames)
+    {
+      mFloatInputLeft.resize(frames);
+      mFloatInputRight.resize(frames);
+      mFloatOutputLeft.resize(frames);
+      mFloatOutputRight.resize(frames);
+    }
+    
+    // Convert input from double to float
+    if (inputs && inputs[0])
+    {
+      for (std::size_t i = 0; i < frames; ++i)
+      {
+        mFloatInputLeft[i] = static_cast<float>(inputs[0][i]);
+      }
+    }
+    if (inputs && inputs[1])
+    {
+      for (std::size_t i = 0; i < frames; ++i)
+      {
+        mFloatInputRight[i] = static_cast<float>(inputs[1][i]);
+      }
+    }
+    
+    // Set up float pointers for the mixer
+    float* floatInputs[2] = { mFloatInputLeft.data(), mFloatInputRight.data() };
+    float* floatOutputs[2] = { mFloatOutputLeft.data(), mFloatOutputRight.data() };
+    
+    // Process through the mixer
+    mPresetMixer.Process(floatInputs, floatOutputs, nFrames);
+    
+    // Convert output from float back to double
+    if (outputs && outputs[0])
+    {
+      for (std::size_t i = 0; i < frames; ++i)
+      {
+        outputs[0][i] = static_cast<iplug::sample>(mFloatOutputLeft[i]);
+      }
+    }
+    if (outputs && outputs[1])
+    {
+      for (std::size_t i = 0; i < frames; ++i)
+      {
+        outputs[1][i] = static_cast<iplug::sample>(mFloatOutputRight[i]);
+      }
+    }
   }
 
   void GuitarFXPlugin::OnReset()
@@ -923,6 +973,13 @@ namespace guitarfx
     std::lock_guard<std::mutex> lock(mDSPMutex);
 
     mPresetMixer.Prepare(GetSampleRate(), GetBlockSize());
+
+    // Resize float conversion buffers for MultiPresetMixer interface
+    const int blockSize = GetBlockSize();
+    mFloatInputLeft.resize(static_cast<std::size_t>(blockSize));
+    mFloatInputRight.resize(static_cast<std::size_t>(blockSize));
+    mFloatOutputLeft.resize(static_cast<std::size_t>(blockSize));
+    mFloatOutputRight.resize(static_cast<std::size_t>(blockSize));
 
     mPreviewBuffer.store(nullptr, std::memory_order_release);
     mPreviewStartedBuffer.store(nullptr, std::memory_order_release);
@@ -1048,6 +1105,7 @@ namespace guitarfx
     // Send tuner data updates to UI
     if (mTunerDataPending.exchange(false, std::memory_order_acq_rel))
     {
+      std::cout << "[Plugin] OnIdle: tuner data pending, mTunerActive=" << mTunerActive.load() << std::endl;
       if (mTunerActive.load(std::memory_order_acquire))
       {
         TunerData data;
@@ -1055,6 +1113,9 @@ namespace guitarfx
           std::lock_guard<std::mutex> lock(mTunerMutex);
           data = mPendingTunerData;
         }
+
+        std::cout << "[Plugin] OnIdle: Sending tuner update, detected=" << data.detected 
+                  << ", note=" << data.noteName << ", freq=" << data.frequency << std::endl;
 
         nlohmann::json message;
         message["type"] = "tunerUpdate";
@@ -1448,6 +1509,12 @@ namespace guitarfx
   // to receive these messages.
   void GuitarFXPlugin::SendMessageToUI(const std::string& jsonMessage)
   {
+    // Log tuner-related messages for debugging
+    if (jsonMessage.find("tuner") != std::string::npos || jsonMessage.find("Tuner") != std::string::npos)
+    {
+      std::cout << "[Plugin] SendMessageToUI (tuner): " << jsonMessage.substr(0, 200) << std::endl;
+    }
+    
     // Escape the JSON string for embedding in JavaScript code
     std::string escaped;
     escaped.reserve(jsonMessage.size() + 10);
@@ -1550,6 +1617,7 @@ namespace guitarfx
     }
 
     const std::string type = payload.value("type", "");
+    
     std::cerr << "[GuitarFXPlugin] Received UI message of type: " << type << std::endl;
     
     if (type == "loadPreset")
@@ -1923,6 +1991,25 @@ namespace guitarfx
     // Initialize multi-preset mixer with a single active preset by default
     mPresetMixer = MultiPresetMixer();
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
+    
+    // Re-register tuner callback after resetting the mixer
+    // (The constructor sets this up, but ApplyPreset creates a new mixer instance)
+    mPresetMixer.SetTunerCallback([this](const MultiPresetMixer::TunerResult &result) {
+      // Store tuner data for sending in OnIdle (thread-safe handoff from audio thread)
+      {
+        std::lock_guard<std::mutex> lock(mTunerMutex);
+        mPendingTunerData.detected = result.detected;
+        mPendingTunerData.noteName = result.noteName;
+        mPendingTunerData.octave = result.octave;
+        mPendingTunerData.frequency = result.frequency;
+        mPendingTunerData.centOffset = result.centOffset;
+        mPendingTunerData.confidence = result.confidence;
+        mPendingTunerData.debugRms = result.debugRms;
+        mPendingTunerData.debugRawFreq = result.debugRawFreq;
+      }
+      mTunerDataPending.store(true, std::memory_order_release);
+    });
+    
     mPresetMixer.Prepare(GetSampleRate(), GetBlockSize());
     const std::string presetId = !preset.id.empty() ? preset.id : "preset";
     mPresetMixer.AddActivePreset(presetWithEQ, presetId, preset.name);
@@ -2415,6 +2502,7 @@ namespace guitarfx
   void GuitarFXPlugin::HandleTunerRequest(const nlohmann::json &payload)
   {
     const std::string action = payload.value("action", "");
+    std::cerr << "[Plugin] HandleTunerRequest called with action: " << action << std::endl;
 
     if (action == "start")
     {

@@ -232,11 +232,13 @@ function initializeInputOutputKnobs(): void {
       valueDisplayId: "transpose-value",
       sensitivity: 0.1,
       onValueChange: (value) => {
-        // Snap to integer values for semitones
+        // Snap to integer values for semitones and send to plugin
         const rounded = Math.round(value);
         if (Math.abs(value - rounded) > 0.01) {
           transposeKnobInstance.setValue(rounded);
         }
+        // Always send the rounded integer value to the plugin
+        setParameter("transpose", rounded);
       },
     });
     knobInstances.set("transpose", transposeKnobInstance);
