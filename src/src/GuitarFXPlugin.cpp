@@ -1717,6 +1717,14 @@ namespace guitarfx
     {
       HandleAddSignalPathNodeRequest(payload);
     }
+    else if (type == "splitSignalPathEdge")
+    {
+      HandleSplitSignalPathEdgeRequest(payload);
+    }
+    else if (type == "collapseSignalPathSplit")
+    {
+      HandleCollapseSignalPathSplitRequest(payload);
+    }
     else if (type == "replaceSignalPathNode")
     {
       HandleReplaceSignalPathNodeRequest(payload);
@@ -3544,9 +3552,25 @@ namespace guitarfx
     const std::string effectType = payload.value("effectType", "");
     const std::string insertAfter = payload.value("insertAfter", "");
 
-    if (effectType.empty() || insertAfter.empty())
+    std::string edgeFrom;
+    std::string edgeTo;
+    int edgeFromPort = 0;
+    int edgeToPort = 0;
+    double edgeGain = 1.0;
+
+    const auto edgeIt = payload.find("edge");
+    if (edgeIt != payload.end() && edgeIt->is_object())
     {
-      ReportErrorToUI("Add node failed", "Missing effectType or insertAfter parameter");
+      edgeFrom = edgeIt->value("from", "");
+      edgeTo = edgeIt->value("to", "");
+      edgeFromPort = edgeIt->value("fromPort", 0);
+      edgeToPort = edgeIt->value("toPort", 0);
+      edgeGain = edgeIt->value("gain", 1.0);
+    }
+
+    if (effectType.empty() || (insertAfter.empty() && edgeFrom.empty()))
+    {
+      ReportErrorToUI("Add node failed", "Missing effectType or insertion target (insertAfter/edge)");
       return;
     }
 
@@ -3584,27 +3608,62 @@ namespace guitarfx
 
     // Find the edge to split
     auto& edges = mActivePreset->graph.edges;
-    auto edgeIt = std::find_if(edges.begin(), edges.end(), 
-      [&insertAfter](const GraphEdge& e) { return e.from == insertAfter; });
+    auto chosenEdgeIt = edges.end();
 
-    if (edgeIt == edges.end())
+    if (!edgeFrom.empty() && !edgeTo.empty())
     {
-      ReportErrorToUI("Add node failed", "Could not find edge after node: " + insertAfter);
+      chosenEdgeIt = std::find_if(edges.begin(), edges.end(),
+        [&](const GraphEdge& e)
+        {
+          return e.from == edgeFrom && e.to == edgeTo && e.fromPort == edgeFromPort && e.toPort == edgeToPort;
+        });
+    }
+    else
+    {
+      chosenEdgeIt = std::find_if(edges.begin(), edges.end(),
+        [&](const GraphEdge& e)
+        {
+          if (e.from != insertAfter)
+            return false;
+          // Prefer the primary port for back-compat
+          return e.fromPort == 0;
+        });
+
+      if (chosenEdgeIt == edges.end())
+      {
+        chosenEdgeIt = std::find_if(edges.begin(), edges.end(),
+          [&](const GraphEdge& e)
+          {
+            return e.from == insertAfter;
+          });
+      }
+    }
+
+    if (chosenEdgeIt == edges.end())
+    {
+      ReportErrorToUI("Add node failed", "Could not find target edge for insertion");
       return;
     }
 
-    std::string nextNodeId = edgeIt->to;
+    // Preserve edge attributes (important for mixer input gains)
+    const std::string nextNodeId = chosenEdgeIt->to;
+    const int preservedToPort = chosenEdgeIt->toPort;
+    const double preservedGain = chosenEdgeIt->gain;
+
+    (void)edgeGain; // UI-provided gain is informational; we honor the graph's current gain.
 
     // Update existing edge to point to new node
-    edgeIt->to = newNode.id;
+    chosenEdgeIt->to = newNode.id;
+    chosenEdgeIt->toPort = 0;
+    chosenEdgeIt->gain = 1.0;
 
     // Add new edge from new node to next node
     GraphEdge newEdge;
     newEdge.from = newNode.id;
     newEdge.to = nextNodeId;
     newEdge.fromPort = 0;
-    newEdge.toPort = 0;
-    newEdge.gain = 1.0;
+    newEdge.toPort = preservedToPort;
+    newEdge.gain = preservedGain;
     edges.push_back(newEdge);
 
     // Add the node
@@ -3616,6 +3675,191 @@ namespace guitarfx
     BroadcastState();
 
     std::cout << "[Plugin] Added node: " << newNode.id << " (" << effectType << ") after " << insertAfter << std::endl;
+  }
+
+  void GuitarFXPlugin::HandleSplitSignalPathEdgeRequest(const nlohmann::json &payload)
+  {
+    if (!mActivePreset)
+    {
+      ReportErrorToUI("Split failed", "No active preset");
+      return;
+    }
+
+    const auto edgeIt = payload.find("edge");
+    if (edgeIt == payload.end() || !edgeIt->is_object())
+    {
+      ReportErrorToUI("Split failed", "Missing edge payload");
+      return;
+    }
+
+    const std::string from = edgeIt->value("from", "");
+    const std::string to = edgeIt->value("to", "");
+    const int fromPort = edgeIt->value("fromPort", 0);
+    const int toPort = edgeIt->value("toPort", 0);
+
+    if (from.empty() || to.empty())
+    {
+      ReportErrorToUI("Split failed", "Edge is missing from/to");
+      return;
+    }
+
+    auto& graph = mActivePreset->graph;
+    auto& edges = graph.edges;
+
+    auto targetEdgeIt = std::find_if(edges.begin(), edges.end(),
+      [&](const GraphEdge& e)
+      {
+        return e.from == from && e.to == to && e.fromPort == fromPort && e.toPort == toPort;
+      });
+
+    if (targetEdgeIt == edges.end())
+    {
+      ReportErrorToUI("Split failed", "Target edge not found");
+      return;
+    }
+
+    const std::string splitterId = MakeUniqueNodeId(graph, "split");
+    const std::string mixerId = MakeUniqueNodeId(graph, "mix");
+
+    GraphNode splitter;
+    splitter.id = splitterId;
+    splitter.type = "splitter";
+    splitter.category = "utility";
+    splitter.label = "Split";
+    splitter.enabled = true;
+
+    GraphNode mixer;
+    mixer.id = mixerId;
+    mixer.type = "mixer";
+    mixer.category = "utility";
+    mixer.label = "Mix";
+    mixer.enabled = true;
+
+    // Preserve edge attributes for the final connection
+    const std::string nextNodeId = targetEdgeIt->to;
+    const int preservedToPort = targetEdgeIt->toPort;
+    const double preservedGain = targetEdgeIt->gain;
+
+    // Rewire: from -> splitter (replace the original edge)
+    targetEdgeIt->to = splitterId;
+    targetEdgeIt->toPort = 0;
+    targetEdgeIt->gain = 1.0;
+
+    // Two initial branches: splitter -> mixer (port 0/1)
+    GraphEdge branch0;
+    branch0.from = splitterId;
+    branch0.to = mixerId;
+    branch0.fromPort = 0;
+    branch0.toPort = 0;
+    branch0.gain = 1.0;
+
+    GraphEdge branch1;
+    branch1.from = splitterId;
+    branch1.to = mixerId;
+    branch1.fromPort = 1;
+    branch1.toPort = 1;
+    branch1.gain = 1.0;
+
+    // mixer -> next
+    GraphEdge mixToNext;
+    mixToNext.from = mixerId;
+    mixToNext.to = nextNodeId;
+    mixToNext.fromPort = 0;
+    mixToNext.toPort = preservedToPort;
+    mixToNext.gain = preservedGain;
+
+    edges.push_back(branch0);
+    edges.push_back(branch1);
+    edges.push_back(mixToNext);
+    graph.nodes.push_back(splitter);
+    graph.nodes.push_back(mixer);
+
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+    ApplyPreset(*mActivePreset);
+    BroadcastState();
+
+    std::cout << "[Plugin] Split edge " << from << " -> " << to << " into parallel via " << splitterId << "/" << mixerId << std::endl;
+  }
+
+  void GuitarFXPlugin::HandleCollapseSignalPathSplitRequest(const nlohmann::json &payload)
+  {
+    if (!mActivePreset)
+    {
+      ReportErrorToUI("Collapse split failed", "No active preset");
+      return;
+    }
+
+    const std::string splitterId = payload.value("splitterId", "");
+    const std::string mixerId = payload.value("mixerId", "");
+    if (splitterId.empty() || mixerId.empty())
+    {
+      ReportErrorToUI("Collapse split failed", "Missing splitterId/mixerId");
+      return;
+    }
+
+    auto& graph = mActivePreset->graph;
+    auto& edges = graph.edges;
+
+    // Only support collapsing when branches are empty (splitter connects directly to mixer)
+    std::vector<GraphEdge*> splitterOut;
+    std::vector<GraphEdge*> mixerIn;
+    GraphEdge* mixerOut = nullptr;
+    GraphEdge* splitterIn = nullptr;
+
+    for (auto& e : edges)
+    {
+      if (e.from == splitterId)
+        splitterOut.push_back(&e);
+      if (e.to == mixerId)
+        mixerIn.push_back(&e);
+      if (e.from == mixerId)
+        mixerOut = &e;
+      if (e.to == splitterId)
+        splitterIn = &e;
+    }
+
+    if (!splitterIn || !mixerOut)
+    {
+      ReportErrorToUI("Collapse split failed", "Split is not connected correctly");
+      return;
+    }
+
+    const bool branchesEmpty = !splitterOut.empty() && std::all_of(splitterOut.begin(), splitterOut.end(),
+      [&](const GraphEdge* e) { return e && e->to == mixerId; });
+
+    if (!branchesEmpty)
+    {
+      ReportErrorToUI("Collapse split failed", "Can only collapse an empty split (remove branch effects first)");
+      return;
+    }
+
+    // Rewire splitterIn (prev -> splitter) to point to mixerOut target (next)
+    splitterIn->to = mixerOut->to;
+    splitterIn->toPort = mixerOut->toPort;
+    splitterIn->gain = mixerOut->gain;
+
+    // Remove edges related to the split
+    edges.erase(std::remove_if(edges.begin(), edges.end(),
+      [&](const GraphEdge& e)
+      {
+        if (e.from == splitterId) return true;
+        if (e.from == mixerId) return true;
+        if (e.to == mixerId) return true;
+        return false;
+      }), edges.end());
+
+    // Remove nodes
+    graph.nodes.erase(std::remove_if(graph.nodes.begin(), graph.nodes.end(),
+      [&](const GraphNode& n)
+      {
+        return n.id == splitterId || n.id == mixerId;
+      }), graph.nodes.end());
+
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+    ApplyPreset(*mActivePreset);
+    BroadcastState();
+
+    std::cout << "[Plugin] Collapsed empty split " << splitterId << "/" << mixerId << std::endl;
   }
 
   void GuitarFXPlugin::HandleReplaceSignalPathNodeRequest(const nlohmann::json &payload)

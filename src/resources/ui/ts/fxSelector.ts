@@ -266,3 +266,23 @@ export function sendAddSignalPathNode(effectType: string, insertAfter: string): 
     insertAfter,
   });
 }
+
+export interface SignalPathEdgeRef {
+  from: string;
+  to: string;
+  fromPort: number;
+  toPort: number;
+}
+
+/**
+ * Add a signal path node by splitting a specific edge.
+ * This is required once the graph supports parallel paths (splitter/mixer),
+ * because a node may have multiple outgoing edges.
+ */
+export function sendAddSignalPathNodeOnEdge(effectType: string, edge: SignalPathEdgeRef): void {
+  postMessage({
+    type: "addSignalPathNode",
+    effectType,
+    edge,
+  });
+}

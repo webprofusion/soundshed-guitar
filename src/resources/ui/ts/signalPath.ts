@@ -2,7 +2,7 @@ import { uiState } from "./state.js";
 import type { Preset, GraphNode, GraphEdge, LibraryResource } from "./types.js";
 import { postMessage } from "./bridge.js";
 import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
-import { sendAddSignalPathNode } from "./fxSelector.js";
+import { sendAddSignalPathNode, sendAddSignalPathNodeOnEdge, type SignalPathEdgeRef } from "./fxSelector.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
 const signalPathPresetNameElement = document.getElementById("signal-path-preset-name");
@@ -124,131 +124,101 @@ export function renderSignalPathBar(): void {
         </div>
       </div>
     `;
+
+    // Bind minimal handlers (legacy fallback uses insertAfter=__input__)
+    bindAddButtonHandlers();
   }
 }
 
-/**
- * Represents a segment in the signal path graph layout.
- * A segment can be a single node or a parallel split.
- */
-interface PathSegment {
-  type: "node" | "parallel";
-  node?: GraphNode;
-  branches?: PathSegment[][];
+type EdgeRef = SignalPathEdgeRef & { gain: number };
+
+function normalizeEdge(edge: Partial<GraphEdge>): EdgeRef {
+  return {
+    from: String(edge.from ?? ""),
+    to: String(edge.to ?? ""),
+    fromPort: typeof edge.fromPort === "number" ? edge.fromPort : 0,
+    toPort: typeof edge.toPort === "number" ? edge.toPort : 0,
+    gain: typeof edge.gain === "number" ? edge.gain : 1.0,
+  };
 }
 
-/**
- * Builds the visual layout structure from the graph.
- * This analyzes the graph topology and creates a layout with parallel branches.
- */
-function buildGraphLayout(nodes: GraphNode[], edges: GraphEdge[]): PathSegment[] {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  
-  // Build adjacency lists
-  const outgoing = new Map<string, GraphEdge[]>();
-  const incoming = new Map<string, GraphEdge[]>();
-  
-  edges.forEach((edge) => {
+function parseEdgeFromDataset(el: HTMLElement): EdgeRef | null {
+  const from = el.dataset.edgeFrom;
+  const to = el.dataset.edgeTo;
+  if (!from || !to) return null;
+  const fromPort = Number(el.dataset.edgeFromPort ?? "0");
+  const toPort = Number(el.dataset.edgeToPort ?? "0");
+  const gain = Number(el.dataset.edgeGain ?? "1");
+  return { from, to, fromPort, toPort, gain };
+}
+
+function sortEdgesByPort(edges: EdgeRef[]): EdgeRef[] {
+  return edges.slice().sort((a, b) => (a.fromPort - b.fromPort) || (a.toPort - b.toPort) || a.to.localeCompare(b.to));
+}
+
+function buildGraphMaps(graph: NonNullable<Preset["graph"]>): {
+  nodeById: Map<string, GraphNode>;
+  outgoing: Map<string, EdgeRef[]>;
+  incoming: Map<string, EdgeRef[]>;
+} {
+  const nodeById = new Map<string, GraphNode>(graph.nodes.map((n) => [n.id, n]));
+  const outgoing = new Map<string, EdgeRef[]>();
+  const incoming = new Map<string, EdgeRef[]>();
+
+  graph.edges.forEach((e) => {
+    const edge = normalizeEdge(e);
+    if (!edge.from || !edge.to) return;
     if (!outgoing.has(edge.from)) outgoing.set(edge.from, []);
     if (!incoming.has(edge.to)) incoming.set(edge.to, []);
     outgoing.get(edge.from)!.push(edge);
     incoming.get(edge.to)!.push(edge);
   });
-  
-  const visited = new Set<string>();
-  const segments: PathSegment[] = [];
-  
-  /**
-   * Traverse from a starting node, building path segments.
-   * Returns the segments and the set of ending node IDs.
-   */
-  function traverse(startId: string): { segments: PathSegment[]; endIds: Set<string> } {
-    const result: PathSegment[] = [];
-    const endIds = new Set<string>();
-    let currentId: string | null = startId;
-    
-    while (currentId && !visited.has(currentId)) {
-      // Skip special IDs
-      if (currentId === "__input__" || currentId === "__output__") {
-        const outs: GraphEdge[] = outgoing.get(currentId) || [];
-        if (outs.length === 1) {
-          currentId = outs[0].to;
-          continue;
-        } else if (outs.length > 1) {
-          // Split at input - handle as parallel branches
-          const branches: PathSegment[][] = [];
-          outs.forEach((edge: GraphEdge) => {
-            if (edge.to !== "__output__") {
-              const branchResult = traverse(edge.to);
-              if (branchResult.segments.length > 0) {
-                branches.push(branchResult.segments);
-              }
-              branchResult.endIds.forEach((id) => endIds.add(id));
-            }
-          });
-          if (branches.length > 0) {
-            result.push({ type: "parallel", branches });
-          }
-          currentId = null;
-        } else {
-          currentId = null;
-        }
-        continue;
-      }
-      
-      visited.add(currentId);
-      const node = nodeMap.get(currentId);
-      
-      if (node) {
-        const outs: GraphEdge[] = outgoing.get(currentId) || [];
-        
-        // Check if this is a splitter (multiple outputs)
-        if (outs.length > 1 && node.type !== "mixer") {
-          result.push({ type: "node", node });
-          
-          // Create parallel branches
-          const branches: PathSegment[][] = [];
-          const branchEndIds = new Set<string>();
-          
-          outs.forEach((edge: GraphEdge) => {
-            if (edge.to !== "__output__" && !visited.has(edge.to)) {
-              const branchResult = traverse(edge.to);
-              if (branchResult.segments.length > 0) {
-                branches.push(branchResult.segments);
-              }
-              branchResult.endIds.forEach((id) => branchEndIds.add(id));
-            }
-          });
-          
-          if (branches.length > 0) {
-            result.push({ type: "parallel", branches });
-          }
-          
-          // Find convergence point (mixer)
-          branchEndIds.forEach((id) => endIds.add(id));
-          currentId = null;
-        } else {
-          // Single path - add node and continue
-          result.push({ type: "node", node });
-          
-          if (outs.length === 1 && outs[0].to !== "__output__") {
-            currentId = outs[0].to;
-          } else {
-            endIds.add(currentId);
-            currentId = null;
-          }
-        }
-      } else {
-        currentId = null;
-      }
-    }
-    
-    return { segments: result, endIds };
-  }
-  
-  // Start traversal from __input__
-  const { segments: mainSegments } = traverse("__input__");
-  return mainSegments;
+
+  // Normalize ordering for stable render
+  outgoing.forEach((list, key) => outgoing.set(key, sortEdgesByPort(list)));
+  incoming.forEach((list, key) => incoming.set(key, sortEdgesByPort(list)));
+
+  return { nodeById, outgoing, incoming };
+}
+
+function pickPrimaryOutgoingEdge(outgoing: Map<string, EdgeRef[]>, fromId: string): EdgeRef | null {
+  const outs = outgoing.get(fromId) ?? [];
+  if (!outs.length) return null;
+  // Prefer port 0 if present
+  const port0 = outs.find((e) => e.fromPort === 0);
+  return port0 ?? outs[0];
+}
+
+function renderConnectorWrapper(edge: EdgeRef, opts?: { showSplit?: boolean }): string {
+  const showSplit = opts?.showSplit ?? true;
+  return `
+    <div class="signal-connector-wrapper"
+         data-edge-from="${edge.from}"
+         data-edge-to="${edge.to}"
+         data-edge-from-port="${edge.fromPort}"
+         data-edge-to-port="${edge.toPort}"
+         data-edge-gain="${edge.gain}">
+      <div class="signal-connector"></div>
+      <button class="signal-add-btn"
+              data-edge-from="${edge.from}"
+              data-edge-to="${edge.to}"
+              data-edge-from-port="${edge.fromPort}"
+              data-edge-to-port="${edge.toPort}"
+              data-edge-gain="${edge.gain}"
+              title="Add Effect">
+        <span class="add-icon">+</span>
+      </button>
+      ${showSplit ? `
+        <button class="signal-split-btn"
+                data-edge-from="${edge.from}"
+                data-edge-to="${edge.to}"
+                data-edge-from-port="${edge.fromPort}"
+                data-edge-to-port="${edge.toPort}"
+                data-edge-gain="${edge.gain}"
+                title="Split to parallel paths">⤢</button>
+      ` : ""}
+    </div>
+  `;
 }
 
 /**
@@ -259,14 +229,153 @@ function renderGraphSignalPath(preset: Preset): void {
     return;
   }
 
-  const nodes = preset.graph.nodes;
-  const edges = preset.graph.edges;
+  const { nodeById, outgoing } = buildGraphMaps(preset.graph);
 
-  // Build the layout structure
-  const segments = buildGraphLayout(nodes, edges);
-  
-  // Render segments to HTML
-  const segmentsHtml = renderSegments(segments);
+  const visited = new Set<string>();
+
+  const renderParallelForSplitter = (splitterId: string): { html: string; mixerId: string | null } => {
+    const splitterNode = nodeById.get(splitterId);
+    if (!splitterNode || splitterNode.type !== "splitter") {
+      return { html: "", mixerId: null };
+    }
+
+    const outs = outgoing.get(splitterId) ?? [];
+    if (outs.length < 2) {
+      return { html: "", mixerId: null };
+    }
+
+    const findMixerIdForBranch = (startNodeId: string): string | null => {
+      let currentId = startNodeId;
+      const localVisited = new Set<string>();
+      while (currentId && !localVisited.has(currentId)) {
+        localVisited.add(currentId);
+        const node = nodeById.get(currentId);
+        if (node && node.type === "mixer") {
+          return currentId;
+        }
+        const edge = pickPrimaryOutgoingEdge(outgoing, currentId);
+        if (!edge) return null;
+        if (edge.to === "__output__") return null;
+        currentId = edge.to;
+      }
+      return null;
+    };
+
+    // Determine shared mixer id
+    const mixerIds = outs
+      .map((e) => (e.to === "__output__" ? null : findMixerIdForBranch(e.to)))
+      .filter((id): id is string => Boolean(id));
+
+    const mixerId = mixerIds.length ? mixerIds[0] : null;
+    if (!mixerId || !mixerIds.every((id) => id === mixerId)) {
+      // Unsupported/ambiguous topology - render as a linear edge fallback
+      return { html: "", mixerId: null };
+    }
+
+    const renderBranch = (firstEdge: EdgeRef): string => {
+      let html = "";
+      let edge: EdgeRef | null = firstEdge;
+      let guard = 0;
+      while (edge && guard++ < 200) {
+        html += renderConnectorWrapper(edge, { showSplit: true });
+
+        if (edge.to === mixerId) {
+          break;
+        }
+
+        const node = nodeById.get(edge.to);
+        if (!node) {
+          break;
+        }
+
+        html += renderNodeElement(node);
+        if (node.type === "splitter") {
+          // Nested splits are not yet rendered; stop at the node.
+          break;
+        }
+
+        edge = pickPrimaryOutgoingEdge(outgoing, node.id);
+      }
+      return html;
+    };
+
+    const branchesHtml = sortEdgesByPort(outs)
+      .map((edge) => {
+        const branchHtml = renderBranch(edge);
+        return `
+          <div class="parallel-branch" data-branch-port="${edge.fromPort}">
+            ${branchHtml}
+          </div>
+        `;
+      })
+      .join("");
+
+    const mixerNode = nodeById.get(mixerId);
+    const mixerNodeHtml = mixerNode ? renderNodeElement(mixerNode) : "";
+
+    const html = `
+      <div class="parallel-container" data-splitter-id="${splitterId}" data-mixer-id="${mixerId}">
+        <div class="parallel-split">
+          <div class="split-icon">⤵️</div>
+        </div>
+        <div class="parallel-branches">
+          ${branchesHtml}
+        </div>
+        <div class="parallel-join">
+          <div class="join-icon">⤴️</div>
+          <button class="parallel-collapse-btn" data-splitter-id="${splitterId}" data-mixer-id="${mixerId}" title="Collapse split (only if empty)">×</button>
+        </div>
+      </div>
+      ${mixerNodeHtml}
+    `;
+
+    return { html, mixerId };
+  };
+
+  const renderMainChain = (): string => {
+    let html = "";
+    let currentId = "__input__";
+    let guard = 0;
+
+    while (guard++ < 500) {
+      if (currentId !== "__input__") {
+        if (visited.has(currentId)) break;
+        visited.add(currentId);
+
+        const node = nodeById.get(currentId);
+        if (node && node.type === "splitter") {
+          const { html: parallelHtml, mixerId } = renderParallelForSplitter(currentId);
+          if (parallelHtml && mixerId) {
+            html += parallelHtml;
+            currentId = mixerId;
+            continue;
+          }
+        }
+      }
+
+      const edge = pickPrimaryOutgoingEdge(outgoing, currentId);
+      if (!edge) {
+        break;
+      }
+
+      html += renderConnectorWrapper(edge, { showSplit: true });
+
+      if (edge.to === "__output__") {
+        break;
+      }
+
+      const nextNode = nodeById.get(edge.to);
+      if (!nextNode) {
+        break;
+      }
+      html += renderNodeElement(nextNode);
+      currentId = nextNode.id;
+    }
+
+    return html;
+  };
+
+  const segmentsHtml = renderMainChain();
 
   signalPathNodesElement.innerHTML = `
     <div class="signal-graph-container">
@@ -277,17 +386,7 @@ function renderGraphSignalPath(preset: Preset): void {
             <div class="node-name">Input</div>
           </div>
         </div>
-        ${segmentsHtml ? segmentsHtml : `
-          <div class="signal-connector-wrapper">
-            <div class="signal-connector"></div>
-            <button class="signal-add-btn" 
-                    data-insert-after="__input__"
-                    title="Add Effect">
-              <span class="add-icon">+</span>
-            </button>
-          </div>
-        `}
-        ${segmentsHtml ? '<div class="signal-connector"></div>' : ''}
+        ${segmentsHtml}
         <div class="signal-node output-node">
           <div class="node-icon">🔈</div>
           <div class="node-info">
@@ -303,39 +402,18 @@ function renderGraphSignalPath(preset: Preset): void {
   
   // Bind drop handlers for connectors (to insert between nodes)
   bindConnectorDropHandlers(preset);
+
+  // Bind split/collapse buttons
+  bindSplitAndCollapseHandlers();
 }
 
-/**
- * Renders path segments to HTML, handling parallel branches recursively.
- */
-function renderSegments(segments: PathSegment[], prevNodeId: string = "__input__"): string {
-  let html = '';
-  let currentPrevId = prevNodeId;
-  
-  segments.forEach((segment, index) => {
-    // Add connector with + button before each segment
-    if (index > 0 || prevNodeId === "__input__") {
-      html += `
-        <div class="signal-connector-wrapper">
-          <div class="signal-connector"></div>
-          <button class="signal-add-btn" 
-                  data-insert-after="${currentPrevId}"
-                  title="Add Effect">
-            <span class="add-icon">+</span>
-          </button>
-        </div>
-      `;
-    }
-    
-    if (segment.type === "node" && segment.node) {
-      html += renderNodeElement(segment.node);
-      currentPrevId = segment.node.id;
-    } else if (segment.type === "parallel" && segment.branches) {
-      html += renderParallelBranches(segment.branches);
-    }
-  });
-  
-  return html;
+function sendAddEffectAtEdgeOrFallback(effectType: string, edge: EdgeRef | null, fallbackInsertAfter: string): void {
+  if (edge) {
+    sendAddSignalPathNodeOnEdge(effectType, edge);
+  } else {
+    // Back-compat: linear chain insertion by node id
+    sendAddSignalPathNode(effectType, fallbackInsertAfter);
+  }
 }
 
 /**
@@ -368,42 +446,15 @@ function renderNodeElement(node: GraphNode): string {
   `;
 }
 
-/**
- * Renders parallel branches with visual split/join indicators.
- */
-function renderParallelBranches(branches: PathSegment[][]): string {
-  if (branches.length === 0) return '';
-  if (branches.length === 1) return renderSegments(branches[0]);
-  
-  const branchesHtml = branches.map((branch, index) => {
-    const branchContent = renderSegments(branch);
-    return `
-      <div class="parallel-branch" data-branch-index="${index}">
-        ${branchContent}
-      </div>
-    `;
-  }).join('');
-  
-  return `
-    <div class="parallel-container">
-      <div class="parallel-split">
-        <div class="split-icon">⤵️</div>
-      </div>
-      <div class="parallel-branches">
-        ${branchesHtml}
-      </div>
-      <div class="parallel-join">
-        <div class="join-icon">⤴️</div>
-      </div>
-    </div>
-  `;
-}
-
 function bindNodeClickHandlers(preset: Preset): void {
   const nodeElements = signalPathNodesElement?.querySelectorAll(".signal-node[data-node-id]");
   if (!nodeElements) {
     return;
   }
+
+  const getGraphNode = (nodeId: string): GraphNode | undefined => {
+    return preset.graph?.nodes.find((n) => n.id === nodeId);
+  };
 
   // Bind + button click handlers
   bindAddButtonHandlers();
@@ -488,7 +539,12 @@ function bindNodeClickHandlers(preset: Preset): void {
         }
       } else if (draggedNodeId && targetNodeId && draggedNodeId !== targetNodeId) {
         // Reordering existing nodes
-        sendSignalPathNodeReorder(draggedNodeId, targetNodeId);
+        const draggedNode = getGraphNode(draggedNodeId);
+        const targetNode = getGraphNode(targetNodeId);
+        const blockedTypes = new Set(["splitter", "mixer"]);
+        if (draggedNode && targetNode && !blockedTypes.has(draggedNode.type) && !blockedTypes.has(targetNode.type)) {
+          sendSignalPathNodeReorder(draggedNodeId, targetNodeId);
+        }
       }
       
       el.classList.remove("drag-over");
@@ -508,6 +564,13 @@ function bindNodeClickHandlers(preset: Preset): void {
       const nodeId = el.dataset.nodeId;
       if (nodeId && (e.key === "Delete" || e.key === "Backspace")) {
         e.preventDefault();
+
+        const node = getGraphNode(nodeId);
+        if (node && (node.type === "splitter" || node.type === "mixer")) {
+          // Avoid corrupting the graph; use the collapse split button instead.
+          return;
+        }
+
         sendSignalPathNodeDelete(nodeId);
         selectedNodeId = null;
         nodeParamsPanelElement?.classList.remove("visible");
@@ -517,12 +580,12 @@ function bindNodeClickHandlers(preset: Preset): void {
 }
 
 function bindConnectorDropHandlers(preset: Preset): void {
-  const connectorElements = signalPathNodesElement?.querySelectorAll(".signal-connector");
-  if (!connectorElements || !preset.graph) {
+  const wrapperElements = signalPathNodesElement?.querySelectorAll(".signal-connector-wrapper");
+  if (!wrapperElements || !preset.graph) {
     return;
   }
 
-  connectorElements.forEach((element) => {
+  wrapperElements.forEach((element) => {
     const el = element as HTMLElement;
     
     // Drag over
@@ -549,14 +612,10 @@ function bindConnectorDropHandlers(preset: Preset): void {
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
       const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
-      
+
+      const edge = parseEdgeFromDataset(el);
       if (fxEffectType && preset.graph) {
-        // Find the node that comes before this connector
-        const prevNode = findNodeBeforeConnector(el, preset);
-        const insertAfter = prevNode?.id || "__input__";
-        
-        // Insert the new effect
-        sendAddSignalPathNode(fxEffectType, insertAfter);
+        sendAddEffectAtEdgeOrFallback(fxEffectType, edge, "__input__");
       }
       
       el.classList.remove("drag-over");
@@ -564,28 +623,33 @@ function bindConnectorDropHandlers(preset: Preset): void {
   });
 }
 
-function findNodeBeforeConnector(connectorEl: HTMLElement, preset: Preset): GraphNode | null {
-  // Find the previous sibling that is a signal-node
-  let prevSibling = connectorEl.previousElementSibling;
-  
-  while (prevSibling) {
-    if (prevSibling.classList.contains("signal-node")) {
-      const nodeId = (prevSibling as HTMLElement).dataset.nodeId;
-      if (nodeId && preset.graph) {
-        const node = preset.graph.nodes.find((n) => n.id === nodeId);
-        if (node) {
-          return node;
-        }
+function bindSplitAndCollapseHandlers(): void {
+  // Split edge button
+  const splitButtons = signalPathNodesElement?.querySelectorAll(".signal-split-btn");
+  splitButtons?.forEach((btn) => {
+    btn.addEventListener("click", (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const edge = parseEdgeFromDataset(btn as HTMLElement);
+      if (edge) {
+        sendSplitSignalPathEdge(edge);
       }
-      // If it's the input node, return null (insert after __input__)
-      if (prevSibling.classList.contains("input-node")) {
-        return null;
+    });
+  });
+
+  // Collapse (only safe when the split region is empty)
+  const collapseButtons = signalPathNodesElement?.querySelectorAll(".parallel-collapse-btn");
+  collapseButtons?.forEach((btn) => {
+    btn.addEventListener("click", (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const splitterId = (btn as HTMLElement).dataset.splitterId;
+      const mixerId = (btn as HTMLElement).dataset.mixerId;
+      if (splitterId && mixerId) {
+        sendCollapseParallelSplit(splitterId, mixerId);
       }
-    }
-    prevSibling = prevSibling.previousElementSibling;
-  }
-  
-  return null;
+    });
+  });
 }
 
 function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
@@ -901,6 +965,21 @@ function sendReplaceSignalPathNode(nodeId: string, newEffectType: string): void 
   });
 }
 
+function sendSplitSignalPathEdge(edge: SignalPathEdgeRef): void {
+  postMessage({
+    type: "splitSignalPathEdge",
+    edge,
+  });
+}
+
+function sendCollapseParallelSplit(splitterId: string, mixerId: string): void {
+  postMessage({
+    type: "collapseSignalPathSplit",
+    splitterId,
+    mixerId,
+  });
+}
+
 /**
  * Bind click handlers for + buttons between nodes.
  */
@@ -911,10 +990,8 @@ function bindAddButtonHandlers(): void {
   addButtons.forEach((button) => {
     button.addEventListener("click", (e: Event) => {
       e.stopPropagation();
-      const insertAfter = (button as HTMLElement).dataset.insertAfter;
-      if (insertAfter) {
-        showEffectSelectionDropdown(button as HTMLElement, insertAfter);
-      }
+      const edge = parseEdgeFromDataset(button as HTMLElement);
+      showEffectSelectionDropdown(button as HTMLElement, edge);
     });
   });
 }
@@ -922,7 +999,7 @@ function bindAddButtonHandlers(): void {
 /**
  * Show a dropdown menu to select an effect to add.
  */
-function showEffectSelectionDropdown(buttonElement: HTMLElement, insertAfter: string): void {
+function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef | null): void {
   // Remove any existing dropdown
   const existing = document.querySelector(".effect-selection-dropdown");
   if (existing) existing.remove();
@@ -978,7 +1055,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, insertAfter: st
     item.addEventListener("click", () => {
       const effectType = (item as HTMLElement).dataset.effectType;
       if (effectType) {
-        sendAddSignalPathNode(effectType, insertAfter);
+        sendAddEffectAtEdgeOrFallback(effectType, edge, edge?.from ?? "__input__");
         dropdown.remove();
       }
     });

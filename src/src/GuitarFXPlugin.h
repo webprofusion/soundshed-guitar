@@ -136,6 +136,8 @@ namespace guitarfx
     void HandleUpdateNodeResourceRequest(const nlohmann::json &payload);
     void HandleBrowseNodeResourceRequest(const nlohmann::json &payload);
     void HandleAddSignalPathNodeRequest(const nlohmann::json &payload);
+    void HandleSplitSignalPathEdgeRequest(const nlohmann::json &payload);
+    void HandleCollapseSignalPathSplitRequest(const nlohmann::json &payload);
     void HandleReplaceSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleReorderSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleDeleteSignalPathNodeRequest(const nlohmann::json &payload);
