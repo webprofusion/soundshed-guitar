@@ -281,46 +281,73 @@ function renderGraphSignalPath(preset: Preset): void {
 
   const { nodeById, outgoing } = buildGraphMaps(preset.graph);
 
+  const getOutgoingEdges = (nodeId: string): EdgeRef[] => outgoing.get(nodeId) ?? [];
+  const isSplitPoint = (nodeId: string): boolean => getOutgoingEdges(nodeId).length >= 2;
+
+  // Finds the first downstream node where all branches converge.
+  // This intentionally supports library presets that model split/join using ordinary nodes (e.g. gain nodes).
+  const findJoinNodeId = (splitterId: string, outs: EdgeRef[]): string | null => {
+    if (outs.length < 2) return null;
+
+    const walkBranch = (startNodeId: string): string[] => {
+      const path: string[] = [];
+      let currentId = startNodeId;
+      const localVisited = new Set<string>();
+      let guard = 0;
+      while (currentId && !localVisited.has(currentId) && guard++ < 500) {
+        localVisited.add(currentId);
+        if (currentId === "__output__") break;
+        path.push(currentId);
+
+        const edge = pickPrimaryOutgoingEdge(outgoing, currentId);
+        if (!edge) break;
+        currentId = edge.to;
+      }
+      return path;
+    };
+
+    const branchPaths = outs
+      .map((e) => e.to)
+      .filter((to) => to && to !== "__output__")
+      .map(walkBranch);
+
+    if (branchPaths.length < 2) return null;
+
+    const candidateSet = new Set(branchPaths[0]);
+    for (let i = 1; i < branchPaths.length; i++) {
+      for (const id of Array.from(candidateSet)) {
+        if (!branchPaths[i].includes(id)) {
+          candidateSet.delete(id);
+        }
+      }
+    }
+
+    candidateSet.delete(splitterId);
+
+    // Prefer the earliest common node along the first branch.
+    for (const id of branchPaths[0]) {
+      if (candidateSet.has(id)) {
+        return id;
+      }
+    }
+
+    return null;
+  };
+
   const visited = new Set<string>();
 
   const renderParallelForSplitter = (splitterId: string): { html: string; mixerId: string | null } => {
-    const splitterNode = nodeById.get(splitterId);
-    if (!splitterNode || splitterNode.type !== "splitter") {
-      return { html: "", mixerId: null };
-    }
+    const outs = getOutgoingEdges(splitterId);
+    if (outs.length < 2) return { html: "", mixerId: null };
 
-    const outs = outgoing.get(splitterId) ?? [];
-    if (outs.length < 2) {
-      return { html: "", mixerId: null };
-    }
-
-    const findMixerIdForBranch = (startNodeId: string): string | null => {
-      let currentId = startNodeId;
-      const localVisited = new Set<string>();
-      while (currentId && !localVisited.has(currentId)) {
-        localVisited.add(currentId);
-        const node = nodeById.get(currentId);
-        if (node && node.type === "mixer") {
-          return currentId;
-        }
-        const edge = pickPrimaryOutgoingEdge(outgoing, currentId);
-        if (!edge) return null;
-        if (edge.to === "__output__") return null;
-        currentId = edge.to;
-      }
-      return null;
-    };
-
-    // Determine shared mixer id
-    const mixerIds = outs
-      .map((e) => (e.to === "__output__" ? null : findMixerIdForBranch(e.to)))
-      .filter((id): id is string => Boolean(id));
-
-    const mixerId = mixerIds.length ? mixerIds[0] : null;
-    if (!mixerId || !mixerIds.every((id) => id === mixerId)) {
+    const joinId = findJoinNodeId(splitterId, outs);
+    if (!joinId) {
       // Unsupported/ambiguous topology - render as a linear edge fallback
       return { html: "", mixerId: null };
     }
+
+    const joinNode = nodeById.get(joinId);
+    const canCollapse = nodeById.get(splitterId)?.type === "splitter" && joinNode?.type === "mixer";
 
     const renderBranch = (firstEdge: EdgeRef): string => {
       let html = "";
@@ -329,7 +356,7 @@ function renderGraphSignalPath(preset: Preset): void {
       while (edge && guard++ < 200) {
         html += renderConnectorWrapper(edge, { showSplit: true });
 
-        if (edge.to === mixerId) {
+        if (edge.to === joinId) {
           break;
         }
 
@@ -339,7 +366,7 @@ function renderGraphSignalPath(preset: Preset): void {
         }
 
         html += renderNodeElement(node);
-        if (node.type === "splitter") {
+        if (node.type === "splitter" || isSplitPoint(node.id)) {
           // Nested splits are not yet rendered; stop at the node.
           break;
         }
@@ -360,11 +387,10 @@ function renderGraphSignalPath(preset: Preset): void {
       })
       .join("");
 
-    const mixerNode = nodeById.get(mixerId);
-    const mixerNodeHtml = mixerNode ? renderNodeElement(mixerNode) : "";
+    const mixerNodeHtml = joinNode ? renderNodeElement(joinNode) : "";
 
     const html = `
-      <div class="parallel-container" data-splitter-id="${splitterId}" data-mixer-id="${mixerId}">
+      <div class="parallel-container" data-splitter-id="${splitterId}" data-mixer-id="${joinId}">
         <div class="parallel-split">
           <div class="split-icon">⤵️</div>
         </div>
@@ -373,13 +399,13 @@ function renderGraphSignalPath(preset: Preset): void {
         </div>
         <div class="parallel-join">
           <div class="join-icon">⤴️</div>
-          <button class="parallel-collapse-btn" data-splitter-id="${splitterId}" data-mixer-id="${mixerId}" title="Collapse split (only if empty)">×</button>
+          ${canCollapse ? `<button class="parallel-collapse-btn" data-splitter-id="${splitterId}" data-mixer-id="${joinId}" title="Collapse split (only if empty)">×</button>` : ""}
         </div>
       </div>
       ${mixerNodeHtml}
     `;
 
-    return { html, mixerId };
+    return { html, mixerId: joinId };
   };
 
   const renderMainChain = (): string => {
@@ -393,7 +419,7 @@ function renderGraphSignalPath(preset: Preset): void {
         visited.add(currentId);
 
         const node = nodeById.get(currentId);
-        if (node && node.type === "splitter") {
+        if (node && (node.type === "splitter" || isSplitPoint(currentId))) {
           const { html: parallelHtml, mixerId } = renderParallelForSplitter(currentId);
           if (parallelHtml && mixerId) {
             html += parallelHtml;

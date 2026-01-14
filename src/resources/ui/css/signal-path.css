@@ -243,15 +243,15 @@
 }
 
 .signal-connector {
-  width: 20px;
-  height: 3px;
-  background: linear-gradient(90deg, #4a4a58, var(--text-secondary), #4a4a58);
+  width: 24px;
+  height: 2px;
+  background: greenyellow;
   border-radius: 2px;
   flex-shrink: 0;
   position: relative;
   transition: all 0.2s ease;
   cursor: pointer;
-  padding: 8px 0; /* Increase drop zone area */
+  
 }
 
 .signal-connector::after {
