@@ -1989,9 +1989,13 @@ namespace guitarfx
     Preset presetWithEQ = preset;
     EnsureParametricEQNode(presetWithEQ, *this);
 
+    // Preserve global signal chain settings across mixer resets
+    const auto globalChainConfig = mPresetMixer.GetGlobalChainConfig();
+
     // Initialize multi-preset mixer with a single active preset by default
     mPresetMixer = MultiPresetMixer();
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
+    mPresetMixer.SetGlobalChainConfig(globalChainConfig);
     
     // Re-register tuner callback after resetting the mixer
     // (The constructor sets this up, but ApplyPreset creates a new mixer instance)

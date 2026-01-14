@@ -105,6 +105,36 @@ namespace guitarfx
     }
   }
 
+  void MultiPresetMixer::RebuildGlobalChains()
+  {
+    if (!mPrepared)
+      return;
+
+    mPreChainExecutor.Reset();
+    mPostChainExecutor.Reset();
+
+    mPreChainExecutor.SetResourceLibrary(mResourceLibrary);
+    mPreChainExecutor.SetGraph(mGlobalChainConfig.BuildPreChainGraph());
+    mPreChainExecutor.SetInputTrim(mGlobalChainConfig.inputGain);
+    mPreChainExecutor.Prepare(mSampleRate, mMaxBlockSize);
+
+    mPostChainExecutor.SetResourceLibrary(mResourceLibrary);
+    mPostChainExecutor.SetGraph(mGlobalChainConfig.BuildPostChainGraph());
+    mPostChainExecutor.Prepare(mSampleRate, mMaxBlockSize);
+
+    mMasterGain = std::pow(10.0, mGlobalChainConfig.outputGain / 20.0);
+
+    mGlobalChainNeedsRebuild = false;
+  }
+
+  void MultiPresetMixer::EnsureGlobalChainsUpToDate()
+  {
+    if (mPrepared && mGlobalChainNeedsRebuild)
+    {
+      RebuildGlobalChains();
+    }
+  }
+
   // ==========================================================================
   // Global Signal Chain Configuration
   // ==========================================================================
@@ -121,7 +151,7 @@ namespace guitarfx
     mInputChannel = config.inputChannel;
     mLimiterEnabled = config.limiterEnabled;
 
-    // Rebuild will happen in Process() or Prepare()
+    EnsureGlobalChainsUpToDate();
   }
 
   void MultiPresetMixer::SetGlobalGateEnabled(bool enabled)
@@ -537,17 +567,9 @@ namespace guitarfx
     mPostChainOutL.resize(static_cast<size_t>(maxBlockSize), 0.0f);
     mPostChainOutR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
 
-    // Build and prepare global signal chains
-    mPreChainExecutor.SetResourceLibrary(mResourceLibrary);
-    mPreChainExecutor.SetGraph(mGlobalChainConfig.BuildPreChainGraph());
-    mPreChainExecutor.SetInputTrim(mGlobalChainConfig.inputGain);
-    mPreChainExecutor.Prepare(sampleRate, maxBlockSize);
-
-    mPostChainExecutor.SetResourceLibrary(mResourceLibrary);
-    mPostChainExecutor.SetGraph(mGlobalChainConfig.BuildPostChainGraph());
-    mPostChainExecutor.Prepare(sampleRate, maxBlockSize);
-
-    mGlobalChainNeedsRebuild = false;
+    // Build and prepare global signal chains based on current config
+    mGlobalChainNeedsRebuild = true;
+    EnsureGlobalChainsUpToDate();
 
     AllocateBuffers(maxBlockSize);
 
@@ -572,6 +594,8 @@ namespace guitarfx
   {
     if (!outputs || numSamples <= 0)
       return;
+
+    EnsureGlobalChainsUpToDate();
 
     // Safety check: ensure we're prepared before processing
     if (!mPrepared || mInstances.empty())

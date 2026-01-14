@@ -181,6 +181,8 @@ namespace guitarfx
     void AllocateBuffers(int maxBlockSize);
     void AllocateInstanceBuffers(PresetInstance &inst, int maxBlockSize);
     static void ComputePanGains(double pan, float &gL, float &gR);
+    void RebuildGlobalChains();
+    void EnsureGlobalChainsUpToDate();
 
     // Tuner processing (YIN-based pitch detection)
     void ProcessTuner(float **inputs, int numSamples);
