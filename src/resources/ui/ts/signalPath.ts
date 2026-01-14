@@ -78,12 +78,62 @@ function getCategoryClass(category: string): string {
   return categoryMap[category] || "utility";
 }
 
+function getNodeDisplayName(node: GraphNode): string {
+  // Support backend presets that use label/enabled instead of displayName/bypassed.
+  const anyNode = node as unknown as { id?: unknown; type?: unknown; displayName?: unknown; label?: unknown };
+  const nodeId = typeof anyNode.id === "string" ? anyNode.id : "";
+  const nodeType = typeof anyNode.type === "string" ? anyNode.type : "";
+
+  if (nodeId === "__input__" || nodeType === "input") return "Input";
+  if (nodeId === "__output__" || nodeType === "output") return "Output";
+
+  const explicit = typeof anyNode.displayName === "string" && anyNode.displayName.trim()
+    ? anyNode.displayName.trim()
+    : (typeof anyNode.label === "string" && anyNode.label.trim() ? anyNode.label.trim() : "");
+  if (explicit) return explicit;
+
+  const typeInfo = nodeType ? EffectTypeRegistry.get(nodeType) : undefined;
+  return typeInfo?.displayName || nodeType || "(Unknown)";
+}
+
+function getNodeCategory(node: GraphNode): string {
+  const anyNode = node as unknown as { category?: unknown; type?: unknown };
+  const explicit = typeof anyNode.category === "string" ? anyNode.category : "";
+  if (explicit) return explicit;
+  const nodeType = typeof anyNode.type === "string" ? anyNode.type : "";
+  const typeInfo = nodeType ? EffectTypeRegistry.get(nodeType) : undefined;
+  return typeInfo?.category || "utility";
+}
+
+function isNodeBypassed(node: GraphNode): boolean {
+  const anyNode = node as unknown as { bypassed?: unknown; enabled?: unknown };
+  if (typeof anyNode.bypassed === "boolean") return anyNode.bypassed;
+  if (typeof anyNode.enabled === "boolean") return !anyNode.enabled;
+  return false;
+}
+
+function getNodeResourceId(node: GraphNode): string {
+  const anyNode = node as unknown as { resource?: unknown };
+  const res = anyNode.resource as { id?: unknown; resourceId?: unknown } | undefined;
+  if (!res) return "";
+  return (typeof res.id === "string" ? res.id : (typeof res.resourceId === "string" ? res.resourceId : ""));
+}
+
+function getNodeResourceFilePath(node: GraphNode): string {
+  const anyNode = node as unknown as { resource?: unknown };
+  const res = anyNode.resource as { filePath?: unknown } | undefined;
+  return typeof res?.filePath === "string" ? res.filePath : "";
+}
+
 export function renderSignalPathBar(): void {
   if (!signalPathNodesElement || !signalPathPresetNameElement) {
     return;
   }
 
-  const activePreset = uiState.presets.find((p) => p.id === uiState.activePresetId);
+  const activePresetId = uiState.activePresetId;
+  const activePreset = activePresetId
+    ? (uiState.presetCache.get(activePresetId) ?? uiState.presets.find((p) => p.id === activePresetId))
+    : undefined;
   
   if (!activePreset) {
     signalPathPresetNameElement.textContent = "No preset selected";
@@ -421,13 +471,15 @@ function sendAddEffectAtEdgeOrFallback(effectType: string, edge: EdgeRef | null,
  */
 function renderNodeElement(node: GraphNode): string {
   const icon = getNodeIcon(node.type);
-  const categoryClass = getCategoryClass(node.category);
-  const bypassedClass = node.bypassed ? "bypassed" : "";
+  const categoryClass = getCategoryClass(getNodeCategory(node));
+  const bypassedClass = isNodeBypassed(node) ? "bypassed" : "";
   const selectedClass = selectedNodeId === node.id ? "selected" : "";
+  const allowDelete = node.type !== "splitter" && node.type !== "mixer";
+  const displayName = getNodeDisplayName(node);
   
   let resourceLabel = "";
   if (node.resource) {
-    resourceLabel = `<div class="node-resource">${node.resource.id || "Custom"}</div>`;
+    resourceLabel = `<div class="node-resource">${getNodeResourceId(node) || "Custom"}</div>`;
   }
 
   return `
@@ -435,13 +487,14 @@ function renderNodeElement(node: GraphNode): string {
          data-node-id="${node.id}" 
          draggable="true" 
          tabindex="0">
+      ${allowDelete ? '<button class="signal-node-delete" type="button" title="Remove" aria-label="Remove">×</button>' : ""}
       <div class="node-icon">${icon}</div>
       <div class="node-info">
-        <div class="node-name">${node.displayName}</div>
+        <div class="node-name">${displayName}</div>
         <div class="node-type">${node.type}</div>
         ${resourceLabel}
       </div>
-      ${node.bypassed ? '<div class="node-bypass-badge">OFF</div>' : ""}
+      ${isNodeBypassed(node) ? '<div class="node-bypass-badge">OFF</div>' : ""}
     </div>
   `;
 }
@@ -451,6 +504,22 @@ function bindNodeClickHandlers(preset: Preset): void {
   if (!nodeElements) {
     return;
   }
+
+  const deleteButtons = signalPathNodesElement?.querySelectorAll(".signal-node-delete");
+  deleteButtons?.forEach((button) => {
+    button.addEventListener("click", (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const nodeEl = (button as HTMLElement).closest(".signal-node") as HTMLElement | null;
+      const nodeId = nodeEl?.dataset.nodeId;
+      if (!nodeId) return;
+
+      sendSignalPathNodeDelete(nodeId);
+      selectedNodeId = null;
+      nodeParamsPanelElement?.classList.remove("visible");
+    });
+  });
 
   const getGraphNode = (nodeId: string): GraphNode | undefined => {
     return preset.graph?.nodes.find((n) => n.id === nodeId);
@@ -695,12 +764,13 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     `;
   }).join("");
 
+  const bypassed = isNodeBypassed(node);
   const bypassButton = `
     <button 
-      class="node-bypass-btn ${node.bypassed ? "bypassed" : ""}" 
+      class="node-bypass-btn ${bypassed ? "bypassed" : ""}" 
       data-node-id="${node.id}"
     >
-      ${node.bypassed ? "Enable" : "Bypass"}
+      ${bypassed ? "Enable" : "Bypass"}
     </button>
   `;
 
@@ -709,8 +779,8 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   if (typeInfo?.requiresResource && typeInfo.resourceType) {
     const resourceType = typeInfo.resourceType;
     const resources = uiState.resourceLibrary[resourceType] || [];
-    const currentResourceId = node.resource?.id || "";
-    const currentFilePath = node.resource?.filePath || "";
+    const currentResourceId = getNodeResourceId(node);
+    const currentFilePath = getNodeResourceFilePath(node);
     
     const resourceOptions = resources.map((res: LibraryResource) => {
       const selected = res.id === currentResourceId ? "selected" : "";
@@ -750,7 +820,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     <div class="node-params-header">
       <div class="node-params-title">
         <span class="node-icon">${getNodeIcon(node.type)}</span>
-        <span>${node.displayName}</span>
+        <span>${getNodeDisplayName(node)}</span>
       </div>
       <button class="close-params-btn">×</button>
     </div>
@@ -896,11 +966,13 @@ function bindBypassButton(node: GraphNode, preset: Preset): void {
   const bypassBtn = nodeParamsPanelElement?.querySelector(".node-bypass-btn");
   if (bypassBtn) {
     bypassBtn.addEventListener("click", () => {
-      const newBypassState = !node.bypassed;
+      const currentBypassed = isNodeBypassed(node);
+      const newBypassState = !currentBypassed;
       sendSignalPathNodeBypassUpdate(node.id, newBypassState);
       
       // Update UI
-      node.bypassed = newBypassState;
+      (node as unknown as { bypassed?: boolean }).bypassed = newBypassState;
+      (node as unknown as { enabled?: boolean }).enabled = !newBypassState;
       renderSignalPathBar();
       showNodeParamsPanel(node, preset);
     });

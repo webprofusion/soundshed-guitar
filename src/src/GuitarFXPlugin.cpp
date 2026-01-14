@@ -1883,7 +1883,7 @@ namespace guitarfx
     preset.version = 2;
 
     GraphNode input;
-    input.id = "input";
+    input.id = "__input__";
     input.type = kNodeTypeInput;
     input.category = "routing";
 
@@ -1898,7 +1898,7 @@ namespace guitarfx
     cab.category = "cab";
 
     GraphNode output;
-    output.id = "output";
+    output.id = "__output__";
     output.type = kNodeTypeOutput;
     output.category = "routing";
 
@@ -1912,6 +1912,7 @@ namespace guitarfx
     EnsureParametricEQNode(preset, *this);
 
     mActivePreset = preset;
+    mActivePresetId = preset.id;
     mActivePresetJson = PresetStorage::SerializeToJson(preset);
   }
 
@@ -2276,7 +2277,7 @@ namespace guitarfx
 
     // Input node (always first)
     GraphNode inputNode;
-    inputNode.id = "input";
+    inputNode.id = "__input__";
     inputNode.type = kNodeTypeInput;
     inputNode.category = "routing";
     newPreset.graph.nodes.push_back(inputNode);
@@ -2414,7 +2415,7 @@ namespace guitarfx
 
     // Output node (always last)
     GraphNode outputNode;
-    outputNode.id = "output";
+    outputNode.id = "__output__";
     outputNode.type = kNodeTypeOutput;
     outputNode.category = "routing";
     newPreset.graph.nodes.push_back(outputNode);

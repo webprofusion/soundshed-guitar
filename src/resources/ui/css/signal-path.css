@@ -200,6 +200,42 @@
   font-weight: 600;
 }
 
+.signal-node-delete {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 14px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.signal-node:hover .signal-node-delete,
+.signal-node:focus-within .signal-node-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.signal-node-delete:hover {
+  background: rgba(255, 80, 80, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 80, 80, 0.35);
+}
+
+.signal-node-delete:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .signal-arrow {
   font-size: 16px;
   color: var(--text-secondary);
