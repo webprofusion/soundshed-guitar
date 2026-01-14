@@ -14,8 +14,8 @@
 - Docs: docs/ (architecture, data models, UI, API)
 
 ## DSP Graph Essentials
-- Graph runner: SignalGraphExecutor with nodes of type amp_nam, ir_cab, eq_parametric, delay, reverb, noise_gate, etc.
-- Effects live in src/src/dsp/effects/; new effects implement EffectProcessor and register via REGISTER_EFFECT.
+- Graph runner: SignalGraphExecutor with nodes of type amp_nam, cab_ir, eq_parametric, delay_digital, reverb_room, dynamics_gate, etc.
+- Effects live in src/src/dsp/effects/; new effects implement EffectProcessor and register via EffectRegistry.
 - Validate parameter ranges and resource presence; fail fast with clear errors instead of silent defaults.
 - Full spec: docs/signal-chain.md, docs/fx-library.md
 

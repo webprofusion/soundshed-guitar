@@ -40,6 +40,9 @@ Top-level preset structure (schema version 2).
 |-------|------|---------|-------|-------------|
 | `inputTrim` | float | 0.0 | -40..+20 | Input gain (dB) |
 | `outputTrim` | float | 0.0 | -40..+20 | Output gain (dB) |
+| `outputVolume` | float | 1.0 | 0.0..1.0 | Output volume (linear) |
+| `autoLevelInput` | bool | false | — | Apply model-referenced input gain |
+| `autoLevelOutput` | bool | false | — | Apply model-referenced output trim |
 | `transpose` | int | 0 | -24..+24 | Pitch shift (semitones) |
 
 ## SignalGraph
@@ -113,9 +116,9 @@ For portable preset sharing.
   "graph": {
     "nodes": [
       {"id": "in", "type": "input"},
-      {"id": "gate", "type": "gate_noise", "params": {"threshold": -55.0}},
-      {"id": "amp", "type": "amp_nam", "resource": {"resourceType": "nam", "resourceId": "plexi-bright"}, "params": {"drive": 0.6}},
-      {"id": "cab", "type": "ir_cab", "resource": {"resourceType": "ir", "resourceId": "4x12-sm57"}},
+      {"id": "gate", "type": "dynamics_gate", "params": {"thresholdDb": -55.0}},
+      {"id": "amp", "type": "amp_nam", "resource": {"resourceType": "nam", "resourceId": "plexi-bright"}, "params": {"inputGain": 3.0}},
+      {"id": "cab", "type": "cab_ir", "resource": {"resourceType": "ir", "resourceId": "4x12-sm57"}},
       {"id": "out", "type": "output"}
     ],
     "edges": [

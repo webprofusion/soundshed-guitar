@@ -65,9 +65,9 @@ input → gate → amp → cab → output
 {
   "nodes": [
     {"id": "in", "type": "input"},
-    {"id": "gate", "type": "gate_noise", "params": {"threshold": -50.0}},
+    {"id": "gate", "type": "dynamics_gate", "params": {"thresholdDb": -50.0}},
     {"id": "amp", "type": "amp_nam", "resource": {"resourceType": "nam", "resourceId": "plexi-bright"}},
-    {"id": "cab", "type": "ir_cab", "resource": {"resourceType": "ir", "resourceId": "4x12-sm57"}},
+    {"id": "cab", "type": "cab_ir", "resource": {"resourceType": "ir", "resourceId": "4x12-sm57"}},
     {"id": "out", "type": "output"}
   ],
   "edges": [

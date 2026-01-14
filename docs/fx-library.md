@@ -67,71 +67,124 @@ Neural amp model processing.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `drive` | 0.0–1.0 | 0.5 | — |
-| `tone` | 0.0–1.0 | 0.5 | — |
-| `output` | -20..+20 | 0.0 | dB |
+| `inputGain` | -24..+24 | 0.0 | dB |
+| `outputGain` | -24..+24 | 0.0 | dB |
 
 **Resource**: NAM model file (`.nam`)
 
-### IR Cabinet (`ir_cab`)
+### IR Cabinet (`cab_ir`)
 Impulse response convolution for cabinet simulation.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `mix` | 0.0–1.0 | 1.0 | — |
-| `low_cut` | 20–500 | 80 | Hz |
-| `high_cut` | 2000–20000 | 12000 | Hz |
+| `outputGain` | -24..+24 | 0.0 | dB |
+| `quality` | 0–3 | 1 | — |
 
-**Resource**: Audio file (`.wav`, `.aiff`)
+Quality levels: 0=Economy, 1=Standard, 2=High, 3=Full
 
-### Noise Gate (`gate_noise`)
+**Resource**: Audio file (`.wav`)
+
+### Noise Gate (`dynamics_gate`)
 Input noise reduction.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `threshold` | -80..0 | -50 | dB |
-| `attack` | 0.1–50 | 1.0 | ms |
-| `hold` | 0–500 | 50 | ms |
-| `release` | 10–1000 | 100 | ms |
+| `thresholdDb` | -80..0 | -60 | dB |
+| `attackMs` | 0.1–50 | 1.0 | ms |
+| `releaseMs` | 1–500 | 50 | ms |
 
 ### Parametric EQ (`eq_parametric`)
-4-band parametric equalizer.
+4-band parametric equalizer (low/high shelves + 2 parametric mids).
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `low_freq` | 20–500 | 80 | Hz |
-| `low_gain` | -15..+15 | 0.0 | dB |
-| `low_q` | 0.1–10 | 0.7 | — |
-| `mid1_freq` | 100–2000 | 400 | Hz |
-| `mid1_gain` | -15..+15 | 0.0 | dB |
-| `mid1_q` | 0.1–10 | 1.0 | — |
-| `mid2_freq` | 500–8000 | 2000 | Hz |
-| `mid2_gain` | -15..+15 | 0.0 | dB |
-| `mid2_q` | 0.1–10 | 1.0 | — |
-| `high_freq` | 2000–20000 | 8000 | Hz |
-| `high_gain` | -15..+15 | 0.0 | dB |
-| `high_q` | 0.1–10 | 0.7 | — |
+| `lowGain` | -12..+12 | 0.0 | dB |
+| `lowFreq` | 20–500 | 100 | Hz |
+| `lowMidGain` | -12..+12 | 0.0 | dB |
+| `lowMidFreq` | 100–2000 | 400 | Hz |
+| `lowMidQ` | 0.1–10 | 1.0 | — |
+| `highMidGain` | -12..+12 | 0.0 | dB |
+| `highMidFreq` | 500–8000 | 2000 | Hz |
+| `highMidQ` | 0.1–10 | 1.0 | — |
+| `highGain` | -12..+12 | 0.0 | dB |
+| `highFreq` | 2000–16000 | 8000 | Hz |
 
 ### Digital Delay (`delay_digital`)
 Clean digital delay.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `time` | 1–2000 | 300 | ms |
+| `timeMs` | 1–2000 | 300 | ms |
 | `feedback` | 0.0–0.95 | 0.3 | — |
 | `mix` | 0.0–1.0 | 0.3 | — |
-| `high_cut` | 1000–20000 | 8000 | Hz |
 
 ### Room Reverb (`reverb_room`)
-Room reverberation.
+Algorithmic room reverberation.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `size` | 0.0–1.0 | 0.5 | — |
-| `decay` | 0.1–10 | 1.5 | s |
+| `decay` | 0.0–1.0 | 0.5 | — |
 | `damping` | 0.0–1.0 | 0.5 | — |
-| `pre_delay` | 0–100 | 10 | ms |
-| `mix` | 0.0–1.0 | 0.2 | — |
+| `mix` | 0.0–1.0 | 0.3 | — |
+
+### Simple Cabinet (`cab_simple`)
+Filter-based cabinet simulation (no IR required).
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `bass` | 0.0–1.0 | 0.5 | — |
+| `presence` | 0.0–1.0 | 0.5 | — |
+| `brightness` | 0.0–1.0 | 0.5 | — |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+### VCA Compressor (`compressor_vca`)
+Clean, precise VCA-style compressor.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `threshold` | -60..0 | -20 | dB |
+| `ratio` | 1–20 | 4.0 | :1 |
+| `attack` | 0.1–500 | 10 | ms |
+| `release` | 10–2000 | 100 | ms |
+| `knee` | 0–24 | 6.0 | dB |
+| `makeup` | 0–24 | 0.0 | dB |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+### Opto Compressor (`compressor_opto`)
+Smooth optical-style compressor.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `threshold` | -60..0 | -20 | dB |
+| `ratio` | 1–20 | 3.0 | :1 |
+| `attack` | 5–200 | 20 | ms |
+| `release` | 50–3000 | 300 | ms |
+| `makeup` | 0–24 | 0.0 | dB |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+### Doubler (`delay_doubler`)
+Creates stereo width by mixing a delayed copy of the signal.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `time` | 0–100 | 6.0 | ms |
+| `mix` | 0.0–1.0 | 0.3 | — |
+
+### Pitch Shift (`pitch_shift`)
+High-quality pitch shift effect for transpose up/down by semitones.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `semitones` | -24..+24 | 0.0 | st |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+### Gain (`gain`)
+Simple gain stage.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `gainDb` | -24..+24 | 0.0 | dB |
 
 ## Resource References
 
@@ -199,10 +252,11 @@ For portable preset sharing, resources can be embedded:
 ## Adding New Effects
 
 1. Implement `EffectProcessor` interface
-2. Register with `REGISTER_EFFECT(typeId, DisplayName, category, factory)`
-3. Define parameter metadata
+2. Create a registration function that populates `EffectTypeInfo` and calls `EffectRegistry::Instance().Register()`
+3. Define parameter metadata in `info.parameters`
 4. Place in `src/src/dsp/effects/`
-5. Effect appears in UI automatically via registry queries
+5. Call registration function from `RegisterAllEffects()` in `BuiltinEffects.h`
+6. Effect appears in UI automatically via registry queries
 
 ## See Also
 - [Signal Chain](signal-chain.md) — How effects execute in the graph
