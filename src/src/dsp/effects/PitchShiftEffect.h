@@ -2,6 +2,7 @@
 
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -22,14 +23,17 @@ namespace guitarfx
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
 
-      // Buffer size - longer for lower pitches, ~1 second of audio
-      mBufferSize = static_cast<size_t>(sampleRate * 1.0);
-      mBufferL.resize(mBufferSize, 0.0f);
-      mBufferR.resize(mBufferSize, 0.0f);
+      // Keep the window short to minimize lookahead/latency while still crossfading cleanly
+      mGrainSize = std::max<size_t>(64, static_cast<size_t>(sampleRate * 0.012)); // ~12 ms @ 48 kHz
+      mHalfGrain = std::max<size_t>(1, mGrainSize / 2);
 
-      // Grain size determines the overlap window - ~50ms works well for most material
-      mGrainSize = static_cast<size_t>(sampleRate * 0.050);
-      mHalfGrain = mGrainSize / 2;
+      // Delay the read heads by roughly one grain so the shifted signal arrives quickly
+      mBaseLatencySamples = std::max<size_t>(mGrainSize, static_cast<size_t>(sampleRate * 0.008));
+
+      // Buffer size: just a few grains plus some slack for pitch-down cases
+      mBufferSize = std::max<size_t>(mGrainSize * 8, static_cast<size_t>(sampleRate * 0.25));
+      mBufferL.assign(mBufferSize, 0.0f);
+      mBufferR.assign(mBufferSize, 0.0f);
 
       // Precompute crossfade window (raised cosine / Hann window for smooth transitions)
       mCrossfadeWindow.resize(mGrainSize);
@@ -51,8 +55,9 @@ namespace guitarfx
       mWriteIndex = 0;
 
       // Initialize two read pointers offset by half the grain size
-      mReadPhase1 = 0.0;
-      mReadPhase2 = static_cast<double>(mHalfGrain);
+      double writePos = static_cast<double>(mWriteIndex);
+      mReadPhase1 = std::fmod(writePos + static_cast<double>(mBufferSize) - static_cast<double>(mBaseLatencySamples), static_cast<double>(mBufferSize));
+      mReadPhase2 = std::fmod(mReadPhase1 + static_cast<double>(mHalfGrain), static_cast<double>(mBufferSize));
       mCrossfadePos = 0;
     }
 
@@ -130,7 +135,7 @@ namespace guitarfx
         // Keep read pointers at safe distance from write pointer
         // Reset if they get too close (within half grain)
         double writePos = static_cast<double>(mWriteIndex);
-        double safeDistance = static_cast<double>(mHalfGrain);
+        double safeDistance = std::max<double>(static_cast<double>(mHalfGrain) * 0.75, 8.0);
 
         // Calculate distance from write pointer (accounting for wrap)
         auto calcDist = [this, writePos](double readPos) -> double {
@@ -145,12 +150,12 @@ namespace guitarfx
         // If a read pointer gets too close to write, reset it to a safe distance
         if (dist1 < safeDistance || dist1 > static_cast<double>(mBufferSize) - safeDistance)
         {
-          mReadPhase1 = std::fmod(writePos - static_cast<double>(mGrainSize * 2), static_cast<double>(mBufferSize));
+          mReadPhase1 = std::fmod(writePos - static_cast<double>(mBaseLatencySamples), static_cast<double>(mBufferSize));
           if (mReadPhase1 < 0) mReadPhase1 += static_cast<double>(mBufferSize);
         }
         if (dist2 < safeDistance || dist2 > static_cast<double>(mBufferSize) - safeDistance)
         {
-          mReadPhase2 = std::fmod(writePos - static_cast<double>(mGrainSize * 2 + mHalfGrain), static_cast<double>(mBufferSize));
+          mReadPhase2 = std::fmod(writePos - static_cast<double>(mBaseLatencySamples) + static_cast<double>(mHalfGrain), static_cast<double>(mBufferSize));
           if (mReadPhase2 < 0) mReadPhase2 += static_cast<double>(mBufferSize);
         }
       }
@@ -228,6 +233,7 @@ namespace guitarfx
     size_t mBufferSize = 0;
     size_t mGrainSize = 0;
     size_t mHalfGrain = 0;
+    size_t mBaseLatencySamples = 0;
     size_t mWriteIndex = 0;
 
     // Two read pointers for overlap-add crossfading
