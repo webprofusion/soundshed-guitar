@@ -33,7 +33,8 @@ export function initializeThemeSwitcher(): void {
     { value: 'default', label: 'Default' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
-    { value: 'classic', label: 'Classic 70s' }
+    { value: 'classic', label: 'Classic 70s' },
+    { value: 'gritty', label: 'Worn Pedal' }
   ];
   
   themes.forEach(theme => {

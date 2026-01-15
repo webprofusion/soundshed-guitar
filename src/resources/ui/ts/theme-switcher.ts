@@ -3,7 +3,7 @@
  * Manages switching between light, dark, and classic themes
  */
 
-export type ThemeName = 'default' | 'light' | 'dark' | 'classic';
+export type ThemeName = 'default' | 'light' | 'dark' | 'classic' | 'gritty';
 
 export class ThemeSwitcher {
   private currentTheme: ThemeName = 'default';
@@ -23,7 +23,7 @@ export class ThemeSwitcher {
    */
   setTheme(theme: ThemeName): void {
     // Remove all theme classes
-    this.body.classList.remove('theme-light', 'theme-dark', 'theme-classic');
+    this.body.classList.remove('theme-light', 'theme-dark', 'theme-classic', 'theme-gritty');
     
     // Add new theme class (default has no class)
     if (theme !== 'default') {
@@ -50,7 +50,7 @@ export class ThemeSwitcher {
    * Cycle to the next theme
    */
   cycleTheme(): void {
-    const themes: ThemeName[] = ['default', 'light', 'dark', 'classic'];
+    const themes: ThemeName[] = ['default', 'light', 'dark', 'classic', 'gritty'];
     const currentIndex = themes.indexOf(this.currentTheme);
     const nextIndex = (currentIndex + 1) % themes.length;
     this.setTheme(themes[nextIndex]);
@@ -65,7 +65,8 @@ export class ThemeSwitcher {
       default: 'Default',
       light: 'Light',
       dark: 'Dark',
-      classic: 'Classic 70s'
+      classic: 'Classic 70s',
+      gritty: 'Worn Pedal'
     };
     return names[t];
   }

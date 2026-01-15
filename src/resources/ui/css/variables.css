@@ -364,3 +364,121 @@
   --node-output: #8ca8c8;
   --node-output-hover: #9cb8d8;
 }
+
+/* Gritty Pedal Theme (Worn) */
+.theme-gritty {
+  /* Primary Colors - Rusty amber */
+  --color-accent: #d27a3c;
+  --color-accent-hover: #e28a4c;
+  --color-accent-dark: #b8642c;
+  
+  /* Success/Active Colors */
+  --color-success: #7a9e5a;
+  --color-success-light: #89ad66;
+  --color-success-glow: rgba(122, 158, 90, 0.45);
+  
+  /* Info Colors */
+  --color-info: #6a7f8e;
+  --color-info-light: #7b8f9e;
+  
+  /* Warning/Error Colors */
+  --color-error: #b4635b;
+  --color-warning: #c75c2c;
+  
+  /* Background Colors - Worn metal */
+  --bg-primary: linear-gradient(180deg, #5a5752 0%, #44413b 100%);
+  --bg-secondary: linear-gradient(180deg, #605b55 0%, #4b4741 100%);
+  --bg-tertiary: linear-gradient(180deg, #6a645c 0%, #555049 100%);
+  --bg-surface: linear-gradient(180deg, #6f685f 0%, #5a554e 100%);
+  --bg-elevated: linear-gradient(180deg, #756e65 0%, #5f5951 100%);
+  
+  --bg-panel: linear-gradient(180deg, #5f5952 0%, #4e4842 100%);
+  --bg-card: linear-gradient(180deg, #6b655d 0%, #58524b 100%);
+  --bg-input: #6f6961;
+  
+  /* Dark Backgrounds */
+  --bg-dark-primary: linear-gradient(180deg, #2f2b27 0%, #23201d 100%);
+  --bg-dark-secondary: linear-gradient(180deg, #3a3530 0%, #2b2622 100%);
+  --bg-dark-tertiary: linear-gradient(180deg, #3d3832 0%, #2f2a25 100%);
+  --bg-dark-surface: #3a352f;
+  
+  --bg-footer: linear-gradient(180deg, #2f2a26 0%, #241f1c 100%);
+  --bg-header-dark: #2b2622;
+  
+  --bg-fx-primary: linear-gradient(180deg, #2a2521 0%, #1e1a17 100%);
+  --bg-fx-secondary: linear-gradient(180deg, #342e29 0%, #27221f 100%);
+  --bg-fx-categories: linear-gradient(180deg, #231f1b 0%, #1a1613 100%);
+  
+  /* Text Colors - Dusty off-whites */
+  --text-primary: #e9dfd2;
+  --text-secondary: #cbbfb0;
+  --text-tertiary: #b2a597;
+  --text-muted: #968a7d;
+  
+  --text-dark-primary: #f5efe6;
+  --text-dark-secondary: #e2d6c8;
+  --text-dark-tertiary: #cbbfaf;
+  --text-dark-muted: #b5a89a;
+  --text-dark-dimmed: #9a8e80;
+  --text-dark-disabled: #80756a;
+  
+  /* Borders - Worn metal */
+  --border-light: #7a7167;
+  --border-medium: #6b6259;
+  --border-strong: #5c544c;
+  --border-dark: #4e463f;
+  --border-darker: #3f3832;
+  
+  --border-dark-light: #5f564e;
+  --border-dark-medium: #4f473f;
+  --border-dark-strong: #6f655c;
+  
+  /* Knob & Control Colors */
+  --control-bg: linear-gradient(145deg, #6b635a, #5a544b);
+  --control-border: #4f473f;
+  --control-indicator: #d6cbbd;
+  
+  /* Amp Knob Colors */
+  --amp-knob-bg: linear-gradient(145deg, #726a61, #5f5850);
+  --amp-knob-border: #5b534a;
+  
+  /* Dark Knob Colors */
+  --knob-dark-bg: linear-gradient(135deg, #4a433c, #332d28);
+  --knob-dark-border: #5a524a;
+  --knob-dark-indicator: #d7a35a;
+  
+  /* Toggle Colors */
+  --toggle-bg: #5a524a;
+  --toggle-border: #463f39;
+  --toggle-active: var(--color-accent);
+  
+  /* Shadow Colors */
+  --shadow-sm: 0 2px 4px rgba(30, 24, 20, 0.25);
+  --shadow-md: 0 4px 8px rgba(30, 24, 20, 0.35);
+  --shadow-lg: 0 8px 32px rgba(30, 24, 20, 0.45);
+  --shadow-xl: 0 8px 32px rgba(30, 24, 20, 0.6);
+  
+  --shadow-inset-light: inset 0 1px 0 rgba(255, 244, 232, 0.08);
+  --shadow-inset-dark: inset 0 -2px 0 rgba(20, 16, 14, 0.35);
+  
+  /* Overlay Colors */
+  --overlay-light: rgba(255, 244, 232, 0.08);
+  --overlay-medium: rgba(255, 244, 232, 0.12);
+  --overlay-dark: rgba(24, 19, 16, 0.45);
+  --overlay-darker: rgba(24, 19, 16, 0.75);
+  
+  /* Special Colors */
+  --color-preset-bg: #2c2521;
+  --color-preset-border: #463c35;
+  --color-preset-favorite: #c18a5c;
+  --color-preset-text: #e2d3c4;
+  
+  /* Amp Glow */
+  --amp-glow: radial-gradient(ellipse, rgba(210, 122, 60, 0.35) 0%, transparent 70%);
+  
+  /* Signal Node Colors */
+  --node-input: #7a9e5a;
+  --node-input-hover: #8fb36c;
+  --node-output: #6a7f8e;
+  --node-output-hover: #7f93a3;
+}

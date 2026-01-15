@@ -124,6 +124,10 @@ async function bootstrap(): Promise<void> {
   };
   console.log("[JS] IPlugReceiveData registered on window");
 
+  window.addEventListener("resize", () => {
+    updateDSPPerformancePlot();
+  });
+
   const signalTestButton = document.getElementById("run-signal-test");
   if (signalTestButton) {
     signalTestButton.addEventListener("click", requestSignalPathTest);

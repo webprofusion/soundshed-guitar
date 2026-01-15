@@ -448,21 +448,36 @@ export function updateDSPPerformancePlot(): void {
   const history = uiState.dspPerformanceHistory;
   if (history.length === 0) return;
 
+  const displayWidth = Math.max(1, Math.floor(canvas.clientWidth));
+  const displayHeight = Math.max(1, Math.floor(canvas.clientHeight));
+  if (displayWidth === 1 || displayHeight === 1) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const desiredWidth = Math.max(1, Math.floor(displayWidth * dpr));
+  const desiredHeight = Math.max(1, Math.floor(displayHeight * dpr));
+  if (canvas.width !== desiredWidth || canvas.height !== desiredHeight) {
+    canvas.width = desiredWidth;
+    canvas.height = desiredHeight;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   // Clear canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
 
   // Set up drawing
   ctx.strokeStyle = "#00ff00";
   ctx.lineWidth = 2;
   ctx.beginPath();
 
-  const width = canvas.width;
-  const height = canvas.height;
+  const width = displayWidth;
+  const height = displayHeight;
   const maxLoad = Math.max(...history.map(h => h.dspLoadPercent), 100); // At least 100% for scale
 
   // Draw line
+  const sampleCount = Math.max(1, history.length - 1);
   history.forEach((stat, index) => {
-    const x = (index / (history.length - 1)) * width;
+    const x = (index / sampleCount) * width;
     const y = height - (stat.dspLoadPercent / maxLoad) * height;
     if (index === 0) {
       ctx.moveTo(x, y);

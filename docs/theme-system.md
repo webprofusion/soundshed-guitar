@@ -8,7 +8,7 @@
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with four built-in themes. Theme preference persists via localStorage.
+GuitarFX uses a CSS variable-based theme system with five built-in themes. Theme preference persists via localStorage.
 
 ## Available Themes
 
@@ -18,6 +18,7 @@ GuitarFX uses a CSS variable-based theme system with four built-in themes. Theme
 | Light | `.theme-light` | High brightness, clean, modern |
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Classic 70s | `.theme-classic` | Warm vintage browns/ambers |
+| Worn Pedal | `.theme-gritty` | Gritty, worn metal textures |
 
 ## Usage
 
@@ -32,7 +33,7 @@ themeSwitcher.setTheme('dark');
 themeSwitcher.cycleTheme();
 
 // Get current theme
-const theme = themeSwitcher.getCurrentTheme(); // 'default', 'light', 'dark', 'classic'
+const theme = themeSwitcher.getCurrentTheme(); // 'default', 'light', 'dark', 'classic', 'gritty'
 ```
 
 ### UI Control
