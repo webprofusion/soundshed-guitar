@@ -215,6 +215,7 @@ function getEffectIcon(effectType: string): string {
     
     // Amps
     "amp_nam": "🎸",
+    "amp_nam_optimized": "⚡",
     "amp_clean": "🎺",
     "amp_crunch": "🎷",
     

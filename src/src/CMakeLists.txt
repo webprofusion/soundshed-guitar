@@ -5,13 +5,27 @@
 # doesn't export a library target
 set(_nam_dsp_sources
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/activations.cpp
+  ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/conv1d.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/convnet.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/dsp.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/get_dsp.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/lstm.cpp
+  ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/ring_buffer.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/util.cpp
   ${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet.cpp
 )
+
+# Fix for upstream NAM bug: activations.h uses assert() without including <cassert>
+# This causes build failures in Release builds. We force include cassert for NAM sources.
+if(MSVC)
+  set_source_files_properties(${_nam_dsp_sources} PROPERTIES
+    COMPILE_FLAGS "/FI\"cassert\""
+  )
+else()
+  set_source_files_properties(${_nam_dsp_sources} PROPERTIES
+    COMPILE_FLAGS "-include cassert"
+  )
+endif()
 
 # GuitarFXCore contains API-agnostic shared code. GuitarFXPlugin.cpp 
 # and GuitarFXPlugin.h are NOT included here because they require format-
@@ -35,6 +49,14 @@ set(_guitarfx_core_sources
   dsp/MultiPresetMixer.h
   dsp/MultiPresetMixer.cpp
   
+  # SIMD-optimized DSP utilities
+  dsp/simd/SimdMath.h
+  dsp/simd/OptimizedActivations.h
+  dsp/simd/OptimizedWaveNet.h
+  dsp/simd/OptimizedLSTM.h
+  dsp/simd/OptimizedNAM.h
+  dsp/simd/Benchmark.h
+  
   # Effect implementations
   dsp/effects/BuiltinEffects.h
   dsp/effects/GainEffect.h
@@ -44,6 +66,7 @@ set(_guitarfx_core_sources
   dsp/effects/ReverbEffect.h
   dsp/effects/CompressorEffect.h
   dsp/effects/NAMAmpEffect.h
+  dsp/effects/OptimizedNAMAmpEffect.h
   dsp/effects/IRCabEffect.h
   dsp/effects/SimpleCabEffect.h
   

@@ -2,6 +2,7 @@
 
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include "dsp/simd/SimdMath.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <filesystem>

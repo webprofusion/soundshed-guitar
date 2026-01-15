@@ -214,7 +214,11 @@ void PrintSamples(const std::string& label, const std::vector<T>& buffer, int co
 // Graph helper
 // ============================================================================
 
-guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& irPath)
+// Effect types to test
+constexpr const char* kAmpTypeStandard = "amp_nam";
+constexpr const char* kAmpTypeOptimized = "amp_nam_optimized";
+
+guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& irPath, const char* ampType = kAmpTypeStandard)
 {
   guitarfx::Preset preset;
   preset.id = "nam-diagnostic";
@@ -228,7 +232,7 @@ guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& i
 
   guitarfx::GraphNode amp;
   amp.id = "amp";
-  amp.type = "amp_nam";
+  amp.type = ampType;
   amp.category = "amp";
   amp.enabled = fs::exists(modelPath);
   if (amp.enabled)
@@ -276,14 +280,15 @@ public:
                const fs::path& modelPath,
                const fs::path& irPath,
                double sampleRate,
-               int blockSize)
+               int blockSize,
+               const char* ampType = kAmpTypeStandard)
   {
     guitarfx::RegisterAllEffects();
     mResourceLibrary = std::make_unique<guitarfx::ResourceLibrary>();
     mResourceLibrary->LoadFromDirectory(resourcesDir);
     mExecutor = std::make_unique<guitarfx::SignalGraphExecutor>();
     mExecutor->SetResourceLibrary(mResourceLibrary.get());
-    mPreset = MakeNamGraphPreset(modelPath, irPath);
+    mPreset = MakeNamGraphPreset(modelPath, irPath, ampType);
     mExecutor->SetInputTrim(mPreset.global.inputTrim);
     mExecutor->SetOutputTrim(mPreset.global.outputTrim);
     mExecutor->SetGraph(mPreset.graph);
@@ -438,13 +443,13 @@ bool TestDirectModelProcessing(const fs::path& modelPath)
 // Test: SignalGraphExecutor Processing Pipeline
 // ============================================================================
 
-bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelPath, const fs::path& irPath)
+bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelPath, const fs::path& irPath, const char* ampType)
 {
-  std::cout << "\n=== Test: SignalGraphExecutor Processing Pipeline ===\n";
+  std::cout << "\n=== Test: SignalGraphExecutor Processing Pipeline (" << ampType << ") ===\n";
   std::cout << "Model: " << modelPath.filename().string() << "\n";
   std::cout << "IR: " << (irPath.empty() ? "(none)" : irPath.filename().string()) << "\n\n";
 
-  GraphHarness dsp(resourcesDir, modelPath, irPath, kTestSampleRate, kTestBlockSize);
+  GraphHarness dsp(resourcesDir, modelPath, irPath, kTestSampleRate, kTestBlockSize, ampType);
   std::cout << "Graph DSP prepared at " << kTestSampleRate << " Hz\n";
 
   // Set neutral DSP parameters
@@ -548,9 +553,9 @@ bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelP
 // Test: Compare Direct vs Manager Processing
 // ============================================================================
 
-bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath)
+bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath, const char* ampType)
 {
-  std::cout << "\n=== Test: Direct Model vs DSP Manager Comparison ===\n";
+  std::cout << "\n=== Test: Direct Model vs DSP Manager Comparison (" << ampType << ") ===\n";
   std::cout << "This test compares NAM model output when called directly vs through SignalGraphExecutor\n\n";
 
   // Load model directly
@@ -563,7 +568,7 @@ bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath
   directModel->ResetAndPrewarm(kTestSampleRate, kTestBlockSize);
 
   // Set up graph-based DSP manager
-  GraphHarness dsp(resourcesDir, modelPath, {}, kTestSampleRate, kTestBlockSize);
+  GraphHarness dsp(resourcesDir, modelPath, {}, kTestSampleRate, kTestBlockSize, ampType);
 
   // Neutral settings for DSP manager (to minimize processing changes)
   dsp.SetInputTrim(0.0);
@@ -641,9 +646,9 @@ bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath
 // Test: Different Models Produce Different Output
 // ============================================================================
 
-bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json& audioModelsJson)
+bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json& audioModelsJson, const char* ampType)
 {
-  std::cout << "\n=== Test: Different Models Produce Different Output ===\n";
+  std::cout << "\n=== Test: Different Models Produce Different Output (" << ampType << ") ===\n";
 
   if (!audioModelsJson.is_array() || audioModelsJson.size() < 2)
   {
@@ -680,9 +685,9 @@ bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json
     return false;
   }
 
-  auto renderModel = [&resourcesDir](const fs::path& modelPath) -> std::vector<double>
+  auto renderModel = [&resourcesDir, ampType](const fs::path& modelPath) -> std::vector<double>
   {
-    GraphHarness dsp(resourcesDir, modelPath, {}, kTestSampleRate, kTestBlockSize);
+    GraphHarness dsp(resourcesDir, modelPath, {}, kTestSampleRate, kTestBlockSize, ampType);
 
     dsp.SetInputTrim(0.0);
     dsp.SetOutputTrim(0.0);
@@ -743,6 +748,155 @@ bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json
   std::cout << (different ? "Models produce distinct output\n" : "WARNING: Models produced nearly identical output\n");
 
   return different;
+}
+
+// ============================================================================
+// Test: Standard vs Optimized NAM Comparison
+// ============================================================================
+
+bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& modelPath)
+{
+  std::cout << "\n=== Test: Standard NAM vs Optimized NAM Comparison ===\n";
+  std::cout << "This test verifies that amp_nam and amp_nam_optimized produce similar output\n";
+  std::cout << "Model: " << modelPath.filename().string() << "\n\n";
+
+  auto renderWithAmpType = [&resourcesDir, &modelPath](const char* ampType) -> std::vector<double>
+  {
+    GraphHarness dsp(resourcesDir, modelPath, {}, kTestSampleRate, kTestBlockSize, ampType);
+
+    dsp.SetInputTrim(0.0);
+    dsp.SetOutputTrim(0.0);
+    dsp.SetDrive(0.0);
+    dsp.SetTone(0.0);
+    dsp.SetMix(1.0);
+
+    std::vector<float> inL(kTestBlockSize), inR(kTestBlockSize);
+    std::vector<float> outL(kTestBlockSize), outR(kTestBlockSize);
+    GenerateSineWave(inL, 440.0, kTestSampleRate, 0.3);
+    GenerateSineWave(inR, 440.0, kTestSampleRate, 0.3);
+
+    float* inputs[2] = {inL.data(), inR.data()};
+    float* outputs[2] = {outL.data(), outR.data()};
+
+    // Process a few blocks to let model settle
+    for (int i = 0; i < 5; ++i)
+    {
+      dsp.Process(inputs, outputs, kTestBlockSize);
+    }
+
+    return std::vector<double>(outL.begin(), outL.end());
+  };
+
+  const auto standardOutput = renderWithAmpType(kAmpTypeStandard);
+  const auto optimizedOutput = renderWithAmpType(kAmpTypeOptimized);
+
+  if (standardOutput.empty() || optimizedOutput.empty())
+  {
+    std::cerr << "ERROR: Failed to render one or both amp types\n";
+    return false;
+  }
+
+  auto standardStats = AnalyzeBuffer(standardOutput);
+  auto optimizedStats = AnalyzeBuffer(optimizedOutput);
+
+  std::cout << "Standard NAM (amp_nam):\n";
+  PrintSignalStats("Output", standardStats);
+  PrintSamples("Output", standardOutput);
+
+  std::cout << "\nOptimized NAM (amp_nam_optimized):\n";
+  PrintSignalStats("Output", optimizedStats);
+  PrintSamples("Output", optimizedOutput);
+
+  // Check for errors in either output
+  if (standardStats.hasNaN || standardStats.hasInf)
+  {
+    std::cerr << "ERROR: Standard NAM produced NaN/Inf!\n";
+    return false;
+  }
+  if (optimizedStats.hasNaN || optimizedStats.hasInf)
+  {
+    std::cerr << "ERROR: Optimized NAM produced NaN/Inf!\n";
+    return false;
+  }
+  if (standardStats.isAllZeros)
+  {
+    std::cerr << "ERROR: Standard NAM produced all zeros!\n";
+    return false;
+  }
+  if (optimizedStats.isAllZeros)
+  {
+    std::cerr << "ERROR: Optimized NAM produced all zeros!\n";
+    return false;
+  }
+
+  // Calculate difference between outputs
+  double sumSq = 0.0;
+  double maxDiff = 0.0;
+  for (std::size_t i = 0; i < std::min(standardOutput.size(), optimizedOutput.size()); ++i)
+  {
+    const double diff = std::abs(standardOutput[i] - optimizedOutput[i]);
+    sumSq += diff * diff;
+    maxDiff = std::max(maxDiff, diff);
+  }
+  const double rmsDiff = std::sqrt(sumSq / static_cast<double>(std::min(standardOutput.size(), optimizedOutput.size())));
+
+  std::cout << "\n--- Difference Analysis ---\n";
+  std::cout << "Max difference: " << std::scientific << maxDiff << "\n";
+  std::cout << "RMS difference: " << rmsDiff << "\n";
+  std::cout << std::fixed;
+
+  // Calculate correlation coefficient
+  const double meanStd = standardStats.mean;
+  const double meanOpt = optimizedStats.mean;
+  double sumXY = 0.0, sumX2 = 0.0, sumY2 = 0.0;
+  for (std::size_t i = 0; i < standardOutput.size(); ++i)
+  {
+    const double x = standardOutput[i] - meanStd;
+    const double y = optimizedOutput[i] - meanOpt;
+    sumXY += x * y;
+    sumX2 += x * x;
+    sumY2 += y * y;
+  }
+  const double correlation = (sumX2 > 0 && sumY2 > 0) ? sumXY / std::sqrt(sumX2 * sumY2) : 0.0;
+  std::cout << "Correlation: " << std::setprecision(6) << correlation << "\n";
+
+  // The optimized version may use different precision (float vs double) and different
+  // activation implementations, so we expect some difference but correlation should be high
+  constexpr double kMinCorrelation = 0.95;  // High correlation expected
+  constexpr double kMaxRmsDiff = 0.5;       // Allow some difference due to implementation
+
+  if (correlation < kMinCorrelation)
+  {
+    std::cerr << "WARNING: Low correlation between standard and optimized (" << correlation << ")\n";
+    std::cerr << "This may indicate an issue with the optimized implementation.\n";
+    return false;
+  }
+
+  if (rmsDiff > kMaxRmsDiff)
+  {
+    std::cerr << "WARNING: High RMS difference (" << rmsDiff << ") between standard and optimized\n";
+    // This is a warning, not a failure, as some difference is expected
+  }
+
+  std::cout << "\nConclusion: Standard and Optimized NAM produce ";
+  if (rmsDiff < 0.001)
+  {
+    std::cout << "nearly identical output (excellent match)\n";
+  }
+  else if (rmsDiff < 0.1)
+  {
+    std::cout << "similar output (good match, minor precision differences)\n";
+  }
+  else if (correlation > kMinCorrelation)
+  {
+    std::cout << "correlated output (acceptable, implementation differences expected)\n";
+  }
+  else
+  {
+    std::cout << "different output (may need investigation)\n";
+  }
+
+  return true;
 }
 
 } // namespace
@@ -806,10 +960,30 @@ int main(int argc, char* argv[])
     // Run diagnostic tests
     bool allPassed = true;
 
+    // Test direct NAM model processing (library level, no effect type)
     allPassed &= TestDirectModelProcessing(modelPath);
-    allPassed &= TestDSPManagerPipeline(resourcesDir, modelPath, irPath);
-    allPassed &= TestDirectVsManager(resourcesDir, modelPath);
-    allPassed &= TestModelDifferentiation(resourcesDir, audioModelsJson);
+
+    // Test Standard NAM (amp_nam)
+    std::cout << "\n\n########################################\n";
+    std::cout << "# TESTING STANDARD NAM (amp_nam)       #\n";
+    std::cout << "########################################\n";
+    allPassed &= TestDSPManagerPipeline(resourcesDir, modelPath, irPath, kAmpTypeStandard);
+    allPassed &= TestDirectVsManager(resourcesDir, modelPath, kAmpTypeStandard);
+    allPassed &= TestModelDifferentiation(resourcesDir, audioModelsJson, kAmpTypeStandard);
+
+    // Test Optimized NAM (amp_nam_optimized)
+    std::cout << "\n\n########################################\n";
+    std::cout << "# TESTING OPTIMIZED NAM (amp_nam_optimized) #\n";
+    std::cout << "########################################\n";
+    allPassed &= TestDSPManagerPipeline(resourcesDir, modelPath, irPath, kAmpTypeOptimized);
+    allPassed &= TestDirectVsManager(resourcesDir, modelPath, kAmpTypeOptimized);
+    allPassed &= TestModelDifferentiation(resourcesDir, audioModelsJson, kAmpTypeOptimized);
+
+    // Compare Standard vs Optimized
+    std::cout << "\n\n########################################\n";
+    std::cout << "# COMPARING STANDARD vs OPTIMIZED      #\n";
+    std::cout << "########################################\n";
+    allPassed &= TestStandardVsOptimized(resourcesDir, modelPath);
 
     std::cout << "\n==========================\n";
     std::cout << "Diagnostic tests " << (allPassed ? "COMPLETED" : "HAD FAILURES") << "\n";

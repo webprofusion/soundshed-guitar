@@ -105,6 +105,17 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     ]
   },
   {
+    type: "amp_nam_optimized",
+    displayName: "NAM Amp (SIMD)",
+    category: "amp",
+    requiresResource: true,
+    resourceType: "nam",
+    parameters: [
+      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
+      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" }
+    ]
+  },
+  {
     type: "cab_ir",
     displayName: "IR Cabinet",
     category: "cab",

@@ -143,6 +143,33 @@ target_compile_definitions(GuitarFX_ModelDiagnosticTests
 
 add_test(NAME NAMModelDiagnosticTests COMMAND GuitarFX_ModelDiagnosticTests)
 
+# NAM Performance Benchmark - measures DSP performance of standard vs optimized NAM
+add_executable(GuitarFX_NAMPerformanceBenchmark
+  NAMPerformanceBenchmark.cpp
+)
+
+target_include_directories(GuitarFX_NAMPerformanceBenchmark
+  PRIVATE
+    ${GUITARFX_PROJECT_ROOT}/src
+    ${NeuralAmpModelerCore_SOURCE_DIR}
+)
+
+target_link_libraries(GuitarFX_NAMPerformanceBenchmark
+  PRIVATE
+    GuitarFXCore
+    nlohmann_json::nlohmann_json
+)
+
+target_compile_features(GuitarFX_NAMPerformanceBenchmark PRIVATE cxx_std_20)
+
+target_compile_definitions(GuitarFX_NAMPerformanceBenchmark
+  PRIVATE
+    GUITARFX_TEST_RESOURCES_DIR="${GUITARFX_RESOURCES_DIR_NORMALIZED}"
+)
+
+# Note: This is a benchmark, not a test, so we don't add it to ctest
+# Run manually with: GuitarFX_NAMPerformanceBenchmark.exe
+
 # Sample Rate and Buffer Size Tests - diagnoses sample rate and buffer issues
 add_executable(GuitarFX_SampleRateBufferTests
   SampleRateBufferTests.cpp

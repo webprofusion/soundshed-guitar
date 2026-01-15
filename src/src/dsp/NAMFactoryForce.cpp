@@ -3,6 +3,9 @@
 // Without this, the static factory::Helper objects in wavenet.cpp, lstm.cpp, and
 // convnet.cpp may be discarded by the linker since they are not directly referenced.
 
+// Include cassert before NAM headers - upstream NAM activations.h uses assert without including it
+#include <cassert>
+
 #include "NAM/wavenet.h"
 #include "NAM/lstm.h"
 #include "NAM/convnet.h"
