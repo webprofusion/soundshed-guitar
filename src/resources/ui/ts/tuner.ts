@@ -6,8 +6,13 @@ const NOTE_NAMES = ["C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab",
 
 // Get adjacent note names
 function getAdjacentNotes(noteName: string): { left: string; right: string } {
+  const trimmed = noteName.trim();
+  if (!trimmed) {
+    return { left: "-", right: "-" };
+  }
+
   // Handle combined notation like "D#/Eb"
-  const baseNote = noteName.includes("/") ? noteName.split("/")[0] : noteName;
+  const baseNote = trimmed.includes("/") ? trimmed.split("/")[0] : trimmed;
   const noteIndex = NOTE_NAMES.findIndex(n => n.startsWith(baseNote));
   
   if (noteIndex < 0) {
@@ -42,6 +47,12 @@ interface TunerData {
   confidence?: number;
 }
 
+interface TunerSample {
+  centOffset: number;
+  frequency: number;
+  confidence: number;
+}
+
 const tunerState: TunerState = {
   isOpen: false,
   isLive: true,
@@ -50,6 +61,38 @@ const tunerState: TunerState = {
   referenceFrequency: 440.0,
   lastDetection: null,
 };
+
+const tunerSampleBuffer: TunerSample[] = [];
+const kTunerSampleWindow = 6;
+
+function resetTunerSamples(): void {
+  tunerSampleBuffer.length = 0;
+}
+
+function addTunerSample(sample: TunerSample): void {
+  tunerSampleBuffer.push(sample);
+  if (tunerSampleBuffer.length > kTunerSampleWindow) {
+    tunerSampleBuffer.shift();
+  }
+}
+
+function getAveragedSample(): TunerSample | null {
+  if (!tunerSampleBuffer.length) return null;
+  let centSum = 0;
+  let freqSum = 0;
+  let confSum = 0;
+  for (const sample of tunerSampleBuffer) {
+    centSum += sample.centOffset;
+    freqSum += sample.frequency;
+    confSum += sample.confidence;
+  }
+  const count = tunerSampleBuffer.length;
+  return {
+    centOffset: centSum / count,
+    frequency: freqSum / count,
+    confidence: confSum / count,
+  };
+}
 
 // DOM elements
 let tunerModal: HTMLElement | null = null;
@@ -162,6 +205,8 @@ export function openTuner(): void {
   tunerModal.style.display = "flex";
   tunerState.isOpen = true;
 
+  resetTunerSamples();
+
   // Always start the tuner when modal opens
   startTuner();
   
@@ -180,6 +225,8 @@ export function closeTuner(): void {
 
   tunerModal.style.display = "none";
   tunerState.isOpen = false;
+
+  resetTunerSamples();
 
   // Stop the tuner
   stopTuner();
@@ -296,6 +343,27 @@ export function handleTunerUpdate(data: TunerData): void {
     return;
   }
 
+  if (!data.detected) {
+    resetTunerSamples();
+    tunerState.lastDetection = data;
+    updateTunerDisplay(data);
+    return;
+  }
+
+  const centOffset = data.centOffset ?? 0;
+  const frequency = data.frequency ?? 0;
+  const confidence = data.confidence ?? 0;
+  addTunerSample({ centOffset, frequency, confidence });
+  const averaged = getAveragedSample();
+  if (averaged) {
+    data = {
+      ...data,
+      centOffset: averaged.centOffset,
+      frequency: averaged.frequency,
+      confidence: averaged.confidence,
+    };
+  }
+
   tunerState.lastDetection = data;
   updateTunerDisplay(data);
 }
@@ -325,12 +393,13 @@ function updateTunerDisplay(data: TunerData): void {
   tunerDisplay.classList.remove("no-signal");
 
   // Update note display
-  const noteName = data.noteName ?? "?";
+  const rawNoteName = (data.noteName ?? "").trim();
+  const noteName = rawNoteName.length > 0 ? rawNoteName : "?";
   const baseNoteName = noteName.includes("/") ? noteName.split("/")[0] : noteName;
-  tunerCurrentNote.textContent = baseNoteName;
+  tunerCurrentNote.textContent = baseNoteName || "?";
 
   // Update adjacent notes
-  const adjacentNotes = getAdjacentNotes(noteName);
+  const adjacentNotes = rawNoteName.length > 0 ? getAdjacentNotes(rawNoteName) : { left: "-", right: "-" };
   tunerNoteLeft.textContent = adjacentNotes.left;
   tunerNoteRight.textContent = adjacentNotes.right;
 

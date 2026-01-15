@@ -11,7 +11,7 @@
 #define PLUG_VERSION_HEX 0x00030000
 #define PLUG_VERSION_STR "0.3.0"
 #define PLUG_UNIQUE_ID 'SGFX'
-#define PLUG_MFR_ID 'Wbp'
+#define PLUG_MFR_ID 'SndS'
 #define PLUG_URL_STR "https://soundshed.com"
 #define PLUG_EMAIL_STR "support@soundshed.com"
 #define PLUG_COPYRIGHT_STR "Copyright " GUITARFX_BRAND_COPYRIGHT_YEAR_STR " " GUITARFX_BRAND_COMPANY_STR

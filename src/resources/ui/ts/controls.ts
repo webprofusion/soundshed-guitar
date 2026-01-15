@@ -1,4 +1,5 @@
 import { appendLog } from "./logging.js";
+import { setAppSetting } from "./bridge.js";
 import { postMessage, setParameter } from "./bridge.js";
 import { uiState } from "./state.js";
 
@@ -413,6 +414,39 @@ export function syncControlsFromState(): void {
 // Input mode state
 let currentMonoMode = true;
 let currentInputChannel = 0;
+const INPUT_CHANNEL_SETTING = "inputChannel.mono";
+
+function normalizeInputChannel(value: unknown): number | null {
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (numeric === 0 || numeric === 1) {
+    return numeric;
+  }
+  return null;
+}
+
+function getStoredInputChannel(): number | null {
+  return normalizeInputChannel(uiState.appSettings?.[INPUT_CHANNEL_SETTING]);
+}
+
+function persistInputChannel(channel: number): void {
+  uiState.appSettings[INPUT_CHANNEL_SETTING] = channel;
+  setAppSetting(INPUT_CHANNEL_SETTING, channel);
+}
+
+export function applyStoredInputChannel(): void {
+  const stored = getStoredInputChannel();
+  if (stored === null) return;
+
+  currentInputChannel = stored;
+  const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
+  if (inputChannelSelect) {
+    inputChannelSelect.value = stored.toString();
+  }
+
+  if (currentMonoMode) {
+    sendInputModeToPlugin();
+  }
+}
 
 function sendInputModeToPlugin(): void {
   const message = JSON.stringify({
@@ -451,6 +485,15 @@ export function initializeInputModeControls(): void {
       if (radio.checked) {
         currentMonoMode = radio.value === "mono";
         updateChannelSelectorVisibility();
+        if (currentMonoMode) {
+          const stored = getStoredInputChannel();
+          if (stored !== null) {
+            currentInputChannel = stored;
+            if (inputChannelSelect) {
+              inputChannelSelect.value = stored.toString();
+            }
+          }
+        }
         sendInputModeToPlugin();
       }
     });
@@ -460,12 +503,16 @@ export function initializeInputModeControls(): void {
   if (inputChannelSelect) {
     inputChannelSelect.addEventListener("change", () => {
       currentInputChannel = parseInt(inputChannelSelect.value, 10);
+      if (!Number.isNaN(currentInputChannel)) {
+        persistInputChannel(currentInputChannel);
+      }
       sendInputModeToPlugin();
     });
   }
 
   // Set initial state
   updateChannelSelectorVisibility();
+  applyStoredInputChannel();
   sendInputModeToPlugin();
 }
 

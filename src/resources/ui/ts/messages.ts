@@ -1,6 +1,6 @@
 import { uiState, clonePreset } from "./state.js";
 import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, updatePresetDropdownSelection, savePresetToLocalStorage, updatePresetActionButtons } from "./presets.js";
-import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState } from "./controls.js";
+import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { previewSelectedDemoAudio } from "./demoAudio.js";
@@ -41,6 +41,7 @@ export function handleIncomingMessage(message: string): void {
       const appSettings = (payload as { appSettings?: Record<string, unknown> }).appSettings;
       if (appSettings) {
         uiState.appSettings = appSettings as import("./types.js").AppSettings;
+        applyStoredInputChannel();
       }
       const uiSettings = (payload as { uiSettings?: UiSettings }).uiSettings;
       if (uiSettings) {
