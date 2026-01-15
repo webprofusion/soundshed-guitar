@@ -46,9 +46,28 @@ const CATEGORIES: CategoryConfig[] = [
 
 let activeCategory = CATEGORIES[0];
 let activeQuery = "";
+let currentTones: Tone3000Tone[] = [];
 
 export function initTone3000Browser(): void {
   renderCategories();
+  if (resultsEl) {
+    resultsEl.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const button = target.closest(".tone3000-import-btn") as HTMLButtonElement | null;
+      if (!button) return;
+
+      const toneId = button.dataset.toneId;
+      const tone = currentTones.find((item) => String(item.id) === toneId);
+      if (!tone) {
+        showNotification("Import failed", "Tone not found");
+        return;
+      }
+
+      showNotification("Import started", tone.title ?? "Tone3000");
+      void importToneModels(button, tone);
+    });
+  }
   searchButtonEl?.addEventListener("click", () => void runSearch());
   searchInputEl?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -157,6 +176,8 @@ async function runSearch(): Promise<void> {
 function renderResults(tones: Tone3000Tone[]): void {
   if (!resultsEl) return;
 
+  currentTones = tones;
+
   if (!tones.length) {
     resultsEl.innerHTML = `<div class="tone3000-empty">No tones found in this category.</div>`;
     return;
@@ -166,7 +187,7 @@ function renderResults(tones: Tone3000Tone[]): void {
     .map((tone) => {
       const modelCount = tone.models_count ?? 0;
       return `
-        <div class="tone3000-item" data-tone-id="${tone.id}">
+        <div class="tone3000-item" data-tone-id="${String(tone.id)}">
           <div class="tone3000-item-main">
             <div class="tone3000-item-title">${escapeHtml(tone.title)}</div>
             <div class="tone3000-item-meta">
@@ -177,21 +198,13 @@ function renderResults(tones: Tone3000Tone[]): void {
             </div>
           </div>
           <div class="tone3000-item-actions">
-            <button class="tone3000-import-btn" data-tone-id="${tone.id}">Import</button>
+            <button class="tone3000-import-btn" data-tone-id="${String(tone.id)}">Import</button>
           </div>
         </div>
       `;
     })
     .join("");
 
-  resultsEl.querySelectorAll(".tone3000-import-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      const toneId = (button as HTMLElement).dataset.toneId;
-      const tone = tones.find((item) => item.id === toneId);
-      if (!tone) return;
-      void importToneModels(button as HTMLButtonElement, tone);
-    });
-  });
 }
 
 async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): Promise<void> {
@@ -218,9 +231,13 @@ async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): 
     const data = await response.json();
     const models: Tone3000Model[] = Array.isArray(data?.models)
       ? data.models
-      : Array.isArray(data)
-        ? data
-        : [];
+      : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.results)
+          ? data.results
+          : Array.isArray(data)
+            ? data
+            : [];
 
     if (!models.length) {
       throw new Error("No models found for tone");
@@ -241,22 +258,34 @@ async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): 
       }
 
       const buffer = await modelResponse.arrayBuffer();
-      const data = arrayBufferToBase64(buffer);
-      const extension = resourceType === "ir" ? ".wav" : ".nam";
-      const fileName = sanitizeFilename(`${tone.title}-${model.name}`) + extension;
+      const contentType = modelResponse.headers.get("content-type") ?? "";
+      const fileNameHint = sanitizeFilename(`${tone.title}-${model.name}`);
 
-      postMessage({
-        type: "importRemoteResource",
-        provider: "tone3000",
-        resourceType,
-        resourceId: `tone3000:${model.id}`,
-        name: `${tone.title} - ${model.name}`,
-        description: tone.description ?? "",
-        category: tone.gear ?? "",
-        subfolder,
-        fileName,
-        data,
-      });
+      if (contentType.includes("zip") || model.model_url.toLowerCase().endsWith(".zip")) {
+        await importZipBuffer(buffer, {
+          tone,
+          modelId: model.id,
+          nameHint: fileNameHint,
+          subfolder,
+        });
+      } else {
+        const data = arrayBufferToBase64(buffer);
+        const extension = resourceType === "ir" ? ".wav" : ".nam";
+        const fileName = `${fileNameHint}${extension}`;
+
+        postMessage({
+          type: "importRemoteResource",
+          provider: "tone3000",
+          resourceType,
+          resourceId: `tone3000:${model.id}`,
+          name: `${tone.title} - ${model.name}`,
+          description: tone.description ?? "",
+          category: tone.gear ?? "",
+          subfolder,
+          fileName,
+          data,
+        });
+      }
     }
 
     appendLog(`tone3000 import queued: ${tone.title}`);
@@ -268,6 +297,53 @@ async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): 
   } finally {
     button.disabled = false;
     button.textContent = "Import";
+  }
+}
+
+async function importZipBuffer(
+  buffer: ArrayBuffer,
+  options: { tone: Tone3000Tone; modelId: string; nameHint: string; subfolder: string },
+): Promise<void> {
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    throw new Error("JSZip not loaded");
+  }
+
+  const zip = await zipLib.loadAsync(buffer);
+  const entries = Object.values(zip.files) as JSZipObject[];
+  const tone = options.tone;
+  let imported = 0;
+
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    const lowerName = entry.name.toLowerCase();
+    const isNam = lowerName.endsWith(".nam") || lowerName.endsWith(".json");
+    const isIr = lowerName.endsWith(".wav") || lowerName.endsWith(".ir");
+    if (!isNam && !isIr) continue;
+
+    const fileBuffer = await entry.async("arraybuffer");
+    const data = arrayBufferToBase64(fileBuffer);
+    const resourceType = isIr ? "ir" : "nam";
+    const fileName = sanitizeFilename(entry.name.split("/").pop() ?? options.nameHint);
+
+    postMessage({
+      type: "importRemoteResource",
+      provider: "tone3000",
+      resourceType,
+      resourceId: `tone3000:${options.modelId}:${sanitizeFilename(entry.name)}`,
+      name: `${tone.title} - ${entry.name}`,
+      description: tone.description ?? "",
+      category: tone.gear ?? "",
+      subfolder: options.subfolder,
+      fileName,
+      data,
+    });
+
+    imported += 1;
+  }
+
+  if (!imported) {
+    throw new Error("Zip contained no supported model or IR files");
   }
 }
 
