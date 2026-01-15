@@ -812,6 +812,10 @@ namespace guitarfx
       const std::size_t framesToProcessSize = std::min<std::size_t>(framesRemaining, static_cast<std::size_t>(nFrames));
       const int framesToProcess = static_cast<int>(framesToProcessSize);
 
+      const std::size_t leftChannelFrames = previewBuffer->channelSamples.front().size();
+      const std::size_t rightChannelIndex = channelCount > 1 ? 1 : 0;
+      const std::size_t rightChannelFrames = previewBuffer->channelSamples[rightChannelIndex].size();
+
       mPreviewInputLeft.resize(static_cast<std::size_t>(nFrames));
       mPreviewInputRight.resize(static_cast<std::size_t>(nFrames));
       mPreviewOutputLeft.resize(static_cast<std::size_t>(nFrames));
@@ -824,9 +828,13 @@ namespace guitarfx
       {
         const std::size_t sourceIndex = cursor + static_cast<std::size_t>(frame);
         const std::size_t leftChannel = 0;
-        const std::size_t rightChannel = channelCount > 1 ? 1 : 0;
-        mPreviewInputLeft[static_cast<std::size_t>(frame)] = previewBuffer->channelSamples[leftChannel][sourceIndex];
-        mPreviewInputRight[static_cast<std::size_t>(frame)] = previewBuffer->channelSamples[rightChannel][sourceIndex];
+        const std::size_t rightChannel = rightChannelIndex;
+        mPreviewInputLeft[static_cast<std::size_t>(frame)] = sourceIndex < leftChannelFrames
+          ? previewBuffer->channelSamples[leftChannel][sourceIndex]
+          : static_cast<iplug::sample>(0.0f);
+        mPreviewInputRight[static_cast<std::size_t>(frame)] = sourceIndex < rightChannelFrames
+          ? previewBuffer->channelSamples[rightChannel][sourceIndex]
+          : static_cast<iplug::sample>(0.0f);
       }
 
       iplug::sample *previewInputs[2] = {mPreviewInputLeft.data(), mPreviewInputRight.data()};
@@ -3078,6 +3086,29 @@ namespace guitarfx
       return;
     }
 
+    std::size_t minFrames = resampled.front().size();
+    for (const auto &channel : resampled)
+    {
+      if (channel.empty())
+      {
+        ReportErrorToUI("Demo preview unavailable", "Audio buffer is empty");
+        return;
+      }
+      minFrames = std::min(minFrames, channel.size());
+    }
+    if (minFrames == 0)
+    {
+      ReportErrorToUI("Demo preview unavailable", "Audio buffer is empty");
+      return;
+    }
+    for (auto &channel : resampled)
+    {
+      if (channel.size() > minFrames)
+      {
+        channel.resize(minFrames);
+      }
+    }
+
     auto previewBuffer = std::make_shared<PreviewPlaybackBuffer>();
     previewBuffer->id = audioIter->value("id", "");
     previewBuffer->title = audioIter->value("title", previewBuffer->id);
@@ -3085,12 +3116,15 @@ namespace guitarfx
     previewBuffer->channels = static_cast<int>(resampled.size());
     previewBuffer->channelSamples = std::move(resampled);
 
-    mPresetMixer.Reset();
+    {
+      std::lock_guard<std::mutex> lock(mDSPMutex);
+      mPresetMixer.Reset();
 
-    mPreviewCursor.store(0, std::memory_order_release);
-    mPreviewBuffer.store(previewBuffer, std::memory_order_release);
-    mPreviewStartedBuffer.store(previewBuffer, std::memory_order_release);
-    mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
+      mPreviewCursor.store(0, std::memory_order_release);
+      mPreviewBuffer.store(previewBuffer, std::memory_order_release);
+      mPreviewStartedBuffer.store(previewBuffer, std::memory_order_release);
+      mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
+    }
   }
 
   void GuitarFXPlugin::ReportErrorToUI(std::string_view message, std::string_view detail)

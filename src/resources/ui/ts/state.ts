@@ -4,14 +4,19 @@ export const LOG_ENTRY_LIMIT = 200;
 
 export const DEMO_AUDIO_SAMPLES: DemoSample[] = [
   {
-    id: "guitar-riff-01",
+    id: "di-riff-01",
     title: "Guitar Riff 01",
     path: "demo/guitar-riff-01.wav",
   },
   {
-    id: "guitar-riff-02",
+    id: "di-riff-02",
     title: "Guitar Riff 02",
     path: "demo/guitar-riff-02.wav",
+  },
+   {
+    id: "di-riff-03",
+    title: "Guitar Riff 03",
+    path: "demo/DI_Guitar_L.wav",
   },
 ];
 
