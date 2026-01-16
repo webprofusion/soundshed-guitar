@@ -33,7 +33,12 @@ namespace guitarfx
     void ProcessBlock(iplug::sample **inputs, iplug::sample **outputs, int nFrames) override;
     void OnReset() override;
     void OnIdle() override;
+    void* OpenWindow(void* pParent) override;
+    void CloseWindow() override;
     void OnUIOpen() override;
+    void OnUIClose() override;
+    void OnWebContentLoaded() override;
+    void OnParentWindowResize(int width, int height) override;
     bool SerializeState(iplug::IByteChunk &chunk) const override;
     int UnserializeState(const iplug::IByteChunk &chunk, int startPos) override;
     void OnParamChange(int paramIdx) override;
@@ -165,6 +170,7 @@ namespace guitarfx
     void LoadAppSettings();
     void LoadLastSessionState();
     void LoadResourceLibraries();
+    void LoadWebViewContent(bool forceReload);
 
     struct SignalTestRuntimeState
     {
@@ -262,6 +268,12 @@ namespace guitarfx
     
     // Flag to prevent loading HTML multiple times
     bool mUIContentLoaded = false;
+    bool mUIVisible = false;
+    bool mUIReady = false;
+    bool mUIReloadInProgress = false;
+    int mUIReloadAttempts = 0;
+    std::chrono::steady_clock::time_point mUIReloadDeadline{};
+    void* mParentWindow = nullptr;
   };
 } // namespace guitarfx
 

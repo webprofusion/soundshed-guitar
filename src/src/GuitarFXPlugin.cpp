@@ -13,7 +13,6 @@
 #include <sstream>
 #include <vector>
 #include <iostream> // For std::cout
-#include <ctime> // For time()
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1190,6 +1189,26 @@ namespace guitarfx
       BroadcastState();
     }
 
+    if (mUIVisible && !mUIReady && mUIReloadAttempts > 0)
+    {
+      if (std::chrono::steady_clock::now() > mUIReloadDeadline)
+      {
+        if (mUIReloadAttempts < 3)
+        {
+          std::cout << "[Plugin] UI not ready; reloading WebView (attempt " << (mUIReloadAttempts + 1) << ")" << std::endl;
+          mUIReloadInProgress = false;
+          mUIReloadDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+          LoadWebViewContent(true);
+        }
+        else
+        {
+          std::cout << "[Plugin] UI failed to become ready after retries" << std::endl;
+          mUIReloadAttempts = 0;
+          mUIReloadInProgress = false;
+        }
+      }
+    }
+
     // Send DSP performance stats to UI periodically (every ~1 second)
     mDSPPerformanceUpdateCounter++;
     if (mDSPPerformanceUpdateCounter >= 60)
@@ -1266,16 +1285,26 @@ namespace guitarfx
     }
   }
 
+  void* GuitarFXPlugin::OpenWindow(void* pParent)
+  {
+    mParentWindow = pParent;
+    mUIVisible = true;
+    mUIReady = false;
+    mUIContentLoaded = false;
+    mUIReloadInProgress = false;
+    mUIReloadAttempts = 0;
+    return iplug::WebViewEditorDelegate::OpenWindow(pParent);
+  }
+
+  void GuitarFXPlugin::CloseWindow()
+  {
+    iplug::WebViewEditorDelegate::CloseWindow();
+    OnUIClose();
+  }
+
   void GuitarFXPlugin::OnUIOpen()
   {
     std::cout << "[Plugin] OnUIOpen called - loading WebView content" << std::endl;
-    
-    // Prevent loading HTML multiple times
-    if (mUIContentLoaded)
-    {
-      std::cout << "[Plugin] UI content already loaded, skipping" << std::endl;
-      return;
-    }
     
     // Check and log DPI information (Windows only)
 #ifdef _WIN32
@@ -1286,22 +1315,76 @@ namespace guitarfx
     // }
 #endif
     
+    mUIVisible = true;
+    LoadWebViewContent(false);
+  }
+
+  void GuitarFXPlugin::OnUIClose()
+  {
+    std::cout << "[Plugin] OnUIClose called - resetting WebView content flag" << std::endl;
+    mUIContentLoaded = false;
+    mUIVisible = false;
+    mUIReady = false;
+    mUIReloadInProgress = false;
+    mUIReloadAttempts = 0;
+    mPendingStateBroadcast = true;
+  }
+
+  void GuitarFXPlugin::OnWebContentLoaded()
+  {
+    iplug::WebViewEditorDelegate::OnWebContentLoaded();
+    mUIContentLoaded = true;
+    mUIReloadInProgress = false;
+    mPendingStateBroadcast = true;
+  }
+
+  void GuitarFXPlugin::OnParentWindowResize(int width, int height)
+  {
+    iplug::WebViewEditorDelegate::OnParentWindowResize(width, height);
+
+    const bool nowVisible = width > 1 && height > 1;
+    if (nowVisible && !mUIVisible)
+    {
+      std::cout << "[Plugin] UI became visible - reloading WebView content" << std::endl;
+      LoadWebViewContent(true);
+      mPendingStateBroadcast = true;
+    }
+
+    mUIVisible = nowVisible;
+  }
+
+  void GuitarFXPlugin::LoadWebViewContent(bool forceReload)
+  {
+    if (mUIReloadInProgress)
+    {
+      return;
+    }
+
+    if (!forceReload && mUIContentLoaded)
+    {
+      return;
+    }
+
     // Build path to index.html in resources
     std::filesystem::path htmlPath = mResourceRoot / "ui" / "index.html";
     std::cout << "[Plugin] Loading HTML from: " << htmlPath.generic_string() << std::endl;
-    
-    if (std::filesystem::exists(htmlPath))
-    {
-      // LoadFile is provided by WebViewEditorDelegate base class
-      LoadFile(htmlPath.string().c_str(), nullptr);
-      EnableScroll(false);
-      mUIContentLoaded = true;
-      mPendingStateBroadcast = true;
-    }
-    else
+
+    if (!std::filesystem::exists(htmlPath))
     {
       std::cerr << "[Plugin] index.html not found at: " << htmlPath.generic_string() << std::endl;
+      mUIReloadInProgress = false;
+      return;
     }
+
+    mUIReloadInProgress = true;
+    mUIReady = false;
+    mUIReloadAttempts++;
+    mUIReloadDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+    // LoadFile is provided by WebViewEditorDelegate base class
+    LoadFile(htmlPath.string().c_str(), nullptr);
+    EnableScroll(false);
+    mPendingStateBroadcast = true;
   }
 
   bool GuitarFXPlugin::SerializeState(iplug::IByteChunk &chunk) const
@@ -1794,6 +1877,23 @@ namespace guitarfx
           mWindowBounds.height = b.value("height", mWindowBounds.height);
         }
         SaveAppSettings();
+      }
+    }
+    else if (type == "uiReady")
+    {
+      mUIReady = true;
+      mUIReloadInProgress = false;
+      mUIReloadAttempts = 0;
+      mPendingStateBroadcast = true;
+    }
+    else if (type == "uiVisibility")
+    {
+      const bool visible = payload.value("visible", true);
+      mUIVisible = visible;
+      HideWebView(!visible);
+      if (visible && !mUIReady)
+      {
+        LoadWebViewContent(true);
       }
     }
     else if (type == "setSetting")

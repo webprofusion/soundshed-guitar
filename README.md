@@ -76,7 +76,7 @@ cmake --build build --config Debug --target GuitarFX_OfflineProcessingTest
 cmake --build build --config Debug --target VST3DebugHost
 ./VST3DebugHost.exe --windowed
 ```
-Testing plugin with pluginval:
+Testing plugin (version with external resources) with pluginval:
 `C:\Tools>pluginval.exe  C:\Work\GIT\misc\neuron-guitar\src\build\GuitarFX.vst3`
 
 ## License

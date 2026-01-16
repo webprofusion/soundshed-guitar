@@ -19,6 +19,7 @@ import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
 import { initSettingsPanel, updateSettingsSessionStatus } from "./settings.js";
 import { ensureTone3000Session } from "./tone3000.js";
+import { postMessage } from "./bridge.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -123,6 +124,17 @@ async function bootstrap(): Promise<void> {
     handleIncomingMessage(message);
   };
   console.log("[JS] IPlugReceiveData registered on window");
+
+  postMessage({ type: "uiReady" });
+  postMessage({ type: "uiVisibility", visible: !document.hidden });
+
+  document.addEventListener("visibilitychange", () => {
+    postMessage({ type: "uiVisibility", visible: !document.hidden });
+  });
+
+  window.addEventListener("focus", () => {
+    postMessage({ type: "uiVisibility", visible: true });
+  });
 
   window.addEventListener("resize", () => {
     updateDSPPerformancePlot();
