@@ -136,6 +136,7 @@ namespace guitarfx
     void HandleSetInputModeRequest(const nlohmann::json &payload);
     void HandleSetAmpCabStateRequest(const nlohmann::json &payload);
     void HandleSetAutoLevelRequest(const nlohmann::json &payload);
+    void HandleSetMetronomeRequest(const nlohmann::json &payload);
     void HandleUpdateSignalPathNodeParamRequest(const nlohmann::json &payload);
     void HandleUpdateSignalPathNodeBypassRequest(const nlohmann::json &payload);
     void HandleUpdateNodeResourceRequest(const nlohmann::json &payload);
@@ -171,6 +172,9 @@ namespace guitarfx
     void LoadLastSessionState();
     void LoadResourceLibraries();
     void LoadWebViewContent(bool forceReload);
+    void SendMetronomeStateToUI();
+    void RenderMetronome(iplug::sample **outputs, int nFrames);
+    double GetEffectiveTempoBpm() const;
 
     struct SignalTestRuntimeState
     {
@@ -215,6 +219,16 @@ namespace guitarfx
       bool HasBounds() const { return width > 0 && height > 0; }
     } mWindowBounds;
     nlohmann::json mAppSettings = nlohmann::json::object();
+    std::atomic<double> mMetronomeBpm{120.0};
+    std::atomic<bool> mMetronomeEnabled{false};
+    std::atomic<double> mMetronomeVolume{0.2};
+    std::atomic<bool> mMetronomeResetPending{false};
+    double mMetronomeSamplesUntilClick = 0.0;
+    int mMetronomeClickSamplesRemaining = 0;
+    double mMetronomeClickPhase = 0.0;
+    double mMetronomeClickPhaseIncrement = 0.0;
+    double mLastBroadcastTempo = 120.0;
+    int mMetronomeUpdateCounter = 0;
     struct PreviewPlaybackBuffer
     {
       std::string id;

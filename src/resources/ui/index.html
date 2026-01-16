@@ -33,6 +33,13 @@
         <button class="icon-btn" data-panel="mixer" title="Mixer">
           <svg viewBox="0 0 24 24"><rect x="4" y="4" width="3" height="16" rx="1" fill="currentColor"/><rect x="10.5" y="7" width="3" height="13" rx="1" fill="currentColor"/><rect x="17" y="5" width="3" height="15" rx="1" fill="currentColor"/></svg>
         </button>
+        <button class="icon-btn metronome-only" data-panel="metronome" title="Metronome">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 20h10l-2-12H9l-2 12z"/>
+            <path d="M12 4v6"/>
+            <circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
         <button class="icon-btn" data-panel="performance" title="Performance">
           <svg viewBox="0 0 24 24"><path d="M12 2v6m0 0l-4 4m4-4l4 4m-4 4v6" stroke="currentColor" stroke-width="2" fill="none"/></svg>
         </button>
@@ -239,6 +246,74 @@
           </div>
         </div>
 
+        <!-- Metronome Panel (Standalone only) -->
+        <div class="tab-panel metronome-only" id="panel-metronome">
+          <div class="panel-content">
+            <div class="metronome-card">
+              <div class="metronome-card-header">
+                <span class="metronome-card-title">Metronome</span>
+                <span class="metronome-source" id="metronome-source">Standalone</span>
+              </div>
+              <div class="metronome-card-body">
+                <div class="metronome-top-row">
+                  <div class="metronome-control-block">
+                    <span class="metronome-label">Volume</span>
+                    <div class="knob metronome-knob">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="metronome-value">0.0 dB</span>
+                  </div>
+                  <div class="metronome-control-block wide">
+                    <span class="metronome-label">Time Signature</span>
+                    <select class="metronome-select" disabled>
+                      <option selected>4/4</option>
+                      <option>3/4</option>
+                      <option>6/8</option>
+                    </select>
+                  </div>
+                  <div class="metronome-control-block wide">
+                    <span class="metronome-label">Sound</span>
+                    <select class="metronome-select" disabled>
+                      <option selected>Click</option>
+                      <option>Electronic</option>
+                      <option>Drum</option>
+                    </select>
+                  </div>
+                  <div class="metronome-control-block">
+                    <span class="metronome-label">Pan</span>
+                    <div class="knob metronome-knob">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="metronome-value">C</span>
+                  </div>
+                </div>
+
+                <div class="metronome-divider"></div>
+
+                <div class="metronome-bottom-row">
+                  <div class="metronome-bpm-block">
+                    <span class="metronome-label">BPM</span>
+                    <div class="metronome-bpm-control">
+                      <div class="metronome-bpm-buttons">
+                        <button class="metronome-bpm-btn" id="metronome-bpm-up">▲</button>
+                        <button class="metronome-bpm-btn" id="metronome-bpm-down">▼</button>
+                      </div>
+                      <input type="number" id="metronome-bpm" min="30" max="300" step="1" class="metronome-bpm-input" />
+                    </div>
+                    <input type="range" id="metronome-bpm-slider" min="30" max="300" step="1" />
+                  </div>
+                  <button class="metronome-play" id="metronome-toggle" aria-label="Toggle metronome">
+                    <span class="metronome-play-icon">▶</span>
+                  </button>
+                </div>
+                <div class="metronome-footer">
+                  <span id="metronome-status">Stopped</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Amp Panel (Default) -->
         <div class="tab-panel active" id="panel-amp">
           <div class="amp-display">
@@ -330,22 +405,6 @@
               <button class="cab-btn" title="Cabinet 3">
                 <div class="cab-icon cab-4x12"></div>
               </button>
-            </div>
-
-            <!-- IR Quality Section -->
-            <div class="ir-quality-section">
-              <div class="ir-quality-header">
-                <span class="ir-quality-label">IR QUALITY</span>
-                <select id="ir-quality-select" class="ir-quality-select">
-                  <option value="0">Economy</option>
-                  <option value="1" selected>Standard</option>
-                  <option value="2">High</option>
-                  <option value="3">Full</option>
-                </select>
-              </div>
-              <div class="ir-quality-info">
-                <span id="ir-quality-samples">~2048 samples</span>
-              </div>
             </div>
 
             <!-- Simple Cab Section -->
@@ -686,6 +745,23 @@
               </div>
               <div class="settings-hint">Continuously report signal levels, headroom, and clipping for chain input/output and nodes.</div>
             </div>
+            <div class="settings-section">
+              <h3>IR Quality</h3>
+              <div class="ir-quality-section">
+                <div class="ir-quality-header">
+                  <span class="ir-quality-label">IR QUALITY</span>
+                  <select id="ir-quality-select" class="ir-quality-select">
+                    <option value="0">Economy</option>
+                    <option value="1" selected>Standard</option>
+                    <option value="2">High</option>
+                    <option value="3">Full</option>
+                  </select>
+                </div>
+                <div class="ir-quality-info">
+                  <span id="ir-quality-samples">~2048 samples</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -722,9 +798,18 @@
         <button class="footer-btn">MIDI</button>
         <span class="footer-divider">|</span>
         <button class="footer-btn">TAP</button>
-        <span class="bpm-display">120.0 BPM ⟳</span>
+        <button class="bpm-display metronome-only" id="footer-bpm-btn" title="Set BPM">
+          <span id="footer-bpm-value">120.0</span> BPM
+        </button>
+        <div class="footer-bpm-panel metronome-only" id="footer-bpm-panel" aria-hidden="true">
+          <label class="footer-bpm-field">
+            <span>BPM</span>
+            <input type="number" id="footer-bpm-input" min="30" max="300" step="1" />
+          </label>
+          <input type="range" id="footer-bpm-slider" min="30" max="300" step="1" />
+        </div>
         <span class="footer-divider">|</span>
-        <button class="footer-btn">
+        <button class="footer-btn metronome-only" id="footer-metronome-btn">
           <span class="play-icon">▶</span> METRONOME
         </button>
         <span class="footer-divider">|</span>

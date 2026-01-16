@@ -8,6 +8,7 @@ import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerR
 import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView } from "./settings.js";
+import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
 import type { Preset, UiSettings } from "./types.js";
 
 export function handleIncomingMessage(message: string): void {
@@ -48,6 +49,19 @@ export function handleIncomingMessage(message: string): void {
         uiState.uiSettings = uiSettings;
         applyUiSettings(uiSettings);
       }
+      const environment = (payload as { environment?: { standalone?: boolean } }).environment;
+      if (environment) {
+        applyEnvironmentState({ standalone: Boolean(environment.standalone) });
+      }
+      const metronome = (payload as { metronome?: { bpm?: number; enabled?: boolean; editable?: boolean; source?: string } }).metronome;
+      if (metronome) {
+        applyMetronomeState({
+          bpm: typeof metronome.bpm === "number" ? metronome.bpm : uiState.metronome?.bpm ?? 120,
+          enabled: Boolean(metronome.enabled),
+          editable: metronome.editable !== undefined ? Boolean(metronome.editable) : true,
+          source: metronome.source === "host" ? "host" : "app",
+        });
+      }
       uiState.signalTest = null;
       const preset = (payload as { preset?: Preset }).preset;
       if (preset) {
@@ -63,6 +77,16 @@ export function handleIncomingMessage(message: string): void {
       updatePresetActionButtons();
       showNotification("");
       refreshSettingsView();
+      break;
+    }
+    case "metronomeState": {
+      const metroPayload = payload as { bpm?: number; enabled?: boolean; editable?: boolean; source?: string };
+      applyMetronomeState({
+        bpm: typeof metroPayload.bpm === "number" ? metroPayload.bpm : uiState.metronome?.bpm ?? 120,
+        enabled: Boolean(metroPayload.enabled),
+        editable: metroPayload.editable !== undefined ? Boolean(metroPayload.editable) : true,
+        source: metroPayload.source === "host" ? "host" : "app",
+      });
       break;
     }
     case "presetLoaded": {

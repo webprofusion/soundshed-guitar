@@ -71,6 +71,221 @@ body {
   line-height: 1.5;
 }
 
+/* Standalone-only UI blocks */
+body:not(.is-standalone) .icon-bar .metronome-only,
+body:not(.is-standalone) .main-content .metronome-only {
+  display: none;
+}
+
+/* ===== Metronome Panel ===== */
+.metronome-card {
+  max-width: 960px;
+  margin: 0 auto;
+  border-radius: 16px;
+  background: var(--bg-dark-primary);
+  border: 1px solid var(--border-dark-light);
+  box-shadow: var(--shadow-xl);
+  color: var(--text-dark-primary);
+  overflow: hidden;
+}
+
+.metronome-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  background: var(--bg-dark-secondary);
+  border-bottom: 1px solid var(--border-dark-medium);
+}
+
+.metronome-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dark-primary);
+}
+
+.metronome-source {
+  font-size: 11px;
+  color: var(--text-dark-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metronome-card-body {
+  padding: 20px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.metronome-top-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  align-items: center;
+}
+
+.metronome-control-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.metronome-control-block.wide {
+  align-items: stretch;
+}
+
+.metronome-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dark-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.metronome-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  font-size: 12px;
+}
+
+.metronome-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.metronome-knob {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--knob-dark-bg);
+  border: 2px solid var(--knob-dark-border);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.08);
+}
+
+.metronome-knob .knob-indicator {
+  background: var(--knob-dark-indicator);
+}
+
+.metronome-value {
+  font-size: 11px;
+  color: var(--text-dark-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metronome-divider {
+  height: 1px;
+  background: var(--border-dark-medium);
+  opacity: 0.6;
+}
+
+.metronome-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.metronome-bpm-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.metronome-bpm-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metronome-bpm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metronome-bpm-btn {
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-secondary);
+  cursor: pointer;
+}
+
+.metronome-bpm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.metronome-bpm-input {
+  width: 140px;
+  border: none;
+  background: transparent;
+  color: var(--text-dark-primary);
+  font-size: 48px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.metronome-bpm-input::-webkit-outer-spin-button,
+.metronome-bpm-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.metronome-bpm-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+#metronome-bpm-slider {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.metronome-play {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-primary);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.metronome-play:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.metronome-play:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.metronome-play-icon {
+  font-size: 22px;
+}
+
+.metronome-footer {
+  font-size: 12px;
+  color: var(--text-dark-secondary);
+}
+
 /* Footer Bar */
 .footer-bar {
   display: flex;
@@ -81,6 +296,7 @@ body {
   color: var(--text-dark-tertiary);
   font-size: 11px;
   flex-shrink: 0;
+  position: relative;
 }
 
 .footer-btn {
@@ -104,6 +320,62 @@ body {
 
 .bpm-display {
   color: var(--text-dark-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.bpm-display.metronome-only {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.bpm-display.metronome-only:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bpm-display.metronome-only:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.footer-bpm-panel {
+  position: absolute;
+  bottom: 44px;
+  right: 260px;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  z-index: 50;
+}
+
+.footer-bpm-panel.open {
+  display: flex;
+}
+
+.footer-bpm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.footer-bpm-field input {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 

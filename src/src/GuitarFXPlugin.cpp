@@ -43,6 +43,13 @@ namespace guitarfx
   namespace
   {
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
+    constexpr const char* kMetronomeEnabledSettingKey = "metronome.enabled";
+    constexpr const char* kMetronomeBpmSettingKey = "metronome.bpm";
+    constexpr double kMetronomeDefaultBpm = 120.0;
+    constexpr double kMetronomeMinBpm = 30.0;
+    constexpr double kMetronomeMaxBpm = 300.0;
+    constexpr double kMetronomeClickSeconds = 0.02;
+    constexpr double kMetronomeClickFrequencyHz = 1800.0;
     constexpr double kMinDbFS = -120.0;
     constexpr double kMinLinear = 1e-6;
 
@@ -60,6 +67,16 @@ namespace guitarfx
       const double peakDb = ToDbFS(peak);
       return std::max(0.0, -peakDb);
     }
+
+    double ClampValue(double value, double minimum, double maximum)
+    {
+      return std::min(maximum, std::max(minimum, value));
+    }
+#ifdef APP_API
+    constexpr bool kIsStandaloneBuild = true;
+#else
+    constexpr bool kIsStandaloneBuild = false;
+#endif
     std::string SanitizeFilename(const std::string &raw)
     {
       std::string result;
@@ -956,6 +973,7 @@ namespace guitarfx
     }
 
     ProcessThroughGlobalChain(inputs, outputs, nFrames);
+    RenderMetronome(outputs, nFrames);
   }
 
   void GuitarFXPlugin::ProcessThroughGlobalChain(iplug::sample **inputs, iplug::sample **outputs, int nFrames)
@@ -1017,6 +1035,86 @@ namespace guitarfx
     }
   }
 
+  double GuitarFXPlugin::GetEffectiveTempoBpm() const
+  {
+    if (kIsStandaloneBuild)
+    {
+      return ClampValue(mMetronomeBpm.load(std::memory_order_relaxed), kMetronomeMinBpm, kMetronomeMaxBpm);
+    }
+
+    const double hostTempo = GetTempo();
+    if (hostTempo > 0.0)
+    {
+      return ClampValue(hostTempo, kMetronomeMinBpm, kMetronomeMaxBpm);
+    }
+
+    return kMetronomeDefaultBpm;
+  }
+
+  void GuitarFXPlugin::RenderMetronome(iplug::sample **outputs, int nFrames)
+  {
+    if (!outputs || !outputs[0] || !outputs[1])
+    {
+      return;
+    }
+
+    if (!kIsStandaloneBuild)
+    {
+      return;
+    }
+
+    const bool enabled = mMetronomeEnabled.load(std::memory_order_relaxed);
+    if (!enabled)
+    {
+      return;
+    }
+
+    if (mMetronomeResetPending.exchange(false, std::memory_order_acq_rel))
+    {
+      mMetronomeSamplesUntilClick = 0.0;
+      mMetronomeClickSamplesRemaining = 0;
+      mMetronomeClickPhase = 0.0;
+    }
+
+    const double bpm = GetEffectiveTempoBpm();
+    const double sampleRate = GetSampleRate();
+    const double samplesPerBeat = sampleRate * (60.0 / std::max(1.0, bpm));
+    const int clickSamples = std::max(1, static_cast<int>(sampleRate * kMetronomeClickSeconds));
+
+    if (sampleRate > 0.0)
+    {
+      mMetronomeClickPhaseIncrement = kTwoPi * kMetronomeClickFrequencyHz / sampleRate;
+    }
+
+    const double volume = ClampValue(mMetronomeVolume.load(std::memory_order_relaxed), 0.0, 1.0);
+
+    for (int frame = 0; frame < nFrames; ++frame)
+    {
+      if (mMetronomeSamplesUntilClick <= 0.0)
+      {
+        mMetronomeClickSamplesRemaining = clickSamples;
+        mMetronomeSamplesUntilClick += samplesPerBeat;
+      }
+
+      float clickSample = 0.0f;
+      if (mMetronomeClickSamplesRemaining > 0)
+      {
+        const double envelope = static_cast<double>(mMetronomeClickSamplesRemaining) / static_cast<double>(clickSamples);
+        clickSample = static_cast<float>(std::sin(mMetronomeClickPhase) * envelope * volume);
+        mMetronomeClickPhase += mMetronomeClickPhaseIncrement;
+        if (mMetronomeClickPhase >= kTwoPi)
+        {
+          mMetronomeClickPhase -= kTwoPi;
+        }
+        --mMetronomeClickSamplesRemaining;
+      }
+
+      outputs[0][frame] += clickSample;
+      outputs[1][frame] += clickSample;
+      mMetronomeSamplesUntilClick -= 1.0;
+    }
+  }
+
   void GuitarFXPlugin::OnReset()
   {
     // Lock DSP mutex during prepare/reset
@@ -1035,6 +1133,9 @@ namespace guitarfx
     mPreviewStartedBuffer.store(nullptr, std::memory_order_release);
     mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
     mPreviewCursor.store(0, std::memory_order_release);
+    mMetronomeSamplesUntilClick = 0.0;
+    mMetronomeClickSamplesRemaining = 0;
+    mMetronomeClickPhase = 0.0;
   }
   // ============================
   // MultiPresetMixer controller
@@ -1205,6 +1306,21 @@ namespace guitarfx
           std::cout << "[Plugin] UI failed to become ready after retries" << std::endl;
           mUIReloadAttempts = 0;
           mUIReloadInProgress = false;
+        }
+      }
+    }
+
+    if (mUIVisible)
+    {
+      mMetronomeUpdateCounter++;
+      if (mMetronomeUpdateCounter >= 60)
+      {
+        mMetronomeUpdateCounter = 0;
+        const double bpm = GetEffectiveTempoBpm();
+        if (std::abs(bpm - mLastBroadcastTempo) > 0.01)
+        {
+          mLastBroadcastTempo = bpm;
+          SendMetronomeStateToUI();
         }
       }
     }
@@ -1945,6 +2061,10 @@ namespace guitarfx
     {
       HandleSetAutoLevelRequest(payload);
     }
+    else if (type == "setMetronome")
+    {
+      HandleSetMetronomeRequest(payload);
+    }
     else if (type == "updateSignalPathNodeParam")
     {
       HandleUpdateSignalPathNodeParamRequest(payload);
@@ -2067,6 +2187,15 @@ namespace guitarfx
     }
     message["uiSettings"] = std::move(uiSettings);
     message["appSettings"] = mAppSettings;
+    message["environment"] = {
+      {"standalone", kIsStandaloneBuild}
+    };
+    message["metronome"] = {
+      {"bpm", GetEffectiveTempoBpm()},
+      {"enabled", mMetronomeEnabled.load(std::memory_order_relaxed)},
+      {"editable", kIsStandaloneBuild},
+      {"source", kIsStandaloneBuild ? "app" : "host"}
+    };
 
     if (mActivePreset)
     {
@@ -2122,6 +2251,17 @@ namespace guitarfx
       
       SendMessageToUI(perfMessage.dump());
     }
+  }
+
+  void GuitarFXPlugin::SendMetronomeStateToUI()
+  {
+    nlohmann::json message;
+    message["type"] = "metronomeState";
+    message["bpm"] = GetEffectiveTempoBpm();
+    message["enabled"] = mMetronomeEnabled.load(std::memory_order_relaxed);
+    message["editable"] = kIsStandaloneBuild;
+    message["source"] = kIsStandaloneBuild ? "app" : "host";
+    SendMessageToUI(message.dump());
   }
 
   void GuitarFXPlugin::EnsureBasicGraph()
@@ -2906,6 +3046,38 @@ namespace guitarfx
     message["autoInput"] = mPresetMixer.GetAutoLevelInput();
     message["autoOutput"] = mPresetMixer.GetAutoLevelOutput();
     SendMessageToUI(message.dump());
+  }
+
+  void GuitarFXPlugin::HandleSetMetronomeRequest(const nlohmann::json &payload)
+  {
+    if (!kIsStandaloneBuild)
+    {
+      return;
+    }
+
+    bool changed = false;
+    if (payload.contains("bpm") && payload["bpm"].is_number())
+    {
+      const double bpm = ClampValue(payload.value("bpm", kMetronomeDefaultBpm), kMetronomeMinBpm, kMetronomeMaxBpm);
+      mMetronomeBpm.store(bpm, std::memory_order_release);
+      mAppSettings[kMetronomeBpmSettingKey] = bpm;
+      changed = true;
+    }
+
+    if (payload.contains("enabled") && payload["enabled"].is_boolean())
+    {
+      const bool enabled = payload.value("enabled", false);
+      mMetronomeEnabled.store(enabled, std::memory_order_release);
+      mAppSettings[kMetronomeEnabledSettingKey] = enabled;
+      changed = true;
+    }
+
+    if (changed)
+    {
+      mMetronomeResetPending.store(true, std::memory_order_release);
+      SaveAppSettings();
+      mPendingStateBroadcast = true;
+    }
   }
 
   void GuitarFXPlugin::HandleUpdateSignalPathNodeParamRequest(const nlohmann::json &payload)
@@ -3817,6 +3989,31 @@ namespace guitarfx
           }
           mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
           mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
+        }
+
+        if (kIsStandaloneBuild)
+        {
+          const auto bpmIt = mAppSettings.find(kMetronomeBpmSettingKey);
+          if (bpmIt != mAppSettings.end() && bpmIt->is_number())
+          {
+            const double bpm = ClampValue(bpmIt->get<double>(), kMetronomeMinBpm, kMetronomeMaxBpm);
+            mMetronomeBpm.store(bpm, std::memory_order_release);
+          }
+
+          const auto enabledIt = mAppSettings.find(kMetronomeEnabledSettingKey);
+          if (enabledIt != mAppSettings.end())
+          {
+            bool enabled = false;
+            if (enabledIt->is_boolean())
+            {
+              enabled = enabledIt->get<bool>();
+            }
+            else if (enabledIt->is_number())
+            {
+              enabled = enabledIt->get<double>() != 0.0;
+            }
+            mMetronomeEnabled.store(enabled, std::memory_order_release);
+          }
         }
       }
 

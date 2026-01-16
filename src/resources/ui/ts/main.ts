@@ -20,6 +20,7 @@ import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./de
 import { initSettingsPanel, updateSettingsSessionStatus } from "./settings.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { postMessage } from "./bridge.js";
+import { initializeMetronome } from "./metronome.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -106,6 +107,7 @@ async function bootstrap(): Promise<void> {
   initializeSaveAsButton();
   initializePresetActionButtons();
   initializeTuner();
+  initializeMetronome();
   initFxSelector();
   startUiSettingsTracking();
 

@@ -96,6 +96,8 @@ export const uiState: UiState = {
   dspPerformanceHistory: [],
   globalSignalChain: { ...DEFAULT_GLOBAL_SIGNAL_CHAIN },
   signalDiagnostics: null,
+  environment: { standalone: false },
+  metronome: { bpm: 120, enabled: false, editable: true, source: "app" },
 };
 
 export function clonePreset<T extends Preset | null>(preset: T): T {

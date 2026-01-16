@@ -251,6 +251,17 @@ export interface SignalLevelDiagnostics {
   timestamp?: number;
 }
 
+export interface EnvironmentState {
+  standalone: boolean;
+}
+
+export interface MetronomeState {
+  bpm: number;
+  enabled: boolean;
+  editable: boolean;
+  source: "app" | "host";
+}
+
 export interface UiState {
   presets: Preset[];
   filteredPresets: Preset[];
@@ -270,6 +281,8 @@ export interface UiState {
   dspPerformanceHistory: DSPPerformanceStats[];
   globalSignalChain?: GlobalSignalChainConfig;
   signalDiagnostics?: SignalLevelDiagnostics | null;
+  environment?: EnvironmentState;
+  metronome?: MetronomeState;
 }
 
 declare global {
