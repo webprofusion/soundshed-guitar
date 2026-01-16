@@ -49,3 +49,5 @@ src/resources/amps/
 src/resources/ir/
 
 Testing/Temporary/
+
+.cache/
