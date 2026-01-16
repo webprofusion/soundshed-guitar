@@ -937,6 +937,7 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
       sendParameter: false,
       onValueChange: (value) => {
         if (nodeId && paramKey) {
+          node.params[paramKey] = value;
           sendSignalPathNodeParamUpdate(nodeId, paramKey, value);
         }
       },

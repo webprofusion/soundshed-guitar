@@ -2653,176 +2653,27 @@ namespace guitarfx
       return;
     }
 
-    // Build the preset using V2 format with signal graph
-    Preset newPreset;
+    EnsureBasicGraph();
+    if (!mActivePreset)
+    {
+      ReportErrorToUI("Cannot save preset", "No active preset to save");
+      return;
+    }
+
+    // Build the preset from the active signal graph (V2 format)
+    Preset newPreset = *mActivePreset;
     newPreset.id = "user-" + std::to_string(std::time(nullptr));
     newPreset.name = presetName;
     newPreset.category = presetCategory;
     newPreset.description = presetDescription;
     newPreset.version = 2;
 
-    // Capture global settings from current parameters
+    // Capture global preset settings (but not global FX chain settings)
     if (auto *param = GetParam(kParamInputTrim)) newPreset.global.inputTrim = param->Value();
     if (auto *param = GetParam(kParamOutputTrim)) newPreset.global.outputTrim = param->Value();
     if (auto *param = GetParam(kParamTranspose)) newPreset.global.transpose = static_cast<int>(param->Value());
     newPreset.global.autoLevelInput = mPresetMixer.GetAutoLevelInput();
     newPreset.global.autoLevelOutput = mPresetMixer.GetAutoLevelOutput();
-
-    // Build the signal graph nodes
-
-    // Input node (always first)
-    GraphNode inputNode;
-    inputNode.id = "__input__";
-    inputNode.type = kNodeTypeInput;
-    inputNode.category = "routing";
-    newPreset.graph.nodes.push_back(inputNode);
-
-    const auto findNodeResource = [this](const std::string &type) -> std::optional<ResourceRef>
-    {
-      if (!mActivePreset)
-        return std::nullopt;
-      for (const auto &node : mActivePreset->graph.nodes)
-      {
-        if (node.type == type && node.resource)
-        {
-          return node.resource;
-        }
-      }
-      return std::nullopt;
-    };
-
-    // Add NAM amp node if the current preset graph contains one with a resource
-    if (auto ampRes = findNodeResource("amp_nam"))
-    {
-      GraphNode ampNode;
-      ampNode.id = "amp";
-      ampNode.type = "amp_nam";
-      ampNode.category = "amp";
-      ampNode.enabled = true;
-      ampNode.resource = ampRes;
-
-      // Capture amp parameters
-      if (auto *param = GetParam(kParamDrive)) ampNode.params["drive"] = param->Value();
-      if (auto *param = GetParam(kParamTone)) ampNode.params["tone"] = param->Value();
-      if (auto *param = GetParam(kParamMix)) ampNode.params["mix"] = param->Value();
-
-      newPreset.graph.nodes.push_back(ampNode);
-    }
-
-    // Add noise gate node
-    if (auto *param = GetParam(kParamGateEnabled))
-    {
-      GraphNode gateNode;
-      gateNode.id = "gate";
-      gateNode.type = "dynamics_gate";
-      gateNode.category = "dynamics";
-      gateNode.enabled = param->Value() > 0.5;
-
-      if (auto *threshParam = GetParam(kParamGateThreshold))
-        gateNode.params["threshold"] = threshParam->Value();
-
-      newPreset.graph.nodes.push_back(gateNode);
-    }
-
-    // Add IR cab node if the current preset graph contains one with a resource
-    if (auto irRes = findNodeResource("ir_cab"))
-    {
-      GraphNode cabNode;
-      cabNode.id = "cab";
-      cabNode.type = "ir_cab";
-      cabNode.category = "cab";
-      cabNode.enabled = true;
-      cabNode.resource = irRes;
-
-      newPreset.graph.nodes.push_back(cabNode);
-    }
-
-    // Add simple cab node
-    if (auto *param = GetParam(kParamSimpleCabEnabled))
-    {
-      GraphNode simpleCabNode;
-      simpleCabNode.id = "simple_cab";
-      simpleCabNode.type = "simple_cab";
-      simpleCabNode.category = "cab";
-      simpleCabNode.enabled = param->Value() > 0.5;
-
-      if (auto *p = GetParam(kParamSimpleCabBass)) simpleCabNode.params["bass"] = p->Value();
-      if (auto *p = GetParam(kParamSimpleCabPresence)) simpleCabNode.params["presence"] = p->Value();
-      if (auto *p = GetParam(kParamSimpleCabBrightness)) simpleCabNode.params["brightness"] = p->Value();
-
-      newPreset.graph.nodes.push_back(simpleCabNode);
-    }
-
-    // Add EQ node
-    if (auto *param = GetParam(kParamEQEnabled))
-    {
-      GraphNode eqNode;
-      eqNode.id = "eq";
-      eqNode.type = "eq_parametric";
-      eqNode.category = "eq";
-      eqNode.enabled = param->Value() > 0.5;
-
-      if (auto *p = GetParam(kParamEQLowGain)) eqNode.params["lowGain"] = p->Value();
-      if (auto *p = GetParam(kParamEQLowFreq)) eqNode.params["lowFreq"] = p->Value();
-      if (auto *p = GetParam(kParamEQLowMidGain)) eqNode.params["lowMidGain"] = p->Value();
-      if (auto *p = GetParam(kParamEQLowMidFreq)) eqNode.params["lowMidFreq"] = p->Value();
-      if (auto *p = GetParam(kParamEQLowMidQ)) eqNode.params["lowMidQ"] = p->Value();
-      if (auto *p = GetParam(kParamEQHighMidGain)) eqNode.params["highMidGain"] = p->Value();
-      if (auto *p = GetParam(kParamEQHighMidFreq)) eqNode.params["highMidFreq"] = p->Value();
-      if (auto *p = GetParam(kParamEQHighMidQ)) eqNode.params["highMidQ"] = p->Value();
-      if (auto *p = GetParam(kParamEQHighGain)) eqNode.params["highGain"] = p->Value();
-      if (auto *p = GetParam(kParamEQHighFreq)) eqNode.params["highFreq"] = p->Value();
-
-      newPreset.graph.nodes.push_back(eqNode);
-    }
-
-    // Add delay node
-    if (auto *param = GetParam(kParamDelayEnabled))
-    {
-      GraphNode delayNode;
-      delayNode.id = "delay";
-      delayNode.type = "delay";
-      delayNode.category = "fx";
-      delayNode.enabled = param->Value() > 0.5;
-
-      if (auto *p = GetParam(kParamDelayTime)) delayNode.params["time"] = p->Value();
-      if (auto *p = GetParam(kParamDelayFeedback)) delayNode.params["feedback"] = p->Value();
-      if (auto *p = GetParam(kParamDelayMix)) delayNode.params["mix"] = p->Value();
-
-      newPreset.graph.nodes.push_back(delayNode);
-    }
-
-    // Add reverb node
-    if (auto *param = GetParam(kParamReverbEnabled))
-    {
-      GraphNode reverbNode;
-      reverbNode.id = "reverb";
-      reverbNode.type = "reverb";
-      reverbNode.category = "fx";
-      reverbNode.enabled = param->Value() > 0.5;
-
-      if (auto *p = GetParam(kParamReverbDecay)) reverbNode.params["decay"] = p->Value();
-      if (auto *p = GetParam(kParamReverbDamping)) reverbNode.params["damping"] = p->Value();
-      if (auto *p = GetParam(kParamReverbMix)) reverbNode.params["mix"] = p->Value();
-
-      newPreset.graph.nodes.push_back(reverbNode);
-    }
-
-    // Output node (always last)
-    GraphNode outputNode;
-    outputNode.id = "__output__";
-    outputNode.type = kNodeTypeOutput;
-    outputNode.category = "routing";
-    newPreset.graph.nodes.push_back(outputNode);
-
-    // Build edges (linear chain for now)
-    for (size_t i = 0; i < newPreset.graph.nodes.size() - 1; ++i)
-    {
-      GraphEdge edge;
-      edge.from = newPreset.graph.nodes[i].id;
-      edge.to = newPreset.graph.nodes[i + 1].id;
-      newPreset.graph.edges.push_back(edge);
-    }
 
     // Save preset to file in user presets directory
     if (mUserPresetsPath.empty())
@@ -3103,37 +2954,55 @@ namespace guitarfx
         mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
         
         // Apply just the changed parameter based on node type (without full preset reload)
-        ApplyNodeParameter(*node, paramKey, value);
+        const bool handled = ApplyNodeParameter(*node, paramKey, value);
+        if (!handled)
+        {
+          // Fallback: re-apply the preset so new node param values take effect immediately.
+          ApplyPreset(*mActivePreset);
+        }
         
         // Don't broadcast state on every param change during drag - too noisy
       }
     }
   }
 
-  void GuitarFXPlugin::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
+  bool GuitarFXPlugin::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
   {
+    bool handled = false;
+    auto applyParam = [&](ParameterId id)
+    {
+      auto *param = GetParam(static_cast<int>(id));
+      if (!param)
+      {
+        return false;
+      }
+      param->Set(value);
+      OnParamChange(static_cast<int>(id));
+      return true;
+    };
+
     // Map node type and param key to plugin parameter
     if (node.type == "amp_nam" || node.type == "nam_amp" || node.type == "nam")
     {
       if (paramKey == "drive")
       {
         auto *param = GetParam(kParamDrive);
-        if (param) { param->Set(value); OnParamChange(kParamDrive); }
+        if (param) { param->Set(value); OnParamChange(kParamDrive); handled = true; }
       }
       else if (paramKey == "tone")
       {
         auto *param = GetParam(kParamTone);
-        if (param) { param->Set(value); OnParamChange(kParamTone); }
+        if (param) { param->Set(value); OnParamChange(kParamTone); handled = true; }
       }
       else if (paramKey == "inputGain")
       {
         auto *param = GetParam(kParamInputTrim);
-        if (param) { param->Set(value); OnParamChange(kParamInputTrim); }
+        if (param) { param->Set(value); OnParamChange(kParamInputTrim); handled = true; }
       }
       else if (paramKey == "outputGain")
       {
         auto *param = GetParam(kParamOutputTrim);
-        if (param) { param->Set(value); OnParamChange(kParamOutputTrim); }
+        if (param) { param->Set(value); OnParamChange(kParamOutputTrim); handled = true; }
       }
     }
     else if (node.type == "dynamics_gate" || node.type == "noise_gate" || node.type == "gate")
@@ -3141,45 +3010,38 @@ namespace guitarfx
       if (paramKey == "threshold")
       {
         auto *param = GetParam(kParamGateThreshold);
-        if (param) { param->Set(value); OnParamChange(kParamGateThreshold); }
+        if (param) { param->Set(value); OnParamChange(kParamGateThreshold); handled = true; }
       }
     }
     else if (node.type == "eq_parametric" || node.type == "eq")
     {
-      std::optional<ParameterId> paramId;
-      if (paramKey == "lowGain") paramId = kParamEQLowGain;
-      else if (paramKey == "lowFreq") paramId = kParamEQLowFreq;
-      else if (paramKey == "lowMidGain") paramId = kParamEQLowMidGain;
-      else if (paramKey == "lowMidFreq") paramId = kParamEQLowMidFreq;
-      else if (paramKey == "lowMidQ") paramId = kParamEQLowMidQ;
-      else if (paramKey == "highMidGain") paramId = kParamEQHighMidGain;
-      else if (paramKey == "highMidFreq") paramId = kParamEQHighMidFreq;
-      else if (paramKey == "highMidQ") paramId = kParamEQHighMidQ;
-      else if (paramKey == "highGain") paramId = kParamEQHighGain;
-      else if (paramKey == "highFreq") paramId = kParamEQHighFreq;
-
-      if (paramId)
-      {
-        auto *param = GetParam(static_cast<int>(*paramId));
-        if (param) { param->Set(value); OnParamChange(static_cast<int>(*paramId)); }
-      }
+      if (paramKey == "lowGain" || paramKey == "band0_gain") handled = applyParam(kParamEQLowGain) || handled;
+      else if (paramKey == "lowFreq" || paramKey == "band0_freq") handled = applyParam(kParamEQLowFreq) || handled;
+      else if (paramKey == "lowMidGain" || paramKey == "band1_gain") handled = applyParam(kParamEQLowMidGain) || handled;
+      else if (paramKey == "lowMidFreq" || paramKey == "band1_freq") handled = applyParam(kParamEQLowMidFreq) || handled;
+      else if (paramKey == "lowMidQ" || paramKey == "band1_q") handled = applyParam(kParamEQLowMidQ) || handled;
+      else if (paramKey == "highMidGain" || paramKey == "band2_gain") handled = applyParam(kParamEQHighMidGain) || handled;
+      else if (paramKey == "highMidFreq" || paramKey == "band2_freq") handled = applyParam(kParamEQHighMidFreq) || handled;
+      else if (paramKey == "highMidQ" || paramKey == "band2_q") handled = applyParam(kParamEQHighMidQ) || handled;
+      else if (paramKey == "highGain" || paramKey == "band3_gain") handled = applyParam(kParamEQHighGain) || handled;
+      else if (paramKey == "highFreq" || paramKey == "band3_freq") handled = applyParam(kParamEQHighFreq) || handled;
     }
     else if (node.type == "delay_digital" || node.type == "delay")
     {
       if (paramKey == "time")
       {
         auto *param = GetParam(kParamDelayTime);
-        if (param) { param->Set(value); OnParamChange(kParamDelayTime); }
+        if (param) { param->Set(value); OnParamChange(kParamDelayTime); handled = true; }
       }
       else if (paramKey == "feedback")
       {
         auto *param = GetParam(kParamDelayFeedback);
-        if (param) { param->Set(value); OnParamChange(kParamDelayFeedback); }
+        if (param) { param->Set(value); OnParamChange(kParamDelayFeedback); handled = true; }
       }
       else if (paramKey == "mix")
       {
         auto *param = GetParam(kParamDelayMix);
-        if (param) { param->Set(value); OnParamChange(kParamDelayMix); }
+        if (param) { param->Set(value); OnParamChange(kParamDelayMix); handled = true; }
       }
     }
     else if (node.type == "reverb_room" || node.type == "reverb")
@@ -3187,17 +3049,17 @@ namespace guitarfx
       if (paramKey == "decay")
       {
         auto *param = GetParam(kParamReverbDecay);
-        if (param) { param->Set(value); OnParamChange(kParamReverbDecay); }
+        if (param) { param->Set(value); OnParamChange(kParamReverbDecay); handled = true; }
       }
       else if (paramKey == "damping")
       {
         auto *param = GetParam(kParamReverbDamping);
-        if (param) { param->Set(value); OnParamChange(kParamReverbDamping); }
+        if (param) { param->Set(value); OnParamChange(kParamReverbDamping); handled = true; }
       }
       else if (paramKey == "mix")
       {
         auto *param = GetParam(kParamReverbMix);
-        if (param) { param->Set(value); OnParamChange(kParamReverbMix); }
+        if (param) { param->Set(value); OnParamChange(kParamReverbMix); handled = true; }
       }
     }
     else if (node.type == "cab_simple" || node.type == "simple_cab")
@@ -3205,19 +3067,21 @@ namespace guitarfx
       if (paramKey == "bass")
       {
         auto *param = GetParam(kParamSimpleCabBass);
-        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBass); }
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBass); handled = true; }
       }
       else if (paramKey == "presence")
       {
         auto *param = GetParam(kParamSimpleCabPresence);
-        if (param) { param->Set(value); OnParamChange(kParamSimpleCabPresence); }
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabPresence); handled = true; }
       }
       else if (paramKey == "brightness")
       {
         auto *param = GetParam(kParamSimpleCabBrightness);
-        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBrightness); }
+        if (param) { param->Set(value); OnParamChange(kParamSimpleCabBrightness); handled = true; }
       }
     }
+
+    return handled;
   }
 
   void GuitarFXPlugin::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::json &payload)
@@ -3858,9 +3722,12 @@ namespace guitarfx
 
       nlohmann::json settings;
       
-      // Save last preset info
-      settings["lastPresetId"] = mActivePresetId;
-      settings["lastPresetJson"] = mActivePresetJson;
+      // Save last preset info (standalone only)
+      if (kIsStandaloneBuild)
+      {
+        settings["lastPresetId"] = mActivePresetId;
+        settings["lastPresetJson"] = mActivePresetJson;
+      }
 
       // UI settings
       nlohmann::json uiSettings;
@@ -3953,9 +3820,12 @@ namespace guitarfx
         return;
       }
 
-      // Restore paths
-      mActivePresetId = settings.value("lastPresetId", "");
-      mActivePresetJson = settings.value("lastPresetJson", "");
+      // Restore last preset (standalone only)
+      if (kIsStandaloneBuild)
+      {
+        mActivePresetId = settings.value("lastPresetId", "");
+        mActivePresetJson = settings.value("lastPresetJson", "");
+      }
 
       // Restore UI settings
       if (settings.contains("uiSettings") && settings["uiSettings"].is_object())

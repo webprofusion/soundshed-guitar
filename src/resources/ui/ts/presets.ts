@@ -413,7 +413,9 @@ export function saveCurrentPreset(): void {
   }
 
   // Creating new preset
+  const basePreset = clonePreset(activePreset ?? ({} as Preset));
   const newPreset: Preset = {
+    ...basePreset,
     id: `${Date.now()}`,
     name,
     category,

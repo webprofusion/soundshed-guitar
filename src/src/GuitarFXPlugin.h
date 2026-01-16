@@ -160,7 +160,7 @@ namespace guitarfx
     void ProcessThroughGlobalChain(iplug::sample **inputs, iplug::sample **outputs, int nFrames);
     void BroadcastState();
     void ApplyPreset(const guitarfx::Preset &preset);
-    void ApplyNodeParameter(const guitarfx::GraphNode& node, const std::string& paramKey, double value);
+    bool ApplyNodeParameter(const guitarfx::GraphNode& node, const std::string& paramKey, double value);
     void ReportErrorToUI(std::string_view message, std::string_view detail = {});
     [[nodiscard]] std::optional<std::filesystem::path> ResolveResourceRef(const ResourceRef &ref) const;
     [[nodiscard]] static std::vector<std::uint8_t> DecodeBase64(const std::string &encoded);
