@@ -3,7 +3,7 @@ import { setAppSetting } from "./bridge.js";
 import { postMessage, setParameter } from "./bridge.js";
 import { uiState } from "./state.js";
 
-interface KnobConfig {
+export interface KnobConfig {
   knobElement: HTMLElement;
   paramId: string;
   minValue: number;
@@ -11,11 +11,14 @@ interface KnobConfig {
   defaultValue: number;
   displayFormat: (value: number) => string;
   valueDisplayId?: string;
+  valueDisplay?: HTMLElement | null;
   sensitivity?: number;
   onValueChange?: (value: number) => void;
+  onValueCommit?: (value: number) => void;
+  sendParameter?: boolean;
 }
 
-class GenericKnob {
+export class GenericKnob {
   private knobElement: HTMLElement;
   private paramId: string;
   private minValue: number;
@@ -26,6 +29,8 @@ class GenericKnob {
   private valueDisplay: HTMLElement | null;
   private sensitivity: number;
   private onValueChange?: (value: number) => void;
+  private onValueCommit?: (value: number) => void;
+  private sendParameter: boolean;
   private isDragging = false;
   private startY = 0;
   private startValue = 0;
@@ -40,10 +45,11 @@ class GenericKnob {
     this.displayFormat = config.displayFormat;
     this.sensitivity = config.sensitivity ?? 0.5;
     this.onValueChange = config.onValueChange;
+    this.onValueCommit = config.onValueCommit;
+    this.sendParameter = config.sendParameter ?? true;
     
-    this.valueDisplay = config.valueDisplayId 
-      ? document.getElementById(config.valueDisplayId) 
-      : null;
+    this.valueDisplay = config.valueDisplay
+      ?? (config.valueDisplayId ? document.getElementById(config.valueDisplayId) : null);
 
     this.initialize();
   }
@@ -70,11 +76,17 @@ class GenericKnob {
     e.preventDefault();
     e.stopPropagation();
     this.setValue(this.defaultValue);
-    setParameter(this.paramId, this.defaultValue);
-    appendLog(`${this.paramId} → ${this.defaultValue.toFixed(2)} (reset to default)`);
+    if (this.sendParameter) {
+      setParameter(this.paramId, this.defaultValue);
+      appendLog(`${this.paramId} → ${this.defaultValue.toFixed(2)} (reset to default)`);
+    }
     
     if (this.onValueChange) {
       this.onValueChange(this.defaultValue);
+    }
+
+    if (this.onValueCommit) {
+      this.onValueCommit(this.defaultValue);
     }
   }
 
@@ -97,7 +109,9 @@ class GenericKnob {
     this.updateDisplay(newValue);
     
     // Send parameter value while dragging
-    setParameter(this.paramId, this.currentValue);
+    if (this.sendParameter) {
+      setParameter(this.paramId, this.currentValue);
+    }
     
     if (this.onValueChange) {
       this.onValueChange(this.currentValue);
@@ -109,8 +123,14 @@ class GenericKnob {
     
     this.isDragging = false;
     // Final value send and log on release
-    setParameter(this.paramId, this.currentValue);
-    appendLog(`${this.paramId} → ${this.currentValue.toFixed(2)}`);
+    if (this.sendParameter) {
+      setParameter(this.paramId, this.currentValue);
+      appendLog(`${this.paramId} → ${this.currentValue.toFixed(2)}`);
+    }
+
+    if (this.onValueCommit) {
+      this.onValueCommit(this.currentValue);
+    }
   }
 
   private updateDisplay(value: number): void {

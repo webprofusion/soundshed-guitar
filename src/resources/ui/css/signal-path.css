@@ -942,36 +942,8 @@
 }
 
 .node-param-knob {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #4a4a5a, #3a3a4a);
-  border-radius: 50%;
-  position: relative;
-  cursor: pointer;
-  border: 2px solid #5a5a6a;
-  box-shadow: 
-    0 2px 6px var(--overlay-darker),
-    inset 0 1px 0 rgba(255,255,255,0.1);
-  transition: all 0.2s;
-}
-
-.node-param-knob:hover {
-  border-color: var(--color-primary);
-  box-shadow: 
-    0 2px 8px rgba(224, 120, 72, 0.3),
-    inset 0 1px 0 rgba(255,255,255,0.1);
-}
-
-.node-param-knob .knob-indicator {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  width: 3px;
-  height: 12px;
-  background: var(--color-primary);
-  border-radius: 2px;
-  transform: translateX(-50%);
-  transform-origin: center 16px;
+  width: 40px;
+  height: 40px;
 }
 
 .node-param-value {

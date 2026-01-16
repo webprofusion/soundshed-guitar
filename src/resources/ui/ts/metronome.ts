@@ -1,5 +1,6 @@
 import { uiState } from "./state.js";
 import { setMetronome } from "./bridge.js";
+import { GenericKnob } from "./controls.js";
 import type { EnvironmentState, MetronomeState } from "./types.js";
 
 const BPM_MIN = 30;
@@ -139,6 +140,51 @@ function syncMetronomeControls(): void {
   if (bpmDownButton) bpmDownButton.disabled = !editable;
 }
 
+function initializeMetronomeKnobs(): void {
+  const { panel } = getMetronomeElements();
+  if (!panel) {
+    return;
+  }
+
+  const volumeKnob = panel.querySelector<HTMLElement>(
+    '.metronome-knob[data-param="metronome_volume"]',
+  );
+  if (volumeKnob) {
+    new GenericKnob({
+      knobElement: volumeKnob,
+      paramId: "metronome_volume",
+      minValue: -60,
+      maxValue: 6,
+      defaultValue: 0,
+      displayFormat: (value) => `${value.toFixed(1)} dB`,
+      valueDisplayId: "metronome-volume-value",
+      sensitivity: 0.5,
+      sendParameter: false,
+    });
+  }
+
+  const panKnob = panel.querySelector<HTMLElement>(
+    '.metronome-knob[data-param="metronome_pan"]',
+  );
+  if (panKnob) {
+    new GenericKnob({
+      knobElement: panKnob,
+      paramId: "metronome_pan",
+      minValue: -1,
+      maxValue: 1,
+      defaultValue: 0,
+      displayFormat: (value) => {
+        if (Math.abs(value) < 0.01) return "C";
+        const direction = value < 0 ? "L" : "R";
+        return `${direction}${Math.round(Math.abs(value) * 100)}`;
+      },
+      valueDisplayId: "metronome-pan-value",
+      sensitivity: 0.02,
+      sendParameter: false,
+    });
+  }
+}
+
 function applyBodyStandaloneClass(): void {
   document.body.classList.toggle("is-standalone", isStandalone());
 }
@@ -195,6 +241,8 @@ export function initializeMetronome(): void {
   if (!panel) {
     // Still wire footer BPM if panel is not mounted yet
   }
+
+  initializeMetronomeKnobs();
 
   if (bpmInput) {
     bpmInput.addEventListener("change", () => {
