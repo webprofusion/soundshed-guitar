@@ -1,6 +1,7 @@
 #pragma once
 
 // Include all effect implementations
+#include "dsp/EffectProcessor.h"
 #include "dsp/effects/GainEffect.h"
 #include "dsp/effects/NoiseGateEffect.h"
 #include "dsp/effects/ParametricEQEffect.h"
@@ -25,6 +26,25 @@ namespace guitarfx
   {
     // Utility effects
     RegisterGainEffect();
+    {
+      EffectTypeInfo splitterInfo;
+      splitterInfo.type = "splitter";
+      splitterInfo.displayName = "Splitter";
+      splitterInfo.category = "utility";
+      splitterInfo.description = "Split signal into parallel branches";
+      splitterInfo.requiresResource = false;
+      EffectRegistry::Instance().Register("splitter", splitterInfo, []()
+        { return std::make_unique<PassthroughProcessor>(); });
+
+      EffectTypeInfo mixerInfo;
+      mixerInfo.type = "mixer";
+      mixerInfo.displayName = "Mixer";
+      mixerInfo.category = "utility";
+      mixerInfo.description = "Mix parallel branches";
+      mixerInfo.requiresResource = false;
+      EffectRegistry::Instance().Register("mixer", mixerInfo, []()
+        { return std::make_unique<PassthroughProcessor>(); });
+    }
 
     // Dynamics
     RegisterNoiseGateEffect();

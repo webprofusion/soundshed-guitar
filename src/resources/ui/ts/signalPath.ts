@@ -269,15 +269,6 @@ function renderConnectorWrapper(edge: EdgeRef, opts?: { showSplit?: boolean }): 
               title="Add Effect">
         <span class="add-icon">+</span>
       </button>
-      ${showSplit ? `
-        <button class="signal-split-btn"
-                data-edge-from="${edge.from}"
-                data-edge-to="${edge.to}"
-                data-edge-from-port="${edge.fromPort}"
-                data-edge-to-port="${edge.toPort}"
-                data-edge-gain="${edge.gain}"
-                title="Split to parallel paths">⤢</button>
-      ` : ""}
     </div>
   `;
 }
@@ -731,19 +722,6 @@ function bindConnectorDropHandlers(preset: Preset): void {
 }
 
 function bindSplitAndCollapseHandlers(): void {
-  // Split edge button
-  const splitButtons = signalPathNodesElement?.querySelectorAll(".signal-split-btn");
-  splitButtons?.forEach((btn) => {
-    btn.addEventListener("click", (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const edge = parseEdgeFromDataset(btn as HTMLElement);
-      if (edge) {
-        sendSplitSignalPathEdge(edge);
-      }
-    });
-  });
-
   // Collapse (only safe when the split region is empty)
   const collapseButtons = signalPathNodesElement?.querySelectorAll(".parallel-collapse-btn");
   collapseButtons?.forEach((btn) => {
@@ -1084,13 +1062,6 @@ function sendReplaceSignalPathNode(nodeId: string, newEffectType: string): void 
     type: "replaceSignalPathNode",
     nodeId,
     newEffectType,
-  });
-}
-
-function sendSplitSignalPathEdge(edge: SignalPathEdgeRef): void {
-  postMessage({
-    type: "splitSignalPathEdge",
-    edge,
   });
 }
 

@@ -173,6 +173,10 @@ Engine value is authoritative. If UI receives `parameterChanged` with a differen
 | Dropdown | Selection (effect type, category) |
 | Button | Actions (load, save, browse) |
 
+## Signal Chain Editor Notes
+
+- To create parallel paths, add the **Splitter** effect from the Utility category. The join **Mixer** node is inserted automatically and is not user-addable.
+
 ## Performance Targets
 
 | Metric | Target |

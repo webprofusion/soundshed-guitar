@@ -86,6 +86,8 @@ input → amp → split   → mixer → output
             └→ cab2 →┘
 ```
 
+**UI note**: Create this topology by inserting a **Splitter** effect from the Utility category. The mixer node is inserted automatically to rejoin the branches.
+
 Mixers sum incoming edges with per-edge `gain` for blend control.
 
 ### Wet/Dry Mix

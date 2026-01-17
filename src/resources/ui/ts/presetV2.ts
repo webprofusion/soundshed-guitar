@@ -179,6 +179,13 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     ]
   },
   {
+    type: "splitter",
+    displayName: "Splitter",
+    category: "utility",
+    requiresResource: false,
+    parameters: []
+  },
+  {
     type: "delay_digital",
     displayName: "Digital Delay",
     category: "delay",

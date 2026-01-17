@@ -4146,33 +4146,6 @@ namespace guitarfx
       return;
     }
 
-    // Create new node with default parameters
-    GraphNode newNode;
-    newNode.id = effectType + "_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    newNode.type = effectType;
-    newNode.enabled = true;
-
-    // Get effect info from registry to set category and display name
-    const auto effectInfoOpt = EffectRegistry::Instance().GetTypeInfo(effectType);
-    if (effectInfoOpt)
-    {
-      const auto& effectInfo = *effectInfoOpt;
-      newNode.category = effectInfo.category;
-      newNode.label = effectInfo.displayName;
-      
-      // Set default parameter values
-      for (const auto& paramDef : effectInfo.parameters)
-      {
-        newNode.params[paramDef.id] = paramDef.defaultValue;
-      }
-    }
-    else
-    {
-      newNode.category = "utility";
-      newNode.label = effectType;
-    }
-
-    // Find the edge to split
     auto& edges = mActivePreset->graph.edges;
     auto chosenEdgeIt = edges.end();
 
@@ -4209,6 +4182,101 @@ namespace guitarfx
     {
       ReportErrorToUI("Add node failed", "Could not find target edge for insertion");
       return;
+    }
+
+    if (effectType == "splitter")
+    {
+      auto& graph = mActivePreset->graph;
+
+      const std::string splitterId = MakeUniqueNodeId(graph, "split");
+      const std::string mixerId = MakeUniqueNodeId(graph, "mix");
+
+      GraphNode splitter;
+      splitter.id = splitterId;
+      splitter.type = "splitter";
+      splitter.category = "utility";
+      splitter.label = "Splitter";
+      splitter.enabled = true;
+
+      GraphNode mixer;
+      mixer.id = mixerId;
+      mixer.type = "mixer";
+      mixer.category = "utility";
+      mixer.label = "Mixer";
+      mixer.enabled = true;
+
+      // Preserve edge attributes for the final connection
+      const std::string nextNodeId = chosenEdgeIt->to;
+      const int preservedToPort = chosenEdgeIt->toPort;
+      const double preservedGain = chosenEdgeIt->gain;
+
+      // Rewire: prev -> splitter (replace the original edge)
+      chosenEdgeIt->to = splitterId;
+      chosenEdgeIt->toPort = 0;
+      chosenEdgeIt->gain = 1.0;
+
+      // Two initial branches: splitter -> mixer (port 0/1)
+      GraphEdge branch0;
+      branch0.from = splitterId;
+      branch0.to = mixerId;
+      branch0.fromPort = 0;
+      branch0.toPort = 0;
+      branch0.gain = 1.0;
+
+      GraphEdge branch1;
+      branch1.from = splitterId;
+      branch1.to = mixerId;
+      branch1.fromPort = 1;
+      branch1.toPort = 1;
+      branch1.gain = 1.0;
+
+      // mixer -> next
+      GraphEdge mixToNext;
+      mixToNext.from = mixerId;
+      mixToNext.to = nextNodeId;
+      mixToNext.fromPort = 0;
+      mixToNext.toPort = preservedToPort;
+      mixToNext.gain = preservedGain;
+
+      edges.push_back(branch0);
+      edges.push_back(branch1);
+      edges.push_back(mixToNext);
+      graph.nodes.push_back(splitter);
+      graph.nodes.push_back(mixer);
+
+      mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+      ApplyPreset(*mActivePreset);
+      BroadcastState();
+
+      std::cout << "[Plugin] Inserted Splitter on edge " << chosenEdgeIt->from << " -> " << nextNodeId
+                << " via " << splitterId << "/" << mixerId << std::endl;
+      return;
+    }
+
+    // Create new node with default parameters
+    GraphNode newNode;
+    newNode.id = effectType + "_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    newNode.type = effectType;
+    newNode.enabled = true;
+
+    // Get effect info from registry to set category and display name
+    const auto effectInfoOpt = EffectRegistry::Instance().GetTypeInfo(effectType);
+    if (effectInfoOpt)
+    {
+      const auto& effectInfo = *effectInfoOpt;
+      newNode.category = effectInfo.category;
+      newNode.label = effectInfo.displayName;
+      
+      // Set default parameter values
+      for (const auto& paramDef : effectInfo.parameters)
+      {
+        newNode.params[paramDef.id] = paramDef.defaultValue;
+      }
+    }
+    else
+    {
+      newNode.category = "utility";
+      newNode.label = effectType;
     }
 
     // Preserve edge attributes (important for mixer input gains)
@@ -4291,14 +4359,14 @@ namespace guitarfx
     splitter.id = splitterId;
     splitter.type = "splitter";
     splitter.category = "utility";
-    splitter.label = "Split";
+    splitter.label = "Splitter";
     splitter.enabled = true;
 
     GraphNode mixer;
     mixer.id = mixerId;
     mixer.type = "mixer";
     mixer.category = "utility";
-    mixer.label = "Mix";
+    mixer.label = "Mixer";
     mixer.enabled = true;
 
     // Preserve edge attributes for the final connection

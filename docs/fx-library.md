@@ -186,6 +186,17 @@ Simple gain stage.
 |-----------|-------|---------|------|
 | `gainDb` | -24..+24 | 0.0 | dB |
 
+### Splitter (`splitter`)
+Creates parallel paths by inserting a splitter and an auto-join mixer.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| — | — | — | — |
+
+**Notes**:
+- The `splitter` effect is user-addable.
+- The `mixer` node is inserted automatically to rejoin branches and is not shown in the FX list.
+
 ## Resource References
 
 ### ResourceRef Structure
