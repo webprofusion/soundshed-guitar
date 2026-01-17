@@ -158,11 +158,12 @@ export function renderSignalPathBar(): void {
     signalPathNodesElement.innerHTML = `
       <div class="signal-graph-container">
         <div class="signal-graph-row">
-          <div class="signal-node input-node">
+          <div class="signal-node input-node" data-node-id="__input__">
             <div class="node-icon">🎤</div>
             <div class="node-info">
               <div class="node-name">Input</div>
             </div>
+            <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
           </div>
           <div class="signal-connector-wrapper">
             <div class="signal-connector"></div>
@@ -172,11 +173,12 @@ export function renderSignalPathBar(): void {
               <span class="add-icon">+</span>
             </button>
           </div>
-          <div class="signal-node output-node">
+          <div class="signal-node output-node" data-node-id="__output__">
             <div class="node-icon">🔈</div>
             <div class="node-info">
               <div class="node-name">Output</div>
             </div>
+            <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
           </div>
         </div>
       </div>
@@ -185,6 +187,8 @@ export function renderSignalPathBar(): void {
     // Bind minimal handlers (legacy fallback uses insertAfter=__input__)
     bindAddButtonHandlers();
   }
+
+  updateSignalPathClipIndicators();
 }
 
 type EdgeRef = SignalPathEdgeRef & { gain: number };
@@ -454,18 +458,20 @@ function renderGraphSignalPath(preset: Preset): void {
   signalPathNodesElement.innerHTML = `
     <div class="signal-graph-container">
       <div class="signal-graph-row">
-        <div class="signal-node input-node">
+        <div class="signal-node input-node" data-node-id="__input__">
           <div class="node-icon">🎤</div>
           <div class="node-info">
             <div class="node-name">Input</div>
           </div>
+          <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
         </div>
         ${segmentsHtml}
-        <div class="signal-node output-node">
+        <div class="signal-node output-node" data-node-id="__output__">
           <div class="node-icon">🔈</div>
           <div class="node-info">
             <div class="node-name">Output</div>
           </div>
+          <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
         </div>
       </div>
     </div>
@@ -519,9 +525,69 @@ function renderNodeElement(node: GraphNode): string {
         <div class="node-type">${node.type}</div>
         ${resourceLabel}
       </div>
+      <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
       ${isNodeBypassed(node) ? '<div class="node-bypass-badge">OFF</div>' : ""}
     </div>
   `;
+}
+
+export function updateSignalPathClipIndicators(): void {
+  const nodeElements = signalPathNodesElement?.querySelectorAll(".signal-node[data-node-id]");
+  if (!nodeElements) {
+    return;
+  }
+
+  const diagnostics = uiState.signalDiagnostics;
+  const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
+  const activePresetId = uiState.activePresetId;
+
+  const nodeClipMap = new Map<string, boolean>();
+  if (enabled && diagnostics) {
+    diagnostics.nodes.forEach((node) => {
+      if (node.presetId && activePresetId && node.presetId !== activePresetId) {
+        return;
+      }
+      if (typeof node.nodeId === "string") {
+        nodeClipMap.set(node.nodeId, Boolean(node.levels?.clipped));
+      }
+    });
+  }
+
+  nodeElements.forEach((element) => {
+    const el = element as HTMLElement;
+    const indicator = el.querySelector(".node-clip-indicator") as HTMLElement | null;
+    if (!indicator) return;
+
+    indicator.classList.remove("clip-on", "clip-off", "clip-inactive", "clip-unknown");
+
+    if (!enabled || !diagnostics) {
+      indicator.classList.add("clip-inactive");
+      indicator.title = "Diagnostics disabled";
+      return;
+    }
+
+    const nodeId = el.dataset.nodeId ?? "";
+    let clipped: boolean | undefined;
+
+    if (nodeId === "__input__") {
+      clipped = diagnostics.input?.clipped;
+    } else if (nodeId === "__output__") {
+      clipped = diagnostics.output?.clipped;
+    } else if (nodeClipMap.has(nodeId)) {
+      clipped = nodeClipMap.get(nodeId);
+    }
+
+    if (clipped === true) {
+      indicator.classList.add("clip-on");
+      indicator.title = "Clipping detected";
+    } else if (clipped === false) {
+      indicator.classList.add("clip-off");
+      indicator.title = "No clipping";
+    } else {
+      indicator.classList.add("clip-unknown");
+      indicator.title = "No diagnostics data";
+    }
+  });
 }
 
 function bindNodeClickHandlers(preset: Preset): void {

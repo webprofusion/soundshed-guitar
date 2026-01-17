@@ -2,6 +2,7 @@ import { renderDemoAudioControls, bindDemoAudioControls } from "./demoAudio.js";
 import { uiState } from "./state.js";
 import { addActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled } from "./bridge.js";
 import { escapeHtml } from "./utils.js";
+import { updateSignalPathClipIndicators } from "./signalPath.js";
 import type { Preset } from "./types.js";
 
 const presetListElement = document.getElementById("preset-list");
@@ -647,4 +648,6 @@ export function updateSignalDiagnosticsView(): void {
       </div>
     `;
   }
+
+  updateSignalPathClipIndicators();
 }

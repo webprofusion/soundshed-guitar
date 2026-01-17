@@ -17,7 +17,7 @@ import { themeSwitcher } from "./theme-switcher.js";
 import { initializeThemeSwitcherIcons } from "./theme-switcher-ui.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
-import { initSettingsPanel, updateSettingsSessionStatus } from "./settings.js";
+import { initDiagnosticsToggle, initSettingsPanel, updateSettingsSessionStatus } from "./settings.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
@@ -113,6 +113,7 @@ async function bootstrap(): Promise<void> {
   initializeMetronome();
   initFxSelector();
   startUiSettingsTracking();
+  initDiagnosticsToggle();
 
   // Initialize footer demo audio controls
   const footerDemoContainer = document.getElementById("footer-demo-audio-container");

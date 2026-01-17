@@ -24,10 +24,23 @@ export function initSettingsPanel(): void {
   settingsInitialized = true;
   saveButton?.addEventListener("click", () => void saveApiKey());
   clearButton?.addEventListener("click", () => void clearApiKey());
-  diagnosticsToggle?.addEventListener("change", () => void updateDiagnosticsSetting());
+  initDiagnosticsToggle();
 
   refreshSettingsView();
   initTone3000Browser();
+}
+
+export function initDiagnosticsToggle(): void {
+  if (!diagnosticsToggle) {
+    return;
+  }
+
+  if (diagnosticsToggle.dataset.bound === "true") {
+    return;
+  }
+
+  diagnosticsToggle.dataset.bound = "true";
+  diagnosticsToggle.addEventListener("change", () => void updateDiagnosticsSetting());
 }
 
 export function refreshSettingsView(): void {

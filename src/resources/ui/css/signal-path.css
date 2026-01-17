@@ -208,6 +208,35 @@
   font-weight: 600;
 }
 
+.node-clip-indicator {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #5a5a6a;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.node-clip-indicator.clip-on {
+  background: #ff5c5c;
+  box-shadow: 0 0 6px rgba(255, 92, 92, 0.75);
+}
+
+.node-clip-indicator.clip-off {
+  background: #48e078;
+  box-shadow: 0 0 6px rgba(72, 224, 120, 0.6);
+}
+
+.node-clip-indicator.clip-inactive,
+.node-clip-indicator.clip-unknown {
+  background: #5a5a6a;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
 .signal-node-delete {
   position: absolute;
   top: 2px;

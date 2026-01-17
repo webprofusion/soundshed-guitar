@@ -605,8 +605,9 @@ body.fx-dragging .signal-connector {
 }
 
 .signal-diagnostics-columns {
-  column-count: 3;
-  column-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 8px;
 }
 
