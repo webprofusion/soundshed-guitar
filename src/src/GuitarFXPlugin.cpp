@@ -4566,7 +4566,21 @@ namespace guitarfx
     const std::string nodeId = payload.value("nodeId", "");
     const std::string targetNodeId = payload.value("targetNodeId", "");
 
-    if (nodeId.empty() || targetNodeId.empty() || nodeId == targetNodeId)
+    std::string edgeFrom;
+    std::string edgeTo;
+    int edgeFromPort = 0;
+    int edgeToPort = 0;
+
+    const auto edgeIt = payload.find("edge");
+    if (edgeIt != payload.end() && edgeIt->is_object())
+    {
+      edgeFrom = edgeIt->value("from", "");
+      edgeTo = edgeIt->value("to", "");
+      edgeFromPort = edgeIt->value("fromPort", 0);
+      edgeToPort = edgeIt->value("toPort", 0);
+    }
+
+    if (nodeId.empty() || (targetNodeId.empty() && edgeFrom.empty()))
     {
       return;
     }
@@ -4577,19 +4591,23 @@ namespace guitarfx
       return;
     }
 
-    // Find both nodes
+    // Find moving node
     const GraphNode* node = mActivePreset->graph.FindNode(nodeId);
-    const GraphNode* targetNode = mActivePreset->graph.FindNode(targetNodeId);
-
-    if (!node || !targetNode)
+    if (!node)
     {
       ReportErrorToUI("Reorder node failed", "Node not found");
       return;
     }
 
+    if (node->type == "splitter" || node->type == "mixer")
+    {
+      ReportErrorToUI("Reorder node failed", "Cannot move splitter/mixer nodes");
+      return;
+    }
+
     auto& edges = mActivePreset->graph.edges;
 
-    // Find edges connected to the moving node
+    // Find edges connected to the moving node (expect single in/out)
     auto incomingEdgeIt = std::find_if(edges.begin(), edges.end(),
       [&nodeId](const GraphEdge& e) { return e.to == nodeId; });
     auto outgoingEdgeIt = std::find_if(edges.begin(), edges.end(),
@@ -4601,35 +4619,89 @@ namespace guitarfx
       return;
     }
 
-    std::string prevNodeId = incomingEdgeIt->from;
-    std::string nextNodeId = outgoingEdgeIt->to;
+    // Preserve outgoing edge attributes before removal
+    const std::string nextNodeId = outgoingEdgeIt->to;
+    const int preservedToPort = outgoingEdgeIt->toPort;
+    const double preservedGain = outgoingEdgeIt->gain;
 
     // Reconnect around the moving node
     incomingEdgeIt->to = nextNodeId;
+    incomingEdgeIt->toPort = preservedToPort;
+    incomingEdgeIt->gain = preservedGain;
     edges.erase(outgoingEdgeIt);
 
-    // Find edge after target node
-    auto targetOutgoingIt = std::find_if(edges.begin(), edges.end(),
-      [&targetNodeId](const GraphEdge& e) { return e.from == targetNodeId; });
-
-    if (targetOutgoingIt == edges.end())
+    if (!edgeFrom.empty() && !edgeTo.empty())
     {
-      ReportErrorToUI("Reorder node failed", "Cannot find target position");
-      return;
+      if (edgeFrom == nodeId || edgeTo == nodeId)
+      {
+        ReportErrorToUI("Reorder node failed", "Cannot move node onto itself");
+        return;
+      }
+
+      auto targetEdgeIt = std::find_if(edges.begin(), edges.end(),
+        [&](const GraphEdge& e)
+        {
+          return e.from == edgeFrom && e.to == edgeTo && e.fromPort == edgeFromPort && e.toPort == edgeToPort;
+        });
+
+      if (targetEdgeIt == edges.end())
+      {
+        ReportErrorToUI("Reorder node failed", "Cannot find target edge");
+        return;
+      }
+
+      const std::string targetNextId = targetEdgeIt->to;
+      const int targetPreservedToPort = targetEdgeIt->toPort;
+      const double targetPreservedGain = targetEdgeIt->gain;
+
+      targetEdgeIt->to = nodeId;
+      targetEdgeIt->toPort = 0;
+      targetEdgeIt->gain = 1.0;
+
+      GraphEdge newEdge;
+      newEdge.from = nodeId;
+      newEdge.to = targetNextId;
+      newEdge.fromPort = 0;
+      newEdge.toPort = targetPreservedToPort;
+      newEdge.gain = targetPreservedGain;
+      edges.push_back(newEdge);
     }
+    else
+    {
+      // Find edge after target node
+      const GraphNode* targetNode = mActivePreset->graph.FindNode(targetNodeId);
+      if (!targetNode)
+      {
+        ReportErrorToUI("Reorder node failed", "Target node not found");
+        return;
+      }
 
-    std::string afterTargetNodeId = targetOutgoingIt->to;
+      auto targetOutgoingIt = std::find_if(edges.begin(), edges.end(),
+        [&targetNodeId](const GraphEdge& e) { return e.from == targetNodeId; });
 
-    // Insert node after target
-    targetOutgoingIt->to = nodeId;
+      if (targetOutgoingIt == edges.end())
+      {
+        ReportErrorToUI("Reorder node failed", "Cannot find target position");
+        return;
+      }
 
-    GraphEdge newEdge;
-    newEdge.from = nodeId;
-    newEdge.to = afterTargetNodeId;
-    newEdge.fromPort = 0;
-    newEdge.toPort = 0;
-    newEdge.gain = 1.0;
-    edges.push_back(newEdge);
+      const std::string afterTargetNodeId = targetOutgoingIt->to;
+      const int targetPreservedToPort = targetOutgoingIt->toPort;
+      const double targetPreservedGain = targetOutgoingIt->gain;
+
+      // Insert node after target
+      targetOutgoingIt->to = nodeId;
+      targetOutgoingIt->toPort = 0;
+      targetOutgoingIt->gain = 1.0;
+
+      GraphEdge newEdge;
+      newEdge.from = nodeId;
+      newEdge.to = afterTargetNodeId;
+      newEdge.fromPort = 0;
+      newEdge.toPort = targetPreservedToPort;
+      newEdge.gain = targetPreservedGain;
+      edges.push_back(newEdge);
+    }
 
     // Re-serialize and broadcast
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);

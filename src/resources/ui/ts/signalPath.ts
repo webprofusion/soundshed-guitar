@@ -6,7 +6,6 @@ import { sendAddSignalPathNode, sendAddSignalPathNodeOnEdge, type SignalPathEdge
 import { GenericKnob } from "./controls.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
-const signalPathPresetNameElement = document.getElementById("signal-path-preset-name");
 const nodeParamsPanelElement = document.getElementById("node-params-panel");
 
 // Drag-drop state
@@ -137,7 +136,7 @@ function getNodeResourceAtIndex(node: GraphNode, index = 0): { id: string; fileP
 }
 
 export function renderSignalPathBar(): void {
-  if (!signalPathNodesElement || !signalPathPresetNameElement) {
+  if (!signalPathNodesElement) {
     return;
   }
 
@@ -147,12 +146,9 @@ export function renderSignalPathBar(): void {
     : undefined;
   
   if (!activePreset) {
-    signalPathPresetNameElement.textContent = "No preset selected";
     signalPathNodesElement.innerHTML = "";
     return;
   }
-
-  signalPathPresetNameElement.textContent = activePreset.name || "Unnamed Preset";
 
   // Render graph-based signal path (supports parallel paths)
   if (activePreset.graph?.nodes) {
@@ -584,6 +580,7 @@ function bindNodeClickHandlers(preset: Preset): void {
         draggedNodeId = nodeId;
         el.classList.add("dragging");
         e.dataTransfer?.setData("text/plain", nodeId);
+        e.dataTransfer?.setData("application/x-signal-node", nodeId);
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = "move";
         }
@@ -692,17 +689,23 @@ function bindConnectorDropHandlers(preset: Preset): void {
       
       // Only accept drops from FX library
       const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
+      const signalNodeId = e.dataTransfer?.getData("application/x-signal-node") || "";
+      const isSignalNode = Boolean(signalNodeId);
       
-      if (fxEffectType) {
+      if (fxEffectType || isSignalNode) {
+        const connector = el.querySelector(".signal-connector") as HTMLElement | null;
+        connector?.classList.add("drag-over");
         el.classList.add("drag-over");
         if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = "copy";
+          e.dataTransfer.dropEffect = fxEffectType ? "copy" : "move";
         }
       }
     });
     
     // Drag leave
     el.addEventListener("dragleave", () => {
+      const connector = el.querySelector(".signal-connector") as HTMLElement | null;
+      connector?.classList.remove("drag-over");
       el.classList.remove("drag-over");
     });
     
@@ -710,12 +713,20 @@ function bindConnectorDropHandlers(preset: Preset): void {
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
       const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
+      const signalNodeId = e.dataTransfer?.getData("application/x-signal-node");
 
       const edge = parseEdgeFromDataset(el);
       if (fxEffectType && preset.graph) {
         sendAddEffectAtEdgeOrFallback(fxEffectType, edge, "__input__");
+      } else if (signalNodeId && edge && preset.graph) {
+        const node = preset.graph.nodes.find((n) => n.id === signalNodeId);
+        if (node && node.type !== "splitter" && node.type !== "mixer") {
+          sendMoveSignalPathNodeToEdge(signalNodeId, edge);
+        }
       }
       
+      const connector = el.querySelector(".signal-connector") as HTMLElement | null;
+      connector?.classList.remove("drag-over");
       el.classList.remove("drag-over");
     });
   });
@@ -1062,6 +1073,14 @@ function sendReplaceSignalPathNode(nodeId: string, newEffectType: string): void 
     type: "replaceSignalPathNode",
     nodeId,
     newEffectType,
+  });
+}
+
+function sendMoveSignalPathNodeToEdge(nodeId: string, edge: SignalPathEdgeRef): void {
+  postMessage({
+    type: "reorderSignalPathNode",
+    nodeId,
+    edge,
   });
 }
 

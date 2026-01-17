@@ -246,14 +246,14 @@
 
 .signal-arrow {
   font-size: 16px;
-  color: var(--text-secondary);
+  color: #00a621;
   margin: 0 4px;
 }
 
 .signal-connector {
   width: 24px;
   height: 2px;
-  background: greenyellow;
+  background: #00a621;
   border-radius: 2px;
   flex-shrink: 0;
   position: relative;
@@ -348,6 +348,11 @@
   position: relative;
 }
 
+.signal-connector-wrapper.drag-over {
+  box-shadow: 0 0 0 2px rgba(72, 224, 120, 0.35);
+  border-radius: 8px;
+}
+
 .parallel-branch::before {
   content: attr(data-branch-index);
   position: absolute;
@@ -367,26 +372,6 @@
 .parallel-branch:nth-child(2) { border-left-color: #48a8e0; }
 .parallel-branch:nth-child(3) { border-left-color: #48e078; }
 .parallel-branch:nth-child(4) { border-left-color: #e048a8; }
-
-.signal-path-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 120px;
-  padding-left: 12px;
-  border-left: 1px solid #3a3a44;
-}
-
-.preset-summary {
-  font-size: 11px;
-  font-weight: 600;
-  color: #c0c0d0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
-}
 
 /* Signal Chain Panel Styles */
 .signal-chain-container {

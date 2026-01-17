@@ -274,6 +274,7 @@ export interface SignalPathEdgeRef {
   to: string;
   fromPort: number;
   toPort: number;
+  gain?: number;
 }
 
 /**
