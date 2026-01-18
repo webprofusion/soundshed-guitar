@@ -35,3 +35,29 @@ if(GUITARFX_ENABLE_TESTS AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUI
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# Inno Setup installer target (Windows only)
+if(WIN32)
+    set(GUITARFX_INSTALLER_SCRIPT "${CMAKE_SOURCE_DIR}/../installer/GuitarFX.iss")
+    if(EXISTS "${GUITARFX_INSTALLER_SCRIPT}")
+        find_program(GUITARFX_ISCC_EXECUTABLE NAMES iscc ISCC)
+        if(GUITARFX_ISCC_EXECUTABLE)
+            add_custom_target(GuitarFX_Installer
+                COMMAND "${GUITARFX_ISCC_EXECUTABLE}" "${GUITARFX_INSTALLER_SCRIPT}"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../installer"
+                COMMENT "Building Inno Setup installer"
+            )
+
+            if(TARGET GuitarFX_VST3)
+                add_dependencies(GuitarFX_Installer GuitarFX_VST3)
+            endif()
+            if(TARGET GuitarFX_App)
+                add_dependencies(GuitarFX_Installer GuitarFX_App)
+            endif()
+        else()
+            message(WARNING "Inno Setup compiler (ISCC) not found; GuitarFX_Installer target will be unavailable.")
+        endif()
+    else()
+        message(WARNING "Installer script not found at ${GUITARFX_INSTALLER_SCRIPT}; GuitarFX_Installer target will be unavailable.")
+    endif()
+endif()

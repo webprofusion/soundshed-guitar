@@ -1,0 +1,37 @@
+name: Build Installer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Configure CMake
+        run: cmake -S src -B src/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build UI
+        working-directory: src/resources/ui
+        run: npm ci
+
+      - name: Build UI bundle
+        working-directory: src/resources/ui
+        run: npm run build
+
+      - name: Build VST3 and App
+        run: cmake --build src/build --config Release --target GuitarFX_VST3 GuitarFX_App
+
+      - name: Build Installer
+        run: cmake --build src/build --config Release --target GuitarFX_Installer
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: GuitarFX-Installer
+          path: installer/dist/*.exe
