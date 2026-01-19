@@ -84,7 +84,21 @@ Testing plugin (version with external resources) with pluginval:
 The webview rendering does not properly compensate for scaled desktop sizes on windows e.g. 150%.
 Patch IPlugWebView_win.cpp at
 
-src\out\build\x64-Debug\_deps\iplug2-src\IPlug\Extras\WebView\IPlugWebView_win.cpp
+src\out\build\x64-Debug\_deps\iplug2-src\IPlug\Extras\WebView\IPlugWebView_win.cpp:L492
+
+```
+void IWebViewImpl::SetWebViewBounds(float x, float y, float w, float h, float scale)
+{
+  auto s = GetScaleForHWND(mParentWnd);
+  s= 1; // hack otherwise scale for window at 150 is 1.5 and webview bound is off the screen;
+  mWebViewBounds = GetScaledRect(x, y, w, h, s);
+
+  if (mWebViewCtrlr)
+  {
+    mWebViewCtrlr->SetBoundsAndZoomFactor(mWebViewBounds, scale);
+  }
+}
+```
 
 ## License
 

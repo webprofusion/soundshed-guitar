@@ -34,6 +34,17 @@ if(GUITARFX_FETCH_DEPENDENCIES)
     message(FATAL_ERROR "iPlug2 dependency not found at ${iPlug2_SOURCE_DIR}. Ensure git access is available or set iPlug2_SOURCE_DIR to a local iPlug2 checkout with VST3_SDK included.")
   endif()
 
+  # Patch iPlug2 WebView scaling to avoid DPI issues on Windows.
+  set(_iplug2_webview_win "${iPlug2_SOURCE_DIR}/IPlug/Extras/WebView/IPlugWebView_win.cpp")
+  if(EXISTS "${_iplug2_webview_win}")
+    file(READ "${_iplug2_webview_win}" _iplug2_webview_win_contents)
+    string(REPLACE "GetScaleForHWND(mParentWnd)" "1.0f" _iplug2_webview_win_patched "${_iplug2_webview_win_contents}")
+    if(NOT _iplug2_webview_win_contents STREQUAL _iplug2_webview_win_patched)
+      file(WRITE "${_iplug2_webview_win}" "${_iplug2_webview_win_patched}")
+      message(STATUS "Patched iPlug2 WebView DPI scaling in ${_iplug2_webview_win}")
+    endif()
+  endif()
+
   if(NOT TARGET NeuralAmpModelerCore)
     FetchContent_Declare(
       NeuralAmpModelerCore
