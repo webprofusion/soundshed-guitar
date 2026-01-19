@@ -2,11 +2,11 @@
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
   <assemblyIdentity
     type="win32"
-    name="com.soundshed.guitarfx"
+    name="com.soundshed.guitar"
     version="1.0.0.0"
     processorArchitecture="amd64"/>
   
-  <description>GuitarFX Audio Plugin</description>
+  <description>Soundshed Guitar Audio Plugin</description>
   
   <!-- Windows 10 and higher DPI awareness -->
   <asmv3:application>

@@ -4,37 +4,37 @@
 
 
     {
-      "name": "Debug GuitarFX App",
+      "name": "Debug SoundshedGuitar App",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Debug/GuitarFX.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Debug/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Debug",
       "environment": [],
       "console": "integratedTerminal",
-      "preLaunchTask": "Build GuitarFX Debug"
+      "preLaunchTask": "Build SoundshedGuitar Debug"
     },
         {
-      "name": "Run GuitarFX App Release",
+      "name": "Run SoundshedGuitar App Release",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/GuitarFX.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",
       "environment": [],
       "console": "integratedTerminal",
-      "preLaunchTask": "Build GuitarFX App Release"
+      "preLaunchTask": "Build SoundshedGuitar App Release"
     },
      {
-      "name": "Debug GuitarFX VST Host",
+      "name": "Debug SoundshedGuitar VST Host",
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/src/build/tools/VST3DebugHost.exe",
       "args": [
        // "-w",
-        "${workspaceFolder}/src/build/GuitarFX.vst3/Contents/x86_64-win/GuitarFX.vst3"
+        "${workspaceFolder}/src/build/SoundshedGuitar.vst3/Contents/x86_64-win/SoundshedGuitar.vst3"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build",
@@ -46,21 +46,21 @@
       "name": "Debug SampleRateBufferTests",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/tests/Debug/GuitarFX_SampleRateBufferTests.exe",
+      "program": "${workspaceFolder}/src/build/tests/Debug/SoundshedGuitar_SampleRateBufferTests.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/tools",
       "environment": [],
       "console": "integratedTerminal",
-      "preLaunchTask": "Build GuitarFX Debug"
+      "preLaunchTask": "Build SoundshedGuitar Debug"
       /*
-      cmake --build . --config Debug --target GuitarFX_SampleRateBufferTests*/
+      cmake --build . --config Debug --target SoundshedGuitar_SampleRateBufferTests*/
     },
     {
-      "name": "Launch GuitarFX App (Release)",
+      "name": "Launch SoundshedGuitar App (Release)",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/GuitarFX.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",

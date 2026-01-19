@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "GuitarFX_App (Debug)",
+      "name": "SoundshedGuitar_App (Debug)",
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/src/platform/app/Debug/GuitarFX.exe",

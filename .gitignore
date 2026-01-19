@@ -28,17 +28,17 @@ src/x64/
 
 src/src/Debug/
 
-src/src/GuitarFX.dir/
+src/src/SoundshedGuitar.dir/
 
-src/src/GuitarFXCore.dir/
+src/src/SoundshedGuitarCore.dir/
 
 src/src/platform/app/Debug/
 
-src/src/platform/app/GuitarFX_App.dir/
+src/src/platform/app/SoundshedGuitar_App.dir/
 
 src/src/platform/vst3/Debug/
 
-src/src/platform/vst3/GuitarFX_VST3.dir/
+src/src/platform/vst3/SoundshedGuitar_VST3.dir/
 
 src/resources/ui/dist/
 

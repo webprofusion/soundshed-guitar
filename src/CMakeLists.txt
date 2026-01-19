@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(GuitarFX LANGUAGES C CXX)
+project(SoundshedGuitar LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,26 +38,26 @@ endif()
 
 # Inno Setup installer target (Windows only)
 if(WIN32)
-    set(GUITARFX_INSTALLER_SCRIPT "${CMAKE_SOURCE_DIR}/../installer/GuitarFX.iss")
+    set(GUITARFX_INSTALLER_SCRIPT "${CMAKE_SOURCE_DIR}/../installer/SoundshedGuitar.iss")
     if(EXISTS "${GUITARFX_INSTALLER_SCRIPT}")
         find_program(GUITARFX_ISCC_EXECUTABLE NAMES iscc ISCC)
         if(GUITARFX_ISCC_EXECUTABLE)
-            add_custom_target(GuitarFX_Installer
+            add_custom_target(SoundshedGuitar_Installer
                 COMMAND "${GUITARFX_ISCC_EXECUTABLE}" "${GUITARFX_INSTALLER_SCRIPT}"
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../installer"
                 COMMENT "Building Inno Setup installer"
             )
 
-            if(TARGET GuitarFX_VST3)
-                add_dependencies(GuitarFX_Installer GuitarFX_VST3)
+            if(TARGET SoundshedGuitar_VST3)
+                add_dependencies(SoundshedGuitar_Installer SoundshedGuitar_VST3)
             endif()
-            if(TARGET GuitarFX_App)
-                add_dependencies(GuitarFX_Installer GuitarFX_App)
+            if(TARGET SoundshedGuitar_App)
+                add_dependencies(SoundshedGuitar_Installer SoundshedGuitar_App)
             endif()
         else()
-            message(WARNING "Inno Setup compiler (ISCC) not found; GuitarFX_Installer target will be unavailable.")
+            message(WARNING "Inno Setup compiler (ISCC) not found; SoundshedGuitar_Installer target will be unavailable.")
         endif()
     else()
-        message(WARNING "Installer script not found at ${GUITARFX_INSTALLER_SCRIPT}; GuitarFX_Installer target will be unavailable.")
+        message(WARNING "Installer script not found at ${GUITARFX_INSTALLER_SCRIPT}; SoundshedGuitar_Installer target will be unavailable.")
     endif()
 endif()

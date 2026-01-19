@@ -33,9 +33,9 @@ set(_nam_app_sources
   ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTMidi/RtMidi.cpp
 )
 
-add_executable(GuitarFX_App WIN32 ${_nam_app_sources})
+add_executable(SoundshedGuitar_App WIN32 ${_nam_app_sources})
 
-target_include_directories(GuitarFX_App
+target_include_directories(SoundshedGuitar_App
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../resources
     ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTAudio
@@ -43,7 +43,7 @@ target_include_directories(GuitarFX_App
     ${iPlug2_SOURCE_DIR}/Dependencies/IPlug/RTMidi
 )
 
-target_compile_definitions(GuitarFX_App
+target_compile_definitions(SoundshedGuitar_App
   PRIVATE
     APP_API
     __WINDOWS_DS__
@@ -54,7 +54,7 @@ target_compile_definitions(GuitarFX_App
     NO_IGRAPHICS
 )
 
-target_link_libraries(GuitarFX_App
+target_link_libraries(SoundshedGuitar_App
   PRIVATE
     GuitarFXCore
     WebView2::Loader
@@ -74,14 +74,14 @@ target_link_libraries(GuitarFX_App
   wininet
 )
 
-set_target_properties(GuitarFX_App PROPERTIES
+set_target_properties(SoundshedGuitar_App PROPERTIES
   OUTPUT_NAME SoundshedGuitar
   FOLDER "GuitarFX/Formats"
 )
 
-add_custom_command(TARGET GuitarFX_App POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:GuitarFX_App>/resources"
+add_custom_command(TARGET SoundshedGuitar_App POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SoundshedGuitar_App>/resources"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/resources"
-    "$<TARGET_FILE_DIR:GuitarFX_App>/resources"
+    "$<TARGET_FILE_DIR:SoundshedGuitar_App>/resources"
   COMMENT "Copying resource assets into the standalone bundle")

@@ -16,7 +16,7 @@
       "problemMatcher": "$tsc"
     },
     {
-      "label": "Build GuitarFX Debug",
+      "label": "Build SoundshedGuitar Debug",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -25,7 +25,7 @@
         "--config",
         "Debug",
         "--target",
-        "GuitarFX_App"
+        "SoundshedGuitar_App"
       ],
       "group": {
         "kind": "build",
@@ -34,7 +34,7 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "Build GuitarFX App Release",
+      "label": "Build SoundshedGuitar App Release",
       "dependsOn": [
         "Build TypeScript"
       ],
@@ -47,13 +47,13 @@
         "--config",
         "Release",
         "--target",
-        "GuitarFX_App"
+        "SoundshedGuitar_App"
       ],
       "group": "build",
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "Build GuitarFX App and VST Release",
+      "label": "Build SoundshedGuitar App and VST Release",
       "dependsOn": [
         "Build TypeScript"
       ],
@@ -68,6 +68,31 @@
       ],
       "group": "build",
       "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build SoundshedGuitar Installer Release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/src/build",
+        "--config",
+        "Release",
+        "--target",
+        "GuitarFX_Installer"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build Release App+VST then Installer",
+      "dependsOn": [
+        "Build SoundshedGuitar App and VST Release",
+        "Build SoundshedGuitar Installer Release"
+      ],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": []
     },
     {
       "label": "Configure CMake",
@@ -87,7 +112,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Build GuitarFX VST3 Debug",
+      "label": "Build SoundshedGuitar VST3 Debug",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -96,7 +121,7 @@
         "--config",
         "Debug",
         "--target",
-        "GuitarFX_VST3"
+        "SoundshedGuitar_VST3"
       ],
       "group": "build",
       "problemMatcher": "$msCompile"
@@ -119,7 +144,7 @@
     {
       "label": "Build VST3 and DebugHost",
       "dependsOn": [
-        "Build GuitarFX VST3 Debug",
+        "Build SoundshedGuitar VST3 Debug",
         "Build VST3DebugHost"
       ],
       "dependsOrder": "sequence",

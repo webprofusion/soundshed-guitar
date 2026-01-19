@@ -35,9 +35,9 @@
 - Configure (once, from src/):
 	powershell: cmake -G "Visual Studio 18 2026" -A x64 -S . -B build
 - Build (tasks available in VS Code):
-	Debug App: cmake --build build --config Debug --target GuitarFX_App
-	Debug VST3: cmake --build build --config Debug --target GuitarFX_VST3
-	Release App: cmake --build build --config Release --target GuitarFX_App
+	Debug App: cmake --build build --config Debug --target SoundshedGuitar_App
+	Debug VST3: cmake --build build --config Debug --target SoundshedGuitar_VST3
+	Release App: cmake --build build --config Release --target SoundshedGuitar_App
 - UI bundle: cd src/resources/ui && npm run build
 
 ## Testing

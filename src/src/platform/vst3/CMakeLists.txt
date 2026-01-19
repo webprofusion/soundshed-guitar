@@ -7,6 +7,15 @@ endif()
 # Define VST3 SDK root for cleaner path references
 set(VST3_SDK_ROOT "${iPlug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
 
+# Validate VST3 SDK presence (iPlug2 does not bundle it by default)
+if(NOT EXISTS "${VST3_SDK_ROOT}/base/source/baseiids.cpp")
+  message(FATAL_ERROR
+    "VST3 SDK not found under ${VST3_SDK_ROOT}. "
+    "Run the iPlug2 VST3 SDK download script (Dependencies/IPlug/download-vst3-sdk.sh) "
+    "or point iPlug2_SOURCE_DIR to a checkout that includes the VST3 SDK."
+  )
+endif()
+
 # VST3 SDK source files
 set(_vst3_sdk_sources
   ${VST3_SDK_ROOT}/base/source/baseiids.cpp
@@ -69,9 +78,9 @@ set(_nam_vst3_sources
   ${_webview_sources}
 )
 
-add_library(GuitarFX_VST3 MODULE ${_nam_vst3_sources})
+add_library(SoundshedGuitar_VST3 MODULE ${_nam_vst3_sources})
 
-target_compile_definitions(GuitarFX_VST3 PRIVATE 
+target_compile_definitions(SoundshedGuitar_VST3 PRIVATE 
   VST3_API 
   IPLUG_EDITOR=1 
   IPLUG_DSP=1
@@ -82,7 +91,7 @@ target_compile_definitions(GuitarFX_VST3 PRIVATE
 
 # Include all paths needed for compiling GuitarFXPlugin.cpp with VST3_API
 # Note: IGraphics directories are still included for header compatibility but IGraphics is not compiled
-target_include_directories(GuitarFX_VST3 PRIVATE
+target_include_directories(SoundshedGuitar_VST3 PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../config
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../resources
@@ -101,7 +110,7 @@ target_include_directories(GuitarFX_VST3 PRIVATE
   ${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann
 )
 
-target_link_libraries(GuitarFX_VST3
+target_link_libraries(SoundshedGuitar_VST3
   PRIVATE
     GuitarFXCore
     WebView2::Loader
@@ -118,7 +127,7 @@ target_link_libraries(GuitarFX_VST3
     wininet
 )
 
-set_target_properties(GuitarFX_VST3 PROPERTIES
+set_target_properties(SoundshedGuitar_VST3 PROPERTIES
   OUTPUT_NAME SoundshedGuitar
   FOLDER GuitarFX/Formats
 )
@@ -134,9 +143,9 @@ set(VST3_ARCH_DIR "${VST3_CONTENTS_DIR}/x86_64-win")
 set(VST3_RESOURCES_DIR "${VST3_CONTENTS_DIR}/Resources")
 
 # Post-build commands to create bundle
-add_custom_command(TARGET GuitarFX_VST3 POST_BUILD
+add_custom_command(TARGET SoundshedGuitar_VST3 POST_BUILD
   COMMAND ${CMAKE_COMMAND}
-    -D SOURCE_DLL="$<TARGET_FILE:GuitarFX_VST3>"
+    -D SOURCE_DLL="$<TARGET_FILE:SoundshedGuitar_VST3>"
     -D DEST_BUNDLE_DIR="${VST3_BUNDLE_DIR}"
     -D RESOURCE_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../resources/ui"
     -D RESOURCE_AMPS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../resources/amps"

@@ -1,6 +1,6 @@
-# GuitarFX
+# Soundshed Guitar
 
-GuitarFX is an iPlug2-based guitar processing plugin combining Neural Amp Modeler (NAM) with a modern web-driven UI. Targets VST3, AU, and AAX formats with an extensible signal graph architecture.
+Soundshed Guitar is an iPlug2-based guitar processing plugin combining Neural Amp Modeler (NAM) with a modern web-driven UI. Targets VST3, AU, and AAX formats with an extensible signal graph architecture.
 
 ## Features
 
@@ -41,7 +41,7 @@ See [docs/](docs/) for architecture and reference documentation:
    ```
 
 3. **Install**
-   - **Windows VST3**: Copy `.vst3` from `build/GuitarFX.vst3` to `C:\Program Files\Common Files\VST3\`
+   - **Windows VST3**: Copy `.vst3` from `build/SoundshedGuitar.vst3` to `C:\Program Files\Common Files\VST3\`
    - **macOS VST3**: Copy to `~/Library/Audio/Plug-Ins/VST3/`
 
 ## SDK Requirements
@@ -77,7 +77,7 @@ cmake --build build --config Debug --target VST3DebugHost
 ./VST3DebugHost.exe --windowed
 ```
 Testing plugin (version with external resources) with pluginval:
-`C:\Tools>pluginval.exe  src\build\GuitarFX.vst3`
+`C:\Tools>pluginval.exe  src\build\SoundshedGuitar.vst3`
 
 
 # IPlug WebView DPI scaling issues

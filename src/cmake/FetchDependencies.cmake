@@ -8,7 +8,14 @@ if(GUITARFX_FETCH_DEPENDENCIES)
   if(EXISTS "${_local_iplug2}/IPlug/VST3_SDK" AND NOT DEFINED iPlug2_SOURCE_DIR)
     message(STATUS "Using local iPlug2 from ${_local_iplug2}")
     set(iPlug2_SOURCE_DIR "${_local_iplug2}" CACHE PATH "iPlug2 source directory")
-  elseif(NOT DEFINED iPlug2_SOURCE_DIR)
+  endif()
+
+  if(DEFINED iPlug2_SOURCE_DIR AND NOT EXISTS "${iPlug2_SOURCE_DIR}/IPlug/APP/IPlugAPP.cpp")
+    message(WARNING "Configured iPlug2_SOURCE_DIR=${iPlug2_SOURCE_DIR}, but required sources are missing. Clearing cached iPlug2_SOURCE_DIR to refetch.")
+    unset(iPlug2_SOURCE_DIR CACHE)
+  endif()
+
+  if(NOT DEFINED iPlug2_SOURCE_DIR)
     # Use FetchContent_Populate instead of FetchContent_MakeAvailable to avoid
     # building iPlug2's Examples and Tests which are added unconditionally
     FetchContent_Declare(
@@ -21,6 +28,10 @@ if(GUITARFX_FETCH_DEPENDENCIES)
       FetchContent_Populate(iPlug2)
     endif()
     set(iPlug2_SOURCE_DIR "${iplug2_SOURCE_DIR}" CACHE PATH "iPlug2 source directory")
+  endif()
+
+  if(NOT EXISTS "${iPlug2_SOURCE_DIR}/IPlug/APP/IPlugAPP.cpp")
+    message(FATAL_ERROR "iPlug2 dependency not found at ${iPlug2_SOURCE_DIR}. Ensure git access is available or set iPlug2_SOURCE_DIR to a local iPlug2 checkout with VST3_SDK included.")
   endif()
 
   if(NOT TARGET NeuralAmpModelerCore)

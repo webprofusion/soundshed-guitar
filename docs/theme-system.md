@@ -127,7 +127,7 @@ cd src/resources/ui
 npm run build
 
 # Build app
-cmake --build src/build --config Debug --target GuitarFX_App
+cmake --build src/build --config Debug --target SoundshedGuitar_App
 
 # Test: launch app, click 🎨 icon to cycle themes
 ```

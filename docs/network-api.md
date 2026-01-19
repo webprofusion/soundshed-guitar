@@ -245,10 +245,10 @@ Each format reports processing latency to the host for automatic delay compensat
 ## Build Targets
 
 ```
-GuitarFX_VST3    # VST3 plugin bundle
+SoundshedGuitar_VST3    # VST3 plugin bundle
 GuitarFX_AU      # Audio Unit bundle (macOS)
 GuitarFX_AAX     # AAX plugin (requires SDK)
-GuitarFX_App     # Standalone application
+SoundshedGuitar_App     # Standalone application
 ```
 
 ### Environment Variables
