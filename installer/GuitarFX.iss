@@ -1,15 +1,15 @@
 ; Inno Setup script for GuitarFX
 ; Build outputs expected:
-;  - VST3 bundle: src\build\GuitarFX.vst3
-;  - Standalone app: src\build\src\platform\app\Release\GuitarFX.exe
+;  - VST3 bundle: src\build\SoundshedGuitar.vst3
+;  - Standalone app: src\build\src\platform\app\Release\SoundshedGuitar.exe
 ;  - Standalone resources: src\build\src\platform\app\Release\resources\
 
-#define AppName "GuitarFX"
+#define AppName "Soundshed Guitar"
 #define AppPublisher "Soundshed"
 #define AppVersion "0.4.0"
 #define AppURL "https://soundshed.com"
-#define AppExeName "GuitarFX.exe"
-#define Vst3BundleName "GuitarFX.vst3"
+#define AppExeName "SoundshedGuitar.exe"
+#define Vst3BundleName "SoundshedGuitar.vst3"
 
 [Setup]
 AppId={{FBA4B6C7-3B1E-4B6C-9AE6-78B6F2E1F2F1}

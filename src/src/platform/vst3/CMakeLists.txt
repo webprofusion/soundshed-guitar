@@ -119,7 +119,7 @@ target_link_libraries(GuitarFX_VST3
 )
 
 set_target_properties(GuitarFX_VST3 PROPERTIES
-  OUTPUT_NAME GuitarFX
+  OUTPUT_NAME SoundshedGuitar
   FOLDER GuitarFX/Formats
 )
 
@@ -128,7 +128,7 @@ set_target_properties(GuitarFX_VST3 PROPERTIES
 # <name>.vst3/Contents/x86_64-win/<name>.vst3 (the DLL)
 # <name>.vst3/Contents/Resources/ (resources)
 
-set(VST3_BUNDLE_DIR "${CMAKE_BINARY_DIR}/GuitarFX.vst3")
+set(VST3_BUNDLE_DIR "${CMAKE_BINARY_DIR}/SoundshedGuitar.vst3")
 set(VST3_CONTENTS_DIR "${VST3_BUNDLE_DIR}/Contents")
 set(VST3_ARCH_DIR "${VST3_CONTENTS_DIR}/x86_64-win")
 set(VST3_RESOURCES_DIR "${VST3_CONTENTS_DIR}/Resources")

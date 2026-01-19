@@ -1,8 +1,8 @@
-# Install script for directory: C:/Work/GIT/misc/neuron-guitar/src
+# Install script for directory: C:/Work/GIT/soundshed-guitar/src
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitarFX")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitar")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -34,28 +34,28 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/_deps/neuralampmodelercore-build/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/_deps/neuralampmodelercore-build/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/_deps/nlohmann_json-build/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/_deps/nlohmann_json-build/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/_deps/cpp_httplib-build/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/_deps/cpp_httplib-build/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/src/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/src/cmake_install.cmake")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Work/GIT/misc/neuron-guitar/src/install_local_manifest.txt"
+  file(WRITE "C:/Work/GIT/soundshed-guitar/src/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
 if(CMAKE_INSTALL_COMPONENT)
@@ -71,6 +71,6 @@ else()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Work/GIT/misc/neuron-guitar/src/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "C:/Work/GIT/soundshed-guitar/src/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

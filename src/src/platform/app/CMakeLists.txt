@@ -75,7 +75,7 @@ target_link_libraries(GuitarFX_App
 )
 
 set_target_properties(GuitarFX_App PROPERTIES
-  OUTPUT_NAME GuitarFX
+  OUTPUT_NAME SoundshedGuitar
   FOLDER "GuitarFX/Formats"
 )
 

@@ -6,7 +6,7 @@
 int main() {
     namespace fs = std::filesystem;
     
-    const fs::path resourcesDir = fs::path("C:/Work/GIT/misc/neuron-guitar/src/resources");
+    const fs::path resourcesDir = fs::path("C:/Work/GIT/soundshed-guitar/src/resources");
     
     const char* testFiles[] = {
         "ir/Guitar/Scharrface/G12T-75, G12-65 blend 1.wav",

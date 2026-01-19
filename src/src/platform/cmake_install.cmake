@@ -1,8 +1,8 @@
-# Install script for directory: C:/Work/GIT/misc/neuron-guitar/src/src/platform
+# Install script for directory: C:/Work/GIT/soundshed-guitar/src/src/platform
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitarFX")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitar")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -34,17 +34,17 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/src/platform/vst3/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/src/platform/vst3/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Work/GIT/misc/neuron-guitar/src/src/platform/app/cmake_install.cmake")
+  include("C:/Work/GIT/soundshed-guitar/src/src/platform/app/cmake_install.cmake")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Work/GIT/misc/neuron-guitar/src/src/platform/install_local_manifest.txt"
+  file(WRITE "C:/Work/GIT/soundshed-guitar/src/src/platform/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

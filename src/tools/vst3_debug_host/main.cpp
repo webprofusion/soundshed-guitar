@@ -926,7 +926,7 @@ int mainImpl(int argc, char* argv[]) {
     std::cout << "\n";
     
     const char* pluginPath;
-    const char* defaultPath = "C:\\Work\\GIT\\misc\\neuron-guitar\\src\\build\\GuitarFX.vst3\\Contents\\x86_64-win\\GuitarFX.vst3";
+    const char* defaultPath = "C:\\Work\\GIT\\soundshed-guitar\\src\\build\\SoundshedGuitar.vst3\\Contents\\x86_64-win\\SoundshedGuitar.vst3";
 
     if (argc < 2) {
         // Default to our plugin

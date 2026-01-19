@@ -1,8 +1,8 @@
-# Install script for directory: C:/Work/GIT/misc/neuron-guitar/src/src/platform/app
+# Install script for directory: C:/Work/GIT/soundshed-guitar/src/src/platform/app
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitarFX")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files/SoundshedGuitar")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -35,6 +35,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Work/GIT/misc/neuron-guitar/src/src/platform/app/install_local_manifest.txt"
+  file(WRITE "C:/Work/GIT/soundshed-guitar/src/src/platform/app/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

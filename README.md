@@ -79,6 +79,13 @@ cmake --build build --config Debug --target VST3DebugHost
 Testing plugin (version with external resources) with pluginval:
 `C:\Tools>pluginval.exe  src\build\GuitarFX.vst3`
 
+
+# IPlug WebView DPI scaling issues
+The webview rendering does not properly compensate for scaled desktop sizes on windows e.g. 150%.
+Patch IPlugWebView_win.cpp at
+
+src\out\build\x64-Debug\_deps\iplug2-src\IPlug\Extras\WebView\IPlugWebView_win.cpp
+
 ## License
 
 MIT. Third-party components retain their upstream licenses.
