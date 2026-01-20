@@ -123,7 +123,11 @@ namespace guitarfx
             inputSumSquares += sample * sample;
           }
 
-          model->process(input.data(), output.data(), frames);
+          NAM_SAMPLE* inputPtr = input.data();
+          NAM_SAMPLE* outputPtr = output.data();
+          NAM_SAMPLE* inputPtrs[1] = { inputPtr };
+          NAM_SAMPLE* outputPtrs[1] = { outputPtr };
+          model->process(inputPtrs, outputPtrs, frames);
 
           for (int i = 0; i < frames; ++i)
           {
@@ -2694,6 +2698,10 @@ namespace guitarfx
     {
       HandleSaveBlendArchiveRequest(payload);
     }
+    else if (type == "savePresetArchive")
+    {
+      HandleSavePresetArchiveRequest(payload);
+    }
     else if (type == "splitSignalPathEdge")
     {
       HandleSplitSignalPathEdgeRequest(payload);
@@ -5168,6 +5176,68 @@ namespace guitarfx
     AppendSessionLog("Blend export saved: " + targetPath.generic_string());
 #else
     ReportErrorToUI("Export not supported", "Blend archive export is only available on Windows");
+#endif
+  }
+
+  void GuitarFXPlugin::HandleSavePresetArchiveRequest(const nlohmann::json &payload)
+  {
+#ifdef _WIN32
+    const std::string dataEncoded = payload.value("data", "");
+    const std::string suggestedName = payload.value("fileName", "preset.presetz");
+    if (dataEncoded.empty())
+    {
+      SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Missing export data"}}.dump());
+      AppendSessionLog("Preset export failed: missing export data");
+      return;
+    }
+
+    wchar_t filePath[MAX_PATH] = {0};
+    std::wstring defaultName;
+    if (!suggestedName.empty())
+    {
+      defaultName.assign(suggestedName.begin(), suggestedName.end());
+    }
+    if (!defaultName.empty() && defaultName.size() < MAX_PATH)
+    {
+      std::wcsncpy(filePath, defaultName.c_str(), MAX_PATH - 1);
+    }
+
+    OPENFILENAMEW ofn = {0};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFilter = L"Preset Archive (*.presetz)\0*.presetz\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = filePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = L"Save Preset Archive";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (!GetSaveFileNameW(&ofn))
+    {
+      SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Save cancelled"}}.dump());
+      AppendSessionLog("Preset export cancelled");
+      return;
+    }
+
+    const auto decodedBytes = DecodeBase64(dataEncoded);
+    if (decodedBytes.empty())
+    {
+      SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Invalid export data"}}.dump());
+      AppendSessionLog("Preset export failed: invalid export data");
+      return;
+    }
+
+    const std::filesystem::path targetPath{filePath};
+    if (!WriteFile(targetPath, decodedBytes))
+    {
+      SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Failed to save file"}}.dump());
+      AppendSessionLog("Preset export failed: write error for " + targetPath.generic_string());
+      return;
+    }
+
+    SendMessageToUI(nlohmann::json{{"type", "presetExportSaved"}, {"path", targetPath.generic_string()}}.dump());
+    AppendSessionLog("Preset export saved: " + targetPath.generic_string());
+#else
+    ReportErrorToUI("Export not supported", "Preset archive export is only available on Windows");
 #endif
   }
 

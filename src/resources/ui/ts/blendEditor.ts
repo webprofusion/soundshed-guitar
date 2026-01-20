@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 import { postMessage } from "./bridge.js";
 import { buildBlendModelMappingsFromIds, inferParamValueFromName } from "./blendUtils.js";
+import { arrayBufferToBase64, buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
 
 type BlendEditorDependencies = {
   getBlendLibrary: () => BlendLibrary;
@@ -240,7 +241,7 @@ export class BlendEditorModal {
       if (!resource) {
         continue;
       }
-      const fileName = buildArchiveFileName(resource);
+      const fileName = buildArchiveFileName(resource, "nam");
       const data = await requestResourceData("nam", resource.id);
       if (!data) {
         continue;
@@ -676,65 +677,3 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function sanitizeFilename(raw: string): string {
-  const trimmed = raw.trim() || "blend";
-  return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
-}
-
-function buildArchiveFileName(resource: LibraryResource): string {
-  const name = resource.filePath ? resource.filePath.split(/[\\/]/).pop() ?? "" : "";
-  if (name) {
-    return name;
-  }
-  return `${sanitizeFilename(resource.id || resource.name || "model")}.nam`;
-}
-
-function generateResourceId(seed: string): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${sanitizeFilename(seed)}-${Math.random().toString(16).slice(2)}`;
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary);
-}
-
-type ResourceDataResponse = {
-  requestId: string;
-  data?: string;
-  fileName?: string;
-  message?: string;
-};
-
-const resourceRequests = new Map<string, (data?: string) => void>();
-
-async function requestResourceData(resourceType: string, resourceId: string): Promise<string | undefined> {
-  const requestId = generateResourceId(resourceId);
-  const promise = new Promise<string | undefined>((resolve) => {
-    resourceRequests.set(requestId, resolve);
-  });
-
-  postMessage({
-    type: "requestResourceData",
-    requestId,
-    resourceType,
-    resourceId,
-  });
-
-  return promise;
-}
-
-export function handleResourceDataMessage(payload: ResourceDataResponse): void {
-  const resolve = resourceRequests.get(payload.requestId);
-  if (!resolve) {
-    return;
-  }
-  resourceRequests.delete(payload.requestId);
-  resolve(payload.data);
-}

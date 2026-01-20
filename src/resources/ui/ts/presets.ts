@@ -4,7 +4,8 @@ import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views
 import { clonePreset, uiState } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl } from "./utils.js";
-import type { Preset, Attachment } from "./types.js";
+import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
+import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource } from "./types.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
@@ -471,6 +472,289 @@ export function initializeSaveAsButton(): void {
   }
 }
 
+type PresetArchiveResource = {
+  id: string;
+  name?: string;
+  category?: string;
+  type: string;
+  fileName: string;
+};
+
+type PresetArchive = {
+  formatVersion: number;
+  preset: Preset;
+  resources: PresetArchiveResource[];
+  blends?: BlendDefinition[];
+};
+
+function getLibraryResource(resourceType: string, resourceId: string): LibraryResource | undefined {
+  const resources = uiState.resourceLibrary[resourceType] ?? [];
+  return resources.find((res) => res.id === resourceId);
+}
+
+function collectPresetBlendIds(preset: Preset): string[] {
+  if (!preset.graph?.nodes) {
+    return [];
+  }
+
+  const ids = new Set<string>();
+  preset.graph.nodes.forEach((node) => {
+    const blendId = node.config?.blendId ?? "";
+    if (blendId) {
+      ids.add(blendId);
+    }
+  });
+
+  return Array.from(ids);
+}
+
+function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[]): ResourceRef[] {
+  const refs: ResourceRef[] = [];
+  const seen = new Set<string>();
+
+  const addRef = (type: string | undefined, id: string | undefined, filePath?: string): void => {
+    if (!type || !id) {
+      return;
+    }
+    const key = `${type}:${id}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    refs.push({ type, id, filePath });
+  };
+
+  if (preset.graph?.nodes) {
+    preset.graph.nodes.forEach((node) => {
+      if (node.resource) {
+        addRef(node.resource.type, node.resource.id, node.resource.filePath);
+      }
+      if (Array.isArray(node.resources)) {
+        node.resources.forEach((res) => addRef(res.type, res.id, res.filePath));
+      }
+    });
+  }
+
+  if (preset.audioFxModelId) {
+    addRef("nam", preset.audioFxModelId);
+  }
+  if (preset.irId) {
+    addRef("ir", preset.irId);
+  }
+
+  preset.attachments?.forEach((attachment) => {
+    if (!attachment.id) {
+      return;
+    }
+    const type = attachment.type === "audiofx" ? "nam" : attachment.type === "ir" ? "ir" : attachment.type;
+    addRef(type, attachment.id, attachment.filePath);
+  });
+
+  blendDefs.forEach((blend) => {
+    (blend.models ?? []).forEach((modelId) => addRef("nam", modelId));
+  });
+
+  return refs;
+}
+
+async function exportCurrentPresetArchive(): Promise<void> {
+  const presetId = uiState.activePresetId ?? "";
+  const preset = uiState.presetCache.get(presetId) ?? null;
+  if (!preset) {
+    showNotification("Export failed", "No preset selected");
+    return;
+  }
+
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    showNotification("Export failed", "Archive library not available");
+    return;
+  }
+
+  const zip = new zipLib();
+  const resourcesFolder = zip.folder("resources");
+  if (!resourcesFolder) {
+    showNotification("Export failed", "Unable to create archive");
+    return;
+  }
+
+  const blendIds = collectPresetBlendIds(preset);
+  const blendDefs = (uiState.blendLibrary ?? []).filter((blend) => blendIds.includes(blend.id));
+  const resourceRefs = collectPresetResourceRefs(preset, blendDefs);
+  const exportResources: PresetArchiveResource[] = [];
+
+  for (const ref of resourceRefs) {
+    const resource = getLibraryResource(ref.type, ref.id);
+    if (!resource) {
+      continue;
+    }
+    const fileName = buildArchiveFileName(resource, ref.type);
+    const data = await requestResourceData(ref.type, ref.id);
+    if (!data) {
+      continue;
+    }
+    resourcesFolder.file(fileName, data, { base64: true });
+    exportResources.push({
+      id: resource.id,
+      name: resource.name,
+      category: resource.category,
+      type: ref.type,
+      fileName,
+    });
+  }
+
+  const archive: PresetArchive = {
+    formatVersion: 1,
+    preset: clonePreset(preset),
+    resources: exportResources,
+    blends: blendDefs,
+  };
+
+  zip.file("preset.json", JSON.stringify(archive, null, 2));
+  const blob = await zip.generateAsync({ type: "blob" });
+  const buffer = await blob.arrayBuffer();
+  const data = arrayBufferToBase64(buffer);
+  postMessage({
+    type: "savePresetArchive",
+    fileName: `${sanitizeFilename(preset.name || preset.id || "preset")}.presetz`,
+    data,
+  });
+}
+
+async function importPresetArchive(file: File): Promise<void> {
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    showNotification("Import failed", "Archive library not available");
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const zip = await zipLib.loadAsync(buffer);
+  const presetEntry = zip.file("preset.json");
+  if (!presetEntry) {
+    showNotification("Import failed", "Archive is missing preset.json");
+    return;
+  }
+
+  const presetText = await presetEntry.async("text");
+  const archive = JSON.parse(presetText) as PresetArchive;
+  if (!archive.preset) {
+    showNotification("Import failed", "Archive has no preset data");
+    return;
+  }
+
+  const zipFiles = Object.values(zip.files) as JSZipObject[];
+  const fileMap = new Map<string, JSZipObject>();
+  zipFiles.forEach((entry) => {
+    if (!entry.dir) {
+      const name = entry.name.replace(/^resources\//, "");
+      fileMap.set(name, entry);
+    }
+  });
+
+  const idMap = new Map<string, string>();
+  const resourcesToImport = archive.resources ?? [];
+  for (const resource of resourcesToImport) {
+    const fileName = resource.fileName ?? "";
+    const entry = fileMap.get(fileName);
+    if (!entry) {
+      continue;
+    }
+    const dataBuffer = await entry.async("arraybuffer");
+    const data = arrayBufferToBase64(dataBuffer);
+    const newId = generateResourceId(fileName);
+    idMap.set(resource.id, newId);
+
+    postMessage({
+      type: "importRemoteResource",
+      provider: "presetArchive",
+      resourceType: resource.type,
+      resourceId: newId,
+      name: resource.name ?? fileName,
+      description: "",
+      category: resource.category ?? "",
+      subfolder: "preset-imports",
+      fileName,
+      metadata: {
+        provider: "presetArchive",
+        sourceFile: fileName,
+      },
+      data,
+    });
+  }
+
+  const blendIdMap = new Map<string, string>();
+  const blends = archive.blends ?? [];
+  blends.forEach((blend) => {
+    const newBlendId = generateResourceId(blend.id || blend.name || "blend");
+    blendIdMap.set(blend.id, newBlendId);
+
+    const remapModel = (id: string) => idMap.get(id) ?? id;
+    const models = (blend.models ?? []).map(remapModel);
+    const modelMappings = (blend.modelMappings ?? []).map((mapping) => ({
+      ...mapping,
+      id: remapModel(mapping.id),
+    }));
+
+    postMessage({
+      type: "saveBlendDefinition",
+      blend: {
+        ...blend,
+        id: newBlendId,
+        models,
+        modelMappings,
+      },
+    });
+  });
+
+  const importedPreset = clonePreset(archive.preset);
+  importedPreset.id = generateResourceId(importedPreset.id || importedPreset.name || "preset");
+  importedPreset.name = importedPreset.name?.endsWith(" (Imported)")
+    ? importedPreset.name
+    : `${importedPreset.name || "Imported Preset"} (Imported)`;
+
+  if (importedPreset.graph?.nodes) {
+    importedPreset.graph.nodes.forEach((node) => {
+      if (node.resource?.id) {
+        node.resource.id = idMap.get(node.resource.id) ?? node.resource.id;
+      }
+      if (Array.isArray(node.resources)) {
+        node.resources.forEach((res) => {
+          res.id = idMap.get(res.id) ?? res.id;
+        });
+      }
+      if (node.config?.blendId) {
+        node.config.blendId = blendIdMap.get(node.config.blendId) ?? node.config.blendId;
+      }
+    });
+  }
+
+  if (importedPreset.audioFxModelId) {
+    importedPreset.audioFxModelId = idMap.get(importedPreset.audioFxModelId) ?? importedPreset.audioFxModelId;
+  }
+  if (importedPreset.irId) {
+    importedPreset.irId = idMap.get(importedPreset.irId) ?? importedPreset.irId;
+  }
+
+  if (Array.isArray(importedPreset.attachments)) {
+    importedPreset.attachments = importedPreset.attachments.map((attachment) => ({
+      ...attachment,
+      id: attachment.id ? (idMap.get(attachment.id) ?? attachment.id) : attachment.id,
+    }));
+  }
+
+  savePresetToLocalStorage(importedPreset);
+  uiState.presets.unshift(importedPreset);
+  uiState.filteredPresets = uiState.presets.slice();
+  uiState.presetCache.set(importedPreset.id, importedPreset);
+  uiState.activePresetId = importedPreset.id;
+  populatePresetDropdown();
+  renderPresetUI(clonePreset(importedPreset));
+  updatePresetDropdownSelection();
+  showNotification("Preset imported", importedPreset.name ?? "");
+  updatePresetActionButtons();
+}
+
 // Delete preset from localStorage
 export function deletePresetFromLocalStorage(presetId: string): boolean {
   try {
@@ -625,6 +909,7 @@ export function updatePresetActionButtons(): void {
   const editBtn = document.getElementById("preset-edit-btn") as HTMLButtonElement | null;
   const saveBtn = document.getElementById("preset-save-btn") as HTMLButtonElement | null;
   const deleteBtn = document.getElementById("preset-delete-btn") as HTMLButtonElement | null;
+  const exportBtn = document.getElementById("preset-export-btn") as HTMLButtonElement | null;
 
   const canModify = isUserPreset(uiState.activePresetId);
 
@@ -640,6 +925,10 @@ export function updatePresetActionButtons(): void {
     deleteBtn.disabled = !canModify;
     deleteBtn.title = canModify ? "Delete Preset" : "Cannot delete factory presets";
   }
+  if (exportBtn) {
+    exportBtn.disabled = !uiState.activePresetId;
+    exportBtn.title = uiState.activePresetId ? "Export Preset" : "No preset to export";
+  }
 }
 
 // Initialize preset action buttons
@@ -647,6 +936,9 @@ export function initializePresetActionButtons(): void {
   const editBtn = document.getElementById("preset-edit-btn");
   const saveBtn = document.getElementById("preset-save-btn");
   const deleteBtn = document.getElementById("preset-delete-btn");
+  const exportBtn = document.getElementById("preset-export-btn");
+  const importBtn = document.getElementById("preset-import-btn");
+  const importInput = document.getElementById("preset-import-input") as HTMLInputElement | null;
 
   if (editBtn) {
     editBtn.addEventListener("click", openEditPresetModal);
@@ -658,6 +950,24 @@ export function initializePresetActionButtons(): void {
 
   if (deleteBtn) {
     deleteBtn.addEventListener("click", deleteCurrentPreset);
+  }
+
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => void exportCurrentPresetArchive());
+  }
+
+  if (importBtn) {
+    importBtn.addEventListener("click", () => importInput?.click());
+  }
+
+  if (importInput) {
+    importInput.addEventListener("change", () => {
+      const file = importInput.files?.[0];
+      importInput.value = "";
+      if (file) {
+        void importPresetArchive(file);
+      }
+    });
   }
 
   // Initial state

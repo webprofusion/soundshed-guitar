@@ -193,6 +193,7 @@ namespace guitarfx
     void HandleSaveBlendDefinitionRequest(const nlohmann::json &payload);
     void HandleRequestResourceDataRequest(const nlohmann::json &payload);
     void HandleSaveBlendArchiveRequest(const nlohmann::json &payload);
+    void HandleSavePresetArchiveRequest(const nlohmann::json &payload);
     void RefreshMetronomeClickSamples();
     void UpdateMetronomeClickConfigFromSettings();
     const MetronomeClickTypeConfig* FindMetronomeClickType(const std::string& id) const;

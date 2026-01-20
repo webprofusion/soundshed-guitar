@@ -133,7 +133,11 @@ public:
           mFallbackInputBuffer[i] = static_cast<NAM_SAMPLE>(mInputBuffer[i]);
         }
 
-        mFallbackModel->process(mFallbackInputBuffer.data(), mFallbackOutputBuffer.data(), numSamples);
+        NAM_SAMPLE* inputPtr = mFallbackInputBuffer.data();
+        NAM_SAMPLE* outputPtr = mFallbackOutputBuffer.data();
+        NAM_SAMPLE* inputPtrs[1] = { inputPtr };
+        NAM_SAMPLE* outputPtrs[1] = { outputPtr };
+        mFallbackModel->process(inputPtrs, outputPtrs, numSamples);
 
         // Output to both channels (convert from NAM_SAMPLE to float)
         const float outputGainF = static_cast<float>(mOutputGain);

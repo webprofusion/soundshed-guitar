@@ -80,8 +80,8 @@ set_target_properties(SoundshedGuitar_App PROPERTIES
 )
 
 add_custom_command(TARGET SoundshedGuitar_App POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SoundshedGuitar_App>/resources"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/resources"
-    "$<TARGET_FILE_DIR:SoundshedGuitar_App>/resources"
+  COMMAND ${CMAKE_COMMAND}
+    -D SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources"
+    -D DEST_DIR="$<TARGET_FILE_DIR:SoundshedGuitar_App>/resources"
+    -P "${CMAKE_SOURCE_DIR}/cmake/CopyAppResources.cmake"
   COMMENT "Copying resource assets into the standalone bundle")

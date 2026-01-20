@@ -12,7 +12,7 @@ import { refreshSelectedNodeParams } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
 import type { Preset, UiSettings } from "./types.js";
-import { handleResourceDataMessage } from "./blendEditor.js";
+import { handleResourceDataMessage } from "./archiveUtils.js";
 
 export function handleIncomingMessage(message: string): void {
   const payload = JSON.parse(message) as Record<string, unknown>;
@@ -269,6 +269,16 @@ export function handleIncomingMessage(message: string): void {
     case "blendExportFailed": {
       const info = payload as { message?: string };
       showNotification("Blend export failed", info.message ?? "");
+      break;
+    }
+    case "presetExportSaved": {
+      const info = payload as { path?: string };
+      showNotification("Preset exported", info.path ?? "");
+      break;
+    }
+    case "presetExportFailed": {
+      const info = payload as { message?: string };
+      showNotification("Preset export failed", info.message ?? "");
       break;
     }
     case "presetSaved": {

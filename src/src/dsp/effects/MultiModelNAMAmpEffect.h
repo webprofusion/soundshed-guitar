@@ -365,7 +365,11 @@ private:
       {
         instance.fallbackInput[i] = static_cast<NAM_SAMPLE>(input[i]);
       }
-      instance.fallback->process(instance.fallbackInput.data(), instance.fallbackOutput.data(), numSamples);
+      NAM_SAMPLE* inputPtr = instance.fallbackInput.data();
+      NAM_SAMPLE* outputPtr = instance.fallbackOutput.data();
+      NAM_SAMPLE* inputPtrs[1] = { inputPtr };
+      NAM_SAMPLE* outputPtrs[1] = { outputPtr };
+      instance.fallback->process(inputPtrs, outputPtrs, numSamples);
       for (int i = 0; i < numSamples; ++i)
       {
         output[i] = static_cast<float>(instance.fallbackOutput[i]);

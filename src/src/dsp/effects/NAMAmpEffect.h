@@ -77,7 +77,11 @@ namespace guitarfx
 
       if (mModel && mEnabled)
       {
-        mModel->process(mInputBuffer.data(), mOutputBuffer.data(), numSamples);
+        NAM_SAMPLE* inputPtr = mInputBuffer.data();
+        NAM_SAMPLE* outputPtr = mOutputBuffer.data();
+        NAM_SAMPLE* inputPtrs[1] = { inputPtr };
+        NAM_SAMPLE* outputPtrs[1] = { outputPtr };
+        mModel->process(inputPtrs, outputPtrs, numSamples);
 
         // Output to both channels
         for (int i = 0; i < numSamples; ++i)
