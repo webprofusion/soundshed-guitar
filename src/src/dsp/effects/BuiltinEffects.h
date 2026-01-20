@@ -10,6 +10,7 @@
 #include "dsp/effects/PitchShiftEffect.h"
 #include "dsp/effects/ReverbEffect.h"
 #include "dsp/effects/CompressorEffect.h"
+#include "dsp/effects/LimiterEffect.h"
 #include "dsp/effects/NAMAmpEffect.h"
 #include "dsp/effects/OptimizedNAMAmpEffect.h"
 #include "dsp/effects/MultiModelNAMAmpEffect.h"
@@ -49,6 +50,7 @@ namespace guitarfx
     // Dynamics
     RegisterNoiseGateEffect();
     RegisterCompressorEffects(); // VCA and Opto compressors
+    RegisterLimiterEffect();
 
     // EQ
     RegisterParametricEQEffect();

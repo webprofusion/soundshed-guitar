@@ -94,6 +94,16 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     ]
   },
   {
+    type: "limiter_brickwall",
+    displayName: "Brickwall Limiter",
+    category: "dynamics",
+    requiresResource: false,
+    parameters: [
+      { key: "ceiling", name: "Ceiling", default: -0.1, min: -24, max: 0, unit: "dB" },
+      { key: "release", name: "Release", default: 50, min: 1, max: 500, unit: "ms" }
+    ]
+  },
+  {
     type: "amp_nam",
     displayName: "NAM Amp Model",
     category: "amp",
