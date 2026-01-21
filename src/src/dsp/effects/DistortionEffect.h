@@ -5,6 +5,34 @@
 #include <algorithm>
 #include <cmath>
 
+/**
+ * @class DistortionEffect
+ * @brief Hard-clipping distortion with a one-pole tone filter and wet/dry mix.
+ *
+ * @details
+ * Algorithm overview:
+ * - **Drive stage:** Input samples are amplified by a drive gain (1.0 + 29.0 * drive),
+ *   then hard-clipped to [-1, 1], producing a classic distortion waveform.
+ * - **Tone stage:** The clipped signal is passed through a one-pole low-pass filter
+ *   whose cutoff is interpolated between 800 Hz and 8000 Hz based on the tone parameter.
+ *   This attenuates harshness at lower tone settings and preserves brightness at higher values.
+ * - **Level stage:** The processed signal is scaled by a linear gain derived from a
+ *   dB parameter (level).
+ * - **Mix stage:** A wet/dry blend combines the original input and processed signal.
+ *
+ * Parameters:
+ * - **drive** [0..1]: Amount of pre-clipping gain; higher values increase saturation.
+ * - **tone**  [0..1]: Low-pass cutoff control (800–8000 Hz) for post-distortion shaping.
+ * - **level** [-12..12] dB: Output gain applied after distortion and tone filtering.
+ * - **mix**   [0..1]: Wet/dry balance (0 = clean, 1 = fully distorted).
+ *
+ * State:
+ * - Maintains separate tone filter states for left/right channels, reset via Reset().
+ *
+ * Usage:
+ * - Call Prepare() to set sample rate and reset state.
+ * - Process() performs in-place-style processing with optional null channels.
+ */
 namespace guitarfx
 {
   /**

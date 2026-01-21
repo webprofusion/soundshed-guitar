@@ -4,6 +4,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/RealtimeConvolver.h"
 #include "dsp/IRTypes.h"
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -28,6 +29,9 @@ namespace guitarfx
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
 
+      UpdateAirCoefficients();
+      ResetAirState();
+
       mInputBufferL.resize(static_cast<size_t>(maxBlockSize));
       mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
@@ -44,6 +48,7 @@ namespace guitarfx
     {
       mConvolverL.Reset();
       mConvolverR.Reset();
+      ResetAirState();
     }
 
     void Process(float **inputs, float **outputs, int numSamples) override
@@ -68,6 +73,16 @@ namespace guitarfx
       // Process through convolvers
       mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
       mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+
+      // Apply Air EQ (post-convolution, pre-mix)
+      if (mAirActive)
+      {
+        for (int i = 0; i < numSamples; ++i)
+        {
+          mOutputBufferL[i] = ProcessAirSample(mOutputBufferL[i], 0);
+          mOutputBufferR[i] = ProcessAirSample(mOutputBufferR[i], 1);
+        }
+      }
 
       // Apply wet/dry mix and output gain
       float wetGain = static_cast<float>(mMix * mOutputGain);
@@ -101,6 +116,17 @@ namespace guitarfx
         if (!mImpulse.empty())
           InitializeConvolvers();
       }
+      else if (key == "air")
+      {
+        mAir = std::clamp(value, 0.0, 1.0);
+        UpdateAirCoefficients();
+      }
+      else if (key == "airMode")
+      {
+        const int mode = static_cast<int>(std::clamp(value, 0.0, 2.0));
+        mAirMode = static_cast<AirMode>(mode);
+        ResetAirState();
+      }
     }
 
     void SetConfig(const std::string &, const std::string &) override {}
@@ -115,6 +141,10 @@ namespace guitarfx
         return mEnabled ? 1.0 : 0.0;
       if (key == "quality")
         return static_cast<double>(mQuality);
+      if (key == "air")
+        return mAir;
+      if (key == "airMode")
+        return static_cast<double>(mAirMode);
       return 0.0;
     }
 
@@ -135,6 +165,7 @@ namespace guitarfx
     [[nodiscard]] std::string GetCategory() const override { return "cab"; }
 
   private:
+    static constexpr double kPi = 3.14159265358979323846;
     // WAV parsing utilities
     template <typename T>
     static bool ReadValue(std::ifstream &stream, T &value)
@@ -439,6 +470,118 @@ namespace guitarfx
       return true;
     }
 
+    enum class AirMode
+    {
+      OptionA_Shelf,
+      OptionB_Peak,
+      OptionC_ShelfPlusPeak,
+    };
+
+    static double ProcessBiquad(double input, double b0, double b1, double b2,
+                                double a1, double a2, double &s1, double &s2)
+    {
+      const double output = b0 * input + s1;
+      s1 = b1 * input - a1 * output + s2;
+      s2 = b2 * input - a2 * output;
+      return output;
+    }
+
+    void ComputeHighShelf(double freq, double slope, double gainDb,
+                          double &b0, double &b1, double &b2, double &a1, double &a2)
+    {
+      const double A = std::pow(10.0, gainDb / 40.0);
+      const double w0 = 2.0 * kPi * freq / mSampleRate;
+      const double cosw0 = std::cos(w0);
+      const double sinw0 = std::sin(w0);
+      const double sqrtA = std::sqrt(A);
+      const double alpha = sinw0 / 2.0 * std::sqrt((A + 1.0 / A) * (1.0 / slope - 1.0) + 2.0);
+
+      const double a0 = (A + 1.0) - (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha;
+      b0 = A * ((A + 1.0) + (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha) / a0;
+      b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cosw0) / a0;
+      b2 = A * ((A + 1.0) + (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0;
+      a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cosw0) / a0;
+      a2 = ((A + 1.0) - (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0;
+    }
+
+    void ComputePeakingEQ(double freq, double Q, double gainDb,
+                          double &b0, double &b1, double &b2, double &a1, double &a2)
+    {
+      const double A = std::pow(10.0, gainDb / 40.0);
+      const double w0 = 2.0 * kPi * freq / mSampleRate;
+      const double cosw0 = std::cos(w0);
+      const double sinw0 = std::sin(w0);
+      const double alpha = sinw0 / (2.0 * Q);
+
+      const double a0 = 1.0 + alpha / A;
+      b0 = (1.0 + alpha * A) / a0;
+      b1 = (-2.0 * cosw0) / a0;
+      b2 = (1.0 - alpha * A) / a0;
+      a1 = (-2.0 * cosw0) / a0;
+      a2 = (1.0 - alpha / A) / a0;
+    }
+
+    void UpdateAirCoefficients()
+    {
+      if (mSampleRate <= 0.0)
+      {
+        mAirActive = false;
+        return;
+      }
+
+      const double clamped = std::clamp(mAir, 0.0, 1.0);
+      if (clamped <= 0.0001)
+      {
+        mAirActive = false;
+        return;
+      }
+
+      // Option A (default): subtle high-shelf lift in the air band.
+      const double shelfGainDb = clamped * 6.0; // 0..+6 dB
+      const double shelfFreq = 9000.0;
+      const double shelfSlope = 0.7;
+      ComputeHighShelf(shelfFreq, shelfSlope, shelfGainDb, mAirShelfB0, mAirShelfB1, mAirShelfB2, mAirShelfA1, mAirShelfA2);
+
+      // Option B (optional): high-mid presence peak.
+      const double peakGainDb = clamped * 4.0; // 0..+4 dB
+      const double peakFreq = 4500.0;
+      const double peakQ = 1.2;
+      ComputePeakingEQ(peakFreq, peakQ, peakGainDb, mAirPeakB0, mAirPeakB1, mAirPeakB2, mAirPeakA1, mAirPeakA2);
+
+      // Option C (optional): shelf + peak combined (handled in ProcessAirSample).
+      mAirActive = true;
+    }
+
+    void ResetAirState()
+    {
+      for (int ch = 0; ch < 2; ++ch)
+      {
+        mAirShelfS1[ch] = mAirShelfS2[ch] = 0.0;
+        mAirPeakS1[ch] = mAirPeakS2[ch] = 0.0;
+      }
+    }
+
+    double ProcessAirSample(double input, int channel)
+    {
+      switch (mAirMode)
+      {
+      case AirMode::OptionA_Shelf:
+        return ProcessBiquad(input, mAirShelfB0, mAirShelfB1, mAirShelfB2, mAirShelfA1, mAirShelfA2,
+                             mAirShelfS1[channel], mAirShelfS2[channel]);
+      case AirMode::OptionB_Peak:
+        return ProcessBiquad(input, mAirPeakB0, mAirPeakB1, mAirPeakB2, mAirPeakA1, mAirPeakA2,
+                             mAirPeakS1[channel], mAirPeakS2[channel]);
+      case AirMode::OptionC_ShelfPlusPeak:
+      default:
+      {
+        const double shelf = ProcessBiquad(input, mAirShelfB0, mAirShelfB1, mAirShelfB2, mAirShelfA1, mAirShelfA2,
+                                           mAirShelfS1[channel], mAirShelfS2[channel]);
+        return ProcessBiquad(shelf, mAirPeakB0, mAirPeakB1, mAirPeakB2, mAirPeakA1, mAirPeakA2,
+                             mAirPeakS1[channel], mAirPeakS2[channel]);
+      }
+      }
+    }
+
     RealtimeConvolver mConvolverL;
     RealtimeConvolver mConvolverR;
 
@@ -455,6 +598,18 @@ namespace guitarfx
     double mOutputGain = 1.0;
     bool mEnabled = true;
     IRQuality mQuality = IRQuality::Standard;
+
+    double mAir = 0.0;
+    AirMode mAirMode = AirMode::OptionA_Shelf;
+    bool mAirActive = false;
+
+    // Air filter coefficients
+    double mAirShelfB0 = 0, mAirShelfB1 = 0, mAirShelfB2 = 0, mAirShelfA1 = 0, mAirShelfA2 = 0;
+    double mAirPeakB0 = 0, mAirPeakB1 = 0, mAirPeakB2 = 0, mAirPeakA1 = 0, mAirPeakA2 = 0;
+
+    // Air filter state (per channel)
+    std::array<double, 2> mAirShelfS1 = {}, mAirShelfS2 = {};
+    std::array<double, 2> mAirPeakS1 = {}, mAirPeakS2 = {};
   };
 
   inline void RegisterIRCabEffect()
@@ -469,6 +624,8 @@ namespace guitarfx
     info.parameters = {
         {"mix", "Mix", 1.0, 0.0, 1.0, ""},
         {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
+      {"air", "Air", 0.0, 0.0, 1.0, "amount"},
+      {"airMode", "Air Mode", 0.0, 0.0, 2.0, "enum"},
         {"quality", "Quality", 1.0, 0.0, 3.0, ""}}; // 0=Economy, 1=Standard, 2=High, 3=Full
 
     EffectRegistry::Instance().Register("cab_ir", info, []()

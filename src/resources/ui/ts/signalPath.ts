@@ -991,6 +991,11 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     const unit = paramDef.unit || "amount";
     const defaultValue = paramDef.default ?? value;
     const isToggle = isToggleParam(paramDef);
+    const step = typeof paramDef.step === "number" ? paramDef.step : undefined;
+    const enumLabels = Array.isArray(paramDef.labels) ? paramDef.labels : [];
+    const isEnum = unit === "enum" && enumLabels.length > 0;
+    const labelIndex = Math.round(Math.max(min, Math.min(max, value)));
+    const enumValueLabel = isEnum ? (enumLabels[labelIndex] ?? `${labelIndex}`) : "";
 
     if (isToggle) {
       const checked = value >= 0.5;
@@ -1018,10 +1023,19 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           data-min="${min}"
           data-max="${max}"
           data-unit="${unit}"
+          ${step !== undefined ? `data-step="${step}"` : ""}
+          ${isEnum ? `data-labels="${enumLabels.join("|")}"` : ""}
         >
           <div class="knob-indicator"></div>
         </div>
-        <span class="node-param-value">${value.toFixed(2)}${unit}</span>
+        <span class="node-param-value">${isEnum ? enumValueLabel : `${value.toFixed(2)}${unit}`}</span>
+        ${isEnum ? `
+          <div class="node-param-steps">
+            ${enumLabels.map((text, idx) => `
+              <span class="node-param-step" data-step-index="${idx}">${text}</span>
+            `).join("")}
+          </div>
+        ` : ""}
       </div>
     `;
   }).join("");
@@ -1214,23 +1228,43 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
     const unit = knob.dataset.unit || "amount";
     const defaultValue = parseFloat(knob.dataset.default || knob.dataset.value || "0");
     const sensitivity = (max - min) / 200;
+    const step = knob.dataset.step ? parseFloat(knob.dataset.step) : undefined;
+    const labels = (knob.dataset.labels || "").split("|").filter(Boolean);
+    const isEnum = unit === "enum" && labels.length > 0;
 
-    new GenericKnob({
+    const snapValue = (rawValue: number): number => {
+      if (!step || step <= 0) return rawValue;
+      const snapped = Math.round((rawValue - min) / step) * step + min;
+      return Math.max(min, Math.min(max, snapped));
+    };
+
+    const formatValue = (rawValue: number): string => {
+      if (isEnum) {
+        const index = Math.round(rawValue);
+        return labels[index] ?? `${index}`;
+      }
+      return `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
+    };
+
+    const knobInstance = new GenericKnob({
       knobElement: knob,
       paramId: `${nodeId ?? "node"}_${paramKey ?? "param"}`,
       minValue: min,
       maxValue: max,
       defaultValue,
-      displayFormat: (value) => `${value.toFixed(2)}${unit === "amount" ? "" : unit}`,
+      displayFormat: (value) => formatValue(value),
       valueDisplay,
       sensitivity,
       sendParameter: false,
       onValueChange: (value) => {
-        if (nodeId && paramKey) {
-          node.params[paramKey] = value;
-          sendSignalPathNodeParamUpdate(nodeId, paramKey, value);
-          updateEqVisualization(node);
+        if (!nodeId || !paramKey) return;
+        const finalValue = snapValue(value);
+        if (finalValue !== value) {
+          knobInstance.setValue(finalValue);
         }
+        node.params[paramKey] = finalValue;
+        sendSignalPathNodeParamUpdate(nodeId, paramKey, finalValue);
+        updateEqVisualization(node);
       },
     });
   });
