@@ -180,7 +180,9 @@
 }
 
 .fx-category-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-block;
   flex-shrink: 0;
 }
 
@@ -244,8 +246,18 @@
 }
 
 .fx-item-icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.fx-item-icon .fx-effect-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .fx-item-info {
@@ -272,8 +284,18 @@
 }
 
 .fx-item-badge {
-  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.fx-item-badge .fx-badge-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .tone3000-status {

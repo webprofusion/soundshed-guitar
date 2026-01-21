@@ -3,6 +3,7 @@ import { uiState } from "./state.js";
 import { addActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled } from "./bridge.js";
 import { escapeHtml } from "./utils.js";
 import { updateSignalPathClipIndicators } from "./signalPath.js";
+import { renderIcon } from "./iconAssets.js";
 import type { Preset } from "./types.js";
 
 const presetListElement = document.getElementById("preset-list");
@@ -80,7 +81,7 @@ function renderParameterSection(): string {
   return `
     <div class="signal-chain-section">
       <h3 class="section-title">
-        <span class="section-icon">⚙️</span>
+        <span class="section-icon">${renderIcon("gear", "section-icon-img")}</span>
         Current Parameters
       </h3>
       <div class="params-grid">
@@ -89,7 +90,7 @@ function renderParameterSection(): string {
     </div>
     <div class="signal-chain-section">
       <h3 class="section-title">
-        <span class="section-icon">🔬</span>
+        <span class="section-icon">${renderIcon("microscope", "section-icon-img")}</span>
         Diagnostics
       </h3>
       <button id="run-signal-test" class="test-btn">Run Signal Path Test</button>
@@ -281,7 +282,11 @@ export function renderPresetDetails(
 
   const attachmentCards = (preset.attachments ?? [])
     .map((attachment) => {
-      const icon = attachment.type === "audiofx" ? "🎸" : attachment.type === "ir" ? "🔊" : "📦";
+      const icon = attachment.type === "audiofx"
+        ? renderIcon("amp", "attachment-icon-img")
+        : attachment.type === "ir"
+          ? renderIcon("speaker", "attachment-icon-img")
+          : renderIcon("package", "attachment-icon-img");
       const label = attachment.type === "audiofx" ? "Amp Model" : attachment.type === "ir" ? "Cabinet IR" : attachment.type;
       const hashShort = attachment.hash ? `${attachment.hash.substring(0, 12)}...` : "N/A";
       return `
@@ -299,7 +304,13 @@ export function renderPresetDetails(
 
   const fxChainNodes = (preset.fxChain ?? [])
     .map((stage) => {
-      const icon = stage === "dynamics_gate" || stage === "noise_gate" ? "🔇" : stage === "compressor" ? "📊" : stage === "eq" ? "🎚️" : "⚡";
+      const icon = stage === "dynamics_gate" || stage === "noise_gate"
+        ? renderIcon("mute", "fx-node-icon-img")
+        : stage === "compressor"
+          ? renderIcon("meter", "fx-node-icon-img")
+          : stage === "eq"
+            ? renderIcon("sliders", "fx-node-icon-img")
+            : renderIcon("bolt", "fx-node-icon-img");
       return `
         <div class="fx-node">
           <div class="fx-node-icon">${icon}</div>
@@ -345,7 +356,7 @@ export function renderPresetDetails(
     return `
       <div class="signal-chain-section">
         <h3 class="section-title">
-          <span class="section-icon">🎛️</span>
+          <span class="section-icon">${renderIcon("mixer", "section-icon-img")}</span>
           Mixer
         </h3>
         <div class="mixer-master">
@@ -379,18 +390,18 @@ export function renderPresetDetails(
 
       <div class="signal-chain-section">
         <h3 class="section-title">
-          <span class="section-icon">🔗</span>
+          <span class="section-icon">${renderIcon("link", "section-icon-img")}</span>
           Signal Chain
         </h3>
         <div class="fx-chain-flow">
           <div class="fx-node input-node">
-            <div class="fx-node-icon">🎸</div>
+            <div class="fx-node-icon">${renderIcon("amp", "fx-node-icon-img")}</div>
             <span class="fx-node-label">Input</span>
           </div>
           <div class="fx-connector"></div>
           ${fxChainContent}
           <div class="fx-node output-node">
-            <div class="fx-node-icon">🔊</div>
+            <div class="fx-node-icon">${renderIcon("speaker", "fx-node-icon-img")}</div>
             <span class="fx-node-label">Output</span>
           </div>
         </div>
@@ -398,7 +409,7 @@ export function renderPresetDetails(
 
       <div class="signal-chain-section">
         <h3 class="section-title">
-          <span class="section-icon">📦</span>
+          <span class="section-icon">${renderIcon("package", "section-icon-img")}</span>
           Loaded Components
         </h3>
         <div class="attachments-grid">

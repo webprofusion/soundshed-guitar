@@ -8,6 +8,7 @@
 import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
+import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon } from "./iconAssets.js";
 
 // DOM Elements
 const fxSelectorPanel = document.getElementById("fx-selector-panel");
@@ -23,19 +24,18 @@ let searchFilter = "";
 interface FxCategory {
   id: string;
   name: string;
-  icon: string;
   color: string;
 }
 
 const FX_CATEGORIES: FxCategory[] = [
-  { id: "dynamics", name: "Dynamics", icon: "⚡", color: "#e04848" },
-  { id: "amp", name: "Amplifiers", icon: "🎸", color: "#e07848" },
-  { id: "cab", name: "Cabinets", icon: "🔊", color: "#a86830" },
-  { id: "eq", name: "Equalizers", icon: "🎚️", color: "#48a8e0" },
-  { id: "modulation", name: "Modulation", icon: "🌊", color: "#9048e0" },
-  { id: "delay", name: "Delay", icon: "⏱️", color: "#48e0a8" },
-  { id: "reverb", name: "Reverb", icon: "🏛️", color: "#4878e0" },
-  { id: "utility", name: "Utility", icon: "🔧", color: "#808080" },
+  { id: "dynamics", name: "Dynamics", color: "#e04848" },
+  { id: "amp", name: "Amplifiers", color: "#e07848" },
+  { id: "cab", name: "Cabinets", color: "#a86830" },
+  { id: "eq", name: "Equalizers", color: "#48a8e0" },
+  { id: "modulation", name: "Modulation", color: "#9048e0" },
+  { id: "delay", name: "Delay", color: "#48e0a8" },
+  { id: "reverb", name: "Reverb", color: "#4878e0" },
+  { id: "utility", name: "Utility", color: "#808080" },
 ];
 
 /**
@@ -89,7 +89,7 @@ function renderCategories(): void {
       <div class="fx-category ${activeClass}" 
            data-category="${category.id}"
            style="--category-color: ${category.color}">
-        <span class="fx-category-icon">${category.icon}</span>
+        ${getFxCategoryIcon(category.id)}
         <span class="fx-category-name">${category.name}</span>
         <span class="fx-category-count">${totalCount}</span>
       </div>
@@ -172,10 +172,10 @@ export function renderEffectsList(): void {
  */
 function renderFxItem(effect: EffectTypeInfo, categoryColor: string, blendId?: string, blendCategory?: string): string {
   const resourceBadge = effect.requiresResource 
-    ? `<span class="fx-item-badge" title="Requires ${effect.resourceType}">📁</span>` 
+    ? `<span class="fx-item-badge">${getBadgeIcon("resource", `Requires ${effect.resourceType}`)}</span>` 
     : "";
   const blendBadge = blendId
-    ? `<span class="fx-item-badge" title="Custom blend">🧪</span>`
+    ? `<span class="fx-item-badge">${getBadgeIcon("blend", "Custom blend")}</span>`
     : "";
 
   return `
@@ -186,7 +186,7 @@ function renderFxItem(effect: EffectTypeInfo, categoryColor: string, blendId?: s
           data-effect-category="${effect.category}"
          draggable="true"
          style="--category-color: ${categoryColor}">
-      <div class="fx-item-icon">${getEffectIcon(effect.type)}</div>
+      <div class="fx-item-icon">${getFxEffectIcon(effect.type)}</div>
       <div class="fx-item-info">
         <div class="fx-item-name">${effect.displayName}</div>
         <div class="fx-item-type">${effect.type}</div>
@@ -261,67 +261,6 @@ function getBlendFxItems(): BlendFxItem[] {
 export function refreshFxSelector(): void {
   renderCategories();
   renderEffectsList();
-}
-
-/**
- * Get the icon for an effect type.
- */
-function getEffectIcon(effectType: string): string {
-  const icons: Record<string, string> = {
-    // Dynamics
-    "dynamics_gate": "🚪",
-    "compressor_vca": "📊",
-    "compressor_opto": "💡",
-    "compressor_fet": "⚡",
-    "overdrive": "🔥",
-    "distortion": "💥",
-    "fuzz": "🌪️",
-    
-    // Amps
-    "amp_nam": "🎸",
-    "amp_nam_optimized": "⚡",
-    "amp_nam_blend": "🧬",
-    "amp_clean": "🎺",
-    "amp_crunch": "🎷",
-    
-    // Cabs
-    "cab_ir": "🔊",
-    "cab_simple": "📻",
-    
-    // EQ
-    "eq_parametric": "🎚️",
-    "eq_graphic": "📊",
-    "eq_tilt": "↗️",
-    
-    // Modulation
-    "chorus_analog": "🌊",
-    "chorus_digital": "🌈",
-    "flanger": "〰️",
-    "phaser": "🌀",
-    "tremolo": "📳",
-    "auto_wah": "🎛️",
-    "octave": "🎼",
-    "vibrato": "🎭",
-    
-    // Delay
-    "delay_digital": "⏱️",
-    "delay_tape": "📼",
-    "delay_analog": "🔄",
-    
-    // Reverb
-    "reverb_room": "🏠",
-    "reverb_hall": "🏛️",
-    "reverb_plate": "📀",
-    "reverb_spring": "🌸",
-    "reverb_shimmer": "✨",
-    
-    // Utility
-    "gain": "📢",
-    "splitter": "↗️",
-    "mixer": "🎛️",
-  };
-  
-  return icons[effectType] || "⚙️";
 }
 
 /**

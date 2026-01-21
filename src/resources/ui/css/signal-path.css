@@ -146,8 +146,18 @@
 }
 
 .node-icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+}
+
+.node-icon .fx-effect-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .node-label {
@@ -471,7 +481,17 @@
 }
 
 .section-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-icon .section-icon-img {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* FX Chain Flow */
@@ -514,7 +534,17 @@
 }
 
 .fx-node-icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fx-node-icon .fx-node-icon-img {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .fx-node-label {
@@ -562,7 +592,6 @@
 }
 
 .attachment-icon {
-  font-size: 24px;
   width: 40px;
   height: 40px;
   display: flex;
@@ -570,6 +599,12 @@
   justify-content: center;
   background: linear-gradient(180deg, #f0f2f8 0%, #e0e4ec 100%);
   border-radius: 8px;
+}
+
+.attachment-icon .attachment-icon-img {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .attachment-info {
@@ -1150,13 +1185,18 @@
 
 .resource-browse-btn {
   padding: 6px 10px;
-  font-size: 14px;
   background: #4a4a5a;
   border: 1px solid #5a5a6a;
   border-radius: 4px;
   color: #e0e0f0;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.resource-browse-btn .resource-browse-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .resource-browse-btn:hover {
@@ -1307,13 +1347,18 @@
 }
 
 .effect-dropdown-icon {
-  font-size: 18px;
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.effect-dropdown-icon .fx-effect-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .effect-dropdown-name {

@@ -3,6 +3,7 @@ import type { Preset, GraphNode, GraphEdge, LibraryResource, BlendModelMapping, 
 import { postMessage } from "./bridge.js";
 import { showNotification } from "./notifications.js";
 import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
+import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon, renderIcon } from "./iconAssets.js";
 import { sendAddSignalPathNode, sendAddSignalPathNodeOnEdge, type SignalPathEdgeRef } from "./fxSelector.js";
 import { GenericKnob } from "./controls.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
@@ -20,57 +21,8 @@ let draggedNodeId: string | null = null;
 let dragOverNodeId: string | null = null;
 let selectedNodeId: string | null = null;
 
-const effectTypeIcons: Record<string, string> = {
-  // Dynamics
-  "dynamics_gate": "🚪",
-  "compressor_vca": "📊",
-  "compressor_opto": "💡",
-  "compressor_fet": "⚡",
-  
-  // Amps
-  "amp_nam": "🎸",
-  "amp_nam_optimized": "⚡",
-  "amp_nam_blend": "🧬",
-  "amp_clean": "🎺",
-  "amp_crunch": "🎷",
-  
-  // Cabs
-  "cab_ir": "🔊",
-  "cab_simple": "📻",
-  
-  // EQ
-  "eq_parametric": "🎚️",
-  "eq_graphic": "📊",
-  "eq_tilt": "↗️",
-  
-  // Modulation
-  "chorus_analog": "🌊",
-  "chorus_digital": "🌈",
-  "flanger": "〰️",
-  "phaser": "🌀",
-  "tremolo": "📳",
-  "vibrato": "🎭",
-  
-  // Delay
-  "delay_digital": "⏱️",
-  "delay_tape": "📼",
-  "delay_analog": "🔄",
-  
-  // Reverb
-  "reverb_room": "🏠",
-  "reverb_hall": "🏛️",
-  "reverb_plate": "📀",
-  "reverb_spring": "🌸",
-  "reverb_shimmer": "✨",
-  
-  // Utility
-  "gain": "📢",
-  "splitter": "↗️",
-  "mixer": "🎛️",
-};
-
 function getNodeIcon(nodeType: string): string {
-  return effectTypeIcons[nodeType] || "⚙️";
+  return getFxEffectIcon(nodeType);
 }
 
 function getCategoryClass(category: string): string {
@@ -1095,7 +1047,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
               data-resource-index="${index}"
               data-accept="${browseAccept}"
               title="Browse for file..."
-            >📁</button>
+            >${renderIcon("folder", "resource-browse-icon")}</button>
           </div>
           ${current.filePath ? `<div class="resource-path-info" title="${current.filePath}">${current.filePath}</div>` : ""}
         </div>
@@ -1658,7 +1610,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
       dropdownHtml += `
         <div class="effect-dropdown-category">
           <div class="effect-dropdown-category-name">
-            ${categoryInfo?.icon || ''} ${categoryInfo?.name || categoryId}
+            ${getFxCategoryIcon(categoryId)} ${categoryInfo?.name || categoryId}
           </div>
           ${effects.map(effect => `
             <div class="effect-dropdown-item" data-effect-type="${effect.type}">
@@ -1668,7 +1620,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
           `).join('')}
           ${blendEntries.map((blend) => `
             <div class="effect-dropdown-item" data-effect-type="amp_nam_blend" data-blend-id="${blend.id}" data-blend-name="${escapeHtml(blend.name)}" data-blend-category="${blend.originalCategory}">
-              <span class="effect-dropdown-icon">🧪</span>
+              <span class="effect-dropdown-icon">${getBadgeIcon("blend", "Custom blend")}</span>
               <span class="effect-dropdown-name">${escapeHtml(blend.name)}</span>
             </div>
           `).join('')}
@@ -1717,14 +1669,14 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
 }
 
 const FX_CATEGORIES = [
-  { id: "dynamics", name: "Dynamics", icon: "⚡", color: "#e04848" },
-  { id: "amp", name: "Amplifiers", icon: "🎸", color: "#e07848" },
-  { id: "cab", name: "Cabinets", icon: "🔊", color: "#a86830" },
-  { id: "eq", name: "Equalizers", icon: "🎚️", color: "#48a8e0" },
-  { id: "modulation", name: "Modulation", icon: "🌊", color: "#9048e0" },
-  { id: "delay", name: "Delay", icon: "⏱️", color: "#48e0a8" },
-  { id: "reverb", name: "Reverb", icon: "🏛️", color: "#4878e0" },
-  { id: "utility", name: "Utility", icon: "🔧", color: "#808080" },
+  { id: "dynamics", name: "Dynamics", color: "#e04848" },
+  { id: "amp", name: "Amplifiers", color: "#e07848" },
+  { id: "cab", name: "Cabinets", color: "#a86830" },
+  { id: "eq", name: "Equalizers", color: "#48a8e0" },
+  { id: "modulation", name: "Modulation", color: "#9048e0" },
+  { id: "delay", name: "Delay", color: "#48e0a8" },
+  { id: "reverb", name: "Reverb", color: "#4878e0" },
+  { id: "utility", name: "Utility", color: "#808080" },
 ];
 
 function getBlendEntriesForCategory(categoryId: string): Array<{ id: string; name: string; category: string; originalCategory: string } > {
