@@ -11,6 +11,9 @@ import { BlendEditorModal } from "./blendEditor.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
 const nodeParamsPanelElement = document.getElementById("node-params-panel");
+const effectVisualizationElement = document.getElementById("effect-visualization");
+const effectVisualizationTitle = document.getElementById("effect-visualization-title");
+const effectVisualizationSubtitle = document.getElementById("effect-visualization-subtitle");
 const blendEditorModal = new BlendEditorModal({
   getBlendLibrary: () => uiState.blendLibrary ?? ([] as BlendLibrary),
   getResourceLibrary: () => uiState.resourceLibrary,
@@ -20,6 +23,57 @@ const blendEditorModal = new BlendEditorModal({
 let draggedNodeId: string | null = null;
 let dragOverNodeId: string | null = null;
 let selectedNodeId: string | null = null;
+
+const DEFAULT_VISUALIZATION_TITLE = "Effect Visualization";
+const DEFAULT_VISUALIZATION_SUBTITLE = "Select a node in the signal chain to edit parameters";
+const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
+  amp: "url('../images/equipment/amp-01.jpg')",
+  cab: "url('../images/equipment/julio-lopez-dkD00Z55q4o-unsplash.jpg')",
+  eq: "linear-gradient(145deg, rgba(56, 96, 132, 0.95) 0%, rgba(18, 24, 44, 0.95) 100%)",
+  dynamics: "linear-gradient(145deg, rgba(132, 64, 64, 0.95) 0%, rgba(38, 18, 24, 0.95) 100%)",
+  modulation: "linear-gradient(145deg, rgba(88, 64, 132, 0.95) 0%, rgba(26, 18, 44, 0.95) 100%)",
+  delay: "linear-gradient(145deg, rgba(64, 132, 112, 0.95) 0%, rgba(18, 34, 38, 0.95) 100%)",
+  reverb: "linear-gradient(145deg, rgba(64, 92, 132, 0.95) 0%, rgba(18, 24, 38, 0.95) 100%)",
+  utility: "linear-gradient(145deg, rgba(86, 86, 96, 0.95) 0%, rgba(26, 26, 30, 0.95) 100%)",
+};
+
+function updateEffectVisualization(node?: GraphNode): void {
+  if (!effectVisualizationElement) {
+    return;
+  }
+
+  if (!node) {
+    effectVisualizationElement.classList.remove("has-selection");
+    effectVisualizationElement.style.removeProperty("--effect-visual-bg");
+    effectVisualizationElement.dataset.effectType = "";
+    effectVisualizationElement.dataset.effectCategory = "";
+    if (effectVisualizationTitle) {
+      effectVisualizationTitle.textContent = DEFAULT_VISUALIZATION_TITLE;
+    }
+    if (effectVisualizationSubtitle) {
+      effectVisualizationSubtitle.textContent = DEFAULT_VISUALIZATION_SUBTITLE;
+    }
+    return;
+  }
+
+  const category = getNodeCategory(node);
+  const typeInfo = EffectTypeRegistry.get(node.type);
+  const displayName = getNodeDisplayName(node);
+  const categoryLabel = (typeInfo?.category || category).toUpperCase();
+  const background = EFFECT_VISUAL_BACKGROUNDS[category] || EFFECT_VISUAL_BACKGROUNDS.utility;
+
+  effectVisualizationElement.classList.add("has-selection");
+  effectVisualizationElement.style.setProperty("--effect-visual-bg", background);
+  effectVisualizationElement.dataset.effectType = node.type;
+  effectVisualizationElement.dataset.effectCategory = category;
+
+  if (effectVisualizationTitle) {
+    effectVisualizationTitle.textContent = displayName || DEFAULT_VISUALIZATION_TITLE;
+  }
+  if (effectVisualizationSubtitle) {
+    effectVisualizationSubtitle.textContent = `${categoryLabel} · ${node.type}`;
+  }
+}
 
 function getNodeIcon(nodeType: string): string {
   return getFxEffectIcon(nodeType);
@@ -186,6 +240,7 @@ export function renderSignalPathBar(): void {
   
   if (!activePreset) {
     signalPathNodesElement.innerHTML = "";
+    updateEffectVisualization();
     return;
   }
 
@@ -228,6 +283,9 @@ export function renderSignalPathBar(): void {
   }
 
   updateSignalPathClipIndicators();
+  if (!selectedNodeId) {
+    updateEffectVisualization();
+  }
 }
 
 export function refreshSelectedNodeParams(): void {
@@ -673,6 +731,7 @@ function bindNodeClickHandlers(preset: Preset): void {
       sendSignalPathNodeDelete(nodeId);
       selectedNodeId = null;
       nodeParamsPanelElement?.classList.remove("visible");
+      updateEffectVisualization();
     });
   });
 
@@ -817,6 +876,7 @@ function bindNodeClickHandlers(preset: Preset): void {
         sendSignalPathNodeDelete(nodeId);
         selectedNodeId = null;
         nodeParamsPanelElement?.classList.remove("visible");
+        updateEffectVisualization();
       }
     });
   });
@@ -915,6 +975,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   }
 
   nodeParamsPanelElement.classList.add("visible");
+  updateEffectVisualization(node);
   
   // Get parameter definitions from registry
   const typeInfo = EffectTypeRegistry.get(node.type);
@@ -1080,13 +1141,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   }
 
   nodeParamsPanelElement.innerHTML = `
-    <div class="node-params-header">
-      <div class="node-params-title">
-        <span class="node-icon">${getNodeIcon(node.type)}</span>
-        <span>${getNodeDisplayName(node)}</span>
-      </div>
-      <button class="close-params-btn">×</button>
-    </div>
+    
     <div class="node-params-body">
       ${resourceSelector}
       ${eqVisualizer}
@@ -1430,6 +1485,8 @@ function bindCloseButton(): void {
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
       nodeParamsPanelElement?.classList.remove("visible");
+      selectedNodeId = null;
+      updateEffectVisualization();
       
       // Deselect all nodes
       const nodeElements = signalPathNodesElement?.querySelectorAll(".signal-node");

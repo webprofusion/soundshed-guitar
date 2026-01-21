@@ -1,6 +1,6 @@
-/* ===== Amp Display & Visualization ===== */
+/* ===== Effect Visualization Panel ===== */
 
-.amp-display {
+.visualization-display {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -13,7 +13,7 @@
   width: 100%;
 }
 
-.amp-panel {
+.visualization-panel {
   width: 100%;
   max-width: 1000px;
   background: #00000042;
@@ -25,28 +25,84 @@
     inset 0 -2px 0 var(--overlay-dark);
   padding: 20px;
   position: relative;
+
+
 }
 
-.amp-visualization {
-  height: 300px;
-  background: linear-gradient(180deg, #c0c4cc 0%, #a8acb4 100%);
-  border-radius: 12px;
-  border: 2px solid #9098a0;
-  margin-bottom: 20px;
+.effect-visualization-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.effect-visualization-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.effect-visualization-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+}
+
+.effect-visualization {
+  height: 420px;
+  background-image: var(--effect-visual-bg, linear-gradient(160deg, #2c2e3d 0%, #1a1c28 100%));
+  background-size: cover;
+  background-position: center;
+  border-radius: 14px;
+  border: 2px solid rgba(145, 156, 170, 0.6);
   position: relative;
   overflow: hidden;
-  box-shadow: inset 0 4px 8px var(--overlay-dark);
+  box-shadow: inset 0 8px 18px rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transform: rotate3d(1, 1, 1, -0.3deg);
 }
 
-.amp-glow {
+.effect-visualization::before {
+  content: "";
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(ellipse, rgba(232, 136, 80, 0.3) 0%, transparent 70%);
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 10, 16, 0.25) 0%, rgba(8, 10, 16, 0.75) 100%);
   pointer-events: none;
+}
+
+.effect-visualization-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+.effect-visualization.has-selection .effect-visualization-overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.effect-visualization-placeholder h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.effect-visualization-placeholder p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* Amp Knobs Row */

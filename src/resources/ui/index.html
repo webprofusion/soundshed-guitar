@@ -28,7 +28,7 @@
       </button>
       -->
 
-      <button class="icon-btn active" data-panel="amp" title="Amp">
+      <button class="icon-btn active" data-panel="visualizer" title="Visualizer">
         <svg viewBox="0 0 24 24">
           <image href="images/icons/amp.svg" width="24" height="24" />
         </svg>
@@ -235,17 +235,6 @@
     </section>
 
 
-    <!-- Node Parameter Panel (shown when a node is selected) -->
-    <section class="node-params-panel" id="node-params-panel" style="display: none;">
-      <div class="node-params-header">
-        <span class="node-params-title" id="node-params-title">Node Parameters</span>
-        <button class="node-params-close" id="node-params-close">×</button>
-      </div>
-      <div class="node-params-content" id="node-params-content">
-        <!-- Node parameters will be rendered here -->
-      </div>
-    </section>
-
     <!-- Main Content Area -->
     <main class="main-content">
       <!-- Hidden file inputs -->
@@ -268,81 +257,28 @@
         </div>
       </div>
 
-      <!-- Amp Panel (Default) -->
-      <div class="tab-panel active" id="panel-amp">
-        <div class="amp-display">
-          <div class="amp-panel">
-            <div class="amp-visualization">
-              <!-- Placeholder for amp graphics -->
-              <div class="amp-glow"></div>
+      <!-- Effect Visualization Panel (Default) -->
+      <div class="tab-panel active" id="panel-visualizer">
+        <div class="visualization-display">
+          <div class="visualization-panel">
+            <div class="effect-visualization-header">
+              <div class="effect-visualization-title" id="effect-visualization-title">Effect Visualization</div>
+              <div class="effect-visualization-subtitle" id="effect-visualization-subtitle">
+                Select a node in the signal chain to edit parameters
+              </div>
             </div>
+            <div class="effect-visualization" id="effect-visualization">
+              <div class="effect-visualization-overlay" id="effect-visualization-overlay">
+                <div class="effect-visualization-placeholder">
+                  <h3>No Effect Selected</h3>
+                  <p>Pick a node in the signal chain above to see its visualization and controls.</p>
+                </div>
+              </div>
 
-            <!-- Amp Knobs Row -->
-            <div class="amp-knobs">
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">INPUT</span>
-                <div class="amp-knob" data-param="amp-input">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control voice-switch">
-                <span class="amp-knob-label">VOICE</span>
-                <div class="voice-toggle">
-                  <div class="voice-lever"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">GAIN</span>
-                <div class="amp-knob" data-param="gain">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">BASS</span>
-                <div class="amp-knob" data-param="bass">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">MIDDLE</span>
-                <div class="amp-knob" data-param="middle">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">TREBLE</span>
-                <div class="amp-knob" data-param="treble">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">PRESENCE</span>
-                <div class="amp-knob" data-param="presence">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">MASTER</span>
-                <div class="amp-knob" data-param="master">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control">
-                <span class="amp-knob-label">OUTPUT</span>
-                <div class="amp-knob" data-param="amp-output">
-                  <div class="knob-indicator"></div>
-                </div>
-              </div>
-              <div class="amp-knob-control power-control">
-                <span class="amp-knob-label">POWER</span>
-                <div class="power-switch" id="power-switch">
-                  <div class="power-indicator"></div>
-                </div>
-              </div>
+              <!-- Node Parameter Panel (shown when a node is selected) -->
+              <section class="node-params-panel" id="node-params-panel" style="display: none;"></section>
             </div>
           </div>
-
-
         </div>
       </div>
 
