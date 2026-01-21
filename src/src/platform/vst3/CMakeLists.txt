@@ -124,6 +124,7 @@ target_link_libraries(SoundshedGuitar_VST3
     user32
     gdi32
     advapi32
+    windowscodecs
     wininet
 )
 

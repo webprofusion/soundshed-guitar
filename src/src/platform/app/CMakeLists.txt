@@ -71,6 +71,7 @@ target_link_libraries(SoundshedGuitar_App
     user32
     gdi32
     advapi32
+    windowscodecs
   wininet
 )
 

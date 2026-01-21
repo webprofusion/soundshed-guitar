@@ -225,6 +225,10 @@ namespace guitarfx
     void SendMetronomeStateToUI();
     void RenderMetronome(iplug::sample **outputs, int nFrames);
     double GetEffectiveTempoBpm() const;
+  #ifdef _WIN32
+    void ApplyWindowIcon();
+    void ReleaseWindowIcon();
+  #endif
 
     struct SignalTestRuntimeState
     {
@@ -353,6 +357,11 @@ namespace guitarfx
     int mUIReloadAttempts = 0;
     std::chrono::steady_clock::time_point mUIReloadDeadline{};
     void* mParentWindow = nullptr;
+#ifdef _WIN32
+    void* mWindowIconLarge = nullptr;
+    void* mWindowIconSmall = nullptr;
+    bool mWindowIconApplied = false;
+#endif
   };
 } // namespace guitarfx
 

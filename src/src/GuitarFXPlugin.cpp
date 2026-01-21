@@ -19,6 +19,8 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <shobjidl.h>
+#include <wincodec.h>
+#include <wrl/client.h>
 #endif
 
 #include <nlohmann/json.hpp>
@@ -72,6 +74,149 @@ namespace guitarfx
     constexpr const char* kSessionLogFileName = "session-log.txt";
     constexpr double kNamCalibrationFrequencyHz = 1000.0;
     constexpr double kNamCalibrationDurationSeconds = 1.0;
+
+#ifdef _WIN32
+    struct ScopedComInitializer
+    {
+      explicit ScopedComInitializer(DWORD coInit)
+      {
+        hr = CoInitializeEx(nullptr, coInit);
+      }
+
+      ~ScopedComInitializer()
+      {
+        if (hr == S_OK)
+        {
+          CoUninitialize();
+        }
+      }
+
+      HRESULT hr = S_OK;
+    };
+
+    std::optional<HICON> CreateIconFromPng(const std::filesystem::path& path, int targetSize)
+    {
+      if (path.empty() || !std::filesystem::exists(path))
+      {
+        return std::nullopt;
+      }
+
+      ScopedComInitializer comInit(COINIT_APARTMENTTHREADED);
+      if (FAILED(comInit.hr) && comInit.hr != RPC_E_CHANGED_MODE)
+      {
+        return std::nullopt;
+      }
+
+      Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+      HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                    IID_PPV_ARGS(&factory));
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+      hr = factory->CreateDecoderFromFilename(path.wstring().c_str(), nullptr, GENERIC_READ,
+                                               WICDecodeMetadataCacheOnLoad, &decoder);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+      hr = decoder->GetFrame(0, &frame);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      Microsoft::WRL::ComPtr<IWICBitmapScaler> scaler;
+      hr = factory->CreateBitmapScaler(&scaler);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      hr = scaler->Initialize(frame.Get(), targetSize, targetSize, WICBitmapInterpolationModeFant);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+      hr = factory->CreateFormatConverter(&converter);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      hr = converter->Initialize(scaler.Get(), GUID_WICPixelFormat32bppBGRA,
+                                 WICBitmapDitherTypeNone, nullptr, 0.0,
+                                 WICBitmapPaletteTypeCustom);
+      if (FAILED(hr))
+      {
+        return std::nullopt;
+      }
+
+      BITMAPV5HEADER bitmapInfo = {};
+      bitmapInfo.bV5Size = sizeof(BITMAPV5HEADER);
+      bitmapInfo.bV5Width = targetSize;
+      bitmapInfo.bV5Height = -targetSize;
+      bitmapInfo.bV5Planes = 1;
+      bitmapInfo.bV5BitCount = 32;
+      bitmapInfo.bV5Compression = BI_BITFIELDS;
+      bitmapInfo.bV5RedMask = 0x00FF0000;
+      bitmapInfo.bV5GreenMask = 0x0000FF00;
+      bitmapInfo.bV5BlueMask = 0x000000FF;
+      bitmapInfo.bV5AlphaMask = 0xFF000000;
+
+      void* pixelData = nullptr;
+      HDC screenDc = GetDC(nullptr);
+      HBITMAP colorBitmap = CreateDIBSection(screenDc, reinterpret_cast<BITMAPINFO*>(&bitmapInfo),
+                                             DIB_RGB_COLORS, &pixelData, nullptr, 0);
+      ReleaseDC(nullptr, screenDc);
+
+      if (!colorBitmap || !pixelData)
+      {
+        if (colorBitmap)
+        {
+          DeleteObject(colorBitmap);
+        }
+        return std::nullopt;
+      }
+
+      const UINT stride = targetSize * 4;
+      hr = converter->CopyPixels(nullptr, stride, stride * targetSize, static_cast<BYTE*>(pixelData));
+      if (FAILED(hr))
+      {
+        DeleteObject(colorBitmap);
+        return std::nullopt;
+      }
+
+      HBITMAP maskBitmap = CreateBitmap(targetSize, targetSize, 1, 1, nullptr);
+      if (!maskBitmap)
+      {
+        DeleteObject(colorBitmap);
+        return std::nullopt;
+      }
+
+      ICONINFO iconInfo = {};
+      iconInfo.fIcon = TRUE;
+      iconInfo.hbmColor = colorBitmap;
+      iconInfo.hbmMask = maskBitmap;
+
+      HICON icon = CreateIconIndirect(&iconInfo);
+      DeleteObject(colorBitmap);
+      DeleteObject(maskBitmap);
+
+      if (!icon)
+      {
+        return std::nullopt;
+      }
+
+      return icon;
+    }
+#endif
 
     double ToDbFS(double linear)
     {
@@ -1953,6 +2098,9 @@ namespace guitarfx
     
     mUIVisible = true;
     LoadWebViewContent(false);
+  #ifdef _WIN32
+    ApplyWindowIcon();
+  #endif
   }
 
   void GuitarFXPlugin::OnUIClose()
@@ -1964,7 +2112,93 @@ namespace guitarfx
     mUIReloadInProgress = false;
     mUIReloadAttempts = 0;
     mPendingStateBroadcast = true;
+#ifdef _WIN32
+    ReleaseWindowIcon();
+#endif
   }
+
+#ifdef _WIN32
+  void GuitarFXPlugin::ApplyWindowIcon()
+  {
+    if (mWindowIconApplied || !mParentWindow)
+    {
+      return;
+    }
+
+    HWND hwnd = reinterpret_cast<HWND>(mParentWindow);
+    if (!IsWindow(hwnd))
+    {
+      return;
+    }
+
+    if (!kIsStandaloneBuild)
+    {
+      if (GetParent(hwnd) != nullptr || GetWindow(hwnd, GW_OWNER) != nullptr)
+      {
+        return;
+      }
+    }
+
+    if (mResourceRoot.empty())
+    {
+      std::cerr << "[Plugin] Cannot apply window icon: resource root is empty." << std::endl;
+      return;
+    }
+
+    const std::filesystem::path iconPath = mResourceRoot / "ui" / "images" / "icon.png";
+    if (!std::filesystem::exists(iconPath))
+    {
+      std::cerr << "[Plugin] Cannot apply window icon: amp icon not found at "
+                << iconPath.generic_string() << std::endl;
+      return;
+    }
+
+    const auto largeIcon = CreateIconFromPng(iconPath, 256);
+    const auto smallIcon = CreateIconFromPng(iconPath, 32);
+
+    if (!largeIcon && !smallIcon)
+    {
+      std::cerr << "[Plugin] Failed to create window icon from " << iconPath.generic_string() << std::endl;
+      return;
+    }
+
+    if (largeIcon)
+    {
+      SendMessage(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(*largeIcon));
+      mWindowIconLarge = *largeIcon;
+    }
+
+    if (smallIcon)
+    {
+      SendMessage(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(*smallIcon));
+      mWindowIconSmall = *smallIcon;
+    }
+
+    mWindowIconApplied = true;
+  }
+
+  void GuitarFXPlugin::ReleaseWindowIcon()
+  {
+    if (!mWindowIconApplied)
+    {
+      return;
+    }
+
+    if (mWindowIconLarge)
+    {
+      DestroyIcon(reinterpret_cast<HICON>(mWindowIconLarge));
+      mWindowIconLarge = nullptr;
+    }
+
+    if (mWindowIconSmall)
+    {
+      DestroyIcon(reinterpret_cast<HICON>(mWindowIconSmall));
+      mWindowIconSmall = nullptr;
+    }
+
+    mWindowIconApplied = false;
+  }
+#endif
 
   void GuitarFXPlugin::OnWebContentLoaded()
   {
