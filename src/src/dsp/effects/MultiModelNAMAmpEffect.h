@@ -168,6 +168,17 @@ public:
     {
       mSnapBlend = (value == "snap");
     }
+    else if (key == "interfaceCalibrationEnabled")
+    {
+      mInterfaceCalibrationEnabled = ParseBool(value);
+    }
+    else if (key == "interfaceCalibrationReferenceDbu")
+    {
+      if (auto parsed = ParseDouble(value))
+      {
+        mInterfaceReferenceDbu = *parsed;
+      }
+    }
   }
 
   [[nodiscard]] double GetParam(const std::string& key) const override
@@ -275,6 +286,8 @@ private:
   double mBlend = 0.0;
   bool mAutoLevelInput = true;
   bool mAutoLevelOutput = true;
+  bool mInterfaceCalibrationEnabled = true;
+  double mInterfaceReferenceDbu = 12.0;
   bool mEnabled = true;
   std::string mParameterId;
 
@@ -292,6 +305,18 @@ private:
   static bool ParseBool(const std::string& value)
   {
     return value == "1" || value == "true" || value == "True" || value == "TRUE";
+  }
+
+  static std::optional<double> ParseDouble(const std::string& value)
+  {
+    try
+    {
+      return std::stod(value);
+    }
+    catch (...)
+    {
+      return std::nullopt;
+    }
   }
 
   bool LoadModelInstance(ModelInstance& instance)
@@ -499,12 +524,18 @@ private:
     static constexpr double kTargetInputLeveldBu = -18.0;
     static constexpr double kTargetOutputLeveldB = -18.0;
 
-    const auto inputLevel = mCalibrationInputLevel.has_value() ? mCalibrationInputLevel : blendedInputLevel;
+    const bool hasCalibrationInput = mCalibrationInputLevel.has_value();
+    const auto inputLevel = hasCalibrationInput ? mCalibrationInputLevel : blendedInputLevel;
     const auto outputLevel = mCalibrationOutputLevel.has_value() ? mCalibrationOutputLevel : blendedOutputLevel;
 
     if (mAutoLevelInput && inputLevel.has_value())
     {
-      const double deltaDb = std::clamp(kTargetInputLeveldBu - *inputLevel, -24.0, 24.0);
+      double effectiveInputLevel = *inputLevel;
+      if (!hasCalibrationInput && mInterfaceCalibrationEnabled && blendedInputLevel.has_value())
+      {
+        effectiveInputLevel = *blendedInputLevel - mInterfaceReferenceDbu;
+      }
+      const double deltaDb = std::clamp(kTargetInputLeveldBu - effectiveInputLevel, -24.0, 24.0);
       mAutoInputGain = std::pow(10.0, deltaDb / 20.0);
     }
 

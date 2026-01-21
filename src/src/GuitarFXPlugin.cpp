@@ -52,6 +52,8 @@ namespace guitarfx
     constexpr const char* kMetronomePanSettingKey = "metronome.pan";
     constexpr const char* kMetronomeClickTypeSettingKey = "metronome.clickType";
     constexpr const char* kMetronomeClickConfigSettingKey = "metronome.clickConfig";
+    constexpr const char* kInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
+    constexpr const char* kInterfaceCalibrationReferenceDbuSettingKey = "audio.interfaceCalibration.referenceDbu";
     constexpr double kMetronomeDefaultBpm = 120.0;
     constexpr double kMetronomeMinBpm = 30.0;
     constexpr double kMetronomeMaxBpm = 300.0;
@@ -63,6 +65,7 @@ namespace guitarfx
     constexpr const char* kMetronomeDefaultClickType = "click";
     constexpr double kMetronomeClickSeconds = 0.02;
     constexpr double kMetronomeClickFrequencyHz = 1800.0;
+    constexpr double kInterfaceCalibrationDefaultReferenceDbu = 12.0;
     constexpr double kMinDbFS = -120.0;
     constexpr double kMinLinear = 1e-6;
     constexpr const char* kNamCalibrationFileName = "model-calibration.json";
@@ -2513,6 +2516,30 @@ namespace guitarfx
           }
           mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
           mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
+        }
+        if (key == kInterfaceCalibrationEnabledSettingKey || key == kInterfaceCalibrationReferenceDbuSettingKey)
+        {
+          bool interfaceCalibrationEnabled = true;
+          double interfaceCalibrationReferenceDbu = kInterfaceCalibrationDefaultReferenceDbu;
+
+          if (const auto enabledIt = mAppSettings.find(kInterfaceCalibrationEnabledSettingKey); enabledIt != mAppSettings.end())
+          {
+            if (enabledIt->is_boolean())
+            {
+              interfaceCalibrationEnabled = enabledIt->get<bool>();
+            }
+            else if (enabledIt->is_number())
+            {
+              interfaceCalibrationEnabled = enabledIt->get<double>() != 0.0;
+            }
+          }
+
+          if (const auto referenceIt = mAppSettings.find(kInterfaceCalibrationReferenceDbuSettingKey); referenceIt != mAppSettings.end() && referenceIt->is_number())
+          {
+            interfaceCalibrationReferenceDbu = referenceIt->get<double>();
+          }
+
+          mPresetMixer.SetNamInterfaceCalibration(interfaceCalibrationEnabled, interfaceCalibrationReferenceDbu);
         }
 
         SaveAppSettings();
@@ -5188,9 +5215,9 @@ namespace guitarfx
       if (!std::filesystem::exists(settingsFile))
       {
         std::cout << "[Plugin] No settings file found at: " << settingsFile.generic_string() << std::endl;
+        mAppSettings = nlohmann::json::object();
         if (kIsStandaloneBuild)
         {
-          mAppSettings = nlohmann::json::object();
           mMetronomeBpm.store(kMetronomeDefaultBpm, std::memory_order_release);
           mMetronomeEnabled.store(false, std::memory_order_release);
           mMetronomeVolumeDb.store(kMetronomeDefaultVolumeDb, std::memory_order_release);
@@ -5205,6 +5232,9 @@ namespace guitarfx
           UpdateMetronomeClickConfigFromSettings();
           RefreshMetronomeClickSamples();
         }
+        mAppSettings[kInterfaceCalibrationEnabledSettingKey] = true;
+        mAppSettings[kInterfaceCalibrationReferenceDbuSettingKey] = kInterfaceCalibrationDefaultReferenceDbu;
+        mPresetMixer.SetNamInterfaceCalibration(true, kInterfaceCalibrationDefaultReferenceDbu);
         AppendSessionLog("Session started");
         return;
       }
@@ -5340,6 +5370,42 @@ namespace guitarfx
           RefreshMetronomeClickSamples();
         }
       }
+      else
+      {
+        mAppSettings = nlohmann::json::object();
+      }
+
+      bool interfaceCalibrationEnabled = true;
+      double interfaceCalibrationReferenceDbu = kInterfaceCalibrationDefaultReferenceDbu;
+      if (const auto enabledIt = mAppSettings.find(kInterfaceCalibrationEnabledSettingKey); enabledIt != mAppSettings.end())
+      {
+        if (enabledIt->is_boolean())
+        {
+          interfaceCalibrationEnabled = enabledIt->get<bool>();
+        }
+        else if (enabledIt->is_number())
+        {
+          interfaceCalibrationEnabled = enabledIt->get<double>() != 0.0;
+        }
+      }
+      else
+      {
+        mAppSettings[kInterfaceCalibrationEnabledSettingKey] = true;
+      }
+
+      if (const auto referenceIt = mAppSettings.find(kInterfaceCalibrationReferenceDbuSettingKey); referenceIt != mAppSettings.end())
+      {
+        if (referenceIt->is_number())
+        {
+          interfaceCalibrationReferenceDbu = referenceIt->get<double>();
+        }
+      }
+      else
+      {
+        mAppSettings[kInterfaceCalibrationReferenceDbuSettingKey] = kInterfaceCalibrationDefaultReferenceDbu;
+      }
+
+      mPresetMixer.SetNamInterfaceCalibration(interfaceCalibrationEnabled, interfaceCalibrationReferenceDbu);
 
       // Restore audio settings
       if (settings.contains("audioSettings") && settings["audioSettings"].is_object())

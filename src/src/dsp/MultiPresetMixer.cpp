@@ -83,6 +83,7 @@ namespace guitarfx
     inst.executor.SetResourceLibrary(mResourceLibrary);
     inst.executor.SetGraph(preset.graph);
     inst.executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
+    ApplyNamInterfaceCalibration(inst.executor);
 
     if (mPrepared)
     {
@@ -118,6 +119,8 @@ namespace guitarfx
     mLimiterEnabled = other.mLimiterEnabled;
     mAutoLevelInput = other.mAutoLevelInput;
     mAutoLevelOutput = other.mAutoLevelOutput;
+    mNamInterfaceCalibrationEnabled = other.mNamInterfaceCalibrationEnabled;
+    mNamInterfaceReferenceDbu = other.mNamInterfaceReferenceDbu;
     mMonoMode = other.mMonoMode;
     mInputChannel = other.mInputChannel;
     mInputAutoLevelGain = other.mInputAutoLevelGain;
@@ -149,6 +152,16 @@ namespace guitarfx
     mOutputLevels.clipCount.store(other.mOutputLevels.clipCount.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
     return *this;
+  }
+
+  void MultiPresetMixer::SetNamInterfaceCalibration(bool enabled, double referenceDbu)
+  {
+    mNamInterfaceCalibrationEnabled = enabled;
+    mNamInterfaceReferenceDbu = referenceDbu;
+    for (auto &inst : mInstances)
+    {
+      ApplyNamInterfaceCalibration(inst.executor);
+    }
   }
 
   void MultiPresetMixer::RemoveActivePreset(const std::string &presetId)
@@ -506,6 +519,21 @@ namespace guitarfx
     {
       inst->executor.SetNodeParam(nodeId, key, value);
     }
+  }
+
+  void MultiPresetMixer::ApplyNamInterfaceCalibration(SignalGraphExecutor &executor) const
+  {
+    const std::string enabledValue = mNamInterfaceCalibrationEnabled ? "1" : "0";
+    const std::string referenceValue = std::to_string(mNamInterfaceReferenceDbu);
+
+    executor.SetNodeConfigForType("amp_nam", "interfaceCalibrationEnabled", enabledValue);
+    executor.SetNodeConfigForType("amp_nam", "interfaceCalibrationReferenceDbu", referenceValue);
+
+    executor.SetNodeConfigForType("amp_nam_optimized", "interfaceCalibrationEnabled", enabledValue);
+    executor.SetNodeConfigForType("amp_nam_optimized", "interfaceCalibrationReferenceDbu", referenceValue);
+
+    executor.SetNodeConfigForType("amp_nam_blend", "interfaceCalibrationEnabled", enabledValue);
+    executor.SetNodeConfigForType("amp_nam_blend", "interfaceCalibrationReferenceDbu", referenceValue);
   }
 
   bool MultiPresetMixer::LoadNodeResource(const std::string &presetId, const std::string &nodeId, const ResourceRef &ref)

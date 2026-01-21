@@ -163,6 +163,22 @@ Engine value is authoritative. If UI receives `parameterChanged` with a differen
 | **Resource Browser** | NAM model and IR selection |
 | **Settings** | Audio preferences, storage, theme |
 
+## Settings → Audio
+
+### Interface Calibration (NAM)
+
+This global setting aligns NAM input metadata (dBu, RMS) to the DAW’s peak reference (dBFS peak) for auto‑leveling. It is **on by default** to provide consistent first‑run behavior.
+
+**Behavior**
+- When enabled and a model provides input metadata, the auto‑level input gain uses:
+  - $\text{effectiveInputLevel} = \text{modelInputLevel}_{\mathrm{dBu}} - \text{referenceDbu}$
+- When disabled, the model’s input metadata is used as‑is.
+- If a per‑node calibration input level is present, it always takes precedence.
+
+**Defaults**
+- Enabled: **true**
+- Reference level: **+12.0 dBu @ 0 dBFS peak**
+
 ## Parameter Controls
 
 | Control | Usage |

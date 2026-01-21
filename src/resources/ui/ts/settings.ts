@@ -11,12 +11,16 @@ import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
+const INTERFACE_CALIBRATION_ENABLED_SETTING = "audio.interfaceCalibration.enabled";
+const INTERFACE_CALIBRATION_REFERENCE_SETTING = "audio.interfaceCalibration.referenceDbu";
 
 const apiKeyInput = document.getElementById("tone3000-api-key-input") as HTMLInputElement | null;
 const saveButton = document.getElementById("tone3000-api-key-save");
 const clearButton = document.getElementById("tone3000-api-key-clear");
 const sessionStatus = document.getElementById("tone3000-session-status");
 const diagnosticsToggle = document.getElementById("signal-diagnostics-toggle") as HTMLInputElement | null;
+const interfaceCalibrationToggle = document.getElementById("interface-calibration-toggle") as HTMLInputElement | null;
+const interfaceCalibrationReferenceInput = document.getElementById("interface-calibration-reference") as HTMLInputElement | null;
 const equipmentTabButtons = Array.from(document.querySelectorAll(".equipment-tab-btn"));
 const equipmentTabPanels = Array.from(document.querySelectorAll(".equipment-tab-panel"));
 const librarySearchInput = document.getElementById("equipment-library-search") as HTMLInputElement | null;
@@ -38,6 +42,7 @@ export function initSettingsPanel(): void {
   saveButton?.addEventListener("click", () => void saveApiKey());
   clearButton?.addEventListener("click", () => void clearApiKey());
   initDiagnosticsToggle();
+  initInterfaceCalibrationControls();
   initEquipmentTabs();
   initLibraryFilters();
 
@@ -106,6 +111,17 @@ export function refreshSettingsView(): void {
   if (diagnosticsToggle) {
     diagnosticsToggle.checked = Boolean(getSettingValue(DIAGNOSTICS_SETTING));
   }
+  const interfaceEnabledSetting = getSettingValue(INTERFACE_CALIBRATION_ENABLED_SETTING);
+  const interfaceEnabled = interfaceEnabledSetting === null ? true : Boolean(interfaceEnabledSetting);
+  if (interfaceCalibrationToggle) {
+    interfaceCalibrationToggle.checked = interfaceEnabled;
+  }
+  if (interfaceCalibrationReferenceInput) {
+    const referenceValue = Number(getSettingValue(INTERFACE_CALIBRATION_REFERENCE_SETTING));
+    const resolvedValue = Number.isFinite(referenceValue) ? referenceValue : 12.0;
+    interfaceCalibrationReferenceInput.value = resolvedValue.toFixed(1);
+    interfaceCalibrationReferenceInput.disabled = !interfaceEnabled;
+  }
   updateSessionStatus();
   updateSignalDiagnosticsView();
   renderLibraryView();
@@ -145,6 +161,33 @@ function updateDiagnosticsSetting(): void {
     uiState.signalDiagnostics = null;
   }
   updateSignalDiagnosticsView();
+}
+
+function initInterfaceCalibrationControls(): void {
+  if (interfaceCalibrationToggle && interfaceCalibrationToggle.dataset.bound !== "true") {
+    interfaceCalibrationToggle.dataset.bound = "true";
+    interfaceCalibrationToggle.addEventListener("change", () => updateInterfaceCalibrationSettings());
+  }
+  if (interfaceCalibrationReferenceInput && interfaceCalibrationReferenceInput.dataset.bound !== "true") {
+    interfaceCalibrationReferenceInput.dataset.bound = "true";
+    interfaceCalibrationReferenceInput.addEventListener("change", () => updateInterfaceCalibrationSettings());
+  }
+}
+
+function updateInterfaceCalibrationSettings(): void {
+  const enabled = Boolean(interfaceCalibrationToggle?.checked ?? true);
+  const rawReference = Number(interfaceCalibrationReferenceInput?.value ?? 12);
+  const reference = Number.isFinite(rawReference) ? rawReference : 12.0;
+
+  uiState.appSettings[INTERFACE_CALIBRATION_ENABLED_SETTING] = enabled;
+  uiState.appSettings[INTERFACE_CALIBRATION_REFERENCE_SETTING] = reference;
+  setAppSetting(INTERFACE_CALIBRATION_ENABLED_SETTING, enabled);
+  setAppSetting(INTERFACE_CALIBRATION_REFERENCE_SETTING, reference);
+
+  if (interfaceCalibrationReferenceInput) {
+    interfaceCalibrationReferenceInput.disabled = !enabled;
+    interfaceCalibrationReferenceInput.value = reference.toFixed(1);
+  }
 }
 
 function updateSessionStatus(): void {

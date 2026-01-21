@@ -85,6 +85,8 @@ export const uiState: UiState = {
   resourceLibrary: {},
   blendLibrary: [],
   appSettings: {
+    "audio.interfaceCalibration.enabled": true,
+    "audio.interfaceCalibration.referenceDbu": 12.0,
     "metronome.clickConfig": [
       {
         id: "click",

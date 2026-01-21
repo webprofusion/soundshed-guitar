@@ -75,7 +75,8 @@
 }
 
 .settings-row input[type="password"],
-.settings-row input[type="text"] {
+.settings-row input[type="text"],
+.settings-row input[type="number"] {
   width: 100%;
   padding: 8px 10px;
   border-radius: 6px;
@@ -83,6 +84,12 @@
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 12px;
+}
+
+.settings-unit {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
 .settings-row button {

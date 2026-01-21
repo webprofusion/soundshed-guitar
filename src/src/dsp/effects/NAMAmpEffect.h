@@ -157,6 +157,19 @@ namespace guitarfx
         mAutoLevelOutput = ParseBool(value);
         RecalculateAutoGains();
       }
+      else if (key == "interfaceCalibrationEnabled")
+      {
+        mInterfaceCalibrationEnabled = ParseBool(value);
+        RecalculateAutoGains();
+      }
+      else if (key == "interfaceCalibrationReferenceDbu")
+      {
+        if (auto parsed = ParseDouble(value))
+        {
+          mInterfaceReferenceDbu = *parsed;
+          RecalculateAutoGains();
+        }
+      }
     }
 
     [[nodiscard]] double GetParam(const std::string &key) const override
@@ -223,6 +236,8 @@ namespace guitarfx
     std::optional<double> mModelLoudness;
     std::optional<double> mCalibrationInputLevel;
     std::optional<double> mCalibrationOutputLevel;
+    bool mInterfaceCalibrationEnabled = true;
+    double mInterfaceReferenceDbu = 12.0;
     bool mEnabled = true;
 
     void UpdateEffectiveGains()
@@ -239,12 +254,18 @@ namespace guitarfx
       mAutoInputGain = 1.0;
       mAutoOutputGain = 1.0;
 
-      const auto inputLevel = mCalibrationInputLevel.has_value() ? mCalibrationInputLevel : mModelInputLevel;
+      const bool hasCalibrationInput = mCalibrationInputLevel.has_value();
+      const auto inputLevel = hasCalibrationInput ? mCalibrationInputLevel : mModelInputLevel;
       const auto outputLevel = mCalibrationOutputLevel.has_value() ? mCalibrationOutputLevel : mModelOutputLevel;
 
       if (mAutoLevelInput && inputLevel.has_value())
       {
-        const double deltaDb = std::clamp(kTargetInputLeveldBu - *inputLevel, -24.0, 24.0);
+        double effectiveInputLevel = *inputLevel;
+        if (!hasCalibrationInput && mInterfaceCalibrationEnabled && mModelInputLevel.has_value())
+        {
+          effectiveInputLevel = *mModelInputLevel - mInterfaceReferenceDbu;
+        }
+        const double deltaDb = std::clamp(kTargetInputLeveldBu - effectiveInputLevel, -24.0, 24.0);
         mAutoInputGain = std::pow(10.0, deltaDb / 20.0);
       }
 
@@ -268,6 +289,18 @@ namespace guitarfx
     static bool ParseBool(const std::string &value)
     {
       return value == "1" || value == "true" || value == "True" || value == "TRUE";
+    }
+
+    static std::optional<double> ParseDouble(const std::string &value)
+    {
+      try
+      {
+        return std::stod(value);
+      }
+      catch (...)
+      {
+        return std::nullopt;
+      }
     }
   };
 

@@ -57,6 +57,7 @@ namespace guitarfx
     void SetNodeEnabled(const std::string &nodeId, bool enabled);
     void SetNodeParam(const std::string &nodeId, const std::string &key, double value);
     void SetNodeConfig(const std::string &nodeId, const std::string &key, const std::string &value);
+    void SetNodeConfigForType(const std::string &type, const std::string &key, const std::string &value);
     bool LoadNodeResource(const std::string &nodeId, const ResourceRef &ref);
 
     // Queries

@@ -607,6 +607,17 @@ namespace guitarfx
     }
   }
 
+  void SignalGraphExecutor::SetNodeConfigForType(const std::string &type, const std::string &key, const std::string &value)
+  {
+    for (auto &[id, state] : mNodeStates)
+    {
+      if (state.type == type && state.processor)
+      {
+        state.processor->SetConfig(key, value);
+      }
+    }
+  }
+
   bool SignalGraphExecutor::LoadNodeResource(const std::string &nodeId, const ResourceRef &ref)
   {
     auto *state = FindNodeState(nodeId);

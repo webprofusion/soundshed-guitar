@@ -101,6 +101,10 @@ namespace guitarfx
     [[nodiscard]] bool GetAutoLevelInput() const { return mAutoLevelInput; }
     [[nodiscard]] bool GetAutoLevelOutput() const { return mAutoLevelOutput; }
 
+    void SetNamInterfaceCalibration(bool enabled, double referenceDbu);
+    [[nodiscard]] bool IsNamInterfaceCalibrationEnabled() const { return mNamInterfaceCalibrationEnabled; }
+    [[nodiscard]] double GetNamInterfaceReferenceDbu() const { return mNamInterfaceReferenceDbu; }
+
     void SetMonoMode(bool mono) { mMonoMode = mono; }
     void SetInputChannel(int channel) { mInputChannel = std::clamp(channel, 0, 1); }
     [[nodiscard]] bool IsMonoMode() const { return mMonoMode; }
@@ -204,6 +208,7 @@ namespace guitarfx
     static void ComputePanGains(double pan, float &gL, float &gR);
     void RebuildGlobalChains();
     void EnsureGlobalChainsUpToDate();
+    void ApplyNamInterfaceCalibration(SignalGraphExecutor &executor) const;
 
     // Tuner processing (YIN-based pitch detection)
     void ProcessTuner(float **inputs, int numSamples);
@@ -222,6 +227,8 @@ namespace guitarfx
     // Global settings
     bool mAutoLevelInput = false;
     bool mAutoLevelOutput = false;
+    bool mNamInterfaceCalibrationEnabled = true;
+    double mNamInterfaceReferenceDbu = 12.0;
     bool mMonoMode = false;
     int mInputChannel = 0; // 0=left, 1=right (for mono mode)
 
