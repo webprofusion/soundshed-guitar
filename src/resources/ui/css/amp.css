@@ -52,7 +52,8 @@
 
 .effect-visualization {
   height: 420px;
-  background-image: var(--effect-visual-bg, linear-gradient(160deg, #2c2e3d 0%, #1a1c28 100%));
+  background-image: var(--effect-visual-bg, none);
+  background-color: #1a1c28;
   background-size: cover;
   background-position: center;
   border-radius: 14px;
@@ -63,8 +64,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-
-  transform: rotate3d(1, 1, 1, -4deg);
 }
 
 .effect-visualization::before {
@@ -72,6 +71,18 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.25) 0%, rgba(8, 10, 16, 0.75) 100%);
+  pointer-events: none;
+}
+
+.effect-visualization::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--effect-visual-icon, url("../images/icon.png"));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 55%;
+  opacity: var(--effect-visual-icon-opacity, 0.08);
   pointer-events: none;
 }
 
