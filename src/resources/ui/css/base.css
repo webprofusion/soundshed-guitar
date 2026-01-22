@@ -12,7 +12,7 @@ html, body {
 }
 
 body {
-  font-family: 'Segoe UI', Arial, sans-serif;
+  font-family: sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 12px;
