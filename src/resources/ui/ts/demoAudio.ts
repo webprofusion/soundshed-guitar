@@ -53,18 +53,36 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
     });
   }
 
-  const repeatCheckbox = document.getElementById(config.repeatId) as HTMLInputElement | null;
-  if (repeatCheckbox) {
-    repeatCheckbox.checked = uiState.demoAudioRepeat;
-    repeatCheckbox.addEventListener("change", (event) => {
-      uiState.demoAudioRepeat = (event.target as HTMLInputElement).checked;
+  const repeatElement = document.getElementById(config.repeatId);
+  if (repeatElement) {
+    const isCheckbox = repeatElement instanceof HTMLInputElement;
+    const setRepeatState = (enabled: boolean) => {
+      uiState.demoAudioRepeat = enabled;
+      if (isCheckbox) {
+        (repeatElement as HTMLInputElement).checked = enabled;
+      } else {
+        repeatElement.classList.toggle("is-active", enabled);
+        repeatElement.setAttribute("aria-pressed", enabled ? "true" : "false");
+      }
       if (config.syncRepeatId) {
         const syncRepeat = document.getElementById(config.syncRepeatId) as HTMLInputElement | null;
         if (syncRepeat) {
-          syncRepeat.checked = uiState.demoAudioRepeat;
+          syncRepeat.checked = enabled;
         }
       }
-    });
+    };
+
+    setRepeatState(uiState.demoAudioRepeat);
+
+    if (isCheckbox) {
+      repeatElement.addEventListener("change", (event) => {
+        setRepeatState((event.target as HTMLInputElement).checked);
+      });
+    } else {
+      repeatElement.addEventListener("click", () => {
+        setRepeatState(!uiState.demoAudioRepeat);
+      });
+    }
   }
 }
 
@@ -86,10 +104,14 @@ export function renderFooterDemoAudioControls(): string {
       <button id="footer-play-demo-audio" class="footer-play-btn" title="Play demo audio">
         <span class="play-icon">▶</span>
       </button>
-      <label class="footer-repeat-toggle" title="Repeat demo audio">
-        <input type="checkbox" id="footer-demo-audio-repeat" class="themed-checkbox" />
-        <span class="footer-repeat-icon">🔁</span>
-      </label>
+      <button id="footer-demo-audio-repeat" class="footer-repeat-btn" title="Repeat demo audio" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 6h9a4 4 0 0 1 0 8h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 6L4 9l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 18H8a4 4 0 0 1 0-8h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 18l3-3-3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
   `;
 }
