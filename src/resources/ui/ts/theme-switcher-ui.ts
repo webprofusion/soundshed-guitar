@@ -30,11 +30,9 @@ export function initializeThemeSwitcher(): void {
   
   // Add theme options
   const themes: Array<{ value: ThemeName; label: string }> = [
-    { value: 'default', label: 'Default' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
-    { value: 'classic', label: 'Classic 70s' },
-    { value: 'gritty', label: 'Worn Pedal' }
+    { value: 'classic', label: '70s' }
   ];
   
   themes.forEach(theme => {

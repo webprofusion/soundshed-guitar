@@ -151,9 +151,9 @@
   --bg-footer: linear-gradient(180deg, #48484f 0%, #38383f 100%);
   --bg-header-dark: #3a3a40;
   
-  --bg-fx-primary: linear-gradient(180deg, #353540 0%, #2a2a32 100%);
-  --bg-fx-secondary: linear-gradient(180deg, #3e3e4a 0%, #353540 100%);
-  --bg-fx-categories: linear-gradient(180deg, #2e2e38 0%, #262630 100%);
+  --bg-fx-primary: linear-gradient(180deg, #f5f6f9 0%, #e8eaef 100%);
+  --bg-fx-secondary: linear-gradient(180deg, #f8f9fb 0%, #eef0f4 100%);
+  --bg-fx-categories: linear-gradient(180deg, #eef0f4 0%, #e0e4ec 100%);
   
   /* Text Colors */
   --text-primary: #1a1a20;
@@ -259,226 +259,112 @@
   --amp-glow: radial-gradient(ellipse, rgba(255, 136, 80, 0.4) 0%, transparent 70%);
 }
 
-/* Classic 1970s Theme (Warm) */
+/* Classic 1970s Theme (Palette) */
 .theme-classic {
-  /* Primary Colors - Warm orange */
-  --color-accent: #ff8c42;
-  --color-accent-hover: #ff9c52;
-  --color-accent-dark: #e86c22;
+  /* Primary Colors - Orange/yellow from palette */
+  --color-accent: #e57c23;
+  --color-accent-hover: #f4a825;
+  --color-accent-dark: #c6651c;
   
-  /* Success - Warm green */
-  --color-success: #8bc34a;
-  --color-success-light: #9bcf5a;
+  /* Success/Info - teal from palette */
+  --color-success: #78c4a7;
+  --color-success-light: #8ad0b6;
+  --color-success-glow: rgba(120, 196, 167, 0.35);
+  --color-info: #78c4a7;
+  --color-info-light: #8ad0b6;
   
-  /* Background Colors - Warm browns and ambers */
-  --bg-primary: linear-gradient(180deg, #d4c4b0 0%, #c0b0a0 100%);
-  --bg-secondary: linear-gradient(180deg, #e0d0c0 0%, #d0c0b0 100%);
-  --bg-tertiary: linear-gradient(180deg, #f0e0d0 0%, #e0d0c0 100%);
-  --bg-surface: linear-gradient(180deg, #f5e8d8 0%, #e8d8c8 100%);
-  --bg-elevated: linear-gradient(180deg, #faf0e0 0%, #f0e0d0 100%);
+  /* Background Colors - dark brown main UI */
+  --bg-primary: linear-gradient(180deg, #5b3a28 0%, #4a2f22 100%);
+  --bg-secondary: linear-gradient(180deg, #6b4530 0%, #5b3a28 100%);
+  --bg-tertiary: linear-gradient(180deg, #704a33 0%, #5b3a28 100%);
+  --bg-surface: linear-gradient(180deg, #6b4530 0%, #5b3a28 100%);
+  --bg-elevated: linear-gradient(180deg, #7a4f36 0%, #6b4530 100%);
   
-  --bg-panel: linear-gradient(180deg, #e8dccc 0%, #d8ccc0 100%);
-  --bg-card: linear-gradient(180deg, #faf5ed 0%, #f0e8dc 100%);
-  --bg-input: #faf5ed;
+  --bg-panel: linear-gradient(180deg, #6b4530 0%, #5b3a28 100%);
+  --bg-card: linear-gradient(180deg, #7a4f36 0%, #6b4530 100%);
+  --bg-input: #6b4530;
   
-  /* Dark Backgrounds - Warm dark browns */
-  --bg-dark-primary: linear-gradient(180deg, #3a3028 0%, #2e2420 100%);
-  --bg-dark-secondary: linear-gradient(180deg, #4a3830 0%, #3e2c28 100%);
-  --bg-dark-tertiary: linear-gradient(180deg, #483830 0%, #3c2c28 100%);
-  --bg-dark-surface: #4a3830;
+  /* Dark Backgrounds - brown from palette */
+  --bg-dark-primary: linear-gradient(180deg, #5b3a28 0%, #4a2f22 100%);
+  --bg-dark-secondary: linear-gradient(180deg, #6b4530 0%, #5b3a28 100%);
+  --bg-dark-tertiary: linear-gradient(180deg, #6a4330 0%, #553625 100%);
+  --bg-dark-surface: #5b3a28;
   
-  --bg-footer: linear-gradient(180deg, #483830 0%, #382820 100%);
-  --bg-header-dark: #3a3028;
+  --bg-footer: linear-gradient(180deg, #6b4530 0%, #553625 100%);
+  --bg-header-dark: #5b3a28;
   
-  --bg-fx-primary: linear-gradient(180deg, #352820 0%, #2a1c18 100%);
-  --bg-fx-secondary: linear-gradient(180deg, #3e3028 0%, #352820 100%);
-  --bg-fx-categories: linear-gradient(180deg, #2e2418 0%, #241c14 100%);
+  --bg-fx-primary: linear-gradient(180deg, #6b4530 0%, #553625 100%);
+  --bg-fx-secondary: linear-gradient(180deg, #7a4f36 0%, #6b4530 100%);
+  --bg-fx-categories: linear-gradient(180deg, #553625 0%, #4a2f22 100%);
   
-  /* Text Colors - Rich browns and warm tones */
-  --text-primary: #3a2a20;
-  --text-secondary: #5a4838;
-  --text-tertiary: #6a5848;
-  --text-muted: #887860;
+  /* Text Colors - cream for dark UI */
+  --text-primary: #fde9b2;
+  --text-secondary: #f7e1a6;
+  --text-tertiary: #efd79a;
+  --text-muted: #e4cc8f;
   
-  --text-dark-primary: #f0e0d0;
-  --text-dark-secondary: #d8c8b8;
-  --text-dark-tertiary: #c0b0a0;
-  --text-dark-muted: #b0a090;
-  --text-dark-dimmed: #988878;
-  --text-dark-disabled: #7a6860;
+  --text-dark-primary: #fff4d6;
+  --text-dark-secondary: #fde9b2;
+  --text-dark-tertiary: #f7e1a6;
+  --text-dark-muted: #efd79a;
+  --text-dark-dimmed: #e4cc8f;
+  --text-dark-disabled: #d7bf85;
   
-  /* Borders - Warm browns */
-  --border-light: #d8c8b8;
-  --border-medium: #c8b8a8;
-  --border-strong: #b8a898;
-  --border-dark: #a89888;
-  --border-darker: #988878;
+  /* Borders - warm browns */
+  --border-light: #8a5b3e;
+  --border-medium: #7a4f36;
+  --border-strong: #6b4530;
+  --border-dark: #5b3a28;
+  --border-darker: #4a2f22;
   
-  --border-dark-light: #5a4838;
-  --border-dark-medium: #4a3828;
-  --border-dark-strong: #6a5848;
+  --border-dark-light: #8a5b3e;
+  --border-dark-medium: #7a4f36;
+  --border-dark-strong: #9a6a45;
   
-  /* Controls - Vintage look */
-  --control-bg: linear-gradient(145deg, #e8dccc, #d0c4b4);
-  --control-border: #b0a494;
-  --control-indicator: #4a3a30;
+  /* Controls - vintage look */
+  --control-bg: linear-gradient(145deg, #7a4f36, #5b3a28);
+  --control-border: #8a5b3e;
+  --control-indicator: #fde9b2;
   
-  --amp-knob-bg: linear-gradient(145deg, #f0e4d4, #d8ccbc);
-  --amp-knob-border: #c0b4a4;
+  --amp-knob-bg: linear-gradient(145deg, #8a5b3e, #6b4530);
+  --amp-knob-border: #9a6a45;
   
-  --knob-dark-bg: linear-gradient(135deg, #6a5848, #4a3830);
-  --knob-dark-border: #786858;
-  --knob-dark-indicator: #ffa652;
+  --knob-dark-bg: linear-gradient(135deg, #9a6a45, #6b4530);
+  --knob-dark-border: #b07a53;
+  --knob-dark-indicator: #f4a825;
   
-  /* Toggle - Vintage orange */
-  --toggle-bg: #a89888;
-  --toggle-border: #988878;
-  --toggle-active: #ff8c42;
+  /* Toggle */
+  --toggle-bg: #8a5b3e;
+  --toggle-border: #7a4f36;
+  --toggle-active: #e57c23;
   
-  /* Shadows - Softer, warmer */
-  --shadow-sm: 0 2px 4px rgba(58, 42, 32, 0.15);
-  --shadow-md: 0 4px 8px rgba(58, 42, 32, 0.2);
-  --shadow-lg: 0 8px 32px rgba(58, 42, 32, 0.25);
-  --shadow-xl: 0 8px 32px rgba(58, 42, 32, 0.4);
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(91, 58, 40, 0.12);
+  --shadow-md: 0 4px 8px rgba(91, 58, 40, 0.18);
+  --shadow-lg: 0 8px 32px rgba(91, 58, 40, 0.22);
+  --shadow-xl: 0 8px 32px rgba(91, 58, 40, 0.35);
   
-  --shadow-inset-light: inset 0 1px 0 rgba(255, 245, 230, 0.5);
-  --shadow-inset-dark: inset 0 -2px 0 rgba(58, 42, 32, 0.15);
+  --shadow-inset-light: inset 0 1px 0 rgba(255, 247, 221, 0.6);
+  --shadow-inset-dark: inset 0 -2px 0 rgba(91, 58, 40, 0.15);
   
   /* Overlays */
-  --overlay-light: rgba(250, 240, 220, 0.3);
-  --overlay-medium: rgba(250, 240, 220, 0.5);
-  --overlay-dark: rgba(58, 42, 32, 0.2);
-  --overlay-darker: rgba(58, 42, 32, 0.6);
+  --overlay-light: rgba(255, 244, 214, 0.4);
+  --overlay-medium: rgba(255, 244, 214, 0.6);
+  --overlay-dark: rgba(91, 58, 40, 0.25);
+  --overlay-darker: rgba(91, 58, 40, 0.6);
   
-  /* Special - Vintage aesthetic */
-  --color-preset-bg: #fff5e8;
-  --color-preset-border: #e8d0b8;
-  --color-preset-favorite: #d89070;
-  --color-preset-text: #6a4838;
+  /* Special */
+  --color-preset-bg: #fff7dd;
+  --color-preset-border: #efd79a;
+  --color-preset-favorite: #e57c23;
+  --color-preset-text: #5b3a28;
   
-  --amp-glow: radial-gradient(ellipse, rgba(255, 140, 66, 0.35) 0%, transparent 70%);
+  --amp-glow: radial-gradient(ellipse, rgba(229, 124, 35, 0.35) 0%, transparent 70%);
   
-  /* Node Colors - Warmer tones */
-  --node-input: #8bc34a;
-  --node-input-hover: #9bcf5a;
-  --node-output: #8ca8c8;
-  --node-output-hover: #9cb8d8;
+  /* Node Colors */
+  --node-input: #78c4a7;
+  --node-input-hover: #8ad0b6;
+  --node-output: #e57c23;
+  --node-output-hover: #f4a825;
 }
 
-/* Gritty Pedal Theme (Worn) */
-.theme-gritty {
-  /* Primary Colors - Rusty amber */
-  --color-accent: #d27a3c;
-  --color-accent-hover: #e28a4c;
-  --color-accent-dark: #b8642c;
-  
-  /* Success/Active Colors */
-  --color-success: #7a9e5a;
-  --color-success-light: #89ad66;
-  --color-success-glow: rgba(122, 158, 90, 0.45);
-  
-  /* Info Colors */
-  --color-info: #6a7f8e;
-  --color-info-light: #7b8f9e;
-  
-  /* Warning/Error Colors */
-  --color-error: #b4635b;
-  --color-warning: #c75c2c;
-  
-  /* Background Colors - Worn metal */
-  --bg-primary: linear-gradient(180deg, #5a5752 0%, #44413b 100%);
-  --bg-secondary: linear-gradient(180deg, #605b55 0%, #4b4741 100%);
-  --bg-tertiary: linear-gradient(180deg, #6a645c 0%, #555049 100%);
-  --bg-surface: linear-gradient(180deg, #6f685f 0%, #5a554e 100%);
-  --bg-elevated: linear-gradient(180deg, #756e65 0%, #5f5951 100%);
-  
-  --bg-panel: linear-gradient(180deg, #5f5952 0%, #4e4842 100%);
-  --bg-card: linear-gradient(180deg, #6b655d 0%, #58524b 100%);
-  --bg-input: #6f6961;
-  
-  /* Dark Backgrounds */
-  --bg-dark-primary: linear-gradient(180deg, #2f2b27 0%, #23201d 100%);
-  --bg-dark-secondary: linear-gradient(180deg, #3a3530 0%, #2b2622 100%);
-  --bg-dark-tertiary: linear-gradient(180deg, #3d3832 0%, #2f2a25 100%);
-  --bg-dark-surface: #3a352f;
-  
-  --bg-footer: linear-gradient(180deg, #2f2a26 0%, #241f1c 100%);
-  --bg-header-dark: #2b2622;
-  
-  --bg-fx-primary: linear-gradient(180deg, #2a2521 0%, #1e1a17 100%);
-  --bg-fx-secondary: linear-gradient(180deg, #342e29 0%, #27221f 100%);
-  --bg-fx-categories: linear-gradient(180deg, #231f1b 0%, #1a1613 100%);
-  
-  /* Text Colors - Dusty off-whites */
-  --text-primary: #e9dfd2;
-  --text-secondary: #cbbfb0;
-  --text-tertiary: #b2a597;
-  --text-muted: #968a7d;
-  
-  --text-dark-primary: #f5efe6;
-  --text-dark-secondary: #e2d6c8;
-  --text-dark-tertiary: #cbbfaf;
-  --text-dark-muted: #b5a89a;
-  --text-dark-dimmed: #9a8e80;
-  --text-dark-disabled: #80756a;
-  
-  /* Borders - Worn metal */
-  --border-light: #7a7167;
-  --border-medium: #6b6259;
-  --border-strong: #5c544c;
-  --border-dark: #4e463f;
-  --border-darker: #3f3832;
-  
-  --border-dark-light: #5f564e;
-  --border-dark-medium: #4f473f;
-  --border-dark-strong: #6f655c;
-  
-  /* Knob & Control Colors */
-  --control-bg: linear-gradient(145deg, #6b635a, #5a544b);
-  --control-border: #4f473f;
-  --control-indicator: #d6cbbd;
-  
-  /* Amp Knob Colors */
-  --amp-knob-bg: linear-gradient(145deg, #726a61, #5f5850);
-  --amp-knob-border: #5b534a;
-  
-  /* Dark Knob Colors */
-  --knob-dark-bg: linear-gradient(135deg, #4a433c, #332d28);
-  --knob-dark-border: #5a524a;
-  --knob-dark-indicator: #d7a35a;
-  
-  /* Toggle Colors */
-  --toggle-bg: #5a524a;
-  --toggle-border: #463f39;
-  --toggle-active: var(--color-accent);
-  
-  /* Shadow Colors */
-  --shadow-sm: 0 2px 4px rgba(30, 24, 20, 0.25);
-  --shadow-md: 0 4px 8px rgba(30, 24, 20, 0.35);
-  --shadow-lg: 0 8px 32px rgba(30, 24, 20, 0.45);
-  --shadow-xl: 0 8px 32px rgba(30, 24, 20, 0.6);
-  
-  --shadow-inset-light: inset 0 1px 0 rgba(255, 244, 232, 0.08);
-  --shadow-inset-dark: inset 0 -2px 0 rgba(20, 16, 14, 0.35);
-  
-  /* Overlay Colors */
-  --overlay-light: rgba(255, 244, 232, 0.08);
-  --overlay-medium: rgba(255, 244, 232, 0.12);
-  --overlay-dark: rgba(24, 19, 16, 0.45);
-  --overlay-darker: rgba(24, 19, 16, 0.75);
-  
-  /* Special Colors */
-  --color-preset-bg: #2c2521;
-  --color-preset-border: #463c35;
-  --color-preset-favorite: #c18a5c;
-  --color-preset-text: #e2d3c4;
-  
-  /* Amp Glow */
-  --amp-glow: radial-gradient(ellipse, rgba(210, 122, 60, 0.35) 0%, transparent 70%);
-  
-  /* Signal Node Colors */
-  --node-input: #7a9e5a;
-  --node-input-hover: #8fb36c;
-  --node-output: #6a7f8e;
-  --node-output-hover: #7f93a3;
-}

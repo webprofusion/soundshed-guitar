@@ -3,9 +3,9 @@
 .fx-selector-panel {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #252530 0%, #1a1a22 100%);
-  border-top: 1px solid #3a3a48;
-  border-bottom: 1px solid #3a3a48;
+  background: var(--bg-fx-primary);
+  border-top: 1px solid var(--border-medium);
+  border-bottom: 1px solid var(--border-medium);
   max-height: 250px;
   overflow: hidden;
 }
@@ -19,8 +19,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 16px;
-  background: linear-gradient(180deg, #2e2e3a 0%, #252530 100%);
-  border-bottom: 1px solid #3a3a48;
+  background: var(--bg-fx-secondary);
+  border-bottom: 1px solid var(--border-medium);
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -31,17 +31,17 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #3a3a48;
-  background: #1a1a22;
-  color: #e0e0f0;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-card);
+  color: var(--text-primary);
   border-radius: 6px;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .fx-selector-toggle:hover {
-  border-color: var(--color-primary);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-accent);
+  background: var(--overlay-light);
 }
 
 .fx-selector-panel.collapsed .fx-toggle-icon {
@@ -63,7 +63,7 @@
 .fx-selector-title {
   font-size: 12px;
   font-weight: 700;
-  color: #e0e0f0;
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -72,8 +72,8 @@
 .fx-selector-categories {
   width: 180px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #1e1e28 0%, #161620 100%);
-  border-right: 1px solid #3a3a48;
+  background: var(--bg-fx-categories);
+  border-right: 1px solid var(--border-medium);
   overflow-y: auto;
   padding: 8px 0;
 }
@@ -87,28 +87,28 @@
 
 .fx-selector-search {
   padding: 8px 16px;
-  border-bottom: 1px solid #3a3a48;
+  border-bottom: 1px solid var(--border-medium);
   flex-shrink: 0;
 }
 
 .fx-selector-search input {
   width: 100%;
   padding: 8px 12px;
-  background: #1a1a22;
-  border: 1px solid #3a3a48;
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  color: #e0e0f0;
+  color: var(--text-primary);
   font-size: 12px;
   outline: none;
   transition: border-color 0.2s;
 }
 
 .fx-selector-search input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
 }
 
 .fx-selector-search input::placeholder {
-  color: #6a6a80;
+  color: var(--text-muted);
 }
 
 .fx-selector-effects-list {
@@ -206,12 +206,12 @@
 }
 
 .fx-category:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-light);
 }
 
 .fx-category.active {
-  background: linear-gradient(90deg, rgba(224, 120, 72, 0.15) 0%, transparent 100%);
-  border-left-color: var(--category-color, var(--color-primary));
+  background: linear-gradient(90deg, var(--overlay-dark) 0%, transparent 100%);
+  border-left-color: var(--category-color, var(--color-accent));
 }
 
 .fx-category-icon {
@@ -225,27 +225,27 @@
   flex: 1;
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .fx-category.active .fx-category-name {
-  color: #e0e0f0;
+  color: var(--text-primary);
 }
 
 .fx-category-count {
   font-size: 9px;
-  color: #6a6a80;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  background: var(--overlay-medium);
   padding: 2px 5px;
   border-radius: 8px;
   font-weight: 500;
 }
 
 .fx-category.active .fx-category-count {
-  background: rgba(224, 120, 72, 0.2);
-  color: var(--color-primary);
+  background: var(--overlay-medium);
+  color: var(--color-accent);
 }
 
 /* FX Item Card */
@@ -254,9 +254,9 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
-  border: 1px solid #4a4a58;
-  border-left: 3px solid var(--category-color, #808080);
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-left: 3px solid var(--category-color, var(--color-accent));
   border-radius: 6px;
   cursor: grab;
   transition: all 0.2s;
@@ -265,8 +265,8 @@
 }
 
 .fx-item:hover {
-  background: linear-gradient(180deg, #44444e 0%, #38384a 100%);
-  border-color: var(--text-secondary);
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px var(--overlay-darker);
 }
@@ -304,7 +304,7 @@
 .fx-item-name {
   font-size: 10px;
   font-weight: 600;
-  color: #e0e0f0;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -312,7 +312,7 @@
 
 .fx-item-type {
   font-size: 8px;
-  color: #6a6a80;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -340,7 +340,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  background: rgba(72, 224, 120, 0.15);
-  color: #7ef0a4;
+  background: var(--color-success-glow);
+  color: var(--color-success-light);
 }
 
