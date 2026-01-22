@@ -567,3 +567,104 @@
 .metronome-close-btn:hover {
   color: var(--text-dark-primary);
 }
+
+/* EQ Modal */
+.eq-modal {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.eq-modal-content {
+  background: var(--bg-dark-primary);
+  border-radius: 16px;
+  width: 900px;
+  max-width: 95vw;
+  border: 1px solid var(--border-dark-light);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.eq-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--bg-dark-secondary);
+  border-bottom: 1px solid var(--border-dark-medium);
+}
+
+.eq-modal-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eq-modal-toggle {
+  margin-right: 2px;
+}
+
+.eq-modal-toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dark-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.eq-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dark-primary);
+}
+
+.eq-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dark-muted);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.eq-modal-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-dark-primary);
+}
+
+.eq-modal-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--bg-dark-primary);
+}
+
+.eq-modal .eq-section {
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-medium);
+}
+
+.eq-modal .eq-label {
+  color: var(--text-dark-primary);
+}
+
+.eq-modal .eq-band {
+  background: var(--bg-dark-tertiary);
+  border: 1px solid var(--border-dark-medium);
+}
+
+.eq-modal .eq-band-title {
+  color: var(--text-dark-primary);
+  border-bottom: 1px solid var(--border-dark-medium);
+}
+
+.eq-modal .eq-knob-label,
+.eq-modal .eq-knob-control .knob-value {
+  color: var(--text-dark-muted);
+}
+
+.eq-modal .eq-curve-canvas {
+  height: 160px;
+}

@@ -2,6 +2,7 @@ import { appendLog } from "./logging.js";
 import { setAppSetting } from "./bridge.js";
 import { postMessage, setParameter } from "./bridge.js";
 import { uiState } from "./state.js";
+import { drawEqCurve, type EqBand } from "./eqCurve.js";
 
 export interface KnobConfig {
   knobElement: HTMLElement;
@@ -723,23 +724,109 @@ export function syncIRQualityFromState(): void {
 let eqEnabled = false;
 
 function updateEQSectionState(): void {
-  const section = document.querySelector(".eq-section");
-  if (section) {
+  const sections = document.querySelectorAll(".eq-section");
+  sections.forEach((section) => {
     section.classList.toggle("enabled", eqEnabled);
+  });
+
+  const eqControl = document.querySelector(".eq-control");
+  if (eqControl) {
+    eqControl.classList.toggle("enabled", eqEnabled);
   }
+}
+
+function readEqParamValue(paramId: string, fallback: number): number {
+  const knobInstance = knobInstances.get(paramId);
+  if (knobInstance) {
+    return knobInstance.getValue();
+  }
+
+  if (Array.isArray(uiState.parameters.values)) {
+    const param = uiState.parameters.values.find((entry) => entry.id === paramId);
+    if (param && typeof param.value === "number") {
+      return param.value;
+    }
+  }
+
+  return fallback;
+}
+
+function updateEqModalVisualization(): void {
+  const canvas = document.getElementById("eq-curve-canvas") as HTMLCanvasElement | null;
+  if (!canvas) {
+    return;
+  }
+
+  const width = Math.max(1, canvas.clientWidth);
+  const height = Math.max(1, canvas.clientHeight);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  const bands: EqBand[] = [
+    {
+      freq: readEqParamValue("eq_low_freq", 100),
+      gainDb: readEqParamValue("eq_low_gain", 0),
+      q: 1.0,
+    },
+    {
+      freq: readEqParamValue("eq_lowmid_freq", 400),
+      gainDb: readEqParamValue("eq_lowmid_gain", 0),
+      q: readEqParamValue("eq_lowmid_q", 1.0),
+    },
+    {
+      freq: readEqParamValue("eq_highmid_freq", 2000),
+      gainDb: readEqParamValue("eq_highmid_gain", 0),
+      q: readEqParamValue("eq_highmid_q", 1.0),
+    },
+    {
+      freq: readEqParamValue("eq_high_freq", 8000),
+      gainDb: readEqParamValue("eq_high_gain", 0),
+      q: 1.0,
+    },
+  ];
+
+  drawEqCurve(canvas, bands);
+}
+
+export function refreshEqModalVisualization(): void {
+  updateEqModalVisualization();
 }
 
 function initializeEQControls(): void {
   const eqToggle = document.getElementById("eq-toggle") as HTMLInputElement | null;
+  const eqModalToggle = document.getElementById("eq-modal-toggle") as HTMLInputElement | null;
+
+  const applyEqEnabled = (nextValue: boolean, shouldSend: boolean): void => {
+    eqEnabled = nextValue;
+    if (eqToggle) {
+      eqToggle.checked = eqEnabled;
+    }
+    if (eqModalToggle) {
+      eqModalToggle.checked = eqEnabled;
+    }
+    if (shouldSend) {
+      setParameter("eq_enabled", eqEnabled ? 1.0 : 0.0);
+      appendLog(`eq_enabled → ${eqEnabled ? 1.0 : 0.0}`);
+    }
+    updateEQSectionState();
+    updateEqModalVisualization();
+  };
 
   if (eqToggle) {
     eqToggle.addEventListener("change", () => {
-      eqEnabled = eqToggle.checked;
-      setParameter("eq_enabled", eqEnabled ? 1.0 : 0.0);
-      appendLog(`eq_enabled → ${eqEnabled ? 1.0 : 0.0}`);
-      updateEQSectionState();
+      applyEqEnabled(eqToggle.checked, true);
     });
   }
+
+  if (eqModalToggle) {
+    eqModalToggle.addEventListener("change", () => {
+      applyEqEnabled(eqModalToggle.checked, true);
+    });
+  }
+
+  const onEqValueChange = () => updateEqModalVisualization();
 
   // Low Shelf Band
   const lowGainKnob = document.querySelector('.eq-knob[data-param="eq_low_gain"]') as HTMLElement | null;
@@ -753,6 +840,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
       valueDisplayId: "eq-low-gain-value",
       sensitivity: 0.1,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_low_gain", knobInstance);
   }
@@ -768,6 +856,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${Math.round(value)} Hz`,
       valueDisplayId: "eq-low-freq-value",
       sensitivity: 2.0,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_low_freq", knobInstance);
   }
@@ -784,6 +873,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
       valueDisplayId: "eq-lowmid-gain-value",
       sensitivity: 0.1,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_lowmid_gain", knobInstance);
   }
@@ -799,6 +889,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${Math.round(value)} Hz`,
       valueDisplayId: "eq-lowmid-freq-value",
       sensitivity: 5.0,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_lowmid_freq", knobInstance);
   }
@@ -814,6 +905,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => value.toFixed(1),
       valueDisplayId: "eq-lowmid-q-value",
       sensitivity: 0.05,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_lowmid_q", knobInstance);
   }
@@ -830,6 +922,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
       valueDisplayId: "eq-highmid-gain-value",
       sensitivity: 0.1,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_highmid_gain", knobInstance);
   }
@@ -845,6 +938,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${Math.round(value)} Hz`,
       valueDisplayId: "eq-highmid-freq-value",
       sensitivity: 20.0,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_highmid_freq", knobInstance);
   }
@@ -860,6 +954,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => value.toFixed(1),
       valueDisplayId: "eq-highmid-q-value",
       sensitivity: 0.05,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_highmid_q", knobInstance);
   }
@@ -876,6 +971,7 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
       valueDisplayId: "eq-high-gain-value",
       sensitivity: 0.1,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_high_gain", knobInstance);
   }
@@ -891,11 +987,13 @@ function initializeEQControls(): void {
       displayFormat: (value) => `${(value / 1000).toFixed(1)}k`,
       valueDisplayId: "eq-high-freq-value",
       sensitivity: 50.0,
+      onValueChange: onEqValueChange,
     });
     knobInstances.set("eq_high_freq", knobInstance);
   }
 
   updateEQSectionState();
+  updateEqModalVisualization();
 }
 
 export function syncEQControlsFromState(): void {
@@ -910,10 +1008,14 @@ export function syncEQControlsFromState(): void {
 
   // Sync toggle
   const eqToggle = document.getElementById("eq-toggle") as HTMLInputElement | null;
+  const eqModalToggle = document.getElementById("eq-modal-toggle") as HTMLInputElement | null;
   if (eqToggle && typeof paramValues.eq_enabled === "number") {
     eqEnabled = paramValues.eq_enabled > 0.5;
     eqToggle.checked = eqEnabled;
     updateEQSectionState();
+  }
+  if (eqModalToggle && typeof paramValues.eq_enabled === "number") {
+    eqModalToggle.checked = eqEnabled;
   }
 
   // Sync all knobs
@@ -930,6 +1032,8 @@ export function syncEQControlsFromState(): void {
       knobInstance.setValue(paramValues[knobId]);
     }
   });
+
+  updateEqModalVisualization();
 }
 
 export { initializeEQControls, initializeIRQualityControls };

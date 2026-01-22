@@ -227,6 +227,41 @@
   display: none;
 }
 
+/* EQ Control (Control Bar) */
+.eq-control {
+  align-items: center;
+}
+
+.eq-icon-btn {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border-darker);
+  border-radius: 6px;
+  background: var(--overlay-light);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.eq-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.eq-icon-btn:hover {
+  background: var(--overlay-medium);
+  color: var(--text-secondary);
+}
+
+.eq-control.enabled .eq-icon-btn {
+  color: var(--color-accent);
+  background: var(--overlay-medium);
+  box-shadow: 0 0 8px var(--color-primary);
+}
+
 /* Buttons */
 .nav-btn {
   width: 24px;

@@ -61,7 +61,8 @@
 /* Control Bar */
 .control-bar {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
+  gap:32px;
   align-items: flex-start;
   padding: 12px 16px;
   background: var(--bg-tertiary);
@@ -167,10 +168,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--color-preset-bg);
   padding: 6px 12px;
   border-radius: 6px;
-  border: 1px solid var(--color-preset-border);
 }
 
 .preset-favorite {

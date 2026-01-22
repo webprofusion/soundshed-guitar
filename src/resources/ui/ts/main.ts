@@ -1,4 +1,4 @@
-import { initializeControls, initializeInputModeControls, initializeAmpCabPowerControls } from "./controls.js";
+import { initializeControls, initializeInputModeControls, initializeAmpCabPowerControls, refreshEqModalVisualization } from "./controls.js";
 import {
   initializePresetControls,
   initializePresets,
@@ -25,9 +25,22 @@ import { initializeBlendEditorModal } from "./signalPath.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
-const iconBarButtons = Array.from(document.querySelectorAll(".icon-bar .icon-btn"));
+const panelSwitchButtons = Array.from(document.querySelectorAll(".icon-bar .icon-btn, .panel-switch"));
 const mainTabPanels = Array.from(document.querySelectorAll(".main-content .tab-panel"));
+const eqModal = document.getElementById("eq-modal");
+const eqModalCloseBtn = document.getElementById("eq-modal-close");
 let tone3000BrowserInitialized = false;
+
+function openEqModal(): void {
+  if (!eqModal) return;
+  eqModal.style.display = "flex";
+  refreshEqModalVisualization();
+}
+
+function closeEqModal(): void {
+  if (!eqModal) return;
+  eqModal.style.display = "none";
+}
 
 function activateTab(tabId: string): void {
   if (!tabButtons.length || !tabPanels.length) {
@@ -47,7 +60,7 @@ function activateTab(tabId: string): void {
 }
 
 function switchMainPanel(panelId: string): void {
-  iconBarButtons.forEach((btn) => {
+  panelSwitchButtons.forEach((btn) => {
     const btnPanel = (btn as HTMLElement).dataset.panel;
     btn.classList.toggle("active", btnPanel === panelId);
   });
@@ -72,11 +85,15 @@ function switchMainPanel(panelId: string): void {
 }
 
 function initializeIconBarTabs(): void {
-  iconBarButtons.forEach((btn) => {
+  panelSwitchButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const panelId = (btn as HTMLElement).dataset.panel;
       if (panelId) {
         if (panelId === "metronome") {
+          return;
+        }
+        if (panelId === "eq") {
+          openEqModal();
           return;
         }
         switchMainPanel(panelId);
@@ -116,6 +133,16 @@ async function bootstrap(): Promise<void> {
   initializePresetActionButtons();
   initializeTuner();
   initializeMetronome();
+  if (eqModalCloseBtn) {
+    eqModalCloseBtn.addEventListener("click", closeEqModal);
+  }
+  if (eqModal) {
+    eqModal.addEventListener("click", (event) => {
+      if (event.target === eqModal) {
+        closeEqModal();
+      }
+    });
+  }
   initializeBlendEditorModal();
   initFxSelector();
   startUiSettingsTracking();
