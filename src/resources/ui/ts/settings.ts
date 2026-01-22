@@ -121,7 +121,7 @@ function activateEquipmentTab(tabId: string): void {
   }
 }
 
-function initLibraryFilters(): void {
+export function initLibraryFilters(): void {
   if (libraryFiltersInitialized) {
     return;
   }
@@ -134,7 +134,7 @@ function initLibraryFilters(): void {
   libraryCategorySelect?.addEventListener("change", () => renderLibraryView());
 }
 
-function initLibraryTabs(): void {
+export function initLibraryTabs(): void {
   if (libraryTabsInitialized) {
     return;
   }

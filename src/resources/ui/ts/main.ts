@@ -16,7 +16,7 @@ import { initFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
-import { initDiagnosticsToggle, initSettingsPanel, initThemeSelect, updateSettingsSessionStatus } from "./settings.js";
+import { initDiagnosticsToggle, initLibraryFilters, initLibraryTabs, initSettingsPanel, initThemeSelect, updateSettingsSessionStatus } from "./settings.js";
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { postMessage } from "./bridge.js";
@@ -76,6 +76,8 @@ function switchMainPanel(panelId: string): void {
   }
 
   if (panelId === "library") {
+    initLibraryTabs();
+    initLibraryFilters();
     if (!tone3000BrowserInitialized) {
       initTone3000Browser();
       tone3000BrowserInitialized = true;

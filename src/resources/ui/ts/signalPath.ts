@@ -759,6 +759,13 @@ function bindNodeClickHandlers(preset: Preset): void {
           nodeElements.forEach((n) => n.classList.remove("selected"));
           el.classList.add("selected");
           el.focus();
+
+          const visualizerButton = document.querySelector(
+            '.icon-bar .icon-btn[data-panel="visualizer"]',
+          ) as HTMLElement | null;
+          if (visualizerButton && !visualizerButton.classList.contains("active")) {
+            visualizerButton.click();
+          }
         }
       }
     });
