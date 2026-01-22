@@ -74,12 +74,29 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div class="knob-control" id="input-control">
-            <span class="knob-label">INPUT</span>
+          <div class="knob-control" id="input-control" title="Input Level">
+            
             <div class="knob" data-param="input" data-value="0">
               <div class="knob-indicator"></div>
             </div>
             <span class="knob-value" id="input-value">+0.0 dB</span>
+          </div>
+        </div>
+
+        <div class="control-stack input-mode-control">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">INPUT MODE</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="stereo-input-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <span class="input-mode-status" id="input-mode-status">STEREO</span>
+          <div class="input-channel-selector" id="input-channel-selector">
+            <select id="input-channel-select">
+              <option value="0" selected>Input 1</option>
+              <option value="1">Input 2</option>
+            </select>
           </div>
         </div>
 
@@ -91,8 +108,7 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div class="knob-control" id="gate-threshold-control">
-            <span class="knob-label">THRESHOLD</span>
+          <div class="knob-control" id="gate-threshold-control" title="Gate Threshold">
             <div class="knob" data-param="gate_threshold" data-value="-60">
               <div class="knob-indicator"></div>
             </div>
@@ -101,7 +117,7 @@
         </div>
 
         <div class="knob-control">
-          <span class="knob-label">TRANSPOSE</span>
+          <span class="knob-label" style="margin-top:3px;margin-bottom:5px;">TRANSPOSE</span>
           <div class="knob" data-param="transpose" data-value="0">
             <div class="knob-indicator"></div>
           </div>
@@ -111,60 +127,65 @@
       </div>
 
       <div class="control-bar-group preset-group">
-        <button class="nav-btn" id="prev-preset" title="Previous Preset">←</button>
-        <button class="nav-btn" id="next-preset" title="Next Preset">→</button>
-
-        <div class="preset-selector">
-          <span class="preset-favorite" id="preset-favorite" title="Toggle Favorite">♡</span>
-          <select id="preset-dropdown" class="themed-select">
-            <option>Default Preset</option>
-          </select>
+        <div class="preset-row preset-row-top">
+          <div class="preset-nav">
+            <button class="nav-btn" id="prev-preset" title="Previous Preset">←</button>
+            <button class="nav-btn" id="next-preset" title="Next Preset">→</button>
+          </div>
+          <div class="preset-actions">
+            <button class="preset-action-btn" id="preset-edit-btn" title="Edit Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-save-btn" title="Save Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-save-as-btn" title="Save As New Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <line x1="12" y1="11" x2="12" y2="17" />
+                <line x1="9" y1="14" x2="15" y2="14" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-export-btn" title="Export Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 5 17 10" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-import-btn" title="Import Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 14 12 19 7 14" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+              </svg>
+            </button>
+            <button class="preset-action-btn preset-action-btn-danger" id="preset-delete-btn" title="Delete Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+            <input type="file" id="preset-import-input" accept=".presetz,application/zip" style="display: none;" />
+          </div>
         </div>
 
-        <div class="preset-actions">
-          <button class="preset-action-btn" id="preset-edit-btn" title="Edit Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-          </button>
-          <button class="preset-action-btn" id="preset-save-btn" title="Save Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-          </button>
-          <button class="preset-action-btn" id="preset-save-as-btn" title="Save As New Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <line x1="12" y1="11" x2="12" y2="17" />
-              <line x1="9" y1="14" x2="15" y2="14" />
-            </svg>
-          </button>
-          <button class="preset-action-btn" id="preset-export-btn" title="Export Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 5 17 10" />
-              <line x1="12" y1="5" x2="12" y2="19" />
-            </svg>
-          </button>
-          <button class="preset-action-btn" id="preset-import-btn" title="Import Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 14 12 19 7 14" />
-              <line x1="12" y1="5" x2="12" y2="19" />
-            </svg>
-          </button>
-          <button class="preset-action-btn preset-action-btn-danger" id="preset-delete-btn" title="Delete Preset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              <line x1="10" y1="11" x2="10" y2="17" />
-              <line x1="14" y1="11" x2="14" y2="17" />
-            </svg>
-          </button>
-          <input type="file" id="preset-import-input" accept=".presetz,application/zip" style="display: none;" />
+        <div class="preset-row preset-row-bottom">
+          <div class="preset-selector">
+            <span class="preset-favorite" id="preset-favorite" title="Toggle Favorite">♡</span>
+            <select id="preset-dropdown" class="themed-select">
+              <option>Default Preset</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -178,7 +199,7 @@
             </label>
           </div>
           <div class="knob-control" id="delay-control">
-            <span class="knob-label">DELAY</span>
+            <!--<span class="knob-label">DELAY</span>-->
             <div class="knob" data-param="delay" data-value="6">
               <div class="knob-indicator"></div>
             </div>
@@ -195,7 +216,7 @@
             </label>
           </div>
           <div class="knob-control" id="output-control">
-            <span class="knob-label">OUTPUT</span>
+            <!--<span class="knob-label">OUTPUT</span>-->
             <div class="knob" data-param="output" data-value="0">
               <div class="knob-indicator"></div>
             </div>
@@ -488,23 +509,6 @@
               </div>
               <div class="settings-hint">Sets the analog reference level used to align NAM input metadata to digital
                 peak levels.</div>
-            </div>
-            <div class="settings-section">
-              <h3>Input Mode</h3>
-              <div class="input-mode-control settings-input-mode">
-                <span class="mode-label">INPUT MODE</span>
-                <div class="mode-options">
-                  <label><input type="radio" name="input-mode" value="stereo" /> Stereo</label>
-                  <label><input type="radio" name="input-mode" value="mono" checked /> Mono</label>
-                </div>
-                <div class="input-channel-selector" id="input-channel-selector">
-                  <span class="mode-label">INPUT</span>
-                  <select id="input-channel-select">
-                    <option value="0" selected>Input 1</option>
-                    <option value="1">Input 2</option>
-                  </select>
-                </div>
-              </div>
             </div>
 
             <div class="settings-section">

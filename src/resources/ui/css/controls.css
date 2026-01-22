@@ -18,7 +18,7 @@
 }
 
 .knob-label, .amp-knob-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -72,7 +72,9 @@
 }
 
 .mini-toggle-control {
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .mini-toggle-control .toggle-label {
@@ -157,6 +159,10 @@
   gap: 4px;
 }
 
+.control-input-mode {
+  align-items: center;
+}
+
 .mode-label {
   font-size: 10px;
   font-weight: 600;
@@ -191,6 +197,15 @@
   flex-direction: column;
   gap: 2px;
   margin-top: 4px;
+}
+
+.input-mode-status {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-height: 12px;
 }
 
 .input-channel-selector select {

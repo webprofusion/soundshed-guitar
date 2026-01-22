@@ -62,7 +62,7 @@
 .control-bar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-dark);
@@ -73,7 +73,7 @@
 
 .control-bar-group {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 2vw;
   flex-shrink: 1;
   min-width: 0;
@@ -85,6 +85,30 @@
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--overlay-medium);
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+.preset-row-top {
+  flex-wrap: wrap;
+}
+
+.preset-row-bottom {
+  justify-content: center;
+}
+
+.preset-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Preset Action Buttons */

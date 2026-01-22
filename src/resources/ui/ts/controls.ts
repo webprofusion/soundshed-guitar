@@ -500,9 +500,10 @@ function sendInputModeToPlugin(): void {
 }
 
 export function initializeInputModeControls(): void {
-  const inputModeRadios = document.querySelectorAll('input[name="input-mode"]') as NodeListOf<HTMLInputElement>;
+  const stereoToggle = document.getElementById("stereo-input-toggle") as HTMLInputElement | null;
   const inputChannelSelector = document.getElementById("input-channel-selector");
   const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
+  const inputModeStatus = document.getElementById("input-mode-status");
 
   // Show/hide channel selector based on mono mode
   function updateChannelSelectorVisibility(): void {
@@ -513,27 +514,32 @@ export function initializeInputModeControls(): void {
         inputChannelSelector.classList.add("hidden");
       }
     }
+
+    if (inputModeStatus) {
+      if (currentMonoMode) {
+        inputModeStatus.textContent = "MONO";
+      } else {
+        inputModeStatus.textContent = "STEREO";
+      }
+    }
   }
 
-  // Initialize radio button listeners
-  inputModeRadios.forEach((radio) => {
-    radio.addEventListener("change", () => {
-      if (radio.checked) {
-        currentMonoMode = radio.value === "mono";
-        updateChannelSelectorVisibility();
-        if (currentMonoMode) {
-          const stored = getStoredInputChannel();
-          if (stored !== null) {
-            currentInputChannel = stored;
-            if (inputChannelSelect) {
-              inputChannelSelect.value = stored.toString();
-            }
+  if (stereoToggle) {
+    stereoToggle.addEventListener("change", () => {
+      currentMonoMode = !stereoToggle.checked;
+      updateChannelSelectorVisibility();
+      if (currentMonoMode) {
+        const stored = getStoredInputChannel();
+        if (stored !== null) {
+          currentInputChannel = stored;
+          if (inputChannelSelect) {
+            inputChannelSelect.value = stored.toString();
           }
         }
-        sendInputModeToPlugin();
       }
+      sendInputModeToPlugin();
     });
-  });
+  }
 
   // Initialize channel select listener
   if (inputChannelSelect) {
@@ -546,6 +552,9 @@ export function initializeInputModeControls(): void {
     });
   }
 
+  if (stereoToggle) {
+    stereoToggle.checked = !currentMonoMode;
+  }
   // Set initial state
   updateChannelSelectorVisibility();
   applyStoredInputChannel();
@@ -556,11 +565,15 @@ export function handleInputModeChanged(monoMode: boolean, inputChannel: number):
   currentMonoMode = monoMode;
   currentInputChannel = inputChannel;
 
-  // Update radio buttons
-  const inputModeRadios = document.querySelectorAll('input[name="input-mode"]') as NodeListOf<HTMLInputElement>;
-  inputModeRadios.forEach((radio) => {
-    radio.checked = (radio.value === "mono") === monoMode;
-  });
+  const stereoToggle = document.getElementById("stereo-input-toggle") as HTMLInputElement | null;
+  if (stereoToggle) {
+    stereoToggle.checked = !monoMode;
+  }
+
+  const inputModeStatus = document.getElementById("input-mode-status");
+  if (inputModeStatus) {
+    inputModeStatus.textContent = monoMode ? "MONO" : "STEREO";
+  }
 
   // Update channel select
   const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
