@@ -111,6 +111,43 @@
   border-top: 1px solid var(--border-dark-medium);
 }
 
+.blend-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.blend-tab-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.blend-tab-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: transparent;
+}
+
+.blend-tab-btn:hover {
+  transform: translateY(-1px);
+}
+
+.blend-tab-panel {
+  display: none;
+}
+
+.blend-tab-panel.active {
+  display: block;
+}
+
 .blend-model-list {
   display: flex;
   flex-direction: column;
@@ -234,6 +271,19 @@
 .blend-match-details {
   color: var(--text-dark-muted);
   font-size: 11px;
+}
+
+.blend-test-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.blend-test-controls .knob-control {
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-medium);
+  border-radius: 10px;
+  padding: 10px 8px;
 }
 
 .blend-model-row .blend-model-remove {

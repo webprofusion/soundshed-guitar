@@ -864,47 +864,59 @@
           <button class="modal-close" id="blend-editor-modal-close">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label for="blend-editor-name-input">Blend Name</label>
-            <input type="text" id="blend-editor-name-input" placeholder="My Blend" />
+          <div class="blend-tabs">
+            <button class="blend-tab-btn active" data-blend-tab="settings" type="button">Blend Settings</button>
+            <button class="blend-tab-btn" data-blend-tab="test" type="button">Test Blend</button>
           </div>
-          <div class="form-group">
-            <label for="blend-editor-category-select">Category</label>
-            <select id="blend-editor-category-select">
-              <option value="pedal">Pedal</option>
-              <option value="preamp">Preamp</option>
-              <option value="amp" selected>Amp</option>
-              <option value="full-rig">Full Rig</option>
-              <option value="cab">Cab</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="blend-editor-mode-select">Blend Mode</label>
-            <select id="blend-editor-mode-select">
-              <option value="interpolate" selected>Interpolate</option>
-              <option value="snap">Snap</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Matched Model</label>
-            <div class="blend-match-summary">
-              <span id="blend-match-name">—</span>
-              <span id="blend-match-details" class="blend-match-details"></span>
+          <div class="blend-tab-panel active" data-blend-tab-panel="settings">
+            <div class="form-group">
+              <label for="blend-editor-name-input">Blend Name</label>
+              <input type="text" id="blend-editor-name-input" placeholder="My Blend" />
+            </div>
+            <div class="form-group">
+              <label for="blend-editor-category-select">Category</label>
+              <select id="blend-editor-category-select">
+                <option value="pedal">Pedal</option>
+                <option value="preamp">Preamp</option>
+                <option value="amp" selected>Amp</option>
+                <option value="full-rig">Full Rig</option>
+                <option value="cab">Cab</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="blend-editor-mode-select">Blend Mode</label>
+              <select id="blend-editor-mode-select">
+                <option value="interpolate" selected>Interpolate</option>
+                <option value="snap">Snap</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Mapped Parameters</label>
+              <div id="blend-parameter-list" class="blend-parameter-list"></div>
+              <div class="blend-parameter-controls">
+                <select id="blend-parameter-add-select"></select>
+                <button class="btn btn-secondary" id="blend-parameter-add-btn" type="button">Add Parameter</button>
+                <button class="btn btn-secondary" id="blend-parameter-auto-btn" type="button">Auto Map</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Models</label>
+              <div id="blend-model-list" class="blend-model-list"></div>
+              <button class="btn btn-secondary blend-add-model" id="blend-add-model-btn" type="button">Add Model</button>
             </div>
           </div>
-          <div class="form-group">
-            <label>Mapped Parameters</label>
-            <div id="blend-parameter-list" class="blend-parameter-list"></div>
-            <div class="blend-parameter-controls">
-              <select id="blend-parameter-add-select"></select>
-              <button class="btn btn-secondary" id="blend-parameter-add-btn" type="button">Add Parameter</button>
-              <button class="btn btn-secondary" id="blend-parameter-auto-btn" type="button">Auto Map</button>
+          <div class="blend-tab-panel" data-blend-tab-panel="test">
+            <div class="form-group">
+              <label>Matched Model</label>
+              <div class="blend-match-summary">
+                <span id="blend-match-name">—</span>
+                <span id="blend-match-details" class="blend-match-details"></span>
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label>Models</label>
-            <div id="blend-model-list" class="blend-model-list"></div>
-            <button class="btn btn-secondary blend-add-model" id="blend-add-model-btn" type="button">Add Model</button>
+            <div class="form-group">
+              <label>Test Parameters</label>
+              <div id="blend-test-controls" class="blend-test-controls"></div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">

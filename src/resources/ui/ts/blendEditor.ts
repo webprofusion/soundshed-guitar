@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
+import { GenericKnob } from "./controls.js";
 import { buildBlendModelMappingsFromIds, inferParamValueFromName } from "./blendUtils.js";
 import { arrayBufferToBase64, buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
 
@@ -56,6 +57,12 @@ export class BlendEditorModal {
   private paramAutoBtn = document.getElementById("blend-parameter-auto-btn") as HTMLButtonElement | null;
   private matchName = document.getElementById("blend-match-name") as HTMLElement | null;
   private matchDetails = document.getElementById("blend-match-details") as HTMLElement | null;
+  private tabButtons = Array.from(document.querySelectorAll(".blend-tab-btn")) as HTMLButtonElement[];
+  private tabPanels = Array.from(document.querySelectorAll(".blend-tab-panel")) as HTMLElement[];
+  private testControls = document.getElementById("blend-test-controls") as HTMLElement | null;
+
+  private testParams: Record<string, number> = {};
+  private activeTab: "settings" | "test" = "settings";
 
   constructor(deps: BlendEditorDependencies) {
     this.deps = deps;
@@ -77,6 +84,13 @@ export class BlendEditorModal {
     this.importBtn?.addEventListener("click", () => this.importInput?.click());
     this.importInput?.addEventListener("change", () => void this.importBlendArchive());
     this.modeSelect?.addEventListener("change", () => this.updateMatchedModel());
+
+    this.tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const tabId = button.dataset.blendTab === "test" ? "test" : "settings";
+        this.setActiveTab(tabId);
+      });
+    });
 
     if (this.paramSelect) {
       this.paramSelect.innerHTML = PARAM_SPECS.map((spec) => `<option value="${spec.id}">${spec.label}</option>`).join("");
@@ -119,8 +133,12 @@ export class BlendEditorModal {
     this.modal.dataset.blendId = blendId;
     this.modal.dataset.nodeId = node.id;
 
+    this.setActiveTab("settings");
+
     this.renderParameterList();
     this.renderModelList(mappings, category);
+    this.syncTestParams(node, mappings);
+    this.renderTestControls(node, mappings);
     this.updateMatchedModel();
     this.modal.style.display = "flex";
   }
@@ -136,6 +154,33 @@ export class BlendEditorModal {
       this.modelList.innerHTML = "";
     }
     this.activeParams = [];
+    this.testParams = {};
+  }
+
+  private getActiveNode(): GraphNode | null {
+    if (!this.modal) {
+      return null;
+    }
+    const nodeId = this.modal.dataset.nodeId ?? "";
+    if (!nodeId) {
+      return null;
+    }
+    const presetId = uiState.activePresetId ?? "";
+    const preset = presetId ? uiState.presetCache.get(presetId) : undefined;
+    return preset?.graph?.nodes.find((entry) => entry.id === nodeId) ?? null;
+  }
+
+  private setActiveTab(tabId: "settings" | "test"): void {
+    this.activeTab = tabId;
+    this.tabButtons.forEach((button) => {
+      const isActive = (button.dataset.blendTab ?? "settings") === tabId;
+      button.classList.toggle("active", isActive);
+    });
+    this.tabPanels.forEach((panel) => {
+      const isActive = (panel.dataset.blendTabPanel ?? "settings") === tabId;
+      panel.classList.toggle("active", isActive);
+    });
+    this.updateMatchedModel();
   }
 
   private renderParameterList(): void {
@@ -169,6 +214,10 @@ export class BlendEditorModal {
         }
         this.renderParameterList();
         this.renderModelList(this.collectCurrentMappings(), this.categorySelect?.value ?? "amp");
+        const activeNode = this.getActiveNode();
+        if (activeNode) {
+          this.renderTestControls(activeNode, this.collectCurrentMappings());
+        }
         this.updateMatchedModel();
       });
     });
@@ -182,6 +231,10 @@ export class BlendEditorModal {
     this.activeParams = [...this.activeParams, next];
     this.renderParameterList();
     this.renderModelList(this.collectCurrentMappings(), this.categorySelect?.value ?? "amp");
+    const activeNode = this.getActiveNode();
+    if (activeNode) {
+      this.renderTestControls(activeNode, this.collectCurrentMappings());
+    }
     this.updateMatchedModel();
   }
 
@@ -218,6 +271,10 @@ export class BlendEditorModal {
     this.activeParams = params.length ? params : ["gain"];
     this.renderParameterList();
     this.renderModelList(mappings, this.categorySelect?.value ?? "amp");
+    const activeNode = this.getActiveNode();
+    if (activeNode) {
+      this.renderTestControls(activeNode, mappings);
+    }
     this.updateMatchedModel();
   }
 
@@ -407,6 +464,10 @@ export class BlendEditorModal {
       .join("");
 
     this.bindModelRowEvents(category);
+    const activeNode = this.getActiveNode();
+    if (activeNode) {
+      this.renderTestControls(activeNode, mappings);
+    }
     this.updateMatchedModel();
   }
 
@@ -471,6 +532,10 @@ export class BlendEditorModal {
       autoBtn?.addEventListener("click", () => applyAuto(true));
       removeBtn?.addEventListener("click", () => {
         row.remove();
+        const activeNode = this.getActiveNode();
+        if (activeNode) {
+          this.renderTestControls(activeNode, this.collectCurrentMappings());
+        }
         this.updateMatchedModel();
       });
 
@@ -506,7 +571,108 @@ export class BlendEditorModal {
     `;
     this.modelList.appendChild(row);
     this.bindModelRowEvents(category);
+    const activeNode = this.getActiveNode();
+    if (activeNode) {
+      this.renderTestControls(activeNode, this.collectCurrentMappings());
+    }
     this.updateMatchedModel();
+  }
+
+  private syncTestParams(node: GraphNode, mappings: BlendModelMapping[]): void {
+    const specs = new Map(PARAM_SPECS.map((spec) => [spec.id, spec]));
+    const defaultNormalized = (paramId: string): number => {
+      const nodeValue = node.params[paramId];
+      if (typeof nodeValue === "number") {
+        return nodeValue;
+      }
+      const values: number[] = [];
+      mappings.forEach((mapping) => {
+        const params = buildParameterMapFromLegacy(mapping);
+        const value = params[paramId];
+        if (typeof value === "number") {
+          values.push(value);
+        }
+      });
+      if (values.length) {
+        const sorted = values.slice().sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+      }
+      const spec = specs.get(paramId);
+      return spec ? normalizeValue((spec.min + spec.max) / 2, spec) : 0.5;
+    };
+
+    const nextParams: Record<string, number> = {};
+    this.activeParams.forEach((paramId) => {
+      const existing = this.testParams[paramId];
+      nextParams[paramId] = typeof existing === "number" ? existing : defaultNormalized(paramId);
+    });
+    this.testParams = nextParams;
+  }
+
+  private renderTestControls(node: GraphNode, mappings: BlendModelMapping[]): void {
+    if (!this.testControls) {
+      return;
+    }
+
+    this.syncTestParams(node, mappings);
+
+    this.testControls.innerHTML = this.activeParams
+      .map((paramId) => {
+        const spec = getParamSpec(paramId);
+        const label = spec?.label ?? paramId;
+        const normalizedValue = this.testParams[paramId] ?? 0;
+        const displayValue = spec ? Number.parseFloat(denormalizeValue(normalizedValue, spec)) : normalizedValue;
+        const min = spec?.min ?? -1;
+        const max = spec?.max ?? 1;
+        return `
+          <div class="knob-control">
+            <span class="knob-label">${escapeHtml(label)}</span>
+            <div
+              class="knob blend-test-knob"
+              data-param-id="${paramId}"
+              data-value="${displayValue.toFixed(2)}"
+              data-min="${min}"
+              data-max="${max}"
+            >
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value">${displayValue.toFixed(2)}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    const knobElements = this.testControls.querySelectorAll(".blend-test-knob");
+    knobElements.forEach((knobElement) => {
+      const knob = knobElement as HTMLElement;
+      const valueDisplay = knob.parentElement?.querySelector(".knob-value") as HTMLElement | null;
+      const paramId = knob.dataset.paramId ?? "";
+      const min = knob.dataset.min ? parseFloat(knob.dataset.min) : -1;
+      const max = knob.dataset.max ? parseFloat(knob.dataset.max) : 1;
+      const spec = getParamSpec(paramId);
+      const defaultValue: number = spec
+        ? Number.parseFloat(denormalizeValue(this.testParams[paramId] ?? 0, spec))
+        : Number(this.testParams[paramId] ?? 0);
+      const sensitivity = (max - min) / 200;
+
+      new GenericKnob({
+        knobElement: knob,
+        paramId: `blend_test_${paramId}`,
+        minValue: min,
+        maxValue: max,
+        defaultValue,
+        displayFormat: (value) => value.toFixed(1),
+        valueDisplay,
+        sensitivity,
+        sendParameter: false,
+        onValueChange: (value) => {
+          const normalized = spec ? normalizeValue(value, spec) : value;
+          this.testParams[paramId] = normalized;
+          this.updateMatchedModel();
+        },
+      });
+    });
   }
 
   private updateMatchedModel(): void {
@@ -521,9 +687,7 @@ export class BlendEditorModal {
       return;
     }
 
-    const presetId = uiState.activePresetId ?? "";
-    const preset = presetId ? uiState.presetCache.get(presetId) : undefined;
-    const node = preset?.graph?.nodes.find((entry) => entry.id === nodeId);
+    const node = this.getActiveNode();
     if (!node) {
       this.matchName.textContent = "—";
       if (this.matchDetails) this.matchDetails.textContent = "";
@@ -532,7 +696,7 @@ export class BlendEditorModal {
 
     const target: Record<string, number> = {};
     this.activeParams.forEach((paramId) => {
-      const value = node.params[paramId];
+      const value = this.testParams[paramId];
       if (typeof value === "number") {
         target[paramId] = value;
       }
