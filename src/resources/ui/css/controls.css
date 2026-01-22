@@ -8,6 +8,15 @@
   gap: 4px;
 }
 
+.knob-control.disabled {
+  opacity: 0.45;
+}
+
+.knob-control.disabled .knob {
+  pointer-events: none;
+  filter: grayscale(0.2);
+}
+
 .knob-label, .amp-knob-label {
   font-size: 10px;
   font-weight: 600;
@@ -53,6 +62,37 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+}
+
+.control-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-toggle-control {
+  gap: 2px;
+}
+
+.mini-toggle-control .toggle-label {
+  font-size: 9px;
+}
+
+.mini-toggle-control .toggle-switch {
+  width: 30px;
+  height: 16px;
+}
+
+.mini-toggle-control .toggle-slider:before {
+  width: 12px;
+  height: 12px;
+  left: 2px;
+  bottom: 2px;
+}
+
+.mini-toggle-control input:checked + .toggle-slider:before {
+  transform: translateX(14px);
 }
 
 .toggle-label {

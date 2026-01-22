@@ -66,36 +66,38 @@
     <!-- Top Control Bar -->
     <section class="control-bar">
       <div class="control-bar-group">
-        <div class="knob-control">
-          <span class="knob-label">INPUT</span>
-          <div class="knob" data-param="input" data-value="0">
-            <div class="knob-indicator"></div>
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">AUTO IN</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-level-input-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
-          <span class="knob-value" id="input-value">+0.0 dB</span>
-        </div>
-
-        <div class="toggle-control">
-          <span class="toggle-label">AUTO IN</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="auto-level-input-toggle" />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-control">
-          <span class="toggle-label">GATE</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="gate-toggle" />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="knob-control">
-          <span class="knob-label">THRESHOLD</span>
-          <div class="knob" data-param="gate_threshold" data-value="-60">
-            <div class="knob-indicator"></div>
+          <div class="knob-control" id="input-control">
+            <span class="knob-label">INPUT</span>
+            <div class="knob" data-param="input" data-value="0">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="input-value">+0.0 dB</span>
           </div>
-          <span class="knob-value" id="gate-threshold-value">-60 dB</span>
+        </div>
+
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">GATE</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="gate-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="gate-threshold-control">
+            <span class="knob-label">THRESHOLD</span>
+            <div class="knob" data-param="gate_threshold" data-value="-60">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="gate-threshold-value">-60 dB</span>
+          </div>
         </div>
 
         <div class="knob-control">
@@ -167,36 +169,38 @@
       </div>
 
       <div class="control-bar-group">
-        <div class="toggle-control">
-          <span class="toggle-label">DOUBLER</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="doubler-toggle" />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="knob-control">
-          <span class="knob-label">DELAY</span>
-          <div class="knob" data-param="delay" data-value="6">
-            <div class="knob-indicator"></div>
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">DOUBLER</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="doubler-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
-          <span class="knob-value" id="delay-value">6.00 ms</span>
-        </div>
-
-        <div class="knob-control">
-          <span class="knob-label">OUTPUT</span>
-          <div class="knob" data-param="output" data-value="0">
-            <div class="knob-indicator"></div>
+          <div class="knob-control" id="delay-control">
+            <span class="knob-label">DELAY</span>
+            <div class="knob" data-param="delay" data-value="6">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="delay-value">6.00 ms</span>
           </div>
-          <span class="knob-value" id="output-value">+0.0 dB</span>
         </div>
 
-        <div class="toggle-control">
-          <span class="toggle-label">AUTO OUT</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="auto-level-output-toggle" />
-            <span class="toggle-slider"></span>
-          </label>
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">AUTO OUT</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-level-output-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="output-control">
+            <span class="knob-label">OUTPUT</span>
+            <div class="knob" data-param="output" data-value="0">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="output-value">+0.0 dB</span>
+          </div>
         </div>
       </div>
     </section>

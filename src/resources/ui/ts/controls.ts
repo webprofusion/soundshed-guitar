@@ -177,6 +177,20 @@ function updateControlDisplay(controlId: string, value: number, format: "percent
 // Store knob instances globally for sync
 const knobInstances: Map<string, GenericKnob> = new Map();
 
+function setKnobControlDisabled(controlId: string, disabled: boolean): void {
+  const control = document.getElementById(controlId);
+  if (!control) return;
+  control.classList.toggle("disabled", disabled);
+}
+
+function updateGateThresholdEnabled(enabled: boolean): void {
+  setKnobControlDisabled("gate-threshold-control", !enabled);
+}
+
+function updateDelayEnabled(enabled: boolean): void {
+  setKnobControlDisabled("delay-control", !enabled);
+}
+
 function initializeDoublerControls(): void {
   const doublerToggle = document.getElementById("doubler-toggle") as HTMLInputElement | null;
 
@@ -184,6 +198,7 @@ function initializeDoublerControls(): void {
     doublerToggle.addEventListener("change", () => {
       const enabled = doublerToggle.checked ? 1.0 : 0.0;
       setParameter("doubler_enabled", enabled);
+      updateDelayEnabled(doublerToggle.checked);
     });
   }
 
@@ -202,6 +217,8 @@ function initializeDoublerControls(): void {
     });
     knobInstances.set("doubler_delay", delayKnobInstance);
   }
+
+  updateDelayEnabled(doublerToggle?.checked ?? true);
 }
 
 function initializeInputOutputKnobs(): void {
@@ -274,6 +291,7 @@ function initializeGateControls(): void {
       const enabled = gateToggle.checked ? 1.0 : 0.0;
       setParameter("gate_enabled", enabled);
       appendLog(`gate_enabled → ${enabled}`);
+      updateGateThresholdEnabled(gateToggle.checked);
     });
   }
 
@@ -292,6 +310,8 @@ function initializeGateControls(): void {
     });
     knobInstances.set("gate_threshold", thresholdKnobInstance);
   }
+
+  updateGateThresholdEnabled(gateToggle?.checked ?? true);
 }
 
 export function syncGateControlsFromState(): void {
@@ -307,6 +327,7 @@ export function syncGateControlsFromState(): void {
   const gateToggle = document.getElementById("gate-toggle") as HTMLInputElement | null;
   if (gateToggle && typeof paramValues.gate_enabled === "number") {
     gateToggle.checked = paramValues.gate_enabled > 0.5;
+    updateGateThresholdEnabled(gateToggle.checked);
   }
 
   // Sync threshold knob
@@ -362,6 +383,7 @@ export function syncDoublerControlsFromState(): void {
   const doublerToggle = document.getElementById("doubler-toggle") as HTMLInputElement | null;
   if (doublerToggle && typeof paramValues.doubler_enabled === "number") {
     doublerToggle.checked = paramValues.doubler_enabled > 0.5;
+    updateDelayEnabled(doublerToggle.checked);
   }
 
   // Sync delay knob using GenericKnob instance
@@ -563,6 +585,21 @@ let cabEnabled = true;
 
 let autoLevelInputEnabled = false;
 let autoLevelOutputEnabled = false;
+
+function updateAutoLevelKnobStates(): void {
+  setKnobControlDisabled("input-control", autoLevelInputEnabled);
+  setKnobControlDisabled("output-control", autoLevelOutputEnabled);
+}
+
+function readAutoLevelFromPreset(): { input?: boolean; output?: boolean } {
+  const activeId = uiState.activePresetId ?? "";
+  const preset = uiState.presetCache.get(activeId) as import("./types.js").Preset | undefined;
+  const globals = (preset as any)?.globals ?? (preset as any)?.global;
+  return {
+    input: typeof globals?.autoLevelInput === "boolean" ? globals.autoLevelInput : undefined,
+    output: typeof globals?.autoLevelOutput === "boolean" ? globals.autoLevelOutput : undefined,
+  };
+}
 
 function sendAmpCabStateToPlugin(): void {
   const message = JSON.stringify({
@@ -934,11 +971,16 @@ function initializeAutoLevelControls(): void {
   const autoOut = document.getElementById("auto-level-output-toggle") as HTMLInputElement | null;
 
   const syncFromGlobals = (): void => {
-    const globals = getActivePresetGlobals();
-    autoLevelInputEnabled = globals?.autoLevelInput ?? false;
-    autoLevelOutputEnabled = globals?.autoLevelOutput ?? false;
+    const globals = readAutoLevelFromPreset();
+    if (typeof globals.input === "boolean") {
+      autoLevelInputEnabled = globals.input;
+    }
+    if (typeof globals.output === "boolean") {
+      autoLevelOutputEnabled = globals.output;
+    }
     if (autoIn) autoIn.checked = autoLevelInputEnabled;
     if (autoOut) autoOut.checked = autoLevelOutputEnabled;
+    updateAutoLevelKnobStates();
   };
 
   syncFromGlobals();
@@ -948,6 +990,7 @@ function initializeAutoLevelControls(): void {
       autoLevelInputEnabled = autoIn.checked;
       updateActivePresetGlobals({ autoLevelInput: autoLevelInputEnabled });
       sendAutoLevelToPlugin();
+      updateAutoLevelKnobStates();
     });
   }
 
@@ -956,17 +999,23 @@ function initializeAutoLevelControls(): void {
       autoLevelOutputEnabled = autoOut.checked;
       updateActivePresetGlobals({ autoLevelOutput: autoLevelOutputEnabled });
       sendAutoLevelToPlugin();
+      updateAutoLevelKnobStates();
     });
   }
 }
 
 export function syncAutoLevelControlsFromState(): void {
-  const globals = getActivePresetGlobals();
-  autoLevelInputEnabled = globals?.autoLevelInput ?? false;
-  autoLevelOutputEnabled = globals?.autoLevelOutput ?? false;
+  const globals = readAutoLevelFromPreset();
+  if (typeof globals.input === "boolean") {
+    autoLevelInputEnabled = globals.input;
+  }
+  if (typeof globals.output === "boolean") {
+    autoLevelOutputEnabled = globals.output;
+  }
 
   const autoIn = document.getElementById("auto-level-input-toggle") as HTMLInputElement | null;
   const autoOut = document.getElementById("auto-level-output-toggle") as HTMLInputElement | null;
   if (autoIn) autoIn.checked = autoLevelInputEnabled;
   if (autoOut) autoOut.checked = autoLevelOutputEnabled;
+  updateAutoLevelKnobStates();
 }

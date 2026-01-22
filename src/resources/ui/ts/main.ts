@@ -17,6 +17,7 @@ import { themeSwitcher } from "./theme-switcher.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
 import { initDiagnosticsToggle, initSettingsPanel, initThemeSelect, updateSettingsSessionStatus } from "./settings.js";
+import { initTone3000Browser } from "./tone3000Browser.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
@@ -26,6 +27,7 @@ const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 const iconBarButtons = Array.from(document.querySelectorAll(".icon-bar .icon-btn"));
 const mainTabPanels = Array.from(document.querySelectorAll(".main-content .tab-panel"));
+let tone3000BrowserInitialized = false;
 
 function activateTab(tabId: string): void {
   if (!tabButtons.length || !tabPanels.length) {
@@ -58,6 +60,14 @@ function switchMainPanel(panelId: string): void {
   if (panelId === "settings") {
     initSettingsPanel();
     void ensureTone3000Session().then(() => updateSettingsSessionStatus());
+  }
+
+  if (panelId === "library") {
+    if (!tone3000BrowserInitialized) {
+      initTone3000Browser();
+      tone3000BrowserInitialized = true;
+    }
+    void ensureTone3000Session();
   }
 }
 
@@ -122,7 +132,7 @@ async function bootstrap(): Promise<void> {
   await initializePresets();
 
   window.IPlugReceiveData = (message: string) => {
-    console.log("[JS] IPlugReceiveData called with:", message.substring(0, 100));
+    //console.log("[JS] IPlugReceiveData called with:", message.substring(0, 100));
     handleIncomingMessage(message);
   };
   console.log("[JS] IPlugReceiveData registered on window");
