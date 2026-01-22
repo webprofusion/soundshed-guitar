@@ -52,6 +52,7 @@
   gap: 0;
   padding: 4px 0;
   min-width: max-content;
+  justify-content: center;
 }
 
 .signal-node {
