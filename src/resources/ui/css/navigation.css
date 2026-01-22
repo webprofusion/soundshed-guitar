@@ -62,7 +62,7 @@
 .control-bar {
   display: flex;
   justify-content: center;
-  gap:32px;
+  gap:4vw;
   align-items: flex-start;
   padding: 12px 16px;
   background: var(--bg-tertiary);
