@@ -12,6 +12,10 @@ const categoryListEl = document.getElementById("tone3000-category-list");
 const resultsEl = document.getElementById("tone3000-results");
 const searchInputEl = document.getElementById("tone3000-search-input") as HTMLInputElement | null;
 const searchButtonEl = document.getElementById("tone3000-search-button");
+const paginationEl = document.getElementById("tone3000-pagination");
+const prevButtonEl = document.getElementById("tone3000-prev-btn") as HTMLButtonElement | null;
+const nextButtonEl = document.getElementById("tone3000-next-btn") as HTMLButtonElement | null;
+const pageLabelEl = document.getElementById("tone3000-page-label");
 
 interface Tone3000Tone {
   id: string;
@@ -48,6 +52,8 @@ const CATEGORIES: CategoryConfig[] = [
 let activeCategory = CATEGORIES[0];
 let activeQuery = "";
 let currentTones: Tone3000Tone[] = [];
+let currentPage = 1;
+let totalPages = 1;
 
 function getToneImportStatus(tone: Tone3000Tone): { status: "imported" | "partial" | "none"; importedCount: number } {
   const toneId = String(tone.id);
@@ -108,6 +114,18 @@ export function initTone3000Browser(): void {
     }
   });
 
+  prevButtonEl?.addEventListener("click", () => {
+    if (currentPage > 1) {
+      void runSearch(currentPage - 1);
+    }
+  });
+
+  nextButtonEl?.addEventListener("click", () => {
+    if (currentPage < totalPages) {
+      void runSearch(currentPage + 1);
+    }
+  });
+
   void runSearch();
 }
 
@@ -134,10 +152,11 @@ function renderCategories(): void {
   });
 }
 
-async function runSearch(): Promise<void> {
+async function runSearch(page = 1): Promise<void> {
   if (!resultsEl) return;
 
   activeQuery = searchInputEl?.value.trim() ?? "";
+  currentPage = page;
   await ensureTone3000Session();
 
   const session = uiState.tone3000Session;
@@ -147,10 +166,11 @@ async function runSearch(): Promise<void> {
   }
 
   resultsEl.innerHTML = `<div class="tone3000-empty">Loading...</div>`;
+  updatePagination(true);
 
   try {
     const params = new URLSearchParams({
-      page: "1",
+      page: String(page),
       page_size: PAGE_SIZE.toString(),
     });
     if (activeQuery) {
@@ -199,11 +219,56 @@ async function runSearch(): Promise<void> {
         })
       : tones;
 
+    updatePagination(false, data, filtered.length);
     renderResults(filtered);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     resultsEl.innerHTML = `<div class="tone3000-empty">${message}</div>`;
+    updatePagination(false);
   }
+}
+
+function updatePagination(loading: boolean, data?: Record<string, unknown>, pageSize?: number): void {
+  if (!paginationEl || !pageLabelEl || !prevButtonEl || !nextButtonEl) {
+    return;
+  }
+
+  if (loading) {
+    paginationEl.style.opacity = "0.6";
+  } else {
+    paginationEl.style.opacity = "1";
+  }
+
+  const pageValue = typeof data?.page === "number" ? data.page
+    : typeof data?.current_page === "number" ? data.current_page
+      : currentPage;
+  currentPage = pageValue;
+
+  const total = typeof data?.total === "number"
+    ? data.total
+    : typeof data?.total_count === "number"
+      ? data.total_count
+      : typeof data?.count === "number"
+        ? data.count
+        : null;
+
+  const totalPagesValue = typeof data?.total_pages === "number"
+    ? data.total_pages
+    : typeof data?.totalPages === "number"
+      ? data.totalPages
+      : typeof data?.pages === "number"
+        ? data.pages
+        : total
+          ? Math.max(1, Math.ceil(total / PAGE_SIZE))
+          : pageSize && pageSize < PAGE_SIZE
+            ? currentPage
+            : currentPage;
+
+  totalPages = totalPagesValue || currentPage;
+
+  pageLabelEl.textContent = `Page ${currentPage}${totalPages ? ` of ${totalPages}` : ""}`;
+  prevButtonEl.disabled = loading || currentPage <= 1;
+  nextButtonEl.disabled = loading || (totalPages ? currentPage >= totalPages : false);
 }
 
 function renderResults(tones: Tone3000Tone[]): void {

@@ -379,3 +379,31 @@
   font-size: 11px;
   text-align: center;
 }
+
+.tone3000-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.tone3000-page-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dark);
+  background: var(--overlay-light);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tone3000-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tone3000-page-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
