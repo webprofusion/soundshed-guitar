@@ -10,29 +10,32 @@
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-dark);
 }
 
 .library-tab-btn {
   padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border-dark);
-  background: var(--overlay-light);
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .library-tab-btn.active {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: transparent;
+  background: var(--overlay-light);
+  color: var(--text-primary);
+  border-color: var(--border-dark);
+  border-bottom-color: var(--color-primary);
 }
 
 .library-tab-btn:hover {
-  transform: translateY(-1px);
+  color: var(--text-primary);
 }
 
 .library-tab-panel {
@@ -49,29 +52,32 @@
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-dark);
 }
 
 .equipment-tab-btn {
   padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border-dark);
-  background: var(--overlay-light);
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .equipment-tab-btn.active {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: transparent;
+  background: var(--overlay-light);
+  color: var(--text-primary);
+  border-color: var(--border-dark);
+  border-bottom-color: var(--color-primary);
 }
 
 .equipment-tab-btn:hover {
-  transform: translateY(-1px);
+  color: var(--text-primary);
 }
 
 .equipment-tab-panel {

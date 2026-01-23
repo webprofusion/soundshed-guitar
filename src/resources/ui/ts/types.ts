@@ -66,6 +66,24 @@ export interface Preset {
   [key: string]: unknown;
 }
 
+export interface PresetFolder {
+  id: string;
+  name: string;
+  children: PresetFolder[];
+  presetIds: string[];
+}
+
+export interface SetlistSlot {
+  presetId: string;
+}
+
+export interface Setlist {
+  id: string;
+  name: string;
+  bank?: number | null;
+  slots: SetlistSlot[];
+}
+
 // V2 Preset Format Types
 export interface GlobalSettings {
   inputTrim: number;
@@ -308,6 +326,10 @@ export interface UiState {
   filteredPresets: Preset[];
   activePresetId: string | null;
   presetCache: Map<string, Preset>;
+  presetFolders?: PresetFolder[];
+  activePresetFolderId?: string | null;
+  setlists?: Setlist[];
+  activeSetlistId?: string | null;
   parameters: ParametersState;
   signalTest: SignalTestResult | null;
   demoAudioSelectedId: string | null;

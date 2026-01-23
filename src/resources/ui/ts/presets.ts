@@ -5,15 +5,460 @@ import { clonePreset, uiState } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
-import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource } from "./types.js";
+import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist } from "./types.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
 
-const presetDropdown = document.getElementById("preset-dropdown") as HTMLSelectElement | null;
+const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
 const prevPresetBtn = document.getElementById("prev-preset");
 const nextPresetBtn = document.getElementById("next-preset");
 const presetSearchElement = document.getElementById("preset-search") as HTMLInputElement | null;
+const presetSelector = document.getElementById("preset-selector");
+const presetLibraryPopover = document.getElementById("preset-library-popover");
+const presetFolderNameInput = document.getElementById("preset-folder-name") as HTMLInputElement | null;
+const presetFolderAddButton = document.getElementById("preset-folder-add");
+const setlistNameInput = document.getElementById("setlist-name-input") as HTMLInputElement | null;
+const setlistBankInput = document.getElementById("setlist-bank-input") as HTMLInputElement | null;
+const setlistAddButton = document.getElementById("setlist-add-btn");
+const setlistListElement = document.getElementById("setlist-list");
+const setlistSlotsElement = document.getElementById("setlist-slots");
+const setlistEditorHeader = document.getElementById("setlist-editor-header");
+const setlistCollapsible = document.getElementById("setlist-collapsible");
+const setlistToggle = document.getElementById("setlist-toggle");
+const setlistPanel = document.getElementById("setlist-panel");
+
+const PRESET_FOLDER_STORAGE_KEY = "guitarfx_preset_folders";
+const PRESET_FOLDER_SELECTED_KEY = "guitarfx_preset_folder_selected";
+const SETLIST_STORAGE_KEY = "guitarfx_setlists";
+const SETLIST_SELECTED_KEY = "guitarfx_setlist_selected";
+const PRESET_FOLDER_ALL_ID = "__all__";
+const PRESET_FOLDER_IMPORTED_NAME = "Imported";
+
+function normalizeFolderName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function normalizeSetlistName(name: string): string {
+  return name.trim();
+}
+
+function openPresetLibraryPopover(): void {
+  if (!presetLibraryPopover) {
+    return;
+  }
+  presetLibraryPopover.classList.add("open");
+  presetLibraryPopover.setAttribute("aria-hidden", "false");
+  presetChooserLabel?.setAttribute("aria-expanded", "true");
+}
+
+function closePresetLibraryPopover(): void {
+  if (!presetLibraryPopover) {
+    return;
+  }
+  presetLibraryPopover.classList.remove("open");
+  presetLibraryPopover.setAttribute("aria-hidden", "true");
+  presetChooserLabel?.setAttribute("aria-expanded", "false");
+}
+
+function togglePresetLibraryPopover(): void {
+  if (!presetLibraryPopover) {
+    return;
+  }
+  if (presetLibraryPopover.classList.contains("open")) {
+    closePresetLibraryPopover();
+  } else {
+    openPresetLibraryPopover();
+  }
+}
+
+function loadPresetFoldersFromLocalStorage(): PresetFolder[] {
+  try {
+    const raw = localStorage.getItem(PRESET_FOLDER_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as PresetFolder[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to load preset folders", error);
+    return [];
+  }
+}
+
+function savePresetFoldersToLocalStorage(folders: PresetFolder[]): void {
+  try {
+    localStorage.setItem(PRESET_FOLDER_STORAGE_KEY, JSON.stringify(folders));
+  } catch (error) {
+    console.error("Failed to save preset folders", error);
+  }
+}
+
+function findFolderById(folders: PresetFolder[], folderId: string): PresetFolder | undefined {
+  for (const folder of folders) {
+    if (folder.id === folderId) {
+      return folder;
+    }
+    const childMatch = findFolderById(folder.children ?? [], folderId);
+    if (childMatch) {
+      return childMatch;
+    }
+  }
+  return undefined;
+}
+
+function findFolderByName(folders: PresetFolder[], name: string): PresetFolder | undefined {
+  const normalized = normalizeFolderName(name);
+  for (const folder of folders) {
+    if (normalizeFolderName(folder.name) === normalized) {
+      return folder;
+    }
+  }
+  return undefined;
+}
+
+function ensurePresetFolders(): void {
+  const stored = loadPresetFoldersFromLocalStorage();
+  const importedFolder = findFolderByName(stored, PRESET_FOLDER_IMPORTED_NAME);
+  if (!importedFolder) {
+    stored.push({
+      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
+      name: PRESET_FOLDER_IMPORTED_NAME,
+      children: [],
+      presetIds: [],
+    });
+  }
+  uiState.presetFolders = stored;
+
+  const storedActive = localStorage.getItem(PRESET_FOLDER_SELECTED_KEY);
+  const resolvedActive = storedActive && storedActive !== PRESET_FOLDER_ALL_ID
+    ? findFolderById(stored, storedActive)?.id
+    : storedActive;
+  uiState.activePresetFolderId = resolvedActive || PRESET_FOLDER_ALL_ID;
+}
+
+function persistPresetFolders(): void {
+  savePresetFoldersToLocalStorage(uiState.presetFolders ?? []);
+}
+
+function loadSetlistsFromLocalStorage(): Setlist[] {
+  try {
+    const raw = localStorage.getItem(SETLIST_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as Setlist[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to load setlists", error);
+    return [];
+  }
+}
+
+function saveSetlistsToLocalStorage(setlists: Setlist[]): void {
+  try {
+    localStorage.setItem(SETLIST_STORAGE_KEY, JSON.stringify(setlists));
+  } catch (error) {
+    console.error("Failed to save setlists", error);
+  }
+}
+
+function ensureSetlists(): void {
+  const stored = loadSetlistsFromLocalStorage();
+  uiState.setlists = stored;
+  const storedActive = localStorage.getItem(SETLIST_SELECTED_KEY);
+  uiState.activeSetlistId = storedActive || (stored[0]?.id ?? null);
+}
+
+function persistSetlists(): void {
+  saveSetlistsToLocalStorage(uiState.setlists ?? []);
+}
+
+function setActiveSetlist(id: string | null): void {
+  uiState.activeSetlistId = id;
+  if (id) {
+    localStorage.setItem(SETLIST_SELECTED_KEY, id);
+  }
+  renderSetlistPanel();
+}
+
+function findSetlistById(id: string | null | undefined): Setlist | undefined {
+  if (!id) {
+    return undefined;
+  }
+  return (uiState.setlists ?? []).find((setlist) => setlist.id === id);
+}
+
+function isBankAvailable(bank: number, excludeId?: string): boolean {
+  return !(uiState.setlists ?? []).some((setlist) => setlist.bank === bank && setlist.id !== excludeId);
+}
+
+function createSetlist(name: string, bank?: number | null): void {
+  const trimmed = normalizeSetlistName(name);
+  if (!trimmed) {
+    showNotification("Setlist name required", "Enter a setlist name.");
+    return;
+  }
+  if (typeof bank === "number" && !isBankAvailable(bank)) {
+    showNotification("Bank already used", "Only one setlist can use a bank number.");
+    return;
+  }
+
+  const newSetlist: Setlist = {
+    id: generateResourceId(trimmed),
+    name: trimmed,
+    bank: typeof bank === "number" ? bank : null,
+    slots: [],
+  };
+  uiState.setlists = uiState.setlists ?? [];
+  uiState.setlists.push(newSetlist);
+  persistSetlists();
+  setActiveSetlist(newSetlist.id);
+}
+
+function addPresetToSetlist(presetId: string): void {
+  const setlist = findSetlistById(uiState.activeSetlistId);
+  if (!setlist) {
+    return;
+  }
+  setlist.slots.push({ presetId });
+  persistSetlists();
+  renderSetlistPanel();
+}
+
+function moveSetlistSlot(fromIndex: number, toIndex: number): void {
+  const setlist = findSetlistById(uiState.activeSetlistId);
+  if (!setlist) {
+    return;
+  }
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= setlist.slots.length || toIndex >= setlist.slots.length) {
+    return;
+  }
+  if (fromIndex === toIndex) {
+    return;
+  }
+  const [slot] = setlist.slots.splice(fromIndex, 1);
+  setlist.slots.splice(toIndex, 0, slot);
+  persistSetlists();
+  renderSetlistPanel();
+}
+
+function removeSetlistSlot(index: number): void {
+  const setlist = findSetlistById(uiState.activeSetlistId);
+  if (!setlist) {
+    return;
+  }
+  setlist.slots.splice(index, 1);
+  persistSetlists();
+  renderSetlistPanel();
+}
+
+function renderSetlistPanel(): void {
+  if (!setlistListElement || !setlistSlotsElement || !setlistEditorHeader) {
+    return;
+  }
+
+  const setlists = uiState.setlists ?? [];
+  setlistListElement.innerHTML = setlists.length
+    ? setlists
+        .map((setlist) => {
+          const active = setlist.id === uiState.activeSetlistId ? "active" : "";
+          const bankLabel = typeof setlist.bank === "number" ? `Bank ${setlist.bank}` : "No Bank";
+          return `
+            <div class="setlist-item ${active}" data-setlist-id="${setlist.id}">
+              <span>${setlist.name}</span>
+              <span class="bank-pill">${bankLabel}</span>
+            </div>
+          `;
+        })
+        .join("")
+    : '<div class="preset-library-empty">No setlists yet.</div>';
+
+  setlistListElement.querySelectorAll<HTMLElement>(".setlist-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const id = item.dataset.setlistId ?? null;
+      setActiveSetlist(id);
+    });
+  });
+
+  const activeSetlist = findSetlistById(uiState.activeSetlistId);
+  if (!activeSetlist) {
+    setlistEditorHeader.textContent = "Select a setlist";
+    setlistSlotsElement.innerHTML = "";
+    return;
+  }
+
+  setlistEditorHeader.textContent = `${activeSetlist.name}${typeof activeSetlist.bank === "number" ? ` (Bank ${activeSetlist.bank})` : ""}`;
+  if (!activeSetlist.slots.length) {
+    setlistSlotsElement.innerHTML = '<div class="preset-library-empty">Drop presets to add slots.</div>';
+  } else {
+    setlistSlotsElement.innerHTML = activeSetlist.slots
+      .map((slot, index) => {
+        const presetName = uiState.presetCache.get(slot.presetId)?.name ?? slot.presetId;
+        return `
+          <div class="setlist-slot" data-slot-index="${index}" draggable="true">
+            <span class="setlist-slot-title">${presetName}</span>
+            <button class="setlist-slot-remove" data-slot-index="${index}" type="button">×</button>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  setlistSlotsElement.querySelectorAll<HTMLButtonElement>(".setlist-slot-remove").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.slotIndex ?? -1);
+      if (index >= 0) {
+        removeSetlistSlot(index);
+      }
+    });
+  });
+
+  setlistSlotsElement.querySelectorAll<HTMLElement>(".setlist-slot").forEach((slotEl) => {
+    slotEl.addEventListener("dragstart", (event) => {
+      const index = slotEl.dataset.slotIndex ?? "";
+      event.dataTransfer?.setData("application/x-setlist-slot", index);
+      event.dataTransfer?.setDragImage(slotEl, 20, 20);
+    });
+
+    slotEl.addEventListener("dragover", (event) => {
+      event.preventDefault();
+    });
+
+    slotEl.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const fromIndex = Number(event.dataTransfer?.getData("application/x-setlist-slot") ?? -1);
+      const toIndex = Number(slotEl.dataset.slotIndex ?? -1);
+      if (fromIndex >= 0 && toIndex >= 0) {
+        moveSetlistSlot(fromIndex, toIndex);
+      }
+    });
+  });
+}
+
+function setSetlistExpanded(expanded: boolean): void {
+  if (!setlistCollapsible || !setlistToggle || !setlistPanel) {
+    return;
+  }
+  setlistCollapsible.classList.toggle("open", expanded);
+  setlistToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  setlistPanel.setAttribute("aria-hidden", expanded ? "false" : "true");
+}
+
+function setActivePresetFolder(folderId: string): void {
+  uiState.activePresetFolderId = folderId;
+  localStorage.setItem(PRESET_FOLDER_SELECTED_KEY, folderId);
+  filterPresets(presetSearchElement?.value ?? "");
+}
+
+function removePresetFromFolders(folders: PresetFolder[], presetId: string): void {
+  folders.forEach((folder) => {
+    folder.presetIds = (folder.presetIds ?? []).filter((id) => id !== presetId);
+    if (folder.children?.length) {
+      removePresetFromFolders(folder.children, presetId);
+    }
+  });
+}
+
+function addPresetToFolder(folderId: string, presetId: string): void {
+  const folders = uiState.presetFolders ?? [];
+  const folder = findFolderById(folders, folderId);
+  if (!folder) {
+    return;
+  }
+  if (!folder.presetIds.includes(presetId)) {
+    folder.presetIds.push(presetId);
+  }
+}
+
+function movePresetToFolder(presetId: string, folderId: string): void {
+  const folders = uiState.presetFolders ?? [];
+  removePresetFromFolders(folders, presetId);
+  if (folderId !== PRESET_FOLDER_ALL_ID) {
+    addPresetToFolder(folderId, presetId);
+  }
+  persistPresetFolders();
+  filterPresets(presetSearchElement?.value ?? "");
+}
+
+function collectPresetIds(folder: PresetFolder): Set<string> {
+  const ids = new Set<string>(folder.presetIds ?? []);
+  (folder.children ?? []).forEach((child) => {
+    collectPresetIds(child).forEach((id) => ids.add(id));
+  });
+  return ids;
+}
+
+function getFilteredPresets(query: string): Preset[] {
+  const normalized = query.trim().toLowerCase();
+  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  let basePresets = uiState.presets.slice();
+
+  if (activeFolderId !== PRESET_FOLDER_ALL_ID) {
+    const folder = findFolderById(uiState.presetFolders ?? [], activeFolderId);
+    if (folder) {
+      const allowedIds = collectPresetIds(folder);
+      basePresets = basePresets.filter((preset) => allowedIds.has(preset.id));
+    }
+  }
+
+  if (!normalized) {
+    return basePresets;
+  }
+
+  return basePresets.filter((preset) => {
+    const tokens = [preset.name, preset.category, preset.description];
+    return tokens.some((token) => token && token.toLowerCase().includes(normalized));
+  });
+}
+
+function createFolder(name: string, parentId?: string): void {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    showNotification("Folder name required", "Enter a folder name to create.");
+    return;
+  }
+
+  const newFolder: PresetFolder = {
+    id: generateResourceId(trimmed),
+    name: trimmed,
+    children: [],
+    presetIds: [],
+  };
+
+  if (parentId && parentId !== PRESET_FOLDER_ALL_ID) {
+    const parent = findFolderById(uiState.presetFolders ?? [], parentId);
+    if (parent) {
+      parent.children = parent.children ?? [];
+      parent.children.push(newFolder);
+    } else {
+      uiState.presetFolders?.push(newFolder);
+    }
+  } else {
+    uiState.presetFolders?.push(newFolder);
+  }
+
+  persistPresetFolders();
+  setActivePresetFolder(newFolder.id);
+}
+
+function addPresetToImportedFolder(presetId: string): void {
+  const folders = uiState.presetFolders ?? [];
+  let imported = findFolderByName(folders, PRESET_FOLDER_IMPORTED_NAME);
+  if (!imported) {
+    imported = {
+      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
+      name: PRESET_FOLDER_IMPORTED_NAME,
+      children: [],
+      presetIds: [],
+    };
+    folders.push(imported);
+  }
+  if (!imported.presetIds.includes(presetId)) {
+    imported.presetIds.push(presetId);
+  }
+  persistPresetFolders();
+}
 
 export function bindLoadButtons(): void {
   const loadModelBtn = document.getElementById("load-model-btn");
@@ -62,6 +507,11 @@ export function requestSignalPathTest(): void {
 function renderPresetUI(preset: Preset | null): void {
   renderPresetList(uiState.filteredPresets, uiState.activePresetId, async (presetId) => {
     await applyPresetFromLibrary(presetId);
+  }, {
+    folders: uiState.presetFolders ?? [],
+    activeFolderId: uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID,
+    onSelectFolder: setActivePresetFolder,
+    onMovePresetToFolder: movePresetToFolder,
   });
 
   renderPresetDetails(preset, {
@@ -85,15 +535,7 @@ export function renderActivePreset(): void {
 }
 
 export function filterPresets(query: string): void {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    uiState.filteredPresets = uiState.presets.slice();
-  } else {
-    uiState.filteredPresets = uiState.presets.filter((preset) => {
-      const tokens = [preset.name, preset.category, preset.description];
-      return tokens.some((token) => token && token.toLowerCase().includes(normalized));
-    });
-  }
+  uiState.filteredPresets = getFilteredPresets(query);
   renderPresetUI(uiState.presetCache.get(uiState.activePresetId ?? "") ?? null);
 }
 
@@ -159,6 +601,7 @@ export async function applyPresetFromLibrary(presetId: string): Promise<void> {
 
     uiState.presetCache.set(presetPayload.id, clonePreset(presetPayload));
     uiState.activePresetId = presetPayload.id;
+    updatePresetDropdownSelection();
     renderPresetUI(clonePreset(presetPayload));
     updatePresetActionButtons();
     postMessage({
@@ -246,29 +689,25 @@ export async function initializePresets(): Promise<void> {
     renderPresetUI(uiState.presetCache.get(uiState.activePresetId ?? "") ?? null);
   }
 
+  ensurePresetFolders();
+  ensureSetlists();
+  uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
+  renderPresetUI(uiState.presetCache.get(uiState.activePresetId ?? "") ?? null);
+  renderSetlistPanel();
+  updatePresetDropdownSelection();
+
   populatePresetDropdown();
   postMessage({ type: "requestState" });
 }
 
 export function populatePresetDropdown(): void {
-  if (!presetDropdown) return;
-
-  presetDropdown.innerHTML = "";
-
-  uiState.presets.forEach((preset) => {
-    const option = document.createElement("option");
-    option.value = preset.id;
-    option.textContent = preset.name;
-    if (preset.id === uiState.activePresetId) {
-      option.selected = true;
-    }
-    presetDropdown.appendChild(option);
-  });
+  updatePresetDropdownSelection();
 }
 
 export function updatePresetDropdownSelection(): void {
-  if (!presetDropdown || !uiState.activePresetId) return;
-  presetDropdown.value = uiState.activePresetId;
+  if (!presetChooserLabel) return;
+  const preset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  presetChooserLabel.textContent = preset?.name ?? "Select Preset";
 }
 
 function getActivePresetIndex(): number {
@@ -311,14 +750,28 @@ export async function selectNextPreset(): Promise<void> {
 }
 
 export function initializePresetControls(): void {
-  if (presetDropdown) {
-    presetDropdown.addEventListener("change", async (event) => {
-      const presetId = (event.target as HTMLSelectElement).value;
-      if (presetId) {
-        await applyPresetFromLibrary(presetId);
-      }
+  if (presetSelector) {
+    presetSelector.addEventListener("click", (event) => {
+      event.stopPropagation();
+      togglePresetLibraryPopover();
     });
   }
+
+  if (presetLibraryPopover) {
+    presetLibraryPopover.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  document.addEventListener("click", () => {
+    closePresetLibraryPopover();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closePresetLibraryPopover();
+    }
+  });
 
   if (prevPresetBtn) {
     prevPresetBtn.addEventListener("click", async () => {
@@ -335,6 +788,63 @@ export function initializePresetControls(): void {
   if (presetSearchElement) {
     presetSearchElement.addEventListener("input", (event) => {
       filterPresets((event.target as HTMLInputElement).value ?? "");
+    });
+  }
+
+  if (setlistToggle) {
+    setlistToggle.addEventListener("click", () => {
+      const expanded = setlistCollapsible?.classList.contains("open") ?? false;
+      setSetlistExpanded(!expanded);
+    });
+  }
+
+  if (setlistAddButton) {
+    setlistAddButton.addEventListener("click", () => {
+      const name = setlistNameInput?.value ?? "";
+      const bankValue = setlistBankInput?.value ?? "";
+      const bank = bankValue === "" ? null : Number(bankValue);
+      if (bankValue !== "" && (!Number.isFinite(bank) || bank! < 0)) {
+        showNotification("Invalid bank", "Bank must be a non-negative number.");
+        return;
+      }
+      createSetlist(name, bank);
+      if (setlistNameInput) {
+        setlistNameInput.value = "";
+      }
+      if (setlistBankInput) {
+        setlistBankInput.value = "";
+      }
+      renderSetlistPanel();
+    });
+  }
+
+  if (setlistSlotsElement) {
+    setlistSlotsElement.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      setlistSlotsElement.classList.add("drag-over");
+    });
+    setlistSlotsElement.addEventListener("dragleave", () => {
+      setlistSlotsElement.classList.remove("drag-over");
+    });
+    setlistSlotsElement.addEventListener("drop", (event) => {
+      event.preventDefault();
+      setlistSlotsElement.classList.remove("drag-over");
+      const presetId = event.dataTransfer?.getData("text/plain") ?? "";
+      if (presetId) {
+        addPresetToSetlist(presetId);
+        setSetlistExpanded(true);
+      }
+    });
+  }
+
+  if (presetFolderAddButton) {
+    presetFolderAddButton.addEventListener("click", () => {
+      const name = presetFolderNameInput?.value ?? "";
+      const parentId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+      createFolder(name, parentId);
+      if (presetFolderNameInput) {
+        presetFolderNameInput.value = "";
+      }
     });
   }
 }
@@ -428,6 +938,9 @@ export function saveCurrentPreset(): void {
   uiState.presets.unshift(newPreset);
   uiState.filteredPresets = uiState.presets.slice();
   uiState.presetCache.set(newPreset.id, newPreset);
+  if (uiState.activePresetFolderId && uiState.activePresetFolderId !== PRESET_FOLDER_ALL_ID) {
+    movePresetToFolder(newPreset.id, uiState.activePresetFolderId);
+  }
   uiState.activePresetId = newPreset.id;
   populatePresetDropdown();
   renderPresetUI(clonePreset(newPreset));
@@ -762,7 +1275,8 @@ async function importPresetArchive(file: File): Promise<void> {
 
   savePresetToLocalStorage(importedPreset);
   uiState.presets.unshift(importedPreset);
-  uiState.filteredPresets = uiState.presets.slice();
+  addPresetToImportedFolder(importedPreset.id);
+  uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
   uiState.presetCache.set(importedPreset.id, importedPreset);
   uiState.activePresetId = importedPreset.id;
   populatePresetDropdown();
@@ -825,7 +1339,9 @@ export function deleteCurrentPreset(): void {
     if (index >= 0) {
       uiState.presets.splice(index, 1);
     }
-    uiState.filteredPresets = uiState.presets.slice();
+    removePresetFromFolders(uiState.presetFolders ?? [], activePresetId);
+    persistPresetFolders();
+    uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
     uiState.presetCache.delete(activePresetId);
 
     // Select first preset if available

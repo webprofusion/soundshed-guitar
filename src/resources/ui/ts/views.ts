@@ -4,10 +4,13 @@ import { addActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSo
 import { escapeHtml } from "./utils.js";
 import { updateSignalPathClipIndicators } from "./signalPath.js";
 import { renderIcon } from "./iconAssets.js";
-import type { Preset } from "./types.js";
+import type { Preset, PresetFolder } from "./types.js";
 
 const presetListElement = document.getElementById("preset-list");
 const presetDetailsElement = document.getElementById("preset-details");
+const presetFolderTreeElement = document.getElementById("preset-folder-tree");
+
+const PRESET_FOLDER_ALL_ID = "__all__";
 
 interface RenderHooks {
   onPresetSelected: (presetId: string) => Promise<void> | void;
@@ -216,20 +219,83 @@ export function renderPresetList(
   presets: Preset[],
   activePresetId: string | null,
   onSelect: (presetId: string) => void | Promise<void>,
+  options?: {
+    folders: PresetFolder[];
+    activeFolderId: string | null;
+    onSelectFolder: (folderId: string) => void;
+    onMovePresetToFolder: (presetId: string, folderId: string) => void;
+  },
 ): void {
   if (!presetListElement) {
     return;
   }
 
+  if (presetFolderTreeElement && options) {
+    const { folders, activeFolderId, onSelectFolder, onMovePresetToFolder } = options;
+    const activeId = activeFolderId ?? PRESET_FOLDER_ALL_ID;
+    const allPresetCount = uiState.presets.length;
+
+    const renderFolderTree = (nodes: PresetFolder[], depth: number): string =>
+      nodes
+        .map((folder) => {
+          const indent = `<span class="preset-folder-indent" style="margin-left: ${depth * 12}px"></span>`;
+          const count = folder.presetIds.length;
+          const childMarkup = folder.children?.length ? renderFolderTree(folder.children, depth + 1) : "";
+          return `
+            <div class="preset-folder-item ${activeId === folder.id ? "active" : ""}" data-folder-id="${folder.id}">
+              ${indent}
+              <span class="folder-name">${escapeHtml(folder.name)}</span>
+              <span class="folder-count">${count}</span>
+            </div>
+            ${childMarkup}
+          `;
+        })
+        .join("");
+
+    presetFolderTreeElement.innerHTML = `
+      <div class="preset-folder-item ${activeId === PRESET_FOLDER_ALL_ID ? "active" : ""}" data-folder-id="${PRESET_FOLDER_ALL_ID}">
+        <span class="folder-name">All Presets</span>
+        <span class="folder-count">${allPresetCount}</span>
+      </div>
+      ${renderFolderTree(folders, 0)}
+    `;
+
+    presetFolderTreeElement.querySelectorAll<HTMLElement>(".preset-folder-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const folderId = item.dataset.folderId ?? PRESET_FOLDER_ALL_ID;
+        onSelectFolder(folderId);
+      });
+
+      item.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        item.classList.add("drag-over");
+      });
+
+      item.addEventListener("dragleave", () => {
+        item.classList.remove("drag-over");
+      });
+
+      item.addEventListener("drop", (event) => {
+        event.preventDefault();
+        item.classList.remove("drag-over");
+        const presetId = event.dataTransfer?.getData("text/plain") ?? "";
+        const folderId = item.dataset.folderId ?? PRESET_FOLDER_ALL_ID;
+        if (presetId) {
+          onMovePresetToFolder(presetId, folderId);
+        }
+      });
+    });
+  }
+
   if (!presets.length) {
-    presetListElement.innerHTML = '<p class="empty">No presets available.</p>';
+    presetListElement.innerHTML = '<p class="preset-library-empty">No presets available.</p>';
     return;
   }
 
   presetListElement.innerHTML = presets
     .map(
       (preset) => `
-        <article class="preset ${preset.id === activePresetId ? "active" : ""}" data-id="${preset.id}">
+        <article class="preset-item ${preset.id === activePresetId ? "active" : ""}" data-id="${preset.id}" draggable="true">
           <header>
             <h3>${escapeHtml(preset.name)}</h3>
             <span>${escapeHtml(preset.category ?? "")}</span>
@@ -240,11 +306,19 @@ export function renderPresetList(
     )
     .join("");
 
-  presetListElement.querySelectorAll("article.preset").forEach((element) => {
+  presetListElement.querySelectorAll<HTMLElement>("article.preset-item").forEach((element) => {
     element.addEventListener("click", async () => {
       const presetId = element.getAttribute("data-id");
       if (presetId) {
         await onSelect(presetId);
+      }
+    });
+
+    element.addEventListener("dragstart", (event) => {
+      const presetId = element.getAttribute("data-id") ?? "";
+      if (presetId) {
+        event.dataTransfer?.setData("text/plain", presetId);
+        event.dataTransfer?.setDragImage(element, 20, 20);
       }
     });
   });

@@ -75,6 +75,10 @@ export const uiState: UiState = {
   filteredPresets: [],
   activePresetId: null,
   presetCache: new Map<string, Preset>(),
+  presetFolders: [],
+  activePresetFolderId: "__all__",
+  setlists: [],
+  activeSetlistId: null,
   parameters: {
     values: [],
   },

@@ -172,6 +172,22 @@
   border-radius: 6px;
 }
 
+.preset-chooser-label {
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+  border: 1px solid var(--border-dark);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 160px;
+  text-align: left;
+}
+
+.preset-chooser-label:hover {
+  background: var(--overlay-light);
+}
+
 .preset-favorite {
   color: var(--color-preset-favorite);
   font-size: 14px;

@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/signal-path.css" />
   <link rel="stylesheet" href="css/modals.css" />
   <link rel="stylesheet" href="css/fx-library.css" />
+  <link rel="stylesheet" href="css/preset-library.css" />
   <link rel="stylesheet" href="css/settings.css" />
 </head>
 
@@ -190,12 +191,50 @@
         </div>
 
         <div class="preset-row preset-row-bottom">
-          <div class="preset-selector">
+          <div class="preset-selector" id="preset-selector">
             <span class="preset-favorite" id="preset-favorite" title="Toggle Favorite">♡</span>
-            <select id="preset-dropdown" class="themed-select">
-              <option>Default Preset</option>
-            </select>
+            <button class="preset-chooser-label" id="preset-chooser-label" type="button" aria-haspopup="dialog" aria-expanded="false">
+              Default Preset
+            </button>
           </div>
+        </div>
+
+        <div class="preset-library-popover" id="preset-library-popover" aria-hidden="true">
+          <section class="preset-library" id="preset-library">
+            <div class="preset-library-header">
+              <input type="text" id="preset-search" placeholder="Search presets..." />
+              <div class="preset-library-actions">
+                <input type="text" id="preset-folder-name" placeholder="New folder name" />
+                <button id="preset-folder-add" type="button">Create Folder</button>
+              </div>
+            </div>
+            <div class="preset-library-body">
+              <div class="preset-folder-tree" id="preset-folder-tree"></div>
+              <div class="preset-list" id="preset-list"></div>
+            </div>
+
+            <div class="setlist-collapsible" id="setlist-collapsible">
+              <button class="setlist-toggle" id="setlist-toggle" type="button" aria-expanded="false">
+                Setlists
+                <span class="setlist-toggle-icon">▾</span>
+              </button>
+              <div class="setlist-panel" id="setlist-panel" aria-hidden="true">
+                <div class="setlist-header">
+                  <input type="text" id="setlist-name-input" placeholder="New setlist name" />
+                  <input type="number" id="setlist-bank-input" placeholder="Bank" min="0" step="1" />
+                  <button id="setlist-add-btn" type="button">Create Setlist</button>
+                </div>
+                <div class="setlist-body">
+                  <div class="setlist-list" id="setlist-list"></div>
+                  <div class="setlist-editor">
+                    <div class="setlist-editor-header" id="setlist-editor-header">Select a setlist</div>
+                    <div class="setlist-slots" id="setlist-slots"></div>
+                    <div class="setlist-hint">Drag presets here to add slots.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
