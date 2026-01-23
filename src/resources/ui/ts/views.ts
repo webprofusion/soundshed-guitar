@@ -11,6 +11,7 @@ const presetDetailsElement = document.getElementById("preset-details");
 const presetFolderTreeElement = document.getElementById("preset-folder-tree");
 
 const PRESET_FOLDER_ALL_ID = "__all__";
+const PRESET_FOLDER_FAVORITES_ID = "__favorites__";
 
 interface RenderHooks {
   onPresetSelected: (presetId: string) => Promise<void> | void;
@@ -226,6 +227,9 @@ export function renderPresetList(
     onMovePresetToFolder: (presetId: string, folderId: string) => void;
     getRating: (presetId: string) => number | null;
     onRate: (presetId: string, rating: number | null) => void;
+    favoritesCount: number;
+    favoritesActive: boolean;
+    onSelectFavorites: () => void;
   },
 ): void {
   if (!presetListElement) {
@@ -233,7 +237,7 @@ export function renderPresetList(
   }
 
   if (presetFolderTreeElement && options) {
-    const { folders, activeFolderId, onSelectFolder, onMovePresetToFolder } = options;
+    const { folders, activeFolderId, onSelectFolder, onMovePresetToFolder, favoritesCount, favoritesActive, onSelectFavorites } = options;
     const activeId = activeFolderId ?? PRESET_FOLDER_ALL_ID;
     const allPresetCount = uiState.presets.length;
 
@@ -255,6 +259,10 @@ export function renderPresetList(
         .join("");
 
     presetFolderTreeElement.innerHTML = `
+      <div class="preset-folder-item ${favoritesActive ? "active" : ""}" data-folder-id="${PRESET_FOLDER_FAVORITES_ID}">
+        <span class="folder-name">Favourites</span>
+        <span class="folder-count">${favoritesCount}</span>
+      </div>
       <div class="preset-folder-item ${activeId === PRESET_FOLDER_ALL_ID ? "active" : ""}" data-folder-id="${PRESET_FOLDER_ALL_ID}">
         <span class="folder-name">All Presets</span>
         <span class="folder-count">${allPresetCount}</span>
@@ -265,7 +273,11 @@ export function renderPresetList(
     presetFolderTreeElement.querySelectorAll<HTMLElement>(".preset-folder-item").forEach((item) => {
       item.addEventListener("click", () => {
         const folderId = item.dataset.folderId ?? PRESET_FOLDER_ALL_ID;
-        onSelectFolder(folderId);
+        if (folderId === PRESET_FOLDER_FAVORITES_ID) {
+          onSelectFavorites();
+        } else {
+          onSelectFolder(folderId);
+        }
       });
 
       item.addEventListener("dragover", (event) => {

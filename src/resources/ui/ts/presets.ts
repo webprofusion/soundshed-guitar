@@ -11,8 +11,10 @@ import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
 
 const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
+const presetFavoriteToggle = document.getElementById("preset-favorite");
 const prevPresetBtn = document.getElementById("prev-preset");
 const nextPresetBtn = document.getElementById("next-preset");
+const randomPresetBtn = document.getElementById("preset-random-btn");
 const presetSearchElement = document.getElementById("preset-search") as HTMLInputElement | null;
 const presetSelector = document.getElementById("preset-selector");
 const presetLibraryPopover = document.getElementById("preset-library-popover");
@@ -33,7 +35,9 @@ const PRESET_FOLDER_SELECTED_KEY = "guitarfx_preset_folder_selected";
 const SETLIST_STORAGE_KEY = "guitarfx_setlists";
 const SETLIST_SELECTED_KEY = "guitarfx_setlist_selected";
 const PRESET_RATINGS_KEY = "guitarfx_preset_ratings";
+const PRESET_FAVORITES_KEY = "guitarfx_preset_favorites";
 const PRESET_FOLDER_ALL_ID = "__all__";
+const PRESET_FOLDER_FAVORITES_ID = "__favorites__";
 const PRESET_FOLDER_IMPORTED_NAME = "Imported";
 
 function normalizeFolderName(name: string): string {
@@ -42,6 +46,55 @@ function normalizeFolderName(name: string): string {
 
 function normalizeSetlistName(name: string): string {
   return name.trim();
+}
+
+function loadFavoritePresetIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PRESET_FAVORITES_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (error) {
+    console.error("Failed to load preset favorites", error);
+    return new Set();
+  }
+}
+
+function saveFavoritePresetIds(ids: Set<string>): void {
+  try {
+    localStorage.setItem(PRESET_FAVORITES_KEY, JSON.stringify(Array.from(ids)));
+  } catch (error) {
+    console.error("Failed to save preset favorites", error);
+  }
+}
+
+function isPresetFavorite(presetId: string): boolean {
+  return loadFavoritePresetIds().has(presetId);
+}
+
+function setFavoriteToggleState(presetId: string | null): void {
+  if (!presetFavoriteToggle) {
+    return;
+  }
+  const active = presetId ? isPresetFavorite(presetId) : false;
+  presetFavoriteToggle.textContent = active ? "♥" : "♡";
+  presetFavoriteToggle.classList.toggle("active", active);
+}
+
+function toggleFavoritePreset(presetId: string): void {
+  const favorites = loadFavoritePresetIds();
+  if (favorites.has(presetId)) {
+    favorites.delete(presetId);
+  } else {
+    favorites.add(presetId);
+  }
+  saveFavoritePresetIds(favorites);
+  setFavoriteToggleState(presetId);
+  if (uiState.activePresetFolderId === PRESET_FOLDER_FAVORITES_ID) {
+    filterPresets(presetSearchElement?.value ?? "");
+  }
 }
 
 function loadPresetRatings(): Record<string, number> {
@@ -412,6 +465,10 @@ function addPresetToFolder(folderId: string, presetId: string): void {
 }
 
 function movePresetToFolder(presetId: string, folderId: string): void {
+  if (folderId === PRESET_FOLDER_FAVORITES_ID) {
+    toggleFavoritePreset(presetId);
+    return;
+  }
   const folders = uiState.presetFolders ?? [];
   removePresetFromFolders(folders, presetId);
   if (folderId !== PRESET_FOLDER_ALL_ID) {
@@ -433,6 +490,11 @@ function getFilteredPresets(query: string): Preset[] {
   const normalized = query.trim().toLowerCase();
   const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
   let basePresets = uiState.presets.slice();
+
+  if (activeFolderId === PRESET_FOLDER_FAVORITES_ID) {
+    const favorites = loadFavoritePresetIds();
+    basePresets = basePresets.filter((preset) => favorites.has(preset.id));
+  }
 
   if (activeFolderId !== PRESET_FOLDER_ALL_ID) {
     const folder = findFolderById(uiState.presetFolders ?? [], activeFolderId);
@@ -554,6 +616,9 @@ function renderPresetUI(preset: Preset | null): void {
     onMovePresetToFolder: movePresetToFolder,
     getRating: getPresetRating,
     onRate: setPresetRating,
+    favoritesCount: loadFavoritePresetIds().size,
+    favoritesActive: uiState.activePresetFolderId === PRESET_FOLDER_FAVORITES_ID,
+    onSelectFavorites: () => setActivePresetFolder(PRESET_FOLDER_FAVORITES_ID),
   });
 
   renderPresetDetails(preset, {
@@ -643,6 +708,7 @@ export async function applyPresetFromLibrary(presetId: string): Promise<void> {
 
     uiState.presetCache.set(presetPayload.id, clonePreset(presetPayload));
     uiState.activePresetId = presetPayload.id;
+    setFavoriteToggleState(presetPayload.id);
     updatePresetDropdownSelection();
     renderPresetUI(clonePreset(presetPayload));
     updatePresetActionButtons();
@@ -737,6 +803,7 @@ export async function initializePresets(): Promise<void> {
   renderPresetUI(uiState.presetCache.get(uiState.activePresetId ?? "") ?? null);
   renderSetlistPanel();
   updatePresetDropdownSelection();
+  setFavoriteToggleState(uiState.activePresetId);
 
   populatePresetDropdown();
   postMessage({ type: "requestState" });
@@ -799,6 +866,18 @@ export function initializePresetControls(): void {
     });
   }
 
+  if (presetFavoriteToggle) {
+    presetFavoriteToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const presetId = uiState.activePresetId;
+      if (!presetId) {
+        showNotification("No preset", "Select a preset to favorite");
+        return;
+      }
+      toggleFavoritePreset(presetId);
+    });
+  }
+
   if (presetLibraryPopover) {
     presetLibraryPopover.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -824,6 +903,25 @@ export function initializePresetControls(): void {
   if (nextPresetBtn) {
     nextPresetBtn.addEventListener("click", async () => {
       await selectNextPreset();
+    });
+  }
+
+  if (randomPresetBtn) {
+    randomPresetBtn.addEventListener("click", async () => {
+      if (!uiState.presets.length) {
+        showNotification("No presets", "Preset library is empty");
+        return;
+      }
+      const list = uiState.filteredPresets.length ? uiState.filteredPresets : uiState.presets;
+      let candidates = list;
+      if (uiState.activePresetId && list.length > 1) {
+        candidates = list.filter((preset) => preset.id !== uiState.activePresetId);
+      }
+      const randomIndex = Math.floor(Math.random() * candidates.length);
+      const preset = candidates[randomIndex];
+      if (preset) {
+        await applyPresetFromLibrary(preset.id);
+      }
     });
   }
 
@@ -1383,6 +1481,10 @@ export function deleteCurrentPreset(): void {
     }
     removePresetFromFolders(uiState.presetFolders ?? [], activePresetId);
     persistPresetFolders();
+    const favorites = loadFavoritePresetIds();
+    if (favorites.delete(activePresetId)) {
+      saveFavoritePresetIds(favorites);
+    }
     uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
     uiState.presetCache.delete(activePresetId);
 
