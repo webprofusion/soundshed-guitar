@@ -11,6 +11,7 @@ import { postMessage } from "./bridge.js";
 import { GenericKnob } from "./controls.js";
 import { buildBlendModelMappingsFromIds, inferParamValueFromName } from "./blendUtils.js";
 import { arrayBufferToBase64, buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
+import { sha256HexFromBase64 } from "./utils.js";
 
 type BlendEditorDependencies = {
   getBlendLibrary: () => BlendLibrary;
@@ -300,7 +301,7 @@ export class BlendEditorModal {
     }
 
     const resources = this.deps.getResourceLibrary().nam ?? [];
-    const exportResources: Array<{ id: string; name: string; category: string; type: string; fileName: string }> = [];
+    const exportResources: Array<{ id: string; name: string; category: string; type: string; fileName: string; hash?: string }> = [];
 
     for (const modelId of blend.models ?? []) {
       const resource = resources.find((res) => res.id === modelId);
@@ -312,6 +313,7 @@ export class BlendEditorModal {
       if (!data) {
         continue;
       }
+      const hash = await sha256HexFromBase64(data);
       resourcesFolder.file(fileName, data, { base64: true });
       exportResources.push({
         id: resource.id,
@@ -319,6 +321,7 @@ export class BlendEditorModal {
         category: resource.category,
         type: "nam",
         fileName,
+        hash,
       });
     }
 
@@ -366,7 +369,7 @@ export class BlendEditorModal {
     const blendText = await blendEntry.async("text");
     const archive = JSON.parse(blendText) as {
       blend?: BlendLibrary[number];
-      resources?: Array<{ id?: string; fileName?: string; name?: string; category?: string; type?: string }>;
+      resources?: Array<{ id?: string; fileName?: string; name?: string; category?: string; type?: string; hash?: string }>;
     };
 
     const zipFiles = Object.values(zip.files) as JSZipObject[];
@@ -383,6 +386,12 @@ export class BlendEditorModal {
 
     for (const resource of resourcesToImport) {
       const fileName = resource.fileName ?? "";
+      const existing = getLibraryResourceByHash(this.deps.getResourceLibrary(), "nam", resource.hash);
+      if (existing) {
+        idMap.set(resource.id ?? fileName, existing.id);
+        continue;
+      }
+
       const entry = fileMap.get(fileName);
       if (!entry) {
         continue;
@@ -402,6 +411,7 @@ export class BlendEditorModal {
         category: resource.category ?? "",
         subfolder: "blend-imports",
         fileName,
+        hash: resource.hash ?? "",
         metadata: {
           provider: "blendArchive",
           sourceFile: fileName,
@@ -928,6 +938,13 @@ function getLibraryResource(library: ResourceLibrary, resourceType: string, reso
   if (!resourceType || !resourceId) return undefined;
   const resources = library[resourceType] || [];
   return resources.find((res) => res.id === resourceId);
+}
+
+function getLibraryResourceByHash(library: ResourceLibrary, resourceType: string, hash?: string): LibraryResource | undefined {
+  if (!resourceType || !hash) return undefined;
+  const resources = library[resourceType] || [];
+  const normalized = hash.toLowerCase();
+  return resources.find((res) => res.hash?.toLowerCase() === normalized);
 }
 
 function getParamSpec(parameterId: string): ParamSpec | null {

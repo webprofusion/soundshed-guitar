@@ -436,6 +436,21 @@
               </div>
               <div class="settings-hint" id="tone3000-session-status">Session not started.</div>
             </div>
+
+            <h2>Library Export</h2>
+            <div class="settings-section">
+              <h3>Export All Presets + Blends</h3>
+              <div class="settings-row">
+                <label for="library-export-resources">Resources</label>
+                <select id="library-export-resources">
+                  <option value="used" selected>Only resources used by presets</option>
+                  <option value="all">All resources in library</option>
+                </select>
+                <button id="library-export-btn" type="button">Export Library</button>
+                <span class="settings-unit">.soundshed-library.zip</span>
+              </div>
+              <div class="settings-hint">Exports all presets and blends, plus IR/NAM files from the library based on the selected scope.</div>
+            </div>
           </div>
 
           <div class="equipment-tab-panel" id="equipment-tab-performance">

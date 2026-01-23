@@ -2842,6 +2842,10 @@ namespace guitarfx
     {
       HandleSavePresetArchiveRequest(payload);
     }
+    else if (type == "saveLibraryArchive")
+    {
+      HandleSaveLibraryArchiveRequest(payload);
+    }
     else if (type == "splitSignalPathEdge")
     {
       HandleSplitSignalPathEdgeRequest(payload);
@@ -5062,6 +5066,7 @@ namespace guitarfx
     const std::string subfolder = payload.value("subfolder", "");
     const std::string data = payload.value("data", "");
     const std::string fileName = payload.value("fileName", "");
+    const std::string hash = payload.value("hash", "");
     const nlohmann::json metadataPayload = payload.value("metadata", nlohmann::json::object());
 
     if (resourceType.empty() || resourceId.empty() || data.empty())
@@ -5113,6 +5118,7 @@ namespace guitarfx
     resource.category = category;
     resource.description = description;
     resource.filePath = targetPath;
+    resource.hash = hash;
     if (metadataPayload.is_object())
     {
       for (const auto& entry : metadataPayload.items())
@@ -5368,6 +5374,68 @@ namespace guitarfx
     AppendSessionLog("Preset export saved: " + targetPath.generic_string());
 #else
     ReportErrorToUI("Export not supported", "Preset archive export is only available on Windows");
+#endif
+  }
+
+  void GuitarFXPlugin::HandleSaveLibraryArchiveRequest(const nlohmann::json &payload)
+  {
+#ifdef _WIN32
+    const std::string dataEncoded = payload.value("data", "");
+    const std::string suggestedName = payload.value("fileName", "library.soundshed-library.zip");
+    if (dataEncoded.empty())
+    {
+      SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Missing export data"}}.dump());
+      AppendSessionLog("Library export failed: missing export data");
+      return;
+    }
+
+    wchar_t filePath[MAX_PATH] = {0};
+    std::wstring defaultName;
+    if (!suggestedName.empty())
+    {
+      defaultName.assign(suggestedName.begin(), suggestedName.end());
+    }
+    if (!defaultName.empty() && defaultName.size() < MAX_PATH)
+    {
+      std::wcsncpy(filePath, defaultName.c_str(), MAX_PATH - 1);
+    }
+
+    OPENFILENAMEW ofn = {0};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFilter = L"Library Export (*.soundshed-library.zip)\0*.soundshed-library.zip\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = filePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = L"Save Library Export";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (!GetSaveFileNameW(&ofn))
+    {
+      SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Save cancelled"}}.dump());
+      AppendSessionLog("Library export cancelled");
+      return;
+    }
+
+    const auto decodedBytes = DecodeBase64(dataEncoded);
+    if (decodedBytes.empty())
+    {
+      SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Invalid export data"}}.dump());
+      AppendSessionLog("Library export failed: invalid export data");
+      return;
+    }
+
+    const std::filesystem::path targetPath{filePath};
+    if (!WriteFile(targetPath, decodedBytes))
+    {
+      SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Failed to save file"}}.dump());
+      AppendSessionLog("Library export failed: write error for " + targetPath.generic_string());
+      return;
+    }
+
+    SendMessageToUI(nlohmann::json{{"type", "libraryExportSaved"}, {"path", targetPath.generic_string()}}.dump());
+    AppendSessionLog("Library export saved: " + targetPath.generic_string());
+#else
+    ReportErrorToUI("Export not supported", "Library export is only available on Windows");
 #endif
   }
 

@@ -3,7 +3,7 @@ import { clearNotification, showNotification } from "./notifications.js";
 import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views.js";
 import { clonePreset, uiState } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
-import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl } from "./utils.js";
+import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
 import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource } from "./types.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
@@ -478,6 +478,7 @@ type PresetArchiveResource = {
   category?: string;
   type: string;
   fileName: string;
+  hash?: string;
 };
 
 type PresetArchive = {
@@ -490,6 +491,14 @@ type PresetArchive = {
 function getLibraryResource(resourceType: string, resourceId: string): LibraryResource | undefined {
   const resources = uiState.resourceLibrary[resourceType] ?? [];
   return resources.find((res) => res.id === resourceId);
+}
+
+function getLibraryResourceByHash(resourceType: string, hash?: string): LibraryResource | undefined {
+  if (!hash) {
+    return undefined;
+  }
+  const resources = uiState.resourceLibrary[resourceType] ?? [];
+  return resources.find((res) => res.hash?.toLowerCase() === hash.toLowerCase());
 }
 
 function collectPresetBlendIds(preset: Preset): string[] {
@@ -593,6 +602,7 @@ async function exportCurrentPresetArchive(): Promise<void> {
     if (!data) {
       continue;
     }
+    const hash = await sha256HexFromBase64(data);
     resourcesFolder.file(fileName, data, { base64: true });
     exportResources.push({
       id: resource.id,
@@ -600,6 +610,7 @@ async function exportCurrentPresetArchive(): Promise<void> {
       category: resource.category,
       type: ref.type,
       fileName,
+      hash,
     });
   }
 
@@ -656,6 +667,11 @@ async function importPresetArchive(file: File): Promise<void> {
   const resourcesToImport = archive.resources ?? [];
   for (const resource of resourcesToImport) {
     const fileName = resource.fileName ?? "";
+    const existing = getLibraryResourceByHash(resource.type, resource.hash);
+    if (existing) {
+      idMap.set(resource.id, existing.id);
+      continue;
+    }
     const entry = fileMap.get(fileName);
     if (!entry) {
       continue;
@@ -675,6 +691,7 @@ async function importPresetArchive(file: File): Promise<void> {
       category: resource.category ?? "",
       subfolder: "preset-imports",
       fileName,
+      hash: resource.hash ?? "",
       metadata: {
         provider: "presetArchive",
         sourceFile: fileName,

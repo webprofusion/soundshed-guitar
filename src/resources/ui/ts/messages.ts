@@ -271,6 +271,16 @@ export function handleIncomingMessage(message: string): void {
       showNotification("Blend export failed", info.message ?? "");
       break;
     }
+    case "libraryExportSaved": {
+      const info = payload as { path?: string };
+      showNotification("Library exported", info.path ?? "");
+      break;
+    }
+    case "libraryExportFailed": {
+      const info = payload as { message?: string };
+      showNotification("Library export failed", info.message ?? "");
+      break;
+    }
     case "presetExportSaved": {
       const info = payload as { path?: string };
       showNotification("Preset exported", info.path ?? "");

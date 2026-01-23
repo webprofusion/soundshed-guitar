@@ -1,4 +1,4 @@
-import { uiState } from "./state.js";
+import { uiState, clonePreset } from "./state.js";
 import { setAppSetting, postMessage } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
@@ -6,7 +6,9 @@ import { handleAppSettingUpdate } from "./tone3000.js";
 import { updateSignalDiagnosticsView, updateDSPPerformancePlot } from "./views.js";
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { getAudioFxLibrary, getIrLibrary } from "./dataLibraries.js";
-import type { AppSettingValue } from "./types.js";
+import { buildArchiveFileName, requestResourceData, sanitizeFilename, arrayBufferToBase64 } from "./archiveUtils.js";
+import { sha256HexFromBase64 } from "./utils.js";
+import type { AppSettingValue, Preset, BlendDefinition, ResourceRef, LibraryResource } from "./types.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { themeSwitcher, type ThemeName } from "./theme-switcher.js";
 
@@ -35,6 +37,8 @@ const libraryResults = document.getElementById("equipment-library-results");
 const librarySummary = document.getElementById("equipment-library-summary");
 const libraryTabButtons = Array.from(document.querySelectorAll(".library-tab-btn"));
 const libraryTabPanels = Array.from(document.querySelectorAll(".library-tab-panel"));
+const libraryExportButton = document.getElementById("library-export-btn");
+const libraryExportResourcesSelect = document.getElementById("library-export-resources") as HTMLSelectElement | null;
 let settingsInitialized = false;
 let libraryFiltersInitialized = false;
 let equipmentTabsInitialized = false;
@@ -58,9 +62,23 @@ export function initSettingsPanel(): void {
   initLibraryFilters();
   initThemeSelect();
   initLibraryTabs();
+  initLibraryExport();
 
   refreshSettingsView();
   initTone3000Browser();
+}
+
+function initLibraryExport(): void {
+  if (!libraryExportButton) {
+    return;
+  }
+
+  if ((libraryExportButton as HTMLButtonElement).dataset.bound === "true") {
+    return;
+  }
+
+  (libraryExportButton as HTMLButtonElement).dataset.bound = "true";
+  libraryExportButton.addEventListener("click", () => void exportLibraryArchive());
 }
 
 function initEquipmentTabs(): void {
@@ -282,6 +300,196 @@ function updateSessionStatus(): void {
 
   const remainingSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
   sessionStatus.textContent = `Session active. Expires in ${remainingSeconds}s.`;
+}
+
+type LibraryArchiveResource = {
+  id: string;
+  name?: string;
+  category?: string;
+  type: string;
+  fileName: string;
+  hash?: string;
+};
+
+type LibraryArchive = {
+  formatVersion: number;
+  createdAt: string;
+  resourceMode: "used" | "all";
+  presets: Preset[];
+  blends: BlendDefinition[];
+  resources: LibraryArchiveResource[];
+};
+
+function getLibraryResource(resourceType: string, resourceId: string): LibraryResource | undefined {
+  const resources = uiState.resourceLibrary[resourceType] ?? [];
+  return resources.find((res) => res.id === resourceId);
+}
+
+function collectPresetBlendIds(preset: Preset): string[] {
+  if (!preset.graph?.nodes) {
+    return [];
+  }
+
+  const ids = new Set<string>();
+  preset.graph.nodes.forEach((node) => {
+    const blendId = node.config?.blendId ?? "";
+    if (blendId) {
+      ids.add(blendId);
+    }
+  });
+
+  return Array.from(ids);
+}
+
+function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[]): ResourceRef[] {
+  const refs: ResourceRef[] = [];
+  const seen = new Set<string>();
+
+  const addRef = (type: string | undefined, id: string | undefined, filePath?: string): void => {
+    if (!type || !id) {
+      return;
+    }
+    const key = `${type}:${id}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    refs.push({ type, id, filePath });
+  };
+
+  if (preset.graph?.nodes) {
+    preset.graph.nodes.forEach((node) => {
+      if (node.resource) {
+        addRef(node.resource.type, node.resource.id, node.resource.filePath);
+      }
+      if (Array.isArray(node.resources)) {
+        node.resources.forEach((res) => addRef(res.type, res.id, res.filePath));
+      }
+    });
+  }
+
+  if (preset.audioFxModelId) {
+    addRef("nam", preset.audioFxModelId ?? undefined);
+  }
+  if (preset.irId) {
+    addRef("ir", preset.irId ?? undefined);
+  }
+
+  preset.attachments?.forEach((attachment) => {
+    if (!attachment.id) {
+      return;
+    }
+    const type = attachment.type === "audiofx" ? "nam" : attachment.type === "ir" ? "ir" : attachment.type;
+    addRef(type, attachment.id, attachment.filePath);
+  });
+
+  blendDefs.forEach((blend) => {
+    (blend.models ?? []).forEach((modelId) => addRef("nam", modelId));
+  });
+
+  return refs;
+}
+
+async function exportLibraryArchive(): Promise<void> {
+  const presets = uiState.presets.map((preset) => clonePreset(uiState.presetCache.get(preset.id) ?? preset));
+  const blends = (uiState.blendLibrary ?? []).map((blend) => JSON.parse(JSON.stringify(blend)) as BlendDefinition);
+
+  if (!presets.length && !blends.length) {
+    showNotification("Export failed", "No presets or blends available");
+    return;
+  }
+
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    showNotification("Export failed", "Archive library not available");
+    return;
+  }
+
+  const zip = new zipLib();
+  const resourcesFolder = zip.folder("resources");
+  if (!resourcesFolder) {
+    showNotification("Export failed", "Unable to create archive");
+    return;
+  }
+  const namFolder = resourcesFolder.folder("nam");
+  const irFolder = resourcesFolder.folder("ir");
+  if (!namFolder || !irFolder) {
+    showNotification("Export failed", "Unable to create resource folders");
+    return;
+  }
+
+  const resourceMode = libraryExportResourcesSelect?.value === "all" ? "all" : "used";
+  const exportResources: LibraryArchiveResource[] = [];
+  const resourceEntries: Array<{ type: string; resource: LibraryResource }> = [];
+
+  if (resourceMode === "all") {
+    const library = uiState.resourceLibrary;
+    (library.nam ?? []).forEach((resource) => resourceEntries.push({ type: "nam", resource }));
+    (library.ir ?? []).forEach((resource) => resourceEntries.push({ type: "ir", resource }));
+  } else {
+    const blendIds = new Set<string>();
+    presets.forEach((preset) => {
+      collectPresetBlendIds(preset).forEach((id) => blendIds.add(id));
+    });
+    const referencedBlends = blends.filter((blend) => blendIds.has(blend.id));
+    const refs = new Map<string, ResourceRef>();
+    presets.forEach((preset) => {
+      collectPresetResourceRefs(preset, referencedBlends).forEach((ref) => {
+        refs.set(`${ref.type}:${ref.id}`, ref);
+      });
+    });
+    refs.forEach((ref) => {
+      const resource = getLibraryResource(ref.type, ref.id);
+      if (resource && (ref.type === "nam" || ref.type === "ir")) {
+        resourceEntries.push({ type: ref.type, resource });
+      }
+    });
+  }
+
+  let missingCount = 0;
+  for (const entry of resourceEntries) {
+    const fileName = buildArchiveFileName(entry.resource, entry.type);
+    const data = await requestResourceData(entry.type, entry.resource.id);
+    if (!data) {
+      missingCount += 1;
+      continue;
+    }
+    const hash = await sha256HexFromBase64(data);
+    const targetFolder = entry.type === "ir" ? irFolder : namFolder;
+    targetFolder.file(fileName, data, { base64: true });
+    exportResources.push({
+      id: entry.resource.id,
+      name: entry.resource.name,
+      category: entry.resource.category,
+      type: entry.type,
+      fileName,
+      hash,
+    });
+  }
+
+  const archive: LibraryArchive = {
+    formatVersion: 1,
+    createdAt: new Date().toISOString(),
+    resourceMode,
+    presets,
+    blends,
+    resources: exportResources,
+  };
+
+  zip.file("library.json", JSON.stringify(archive, null, 2));
+  const blob = await zip.generateAsync({ type: "blob" });
+  const buffer = await blob.arrayBuffer();
+  const data = arrayBufferToBase64(buffer);
+
+  if (missingCount > 0) {
+    showNotification("Export warning", `${missingCount} resources could not be read`);
+  }
+
+  postMessage({
+    type: "saveLibraryArchive",
+    fileName: `${sanitizeFilename("Soundshed-Library")}.soundshed-library.zip`,
+    data,
+  });
 }
 
 type LibraryItem = {

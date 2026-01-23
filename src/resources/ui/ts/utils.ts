@@ -20,6 +20,27 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+export async function sha256HexFromBase64(base64: string): Promise<string> {
+  if (typeof crypto === "undefined" || !crypto.subtle) {
+    return "";
+  }
+  const buffer = base64ToArrayBuffer(base64);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashBytes = new Uint8Array(hashBuffer);
+  return Array.from(hashBytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function resolveDemoSamplePath(rawPath: string | null | undefined): string | null {
   if (!rawPath || typeof rawPath !== "string") {
     return null;

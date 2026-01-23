@@ -161,6 +161,7 @@ export interface LibraryResource {
   category: string;
   description: string;
   filePath: string;
+  hash?: string;
   metadata?: Record<string, string>;
 }
 
