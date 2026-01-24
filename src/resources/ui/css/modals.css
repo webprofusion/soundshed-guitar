@@ -5,27 +5,22 @@
   position: fixed;
   top: 0;
   left: 0;
-  border-bottom: 1px solid var(--border-dark);
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
   background: rgba(0, 0, 0, 0.6);
-  padding: 6px 12px;
-  border-radius: 4px 4px 0 0;
-  border: 1px solid transparent;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  z-index: 1000;
+}
+
 .modal-content {
   background: linear-gradient(180deg, #e8ecf4 0%, var(--bg-secondary) 100%);
   border-radius: 12px;
   background: var(--overlay-light);
   color: var(--text-primary);
-  border-color: var(--border-dark);
+  border: 1px solid var(--border-dark);
   border-bottom-color: var(--color-primary);
   overflow: hidden;
 }
@@ -83,6 +78,16 @@
   background: var(--bg-dark-primary);
   border: 1px solid var(--border-dark-light);
   box-shadow: var(--shadow-xl);
+}
+
+/* Save Preset Modal */
+.save-preset-modal .modal-content {
+  width: 560px;
+  max-width: 95vw;
+}
+
+.save-preset-modal select {
+  width: 100%;
 }
 
 .blend-editor-modal .modal-header {

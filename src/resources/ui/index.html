@@ -999,13 +999,17 @@
     </div>
 
     <!-- Save Preset Modal -->
-    <div id="save-preset-modal" class="modal" style="display: none;">
+    <div id="save-preset-modal" class="modal save-preset-modal" style="display: none;">
       <div class="modal-content">
         <div class="modal-header">
           <h3>Save Preset</h3>
           <button class="modal-close" id="save-preset-modal-close">×</button>
         </div>
         <div class="modal-body">
+          <div class="form-group">
+            <label for="preset-folder-select">Save Folder</label>
+            <select id="preset-folder-select" class="themed-select"></select>
+          </div>
           <div class="form-group">
             <label for="preset-name-input">Preset Name</label>
             <input type="text" id="preset-name-input" placeholder="My Custom Preset" />
@@ -1017,10 +1021,6 @@
           <div class="form-group">
             <label for="preset-description-input">Description</label>
             <textarea id="preset-description-input" placeholder="Optional description..." rows="3"></textarea>
-          </div>
-          <div class="form-info">
-            <p><strong>Current Model:</strong> <span id="save-modal-model-path">None</span></p>
-            <p><strong>Current IR:</strong> <span id="save-modal-ir-path">None</span></p>
           </div>
         </div>
         <div class="modal-footer">

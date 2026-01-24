@@ -210,6 +210,47 @@ function findFolderByName(folders: PresetFolder[], name: string): PresetFolder |
   return undefined;
 }
 
+function findFolderForPreset(folders: PresetFolder[], presetId: string): PresetFolder | undefined {
+  for (const folder of folders) {
+    if ((folder.presetIds ?? []).includes(presetId)) {
+      return folder;
+    }
+    const childMatch = findFolderForPreset(folder.children ?? [], presetId);
+    if (childMatch) {
+      return childMatch;
+    }
+  }
+  return undefined;
+}
+
+function populatePresetFolderSelect(select: HTMLSelectElement | null, selectedId?: string | null): void {
+  if (!select) return;
+
+  const folders = uiState.presetFolders ?? [];
+  const options: Array<{ id: string; label: string }> = [
+    { id: PRESET_FOLDER_ALL_ID, label: "All Presets" },
+  ];
+
+  const buildOptions = (nodes: PresetFolder[], depth: number): void => {
+    nodes.forEach((folder) => {
+      const indent = "\u00A0".repeat(depth * 2);
+      options.push({ id: folder.id, label: `${indent}${folder.name}` });
+      if (folder.children?.length) {
+        buildOptions(folder.children, depth + 1);
+      }
+    });
+  };
+
+  buildOptions(folders, 0);
+
+  select.innerHTML = options
+    .map((option) => `<option value="${option.id}">${option.label}</option>`)
+    .join("");
+
+  const resolved = selectedId ?? uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  select.value = resolved || PRESET_FOLDER_ALL_ID;
+}
+
 function ensurePresetFolders(): void {
   const stored = loadPresetFoldersFromLocalStorage();
   const importedFolder = findFolderByName(stored, PRESET_FOLDER_IMPORTED_NAME);
@@ -994,9 +1035,14 @@ export function openSavePresetModal(): void {
   const modal = document.getElementById("save-preset-modal");
   if (!modal) return;
 
+  const folderSelect = document.getElementById("preset-folder-select") as HTMLSelectElement | null;
   const nameInput = document.getElementById("preset-name-input") as HTMLInputElement | null;
   const categoryInput = document.getElementById("preset-category-input") as HTMLInputElement | null;
   const descriptionInput = document.getElementById("preset-description-input") as HTMLTextAreaElement | null;
+
+  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  const defaultFolderId = activeFolderId === PRESET_FOLDER_FAVORITES_ID ? PRESET_FOLDER_ALL_ID : activeFolderId;
+  populatePresetFolderSelect(folderSelect, defaultFolderId);
 
   if (nameInput) nameInput.value = "";
   if (categoryInput) categoryInput.value = "User";
@@ -1016,6 +1062,7 @@ export function closeSavePresetModal(): void {
 
 export function saveCurrentPreset(): void {
   const modal = document.getElementById("save-preset-modal");
+  const folderSelect = document.getElementById("preset-folder-select") as HTMLSelectElement | null;
   const nameInput = document.getElementById("preset-name-input") as HTMLInputElement | null;
   const categoryInput = document.getElementById("preset-category-input") as HTMLInputElement | null;
   const descriptionInput = document.getElementById("preset-description-input") as HTMLTextAreaElement | null;
@@ -1032,6 +1079,7 @@ export function saveCurrentPreset(): void {
   // Check if we're editing an existing preset
   const editingPresetId = modal?.dataset.editingPresetId;
 
+  const selectedFolderId = folderSelect?.value || PRESET_FOLDER_ALL_ID;
   const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
   const baseAttachments = buildAttachmentsFromPreset(activePreset ?? {} as Preset);
 
@@ -1056,6 +1104,7 @@ export function saveCurrentPreset(): void {
       uiState.filteredPresets = uiState.presets.slice();
       populatePresetDropdown();
       renderPresetUI(clonePreset(updatedPreset));
+      movePresetToFolder(editingPresetId, selectedFolderId);
       closeSavePresetModal();
       showNotification("Preset updated", name);
       updatePresetActionButtons();
@@ -1078,8 +1127,8 @@ export function saveCurrentPreset(): void {
   uiState.presets.unshift(newPreset);
   uiState.filteredPresets = uiState.presets.slice();
   uiState.presetCache.set(newPreset.id, newPreset);
-  if (uiState.activePresetFolderId && uiState.activePresetFolderId !== PRESET_FOLDER_ALL_ID) {
-    movePresetToFolder(newPreset.id, uiState.activePresetFolderId);
+  if (selectedFolderId) {
+    movePresetToFolder(newPreset.id, selectedFolderId);
   }
   uiState.activePresetId = newPreset.id;
   populatePresetDropdown();
@@ -1565,6 +1614,11 @@ export function openEditPresetModal(): void {
 
   const modal = document.getElementById("save-preset-modal");
   if (!modal) return;
+
+  const folderSelect = document.getElementById("preset-folder-select") as HTMLSelectElement | null;
+  const presetFolder = findFolderForPreset(uiState.presetFolders ?? [], activePresetId);
+  const selectedFolderId = presetFolder?.id ?? PRESET_FOLDER_ALL_ID;
+  populatePresetFolderSelect(folderSelect, selectedFolderId);
 
   // Pre-fill with existing preset data
   const nameInput = document.getElementById("preset-name-input") as HTMLInputElement | null;
