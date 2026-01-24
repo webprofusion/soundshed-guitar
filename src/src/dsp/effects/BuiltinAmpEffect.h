@@ -8,6 +8,13 @@
 
 namespace guitarfx
 {
+  /*
+   * Design notes (gain stages v1):
+   * - Stage count is clamped to 1..6, defaulting to 2 to preserve legacy presets.
+   * - Tone stack is positioned between stage 2 and stage 3 ("split around tone").
+   * - Stage gains are in dB (per-stage trims) with 0 dB default; gain/voice retain voicing.
+   * - Missing params fall back to defaults; no allocations or locks in Process().
+   */
   /**
    * Built-in amp effect with smooth Clean/Drive voicing and tone controls.
    */
@@ -46,7 +53,10 @@ namespace guitarfx
       const float cleanGain = static_cast<float>(1.0 + 5.0 * mGain);
       const float driveGain = static_cast<float>(1.0 + 45.0 * mGain);
       const float outputGain = static_cast<float>(std::pow(10.0, mOutputDb * 0.05));
+      const float masterGain = static_cast<float>(1.0 + 6.0 * mGain);
       const float smoothStep = static_cast<float>(1.0 - mVoiceSmoothCoef);
+      const int stageCount = std::clamp(mStageCount, 1, kMaxStages);
+      const int preStages = std::min(stageCount, kPreToneStages);
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -65,14 +75,18 @@ namespace guitarfx
           double tightened = ProcessBiquad(sample, mPreHPB0, mPreHPB1, mPreHPB2, mPreHPA1, mPreHPA2,
                                            mPreHPS1[ch], mPreHPS2[ch]);
 
-          const float pre = static_cast<float>(tightened);
+          const float pre = static_cast<float>(tightened) * mStageGainLinear[0] * masterGain;
           const float clean = SoftClip(pre * cleanGain) * 0.9f;
           const float drive = SoftClip(pre * driveGain);
           const float blended = clean + (drive - clean) * voice;
 
-          const float stage2 = SoftClip(blended * (1.0f + 6.0f * mGain));
+          float stageOut = blended;
+          if (preStages >= 2)
+          {
+            stageOut = SoftClip(stageOut * masterGain * mStageGainLinear[1]);
+          }
 
-          double processed = stage2;
+          double processed = stageOut;
           processed = ProcessBiquad(processed, mLowB0, mLowB1, mLowB2, mLowA1, mLowA2, mLowS1[ch], mLowS2[ch]);
           processed = ProcessBiquad(processed, mMidB0, mMidB1, mMidB2, mMidA1, mMidA2, mMidS1[ch], mMidS2[ch]);
           processed = ProcessBiquad(processed, mContourB0, mContourB1, mContourB2, mContourA1, mContourA2,
@@ -81,6 +95,11 @@ namespace guitarfx
                                     mTrebleS1[ch], mTrebleS2[ch]);
           processed = ProcessBiquad(processed, mPresenceB0, mPresenceB1, mPresenceB2, mPresenceA1, mPresenceA2,
                                     mPresenceS1[ch], mPresenceS2[ch]);
+
+          for (int stageIndex = kPreToneStages; stageIndex < stageCount; ++stageIndex)
+          {
+            processed = SoftClip(static_cast<float>(processed) * masterGain * mStageGainLinear[stageIndex]);
+          }
 
           out[i] = static_cast<float>(processed) * outputGain;
         }
@@ -126,6 +145,35 @@ namespace guitarfx
       {
         mOutputDb = std::clamp(value, -24.0, 24.0);
       }
+      else if (key == "stageCount")
+      {
+        const int count = static_cast<int>(std::round(value));
+        mStageCount = std::clamp(count, 1, kMaxStages);
+      }
+      else if (key == "stage1Gain")
+      {
+        SetStageGain(0, value);
+      }
+      else if (key == "stage2Gain")
+      {
+        SetStageGain(1, value);
+      }
+      else if (key == "stage3Gain")
+      {
+        SetStageGain(2, value);
+      }
+      else if (key == "stage4Gain")
+      {
+        SetStageGain(3, value);
+      }
+      else if (key == "stage5Gain")
+      {
+        SetStageGain(4, value);
+      }
+      else if (key == "stage6Gain")
+      {
+        SetStageGain(5, value);
+      }
     }
 
     void SetConfig(const std::string &, const std::string &) override {}
@@ -148,6 +196,20 @@ namespace guitarfx
         return mPresence;
       if (key == "output")
         return mOutputDb;
+      if (key == "stageCount")
+        return mStageCount;
+      if (key == "stage1Gain")
+        return mStageGainDb[0];
+      if (key == "stage2Gain")
+        return mStageGainDb[1];
+      if (key == "stage3Gain")
+        return mStageGainDb[2];
+      if (key == "stage4Gain")
+        return mStageGainDb[3];
+      if (key == "stage5Gain")
+        return mStageGainDb[4];
+      if (key == "stage6Gain")
+        return mStageGainDb[5];
       return 0.0;
     }
 
@@ -156,6 +218,8 @@ namespace guitarfx
 
   private:
     static constexpr double kPi = 3.14159265358979323846;
+    static constexpr int kMaxStages = 6;
+    static constexpr int kPreToneStages = 2;
 
     static float SoftClip(float x)
     {
@@ -169,6 +233,20 @@ namespace guitarfx
       s1 = b1 * input - a1 * output + s2;
       s2 = b2 * input - a2 * output;
       return output;
+    }
+
+    static float DbToLinear(double db)
+    {
+      return static_cast<float>(std::pow(10.0, db * 0.05));
+    }
+
+    void SetStageGain(int index, double value)
+    {
+      if (index < 0 || index >= kMaxStages)
+        return;
+      const double clamped = std::clamp(value, -24.0, 24.0);
+      mStageGainDb[index] = clamped;
+      mStageGainLinear[index] = DbToLinear(clamped);
     }
 
     void UpdateSmoothing()
@@ -187,11 +265,11 @@ namespace guitarfx
       if (mSampleRate <= 0.0)
         return;
 
-      const double bassGain = (mBass - 0.5) * 12.0;
-      const double midGain = (mMiddle - 0.5) * 12.0;
-      const double trebleGain = (mTreble - 0.5) * 12.0;
+      const double bassGain = (mBass - 0.5) * 18.0;
+      const double midGain = (mMiddle - 0.5) * 18.0;
+      const double trebleGain = (mTreble - 0.5) * 18.0;
       const double contourGain = -12.0 * mContour;
-      const double presenceGain = (mPresence - 0.5) * 6.0;
+      const double presenceGain = (mPresence - 0.5) * 12.0;
 
       ComputeLowShelf(120.0, 0.8, bassGain, mLowB0, mLowB1, mLowB2, mLowA1, mLowA2);
       ComputePeakingEQ(750.0, 0.9, midGain, mMidB0, mMidB1, mMidB2, mMidA1, mMidA2);
@@ -289,6 +367,9 @@ namespace guitarfx
     double mContour = 0.2;
     double mPresence = 0.5;
     double mOutputDb = 0.0;
+    int mStageCount = 2;
+    std::array<double, kMaxStages> mStageGainDb = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    std::array<float, kMaxStages> mStageGainLinear = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
     double mPreHPB0 = 1.0, mPreHPB1 = 0.0, mPreHPB2 = 0.0, mPreHPA1 = 0.0, mPreHPA2 = 0.0;
 
@@ -322,7 +403,14 @@ namespace guitarfx
       {"treble", "Treble", 0.5, 0.0, 1.0, "amount"},
       {"contour", "Contour", 0.2, 0.0, 1.0, "amount"},
       {"presence", "Presence", 0.5, 0.0, 1.0, "amount"},
-      {"output", "Output", 0.0, -24.0, 24.0, "dB"}
+      {"output", "Output", 0.0, -24.0, 24.0, "dB"},
+      {"stageCount", "Gain Stages", 2.0, 1.0, 6.0, "amount"},
+      {"stage1Gain", "Stage 1 Gain", 0.0, -24.0, 24.0, "dB"},
+      {"stage2Gain", "Stage 2 Gain", 0.0, -24.0, 24.0, "dB"},
+      {"stage3Gain", "Stage 3 Gain", 0.0, -24.0, 24.0, "dB"},
+      {"stage4Gain", "Stage 4 Gain", 0.0, -24.0, 24.0, "dB"},
+      {"stage5Gain", "Stage 5 Gain", 0.0, -24.0, 24.0, "dB"},
+      {"stage6Gain", "Stage 6 Gain", 0.0, -24.0, 24.0, "dB"}
     };
 
     EffectRegistry::Instance().Register("amp_builtin", info, []()
