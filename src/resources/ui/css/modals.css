@@ -11,17 +11,16 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   z-index: 1000;
 }
 
 .modal-content {
-  background: linear-gradient(180deg, #e8ecf4 0%, var(--bg-secondary) 100%);
-  border-radius: 12px;
-  background: var(--overlay-light);
-  color: var(--text-primary);
-  border: 1px solid var(--border-dark);
-  border-bottom-color: var(--color-primary);
+  background: var(--bg-dark-primary);
+  border-radius: 16px;
+  color: var(--text-dark-primary);
+  border: 1px solid var(--border-dark-light);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
 }
 
@@ -30,15 +29,15 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(180deg, #f0f4fc 0%, #e0e4ec 100%);
-  border-bottom: 1px solid #c0c4cc;
+  background: var(--bg-dark-secondary);
+  border-bottom: 1px solid var(--border-dark-medium);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-dark-primary);
 }
 
 .modal-close {
@@ -46,7 +45,7 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: #6a6a70;
+  color: var(--text-dark-muted);
   font-size: 20px;
   cursor: pointer;
   border-radius: 4px;
@@ -54,12 +53,14 @@
 }
 
 .modal-close:hover {
-  background: var(--overlay-dark);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dark-primary);
 }
 
 .modal-body {
   padding: 20px;
+  background: var(--bg-dark-primary);
+  color: var(--text-dark-secondary);
 }
 
 .modal-footer {
@@ -67,8 +68,8 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
-  background: linear-gradient(180deg, #d8dce4 0%, var(--bg-tertiary) 100%);
-  border-top: 1px solid var(--bg-tertiary);
+  background: var(--bg-dark-secondary);
+  border-top: 1px solid var(--border-dark-medium);
 }
 
 /* Blend Editor Modal */
