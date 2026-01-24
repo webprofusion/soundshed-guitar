@@ -11,6 +11,7 @@ import { sha256HexFromBase64 } from "./utils.js";
 import type { AppSettingValue, Preset, BlendDefinition, ResourceRef, LibraryResource } from "./types.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { themeSwitcher, type ThemeName } from "./theme-switcher.js";
+import { renderIcon } from "./iconAssets.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
@@ -44,6 +45,7 @@ let libraryFiltersInitialized = false;
 let equipmentTabsInitialized = false;
 let themeSelectInitialized = false;
 let libraryTabsInitialized = false;
+let libraryStateRequestedAt = 0;
 
 export function initSettingsPanel(): void {
   if (settingsInitialized) {
@@ -150,6 +152,7 @@ export function initLibraryFilters(): void {
   librarySourceSelect?.addEventListener("change", () => renderLibraryView());
   libraryViewSelect?.addEventListener("change", () => renderLibraryView());
   libraryCategorySelect?.addEventListener("change", () => renderLibraryView());
+  bindLibraryActions();
 }
 
 export function initLibraryTabs(): void {
@@ -178,6 +181,10 @@ function activateLibraryTab(tabId: string): void {
     const isMatch = (panel as HTMLElement).id === `library-tab-${tabId}`;
     panel.classList.toggle("active", isMatch);
   });
+
+  if (tabId === "resources") {
+    postMessage({ type: "requestState" });
+  }
 }
 
 export function initDiagnosticsToggle(): void {
@@ -390,6 +397,27 @@ function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[])
   return refs;
 }
 
+function buildUsedResourceSet(): Set<string> {
+  const used = new Set<string>();
+  const presets = uiState.presets.map((preset) => clonePreset(uiState.presetCache.get(preset.id) ?? preset));
+  const blends = (uiState.blendLibrary ?? []).map((blend) => JSON.parse(JSON.stringify(blend)) as BlendDefinition);
+  const blendIds = new Set<string>();
+  presets.forEach((preset) => {
+    collectPresetBlendIds(preset).forEach((id) => blendIds.add(id));
+  });
+  const referencedBlends = blends.filter((blend) => blendIds.has(blend.id));
+
+  presets.forEach((preset) => {
+    collectPresetResourceRefs(preset, referencedBlends).forEach((ref) => {
+      if (ref.type && ref.id) {
+        used.add(`${ref.type}:${ref.id}`);
+      }
+    });
+  });
+
+  return used;
+}
+
 async function exportLibraryArchive(): Promise<void> {
   const presets = uiState.presets.map((preset) => clonePreset(uiState.presetCache.get(preset.id) ?? preset));
   const blends = (uiState.blendLibrary ?? []).map((blend) => JSON.parse(JSON.stringify(blend)) as BlendDefinition);
@@ -500,6 +528,7 @@ type LibraryItem = {
   description: string;
   filePath: string;
   metadata?: Record<string, string>;
+  fileMissing?: boolean;
 };
 
 function getLibraryItems(): LibraryItem[] {
@@ -541,14 +570,16 @@ function getLibraryItems(): LibraryItem[] {
         return;
       }
       const entry = res as import("./types.js").LibraryResource;
+      const entryFilePath = entry.filePath ?? "";
       items.push({
         type,
         id: entry.id ?? "",
         name: entry.name ?? entry.id ?? "",
         category: entry.category ?? "Imported",
         description: entry.description ?? "",
-        filePath: entry.filePath ?? "",
+        filePath: entryFilePath,
         metadata: entry.metadata ?? { source: "imported" },
+        fileMissing: entry.fileMissing ?? entryFilePath.length === 0,
       });
     });
   });
@@ -558,6 +589,17 @@ function getLibraryItems(): LibraryItem[] {
 function renderLibraryView(): void {
   if (!libraryResults) {
     return;
+  }
+
+  const resourcesHaveMissingFlags = Object.values(uiState.resourceLibrary ?? {}).some((entries) =>
+    (entries ?? []).some((entry) => typeof entry?.fileMissing === "boolean"),
+  );
+  if (!resourcesHaveMissingFlags) {
+    const now = Date.now();
+    if (now - libraryStateRequestedAt > 1000) {
+      libraryStateRequestedAt = now;
+      postMessage({ type: "requestState" });
+    }
   }
 
   const allItems = getLibraryItems();
@@ -600,6 +642,81 @@ function renderLibraryView(): void {
   renderListLibraryView(filtered, allItems.length);
 }
 
+function bindLibraryActions(): void {
+  if (!libraryResults) {
+    return;
+  }
+
+  if (libraryResults.dataset.bound === "true") {
+    return;
+  }
+
+  libraryResults.dataset.bound = "true";
+  libraryResults.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+    const browseButton = target.closest(".equipment-library-browse") as HTMLButtonElement | null;
+    if (!browseButton) {
+      return;
+    }
+
+    const resourceType = browseButton.dataset.resourceType ?? "";
+    const resourceId = browseButton.dataset.resourceId ?? "";
+    if (!resourceType || !resourceId) {
+      return;
+    }
+
+    const item = getLibraryItems().find((entry) => entry.type === resourceType && entry.id === resourceId);
+    if (!item) {
+      showNotification("Replace failed", "Resource not found in library.");
+      return;
+    }
+
+    promptReplaceLibraryResource(item);
+  });
+}
+
+function promptReplaceLibraryResource(item: LibraryItem): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = item.type === "nam" ? ".nam,.json" : item.type === "ir" ? ".wav" : "*";
+  input.addEventListener("change", () => {
+    void replaceLibraryResourceFromInput(item, input);
+  });
+  input.click();
+}
+
+async function replaceLibraryResourceFromInput(item: LibraryItem, input: HTMLInputElement): Promise<void> {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) {
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const data = arrayBufferToBase64(buffer);
+  const hash = await sha256HexFromBase64(data);
+  const provider = item.metadata?.provider ?? "manual";
+
+  postMessage({
+    type: "importRemoteResource",
+    provider,
+    resourceType: item.type,
+    resourceId: item.id,
+    name: item.name,
+    description: item.description,
+    category: item.category,
+    fileName: sanitizeFilename(file.name),
+    data,
+    hash,
+    metadata: item.metadata ?? {},
+  });
+
+  showNotification("Resource updated", item.name || item.id);
+}
+
 function renderListLibraryView(filtered: LibraryItem[], totalCount: number): void {
   if (!libraryResults) {
     return;
@@ -614,8 +731,10 @@ function renderListLibraryView(filtered: LibraryItem[], totalCount: number): voi
     return;
   }
 
+  const usedResources = buildUsedResourceSet();
+
   libraryResults.innerHTML = filtered
-    .map((item) => renderLibraryItemRow(item))
+    .map((item) => renderLibraryItemRow(item, usedResources))
     .join("");
 }
 
@@ -670,22 +789,35 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
   bindBlendGroupDragHandlers(grouped);
 }
 
-function renderLibraryItemRow(item: LibraryItem): string {
+function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): string {
   const typeLabel = item.type === "ir" ? "Cab IR" : item.type === "nam" ? "Amp Model" : item.type.toUpperCase();
   const categoryLabel = item.category ? item.category : "Uncategorized";
   const originLabel = inferResourceOrigin(item.filePath);
   const metadataBadges = buildMetadataBadges(item.metadata);
+  const missingBadge = item.fileMissing ? "<span class=\"equipment-library-missing\">Missing File</span>" : "";
+  const missingAction = item.fileMissing
+    ? `<button class="equipment-library-browse" data-resource-type="${escapeHtml(item.type)}" data-resource-id="${escapeHtml(item.id)}">Browse File</button>`
+    : "";
+  const usedKey = `${item.type}:${item.id}`;
+  const usedBadge = usedResources.has(usedKey)
+    ? `<span class="equipment-library-used" title="Used by preset">${renderIcon("link", "equipment-library-used-icon")}</span>`
+    : "";
   return `
     <div class="equipment-library-item">
       <div class="equipment-library-item-main">
-        <div class="equipment-library-item-title">${escapeHtml(item.name || item.id)}</div>
+        <div class="equipment-library-item-title">${escapeHtml(item.name || item.id)}${usedBadge}</div>
         <div class="equipment-library-item-meta">
           <span>${escapeHtml(typeLabel)}</span>
           <span>${escapeHtml(categoryLabel)}</span>
           <span>${escapeHtml(originLabel)}</span>
+          ${missingBadge}
           <span>${escapeHtml(item.id)}</span>
           ${metadataBadges}
         </div>
+        <div class="equipment-library-item-path" title="${escapeHtml(item.filePath)}">${escapeHtml(item.filePath || "(no file path)")}</div>
+      </div>
+      <div class="equipment-library-item-actions">
+        ${missingAction}
       </div>
     </div>
   `;

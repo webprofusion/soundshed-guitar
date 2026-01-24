@@ -63,6 +63,9 @@ function getToneImportStatus(tone: Tone3000Tone): { status: "imported" | "partia
   resourceTypes.forEach((type) => {
     const resources = uiState.resourceLibrary[type] || [];
     resources.forEach((resource) => {
+      if (resource.fileMissing) {
+        return;
+      }
       const metadata = resource.metadata || {};
       const resourceToneId = metadata.toneId || metadata.groupId;
       if (resourceToneId && String(resourceToneId) === toneId) {
@@ -292,8 +295,12 @@ function renderResults(tones: Tone3000Tone[]): void {
             ? "Partially Imported"
             : "";
       const statusBadge = statusLabel ? `<span class="tone3000-status">${statusLabel}</span>` : "";
-      const disableImport = importStatus.status === "imported" && modelCount > 0;
-      const buttonLabel = disableImport ? "Imported" : "Import";
+      const disableImport = false;
+      const buttonLabel = importStatus.status === "imported"
+        ? "Re-import"
+        : importStatus.status === "partial"
+          ? "Re-import"
+          : "Import";
       return `
         <div class="tone3000-item" data-tone-id="${String(tone.id)}">
           <div class="tone3000-item-main">

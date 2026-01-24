@@ -33,6 +33,11 @@ const PARAM_SPECS: ParamSpec[] = [
   { id: "middle", label: "Middle", min: 0, max: 10 },
   { id: "bass", label: "Bass", min: 0, max: 10 },
   { id: "presence", label: "Presence", min: 0, max: 10 },
+  { id: "tone", label: "Tone", min: 0, max: 10 },
+  { id: "level", label: "Level", min: 0, max: 10 },
+  { id: "custom_a", label: "Custom A", min: 0, max: 10 },
+  { id: "custom_b", label: "Custom B", min: 0, max: 10 },
+  { id: "custom_c", label: "Custom C", min: 0, max: 10 },
 ];
 
 export class BlendEditorModal {

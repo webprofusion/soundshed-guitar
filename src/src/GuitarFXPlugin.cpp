@@ -2998,6 +2998,11 @@ namespace guitarfx
       resJson["category"] = res.category;
       resJson["description"] = res.description;
       resJson["filePath"] = res.filePath.generic_string();
+      std::error_code existsError;
+      const bool fileExists = !res.filePath.empty()
+        && std::filesystem::exists(res.filePath, existsError)
+        && std::filesystem::is_regular_file(res.filePath, existsError);
+      resJson["fileMissing"] = !fileExists;
       if (!res.metadata.empty())
       {
         resJson["metadata"] = res.metadata;
@@ -5015,19 +5020,7 @@ namespace guitarfx
         }
       }
 
-      bool exists = false;
-      for (const auto& item : entries)
-      {
-        if (item.value("type", "") == resource.type && item.value("id", "") == resource.id)
-        {
-          exists = true;
-          break;
-        }
-      }
-
-      if (!exists)
-      {
-        nlohmann::json item;
+      auto buildEntry = [&](nlohmann::json& item) {
         item["type"] = resource.type;
         item["id"] = resource.id;
         item["name"] = resource.name;
@@ -5040,6 +5033,23 @@ namespace guitarfx
         {
           item["metadata"] = resource.metadata;
         }
+      };
+
+      bool updated = false;
+      for (auto& item : entries)
+      {
+        if (item.value("type", "") == resource.type && item.value("id", "") == resource.id)
+        {
+          buildEntry(item);
+          updated = true;
+          break;
+        }
+      }
+
+      if (!updated)
+      {
+        nlohmann::json item;
+        buildEntry(item);
         entries.push_back(std::move(item));
       }
 

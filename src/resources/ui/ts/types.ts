@@ -181,6 +181,7 @@ export interface LibraryResource {
   filePath: string;
   hash?: string;
   metadata?: Record<string, string>;
+  fileMissing?: boolean;
 }
 
 export interface ResourceLibrary {

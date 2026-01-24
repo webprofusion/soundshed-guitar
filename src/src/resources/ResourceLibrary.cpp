@@ -187,7 +187,18 @@ namespace guitarfx
         resource.name = item.value("name", "");
         resource.category = item.value("category", "");
         resource.description = item.value("description", "");
-        resource.filePath = item.value("filePath", "");
+        {
+          const std::string rawPath = item.value("filePath", "");
+          if (!rawPath.empty())
+          {
+            std::filesystem::path resolvedPath(rawPath);
+            if (resolvedPath.is_relative())
+            {
+              resolvedPath = path.parent_path() / resolvedPath;
+            }
+            resource.filePath = resolvedPath;
+          }
+        }
         resource.hash = item.value("hash", "");
 
         if (item.contains("tags") && item["tags"].is_array())

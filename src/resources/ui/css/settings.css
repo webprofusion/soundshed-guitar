@@ -244,6 +244,9 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .equipment-library-item-meta {
@@ -252,6 +255,57 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.equipment-library-item-path {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.equipment-library-used {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(64, 160, 255, 0.12);
+  border: 1px solid rgba(64, 160, 255, 0.3);
+}
+
+.equipment-library-used-icon {
+  width: 12px;
+  height: 12px;
+  opacity: 0.85;
+}
+
+.equipment-library-missing {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(232, 76, 76, 0.2);
+  color: #ff8a8a;
+  border: 1px solid rgba(232, 76, 76, 0.4);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.equipment-library-browse {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dark);
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+}
+
+.equipment-library-browse:hover {
+  background: var(--overlay-light);
 }
 
 .equipment-library-empty {
