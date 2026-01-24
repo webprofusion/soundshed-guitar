@@ -170,12 +170,14 @@
   gap: 8px;
   padding: 6px 12px;
   border-radius: 6px;
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-medium);
 }
 
 .preset-chooser-label {
-  background: var(--overlay-medium);
-  color: var(--text-primary);
-  border: 1px solid var(--border-dark);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  border: 1px solid var(--border-dark-light);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
@@ -185,7 +187,7 @@
 }
 
 .preset-chooser-label:hover {
-  background: var(--overlay-light);
+  background: var(--bg-dark-secondary);
 }
 
 .preset-favorite {

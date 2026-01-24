@@ -225,6 +225,7 @@ export function renderPresetList(
     activeFolderId: string | null;
     onSelectFolder: (folderId: string) => void;
     onMovePresetToFolder: (presetId: string, folderId: string) => void;
+    onMoveFolder: (folderId: string, targetParentId: string) => void;
     getRating: (presetId: string) => number | null;
     onRate: (presetId: string, rating: number | null) => void;
     favoritesCount: number;
@@ -237,18 +238,18 @@ export function renderPresetList(
   }
 
   if (presetFolderTreeElement && options) {
-    const { folders, activeFolderId, onSelectFolder, onMovePresetToFolder, favoritesCount, favoritesActive, onSelectFavorites } = options;
+    const { folders, activeFolderId, onSelectFolder, onMovePresetToFolder, onMoveFolder, favoritesCount, favoritesActive, onSelectFavorites } = options;
     const activeId = activeFolderId ?? PRESET_FOLDER_ALL_ID;
     const allPresetCount = uiState.presets.length;
 
-    const renderFolderTree = (nodes: PresetFolder[], depth: number): string =>
+    const renderFolderTree = (nodes: PresetFolder[], depth: number, parentId: string): string =>
       nodes
         .map((folder) => {
           const indent = `<span class="preset-folder-indent" style="margin-left: ${depth * 12}px"></span>`;
           const count = folder.presetIds.length;
-          const childMarkup = folder.children?.length ? renderFolderTree(folder.children, depth + 1) : "";
+          const childMarkup = folder.children?.length ? renderFolderTree(folder.children, depth + 1, folder.id) : "";
           return `
-            <div class="preset-folder-item ${activeId === folder.id ? "active" : ""}" data-folder-id="${folder.id}">
+            <div class="preset-folder-item ${activeId === folder.id ? "active" : ""}" data-folder-id="${folder.id}" data-parent-id="${parentId}" data-depth="${depth}" draggable="true">
               ${indent}
               <span class="folder-name">${escapeHtml(folder.name)}</span>
               <span class="folder-count">${count}</span>
@@ -267,7 +268,7 @@ export function renderPresetList(
         <span class="folder-name">All Presets</span>
         <span class="folder-count">${allPresetCount}</span>
       </div>
-      ${renderFolderTree(folders, 0)}
+      ${renderFolderTree(folders, 0, PRESET_FOLDER_ALL_ID)}
     `;
 
     presetFolderTreeElement.querySelectorAll<HTMLElement>(".preset-folder-item").forEach((item) => {
@@ -289,11 +290,35 @@ export function renderPresetList(
         item.classList.remove("drag-over");
       });
 
+      item.addEventListener("dragstart", (event) => {
+        const folderId = item.dataset.folderId ?? "";
+        if (!folderId || folderId === PRESET_FOLDER_FAVORITES_ID || folderId === PRESET_FOLDER_ALL_ID) {
+          return;
+        }
+        event.dataTransfer?.setData("application/x-preset-folder", folderId);
+        event.dataTransfer?.setDragImage(item, 20, 20);
+      });
+
       item.addEventListener("drop", (event) => {
         event.preventDefault();
         item.classList.remove("drag-over");
+        const folderDragId = event.dataTransfer?.getData("application/x-preset-folder") ?? "";
         const presetId = event.dataTransfer?.getData("text/plain") ?? "";
         const folderId = item.dataset.folderId ?? PRESET_FOLDER_ALL_ID;
+        if (folderDragId) {
+          if (folderId === PRESET_FOLDER_FAVORITES_ID) {
+            return;
+          }
+          const offsetX = (event as DragEvent).offsetX ?? 0;
+          const parentId = item.dataset.parentId ?? PRESET_FOLDER_ALL_ID;
+          const depth = Number(item.dataset.depth ?? "0");
+          const isIndentDrop = depth > 0 && offsetX < 16;
+          const targetParentId = folderId === PRESET_FOLDER_ALL_ID
+            ? PRESET_FOLDER_ALL_ID
+            : (isIndentDrop ? parentId : folderId);
+          onMoveFolder(folderDragId, targetParentId);
+          return;
+        }
         if (presetId) {
           onMovePresetToFolder(presetId, folderId);
         }

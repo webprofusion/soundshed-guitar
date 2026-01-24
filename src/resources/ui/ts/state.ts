@@ -126,6 +126,7 @@ export const uiState: UiState = {
   signalDiagnostics: null,
   environment: { standalone: false },
   namCalibrationStatus: {},
+  missingNodeResources: [],
   metronome: {
     bpm: 120,
     enabled: false,

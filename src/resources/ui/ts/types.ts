@@ -106,6 +106,8 @@ export interface UiSettings {
 export interface ResourceRef {
   type: string;
   id: string;
+  resourceType?: string;
+  resourceId?: string;
   filePath?: string;
   embeddedId?: string;
   parameterId?: string;
@@ -349,6 +351,7 @@ export interface UiState {
   environment?: EnvironmentState;
   metronome?: MetronomeState;
   namCalibrationStatus?: Record<string, "calibrating" | "ready" | "failed">;
+  missingNodeResources?: Array<{ nodeId: string; resourceType?: string; resourceId?: string; filePath?: string }>;
 }
 
 declare global {

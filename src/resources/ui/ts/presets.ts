@@ -210,6 +210,30 @@ function findFolderByName(folders: PresetFolder[], name: string): PresetFolder |
   return undefined;
 }
 
+function findFolderWithParent(
+  folders: PresetFolder[],
+  folderId: string,
+  parent: PresetFolder | null = null,
+): { folder: PresetFolder; parent: PresetFolder | null } | null {
+  for (const folder of folders) {
+    if (folder.id === folderId) {
+      return { folder, parent };
+    }
+    const childMatch = findFolderWithParent(folder.children ?? [], folderId, folder);
+    if (childMatch) {
+      return childMatch;
+    }
+  }
+  return null;
+}
+
+function isDescendantFolder(folder: PresetFolder, targetId: string): boolean {
+  if (!folder.children?.length) {
+    return false;
+  }
+  return folder.children.some((child) => child.id === targetId || isDescendantFolder(child, targetId));
+}
+
 function findFolderForPreset(folders: PresetFolder[], presetId: string): PresetFolder | undefined {
   for (const folder of folders) {
     if ((folder.presetIds ?? []).includes(presetId)) {
@@ -519,6 +543,51 @@ function movePresetToFolder(presetId: string, folderId: string): void {
   filterPresets(presetSearchElement?.value ?? "");
 }
 
+function movePresetFolder(folderId: string, targetParentId: string): void {
+  if (!folderId || folderId === PRESET_FOLDER_ALL_ID || folderId === PRESET_FOLDER_FAVORITES_ID) {
+    return;
+  }
+  if (targetParentId === PRESET_FOLDER_FAVORITES_ID) {
+    return;
+  }
+
+  const folders = uiState.presetFolders ?? [];
+  const result = findFolderWithParent(folders, folderId);
+  if (!result) {
+    return;
+  }
+
+  if (targetParentId && targetParentId !== PRESET_FOLDER_ALL_ID) {
+    if (folderId === targetParentId) {
+      return;
+    }
+    if (isDescendantFolder(result.folder, targetParentId)) {
+      return;
+    }
+  }
+
+  if (result.parent) {
+    result.parent.children = (result.parent.children ?? []).filter((child) => child.id !== folderId);
+  } else {
+    uiState.presetFolders = (uiState.presetFolders ?? []).filter((folder) => folder.id !== folderId);
+  }
+
+  if (targetParentId && targetParentId !== PRESET_FOLDER_ALL_ID) {
+    const targetParent = findFolderById(folders, targetParentId);
+    if (!targetParent) {
+      return;
+    }
+    targetParent.children = targetParent.children ?? [];
+    targetParent.children.push(result.folder);
+  } else {
+    uiState.presetFolders = uiState.presetFolders ?? [];
+    uiState.presetFolders.push(result.folder);
+  }
+
+  persistPresetFolders();
+  filterPresets(presetSearchElement?.value ?? "");
+}
+
 function collectPresetIds(folder: PresetFolder): Set<string> {
   const ids = new Set<string>(folder.presetIds ?? []);
   (folder.children ?? []).forEach((child) => {
@@ -655,6 +724,7 @@ function renderPresetUI(preset: Preset | null): void {
     activeFolderId: uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID,
     onSelectFolder: setActivePresetFolder,
     onMovePresetToFolder: movePresetToFolder,
+    onMoveFolder: movePresetFolder,
     getRating: getPresetRating,
     onRate: setPresetRating,
     favoritesCount: loadFavoritePresetIds().size,

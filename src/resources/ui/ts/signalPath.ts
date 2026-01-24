@@ -314,6 +314,74 @@ function getNodeResourceSummary(node: GraphNode): string {
   return getNodeResourceDisplayName(node, 0);
 }
 
+function getMissingResourceEntries(node: GraphNode): Array<{ resourceType?: string; resourceId?: string; filePath?: string }> {
+  const typeInfo = EffectTypeRegistry.get(node.type);
+  const backendMissing = (uiState.missingNodeResources ?? []).filter((entry) => entry.nodeId === node.id);
+
+  const refs: Array<{ resourceType?: string; resourceId?: string; filePath?: string }> = [];
+  const addRef = (ref: GraphNode["resource"] | undefined): void => {
+    if (!ref) return;
+    const resourceType = ref.type || typeInfo?.resourceType;
+    const resourceId = ref.id;
+    const filePath = ref.filePath;
+    refs.push({ resourceType, resourceId, filePath });
+  };
+
+  if (node.resource) {
+    addRef(node.resource);
+  }
+  if (Array.isArray(node.resources)) {
+    node.resources.forEach((ref) => addRef(ref));
+  }
+
+  const isBackendMissing = (entry: { resourceType?: string; resourceId?: string; filePath?: string }): boolean => {
+    return backendMissing.some((missing) => {
+      if (entry.filePath && missing.filePath) {
+        return entry.filePath === missing.filePath;
+      }
+      if (entry.resourceType && entry.resourceId && missing.resourceType && missing.resourceId) {
+        return entry.resourceType === missing.resourceType && entry.resourceId === missing.resourceId;
+      }
+      return false;
+    });
+  };
+
+  return refs.filter((entry) => {
+    if (entry.resourceType && entry.resourceId) {
+      const resource = getLibraryResource(entry.resourceType, entry.resourceId);
+      if (!resource) {
+        return true;
+      }
+      if (resource.fileMissing === true) {
+        return true;
+      }
+      return false;
+    }
+
+    if (entry.filePath) {
+      return isBackendMissing(entry);
+    }
+
+    return true;
+  });
+}
+
+function buildMissingResourceTooltip(entries: Array<{ resourceType?: string; resourceId?: string; filePath?: string }>): string {
+  if (!entries.length) {
+    return "";
+  }
+  const details = entries.map((entry) => {
+    if (entry.filePath) {
+      return entry.filePath;
+    }
+    if (entry.resourceType && entry.resourceId) {
+      return `${entry.resourceType}:${entry.resourceId}`;
+    }
+    return "Missing resource";
+  });
+  return `Missing resource file: ${details.join(", ")}`;
+}
+
 function getNodeDisplayName(node: GraphNode): string {
   // Support backend presets that use label/enabled instead of displayName/bypassed.
   const anyNode = node as unknown as { id?: unknown; type?: unknown; displayName?: unknown; label?: unknown };
@@ -791,9 +859,15 @@ function renderNodeElement(node: GraphNode): string {
   const categoryClass = getCategoryClass(getNodeCategory(node));
   const bypassedClass = isNodeBypassed(node) ? "bypassed" : "";
   const selectedClass = selectedNodeId === node.id ? "selected" : "";
+  const missingEntries = getMissingResourceEntries(node);
+  const missingClass = missingEntries.length ? "missing-resource" : "";
   const allowDelete = node.type !== "splitter" && node.type !== "mixer";
   const displayName = getNodeDisplayName(node);
   const isCalibrating = uiState.namCalibrationStatus?.[node.id] === "calibrating";
+  const missingTooltip = buildMissingResourceTooltip(missingEntries);
+  const missingBadge = missingEntries.length
+    ? `<div class="node-missing-badge" title="${escapeHtml(missingTooltip)}" aria-label="Missing resource">⚠</div>`
+    : "";
   
   let resourceLabel = "";
   const resourceSummary = getNodeResourceSummary(node);
@@ -802,7 +876,7 @@ function renderNodeElement(node: GraphNode): string {
   }
 
   return `
-    <div class="signal-node ${categoryClass} ${bypassedClass} ${selectedClass}" 
+    <div class="signal-node ${categoryClass} ${bypassedClass} ${selectedClass} ${missingClass}" 
          data-node-id="${node.id}" 
          draggable="true" 
          tabindex="0">
@@ -816,6 +890,7 @@ function renderNodeElement(node: GraphNode): string {
       <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
       ${isCalibrating ? '<div class="node-calibration-badge">CAL</div>' : ""}
       ${isNodeBypassed(node) ? '<div class="node-bypass-badge">OFF</div>' : ""}
+      ${missingBadge}
     </div>
   `;
 }

@@ -233,6 +233,24 @@
   letter-spacing: 0.3px;
 }
 
+.signal-node.missing-resource {
+  border-color: rgba(232, 76, 76, 0.6);
+  box-shadow: 0 0 0 1px rgba(232, 76, 76, 0.35);
+}
+
+.node-missing-badge {
+  position: absolute;
+  top: 18px;
+  right: 2px;
+  font-size: 10px;
+  color: #ff8a8a;
+  background: rgba(232, 76, 76, 0.2);
+  border: 1px solid rgba(232, 76, 76, 0.4);
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
 .node-clip-indicator {
   position: absolute;
   right: 4px;

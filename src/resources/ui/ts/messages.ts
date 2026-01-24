@@ -11,8 +11,38 @@ import { refreshSettingsView } from "./settings.js";
 import { refreshSelectedNodeParams } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
-import type { Preset, UiSettings } from "./types.js";
+import type { Preset, ResourceRef, UiSettings } from "./types.js";
 import { handleResourceDataMessage } from "./archiveUtils.js";
+
+function normalizeResourceRef(ref?: ResourceRef | null): void {
+  if (!ref) return;
+  const resourceType = ref.resourceType ?? "";
+  const resourceId = ref.resourceId ?? "";
+  if (!ref.type && resourceType) {
+    ref.type = resourceType;
+  }
+  if (!ref.id && resourceId) {
+    ref.id = resourceId;
+  }
+  if (ref.type && !ref.resourceType) {
+    ref.resourceType = ref.type;
+  }
+  if (ref.id && !ref.resourceId) {
+    ref.resourceId = ref.id;
+  }
+}
+
+function normalizePresetResources(preset?: Preset | null): void {
+  if (!preset?.graph?.nodes) return;
+  preset.graph.nodes.forEach((node) => {
+    if (node.resource) {
+      normalizeResourceRef(node.resource);
+    }
+    if (Array.isArray(node.resources)) {
+      node.resources.forEach((ref) => normalizeResourceRef(ref));
+    }
+  });
+}
 
 export function handleIncomingMessage(message: string): void {
   const payload = JSON.parse(message) as Record<string, unknown>;
@@ -41,6 +71,19 @@ export function handleIncomingMessage(message: string): void {
       const resourceLibrary = (payload as { resourceLibrary?: Record<string, unknown[]> }).resourceLibrary;
       if (resourceLibrary) {
         uiState.resourceLibrary = resourceLibrary as import("./types.js").ResourceLibrary;
+      }
+      const missingNodeResources = (payload as { missingNodeResources?: Array<{ nodeId?: string; resourceType?: string; resourceId?: string; filePath?: string }> }).missingNodeResources;
+      if (Array.isArray(missingNodeResources)) {
+        uiState.missingNodeResources = missingNodeResources
+          .filter((entry) => entry && typeof entry.nodeId === "string")
+          .map((entry) => ({
+            nodeId: entry.nodeId ?? "",
+            resourceType: typeof entry.resourceType === "string" ? entry.resourceType : undefined,
+            resourceId: typeof entry.resourceId === "string" ? entry.resourceId : undefined,
+            filePath: typeof entry.filePath === "string" ? entry.filePath : undefined,
+          }));
+      } else {
+        uiState.missingNodeResources = [];
       }
       const blendLibrary = (payload as { blendLibrary?: unknown[] }).blendLibrary;
       if (Array.isArray(blendLibrary)) {
@@ -81,6 +124,7 @@ export function handleIncomingMessage(message: string): void {
       uiState.signalTest = null;
       const preset = (payload as { preset?: Preset }).preset;
       if (preset) {
+        normalizePresetResources(preset);
         uiState.presetCache.set(preset.id, preset);
         if (!uiState.presets.some((p) => p.id === preset.id)) {
           uiState.presets = [preset, ...uiState.presets];
@@ -117,6 +161,7 @@ export function handleIncomingMessage(message: string): void {
     case "presetLoaded": {
       const preset = (payload as { preset?: Preset }).preset;
       if (preset) {
+        normalizePresetResources(preset);
         uiState.activePresetId = preset.id;
         uiState.presetCache.set(preset.id, preset);
         updatePresetDropdownSelection();

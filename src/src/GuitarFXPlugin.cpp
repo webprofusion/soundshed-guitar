@@ -2971,6 +2971,64 @@ namespace guitarfx
       message["preset"] = nlohmann::json::parse(PresetStorage::SerializeToJson(*mActivePreset));
     }
 
+    nlohmann::json missingNodeResources = nlohmann::json::array();
+    if (mActivePreset)
+    {
+      auto isMissingRef = [&](const ResourceRef& ref) -> bool {
+        if (ref.IsLibraryRef())
+        {
+          const auto resource = mResourceLibrary.LookupResource(ref.resourceType, ref.resourceId);
+          if (!resource)
+          {
+            return true;
+          }
+          if (resource->filePath.empty())
+          {
+            return true;
+          }
+          std::error_code existsError;
+          return !(std::filesystem::exists(resource->filePath, existsError)
+            && std::filesystem::is_regular_file(resource->filePath, existsError));
+        }
+        if (ref.IsFilePath())
+        {
+          std::error_code existsError;
+          return !(std::filesystem::exists(ref.filePath, existsError)
+            && std::filesystem::is_regular_file(ref.filePath, existsError));
+        }
+        return false;
+      };
+
+      auto pushMissing = [&](const std::string& nodeId, const ResourceRef& ref) {
+        nlohmann::json item;
+        item["nodeId"] = nodeId;
+        if (!ref.resourceType.empty()) item["resourceType"] = ref.resourceType;
+        if (!ref.resourceId.empty()) item["resourceId"] = ref.resourceId;
+        if (!ref.filePath.empty()) item["filePath"] = ref.filePath.generic_string();
+        missingNodeResources.push_back(std::move(item));
+      };
+
+      for (const auto& node : mActivePreset->graph.nodes)
+      {
+        if (node.resource && node.resource->IsValid())
+        {
+          if (isMissingRef(*node.resource))
+          {
+            pushMissing(node.id, *node.resource);
+          }
+        }
+        for (const auto& ref : node.resources)
+        {
+          if (ref.IsValid() && isMissingRef(ref))
+          {
+            pushMissing(node.id, ref);
+          }
+        }
+      }
+    }
+
+    message["missingNodeResources"] = std::move(missingNodeResources);
+
     // Include user presets from user presets directory
     nlohmann::json userPresetsJson = nlohmann::json::array();
     if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
