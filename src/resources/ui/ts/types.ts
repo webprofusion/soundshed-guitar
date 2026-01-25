@@ -104,8 +104,8 @@ export interface UiSettings {
 }
 
 export interface ResourceRef {
-  type: string;
-  id: string;
+  type?: string;
+  id?: string;
   resourceType?: string;
   resourceId?: string;
   filePath?: string;

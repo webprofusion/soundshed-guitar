@@ -463,13 +463,23 @@ async function exportLibraryArchive(): Promise<void> {
     const refs = new Map<string, ResourceRef>();
     presets.forEach((preset) => {
       collectPresetResourceRefs(preset, referencedBlends).forEach((ref) => {
-        refs.set(`${ref.type}:${ref.id}`, ref);
+        const resourceType = ref.resourceType ?? ref.type ?? "";
+        const resourceId = ref.resourceId ?? ref.id ?? "";
+        if (!resourceType || !resourceId) {
+          return;
+        }
+        refs.set(`${resourceType}:${resourceId}`, ref);
       });
     });
     refs.forEach((ref) => {
-      const resource = getLibraryResource(ref.type, ref.id);
-      if (resource && (ref.type === "nam" || ref.type === "ir")) {
-        resourceEntries.push({ type: ref.type, resource });
+      const resourceType = ref.resourceType ?? ref.type ?? "";
+      const resourceId = ref.resourceId ?? ref.id ?? "";
+      if (!resourceType || !resourceId) {
+        return;
+      }
+      const resource = getLibraryResource(resourceType, resourceId);
+      if (resource && (resourceType === "nam" || resourceType === "ir")) {
+        resourceEntries.push({ type: resourceType, resource });
       }
     });
   }

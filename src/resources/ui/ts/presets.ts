@@ -1,11 +1,11 @@
 import { appendLog } from "./logging.js";
 import { clearNotification, showNotification } from "./notifications.js";
 import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views.js";
-import { clonePreset, uiState } from "./state.js";
+import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
-import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist } from "./types.js";
+import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode } from "./types.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
@@ -135,9 +135,42 @@ function validatePresetForUi(preset: Preset | null): string[] {
   return issues;
 }
 
-function cleanupPresetForUi(preset: Preset): { cleaned: Preset; removedKeys: string[] } {
+function cleanupPresetForUi(
+  preset: Preset,
+): { cleaned: Preset; removedKeys: string[]; normalizedAliases: number; removedGlobalEq: boolean } {
   const cleaned: Preset = clonePreset(preset);
   const removedKeys: string[] = [];
+  let normalizedAliases = 0;
+  let removedGlobalEq = false;
+
+  const normalizeRef = (ref: ResourceRef): ResourceRef => {
+    const normalized: ResourceRef = { ...ref };
+    const legacyId = typeof normalized.id === "string" ? normalized.id : "";
+    const legacyType = typeof normalized.type === "string" ? normalized.type : "";
+    const resourceId = typeof normalized.resourceId === "string" ? normalized.resourceId : "";
+    const resourceType = typeof normalized.resourceType === "string" ? normalized.resourceType : "";
+
+    const finalId = resourceId || legacyId;
+    const finalType = resourceType || legacyType;
+
+    if (finalId) {
+      normalized.resourceId = finalId;
+    }
+    if (finalType) {
+      normalized.resourceType = finalType;
+    }
+
+    if (legacyId && legacyId === normalized.resourceId) {
+      delete normalized.id;
+      normalizedAliases += 1;
+    }
+    if (legacyType && legacyType === normalized.resourceType) {
+      delete normalized.type;
+      normalizedAliases += 1;
+    }
+
+    return normalized;
+  };
 
   Object.keys(cleaned).forEach((key) => {
     if (!PRESET_ALLOWED_KEYS.has(key)) {
@@ -162,6 +195,88 @@ function cleanupPresetForUi(preset: Preset): { cleaned: Preset; removedKeys: str
     }
   });
 
+  if (cleaned.graph?.nodes) {
+    cleaned.graph.nodes = cleaned.graph.nodes.map((node) => {
+      const nextNode = { ...node };
+      if (nextNode.resource) {
+        nextNode.resource = normalizeRef(nextNode.resource);
+      }
+      if (Array.isArray(nextNode.resources)) {
+        nextNode.resources = nextNode.resources.map((ref) => normalizeRef(ref));
+      }
+      return nextNode;
+    });
+  }
+
+  if (cleaned.graph?.nodes?.length && cleaned.graph?.edges?.length) {
+    const eqDefaults = DEFAULT_GLOBAL_SIGNAL_CHAIN.postChain;
+    const isDefaultGlobalEqNode = (node: GraphNode): boolean => {
+      const anyNode = node as unknown as {
+        id?: unknown;
+        type?: unknown;
+        label?: unknown;
+        enabled?: unknown;
+        bypassed?: unknown;
+        params?: Record<string, number>;
+      };
+      const nodeId = typeof anyNode.id === "string" ? anyNode.id : "";
+      const nodeType = typeof anyNode.type === "string" ? anyNode.type : "";
+      const nodeLabel = typeof anyNode.label === "string" ? anyNode.label : "";
+      if (nodeId !== "global_eq" && nodeLabel !== "Global EQ") {
+        return false;
+      }
+      if (nodeType && nodeType !== "eq_parametric") {
+        return false;
+      }
+      const enabled = typeof anyNode.enabled === "boolean"
+        ? anyNode.enabled
+        : (typeof anyNode.bypassed === "boolean" ? !anyNode.bypassed : true);
+      if (enabled) {
+        return false;
+      }
+      const params = anyNode.params ?? {};
+      return (
+        params.lowGain === eqDefaults.eqLowGain
+        && params.lowFreq === eqDefaults.eqLowFreq
+        && params.lowMidGain === eqDefaults.eqLowMidGain
+        && params.lowMidFreq === eqDefaults.eqLowMidFreq
+        && params.lowMidQ === eqDefaults.eqLowMidQ
+        && params.highMidGain === eqDefaults.eqHighMidGain
+        && params.highMidFreq === eqDefaults.eqHighMidFreq
+        && params.highMidQ === eqDefaults.eqHighMidQ
+        && params.highGain === eqDefaults.eqHighGain
+        && params.highFreq === eqDefaults.eqHighFreq
+      );
+    };
+
+    const eqNode = cleaned.graph.nodes.find((node) => isDefaultGlobalEqNode(node));
+    if (eqNode) {
+      const eqId = eqNode.id;
+      const hasInputToEq = cleaned.graph.edges.some((edge) => edge.from === "__input__" && edge.to === eqId);
+      const hasEqToDoubler = cleaned.graph.edges.some((edge) => edge.from === eqId && edge.to === "global_doubler");
+      const hasEqToOutput = cleaned.graph.edges.some((edge) => edge.from === eqId && edge.to === "__output__");
+      const hasDoubler = cleaned.graph.nodes.some((node) => node.id === "global_doubler");
+      const hasOutput = cleaned.graph.nodes.some((node) => node.id === "__output__");
+
+      cleaned.graph.nodes = cleaned.graph.nodes.filter((node) => node.id !== eqId);
+      cleaned.graph.edges = cleaned.graph.edges.filter((edge) => edge.from !== eqId && edge.to !== eqId);
+
+      if (hasInputToEq && hasEqToDoubler && hasDoubler) {
+        const alreadyLinked = cleaned.graph.edges.some((edge) => edge.from === "__input__" && edge.to === "global_doubler");
+        if (!alreadyLinked) {
+          cleaned.graph.edges.push({ from: "__input__", to: "global_doubler", fromPort: 0, toPort: 0, gain: 1 });
+        }
+      } else if (hasInputToEq && hasEqToOutput && hasOutput) {
+        const alreadyLinked = cleaned.graph.edges.some((edge) => edge.from === "__input__" && edge.to === "__output__");
+        if (!alreadyLinked) {
+          cleaned.graph.edges.push({ from: "__input__", to: "__output__", fromPort: 0, toPort: 0, gain: 1 });
+        }
+      }
+
+      removedGlobalEq = true;
+    }
+  }
+
   if (cleaned.audioFxModelId == null || cleaned.audioFxModelId === "") {
     delete cleaned.audioFxModelId;
     removedKeys.push("audioFxModelId");
@@ -182,7 +297,12 @@ function cleanupPresetForUi(preset: Preset): { cleaned: Preset; removedKeys: str
     removedKeys.push("customIrPath");
   }
 
-  return { cleaned, removedKeys: removedKeys.filter((value, index) => removedKeys.indexOf(value) === index) };
+  return {
+    cleaned,
+    removedKeys: removedKeys.filter((value, index) => removedKeys.indexOf(value) === index),
+    normalizedAliases,
+    removedGlobalEq,
+  };
 }
 
 function setPresetModalActiveTab(modal: HTMLElement, tabId: string): void {
@@ -256,9 +376,17 @@ function initPresetModalAdvancedActions(modal: HTMLElement): void {
     const result = cleanupPresetForUi(preset);
     modal.dataset.cleanedPreset = JSON.stringify(result.cleaned);
     updatePresetModalJson(result.cleaned);
-    updatePresetModalReport(result.removedKeys.length
-      ? [`Removed fields: ${result.removedKeys.sort().join(", ")}`]
-      : ["No unused fields removed."]);
+    const reportLines: string[] = [];
+    if (result.removedKeys.length) {
+      reportLines.push(`Removed fields: ${result.removedKeys.sort().join(", ")}`);
+    }
+    if (result.normalizedAliases > 0) {
+      reportLines.push(`Normalized resource ref aliases: ${result.normalizedAliases}`);
+    }
+    if (result.removedGlobalEq) {
+      reportLines.push("Removed default global EQ node.");
+    }
+    updatePresetModalReport(reportLines.length ? reportLines : ["No unused fields removed."]);
   });
 }
 
@@ -1597,12 +1725,17 @@ async function exportCurrentPresetArchive(): Promise<void> {
   const exportResources: PresetArchiveResource[] = [];
 
   for (const ref of resourceRefs) {
-    const resource = getLibraryResource(ref.type, ref.id);
+    const resourceType = ref.resourceType ?? ref.type ?? "";
+    const resourceId = ref.resourceId ?? ref.id ?? "";
+    if (!resourceType || !resourceId) {
+      continue;
+    }
+    const resource = getLibraryResource(resourceType, resourceId);
     if (!resource) {
       continue;
     }
-    const fileName = buildArchiveFileName(resource, ref.type);
-    const data = await requestResourceData(ref.type, ref.id);
+    const fileName = buildArchiveFileName(resource, resourceType);
+    const data = await requestResourceData(resourceType, resourceId);
     if (!data) {
       continue;
     }
@@ -1612,7 +1745,7 @@ async function exportCurrentPresetArchive(): Promise<void> {
       id: resource.id,
       name: resource.name,
       category: resource.category,
-      type: ref.type,
+      type: resourceType,
       fileName,
       hash,
     });
@@ -1736,12 +1869,22 @@ async function importPresetArchive(file: File): Promise<void> {
 
   if (importedPreset.graph?.nodes) {
     importedPreset.graph.nodes.forEach((node) => {
-      if (node.resource?.id) {
-        node.resource.id = idMap.get(node.resource.id) ?? node.resource.id;
+      if (node.resource) {
+        const resourceId = node.resource.resourceId ?? node.resource.id;
+        if (resourceId) {
+          const mapped = idMap.get(resourceId) ?? resourceId;
+          node.resource.resourceId = mapped;
+          node.resource.id = mapped;
+        }
       }
       if (Array.isArray(node.resources)) {
         node.resources.forEach((res) => {
-          res.id = idMap.get(res.id) ?? res.id;
+          const resourceId = res.resourceId ?? res.id;
+          if (resourceId) {
+            const mapped = idMap.get(resourceId) ?? resourceId;
+            res.resourceId = mapped;
+            res.id = mapped;
+          }
         });
       }
       if (node.config?.blendId) {
