@@ -236,7 +236,7 @@
 
 .preset-folder-tree,
 .preset-list {
-  background: var(--overlay-light);
+
   border: 1px solid var(--border-dark);
   border-radius: 10px;
   padding: 10px;

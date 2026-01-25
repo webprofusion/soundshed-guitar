@@ -48,6 +48,45 @@ function normalizeSetlistName(name: string): string {
   return name.trim();
 }
 
+function setPresetModalActiveTab(modal: HTMLElement, tabId: string): void {
+  const tabButtons = Array.from(modal.querySelectorAll<HTMLElement>(".preset-modal-tab-btn"));
+  const tabPanels = Array.from(modal.querySelectorAll<HTMLElement>(".preset-modal-tab-panel"));
+  tabButtons.forEach((button) => {
+    const active = button.dataset.presetModalTab === tabId;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  tabPanels.forEach((panel) => {
+    const active = panel.dataset.presetModalTabPanel === tabId;
+    panel.classList.toggle("active", active);
+  });
+}
+
+function initPresetModalTabs(modal: HTMLElement): void {
+  if (modal.dataset.tabsBound === "true") {
+    return;
+  }
+  modal.dataset.tabsBound = "true";
+  modal.addEventListener("click", (event) => {
+    const target = (event.target as HTMLElement | null)?.closest(".preset-modal-tab-btn") as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+    const tabId = target.dataset.presetModalTab;
+    if (tabId) {
+      setPresetModalActiveTab(modal, tabId);
+    }
+  });
+}
+
+function updatePresetModalJson(preset: Preset | null): void {
+  const pre = document.getElementById("preset-json-view") as HTMLPreElement | null;
+  if (!pre) {
+    return;
+  }
+  pre.textContent = preset ? JSON.stringify(preset, null, 2) : "";
+}
+
 function loadFavoritePresetIds(): Set<string> {
   try {
     const raw = localStorage.getItem(PRESET_FAVORITES_KEY);
@@ -1118,6 +1157,11 @@ export function openSavePresetModal(): void {
   if (categoryInput) categoryInput.value = "User";
   if (descriptionInput) descriptionInput.value = "";
 
+  initPresetModalTabs(modal);
+  setPresetModalActiveTab(modal, "details");
+  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  updatePresetModalJson(activePreset);
+
   modal.style.display = "flex";
 }
 
@@ -1698,6 +1742,10 @@ export function openEditPresetModal(): void {
   if (nameInput) nameInput.value = preset.name;
   if (categoryInput) categoryInput.value = preset.category || "User";
   if (descriptionInput) descriptionInput.value = preset.description || "";
+
+  initPresetModalTabs(modal);
+  setPresetModalActiveTab(modal, "details");
+  updatePresetModalJson(preset);
 
   // Store that we're editing, not creating
   modal.dataset.editingPresetId = activePresetId;

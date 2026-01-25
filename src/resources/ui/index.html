@@ -1006,21 +1006,35 @@
           <button class="modal-close" id="save-preset-modal-close">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label for="preset-folder-select">Save Folder</label>
-            <select id="preset-folder-select" class="themed-select"></select>
+          <div class="preset-modal-tabs">
+            <button class="preset-modal-tab-btn active" data-preset-modal-tab="details" type="button">Details</button>
+            <button class="preset-modal-tab-btn" data-preset-modal-tab="advanced" type="button">Advanced</button>
           </div>
-          <div class="form-group">
-            <label for="preset-name-input">Preset Name</label>
-            <input type="text" id="preset-name-input" placeholder="My Custom Preset" />
+          <div class="preset-modal-tab-panel active" data-preset-modal-tab-panel="details">
+            <div class="form-group">
+              <label for="preset-folder-select">Save Folder</label>
+              <select id="preset-folder-select" class="themed-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="preset-name-input">Preset Name</label>
+              <input type="text" id="preset-name-input" placeholder="My Custom Preset" />
+            </div>
+            <div class="form-group">
+              <label for="preset-category-input">Category</label>
+              <input type="text" id="preset-category-input" placeholder="User" value="User" />
+            </div>
+            <div class="form-group">
+              <label for="preset-description-input">Description</label>
+              <textarea id="preset-description-input" placeholder="Optional description..." rows="3"></textarea>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="preset-category-input">Category</label>
-            <input type="text" id="preset-category-input" placeholder="User" value="User" />
-          </div>
-          <div class="form-group">
-            <label for="preset-description-input">Description</label>
-            <textarea id="preset-description-input" placeholder="Optional description..." rows="3"></textarea>
+          <div class="preset-modal-tab-panel" data-preset-modal-tab-panel="advanced">
+            <div class="form-group">
+              <label>Preset JSON (read-only)</label>
+              <div class="preset-advanced-json" aria-label="Preset JSON">
+                <pre id="preset-json-view"></pre>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">

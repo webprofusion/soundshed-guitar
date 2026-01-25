@@ -91,6 +91,100 @@
   width: 100%;
 }
 
+.save-preset-modal .form-group label {
+  color: var(--text-dark-primary);
+}
+
+.save-preset-modal .form-group input,
+.save-preset-modal .form-group textarea,
+.save-preset-modal .form-group select {
+  background: var(--bg-dark-tertiary);
+  border-color: var(--border-dark-medium);
+  color: var(--text-dark-primary);
+}
+
+.save-preset-modal .form-group input::placeholder,
+.save-preset-modal .form-group textarea::placeholder {
+  color: var(--text-dark-muted);
+}
+
+.save-preset-modal .form-group input:focus,
+.save-preset-modal .form-group textarea:focus,
+.save-preset-modal .form-group select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(224, 120, 72, 0.2);
+  outline: none;
+}
+
+.save-preset-modal .btn-secondary {
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-primary);
+  border: 1px solid var(--border-dark-medium);
+}
+
+.save-preset-modal .btn-secondary:hover {
+  background: var(--bg-dark-tertiary);
+  border-color: var(--border-dark-strong);
+}
+
+.preset-modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-dark-medium);
+}
+
+.preset-modal-tab-btn {
+  padding: 8px 12px;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dark-tertiary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.preset-modal-tab-btn.active {
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-primary);
+  border-color: var(--border-dark-medium);
+  border-bottom-color: var(--color-primary);
+}
+
+.preset-modal-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.preset-modal-tab-panel {
+  display: none;
+}
+
+.preset-modal-tab-panel.active {
+  display: block;
+}
+
+.preset-advanced-json {
+  background: var(--bg-dark-primary);
+  border-radius: 10px;
+  border: 1px solid var(--border-dark-medium);
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.preset-advanced-json pre {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dark-primary);
+  white-space: pre;
+}
+
 .blend-editor-modal .modal-header {
   background: var(--bg-dark-secondary);
   border-bottom: 1px solid var(--border-dark-medium);
