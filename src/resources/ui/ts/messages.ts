@@ -158,6 +158,29 @@ export function handleIncomingMessage(message: string): void {
       });
       break;
     }
+    case "resourceCleanupResult": {
+      const removed = typeof (payload as { removed?: number }).removed === "number"
+        ? (payload as { removed?: number }).removed as number
+        : 0;
+      const skipped = typeof (payload as { skipped?: number }).skipped === "number"
+        ? (payload as { skipped?: number }).skipped as number
+        : 0;
+      const skippedUsed = typeof (payload as { skippedUsed?: number }).skippedUsed === "number"
+        ? (payload as { skippedUsed?: number }).skippedUsed as number
+        : 0;
+      const message = removed > 0 ? `Removed ${removed} resources.` : "No resources removed.";
+      const parts: string[] = [];
+      if (skipped > 0) {
+        parts.push(`${skipped} skipped`);
+      }
+      if (skippedUsed > 0) {
+        parts.push(`${skippedUsed} in use`);
+      }
+      const detail = parts.length ? `${parts.join("; ")}.` : "";
+      showNotification(message, detail);
+      refreshSettingsView();
+      break;
+    }
     case "presetLoaded": {
       const preset = (payload as { preset?: Preset }).preset;
       if (preset) {

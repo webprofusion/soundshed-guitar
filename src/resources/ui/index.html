@@ -414,6 +414,15 @@
                   <option value="all">All Categories</option>
                 </select>
               </div>
+              <div class="settings-row">
+                <label for="equipment-library-cleanup-scope">Cleanup unused</label>
+                <select id="equipment-library-cleanup-scope">
+                  <option value="all" selected>All types</option>
+                  <option value="nam">Amp models only</option>
+                  <option value="ir">IRs only</option>
+                </select>
+                <button id="equipment-library-cleanup-btn" type="button">Remove unused</button>
+              </div>
               <div class="equipment-library-summary" id="equipment-library-summary"></div>
               <div class="equipment-library-results" id="equipment-library-results">
                 <!-- Library results rendered by JS -->

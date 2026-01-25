@@ -34,6 +34,8 @@ const libraryTypeSelect = document.getElementById("equipment-library-type") as H
 const librarySourceSelect = document.getElementById("equipment-library-source") as HTMLSelectElement | null;
 const libraryViewSelect = document.getElementById("equipment-library-view") as HTMLSelectElement | null;
 const libraryCategorySelect = document.getElementById("equipment-library-category") as HTMLSelectElement | null;
+const libraryCleanupSelect = document.getElementById("equipment-library-cleanup-scope") as HTMLSelectElement | null;
+const libraryCleanupButton = document.getElementById("equipment-library-cleanup-btn") as HTMLButtonElement | null;
 const libraryResults = document.getElementById("equipment-library-results");
 const librarySummary = document.getElementById("equipment-library-summary");
 const libraryTabButtons = Array.from(document.querySelectorAll(".library-tab-btn"));
@@ -62,6 +64,7 @@ export function initSettingsPanel(): void {
   initInterfaceCalibrationControls();
   initEquipmentTabs();
   initLibraryFilters();
+  initLibraryCleanup();
   initThemeSelect();
   initLibraryTabs();
   initLibraryExport();
@@ -81,6 +84,19 @@ function initLibraryExport(): void {
 
   (libraryExportButton as HTMLButtonElement).dataset.bound = "true";
   libraryExportButton.addEventListener("click", () => void exportLibraryArchive());
+}
+
+function initLibraryCleanup(): void {
+  if (!libraryCleanupButton) {
+    return;
+  }
+
+  if (libraryCleanupButton.dataset.bound === "true") {
+    return;
+  }
+
+  libraryCleanupButton.dataset.bound = "true";
+  libraryCleanupButton.addEventListener("click", () => void cleanupUnusedResources());
 }
 
 function initEquipmentTabs(): void {
@@ -411,6 +427,14 @@ function buildUsedResourceSet(): Set<string> {
     collectPresetResourceRefs(preset, referencedBlends).forEach((ref) => {
       if (ref.type && ref.id) {
         used.add(`${ref.type}:${ref.id}`);
+      }
+    });
+  });
+
+  blends.forEach((blend) => {
+    (blend.models ?? []).forEach((modelId) => {
+      if (modelId) {
+        used.add(`nam:${modelId}`);
       }
     });
   });
@@ -754,6 +778,7 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
   }
 
   const grouped = groupLibraryItemsByTone(filtered);
+  const usedResources = buildUsedResourceSet();
   if (librarySummary) {
     librarySummary.textContent = `Showing ${grouped.length} of ${totalCount} resources (grouped)`;
   }
@@ -775,10 +800,14 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
         ? Array.from(group.origins)[0]
         : "Mixed";
       const modelCountLabel = `${group.count} models`;
+      const usedCount = group.items.filter((item) => usedResources.has(`${item.type}:${item.id}`)).length;
+      const usedBadge = usedCount > 0
+        ? `<span class="equipment-library-used" title="${usedCount} used by presets or blends">${renderIcon("link", "equipment-library-used-icon")}</span>`
+        : "";
       return `
         <div class="equipment-library-item equipment-library-group" draggable="true" data-group-id="${escapeHtml(group.groupId)}">
           <div class="equipment-library-item-main">
-            <div class="equipment-library-item-title">${escapeHtml(group.title)}</div>
+            <div class="equipment-library-item-title">${escapeHtml(group.title)}${usedBadge}</div>
             <div class="equipment-library-item-meta">
               <span>${escapeHtml(typeLabel)}</span>
               <span>${escapeHtml(categoryLabel)}</span>
@@ -789,6 +818,7 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
           </div>
           <div class="equipment-library-item-actions">
             <button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>
+            <button class="equipment-library-delete-group" data-group-id="${escapeHtml(group.groupId)}">Delete Group</button>
           </div>
         </div>
       `;
@@ -796,6 +826,7 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
     .join("");
 
   bindBlendCreateButtons(grouped);
+  bindBlendDeleteButtons(grouped);
   bindBlendGroupDragHandlers(grouped);
 }
 
@@ -840,6 +871,7 @@ type ToneGroup = {
   categories: Set<string>;
   origins: Set<string>;
   modelIds: string[];
+  items: LibraryItem[];
   gear?: string;
 };
 
@@ -861,7 +893,10 @@ function groupLibraryItemsByTone(items: LibraryItem[]): ToneGroup[] {
       existing.types.add(item.type);
       existing.categories.add(item.category || "Uncategorized");
       existing.origins.add(origin);
-      existing.modelIds.push(item.id);
+      if (item.type === "nam") {
+        existing.modelIds.push(item.id);
+      }
+      existing.items.push(item);
       if (!existing.gear && gear) {
         existing.gear = gear;
       }
@@ -873,7 +908,8 @@ function groupLibraryItemsByTone(items: LibraryItem[]): ToneGroup[] {
         types: new Set([item.type]),
         categories: new Set([item.category || "Uncategorized"]),
         origins: new Set([origin]),
-        modelIds: [item.id],
+        modelIds: item.type === "nam" ? [item.id] : [],
+        items: [item],
         gear: gear,
       });
     }
@@ -896,6 +932,55 @@ function bindBlendCreateButtons(groups: ToneGroup[]): void {
         return;
       }
       createBlendFromGroup(group);
+    });
+  });
+}
+
+function bindBlendDeleteButtons(groups: ToneGroup[]): void {
+  const buttons = libraryResults?.querySelectorAll(".equipment-library-delete-group");
+  if (!buttons) {
+    return;
+  }
+
+  const usedResources = buildUsedResourceSet();
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const groupId = (btn as HTMLElement).dataset.groupId ?? "";
+      const group = groups.find((entry) => entry.groupId === groupId);
+      if (!group) {
+        return;
+      }
+
+      const deletable = group.items.filter((item) =>
+        inferResourceOrigin(item.filePath) === "Imported"
+        && !usedResources.has(`${item.type}:${item.id}`)
+      );
+      const usedCount = group.items.filter((item) => usedResources.has(`${item.type}:${item.id}`)).length;
+      const skipped = group.items.length - deletable.length;
+
+      if (!deletable.length) {
+        const reason = usedCount > 0
+          ? "All resources in this group are used by presets or blends."
+          : "No deletable imported resources found.";
+        showNotification("Delete group", reason);
+        return;
+      }
+
+      const message = `Delete ${deletable.length} resources from "${group.title}"?`
+        + (usedCount ? ` ${usedCount} used resources will be kept.` : "")
+        + (skipped ? ` ${skipped} non-deletable resources will be kept.` : "");
+
+      if (!confirm(message)) {
+        return;
+      }
+
+      postMessage({
+        type: "cleanupResourceLibrary",
+        scope: "all",
+        removeFiles: true,
+        resources: deletable.map((item) => ({ type: item.type, id: item.id })),
+      });
     });
   });
 }
@@ -946,6 +1031,11 @@ function createBlendFromGroup(group: ToneGroup): void {
   const snapMode = confirm("Snap between models? Click OK for snap, Cancel for interpolate.");
 
   const category = normalizeBlendCategory(group.gear);
+  if (!group.modelIds.length) {
+    showNotification("Blend creation failed", "No amp models found in this group.");
+    return;
+  }
+
   const modelMappings = buildBlendModelMappingsFromIds(group.modelIds, uiState.resourceLibrary);
   const blend = {
     id,
@@ -959,6 +1049,39 @@ function createBlendFromGroup(group: ToneGroup): void {
   postMessage({
     type: "saveBlendDefinition",
     blend,
+  });
+}
+
+function cleanupUnusedResources(): void {
+  const scope = libraryCleanupSelect?.value ?? "all";
+  const allItems = getLibraryItems();
+  const usedResources = buildUsedResourceSet();
+
+  const unused = allItems.filter((item) => !usedResources.has(`${item.type}:${item.id}`));
+  const scoped = scope === "all"
+    ? unused
+    : unused.filter((item) => item.type === scope);
+  const deletable = scoped.filter((item) => inferResourceOrigin(item.filePath) === "Imported");
+  const skippedBuiltIn = scoped.length - deletable.length;
+
+  if (!deletable.length) {
+    showNotification("Cleanup", skippedBuiltIn ? "No unused imported resources found." : "No unused resources found.");
+    return;
+  }
+
+  const scopeLabel = scope === "all" ? "all unused resources" : `unused ${scope.toUpperCase()} resources`;
+  const message = `Remove ${deletable.length} ${scopeLabel}?`
+    + (skippedBuiltIn ? ` ${skippedBuiltIn} built-in resources will be kept.` : "");
+
+  if (!confirm(message)) {
+    return;
+  }
+
+  postMessage({
+    type: "cleanupResourceLibrary",
+    scope,
+    removeFiles: true,
+    resources: deletable.map((item) => ({ type: item.type, id: item.id })),
   });
 }
 

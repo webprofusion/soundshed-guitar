@@ -75,6 +75,10 @@ target_link_libraries(SoundshedGuitar_App
   wininet
 )
 
+if(MSVC)
+  target_compile_options(SoundshedGuitar_App PRIVATE /wd4068)
+endif()
+
 set_target_properties(SoundshedGuitar_App PROPERTIES
   OUTPUT_NAME SoundshedGuitar
   FOLDER "GuitarFX/Formats"

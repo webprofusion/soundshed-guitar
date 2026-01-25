@@ -128,6 +128,10 @@ target_link_libraries(SoundshedGuitar_VST3
     wininet
 )
 
+if(MSVC)
+  target_compile_options(SoundshedGuitar_VST3 PRIVATE /wd4068)
+endif()
+
 set_target_properties(SoundshedGuitar_VST3 PROPERTIES
   OUTPUT_NAME SoundshedGuitar
   FOLDER GuitarFX/Formats

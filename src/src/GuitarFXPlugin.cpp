@@ -12,6 +12,7 @@
 #include <optional>
 #include <sstream>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 #include <iostream> // For std::cout
 
@@ -2846,6 +2847,10 @@ namespace guitarfx
     {
       HandleSaveLibraryArchiveRequest(payload);
     }
+    else if (type == "cleanupResourceLibrary")
+    {
+      HandleCleanupResourceLibraryRequest(payload);
+    }
     else if (type == "splitSignalPathEdge")
     {
       HandleSplitSignalPathEdgeRequest(payload);
@@ -5518,6 +5523,242 @@ namespace guitarfx
 #else
     ReportErrorToUI("Export not supported", "Library export is only available on Windows");
 #endif
+  }
+
+  void GuitarFXPlugin::HandleCleanupResourceLibraryRequest(const nlohmann::json &payload)
+  {
+    const nlohmann::json resources = payload.value("resources", nlohmann::json::array());
+    const std::string scope = payload.value("scope", "all");
+    const bool removeFiles = payload.value("removeFiles", true);
+
+    if (!resources.is_array())
+    {
+      ReportErrorToUI("Cleanup failed", "Missing resource list");
+      return;
+    }
+
+    const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
+    const auto libraryDir = settingsDir / "resources";
+    const auto libraryFile = libraryDir / "library.json";
+
+    nlohmann::json entries = nlohmann::json::array();
+    if (std::filesystem::exists(libraryFile))
+    {
+      std::ifstream input(libraryFile);
+      if (input)
+      {
+        nlohmann::json parsed;
+        input >> parsed;
+        if (parsed.is_array())
+        {
+          entries = std::move(parsed);
+        }
+      }
+    }
+
+    auto makeResourceKey = [](const std::string& type, const std::string& id) {
+      return type + ":" + id;
+    };
+
+    std::unordered_set<std::string> userKeys;
+    userKeys.reserve(entries.size());
+    for (const auto& entry : entries)
+    {
+      const std::string type = entry.value("type", "");
+      const std::string id = entry.value("id", "");
+      if (!type.empty() && !id.empty())
+      {
+        userKeys.insert(makeResourceKey(type, id));
+      }
+    }
+
+    std::unordered_set<std::string> usedKeys;
+    auto addUsedRef = [&](const ResourceRef& ref) {
+      const std::string type = ref.resourceType;
+      const std::string id = ref.resourceId;
+      if (!type.empty() && !id.empty())
+      {
+        usedKeys.insert(makeResourceKey(type, id));
+      }
+    };
+
+    auto addUsedPreset = [&](const Preset& preset) {
+      for (const auto& node : preset.graph.nodes)
+      {
+        if (node.resource && node.resource->IsLibraryRef())
+        {
+          addUsedRef(*node.resource);
+        }
+        for (const auto& res : node.resources)
+        {
+          if (res.IsLibraryRef())
+          {
+            addUsedRef(res);
+          }
+        }
+      }
+    };
+
+    if (mActivePreset)
+    {
+      addUsedPreset(*mActivePreset);
+    }
+
+    if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
+    {
+      const auto userPresets = PresetStorage::LoadAllFromDirectory(mUserPresetsPath);
+      for (const auto& preset : userPresets)
+      {
+        addUsedPreset(preset);
+      }
+    }
+
+    if (mBlendLibrary.is_array())
+    {
+      for (const auto& blend : mBlendLibrary)
+      {
+        if (!blend.is_object())
+        {
+          continue;
+        }
+        const auto models = blend.value("models", nlohmann::json::array());
+        if (!models.is_array())
+        {
+          continue;
+        }
+        for (const auto& modelId : models)
+        {
+          if (modelId.is_string())
+          {
+            usedKeys.insert(makeResourceKey("nam", modelId.get<std::string>()));
+          }
+        }
+      }
+    }
+
+    auto isScopeMatch = [&](const std::string& type) {
+      return scope == "all" || scope == type;
+    };
+
+    auto isUnderDirectory = [&](const std::filesystem::path& candidate, const std::filesystem::path& base) {
+      if (candidate.empty() || base.empty())
+      {
+        return false;
+      }
+      std::error_code ec;
+      auto normalizedCandidate = std::filesystem::weakly_canonical(candidate, ec);
+      if (ec)
+      {
+        return false;
+      }
+      auto normalizedBase = std::filesystem::weakly_canonical(base, ec);
+      if (ec)
+      {
+        return false;
+      }
+      auto baseIt = normalizedBase.begin();
+      auto baseEnd = normalizedBase.end();
+      auto candIt = normalizedCandidate.begin();
+      for (; baseIt != baseEnd; ++baseIt, ++candIt)
+      {
+        if (candIt == normalizedCandidate.end() || *baseIt != *candIt)
+        {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    std::vector<std::string> removedKeys;
+    removedKeys.reserve(resources.size());
+    std::size_t skipped = 0;
+    std::size_t skippedUsed = 0;
+
+    for (const auto& item : resources)
+    {
+      if (!item.is_object())
+      {
+        skipped += 1;
+        continue;
+      }
+      const std::string type = item.value("type", "");
+      const std::string id = item.value("id", "");
+      if (type.empty() || id.empty())
+      {
+        skipped += 1;
+        continue;
+      }
+      if (!isScopeMatch(type))
+      {
+        continue;
+      }
+
+      const std::string key = makeResourceKey(type, id);
+      if (usedKeys.count(key) > 0)
+      {
+        skippedUsed += 1;
+        continue;
+      }
+      const auto resourceOpt = mResourceLibrary.LookupResource(type, id);
+      if (!resourceOpt)
+      {
+        skipped += 1;
+        continue;
+      }
+
+      const bool isUserEntry = userKeys.count(key) > 0;
+      const bool isUserFile = !resourceOpt->filePath.empty() && isUnderDirectory(resourceOpt->filePath, libraryDir);
+      if (!isUserEntry && !isUserFile)
+      {
+        skipped += 1;
+        continue;
+      }
+
+      mResourceLibrary.RemoveResource(type, id);
+      removedKeys.push_back(key);
+
+      if (removeFiles && isUserFile)
+      {
+        std::error_code removeError;
+        std::filesystem::remove(resourceOpt->filePath, removeError);
+      }
+    }
+
+    if (!removedKeys.empty())
+    {
+      std::unordered_set<std::string> removedSet(removedKeys.begin(), removedKeys.end());
+      nlohmann::json updated = nlohmann::json::array();
+      for (const auto& entry : entries)
+      {
+        const std::string type = entry.value("type", "");
+        const std::string id = entry.value("id", "");
+        if (!type.empty() && !id.empty())
+        {
+          const std::string key = makeResourceKey(type, id);
+          if (removedSet.count(key) > 0)
+          {
+            continue;
+          }
+        }
+        updated.push_back(entry);
+      }
+
+      (void)mFileSystem.EnsureDirectory(libraryDir);
+      std::ofstream output(libraryFile);
+      if (output)
+      {
+        output << updated.dump(2);
+      }
+    }
+
+    BroadcastState();
+    nlohmann::json message;
+    message["type"] = "resourceCleanupResult";
+    message["requested"] = resources.size();
+    message["removed"] = removedKeys.size();
+    message["skipped"] = skipped;
+    message["skippedUsed"] = skippedUsed;
+    SendMessageToUI(message.dump());
   }
 
   bool GuitarFXPlugin::StartSignalPathTest(double frequencyHz, double durationSeconds)
