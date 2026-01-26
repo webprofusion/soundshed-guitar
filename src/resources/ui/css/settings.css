@@ -417,6 +417,26 @@
   border: 1px solid var(--border-dark-medium);
 }
 
+.tone3000-item-image {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-dark-tertiary);
+  border: 1px solid var(--border-dark-light);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tone3000-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .tone3000-item-main {
   flex: 1;
   min-width: 0;
@@ -440,6 +460,21 @@
 .tone3000-item-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.tone3000-details-btn {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tone3000-details-btn:hover {
+  background: var(--bg-dark-secondary);
 }
 
 .tone3000-import-btn {

@@ -56,7 +56,7 @@ const effectIcons: Record<string, IconKey> = {
   // Amps
   amp_builtin: "amp",
   amp_nam: "amp",
-  amp_nam_optimized: "bolt",
+  amp_nam_optimized: "amp",
   amp_nam_blend: "blend",
   amp_clean: "amp",
   amp_crunch: "amp",

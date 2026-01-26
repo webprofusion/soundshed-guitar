@@ -16,6 +16,15 @@ const paginationEl = document.getElementById("tone3000-pagination");
 const prevButtonEl = document.getElementById("tone3000-prev-btn") as HTMLButtonElement | null;
 const nextButtonEl = document.getElementById("tone3000-next-btn") as HTMLButtonElement | null;
 const pageLabelEl = document.getElementById("tone3000-page-label");
+const detailsModalEl = document.getElementById("tone3000-details-modal");
+const detailsCloseEl = document.getElementById("tone3000-details-close");
+const detailsTitleEl = document.getElementById("tone3000-details-title");
+const detailsImageEl = document.getElementById("tone3000-details-image");
+const detailsMetaEl = document.getElementById("tone3000-details-meta");
+const detailsDescriptionEl = document.getElementById("tone3000-details-description");
+const detailsTagsEl = document.getElementById("tone3000-details-tags");
+const detailsModelsStatusEl = document.getElementById("tone3000-details-models-status");
+const detailsModelsEl = document.getElementById("tone3000-details-models");
 
 interface Tone3000Tone {
   id: string;
@@ -26,6 +35,13 @@ interface Tone3000Tone {
   platform?: string;
   models_count?: number;
   user?: { username?: string };
+  images?: string[];
+  tags?: Array<{ name?: string }>;
+  equipment_image_url?: string;
+  equipment_image?: string;
+  gear_image_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
 }
 
 interface Tone3000Model {
@@ -96,6 +112,17 @@ export function initTone3000Browser(): void {
     resultsEl.addEventListener("click", (event) => {
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      const detailsButton = target.closest(".tone3000-details-btn") as HTMLButtonElement | null;
+      if (detailsButton) {
+        const toneId = detailsButton.dataset.toneId;
+        const tone = currentTones.find((item) => String(item.id) === toneId);
+        if (!tone) {
+          showNotification("Details unavailable", "Tone not found");
+          return;
+        }
+        void openToneDetails(tone);
+        return;
+      }
       const button = target.closest(".tone3000-import-btn") as HTMLButtonElement | null;
       if (!button) return;
 
@@ -126,6 +153,18 @@ export function initTone3000Browser(): void {
   nextButtonEl?.addEventListener("click", () => {
     if (currentPage < totalPages) {
       void runSearch(currentPage + 1);
+    }
+  });
+
+  detailsCloseEl?.addEventListener("click", () => closeToneDetails());
+  detailsModalEl?.addEventListener("click", (event) => {
+    if (event.target === detailsModalEl) {
+      closeToneDetails();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && detailsModalEl?.style.display !== "none") {
+      closeToneDetails();
     }
   });
 
@@ -287,6 +326,7 @@ function renderResults(tones: Tone3000Tone[]): void {
   resultsEl.innerHTML = tones
     .map((tone) => {
       const modelCount = tone.models_count ?? 0;
+      const equipmentImageUrl = getEquipmentImageUrl(tone);
       const importStatus = getToneImportStatus(tone);
       const statusLabel =
         importStatus.status === "imported"
@@ -301,8 +341,16 @@ function renderResults(tones: Tone3000Tone[]): void {
         : importStatus.status === "partial"
           ? "Re-import"
           : "Import";
+      const imageMarkup = equipmentImageUrl
+        ? `
+          <div class="tone3000-item-image">
+            <img src="${escapeHtml(equipmentImageUrl)}" alt="${escapeHtml(tone.gear ?? "Equipment")}" loading="lazy" />
+          </div>
+        `
+        : "";
       return `
         <div class="tone3000-item" data-tone-id="${String(tone.id)}">
+          ${imageMarkup}
           <div class="tone3000-item-main">
             <div class="tone3000-item-title">${escapeHtml(tone.title)}</div>
             <div class="tone3000-item-meta">
@@ -314,6 +362,7 @@ function renderResults(tones: Tone3000Tone[]): void {
             </div>
           </div>
           <div class="tone3000-item-actions">
+            <button class="tone3000-details-btn" data-tone-id="${String(tone.id)}" type="button">Details</button>
             <button class="tone3000-import-btn" data-tone-id="${String(tone.id)}" ${disableImport ? "disabled" : ""}>${buttonLabel}</button>
           </div>
         </div>
@@ -321,6 +370,113 @@ function renderResults(tones: Tone3000Tone[]): void {
     })
     .join("");
 
+}
+
+function getEquipmentImageUrl(tone: Tone3000Tone): string | null {
+  const candidates = [
+    Array.isArray(tone.images) ? tone.images[0] : undefined,
+    tone.equipment_image_url,
+    tone.equipment_image,
+    tone.gear_image_url,
+    tone.image_url,
+    tone.thumbnail_url,
+  ];
+
+  for (const candidate of candidates) {
+    const value = typeof candidate === "string" ? candidate.trim() : "";
+    if (!value) continue;
+    if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:")) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function closeToneDetails(): void {
+  if (!detailsModalEl) return;
+  detailsModalEl.style.display = "none";
+}
+
+async function openToneDetails(tone: Tone3000Tone): Promise<void> {
+  if (!detailsModalEl || !detailsTitleEl || !detailsImageEl || !detailsMetaEl || !detailsDescriptionEl || !detailsTagsEl || !detailsModelsEl || !detailsModelsStatusEl) {
+    return;
+  }
+
+  detailsTitleEl.textContent = tone.title ?? tone.name ?? "Tone Details";
+  const imageUrl = getEquipmentImageUrl(tone);
+  detailsImageEl.innerHTML = imageUrl
+    ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(tone.gear ?? "Equipment")}" />`
+    : `<div class="tone3000-details-image-placeholder">No image</div>`;
+
+  const metaParts = [
+    tone.gear ? `Gear: ${tone.gear}` : null,
+    tone.platform ? `Platform: ${tone.platform}` : null,
+    typeof tone.models_count === "number" ? `Models: ${tone.models_count}` : null,
+    tone.user?.username ? `By: ${tone.user.username}` : null,
+  ].filter(Boolean);
+
+  detailsMetaEl.textContent = metaParts.length ? metaParts.join(" · ") : "No metadata available.";
+  detailsDescriptionEl.textContent = tone.description?.trim() || "No description provided.";
+  const tags = Array.isArray(tone.tags)
+    ? tone.tags
+      .map((tag) => tag?.name?.trim())
+      .filter((tagName): tagName is string => Boolean(tagName))
+    : [];
+  detailsTagsEl.innerHTML = tags.length
+    ? tags.map((tag) => `<span class="tone3000-details-tag">${escapeHtml(tag)}</span>`).join("")
+    : `<span class="tone3000-details-tag tone3000-details-tag-empty">No tags available.</span>`;
+
+  detailsModelsEl.innerHTML = "";
+  detailsModelsStatusEl.textContent = "Loading models...";
+  detailsModalEl.style.display = "flex";
+
+  await ensureTone3000Session();
+  const session = uiState.tone3000Session;
+  if (!session?.accessToken) {
+    detailsModelsStatusEl.textContent = "Add a Tone3000 API key to load models.";
+    return;
+  }
+
+  try {
+    const models = await fetchToneModels(tone, session.accessToken);
+    if (!models.length) {
+      detailsModelsStatusEl.textContent = "No models found for this tone.";
+      return;
+    }
+    detailsModelsStatusEl.textContent = "";
+    detailsModelsEl.innerHTML = models
+      .map((model) => `<li>${escapeHtml(model.name || model.id)}</li>`)
+      .join("");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    detailsModelsStatusEl.textContent = `Unable to load models: ${message}`;
+  }
+}
+
+async function fetchToneModels(tone: Tone3000Tone, accessToken: string): Promise<Tone3000Model[]> {
+  const response = await fetch(`${API_BASE}/models?tone_id=${encodeURIComponent(tone.id)}&page=1&page_size=100`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Model fetch failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const models: Tone3000Model[] = Array.isArray(data?.models)
+    ? data.models
+    : Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data)
+          ? data
+          : [];
+
+  return models;
 }
 
 async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): Promise<void> {
