@@ -16,6 +16,7 @@ export interface ParameterDef {
   unit: string;
   step?: number;
   labels?: string[];
+  group?: string;
 }
 
 export interface EffectTypeInfo {
@@ -240,16 +241,16 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     category: "eq",
     requiresResource: false,
     parameters: [
-      { key: "band0_gain", name: "Low Gain", default: 0, min: -18, max: 18, unit: "dB" },
-      { key: "band0_freq", name: "Low Freq", default: 100, min: 20, max: 500, unit: "Hz" },
-      { key: "band1_gain", name: "Low-Mid Gain", default: 0, min: -18, max: 18, unit: "dB" },
-      { key: "band1_freq", name: "Low-Mid Freq", default: 400, min: 200, max: 2000, unit: "Hz" },
-      { key: "band1_q", name: "Low-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount" },
-      { key: "band2_gain", name: "High-Mid Gain", default: 0, min: -18, max: 18, unit: "dB" },
-      { key: "band2_freq", name: "High-Mid Freq", default: 2000, min: 1000, max: 8000, unit: "Hz" },
-      { key: "band2_q", name: "High-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount" },
-      { key: "band3_gain", name: "High Gain", default: 0, min: -18, max: 18, unit: "dB" },
-      { key: "band3_freq", name: "High Freq", default: 8000, min: 4000, max: 20000, unit: "Hz" }
+      { key: "band0_gain", name: "Low Gain", default: 0, min: -18, max: 18, unit: "dB", group: "Low" },
+      { key: "band0_freq", name: "Low Freq", default: 100, min: 20, max: 500, unit: "Hz", group: "Low" },
+      { key: "band1_gain", name: "Low-Mid Gain", default: 0, min: -18, max: 18, unit: "dB", group: "Low Mid" },
+      { key: "band1_freq", name: "Low-Mid Freq", default: 400, min: 200, max: 2000, unit: "Hz", group: "Low Mid" },
+      { key: "band1_q", name: "Low-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount", group: "Low Mid" },
+      { key: "band2_gain", name: "High-Mid Gain", default: 0, min: -18, max: 18, unit: "dB", group: "High Mid" },
+      { key: "band2_freq", name: "High-Mid Freq", default: 2000, min: 1000, max: 8000, unit: "Hz", group: "High Mid" },
+      { key: "band2_q", name: "High-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount", group: "High Mid" },
+      { key: "band3_gain", name: "High Gain", default: 0, min: -18, max: 18, unit: "dB", group: "High" },
+      { key: "band3_freq", name: "High Freq", default: 8000, min: 4000, max: 20000, unit: "Hz", group: "High" }
     ]
   },
   {

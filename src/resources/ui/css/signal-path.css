@@ -1015,6 +1015,34 @@
   align-items: flex-start;
 }
 
+.node-param-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(90, 90, 110, 0.7);
+  border-radius: 10px;
+  min-width: 180px;
+}
+
+.node-param-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #b6bccf;
+  text-align: center;
+}
+
+.node-param-group-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
 .eq-visualizer {
   display: flex;
   flex-direction: column;

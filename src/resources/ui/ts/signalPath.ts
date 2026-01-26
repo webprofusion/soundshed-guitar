@@ -1397,7 +1397,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     paramDefs = [...blendParamDefs, ...nonBlendParams];
   }
   
-  const paramControls = paramDefs.map((paramDef) => {
+  const renderParamControl = (paramDef: ParameterDef): string => {
     const key = paramDef.key;
     const rawValue = node.params[key];
     const label = paramDef.name || formatParamLabel(key);
@@ -1464,7 +1464,33 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         ` : ""}
       </div>
     `;
-  }).join("");
+  };
+
+  const hasGroups = paramDefs.some((paramDef) => typeof paramDef.group === "string" && paramDef.group.trim().length > 0);
+  const paramControls = hasGroups
+    ? (() => {
+        const groupOrder: string[] = [];
+        const groupMap = new Map<string, string[]>();
+
+        paramDefs.forEach((paramDef) => {
+          const group = paramDef.group?.trim() || "Other";
+          if (!groupMap.has(group)) {
+            groupMap.set(group, []);
+            groupOrder.push(group);
+          }
+          groupMap.get(group)?.push(renderParamControl(paramDef));
+        });
+
+        return groupOrder.map((group) => `
+          <div class="node-param-group-block">
+            <div class="node-param-group-title">${group}</div>
+            <div class="node-param-group-items">
+              ${(groupMap.get(group) || []).join("")}
+            </div>
+          </div>
+        `).join("");
+      })()
+    : paramDefs.map(renderParamControl).join("");
 
   const isEqNode = typeInfo?.category === "eq" || node.type.startsWith("eq_");
   const eqVisualizer = isEqNode ? `
