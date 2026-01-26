@@ -150,6 +150,9 @@
   font-size: 11px;
   color: var(--text-dark-secondary);
   line-height: 1.5;
+  white-space: pre;
+  max-height: 300px;
+  overflow: auto;
 }
 
 .tone3000-details-tags {
@@ -177,9 +180,37 @@
   margin-bottom: 6px;
 }
 
+.tone3000-details-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.tone3000-details-select,
+.tone3000-details-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tone3000-details-select-btn {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.tone3000-details-progress {
+  font-size: 11px;
+  color: var(--text-dark-muted);
+  margin-bottom: 6px;
+}
+
 .tone3000-details-models {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -187,6 +218,21 @@
   color: var(--text-dark-secondary);
   max-height: 220px;
   overflow-y: auto;
+}
+
+.tone3000-details-model-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-dark-tertiary);
+  border: 1px solid var(--border-dark-medium);
+  cursor: pointer;
+}
+
+.tone3000-details-model-row input[type="checkbox"] {
+  accent-color: var(--color-primary);
 }
 
 /* Blend Editor Modal */

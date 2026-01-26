@@ -5,6 +5,7 @@ import type {
   ResourceLibrary,
   LibraryResource,
   BlendMode,
+  BlendDefinition,
 } from "./types.js";
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
@@ -150,6 +151,51 @@ export class BlendEditorModal {
     this.syncTestParams(node, mappings);
     this.renderTestControls(node, mappings);
     this.updateMatchedModel();
+    this.modal.style.display = "flex";
+  }
+
+  openWithDefinition(blend: BlendDefinition): void {
+    if (!this.modal) {
+      return;
+    }
+
+    this.initialize();
+
+    const category = blend.category ?? "amp";
+    const mappings = blend.modelMappings?.length
+      ? blend.modelMappings
+      : buildBlendModelMappingsFromIds(blend.models ?? [], this.deps.getResourceLibrary());
+
+    this.activeParams = resolveActiveParams(blend, mappings);
+
+    if (this.nameInput) {
+      this.nameInput.value = blend.name ?? blend.id;
+    }
+    if (this.modeSelect) {
+      this.modeSelect.value = blend.blendMode ?? "interpolate";
+    }
+    if (this.categorySelect) {
+      const options = Array.from(this.categorySelect.options).map((opt) => opt.value);
+      this.categorySelect.value = options.includes(category) ? category : "amp";
+    }
+
+    this.modal.dataset.blendId = blend.id;
+    delete this.modal.dataset.nodeId;
+
+    this.setActiveTab("settings");
+    this.renderParameterList();
+    this.renderModelList(mappings, category);
+    this.testParams = {};
+    this.testKnobs.clear();
+    if (this.testControls) {
+      this.testControls.innerHTML = "";
+    }
+    if (this.matchName) {
+      this.matchName.textContent = "—";
+    }
+    if (this.matchDetails) {
+      this.matchDetails.textContent = "";
+    }
     this.modal.style.display = "flex";
   }
 

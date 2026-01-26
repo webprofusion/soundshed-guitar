@@ -1991,6 +1991,10 @@ export function initializeBlendEditorModal(): void {
   blendEditorModal.initialize();
 }
 
+export function openBlendEditorWithDefinition(blend: BlendDefinition): void {
+  blendEditorModal.openWithDefinition(blend);
+}
+
 function getNodeResourceIds(node: GraphNode): string[] {
   const anyNode = node as unknown as { resources?: unknown };
   if (!Array.isArray(anyNode.resources)) {

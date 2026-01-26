@@ -3,7 +3,9 @@ import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { postMessage } from "./bridge.js";
 import { ensureTone3000Session } from "./tone3000.js";
+import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { arrayBufferToBase64 } from "./utils.js";
+import { openBlendEditorWithDefinition } from "./signalPath.js";
 
 const API_BASE = "https://www.tone3000.com/api/v1";
 const PAGE_SIZE = 25;
@@ -25,6 +27,11 @@ const detailsDescriptionEl = document.getElementById("tone3000-details-descripti
 const detailsTagsEl = document.getElementById("tone3000-details-tags");
 const detailsModelsStatusEl = document.getElementById("tone3000-details-models-status");
 const detailsModelsEl = document.getElementById("tone3000-details-models");
+const detailsSelectAllEl = document.getElementById("tone3000-details-select-all") as HTMLButtonElement | null;
+const detailsSelectNoneEl = document.getElementById("tone3000-details-select-none") as HTMLButtonElement | null;
+const detailsImportSelectedEl = document.getElementById("tone3000-details-import-selected") as HTMLButtonElement | null;
+const detailsImportBlendEl = document.getElementById("tone3000-details-import-blend") as HTMLButtonElement | null;
+const detailsProgressEl = document.getElementById("tone3000-details-progress");
 
 interface Tone3000Tone {
   id: string;
@@ -45,7 +52,7 @@ interface Tone3000Tone {
 }
 
 interface Tone3000Model {
-  id: string;
+  id: string | number;
   name: string;
   model_url: string;
 }
@@ -70,6 +77,9 @@ let activeQuery = "";
 let currentTones: Tone3000Tone[] = [];
 let currentPage = 1;
 let totalPages = 1;
+let currentDetailsTone: Tone3000Tone | null = null;
+let currentDetailsModels: Tone3000Model[] = [];
+let detailsImporting = false;
 
 function getToneImportStatus(tone: Tone3000Tone): { status: "imported" | "partial" | "none"; importedCount: number } {
   const toneId = String(tone.id);
@@ -162,6 +172,17 @@ export function initTone3000Browser(): void {
       closeToneDetails();
     }
   });
+  detailsModelsEl?.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.classList.contains("tone3000-details-model-select")) {
+      return;
+    }
+    updateDetailsSelectionStatus();
+  });
+  detailsSelectAllEl?.addEventListener("click", () => setDetailsSelection(true));
+  detailsSelectNoneEl?.addEventListener("click", () => setDetailsSelection(false));
+  detailsImportSelectedEl?.addEventListener("click", () => void importSelectedDetailsModels(false));
+  detailsImportBlendEl?.addEventListener("click", () => void importSelectedDetailsModels(true));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && detailsModalEl?.style.display !== "none") {
       closeToneDetails();
@@ -403,6 +424,9 @@ async function openToneDetails(tone: Tone3000Tone): Promise<void> {
     return;
   }
 
+  currentDetailsTone = tone;
+  currentDetailsModels = [];
+
   detailsTitleEl.textContent = tone.title ?? tone.name ?? "Tone Details";
   const imageUrl = getEquipmentImageUrl(tone);
   detailsImageEl.innerHTML = imageUrl
@@ -429,6 +453,10 @@ async function openToneDetails(tone: Tone3000Tone): Promise<void> {
 
   detailsModelsEl.innerHTML = "";
   detailsModelsStatusEl.textContent = "Loading models...";
+  if (detailsProgressEl) {
+    detailsProgressEl.textContent = "";
+  }
+  setDetailsImportState(false);
   detailsModalEl.style.display = "flex";
 
   await ensureTone3000Session();
@@ -440,17 +468,154 @@ async function openToneDetails(tone: Tone3000Tone): Promise<void> {
 
   try {
     const models = await fetchToneModels(tone, session.accessToken);
+    currentDetailsModels = models;
     if (!models.length) {
       detailsModelsStatusEl.textContent = "No models found for this tone.";
+      updateDetailsSelectionStatus();
+      setDetailsSelection(false);
+      setDetailsImportState(false);
       return;
     }
-    detailsModelsStatusEl.textContent = "";
-    detailsModelsEl.innerHTML = models
-      .map((model) => `<li>${escapeHtml(model.name || model.id)}</li>`)
-      .join("");
+    renderDetailsModelList(models);
+    updateDetailsSelectionStatus();
+    setDetailsSelection(true);
+    const platform = (tone.platform ?? "nam").toLowerCase();
+    if (detailsImportBlendEl) {
+      detailsImportBlendEl.disabled = platform === "ir";
+      detailsImportBlendEl.title = platform === "ir" ? "Blend creation is only available for NAM models." : "";
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     detailsModelsStatusEl.textContent = `Unable to load models: ${message}`;
+    updateDetailsSelectionStatus();
+    setDetailsImportState(false);
+  }
+}
+
+function renderDetailsModelList(models: Tone3000Model[]): void {
+  if (!detailsModelsEl) {
+    return;
+  }
+  detailsModelsEl.innerHTML = models
+    .map((model) => {
+      const label = model.name || String(model.id);
+      return `
+        <li class="tone3000-details-model-row">
+          <label>
+            <input class="tone3000-details-model-select" type="checkbox" data-model-id="${escapeHtml(model.id)}" checked />
+            <span>${escapeHtml(label)}</span>
+          </label>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function updateDetailsSelectionStatus(): void {
+  if (!detailsModelsStatusEl) {
+    return;
+  }
+  const total = currentDetailsModels.length;
+  if (!total) {
+    return;
+  }
+  const selected = getSelectedDetailModelIds().size;
+  detailsModelsStatusEl.textContent = `Selected ${selected} of ${total} models.`;
+}
+
+function setDetailsSelection(checked: boolean): void {
+  if (!detailsModelsEl) {
+    return;
+  }
+  detailsModelsEl.querySelectorAll<HTMLInputElement>(".tone3000-details-model-select").forEach((input) => {
+    input.checked = checked;
+  });
+  updateDetailsSelectionStatus();
+}
+
+function getSelectedDetailModelIds(): Set<string> {
+  const selected = new Set<string>();
+  if (!detailsModelsEl) {
+    return selected;
+  }
+  detailsModelsEl.querySelectorAll<HTMLInputElement>(".tone3000-details-model-select").forEach((input) => {
+    if (input.checked && input.dataset.modelId) {
+      selected.add(input.dataset.modelId);
+    }
+  });
+  return selected;
+}
+
+function setDetailsImportState(importing: boolean, progressText = ""): void {
+  detailsImporting = importing;
+  if (detailsImportSelectedEl) {
+    detailsImportSelectedEl.disabled = importing;
+  }
+  if (detailsImportBlendEl) {
+    detailsImportBlendEl.disabled = importing || ((currentDetailsTone?.platform ?? "nam").toLowerCase() === "ir");
+  }
+  if (detailsSelectAllEl) {
+    detailsSelectAllEl.disabled = importing;
+  }
+  if (detailsSelectNoneEl) {
+    detailsSelectNoneEl.disabled = importing;
+  }
+  if (detailsProgressEl) {
+    detailsProgressEl.textContent = progressText;
+  }
+}
+
+async function importSelectedDetailsModels(createBlend: boolean): Promise<void> {
+  if (detailsImporting) {
+    return;
+  }
+  const tone = currentDetailsTone;
+  if (!tone) {
+    showNotification("Import failed", "Tone details unavailable");
+    return;
+  }
+  const selectedIds = getSelectedDetailModelIds();
+  if (!selectedIds.size) {
+    showNotification("Import failed", "Select at least one model.");
+    return;
+  }
+  if (createBlend && (tone.platform ?? "nam").toLowerCase() === "ir") {
+    showNotification("Blend creation unavailable", "Blends can only be created from NAM models.");
+    return;
+  }
+
+  const models = currentDetailsModels.filter((model) => selectedIds.has(String(model.id)));
+  if (!models.length) {
+    showNotification("Import failed", "No matching models found.");
+    return;
+  }
+
+  try {
+    setDetailsImportState(true, "Preparing import...");
+    const importedNamIds = await importToneModelsList(tone, models, (completed, total, currentName) => {
+      const label = currentName ? ` (${currentName})` : "";
+      setDetailsImportState(true, `Importing ${completed}/${total}${label}...`);
+    });
+    setDetailsImportState(false, "Import complete.");
+    updateDetailsSelectionStatus();
+
+    if (createBlend) {
+      const blendIds = importedNamIds.length ? Array.from(new Set(importedNamIds)) : [];
+      if (!blendIds.length) {
+        showNotification("Blend creation failed", "No NAM models were imported.");
+        return;
+      }
+      const blend = createBlendDefinitionFromModels(tone, blendIds);
+      postMessage({
+        type: "saveBlendDefinition",
+        blend,
+      });
+      openBlendEditorWithDefinition(blend);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showNotification("Import failed", message);
+    setDetailsImportState(false, "");
   }
 }
 
@@ -490,90 +655,17 @@ async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): 
   button.textContent = "Importing...";
 
   try {
-    const response = await fetch(`${API_BASE}/models?tone_id=${encodeURIComponent(tone.id)}&page=1&page_size=25`, {
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Model fetch failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const models: Tone3000Model[] = Array.isArray(data?.models)
-      ? data.models
-      : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.results)
-          ? data.results
-          : Array.isArray(data)
-            ? data
-            : [];
-
+    const models = await fetchToneModels(tone, session.accessToken);
     if (!models.length) {
       throw new Error("No models found for tone");
     }
 
-    const resourceType = (tone.platform ?? "nam").toLowerCase() === "ir" ? "ir" : "nam";
-    const gearFolder = sanitizeFilename(tone.gear ?? "other");
-    const toneLabel = tone.title ?? tone.name ?? "tone";
-    const toneFolder = sanitizeFilename(toneLabel);
-    const subfolder = `${gearFolder}/${toneFolder}`;
+    await importToneModelsList(tone, models, (completed, total) => {
+      button.textContent = `Importing ${completed}/${total}...`;
+    });
 
-    for (const model of models) {
-      const modelResponse = await fetch(model.model_url, {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      });
-
-      if (!modelResponse.ok) {
-        throw new Error(`Model download failed: ${modelResponse.status}`);
-      }
-
-      const buffer = await modelResponse.arrayBuffer();
-      const contentType = modelResponse.headers.get("content-type") ?? "";
-      const fileNameHint = sanitizeFilename(model.name ?? toneLabel ?? "model");
-
-      if (contentType.includes("zip") || model.model_url.toLowerCase().endsWith(".zip")) {
-        await importZipBuffer(buffer, {
-          tone,
-          modelId: model.id,
-          nameHint: fileNameHint,
-          subfolder,
-        });
-      } else {
-        const data = arrayBufferToBase64(buffer);
-        const extension = resourceType === "ir" ? ".wav" : ".nam";
-        const fileName = `${fileNameHint}${extension}`;
-
-        postMessage({
-          type: "importRemoteResource",
-          provider: "tone3000",
-          resourceType,
-          resourceId: `tone3000:${model.id}`,
-          name: `${tone.title} - ${model.name}`,
-          description: tone.description ?? "",
-          category: tone.gear ?? "",
-          subfolder,
-          fileName,
-          metadata: {
-            provider: "tone3000",
-            toneId: String(tone.id),
-            toneTitle: tone.title ?? tone.name ??"",
-            gear: tone.gear ?? "",
-            platform: tone.platform ?? "",
-            modelId: String(model.id),
-            modelName: model.name ?? "",
-          },
-          data,
-        });
-      }
-    }
-
-    appendLog(`tone3000 import queued: ${tone.title}`);
-    showNotification("Import started", tone.title);
+    appendLog(`tone3000 import complete (${tone.title})`);
+    showNotification("Import complete", tone.title ?? "Tone3000");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     appendLog(`tone3000 import failed: ${message}`);
@@ -587,7 +679,7 @@ async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): 
 async function importZipBuffer(
   buffer: ArrayBuffer,
   options: { tone: Tone3000Tone; modelId: string; nameHint: string; subfolder: string },
-): Promise<void> {
+): Promise<string[]> {
   const zipLib = window.JSZip;
   if (!zipLib) {
     throw new Error("JSZip not loaded");
@@ -597,6 +689,7 @@ async function importZipBuffer(
   const entries = Object.values(zip.files) as JSZipObject[];
   const tone = options.tone;
   let imported = 0;
+  const importedNamIds: string[] = [];
 
   for (const entry of entries) {
     if (entry.dir) continue;
@@ -609,12 +702,13 @@ async function importZipBuffer(
     const data = arrayBufferToBase64(fileBuffer);
     const resourceType = isIr ? "ir" : "nam";
     const fileName = sanitizeFilename(entry.name.split("/").pop() ?? options.nameHint);
+    const resourceId = `tone3000:${options.modelId}:${sanitizeFilename(entry.name)}`;
 
     postMessage({
       type: "importRemoteResource",
       provider: "tone3000",
       resourceType,
-      resourceId: `tone3000:${options.modelId}:${sanitizeFilename(entry.name)}`,
+      resourceId,
       name: `${tone.title} - ${entry.name}`,
       description: tone.description ?? "",
       category: tone.gear ?? "",
@@ -635,12 +729,128 @@ async function importZipBuffer(
       data,
     });
 
+    if (resourceType === "nam") {
+      importedNamIds.push(resourceId);
+    }
     imported += 1;
   }
 
-  if (!imported) {
-    throw new Error("Zip contained no supported model or IR files");
+  if (imported === 0) {
+    throw new Error("No supported files found in archive");
   }
+
+  return importedNamIds;
+}
+
+async function importToneModelsList(
+  tone: Tone3000Tone,
+  models: Tone3000Model[],
+  onProgress?: (completed: number, total: number, currentName?: string) => void,
+): Promise<string[]> {
+  const session = uiState.tone3000Session;
+  if (!session?.accessToken) {
+    throw new Error("Tone3000 session missing");
+  }
+
+  const resourceType = (tone.platform ?? "nam").toLowerCase() === "ir" ? "ir" : "nam";
+  const gearFolder = sanitizeFilename(tone.gear ?? "other");
+  const toneLabel = tone.title ?? tone.name ?? "tone";
+  const toneFolder = sanitizeFilename(toneLabel);
+  const subfolder = `${gearFolder}/${toneFolder}`;
+  const importedNamIds: string[] = [];
+
+  let completed = 0;
+  const total = models.length;
+
+  for (const model of models) {
+    const modelResponse = await fetch(model.model_url, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    if (!modelResponse.ok) {
+      throw new Error(`Model download failed: ${modelResponse.status}`);
+    }
+
+    const buffer = await modelResponse.arrayBuffer();
+    const contentType = modelResponse.headers.get("content-type") ?? "";
+    const fileNameHint = sanitizeFilename(model.name ?? toneLabel ?? "model");
+
+    if (contentType.includes("zip") || model.model_url.toLowerCase().endsWith(".zip")) {
+      const imported = await importZipBuffer(buffer, {
+        tone,
+        modelId: String(model.id),
+        nameHint: fileNameHint,
+        subfolder,
+      });
+      importedNamIds.push(...imported);
+    } else {
+      const data = arrayBufferToBase64(buffer);
+      const extension = resourceType === "ir" ? ".wav" : ".nam";
+      const fileName = `${fileNameHint}${extension}`;
+      const resourceId = `tone3000:${model.id}`;
+
+      postMessage({
+        type: "importRemoteResource",
+        provider: "tone3000",
+        resourceType,
+        resourceId,
+        name: `${tone.title} - ${model.name}`,
+        description: tone.description ?? "",
+        category: tone.gear ?? "",
+        subfolder,
+        fileName,
+        metadata: {
+          provider: "tone3000",
+          toneId: String(tone.id),
+          toneTitle: tone.title ?? "",
+          groupId: String(tone.id),
+          groupName: tone.title ?? tone.name ?? "",
+          gear: tone.gear ?? "",
+          platform: tone.platform ?? "",
+          modelId: String(model.id),
+          modelName: model.name ?? "",
+        },
+        data,
+      });
+
+      if (resourceType === "nam") {
+        importedNamIds.push(resourceId);
+      }
+    }
+
+    completed += 1;
+    onProgress?.(completed, total, model.name ?? model.id);
+  }
+
+  return importedNamIds;
+}
+
+function createBlendDefinitionFromModels(tone: Tone3000Tone, modelIds: string[]) {
+  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const name = `${tone.title ?? tone.name ?? "Tone3000"} Blend`;
+  const category = normalizeBlendCategory(tone.gear);
+  const modelMappings = buildBlendModelMappingsFromIds(modelIds, uiState.resourceLibrary);
+  return {
+    id,
+    name,
+    category,
+    models: modelMappings.map((mapping) => mapping.id),
+    modelMappings,
+    blendMode: "interpolate" as const,
+  };
+}
+
+function normalizeBlendCategory(category?: string): string {
+  const value = (category ?? "").toLowerCase();
+  const allowed = new Set(["pedal", "preamp", "amp", "full-rig", "cab"]);
+  if (allowed.has(value)) {
+    return value;
+  }
+  return "amp";
 }
 
 function sanitizeFilename(raw: string): string {
@@ -648,8 +858,9 @@ function sanitizeFilename(raw: string): string {
   return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
 }
 
-function escapeHtml(value: string): string {
-  return value
+function escapeHtml(value: string | number | null | undefined): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
