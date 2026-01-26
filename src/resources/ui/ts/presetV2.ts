@@ -302,6 +302,16 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     ]
   },
   {
+    type: "transpose",
+    displayName: "Transpose",
+    category: "modulation",
+    requiresResource: false,
+    parameters: [
+      { key: "semitones", name: "Semitones", default: 0, min: -36, max: 12, unit: "st", step: 1 },
+      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
     type: "chorus",
     displayName: "Chorus",
     category: "modulation",

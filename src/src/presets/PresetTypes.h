@@ -113,7 +113,7 @@ namespace guitarfx
     double outputVolume = 1.0; // Output volume (0.0-1.0 linear)
     bool autoLevelInput = false;  // Apply model-referenced input gain if available
     bool autoLevelOutput = false; // Apply model-referenced output trim if available
-    int transpose = 0;        // Pitch shift in semitones
+    int transpose = 0;        // Pitch shift in semitones (-36..+12)
   };
 
   /**
@@ -168,9 +168,9 @@ namespace guitarfx
       double gateHold = 50.0;        // ms
       double gateRelease = 100.0;    // ms
 
-      // Transpose (pitch_shift)
+      // Transpose (transpose)
       bool transposeEnabled = false;
-      int transposeSemitones = 0;    // -24 to +24
+      int transposeSemitones = 0;    // -36 to +12
     };
 
     // Post-chain settings (applied after preset mixing)

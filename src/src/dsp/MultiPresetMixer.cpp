@@ -313,7 +313,7 @@ namespace guitarfx
 
   void MultiPresetMixer::SetGlobalTranspose(int semitones)
   {
-    mGlobalChainConfig.preChain.transposeSemitones = std::clamp(semitones, -24, 24);
+    mGlobalChainConfig.preChain.transposeSemitones = std::clamp(semitones, -36, 12);
     mPreChainExecutor.SetNodeParam("global_transpose", "semitones", static_cast<double>(mGlobalChainConfig.preChain.transposeSemitones));
   }
 

@@ -27,11 +27,11 @@ SignalGraph GlobalSignalChainConfig::BuildPreChainGraph() const
   gateNode.params["release"] = preChain.gateRelease;
   graph.nodes.push_back(gateNode);
 
-  // Transpose (Pitch Shift)
+  // Transpose (Resampled)
   GraphNode transposeNode;
   transposeNode.id = "global_transpose";
-  transposeNode.type = "pitch_shift";
-  transposeNode.category = "pitch";
+  transposeNode.type = "transpose";
+  transposeNode.category = "modulation";
   transposeNode.label = "Transpose";
   transposeNode.enabled = preChain.transposeEnabled;
   transposeNode.params["semitones"] = static_cast<double>(preChain.transposeSemitones);

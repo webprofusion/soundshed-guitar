@@ -43,7 +43,7 @@ Top-level preset structure (schema version 2).
 | `outputVolume` | float | 1.0 | 0.0..1.0 | Output volume (linear) |
 | `autoLevelInput` | bool | false | — | Apply model-referenced input gain |
 | `autoLevelOutput` | bool | false | — | Apply model-referenced output trim |
-| `transpose` | int | 0 | -24..+24 | Pitch shift (semitones) |
+| `transpose` | int | 0 | -36..+12 | Pitch shift (semitones) |
 
 ## SignalGraph
 

@@ -179,6 +179,14 @@ High-quality pitch shift effect for transpose up/down by semitones.
 | `semitones` | -24..+24 | 0.0 | st |
 | `mix` | 0.0–1.0 | 1.0 | — |
 
+### Transpose (`transpose`)
+High-quality transpose effect optimized for integer semitone steps using Signalsmith Stretch.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `semitones` | -36..+12 | 0.0 | st |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
 ### Gain (`gain`)
 Simple gain stage.
 

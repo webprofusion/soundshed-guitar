@@ -95,6 +95,38 @@ if(GUITARFX_FETCH_DEPENDENCIES)
     endif()
   endif()
 
+  if(NOT TARGET signalsmith_linear::headers)
+    FetchContent_Declare(
+      signalsmith_linear
+      GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
+      GIT_TAG main
+    )
+    FetchContent_GetProperties(signalsmith_linear)
+    if(NOT signalsmith_linear_POPULATED)
+      FetchContent_Populate(signalsmith_linear)
+    endif()
+    add_library(signalsmith_linear::headers INTERFACE IMPORTED)
+    set_target_properties(signalsmith_linear::headers PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${signalsmith_linear_SOURCE_DIR}/include"
+    )
+  endif()
+
+  if(NOT TARGET signalsmith_stretch::headers)
+    FetchContent_Declare(
+      signalsmith_stretch
+      GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+      GIT_TAG main
+    )
+    FetchContent_GetProperties(signalsmith_stretch)
+    if(NOT signalsmith_stretch_POPULATED)
+      FetchContent_Populate(signalsmith_stretch)
+    endif()
+    add_library(signalsmith_stretch::headers INTERFACE IMPORTED)
+    set_target_properties(signalsmith_stretch::headers PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${signalsmith_stretch_SOURCE_DIR}"
+    )
+  endif()
+
   if(NOT TARGET WebView2::Loader)
     set(WEBVIEW2_SDK_VERSION "1.0.2903.40" CACHE STRING "Microsoft WebView2 SDK version to fetch" FORCE)
     set(WEBVIEW2_SDK_URL "https://globalcdn.nuget.org/packages/microsoft.web.webview2.${WEBVIEW2_SDK_VERSION}.nupkg" CACHE STRING "Microsoft WebView2 SDK download URL" FORCE)

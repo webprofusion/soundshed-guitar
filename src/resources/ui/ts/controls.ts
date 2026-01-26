@@ -261,7 +261,7 @@ function initializeInputOutputKnobs(): void {
     const transposeKnobInstance = new GenericKnob({
       knobElement: transposeKnob,
       paramId: "transpose",
-      minValue: -12,
+      minValue: -36,
       maxValue: 12,
       defaultValue: 0,
       displayFormat: (value) => {

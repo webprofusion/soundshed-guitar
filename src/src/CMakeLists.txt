@@ -131,6 +131,8 @@ target_link_libraries(GuitarFXCore
   PUBLIC
     nlohmann_json::nlohmann_json
     httplib::httplib
+    signalsmith_linear::headers
+    signalsmith_stretch::headers
 )
 
 if(TARGET nam)

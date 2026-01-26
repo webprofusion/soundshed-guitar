@@ -230,7 +230,7 @@ export interface GlobalPreChainConfig {
   gateHold: number;       // ms
   gateRelease: number;    // ms
   transposeEnabled: boolean;
-  transposeSemitones: number;  // -24 to +24
+  transposeSemitones: number;  // -36 to +12
 }
 
 export interface GlobalPostChainConfig {
