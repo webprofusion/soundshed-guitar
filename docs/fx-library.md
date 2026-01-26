@@ -172,12 +172,15 @@ Creates stereo width by mixing a delayed copy of the signal.
 | `mix` | 0.0–1.0 | 0.3 | — |
 
 ### Pitch Shift (`pitch_shift`)
-High-quality pitch shift effect for transpose up/down by semitones.
+Pitch shift effect using Signalsmith Stretch with stepped or free-form control.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `semitones` | -24..+24 | 0.0 | st |
+| `semitones` | -1..+1 | 0.0 | — |
+| `minSemitones` | -12..+12 | -12.0 | st |
+| `maxSemitones` | -12..+12 | 12.0 | st |
 | `mix` | 0.0–1.0 | 1.0 | — |
+| `stepMode` | 0–1 | 1 | — |
 
 ### Transpose (`transpose`)
 High-quality transpose effect optimized for integer semitone steps using Signalsmith Stretch.

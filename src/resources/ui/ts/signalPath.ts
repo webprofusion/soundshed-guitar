@@ -1709,6 +1709,10 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
     const labels = (knob.dataset.labels || "").split("|").filter(Boolean);
     const isEnum = unit === "enum" && labels.length > 0;
     const isBlendParam = knob.dataset.blendParam === "true";
+    const isPitchShiftSemitones = node.type === "pitch_shift" && paramKey === "semitones";
+    const isPitchShiftStepMode = node.type === "pitch_shift" && paramKey === "stepMode";
+    const isPitchShiftMin = node.type === "pitch_shift" && paramKey === "minSemitones";
+    const isPitchShiftMax = node.type === "pitch_shift" && paramKey === "maxSemitones";
     const blendSpecMin = knob.dataset.blendSpecMin ? parseFloat(knob.dataset.blendSpecMin) : 0;
     const blendSpecMax = knob.dataset.blendSpecMax ? parseFloat(knob.dataset.blendSpecMax) : 10;
     const blendMode = (knob.dataset.blendMode ?? "interpolate") as BlendMode;
@@ -1717,6 +1721,16 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
       : null;
 
     const snapValue = (rawValue: number): number => {
+      if (isPitchShiftSemitones && (node.params.stepMode ?? 1) >= 0.5) {
+        const minBound = typeof node.params.minSemitones === "number" ? node.params.minSemitones : -12;
+        const maxBound = typeof node.params.maxSemitones === "number" ? node.params.maxSemitones : 12;
+        const range = Math.max(0.0, maxBound - minBound);
+        if (range <= 0.0) return Math.max(min, Math.min(max, rawValue));
+        const mapped = minBound + (rawValue + 1) * 0.5 * range;
+        const snappedSemitones = Math.max(minBound, Math.min(maxBound, Math.round(mapped)));
+        const snappedControl = ((snappedSemitones - minBound) / range) * 2 - 1;
+        return Math.max(min, Math.min(max, snappedControl));
+      }
       if (!step || step <= 0) return rawValue;
       const snapped = Math.round((rawValue - min) / step) * step + min;
       return Math.max(min, Math.min(max, snapped));
@@ -1775,6 +1789,51 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
 
         node.params[paramKey] = normalizedValue;
         sendSignalPathNodeParamUpdate(nodeId, paramKey, normalizedValue);
+
+        if (isPitchShiftMin || isPitchShiftMax) {
+          const minBound = typeof node.params.minSemitones === "number" ? node.params.minSemitones : -12;
+          const maxBound = typeof node.params.maxSemitones === "number" ? node.params.maxSemitones : 12;
+          let nextMin = minBound;
+          let nextMax = maxBound;
+
+          if (isPitchShiftMin) {
+            nextMin = Math.max(-12, Math.min(12, normalizedValue));
+            nextMax = Math.max(nextMin, maxBound);
+          } else {
+            nextMax = Math.max(-12, Math.min(12, normalizedValue));
+            nextMin = Math.min(nextMax, minBound);
+          }
+
+          if (nextMin !== minBound) {
+            node.params.minSemitones = nextMin;
+            sendSignalPathNodeParamUpdate(nodeId, "minSemitones", nextMin);
+          }
+          if (nextMax !== maxBound) {
+            node.params.maxSemitones = nextMax;
+            sendSignalPathNodeParamUpdate(nodeId, "maxSemitones", nextMax);
+          }
+
+          const currentSemitones = typeof node.params.semitones === "number" ? node.params.semitones : 0;
+          const clampedSemitones = Math.max(nextMin, Math.min(nextMax, currentSemitones));
+          if (clampedSemitones !== currentSemitones) {
+            node.params.semitones = clampedSemitones;
+            sendSignalPathNodeParamUpdate(nodeId, "semitones", clampedSemitones);
+          }
+
+          showNodeParamsPanel(node, preset);
+          return;
+        }
+
+        if (isPitchShiftStepMode && normalizedValue >= 0.5) {
+          const currentControl = typeof node.params.semitones === "number" ? node.params.semitones : 0;
+          const snappedControl = snapValue(currentControl);
+          if (snappedControl !== currentControl) {
+            node.params.semitones = snappedControl;
+            sendSignalPathNodeParamUpdate(nodeId, "semitones", snappedControl);
+            showNodeParamsPanel(node, preset);
+            return;
+          }
+        }
         updateEqVisualization(node);
 
         if (isBlendParam && blendState) {

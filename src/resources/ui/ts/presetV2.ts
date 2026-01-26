@@ -297,8 +297,11 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     category: "modulation",
     requiresResource: false,
     parameters: [
-      { key: "semitones", name: "Semitones", default: 0, min: -24, max: 24, unit: "st" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
+      { key: "semitones", name: "Semitones", default: 0, min: -1, max: 1, unit: "amount", step: 0.01 },
+      { key: "minSemitones", name: "Min Semitones", default: -12, min: -12, max: 12, unit: "st", step: 1 },
+      { key: "maxSemitones", name: "Max Semitones", default: 12, min: -12, max: 12, unit: "st", step: 1 },
+      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
+      { key: "stepMode", name: "Step Mode", default: 1, min: 0, max: 1, unit: "enum", step: 1, labels: ["Free", "Stepped"] }
     ]
   },
   {
