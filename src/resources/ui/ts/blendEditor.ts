@@ -515,7 +515,7 @@ export class BlendEditorModal {
         return `
           <div class="blend-model-row" data-index="${index}">
             <div class="blend-model-header">
-              <select class="blend-model-select">
+              <select class="blend-model-select themed-select">
                 ${this.buildModelOptions(mapping.id)}
               </select>
               <button class="blend-model-auto" type="button">Auto</button>
@@ -625,7 +625,7 @@ export class BlendEditorModal {
     row.dataset.index = index.toString();
     row.innerHTML = `
       <div class="blend-model-header">
-        <select class="blend-model-select">
+        <select class="blend-model-select themed-select">
           ${this.buildModelOptions("")}
         </select>
         <button class="blend-model-auto" type="button">Auto</button>
