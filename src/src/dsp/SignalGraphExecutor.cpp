@@ -305,14 +305,22 @@ namespace guitarfx
             state.processor->LoadResources(resolvedRefs, resolvedPaths);
           }
         }
-        else if (node.resource && node.resource->IsValid() && mResourceLibrary)
+        /*else if (node.resource && node.resource->IsValid())
         {
-          auto path = mResourceLibrary->ResolveResource(*node.resource);
+          std::optional<std::filesystem::path> path;
+          if (mResourceLibrary)
+          {
+            path = mResourceLibrary->ResolveResource(*node.resource);
+          }
           if (path)
           {
             state.processor->LoadResource(*path);
           }
-        }
+          else if (node.resource->IsFilePath())
+          {
+            state.processor->LoadResource(node.resource->filePath);
+          }
+        }*/
       }
 
     }
