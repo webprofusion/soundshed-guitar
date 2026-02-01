@@ -123,7 +123,6 @@ export interface GraphNode {
   bypassed: boolean;
   params: Record<string, number>;
   config: Record<string, string>;
-  resource?: ResourceRef;
   resources?: ResourceRef[];
 }
 

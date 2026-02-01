@@ -64,8 +64,9 @@ guitarfx::Preset CreateTestPreset(
     ampNode.enabled = true;
     ampNode.params["drive"] = 0.5;
     ampNode.params["tone"] = 0.6;
-    ampNode.resource = guitarfx::ResourceRef{};
-    ampNode.resource->filePath = fs::path(modelPath);
+    guitarfx::ResourceRef ampRef;
+    ampRef.filePath = fs::path(modelPath);
+    ampNode.resources.push_back(ampRef);
     preset.graph.nodes.push_back(ampNode);
   }
 
@@ -77,8 +78,9 @@ guitarfx::Preset CreateTestPreset(
     cabNode.type = "ir_cab";
     cabNode.category = "cab";
     cabNode.enabled = true;
-    cabNode.resource = guitarfx::ResourceRef{};
-    cabNode.resource->filePath = fs::path(irPath);
+    guitarfx::ResourceRef cabRef;
+    cabRef.filePath = fs::path(irPath);
+    cabNode.resources.push_back(cabRef);
     preset.graph.nodes.push_back(cabNode);
   }
 
@@ -475,8 +477,9 @@ bool TestEmbeddedResources()
   guitarfx::GraphNode node;
   node.id = "amp";
   node.type = "amp_nam";
-  node.resource = guitarfx::ResourceRef{};
-  node.resource->embeddedId = "emb-model-1";
+  guitarfx::ResourceRef embeddedRef;
+  embeddedRef.embeddedId = "emb-model-1";
+  node.resources.push_back(embeddedRef);
   original.graph.nodes.push_back(node);
 
   // Serialize and deserialize

@@ -67,7 +67,7 @@ namespace
     {
       guitarfx::ResourceRef ref;
       ref.filePath = modelPath;
-      amp.resource = ref;
+      amp.resources.push_back(ref);
     }
 
     guitarfx::GraphNode cab;
@@ -81,7 +81,7 @@ namespace
     {
       guitarfx::ResourceRef ref;
       ref.filePath = irPath;
-      cab.resource = ref;
+      cab.resources.push_back(ref);
     }
 
     guitarfx::GraphNode output;

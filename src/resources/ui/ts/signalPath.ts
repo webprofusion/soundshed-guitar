@@ -4,6 +4,7 @@ import type {
   GraphNode,
   GraphEdge,
   LibraryResource,
+  ResourceRef,
   BlendModelMapping,
   BlendLibrary,
   BlendDefinition,
@@ -460,7 +461,7 @@ function getMissingResourceEntries(node: GraphNode): Array<{ resourceType?: stri
   const backendMissing = (uiState.missingNodeResources ?? []).filter((entry) => entry.nodeId === node.id);
 
   const refs: Array<{ resourceType?: string; resourceId?: string; filePath?: string }> = [];
-  const addRef = (ref: GraphNode["resource"] | undefined): void => {
+  const addRef = (ref?: ResourceRef): void => {
     if (!ref) return;
     const resourceType = ref.type || typeInfo?.resourceType;
     const resourceId = ref.id;
@@ -468,9 +469,6 @@ function getMissingResourceEntries(node: GraphNode): Array<{ resourceType?: stri
     refs.push({ resourceType, resourceId, filePath });
   };
 
-  if (node.resource) {
-    addRef(node.resource);
-  }
   if (Array.isArray(node.resources)) {
     node.resources.forEach((ref) => addRef(ref));
   }
@@ -577,7 +575,6 @@ function isNodeBypassed(node: GraphNode): boolean {
 
 function getNodeResourceAtIndex(node: GraphNode, index = 0): { id: string; filePath: string; parameterValue?: number } {
   const anyNode = node as unknown as {
-    resource?: unknown;
     resources?: unknown;
   };
 
@@ -593,15 +590,7 @@ function getNodeResourceAtIndex(node: GraphNode, index = 0): { id: string; fileP
     return { id, filePath, parameterValue };
   }
 
-  const res = anyNode.resource as { id?: unknown; resourceId?: unknown; embeddedId?: unknown; filePath?: unknown; parameterValue?: unknown } | undefined;
-  const id = typeof res?.id === "string"
-    ? res.id
-    : (typeof res?.resourceId === "string"
-      ? res.resourceId
-      : (typeof res?.embeddedId === "string" ? res.embeddedId : ""));
-  const filePath = typeof res?.filePath === "string" ? res.filePath : "";
-  const parameterValue = typeof res?.parameterValue === "number" ? res.parameterValue : undefined;
-  return { id, filePath, parameterValue };
+  return { id: "", filePath: "" };
 }
 
 export function renderSignalPathBar(): void {

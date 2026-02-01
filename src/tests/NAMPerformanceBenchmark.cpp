@@ -300,7 +300,7 @@ guitarfx::Preset MakeNamPreset(const fs::path& modelPath, const char* ampType)
   guitarfx::ResourceRef ref;
   ref.resourceType = "nam";
   ref.filePath = modelPath;
-  amp.resource = ref;
+  amp.resources.push_back(ref);
 
   guitarfx::GraphNode output;
   output.id = "output";

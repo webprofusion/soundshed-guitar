@@ -231,7 +231,7 @@ int main()
     SignalGraph g;
     g.nodes.push_back({"in", kNodeTypeInput, "", "Input", true});
     GraphNode nam{ "amp", "amp_nam", "amp", "NAM", true };
-    nam.resource = ResourceRef{ "nam", "test-nam-jcm800-g6", {}, "" };
+    nam.resources = { ResourceRef{ "nam", "test-nam-jcm800-g6", {}, "" } };
     g.nodes.push_back(nam);
     g.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
     g.edges.push_back({"in", "amp", 0, 0, 1.0});
@@ -279,7 +279,7 @@ int main()
     g.nodes.push_back(pre);
 
     GraphNode cab{ "cab", "cab_ir", "cab", "IR", true };
-    cab.resource = ResourceRef{ "ir", "test-ir-bark", {}, "" };
+    cab.resources = { ResourceRef{ "ir", "test-ir-bark", {}, "" } };
     cab.params["mix"] = 1.0;
     cab.params["outputGain"] = 0.0;
     g.nodes.push_back(cab);

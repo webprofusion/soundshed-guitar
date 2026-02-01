@@ -382,9 +382,6 @@ function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[])
 
   if (preset.graph?.nodes) {
     preset.graph.nodes.forEach((node) => {
-      if (node.resource) {
-        addRef(node.resource.type, node.resource.id, node.resource.filePath);
-      }
       if (Array.isArray(node.resources)) {
         node.resources.forEach((res) => addRef(res.type, res.id, res.filePath));
       }

@@ -60,7 +60,6 @@ namespace guitarfx
     std::map<std::string, double> params;      // Numeric parameters
     std::map<std::string, std::string> config; // String config
 
-    std::optional<ResourceRef> resource;      // For effects needing a single external file
     std::vector<ResourceRef> resources;       // For effects needing multiple external files
   };
 

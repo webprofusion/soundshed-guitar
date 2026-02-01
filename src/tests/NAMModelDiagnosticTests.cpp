@@ -240,7 +240,7 @@ guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& i
     guitarfx::ResourceRef ref;
     ref.resourceType = "nam";
     ref.filePath = modelPath;
-    amp.resource = ref;
+    amp.resources.push_back(ref);
   }
 
   guitarfx::GraphNode cab;
@@ -255,7 +255,7 @@ guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& i
     guitarfx::ResourceRef ref;
     ref.resourceType = "ir";
     ref.filePath = irPath;
-    cab.resource = ref;
+    cab.resources.push_back(ref);
   }
 
   guitarfx::GraphNode output;

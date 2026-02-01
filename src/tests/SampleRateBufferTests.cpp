@@ -172,7 +172,7 @@ namespace
     amp.params["drive"] = drive;
     guitarfx::ResourceRef ref;
     ref.filePath = modelPath;
-    amp.resource = ref;
+    amp.resources.push_back(ref);
 
     guitarfx::GraphNode output;
     output.id = kOutputNodeId;

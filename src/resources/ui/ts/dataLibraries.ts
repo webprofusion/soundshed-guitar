@@ -74,9 +74,6 @@ function extractResourceIdsFromGraph(
     if (node.type !== nodeType) {
       continue;
     }
-    if (node.resource?.type === resourceType && node.resource?.id) {
-      ids.push(node.resource.id);
-    }
     if (Array.isArray(node.resources)) {
       node.resources.forEach((res) => {
         if (res.type === resourceType && res.id) {

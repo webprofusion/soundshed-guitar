@@ -3015,13 +3015,6 @@ namespace guitarfx
 
       for (const auto& node : mActivePreset->graph.nodes)
       {
-        if (node.resource && node.resource->IsValid())
-        {
-          if (isMissingRef(*node.resource))
-          {
-            pushMissing(node.id, *node.resource);
-          }
-        }
         for (const auto& ref : node.resources)
         {
           if (ref.IsValid() && isMissingRef(ref))
@@ -3197,7 +3190,8 @@ namespace guitarfx
     ResourceRef ref;
     ref.resourceType = resourceType;
     ref.filePath = filePath;
-    target->resource = ref;
+    target->resources.clear();
+    target->resources.push_back(ref);
 
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
 
@@ -3227,7 +3221,8 @@ namespace guitarfx
       return false;
     }
 
-    target->resource = ref;
+    target->resources.clear();
+    target->resources.push_back(ref);
 
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
 
@@ -3349,9 +3344,11 @@ namespace guitarfx
     {
       for (const auto& node : mActivePreset->graph.nodes)
       {
-        if ((node.type == "amp_nam" || node.type == "amp_nam_optimized") && node.resource && node.resource->IsValid())
+        if ((node.type == "amp_nam" || node.type == "amp_nam_optimized")
+            && !node.resources.empty()
+            && node.resources.front().IsValid())
         {
-          QueueNamCalibrationForNode(node.id, *node.resource);
+          QueueNamCalibrationForNode(node.id, node.resources.front());
         }
       }
     }
@@ -3614,9 +3611,11 @@ namespace guitarfx
     {
       for (const auto& node : mActivePreset->graph.nodes)
       {
-        if ((node.type == "amp_nam" || node.type == "amp_nam_optimized") && node.resource && node.resource->IsValid())
+        if ((node.type == "amp_nam" || node.type == "amp_nam_optimized")
+            && !node.resources.empty()
+            && node.resources.front().IsValid())
         {
-          QueueNamCalibrationForNode(node.id, *node.resource);
+          QueueNamCalibrationForNode(node.id, node.resources.front());
         }
       }
     }
@@ -4481,11 +4480,7 @@ namespace guitarfx
     }
 
     std::optional<ResourceRef> ref;
-    if (node->resource && node->resource->IsValid())
-    {
-      ref = *node->resource;
-    }
-    else if (!node->resources.empty() && node->resources.front().IsValid())
+    if (!node->resources.empty() && node->resources.front().IsValid())
     {
       ref = node->resources.front();
     }
@@ -4694,11 +4689,6 @@ namespace guitarfx
       if (ref.parameterValue.has_value())
         slot.parameterValue = ref.parameterValue;
 
-      if (target->type == "amp_nam_blend")
-      {
-        target->resource.reset();
-      }
-
       mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
       ApplyPreset(*mActivePreset);
       mPendingStateBroadcast = true;
@@ -4712,7 +4702,6 @@ namespace guitarfx
       {
         node->resources.clear();
         node->resources.push_back(ref);
-        node->resource.reset();
 
         mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
         ApplyPreset(*mActivePreset);
@@ -4727,9 +4716,11 @@ namespace guitarfx
       if (mActivePreset)
       {
         GraphNode* node = mActivePreset->graph.FindNode(nodeId);
-        if (node && (node->type == "amp_nam" || node->type == "amp_nam_optimized") && node->resource && node->resource->IsValid())
+        if (node && (node->type == "amp_nam" || node->type == "amp_nam_optimized")
+            && !node->resources.empty()
+            && node->resources.front().IsValid())
         {
-          QueueNamCalibrationForNode(nodeId, *node->resource);
+          QueueNamCalibrationForNode(nodeId, node->resources.front());
         }
       }
       return;
@@ -5601,10 +5592,6 @@ namespace guitarfx
     auto addUsedPreset = [&](const Preset& preset) {
       for (const auto& node : preset.graph.nodes)
       {
-        if (node.resource && node.resource->IsLibraryRef())
-        {
-          addUsedRef(*node.resource);
-        }
         for (const auto& res : node.resources)
         {
           if (res.IsLibraryRef())
@@ -6834,7 +6821,7 @@ namespace guitarfx
     node->label = newEffectInfo.displayName;
     node->category = newEffectInfo.category;
     node->params.clear();
-    node->resource.reset();
+  
     node->resources.clear();
     node->config.clear();
 

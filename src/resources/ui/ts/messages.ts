@@ -35,9 +35,6 @@ function normalizeResourceRef(ref?: ResourceRef | null): void {
 function normalizePresetResources(preset?: Preset | null): void {
   if (!preset?.graph?.nodes) return;
   preset.graph.nodes.forEach((node) => {
-    if (node.resource) {
-      normalizeResourceRef(node.resource);
-    }
     if (Array.isArray(node.resources)) {
       node.resources.forEach((ref) => normalizeResourceRef(ref));
     }

@@ -198,19 +198,11 @@ function cleanupPresetForUi(
   if (cleaned.graph?.nodes) {
     cleaned.graph.nodes = cleaned.graph.nodes.map((node) => {
       const nextNode = { ...node };
-      const legacyResource = (nextNode as { resource?: ResourceRef }).resource;
       const normalizedResources = Array.isArray(nextNode.resources)
         ? nextNode.resources.map((ref) => normalizeRef(ref))
         : [];
-      if (legacyResource && normalizedResources.length === 0) {
-        normalizedResources.push(normalizeRef(legacyResource));
-        removedKeys.push("graph.nodes[].resource");
-      }
       if (normalizedResources.length || Array.isArray(nextNode.resources)) {
         nextNode.resources = normalizedResources;
-      }
-      if (legacyResource) {
-        delete (nextNode as { resource?: ResourceRef }).resource;
       }
       return nextNode;
     });

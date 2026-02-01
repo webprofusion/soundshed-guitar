@@ -91,11 +91,6 @@ namespace guitarfx
         }
       }
 
-      if (node.resource && node.resource->IsValid())
-      {
-        json["resource"] = SerializeResourceRef(*node.resource);
-      }
-
       const bool isBlendRef = node.type == "amp_nam_blend"
         && node.config.find("blendId") != node.config.end();
       if (!node.resources.empty() && !isBlendRef)
@@ -155,11 +150,6 @@ namespace guitarfx
             node.config[key] = value.get<std::string>();
           }
         }
-      }
-
-      if (json.contains("resource") && json["resource"].is_object())
-      {
-        node.resource = DeserializeResourceRef(json["resource"]);
       }
 
       if (json.contains("resources") && json["resources"].is_array())

@@ -479,7 +479,7 @@ export function createSimplePresetV2(
       bypassed: false,
       params: { inputGain: 0, outputGain: 0 },
       config: {},
-      resource: ampResource
+      resources: [ampResource]
     };
     preset.graph!.nodes.push(ampNode);
     preset.graph!.edges.push({
@@ -502,7 +502,7 @@ export function createSimplePresetV2(
       bypassed: false,
       params: { mix: 1 },
       config: {},
-      resource: cabResource
+      resources: [cabResource]
     };
     preset.graph!.nodes.push(cabNode);
     preset.graph!.edges.push({
