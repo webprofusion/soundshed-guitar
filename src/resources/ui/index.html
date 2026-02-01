@@ -1097,6 +1097,23 @@
         </div>
       </div>
     </div>
+
+    <!-- Alert/Confirm Dialog Modal -->
+    <div id="dialog-modal" class="modal dialog-modal" style="display: none;">
+      <div class="modal-content dialog-content" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-header">
+          <h3 id="dialog-title">Notice</h3>
+          <button class="modal-close" id="dialog-close" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="dialog-message" class="dialog-message"></p>
+        </div>
+        <div class="modal-footer dialog-footer">
+          <button class="btn btn-secondary" id="dialog-cancel" type="button">Cancel</button>
+          <button class="btn btn-primary" id="dialog-ok" type="button">OK</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script type="module" src="dist/main.js"></script>

@@ -12,6 +12,7 @@ import type { AppSettingValue, Preset, BlendDefinition, ResourceRef, LibraryReso
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { themeSwitcher, type ThemeName } from "./theme-switcher.js";
 import { renderIcon } from "./iconAssets.js";
+import { showConfirm } from "./dialogs.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
@@ -928,7 +929,7 @@ function bindBlendCreateButtons(groups: ToneGroup[]): void {
       if (!group) {
         return;
       }
-      createBlendFromGroup(group);
+      void createBlendFromGroup(group);
     });
   });
 }
@@ -942,7 +943,7 @@ function bindBlendDeleteButtons(groups: ToneGroup[]): void {
   const usedResources = buildUsedResourceSet();
 
   buttons.forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const groupId = (btn as HTMLElement).dataset.groupId ?? "";
       const group = groups.find((entry) => entry.groupId === groupId);
       if (!group) {
@@ -968,7 +969,8 @@ function bindBlendDeleteButtons(groups: ToneGroup[]): void {
         + (usedCount ? ` ${usedCount} used resources will be kept.` : "")
         + (skipped ? ` ${skipped} non-deletable resources will be kept.` : "");
 
-      if (!confirm(message)) {
+      const confirmed = await showConfirm(message, "Delete group");
+      if (!confirmed) {
         return;
       }
 
@@ -1016,7 +1018,7 @@ function bindBlendGroupDragHandlers(groups: ToneGroup[]): void {
   });
 }
 
-function createBlendFromGroup(group: ToneGroup): void {
+async function createBlendFromGroup(group: ToneGroup): Promise<void> {
   const id = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1025,7 +1027,7 @@ function createBlendFromGroup(group: ToneGroup): void {
     return;
   }
 
-  const snapMode = confirm("Snap between models? Click OK for snap, Cancel for interpolate.");
+  const snapMode = await showConfirm("Snap between models? Click OK for snap, Cancel for interpolate.", "Blend Mode");
 
   const category = normalizeBlendCategory(group.gear);
   if (!group.modelIds.length) {
@@ -1049,7 +1051,7 @@ function createBlendFromGroup(group: ToneGroup): void {
   });
 }
 
-function cleanupUnusedResources(): void {
+async function cleanupUnusedResources(): Promise<void> {
   const scope = libraryCleanupSelect?.value ?? "all";
   const allItems = getLibraryItems();
   const usedResources = buildUsedResourceSet();
@@ -1070,7 +1072,8 @@ function cleanupUnusedResources(): void {
   const message = `Remove ${deletable.length} ${scopeLabel}?`
     + (skippedBuiltIn ? ` ${skippedBuiltIn} built-in resources will be kept.` : "");
 
-  if (!confirm(message)) {
+  const confirmed = await showConfirm(message, "Cleanup");
+  if (!confirmed) {
     return;
   }
 

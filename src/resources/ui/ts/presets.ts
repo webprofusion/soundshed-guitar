@@ -9,6 +9,7 @@ import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource,
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
+import { showConfirm } from "./dialogs.js";
 
 const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
 const presetFavoriteToggle = document.getElementById("preset-favorite");
@@ -1151,7 +1152,7 @@ async function enrichAttachment(attachment: Attachment): Promise<Attachment> {
 
 export async function applyPresetFromLibrary(presetId: string): Promise<void> {
   if (uiState.presetDirty && uiState.activePresetId && uiState.activePresetId !== presetId) {
-    const confirmDiscard = confirm("Discard unsaved changes?");
+    const confirmDiscard = await showConfirm("Discard unsaved changes?", "Unsaved changes");
     if (!confirmDiscard) {
       return;
     }
@@ -1953,7 +1954,7 @@ export function isUserPreset(presetId: string | null): boolean {
 }
 
 // Delete current preset
-export function deleteCurrentPreset(): void {
+export async function deleteCurrentPreset(): Promise<void> {
   const activePresetId = uiState.activePresetId;
   if (!activePresetId) {
     showNotification("Error", "No preset selected");
@@ -1968,7 +1969,8 @@ export function deleteCurrentPreset(): void {
   const preset = uiState.presetCache.get(activePresetId);
   const presetName = preset?.name ?? "Unknown";
 
-  if (!confirm(`Are you sure you want to delete "${presetName}"?`)) {
+  const confirmed = await showConfirm(`Are you sure you want to delete "${presetName}"?`, "Delete preset");
+  if (!confirmed) {
     return;
   }
 
@@ -2145,7 +2147,7 @@ export function initializePresetActionButtons(): void {
   }
 
   if (deleteBtn) {
-    deleteBtn.addEventListener("click", deleteCurrentPreset);
+    deleteBtn.addEventListener("click", () => void deleteCurrentPreset());
   }
 
   if (exportBtn) {

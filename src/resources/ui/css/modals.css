@@ -72,6 +72,20 @@
   border-top: 1px solid var(--border-dark-medium);
 }
 
+/* Alert/Confirm Dialog */
+.dialog-modal .dialog-content {
+  width: 520px;
+  max-width: 92vw;
+}
+
+.dialog-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dark-secondary);
+  white-space: pre-wrap;
+}
+
 /* Tone3000 Details Modal */
 .tone3000-details-content {
   width: 720px;
