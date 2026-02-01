@@ -329,6 +329,9 @@ export interface UiState {
   filteredPresets: Preset[];
   activePresetId: string | null;
   presetCache: Map<string, Preset>;
+  activePresetSnapshot?: Preset | null;
+  activePresetDraft?: Preset | null;
+  presetDirty?: boolean;
   presetFolders?: PresetFolder[];
   activePresetFolderId?: string | null;
   setlists?: Setlist[];

@@ -6,7 +6,7 @@
  */
 
 import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
-import { uiState } from "./state.js";
+import { uiState, setPresetDirty } from "./state.js";
 import { postMessage } from "./bridge.js";
 import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon } from "./iconAssets.js";
 
@@ -302,6 +302,7 @@ export function sendAddSignalPathNode(
     label: options?.label,
     category: options?.category,
   });
+  setPresetDirty(true);
 }
 
 export interface SignalPathEdgeRef {
@@ -330,4 +331,5 @@ export function sendAddSignalPathNodeOnEdge(
     label: options?.label,
     category: options?.category,
   });
+  setPresetDirty(true);
 }

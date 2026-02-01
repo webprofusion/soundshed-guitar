@@ -1,4 +1,5 @@
 import { appendLog } from "./logging.js";
+import { setPresetDirty } from "./state.js";
 
 const NAMBridge = {
   postMessage(message: unknown): void {
@@ -31,6 +32,7 @@ export function setParameter(id: string, value: number): void {
     value,
   });
   appendLog(`${id} → ${value}`);
+  setPresetDirty(true);
 }
 
 // Multi-Preset Mixer controls

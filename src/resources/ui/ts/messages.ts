@@ -1,4 +1,4 @@
-import { uiState, clonePreset } from "./state.js";
+import { uiState, clonePreset, getActivePresetForRender, setActivePresetDraft, setActivePresetSnapshot, setPresetDirty } from "./state.js";
 import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, updatePresetDropdownSelection, savePresetToLocalStorage, updatePresetActionButtons } from "./presets.js";
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
@@ -42,6 +42,10 @@ function normalizePresetResources(preset?: Preset | null): void {
       node.resources.forEach((ref) => normalizeResourceRef(ref));
     }
   });
+}
+
+function presetSignature(preset?: Preset | null): string {
+  return preset ? JSON.stringify(preset) : "";
 }
 
 export function handleIncomingMessage(message: string): void {
@@ -125,12 +129,24 @@ export function handleIncomingMessage(message: string): void {
       const preset = (payload as { preset?: Preset }).preset;
       if (preset) {
         normalizePresetResources(preset);
-        uiState.presetCache.set(preset.id, preset);
-        if (!uiState.presets.some((p) => p.id === preset.id)) {
-          uiState.presets = [preset, ...uiState.presets];
-          uiState.filteredPresets = uiState.presets.slice();
-          populatePresetDropdown();
+        const snapshot = uiState.activePresetSnapshot;
+        const isNewPreset = !snapshot || snapshot.id !== preset.id;
+        if (isNewPreset) {
+          setActivePresetSnapshot(preset);
+          setPresetDirty(false);
+          uiState.presetCache.set(preset.id, clonePreset(preset));
+          if (!uiState.presets.some((p) => p.id === preset.id)) {
+            uiState.presets = [clonePreset(preset), ...uiState.presets];
+            uiState.filteredPresets = uiState.presets.slice();
+            populatePresetDropdown();
+          }
+        } else {
+          if (!uiState.presetDirty) {
+            const dirty = presetSignature(snapshot) !== presetSignature(preset);
+            setPresetDirty(dirty);
+          }
         }
+        setActivePresetDraft(preset);
       }
       renderActivePreset();
       syncControlsFromState();
@@ -186,7 +202,10 @@ export function handleIncomingMessage(message: string): void {
       if (preset) {
         normalizePresetResources(preset);
         uiState.activePresetId = preset.id;
-        uiState.presetCache.set(preset.id, preset);
+        uiState.presetCache.set(preset.id, clonePreset(preset));
+        setActivePresetSnapshot(preset);
+        setActivePresetDraft(preset);
+        setPresetDirty(false);
         updatePresetDropdownSelection();
       }
       const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
@@ -208,7 +227,10 @@ export function handleIncomingMessage(message: string): void {
         };
       }
       if (preset) {
-        uiState.presetCache.set(preset.id, preset);
+        uiState.presetCache.set(preset.id, clonePreset(preset));
+        setActivePresetSnapshot(preset);
+        setActivePresetDraft(preset);
+        setPresetDirty(false);
       }
       renderActivePreset();
       syncControlsFromState();
@@ -286,7 +308,7 @@ export function handleIncomingMessage(message: string): void {
         break;
       }
       const activePresetId = uiState.activePresetId ?? "";
-      const preset = uiState.presetCache.get(activePresetId) ?? uiState.presets.find((p) => p.id === activePresetId);
+      const preset = getActivePresetForRender();
       if (preset?.graph) {
         const node = preset.graph.nodes.find((n) => n.id === info.nodeId);
         if (node) {
@@ -365,9 +387,12 @@ export function handleIncomingMessage(message: string): void {
       if (savedPreset) {
         savePresetToLocalStorage(savedPreset);
         uiState.activePresetId = savedPreset.id;
-        uiState.presetCache.set(savedPreset.id, savedPreset);
+        uiState.presetCache.set(savedPreset.id, clonePreset(savedPreset));
+        setActivePresetSnapshot(savedPreset);
+        setActivePresetDraft(savedPreset);
+        setPresetDirty(false);
         if (!uiState.presets.some((p) => p.id === savedPreset.id)) {
-          uiState.presets.unshift(savedPreset);
+          uiState.presets.unshift(clonePreset(savedPreset));
           uiState.filteredPresets = uiState.presets.slice();
           populatePresetDropdown();
         }

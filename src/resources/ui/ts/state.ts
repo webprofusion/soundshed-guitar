@@ -75,6 +75,9 @@ export const uiState: UiState = {
   filteredPresets: [],
   activePresetId: null,
   presetCache: new Map<string, Preset>(),
+  activePresetSnapshot: null,
+  activePresetDraft: null,
+  presetDirty: false,
   presetFolders: [],
   activePresetFolderId: "__all__",
   setlists: [],
@@ -145,4 +148,30 @@ export const uiState: UiState = {
 
 export function clonePreset<T extends Preset | null>(preset: T): T {
   return preset ? (JSON.parse(JSON.stringify(preset)) as T) : preset;
+}
+
+export function getActivePresetForRender(): Preset | null {
+  if (uiState.activePresetDraft) {
+    return uiState.activePresetDraft;
+  }
+  const activePresetId = uiState.activePresetId;
+  if (!activePresetId) {
+    return null;
+  }
+  return uiState.presetCache.get(activePresetId) ?? uiState.presets.find((preset) => preset.id === activePresetId) ?? null;
+}
+
+export function setActivePresetSnapshot(preset: Preset | null): void {
+  uiState.activePresetSnapshot = preset ? clonePreset(preset) : null;
+}
+
+export function setActivePresetDraft(preset: Preset | null): void {
+  uiState.activePresetDraft = preset ? clonePreset(preset) : null;
+}
+
+export function setPresetDirty(isDirty: boolean): void {
+  uiState.presetDirty = isDirty;
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent("presetDirtyChanged"));
+  }
 }

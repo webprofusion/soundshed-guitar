@@ -159,6 +159,22 @@
   color: var(--text-secondary);
 }
 
+.preset-action-btn-unsaved {
+  background: rgba(220, 53, 69, 0.18);
+  color: var(--color-error);
+}
+
+.preset-action-btn-unsaved:hover {
+  background: rgba(220, 53, 69, 0.28);
+  color: var(--color-error);
+}
+
+.preset-action-btn-unsaved:disabled {
+  opacity: 0.7;
+  background: rgba(220, 53, 69, 0.18);
+  color: var(--color-error);
+}
+
 .preset-action-btn-danger:hover {
   background: rgba(220, 53, 69, 0.2);
   color: var(--color-error);

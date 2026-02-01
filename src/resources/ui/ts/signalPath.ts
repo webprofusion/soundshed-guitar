@@ -1,4 +1,4 @@
-import { uiState } from "./state.js";
+import { uiState, getActivePresetForRender, setPresetDirty } from "./state.js";
 import type {
   Preset,
   GraphNode,
@@ -610,9 +610,7 @@ export function renderSignalPathBar(): void {
   }
 
   const activePresetId = uiState.activePresetId;
-  const activePreset = activePresetId
-    ? (uiState.presetCache.get(activePresetId) ?? uiState.presets.find((p) => p.id === activePresetId))
-    : undefined;
+  const activePreset = getActivePresetForRender() ?? undefined;
   
   if (!activePreset) {
     signalPathNodesElement.innerHTML = "";
@@ -669,9 +667,7 @@ export function refreshSelectedNodeParams(): void {
     return;
   }
   const activePresetId = uiState.activePresetId;
-  const activePreset = activePresetId
-    ? (uiState.presetCache.get(activePresetId) ?? uiState.presets.find((p) => p.id === activePresetId))
-    : undefined;
+  const activePreset = getActivePresetForRender() ?? undefined;
   if (!activePreset?.graph) {
     return;
   }
@@ -1546,12 +1542,13 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       return `<option value="${res.id}" ${selected}>${res.name}</option>`;
     }).join("");
 
-    const buildSelector = (index: number, label: string) => {
+    const buildSelector = (index: number, label: string, includeIndexAttr: boolean) => {
       const current = getNodeResourceAtIndex(node, index);
       const resourceOptions = buildOptions(current.id);
       const customOption = current.filePath
         ? `<option value="__custom__" selected>Custom: ${current.filePath.split("/").pop()}</option>`
         : "";
+      const indexAttr = includeIndexAttr ? `data-resource-index="${index}"` : "";
 
       return `
         <div class="node-resource-selector">
@@ -1561,7 +1558,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
               class="resource-dropdown"
               data-node-id="${node.id}"
               data-resource-type="${resourceType}"
-              data-resource-index="${index}"
+              ${indexAttr}
             >
               <option value="">-- Select from Library --</option>
               ${resourceOptions}
@@ -1571,7 +1568,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
               class="resource-browse-btn"
               data-node-id="${node.id}"
               data-resource-type="${resourceType}"
-              data-resource-index="${index}"
+              ${indexAttr}
               data-accept="${browseAccept}"
               title="Browse for file..."
             >${renderIcon("folder", "resource-browse-icon")}</button>
@@ -1586,14 +1583,14 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         const modelSelectors = items.length ? items.map((_, index) => {
           const paramValue = getNodeResourceAtIndex(node, index).parameterValue ?? index;
           return `
-            ${buildSelector(index, `Model ${index + 1}`)}
+            ${buildSelector(index, `Model ${index + 1}`, true)}
             <div class="node-resource-meta">
               <label>Model ${index + 1} Value</label>
               <input class="resource-param-value" type="number" step="0.1" data-node-id="${node.id}" data-resource-index="${index}" value="${paramValue}" />
             </div>
           `;
         }).join("") : `
-          ${buildSelector(0, "Model 1")}
+          ${buildSelector(0, "Model 1", true)}
           <div class="node-resource-meta">
             <label>Model 1 Value</label>
             <input class="resource-param-value" type="number" step="0.1" data-node-id="${node.id}" data-resource-index="0" value="0" />
@@ -1601,7 +1598,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         `;
         resourceSelector = modelSelectors;
       } else {
-        resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : "Resource");
+        resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : "Resource", false);
       }
     }
   }
@@ -2075,6 +2072,7 @@ function sendSignalPathNodeParamUpdate(nodeId: string, paramKey: string, value: 
     paramKey,
     value,
   });
+  setPresetDirty(true);
 }
 
 function sendSignalPathNodeBypassUpdate(nodeId: string, bypassed: boolean): void {
@@ -2083,6 +2081,7 @@ function sendSignalPathNodeBypassUpdate(nodeId: string, bypassed: boolean): void
     nodeId,
     bypassed,
   });
+  setPresetDirty(true);
 }
 
 function sendNodeResourceUpdate(
@@ -2102,6 +2101,7 @@ function sendNodeResourceUpdate(
     resourceIndex,
     parameterValue,
   });
+  setPresetDirty(true);
 }
 
 function sendBrowseNodeResource(nodeId: string, resourceType: string, resourceIndex?: number): void {
@@ -2119,6 +2119,7 @@ function sendSignalPathNodeReorder(nodeId: string, targetNodeId: string): void {
     nodeId,
     targetNodeId,
   });
+  setPresetDirty(true);
 }
 
 function sendSignalPathNodeDelete(nodeId: string): void {
@@ -2126,6 +2127,7 @@ function sendSignalPathNodeDelete(nodeId: string): void {
     type: "deleteSignalPathNode",
     nodeId,
   });
+  setPresetDirty(true);
 }
 
 function sendReplaceSignalPathNode(
@@ -2141,6 +2143,7 @@ function sendReplaceSignalPathNode(
     label: options?.label,
     category: options?.category,
   });
+  setPresetDirty(true);
 }
 
 function sendMoveSignalPathNodeToEdge(nodeId: string, edge: SignalPathEdgeRef): void {
@@ -2149,6 +2152,7 @@ function sendMoveSignalPathNodeToEdge(nodeId: string, edge: SignalPathEdgeRef): 
     nodeId,
     edge,
   });
+  setPresetDirty(true);
 }
 
 function sendCollapseParallelSplit(splitterId: string, mixerId: string): void {
@@ -2157,6 +2161,7 @@ function sendCollapseParallelSplit(splitterId: string, mixerId: string): void {
     splitterId,
     mixerId,
   });
+  setPresetDirty(true);
 }
 
 /**
@@ -2332,7 +2337,7 @@ function handleResourceGroupDrop(
     : buildBlendModelMappingsFromIds(payload.modelIds, uiState.resourceLibrary);
 
   const existingBlendId = targetNodeId
-    ? (uiState.presetCache.get(uiState.activePresetId ?? "")?.graph?.nodes.find((n) => n.id === targetNodeId)?.config?.blendId ?? "")
+    ? (getActivePresetForRender()?.graph?.nodes.find((n) => n.id === targetNodeId)?.config?.blendId ?? "")
     : "";
 
   const blendId = existingBlendId || (typeof crypto !== "undefined" && "randomUUID" in crypto

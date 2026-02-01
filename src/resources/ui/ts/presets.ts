@@ -1,7 +1,7 @@
 import { appendLog } from "./logging.js";
 import { clearNotification, showNotification } from "./notifications.js";
 import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views.js";
-import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN } from "./state.js";
+import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRender, setActivePresetDraft, setActivePresetSnapshot, setPresetDirty } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
@@ -1097,7 +1097,7 @@ function renderPresetUI(preset: Preset | null): void {
 }
 
 export function renderActivePreset(): void {
-  const active = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  const active = getActivePresetForRender();
   renderPresetUI(active);
   renderMixerPanel();
 }
@@ -1158,6 +1158,13 @@ async function enrichAttachment(attachment: Attachment): Promise<Attachment> {
 }
 
 export async function applyPresetFromLibrary(presetId: string): Promise<void> {
+  if (uiState.presetDirty && uiState.activePresetId && uiState.activePresetId !== presetId) {
+    const confirmDiscard = confirm("Discard unsaved changes?");
+    if (!confirmDiscard) {
+      return;
+    }
+    setPresetDirty(false);
+  }
   try {
     clearNotification();
     const preset = await loadPresetMetadata(presetId);
@@ -1169,6 +1176,9 @@ export async function applyPresetFromLibrary(presetId: string): Promise<void> {
 
     uiState.presetCache.set(presetPayload.id, clonePreset(presetPayload));
     uiState.activePresetId = presetPayload.id;
+    setActivePresetSnapshot(presetPayload);
+    setActivePresetDraft(presetPayload);
+    setPresetDirty(false);
     setFavoriteToggleState(presetPayload.id);
     updatePresetDropdownSelection();
     renderPresetUI(clonePreset(presetPayload));
@@ -1509,7 +1519,7 @@ export function saveCurrentPreset(): void {
   const editingPresetId = modal?.dataset.editingPresetId;
 
   const selectedFolderId = folderSelect?.value || PRESET_FOLDER_ALL_ID;
-  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  const activePreset = getActivePresetForRender();
   const baseAttachments = buildAttachmentsFromPreset(activePreset ?? {} as Preset);
   let cleanedPreset: Preset | null = null;
   if (modal?.dataset.cleanedPreset) {
@@ -1545,6 +1555,9 @@ export function saveCurrentPreset(): void {
       movePresetToFolder(editingPresetId, selectedFolderId);
       closeSavePresetModal();
       showNotification("Preset updated", name);
+      setActivePresetSnapshot(updatedPreset);
+      setActivePresetDraft(updatedPreset);
+      setPresetDirty(false);
       updatePresetActionButtons();
       return;
     }
@@ -1573,6 +1586,9 @@ export function saveCurrentPreset(): void {
   renderPresetUI(clonePreset(newPreset));
   closeSavePresetModal();
   showNotification("Preset saved", newPreset.name);
+  setActivePresetSnapshot(newPreset);
+  setActivePresetDraft(newPreset);
+  setPresetDirty(false);
   updatePresetActionButtons();
 }
 
@@ -2008,7 +2024,7 @@ export function saveOverwriteCurrentPreset(): void {
     return;
   }
 
-  const existingPreset = uiState.presetCache.get(activePresetId);
+  const existingPreset = getActivePresetForRender();
   if (!existingPreset) {
     showNotification("Error", "Preset not found");
     return;
@@ -2032,6 +2048,9 @@ export function saveOverwriteCurrentPreset(): void {
     uiState.presets[index] = updatedPreset;
   }
 
+  setActivePresetSnapshot(updatedPreset);
+  setActivePresetDraft(updatedPreset);
+  setPresetDirty(false);
   showNotification("Preset saved", existingPreset.name);
 }
 
@@ -2048,7 +2067,7 @@ export function openEditPresetModal(): void {
     return;
   }
 
-  const preset = uiState.presetCache.get(activePresetId);
+  const preset = getActivePresetForRender();
   if (!preset) {
     showNotification("Error", "Preset not found");
     return;
@@ -2100,6 +2119,7 @@ export function updatePresetActionButtons(): void {
   if (saveBtn) {
     saveBtn.disabled = !canModify;
     saveBtn.title = canModify ? "Save Preset" : "Cannot overwrite factory presets";
+    saveBtn.classList.toggle("preset-action-btn-unsaved", Boolean(uiState.presetDirty));
   }
   if (deleteBtn) {
     deleteBtn.disabled = !canModify;
@@ -2110,6 +2130,10 @@ export function updatePresetActionButtons(): void {
     exportBtn.title = uiState.activePresetId ? "Export Preset" : "No preset to export";
   }
 }
+
+document.addEventListener("presetDirtyChanged", () => {
+  updatePresetActionButtons();
+});
 
 // Initialize preset action buttons
 export function initializePresetActionButtons(): void {

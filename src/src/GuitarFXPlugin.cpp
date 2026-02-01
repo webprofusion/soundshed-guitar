@@ -4705,6 +4705,22 @@ namespace guitarfx
       return;
     }
 
+    if (!filePath.empty() && mActivePreset)
+    {
+      GraphNode* node = mActivePreset->graph.FindNode(nodeId);
+      if (node && !node->resources.empty())
+      {
+        node->resources.clear();
+        node->resources.push_back(ref);
+        node->resource.reset();
+
+        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        ApplyPreset(*mActivePreset);
+        mPendingStateBroadcast = true;
+        return;
+      }
+    }
+
     // Update only the targeted node (single-resource)
     if (UpdateResourceForNodeId(nodeId, ref, true))
     {
