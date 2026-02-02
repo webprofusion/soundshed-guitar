@@ -400,6 +400,18 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
       { key: "damping", name: "Damping", default: 0.5, min: 0, max: 1, unit: "amount" },
       { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" }
     ]
+  },
+  {
+    type: "reverb_ir",
+    displayName: "IR Reverb",
+    category: "reverb",
+    requiresResource: true,
+    resourceType: "ir",
+    parameters: [
+      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
+      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
+      { key: "quality", name: "Quality", default: 1, min: 0, max: 3, unit: "" }
+    ]
   }
 ];
 

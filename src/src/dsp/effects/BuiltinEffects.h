@@ -26,6 +26,7 @@
 #include "dsp/effects/OptimizedNAMAmpEffect.h"
 #include "dsp/effects/MultiModelNAMAmpEffect.h"
 #include "dsp/effects/IRCabEffect.h"
+#include "dsp/effects/IRReverbEffect.h"
 #include "dsp/effects/SimpleCabEffect.h"
 
 namespace guitarfx
@@ -83,6 +84,7 @@ namespace guitarfx
     RegisterDelayEffect();
     RegisterDoublerEffect();
     RegisterReverbEffect();
+    RegisterIRReverbEffect();
 
     // Modulation effects
     RegisterPitchShiftEffect();
