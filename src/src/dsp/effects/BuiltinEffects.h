@@ -28,6 +28,7 @@
 #include "dsp/effects/MultiModelNAMAmpEffect.h"
 #include "dsp/effects/IRCabEffect.h"
 #include "dsp/effects/IRReverbEffect.h"
+#include "dsp/effects/MixerEffect.h"
 #include "dsp/effects/SimpleCabEffect.h"
 
 namespace guitarfx
@@ -54,10 +55,14 @@ namespace guitarfx
       mixerInfo.type = "mixer";
       mixerInfo.displayName = "Mixer";
       mixerInfo.category = "utility";
-      mixerInfo.description = "Mix parallel branches";
+      mixerInfo.description = "Mix parallel branches with per-input level, pan, and delay";
       mixerInfo.requiresResource = false;
+      mixerInfo.parameters = {
+        {"masterLevel", "Master", 0.0, -60.0, 12.0, "dB"}
+        // Per-input params (level_N, pan_N, delay_N, mute_N) are dynamic
+      };
       EffectRegistry::Instance().Register("mixer", mixerInfo, []()
-        { return std::make_unique<PassthroughProcessor>(); });
+        { return std::make_unique<MixerEffect>(); });
     }
 
     // Dynamics

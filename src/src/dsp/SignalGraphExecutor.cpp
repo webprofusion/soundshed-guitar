@@ -1,6 +1,7 @@
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include "dsp/effects/MixerEffect.h"
 #include "resources/ResourceLibrary.h"
 
 #include <algorithm>
@@ -249,10 +250,19 @@ namespace guitarfx
         // Input/output are handled specially, use passthrough
         state.processor = std::make_unique<PassthroughProcessor>();
       }
-      else if (node.type == kNodeTypeSplitter || node.type == kNodeTypeMixer)
+      else if (node.type == kNodeTypeSplitter)
       {
-        // Splitter/mixer handled specially
+        // Splitter is handled specially with passthrough
         state.processor = std::make_unique<PassthroughProcessor>();
+      }
+      else if (node.type == kNodeTypeMixer)
+      {
+        // Mixer uses MixerEffect for per-input control (level, pan, delay)
+        state.processor = registry.Create(node.type);
+        if (!state.processor)
+        {
+          state.processor = std::make_unique<PassthroughProcessor>();
+        }
       }
       else
       {
@@ -453,7 +463,16 @@ namespace guitarfx
 
       // Gather inputs from incoming edges
       const int incomingCount = mIncomingEdgeCount.count(nodeId) ? mIncomingEdgeCount[nodeId] : 0;
-      const bool shouldAccumulate = (node->type == kNodeTypeMixer) || (incomingCount > 1);
+      const bool isMixer = (node->type == kNodeTypeMixer);
+      const bool shouldAccumulate = isMixer || (incomingCount > 1);
+
+      // Get MixerEffect if this is a mixer node
+      MixerEffect *mixerEffect = nullptr;
+      if (isMixer && state->processor)
+      {
+        mixerEffect = dynamic_cast<MixerEffect *>(state->processor.get());
+      }
+
       for (const auto &edge : mGraph.edges)
       {
         if (edge.to == nodeId)
@@ -461,15 +480,44 @@ namespace guitarfx
           auto *sourceState = FindNodeState(edge.from);
           if (sourceState && sourceState->hasInput)
           {
-            const float gain = static_cast<float>(edge.gain);
+            const float edgeGain = static_cast<float>(edge.gain);
+            const int inputPort = edge.toPort;
 
-            // Handle mixer or any multi-input node: accumulate inputs
-            if (shouldAccumulate)
+            // Handle mixer with per-input processing
+            if (isMixer && mixerEffect)
             {
+              // Check if this input is muted
+              if (mixerEffect->IsInputMuted(inputPort))
+              {
+                // Skip muted inputs
+                continue;
+              }
+
+              // Get per-input coefficients from MixerEffect
+              const float level = mixerEffect->GetInputLevel(inputPort);
+              const float panL = mixerEffect->GetInputPanL(inputPort);
+              const float panR = mixerEffect->GetInputPanR(inputPort);
+              const size_t delaySamples = mixerEffect->GetInputDelaySamples(inputPort);
+
+              // For now, apply level and pan without delay (delay requires buffering)
+              // TODO: Implement delay line in executor or use MixerEffect::ProcessInput
+              const float gainL = edgeGain * level * panL;
+              const float gainR = edgeGain * level * panR;
+
               for (int i = 0; i < numSamples; ++i)
               {
-                state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * gain;
-                state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * gain;
+                state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * gainL;
+                state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * gainR;
+              }
+              state->hasInput = true;
+            }
+            else if (shouldAccumulate)
+            {
+              // Non-mixer multi-input: simple accumulation
+              for (int i = 0; i < numSamples; ++i)
+              {
+                state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
+                state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
               }
             }
             else
@@ -477,8 +525,8 @@ namespace guitarfx
               // Normal node: copy input (last edge wins for non-mixers)
               for (int i = 0; i < numSamples; ++i)
               {
-                state->bufferLeft[static_cast<size_t>(i)] = sourceState->bufferLeft[static_cast<size_t>(i)] * gain;
-                state->bufferRight[static_cast<size_t>(i)] = sourceState->bufferRight[static_cast<size_t>(i)] * gain;
+                state->bufferLeft[static_cast<size_t>(i)] = sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
+                state->bufferRight[static_cast<size_t>(i)] = sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
               }
             }
             state->hasInput = true;
@@ -489,10 +537,22 @@ namespace guitarfx
       // Process the node
       if (state->processor && state->hasInput)
       {
-        if (node->type == kNodeTypeSplitter || node->type == kNodeTypeMixer ||
+        if (node->type == kNodeTypeSplitter ||
             node->type == kNodeTypeOutput || node->id == "__output__")
         {
           // These nodes just pass through (routing handled above)
+        }
+        else if (node->type == kNodeTypeMixer)
+        {
+          // Mixer: apply master gain via Process()
+          if (state->processor->IsEnabled())
+          {
+            float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
+            float *outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
+            state->processor->Process(inPtrs, outPtrs, numSamples);
+            std::copy(mTempLeftBuffer.begin(), mTempLeftBuffer.begin() + numSamples, state->bufferLeft.begin());
+            std::copy(mTempRightBuffer.begin(), mTempRightBuffer.begin() + numSamples, state->bufferRight.begin());
+          }
         }
         else if (state->processor->IsEnabled())
         {

@@ -1349,6 +1349,11 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     return;
   }
 
+  // Ensure node.params exists
+  if (!node.params) {
+    node.params = {};
+  }
+
   nodeParamsPanelElement.classList.add("visible");
   updateEffectVisualization(node);
   
@@ -1488,6 +1493,114 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     </div>
   ` : "";
 
+  // Build mixer input controls for mixer nodes
+  let mixerInputControls = "";
+  if (node.type === "mixer" && preset.graph?.nodes && preset.graph?.edges) {
+    try {
+      const { incoming } = buildGraphMaps(preset.graph);
+      const incomingEdges = incoming.get(node.id) ?? [];
+      
+      // Get list of unique input port indices
+      const inputPorts = [...new Set(incomingEdges.map(e => e.toPort))].sort((a, b) => a - b);
+      
+      if (inputPorts.length > 0) {
+        const renderMixerInputControl = (portIndex: number): string => {
+          // Get source node name for this input
+          const edge = incomingEdges.find(e => e.toPort === portIndex);
+          const sourceNode = edge ? preset.graph?.nodes?.find(n => n.id === edge.from) : null;
+          const sourceTypeInfo = sourceNode ? EffectTypeRegistry.get(sourceNode.type) : null;
+          const inputLabel = sourceTypeInfo?.displayName ?? sourceNode?.type ?? `Input ${portIndex + 1}`;
+          
+          // Get current values from node params
+          const levelKey = `level_${portIndex}`;
+          const panKey = `pan_${portIndex}`;
+          const delayKey = `delay_${portIndex}`;
+          const muteKey = `mute_${portIndex}`;
+          
+          const levelValue = typeof node.params[levelKey] === "number" ? node.params[levelKey] : 0;
+          const panValue = typeof node.params[panKey] === "number" ? node.params[panKey] : 0;
+          const delayValue = typeof node.params[delayKey] === "number" ? node.params[delayKey] : 0;
+          const muteValue = typeof node.params[muteKey] === "number" ? node.params[muteKey] >= 0.5 : false;
+          
+          return `
+            <div class="mixer-input-group" data-port-index="${portIndex}">
+              <div class="mixer-input-header">
+                <span class="mixer-input-label">${escapeHtml(inputLabel)}</span>
+                <label class="toggle-switch mixer-mute-toggle">
+                  <input class="node-param-toggle mixer-input-mute" type="checkbox" 
+                         data-node-id="${node.id}" data-param-key="${muteKey}" ${muteValue ? "checked" : ""}>
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="mixer-mute-label">${muteValue ? "Muted" : "Active"}</span>
+              </div>
+              <div class="mixer-input-controls">
+                <div class="node-param-group mixer-param">
+                  <span class="node-param-label">Level</span>
+                  <div class="knob node-param-knob" 
+                       data-node-id="${node.id}" 
+                       data-param-key="${levelKey}"
+                       data-value="${levelValue}"
+                       data-default="0"
+                       data-min="-60"
+                       data-max="12"
+                       data-unit="dB">
+                    <div class="knob-indicator"></div>
+                  </div>
+                  <span class="node-param-value">${levelValue.toFixed(1)}dB</span>
+                </div>
+                <div class="node-param-group mixer-param">
+                  <span class="node-param-label">Pan</span>
+                  <div class="knob node-param-knob" 
+                       data-node-id="${node.id}" 
+                       data-param-key="${panKey}"
+                       data-value="${panValue}"
+                       data-default="0"
+                       data-min="-1"
+                       data-max="1"
+                       data-unit="pan">
+                    <div class="knob-indicator"></div>
+                  </div>
+                  <span class="node-param-value">${panValue === 0 ? "C" : (panValue < 0 ? `L${Math.abs(panValue * 100).toFixed(0)}` : `R${(panValue * 100).toFixed(0)}`)}</span>
+                </div>
+                <div class="node-param-group mixer-param">
+                  <span class="node-param-label">Delay</span>
+                  <div class="knob node-param-knob" 
+                       data-node-id="${node.id}" 
+                       data-param-key="${delayKey}"
+                       data-value="${delayValue}"
+                       data-default="0"
+                       data-min="0"
+                       data-max="500"
+                       data-unit="ms">
+                    <div class="knob-indicator"></div>
+                  </div>
+                  <span class="node-param-value">${delayValue.toFixed(1)}ms</span>
+                </div>
+              </div>
+            </div>
+          `;
+        };
+        
+        mixerInputControls = `
+          <div class="mixer-inputs-section">
+            <div class="mixer-inputs-header">Input Channels</div>
+            ${inputPorts.map(renderMixerInputControl).join("")}
+          </div>
+        `;
+      } else {
+        // Show placeholder when no inputs connected
+        mixerInputControls = `
+          <div class="mixer-inputs-section">
+            <div class="mixer-inputs-header">Input Channels</div>
+            <div class="mixer-no-inputs">No inputs connected. Connect effects to the mixer to control per-input levels.</div>
+          </div>
+        `;
+      }
+    } catch (e) {
+      console.error("Error building mixer input controls:", e);
+    }
+  }
+
   const bypassed = isNodeBypassed(node);
   const bypassButton = `
     <button 
@@ -1621,6 +1734,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     <div class="node-params-body">
       ${resourceSelector}
       ${eqVisualizer}
+      ${mixerInputControls}
       <div class="params-controls">
         ${paramControls}
       </div>
@@ -1665,10 +1779,19 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
         const value = input.checked ? 1 : 0;
         node.params[paramKey] = value;
         sendSignalPathNodeParamUpdate(nodeId, paramKey, value);
+        
+        // Handle standard toggle labels
         const valueLabel = input.closest(".node-param-group")?.querySelector(".node-param-value") as HTMLElement | null;
         if (valueLabel) {
           valueLabel.textContent = input.checked ? "On" : "Off";
         }
+        
+        // Handle mixer mute labels
+        const muteLabel = input.closest(".mixer-input-header")?.querySelector(".mixer-mute-label") as HTMLElement | null;
+        if (muteLabel) {
+          muteLabel.textContent = input.checked ? "Muted" : "Active";
+        }
+        
         updateEqVisualization(node);
       }
     });
@@ -1779,6 +1902,13 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
       }
       if (isBlendParam) {
         return rawValue.toFixed(1);
+      }
+      // Special formatting for pan values
+      if (unit === "pan") {
+        if (Math.abs(rawValue) < 0.01) return "C";
+        return rawValue < 0 
+          ? `L${Math.abs(rawValue * 100).toFixed(0)}`
+          : `R${(rawValue * 100).toFixed(0)}`;
       }
       return `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
     };
@@ -2249,7 +2379,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
     effectsByCategory.get(effect.category)!.push(effect);
   });
 
-  const categoryOrder = ["dynamics", "amp", "cab", "eq", "modulation", "delay", "reverb", "utility"];
+  const categoryOrder = ["dynamics", "amp", "cab", "eq", "modulation", "delay", "reverb", "synth", "utility"];
   
   let dropdownHtml = '<div class="effect-dropdown-header">Add Effect</div>';
   
@@ -2327,6 +2457,7 @@ const FX_CATEGORIES = [
   { id: "modulation", name: "Modulation", color: "#9048e0" },
   { id: "delay", name: "Delay", color: "#48e0a8" },
   { id: "reverb", name: "Reverb", color: "#4878e0" },
+  { id: "synth", name: "Synth", color: "#7a8a02" },
   { id: "utility", name: "Utility", color: "#808080" },
 ];
 

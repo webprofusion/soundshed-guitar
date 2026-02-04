@@ -271,6 +271,17 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     parameters: []
   },
   {
+    type: "mixer",
+    displayName: "Mixer",
+    category: "utility",
+    requiresResource: false,
+    parameters: [
+      { key: "masterLevel", name: "Master", default: 0, min: -60, max: 12, unit: "dB" },
+      // Per-input parameters are dynamic - UI generates them based on connected inputs
+      // Format: level_N, pan_N, delay_N, mute_N where N is the input port index
+    ]
+  },
+  {
     type: "delay_digital",
     displayName: "Digital Delay",
     category: "delay",

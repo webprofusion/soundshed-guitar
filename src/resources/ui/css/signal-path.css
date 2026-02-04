@@ -1502,3 +1502,118 @@
   background: var(--border-dark-strong);
   border-color: var(--border-dark-medium);
 }
+
+/* Mixer Input Controls */
+.mixer-inputs-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-dark-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-light);
+}
+
+.mixer-inputs-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-dark-light);
+}
+
+.mixer-input-group {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: var(--bg-dark-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border-dark-light);
+}
+
+.mixer-input-group:last-child {
+  margin-bottom: 0;
+}
+
+.mixer-input-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-dark-light);
+}
+
+.mixer-input-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.mixer-mute-toggle {
+  width: 28px;
+  height: 16px;
+}
+
+.mixer-mute-toggle .toggle-slider {
+  background: var(--color-success);
+}
+
+.mixer-mute-toggle input:checked + .toggle-slider {
+  background: var(--color-error);
+}
+
+.mixer-mute-toggle .toggle-slider:before {
+  height: 10px;
+  width: 10px;
+  left: 2px;
+  bottom: 2px;
+}
+
+.mixer-mute-toggle input:checked + .toggle-slider:before {
+  transform: translateX(12px);
+}
+
+.mixer-mute-label {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  min-width: 36px;
+}
+
+.mixer-input-controls {
+  display: flex;
+  gap: 16px;
+  justify-content: space-around;
+}
+
+.mixer-input-controls .mixer-param {
+  flex: 1;
+  max-width: 70px;
+}
+
+.mixer-input-controls .node-param-knob {
+  width: 36px;
+  height: 36px;
+}
+
+.mixer-input-controls .node-param-knob .knob-indicator {
+  height: 12px;
+  top: 4px;
+}
+
+.mixer-input-controls .node-param-value {
+  font-size: 9px;
+}
+
+.mixer-input-controls .node-param-label {
+  font-size: 8px;
+}
+
+.mixer-no-inputs {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 12px;
+  text-align: center;
+  font-style: italic;
+}

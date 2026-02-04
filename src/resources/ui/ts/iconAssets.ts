@@ -40,6 +40,7 @@ const categoryIcons: Record<string, IconKey> = {
   modulation: "wave",
   delay: "clock",
   reverb: "hall",
+  synth: "note",
   utility: "wrench",
 };
 
@@ -91,6 +92,9 @@ const effectIcons: Record<string, IconKey> = {
   reverb_plate: "hall",
   reverb_spring: "hall",
   reverb_shimmer: "sparkle",
+
+  // Synth
+  synth_saw: "note",
 
   // Utility
   gain: "megaphone",
