@@ -117,6 +117,25 @@ target_compile_definitions(GuitarFX_IRConvolutionTests
 
 add_test(NAME IRConvolutionTests COMMAND GuitarFX_IRConvolutionTests)
 
+# SynthSaw Effect Tests - verifies pitch detection and synthesis accuracy
+add_executable(GuitarFX_SynthSawEffectTests
+  SynthSawEffectTests.cpp
+)
+
+target_include_directories(GuitarFX_SynthSawEffectTests
+  PRIVATE
+    ${GUITARFX_PROJECT_ROOT}/src
+)
+
+target_link_libraries(GuitarFX_SynthSawEffectTests
+  PRIVATE
+    GuitarFXCore
+)
+
+target_compile_features(GuitarFX_SynthSawEffectTests PRIVATE cxx_std_20)
+
+add_test(NAME SynthSawEffectTests COMMAND GuitarFX_SynthSawEffectTests)
+
 # NAM Model Diagnostic Tests - detailed diagnostics for model processing issues
 add_executable(GuitarFX_ModelDiagnosticTests
   NAMModelDiagnosticTests.cpp
