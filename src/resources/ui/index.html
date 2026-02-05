@@ -47,6 +47,13 @@
           <path d="M6 10h2M6 13h2M16 9h2M16 12h2M16 15h2" stroke="currentColor" stroke-width="1.5" fill="none" />
         </svg>
       </button>
+      <button class="icon-btn" data-panel="scalex" title="ScaleX Guitar">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
       <button class="icon-btn" data-panel="settings" title="Settings">
         <svg viewBox="0 0 24 24">
           <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.5"
@@ -447,6 +454,20 @@
         </div>
 
       </div>
+
+      <!-- ScaleX Panel -->
+      <div class="tab-panel" id="panel-scalex">
+        <div class="panel-content" style="padding: 0; height: 100%;">
+          <iframe 
+            id="scalex-iframe" 
+            data-src="https://scalex.soundshed.com" 
+            style="width: 100%; height: 100%; border: none;"
+            title="ScaleX Guitar"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          ></iframe>
+        </div>
+      </div>
+
       <div class="tab-panel" id="panel-settings">
         <div class="panel-content settings-panel">
 

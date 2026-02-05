@@ -414,7 +414,9 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
       { key: "octaveShift", name: "Octave", default: 0, min: -2, max: 2, unit: "oct", step: 1 },
       { key: "glide", name: "Glide", default: 10, min: 0, max: 500, unit: "ms" },
       { key: "outputGain", name: "Output", default: 0, min: -24, max: 12, unit: "dB" },
-      { key: "gate", name: "Gate", default: -60, min: -80, max: 0, unit: "dB" }
+      { key: "gate", name: "Gate", default: -60, min: -80, max: 0, unit: "dB" },
+      { key: "voice2Semitones", name: "Voice 2 Pitch", default: 0, min: -24, max: 24, unit: "st", step: 1 },
+      { key: "voice2Mix", name: "Voice 2 Mix", default: 0, min: 0, max: 1, unit: "amount" }
     ]
   },
   {

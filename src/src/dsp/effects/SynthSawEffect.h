@@ -183,6 +183,7 @@ namespace guitarfx
     void Reset() override
     {
       mOscPhase = 0.0;
+      mOscPhase2 = 0.0;
       mCurrentFreq = 0.0;
       mTargetFreq = 0.0;
       mSmoothedFreq = 0.0;
@@ -278,7 +279,8 @@ namespace guitarfx
           if (semitoneRatio > 1.5 || semitoneRatio < 0.67)
           {
             mCurrentFreq = mSmoothedFreq;
-            mOscPhase = 0.0; // Reset phase on new note
+            mOscPhase = 0.0;  // Reset phase on new note
+            mOscPhase2 = 0.0; // Reset 2nd voice phase on new note
           }
           else
           {
@@ -330,10 +332,29 @@ namespace guitarfx
             mOscPhase -= 1.0;
 
           // Raw sawtooth: linear ramp from -1 to +1 over one cycle
-          synthOut = static_cast<float>(2.0 * mOscPhase - 1.0);
+          float voice1Out = static_cast<float>(2.0 * mOscPhase - 1.0);
           
           // Apply PolyBLEP correction to reduce aliasing at the discontinuity
-          synthOut -= PolyBLEP(mOscPhase, phaseInc);
+          voice1Out -= PolyBLEP(mOscPhase, phaseInc);
+
+          // Generate 2nd voice with semitone offset
+          float voice2Out = 0.0f;
+          if (mVoice2Mix > 0.0f)
+          {
+            // Apply semitone shift: freq * 2^(semitones/12)
+            const double freq2 = freq * std::pow(2.0, mVoice2Semitones / 12.0);
+            const double freq2Clamped = std::clamp(freq2, kMinOutputFrequency, kMaxFrequency);
+            const double phaseInc2 = freq2Clamped / mSampleRate;
+            mOscPhase2 += phaseInc2;
+            if (mOscPhase2 >= 1.0)
+              mOscPhase2 -= 1.0;
+
+            voice2Out = static_cast<float>(2.0 * mOscPhase2 - 1.0);
+            voice2Out -= PolyBLEP(mOscPhase2, phaseInc2);
+          }
+
+          // Mix voice 1 and voice 2
+          synthOut = voice1Out * (1.0f - mVoice2Mix) + voice2Out * mVoice2Mix;
 
           // Apply envelope
           synthOut *= mEnvelopeLevel;
@@ -394,6 +415,14 @@ namespace guitarfx
         const double dB = std::clamp(value, -80.0, 0.0);
         kGateThreshold = static_cast<float>(std::pow(10.0, dB / 20.0));
       }
+      else if (key == "voice2Semitones")
+      {
+        mVoice2Semitones = std::clamp(value, -24.0, 24.0);
+      }
+      else if (key == "voice2Mix")
+      {
+        mVoice2Mix = static_cast<float>(std::clamp(value, 0.0, 1.0));
+      }
     }
 
     void SetConfig(const std::string &, const std::string &) override {}
@@ -416,6 +445,10 @@ namespace guitarfx
         return 20.0 * std::log10(mOutputGain + 1e-10f);
       if (key == "gate")
         return 20.0 * std::log10(kGateThreshold + 1e-10f);
+      if (key == "voice2Semitones")
+        return mVoice2Semitones;
+      if (key == "voice2Mix")
+        return mVoice2Mix;
       return 0.0;
     }
 
@@ -908,10 +941,15 @@ namespace guitarfx
 
     // Oscillator state
     double mOscPhase = 0.0;
+    double mOscPhase2 = 0.0;  // 2nd voice oscillator phase
     double mCurrentFreq = 0.0;
     double mTargetFreq = 0.0;
     double mSmoothedFreq = 0.0;
     double mGlideCoef = 0.1;
+
+    // 2nd voice parameters
+    double mVoice2Semitones = 0.0;  // semitone offset (-12 to +12)
+    float mVoice2Mix = 0.0f;        // mix between voice 1 and voice 2 (0 = only voice 1)
 
     // Pitch detection state
     float mPitchConfidence = 0.0f;
@@ -951,7 +989,9 @@ namespace guitarfx
       {"octaveShift", "Octave", 0.0, -2.0, 2.0, "oct"},
       {"glide", "Glide", 10.0, 0.0, 500.0, "ms"},
       {"outputGain", "Output", 0.0, -24.0, 12.0, "dB"},
-      {"gate", "Gate", -60.0, -80.0, 0.0, "dB"}
+      {"gate", "Gate", -60.0, -80.0, 0.0, "dB"},
+      {"voice2Semitones", "Voice 2 Pitch", 0.0, -24.0, 24.0, "st"},
+      {"voice2Mix", "Voice 2 Mix", 0.0, 0.0, 1.0, "amount"}
     };
 
     EffectRegistry::Instance().Register("synth_saw", info, []()

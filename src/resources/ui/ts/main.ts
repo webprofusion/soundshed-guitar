@@ -71,6 +71,19 @@ function switchMainPanel(panelId: string): void {
     panel.classList.toggle("active", isPanelMatch);
   });
 
+  // Hide signal path bar for full-height panels (everything except visualizer)
+  const signalPathBar = document.getElementById("signal-path-bar");
+  const mainContent = document.querySelector(".main-content") as HTMLElement | null;
+  const fullHeightPanels = ["library", "settings", "scalex", "advanced", "mixer"];
+  const isFullHeight = fullHeightPanels.includes(panelId);
+  
+  if (signalPathBar) {
+    signalPathBar.style.display = isFullHeight ? "none" : "";
+  }
+  if (mainContent) {
+    mainContent.classList.toggle("full-height", isFullHeight);
+  }
+
   if (panelId === "settings") {
     initSettingsPanel();
     void ensureTone3000Session().then(() => updateSettingsSessionStatus());
@@ -84,6 +97,13 @@ function switchMainPanel(panelId: string): void {
       tone3000BrowserInitialized = true;
     }
     void ensureTone3000Session();
+  }
+
+  if (panelId === "scalex") {
+    const iframe = document.getElementById("scalex-iframe") as HTMLIFrameElement | null;
+    if (iframe && !iframe.src && iframe.dataset.src) {
+      iframe.src = iframe.dataset.src;
+    }
   }
 }
 
