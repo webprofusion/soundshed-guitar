@@ -2645,6 +2645,10 @@ namespace guitarfx
     {
       HandlePreviewDemoRequest(payload);
     }
+    else if (type == "stopDemoAudio")
+    {
+      HandleStopDemoRequest();
+    }
     else if (type == "setParameter")
     {
       HandleSetParameterRequest(payload);
@@ -2834,6 +2838,14 @@ namespace guitarfx
     else if (type == "importRemoteResource")
     {
       HandleImportRemoteResourceRequest(payload);
+    }
+    else if (type == "previewRemoteResource")
+    {
+      HandlePreviewRemoteResourceRequest(payload);
+    }
+    else if (type == "cancelPreviewResource")
+    {
+      HandleCancelPreviewResourceRequest(payload);
     }
     else if (type == "saveBlendDefinition")
     {
@@ -4823,7 +4835,12 @@ namespace guitarfx
       if (!ref.resourceType.empty())
         slot.resourceType = ref.resourceType;
       if (!ref.resourceId.empty())
+      {
         slot.resourceId = ref.resourceId;
+        // When setting a library resource ID, clear the file path
+        // since library resources are referenced by ID, not path
+        slot.filePath.clear();
+      }
       if (!ref.filePath.empty())
         slot.filePath = ref.filePath;
       if (!ref.embeddedId.empty())
@@ -4836,6 +4853,14 @@ namespace guitarfx
       mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
       ApplyPreset(*mActivePreset);
       mPendingStateBroadcast = true;
+      
+      // Queue NAM calibration if this is a NAM node
+      if ((target->type == "amp_nam" || target->type == "amp_nam_optimized")
+          && !target->resources.empty()
+          && target->resources.front().IsValid())
+      {
+        QueueNamCalibrationForNode(nodeId, target->resources.front());
+      }
       return;
     }
 
@@ -4850,6 +4875,14 @@ namespace guitarfx
         mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
         ApplyPreset(*mActivePreset);
         mPendingStateBroadcast = true;
+        
+        // Queue NAM calibration if this is a NAM node
+        if ((node->type == "amp_nam" || node->type == "amp_nam_optimized")
+            && !node->resources.empty()
+            && node->resources.front().IsValid())
+        {
+          QueueNamCalibrationForNode(node->id, node->resources.front());
+        }
         return;
       }
     }
@@ -5020,6 +5053,23 @@ namespace guitarfx
       mPreviewBuffer.store(previewBuffer, std::memory_order_release);
       mPreviewStartedBuffer.store(previewBuffer, std::memory_order_release);
       mPreviewCompletedBuffer.store(nullptr, std::memory_order_release);
+    }
+  }
+
+  void GuitarFXPlugin::HandleStopDemoRequest()
+  {
+    // Stop any currently playing demo audio
+    auto buffer = mPreviewBuffer.load(std::memory_order_acquire);
+    if (buffer)
+    {
+      mPreviewBuffer.store(nullptr, std::memory_order_release);
+      
+      // Send stopped message to UI
+      nlohmann::json message;
+      message["type"] = "previewStopped";
+      message["id"] = buffer->id;
+      message["title"] = buffer->title;
+      SendMessageToUI(message.dump());
     }
   }
 
@@ -5388,6 +5438,143 @@ namespace guitarfx
     msg["filePath"] = targetPath.string();
     SendMessageToUI(msg.dump());
     AppendSessionLog("Imported resource " + resourceType + ":" + resourceId + " (" + targetPath.string() + ")");
+  }
+
+  void GuitarFXPlugin::HandlePreviewRemoteResourceRequest(const nlohmann::json &payload)
+  {
+    const std::string resourceType = payload.value("resourceType", "");
+    const std::string tempResourceId = payload.value("tempResourceId", "");
+    const std::string nodeId = payload.value("nodeId", "");
+    const int resourceIndex = payload.value("resourceIndex", 0);
+    const std::string data = payload.value("data", "");
+    const bool isZip = payload.value("isZip", false);
+
+    if (resourceType.empty() || data.empty())
+    {
+      AppendSessionLog("Preview failed: missing resource type or data");
+      return;
+    }
+
+    // Decode the base64 data
+    const std::vector<std::uint8_t> bytes = DecodeBase64(data);
+    if (bytes.empty())
+    {
+      AppendSessionLog("Preview failed: invalid base64 payload");
+      return;
+    }
+
+    // Create temp file
+    const auto tempDir = mFileSystem.ResolveSettingsDirectory() / "temp";
+    (void)mFileSystem.EnsureDirectory(tempDir);
+    
+    std::filesystem::path tempPath;
+    if (isZip)
+    {
+      // For zip files, we need to extract and find the first relevant file
+      // For simplicity, we'll save the zip and let the node extract it
+      const std::string extension = resourceType == "ir" ? ".wav" : ".nam";
+      tempPath = tempDir / ("preview_" + std::to_string(std::hash<std::string>{}(tempResourceId)) + extension);
+      
+      // Try to extract first matching file from zip
+      if (!ExtractFirstResourceFromZip(bytes, resourceType, tempPath))
+      {
+        AppendSessionLog("Preview failed: no matching resource in zip");
+        return;
+      }
+    }
+    else
+    {
+      const std::string extension = resourceType == "ir" ? ".wav" : ".nam";
+      tempPath = tempDir / ("preview_" + std::to_string(std::hash<std::string>{}(tempResourceId)) + extension);
+      if (!WriteFile(tempPath, bytes))
+      {
+        AppendSessionLog("Preview failed: could not write temp file");
+        return;
+      }
+    }
+
+    // Store the preview state so we can restore later
+    mPreviewState.active = true;
+    mPreviewState.nodeId = nodeId;
+    mPreviewState.resourceIndex = resourceIndex;
+    mPreviewState.resourceType = resourceType;
+    mPreviewState.tempFilePath = tempPath;
+    
+    // Store original resource for this node so we can restore it
+    if (mActivePreset)
+    {
+      GraphNode* node = mActivePreset->graph.FindNode(nodeId);
+      if (node && resourceIndex >= 0 && static_cast<size_t>(resourceIndex) < node->resources.size())
+      {
+        mPreviewState.originalResourceRef = node->resources[resourceIndex];
+      }
+    }
+
+    // Apply the preview resource to the node (temporary, file-based)
+    if (!nodeId.empty())
+    {
+      nlohmann::json updatePayload;
+      updatePayload["nodeId"] = nodeId;
+      updatePayload["resourceType"] = resourceType;
+      updatePayload["resourceId"] = "";
+      updatePayload["filePath"] = tempPath.string();
+      updatePayload["resourceIndex"] = resourceIndex;
+      HandleUpdateNodeResourceRequest(updatePayload);
+    }
+
+    AppendSessionLog("Preview started: " + resourceType + " at " + tempPath.string());
+  }
+
+  void GuitarFXPlugin::HandleCancelPreviewResourceRequest(const nlohmann::json &payload)
+  {
+    const std::string nodeId = payload.value("nodeId", "");
+    const int resourceIndex = payload.value("resourceIndex", 0);
+
+    if (!mPreviewState.active)
+    {
+      return;
+    }
+
+    // Restore the original resource
+    if (!mPreviewState.nodeId.empty() && mPreviewState.originalResourceRef.has_value())
+    {
+      const auto& original = mPreviewState.originalResourceRef.value();
+      const std::string originalId = original.resourceId;
+      const std::string originalPath = original.filePath.string();
+      
+      nlohmann::json updatePayload;
+      updatePayload["nodeId"] = mPreviewState.nodeId;
+      updatePayload["resourceType"] = mPreviewState.resourceType;
+      updatePayload["resourceId"] = originalId;
+      updatePayload["filePath"] = originalPath;
+      updatePayload["resourceIndex"] = mPreviewState.resourceIndex;
+      HandleUpdateNodeResourceRequest(updatePayload);
+    }
+
+    // Clean up temp file
+    if (!mPreviewState.tempFilePath.empty())
+    {
+      std::error_code ec;
+      std::filesystem::remove(mPreviewState.tempFilePath, ec);
+    }
+
+    mPreviewState = PreviewState{};
+    AppendSessionLog("Preview cancelled");
+  }
+
+  bool GuitarFXPlugin::ExtractFirstResourceFromZip(
+    const std::vector<std::uint8_t>& zipData,
+    const std::string& resourceType,
+    const std::filesystem::path& outputPath)
+  {
+    // Zip extraction for preview is not supported yet
+    // This would require adding miniz to the project dependencies
+    // For now, preview only works with non-zip model downloads
+    (void)zipData;
+    (void)resourceType;
+    (void)outputPath;
+    AppendSessionLog("Preview from zip not supported - select a non-zip model");
+    return false;
   }
 
   void GuitarFXPlugin::HandleSaveBlendDefinitionRequest(const nlohmann::json &payload)

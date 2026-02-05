@@ -5,6 +5,9 @@ import { showNotification } from "./notifications.js";
 import { postMessage } from "./bridge.js";
 import type { DemoSample } from "./types.js";
 
+// Track whether demo audio is currently playing
+let demoAudioPlaying = false;
+
 function getSelectedDemoAudio(): DemoSample | null {
   if (!DEMO_AUDIO_SAMPLES.length) {
     return null;
@@ -49,7 +52,11 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
   const playButton = document.getElementById(config.playId);
   if (playButton) {
     playButton.addEventListener("click", async () => {
-      await previewSelectedDemoAudio();
+      if (demoAudioPlaying) {
+        stopDemoAudio();
+      } else {
+        await previewSelectedDemoAudio();
+      }
     });
   }
 
@@ -221,5 +228,68 @@ export async function previewSelectedDemoAudio(): Promise<void> {
     console.error("Failed to preview demo audio", error);
     appendLog(`preview error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
     showNotification("Failed to preview demo audio", error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Stop the currently playing demo audio.
+ */
+export function stopDemoAudio(): void {
+  postMessage({ type: "stopDemoAudio" });
+  appendLog("stop demo audio requested");
+}
+
+/**
+ * Called when demo audio playback starts.
+ */
+export function onDemoAudioStarted(): void {
+  demoAudioPlaying = true;
+  updatePlayButtonIcons(true);
+}
+
+/**
+ * Called when demo audio playback stops or completes.
+ */
+export function onDemoAudioStopped(): void {
+  demoAudioPlaying = false;
+  updatePlayButtonIcons(false);
+}
+
+/**
+ * Check if demo audio is currently playing.
+ */
+export function isDemoAudioPlaying(): boolean {
+  return demoAudioPlaying;
+}
+
+/**
+ * Update all play button icons to show play or stop state.
+ */
+function updatePlayButtonIcons(playing: boolean): void {
+  const playIcon = playing ? "⏹" : "▶";
+  const playTitle = playing ? "Stop demo audio" : "Play demo audio";
+  
+  // Update footer play button
+  const footerBtn = document.getElementById("footer-play-demo-audio");
+  if (footerBtn) {
+    const iconSpan = footerBtn.querySelector(".play-icon");
+    if (iconSpan) {
+      iconSpan.textContent = playIcon;
+    }
+    footerBtn.title = playTitle;
+    footerBtn.classList.toggle("is-playing", playing);
+  }
+  
+  // Update main play button
+  const mainBtn = document.getElementById("play-demo-audio");
+  if (mainBtn) {
+    const iconSpan = mainBtn.querySelector(".play-icon");
+    if (iconSpan) {
+      iconSpan.textContent = playIcon;
+    }
+    // Update the button text too
+    mainBtn.innerHTML = `<span class="play-icon">${playIcon}</span> ${playing ? "Stop" : "Play"}`;
+    mainBtn.title = playTitle;
+    mainBtn.classList.toggle("is-playing", playing);
   }
 }

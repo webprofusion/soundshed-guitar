@@ -19,6 +19,7 @@ import { GenericKnob } from "./controls.js";
 import { drawEqCurve, type EqBand } from "./eqCurve.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { BlendEditorModal } from "./blendEditor.js";
+import { resourceBrowserModal } from "./resourceBrowser.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
 const nodeParamsPanelElement = document.getElementById("node-params-panel");
@@ -2091,16 +2092,18 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
   resourcePickers?.forEach((picker) => {
     picker.addEventListener("click", () => {
       const nodeId = picker.dataset.nodeId;
-      const resourceType = picker.dataset.resourceType;
+      const resourceType = picker.dataset.resourceType as "nam" | "ir" | undefined;
       const resourceIndex = picker.dataset.resourceIndex ? parseInt(picker.dataset.resourceIndex, 10) : 0;
-      if (!nodeId || !resourceType) {
+      if (!nodeId || !resourceType || (resourceType !== "nam" && resourceType !== "ir")) {
         return;
       }
 
       const current = getNodeResourceAtIndex(node, resourceIndex);
-      blendEditorModal.openResourceBrowser({
+      resourceBrowserModal.open({
         resourceType,
         currentId: current.id,
+        nodeId,
+        resourceIndex,
         onSelect: (resourceId) => {
           sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex);
           const label = getLibraryResourceName(resourceType, resourceId) || resourceId || "";

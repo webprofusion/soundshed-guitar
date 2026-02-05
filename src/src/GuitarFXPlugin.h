@@ -153,6 +153,7 @@ namespace guitarfx
     void HandleStateRequest();
     void HandleSignalTestRequest(const nlohmann::json &payload);
     void HandlePreviewDemoRequest(const nlohmann::json &payload);
+    void HandleStopDemoRequest();
     void HandleSetParameterRequest(const nlohmann::json &payload);
     void HandleLoadModelRequest(const nlohmann::json &payload);
     void HandleLoadIRRequest(const nlohmann::json &payload);
@@ -179,6 +180,9 @@ namespace guitarfx
     void HandleReorderSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleDeleteSignalPathNodeRequest(const nlohmann::json &payload);
     void HandleImportRemoteResourceRequest(const nlohmann::json &payload);
+    void HandlePreviewRemoteResourceRequest(const nlohmann::json &payload);
+    void HandleCancelPreviewResourceRequest(const nlohmann::json &payload);
+    bool ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& zipData, const std::string& resourceType, const std::filesystem::path& outputPath);
     void HandleSaveBlendDefinitionRequest(const nlohmann::json &payload);
     void HandleRequestResourceDataRequest(const nlohmann::json &payload);
     void HandleSaveBlendArchiveRequest(const nlohmann::json &payload);
@@ -337,6 +341,18 @@ namespace guitarfx
     std::atomic<bool> mTunerDataPending{false};
     TunerData mPendingTunerData;
     mutable std::mutex mTunerMutex;
+
+    // Preview resource state (for temp loading from Tone3000)
+    struct PreviewState
+    {
+      bool active = false;
+      std::string nodeId;
+      int resourceIndex = 0;
+      std::string resourceType;
+      std::filesystem::path tempFilePath;
+      std::optional<ResourceRef> originalResourceRef;
+    };
+    PreviewState mPreviewState;
 
     // Mutex to protect DSP state during model/IR loading
     // ProcessBlock (audio thread) and ApplyPreset/LoadModel/LoadIR (UI thread) share mDSP

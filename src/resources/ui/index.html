@@ -461,7 +461,7 @@
 
       </div>
 
-      <!-- ScaleX Panel -->
+      <!-- Embed Panel -->
       <div class="tab-panel" id="panel-scalex">
         <div class="panel-content" style="padding: 0; height: 100%;">
           <iframe 
@@ -1089,6 +1089,64 @@
           <button class="btn btn-secondary" id="blend-editor-import">Import .namz</button>
           <button class="btn btn-secondary" id="blend-editor-cancel">Cancel</button>
           <button class="btn btn-primary" id="blend-editor-save">Save Blend</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resource Browser Modal (Enhanced NAM/IR selector with Library + Tone3000) -->
+    <div id="resource-browser-modal" class="modal resource-browser-modal" style="display: none;">
+      <div class="modal-content resource-browser-modal-content" role="dialog" aria-modal="true" aria-labelledby="resource-browser-title">
+        <div class="modal-header">
+          <h3 id="resource-browser-title">Select Resource</h3>
+          <button class="modal-close" id="resource-browser-close">×</button>
+        </div>
+        <div class="modal-body">
+          <!-- Tab buttons -->
+          <div class="resource-browser-tabs">
+            <button class="resource-browser-tab-btn active" data-tab="library" type="button">Resource Library</button>
+            <button class="resource-browser-tab-btn" data-tab="tone3000" type="button">Tone 3000</button>
+          </div>
+          
+          <!-- Library Tab Panel -->
+          <div class="resource-browser-tab-panel active" data-tab-panel="library">
+            <div class="resource-browser-filters">
+              <input type="text" id="resource-browser-library-search" placeholder="Search models..." />
+              <select id="resource-browser-library-category">
+                <option value="all">All Categories</option>
+              </select>
+            </div>
+            <div id="resource-browser-library-list" class="resource-browser-list"></div>
+          </div>
+          
+          <!-- Tone3000 Tab Panel -->
+          <div class="resource-browser-tab-panel" data-tab-panel="tone3000">
+            <div class="resource-browser-filters">
+              <input type="text" id="resource-browser-tone3000-search" placeholder="Search amps and pedals..." />
+              <button class="btn btn-secondary" id="resource-browser-tone3000-search-btn" type="button">Search</button>
+              <select id="resource-browser-tone3000-category">
+                <option value="amp" selected>Amps</option>
+                <option value="pedal">Pedals (FX)</option>
+                <option value="preamp">Preamps</option>
+                <option value="full-rig">Full Rigs</option>
+              </select>
+              <select id="resource-browser-tone3000-sort">
+                <option value="popular" selected>Popular</option>
+                <option value="recent">Recent</option>
+                <option value="trending">Trending</option>
+              </select>
+            </div>
+            <div id="resource-browser-tone3000-status" class="resource-browser-status"></div>
+            <div id="resource-browser-tone3000-list" class="resource-browser-list resource-browser-tone3000-list"></div>
+            <div id="resource-browser-tone3000-pagination" class="resource-browser-pagination">
+              <button class="resource-browser-page-btn" id="resource-browser-tone3000-prev" type="button">◀ Prev</button>
+              <span id="resource-browser-tone3000-page-label">Page 1</span>
+              <button class="resource-browser-page-btn" id="resource-browser-tone3000-next" type="button">Next ▶</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="resource-browser-cancel">Cancel</button>
+          <button class="btn btn-primary" id="resource-browser-select" disabled>Select</button>
         </div>
       </div>
     </div>

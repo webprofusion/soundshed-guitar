@@ -3,7 +3,7 @@ import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, upd
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
-import { previewSelectedDemoAudio } from "./demoAudio.js";
+import { previewSelectedDemoAudio, onDemoAudioStarted, onDemoAudioStopped } from "./demoAudio.js";
 import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
 import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
@@ -296,16 +296,24 @@ export function handleIncomingMessage(message: string): void {
       if (selector && uiState.demoAudioSelectedId) {
         selector.value = uiState.demoAudioSelectedId;
       }
+      onDemoAudioStarted();
       showNotification("Playing demo audio", (payload as { title?: string }).title ?? "Demo");
       break;
     }
     case "previewComplete": {
       appendLog(`preview complete ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+      onDemoAudioStopped();
       if (uiState.demoAudioRepeat) {
         previewSelectedDemoAudio();
       } else {
         showNotification("Demo playback finished", (payload as { title?: string }).title ?? "Demo");
       }
+      break;
+    }
+    case "previewStopped": {
+      appendLog(`preview stopped ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+      onDemoAudioStopped();
+      showNotification("Demo playback stopped", (payload as { title?: string }).title ?? "Demo");
       break;
     }
     case "error": {
