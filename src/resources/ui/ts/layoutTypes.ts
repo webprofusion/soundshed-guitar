@@ -28,8 +28,10 @@ export interface LayoutBackground {
   /** Opacity (0-1), default 1 */
   opacity?: number;
   /** Background size mode */
-  size?: "cover" | "contain" | "stretch" | "tile";
-  /** Position offset from top-left */
+  size?: "cover" | "contain" | "stretch" | "tile" | "custom";
+  /** Custom scale (1.0 = 100%, only used when size is "custom") */
+  scale?: number;
+  /** Position offset from top-left (pixels) */
   offsetX?: number;
   offsetY?: number;
 }
@@ -54,6 +56,10 @@ export interface LayoutControl {
   style?: {
     /** Label position relative to control */
     labelPosition?: LabelPosition;
+    /** Whether to hide the built-in label */
+    hideLabel?: boolean;
+    /** Label text color (CSS) */
+    labelColor?: string;
     /** Whether to show value display */
     showValue?: boolean;
     /** Value display position */
@@ -81,6 +87,8 @@ export interface LayoutTextLabel {
   fontSize: number;
   /** Font weight */
   fontWeight?: "normal" | "bold";
+  /** Font family (CSS) */
+  fontFamily?: string;
   /** Text color (CSS) */
   color?: string;
   /** Text alignment */

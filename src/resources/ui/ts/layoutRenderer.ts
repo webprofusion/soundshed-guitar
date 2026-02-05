@@ -109,11 +109,25 @@ function renderBackgrounds(backgrounds: LayoutBackground[]): string {
       } else if (bg.type === "image") {
         const url = getLayoutImageUrl(bg.value);
         if (url) {
+          // Determine background-size
+          let bgSize: string = bg.size || "cover";
+          if (bg.size === "custom" && bg.scale !== undefined) {
+            bgSize = `${bg.scale * 100}%`;
+          }
+          // Determine position (offset or center)
+          const offsetX = bg.offsetX || 0;
+          const offsetY = bg.offsetY || 0;
+          const bgPosition = offsetX !== 0 || offsetY !== 0 
+            ? `${offsetX}px ${offsetY}px` 
+            : "center";
+          // Tile mode uses repeat
+          const bgRepeat = bg.size === "tile" ? "repeat" : "no-repeat";
+
           style += `
             background-image: url('${url}');
-            background-size: ${bg.size || "cover"};
-            background-position: center;
-            background-repeat: no-repeat;
+            background-size: ${bgSize};
+            background-position: ${bgPosition};
+            background-repeat: ${bgRepeat};
           `;
         }
       }
@@ -152,6 +166,8 @@ function renderControls(
       const labelPosition = control.style?.labelPosition || "top";
       const showValue = control.style?.showValue !== false;
       const knobStyle = control.style?.knobStyle || "default";
+      const hideLabel = control.style?.hideLabel === true;
+      const labelColor = control.style?.labelColor || "var(--text-dark-secondary)";
 
       const isToggle = control.type === "toggle" || unit === "toggle";
       const isEnum = unit === "enum" && Array.isArray(labels);
@@ -168,8 +184,8 @@ function renderControls(
 
       let controlHtml = "";
 
-      if (labelPosition === "top") {
-        controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: var(--text-dark-secondary); margin-bottom: 4px;">${escapeHtml(label)}</span>`;
+      if (!hideLabel && labelPosition === "top") {
+        controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: ${labelColor}; margin-bottom: 4px;">${escapeHtml(label)}</span>`;
       }
 
       if (isToggle) {
@@ -206,8 +222,8 @@ function renderControls(
         `;
       }
 
-      if (labelPosition === "bottom") {
-        controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: var(--text-dark-secondary); margin-top: 4px;">${escapeHtml(label)}</span>`;
+      if (!hideLabel && labelPosition === "bottom") {
+        controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: ${labelColor}; margin-top: 4px;">${escapeHtml(label)}</span>`;
       }
 
       if (showValue) {
@@ -231,6 +247,7 @@ function renderTextLabels(labels: LayoutTextLabel[]): string {
         top: ${label.position.y}px;
         font-size: ${label.fontSize}px;
         font-weight: ${label.fontWeight || "normal"};
+        ${label.fontFamily ? `font-family: ${label.fontFamily};` : ""}
         color: ${label.color || "var(--text-dark-primary)"};
         text-align: ${label.textAlign || "left"};
         pointer-events: none;

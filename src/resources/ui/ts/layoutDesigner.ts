@@ -28,6 +28,7 @@ import {
 type SelectedElement =
   | { type: "control"; paramKey: string }
   | { type: "label"; id: string }
+  | { type: "background"; layerIndex: number }
   | null;
 
 interface DragState {
@@ -363,8 +364,10 @@ export class LayoutDesignerModal {
 
     // Render each background layer
     this.layout.backgrounds.forEach((bg) => {
+      const isSelected = this.selectedElement?.type === "background" && this.selectedElement.layerIndex === bg.layerIndex;
       const layer = document.createElement("div");
-      layer.className = `layout-designer-background layer-${bg.layerIndex}`;
+      layer.className = `layout-designer-background layer-${bg.layerIndex}${isSelected ? " selected" : ""}`;
+      layer.dataset.layerIndex = String(bg.layerIndex);
 
       if (bg.type === "color") {
         layer.style.backgroundColor = bg.value;
@@ -375,13 +378,26 @@ export class LayoutDesignerModal {
         const imageUrl = this.getImageUrl(bg.value);
         if (imageUrl) {
           layer.style.backgroundImage = `url(${imageUrl})`;
-          layer.style.backgroundSize = bg.size || "cover";
+          // Apply size mode or custom scale
+          if (bg.size === "custom" && bg.scale !== undefined) {
+            layer.style.backgroundSize = `${bg.scale * 100}%`;
+          } else {
+            layer.style.backgroundSize = bg.size || "cover";
+          }
+          layer.style.backgroundRepeat = bg.size === "tile" ? "repeat" : "no-repeat";
+          layer.style.backgroundPosition = `${bg.offsetX || 0}px ${bg.offsetY || 0}px`;
         }
       }
 
       if (bg.opacity !== undefined && bg.opacity < 1) {
         layer.style.opacity = String(bg.opacity);
       }
+
+      // Make background clickable for selection
+      layer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.selectElement({ type: "background", layerIndex: bg.layerIndex });
+      });
 
       if (this.canvas && this.grid) {
         this.canvas.insertBefore(layer, this.grid);
@@ -494,6 +510,9 @@ export class LayoutDesignerModal {
     el.style.top = `${label.position.y}px`;
     el.style.fontSize = `${label.fontSize}px`;
     el.style.fontWeight = label.fontWeight || "normal";
+    if (label.fontFamily) {
+      el.style.fontFamily = label.fontFamily;
+    }
     el.style.color = label.color || "var(--text-dark-primary)";
     el.style.textAlign = label.textAlign || "left";
     el.textContent = label.text;
@@ -574,7 +593,131 @@ export class LayoutDesignerModal {
       this.renderControlProperties(this.selectedElement.paramKey);
     } else if (this.selectedElement.type === "label") {
       this.renderLabelProperties(this.selectedElement.id);
+    } else if (this.selectedElement.type === "background") {
+      this.renderBackgroundProperties(this.selectedElement.layerIndex);
     }
+  }
+
+  private renderBackgroundProperties(layerIndex: number): void {
+    if (!this.sidebarContent || !this.layout) return;
+
+    const bg = this.layout.backgrounds.find((b) => b.layerIndex === layerIndex);
+    if (!bg) return;
+
+    const isCustomScale = bg.size === "custom";
+
+    this.sidebarContent.innerHTML = `
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Background Layer ${layerIndex + 1}</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Type</span>
+          <span class="layout-property-input">${bg.type}</span>
+        </div>
+      </div>
+
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Size & Position</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Size Mode</span>
+          <div class="layout-property-input">
+            <select id="prop-bg-size">
+              <option value="cover" ${bg.size === "cover" || !bg.size ? "selected" : ""}>Cover</option>
+              <option value="contain" ${bg.size === "contain" ? "selected" : ""}>Contain</option>
+              <option value="stretch" ${bg.size === "stretch" ? "selected" : ""}>Stretch</option>
+              <option value="tile" ${bg.size === "tile" ? "selected" : ""}>Tile</option>
+              <option value="custom" ${bg.size === "custom" ? "selected" : ""}>Custom Scale</option>
+            </select>
+          </div>
+        </div>
+        ${isCustomScale ? `
+        <div class="layout-property-row">
+          <span class="layout-property-label">Scale</span>
+          <div class="layout-property-input">
+            <input type="range" id="prop-bg-scale" min="10" max="300" value="${(bg.scale || 1) * 100}" style="width: 80px;">
+            <span id="prop-bg-scale-value">${Math.round((bg.scale || 1) * 100)}%</span>
+          </div>
+        </div>
+        ` : ""}
+        <div class="layout-property-row">
+          <span class="layout-property-label">Offset X</span>
+          <div class="layout-property-input">
+            <input type="number" id="prop-bg-offset-x" value="${bg.offsetX || 0}" step="8">
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Offset Y</span>
+          <div class="layout-property-input">
+            <input type="number" id="prop-bg-offset-y" value="${bg.offsetY || 0}" step="8">
+          </div>
+        </div>
+      </div>
+
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Appearance</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Opacity</span>
+          <div class="layout-property-input">
+            <input type="range" id="prop-bg-opacity" min="0" max="100" value="${(bg.opacity ?? 1) * 100}" style="width: 80px;">
+            <span id="prop-bg-opacity-value">${Math.round((bg.opacity ?? 1) * 100)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="layout-property-group">
+        <button id="prop-delete-bg" style="width: 100%; background: rgba(255,100,100,0.2); color: #ff6b6b;">Remove Background</button>
+      </div>
+    `;
+
+    this.bindBackgroundPropertyHandlers(bg);
+  }
+
+  private bindBackgroundPropertyHandlers(bg: LayoutBackground): void {
+    const sizeSelect = document.getElementById("prop-bg-size") as HTMLSelectElement;
+    const scaleInput = document.getElementById("prop-bg-scale") as HTMLInputElement;
+    const scaleValue = document.getElementById("prop-bg-scale-value") as HTMLElement;
+    const offsetXInput = document.getElementById("prop-bg-offset-x") as HTMLInputElement;
+    const offsetYInput = document.getElementById("prop-bg-offset-y") as HTMLInputElement;
+    const opacityInput = document.getElementById("prop-bg-opacity") as HTMLInputElement;
+    const opacityValue = document.getElementById("prop-bg-opacity-value") as HTMLElement;
+    const deleteBtn = document.getElementById("prop-delete-bg") as HTMLButtonElement;
+
+    sizeSelect?.addEventListener("change", () => {
+      bg.size = sizeSelect.value as "cover" | "contain" | "stretch" | "tile" | "custom";
+      if (bg.size === "custom" && bg.scale === undefined) {
+        bg.scale = 1;
+      }
+      this.renderCanvas();
+      this.renderSidebar(); // Re-render to show/hide scale slider
+    });
+
+    scaleInput?.addEventListener("input", () => {
+      bg.scale = parseInt(scaleInput.value) / 100;
+      if (scaleValue) scaleValue.textContent = `${scaleInput.value}%`;
+      this.renderCanvas();
+    });
+
+    offsetXInput?.addEventListener("change", () => {
+      bg.offsetX = parseInt(offsetXInput.value) || 0;
+      this.renderCanvas();
+    });
+
+    offsetYInput?.addEventListener("change", () => {
+      bg.offsetY = parseInt(offsetYInput.value) || 0;
+      this.renderCanvas();
+    });
+
+    opacityInput?.addEventListener("input", () => {
+      bg.opacity = parseInt(opacityInput.value) / 100;
+      if (opacityValue) opacityValue.textContent = `${opacityInput.value}%`;
+      this.renderCanvas();
+    });
+
+    deleteBtn?.addEventListener("click", () => {
+      if (!this.layout) return;
+      this.layout.backgrounds = this.layout.backgrounds.filter((b) => b.layerIndex !== bg.layerIndex);
+      this.selectElement(null);
+      this.renderCanvas();
+    });
   }
 
   private renderControlProperties(paramKey: string): void {
@@ -615,6 +758,12 @@ export class LayoutDesignerModal {
       <div class="layout-property-group">
         <div class="layout-property-group-title">Label</div>
         <div class="layout-property-row">
+          <span class="layout-property-label">Hide Label</span>
+          <div class="layout-property-input">
+            <input type="checkbox" id="prop-hide-label" ${control.style?.hideLabel ? "checked" : ""}>
+          </div>
+        </div>
+        <div class="layout-property-row">
           <span class="layout-property-label">Override</span>
           <div class="layout-property-input">
             <input type="text" id="prop-label-override" value="${control.labelOverride || ""}" placeholder="${paramDef?.name || paramKey}">
@@ -630,6 +779,12 @@ export class LayoutDesignerModal {
               <option value="right" ${control.style?.labelPosition === "right" ? "selected" : ""}>Right</option>
               <option value="none" ${control.style?.labelPosition === "none" ? "selected" : ""}>Hidden</option>
             </select>
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Color</span>
+          <div class="layout-property-input">
+            <input type="color" id="prop-label-color" value="${control.style?.labelColor || "#ffffff"}">
           </div>
         </div>
       </div>
@@ -678,8 +833,10 @@ export class LayoutDesignerModal {
     const typeSelect = document.getElementById("prop-control-type") as HTMLSelectElement;
     const posXInput = document.getElementById("prop-pos-x") as HTMLInputElement;
     const posYInput = document.getElementById("prop-pos-y") as HTMLInputElement;
+    const hideLabelCheck = document.getElementById("prop-hide-label") as HTMLInputElement;
     const labelOverrideInput = document.getElementById("prop-label-override") as HTMLInputElement;
     const labelPosSelect = document.getElementById("prop-label-position") as HTMLSelectElement;
+    const labelColorInput = document.getElementById("prop-label-color") as HTMLInputElement;
     const knobStyleSelect = document.getElementById("prop-knob-style") as HTMLSelectElement;
     const showValueCheck = document.getElementById("prop-show-value") as HTMLInputElement;
     const deleteBtn = document.getElementById("prop-delete-control") as HTMLButtonElement;
@@ -703,6 +860,12 @@ export class LayoutDesignerModal {
       this.renderCanvas();
     });
 
+    hideLabelCheck?.addEventListener("change", () => {
+      if (!control.style) control.style = {};
+      control.style.hideLabel = hideLabelCheck.checked;
+      this.renderCanvas();
+    });
+
     labelOverrideInput?.addEventListener("change", () => {
       control.labelOverride = labelOverrideInput.value.trim() || undefined;
       this.renderCanvas();
@@ -711,6 +874,12 @@ export class LayoutDesignerModal {
     labelPosSelect?.addEventListener("change", () => {
       if (!control.style) control.style = {};
       control.style.labelPosition = labelPosSelect.value as LabelPosition;
+      this.renderCanvas();
+    });
+
+    labelColorInput?.addEventListener("change", () => {
+      if (!control.style) control.style = {};
+      control.style.labelColor = labelColorInput.value;
       this.renderCanvas();
     });
 
@@ -775,6 +944,22 @@ export class LayoutDesignerModal {
       <div class="layout-property-group">
         <div class="layout-property-group-title">Style</div>
         <div class="layout-property-row">
+          <span class="layout-property-label">Font</span>
+          <div class="layout-property-input">
+            <select id="prop-label-font">
+              <option value="" ${!label.fontFamily ? "selected" : ""}>Default</option>
+              <option value="Arial, sans-serif" ${label.fontFamily === "Arial, sans-serif" ? "selected" : ""}>Arial</option>
+              <option value="'Helvetica Neue', Helvetica, sans-serif" ${label.fontFamily?.includes("Helvetica") ? "selected" : ""}>Helvetica</option>
+              <option value="'Segoe UI', Tahoma, sans-serif" ${label.fontFamily?.includes("Segoe") ? "selected" : ""}>Segoe UI</option>
+              <option value="Georgia, serif" ${label.fontFamily?.includes("Georgia") ? "selected" : ""}>Georgia</option>
+              <option value="'Times New Roman', Times, serif" ${label.fontFamily?.includes("Times") ? "selected" : ""}>Times New Roman</option>
+              <option value="'Courier New', Courier, monospace" ${label.fontFamily?.includes("Courier") ? "selected" : ""}>Courier New</option>
+              <option value="Impact, sans-serif" ${label.fontFamily?.includes("Impact") ? "selected" : ""}>Impact</option>
+              <option value="'Comic Sans MS', cursive" ${label.fontFamily?.includes("Comic") ? "selected" : ""}>Comic Sans</option>
+            </select>
+          </div>
+        </div>
+        <div class="layout-property-row">
           <span class="layout-property-label">Font Size</span>
           <div class="layout-property-input">
             <input type="number" id="prop-label-font-size" value="${label.fontSize}" min="8" max="48">
@@ -820,6 +1005,7 @@ export class LayoutDesignerModal {
     const textInput = document.getElementById("prop-label-text") as HTMLInputElement;
     const posXInput = document.getElementById("prop-label-pos-x") as HTMLInputElement;
     const posYInput = document.getElementById("prop-label-pos-y") as HTMLInputElement;
+    const fontSelect = document.getElementById("prop-label-font") as HTMLSelectElement;
     const fontSizeInput = document.getElementById("prop-label-font-size") as HTMLInputElement;
     const weightSelect = document.getElementById("prop-label-weight") as HTMLSelectElement;
     const colorInput = document.getElementById("prop-label-color") as HTMLInputElement;
@@ -840,6 +1026,11 @@ export class LayoutDesignerModal {
     posYInput?.addEventListener("change", () => {
       label.position.y = snapToGrid(parseInt(posYInput.value) || 0);
       posYInput.value = String(label.position.y);
+      this.renderCanvas();
+    });
+
+    fontSelect?.addEventListener("change", () => {
+      label.fontFamily = fontSelect.value || undefined;
       this.renderCanvas();
     });
 
