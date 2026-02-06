@@ -53,3 +53,13 @@ Testing/Temporary/
 .cache/
 
 installer/dist/
+
+src/build-macos-x86_64/
+
+src/build-macos-x86_64-release/
+
+src/build-macos-x86_64-test/
+
+src/.DS_Store
+
+.DS_Store
