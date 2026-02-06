@@ -9,6 +9,7 @@ import { postMessage } from "./bridge.js";
 import { uiState } from "./state.js";
 import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
 import { showNotification } from "./notifications.js";
+import { arrayBufferToBase64 } from "./utils.js";
 import {
   type EffectLayout,
   type LayoutControl,
@@ -66,13 +67,25 @@ export class LayoutDesignerModal {
   private previewMode = false;
   private zoom = 1;
 
+  // Undo/redo history
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  private static readonly MAX_UNDO = 50;
+  /** Tracks whether undo was pushed for current sidebar edit session */
+  private sidebarUndoPushed = false;
+  /** Timer for nudge undo debouncing */
+  private nudgeUndoTimer: ReturnType<typeof setTimeout> | null = null;
+
   // DOM references
   private modal: HTMLElement | null = null;
   private closeBtn: HTMLButtonElement | null = null;
   private cancelBtn: HTMLButtonElement | null = null;
   private saveBtn: HTMLButtonElement | null = null;
   private exportBtn: HTMLButtonElement | null = null;
+  private importBtn: HTMLButtonElement | null = null;
+  private importFileInput: HTMLInputElement | null = null;
   private canvas: HTMLElement | null = null;
+  private canvasWrapper: HTMLElement | null = null;
   private grid: HTMLElement | null = null;
   private controlsLayer: HTMLElement | null = null;
   private sidebar: HTMLElement | null = null;
@@ -83,8 +96,16 @@ export class LayoutDesignerModal {
   private gridToggleBtn: HTMLButtonElement | null = null;
   private previewToggleBtn: HTMLButtonElement | null = null;
   private addLabelBtn: HTMLButtonElement | null = null;
+  private addControlBtn: HTMLButtonElement | null = null;
   private addBgBtn: HTMLButtonElement | null = null;
+  private addColorBgBtn: HTMLButtonElement | null = null;
   private resetLayoutBtn: HTMLButtonElement | null = null;
+  private undoBtn: HTMLButtonElement | null = null;
+  private redoBtn: HTMLButtonElement | null = null;
+  private zoomInBtn: HTMLButtonElement | null = null;
+  private zoomOutBtn: HTMLButtonElement | null = null;
+  private zoomResetBtn: HTMLButtonElement | null = null;
+  private zoomLabel: HTMLElement | null = null;
 
   // Dimension inputs
   private widthInput: HTMLInputElement | null = null;
@@ -109,7 +130,10 @@ export class LayoutDesignerModal {
     this.cancelBtn = document.getElementById("layout-designer-cancel") as HTMLButtonElement;
     this.saveBtn = document.getElementById("layout-designer-save") as HTMLButtonElement;
     this.exportBtn = document.getElementById("layout-designer-export") as HTMLButtonElement;
+    this.importBtn = document.getElementById("layout-designer-import") as HTMLButtonElement;
+    this.importFileInput = document.getElementById("layout-designer-import-file") as HTMLInputElement;
     this.canvas = document.getElementById("layout-designer-canvas");
+    this.canvasWrapper = document.getElementById("layout-designer-canvas-wrapper");
     this.grid = document.getElementById("layout-designer-grid");
     this.controlsLayer = document.getElementById("layout-designer-controls");
     this.sidebar = document.getElementById("layout-designer-sidebar");
@@ -119,8 +143,16 @@ export class LayoutDesignerModal {
     this.gridToggleBtn = document.getElementById("layout-designer-grid-toggle") as HTMLButtonElement;
     this.previewToggleBtn = document.getElementById("layout-designer-preview-toggle") as HTMLButtonElement;
     this.addLabelBtn = document.getElementById("layout-designer-add-label") as HTMLButtonElement;
+    this.addControlBtn = document.getElementById("layout-designer-add-control") as HTMLButtonElement;
     this.addBgBtn = document.getElementById("layout-designer-add-bg") as HTMLButtonElement;
+    this.addColorBgBtn = document.getElementById("layout-designer-add-color-bg") as HTMLButtonElement;
     this.resetLayoutBtn = document.getElementById("layout-designer-reset") as HTMLButtonElement;
+    this.undoBtn = document.getElementById("layout-designer-undo") as HTMLButtonElement;
+    this.redoBtn = document.getElementById("layout-designer-redo") as HTMLButtonElement;
+    this.zoomInBtn = document.getElementById("layout-designer-zoom-in") as HTMLButtonElement;
+    this.zoomOutBtn = document.getElementById("layout-designer-zoom-out") as HTMLButtonElement;
+    this.zoomResetBtn = document.getElementById("layout-designer-zoom-reset") as HTMLButtonElement;
+    this.zoomLabel = document.getElementById("layout-designer-zoom-label");
 
     console.log("[LayoutDesigner] initialize - addBgBtn found:", !!this.addBgBtn);
 
@@ -137,6 +169,8 @@ export class LayoutDesignerModal {
     this.cancelBtn?.addEventListener("click", () => this.close());
     this.saveBtn?.addEventListener("click", () => this.save());
     this.exportBtn?.addEventListener("click", () => this.exportLayout());
+    this.importBtn?.addEventListener("click", () => this.importFileInput?.click());
+    this.importFileInput?.addEventListener("change", () => this.handleImportFileSelected());
 
     // Modal backdrop click
     this.modal?.addEventListener("click", (e) => {
@@ -149,8 +183,15 @@ export class LayoutDesignerModal {
     this.gridToggleBtn?.addEventListener("click", () => this.toggleGrid());
     this.previewToggleBtn?.addEventListener("click", () => this.togglePreview());
     this.addLabelBtn?.addEventListener("click", () => this.addTextLabel());
+    this.addControlBtn?.addEventListener("click", () => this.showAddControlMenu());
     this.addBgBtn?.addEventListener("click", () => this.browseBackgroundImage());
+    this.addColorBgBtn?.addEventListener("click", () => this.addColorBackground());
     this.resetLayoutBtn?.addEventListener("click", () => this.resetLayout());
+    this.undoBtn?.addEventListener("click", () => this.undo());
+    this.redoBtn?.addEventListener("click", () => this.redo());
+    this.zoomInBtn?.addEventListener("click", () => this.setZoom(this.zoom + 0.25));
+    this.zoomOutBtn?.addEventListener("click", () => this.setZoom(this.zoom - 0.25));
+    this.zoomResetBtn?.addEventListener("click", () => this.setZoom(1));
 
     // Dimension inputs
     this.widthInput?.addEventListener("change", () => this.updateDimensions());
@@ -198,9 +239,13 @@ export class LayoutDesignerModal {
     this.gridVisible = true;
     this.previewMode = false;
     this.zoom = 1;
+    this.undoStack = [];
+    this.redoStack = [];
 
     // Update UI
     this.updateDimensionInputs();
+    this.updateZoomUI();
+    this.updateUndoRedoButtons();
     this.renderCanvas();
     this.renderSidebar();
 
@@ -241,15 +286,194 @@ export class LayoutDesignerModal {
     this.close();
   }
 
-  private exportLayout(): void {
+  private async exportLayout(): Promise<void> {
     if (!this.layout) return;
 
-    // Request export via plugin (will handle zip creation and file dialog)
+    const zipLib = window.JSZip;
+    if (!zipLib) {
+      showNotification("Export failed: archive library not available", "error");
+      return;
+    }
+
+    const zip = new zipLib();
+
+    // Collect all image IDs referenced by this layout
+    const referencedImageIds = new Set<string>();
+    for (const bg of this.layout.backgrounds) {
+      if (bg.type === "image" && bg.value) {
+        referencedImageIds.add(bg.value);
+      }
+    }
+    for (const control of this.layout.controls) {
+      if (control.style?.knobImageId) {
+        referencedImageIds.add(control.style.knobImageId);
+      }
+    }
+
+    // Add referenced images to zip
+    const imagesFolder = zip.folder("images");
+    const imageManifest: Array<{ imageId: string; fileName: string; type?: string }> = [];
+
+    if (imagesFolder) {
+      const images = uiState.layoutLibrary?.images ?? [];
+      for (const imageId of referencedImageIds) {
+        const img = images.find((i) => i.imageId === imageId);
+        if (!img?.dataUrl) continue;
+
+        // Extract base64 data from data URL (data:image/png;base64,...)
+        const match = img.dataUrl.match(/^data:image\/([^;]+);base64,(.+)$/);
+        if (!match) continue;
+
+        const ext = match[1] === "jpeg" ? "jpg" : match[1];
+        const base64Data = match[2];
+        const fileName = img.fileName || `${imageId}.${ext}`;
+
+        imagesFolder.file(fileName, base64Data, { base64: true });
+        imageManifest.push({
+          imageId: img.imageId,
+          fileName,
+          type: img.type,
+        });
+      }
+    }
+
+    // Build layout JSON for export (includes image manifest for reimport)
+    const exportData = {
+      formatVersion: 1,
+      createdAt: new Date().toISOString(),
+      layout: this.layout,
+      images: imageManifest,
+    };
+
+    zip.file("layout.json", JSON.stringify(exportData, null, 2));
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    const buffer = await blob.arrayBuffer();
+    const data = arrayBufferToBase64(buffer);
+
+    const safeName = this.effectType.replace(/[^a-zA-Z0-9_-]/g, "_");
     postMessage({
       type: "exportEffectLayout",
-      effectType: this.effectType,
-      layout: this.layout,
+      fileName: `${safeName}.sgfxlayout.zip`,
+      data,
     });
+  }
+
+  private async handleImportFileSelected(): Promise<void> {
+    const file = this.importFileInput?.files?.[0];
+    if (!file) return;
+
+    // Reset file input so the same file can be re-selected
+    if (this.importFileInput) this.importFileInput.value = "";
+
+    const zipLib = window.JSZip;
+    if (!zipLib) {
+      showNotification("Import failed: archive library not available", "error");
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const zip = await zipLib.loadAsync(buffer);
+
+      const layoutEntry = zip.file("layout.json");
+      if (!layoutEntry) {
+        showNotification("Import failed: archive is missing layout.json", "error");
+        return;
+      }
+
+      const layoutText = await layoutEntry.async("text");
+      const archive = JSON.parse(layoutText) as {
+        formatVersion?: number;
+        layout?: EffectLayout;
+        images?: Array<{ imageId: string; fileName: string; type?: string }>;
+      };
+
+      if (!archive.layout) {
+        showNotification("Import failed: archive has no layout data", "error");
+        return;
+      }
+
+      // Extract images from zip and build data URLs
+      const imageManifest = archive.images ?? [];
+      const importedImages: Array<{ imageId: string; fileName: string; dataUrl: string; rawBase64: string; type?: string }> = [];
+
+      for (const imgRef of imageManifest) {
+        const imgEntry = zip.file(`images/${imgRef.fileName}`);
+        if (!imgEntry) continue;
+
+        const imgBuffer = await imgEntry.async("arraybuffer");
+        const imgBase64 = arrayBufferToBase64(imgBuffer);
+
+        // Determine MIME type from extension
+        const ext = imgRef.fileName.split(".").pop()?.toLowerCase() ?? "png";
+        const mimeMap: Record<string, string> = {
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          svg: "image/svg+xml",
+        };
+        const mime = mimeMap[ext] ?? "image/png";
+        const dataUrl = `data:${mime};base64,${imgBase64}`;
+
+        importedImages.push({
+          imageId: imgRef.imageId,
+          fileName: imgRef.fileName,
+          dataUrl,
+          rawBase64: imgBase64,
+          type: imgRef.type,
+        });
+      }
+
+      // Register images in the layout library
+      if (importedImages.length > 0) {
+        if (!uiState.layoutLibrary) {
+          uiState.layoutLibrary = { byEffectType: {}, defaults: {}, images: [] };
+        }
+        for (const img of importedImages) {
+          // Replace existing or add new
+          const existingIdx = uiState.layoutLibrary.images.findIndex((i) => i.imageId === img.imageId);
+          const imageRef = {
+            imageId: img.imageId,
+            fileName: img.fileName,
+            dataUrl: img.dataUrl,
+            type: img.type as "background" | "knob" | "general" | undefined,
+          };
+          if (existingIdx >= 0) {
+            uiState.layoutLibrary.images[existingIdx] = imageRef;
+          } else {
+            uiState.layoutLibrary.images.push(imageRef);
+          }
+
+          // Send image to C++ for persistent storage
+          postMessage({
+            type: "saveLayoutImage",
+            imageId: img.imageId,
+            fileName: img.fileName,
+            data: img.rawBase64,
+          });
+        }
+      }
+
+      // Load the imported layout into the designer
+      this.pushUndoState();
+      this.layout = archive.layout;
+      // Update effect type if it matches or override with current
+      if (this.effectType && archive.layout.effectType !== this.effectType) {
+        this.layout.effectType = this.effectType;
+      }
+      this.layout.modifiedAt = new Date().toISOString();
+
+      this.updateDimensionInputs();
+      this.renderCanvas();
+      this.selectElement(null);
+      showNotification("Layout imported successfully", "success");
+    } catch (err) {
+      console.error("[LayoutDesigner] Import failed:", err);
+      showNotification(`Import failed: ${err instanceof Error ? err.message : "unknown error"}`, "error");
+    }
   }
 
   private createDefaultLayout(effectType: string): EffectLayout {
@@ -294,6 +518,7 @@ export class LayoutDesignerModal {
   private resetLayout(): void {
     if (!this.effectType) return;
 
+    this.pushUndoState();
     this.layout = this.createDefaultLayout(this.effectType);
     this.selectedElement = null;
     this.updateDimensionInputs();
@@ -318,9 +543,80 @@ export class LayoutDesignerModal {
     }
   }
 
+  // === Undo / Redo ===
+
+  /** Snapshot the current layout state onto the undo stack. Call before any mutation. */
+  private pushUndoState(): void {
+    if (!this.layout) return;
+    this.undoStack.push(JSON.stringify(this.layout));
+    if (this.undoStack.length > LayoutDesignerModal.MAX_UNDO) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+    this.updateUndoRedoButtons();
+  }
+
+  private undo(): void {
+    if (!this.undoStack.length || !this.layout) return;
+    this.redoStack.push(JSON.stringify(this.layout));
+    this.layout = JSON.parse(this.undoStack.pop()!) as EffectLayout;
+    this.selectedElement = null;
+    this.updateDimensionInputs();
+    this.renderCanvas();
+    this.renderSidebar();
+    this.updateUndoRedoButtons();
+  }
+
+  private redo(): void {
+    if (!this.redoStack.length || !this.layout) return;
+    this.undoStack.push(JSON.stringify(this.layout));
+    this.layout = JSON.parse(this.redoStack.pop()!) as EffectLayout;
+    this.selectedElement = null;
+    this.updateDimensionInputs();
+    this.renderCanvas();
+    this.renderSidebar();
+    this.updateUndoRedoButtons();
+  }
+
+  private updateUndoRedoButtons(): void {
+    if (this.undoBtn) {
+      this.undoBtn.disabled = this.undoStack.length === 0;
+      this.undoBtn.title = this.undoStack.length ? `Undo (Ctrl+Z) — ${this.undoStack.length} step${this.undoStack.length > 1 ? "s" : ""}` : "Undo (Ctrl+Z)";
+    }
+    if (this.redoBtn) {
+      this.redoBtn.disabled = this.redoStack.length === 0;
+      this.redoBtn.title = this.redoStack.length ? `Redo (Ctrl+Y) — ${this.redoStack.length} step${this.redoStack.length > 1 ? "s" : ""}` : "Redo (Ctrl+Y)";
+    }
+  }
+
+  /** Push undo state once per sidebar editing session (first property change after selection). */
+  private pushSidebarUndoOnce(): void {
+    if (!this.sidebarUndoPushed) {
+      this.sidebarUndoPushed = true;
+      this.pushUndoState();
+    }
+  }
+
+  // === Zoom ===
+
+  private setZoom(level: number): void {
+    this.zoom = Math.max(0.25, Math.min(3, level));
+    this.updateZoomUI();
+    this.updateCanvasSize();
+  }
+
+  private updateZoomUI(): void {
+    if (this.zoomLabel) {
+      this.zoomLabel.textContent = `${Math.round(this.zoom * 100)}%`;
+    }
+    if (this.zoomInBtn) this.zoomInBtn.disabled = this.zoom >= 3;
+    if (this.zoomOutBtn) this.zoomOutBtn.disabled = this.zoom <= 0.25;
+  }
+
   private updateDimensions(): void {
     if (!this.layout || !this.widthInput || !this.heightInput) return;
 
+    this.pushUndoState();
     const width = Math.max(
       LAYOUT_DIMENSION_LIMITS.minWidth,
       Math.min(LAYOUT_DIMENSION_LIMITS.maxWidth, parseInt(this.widthInput.value) || DEFAULT_LAYOUT_DIMENSIONS.width)
@@ -343,8 +639,16 @@ export class LayoutDesignerModal {
 
   private updateCanvasSize(): void {
     if (!this.canvas || !this.layout) return;
-    this.canvas.style.width = `${this.layout.dimensions.width * this.zoom}px`;
-    this.canvas.style.height = `${this.layout.dimensions.height * this.zoom}px`;
+    // Canvas element stays at design dimensions; zoom is applied via CSS transform
+    this.canvas.style.width = `${this.layout.dimensions.width}px`;
+    this.canvas.style.height = `${this.layout.dimensions.height}px`;
+    this.canvas.style.transform = `scale(${this.zoom})`;
+    this.canvas.style.transformOrigin = "top left";
+    // Wrapper takes the zoomed dimensions so parent container scrolls correctly
+    if (this.canvasWrapper) {
+      this.canvasWrapper.style.width = `${this.layout.dimensions.width * this.zoom}px`;
+      this.canvasWrapper.style.height = `${this.layout.dimensions.height * this.zoom}px`;
+    }
   }
 
   private renderCanvas(): void {
@@ -381,6 +685,8 @@ export class LayoutDesignerModal {
           // Apply size mode or custom scale
           if (bg.size === "custom" && bg.scale !== undefined) {
             layer.style.backgroundSize = `${bg.scale * 100}%`;
+          } else if (bg.size === "stretch") {
+            layer.style.backgroundSize = "100% 100%";
           } else {
             layer.style.backgroundSize = bg.size || "cover";
           }
@@ -462,6 +768,8 @@ export class LayoutDesignerModal {
 
     if (control.type === "toggle") {
       html += `<div class="control-toggle"></div>`;
+    } else if (control.type === "slider") {
+      html += `<div class="control-slider"><div class="control-slider-track"><div class="control-slider-thumb"></div></div></div>`;
     } else {
       html += `<div class="control-knob" data-style="${control.style?.knobStyle || "default"}"></div>`;
     }
@@ -579,6 +887,7 @@ export class LayoutDesignerModal {
 
   private renderSidebar(): void {
     if (!this.sidebarContent) return;
+    this.sidebarUndoPushed = false;
 
     if (!this.selectedElement) {
       this.sidebarContent.innerHTML = `
@@ -605,16 +914,56 @@ export class LayoutDesignerModal {
     if (!bg) return;
 
     const isCustomScale = bg.size === "custom";
+    const isImage = bg.type === "image";
+
+    // Type-specific value editor
+    let valueEditor = "";
+    if (bg.type === "color") {
+      valueEditor = `
+        <div class="layout-property-row">
+          <span class="layout-property-label">Color</span>
+          <div class="layout-property-input">
+            <input type="color" id="prop-bg-color" value="${bg.value || "#1a1a2e"}">
+          </div>
+        </div>
+      `;
+    } else if (bg.type === "gradient") {
+      valueEditor = `
+        <div class="layout-property-row">
+          <span class="layout-property-label">Gradient</span>
+          <div class="layout-property-input">
+            <input type="text" id="prop-bg-gradient" value="${bg.value}" placeholder="linear-gradient(...)">
+          </div>
+        </div>
+      `;
+    }
+
+    // Type selector
+    const typeSelector = bg.type !== "image" ? `
+      <div class="layout-property-row">
+        <span class="layout-property-label">Type</span>
+        <div class="layout-property-input">
+          <select id="prop-bg-type">
+            <option value="color" ${bg.type === "color" ? "selected" : ""}>Solid Color</option>
+            <option value="gradient" ${bg.type === "gradient" ? "selected" : ""}>Gradient</option>
+          </select>
+        </div>
+      </div>
+    ` : `
+      <div class="layout-property-row">
+        <span class="layout-property-label">Type</span>
+        <span class="layout-property-input">Image</span>
+      </div>
+    `;
 
     this.sidebarContent.innerHTML = `
       <div class="layout-property-group">
         <div class="layout-property-group-title">Background Layer ${layerIndex + 1}</div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Type</span>
-          <span class="layout-property-input">${bg.type}</span>
-        </div>
+        ${typeSelector}
+        ${valueEditor}
       </div>
 
+      ${isImage ? `
       <div class="layout-property-group">
         <div class="layout-property-group-title">Size & Position</div>
         <div class="layout-property-row">
@@ -651,6 +1000,7 @@ export class LayoutDesignerModal {
           </div>
         </div>
       </div>
+      ` : ""}
 
       <div class="layout-property-group">
         <div class="layout-property-group-title">Appearance</div>
@@ -672,6 +1022,13 @@ export class LayoutDesignerModal {
   }
 
   private bindBackgroundPropertyHandlers(bg: LayoutBackground): void {
+    // Push undo once on first input/change in this sidebar session
+    this.sidebarContent?.addEventListener("input", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+    this.sidebarContent?.addEventListener("change", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+
+    const typeSelect = document.getElementById("prop-bg-type") as HTMLSelectElement;
+    const colorInput = document.getElementById("prop-bg-color") as HTMLInputElement;
+    const gradientInput = document.getElementById("prop-bg-gradient") as HTMLInputElement;
     const sizeSelect = document.getElementById("prop-bg-size") as HTMLSelectElement;
     const scaleInput = document.getElementById("prop-bg-scale") as HTMLInputElement;
     const scaleValue = document.getElementById("prop-bg-scale-value") as HTMLElement;
@@ -680,6 +1037,28 @@ export class LayoutDesignerModal {
     const opacityInput = document.getElementById("prop-bg-opacity") as HTMLInputElement;
     const opacityValue = document.getElementById("prop-bg-opacity-value") as HTMLElement;
     const deleteBtn = document.getElementById("prop-delete-bg") as HTMLButtonElement;
+
+    typeSelect?.addEventListener("change", () => {
+      const newType = typeSelect.value as "color" | "gradient";
+      bg.type = newType;
+      if (newType === "color") {
+        bg.value = "#1a1a2e";
+      } else if (newType === "gradient") {
+        bg.value = "linear-gradient(180deg, #2a2a3a 0%, #1a1a2e 100%)";
+      }
+      this.renderCanvas();
+      this.renderSidebar();
+    });
+
+    colorInput?.addEventListener("input", () => {
+      bg.value = colorInput.value;
+      this.renderCanvas();
+    });
+
+    gradientInput?.addEventListener("change", () => {
+      bg.value = gradientInput.value;
+      this.renderCanvas();
+    });
 
     sizeSelect?.addEventListener("change", () => {
       bg.size = sizeSelect.value as "cover" | "contain" | "stretch" | "tile" | "custom";
@@ -830,6 +1209,9 @@ export class LayoutDesignerModal {
   }
 
   private bindControlPropertyHandlers(control: LayoutControl): void {
+    this.sidebarContent?.addEventListener("input", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+    this.sidebarContent?.addEventListener("change", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+
     const typeSelect = document.getElementById("prop-control-type") as HTMLSelectElement;
     const posXInput = document.getElementById("prop-pos-x") as HTMLInputElement;
     const posYInput = document.getElementById("prop-pos-y") as HTMLInputElement;
@@ -1002,6 +1384,9 @@ export class LayoutDesignerModal {
   }
 
   private bindLabelPropertyHandlers(label: LayoutTextLabel): void {
+    this.sidebarContent?.addEventListener("input", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+    this.sidebarContent?.addEventListener("change", () => this.pushSidebarUndoOnce(), { once: true, capture: true });
+
     const textInput = document.getElementById("prop-label-text") as HTMLInputElement;
     const posXInput = document.getElementById("prop-label-pos-x") as HTMLInputElement;
     const posYInput = document.getElementById("prop-label-pos-y") as HTMLInputElement;
@@ -1065,6 +1450,7 @@ export class LayoutDesignerModal {
   private addTextLabel(): void {
     if (!this.layout) return;
 
+    this.pushUndoState();
     const newLabel: LayoutTextLabel = {
       id: generateLabelId(),
       text: "New Label",
@@ -1089,6 +1475,114 @@ export class LayoutDesignerModal {
     });
   }
 
+  private addColorBackground(): void {
+    if (!this.layout) return;
+
+    if (this.layout.backgrounds.length >= 2) {
+      showNotification("Maximum 2 background layers", "warning");
+      return;
+    }
+
+    const layerIndex = this.layout.backgrounds.length;
+    this.pushUndoState();
+    const newBg: LayoutBackground = {
+      layerIndex,
+      type: "color",
+      value: "#1a1a2e",
+      opacity: 1,
+    };
+
+    this.layout.backgrounds.push(newBg);
+    this.selectElement({ type: "background", layerIndex });
+    this.renderCanvas();
+    this.renderSidebar();
+  }
+
+  private showAddControlMenu(): void {
+    if (!this.layout || !this.sidebarContent) return;
+
+    // Find params not already in layout
+    const usedKeys = new Set(this.layout.controls.map((c) => c.paramKey));
+    const availableParams = this.paramDefs.filter((p) => !usedKeys.has(p.key));
+
+    if (availableParams.length === 0) {
+      showNotification("All parameters are already in the layout", "info");
+      return;
+    }
+
+    // Show available params in sidebar
+    this.selectedElement = null;
+    this.sidebarContent.innerHTML = `
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Add Parameter Control</div>
+        <div style="font-size: 11px; color: var(--text-dark-muted); margin-bottom: 8px;">Click a parameter to add it to the layout</div>
+        ${availableParams
+          .map(
+            (p) => `
+          <button
+            class="layout-add-control-btn"
+            data-param-key="${p.key}"
+            style="
+              display: block;
+              width: 100%;
+              padding: 6px 10px;
+              margin-bottom: 4px;
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: 4px;
+              color: var(--text-dark-primary);
+              font-size: 12px;
+              cursor: pointer;
+              text-align: left;
+            "
+          >
+            ${p.name || p.key} <span style="opacity: 0.5; font-size: 10px;">${p.unit || ""}</span>
+          </button>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+
+    // Bind click handlers
+    this.sidebarContent.querySelectorAll(".layout-add-control-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const paramKey = (btn as HTMLElement).dataset.paramKey;
+        if (paramKey) {
+          this.addControlForParam(paramKey);
+        }
+      });
+    });
+  }
+
+  private addControlForParam(paramKey: string): void {
+    if (!this.layout) return;
+
+    const paramDef = this.paramDefs.find((p) => p.key === paramKey);
+    if (!paramDef) return;
+
+    this.pushUndoState();
+    // Place in center of canvas
+    const newControl: LayoutControl = {
+      paramKey,
+      type: paramDef.unit === "toggle" ? "toggle" : "knob",
+      position: {
+        x: snapToGrid(this.layout.dimensions.width / 2 - 24),
+        y: snapToGrid(this.layout.dimensions.height / 2 - 24),
+      },
+      style: {
+        labelPosition: "top",
+        showValue: true,
+        valuePosition: "bottom",
+        knobStyle: "default",
+      },
+    };
+
+    this.layout.controls.push(newControl);
+    this.selectElement({ type: "control", paramKey });
+    this.renderCanvas();
+  }
+
   private browseKnobImage(control: LayoutControl): void {
     postMessage({
       type: "browseLayoutImage",
@@ -1106,6 +1600,7 @@ export class LayoutDesignerModal {
     }
 
     if (purpose === "background" && layerIndex !== undefined) {
+      this.pushUndoState();
       // Add or update background layer
       const existingIndex = this.layout.backgrounds.findIndex((bg) => bg.layerIndex === layerIndex);
       const newBg: LayoutBackground = {
@@ -1122,6 +1617,7 @@ export class LayoutDesignerModal {
         this.layout.backgrounds.push(newBg);
       }
     } else if (purpose === "knob" && paramKey) {
+      this.pushUndoState();
       const control = this.layout.controls.find((c) => c.paramKey === paramKey);
       if (control) {
         if (!control.style) control.style = {};
@@ -1158,6 +1654,7 @@ export class LayoutDesignerModal {
   private startDrag(e: MouseEvent, element: HTMLElement, type: "control" | "label", id: string): void {
     e.preventDefault();
 
+    this.pushUndoState();
     this.dragState = {
       active: true,
       element,
@@ -1240,6 +1737,24 @@ export class LayoutDesignerModal {
     if (!this.modal || this.modal.style.display === "none") return;
     if ((e.target as HTMLElement).tagName === "INPUT") return;
 
+    // Undo/Redo: Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.redo();
+        } else {
+          this.undo();
+        }
+        return;
+      }
+      if (e.key === "y" || e.key === "Y") {
+        e.preventDefault();
+        this.redo();
+        return;
+      }
+    }
+
     if (e.key === "Escape") {
       if (this.selectedElement) {
         this.selectElement(null);
@@ -1270,11 +1785,23 @@ export class LayoutDesignerModal {
     if (e.key === "p" || e.key === "P") {
       this.togglePreview();
     }
+
+    // Zoom: + / - / 0
+    if (e.key === "+" || e.key === "=") {
+      this.setZoom(this.zoom + 0.25);
+    }
+    if (e.key === "-" || e.key === "_") {
+      this.setZoom(this.zoom - 0.25);
+    }
+    if (e.key === "0") {
+      this.setZoom(1);
+    }
   }
 
   private deleteSelectedElement(): void {
     if (!this.layout || !this.selectedElement) return;
 
+    this.pushUndoState();
     if (this.selectedElement.type === "control") {
       const selectedParamKey = this.selectedElement.paramKey;
       this.layout.controls = this.layout.controls.filter(
@@ -1284,6 +1811,11 @@ export class LayoutDesignerModal {
       this.layout.textLabels = this.layout.textLabels.filter(
         (l) => l.id !== (this.selectedElement as { type: "label"; id: string }).id
       );
+    } else if (this.selectedElement.type === "background") {
+      const selectedLayerIndex = this.selectedElement.layerIndex;
+      this.layout.backgrounds = this.layout.backgrounds.filter(
+        (b) => b.layerIndex !== selectedLayerIndex
+      );
     }
 
     this.selectElement(null);
@@ -1292,6 +1824,14 @@ export class LayoutDesignerModal {
 
   private nudgeSelectedElement(key: string, amount: number): void {
     if (!this.layout || !this.selectedElement) return;
+
+    // Debounced undo: push once at start of a nudge sequence, not on every arrow press
+    if (!this.nudgeUndoTimer) {
+      this.pushUndoState();
+    } else {
+      clearTimeout(this.nudgeUndoTimer);
+    }
+    this.nudgeUndoTimer = setTimeout(() => { this.nudgeUndoTimer = null; }, 500);
 
     let position: { x: number; y: number } | undefined;
 

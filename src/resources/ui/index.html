@@ -1251,6 +1251,16 @@
             </div>
           </div>
           <div class="layout-designer-toolbar-group">
+            <button id="layout-designer-undo" disabled title="Undo (Ctrl+Z)">
+              <svg viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 0 1 0 10H9" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 6L3 10l4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Undo
+            </button>
+            <button id="layout-designer-redo" disabled title="Redo (Ctrl+Y)">
+              <svg viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 0 0 0 10h4" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M17 6l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Redo
+            </button>
+          </div>
+          <div class="layout-designer-toolbar-group">
             <button id="layout-designer-grid-toggle" class="active" title="Toggle Grid (G)">
               <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
               Grid
@@ -1265,9 +1275,17 @@
               <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
               Add Label
             </button>
+            <button id="layout-designer-add-control" title="Add Parameter Control">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Add Control
+            </button>
             <button id="layout-designer-add-bg" title="Add Background Image">
               <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="8" cy="9" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 15l-5-5L5 21" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
               Background
+            </button>
+            <button id="layout-designer-add-color-bg" title="Add Color/Gradient Background">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="5" y="5" width="14" height="14" rx="1" fill="currentColor" opacity="0.3"/></svg>
+              Color BG
             </button>
           </div>
           <div class="layout-designer-toolbar-group">
@@ -1276,14 +1294,26 @@
               Reset
             </button>
           </div>
+          <div class="layout-designer-toolbar-group layout-designer-zoom-group">
+            <button id="layout-designer-zoom-out" title="Zoom Out">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 21l-4.35-4.35M8 11h6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <span id="layout-designer-zoom-label" class="layout-designer-zoom-value">100%</span>
+            <button id="layout-designer-zoom-in" title="Zoom In">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 21l-4.35-4.35M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <button id="layout-designer-zoom-reset" title="Reset Zoom to 100%">1:1</button>
+          </div>
         </div>
 
         <div class="layout-designer-body">
           <!-- Canvas Area -->
           <div class="layout-designer-canvas-container">
-            <div id="layout-designer-canvas" class="layout-designer-canvas">
-              <div id="layout-designer-grid" class="layout-designer-grid grid-visible"></div>
-              <div id="layout-designer-controls" class="layout-designer-controls"></div>
+            <div id="layout-designer-canvas-wrapper" class="layout-designer-canvas-wrapper">
+              <div id="layout-designer-canvas" class="layout-designer-canvas">
+                <div id="layout-designer-grid" class="layout-designer-grid grid-visible"></div>
+                <div id="layout-designer-controls" class="layout-designer-controls"></div>
+              </div>
             </div>
           </div>
 
@@ -1301,6 +1331,8 @@
         <div class="modal-footer layout-designer-footer">
           <div class="layout-designer-footer-left">
             <button class="btn btn-secondary" id="layout-designer-export">Export...</button>
+            <button class="btn btn-secondary" id="layout-designer-import">Import...</button>
+            <input type="file" id="layout-designer-import-file" accept=".zip,.sgfxlayout.zip" style="display: none;" />
           </div>
           <div class="layout-designer-footer-right">
             <button class="btn btn-secondary" id="layout-designer-cancel">Cancel</button>

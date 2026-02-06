@@ -43,6 +43,7 @@
 
 .effect-visualization {
   height: 800px;
+  padding: 16px;
   background-image: var(--effect-visual-bg, none);
   background-color: #1a1c28;
   background-size: cover;
@@ -54,7 +55,7 @@
   overflow: hidden;
   box-shadow: inset 0 8px 18px rgba(0, 0, 0, 0.45);
   display: flex;
-  align-items: center;
+  align-items: start;
   justify-content: center;
 }
 

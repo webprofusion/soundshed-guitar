@@ -1789,6 +1789,37 @@ function isToggleParam(paramDef: { key: string; min?: number; max?: number; unit
 }
 
 function bindNodeParamControls(node: GraphNode, preset: Preset): void {
+  // Bind slider inputs from custom layouts
+  const sliders = nodeParamsPanelElement?.querySelectorAll(".node-param-slider");
+  sliders?.forEach((sliderEl) => {
+    const input = sliderEl as HTMLInputElement;
+    input.addEventListener("input", () => {
+      const nodeId = input.dataset.nodeId;
+      const paramKey = input.dataset.paramKey;
+      if (nodeId && paramKey) {
+        const value = parseFloat(input.value);
+        node.params[paramKey] = value;
+        sendSignalPathNodeParamUpdate(nodeId, paramKey, value);
+
+        // Update associated value display
+        const parentControl = input.closest(".custom-layout-control");
+        const valueEl = parentControl?.querySelector(".node-param-value") as HTMLElement | null;
+        if (valueEl) {
+          const paramDef = EffectTypeRegistry.get(node.type)?.parameters.find((p) => p.key === paramKey);
+          if (paramDef) {
+            if (paramDef.unit === "dB" || paramDef.unit === "ms" || paramDef.unit === "Hz") {
+              valueEl.textContent = `${value.toFixed(1)}${paramDef.unit}`;
+            } else if (paramDef.unit === "enum" && Array.isArray(paramDef.labels)) {
+              valueEl.textContent = paramDef.labels[Math.round(value)] ?? `${Math.round(value)}`;
+            } else {
+              valueEl.textContent = value.toFixed(2);
+            }
+          }
+        }
+      }
+    });
+  });
+
   const toggles = nodeParamsPanelElement?.querySelectorAll(".node-param-toggle");
   toggles?.forEach((toggleEl) => {
     const input = toggleEl as HTMLInputElement;

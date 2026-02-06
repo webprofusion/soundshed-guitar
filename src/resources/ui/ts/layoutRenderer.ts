@@ -76,13 +76,17 @@ export function renderCustomLayout(
         overflow: hidden;
         border-radius: 8px;
         background: var(--bg-dark-secondary);
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        flex-shrink: 0;
       "
     >
       ${backgrounds}
-      <div class="custom-layout-controls" style="position: absolute; inset: 0; z-index: 2;">
+      <div class="custom-layout-controls" style="position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0;">
         ${controls}
       </div>
-      <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none;">
+      <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
         ${labels}
       </div>
     </div>
@@ -113,6 +117,8 @@ function renderBackgrounds(backgrounds: LayoutBackground[]): string {
           let bgSize: string = bg.size || "cover";
           if (bg.size === "custom" && bg.scale !== undefined) {
             bgSize = `${bg.scale * 100}%`;
+          } else if (bg.size === "stretch") {
+            bgSize = "100% 100%";
           }
           // Determine position (offset or center)
           const offsetX = bg.offsetX || 0;
@@ -195,6 +201,24 @@ function renderControls(
             <input class="node-param-toggle" type="checkbox" data-node-id="${node.id}" data-param-key="${key}" ${checked ? "checked" : ""}>
             <span class="toggle-slider"></span>
           </label>
+        `;
+      } else if (control.type === "slider") {
+        // Slider
+        const normalized = (value - (min ?? 0)) / ((max ?? 1) - (min ?? 0));
+        controlHtml += `
+          <input
+            type="range"
+            class="custom-layout-slider node-param-slider"
+            data-node-id="${node.id}"
+            data-param-key="${key}"
+            data-value="${value}"
+            data-default="${defaultValue ?? 0}"
+            min="${min ?? 0}"
+            max="${max ?? 1}"
+            ${step !== undefined ? `step="${step}"` : `step="0.01"`}
+            value="${value}"
+            ${isEnum ? `data-labels="${labels?.join("|") ?? ""}"` : ""}
+          >
         `;
       } else {
         // Knob

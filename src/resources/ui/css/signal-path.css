@@ -898,9 +898,9 @@
 
 .effect-visualization .node-params-panel {
   position: absolute;
-  top: 25%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  
+  left: 20%;
+  /*transform: translate(-50%, -50%);*/
   width: min(950px, 92%);
   max-height: 82%;
   overflow-y: auto;
@@ -1616,4 +1616,88 @@
   padding: 12px;
   text-align: center;
   font-style: italic;
+}
+
+/* Custom Layout Container - rendered from layout editor */
+.custom-layout-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  isolation: isolate;
+}
+
+.custom-layout-control {
+  box-sizing: border-box;
+}
+
+.custom-layout-bg {
+  pointer-events: none;
+}
+
+.custom-control-label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 80px;
+}
+
+/* Knob style presets for custom layouts */
+.custom-knob-default {
+  /* Standard dark knob (inherits from .knob) */
+}
+
+.custom-knob-pedal {
+  background: linear-gradient(145deg, #e0e0e0, #b0b0b0) !important;
+  border-color: #888 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.custom-knob-pedal .knob-indicator {
+  background: #333 !important;
+}
+
+.custom-knob-amp {
+  background: radial-gradient(circle at 35% 35%, #555, #1a1a1a) !important;
+  border: 2px solid #666 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.custom-knob-amp .knob-indicator {
+  background: #f0c040 !important;
+  width: 2px !important;
+  border-radius: 1px !important;
+}
+
+.custom-knob-minimal {
+  background: transparent !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: none;
+}
+
+.custom-knob-minimal .knob-indicator {
+  background: var(--accent-primary) !important;
+  width: 2px !important;
+  height: 14px !important;
+}
+
+/* Slider control type in custom layout */
+.custom-layout-slider {
+  width: 80px;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  margin: 8px 0;
+}
+
+.custom-layout-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.3);
 }

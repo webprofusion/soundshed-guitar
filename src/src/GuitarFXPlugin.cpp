@@ -2879,6 +2879,10 @@ namespace guitarfx
     {
       HandleBrowseLayoutImageRequest(payload);
     }
+    else if (type == "saveLayoutImage")
+    {
+      HandleSaveLayoutImageRequest(payload);
+    }
     else if (type == "cleanupResourceLibrary")
     {
       HandleCleanupResourceLibraryRequest(payload);
@@ -6024,18 +6028,22 @@ namespace guitarfx
   void GuitarFXPlugin::HandleExportEffectLayoutRequest(const nlohmann::json &payload)
   {
 #ifdef _WIN32
-    const std::string effectType = payload.value("effectType", "");
-    const auto layoutIt = payload.find("layout");
+    const std::string dataEncoded = payload.value("data", "");
+    const std::string suggestedName = payload.value("fileName", "layout.sgfxlayout.zip");
 
-    if (effectType.empty() || layoutIt == payload.end())
+    if (dataEncoded.empty())
     {
-      SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Missing layout data"}}.dump());
+      SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Missing export data"}}.dump());
       return;
     }
 
     wchar_t filePath[MAX_PATH] = {0};
-    std::wstring defaultName = std::wstring(effectType.begin(), effectType.end()) + L".sgfxlayout.zip";
-    if (defaultName.size() < MAX_PATH)
+    std::wstring defaultName;
+    if (!suggestedName.empty())
+    {
+      defaultName.assign(suggestedName.begin(), suggestedName.end());
+    }
+    if (!defaultName.empty() && defaultName.size() < MAX_PATH)
     {
       std::wcsncpy(filePath, defaultName.c_str(), MAX_PATH - 1);
     }
@@ -6055,20 +6063,22 @@ namespace guitarfx
       return;
     }
 
-    // For now, just save the layout JSON (TODO: create zip with images)
-    const std::filesystem::path targetPath{filePath};
-    std::ofstream output(targetPath);
-    if (output)
+    const auto decodedBytes = DecodeBase64(dataEncoded);
+    if (decodedBytes.empty())
     {
-      output << layoutIt->dump(2);
-      output.close();
-      SendMessageToUI(nlohmann::json{{"type", "layoutExportSaved"}, {"path", targetPath.generic_string()}}.dump());
-      AppendSessionLog("Layout exported: " + targetPath.generic_string());
+      SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Invalid export data"}}.dump());
+      return;
     }
-    else
+
+    const std::filesystem::path targetPath{filePath};
+    if (!WriteFile(targetPath, decodedBytes))
     {
       SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Failed to write file"}}.dump());
+      return;
     }
+
+    SendMessageToUI(nlohmann::json{{"type", "layoutExportSaved"}, {"path", targetPath.generic_string()}}.dump());
+    AppendSessionLog("Layout exported: " + targetPath.generic_string());
 #else
     ReportErrorToUI("Export not supported", "Layout export is only available on Windows");
 #endif
@@ -6162,6 +6172,44 @@ namespace guitarfx
 #else
     ReportErrorToUI("Not supported", "Image selection is only available on Windows");
 #endif
+  }
+
+  void GuitarFXPlugin::HandleSaveLayoutImageRequest(const nlohmann::json &payload)
+  {
+    const std::string imageId = payload.value("imageId", "");
+    const std::string fileName = payload.value("fileName", "");
+    const std::string dataEncoded = payload.value("data", "");
+
+    if (imageId.empty() || fileName.empty() || dataEncoded.empty())
+    {
+      AppendSessionLog("SaveLayoutImage: missing required fields");
+      return;
+    }
+
+    const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
+    const auto imagesDir = settingsDir / "layouts" / "images";
+
+    if (!std::filesystem::exists(imagesDir))
+    {
+      std::filesystem::create_directories(imagesDir);
+    }
+
+    const auto decodedBytes = DecodeBase64(dataEncoded);
+    if (decodedBytes.empty())
+    {
+      AppendSessionLog("SaveLayoutImage: failed to decode base64 data for " + imageId);
+      return;
+    }
+
+    const auto destPath = imagesDir / fileName;
+    if (WriteFile(destPath, decodedBytes))
+    {
+      AppendSessionLog("Layout image saved from import: " + destPath.generic_string());
+    }
+    else
+    {
+      AppendSessionLog("SaveLayoutImage: failed to write " + destPath.generic_string());
+    }
   }
 
   void GuitarFXPlugin::HandleCleanupResourceLibraryRequest(const nlohmann::json &payload)
