@@ -66,6 +66,7 @@ public:
     void NotifyStateChanged() override;
     [[nodiscard]] double GetHostTempo() const override;
     [[nodiscard]] bool IsHostPlaying() const override;
+    [[nodiscard]] bool IsStandalone() const override;
 
     // ── Accessors ──────────────────────────────────────────────────
     [[nodiscard]] PluginController& GetController() { return mController; }

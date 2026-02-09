@@ -94,6 +94,9 @@ public:
 
     /// Check if DAW is currently playing.
     [[nodiscard]] virtual bool IsHostPlaying() const { return false; }
+
+    /// True for standalone app builds; false for DAW plugin formats.
+    [[nodiscard]] virtual bool IsStandalone() const { return false; }
 };
 
 } // namespace guitarfx

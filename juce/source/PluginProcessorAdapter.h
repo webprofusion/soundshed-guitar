@@ -69,6 +69,7 @@ public:
     void NotifyStateChanged() override;
     [[nodiscard]] double GetHostTempo() const override;
     [[nodiscard]] bool IsHostPlaying() const override;
+    [[nodiscard]] bool IsStandalone() const override;
 
     // ── WebView bridge ─────────────────────────────────────────────
     void setWebMessageCallback(std::function<void(const juce::String&)> callback);

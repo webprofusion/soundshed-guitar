@@ -316,6 +316,11 @@ bool PluginProcessorAdapter::IsHostPlaying() const
     return false;
 }
 
+bool PluginProcessorAdapter::IsStandalone() const
+{
+    return false;
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // WebView bridge
 // ════════════════════════════════════════════════════════════════════════

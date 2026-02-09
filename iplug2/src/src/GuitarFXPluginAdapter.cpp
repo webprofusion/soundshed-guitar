@@ -552,6 +552,11 @@ bool GuitarFXPluginAdapter::IsHostPlaying() const
     return GetTransportIsRunning();
 }
 
+bool GuitarFXPluginAdapter::IsStandalone() const
+{
+    return kIsStandaloneBuild;
+}
+
 // ════════════════════════════════════════════════════════════════════
 // Private helpers
 // ════════════════════════════════════════════════════════════════════

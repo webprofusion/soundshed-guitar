@@ -386,12 +386,48 @@ private:
     TunerData mPendingTunerData;
     mutable std::mutex mTunerMutex;
 
+    // Metronome helpers
+    [[nodiscard]] double GetEffectiveTempoBpm() const;
+    void RenderMetronome(float** outputs, int numSamples);
+    void ApplyMetronomeSettingsFromAppSettings();
+    void UpdateMetronomeClickConfigFromSettings();
+    struct MetronomeClickTypeConfig;
+    [[nodiscard]] const MetronomeClickTypeConfig* FindMetronomeClickType(const std::string& id) const;
+    struct MetronomeClickSamples;
+    std::shared_ptr<MetronomeClickSamples> BuildMetronomeClickSamples(const MetronomeClickTypeConfig& config, double targetSampleRate) const;
+    void RefreshMetronomeClickSamples(double sampleRate);
+
     // Metronome state
     std::atomic<double> mMetronomeBpm{120.0};
     std::atomic<bool> mMetronomeEnabled{false};
     std::atomic<double> mMetronomeVolumeDb{-12.0};
     std::atomic<double> mMetronomePan{0.0};
     std::string mMetronomeClickType{"click"};
+    std::atomic<bool> mMetronomeResetPending{false};
+    double mMetronomeSamplesUntilClick = 0.0;
+    int mMetronomeClickSamplesRemaining = 0;
+    double mMetronomeClickPhase = 0.0;
+    double mMetronomeClickPhaseIncrement = 0.0;
+    int mMetronomeBeatIndex = 0;
+    int mMetronomeClickSamplePosition = 0;
+    bool mMetronomeClickUseHigh = false;
+
+    struct MetronomeClickTypeConfig
+    {
+        std::string id;
+        std::string label;
+        std::filesystem::path lowPath;
+        std::filesystem::path highPath;
+    };
+
+    struct MetronomeClickSamples
+    {
+        std::vector<std::vector<float>> low;
+        std::vector<std::vector<float>> high;
+    };
+
+    std::vector<MetronomeClickTypeConfig> mMetronomeClickConfig;
+    std::atomic<std::shared_ptr<MetronomeClickSamples>> mMetronomeClickSamples{nullptr};
 
     // Demo audio preview
     struct DemoAudioBuffer
