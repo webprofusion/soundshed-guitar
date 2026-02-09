@@ -1,0 +1,172 @@
+{
+  "id": "vintage-marshall-channel",
+  "name": "Vintage Marshall Channel",
+  "category": "channel",
+  "description": "Classic Marshall crunch with pre-EQ, noise gate, and room reverb. Four exposed knobs: Drive, Tone, Reverb, and Volume.",
+  "author": "Soundshed",
+  "tags": ["marshall", "crunch", "channel-strip", "classic"],
+  "version": 1,
+  "innerGraph": {
+    "nodes": [
+      { "id": "in", "type": "input" },
+      {
+        "id": "pre_eq",
+        "type": "eq_parametric",
+        "category": "eq",
+        "params": {
+          "lowGain": 0.0,
+          "lowFreq": 120,
+          "lowMidGain": 0.0,
+          "lowMidFreq": 400,
+          "lowMidQ": 1.0,
+          "highMidGain": 0.0,
+          "highMidFreq": 2000,
+          "highMidQ": 1.0,
+          "highGain": 2.0,
+          "highFreq": 6000
+        }
+      },
+      {
+        "id": "gate",
+        "type": "dynamics_gate",
+        "category": "dynamics",
+        "params": {
+          "thresholdDb": -55.0,
+          "attackMs": 1.0,
+          "releaseMs": 50.0
+        }
+      },
+      {
+        "id": "amp",
+        "type": "amp_nam",
+        "category": "amp",
+        "resources": [
+          { "resourceType": "nam", "resourceId": "plexi-bright" }
+        ],
+        "params": {
+          "inputGain": 3.0,
+          "outputGain": 0.0
+        }
+      },
+      {
+        "id": "cab",
+        "type": "cab_ir",
+        "category": "cab",
+        "resources": [
+          { "resourceType": "ir", "resourceId": "4x12-sm57" }
+        ],
+        "params": {
+          "mix": 1.0,
+          "outputGain": 0.0
+        }
+      },
+      {
+        "id": "verb",
+        "type": "reverb_room",
+        "category": "reverb",
+        "params": {
+          "decay": 0.3,
+          "damping": 0.5,
+          "mix": 0.15
+        }
+      },
+      { "id": "out", "type": "output" }
+    ],
+    "edges": [
+      { "from": "in", "to": "pre_eq" },
+      { "from": "pre_eq", "to": "gate" },
+      { "from": "gate", "to": "amp" },
+      { "from": "amp", "to": "cab" },
+      { "from": "cab", "to": "verb" },
+      { "from": "verb", "to": "out" }
+    ]
+  },
+  "exposedParams": [
+    {
+      "paramId": "drive",
+      "displayName": "Drive",
+      "nodeId": "amp",
+      "nodeParamKey": "inputGain",
+      "minValue": -6.0,
+      "maxValue": 24.0,
+      "defaultValue": 3.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "tone",
+      "displayName": "Tone",
+      "nodeId": "pre_eq",
+      "nodeParamKey": "highGain",
+      "minValue": -12.0,
+      "maxValue": 12.0,
+      "defaultValue": 2.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "reverb",
+      "displayName": "Reverb",
+      "nodeId": "verb",
+      "nodeParamKey": "mix",
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "defaultValue": 0.15
+    },
+    {
+      "paramId": "volume",
+      "displayName": "Volume",
+      "nodeId": "amp",
+      "nodeParamKey": "outputGain",
+      "minValue": -24.0,
+      "maxValue": 12.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    }
+  ],
+  "layout": {
+    "effectType": "composite:vintage-marshall-channel",
+    "version": 1,
+    "name": "Vintage Marshall",
+    "dimensions": { "width": 400, "height": 200 },
+    "backgrounds": [
+      { "layerIndex": 0, "type": "gradient", "value": "linear-gradient(135deg, #2a1a0e 0%, #1a0f05 100%)" }
+    ],
+    "controls": [
+      {
+        "paramKey": "drive",
+        "type": "knob",
+        "position": { "x": 48, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#d4a84b" }
+      },
+      {
+        "paramKey": "tone",
+        "type": "knob",
+        "position": { "x": 148, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#d4a84b" }
+      },
+      {
+        "paramKey": "reverb",
+        "type": "knob",
+        "position": { "x": 248, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#d4a84b" }
+      },
+      {
+        "paramKey": "volume",
+        "type": "knob",
+        "position": { "x": 348, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#d4a84b" }
+      }
+    ],
+    "textLabels": [
+      {
+        "id": "title",
+        "text": "VINTAGE MARSHALL",
+        "position": { "x": 200, "y": 16 },
+        "fontSize": 16,
+        "fontWeight": "bold",
+        "color": "#d4a84b",
+        "textAlign": "center"
+      }
+    ]
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z"
+}

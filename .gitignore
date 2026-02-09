@@ -63,3 +63,15 @@ src/build-macos-x86_64-test/
 src/.DS_Store
 
 .DS_Store
+
+core/build/
+
+juce/JUCE/
+
+core/ui/assets/amps/
+
+core/ui/assets/ir/
+
+core/ui/dist/
+
+core/ui/node_modules/

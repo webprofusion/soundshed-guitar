@@ -1,0 +1,324 @@
+# SoundshedGuitarCore — Shared framework-agnostic library
+# Consumed by both the iPlug2 and JUCE plugin projects via add_subdirectory().
+
+cmake_minimum_required(VERSION 3.22)
+
+project(SoundshedGuitarCore LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# ---------------------------------------------------------------------------
+# Options — defaults assume the consumer provides these dependencies.
+# When building standalone (e.g. for tests) set GUITARFX_CORE_FETCH_DEPS=ON.
+# ---------------------------------------------------------------------------
+option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
+option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+
+# nlohmann/json — consumer usually provides this
+if(NOT TARGET nlohmann_json::nlohmann_json AND GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3)
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
+# Signalsmith headers — consumer may set these variables before add_subdirectory()
+if(NOT DEFINED signalsmith_linear_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(signalsmith_linear
+        GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
+        GIT_TAG main)
+    FetchContent_MakeAvailable(signalsmith_linear)
+endif()
+
+if(NOT DEFINED signalsmith_stretch_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(signalsmith_stretch
+        GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+        GIT_TAG main)
+    FetchContent_MakeAvailable(signalsmith_stretch)
+endif()
+
+# cpp-httplib — only needed by network module; consumer can skip it
+if(NOT TARGET httplib::httplib AND GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(httplib
+        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+        GIT_TAG v0.14.3)
+    FetchContent_MakeAvailable(httplib)
+endif()
+
+# NeuralAmpModelerCore + Eigen (used by NAM effects)
+if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam)
+    include(FetchContent)
+    set(NAM_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(NAM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(NeuralAmpModelerCore
+        GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
+        GIT_TAG main
+        CMAKE_ARGS -DNAM_BUILD_TOOLS=OFF -DNAM_BUILD_TESTS=OFF)
+    FetchContent_MakeAvailable(NeuralAmpModelerCore)
+    FetchContent_GetProperties(NeuralAmpModelerCore SOURCE_DIR NAM_SOURCE_DIR BINARY_DIR NAM_BINARY_DIR)
+    if(NOT DEFINED NeuralAmpModelerCore_SOURCE_DIR)
+        set(NeuralAmpModelerCore_SOURCE_DIR "${NAM_SOURCE_DIR}" CACHE PATH "" FORCE)
+    endif()
+
+    if(MSVC)
+        foreach(_nam_tool benchmodel loadmodel run_tests tools)
+            if(TARGET ${_nam_tool})
+                set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_ALL TRUE)
+                set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_DEFAULT_BUILD TRUE)
+            endif()
+        endforeach()
+    endif()
+
+    if(DEFINED NeuralAmpModelerCore_SOURCE_DIR)
+        set(_nam_eigen_dest "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/eigen")
+        if(NOT EXISTS "${_nam_eigen_dest}/Eigen")
+            FetchContent_Declare(eigen
+                GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+                GIT_TAG 3.4.0)
+            FetchContent_MakeAvailable(eigen)
+            if(EXISTS "${eigen_SOURCE_DIR}/Eigen")
+                file(MAKE_DIRECTORY "${_nam_eigen_dest}")
+                file(COPY "${eigen_SOURCE_DIR}/Eigen" "${eigen_SOURCE_DIR}/unsupported" DESTINATION "${_nam_eigen_dest}")
+            endif()
+        endif()
+    endif()
+
+    if(NOT TARGET NeuralAmpModelerCore AND DEFINED NeuralAmpModelerCore_SOURCE_DIR)
+        file(GLOB NAM_SOURCES CONFIGURE_DEPENDS "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/*.cpp")
+        add_library(NeuralAmpModelerCore STATIC ${NAM_SOURCES})
+        target_compile_features(NeuralAmpModelerCore PUBLIC cxx_std_17)
+        target_include_directories(NeuralAmpModelerCore PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/compat"
+            "${NeuralAmpModelerCore_SOURCE_DIR}"
+            "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/eigen")
+        if(TARGET nlohmann_json::nlohmann_json)
+            target_link_libraries(NeuralAmpModelerCore PUBLIC nlohmann_json::nlohmann_json)
+        else()
+            target_include_directories(NeuralAmpModelerCore PUBLIC
+                "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann")
+        endif()
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Source files
+# ---------------------------------------------------------------------------
+set(GUITARFX_CORE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+
+set(GUITARFX_CORE_SOURCES
+    # Host interface & controller
+    src/PluginController.h
+    src/PluginController.cpp
+    src/MessageDispatcher.h
+    src/MessageDispatcher.cpp
+    src/IPluginHost.h
+    src/UiBridge.h
+    src/UiBridge.cpp
+
+    # DSP core
+    src/dsp/EffectProcessor.h
+    src/dsp/EffectRegistry.h
+    src/dsp/EffectRegistry.cpp
+    src/dsp/SignalGraphExecutor.h
+    src/dsp/SignalGraphExecutor.cpp
+    src/dsp/MultiPresetMixer.h
+    src/dsp/MultiPresetMixer.cpp
+    src/dsp/RealtimeConvolver.h
+    src/dsp/RealtimeConvolver.cpp
+    src/dsp/SimdFFT.h
+    src/dsp/IRTypes.h
+    src/dsp/IRWavLoader.h
+    src/dsp/NAMFactoryForce.cpp
+
+    # SIMD optimizations
+    src/dsp/simd/SimdMath.h
+    src/dsp/simd/OptimizedActivations.h
+    src/dsp/simd/OptimizedWaveNet.h
+    src/dsp/simd/OptimizedLSTM.h
+    src/dsp/simd/OptimizedNAM.h
+    src/dsp/simd/Benchmark.h
+
+    # Effect processors
+    src/dsp/effects/BuiltinEffects.h
+    src/dsp/effects/GainEffect.h
+    src/dsp/effects/NoiseGateEffect.h
+    src/dsp/effects/ParametricEQEffect.h
+    src/dsp/effects/DelayEffect.h
+    src/dsp/effects/ReverbEffect.h
+    src/dsp/effects/CompressorEffect.h
+    src/dsp/effects/LimiterEffect.h
+    src/dsp/effects/NAMAmpEffect.h
+    src/dsp/effects/OptimizedNAMAmpEffect.h
+    src/dsp/effects/MultiModelNAMAmpEffect.h
+    src/dsp/effects/IRCabEffect.h
+    src/dsp/effects/IRReverbEffect.h
+    src/dsp/effects/SimpleCabEffect.h
+    src/dsp/effects/OverdriveEffect.h
+    src/dsp/effects/DistortionEffect.h
+    src/dsp/effects/FuzzEffect.h
+    src/dsp/effects/BuiltinAmpEffect.h
+    src/dsp/effects/ChorusEffect.h
+    src/dsp/effects/FlangerEffect.h
+    src/dsp/effects/PhaserEffect.h
+    src/dsp/effects/TremoloEffect.h
+    src/dsp/effects/AutoWahEffect.h
+    src/dsp/effects/OctaveEffect.h
+    src/dsp/effects/PitchShiftEffect.h
+    src/dsp/effects/TransposeEffect.h
+    src/dsp/effects/DoublerEffect.h
+    src/dsp/effects/SynthSawEffect.h
+    src/dsp/effects/MixerEffect.h
+    src/dsp/effects/CompositeEffectProcessor.h
+    src/dsp/effects/CompositeEffectProcessor.cpp
+
+    # Presets
+    src/presets/PresetTypes.h
+    src/presets/PresetTypes.cpp
+    src/presets/PresetTypesJson.h
+    src/presets/PresetStorage.h
+    src/presets/PresetStorage.cpp
+
+    # Resources
+    src/resources/ResourceLibrary.h
+    src/resources/ResourceLibrary.cpp
+
+    # Models
+    src/models/ModelHasher.h
+    src/models/ModelHasher.cpp
+
+    # Network
+    src/network/PresetServiceClient.h
+    src/network/PresetServiceClient.cpp
+
+    # Utilities
+    src/util/FileSystem.h
+    src/util/FileSystem.cpp
+)
+
+# ---------------------------------------------------------------------------
+# Library target
+# ---------------------------------------------------------------------------
+add_library(SoundshedGuitarCore STATIC ${GUITARFX_CORE_SOURCES})
+
+# Build UI bundle from core/ui with npm when available.
+# Uses a stamp file so the TS build only reruns when sources change.
+find_program(NPM_EXECUTABLE npm)
+if(NPM_EXECUTABLE)
+    file(GLOB_RECURSE _UI_TS_SOURCES CONFIGURE_DEPENDS
+        "${GUITARFX_CORE_ROOT}/ui/ts/*.ts"
+        "${GUITARFX_CORE_ROOT}/ui/tsconfig.json"
+        "${GUITARFX_CORE_ROOT}/ui/package.json")
+    set(_UI_STAMP "${CMAKE_CURRENT_BINARY_DIR}/ui_build.stamp")
+    add_custom_command(
+        OUTPUT "${_UI_STAMP}"
+        COMMAND "${NPM_EXECUTABLE}" run build
+        COMMAND ${CMAKE_COMMAND} -E touch "${_UI_STAMP}"
+        WORKING_DIRECTORY "${GUITARFX_CORE_ROOT}/ui"
+        DEPENDS ${_UI_TS_SOURCES}
+        COMMENT "Building core UI TypeScript bundle")
+    add_custom_target(SoundshedGuitarCoreUiBuild DEPENDS "${_UI_STAMP}")
+    add_dependencies(SoundshedGuitarCore SoundshedGuitarCoreUiBuild)
+else()
+    message(WARNING "npm not found; core UI TypeScript build will be skipped.")
+endif()
+
+target_include_directories(SoundshedGuitarCore
+    PUBLIC
+        "${GUITARFX_CORE_ROOT}/src"
+)
+
+# Framework-agnostic — no iPlug2 or JUCE includes here
+target_compile_definitions(SoundshedGuitarCore
+    PUBLIC
+        NOMINMAX
+)
+
+# Link dependencies
+target_link_libraries(SoundshedGuitarCore
+    PUBLIC
+        nlohmann_json::nlohmann_json
+)
+
+# Optional: httplib (for network module)
+if(TARGET httplib::httplib)
+    target_link_libraries(SoundshedGuitarCore PUBLIC httplib::httplib)
+    target_compile_definitions(SoundshedGuitarCore PUBLIC GUITARFX_HAS_HTTPLIB=1)
+endif()
+
+# NeuralAmpModelerCore — consumer must provide this target or set include dirs
+if(TARGET NeuralAmpModelerCore)
+    target_link_libraries(SoundshedGuitarCore PUBLIC NeuralAmpModelerCore)
+elseif(TARGET nam)
+    target_link_libraries(SoundshedGuitarCore PUBLIC nam)
+endif()
+
+if(DEFINED NeuralAmpModelerCore_SOURCE_DIR)
+    target_include_directories(SoundshedGuitarCore PUBLIC
+        "${NeuralAmpModelerCore_SOURCE_DIR}"
+        "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/eigen"
+    )
+    if(NOT TARGET nlohmann_json::nlohmann_json)
+        target_include_directories(SoundshedGuitarCore PUBLIC
+            "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann"
+        )
+    endif()
+endif()
+
+# Signalsmith headers
+if(TARGET signalsmith_linear::headers)
+    target_link_libraries(SoundshedGuitarCore PUBLIC signalsmith_linear::headers)
+elseif(DEFINED signalsmith_linear_SOURCE_DIR)
+    target_include_directories(SoundshedGuitarCore PUBLIC "${signalsmith_linear_SOURCE_DIR}/include")
+endif()
+
+if(TARGET signalsmith_stretch::headers)
+    target_link_libraries(SoundshedGuitarCore PUBLIC signalsmith_stretch::headers)
+elseif(DEFINED signalsmith_stretch_SOURCE_DIR)
+    target_include_directories(SoundshedGuitarCore PUBLIC "${signalsmith_stretch_SOURCE_DIR}")
+endif()
+
+# Platform flags
+if(WIN32)
+    target_compile_definitions(SoundshedGuitarCore PUBLIC _WIN32 WIN32 _WINDOWS)
+    target_compile_options(SoundshedGuitarCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+endif()
+
+set_target_properties(SoundshedGuitarCore PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    FOLDER "GuitarFX"
+)
+
+# Precompiled header — speeds up parsing of heavy template libraries
+target_precompile_headers(SoundshedGuitarCore PRIVATE
+    <string>
+    <vector>
+    <memory>
+    <algorithm>
+    <unordered_map>
+    <functional>
+    <cmath>
+    <nlohmann/json.hpp>
+)
+
+# ---------------------------------------------------------------------------
+# Tests (optional)
+# ---------------------------------------------------------------------------
+if(GUITARFX_CORE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

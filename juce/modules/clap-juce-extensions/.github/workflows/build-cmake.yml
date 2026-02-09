@@ -1,0 +1,96 @@
+name: CI-CMake
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  build_and_test:
+    name: JUCE ${{ matrix.juce_version }} / ${{ matrix.os }} CMake example plugins
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
+      matrix:
+        include:
+        # note: the github runners don't have enough old mac juce to compile 6 and 7 easily
+          - os: ubuntu-22.04
+            juce_version: 6.0.7
+          - os: ubuntu-22.04
+            juce_version: 6.1.6
+          - os: ubuntu-22.04
+            juce_version: 7.0.0
+          - os: ubuntu-22.04
+            juce_version: 7.0.12
+          - os: ubuntu-22.04
+            juce_version: 8.0.10
+          - os: ubuntu-22.04
+            juce_version: 8.0.11
+
+          - os: windows-latest
+            juce_version: 6.1.6
+          - os: windows-latest
+            juce_version: 7.0.0
+          - os: windows-latest
+            juce_version: 7.0.12
+          - os: windows-latest
+            juce_version: 8.0.10
+          - os: windows-latest
+            juce_version: 8.0.11
+
+          - os: macOS-latest
+            juce_version: 8.0.11
+
+    steps:
+      - name: Install Linux Deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt install libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libfreetype6-dev libfontconfig1-dev libglu1-mesa-dev libjack-jackd2-dev
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 11
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 11
+
+      - name: Get latest CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure
+        shell: bash
+        run: cmake -Bbuild -DCMAKE_BUILD_TYPE=Release -DCLAP_JUCE_VERSION=$JUCE_VERSION -DCLAP_EXAMPLES_TREAT_WARNINGS_AS_ERRORS=ON
+        env:
+          JUCE_VERSION: ${{ matrix.juce_version }}
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 4 --target GainPlugin_CLAP
+
+      - name: Set up clap-info
+        shell: bash
+        run: |
+          git clone --recurse-submodules https://github.com/surge-synthesizer/clap-info
+          cd clap-info
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel 4
+
+      - name: Run clap-info (Max/Linux)
+        if: runner.os == 'Linux' || runner.os == 'MacOS'
+        shell: bash
+        run: |
+          clap-info/build/clap-info --version
+          clap-info/build/clap-info build/examples/GainPlugin/GainPlugin_artefacts/Release/CLAP/GainPlugin.clap
+
+      - name: Run clap-info (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          clap-info/build/Release/clap-info --version
+          clap-info/build/Release/clap-info build/examples/GainPlugin/GainPlugin_artefacts/Release/CLAP/GainPlugin.clap

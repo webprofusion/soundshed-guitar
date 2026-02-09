@@ -1,0 +1,158 @@
+{
+  "id": "clean-jazz-channel",
+  "name": "Clean Jazz Channel",
+  "category": "channel",
+  "description": "Warm clean tone with compressor, EQ scoop, and lush reverb. Three exposed knobs: Warmth, Reverb, and Volume.",
+  "author": "Soundshed",
+  "tags": ["clean", "jazz", "warm", "channel-strip"],
+  "version": 1,
+  "innerGraph": {
+    "nodes": [
+      { "id": "in", "type": "input" },
+      {
+        "id": "comp",
+        "type": "compressor_opto",
+        "category": "dynamics",
+        "params": {
+          "threshold": -18.0,
+          "ratio": 3.0,
+          "attack": 30,
+          "release": 300,
+          "makeup": 2.0,
+          "mix": 0.8
+        }
+      },
+      {
+        "id": "eq",
+        "type": "eq_parametric",
+        "category": "eq",
+        "params": {
+          "lowGain": 3.0,
+          "lowFreq": 200,
+          "lowMidGain": -2.0,
+          "lowMidFreq": 800,
+          "lowMidQ": 0.7,
+          "highMidGain": 1.5,
+          "highMidFreq": 3000,
+          "highMidQ": 0.8,
+          "highGain": -1.0,
+          "highFreq": 8000
+        }
+      },
+      {
+        "id": "amp",
+        "type": "amp_nam",
+        "category": "amp",
+        "resources": [
+          { "resourceType": "nam", "resourceId": "clean-twin" }
+        ],
+        "params": {
+          "inputGain": -2.0,
+          "outputGain": 0.0
+        }
+      },
+      {
+        "id": "cab",
+        "type": "cab_ir",
+        "category": "cab",
+        "resources": [
+          { "resourceType": "ir", "resourceId": "2x12-jazz" }
+        ],
+        "params": {
+          "mix": 1.0
+        }
+      },
+      {
+        "id": "verb",
+        "type": "reverb_room",
+        "category": "reverb",
+        "params": {
+          "decay": 0.6,
+          "damping": 0.4,
+          "mix": 0.25
+        }
+      },
+      { "id": "out", "type": "output" }
+    ],
+    "edges": [
+      { "from": "in", "to": "comp" },
+      { "from": "comp", "to": "eq" },
+      { "from": "eq", "to": "amp" },
+      { "from": "amp", "to": "cab" },
+      { "from": "cab", "to": "verb" },
+      { "from": "verb", "to": "out" }
+    ]
+  },
+  "exposedParams": [
+    {
+      "paramId": "warmth",
+      "displayName": "Warmth",
+      "nodeId": "eq",
+      "nodeParamKey": "lowGain",
+      "minValue": -6.0,
+      "maxValue": 12.0,
+      "defaultValue": 3.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "reverb",
+      "displayName": "Reverb",
+      "nodeId": "verb",
+      "nodeParamKey": "mix",
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "defaultValue": 0.25
+    },
+    {
+      "paramId": "volume",
+      "displayName": "Volume",
+      "nodeId": "amp",
+      "nodeParamKey": "outputGain",
+      "minValue": -24.0,
+      "maxValue": 12.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    }
+  ],
+  "layout": {
+    "effectType": "composite:clean-jazz-channel",
+    "version": 1,
+    "name": "Clean Jazz",
+    "dimensions": { "width": 320, "height": 200 },
+    "backgrounds": [
+      { "layerIndex": 0, "type": "gradient", "value": "linear-gradient(135deg, #1a2a3a 0%, #0f1a25 100%)" }
+    ],
+    "controls": [
+      {
+        "paramKey": "warmth",
+        "type": "knob",
+        "position": { "x": 48, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#6fa8dc" }
+      },
+      {
+        "paramKey": "reverb",
+        "type": "knob",
+        "position": { "x": 152, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#6fa8dc" }
+      },
+      {
+        "paramKey": "volume",
+        "type": "knob",
+        "position": { "x": 264, "y": 72 },
+        "style": { "knobStyle": "amp", "accentColor": "#6fa8dc" }
+      }
+    ],
+    "textLabels": [
+      {
+        "id": "title",
+        "text": "CLEAN JAZZ",
+        "position": { "x": 160, "y": 16 },
+        "fontSize": 16,
+        "fontWeight": "bold",
+        "color": "#6fa8dc",
+        "textAlign": "center"
+      }
+    ]
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z"
+}

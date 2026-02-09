@@ -7,10 +7,10 @@
       "name": "Debug SoundshedGuitar App",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Debug/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/iplug2/src/build/src/platform/app/Debug/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/src/build/src/platform/app/Debug",
+      "cwd": "${workspaceFolder}/iplug2/src/build/src/platform/app/Debug",
       "environment": [],
       "console": "integratedTerminal",
       "preLaunchTask": "Build SoundshedGuitar Debug"
@@ -19,10 +19,10 @@
       "name": "Run SoundshedGuitar App Release",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/iplug2/src/build/src/platform/app/Release/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",
+      "cwd": "${workspaceFolder}/iplug2/src/build/src/platform/app/Release",
       "environment": [],
       "console": "integratedTerminal",
       "preLaunchTask": "Build SoundshedGuitar App Release"
@@ -31,13 +31,13 @@
       "name": "Debug SoundshedGuitar VST Host",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/tools/VST3DebugHost.exe",
+      "program": "${workspaceFolder}/iplug2/src/build/tools/VST3DebugHost.exe",
       "args": [
        // "-w",
-        "${workspaceFolder}/src/build/SoundshedGuitar.vst3/Contents/x86_64-win/SoundshedGuitar.vst3"
+        "${workspaceFolder}/iplug2/src/build/SoundshedGuitar.vst3/Contents/x86_64-win/SoundshedGuitar.vst3"
       ],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/src/build",
+      "cwd": "${workspaceFolder}/iplug2/src/build",
       "environment": [],
       "console": "integratedTerminal",
       "preLaunchTask": "Build VST3 and DebugHost"
@@ -46,10 +46,10 @@
       "name": "Debug SampleRateBufferTests",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/tests/Debug/SoundshedGuitar_SampleRateBufferTests.exe",
+      "program": "${workspaceFolder}/iplug2/src/build/tests/Debug/SoundshedGuitar_SampleRateBufferTests.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/src/build/tools",
+      "cwd": "${workspaceFolder}/iplug2/src/build/tools",
       "environment": [],
       "console": "integratedTerminal",
       "preLaunchTask": "Build SoundshedGuitar Debug"
@@ -60,10 +60,10 @@
       "name": "Launch SoundshedGuitar App (Release)",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/iplug2/src/build/src/platform/app/Release/SoundshedGuitar.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",
+      "cwd": "${workspaceFolder}/iplug2/src/build/src/platform/app/Release",
       "environment": [],
       "console": "integratedTerminal"
     }

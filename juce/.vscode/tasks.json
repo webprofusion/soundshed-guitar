@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Standalone (Debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build",
+        "--config",
+        "Debug",
+        "--target",
+        "SoundshedGuitar_Standalone"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Standalone (Release)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build",
+        "--config",
+        "Release",
+        "--target",
+        "SoundshedGuitar_Standalone"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Standalone (Debug)",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "start",
+        "\"\"",
+        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Debug\\Standalone\\SoundshedGuitar.exe\""
+      ],
+      "dependsOn": "Build Standalone (Release)",
+      "problemMatcher": []
+    },
+     {
+      "label": "Run Standalone (Release)",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "start",
+        "\"\"",
+        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Release\\Standalone\\SoundshedGuitar.exe\""
+      ],
+      "dependsOn": "Build Standalone (Release)",
+      "problemMatcher": []
+    }
+  ]
+}

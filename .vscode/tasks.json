@@ -2,26 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build TypeScript",
-      "type": "shell",
-      "command": "npm",
-      "args": [
-        "run",
-        "build"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}/src/resources/ui"
-      },
-      "group": "build",
-      "problemMatcher": "$tsc"
-    },
-    {
       "label": "Build SoundshedGuitar Debug",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Debug",
         "--target",
@@ -43,7 +29,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Release",
         "--target",
@@ -62,7 +48,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Release"
       ],
@@ -75,7 +61,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Release",
         "--target",
@@ -106,7 +92,7 @@
         "-S",
         "${workspaceFolder}/src",
         "-B",
-        "${workspaceFolder}/src/build"
+        "${workspaceFolder}/iplug2/src/build"
       ],
       "group": "build",
       "problemMatcher": []
@@ -117,7 +103,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Debug",
         "--target",
@@ -132,7 +118,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Debug",
         "--target",
@@ -157,7 +143,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/src/build",
+        "${workspaceFolder}/iplug2/src/build",
         "--config",
         "Debug"
       ],
@@ -174,7 +160,7 @@
         "--output-on-failure"
       ],
       "options": {
-        "cwd": "${workspaceFolder}/src/build"
+        "cwd": "${workspaceFolder}/iplug2/src/src/build"
       },
       "group": "test",
       "problemMatcher": []

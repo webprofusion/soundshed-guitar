@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=2" />
+  <title>Soundshed GuitarX</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/controls.css" />
+  <link rel="stylesheet" href="css/navigation.css" />
+  <link rel="stylesheet" href="css/amp.css" />
+  <link rel="stylesheet" href="css/effects.css" />
+  <link rel="stylesheet" href="css/signal-path.css" />
+  <link rel="stylesheet" href="css/modals.css" />
+  <link rel="stylesheet" href="css/layout-designer.css" />
+  <link rel="stylesheet" href="css/fx-library.css" />
+  <link rel="stylesheet" href="css/preset-library.css" />
+  <link rel="stylesheet" href="css/advanced-panel.css" />
+  <link rel="stylesheet" href="css/settings.css" />
+</head>
+
+<body>
+  <div id="app" class="prevent-select">
+    <!-- Top Icon Bar -->
+    <header class="icon-bar">
+     <!-- <button class="icon-btn" data-panel="advanced" title="Advanced">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" fill="none" />
+        </svg>
+      </button>
+      -->
+
+      <button class="icon-btn active" data-panel="visualizer" title="Visualizer">
+        <span aria-hidden="true" style="display: block; width: 24px; height: 24px; background-color: currentColor; -webkit-mask: url('images/icons/amp.svg') center / contain no-repeat; mask: url('images/icons/amp.svg') center / contain no-repeat;"></span>
+      </button>
+
+      <!--<button class="icon-btn" data-panel="mixer" title="Mixer">
+        <svg viewBox="0 0 24 24">
+          <rect x="4" y="4" width="3" height="16" rx="1" fill="currentColor" />
+          <rect x="10.5" y="7" width="3" height="13" rx="1" fill="currentColor" />
+          <rect x="17" y="5" width="3" height="15" rx="1" fill="currentColor" />
+        </svg>
+      </button>-->
+
+      <button class="icon-btn" data-panel="library" title="Equipment Library">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 6h6v14H4zM14 4h6v16h-6z" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M6 10h2M6 13h2M16 9h2M16 12h2M16 15h2" stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
+      <button class="icon-btn" data-panel="scalex" title="ScaleX Guitar">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
+      <button class="icon-btn" data-panel="settings" title="Settings">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.5"
+        fill="none" />
+          <path
+        d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.03.03a2 2 0 0 1-2.83 2.83l-.03-.03A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.53V21a2 2 0 0 1-4 0v-.07a1.7 1.7 0 0 0-1-1.53 1.7 1.7 0 0 0-1.86.34l-.03.03a2 2 0 1 1-2.83-2.83l.03-.03A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.53-1H3a2 2 0 0 1 0-4h.07a1.7 1.7 0 0 0 1.53-1 1.7 1.7 0 0 0-.34-1.86l-.03-.03a2 2 0 1 1 2.83-2.83l.03.03A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.07V3a2 2 0 0 1 4 0v.07a1.7 1.7 0 0 0 1 1.53 1.7 1.7 0 0 0 1.86-.34l.03-.03a2 2 0 1 1 2.83 2.83l-.03.03A1.7 1.7 0 0 0 19.4 9c0 .46.17.9.46 1.24.3.33.74.53 1.21.56H21a2 2 0 0 1 0 4h-.07a1.7 1.7 0 0 0-1.53 1z"
+        stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
+
+    </header>
+
+    <!-- Top Control Bar -->
+    <section class="control-bar">
+      <div class="control-bar-group">
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">AUTO IN</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-level-input-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="input-control" title="Input Level">
+            
+            <div class="knob" data-param="input" data-value="0">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="input-value">+0.0 dB</span>
+          </div>
+        </div>
+
+        <div class="control-stack input-mode-control">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">INPUT MODE</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="stereo-input-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <span class="input-mode-status" id="input-mode-status">STEREO</span>
+          <div class="input-channel-selector" id="input-channel-selector">
+            <select id="input-channel-select">
+              <option value="0" selected>Input 1</option>
+              <option value="1">Input 2</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">GATE</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="gate-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="gate-threshold-control" title="Gate Threshold">
+            <div class="knob" data-param="gate_threshold" data-value="-60">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="gate-threshold-value">-60 dB</span>
+          </div>
+        </div>
+
+        <div class="knob-control">
+          <span class="knob-label" style="margin-bottom:2px;">TRANSPOSE</span>
+          <div class="knob" data-param="transpose" data-value="0">
+            <div class="knob-indicator"></div>
+          </div>
+          <span class="knob-value" id="transpose-value">0 st</span>
+        </div>
+
+        <div class="control-stack eq-control">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">Global EQ</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="eq-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <button class="eq-icon-btn panel-switch" data-panel="eq" title="EQ">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 21v-7M12 21V3M20 21v-11" stroke="currentColor" stroke-width="2" fill="none" />
+            </svg>
+          </button>
+        </div>
+
+      </div>
+
+      <div class="control-bar-group preset-group">
+        <div class="preset-row preset-row-top">
+          <div class="preset-nav">
+            <button class="nav-btn" id="prev-preset" title="Previous Preset">←</button>
+            <button class="nav-btn" id="next-preset" title="Next Preset">→</button>
+          </div>
+          <div class="preset-actions">
+            <button class="preset-action-btn" id="preset-random-btn" title="Random Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <circle cx="15.5" cy="15.5" r="1.5" />
+                <circle cx="8.5" cy="15.5" r="1.5" />
+                <circle cx="15.5" cy="8.5" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-new-btn" title="New Preset from Default">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <line x1="12" y1="7" x2="12" y2="17" />
+                <line x1="7" y1="12" x2="17" y2="12" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-edit-btn" title="Edit Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-save-btn" title="Save Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-save-as-btn" title="Save As New Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <line x1="12" y1="11" x2="12" y2="17" />
+                <line x1="9" y1="14" x2="15" y2="14" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-export-btn" title="Export Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 5 17 10" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+              </svg>
+            </button>
+            <button class="preset-action-btn" id="preset-import-btn" title="Import Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 14 12 19 7 14" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+              </svg>
+            </button>
+            <button class="preset-action-btn preset-action-btn-danger" id="preset-delete-btn" title="Delete Preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+            <input type="file" id="preset-import-input" accept=".presetz,application/zip" style="display: none;" />
+          </div>
+        </div>
+
+        <div class="preset-row preset-row-bottom">
+          <div class="preset-selector" id="preset-selector">
+            <span class="preset-favorite" id="preset-favorite" title="Toggle Favorite">♡</span>
+            <button class="preset-chooser-label" id="preset-chooser-label" type="button" aria-haspopup="dialog" aria-expanded="false">
+              Default Preset
+            </button>
+          </div>
+        </div>
+
+        <div class="preset-library-popover" id="preset-library-popover" aria-hidden="true">
+          <section class="preset-library" id="preset-library">
+            <div class="preset-library-header">
+              <input type="text" id="preset-search" placeholder="Search presets..." />
+              <div class="preset-library-actions">
+                <input type="text" id="preset-folder-name" placeholder="New folder name" />
+                <button id="preset-folder-add" type="button">Create Folder</button>
+                <button id="preset-export-folder-btn" type="button" class="preset-library-export-btn" title="Export presets" aria-label="Export presets">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 5 17 10" />
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="preset-library-body">
+              <div class="preset-folder-tree" id="preset-folder-tree"></div>
+              <div class="preset-list" id="preset-list"></div>
+            </div>
+
+            <div class="setlist-collapsible" id="setlist-collapsible">
+              <button class="setlist-toggle" id="setlist-toggle" type="button" aria-expanded="false">
+                Setlists
+                <span class="setlist-toggle-icon">▾</span>
+              </button>
+              <div class="setlist-panel" id="setlist-panel" aria-hidden="true">
+                <div class="setlist-header">
+                  <input type="text" id="setlist-name-input" placeholder="New setlist name" />
+                  <input type="number" id="setlist-bank-input" placeholder="Bank" min="0" step="1" />
+                  <button id="setlist-add-btn" type="button">Create Setlist</button>
+                </div>
+                <div class="setlist-body">
+                  <div class="setlist-list" id="setlist-list"></div>
+                  <div class="setlist-editor">
+                    <div class="setlist-editor-header" id="setlist-editor-header">Select a setlist</div>
+                    <div class="setlist-slots" id="setlist-slots"></div>
+                    <div class="setlist-hint">Drag presets here to add slots.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="control-bar-group">
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">DOUBLER</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="doubler-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="delay-control">
+            <!--<span class="knob-label">DELAY</span>-->
+            <div class="knob" data-param="delay" data-value="6">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="delay-value">6.00 ms</span>
+          </div>
+        </div>
+
+        <div class="control-stack">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">AUTO OUT</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-level-output-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="knob-control" id="output-control">
+            <!--<span class="knob-label">OUTPUT</span>-->
+            <div class="knob" data-param="output" data-value="0">
+              <div class="knob-indicator"></div>
+            </div>
+            <span class="knob-value" id="output-value">+0.0 dB</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Signal Path Bar -->
+    <section class="signal-path-bar" id="signal-path-bar">
+      <!-- Composite edit mode banner -->
+      <div class="composite-edit-banner" id="composite-edit-banner" style="display: none;">
+        <span class="composite-edit-banner-label">Editing Composite:</span>
+        <span class="composite-edit-banner-name" id="composite-edit-banner-name"></span>
+        <span class="composite-edit-banner-hint">Use the signal chain below to add/remove/configure effects</span>
+      </div>
+      <div class="signal-path-scroll">
+        <div class="signal-path-nodes" id="signal-path-nodes">
+          <!-- Signal path nodes will be rendered here by JavaScript -->
+          <div class="signal-node input-node" data-node-id="__input__">
+            <div class="node-icon"><img class="fx-effect-icon" src="images/icons/amp.svg" alt="" aria-hidden="true">
+            </div>
+            <span class="node-label">Input</span>
+          </div>
+          <div class="signal-connector"></div>
+          <div class="signal-node" data-node-id="placeholder">
+            <div class="node-icon"><img class="fx-effect-icon" src="images/icons/bolt.svg" alt="" aria-hidden="true">
+            </div>
+            <span class="node-label">No Preset</span>
+          </div>
+          <div class="signal-connector"></div>
+          <div class="signal-node output-node" data-node-id="__output__">
+            <div class="node-icon"><img class="fx-effect-icon" src="images/icons/speaker.svg" alt="" aria-hidden="true">
+            </div>
+            <span class="node-label">Output</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Hidden file inputs -->
+      <input type="file" id="model-file-input" accept=".nam,.json" style="display: none;" />
+      <input type="file" id="ir-file-input" accept=".wav,.ir" style="display: none;" />
+
+      <!-- Advanced Panel -->
+      <div class="tab-panel" id="panel-advanced">
+        <div class="panel-content">
+          <h2>Advanced</h2>
+          <div id="preset-details"></div>
+        </div>
+      </div>
+
+      <!-- Mixer Panel -->
+      <div class="tab-panel" id="panel-mixer">
+        <div class="panel-content">
+          <h2>Mixer</h2>
+          <div id="mixer-panel"></div>
+        </div>
+      </div>
+
+      <!-- Effect Visualization Panel (Default) -->
+      <div class="tab-panel active" id="panel-visualizer">
+        <div class="visualization-display">
+          <div class="visualization-panel">
+            <div class="effect-visualization-header">
+              <div class="effect-visualization-title" id="effect-visualization-title">Effect Visualization</div>
+              <div class="effect-visualization-subtitle" id="effect-visualization-subtitle">
+                Select a node in the signal chain to edit parameters
+              </div>
+            </div>
+            <div class="effect-visualization" id="effect-visualization">
+              <div class="effect-visualization-overlay" id="effect-visualization-overlay">
+                <div class="effect-visualization-placeholder">
+                  <h3>No Effect Selected</h3>
+                  <p>Pick a node in the signal chain above to see its visualization and controls.</p>
+                </div>
+              </div>
+
+              <!-- Node Parameter Panel (shown when a node is selected) -->
+              <section class="node-params-panel" id="node-params-panel" style="display: none;"></section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="tab-panel" id="panel-library">
+        <div class="panel-content">
+
+          <div class="library-tabs">
+            <button class="library-tab-btn active" data-library-tab="tone3000">Tone 3000</button>
+            <button class="library-tab-btn" data-library-tab="resources">Resource Library</button>
+            <button class="library-tab-btn" data-library-tab="advanced">Advanced</button>
+          </div>
+
+          <div class="library-tab-panel active" id="library-tab-tone3000">
+            <div class="settings-section">
+              <h3>Tone3000 Browser</h3>
+              <div class="tone3000-search">
+                <input type="text" id="tone3000-search-input" placeholder="Search tones..." />
+                <select id="tone3000-sort-select" class="themed-select">
+                  <option value="popular">Most Popular</option>
+                  <option value="recent">Most Recent</option>
+                  <option value="trending">Trending</option>
+                  <option value="name">Name A-Z</option>
+                </select>
+                <button id="tone3000-search-button">Search</button>
+              </div>
+              <div class="tone3000-browser">
+                <div class="tone3000-categories" id="tone3000-category-list">
+                  <!-- Category buttons rendered by JS -->
+                </div>
+                <div class="tone3000-results" id="tone3000-results">
+                  <!-- Search results rendered by JS -->
+                </div>
+              </div>
+              <div class="tone3000-pagination" id="tone3000-pagination">
+                <button class="tone3000-page-btn" id="tone3000-prev-btn" type="button">Previous</button>
+                <span class="tone3000-page-label" id="tone3000-page-label">Page 1</span>
+                <button class="tone3000-page-btn" id="tone3000-next-btn" type="button">Next</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="library-tab-panel" id="library-tab-resources">
+            <div class="settings-section">
+              <h3>Resource Library</h3>
+              <div class="equipment-library-filters">
+                <input type="text" id="equipment-library-search" placeholder="Search models and IRs..." />
+                <select id="equipment-library-type">
+                  <option value="all">All Types</option>
+                  <option value="nam">Amp Models</option>
+                  <option value="ir">Cab IRs</option>
+                </select>
+                <select id="equipment-library-source">
+                  <option value="all">All Sources</option>
+                  <option value="built-in">Built-in</option>
+                  <option value="imported">Imported</option>
+                </select>
+                <select id="equipment-library-view">
+                  <option value="list">List View</option>
+                  <option value="grouped" selected>Group by Tone</option>
+                </select>
+                <select id="equipment-library-category">
+                  <option value="all">All Categories</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <label for="equipment-library-cleanup-scope">Cleanup unused</label>
+                <select id="equipment-library-cleanup-scope">
+                  <option value="all" selected>All types</option>
+                  <option value="nam">Amp models only</option>
+                  <option value="ir">IRs only</option>
+                </select>
+                <button id="equipment-library-cleanup-btn" type="button">Remove unused</button>
+              </div>
+              <div class="equipment-library-summary" id="equipment-library-summary"></div>
+              <div class="equipment-library-results" id="equipment-library-results">
+                <!-- Library results rendered by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced Tab Panel -->
+          <div class="library-tab-panel" id="library-tab-advanced">
+            <div class="advanced-panel">
+              <div class="advanced-sub-tabs">
+                <button class="advanced-sub-tab-btn active" data-advanced-tab="composites">Composite Effects</button>
+                <button class="advanced-sub-tab-btn" data-advanced-tab="layouts">Effect Layouts</button>
+              </div>
+
+              <!-- Composite Effects Sub-Tab -->
+              <div class="advanced-sub-panel active" id="advanced-tab-composites">
+                <div class="advanced-toolbar">
+                  <input type="text" id="composite-search-input" class="advanced-search-input" placeholder="Search composites..." />
+                  <button id="composite-new-btn" class="advanced-action-btn" title="Create new composite effect">+ New Composite</button>
+                </div>
+                <div class="composite-list" id="composite-list">
+                  <!-- Composite list rendered by JS -->
+                </div>
+
+                <!-- Composite Editor (hidden until editing) -->
+                <div class="composite-editor" id="composite-editor" style="display: none;">
+                  <div class="composite-editor-header">
+                    <h3 id="composite-editor-title">Edit Composite Effect</h3>
+                    <div class="composite-editor-actions">
+                      <button id="composite-editor-save-btn" class="advanced-action-btn primary" title="Save composite">Save</button>
+                      <button id="composite-editor-save-as-btn" class="advanced-action-btn" title="Save as new composite">Save As New</button>
+                      <button id="composite-editor-cancel-btn" class="advanced-action-btn" title="Cancel editing">Cancel</button>
+                    </div>
+                  </div>
+                  <div class="composite-editor-body">
+                    <div class="composite-editor-meta">
+                      <div class="composite-field-row">
+                        <label for="composite-edit-name">Name</label>
+                        <input type="text" id="composite-edit-name" placeholder="Effect name" />
+                      </div>
+                      <div class="composite-field-row">
+                        <label for="composite-edit-category">Category</label>
+                        <select id="composite-edit-category">
+                          <option value="channel">Channel Strip</option>
+                          <option value="amp">Amplifier</option>
+                          <option value="cab">Cabinet</option>
+                          <option value="dynamics">Dynamics</option>
+                          <option value="eq">Equalizer</option>
+                          <option value="modulation">Modulation</option>
+                          <option value="delay">Delay</option>
+                          <option value="reverb">Reverb</option>
+                          <option value="utility">Utility</option>
+                        </select>
+                      </div>
+                      <div class="composite-field-row">
+                        <label for="composite-edit-description">Description</label>
+                        <textarea id="composite-edit-description" rows="2" placeholder="Description..."></textarea>
+                      </div>
+                      <div class="composite-field-row">
+                        <label for="composite-edit-author">Author</label>
+                        <input type="text" id="composite-edit-author" placeholder="Author name" />
+                      </div>
+                      <div class="composite-field-row">
+                        <label for="composite-edit-tags">Tags</label>
+                        <input type="text" id="composite-edit-tags" placeholder="Comma-separated tags" />
+                      </div>
+                    </div>
+
+                    <!-- Inner Signal Graph — edited via main signal path -->
+                    <div class="composite-editor-section">
+                      <h4>Inner Signal Path</h4>
+                      <p class="section-hint">
+                        The signal chain above shows this composite's inner effects.
+                        Use it to add, remove, and configure effects just like a normal preset.
+                      </p>
+                    </div>
+
+                    <!-- Exposed Parameters -->
+                    <div class="composite-editor-section">
+                      <h4>Exposed Parameters</h4>
+                      <p class="section-hint">Select which parameters are surfaced to the user.</p>
+                      <div class="composite-exposed-params" id="composite-exposed-params">
+                        <!-- Exposed params rendered by JS -->
+                      </div>
+                      <button id="composite-add-param-btn" class="advanced-action-btn">+ Expose Parameter</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Effect Layouts Sub-Tab -->
+              <div class="advanced-sub-panel" id="advanced-tab-layouts">
+                <div class="advanced-toolbar">
+                  <input type="text" id="layout-search-input" class="advanced-search-input" placeholder="Search layouts..." />
+                </div>
+                <div class="layout-list" id="layout-list">
+                  <!-- Layout list rendered by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Embed Panel -->
+      <div class="tab-panel" id="panel-scalex">
+        <div class="panel-content" style="padding: 0; height: 100%;">
+          <iframe 
+            id="scalex-iframe" 
+            data-src="https://scalex.soundshed.com" 
+            style="width: 100%; height: 100%; border: none;"
+            title="ScaleX Guitar"
+            sandbox="allow-scripts allow-forms allow-popups"
+          ></iframe>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-settings">
+        <div class="panel-content settings-panel">
+
+          <div class="equipment-tabs">
+            <button class="equipment-tab-btn active" data-equipment-tab="settings">General</button>
+            <button class="equipment-tab-btn" data-equipment-tab="performance">DSP Performance</button>
+          </div>
+
+          <div class="equipment-tab-panel active" id="equipment-tab-settings">
+            <h2>Audio</h2>
+            <div class="settings-section">
+              <h3>Audio Device</h3>
+              <div class="settings-row settings-row-two">
+                <label for="open-audio-preferences">Preferences</label>
+                <button id="open-audio-preferences" type="button">Open Audio Preferences</button>
+              </div>
+              <div class="settings-hint">Opens the native audio/MIDI device settings dialog for the standalone app.</div>
+               <div class="settings-row">
+                <label for="run-signal-test">Signal Path Test</label>
+                <button id="run-signal-test" type="button">Run Signal Path Test</button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>Interface Calibration</h3>
+              <div class="settings-row">
+                <label for="interface-calibration-toggle">Enabled</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="interface-calibration-toggle" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <label for="interface-calibration-reference">Reference Level</label>
+                <input type="number" id="interface-calibration-reference" min="-24" max="24" step="0.1" value="12.0" />
+                <span class="settings-unit">dBu @ 0 dBFS peak</span>
+              </div>
+              <div class="settings-hint">Sets the analog reference level used to align NAM input metadata to digital
+                peak levels.</div>
+            </div>
+
+            <div class="settings-section">
+              <h3>IR Quality</h3>
+              <div class="ir-quality-section">
+                <div class="ir-quality-header">
+                  <span class="ir-quality-label">IR QUALITY</span>
+                  <select id="ir-quality-select" class="ir-quality-select">
+                    <option value="0">Economy</option>
+                    <option value="1" selected>Standard</option>
+                    <option value="2">High</option>
+                    <option value="3">Full</option>
+                  </select>
+                </div>
+                <div class="ir-quality-info">
+                  <span id="ir-quality-samples">~2048 samples</span>
+                </div>
+              </div>
+            </div>
+
+
+            <h2>User Interface</h2>
+            <div class="settings-section">
+              <h3>Advanced Options</h3>
+              <div class="settings-row">
+                <label for="advanced-options-toggle">Enable Advanced Options</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="advanced-options-toggle" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint">Shows the Advanced tab in the Library panel and the layout editor for effects.</div>
+            </div>
+
+            <h2>Tone3000</h2>
+            <div class="settings-section">
+              <h3>Tone3000 API</h3>
+              <div class="settings-row">
+                <label for="tone3000-api-key-input">API Key</label>
+                <input type="password" id="tone3000-api-key-input" placeholder="Enter your Tone3000 API key" />
+                <button id="tone3000-api-key-save">Save</button>
+                <button id="tone3000-api-key-clear" class="secondary">Clear</button>
+              </div>
+              <div class="settings-hint" id="tone3000-session-status">Session not started.</div>
+            </div>
+
+            <h2>Library Export</h2>
+            <div class="settings-section">
+              <h3>Export All Presets + Blends</h3>
+              <div class="settings-row">
+                <label for="library-export-resources">Resources</label>
+                <select id="library-export-resources">
+                  <option value="used" selected>Only resources used by presets</option>
+                  <option value="all">All resources in library</option>
+                </select>
+                <button id="library-export-btn" type="button">Export Library</button>
+                <span class="settings-unit">.soundshed-library.zip</span>
+              </div>
+              <div class="settings-hint">Exports all presets and blends, plus IR/NAM files from the library based on the selected scope.</div>
+            </div>
+          </div>
+
+          <div class="equipment-tab-panel" id="equipment-tab-performance">
+            <h2>DSP Performance</h2>
+            <div class="performance-section">
+              <h3>Diagnostics</h3>
+              <div class="settings-row">
+                <label for="signal-diagnostics-toggle">Signal Level Diagnostics</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="signal-diagnostics-toggle" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+             
+              <div class="settings-hint">Continuously report signal levels, headroom, and clipping for chain input/output
+                and nodes.</div>
+            </div>
+            <div class="performance-stats">
+              <div class="performance-metric">
+                <span class="metric-label">DSP Load:</span>
+                <span class="metric-value" id="dsp-load-value">0.0%</span>
+              </div>
+              <div class="performance-metric">
+                <span class="metric-label">Peak Load:</span>
+                <span class="metric-value" id="dsp-peak-value">0.0%</span>
+              </div>
+            </div>
+            <div class="performance-details">
+              <h3>Signal Diagnostics <span class="metric-value" id="signal-diagnostics-status">Disabled</span></h3>
+              <div class="signal-diagnostics-summary">
+                <div class="performance-metric">
+                  <span class="metric-label">Input Peak:</span>
+                  <span class="metric-value" id="signal-input-peak">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Input RMS:</span>
+                  <span class="metric-value" id="signal-input-rms">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Input Headroom:</span>
+                  <span class="metric-value" id="signal-input-headroom">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Input Clipping:</span>
+                  <span class="metric-value signal-clip-status clip-off" id="signal-input-clipping">
+                    <span class="clip-indicator"></span>
+                    —
+                  </span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Output Peak:</span>
+                  <span class="metric-value" id="signal-output-peak">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Output RMS:</span>
+                  <span class="metric-value" id="signal-output-rms">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Output Headroom:</span>
+                  <span class="metric-value" id="signal-output-headroom">—</span>
+                </div>
+                <div class="performance-metric">
+                  <span class="metric-label">Output Clipping:</span>
+                  <span class="metric-value signal-clip-status clip-off" id="signal-output-clipping">
+                    <span class="clip-indicator"></span>
+                    —
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div class="performance-plot-container">
+              <canvas id="performance-plot" width="400" height="200"></canvas>
+            </div>
+            <div class="performance-details">
+              <h3>Per-Effect Times (μs)</h3>
+              <div id="performance-details-list">
+                <!-- Per-effect timing details will be populated here -->
+              </div>
+            </div>
+            <div class="performance-details">
+              <h3>Per-Node Levels (dBFS)</h3>
+              <div id="signal-diagnostics-list">
+                <!-- Signal diagnostics details will be populated here -->
+              </div>
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+
+      <!-- FX Library Selector Panel -->
+      <section class="fx-selector-panel" id="fx-selector-panel">
+        <div class="fx-selector-header">
+          <span class="fx-selector-title">FX Library</span>
+          <button class="fx-selector-toggle" id="fx-selector-toggle" aria-expanded="true" title="Collapse FX Library">
+            <span class="fx-toggle-icon" aria-hidden="true">▾</span>
+          </button>
+        </div>
+        <div class="fx-selector-content">
+          <div class="fx-selector-categories" id="fx-selector-categories">
+            <!-- Categories rendered by JavaScript -->
+          </div>
+          <div class="fx-selector-effects">
+            <div class="fx-selector-search">
+              <input type="text" id="fx-search-input" placeholder="Search effects..." />
+            </div>
+            <div class="fx-selector-effects-list" id="fx-selector-effects-list">
+              <!-- Effects rendered by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer Bar -->
+    <footer class="footer-bar">
+      <div id="footer-demo-audio-container" class="footer-demo-audio-container">
+        <!-- Demo audio controls rendered by JavaScript -->
+      </div>
+      <span class="footer-divider">|</span>
+      <button class="footer-btn">TUNER</button>
+      <span class="footer-divider">|</span>
+      <button class="footer-btn footer-btn-disabled" disabled>MIDI</button>
+      <span class="footer-divider">|</span>
+      <button class="footer-btn" id="footer-tap-btn">TAP</button>
+      <button class="bpm-display metronome-only" id="footer-bpm-btn" title="Set BPM">
+        <span id="footer-bpm-value">120.0</span> BPM
+      </button>
+      <div class="footer-bpm-panel metronome-only" id="footer-bpm-panel" aria-hidden="true">
+        <label class="footer-bpm-field">
+          <span>BPM</span>
+          <input type="number" id="footer-bpm-input" min="30" max="300" step="1" />
+        </label>
+        <input type="range" id="footer-bpm-slider" min="30" max="300" step="1" />
+      </div>
+      <span class="footer-divider">|</span>
+      <button class="footer-btn metronome-only" id="footer-metronome-btn">
+        <span class="play-icon">▶</span> METRONOME
+      </button>
+      <span class="footer-divider">|</span>
+      <button class="footer-btn" id="footer-settings-btn">SETTINGS</button>
+      <span class="footer-divider">|</span>
+      <div class="footer-right">
+        <div class="footer-theme-select">
+          <span class="footer-theme-label">THEME</span>
+          <select id="theme-select" class="footer-demo-select themed-select"></select>
+        </div>
+        <span class="footer-hint notification" id="notification-area">[Click] to access the Cab Section · [R Click] or
+          [Double Click] to activate/deactivate.</span>
+      </div>
+    </footer>
+
+    <!-- Tone3000 Details Modal -->
+    <div id="tone3000-details-modal" class="modal tone3000-details-modal" style="display: none;">
+      <div class="modal-content tone3000-details-content">
+        <div class="modal-header">
+          <h3 id="tone3000-details-title">Tone Details</h3>
+          <button class="tone3000-details-close" id="tone3000-details-close" title="Close tone details">×</button>
+        </div>
+        <div class="tone3000-details-body">
+          <div class="tone3000-details-hero">
+            <div class="tone3000-details-image" id="tone3000-details-image"></div>
+            <div class="tone3000-details-meta" id="tone3000-details-meta"></div>
+          </div>
+          <div class="tone3000-details-section">
+            <h4>Description</h4>
+            <p id="tone3000-details-description"></p>
+          </div>
+          <div class="tone3000-details-section">
+            <h4>Tags</h4>
+            <div class="tone3000-details-tags" id="tone3000-details-tags"></div>
+          </div>
+          <div class="tone3000-details-section">
+            <h4>Models</h4>
+            <div class="tone3000-details-status" id="tone3000-details-models-status"></div>
+            <div class="tone3000-details-controls">
+              <div class="tone3000-details-select">
+                <button class="btn btn-secondary tone3000-details-select-btn" id="tone3000-details-select-all" type="button">Select All</button>
+                <button class="btn btn-secondary tone3000-details-select-btn" id="tone3000-details-select-none" type="button">Select None</button>
+              </div>
+              <div class="tone3000-details-import-actions">
+                <button class="btn btn-secondary" id="tone3000-details-import-selected" type="button">Import Selected</button>
+                <button class="btn btn-primary" id="tone3000-details-import-blend" type="button">Import &amp; Create Blend</button>
+              </div>
+            </div>
+            <div class="tone3000-details-progress" id="tone3000-details-progress"></div>
+            <ul class="tone3000-details-models" id="tone3000-details-models"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metronome Modal -->
+    <div id="metronome-modal" class="modal metronome-modal metronome-only" style="display: none;">
+      <div class="metronome-content">
+        <div class="metronome-card">
+          <div class="metronome-card-header">
+            <span class="metronome-card-title">Metronome</span>
+            <div class="metronome-header-controls">
+              <span class="metronome-source" id="metronome-source">Standalone</span>
+              <button class="metronome-close-btn" id="metronome-close-btn" title="Close metronome">×</button>
+            </div>
+          </div>
+          <div class="metronome-card-body">
+            <div class="metronome-top-row">
+              <div class="metronome-control-block">
+                <span class="metronome-label">Volume</span>
+                <div class="knob metronome-knob" data-param="metronome_volume" data-value="-12">
+                  <div class="knob-indicator"></div>
+                </div>
+                <span class="metronome-value" id="metronome-volume-value">-12.0 dB</span>
+              </div>
+              <div class="metronome-control-block wide">
+                <span class="metronome-label">Time Signature</span>
+                <select class="metronome-select" disabled>
+                  <option selected>4/4</option>
+                  <option>3/4</option>
+                  <option>6/8</option>
+                </select>
+              </div>
+              <div class="metronome-control-block wide">
+                <span class="metronome-label">Sound</span>
+                <select class="metronome-select" id="metronome-sound-select">
+                  <option value="click" selected>Click</option>
+                  <option value="drum">Drum</option>
+                </select>
+              </div>
+              <div class="metronome-control-block">
+                <span class="metronome-label">Pan</span>
+                <div class="knob metronome-knob" data-param="metronome_pan" data-value="0">
+                  <div class="knob-indicator"></div>
+                </div>
+                <span class="metronome-value" id="metronome-pan-value">C</span>
+              </div>
+            </div>
+
+            <div class="metronome-divider"></div>
+
+            <div class="metronome-bottom-row">
+              <div class="metronome-bpm-block">
+                <span class="metronome-label">BPM</span>
+                <div class="metronome-bpm-control">
+                  <div class="metronome-bpm-buttons">
+                    <button class="metronome-bpm-btn" id="metronome-bpm-up">▲</button>
+                    <button class="metronome-bpm-btn" id="metronome-bpm-down">▼</button>
+                  </div>
+                  <input type="number" id="metronome-bpm" min="30" max="300" step="1" class="metronome-bpm-input" />
+                </div>
+                <input type="range" id="metronome-bpm-slider" min="30" max="300" step="1" />
+              </div>
+              <button class="metronome-play" id="metronome-toggle" aria-label="Toggle metronome">
+                <span class="metronome-play-icon">▶</span>
+              </button>
+            </div>
+            <div class="metronome-footer">
+              <span id="metronome-status">Stopped</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tuner Modal -->
+    <div id="tuner-modal" class="modal tuner-modal" style="display: none;">
+      <div class="tuner-content">
+        <div class="tuner-header">
+          <span class="tuner-title">Tuner</span>
+          <div class="tuner-header-controls">
+            <button class="tuner-mute-btn" id="tuner-mute-btn" title="Mute output">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+                  fill="currentColor" />
+              </svg>
+            </button>
+            <button class="tuner-close-btn" id="tuner-close-btn" title="Close tuner">×</button>
+          </div>
+        </div>
+
+        <div class="tuner-display">
+          <!-- Cents display -->
+          <div class="tuner-cents-display">
+            <span class="cents-marker cents-left">-50</span>
+            <span class="cents-indicator" id="tuner-cents-indicator">></span>
+            <span class="cents-value" id="tuner-cents-value">0.0</span>
+            <span class="cents-marker cents-right">+50</span>
+          </div>
+
+          <!-- Visual pitch indicator -->
+          <div class="tuner-pitch-track">
+            <div class="tuner-pitch-indicator" id="tuner-pitch-indicator"></div>
+            <div class="tuner-pitch-target"></div>
+          </div>
+
+          <!-- Note display -->
+          <div class="tuner-note-display">
+            <span class="adjacent-note adjacent-note-left" id="tuner-note-left">-</span>
+            <span class="current-note" id="tuner-current-note">-</span>
+            <span class="adjacent-note adjacent-note-right" id="tuner-note-right">-</span>
+          </div>
+        </div>
+
+        <div class="tuner-controls">
+          <div class="tuner-control-group">
+            <button class="tuner-unit-btn active" id="tuner-cents-btn">Cents</button>
+            <button class="tuner-unit-btn" id="tuner-hz-btn">Hz</button>
+          </div>
+
+          <div class="tuner-control-group">
+            <label class="toggle-switch tuner-toggle">
+              <input type="checkbox" id="tuner-live-toggle" checked />
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="tuner-toggle-label">Live Tuner</span>
+          </div>
+
+          <div class="tuner-control-group tuner-ref-group">
+            <input type="number" id="tuner-ref-freq" value="440.0" min="400" max="480" step="0.1"
+              class="tuner-ref-input" />
+            <div class="tuner-ref-buttons">
+              <button class="tuner-ref-btn" id="tuner-ref-up">▲</button>
+              <button class="tuner-ref-btn" id="tuner-ref-down">▼</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EQ Modal -->
+    <div id="eq-modal" class="modal eq-modal" style="display: none;">
+      <div class="eq-modal-content">
+        <div class="eq-modal-header">
+          <span class="eq-modal-title">Global EQ</span>
+          <div class="eq-modal-controls">
+            <label class="toggle-switch eq-modal-toggle">
+              <input type="checkbox" id="eq-modal-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="eq-modal-toggle-label">Enabled</span>
+            <button class="eq-modal-close" id="eq-modal-close" title="Close EQ">×</button>
+          </div>
+        </div>
+        <div class="eq-modal-body">
+          <div class="eq-visualizer">
+            <div class="eq-visualizer-header">
+              <span>EQ Curve</span>
+              <span class="eq-visualizer-range">±18 dB</span>
+            </div>
+            <canvas class="eq-curve-canvas" id="eq-curve-canvas"></canvas>
+          </div>
+
+          <div class="eq-section">
+            <div class="eq-header">
+              <span class="eq-label">PARAMETRIC EQ</span>
+            </div>
+
+            <div class="eq-bands">
+              <!-- Low Shelf Band -->
+              <div class="eq-band">
+                <span class="eq-band-title">LOW</span>
+                <div class="eq-knob-group">
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">GAIN</span>
+                    <div class="eq-knob" data-param="eq_low_gain" data-value="0">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-low-gain-value">0 dB</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">FREQ</span>
+                    <div class="eq-knob" data-param="eq_low_freq" data-value="100">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-low-freq-value">100 Hz</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Low-Mid Band -->
+              <div class="eq-band">
+                <span class="eq-band-title">LOW MID</span>
+                <div class="eq-knob-group">
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">GAIN</span>
+                    <div class="eq-knob" data-param="eq_lowmid_gain" data-value="0">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-lowmid-gain-value">0 dB</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">FREQ</span>
+                    <div class="eq-knob" data-param="eq_lowmid_freq" data-value="500">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-lowmid-freq-value">500 Hz</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">Q</span>
+                    <div class="eq-knob" data-param="eq_lowmid_q" data-value="1">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-lowmid-q-value">1.0</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- High-Mid Band -->
+              <div class="eq-band">
+                <span class="eq-band-title">HIGH MID</span>
+                <div class="eq-knob-group">
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">GAIN</span>
+                    <div class="eq-knob" data-param="eq_highmid_gain" data-value="0">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-highmid-gain-value">0 dB</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">FREQ</span>
+                    <div class="eq-knob" data-param="eq_highmid_freq" data-value="2000">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-highmid-freq-value">2.0k</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">Q</span>
+                    <div class="eq-knob" data-param="eq_highmid_q" data-value="1">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-highmid-q-value">1.0</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- High Shelf Band -->
+              <div class="eq-band">
+                <span class="eq-band-title">HIGH</span>
+                <div class="eq-knob-group">
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">GAIN</span>
+                    <div class="eq-knob" data-param="eq_high_gain" data-value="0">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-high-gain-value">0 dB</span>
+                  </div>
+                  <div class="eq-knob-control">
+                    <span class="eq-knob-label">FREQ</span>
+                    <div class="eq-knob" data-param="eq_high_freq" data-value="8000">
+                      <div class="knob-indicator"></div>
+                    </div>
+                    <span class="knob-value" id="eq-high-freq-value">8.0k</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blend Editor Modal -->
+    <div id="blend-editor-modal" class="modal" style="display: none;">
+      <div class="modal-content blend-editor-modal">
+        <div class="modal-header">
+          <h3>Edit Blend</h3>
+          <button class="modal-close" id="blend-editor-modal-close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="blend-tabs">
+            <button class="blend-tab-btn active" data-blend-tab="settings" type="button">Blend Settings</button>
+            <button class="blend-tab-btn" data-blend-tab="test" type="button">Test Blend</button>
+          </div>
+          <div class="blend-tab-panel active" data-blend-tab-panel="settings">
+            <div class="form-group">
+              <label for="blend-editor-name-input">Blend Name</label>
+              <input type="text" id="blend-editor-name-input" placeholder="My Blend" />
+            </div>
+            <div class="form-group">
+              <label for="blend-editor-category-select">Category</label>
+              <select id="blend-editor-category-select">
+                <option value="pedal">Pedal</option>
+                <option value="preamp">Preamp</option>
+                <option value="amp" selected>Amp</option>
+                <option value="full-rig">Full Rig</option>
+                <option value="cab">Cab</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="blend-editor-mode-select">Blend Mode</label>
+              <select id="blend-editor-mode-select">
+                <option value="interpolate" selected>Interpolate</option>
+                <option value="snap">Snap</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Mapped Parameters</label>
+              <div id="blend-parameter-list" class="blend-parameter-list"></div>
+              <div class="blend-parameter-controls">
+                <select id="blend-parameter-add-select"></select>
+                <button class="btn btn-secondary" id="blend-parameter-add-btn" type="button">Add Parameter</button>
+                <button class="btn btn-secondary" id="blend-parameter-auto-btn" type="button">Auto Map</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Models</label>
+              <div id="blend-model-list" class="blend-model-list"></div>
+              <button class="btn btn-secondary blend-add-model" id="blend-add-model-btn" type="button">Add Model</button>
+            </div>
+          </div>
+          <div class="blend-tab-panel" data-blend-tab-panel="test">
+            <div class="form-group">
+              <label>Matched Model</label>
+              <div class="blend-match-summary">
+                <span id="blend-match-name">—</span>
+                <span id="blend-match-details" class="blend-match-details"></span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Test Parameters</label>
+              <div id="blend-test-controls" class="blend-test-controls"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <input type="file" id="blend-import-input" accept=".namz" style="display: none;" />
+          <button class="btn btn-secondary" id="blend-editor-export">Export .namz</button>
+          <button class="btn btn-secondary" id="blend-editor-import">Import .namz</button>
+          <button class="btn btn-secondary" id="blend-editor-cancel">Cancel</button>
+          <button class="btn btn-primary" id="blend-editor-save">Save Blend</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resource Browser Modal (Enhanced NAM/IR selector with Library + Tone3000) -->
+    <div id="resource-browser-modal" class="modal resource-browser-modal" style="display: none;">
+      <div class="modal-content resource-browser-modal-content" role="dialog" aria-modal="true" aria-labelledby="resource-browser-title">
+        <div class="modal-header">
+          <h3 id="resource-browser-title">Select Resource</h3>
+          <button class="modal-close" id="resource-browser-close">×</button>
+        </div>
+        <div class="modal-body">
+          <!-- Tab buttons -->
+          <div class="resource-browser-tabs">
+            <button class="resource-browser-tab-btn active" data-tab="library" type="button">Resource Library</button>
+            <button class="resource-browser-tab-btn" data-tab="tone3000" type="button">Tone 3000</button>
+          </div>
+          
+          <!-- Library Tab Panel -->
+          <div class="resource-browser-tab-panel active" data-tab-panel="library">
+            <div class="resource-browser-filters">
+              <input type="text" id="resource-browser-library-search" placeholder="Search models..." />
+              <select id="resource-browser-library-category">
+                <option value="all">All Categories</option>
+              </select>
+            </div>
+            <div id="resource-browser-library-list" class="resource-browser-list"></div>
+          </div>
+          
+          <!-- Tone3000 Tab Panel -->
+          <div class="resource-browser-tab-panel" data-tab-panel="tone3000">
+            <div class="resource-browser-filters">
+              <input type="text" id="resource-browser-tone3000-search" placeholder="Search amps and pedals..." />
+              <button class="btn btn-secondary" id="resource-browser-tone3000-search-btn" type="button">Search</button>
+              <select id="resource-browser-tone3000-category">
+                <option value="amp" selected>Amps</option>
+                <option value="pedal">Pedals (FX)</option>
+                <option value="preamp">Preamps</option>
+                <option value="full-rig">Full Rigs</option>
+              </select>
+              <select id="resource-browser-tone3000-sort">
+                <option value="popular" selected>Popular</option>
+                <option value="recent">Recent</option>
+                <option value="trending">Trending</option>
+              </select>
+            </div>
+            <div id="resource-browser-tone3000-status" class="resource-browser-status"></div>
+            <div id="resource-browser-tone3000-list" class="resource-browser-list resource-browser-tone3000-list"></div>
+            <div id="resource-browser-tone3000-pagination" class="resource-browser-pagination">
+              <button class="resource-browser-page-btn" id="resource-browser-tone3000-prev" type="button">◀ Prev</button>
+              <span id="resource-browser-tone3000-page-label">Page 1</span>
+              <button class="resource-browser-page-btn" id="resource-browser-tone3000-next" type="button">Next ▶</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="resource-browser-cancel">Cancel</button>
+          <button class="btn btn-primary" id="resource-browser-select" disabled>Select</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blend Model Browser Modal -->
+    <div id="blend-model-browser-modal" class="modal" style="display: none;">
+      <div class="modal-content blend-model-browser-modal" role="dialog" aria-modal="true" aria-labelledby="blend-model-browser-title">
+        <div class="modal-header">
+          <h3 id="blend-model-browser-title">Select Model</h3>
+          <button class="modal-close" id="blend-model-browser-close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="blend-model-browser-summary">
+            <span>Default tone group: <strong id="blend-model-browser-group">—</strong></span>
+          </div>
+          <div class="blend-model-browser-filters">
+            <input type="text" id="blend-model-browser-search" placeholder="Search models..." />
+            <select id="blend-model-browser-scope">
+              <option value="group" selected>Current tone group</option>
+              <option value="all">All models</option>
+            </select>
+            <select id="blend-model-browser-category">
+              <option value="all" selected>All types</option>
+            </select>
+          </div>
+          <div id="blend-model-browser-list" class="blend-model-browser-list"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="blend-model-browser-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Preset Modal -->
+    <div id="save-preset-modal" class="modal save-preset-modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Save Preset</h3>
+          <button class="modal-close" id="save-preset-modal-close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="preset-modal-tabs">
+            <button class="preset-modal-tab-btn active" data-preset-modal-tab="details" type="button">Details</button>
+            <button class="preset-modal-tab-btn" data-preset-modal-tab="advanced" type="button">Advanced</button>
+          </div>
+          <div class="preset-modal-tab-panel active" data-preset-modal-tab-panel="details">
+            <div class="form-group">
+              <label for="preset-folder-select">Save Folder</label>
+              <select id="preset-folder-select" class="themed-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="preset-name-input">Preset Name</label>
+              <input type="text" id="preset-name-input" placeholder="My Custom Preset" />
+            </div>
+            <div class="form-group">
+              <label for="preset-category-input">Category</label>
+              <input type="text" id="preset-category-input" placeholder="User" value="User" />
+            </div>
+            <div class="form-group">
+              <label for="preset-description-input">Description</label>
+              <textarea id="preset-description-input" placeholder="Optional description..." rows="3"></textarea>
+            </div>
+          </div>
+          <div class="preset-modal-tab-panel" data-preset-modal-tab-panel="advanced">
+            <div class="form-group">
+              <label>Preset JSON (read-only)</label>
+              <div class="preset-advanced-actions">
+                <button class="btn btn-secondary" id="preset-json-validate" type="button">Validate</button>
+                <button class="btn btn-secondary" id="preset-json-cleanup" type="button">Clean Up</button>
+              </div>
+              <pre class="preset-json-report" id="preset-json-report"></pre>
+              <div class="preset-advanced-json" aria-label="Preset JSON">
+                <pre id="preset-json-view"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="save-preset-cancel">Cancel</button>
+          <button class="btn btn-primary" id="save-preset-confirm">Save Preset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layout Designer Modal -->
+    <div id="layout-designer-modal" class="modal" style="display: none;">
+      <div class="modal-content layout-designer-content">
+        <div class="modal-header">
+          <h3 id="layout-designer-title">Layout Designer</h3>
+          <button class="modal-close" id="layout-designer-close">×</button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="layout-designer-toolbar">
+          <div class="layout-designer-toolbar-group">
+            <span class="layout-designer-toolbar-label">Size:</span>
+            <div class="layout-dimensions-inputs">
+              <label>W<input type="number" id="layout-designer-width" min="200" max="800" step="8"></label>
+              <span class="dimension-separator">×</span>
+              <label>H<input type="number" id="layout-designer-height" min="150" max="600" step="8"></label>
+            </div>
+          </div>
+          <div class="layout-designer-toolbar-group">
+            <button id="layout-designer-undo" disabled title="Undo (Ctrl+Z)">
+              <svg viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 0 1 0 10H9" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 6L3 10l4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Undo
+            </button>
+            <button id="layout-designer-redo" disabled title="Redo (Ctrl+Y)">
+              <svg viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 0 0 0 10h4" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M17 6l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Redo
+            </button>
+          </div>
+          <div class="layout-designer-toolbar-group">
+            <button id="layout-designer-grid-toggle" class="active" title="Toggle Grid (G)">
+              <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Grid
+            </button>
+            <button id="layout-designer-preview-toggle" title="Preview Mode (P)">
+              <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Preview
+            </button>
+          </div>
+          <div class="layout-designer-toolbar-group">
+            <button id="layout-designer-add-label" title="Add Text Label">
+              <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Add Label
+            </button>
+            <button id="layout-designer-add-control" title="Add Parameter Control">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Add Control
+            </button>
+            <button id="layout-designer-add-bg" title="Add Background Image">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="8" cy="9" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 15l-5-5L5 21" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Background
+            </button>
+            <button id="layout-designer-add-color-bg" title="Add Color/Gradient Background">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="5" y="5" width="14" height="14" rx="1" fill="currentColor" opacity="0.3"/></svg>
+              Color BG
+            </button>
+          </div>
+          <div class="layout-designer-toolbar-group">
+            <button id="layout-designer-reset" title="Reset to Default Layout">
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M3 3v5h5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              Reset
+            </button>
+          </div>
+          <div class="layout-designer-toolbar-group layout-designer-zoom-group">
+            <button id="layout-designer-zoom-out" title="Zoom Out">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 21l-4.35-4.35M8 11h6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <span id="layout-designer-zoom-label" class="layout-designer-zoom-value">100%</span>
+            <button id="layout-designer-zoom-in" title="Zoom In">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M21 21l-4.35-4.35M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <button id="layout-designer-zoom-reset" title="Reset Zoom to 100%">1:1</button>
+          </div>
+        </div>
+
+        <div class="layout-designer-body">
+          <!-- Canvas Area -->
+          <div class="layout-designer-canvas-container">
+            <div id="layout-designer-canvas-wrapper" class="layout-designer-canvas-wrapper">
+              <div id="layout-designer-canvas" class="layout-designer-canvas">
+                <div id="layout-designer-grid" class="layout-designer-grid grid-visible"></div>
+                <div id="layout-designer-controls" class="layout-designer-controls"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Properties Sidebar -->
+          <div id="layout-designer-sidebar" class="layout-designer-sidebar">
+            <div class="layout-designer-sidebar-header">Properties</div>
+            <div id="layout-designer-sidebar-content" class="layout-designer-sidebar-content">
+              <div class="layout-designer-sidebar-empty">
+                Select a control or label to edit its properties
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer layout-designer-footer">
+          <div class="layout-designer-footer-left">
+            <button class="btn btn-secondary" id="layout-designer-export">Export...</button>
+            <button class="btn btn-secondary" id="layout-designer-import">Import...</button>
+            <input type="file" id="layout-designer-import-file" accept=".zip,.sgfxlayout.zip" style="display: none;" />
+          </div>
+          <div class="layout-designer-footer-right">
+            <button class="btn btn-secondary" id="layout-designer-cancel">Cancel</button>
+            <button class="btn btn-primary" id="layout-designer-save">Save Layout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert/Confirm Dialog Modal -->
+    <div id="dialog-modal" class="modal dialog-modal" style="display: none;">
+      <div class="modal-content dialog-content" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-header">
+          <h3 id="dialog-title">Notice</h3>
+          <button class="modal-close" id="dialog-close" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="dialog-message" class="dialog-message"></p>
+        </div>
+        <div class="modal-footer dialog-footer">
+          <button class="btn btn-secondary" id="dialog-cancel" type="button">Cancel</button>
+          <button class="btn btn-primary" id="dialog-ok" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="dist/jszip.min.js"></script>
+  <script type="module" src="dist/main.js"></script>
+</body>
+
+</html>

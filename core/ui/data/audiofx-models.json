@@ -1,0 +1,137 @@
+[
+  {
+    "id": "nam-jcm800-hi-g6",
+    "hash": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+    "filePath": "assets/amps/Guitar/TimR/JCM800 2203 1985/JCM800 Hi P6 B8 M4 T7 G6.nam",
+    "title": "JCM800 Hi Gain 6",
+    "description": "Marshall JCM800 2203 1985 - High input, medium gain",
+    "category": "British",
+    "tags": ["marshall", "crunch", "classic-rock"]
+  },
+  {
+    "id": "nam-jcm800-hi-g10",
+    "hash": "b2c3d4e5f67890123456789012345678901abcdef1234567890abcdef1234567",
+    "filePath": "assets/amps/Guitar/TimR/JCM800 2203 1985/JCM800 Hi P6 B8 M4 T7 G10.nam",
+    "title": "JCM800 Hi Gain 10",
+    "description": "Marshall JCM800 2203 1985 - High input, full gain",
+    "category": "British",
+    "tags": ["marshall", "high-gain", "metal"]
+  },
+  {
+    "id": "nam-jcm800-lo-g4",
+    "hash": "c3d4e5f678901234567890123456789012abcdef1234567890abcdef12345678",
+    "filePath": "assets/amps/Guitar/TimR/JCM800 2203 1985/JCM800 Lo P6 B8 M4 T7 G4.nam",
+    "title": "JCM800 Lo Gain 4",
+    "description": "Marshall JCM800 2203 1985 - Low input, edge of breakup",
+    "category": "British",
+    "tags": ["marshall", "clean", "bluesy"]
+  },
+  {
+    "id": "nam-mesa-recto-clean-g5",
+    "hash": "d4e5f6789012345678901234567890123abcdef1234567890abcdef123456789",
+    "filePath": "assets/amps/Guitar/Arlington Audio/Mesa Boogie Single Rectifier 50 (0.5.2)/MESA BOOGIE - SOLO RECTIFIER 50 - 6L6 - GREEN - CLEAN -  G5.nam",
+    "title": "Mesa Recto Clean",
+    "description": "Mesa Single Rectifier 50 - Green channel clean",
+    "category": "American",
+    "tags": ["mesa", "clean", "pristine"]
+  },
+  {
+    "id": "nam-mesa-recto-pushed-g7",
+    "hash": "e5f67890123456789012345678901234abcdef1234567890abcdef1234567890",
+    "filePath": "assets/amps/Guitar/Arlington Audio/Mesa Boogie Single Rectifier 50 (0.5.2)/MESA BOOGIE - SOLO RECTIFIER 50 - 6L6 - GREEN - PUSHED - G7.nam",
+    "title": "Mesa Recto Pushed",
+    "description": "Mesa Single Rectifier 50 - Green channel pushed",
+    "category": "American",
+    "tags": ["mesa", "crunch", "warm"]
+  },
+  {
+    "id": "nam-mesa-recto-modern-g8",
+    "hash": "f6789012345678901234567890123456abcdef1234567890abcdef12345678901",
+    "filePath": "assets/amps/Guitar/Arlington Audio/Mesa Boogie Single Rectifier 50 (0.5.2)/MESA BOOGIE - SOLO RECTIFIER 50 - 6L6 - RED - MODERN - G8.nam",
+    "title": "Mesa Recto Modern",
+    "description": "Mesa Single Rectifier 50 - Red channel modern high gain",
+    "category": "American",
+    "tags": ["mesa", "high-gain", "metal", "djent"]
+  },
+  {
+    "id": "nam-mesa-recto-vintage-el34",
+    "hash": "07890123456789012345678901234567abcdef1234567890abcdef123456789012",
+    "filePath": "assets/amps/Guitar/Arlington Audio/Mesa Boogie Single Rectifier 50 (0.5.2)/MESA BOOGIE - SOLO RECTIFIER 50 - EL34 - RED - VINTAGE - G6.nam",
+    "title": "Mesa Recto Vintage EL34",
+    "description": "Mesa Single Rectifier 50 - EL34 vintage voicing",
+    "category": "American",
+    "tags": ["mesa", "high-gain", "vintage", "rock"]
+  },
+  {
+    "id": "nam-vox-ac15-clean",
+    "hash": "18901234567890123456789012345678abcdef1234567890abcdef1234567890123",
+    "filePath": "assets/amps/Guitar/Emil Rohbe/VOX AC15 NAM PACK/VOX AC15 Capture 3 - Emil Rohbe.nam",
+    "title": "VOX AC15 Clean",
+    "description": "VOX AC15 - chimey clean tones",
+    "category": "British",
+    "tags": ["vox", "clean", "chimey", "jangly"]
+  },
+  {
+    "id": "nam-vox-ac15-breakup",
+    "hash": "29012345678901234567890123456789abcdef1234567890abcdef12345678901234",
+    "filePath": "assets/amps/Guitar/Emil Rohbe/VOX AC15 NAM PACK/VOX AC15 Capture 7 - Emil Rohbe.nam",
+    "title": "VOX AC15 Breakup",
+    "description": "VOX AC15 - classic British breakup",
+    "category": "British",
+    "tags": ["vox", "breakup", "vintage", "beatles"]
+  },
+  {
+    "id": "nam-fender-twin-clean",
+    "hash": "30123456789012345678901234567890abcdef1234567890abcdef123456789012345",
+    "filePath": "assets/amps/Guitar/TimR/Fender Twin Reverb - Breakup/Tim R Fender Twin Reverb Ch1 BR G04.nam",
+    "title": "Fender Twin Clean",
+    "description": "Fender Twin Reverb - pristine clean",
+    "category": "American",
+    "tags": ["fender", "clean", "pristine", "country"]
+  },
+  {
+    "id": "nam-fender-twin-breakup",
+    "hash": "41234567890123456789012345678901abcdef1234567890abcdef1234567890123456",
+    "filePath": "assets/amps/Guitar/TimR/Fender Twin Reverb - Breakup/Tim R Fender Twin Reverb Ch1 BR G07.nam",
+    "title": "Fender Twin Breakup",
+    "description": "Fender Twin Reverb - edge of breakup",
+    "category": "American",
+    "tags": ["fender", "breakup", "bluesy", "warm"]
+  },
+  {
+    "id": "nam-randall-protube-od",
+    "hash": "52345678901234567890123456789012abcdef1234567890abcdef12345678901234567",
+    "filePath": "assets/amps/Guitar/Scharrface/Randall Protube 2000/Randall Protube 2000 Overdrive channel V4 G6 B6 M5 T6 Gain Voicing2 boosted by Airis Parallel OD.nam",
+    "title": "Randall Protube OD",
+    "description": "Randall Protube 2000 - Boosted overdrive",
+    "category": "American",
+    "tags": ["randall", "high-gain", "metal", "tight"]
+  },
+  {
+    "id": "nam-bugera-6262-grind",
+    "hash": "63456789012345678901234567890123abcdef1234567890abcdef123456789012345678",
+    "filePath": "assets/amps/Guitar/Pipp Priss/Pipps Boosted Goodiness Bugera 6262/Bug6262-CR-Grind.nam",
+    "title": "Bugera 6262 Grind",
+    "description": "Bugera 6262 - Modern high gain grinding tone",
+    "category": "American",
+    "tags": ["bugera", "high-gain", "modern", "metal"]
+  },
+  {
+    "id": "nam-orange-ad200-bass",
+    "hash": "74567890123456789012345678901234abcdef1234567890abcdef1234567890123456789",
+    "filePath": "assets/amps/Bass/FatDracula/Orange AD200b/AD200 Mas5 Gain5.nam",
+    "title": "Orange AD200 Bass",
+    "description": "Orange AD200b - Classic bass amp tone",
+    "category": "Bass",
+    "tags": ["orange", "bass", "tube", "warm"]
+  },
+  {
+    "id": "nam-orange-ad200-driven",
+    "hash": "85678901234567890123456789012345abcdef1234567890abcdef12345678901234567890",
+    "filePath": "assets/amps/Bass/FatDracula/Orange AD200b/AD200 Mas10 Gain10.nam",
+    "title": "Orange AD200 Driven",
+    "description": "Orange AD200b - Full gain bass overdrive",
+    "category": "Bass",
+    "tags": ["orange", "bass", "overdrive", "gritty"]
+  }
+]

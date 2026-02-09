@@ -1,0 +1,217 @@
+/* ===== Navigation Elements ===== */
+
+/* Icon Bar (Top) */
+.icon-bar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-darker);
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: var(--overlay-light);
+  color: var(--text-primary);
+}
+
+.icon-btn.active {
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 2px var(--overlay-dark);
+}
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-bar-spacer {
+  flex: 1;
+}
+
+#fx-library-toggle {
+  background: linear-gradient(180deg, #3a5a3a 0%, #2a4a2a 100%);
+  border-color: #4a7a4a;
+}
+
+#fx-library-toggle:hover {
+  background: linear-gradient(180deg, #4a6a4a 0%, #3a5a3a 100%);
+}
+
+#fx-library-toggle.active {
+  background: linear-gradient(180deg, #e07848 0%, #c06030 100%);
+  border-color: #f08858;
+}
+
+/* Control Bar */
+.control-bar {
+  display: flex;
+  justify-content: center;
+  gap:10vw;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-dark);
+  flex-wrap: nowrap;
+  min-height: fit-content;
+  overflow: visible;
+}
+
+.control-bar-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 2vw;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Preset Group */
+.preset-group {
+  background: var(--overlay-light);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--overlay-medium);
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+.preset-row-top {
+  flex-wrap: wrap;
+}
+
+.preset-row-bottom {
+  justify-content: center;
+}
+
+.preset-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Preset Action Buttons */
+.preset-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.preset-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.preset-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.preset-action-btn:hover {
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+}
+
+.preset-action-btn:active {
+  background: var(--overlay-medium);
+  transform: scale(0.95);
+}
+
+.preset-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.preset-action-btn:disabled:hover {
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+}
+
+.preset-action-btn-unsaved {
+  background: rgba(220, 53, 69, 0.18);
+  color: var(--color-error);
+}
+
+.preset-action-btn-unsaved:hover {
+  background: rgba(220, 53, 69, 0.28);
+  color: var(--color-error);
+}
+
+.preset-action-btn-unsaved:disabled {
+  opacity: 0.7;
+  background: rgba(220, 53, 69, 0.18);
+  color: var(--color-error);
+}
+
+.preset-action-btn-danger:hover {
+  background: rgba(220, 53, 69, 0.2);
+  color: var(--color-error);
+}
+
+.preset-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-medium);
+}
+
+.preset-chooser-label {
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  border: 1px solid var(--border-dark-light);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 160px;
+  text-align: left;
+}
+
+.preset-chooser-label:hover {
+  background: var(--bg-dark-secondary);
+}
+
+.preset-favorite {
+  color: var(--color-preset-favorite);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.preset-favorite.active {
+  text-shadow: 0 0 6px color-mix(in srgb, var(--color-preset-favorite), transparent 40%);
+}

@@ -1,0 +1,102 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - next
+
+jobs:
+  build_and_run_tests:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            cmakeargs: -A x64
+            install_ninja: false
+            name: Windows 64bit MSVC
+            exe: .exe
+
+          - os: windows-latest
+            cmakeargs: -A x64 -DCLAP_HELPERS_TESTS_CXX_STANDARD=20
+            install_ninja: false
+            name: Windows 64bit C++20 MSVC
+            exe: .exe
+
+          #- os: windows-latest
+          #  cmakeargs: -GNinja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
+          #  install_ninja: true
+          #  name: Windows gcc/minGW
+          #  exe: .exe
+
+          - os: windows-latest
+            cmakeargs: -GNinja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
+            install_ninja: true
+            name: Windows clang
+            exe: .exe
+
+          - os: ubuntu-latest
+            cmakeargs: -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER=gcc-11 -DCLAP_HELPERS_TESTS_CXX_STANDARD=11
+            install_ninja: false
+            name: Linux gcc11 C++ 11
+
+          - os: ubuntu-latest
+            cmakeargs: -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_C_COMPILER=gcc-12 -DCLAP_HELPERS_TESTS_CXX+STANDARD=17
+            install_ninja: false
+            name: Linux gcc12 C++ 17
+
+          - os: ubuntu-latest
+            cmakeargs: -DCLAP_HELPERS_TESTS_CXX_STANDARD=20 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_C_COMPILER=gcc-12
+            install_ninja: false
+            name: Linux gcc12 C++20
+
+          - os: ubuntu-latest
+            cmakeargs: -DCLAP_HELPERS_TESTS_CXX_STANDARD=23 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_C_COMPILER=gcc-12
+            install_ninja: false
+            name: Linux gcc12 C++23
+
+          - os: macos-latest
+            cmakeargs: -GNinja -DCLAP_HELPERS_TESTS_CXX_STANDARD=11
+            install_ninja: true
+            name: MacOS Ninja C++11
+
+          - os: macos-latest
+            cmakeargs: -G"Xcode" -DCLAP_HELPERS_TESTS_CXX_STANDARD=14
+            install_ninja: false
+            name: MacOS Xcode C++14
+
+          - os: macos-latest
+            cmakeargs: -G"Unix Makefiles" -DCLAP_HELPERS_TESTS_CXX_STANDARD=17
+            install_ninja: false
+            name: MacOS Unix Makefiles C++17
+
+          - os: macos-latest
+            cmakeargs: -G"Ninja Multi-Config" -DCLAP_HELPERS_TESTS_CXX_STANDARD=20
+            install_ninja: true
+            name: MacOS Ninja Multi C++20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Install Ninja
+        if: ${{ matrix.install_ninja }}
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Build project
+        run: |
+          cmake -S . -B ./build ${{ matrix.cmakeargs }} -DCMAKE_BUILD_TYPE=Debug -DCLAP_HELPERS_DOWNLOAD_DEPENDENCIES=TRUE -DCLAP_HELPERS_BUILD_TESTS=TRUE
+          cmake --build ./build --config Debug --target clap-helpers-tests --parallel
+
+      - name: Run Tests
+        shell: bash
+        run: |
+          echo "About to run " ./build/clap-helpers-tests${{ matrix.exe }}
+          ls -l ./build/clap-helpers-tests${{ matrix.exe }}
+          echo "Starting Run"
+          ./build/clap-helpers-tests${{ matrix.exe }}
+          echo "Run complete"

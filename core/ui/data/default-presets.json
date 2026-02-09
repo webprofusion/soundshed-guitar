@@ -1,0 +1,1065 @@
+[
+  {
+    "id": "preset-clean-fender-twin",
+    "formatVersion": 2,
+    "name": "Pristine Clean",
+    "category": "Clean",
+    "description": "Crystal clear Fender Twin clean tone, perfect for country and jazz",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Fender Twin",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-fender-twin-clean" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Jensen Cab",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-clean-vox-jangle",
+    "formatVersion": 2,
+    "name": "Chimey Jangle",
+    "category": "Clean",
+    "description": "Sparkling VOX AC15 clean tone with chime and jangle",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "VOX AC15",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-vox-ac15-clean" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Greenback Cab",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112g12m" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-crunch-jcm800",
+    "formatVersion": 2,
+    "name": "British Crunch",
+    "category": "Crunch",
+    "description": "Classic Marshall JCM800 crunch, perfect for classic rock",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -55, "attack": 0.1, "hold": 50, "release": 100 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "JCM800",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-jcm800-hi-g6" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "1960 Cab",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-421-1960" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-crunch-vox-breakup",
+    "formatVersion": 2,
+    "name": "Vintage Breakup",
+    "category": "Crunch",
+    "description": "Touch-sensitive VOX breakup for classic British tones",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "VOX Breakup",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-vox-ac15-breakup" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Greenback 2x12",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-212v30" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-highgain-mesa-modern",
+    "formatVersion": 2,
+    "name": "Modern Metal",
+    "category": "High Gain",
+    "description": "Mesa Rectifier modern high gain for djent and metal",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -50, "attack": 0.1, "hold": 30, "release": 80 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Mesa Modern",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-mesa-recto-modern-g8" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "4x12 V30",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-412v30" }
+        },
+        {
+          "id": "eq_1",
+          "type": "eq_parametric",
+          "displayName": "Post EQ",
+          "category": "eq",
+          "bypassed": false,
+          "params": {
+            "band0_gain": -2,
+            "band0_freq": 100,
+            "band1_gain": -3,
+            "band1_freq": 400,
+            "band1_q": 1.5,
+            "band2_gain": 2,
+            "band2_freq": 2500,
+            "band2_q": 1.2,
+            "band3_gain": 1,
+            "band3_freq": 6000
+          },
+          "config": {}
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "eq_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "eq_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-highgain-jcm800-full",
+    "formatVersion": 2,
+    "name": "British Fury",
+    "category": "High Gain",
+    "description": "JCM800 cranked to full gain for aggressive rock and metal",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -48, "attack": 0.1, "hold": 40, "release": 100 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "JCM800 Full",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-jcm800-hi-g10" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "1960 Cab",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-906-1960" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-highgain-bugera-grind",
+    "formatVersion": 2,
+    "name": "Grinding Metal",
+    "category": "High Gain",
+    "description": "Bugera 6262 for grinding modern metal tones",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -45, "attack": 0.1, "hold": 25, "release": 60 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Bugera Grind",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-bugera-6262-grind" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Tight Modern",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-scharrface-blend-tight" }
+        },
+        {
+          "id": "pitch_1",
+          "type": "pitch_shift",
+          "displayName": "Pitch Shift",
+          "category": "modulation",
+          "bypassed": true,
+          "params": { "semitones": 0, "mix": 1 },
+          "config": {}
+        },
+        {
+          "id": "doubler_1",
+          "type": "delay_doubler",
+          "displayName": "Doubler",
+          "category": "delay",
+          "bypassed": true,
+          "params": { "time": 6, "mix": 0.3 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "pitch_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "pitch_1", "to": "doubler_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "doubler_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-dual-amp-clean-crunch",
+    "formatVersion": 2,
+    "name": "Clean/Crunch Blend",
+    "category": "Dual Amp",
+    "description": "Parallel Fender clean and JCM800 crunch blended together",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "split_1",
+          "type": "gain",
+          "displayName": "Split",
+          "category": "utility",
+          "bypassed": false,
+          "params": { "gain": 0, "polarity": 0 },
+          "config": {}
+        },
+        {
+          "id": "amp_clean",
+          "type": "amp_nam",
+          "displayName": "Fender Clean",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": -3 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-fender-twin-clean" }
+        },
+        {
+          "id": "cab_clean",
+          "type": "cab_ir",
+          "displayName": "Jensen",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        },
+        {
+          "id": "amp_crunch",
+          "type": "amp_nam",
+          "displayName": "JCM800 Crunch",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": -6 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-jcm800-hi-g6" }
+        },
+        {
+          "id": "cab_crunch",
+          "type": "cab_ir",
+          "displayName": "1960 V30",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-412v30" }
+        },
+        {
+          "id": "mixer_1",
+          "type": "gain",
+          "displayName": "Mix",
+          "category": "utility",
+          "bypassed": false,
+          "params": { "gain": 0, "polarity": 0 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "split_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "split_1", "to": "amp_clean", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "split_1", "to": "amp_crunch", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_clean", "to": "cab_clean", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_crunch", "to": "cab_crunch", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_clean", "to": "mixer_1", "fromPort": 0, "toPort": 0, "gain": 0.6 },
+        { "from": "cab_crunch", "to": "mixer_1", "fromPort": 0, "toPort": 1, "gain": 0.4 },
+        { "from": "mixer_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-dual-amp-brit-american",
+    "formatVersion": 2,
+    "name": "Atlantic Crossover",
+    "category": "Dual Amp",
+    "description": "Parallel British Marshall and American Mesa blend for massive tone",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -50, "attack": 0.1, "hold": 40, "release": 100 },
+          "config": {}
+        },
+        {
+          "id": "split_1",
+          "type": "gain",
+          "displayName": "Split",
+          "category": "utility",
+          "bypassed": false,
+          "params": { "gain": 0, "polarity": 0 },
+          "config": {}
+        },
+        {
+          "id": "amp_marshall",
+          "type": "amp_nam",
+          "displayName": "JCM800",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-jcm800-hi-g10" }
+        },
+        {
+          "id": "cab_marshall",
+          "type": "cab_ir",
+          "displayName": "1960 Cab",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-906-1960" }
+        },
+        {
+          "id": "amp_mesa",
+          "type": "amp_nam",
+          "displayName": "Mesa Recto",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-mesa-recto-modern-g8" }
+        },
+        {
+          "id": "cab_mesa",
+          "type": "cab_ir",
+          "displayName": "Recto 4x12",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-412v30" }
+        },
+        {
+          "id": "mixer_1",
+          "type": "gain",
+          "displayName": "Mix",
+          "category": "utility",
+          "bypassed": false,
+          "params": { "gain": 0, "polarity": 0 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "split_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "split_1", "to": "amp_marshall", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "split_1", "to": "amp_mesa", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_marshall", "to": "cab_marshall", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_mesa", "to": "cab_mesa", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_marshall", "to": "mixer_1", "fromPort": 0, "toPort": 0, "gain": 0.5 },
+        { "from": "cab_mesa", "to": "mixer_1", "fromPort": 0, "toPort": 1, "gain": 0.5 },
+        { "from": "mixer_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-lead-mesa-delay",
+    "formatVersion": 2,
+    "name": "Singing Lead",
+    "category": "Lead",
+    "description": "Mesa Rectifier lead with delay for soaring solos",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -55, "attack": 0.1, "hold": 50, "release": 120 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Mesa Lead",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 3, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-mesa-recto-pushed-g7" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "4x12 V30",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-412creamback" }
+        },
+        {
+          "id": "delay_1",
+          "type": "delay_digital",
+          "displayName": "Lead Delay",
+          "category": "delay",
+          "bypassed": false,
+          "params": { "time": 350, "feedback": 0.35, "mix": 0.25, "highCut": 6000 },
+          "config": {}
+        },
+        {
+          "id": "reverb_1",
+          "type": "reverb_room",
+          "displayName": "Room",
+          "category": "reverb",
+          "bypassed": false,
+          "params": { "decay": 0.4, "damping": 0.6, "mix": 0.15 },
+          "config": {}
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "delay_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "delay_1", "to": "reverb_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "reverb_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-bass-orange",
+    "formatVersion": 2,
+    "name": "Orange Bass",
+    "category": "Bass",
+    "description": "Warm Orange AD200 bass tone for rock",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "comp_1",
+          "type": "compressor_opto",
+          "displayName": "Bass Comp",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -18, "ratio": 4, "attack": 15, "release": 200, "makeup": 3, "mix": 0.7 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Orange AD200",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-orange-ad200-bass" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "8x10 SVT",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-drbonkers-bass-810" }
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "comp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "comp_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-bass-driven",
+    "formatVersion": 2,
+    "name": "Gritty Bass",
+    "category": "Bass",
+    "description": "Driven Orange bass tone for aggressive rock and metal",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "gate_1",
+          "type": "dynamics_gate",
+          "displayName": "Gate",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -55, "attack": 0.5, "hold": 80, "release": 150 },
+          "config": {}
+        },
+        {
+          "id": "comp_1",
+          "type": "compressor_vca",
+          "displayName": "Comp",
+          "category": "dynamics",
+          "bypassed": false,
+          "params": { "threshold": -15, "ratio": 6, "attack": 5, "release": 150, "knee": 6, "makeup": 3, "mix": 0.8 },
+          "config": {}
+        },
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Orange Driven",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 3, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-orange-ad200-driven" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "1x15 Deep",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-drbonkers-bass-115" }
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "gate_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "gate_1", "to": "comp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "comp_1", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-test-nam-only",
+    "formatVersion": 2,
+    "name": "Test NAM Only",
+    "category": "Debug",
+    "description": "NAM path only with cab bypassed (checks amp output)",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "NAM Only Amp",
+          "category": "amp",
+          "bypassed": false,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-fender-twin-clean" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Bypassed Cab",
+          "category": "cab",
+          "bypassed": true,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-test-ir-only",
+    "formatVersion": 2,
+    "name": "Test IR Only",
+    "category": "Debug",
+    "description": "IR path only with amp bypassed (checks cab output)",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Bypassed Amp",
+          "category": "amp",
+          "bypassed": true,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-fender-twin-clean" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Test IR",
+          "category": "cab",
+          "bypassed": false,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  },
+  {
+    "id": "preset-bypass-debug",
+    "formatVersion": 2,
+    "name": "Bypass Debug",
+    "category": "Debug",
+    "description": "Pass-through preset to verify input reaches output",
+    "author": "Factory",
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "modifiedAt": "2025-01-01T00:00:00.000Z",
+    "globals": {
+      "inputTrim": 0,
+      "outputTrim": 0,
+      "outputVolume": 1.0,
+      "transpose": 0
+    },
+    "graph": {
+      "nodes": [
+        {
+          "id": "amp_1",
+          "type": "amp_nam",
+          "displayName": "Bypass Amp",
+          "category": "amp",
+          "bypassed": true,
+          "params": { "inputGain": 0, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "nam", "id": "nam-fender-twin-clean" }
+        },
+        {
+          "id": "cab_1",
+          "type": "cab_ir",
+          "displayName": "Bypass Cab",
+          "category": "cab",
+          "bypassed": true,
+          "params": { "mix": 1, "outputGain": 0 },
+          "config": {},
+          "resource": { "type": "ir", "id": "ir-devils-lab-112jensen" }
+        }
+      ],
+      "edges": [
+        { "from": "__input__", "to": "amp_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "amp_1", "to": "cab_1", "fromPort": 0, "toPort": 0, "gain": 1 },
+        { "from": "cab_1", "to": "__output__", "fromPort": 0, "toPort": 0, "gain": 1 }
+      ]
+    },
+    "embeddedResources": []
+  }
+]
+

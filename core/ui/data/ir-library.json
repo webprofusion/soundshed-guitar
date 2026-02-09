@@ -1,0 +1,128 @@
+[
+  {
+    "id": "ir-devils-lab-412v30",
+    "hash": "ir001234567890123456789012345678abcdef1234567890abcdef12345678901234",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Hell.wav",
+    "title": "Devil's Lab 4x12 V30",
+    "description": "4x12 cabinet with Vintage 30 speakers",
+    "category": "4x12",
+    "tags": ["4x12", "v30", "tight", "metal"]
+  },
+  {
+    "id": "ir-devils-lab-212v30",
+    "hash": "ir012345678901234567890123456789abcdef1234567890abcdef123456789012345",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Warlord.wav",
+    "title": "Devil's Lab 2x12 V30",
+    "description": "2x12 cabinet with Vintage 30 speakers",
+    "category": "2x12",
+    "tags": ["2x12", "v30", "balanced", "rock"]
+  },
+  {
+    "id": "ir-devils-lab-112g12m",
+    "hash": "ir12345678901234567890123456789abcdef1234567890abcdef1234567890123456",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Blue Dragon.wav",
+    "title": "Devil's Lab 1x12 G12M",
+    "description": "1x12 cabinet with G12M Greenback",
+    "category": "1x12",
+    "tags": ["1x12", "greenback", "vintage", "british"]
+  },
+  {
+    "id": "ir-devils-lab-412creamback",
+    "hash": "ir23456789012345678901234567890abcdef1234567890abcdef12345678901234567",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Fierce.wav",
+    "title": "Devil's Lab 4x12 Creamback",
+    "description": "4x12 cabinet with Creamback speakers",
+    "category": "4x12",
+    "tags": ["4x12", "creamback", "smooth", "british"]
+  },
+  {
+    "id": "ir-devils-lab-212alnico",
+    "hash": "ir34567890123456789012345678901abcdef1234567890abcdef123456789012345678",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Coyote.wav",
+    "title": "Devil's Lab 2x12 Alnico",
+    "description": "2x12 cabinet with Alnico speakers",
+    "category": "2x12",
+    "tags": ["2x12", "alnico", "vintage", "american"]
+  },
+  {
+    "id": "ir-devils-lab-112jensen",
+    "hash": "ir45678901234567890123456789012abcdef1234567890abcdef1234567890123456789",
+    "filePath": "assets/ir/Guitar/Devil's Lab/Fat Boy.wav",
+    "title": "Devil's Lab 1x12 Jensen",
+    "description": "1x12 cabinet with Jensen speaker - classic Fender tone",
+    "category": "1x12",
+    "tags": ["1x12", "jensen", "fender", "clean"]
+  },
+  {
+    "id": "ir-metaltune-412v30-sm57",
+    "hash": "ir56789012345678901234567890123abcdef1234567890abcdef12345678901234567890",
+    "filePath": "assets/ir/Guitar/MetalTune Music/Mesa 57 V30 .wav",
+    "title": "MetalTune 4x12 V30 SM57",
+    "description": "4x12 V30 captured with SM57 - punchy midrange",
+    "category": "4x12",
+    "tags": ["4x12", "v30", "sm57", "metal"]
+  },
+  {
+    "id": "ir-metaltune-412v30-r121",
+    "hash": "ir67890123456789012345678901234abcdef1234567890abcdef123456789012345678901",
+    "filePath": "assets/ir/Guitar/MetalTune Music/Marshall 57.wav",
+    "title": "MetalTune 4x12 V30 R121",
+    "description": "4x12 V30 captured with Royer R121 - smooth and dark",
+    "category": "4x12",
+    "tags": ["4x12", "v30", "ribbon", "smooth"]
+  },
+  {
+    "id": "ir-scharrface-blend-tight",
+    "hash": "ir78901234567890123456789012345abcdef1234567890abcdef1234567890123456789012",
+    "filePath": "assets/ir/Guitar/Scharrface/G12T-75, G12-65 blend 1.wav",
+    "title": "Scharrface Tight Modern",
+    "description": "Custom blended IR - tight and modern",
+    "category": "Blended",
+    "tags": ["blended", "tight", "modern", "djent"]
+  },
+  {
+    "id": "ir-scharrface-blend-vintage",
+    "hash": "ir89012345678901234567890123456abcdef1234567890abcdef12345678901234567890123",
+    "filePath": "assets/ir/Guitar/Scharrface/V30 G12-65 blend 1.wav",
+    "title": "Scharrface Vintage Rock",
+    "description": "Custom blended IR - vintage rock vibe",
+    "category": "Blended",
+    "tags": ["blended", "vintage", "rock", "classic"]
+  },
+  {
+    "id": "ir-421-1960",
+    "hash": "b2c3d4e5f67890123456789012345678901abcdef1234567890abcdef1234567",
+    "filePath": "assets/ir/421 1960.wav",
+    "title": "421 1960",
+    "description": "SM57-style mic on Marshall 1960 cabinet",
+    "category": "4x12",
+    "tags": ["4x12", "marshall", "1960", "rock"]
+  },
+  {
+    "id": "ir-906-1960",
+    "hash": "c3d4e5f678901234567890123456789012abcdef1234567890abcdef12345678",
+    "filePath": "assets/ir/906 1960.wav",
+    "title": "906 1960",
+    "description": "e906-style mic on Marshall 1960 cabinet",
+    "category": "4x12",
+    "tags": ["4x12", "marshall", "1960", "bright"]
+  },
+  {
+    "id": "ir-drbonkers-bass-810",
+    "hash": "ir90123456789012345678901234567abcdef1234567890abcdef123456789012345678901234",
+    "filePath": "assets/ir/Bass/Misc/Bass/Ampeg 810 One.wav",
+    "title": "Dr.Bonkers 8x10 Classic",
+    "description": "Classic 8x10 bass cabinet tone",
+    "category": "Bass",
+    "tags": ["bass", "8x10", "svt", "rock"]
+  },
+  {
+    "id": "ir-drbonkers-bass-115",
+    "hash": "ir01234567890123456789012345678abcdef1234567890abcdef1234567890123456789012345",
+    "filePath": "assets/ir/Bass/Misc/Bass/SWR 115 Blend.wav",
+    "title": "Dr.Bonkers 1x15 Deep",
+    "description": "Deep 1x15 bass cabinet - extended lows",
+    "category": "Bass",
+    "tags": ["bass", "1x15", "deep", "reggae"]
+  }
+]
