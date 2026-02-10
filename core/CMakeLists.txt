@@ -205,8 +205,16 @@ set(GUITARFX_CORE_SOURCES
     src/network/PresetServiceClient.cpp
 
     # Utilities
+    src/util/Base64.h
+    src/util/Base64.cpp
+    src/util/FileIO.h
+    src/util/FileIO.cpp
     src/util/FileSystem.h
     src/util/FileSystem.cpp
+    src/util/PathSanitizer.h
+    src/util/PathSanitizer.cpp
+    src/util/Wav.h
+    src/util/Wav.cpp
 )
 
 # ---------------------------------------------------------------------------

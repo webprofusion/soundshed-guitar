@@ -323,9 +323,6 @@ private:
     [[nodiscard]] nlohmann::json LoadUiStorageJson(const std::string& filename, const nlohmann::json& fallback) const;
     void SaveUiStorageJson(const std::string& filename, const nlohmann::json& payload) const;
 
-    // Encoding helpers
-    [[nodiscard]] static std::vector<std::uint8_t> DecodeBase64(const std::string& encoded);
-    [[nodiscard]] static std::string EncodeBase64(const std::vector<std::uint8_t>& data);
     bool WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const;
 
     void AppendSessionLog(const std::string& message);
@@ -459,10 +456,9 @@ private:
         int channels = 0;
         std::vector<std::vector<float>> channelSamples;
     };
-    std::shared_ptr<DemoAudioBuffer> mDemoAudioBuffer;
+    std::atomic<std::shared_ptr<DemoAudioBuffer>> mDemoAudioBuffer{nullptr};
     std::atomic<size_t> mDemoAudioCursor{0};
     std::atomic<bool> mDemoAudioActive{false};
-    mutable std::mutex mDemoAudioMutex;
 
     // Resource preview state (for temp loading from Tone3000)
     struct PreviewState

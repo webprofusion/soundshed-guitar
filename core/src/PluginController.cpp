@@ -15,6 +15,10 @@
 #include "MessageDispatcher.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "util/Base64.h"
+#include "util/FileIO.h"
+#include "util/PathSanitizer.h"
+#include "util/Wav.h"
 
 #include <algorithm>
 #include <array>
@@ -172,234 +176,7 @@ namespace
         return std::min(maximum, std::max(minimum, value));
     }
 
-    // ── LE byte readers (for WAV decoding) ──────────────────────────
-
-    std::uint32_t ReadUint32LE(const std::uint8_t* data)
-    {
-        return static_cast<std::uint32_t>(data[0])
-             | (static_cast<std::uint32_t>(data[1]) << 8u)
-             | (static_cast<std::uint32_t>(data[2]) << 16u)
-             | (static_cast<std::uint32_t>(data[3]) << 24u);
-    }
-
-    std::uint16_t ReadUint16LE(const std::uint8_t* data)
-    {
-        return static_cast<std::uint16_t>(data[0])
-             | (static_cast<std::uint16_t>(data[1]) << 8u);
-    }
-
-    // ── WAV decoder ─────────────────────────────────────────────────
-
-    struct DecodedWav
-    {
-        double sampleRate = 0.0;
-        int channels = 0;
-        int bitsPerSample = 0;
-        std::vector<std::vector<double>> channelSamples;
-    };
-
-    std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
-    {
-        if (bytes.size() < 44) return std::nullopt;
-        if (std::memcmp(bytes.data(), "RIFF", 4) != 0 || std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
-            return std::nullopt;
-
-        std::size_t offset = 12;
-        std::uint16_t audioFormat = 0, channels = 0, bitsPerSample = 0, blockAlign = 0;
-        std::uint32_t sampleRate = 0, dataSize = 0;
-        std::size_t dataOffset = 0;
-
-        while (offset + 8 <= bytes.size())
-        {
-            const char* ch = reinterpret_cast<const char*>(bytes.data() + offset);
-            const std::string chunkId(ch, ch + 4);
-            const std::uint32_t chunkSize = ReadUint32LE(bytes.data() + offset + 4);
-            const std::size_t chunkDataStart = offset + 8;
-            if (chunkDataStart + chunkSize > bytes.size()) return std::nullopt;
-
-            if (chunkId == "fmt ")
-            {
-                audioFormat = ReadUint16LE(bytes.data() + chunkDataStart);
-                channels = ReadUint16LE(bytes.data() + chunkDataStart + 2);
-                sampleRate = ReadUint32LE(bytes.data() + chunkDataStart + 4);
-                blockAlign = ReadUint16LE(bytes.data() + chunkDataStart + 12);
-                bitsPerSample = ReadUint16LE(bytes.data() + chunkDataStart + 14);
-            }
-            else if (chunkId == "data")
-            {
-                dataOffset = chunkDataStart;
-                dataSize = chunkSize;
-                break;
-            }
-            offset = chunkDataStart + chunkSize + (chunkSize % 2);
-        }
-
-        if (audioFormat == 0 || channels == 0 || sampleRate == 0 || bitsPerSample == 0 || blockAlign == 0 || dataOffset == 0)
-            return std::nullopt;
-
-        const std::size_t bytesPerSample = static_cast<std::size_t>(bitsPerSample) / 8;
-        if (bytesPerSample == 0) return std::nullopt;
-
-        const std::size_t frameCount = dataSize / blockAlign;
-        if (frameCount == 0) return std::nullopt;
-
-        DecodedWav wav;
-        wav.sampleRate = static_cast<double>(sampleRate);
-        wav.channels = static_cast<int>(channels);
-        wav.bitsPerSample = static_cast<int>(bitsPerSample);
-        wav.channelSamples.assign(static_cast<std::size_t>(channels), std::vector<double>(frameCount, 0.0));
-
-        const bool isFloat = (audioFormat == 3);
-        for (std::size_t frame = 0; frame < frameCount; ++frame)
-        {
-            const std::size_t frameOffset = dataOffset + frame * blockAlign;
-            for (std::size_t ch = 0; ch < static_cast<std::size_t>(channels); ++ch)
-            {
-                const std::size_t so = frameOffset + ch * bytesPerSample;
-                if (so + bytesPerSample > dataOffset + dataSize) return std::nullopt;
-
-                double sample = 0.0;
-                if (isFloat)
-                {
-                    if (bitsPerSample == 32) { float v; std::memcpy(&v, bytes.data() + so, 4); sample = v; }
-                    else if (bitsPerSample == 64) { std::memcpy(&sample, bytes.data() + so, 8); }
-                    else return std::nullopt;
-                }
-                else
-                {
-                    switch (bitsPerSample)
-                    {
-                    case 8:  sample = (static_cast<double>(bytes[so]) - 128.0) / 128.0; break;
-                    case 16: sample = static_cast<double>(static_cast<std::int16_t>(ReadUint16LE(bytes.data() + so))) / 32768.0; break;
-                    case 24: {
-                        std::int32_t v = static_cast<std::int32_t>(bytes[so])
-                                       | (static_cast<std::int32_t>(bytes[so + 1]) << 8)
-                                       | (static_cast<std::int32_t>(bytes[so + 2]) << 16);
-                        if (v & 0x800000) v |= ~0xFFFFFF;
-                        sample = static_cast<double>(v) / 8388608.0;
-                        break;
-                    }
-                    case 32: sample = static_cast<double>(static_cast<std::int32_t>(ReadUint32LE(bytes.data() + so))) / 2147483648.0; break;
-                    default: return std::nullopt;
-                    }
-                }
-                wav.channelSamples[ch][frame] = std::clamp(sample, -1.0, 1.0);
-            }
-        }
-        return wav;
-    }
-
-    std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav, double targetRate)
-    {
-        if (wav.channelSamples.empty() || wav.channelSamples.front().empty()) return {};
-        const double sourceRate = wav.sampleRate > 0.0 ? wav.sampleRate : targetRate;
-        if (sourceRate <= 0.0) return {};
-
-        const std::size_t channelCount = wav.channelSamples.size();
-        const std::size_t sourceFrames = wav.channelSamples.front().size();
-        std::vector<std::vector<float>> output(channelCount);
-
-        if (targetRate <= 0.0 || std::fabs(sourceRate - targetRate) < 1e-6)
-        {
-            for (std::size_t c = 0; c < channelCount; ++c)
-            {
-                const auto& src = wav.channelSamples[std::min(c, wav.channelSamples.size() - 1)];
-                output[c].resize(sourceFrames);
-                for (std::size_t f = 0; f < sourceFrames; ++f)
-                    output[c][f] = static_cast<float>(std::clamp(src[f], -1.0, 1.0));
-            }
-            return output;
-        }
-
-        const double ratio = targetRate / sourceRate;
-        const std::size_t destFrames = std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(sourceFrames * ratio)));
-        for (std::size_t c = 0; c < channelCount; ++c)
-        {
-            const auto& src = wav.channelSamples[std::min(c, wav.channelSamples.size() - 1)];
-            output[c].resize(destFrames);
-            for (std::size_t f = 0; f < destFrames; ++f)
-            {
-                const double pos = (static_cast<double>(f) * sourceRate) / targetRate;
-                const std::size_t i0 = std::min<std::size_t>(static_cast<std::size_t>(pos), sourceFrames - 1);
-                const std::size_t i1 = std::min(i0 + 1, sourceFrames - 1);
-                const double frac = std::clamp(pos - static_cast<double>(i0), 0.0, 1.0);
-                output[c][f] = static_cast<float>(std::clamp(src[i0] + (src[i1] - src[i0]) * frac, -1.0, 1.0));
-            }
-        }
-        return output;
-    }
-
-    std::vector<std::uint8_t> ReadFileBytes(const std::filesystem::path& path)
-    {
-        std::ifstream input(path, std::ios::binary);
-        if (!input)
-            return {};
-
-        input.seekg(0, std::ios::end);
-        const auto size = input.tellg();
-        if (size <= 0)
-            return {};
-
-        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
-        input.seekg(0, std::ios::beg);
-        input.read(reinterpret_cast<char*>(bytes.data()), size);
-        return bytes;
-    }
-
-    // ── Path sanitization helpers ───────────────────────────────────
-
-    std::string ToUpperAscii(std::string value)
-    {
-        for (char& c : value) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        return value;
-    }
-
-    bool IsWindowsReservedName(const std::string& name)
-    {
-        if (name.empty()) return false;
-        const auto dotPos = name.find('.');
-        const std::string upper = ToUpperAscii(dotPos == std::string::npos ? name : name.substr(0, dotPos));
-        static const std::array<const char*, 22> kReserved = {
-            "CON", "PRN", "AUX", "NUL",
-            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-        };
-        return std::any_of(kReserved.begin(), kReserved.end(), [&](const char* r) { return upper == r; });
-    }
-
-    std::string SanitizePathSegment(const std::string& raw, bool allowDots)
-    {
-        std::string result;
-        result.reserve(raw.size());
-        for (unsigned char c : raw)
-        {
-            if (std::isalnum(c) || c == '-' || c == '_') result.push_back(static_cast<char>(c));
-            else if (allowDots && c == '.') result.push_back('.');
-            else if (std::isspace(c)) result.push_back('_');
-        }
-        while (!result.empty() && result.front() == '.') result.erase(result.begin());
-        while (!result.empty() && result.back() == '.') result.pop_back();
-        if (result.empty() || result == "." || result == "..") result = "resource";
-        if (IsWindowsReservedName(result)) result = "_" + result;
-        return result;
-    }
-
-    std::filesystem::path SanitizeSubfolderPath(const std::string& raw)
-    {
-        std::filesystem::path result;
-        std::string segment;
-        auto push = [&]() {
-            if (segment.empty()) return;
-            std::string s = SanitizePathSegment(segment, true);
-            if (!s.empty() && s != "." && s != "..") result /= s;
-            segment.clear();
-        };
-        for (char c : raw) { if (c == '/' || c == '\\') push(); else segment.push_back(c); }
-        push();
-        return result;
-    }
-
-    std::string SanitizeFilename(const std::string& raw) { return SanitizePathSegment(raw, true); }
+    // ── Utility helpers ─────────────────────────────────────────────
 
     // ── Graph utility ───────────────────────────────────────────────
 
@@ -487,7 +264,7 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
     // Mix in demo audio preview if active
     if (mDemoAudioActive.load(std::memory_order_acquire))
     {
-        auto buf = mDemoAudioBuffer;
+        auto buf = mDemoAudioBuffer.load(std::memory_order_acquire);
         if (buf && buf->channels >= 1)
         {
             size_t cursor = mDemoAudioCursor.load(std::memory_order_relaxed);
@@ -810,21 +587,21 @@ PluginController::BuildMetronomeClickSamples(const MetronomeClickTypeConfig& con
             return;
         }
 
-        const auto bytes = ReadFileBytes(path);
+        const auto bytes = util::ReadFileBytes(path);
         if (bytes.empty())
         {
             std::cerr << "[Plugin] Metronome " << label << " sample empty: " << path.generic_string() << std::endl;
             return;
         }
 
-        const auto wavData = DecodePcmWav(bytes);
+        const auto wavData = util::DecodePcmWav(bytes);
         if (!wavData)
         {
             std::cerr << "[Plugin] Metronome " << label << " sample unsupported WAV: " << path.generic_string() << std::endl;
             return;
         }
 
-        auto resampled = ConvertToSampleRate(*wavData, targetSampleRate);
+        auto resampled = util::ConvertToSampleRate(*wavData, targetSampleRate);
         if (resampled.empty() || resampled.front().empty())
         {
             std::cerr << "[Plugin] Metronome " << label << " sample empty after resample: " << path.generic_string() << std::endl;
@@ -1090,18 +867,17 @@ void PluginController::OnIdle()
     }
 
     // Demo audio completion notification
-    if (mDemoAudioBuffer && !mDemoAudioActive.load(std::memory_order_acquire))
+    auto demoBuffer = mDemoAudioBuffer.load(std::memory_order_acquire);
+    if (demoBuffer && !mDemoAudioActive.load(std::memory_order_acquire))
     {
-        auto buf = mDemoAudioBuffer;
-        if (buf)
+        if (demoBuffer)
         {
             nlohmann::json msg;
             msg["type"] = "previewComplete";
-            msg["id"] = buf->id;
-            msg["title"] = buf->title;
+            msg["id"] = demoBuffer->id;
+            msg["title"] = demoBuffer->title;
             SendMessageToUI(msg.dump());
-            std::lock_guard<std::mutex> lock(mDemoAudioMutex);
-            mDemoAudioBuffer.reset();
+            mDemoAudioBuffer.store(nullptr, std::memory_order_release);
         }
     }
 }
@@ -2407,19 +2183,19 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     }
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
-    const auto sanitizedProvider = SanitizePathSegment(provider, true);
+    const auto sanitizedProvider = util::SanitizePathSegment(provider, true);
     auto targetDir = settingsDir / "resources" / sanitizedProvider;
-    const auto sanitizedSubfolder = SanitizeSubfolderPath(subfolder);
+    const auto sanitizedSubfolder = util::SanitizeSubfolderPath(subfolder);
     if (!sanitizedSubfolder.empty()) targetDir /= sanitizedSubfolder;
     mFileSystem.EnsureDirectory(targetDir);
 
     std::string resolvedName = fileName.empty() ? resourceId : fileName;
-    resolvedName = SanitizeFilename(resolvedName);
+    resolvedName = util::SanitizeFilename(resolvedName);
     if (resolvedName.find('.') == std::string::npos)
         resolvedName += resourceType == "ir" ? ".wav" : ".nam";
 
     const auto targetPath = targetDir / resolvedName;
-    const std::vector<std::uint8_t> bytes = DecodeBase64(data);
+    const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
     if (bytes.empty())
     {
         ReportErrorToUI("Import failed", "Invalid base64 payload");
@@ -2477,7 +2253,7 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
 
     if (resourceType.empty() || data.empty()) { AppendSessionLog("Preview failed: missing resource type or data"); return; }
 
-    const std::vector<std::uint8_t> bytes = DecodeBase64(data);
+    const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
     if (bytes.empty()) { AppendSessionLog("Preview failed: invalid base64 payload"); return; }
 
     const auto tempDir = mFileSystem.ResolveSettingsDirectory() / "temp";
@@ -2604,7 +2380,7 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     if (data.empty())
     { SendMessageToUI(nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Resource file empty"}}.dump()); return; }
 
-    const std::string encoded = EncodeBase64(data);
+    const std::string encoded = util::EncodeBase64(data);
     nlohmann::json response;
     response["type"] = "resourceData";
     response["requestId"] = requestId;
@@ -2628,7 +2404,7 @@ void PluginController::HandleSaveBlendArchiveRequest(const nlohmann::json& paylo
             if (!result.success)
             { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Save cancelled"}}.dump()); return; }
 
-            const auto decodedBytes = DecodeBase64(dataEncoded);
+            const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
             { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
 
@@ -2653,7 +2429,7 @@ void PluginController::HandleSavePresetArchiveRequest(const nlohmann::json& payl
             if (!result.success)
             { SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Save cancelled"}}.dump()); return; }
 
-            const auto decodedBytes = DecodeBase64(dataEncoded);
+            const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
             { SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
 
@@ -2678,7 +2454,7 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
             if (!result.success)
             { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Save cancelled"}}.dump()); return; }
 
-            const auto decodedBytes = DecodeBase64(dataEncoded);
+            const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
             { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
 
@@ -2758,7 +2534,7 @@ void PluginController::HandleExportEffectLayoutRequest(const nlohmann::json& pay
             if (!result.success)
             { SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Export cancelled"}}.dump()); return; }
 
-            const auto decodedBytes = DecodeBase64(dataEncoded);
+            const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
             { SendMessageToUI(nlohmann::json{{"type", "layoutExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
 
@@ -2800,7 +2576,7 @@ void PluginController::HandleBrowseLayoutImageRequest(const nlohmann::json& payl
                 std::vector<std::uint8_t> imageData((std::istreambuf_iterator<char>(imageFile)), std::istreambuf_iterator<char>());
                 imageFile.close();
 
-                const std::string base64Data = EncodeBase64(imageData);
+                const std::string base64Data = util::EncodeBase64(imageData);
                 std::string mimeType = "image/png";
                 const auto ext = selectedPath.extension().string();
                 if (ext == ".jpg" || ext == ".jpeg") mimeType = "image/jpeg";
@@ -2837,7 +2613,7 @@ void PluginController::HandleSaveLayoutImageRequest(const nlohmann::json& payloa
     const auto imagesDir = settingsDir / "layouts" / "images";
     mFileSystem.EnsureDirectory(imagesDir);
 
-    const auto decodedBytes = DecodeBase64(dataEncoded);
+    const auto decodedBytes = util::DecodeBase64(dataEncoded);
     if (decodedBytes.empty()) { AppendSessionLog("SaveLayoutImage: failed to decode base64 data for " + imageId); return; }
 
     const auto destPath = imagesDir / fileName;
@@ -3082,14 +2858,14 @@ void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
         return;
     }
 
-    const auto decodedBytes = DecodeBase64(dataEncoded);
+    const auto decodedBytes = util::DecodeBase64(dataEncoded);
     if (decodedBytes.empty())
     {
         ReportErrorToUI("Demo preview unavailable", "Unable to decode audio data");
         return;
     }
 
-    const auto wavData = DecodePcmWav(decodedBytes);
+    const auto wavData = util::DecodePcmWav(decodedBytes);
     if (!wavData)
     {
         ReportErrorToUI("Demo preview unavailable", "Unsupported WAV format");
@@ -3104,7 +2880,7 @@ void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
         return;
     }
 
-    auto resampled = ConvertToSampleRate(*wavData, targetSampleRate);
+    auto resampled = util::ConvertToSampleRate(*wavData, targetSampleRate);
     if (resampled.empty() || resampled.front().empty())
     {
         ReportErrorToUI("Demo preview unavailable", "Audio buffer is empty");
@@ -3139,10 +2915,10 @@ void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
     buffer->channelSamples = std::move(resampled);
 
     {
-        std::lock_guard<std::mutex> lock(mDemoAudioMutex);
+        std::lock_guard<std::mutex> lock(mDSPMutex);
         mPresetMixer.Reset();
         mDemoAudioCursor.store(0, std::memory_order_release);
-        mDemoAudioBuffer = buffer;
+        mDemoAudioBuffer.store(buffer, std::memory_order_release);
         mDemoAudioActive.store(true, std::memory_order_release);
     }
 
@@ -3156,12 +2932,15 @@ void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
 
 void PluginController::HandleStopDemoRequest()
 {
-    {
-        std::lock_guard<std::mutex> lock(mDemoAudioMutex);
-        mDemoAudioActive.store(false, std::memory_order_release);
-    }
+    mDemoAudioActive.store(false, std::memory_order_release);
+    auto stopped = mDemoAudioBuffer.exchange(nullptr, std::memory_order_acq_rel);
     nlohmann::json msg;
     msg["type"] = "previewStopped";
+    if (stopped)
+    {
+        msg["id"] = stopped->id;
+        msg["title"] = stopped->title;
+    }
     SendMessageToUI(msg.dump());
 }
 
@@ -4222,7 +4001,7 @@ void PluginController::LoadLayoutLibrary()
                                 std::istreambuf_iterator<char>());
                             imageFile.close();
 
-                            const std::string base64Data = EncodeBase64(imageData);
+                            const std::string base64Data = util::EncodeBase64(imageData);
                             std::string mimeType = "image/png";
                             if (ext == ".jpg" || ext == ".jpeg") mimeType = "image/jpeg";
                             const std::string dataUrl = "data:" + mimeType + ";base64," + base64Data;
@@ -4468,64 +4247,6 @@ void PluginController::SendMetronomeStateToUI()
         clickTypes.push_back({ {"id", config.id}, {"label", config.label} });
     msg["clickTypes"] = std::move(clickTypes);
     SendMessageToUI(msg.dump());
-}
-
-// ── Encoding helpers ───────────────────────────────────────────────
-
-std::vector<std::uint8_t> PluginController::DecodeBase64(const std::string& encoded)
-{
-    static const std::array<int, 256> decodeTable = []()
-    {
-        std::array<int, 256> table{};
-        table.fill(-1);
-        const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        for (std::size_t idx = 0; idx < alphabet.size(); ++idx)
-            table[static_cast<unsigned char>(alphabet[idx])] = static_cast<int>(idx);
-        table[static_cast<unsigned char>('-')] = 62;
-        table[static_cast<unsigned char>('_')] = 63;
-        return table;
-    }();
-
-    std::vector<std::uint8_t> output;
-    int accumulator = 0;
-    int bits = -8;
-
-    for (unsigned char c : encoded)
-    {
-        if (std::isspace(c)) continue;
-        if (c == '=') break;
-        const int value = decodeTable[c];
-        if (value < 0) return {};
-        accumulator = (accumulator << 6) + value;
-        bits += 6;
-        if (bits >= 0)
-        {
-            output.push_back(static_cast<std::uint8_t>((accumulator >> bits) & 0xFF));
-            bits -= 8;
-        }
-    }
-    return output;
-}
-
-std::string PluginController::EncodeBase64(const std::vector<std::uint8_t>& data)
-{
-    static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string output;
-    output.reserve(((data.size() + 2) / 3) * 4);
-
-    for (std::size_t i = 0; i < data.size(); i += 3)
-    {
-        const std::uint32_t octetA = data[i];
-        const std::uint32_t octetB = (i + 1) < data.size() ? data[i + 1] : 0;
-        const std::uint32_t octetC = (i + 2) < data.size() ? data[i + 2] : 0;
-        const std::uint32_t triple = (octetA << 16) | (octetB << 8) | octetC;
-
-        output.push_back(alphabet[(triple >> 18) & 0x3F]);
-        output.push_back(alphabet[(triple >> 12) & 0x3F]);
-        output.push_back((i + 1) < data.size() ? alphabet[(triple >> 6) & 0x3F] : '=');
-        output.push_back((i + 2) < data.size() ? alphabet[triple & 0x3F] : '=');
-    }
-    return output;
 }
 
 bool PluginController::WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const
