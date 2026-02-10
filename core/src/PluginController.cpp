@@ -21,6 +21,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <deque>
 #include <fstream>
 #include <future>
@@ -1013,6 +1014,15 @@ void PluginController::OnIdle()
     // Process NAM calibration results
     ProcessNamCalibrationQueue();
 
+    if (mNamCalibrationFuture && mNamCalibrationFuture->wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+    {
+        const auto result = mNamCalibrationFuture->get();
+        mNamCalibrationFuture.reset();
+        mNamCalibrationActiveJob.reset();
+        ApplyNamCalibrationResult(result);
+        ProcessNamCalibrationQueue();
+    }
+
     // Signal test result
     if (mSignalTestResultPending.load(std::memory_order_acquire))
     {
@@ -1416,46 +1426,131 @@ void PluginController::HandleOpenAudioPreferencesRequest()
 
 void PluginController::HandleTunerRequest(const nlohmann::json& payload)
 {
-    bool enabled = payload.value("enabled", false);
-    mTunerActive.store(enabled, std::memory_order_release);
-    mPresetMixer.SetTunerEnabled(enabled);
+    const std::string action = payload.value("action", "");
+    if (action == "start")
+    {
+        if (payload.contains("liveMode"))
+            mPresetMixer.SetLiveTunerMode(payload.value("liveMode", true));
 
-    if (payload.contains("referenceFrequency"))
-        mPresetMixer.SetTunerReferenceFrequency(payload["referenceFrequency"].get<double>());
+        mTunerActive.store(true, std::memory_order_release);
+        mPresetMixer.SetTunerEnabled(true);
 
-    if (payload.contains("liveMode"))
-        mPresetMixer.SetLiveTunerMode(payload["liveMode"].get<bool>());
+        if (payload.contains("referenceFrequency"))
+            mPresetMixer.SetTunerReferenceFrequency(payload["referenceFrequency"].get<double>());
 
-    nlohmann::json reply;
-    reply["type"] = "tunerState";
-    reply["enabled"] = enabled;
-    reply["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
-    SendMessageToUI(reply.dump());
+        nlohmann::json message;
+        message["type"] = "tunerStarted";
+        message["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
+        message["liveMode"] = mPresetMixer.IsLiveTunerMode();
+        SendMessageToUI(message.dump());
+        return;
+    }
+
+    if (action == "stop")
+    {
+        mTunerActive.store(false, std::memory_order_release);
+        mPresetMixer.SetTunerEnabled(false);
+
+        nlohmann::json message;
+        message["type"] = "tunerStopped";
+        SendMessageToUI(message.dump());
+        return;
+    }
+
+    if (action == "setLiveMode")
+    {
+        bool liveMode = payload.value("liveMode", true);
+        mPresetMixer.SetLiveTunerMode(liveMode);
+
+        nlohmann::json message;
+        message["type"] = "tunerLiveModeChanged";
+        message["liveMode"] = liveMode;
+        SendMessageToUI(message.dump());
+        return;
+    }
+
+    if (action == "setReference")
+    {
+        double freq = payload.value("referenceFrequency", 440.0);
+        mPresetMixer.SetTunerReferenceFrequency(freq);
+
+        nlohmann::json message;
+        message["type"] = "tunerReferenceChanged";
+        message["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
+        SendMessageToUI(message.dump());
+        return;
+    }
+
+    if (payload.contains("enabled"))
+    {
+        bool enabled = payload.value("enabled", false);
+        mTunerActive.store(enabled, std::memory_order_release);
+        mPresetMixer.SetTunerEnabled(enabled);
+
+        nlohmann::json reply;
+        reply["type"] = enabled ? "tunerStarted" : "tunerStopped";
+        reply["referenceFrequency"] = mPresetMixer.GetTunerReferenceFrequency();
+        reply["liveMode"] = mPresetMixer.IsLiveTunerMode();
+        SendMessageToUI(reply.dump());
+    }
 }
 
 void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
 {
-    if (payload.contains("mono"))
+    if (payload.contains("monoMode"))
+        mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
+    else if (payload.contains("mono"))
         mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
-    if (payload.contains("channel"))
+
+    if (payload.contains("inputChannel"))
+        mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
+    else if (payload.contains("channel"))
         mPresetMixer.SetInputChannel(payload["channel"].get<int>());
+
+    nlohmann::json message;
+    message["type"] = "inputModeChanged";
+    message["monoMode"] = mPresetMixer.IsMonoMode();
+    message["inputChannel"] = mPresetMixer.GetInputChannel();
+    SendMessageToUI(message.dump());
 }
 
-void PluginController::HandleSetAmpCabStateRequest(const nlohmann::json& /*payload*/)
+void PluginController::HandleSetAmpCabStateRequest(const nlohmann::json& payload)
 {
-    // Stub: future implementation for enabling/disabling amp/cab nodes globally
+    bool ampEnabled = true;
+    bool cabEnabled = true;
+    if (payload.contains("ampEnabled"))
+        ampEnabled = payload.value("ampEnabled", true);
+    if (payload.contains("cabEnabled"))
+        cabEnabled = payload.value("cabEnabled", true);
+
+    nlohmann::json message;
+    message["type"] = "ampCabStateChanged";
+    message["ampEnabled"] = ampEnabled;
+    message["cabEnabled"] = cabEnabled;
+    SendMessageToUI(message.dump());
 }
 
 void PluginController::HandleSetAutoLevelRequest(const nlohmann::json& payload)
 {
-    if (payload.contains("input"))
+    if (payload.contains("autoInput"))
+        mPresetMixer.SetAutoLevelInput(payload["autoInput"].get<bool>());
+    else if (payload.contains("input"))
         mPresetMixer.SetAutoLevelInput(payload["input"].get<bool>());
-    if (payload.contains("output"))
+
+    if (payload.contains("autoOutput"))
+        mPresetMixer.SetAutoLevelOutput(payload["autoOutput"].get<bool>());
+    else if (payload.contains("output"))
         mPresetMixer.SetAutoLevelOutput(payload["output"].get<bool>());
 
     mAppSettings["autoLevelInput"] = mPresetMixer.GetAutoLevelInput();
     mAppSettings["autoLevelOutput"] = mPresetMixer.GetAutoLevelOutput();
     SaveAppSettings();
+
+    nlohmann::json message;
+    message["type"] = "autoLevelChanged";
+    message["autoInput"] = mPresetMixer.GetAutoLevelInput();
+    message["autoOutput"] = mPresetMixer.GetAutoLevelOutput();
+    SendMessageToUI(message.dump());
 }
 
 void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
@@ -1538,6 +1633,8 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
 void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
+    if (path.empty())
+        path = payload.value("filePath", "");
     if (path.empty()) return;
 
     std::filesystem::path filePath(path);
@@ -1551,12 +1648,19 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
     {
         mAppSettings["lastModelPath"] = filePath.parent_path().string();
         SaveAppSettings();
+
+        nlohmann::json message;
+        message["type"] = "modelLoaded";
+        message["path"] = filePath.generic_string();
+        SendMessageToUI(message.dump());
     }
 }
 
 void PluginController::HandleLoadIRRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
+    if (path.empty())
+        path = payload.value("filePath", "");
     if (path.empty()) return;
 
     std::filesystem::path filePath(path);
@@ -1570,40 +1674,68 @@ void PluginController::HandleLoadIRRequest(const nlohmann::json& payload)
     {
         mAppSettings["lastIRPath"] = filePath.parent_path().string();
         SaveAppSettings();
+
+        nlohmann::json message;
+        message["type"] = "irLoaded";
+        message["path"] = filePath.generic_string();
+        SendMessageToUI(message.dump());
     }
 }
 
 void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
 {
-    // Saves current preset to user directory as JSON file
-    if (!mActivePreset) return;
+    const std::string presetName = payload.value("name", "");
+    const std::string presetCategory = payload.value("category", "User");
+    const std::string presetDescription = payload.value("description", "");
+
+    if (presetName.empty())
+    {
+        ReportErrorToUI("Cannot save preset", "Preset name is required");
+        return;
+    }
+
+    EnsureBasicGraph();
+    if (!mActivePreset)
+    {
+        ReportErrorToUI("Cannot save preset", "No active preset to save");
+        return;
+    }
 
     try
     {
-        Preset preset = *mActivePreset;
+        Preset newPreset = *mActivePreset;
+        newPreset.id = "user-" + std::to_string(std::time(nullptr));
+        newPreset.name = presetName;
+        newPreset.category = presetCategory;
+        newPreset.description = presetDescription;
+        newPreset.version = 2;
 
-        // Update metadata from payload
-        if (payload.contains("name")) preset.name = payload["name"].get<std::string>();
-        if (payload.contains("category")) preset.category = payload["category"].get<std::string>();
-        if (payload.contains("description")) preset.description = payload["description"].get<std::string>();
-        if (payload.contains("author")) preset.author = payload["author"].get<std::string>();
-        if (payload.contains("tags")) preset.tags = payload["tags"].get<std::vector<std::string>>();
+        newPreset.global.inputTrim = mParamValues[kParamInputTrim];
+        newPreset.global.outputTrim = mParamValues[kParamOutputTrim];
+        newPreset.global.transpose = static_cast<int>(mParamValues[kParamTranspose]);
+        newPreset.global.autoLevelInput = mPresetMixer.GetAutoLevelInput();
+        newPreset.global.autoLevelOutput = mPresetMixer.GetAutoLevelOutput();
 
-        // Ensure directory exists
+        if (mUserPresetsPath.empty())
+            mUserPresetsPath = mResourceRoot / "presets" / "user";
         mFileSystem.EnsureDirectory(mUserPresetsPath);
 
-        // Save to file
-        PresetStorage::SaveToFile(preset, mUserPresetsPath / (preset.id + ".json"));
+        const auto presetPath = mUserPresetsPath / (newPreset.id + ".json");
+        if (!PresetStorage::SaveToFile(newPreset, presetPath))
+        {
+            ReportErrorToUI("Failed to save preset", "Could not write preset file");
+            return;
+        }
 
-        mActivePreset = preset;
-        mActivePresetJson = PresetStorage::SerializeToJson(preset);
-        mActivePresetId = preset.id;
+        mActivePreset = newPreset;
+        mActivePresetId = newPreset.id;
+        mActivePresetJson = PresetStorage::SerializeToJson(newPreset);
         mPendingStateBroadcast = true;
+        SaveAppSettings();
 
         nlohmann::json reply;
         reply["type"] = "presetSaved";
-        reply["presetId"] = preset.id;
-        reply["name"] = preset.name;
+        reply["preset"] = nlohmann::json::parse(mActivePresetJson);
         SendMessageToUI(reply.dump());
     }
     catch (const std::exception& e)
@@ -1639,6 +1771,8 @@ void PluginController::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::j
 {
     std::string nodeId = payload.value("nodeId", "");
     bool enabled = payload.value("enabled", true);
+    if (payload.contains("bypassed"))
+        enabled = !payload.value("bypassed", false);
     std::string presetId = payload.value("presetId", "p1");
 
     auto* graph = ResolveEditTarget();
@@ -1658,6 +1792,8 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
 
+    const int resourceIndex = payload.value("resourceIndex", -1);
+
     ResourceRef ref;
     if (payload.contains("resourceType"))
         ref.resourceType = payload["resourceType"].get<std::string>();
@@ -1665,20 +1801,125 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         ref.resourceId = payload["resourceId"].get<std::string>();
     if (payload.contains("filePath"))
         ref.filePath = payload["filePath"].get<std::string>();
+    if (payload.contains("embeddedId"))
+        ref.embeddedId = payload["embeddedId"].get<std::string>();
+    if (payload.contains("parameterId"))
+        ref.parameterId = payload["parameterId"].get<std::string>();
+    if (payload.contains("parameterValue") && payload["parameterValue"].is_number())
+        ref.parameterValue = payload["parameterValue"].get<double>();
+
+    if (!ref.parameterId.empty() && ref.parameterValue.has_value())
+        ref.parameters[ref.parameterId] = *ref.parameterValue;
+
+    if (resourceIndex >= 0)
+    {
+        if (!IsCompositeEditMode())
+            EnsureBasicGraph();
+
+        auto* targetGraph = ResolveEditTarget();
+        if (!targetGraph) return;
+
+        auto* target = targetGraph->FindNode(nodeId);
+        if (!target) return;
+
+        if (static_cast<size_t>(resourceIndex) >= target->resources.size())
+            target->resources.resize(static_cast<size_t>(resourceIndex) + 1);
+
+        ResourceRef& slot = target->resources[static_cast<size_t>(resourceIndex)];
+        if (!ref.resourceType.empty())
+            slot.resourceType = ref.resourceType;
+        if (!ref.resourceId.empty())
+        {
+            slot.resourceId = ref.resourceId;
+            slot.filePath.clear();
+        }
+        if (!ref.filePath.empty())
+            slot.filePath = ref.filePath;
+        if (!ref.embeddedId.empty())
+            slot.embeddedId = ref.embeddedId;
+        if (!ref.parameterId.empty())
+            slot.parameterId = ref.parameterId;
+        if (ref.parameterValue.has_value())
+            slot.parameterValue = ref.parameterValue;
+        if (!ref.parameters.empty())
+            slot.parameters = ref.parameters;
+
+        if (IsCompositeEditMode())
+        {
+            BroadcastCompositeEditState();
+        }
+        else if (mActivePreset)
+        {
+            mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+            ApplyPreset(*mActivePreset);
+            mPendingStateBroadcast = true;
+        }
+
+        if (!IsCompositeEditMode()
+            && (target->type == "amp_nam" || target->type == "amp_nam_optimized")
+            && !target->resources.empty()
+            && target->resources.front().IsValid())
+        {
+            QueueNamCalibrationForNode(nodeId, target->resources.front());
+        }
+        return;
+    }
+
+    if (!ref.filePath.empty())
+    {
+        auto* fpGraph = ResolveEditTarget();
+        auto* node = fpGraph ? fpGraph->FindNode(nodeId) : nullptr;
+        if (node && !node->resources.empty())
+        {
+            node->resources.clear();
+            node->resources.push_back(ref);
+
+            if (IsCompositeEditMode())
+            {
+                BroadcastCompositeEditState();
+            }
+            else if (mActivePreset)
+            {
+                mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+                ApplyPreset(*mActivePreset);
+                mPendingStateBroadcast = true;
+            }
+
+            if (!IsCompositeEditMode()
+                && (node->type == "amp_nam" || node->type == "amp_nam_optimized")
+                && !node->resources.empty()
+                && node->resources.front().IsValid())
+            {
+                QueueNamCalibrationForNode(node->id, node->resources.front());
+            }
+            return;
+        }
+    }
 
     UpdateResourceForNodeId(nodeId, ref);
+
+    if (mActivePreset)
+    {
+        auto* node = mActivePreset->graph.FindNode(nodeId);
+        if (node && (node->type == "amp_nam" || node->type == "amp_nam_optimized")
+            && !node->resources.empty() && node->resources.front().IsValid())
+        {
+            QueueNamCalibrationForNode(nodeId, node->resources.front());
+        }
+    }
 }
 
 void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& payload)
 {
     std::string nodeId = payload.value("nodeId", "");
     std::string resourceType = payload.value("resourceType", "nam");
+    const int resourceIndex = payload.value("resourceIndex", -1);
 
     BrowseFileType fileType = BrowseFileType::NAMModel;
     if (resourceType == "ir") fileType = BrowseFileType::IRFile;
 
     mHost.BrowseFileAsync(fileType, "Select Resource",
-        [this, nodeId, resourceType](const BrowseFileResult& result)
+        [this, nodeId, resourceType, resourceIndex](const BrowseFileResult& result)
         {
             if (result.success)
             {
@@ -1686,6 +1927,8 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
                 payload["nodeId"] = nodeId;
                 payload["filePath"] = result.path.string();
                 payload["resourceType"] = resourceType;
+                if (resourceIndex >= 0)
+                    payload["resourceIndex"] = resourceIndex;
                 HandleUpdateNodeResourceRequest(payload);
             }
         });
@@ -2361,6 +2604,35 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
             SendMessageToUI(nlohmann::json{{"type", "libraryExportSaved"}, {"path", result.path.generic_string()}}.dump());
             AppendSessionLog("Library export saved: " + result.path.generic_string());
         });
+}
+
+void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
+{
+    const std::string effectType = payload.value("effectType", "");
+    const std::string blendId = payload.value("blendId", "");
+    if (effectType.empty())
+    {
+        ReportErrorToUI("Delete layout failed", "Missing effect type");
+        return;
+    }
+
+    const std::string storageKey = blendId.empty() ? effectType : (effectType + "--" + blendId);
+    const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
+    const auto layoutFile = settingsDir / "layouts" / (storageKey + ".layout.json");
+
+    std::error_code ec;
+    if (std::filesystem::exists(layoutFile, ec))
+    {
+        std::filesystem::remove(layoutFile, ec);
+        if (ec)
+        {
+            ReportErrorToUI("Delete layout failed", "Unable to remove layout file");
+            return;
+        }
+        AppendSessionLog("Layout deleted: " + layoutFile.generic_string());
+    }
+
+    LoadLayoutLibrary();
 }
 
 void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& payload)

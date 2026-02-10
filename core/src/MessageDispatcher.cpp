@@ -79,6 +79,12 @@ void MessageDispatcher::Dispatch(PluginController& c, const std::string& jsonMes
         std::string key = msg.value("key", "");
         if (!key.empty() && msg.contains("value"))
         {
+            if (msg["value"].is_null())
+            {
+                c.mAppSettings.erase(key);
+                c.SaveAppSettings();
+                return;
+            }
             if (key == "diagnostics.signalLevelsEnabled")
             {
                 nlohmann::json payload;
@@ -365,6 +371,10 @@ void MessageDispatcher::Dispatch(PluginController& c, const std::string& jsonMes
     else if (type == "saveEffectLayout")
     {
         c.HandleSaveEffectLayoutRequest(msg);
+    }
+    else if (type == "deleteLayout")
+    {
+        c.HandleDeleteLayoutRequest(msg);
     }
     else if (type == "exportEffectLayout")
     {

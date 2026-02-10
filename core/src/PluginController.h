@@ -200,6 +200,7 @@ private:
     void HandleSetInputModeRequest(const nlohmann::json& payload);
     void HandleSetAmpCabStateRequest(const nlohmann::json& payload);
     void HandleSetAutoLevelRequest(const nlohmann::json& payload);
+    void HandleDeleteLayoutRequest(const nlohmann::json& payload);
     void HandleSetMetronomeRequest(const nlohmann::json& payload);
     void HandleUpdateSignalPathNodeParamRequest(const nlohmann::json& payload);
     void HandleUpdateSignalPathNodeBypassRequest(const nlohmann::json& payload);
