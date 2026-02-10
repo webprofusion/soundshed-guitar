@@ -405,10 +405,11 @@ function updatePresetModalJson(preset: Preset | null): void {
     return;
   }
   const withGlobalChain = preset
-    ? {
-        ...stripLegacyGlobals(preset),
-        globalSignalChain: (preset as Preset & { globalSignalChain?: unknown }).globalSignalChain ?? uiState.globalSignalChain,
-      }
+    ? (() => {
+        const cleaned = stripLegacyGlobals(preset);
+        const chain = (preset as Preset & { globalSignalChain?: unknown }).globalSignalChain;
+        return chain ? { ...cleaned, globalSignalChain: chain } : cleaned;
+      })()
     : null;
   pre.textContent = withGlobalChain ? JSON.stringify(withGlobalChain, null, 2) : "";
 }
@@ -1653,7 +1654,6 @@ export function closeSavePresetModal(): void {
 
 export function createDefaultPreset(): void {
   const newPreset = createEmptyPresetV2();
-  (newPreset as Preset & { globalSignalChain?: unknown }).globalSignalChain = uiState.globalSignalChain;
   const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
   const selectedFolderId = activeFolderId === PRESET_FOLDER_FAVORITES_ID ? PRESET_FOLDER_ALL_ID : activeFolderId;
 
