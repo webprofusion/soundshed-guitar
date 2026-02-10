@@ -223,6 +223,7 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
 endfunction()
 
 soundshed_copy_ui_resources(${PROJECT_NAME}_Standalone)
+soundshed_copy_ui_resources(${PROJECT_NAME}_VST3)
 
 # IPP support, comment out to disable
 include(PamplejuceIPP)
