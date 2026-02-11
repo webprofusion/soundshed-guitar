@@ -1389,18 +1389,16 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
     else if (path == "input.gain") mPresetMixer.SetGlobalInputGain(value.get<double>());
     else if (path == "output.gain") mPresetMixer.SetGlobalOutputGain(value.get<double>());
     else if (path == "limiter.enabled") mPresetMixer.SetLimiterEnabled(value.get<bool>());
-    else if (path.rfind("eq.band", 0) == 0)
-    {
-        // e.g., "eq.band0.gain", "eq.band1.frequency", "eq.band2.q"
-        if (path.size() >= 12)
-        {
-            int band = path[7] - '0';
-            std::string prop = path.substr(9);
-            if (prop == "gain") mPresetMixer.SetGlobalEQBandGain(band, value.get<double>());
-            else if (prop == "frequency") mPresetMixer.SetGlobalEQBandFrequency(band, value.get<double>());
-            else if (prop == "q") mPresetMixer.SetGlobalEQBandQ(band, value.get<double>());
-        }
-    }
+    else if (path == "eq.lowGain") mPresetMixer.SetGlobalEQBandGain(0, value.get<double>());
+    else if (path == "eq.lowFreq") mPresetMixer.SetGlobalEQBandFrequency(0, value.get<double>());
+    else if (path == "eq.lowMidGain") mPresetMixer.SetGlobalEQBandGain(1, value.get<double>());
+    else if (path == "eq.lowMidFreq") mPresetMixer.SetGlobalEQBandFrequency(1, value.get<double>());
+    else if (path == "eq.lowMidQ") mPresetMixer.SetGlobalEQBandQ(1, value.get<double>());
+    else if (path == "eq.highMidGain") mPresetMixer.SetGlobalEQBandGain(2, value.get<double>());
+    else if (path == "eq.highMidFreq") mPresetMixer.SetGlobalEQBandFrequency(2, value.get<double>());
+    else if (path == "eq.highMidQ") mPresetMixer.SetGlobalEQBandQ(2, value.get<double>());
+    else if (path == "eq.highGain") mPresetMixer.SetGlobalEQBandGain(3, value.get<double>());
+    else if (path == "eq.highFreq") mPresetMixer.SetGlobalEQBandFrequency(3, value.get<double>());
 
     SendGlobalChainStateToUI();
 }

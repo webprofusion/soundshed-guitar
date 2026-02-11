@@ -839,52 +839,52 @@ const getPostChainEqNode = (): GraphNode | undefined =>
 
 const GLOBAL_EQ_PARAM_MAP: Record<string, GlobalEqParamBinding> = {
   eq_low_gain: {
-    path: "eq.band0.gain",
+    path: "eq.lowGain",
     read: (node) => node.params.lowGain,
     apply: (node, value) => { node.params.lowGain = value; },
   },
   eq_low_freq: {
-    path: "eq.band0.frequency",
+    path: "eq.lowFreq",
     read: (node) => node.params.lowFreq,
     apply: (node, value) => { node.params.lowFreq = value; },
   },
   eq_lowmid_gain: {
-    path: "eq.band1.gain",
+    path: "eq.lowMidGain",
     read: (node) => node.params.lowMidGain,
     apply: (node, value) => { node.params.lowMidGain = value; },
   },
   eq_lowmid_freq: {
-    path: "eq.band1.frequency",
+    path: "eq.lowMidFreq",
     read: (node) => node.params.lowMidFreq,
     apply: (node, value) => { node.params.lowMidFreq = value; },
   },
   eq_lowmid_q: {
-    path: "eq.band1.q",
+    path: "eq.lowMidQ",
     read: (node) => node.params.lowMidQ,
     apply: (node, value) => { node.params.lowMidQ = value; },
   },
   eq_highmid_gain: {
-    path: "eq.band2.gain",
+    path: "eq.highMidGain",
     read: (node) => node.params.highMidGain,
     apply: (node, value) => { node.params.highMidGain = value; },
   },
   eq_highmid_freq: {
-    path: "eq.band2.frequency",
+    path: "eq.highMidFreq",
     read: (node) => node.params.highMidFreq,
     apply: (node, value) => { node.params.highMidFreq = value; },
   },
   eq_highmid_q: {
-    path: "eq.band2.q",
+    path: "eq.highMidQ",
     read: (node) => node.params.highMidQ,
     apply: (node, value) => { node.params.highMidQ = value; },
   },
   eq_high_gain: {
-    path: "eq.band3.gain",
+    path: "eq.highGain",
     read: (node) => node.params.highGain,
     apply: (node, value) => { node.params.highGain = value; },
   },
   eq_high_freq: {
-    path: "eq.band3.frequency",
+    path: "eq.highFreq",
     read: (node) => node.params.highFreq,
     apply: (node, value) => { node.params.highFreq = value; },
   },

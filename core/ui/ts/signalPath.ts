@@ -2227,22 +2227,22 @@ function getEqBands(node: GraphNode, typeInfo: EffectTypeInfo): EqBand[] {
     return fallback;
   };
 
-  const band0Gain = readParam(["band0_gain", "lowGain"], getDefault("band0_gain", 0));
-  const band0Freq = readParam(["band0_freq", "lowFreq"], getDefault("band0_freq", 100));
-  const band1Gain = readParam(["band1_gain", "lowMidGain"], getDefault("band1_gain", 0));
-  const band1Freq = readParam(["band1_freq", "lowMidFreq"], getDefault("band1_freq", 400));
-  const band1Q = readParam(["band1_q", "lowMidQ"], getDefault("band1_q", 1.0));
-  const band2Gain = readParam(["band2_gain", "highMidGain"], getDefault("band2_gain", 0));
-  const band2Freq = readParam(["band2_freq", "highMidFreq"], getDefault("band2_freq", 2000));
-  const band2Q = readParam(["band2_q", "highMidQ"], getDefault("band2_q", 1.0));
-  const band3Gain = readParam(["band3_gain", "highGain"], getDefault("band3_gain", 0));
-  const band3Freq = readParam(["band3_freq", "highFreq"], getDefault("band3_freq", 8000));
+  const lowGain = readParam(["lowGain"], getDefault("lowGain", 0));
+  const lowFreq = readParam(["lowFreq"], getDefault("lowFreq", 100));
+  const lowMidGain = readParam(["lowMidGain"], getDefault("lowMidGain", 0));
+  const lowMidFreq = readParam(["lowMidFreq"], getDefault("lowMidFreq", 400));
+  const lowMidQ = readParam(["lowMidQ"], getDefault("lowMidQ", 1.0));
+  const highMidGain = readParam(["highMidGain"], getDefault("highMidGain", 0));
+  const highMidFreq = readParam(["highMidFreq"], getDefault("highMidFreq", 2000));
+  const highMidQ = readParam(["highMidQ"], getDefault("highMidQ", 1.0));
+  const highGain = readParam(["highGain"], getDefault("highGain", 0));
+  const highFreq = readParam(["highFreq"], getDefault("highFreq", 8000));
 
   return [
-    { freq: band0Freq, gainDb: band0Gain, q: 1.0 },
-    { freq: band1Freq, gainDb: band1Gain, q: band1Q },
-    { freq: band2Freq, gainDb: band2Gain, q: band2Q },
-    { freq: band3Freq, gainDb: band3Gain, q: 1.0 },
+    { freq: lowFreq, gainDb: lowGain, q: 1.0 },
+    { freq: lowMidFreq, gainDb: lowMidGain, q: lowMidQ },
+    { freq: highMidFreq, gainDb: highMidGain, q: highMidQ },
+    { freq: highFreq, gainDb: highGain, q: 1.0 },
   ];
 }
 
