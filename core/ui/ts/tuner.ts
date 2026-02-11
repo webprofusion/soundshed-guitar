@@ -182,7 +182,7 @@ export function initializeTuner(): void {
 
   // Close modal when clicking outside
   if (tunerModal) {
-    tunerModal.addEventListener("click", (e) => {
+    tunerModal.addEventListener("mousedown", (e) => {
       if (e.target === tunerModal) {
         closeTuner();
       }

@@ -525,7 +525,7 @@ export function initializeMetronome(): void {
   }
 
   if (metronomeModal) {
-    metronomeModal.addEventListener("click", (event) => {
+    metronomeModal.addEventListener("mousedown", (event) => {
       if (event.target === metronomeModal) {
         closeMetronome();
       }

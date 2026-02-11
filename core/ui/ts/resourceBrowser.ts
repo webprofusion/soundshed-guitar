@@ -147,7 +147,7 @@ export class ResourceBrowserModal {
     this.cancelBtn?.addEventListener("click", () => this.close());
     this.selectBtn?.addEventListener("click", () => this.confirmSelection());
     
-    this.modal.addEventListener("click", (event) => {
+    this.modal.addEventListener("mousedown", (event) => {
       if (event.target === this.modal) {
         this.close();
       }

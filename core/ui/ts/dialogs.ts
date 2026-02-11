@@ -103,7 +103,7 @@ export function initializeDialogModals(): void {
   dialogCancelButton.addEventListener("click", () => closeDialog(false));
   dialogCloseButton?.addEventListener("click", () => closeDialog(activeMode === "alert"));
 
-  dialogModal.addEventListener("click", (event) => {
+  dialogModal.addEventListener("mousedown", (event) => {
     if (event.target === dialogModal) {
       closeDialog(activeMode === "alert");
     }

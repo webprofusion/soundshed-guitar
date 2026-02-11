@@ -170,7 +170,7 @@ export function initTone3000Browser(): void {
   });
 
   detailsCloseEl?.addEventListener("click", () => closeToneDetails());
-  detailsModalEl?.addEventListener("click", (event) => {
+  detailsModalEl?.addEventListener("mousedown", (event) => {
     if (event.target === detailsModalEl) {
       closeToneDetails();
     }

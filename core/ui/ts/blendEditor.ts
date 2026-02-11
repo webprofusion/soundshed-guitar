@@ -130,13 +130,13 @@ export class BlendEditorModal {
       this.paramSelect.innerHTML = PARAM_SPECS.map((spec) => `<option value="${spec.id}">${spec.label}</option>`).join("");
     }
 
-    this.modal?.addEventListener("click", (event) => {
+    this.modal?.addEventListener("mousedown", (event) => {
       if (event.target === this.modal) {
         this.close();
       }
     });
 
-    this.modelBrowserModal?.addEventListener("click", (event) => {
+    this.modelBrowserModal?.addEventListener("mousedown", (event) => {
       if (event.target === this.modelBrowserModal) {
         this.closeModelBrowser();
       }

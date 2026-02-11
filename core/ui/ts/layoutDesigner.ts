@@ -174,7 +174,7 @@ export class LayoutDesignerModal {
     this.importFileInput?.addEventListener("change", () => this.handleImportFileSelected());
 
     // Modal backdrop click
-    this.modal?.addEventListener("click", (e) => {
+    this.modal?.addEventListener("mousedown", (e) => {
       if (e.target === this.modal) {
         this.close();
       }

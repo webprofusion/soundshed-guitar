@@ -1833,7 +1833,7 @@ export function initializeSavePresetModal(): void {
   }
 
   if (modal) {
-    modal.addEventListener("click", (event) => {
+    modal.addEventListener("mousedown", (event) => {
       if (event.target === modal) {
         closeSavePresetModal();
       }
