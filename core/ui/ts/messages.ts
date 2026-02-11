@@ -62,6 +62,28 @@ function presetSignature(preset?: Preset | null): string {
     if (value && typeof value === "object") {
       const obj = value as Record<string, unknown>;
       const cleaned: Record<string, unknown> = { ...obj };
+      if (typeof cleaned.resourceType === "string" || typeof cleaned.type === "string") {
+        cleaned.resourceType = typeof cleaned.resourceType === "string" ? cleaned.resourceType : cleaned.type;
+        delete cleaned.type;
+      }
+      if (typeof cleaned.resourceId === "string" || typeof cleaned.id === "string") {
+        cleaned.resourceId = typeof cleaned.resourceId === "string" ? cleaned.resourceId : cleaned.id;
+        delete cleaned.id;
+      }
+      if (cleaned.filePath === "") {
+        delete cleaned.filePath;
+      }
+      if (cleaned.embeddedId === "") {
+        delete cleaned.embeddedId;
+      }
+      if (cleaned.parameterId === "") {
+        delete cleaned.parameterId;
+      }
+      if (cleaned.parameters && typeof cleaned.parameters === "object" && cleaned.parameters !== null) {
+        if (Object.keys(cleaned.parameters as Record<string, unknown>).length === 0) {
+          delete cleaned.parameters;
+        }
+      }
       if (cleaned.params && typeof cleaned.params === "object" && cleaned.params !== null) {
         const params = cleaned.params as Record<string, unknown>;
         const cleanedParams: Record<string, unknown> = { ...params };

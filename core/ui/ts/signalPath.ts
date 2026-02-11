@@ -37,6 +37,9 @@ const blendEditorModal = new BlendEditorModal({
 let draggedNodeId: string | null = null;
 let dragOverNodeId: string | null = null;
 let selectedNodeId: string | null = null;
+let lastSelectedNodeType: string | null = null;
+let lastSelectedNodeCategory: string | null = null;
+let lastRenderedPresetId: string | null = null;
 
 const DEFAULT_VISUALIZATION_TITLE = "";
 const DEFAULT_VISUALIZATION_SUBTITLE = "Select an item in the signal chain to edit";
@@ -388,6 +391,64 @@ function updateEffectVisualization(node?: GraphNode): void {
   }
 }
 
+function updateLastSelectedNode(node: GraphNode): void {
+  lastSelectedNodeType = node.type || null;
+  lastSelectedNodeCategory = getNodeCategory(node) || null;
+}
+
+function selectNodeForPreset(preset: Preset, presetChanged: boolean): void {
+  const nodes = preset.graph?.nodes ?? [];
+  if (!nodes.length) {
+    selectedNodeId = null;
+    nodeParamsPanelElement?.classList.remove("visible");
+    updateEffectVisualization();
+    return;
+  }
+
+  const currentNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : undefined;
+  if (currentNode) {
+    if (presetChanged) {
+      updateLastSelectedNode(currentNode);
+      if (nodeParamsPanelElement?.classList.contains("visible")) {
+        showNodeParamsPanel(currentNode, preset);
+      } else {
+        updateEffectVisualization(currentNode);
+      }
+    }
+    return;
+  }
+
+  const matchesCategory = (node: GraphNode): boolean => {
+    if (!lastSelectedNodeCategory) return true;
+    return getNodeCategory(node) === lastSelectedNodeCategory;
+  };
+
+  let replacement: GraphNode | undefined;
+  if (lastSelectedNodeType) {
+    replacement = nodes.find((node) => node.type === lastSelectedNodeType && matchesCategory(node));
+    if (!replacement) {
+      replacement = nodes.find((node) => node.type === lastSelectedNodeType);
+    }
+  }
+  if (!replacement && lastSelectedNodeCategory) {
+    replacement = nodes.find((node) => getNodeCategory(node) === lastSelectedNodeCategory);
+  }
+  if (!replacement) {
+    replacement = nodes[0];
+  }
+
+  selectedNodeId = replacement?.id ?? null;
+  if (replacement) {
+    updateLastSelectedNode(replacement);
+  }
+
+  if (nodeParamsPanelElement?.classList.contains("visible") && replacement) {
+    showNodeParamsPanel(replacement, preset);
+  } else {
+    updateEffectVisualization(replacement);
+  }
+}
+
 function getNodeIcon(nodeType: string): string {
   return getFxEffectIcon(nodeType);
 }
@@ -608,6 +669,8 @@ export function renderSignalPathBar(): void {
 
   const activePresetId = uiState.activePresetId;
   const activePreset = getActivePresetForRender() ?? undefined;
+  const presetChanged = activePresetId !== lastRenderedPresetId;
+  lastRenderedPresetId = activePresetId ?? null;
   
   if (!activePreset) {
     signalPathNodesElement.innerHTML = "";
@@ -617,6 +680,7 @@ export function renderSignalPathBar(): void {
 
   // Render graph-based signal path (supports parallel paths)
   if (activePreset.graph?.nodes) {
+    selectNodeForPreset(activePreset, presetChanged);
     renderGraphSignalPath(activePreset);
   } else {
     // Empty preset - show only input/output
@@ -1363,6 +1427,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   }
 
   nodeParamsPanelElement.classList.add("visible");
+  updateLastSelectedNode(node);
   updateEffectVisualization(node);
   
   // Get parameter definitions from registry
