@@ -136,6 +136,64 @@ namespace
     return path;
   }
 
+  std::filesystem::path WriteStereoImpulseToWav(const std::vector<float>& left,
+                                                const std::vector<float>& right,
+                                                double sampleRate)
+  {
+    const std::size_t length = std::min(left.size(), right.size());
+    if (length == 0)
+    {
+      throw std::runtime_error("Stereo IR must have data");
+    }
+
+    auto tempDir = fs::temp_directory_path() / "guitarfx_ir_tests";
+    std::filesystem::create_directories(tempDir);
+
+    static std::atomic<int> counter{0};
+    const auto filename = "ir_stereo_" + std::to_string(counter++) + ".wav";
+    const auto path = tempDir / filename;
+
+    std::ofstream file(path, std::ios::binary);
+    if (!file)
+    {
+      throw std::runtime_error("Failed to create temp stereo IR file");
+    }
+
+    std::vector<float> interleaved(length * 2);
+    for (std::size_t i = 0; i < length; ++i)
+    {
+      interleaved[i * 2] = left[i];
+      interleaved[i * 2 + 1] = right[i];
+    }
+
+    const uint32_t dataSize = static_cast<uint32_t>(interleaved.size() * sizeof(float));
+    const uint32_t riffSize = 36u + dataSize;
+    const uint16_t audioFormat = 3; // IEEE float
+    const uint16_t numChannels = 2;
+    const uint32_t sampleRateU32 = static_cast<uint32_t>(sampleRate);
+    const uint32_t byteRate = sampleRateU32 * numChannels * sizeof(float);
+    const uint16_t blockAlign = static_cast<uint16_t>(numChannels * sizeof(float));
+    const uint16_t bitsPerSample = 32;
+    const uint32_t fmtChunkSize = 16;
+
+    file.write("RIFF", 4);
+    file.write(reinterpret_cast<const char*>(&riffSize), 4);
+    file.write("WAVE", 4);
+    file.write("fmt ", 4);
+    file.write(reinterpret_cast<const char*>(&fmtChunkSize), 4);
+    file.write(reinterpret_cast<const char*>(&audioFormat), 2);
+    file.write(reinterpret_cast<const char*>(&numChannels), 2);
+    file.write(reinterpret_cast<const char*>(&sampleRateU32), 4);
+    file.write(reinterpret_cast<const char*>(&byteRate), 4);
+    file.write(reinterpret_cast<const char*>(&blockAlign), 2);
+    file.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
+    file.write("data", 4);
+    file.write(reinterpret_cast<const char*>(&dataSize), 4);
+    file.write(reinterpret_cast<const char*>(interleaved.data()), dataSize);
+
+    return path;
+  }
+
   /**
    * @brief Helper class to test IR convolution via SignalGraphExecutor + IRCabEffect
    */
@@ -174,6 +232,20 @@ namespace
         throw std::runtime_error("IR file not found: " + path.string());
       }
 
+      LoadImpulse(path);
+    }
+
+    void SetStereoImpulse(const std::vector<float>& left, const std::vector<float>& right)
+    {
+      if (left.empty() || right.empty())
+      {
+        mExecutor.SetNodeEnabled("cab", false);
+        mExecutor.Reset();
+        return;
+      }
+
+      const auto path = WriteStereoImpulseToWav(left, right, kSampleRate);
+      mTempFiles.push_back(path);
       LoadImpulse(path);
     }
 
@@ -620,6 +692,46 @@ namespace
     // Right channel: impulse at t=1, so output = [0, 0.5, 0.5]
     std::vector<double> expectedL = { 0.5, 0.5, 0.0 };
     std::vector<double> expectedR = { 0.0, 0.5, 0.5 };
+
+    for (std::size_t i = 0; i < expectedL.size(); ++i)
+    {
+      if (!ApproxEqual(channelL[i], expectedL[i]))
+      {
+        std::cout << "FAILED on L channel at index " << i
+                  << " (expected " << expectedL[i] << ", got " << channelL[i] << ")\n";
+        return false;
+      }
+      if (!ApproxEqual(channelR[i], expectedR[i]))
+      {
+        std::cout << "FAILED on R channel at index " << i
+                  << " (expected " << expectedR[i] << ", got " << channelR[i] << ")\n";
+        return false;
+      }
+    }
+
+    std::cout << "OK\n";
+    return true;
+  }
+
+  // Test 10b: Stereo IR retention - ensure L/R IRs stay independent
+  bool TestStereoIRRetention()
+  {
+    std::cout << "Test: Stereo IR retention (L/R distinct)... ";
+
+    std::vector<float> leftIR = { 1.0f, 0.0f, 0.0f };
+    std::vector<float> rightIR = { 0.0f, 1.0f, 0.0f };
+
+    IRConvolutionTester tester;
+    tester.SetStereoImpulse(leftIR, rightIR);
+
+    std::vector<double> channelL = { 1.0, 0.0, 0.0 };
+    std::vector<double> channelR = { 1.0, 0.0, 0.0 };
+
+    tester.Convolve(channelL, 0);
+    tester.Convolve(channelR, 1);
+
+    std::vector<double> expectedL = { 1.0, 0.0, 0.0 };
+    std::vector<double> expectedR = { 0.0, 1.0, 0.0 };
 
     for (std::size_t i = 0; i < expectedL.size(); ++i)
     {
@@ -1387,6 +1499,7 @@ int main()
   runTest(TestLongIR);
   runTest(TestEmptyIR);
   runTest(TestStereoChannels);
+  runTest(TestStereoIRRetention);
   runTest(TestRealtimeLatency);
   runTest(TestAudioCleanness);
   runTest(TestLargeScaleRealtimeProcessing);

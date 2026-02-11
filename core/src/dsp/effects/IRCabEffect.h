@@ -7,6 +7,7 @@
 #include "dsp/IRWavLoader.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <vector>
@@ -34,8 +35,10 @@ namespace guitarfx
       mOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferR.resize(static_cast<size_t>(maxBlockSize));
 
+      ApplyPendingQuality();
+
       // Reinitialize convolvers if we have an IR loaded
-      if (!mImpulse.empty())
+      if (!mImpulseL.empty())
       {
         InitializeConvolvers();
       }
@@ -50,10 +53,25 @@ namespace guitarfx
 
     void Process(float **inputs, float **outputs, int numSamples) override
     {
+      if (!outputs || numSamples <= 0)
+      {
+        return;
+      }
+
       // Clamp to allocated buffer size to prevent out-of-bounds writes
       numSamples = std::min(numSamples, mMaxBlockSize);
 
-      if (!mEnabled || !mConvolverL.IsInitialized())
+      if (!inputs)
+      {
+        if (outputs[0])
+          std::fill_n(outputs[0], numSamples, 0.0f);
+        if (outputs[1])
+          std::fill_n(outputs[1], numSamples, 0.0f);
+        return;
+      }
+
+      const bool rightReady = !mIsStereo || mConvolverR.IsInitialized();
+      if (!mEnabled || mMix <= 0.0 || !mConvolverL.IsInitialized() || !rightReady)
       {
         // Bypass: copy input to output, falling back L→R if R is null
         if (outputs[0])
@@ -122,11 +140,8 @@ namespace guitarfx
         mEnabled = value > 0.5;
       else if (key == "quality")
       {
-        int q = static_cast<int>(std::clamp(value, 0.0, 3.0));
-        mQuality = static_cast<IRQuality>(q);
-        // Reinitialize convolvers with new quality setting
-        if (!mImpulse.empty())
-          InitializeConvolvers();
+        const int q = static_cast<int>(std::clamp(value, 0.0, 3.0));
+        mPendingQuality.store(q, std::memory_order_release);
       }
       else if (key == "air")
       {
@@ -152,7 +167,10 @@ namespace guitarfx
       if (key == "enabled")
         return mEnabled ? 1.0 : 0.0;
       if (key == "quality")
-        return static_cast<double>(mQuality);
+      {
+        const int pending = mPendingQuality.load(std::memory_order_acquire);
+        return pending >= 0 ? static_cast<double>(pending) : static_cast<double>(mQuality);
+      }
       if (key == "air")
         return mAir;
       if (key == "airMode")
@@ -167,10 +185,14 @@ namespace guitarfx
         return false;
 
       mIRPath = resourcePath;
+      ApplyPendingQuality();
       return InitializeConvolvers();
     }
 
-    [[nodiscard]] bool HasResource() const override { return mConvolverL.IsInitialized(); }
+    [[nodiscard]] bool HasResource() const override
+    {
+      return mConvolverL.IsInitialized() && (!mIsStereo || mConvolverR.IsInitialized());
+    }
     [[nodiscard]] std::filesystem::path GetResourcePath() const override { return mIRPath; }
 
     [[nodiscard]] std::string GetType() const override { return "cab_ir"; }
@@ -205,26 +227,57 @@ namespace guitarfx
       return samples.size();
     }
 
-    // Get processed (potentially truncated) IR based on quality setting
-    std::vector<float> GetProcessedImpulse() const
+    static size_t FindEnergyTruncationPointStereo(const std::vector<float> &left,
+                                                  const std::vector<float> &right,
+                                                  float threshold = 0.001f)
     {
-      if (mImpulse.empty())
+      const size_t length = std::min(left.size(), right.size());
+      if (length == 0)
+        return 0;
+
+      double totalEnergy = 0.0;
+      for (size_t i = 0; i < length; ++i)
+      {
+        totalEnergy += static_cast<double>(left[i]) * static_cast<double>(left[i]);
+        totalEnergy += static_cast<double>(right[i]) * static_cast<double>(right[i]);
+      }
+
+      if (totalEnergy < 1e-10)
+        return length;
+
+      const double targetEnergy = totalEnergy * (1.0 - static_cast<double>(threshold));
+      double cumulativeEnergy = 0.0;
+
+      for (size_t i = 0; i < length; ++i)
+      {
+        cumulativeEnergy += static_cast<double>(left[i]) * static_cast<double>(left[i]);
+        cumulativeEnergy += static_cast<double>(right[i]) * static_cast<double>(right[i]);
+        if (cumulativeEnergy >= targetEnergy)
+          return std::min(i + 256, length); // Add small buffer after threshold
+      }
+      return length;
+    }
+
+    // Get processed (potentially truncated) IR based on quality setting
+    std::vector<float> GetProcessedImpulse(const std::vector<float> &samples) const
+    {
+      if (samples.empty())
         return {};
 
       // For Full quality, return the complete IR
       if (mQuality == IRQuality::Full)
-        return mImpulse;
+        return samples;
 
       const size_t maxSamples = GetMaxIRSamples(mQuality, mSampleRate);
-      if (maxSamples == 0 || mImpulse.size() <= maxSamples)
-        return mImpulse;
+      if (maxSamples == 0 || samples.size() <= maxSamples)
+        return samples;
 
       // Find smart truncation point based on energy
-      const size_t energyTruncPoint = FindEnergyTruncationPoint(mImpulse, 0.001f);
-      const size_t truncLength = std::min({mImpulse.size(), maxSamples, energyTruncPoint});
+      const size_t energyTruncPoint = FindEnergyTruncationPoint(samples, 0.001f);
+      const size_t truncLength = std::min({samples.size(), maxSamples, energyTruncPoint});
 
       // Apply fade-out to avoid clicks (last 64 samples)
-      std::vector<float> truncated(mImpulse.begin(), mImpulse.begin() + truncLength);
+      std::vector<float> truncated(samples.begin(), samples.begin() + truncLength);
 
       constexpr size_t kFadeLength = 64;
       if (truncLength > kFadeLength)
@@ -238,41 +291,144 @@ namespace guitarfx
       return truncated;
     }
 
+    void GetProcessedImpulseStereo(std::vector<float> &left, std::vector<float> &right) const
+    {
+      left.clear();
+      right.clear();
+
+      if (mImpulseL.empty() || mImpulseR.empty())
+        return;
+
+      if (mQuality == IRQuality::Full)
+      {
+        left = mImpulseL;
+        right = mImpulseR;
+        return;
+      }
+
+      const size_t maxSamples = GetMaxIRSamples(mQuality, mSampleRate);
+      const size_t length = std::min(mImpulseL.size(), mImpulseR.size());
+      if (maxSamples == 0 || length <= maxSamples)
+      {
+        left.assign(mImpulseL.begin(), mImpulseL.begin() + length);
+        right.assign(mImpulseR.begin(), mImpulseR.begin() + length);
+        return;
+      }
+
+      const size_t energyTruncPoint = FindEnergyTruncationPointStereo(mImpulseL, mImpulseR, 0.001f);
+      const size_t truncLength = std::min({length, maxSamples, energyTruncPoint});
+
+      left.assign(mImpulseL.begin(), mImpulseL.begin() + truncLength);
+      right.assign(mImpulseR.begin(), mImpulseR.begin() + truncLength);
+
+      constexpr size_t kFadeLength = 64;
+      if (truncLength > kFadeLength)
+      {
+        for (size_t i = 0; i < kFadeLength; ++i)
+        {
+          const float fadeGain = static_cast<float>(kFadeLength - 1 - i) / static_cast<float>(kFadeLength - 1);
+          left[truncLength - kFadeLength + i] *= fadeGain;
+          right[truncLength - kFadeLength + i] *= fadeGain;
+        }
+      }
+    }
+
     bool LoadWavFile(const std::filesystem::path &path)
     {
       IRWavData data;
       if (!irwav::LoadWavFile(path, data))
         return false;
 
-      std::vector<float> mono;
-      irwav::DownmixToMono(data, mono);
-      if (mono.empty())
+      std::vector<float> left;
+      std::vector<float> right;
+      if (data.channels >= 2)
+      {
+        irwav::SplitToStereo(data, left, right);
+      }
+      else
+      {
+        left = data.samples;
+        right.clear();
+      }
+
+      if (left.empty())
         return false;
 
       mIRSampleRate = data.sampleRate;
-      mImpulse = std::move(mono);
+      if (data.channels >= 2 && !right.empty())
+      {
+        const size_t length = std::min(left.size(), right.size());
+        left.resize(length);
+        right.resize(length);
+        mImpulseL = std::move(left);
+        mImpulseR = std::move(right);
+        mIsStereo = true;
+      }
+      else
+      {
+        mImpulseL = std::move(left);
+        mImpulseR.clear();
+        mIsStereo = false;
+      }
       return true;
     }
 
     bool InitializeConvolvers()
     {
-      if (mImpulse.empty() || mMaxBlockSize == 0)
+      if (mImpulseL.empty() || mMaxBlockSize == 0)
         return false;
 
-      // Get processed (potentially truncated) IR
-      std::vector<float> processedIR = GetProcessedImpulse();
+      if (mIsStereo && !mImpulseR.empty())
+      {
+        std::vector<float> processedL;
+        std::vector<float> processedR;
+        GetProcessedImpulseStereo(processedL, processedR);
 
-      // Resample IR if needed
+        if (processedL.empty() || processedR.empty())
+          return false;
+
+        if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
+        {
+          irwav::ResampleLinear(processedL, mIRSampleRate, mSampleRate);
+          irwav::ResampleLinear(processedR, mIRSampleRate, mSampleRate);
+        }
+
+        if (!mConvolverL.SetImpulse(processedL, mMaxBlockSize) ||
+            !mConvolverR.SetImpulse(processedR, mMaxBlockSize))
+        {
+          mConvolverL.Reset();
+          mConvolverR.Reset();
+          return false;
+        }
+
+        return true;
+      }
+
+      std::vector<float> processedIR = GetProcessedImpulse(mImpulseL);
+      if (processedIR.empty())
+        return false;
+
       if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
         irwav::ResampleLinear(processedIR, mIRSampleRate, mSampleRate);
 
-      // Initialize both convolvers with the same IR
-      if (!mConvolverL.SetImpulse(processedIR, mMaxBlockSize))
+      if (!mConvolverL.SetImpulse(processedIR, mMaxBlockSize) ||
+          !mConvolverR.SetImpulse(processedIR, mMaxBlockSize))
+      {
+        mConvolverL.Reset();
+        mConvolverR.Reset();
         return false;
-      if (!mConvolverR.SetImpulse(processedIR, mMaxBlockSize))
-        return false;
+      }
 
       return true;
+    }
+
+    void ApplyPendingQuality()
+    {
+      const int pending = mPendingQuality.exchange(-1, std::memory_order_acq_rel);
+      if (pending >= 0)
+      {
+        mQuality = static_cast<IRQuality>(pending);
+      }
     }
 
     enum class AirMode
@@ -390,9 +546,11 @@ namespace guitarfx
     RealtimeConvolver mConvolverL;
     RealtimeConvolver mConvolverR;
 
-    std::vector<float> mImpulse;      // Original IR samples (mono, at original sample rate)
+    std::vector<float> mImpulseL;     // Original IR samples (left)
+    std::vector<float> mImpulseR;     // Original IR samples (right, optional)
     std::filesystem::path mIRPath;
     double mIRSampleRate = 48000.0;
+    bool mIsStereo = false;
 
     std::vector<double> mInputBufferL;
     std::vector<double> mInputBufferR;
@@ -403,6 +561,7 @@ namespace guitarfx
     double mOutputGain = 1.0;
     bool mEnabled = true;
     IRQuality mQuality = IRQuality::Standard;
+    std::atomic<int> mPendingQuality{-1};
 
     double mAir = 0.0;
     AirMode mAirMode = AirMode::OptionA_Shelf;
