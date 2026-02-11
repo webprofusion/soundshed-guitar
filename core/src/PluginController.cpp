@@ -600,6 +600,12 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
             if (!highPath.empty())
                 config.highPath = resolveClickPath(highPath);
 
+            std::error_code ec;
+            const bool lowExists = !config.lowPath.empty() && std::filesystem::exists(config.lowPath, ec);
+            const bool highExists = !config.highPath.empty() && std::filesystem::exists(config.highPath, ec);
+            if (!lowExists && !highExists)
+                continue;
+
             mMetronomeClickConfig.push_back(std::move(config));
             hasValidConfig = true;
         }
@@ -607,34 +613,31 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
 
     if (!hasValidConfig)
     {
-        const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
-        auto metronomeDir = settingsDir / "metronome";
-        const auto assetsRoot = mHost.GetBundledAssetsPath();
-        if (!assetsRoot.empty())
-            metronomeDir = assetsRoot / "ui" / "metronome";
-        (void)mFileSystem.EnsureDirectory(metronomeDir);
-
-        const std::array<std::pair<std::string, std::string>, 3> defaults = {
-            std::make_pair(std::string{"click"}, std::string{"Click"}),
-            std::make_pair(std::string{"drum"}, std::string{"Drum"}),
-            std::make_pair(std::string{"electronic"}, std::string{"Electronic"})
+        const std::array<std::tuple<std::string, std::string, std::string, std::string>, 3> defaults = {
+            std::make_tuple(std::string{"click"}, std::string{"Click"}, std::string{"metronome/click/Low.wav"}, std::string{"metronome/click/High.wav"}),
+            std::make_tuple(std::string{"drum"}, std::string{"Drum"}, std::string{"metronome/kit1/Low.wav"}, std::string{"metronome/kit1/High.wav"}),
+            std::make_tuple(std::string{"electronic"}, std::string{"Electronic"}, std::string{"metronome/digital/Low.wav"}, std::string{"metronome/digital/High.wav"})
         };
 
         nlohmann::json defaultConfig = nlohmann::json::array();
-        for (const auto& [id, label] : defaults)
+        for (const auto& entry : defaults)
         {
+            const auto& id = std::get<0>(entry);
+            const auto& label = std::get<1>(entry);
+            const auto& lowPath = std::get<2>(entry);
+            const auto& highPath = std::get<3>(entry);
             MetronomeClickTypeConfig config;
             config.id = id;
             config.label = label;
-            config.lowPath = metronomeDir / (id + "_low.wav");
-            config.highPath = metronomeDir / (id + "_high.wav");
+            config.lowPath = resolveClickPath(lowPath);
+            config.highPath = resolveClickPath(highPath);
             mMetronomeClickConfig.push_back(config);
 
             nlohmann::json entry;
             entry["id"] = id;
             entry["label"] = label;
-            entry["lowPath"] = config.lowPath.generic_string();
-            entry["highPath"] = config.highPath.generic_string();
+            entry["lowPath"] = lowPath;
+            entry["highPath"] = highPath;
             defaultConfig.push_back(std::move(entry));
         }
 
@@ -1570,6 +1573,8 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
 
     bool stateChanged = false;
     bool settingsChanged = false;
+    bool resetRequired = false;
+    const bool wasEnabled = mMetronomeEnabled.load(std::memory_order_relaxed);
 
     if (payload.contains("bpm") && payload["bpm"].is_number())
     {
@@ -1587,6 +1592,7 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
         if (mAppSettings.contains(kMetronomeEnabledSettingKey))
             mAppSettings.erase(kMetronomeEnabledSettingKey);
         stateChanged = true;
+        resetRequired = enabled && !wasEnabled;
     }
 
     if (payload.contains("volumeDb") && payload["volumeDb"].is_number())
@@ -1632,7 +1638,8 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
 
     if (stateChanged)
     {
-        mMetronomeResetPending.store(true, std::memory_order_release);
+        if (resetRequired)
+            mMetronomeResetPending.store(true, std::memory_order_release);
         mPendingStateBroadcast = true;
     }
 

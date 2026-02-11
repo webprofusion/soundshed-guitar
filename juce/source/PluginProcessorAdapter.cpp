@@ -8,6 +8,7 @@
 
 #include "PluginProcessorAdapter.h"
 #include "PluginEditor.h"   // existing editor, unchanged
+#include "UiBridge.h"
 
 #include <nlohmann/json.hpp>
 
@@ -30,15 +31,6 @@ static constexpr const char* kParamLabels[] = {
     "EQ High-Mid Gain", "EQ High-Mid Freq", "EQ High-Mid Q",
     "EQ High Gain", "EQ High Freq"
 };
-
-namespace
-{
-    bool fileExists(const std::filesystem::path& p)
-    {
-        std::error_code ec;
-        return std::filesystem::exists(p, ec);
-    }
-} // namespace
 
 // ════════════════════════════════════════════════════════════════════════
 // Construction / Destruction
@@ -506,27 +498,26 @@ void PluginProcessorAdapter::applyParametersToController()
 
 std::filesystem::path PluginProcessorAdapter::locateAssetsRoot() const
 {
-    auto findInParents = [](std::filesystem::path current) -> std::filesystem::path
-    {
-        for (int i = 0; i < 6; ++i)
-        {
-            if (fileExists(current / "assets" / "ui" / "data" / "default-presets.json"))
-                return current / "assets";
-            if (!current.has_parent_path()) break;
-            current = current.parent_path();
-        }
-        return {};
-    };
+    std::vector<std::filesystem::path> candidates;
 
     const auto cwd = std::filesystem::path(
         juce::File::getCurrentWorkingDirectory().getFullPathName().toStdString());
-    if (auto found = findInParents(cwd); !found.empty())
-        return found;
+    if (!cwd.empty())
+    {
+        candidates.push_back(cwd / "resources");
+        candidates.push_back(cwd / "Resources");
+    }
 
     const auto exeDir = std::filesystem::path(
         juce::File::getSpecialLocation(juce::File::currentExecutableFile)
             .getParentDirectory().getFullPathName().toStdString());
-    return findInParents(exeDir);
+    if (!exeDir.empty())
+    {
+        candidates.push_back(exeDir / "resources");
+        candidates.push_back(exeDir / "Resources");
+    }
+
+    return guitarfx::ui::ResolveResourceRoot(candidates);
 }
 
 // ════════════════════════════════════════════════════════════════════════
