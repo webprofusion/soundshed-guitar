@@ -150,7 +150,8 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     parameters: [
       { key: "voice", name: "Voice", default: 0, min: 0, max: 1, unit: "toggle" },
       { key: "gain", name: "Gain", default: 0.45, min: 0, max: 1, unit: "amount" },
-      { key: "stageCount", name: "Preamp Stages", default: 2, min: 1, max: 6, unit: "amount", step: 1 },
+      { key: "stageCount", name: "Preamp Stages", default: 2, min: 1, max: 4, unit: "amount", step: 1 },
+      { key: "stageGain", name: "Stage Gain", default: 0, min: -24, max: 24, unit: "dB" },
       { key: "bass", name: "Bass", default: 0.5, min: 0, max: 1, unit: "amount" },
       { key: "middle", name: "Middle", default: 0.5, min: 0, max: 1, unit: "amount" },
       { key: "treble", name: "Treble", default: 0.5, min: 0, max: 1, unit: "amount" },
