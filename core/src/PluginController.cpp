@@ -544,6 +544,39 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
 {
     mMetronomeClickConfig.clear();
 
+    auto resolveClickPath = [this](const std::string& rawPath) -> std::filesystem::path {
+        if (rawPath.empty())
+            return {};
+
+        std::filesystem::path path{rawPath};
+        if (path.is_absolute())
+            return path;
+
+        std::error_code ec;
+        const auto assetsRoot = mHost.GetBundledAssetsPath();
+        if (!assetsRoot.empty())
+        {
+            const auto candidateUi = assetsRoot / "ui" / path;
+            if (std::filesystem::exists(candidateUi, ec))
+                return candidateUi;
+            const auto candidateRoot = assetsRoot / path;
+            if (std::filesystem::exists(candidateRoot, ec))
+                return candidateRoot;
+        }
+
+        if (!mResourceRoot.empty())
+        {
+            const auto candidateUi = mResourceRoot / "ui" / path;
+            if (std::filesystem::exists(candidateUi, ec))
+                return candidateUi;
+            const auto candidateRoot = mResourceRoot / path;
+            if (std::filesystem::exists(candidateRoot, ec))
+                return candidateRoot;
+        }
+
+        return path;
+    };
+
     const auto configIt = mAppSettings.find(kMetronomeClickConfigSettingKey);
     bool hasValidConfig = false;
     if (configIt != mAppSettings.end() && configIt->is_array())
@@ -563,9 +596,9 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
             const std::string lowPath = entry.value("lowPath", "");
             const std::string highPath = entry.value("highPath", "");
             if (!lowPath.empty())
-                config.lowPath = std::filesystem::path{lowPath};
+                config.lowPath = resolveClickPath(lowPath);
             if (!highPath.empty())
-                config.highPath = std::filesystem::path{highPath};
+                config.highPath = resolveClickPath(highPath);
 
             mMetronomeClickConfig.push_back(std::move(config));
             hasValidConfig = true;
@@ -575,7 +608,10 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
     if (!hasValidConfig)
     {
         const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
-        const auto metronomeDir = settingsDir / "metronome";
+        auto metronomeDir = settingsDir / "metronome";
+        const auto assetsRoot = mHost.GetBundledAssetsPath();
+        if (!assetsRoot.empty())
+            metronomeDir = assetsRoot / "ui" / "metronome";
         (void)mFileSystem.EnsureDirectory(metronomeDir);
 
         const std::array<std::pair<std::string, std::string>, 3> defaults = {
@@ -3351,6 +3387,9 @@ void PluginController::BroadcastState()
         clickTypes.push_back({ {"id", config.id}, {"label", config.label} });
     metronome["clickTypes"] = std::move(clickTypes);
     state["metronome"] = metronome;
+
+    // Environment
+    state["environment"] = { {"standalone", mHost.IsStandalone()} };
 
     // Blend library
     state["blendLibrary"] = mBlendLibrary;
