@@ -6,6 +6,8 @@
   --color-accent: #e07848;
   --color-accent-hover: #e88858;
   --color-accent-dark: #c85828;
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
   
   /* Success/Active Colors */
   --color-success: #68b868;

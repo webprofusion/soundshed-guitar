@@ -937,9 +937,6 @@
 
 .effect-visualization .node-params-panel {
   position: absolute;
-  
-  left: 20%;
-  /*transform: translate(-50%, -50%);*/
   width: min(950px, 92%);
   max-height: 82%;
   overflow-y: auto;

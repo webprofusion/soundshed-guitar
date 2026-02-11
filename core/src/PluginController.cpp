@@ -84,6 +84,12 @@ namespace
         return 20.0 * std::log10(linear);
     }
 
+    double HeadroomDbFromPeak(double peak)
+    {
+        const double peakDb = ToDbFS(peak);
+        return std::max(0.0, -peakDb);
+    }
+
         std::string FormatTimestamp()
         {
         const auto now = std::chrono::system_clock::now();
@@ -4426,12 +4432,26 @@ void PluginController::SendSignalDiagnosticsToUI()
     auto snapshot = mPresetMixer.GetSignalDiagnosticsSnapshot();
     nlohmann::json msg;
     msg["type"] = "signalLevelDiagnostics";
-    msg["input"]["peak"] = snapshot.input.peak;
-    msg["input"]["rms"] = snapshot.input.rms;
-    msg["input"]["clipCount"] = snapshot.input.clipCount;
-    msg["output"]["peak"] = snapshot.output.peak;
-    msg["output"]["rms"] = snapshot.output.rms;
-    msg["output"]["clipCount"] = snapshot.output.clipCount;
+
+    auto buildLevelJson = [](const MultiPresetMixer::SignalLevelStats& stats)
+    {
+        const double peakDb = ToDbFS(stats.peak);
+        const double rmsDb = ToDbFS(stats.rms);
+        const double headroomDb = HeadroomDbFromPeak(stats.peak);
+        const bool clipped = stats.clipCount > 0 || stats.peak >= 1.0;
+        return nlohmann::json{
+            {"peak", stats.peak},
+            {"rms", stats.rms},
+            {"peakDbfs", peakDb},
+            {"rmsDbfs", rmsDb},
+            {"headroomDb", headroomDb},
+            {"clipped", clipped},
+            {"clipCount", stats.clipCount},
+        };
+    };
+
+    msg["input"] = buildLevelJson(snapshot.input);
+    msg["output"] = buildLevelJson(snapshot.output);
 
     nlohmann::json nodes = nlohmann::json::array();
     for (const auto& n : snapshot.nodes)
@@ -4441,9 +4461,7 @@ void PluginController::SendSignalDiagnosticsToUI()
         node["presetId"] = n.presetId;
         node["nodeId"] = n.nodeId;
         node["nodeType"] = n.nodeType;
-        node["peak"] = n.levels.peak;
-        node["rms"] = n.levels.rms;
-        node["clipCount"] = n.levels.clipCount;
+        node["levels"] = buildLevelJson(n.levels);
         nodes.push_back(node);
     }
     msg["nodes"] = nodes;

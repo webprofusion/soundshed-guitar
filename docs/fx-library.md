@@ -129,6 +129,17 @@ Algorithmic room reverberation.
 | `mix` | 0.0–1.0 | 0.3 | — |
 | `safetyClip` | 0.0–1.0 | 0.0 | — |
 
+### Spring Reverb (`reverb_spring`)
+Spring-style reverb with tonal coloration.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.6 | — |
+| `tone` | 0.0–1.0 | 0.6 | — |
+| `drive` | 0.0–1.0 | 0.2 | — |
+| `tension` | 0.0–1.0 | 0.4 | — |
+| `mix` | 0.0–1.0 | 0.3 | — |
+
 ### Simple Cabinet (`cab_simple`)
 Filter-based cabinet simulation (no IR required).
 

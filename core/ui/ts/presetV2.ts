@@ -437,6 +437,20 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     parameters: [
       { key: "decay", name: "Decay", default: 0.5, min: 0, max: 1, unit: "amount" },
       { key: "damping", name: "Damping", default: 0.5, min: 0, max: 1, unit: "amount" },
+      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" },
+      { key: "safetyClip", name: "Safety Clip", default: 0.0, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_spring",
+    displayName: "Spring Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.6, min: 0, max: 1, unit: "amount" },
+      { key: "tone", name: "Tone", default: 0.6, min: 0, max: 1, unit: "amount" },
+      { key: "drive", name: "Drive", default: 0.2, min: 0, max: 1, unit: "amount" },
+      { key: "tension", name: "Tension", default: 0.4, min: 0, max: 1, unit: "amount" },
       { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" }
     ]
   },

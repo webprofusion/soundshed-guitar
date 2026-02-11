@@ -59,7 +59,7 @@ Clean and refetch-deps (/src):
 Copy the vst3sdk content to `src/build/_deps/iplug2-src/Dependencies/IPlug/VST3_SDK`
 -- `cmake -S . -B build -DGUITARFX_FETCH_DEPENDENCIES=ON`
 
-Configure cmake:
+Configure cmake in /src :
 ` cmake -S . -B build -G "Visual Studio 18 2026" `
 Run configured release build (under /src):
 `cmake --build build --config Release`

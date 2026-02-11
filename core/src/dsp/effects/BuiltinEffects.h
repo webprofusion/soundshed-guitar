@@ -10,6 +10,7 @@
 #include "dsp/effects/PitchShiftEffect.h"
 #include "dsp/effects/TransposeEffect.h"
 #include "dsp/effects/ReverbEffect.h"
+#include "dsp/effects/SpringReverbEffect.h"
 #include "dsp/effects/CompressorEffect.h"
 #include "dsp/effects/OverdriveEffect.h"
 #include "dsp/effects/DistortionEffect.h"
@@ -91,6 +92,7 @@ namespace guitarfx
     RegisterDelayEffect();
     RegisterDoublerEffect();
     RegisterReverbEffect();
+    RegisterSpringReverbEffect();
     RegisterIRReverbEffect();
 
     // Modulation effects

@@ -109,6 +109,22 @@ guitarfx::SignalGraph MakeComplexSinglePath()
   return g;
 }
 
+guitarfx::SignalGraph MakeSpringReverbPath()
+{
+  using namespace guitarfx;
+  SignalGraph g;
+  g.nodes.push_back({"in", kNodeTypeInput, "", "Input", true});
+  g.nodes.push_back({"spring", "reverb_spring", "reverb", "Spring", true});
+  g.nodes.back().params["mix"] = 0.35;
+  g.nodes.back().params["decay"] = 0.5;
+  g.nodes.back().params["tension"] = 0.5;
+  g.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
+
+  g.edges.push_back({"in", "spring", 0, 0, 1.0});
+  g.edges.push_back({"spring", "out", 0, 0, 1.0});
+  return g;
+}
+
 guitarfx::SignalGraph MakeParallelPath()
 {
   using namespace guitarfx;
@@ -189,7 +205,18 @@ int main()
     if (ok && boundsOk) ++passed; else ++failed;
   }
 
-  // Case 3: Parallel path (two branches summed in mixer)
+  // Case 3: Spring reverb path (Input->Spring->Output)
+  {
+    Analysis a{};
+    const bool ok = RunGraph(MakeSpringReverbPath(), a);
+    const bool boundsOk = (a.peak > 1e-4) && (a.peak < 1.5) && (a.rms > 1e-4);
+    std::cout << "Spring reverb path: peak=" << std::fixed << std::setprecision(3) << a.peak
+              << ", rms=" << std::setprecision(3) << a.rms
+              << ((ok && boundsOk) ? "  PASS" : "  FAIL") << "\n";
+    if (ok && boundsOk) ++passed; else ++failed;
+  }
+
+  // Case 4: Parallel path (two branches summed in mixer)
   {
     Analysis a{};
     const bool ok = RunGraph(MakeParallelPath(), a);
@@ -208,7 +235,7 @@ int main()
     if (ok && within) ++passed; else ++failed;
   }
 
-  // Case 4: Resource-backed NAM-only path (resource resolution + processing)
+  // Case 5: Resource-backed NAM-only path (resource resolution + processing)
   {
     using namespace guitarfx;
     // Build library entries (use test resources dir)

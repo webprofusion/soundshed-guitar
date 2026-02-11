@@ -188,6 +188,8 @@
   font-size: 11px;
   cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease;
+  justify-self: start;
+  width: fit-content;
 }
 
 .settings-row button.secondary {

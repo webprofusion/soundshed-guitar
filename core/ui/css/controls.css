@@ -261,11 +261,20 @@
 .input-channel-selector select {
   padding: 4px 8px;
   font-size: 11px;
-  background-color: #3c3c46;
-  color: var(--text-tertiary);
-  border: 1px solid #4a4a54;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   cursor: pointer;
+}
+
+.theme-dark .input-channel-selector select {
+  color-scheme: dark;
+}
+
+.theme-light .input-channel-selector select,
+.theme-classic .input-channel-selector select {
+  color-scheme: light;
 }
 
 .input-channel-selector select:focus {
