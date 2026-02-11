@@ -1519,13 +1519,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           <div class="knob-indicator"></div>
         </div>
         <span class="node-param-value">${isEnum ? enumValueLabel : `${displayValue.toFixed(2)}${unit}`}</span>
-        ${isEnum ? `
-          <div class="node-param-steps">
-            ${enumLabels.map((text: string, idx: number) => `
-              <span class="node-param-step" data-step-index="${idx}">${text}</span>
-            `).join("")}
-          </div>
-        ` : ""}
+       
       </div>
     `;
   };

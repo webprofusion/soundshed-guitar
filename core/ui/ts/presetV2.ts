@@ -220,7 +220,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     parameters: [
       { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
       { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount" },
+      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: true },
       {
         key: "airMode",
         name: "Air Mode",
@@ -229,7 +229,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
         max: 2,
         unit: "enum",
         step: 1,
-        labels: ["Shelf", "Presence", "Shelf+Presence"]
+        labels: ["Shelf", "Presence", "Shelf+Presence"], advanced: true
       }
     ]
   },

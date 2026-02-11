@@ -1500,27 +1500,32 @@
 }
 
 .node-bypass-btn {
-  padding: 6px 12px;
-  background: linear-gradient(180deg, #4a4a5a 0%, #3a3a4a 100%);
-  border: 1px solid #5a5a6a;
-  border-radius: 4px;
-  color: var(--text-tertiary);
-  font-size: 10px;
+  padding: 8px 16px;
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-medium);
+  border-radius: 6px;
+  color: var(--text-dark-secondary);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.8px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .node-bypass-btn:hover {
-  background: linear-gradient(180deg, #5a5a6a 0%, #4a4a5a 100%);
-  color: #c0c0d0;
+  background: var(--bg-dark-tertiary);
+  border-color: var(--border-dark-light);
+  color: var(--text-dark-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
 }
 
 .node-bypass-btn.bypassed {
-  background: linear-gradient(180deg, #6a3030 0%, #502828 100%);
-  border-color: #8a4040;
-  color: #e0a0a0;
+  background: linear-gradient(180deg, #6a3838 0%, #563030 100%);
+  border-color: #8a5050;
+  color: var(--text-dark-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .node-empty-message {
