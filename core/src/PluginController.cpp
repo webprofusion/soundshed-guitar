@@ -897,6 +897,8 @@ void PluginController::DeserializeState(const std::string& json)
             if (presetOpt)
             {
                 mActivePresetId = state.value("presetId", presetOpt->id);
+                mActivePreset = *presetOpt;
+                mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
                 ApplyPreset(*presetOpt);
             }
         }

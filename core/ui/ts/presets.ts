@@ -1245,16 +1245,27 @@ export function handlePresetDataMessage(preset: Preset): void {
   }
 }
 
+function hasGraphNodes(preset: Preset | null | undefined): boolean {
+  return Boolean(preset?.graph && Array.isArray(preset.graph.nodes) && preset.graph.nodes.length > 0);
+}
+
 async function loadPresetMetadata(presetId: string): Promise<Preset> {
   if (uiState.presetCache.has(presetId)) {
-    return stripLegacyGlobals(clonePreset(uiState.presetCache.get(presetId) ?? null) as Preset);
+    const cached = stripLegacyGlobals(clonePreset(uiState.presetCache.get(presetId) ?? null) as Preset);
+    if (hasGraphNodes(cached)) {
+      return cached;
+    }
+    const backendPreset = await requestPresetFromBackend(presetId);
+    const resolved = stripLegacyGlobals(backendPreset);
+    uiState.presetCache.set(resolved.id, resolved);
+    return clonePreset(resolved) as Preset;
   }
 
   const localPreset = uiState.presets.find((preset) => preset.id === presetId);
   if (localPreset) {
     const cleaned = stripLegacyGlobals(localPreset);
     uiState.presetCache.set(localPreset.id, cleaned);
-    if (!cleaned.graph || !Array.isArray(cleaned.graph.nodes) || cleaned.graph.nodes.length === 0) {
+    if (!hasGraphNodes(cleaned)) {
       const backendPreset = await requestPresetFromBackend(presetId);
       const resolved = stripLegacyGlobals(backendPreset);
       uiState.presetCache.set(resolved.id, resolved);
