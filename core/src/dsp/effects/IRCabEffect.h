@@ -39,6 +39,10 @@ namespace guitarfx
       mOutputBufferR.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferBL.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferBR.resize(static_cast<size_t>(maxBlockSize));
+      mPrevOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
+      mPrevOutputBufferR.resize(static_cast<size_t>(maxBlockSize));
+      mPrevOutputBufferBL.resize(static_cast<size_t>(maxBlockSize));
+      mPrevOutputBufferBR.resize(static_cast<size_t>(maxBlockSize));
 
       ApplyPendingQuality();
 
@@ -59,9 +63,15 @@ namespace guitarfx
       mConvolverR.Reset();
       mConvolverBL.Reset();
       mConvolverBR.Reset();
+      mPrevConvolverL.Reset();
+      mPrevConvolverR.Reset();
+      mPrevConvolverBL.Reset();
+      mPrevConvolverBR.Reset();
       ResetAirState();
       ResetCabFilterState();
       mResourceTransitionSamplesRemaining = 0;
+      mPrevHasSlotA = false;
+      mPrevHasSlotB = false;
     }
 
     void Process(float **inputs, float **outputs, int numSamples) override
@@ -124,6 +134,19 @@ namespace guitarfx
         mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
       }
 
+      const bool transitionActive = mResourceTransitionSamplesRemaining > 0 && mPrevHasSlotA;
+      if (transitionActive)
+      {
+        mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+        mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
+
+        if (mPrevHasSlotB)
+        {
+          mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
+          mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+        }
+      }
+
       // Apply wet/dry mix and output gain
       float wetGain = static_cast<float>(mMix * mOutputGain);
       float dryGain = static_cast<float>((1.0 - mMix));
@@ -143,6 +166,35 @@ namespace guitarfx
           wetR += mOutputBufferBR[i] * slotBGain;
         }
 
+        if (transitionActive)
+        {
+          const int progressed = mResourceTransitionSamplesTotal - mResourceTransitionSamplesRemaining;
+          const double newWeight = static_cast<double>(progressed) / static_cast<double>(std::max(1, mResourceTransitionSamplesTotal));
+          const double oldWeight = 1.0 - std::clamp(newWeight, 0.0, 1.0);
+
+          double prevWetL = mPrevOutputBufferL[i] * slotAGain;
+          double prevWetR = mPrevOutputBufferR[i] * slotAGain;
+          if (mPrevHasSlotB)
+          {
+            prevWetL += mPrevOutputBufferBL[i] * slotBGain;
+            prevWetR += mPrevOutputBufferBR[i] * slotBGain;
+          }
+
+          wetL = prevWetL * oldWeight + wetL * (1.0 - oldWeight);
+          wetR = prevWetR * oldWeight + wetR * (1.0 - oldWeight);
+
+          mResourceTransitionSamplesRemaining -= 1;
+          if (mResourceTransitionSamplesRemaining <= 0)
+          {
+            mPrevHasSlotA = false;
+            mPrevHasSlotB = false;
+            mPrevConvolverL.Reset();
+            mPrevConvolverR.Reset();
+            mPrevConvolverBL.Reset();
+            mPrevConvolverBR.Reset();
+          }
+        }
+
         wetL = ProcessCabFilters(wetL, 0);
         wetR = ProcessCabFilters(wetR, 1);
 
@@ -151,17 +203,6 @@ namespace guitarfx
           wetL = ProcessAirSample(wetL, 0);
           wetR = ProcessAirSample(wetR, 1);
         }
-
-        double transitionWetGain = 1.0;
-        if (mResourceTransitionSamplesRemaining > 0)
-        {
-          const int progressed = mResourceTransitionSamplesTotal - mResourceTransitionSamplesRemaining;
-          transitionWetGain = static_cast<double>(progressed) / static_cast<double>(std::max(1, mResourceTransitionSamplesTotal));
-          mResourceTransitionSamplesRemaining -= 1;
-        }
-
-        wetL *= transitionWetGain;
-        wetR *= transitionWetGain;
 
         float dryL = inputs[0] ? inputs[0][i] : 0.0f;
         float dryR = inputs[1] ? inputs[1][i] : dryL;
@@ -257,6 +298,8 @@ namespace guitarfx
 
     bool LoadResource(const std::filesystem::path &resourcePath) override
     {
+      CapturePreviousConvolvers();
+
       // Single-resource load path (legacy): load slot A and clear slot B.
       if (!LoadWavFile(resourcePath))
         return false;
@@ -282,9 +325,21 @@ namespace guitarfx
       if (paths.empty())
         return false;
 
-      if (!LoadResource(paths.front()))
+      CapturePreviousConvolvers();
+
+      if (!LoadWavFile(paths.front()))
         return false;
 
+      mIRPath = paths.front();
+      ApplyPendingQuality();
+      if (!InitializeConvolverA())
+        return false;
+
+      mImpulseBL.clear();
+      mImpulseBR.clear();
+      mIRPathB.clear();
+      mConvolverBL.Reset();
+      mConvolverBR.Reset();
       if (paths.size() >= 2)
       {
         if (LoadWavFileInto(paths[1], mImpulseBL, mImpulseBR, mIRSampleRateB, mIsStereoB))
@@ -517,64 +572,20 @@ namespace guitarfx
       return LoadWavFileInto(path, mImpulseL, mImpulseR, mIRSampleRate, mIsStereo);
     }
 
-    bool InitializeConvolverA()
+    bool InitializeConvolverFromImpulse(const std::vector<float> &impulseL,
+                                        const std::vector<float> &impulseR,
+                                        bool isStereo,
+                                        double impulseSampleRate,
+                                        RealtimeConvolver &convolverL,
+                                        RealtimeConvolver &convolverR)
     {
-      if (mImpulseL.empty() || mMaxBlockSize == 0)
+      if (impulseL.empty() || mMaxBlockSize == 0)
         return false;
 
-      if (mIsStereo && !mImpulseR.empty())
+      if (isStereo && !impulseR.empty())
       {
-        std::vector<float> processedL;
-        std::vector<float> processedR;
-        GetProcessedImpulseStereo(processedL, processedR);
-
-        if (processedL.empty() || processedR.empty())
-          return false;
-
-        if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
-        {
-          irwav::ResampleLinear(processedL, mIRSampleRate, mSampleRate);
-          irwav::ResampleLinear(processedR, mIRSampleRate, mSampleRate);
-        }
-
-        if (!mConvolverL.SetImpulse(processedL, mMaxBlockSize) ||
-            !mConvolverR.SetImpulse(processedR, mMaxBlockSize))
-        {
-          mConvolverL.Reset();
-          mConvolverR.Reset();
-          return false;
-        }
-
-        return true;
-      }
-
-      std::vector<float> processedIR = GetProcessedImpulse(mImpulseL);
-      if (processedIR.empty())
-        return false;
-
-      if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
-        irwav::ResampleLinear(processedIR, mIRSampleRate, mSampleRate);
-
-      if (!mConvolverL.SetImpulse(processedIR, mMaxBlockSize) ||
-          !mConvolverR.SetImpulse(processedIR, mMaxBlockSize))
-      {
-        mConvolverL.Reset();
-        mConvolverR.Reset();
-        return false;
-      }
-
-      return true;
-    }
-
-    bool InitializeConvolverB()
-    {
-      if (mImpulseBL.empty() || mMaxBlockSize == 0)
-        return false;
-
-      if (mIsStereoB && !mImpulseBR.empty())
-      {
-        std::vector<float> processedL = GetProcessedImpulse(mImpulseBL);
-        std::vector<float> processedR = GetProcessedImpulse(mImpulseBR);
+        std::vector<float> processedL = GetProcessedImpulse(impulseL);
+        std::vector<float> processedR = GetProcessedImpulse(impulseR);
 
         if (processedL.empty() || processedR.empty())
           return false;
@@ -583,39 +594,93 @@ namespace guitarfx
         processedL.resize(length);
         processedR.resize(length);
 
-        if (std::abs(mIRSampleRateB - mSampleRate) > 1.0)
+        if (std::abs(impulseSampleRate - mSampleRate) > 1.0)
         {
-          irwav::ResampleLinear(processedL, mIRSampleRateB, mSampleRate);
-          irwav::ResampleLinear(processedR, mIRSampleRateB, mSampleRate);
+          irwav::ResampleLinear(processedL, impulseSampleRate, mSampleRate);
+          irwav::ResampleLinear(processedR, impulseSampleRate, mSampleRate);
         }
 
-        if (!mConvolverBL.SetImpulse(processedL, mMaxBlockSize) ||
-            !mConvolverBR.SetImpulse(processedR, mMaxBlockSize))
+        if (!convolverL.SetImpulse(processedL, mMaxBlockSize) ||
+            !convolverR.SetImpulse(processedR, mMaxBlockSize))
         {
-          mConvolverBL.Reset();
-          mConvolverBR.Reset();
+          convolverL.Reset();
+          convolverR.Reset();
           return false;
         }
 
         return true;
       }
 
-      std::vector<float> processedIR = GetProcessedImpulse(mImpulseBL);
+      std::vector<float> processedIR = GetProcessedImpulse(impulseL);
       if (processedIR.empty())
         return false;
 
-      if (std::abs(mIRSampleRateB - mSampleRate) > 1.0)
-        irwav::ResampleLinear(processedIR, mIRSampleRateB, mSampleRate);
+      if (std::abs(impulseSampleRate - mSampleRate) > 1.0)
+        irwav::ResampleLinear(processedIR, impulseSampleRate, mSampleRate);
 
-      if (!mConvolverBL.SetImpulse(processedIR, mMaxBlockSize) ||
-          !mConvolverBR.SetImpulse(processedIR, mMaxBlockSize))
+      if (!convolverL.SetImpulse(processedIR, mMaxBlockSize) ||
+          !convolverR.SetImpulse(processedIR, mMaxBlockSize))
       {
-        mConvolverBL.Reset();
-        mConvolverBR.Reset();
+        convolverL.Reset();
+        convolverR.Reset();
         return false;
       }
 
       return true;
+    }
+
+    void CapturePreviousConvolvers()
+    {
+      mPrevHasSlotA = false;
+      mPrevHasSlotB = false;
+      mPrevConvolverL.Reset();
+      mPrevConvolverR.Reset();
+      mPrevConvolverBL.Reset();
+      mPrevConvolverBR.Reset();
+
+      if (HasResource())
+      {
+        mPrevHasSlotA = InitializeConvolverFromImpulse(
+          mImpulseL,
+          mImpulseR,
+          mIsStereo,
+          mIRSampleRate,
+          mPrevConvolverL,
+          mPrevConvolverR);
+      }
+
+      if (!mImpulseBL.empty() && mConvolverBL.IsInitialized())
+      {
+        mPrevHasSlotB = InitializeConvolverFromImpulse(
+          mImpulseBL,
+          mImpulseBR,
+          mIsStereoB,
+          mIRSampleRateB,
+          mPrevConvolverBL,
+          mPrevConvolverBR);
+      }
+    }
+
+    bool InitializeConvolverA()
+    {
+      return InitializeConvolverFromImpulse(
+        mImpulseL,
+        mImpulseR,
+        mIsStereo,
+        mIRSampleRate,
+        mConvolverL,
+        mConvolverR);
+    }
+
+    bool InitializeConvolverB()
+    {
+      return InitializeConvolverFromImpulse(
+        mImpulseBL,
+        mImpulseBR,
+        mIsStereoB,
+        mIRSampleRateB,
+        mConvolverBL,
+        mConvolverBR);
     }
 
     void ApplyPendingQuality()
@@ -827,6 +892,10 @@ namespace guitarfx
     RealtimeConvolver mConvolverR;
     RealtimeConvolver mConvolverBL;
     RealtimeConvolver mConvolverBR;
+    RealtimeConvolver mPrevConvolverL;
+    RealtimeConvolver mPrevConvolverR;
+    RealtimeConvolver mPrevConvolverBL;
+    RealtimeConvolver mPrevConvolverBR;
 
     std::vector<float> mImpulseL;     // Original IR samples (left)
     std::vector<float> mImpulseR;     // Original IR samples (right, optional)
@@ -845,6 +914,10 @@ namespace guitarfx
     std::vector<double> mOutputBufferR;
     std::vector<double> mOutputBufferBL;
     std::vector<double> mOutputBufferBR;
+    std::vector<double> mPrevOutputBufferL;
+    std::vector<double> mPrevOutputBufferR;
+    std::vector<double> mPrevOutputBufferBL;
+    std::vector<double> mPrevOutputBufferBR;
 
     double mMix = 1.0;
     double mIRBlend = 0.0;
@@ -859,6 +932,8 @@ namespace guitarfx
     IRQuality mQuality = IRQuality::Standard;
     std::atomic<int> mPendingQuality{-1};
     bool mHasLoadedResource = false;
+    bool mPrevHasSlotA = false;
+    bool mPrevHasSlotB = false;
     int mResourceTransitionSamplesTotal = 1440;
     int mResourceTransitionSamplesRemaining = 0;
 
