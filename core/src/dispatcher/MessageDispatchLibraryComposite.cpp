@@ -33,6 +33,11 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
         c.HandleSaveBlendDefinitionRequest(msg);
         return true;
     }
+    if (type == "deleteBlendDefinition")
+    {
+        c.HandleDeleteBlendDefinitionRequest(msg);
+        return true;
+    }
     if (type == "saveBlendArchive")
     {
         c.HandleSaveBlendArchiveRequest(msg);

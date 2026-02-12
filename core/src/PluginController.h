@@ -222,6 +222,7 @@ private:
     void HandlePreviewRemoteResourceRequest(const nlohmann::json& payload);
     void HandleCancelPreviewResourceRequest(const nlohmann::json& payload);
     void HandleSaveBlendDefinitionRequest(const nlohmann::json& payload);
+    void HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload);
     void HandleRequestResourceDataRequest(const nlohmann::json& payload);
     void HandleSaveBlendArchiveRequest(const nlohmann::json& payload);
     void HandleSavePresetArchiveRequest(const nlohmann::json& payload);

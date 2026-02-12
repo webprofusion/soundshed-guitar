@@ -20,6 +20,7 @@ import { handleCompositeLibrary, handleCompositeDefinitionAdded, handleComposite
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
 import { renderCompositeList, handleCompositeEditModeExited, handleCompositeEditStateUpdate } from "./compositeEditor.js";
 import { renderLayoutList } from "./layoutManager.js";
+import { renderBlendList } from "./blendManager.js";
 import { enterCompositeEditState, updateCompositeEditState, exitCompositeEditState } from "./state.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { themeSwitcher } from "./theme-switcher.js";
@@ -175,6 +176,7 @@ export function handleIncomingMessage(message: string): void {
       if (Array.isArray(blendLibrary)) {
         uiState.blendLibrary = blendLibrary as import("./types.js").BlendLibrary;
         refreshFxSelector();
+        renderBlendList();
       }
       const compositeLibrary = (payload as { compositeLibrary?: CompositeEffectDefinition[] }).compositeLibrary;
       if (Array.isArray(compositeLibrary)) {
@@ -888,6 +890,7 @@ export function handleIncomingMessage(message: string): void {
             type,
             displayName,
             category,
+            catalogHidden: existing?.catalogHidden ?? (type === "amp_nam" || type === "amp_nam_blend"),
             requiresResource,
             resourceType,
             parameters,

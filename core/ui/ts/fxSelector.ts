@@ -43,6 +43,13 @@ const FX_CATEGORIES: FxCategory[] = [
   { id: "channel", name: "Channels", color: "#c89040" },
 ];
 
+function getCatalogEffects(): EffectTypeInfo[] {
+  return EffectTypeRegistry.getAll().filter((effect) => {
+    if (effect.catalogHidden) return false;
+    return effect.type !== "amp_nam" && effect.type !== "amp_nam_blend";
+  });
+}
+
 /**
  * Initialize the FX selector panel and bind event handlers.
  */
@@ -102,7 +109,7 @@ function selectCategory(categoryId: string): void {
 function renderCategories(): void {
   if (!fxSelectorCategories) return;
 
-  const allEffects = EffectTypeRegistry.getAll();
+  const allEffects = getCatalogEffects();
   const blendItems = getBlendFxItems();
   const compositeItems = getCompositeFxItems();
   
@@ -144,7 +151,7 @@ function renderCategories(): void {
 export function renderEffectsList(): void {
   if (!fxSelectorEffectsList) return;
 
-  const allEffects = EffectTypeRegistry.getAll();
+  const allEffects = getCatalogEffects();
   const activeColorCategory = FX_CATEGORIES.find((c) => c.id === activeCategory);
   const categoryColor = activeColorCategory?.color || "#808080";
   

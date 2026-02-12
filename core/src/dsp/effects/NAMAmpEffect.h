@@ -315,7 +315,7 @@ namespace guitarfx
 
     EffectTypeInfo info;
     info.type = "amp_nam";
-    info.displayName = "Neural Amp Model";
+    info.displayName = "Neural Amp";
     info.category = "amp";
     info.description = "Neural Amp Modeler - AI-trained amp simulation";
     info.requiresResource = true;

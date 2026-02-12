@@ -2773,6 +2773,36 @@ void PluginController::HandleSaveBlendDefinitionRequest(const nlohmann::json& pa
     BroadcastState();
 }
 
+void PluginController::HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload)
+{
+    const std::string id = payload.value("blendId", "");
+    if (id.empty()) { ReportErrorToUI("Blend delete failed", "Missing blend id"); return; }
+
+    if (!mBlendLibrary.is_array()) mBlendLibrary = nlohmann::json::array();
+
+    nlohmann::json updated = nlohmann::json::array();
+    bool removed = false;
+    for (const auto& item : mBlendLibrary)
+    {
+        if (item.value("id", "") == id)
+        {
+            removed = true;
+            continue;
+        }
+        updated.push_back(item);
+    }
+
+    if (!removed)
+    {
+        ReportErrorToUI("Blend delete failed", "Blend not found");
+        return;
+    }
+
+    mBlendLibrary = std::move(updated);
+    SaveBlendLibrary();
+    BroadcastState();
+}
+
 void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& payload)
 {
     const std::string requestId = payload.value("requestId", "");

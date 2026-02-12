@@ -448,7 +448,7 @@ inline void RegisterOptimizedNAMAmpEffect()
 
   EffectTypeInfo info;
   info.type = "amp_nam_optimized";
-  info.displayName = "Neural Amp Model (Optimized)";
+  info.displayName = "Neural Amp/FX";
   info.category = "amp";
   info.description = "Neural Amp Modeler with SIMD-optimized processing";
   info.requiresResource = true;

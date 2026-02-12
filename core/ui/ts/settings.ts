@@ -15,6 +15,7 @@ import { renderIcon } from "./iconAssets.js";
 import { showConfirm } from "./dialogs.js";
 import { initCompositeEditor, renderCompositeList } from "./compositeEditor.js";
 import { initLayoutManager, renderLayoutList } from "./layoutManager.js";
+import { initBlendManager, renderBlendList } from "./blendManager.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
@@ -251,6 +252,7 @@ function initAdvancedSubTabs(): void {
   advancedSubTabsInitialized = true;
 
   initCompositeEditor();
+  initBlendManager();
   initLayoutManager();
 
   const subTabButtons = Array.from(document.querySelectorAll<HTMLElement>(".advanced-sub-tab-btn"));
@@ -281,6 +283,8 @@ function applyAdvancedSubTab(tabId: string, subTabButtons: HTMLElement[], subTab
 
   if (tabId === "composites") {
     renderCompositeList();
+  } else if (tabId === "blends") {
+    renderBlendList();
   } else if (tabId === "layouts") {
     renderLayoutList();
   }

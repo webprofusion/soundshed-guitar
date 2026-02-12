@@ -471,6 +471,7 @@
             <div class="advanced-panel">
               <div class="advanced-sub-tabs">
                 <button class="advanced-sub-tab-btn active" data-advanced-tab="composites">Composite Effects</button>
+                <button class="advanced-sub-tab-btn" data-advanced-tab="blends">Blends</button>
                 <button class="advanced-sub-tab-btn" data-advanced-tab="layouts">Effect Layouts</button>
               </div>
 
@@ -547,6 +548,16 @@
                       <button id="composite-add-param-btn" class="advanced-action-btn">+ Expose Parameter</button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- Blends Sub-Tab -->
+              <div class="advanced-sub-panel" id="advanced-tab-blends">
+                <div class="advanced-toolbar">
+                  <input type="text" id="blend-search-input" class="advanced-search-input" placeholder="Search blends..." />
+                </div>
+                <div class="composite-list" id="blend-list">
+                  <!-- Blend list rendered by JS -->
                 </div>
               </div>
 

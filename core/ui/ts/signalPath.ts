@@ -2720,7 +2720,10 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   const dropdown = document.createElement("div");
   dropdown.className = "effect-selection-dropdown";
   
-  const allEffects = EffectTypeRegistry.getAll();
+  const allEffects = EffectTypeRegistry.getAll().filter((effect) => {
+    if (effect.catalogHidden) return false;
+    return effect.type !== "amp_nam" && effect.type !== "amp_nam_blend";
+  });
   const effectsByCategory = new Map<string, EffectTypeInfo[]>();
   
   allEffects.forEach((effect) => {

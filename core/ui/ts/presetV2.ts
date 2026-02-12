@@ -24,6 +24,7 @@ export interface EffectTypeInfo {
   type: string;
   displayName: string;
   category: string;
+  catalogHidden?: boolean;
   requiresResource: boolean;
   resourceType?: string;
   parameters: ParameterDef[];
@@ -181,8 +182,9 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
   },
   {
     type: "amp_nam",
-    displayName: "NAM Amp Model",
+    displayName: "NAM Amp/FX Model",
     category: "amp",
+    catalogHidden: true,
     requiresResource: true,
     resourceType: "nam",
     parameters: [
@@ -196,7 +198,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
   },
   {
     type: "amp_nam_optimized",
-    displayName: "NAM Amp (SIMD)",
+    displayName: "Neural Amp/FX",
     category: "amp",
     requiresResource: true,
     resourceType: "nam",
@@ -213,6 +215,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     type: "amp_nam_blend",
     displayName: "NAM Blend",
     category: "amp",
+    catalogHidden: true,
     requiresResource: true,
     resourceType: "nam",
     parameters: [
