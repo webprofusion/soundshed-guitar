@@ -1893,6 +1893,10 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           </div>
         `;
         resourceSelector = modelSelectors;
+      } else if (node.type === "cab_ir") {
+        const irSlotA = buildSelector(0, "IR A", true);
+        const irSlotB = buildSelector(1, "IR B", true);
+        resourceSelector = `${irSlotA}${irSlotB}`;
       } else {
         resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : "Resource", false);
       }
