@@ -46,8 +46,18 @@ export type LabelPosition = "top" | "bottom" | "left" | "right" | "none";
 export interface LayoutControl {
   /** Parameter key this control binds to */
   paramKey: string;
+  /** Binding kind (default: parameter for legacy layouts) */
+  bindingType?: "parameter" | "resource";
   /** Control type */
   type: "knob" | "toggle" | "slider" | "dropdown";
+  /** Resource type when bindingType is "resource" */
+  resourceType?: string;
+  /** Resource slot index when bindingType is "resource" */
+  resourceIndex?: number;
+  /** Exposed resource ID (for surfaced composite resources) */
+  exposedResourceId?: string;
+  /** Whether file browsing is allowed for this resource selector */
+  allowBrowseFile?: boolean;
   /** Position in pixels (snapped to grid) */
   position: { x: number; y: number };
   /** Optional size override */
@@ -99,6 +109,8 @@ export interface LayoutTextLabel {
 export interface EffectLayout {
   /** Effect type this layout applies to (e.g., "delay_digital") */
   effectType: string;
+  /** GUID layout ID used for persistence (filename stem) */
+  layoutId?: string;
   /** Blend definition ID for per-blend layouts (amp_nam_blend only) */
   blendId?: string;
   /** Layout schema version */
@@ -171,7 +183,7 @@ export const LAYOUT_DIMENSION_LIMITS = {
  * otherwise just the effectType string.
  */
 export function layoutLookupKey(effectType: string, blendId?: string): string {
-  if (blendId && effectType === "amp_nam_blend") {
+  if (blendId) {
     return `${effectType}::${blendId}`;
   }
   return effectType;

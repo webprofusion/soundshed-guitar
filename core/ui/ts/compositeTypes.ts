@@ -34,6 +34,28 @@ export interface ExposedParameter {
 }
 
 /**
+ * Maps a user-facing resource selector to an inner node resource slot.
+ */
+export interface ExposedResource {
+  /** User-facing resource key (e.g., "ampModel", "cabIr") */
+  resourceId: string;
+  /** Label shown in UI */
+  displayName: string;
+  /** Target node ID within the inner graph */
+  nodeId: string;
+  /** Resource type (e.g., "nam", "ir") */
+  resourceType: string;
+  /** Target resource slot on the inner node */
+  resourceIndex?: number;
+  /** Whether browsing custom files is allowed */
+  allowBrowseFile?: boolean;
+  /** Optional resource parameter key */
+  parameterId?: string;
+  /** Optional resource parameter value */
+  parameterValue?: number;
+}
+
+/**
  * Defines a composite effect — a reusable mini signal path that
  * appears as a single node in the parent graph.
  */
@@ -56,6 +78,8 @@ export interface CompositeEffectDefinition {
   innerGraph: SignalGraph;
   /** Parameters surfaced to the user */
   exposedParams: ExposedParameter[];
+  /** Resources surfaced to the user */
+  exposedResources?: ExposedResource[];
   /** Custom control layout design */
   layout?: EffectLayout;
   /** ISO 8601 creation timestamp */
@@ -107,6 +131,7 @@ export function createEmptyCompositeDefinition(id?: string): CompositeEffectDefi
       ],
     },
     exposedParams: [],
+    exposedResources: [],
     createdAt: new Date().toISOString(),
     modifiedAt: new Date().toISOString(),
   };

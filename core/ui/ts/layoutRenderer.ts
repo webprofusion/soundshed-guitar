@@ -6,6 +6,7 @@
 
 import { uiState } from "./state.js";
 import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
+import { renderIcon } from "./iconAssets.js";
 import type {
   EffectLayout,
   LayoutControl,
@@ -14,6 +15,18 @@ import type {
 } from "./layoutTypes.js";
 import { layoutLookupKey } from "./layoutTypes.js";
 import type { GraphNode } from "./types.js";
+
+export interface LayoutResourceControlDef {
+  resourceControlKey: string;
+  displayName: string;
+  resourceType: string;
+  resourceIndex: number;
+  exposedResourceId?: string;
+  allowBrowseFile?: boolean;
+  currentDisplayName: string;
+  currentFilePath?: string;
+  isMissing?: boolean;
+}
 
 /**
  * Check if a custom layout exists for an effect type (and optionally a specific blend).
@@ -65,10 +78,11 @@ function getLayoutImageUrl(imageId: string): string | null {
 export function renderCustomLayout(
   node: GraphNode,
   layout: EffectLayout,
-  paramDefs: ParameterDef[]
+  paramDefs: ParameterDef[],
+  resourceControls: LayoutResourceControlDef[] = []
 ): string {
   const backgrounds = renderBackgrounds(layout.backgrounds);
-  const controls = renderControls(node, layout.controls, paramDefs);
+  const controls = renderControls(node, layout.controls, paramDefs, resourceControls);
   const labels = renderTextLabels(layout.textLabels);
 
   return `
@@ -94,6 +108,28 @@ export function renderCustomLayout(
       <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
         ${labels}
       </div>
+    </div>
+  `;
+}
+
+/**
+ * Render only the controls/labels layers for preview contexts that already own the outer container.
+ */
+export function renderCustomLayoutPreviewLayers(
+  node: GraphNode,
+  layout: EffectLayout,
+  paramDefs: ParameterDef[],
+  resourceControls: LayoutResourceControlDef[] = []
+): string {
+  const controls = renderControls(node, layout.controls, paramDefs, resourceControls);
+  const labels = renderTextLabels(layout.textLabels);
+
+  return `
+    <div class="custom-layout-controls" style="position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0;">
+      ${controls}
+    </div>
+    <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
+      ${labels}
     </div>
   `;
 }
@@ -158,21 +194,43 @@ function renderBackgrounds(backgrounds: LayoutBackground[]): string {
 function renderControls(
   node: GraphNode,
   controls: LayoutControl[],
-  paramDefs: ParameterDef[]
+  paramDefs: ParameterDef[],
+  resourceControls: LayoutResourceControlDef[]
 ): string {
+  const resourceByKey = new Map(resourceControls.map((resource) => [resource.resourceControlKey, resource]));
+
   return controls
     .map((control) => {
+      const isResourceControl =
+        control.bindingType === "resource"
+        || control.paramKey.startsWith("__resource__:");
+      const resourceDef = isResourceControl ? resourceByKey.get(control.paramKey) : undefined;
+
+      if (isResourceControl && !resourceDef) {
+        return "";
+      }
+
       const paramDef = paramDefs.find((p) => p.key === control.paramKey);
-      if (!paramDef) {
+      if (!isResourceControl && !paramDef) {
         // Parameter doesn't exist for this effect, skip
         return "";
       }
 
-      const { key, min, max, default: defaultValue, unit, step, labels } = paramDef;
-      const rawValue = node.params[key];
+      const key = paramDef?.key ?? "";
+      const min = paramDef?.min;
+      const max = paramDef?.max;
+      const defaultValue = paramDef?.default;
+      const unit = paramDef?.unit;
+      const step = paramDef?.step;
+      const labels = paramDef?.labels;
+      const rawValue = key ? node.params[key] : undefined;
       const value = typeof rawValue === "number" ? rawValue : defaultValue ?? 0;
-      const displayValue = formatParamValue(value, unit, labels);
-      const label = control.labelOverride || paramDef.name || key;
+      const displayValue = isResourceControl
+        ? ""
+        : formatParamValue(value, unit, labels);
+      const label = control.labelOverride
+        || (isResourceControl ? resourceDef?.displayName : paramDef?.name)
+        || control.paramKey;
 
       const labelPosition = control.style?.labelPosition || "top";
       const showValue = control.style?.showValue !== false;
@@ -180,8 +238,8 @@ function renderControls(
       const hideLabel = control.style?.hideLabel === true;
       const labelColor = control.style?.labelColor || "var(--text-dark-secondary)";
 
-      const isToggle = control.type === "toggle" || unit === "toggle";
-      const isEnum = unit === "enum" && Array.isArray(labels);
+      const isToggle = !isResourceControl && (control.type === "toggle" || unit === "toggle");
+      const isEnum = !isResourceControl && unit === "enum" && Array.isArray(labels);
 
       const controlStyle = `
         position: absolute;
@@ -199,7 +257,52 @@ function renderControls(
         controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: ${labelColor}; margin-bottom: 4px;">${escapeHtml(label)}</span>`;
       }
 
-      if (isToggle) {
+      if (isResourceControl) {
+        const browseAccept = resourceDef?.resourceType === "nam"
+          ? ".nam,.json"
+          : resourceDef?.resourceType === "ir"
+            ? ".wav"
+            : "*";
+        const missingClass = resourceDef?.isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
+        const exposedResourceAttr = resourceDef?.exposedResourceId
+          ? `data-exposed-resource-id="${escapeHtml(resourceDef.exposedResourceId)}"`
+          : "";
+        const resourceIndex = resourceDef?.resourceIndex ?? 0;
+
+        controlHtml += `
+          <div class="node-resource-selector custom-layout-resource-selector" data-node-id="${node.id}">
+            <div class="resource-controls">
+              <button
+                class="resource-picker-btn"
+                data-node-id="${node.id}"
+                data-resource-type="${resourceDef?.resourceType ?? ""}"
+                data-resource-index="${resourceIndex}"
+                ${exposedResourceAttr}
+              >Browse</button>
+              <div
+                class="${missingClass}"
+                data-node-id="${node.id}"
+                data-resource-type="${resourceDef?.resourceType ?? ""}"
+                data-resource-index="${resourceIndex}"
+                ${exposedResourceAttr}
+                title="${escapeHtml(resourceDef?.currentDisplayName ?? "") }"
+              >${escapeHtml(resourceDef?.currentDisplayName ?? "")}</div>
+              ${(resourceDef?.allowBrowseFile ?? true) ? `
+                <button
+                  class="resource-browse-btn"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceDef?.resourceType ?? ""}"
+                  data-resource-index="${resourceIndex}"
+                  ${exposedResourceAttr}
+                  data-accept="${browseAccept}"
+                  title="Browse for file..."
+                >${renderIcon("folder", "resource-browse-icon")}</button>
+              ` : ""}
+            </div>
+            ${resourceDef?.currentFilePath ? `<div class="resource-path-info" title="${escapeHtml(resourceDef.currentFilePath)}">${escapeHtml(resourceDef.currentFilePath)}</div>` : ""}
+          </div>
+        `;
+      } else if (isToggle) {
         const checked = value >= 0.5;
         controlHtml += `
           <label class="toggle-switch">
@@ -255,7 +358,7 @@ function renderControls(
         controlHtml += `<span class="custom-control-label" style="font-size: 10px; color: ${labelColor}; margin-top: 4px;">${escapeHtml(label)}</span>`;
       }
 
-      if (showValue) {
+      if (!isResourceControl && showValue) {
         controlHtml += `<span class="node-param-value" style="font-size: 9px; color: var(--text-dark-muted); margin-top: 2px;">${displayValue}</span>`;
       }
 

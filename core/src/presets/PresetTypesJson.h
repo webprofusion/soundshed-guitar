@@ -308,6 +308,37 @@ namespace guitarfx
     return ep;
   }
 
+  inline nlohmann::json SerializeExposedResource(const ExposedResource& er)
+  {
+    nlohmann::json j;
+    j["resourceId"] = er.resourceId;
+    j["displayName"] = er.displayName;
+    j["nodeId"] = er.nodeId;
+    j["resourceType"] = er.resourceType;
+    j["resourceIndex"] = er.resourceIndex;
+    j["allowBrowseFile"] = er.allowBrowseFile;
+    if (!er.parameterId.empty())
+      j["parameterId"] = er.parameterId;
+    if (er.parameterValue.has_value())
+      j["parameterValue"] = *er.parameterValue;
+    return j;
+  }
+
+  inline ExposedResource DeserializeExposedResource(const nlohmann::json& j)
+  {
+    ExposedResource er;
+    er.resourceId = j.value("resourceId", "");
+    er.displayName = j.value("displayName", "");
+    er.nodeId = j.value("nodeId", "");
+    er.resourceType = j.value("resourceType", "");
+    er.resourceIndex = j.value("resourceIndex", 0);
+    er.allowBrowseFile = j.value("allowBrowseFile", true);
+    er.parameterId = j.value("parameterId", "");
+    if (j.contains("parameterValue") && j["parameterValue"].is_number())
+      er.parameterValue = j["parameterValue"].get<double>();
+    return er;
+  }
+
   inline nlohmann::json SerializeCompositeEffectDefinition(const CompositeEffectDefinition& def)
   {
     nlohmann::json j;
@@ -328,6 +359,15 @@ namespace guitarfx
     for (const auto& ep : def.exposedParams)
     {
       j["exposedParams"].push_back(SerializeExposedParameter(ep));
+    }
+
+    if (!def.exposedResources.empty())
+    {
+      j["exposedResources"] = nlohmann::json::array();
+      for (const auto& er : def.exposedResources)
+      {
+        j["exposedResources"].push_back(SerializeExposedResource(er));
+      }
     }
 
     if (!def.layoutJson.empty())
@@ -383,6 +423,17 @@ namespace guitarfx
         if (epJson.is_object())
         {
           def.exposedParams.push_back(DeserializeExposedParameter(epJson));
+        }
+      }
+    }
+
+    if (j.contains("exposedResources") && j["exposedResources"].is_array())
+    {
+      for (const auto& erJson : j["exposedResources"])
+      {
+        if (erJson.is_object())
+        {
+          def.exposedResources.push_back(DeserializeExposedResource(erJson));
         }
       }
     }

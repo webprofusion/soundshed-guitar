@@ -182,6 +182,17 @@ function confirmDeleteLayout(key: string, layoutId: string): void {
 
   // Optimistically remove from local state
   library.byEffectType[key] = entries.filter((e) => e.layoutId !== layoutId);
+  if (library.defaults[key] === layoutId) {
+    const nextDefault = library.byEffectType[key]?.[0]?.layoutId;
+    if (nextDefault) {
+      library.defaults[key] = nextDefault;
+      library.byEffectType[key].forEach((e) => {
+        e.isDefault = e.layoutId === nextDefault;
+      });
+    } else {
+      delete library.defaults[key];
+    }
+  }
   if (library.byEffectType[key].length === 0) {
     delete library.byEffectType[key];
   }

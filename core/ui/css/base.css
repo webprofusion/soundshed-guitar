@@ -203,6 +203,7 @@ body:not(.is-standalone) .main-content .metronome-only {
   background: var(--bg-input);
   color: var(--text-primary);
   border-color: var(--border-dark);
+  color-scheme: dark;
 }
 
 .theme-light select {
@@ -225,7 +226,8 @@ body:not(.is-standalone) .main-content .metronome-only {
 
 .theme-dark select option,
 .theme-dark select optgroup {
-  background: var(--bg-dark-secondary);
+  /* Use a solid token; native option lists often ignore gradients. */
+  background: var(--bg-input);
   color: var(--text-primary);
 }
 
@@ -237,8 +239,8 @@ body:not(.is-standalone) .main-content .metronome-only {
 
 .theme-classic select option,
 .theme-classic select optgroup {
-  background: #f6e9c8;
-  color: var(--color-preset-text);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .themed-checkbox {

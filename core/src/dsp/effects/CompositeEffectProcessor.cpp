@@ -40,6 +40,8 @@ namespace guitarfx
     mSampleRate = sampleRate;
     mMaxBlockSize = maxBlockSize;
     mInnerExecutor.Prepare(sampleRate, maxBlockSize);
+    mInnerPrepared = true;
+    ApplyPendingResourceOverrides();
   }
 
   void CompositeEffectProcessor::Reset()
@@ -107,6 +109,45 @@ namespace guitarfx
     return "";
   }
 
+  bool CompositeEffectProcessor::LoadResources(const std::vector<ResourceRef> &refs,
+                                               const std::vector<std::filesystem::path> & /*paths*/)
+  {
+    mPendingResourceOverrides.clear();
+
+    if (refs.empty() || mDefinition.exposedResources.empty())
+    {
+      return false;
+    }
+
+    const std::size_t count = std::min(refs.size(), mDefinition.exposedResources.size());
+    for (std::size_t i = 0; i < count; ++i)
+    {
+      const auto &surface = mDefinition.exposedResources[i];
+      ResourceRef mapped = refs[i];
+
+      if (mapped.resourceType.empty())
+        mapped.resourceType = surface.resourceType;
+
+      if (mapped.parameterId.empty() && !surface.parameterId.empty())
+        mapped.parameterId = surface.parameterId;
+
+      if (!mapped.parameterValue.has_value() && surface.parameterValue.has_value())
+        mapped.parameterValue = *surface.parameterValue;
+
+      if (!mapped.parameterId.empty() && mapped.parameterValue.has_value())
+        mapped.parameters[mapped.parameterId] = *mapped.parameterValue;
+
+      mPendingResourceOverrides.push_back({surface.nodeId, std::move(mapped)});
+    }
+
+    if (mInnerPrepared)
+    {
+      ApplyPendingResourceOverrides();
+    }
+
+    return !mPendingResourceOverrides.empty();
+  }
+
   std::string CompositeEffectProcessor::GetType() const
   {
     return mDefinition.GetEffectTypeId();
@@ -115,6 +156,17 @@ namespace guitarfx
   std::string CompositeEffectProcessor::GetCategory() const
   {
     return mDefinition.category;
+  }
+
+  void CompositeEffectProcessor::ApplyPendingResourceOverrides()
+  {
+    if (!mInnerPrepared || mPendingResourceOverrides.empty())
+      return;
+
+    for (const auto &entry : mPendingResourceOverrides)
+    {
+      mInnerExecutor.LoadNodeResource(entry.nodeId, entry.ref);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -241,53 +293,7 @@ namespace guitarfx
             continue;
 
           nlohmann::json j = nlohmann::json::parse(file);
-          CompositeEffectDefinition def;
-
-          def.id = j.value("id", "");
-          def.name = j.value("name", "");
-          def.category = j.value("category", "");
-          def.description = j.value("description", "");
-          def.author = j.value("author", "");
-          def.version = j.value("version", 1);
-          def.createdAt = j.value("createdAt", "");
-          def.modifiedAt = j.value("modifiedAt", "");
-
-          if (j.contains("tags") && j["tags"].is_array())
-          {
-            for (const auto &tag : j["tags"])
-            {
-              if (tag.is_string())
-                def.tags.push_back(tag.get<std::string>());
-            }
-          }
-
-          if (j.contains("innerGraph") && j["innerGraph"].is_object())
-          {
-            def.innerGraph = DeserializeSignalGraph(j["innerGraph"]);
-          }
-
-          if (j.contains("exposedParams") && j["exposedParams"].is_array())
-          {
-            for (const auto &epJson : j["exposedParams"])
-            {
-              ExposedParameter ep;
-              ep.paramId = epJson.value("paramId", "");
-              ep.displayName = epJson.value("displayName", "");
-              ep.nodeId = epJson.value("nodeId", "");
-              ep.nodeParamKey = epJson.value("nodeParamKey", "");
-              ep.minValue = epJson.value("minValue", 0.0);
-              ep.maxValue = epJson.value("maxValue", 1.0);
-              ep.defaultValue = epJson.value("defaultValue", 0.0);
-              ep.unit = epJson.value("unit", "");
-              ep.curve = epJson.value("curve", "linear");
-              def.exposedParams.push_back(ep);
-            }
-          }
-
-          if (j.contains("layout"))
-          {
-            def.layoutJson = j["layout"].dump();
-          }
+          CompositeEffectDefinition def = DeserializeCompositeEffectDefinition(j);
 
           if (def.IsValid())
           {
@@ -315,53 +321,7 @@ namespace guitarfx
     try
     {
       std::filesystem::create_directories(userDir);
-
-      nlohmann::json j;
-      j["id"] = def.id;
-      j["name"] = def.name;
-      j["category"] = def.category;
-      j["description"] = def.description;
-      j["author"] = def.author;
-      j["version"] = def.version;
-      j["createdAt"] = def.createdAt;
-      j["modifiedAt"] = def.modifiedAt;
-
-      if (!def.tags.empty())
-      {
-        j["tags"] = def.tags;
-      }
-
-      j["innerGraph"] = SerializeSignalGraph(def.innerGraph);
-
-      j["exposedParams"] = nlohmann::json::array();
-      for (const auto &ep : def.exposedParams)
-      {
-        nlohmann::json epJson;
-        epJson["paramId"] = ep.paramId;
-        epJson["displayName"] = ep.displayName;
-        epJson["nodeId"] = ep.nodeId;
-        epJson["nodeParamKey"] = ep.nodeParamKey;
-        epJson["minValue"] = ep.minValue;
-        epJson["maxValue"] = ep.maxValue;
-        epJson["defaultValue"] = ep.defaultValue;
-        if (!ep.unit.empty())
-          epJson["unit"] = ep.unit;
-        if (ep.curve != "linear")
-          epJson["curve"] = ep.curve;
-        j["exposedParams"].push_back(epJson);
-      }
-
-      if (!def.layoutJson.empty())
-      {
-        try
-        {
-          j["layout"] = nlohmann::json::parse(def.layoutJson);
-        }
-        catch (...)
-        {
-          // Store as raw string if parse fails
-        }
-      }
+      nlohmann::json j = SerializeCompositeEffectDefinition(def);
 
       // Use the definition ID as filename
       std::string filename = def.id + ".json";

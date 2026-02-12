@@ -50,7 +50,7 @@
       "cwd": "${workspaceFolder}/juce/build/SoundshedGuitar_artefacts/Release/Standalone",
       "environment": [],
       "console": "integratedTerminal",
-      "preLaunchTask": "Build SoundshedGuitar (JUCE) Release"
+      "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release"
     },
      {
       "name": "Debug SoundshedGuitar VST Host",

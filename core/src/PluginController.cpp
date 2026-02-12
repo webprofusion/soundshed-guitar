@@ -250,6 +250,106 @@ namespace
 namespace guitarfx
 {
 
+namespace
+{
+static std::string GenerateGuidV4String()
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<std::uint32_t> dis(0, 0xFFFFFFFFu);
+
+    std::uint32_t d0 = dis(gen);
+    std::uint32_t d1 = dis(gen);
+    std::uint32_t d2 = dis(gen);
+    std::uint32_t d3 = dis(gen);
+
+    // Set version to 4 (0100)
+    d1 = (d1 & 0xFFFF0FFFu) | 0x00004000u;
+    // Set variant to 10xx
+    d2 = (d2 & 0x3FFFFFFFu) | 0x80000000u;
+
+    auto hex = [](std::uint32_t value, int width) {
+        std::ostringstream oss;
+        oss << std::hex << std::nouppercase << std::setfill('0') << std::setw(width) << value;
+        return oss.str();
+    };
+
+    // UUID layout: 8-4-4-4-12
+    const std::string part1 = hex(d0, 8);
+    const std::string part2 = hex((d1 >> 16) & 0xFFFFu, 4);
+    const std::string part3 = hex(d1 & 0xFFFFu, 4);
+    const std::string part4 = hex((d2 >> 16) & 0xFFFFu, 4);
+    const std::string part5 = hex(d2 & 0xFFFFu, 4) + hex(d3, 8);
+    return part1 + "-" + part2 + "-" + part3 + "-" + part4 + "-" + part5;
+}
+
+static std::filesystem::path ResolveEffectLayoutsSettingsPath(const FileSystem& fileSystem)
+{
+    return fileSystem.ResolveSettingsDirectory() / "effect-layouts.json";
+}
+
+static nlohmann::json LoadEffectLayoutsSettings(const FileSystem& fileSystem)
+{
+    const auto path = ResolveEffectLayoutsSettingsPath(fileSystem);
+    nlohmann::json root = nlohmann::json::object();
+    root["version"] = 1;
+    root["associations"] = nlohmann::json::object();
+
+    try
+    {
+        if (path.empty() || !std::filesystem::exists(path))
+            return root;
+
+        std::ifstream input(path);
+        if (!input)
+            return root;
+
+        nlohmann::json parsed;
+        input >> parsed;
+
+        if (!parsed.is_object())
+            return root;
+
+        if (!parsed.contains("associations") || !parsed["associations"].is_object())
+            parsed["associations"] = nlohmann::json::object();
+
+        if (!parsed.contains("version") || !parsed["version"].is_number())
+            parsed["version"] = 1;
+
+        return parsed;
+    }
+    catch (...)
+    {
+        return root;
+    }
+}
+
+static void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::json& root)
+{
+    const auto path = ResolveEffectLayoutsSettingsPath(fileSystem);
+    if (path.empty())
+        return;
+
+    try
+    {
+        const auto dir = path.parent_path();
+        [[maybe_unused]] const auto ensured = fileSystem.EnsureDirectory(dir);
+        std::ofstream output(path);
+        if (output)
+            output << root.dump(2);
+    }
+    catch (...) {}
+}
+
+static std::filesystem::path ResolveLayoutFilePath(const FileSystem& fileSystem, const std::string& layoutId)
+{
+    const auto settingsDir = fileSystem.ResolveSettingsDirectory();
+    const auto layoutsDir = settingsDir / "layouts";
+    const std::string fileStem = util::SanitizeFilename(layoutId);
+    return layoutsDir / (fileStem + ".layout.json");
+}
+}
+
 // ════════════════════════════════════════════════════════════════════
 // Construction / Lifecycle
 // ════════════════════════════════════════════════════════════════════
@@ -278,10 +378,10 @@ void PluginController::Initialize()
     std::cout << "[Plugin] Initializing. Resource root: " << mResourceRoot.string() << std::endl;
 
     // Ensure essential directories exist on first launch
-    mFileSystem.EnsureDirectory(mResourceRoot);
-    mFileSystem.EnsureDirectory(mUserPresetsPath);
-    mFileSystem.EnsureDirectory(mResourceRoot / "presets" / "factory");
-    mFileSystem.EnsureDirectory(mResourceRoot / "resources");
+    [[maybe_unused]] const auto ensuredResourceRoot = mFileSystem.EnsureDirectory(mResourceRoot);
+    [[maybe_unused]] const auto ensuredUserPresets = mFileSystem.EnsureDirectory(mUserPresetsPath);
+    [[maybe_unused]] const auto ensuredFactoryPresets = mFileSystem.EnsureDirectory(mResourceRoot / "presets" / "factory");
+    [[maybe_unused]] const auto ensuredResources = mFileSystem.EnsureDirectory(mResourceRoot / "resources");
 
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
 
@@ -1099,6 +1199,10 @@ void PluginController::OnWebContentLoaded()
 {
     mUIReady = true;
     mPendingStateBroadcast = true;
+
+    // The UI may not be ready when Initialize() loads/sends the layout library.
+    // Resend here so custom layouts are available immediately after startup.
+    LoadLayoutLibrary();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1270,7 +1374,7 @@ void PluginController::AppendSessionLog(const std::string& message)
         return;
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
-    (void)mFileSystem.EnsureDirectory(settingsDir);
+    [[maybe_unused]] const auto ensuredSettingsDir = mFileSystem.EnsureDirectory(settingsDir);
     const auto logPath = settingsDir / kSessionLogFileName;
 
     std::ofstream output(logPath, std::ios::app);
@@ -1775,7 +1879,7 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
 
         if (mUserPresetsPath.empty())
             mUserPresetsPath = mResourceRoot / "presets" / "user";
-        mFileSystem.EnsureDirectory(mUserPresetsPath);
+        [[maybe_unused]] const auto ensuredUserPresetPath = mFileSystem.EnsureDirectory(mUserPresetsPath);
 
         const auto presetPath = mUserPresetsPath / (newPreset.id + ".json");
         if (!PresetStorage::SaveToFile(newPreset, presetPath))
@@ -1903,7 +2007,8 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
 
-    const int resourceIndex = payload.value("resourceIndex", -1);
+    int resourceIndex = payload.value("resourceIndex", -1);
+    const std::string exposedResourceId = payload.value("exposedResourceId", "");
 
     ResourceRef ref;
     if (payload.contains("resourceType"))
@@ -1918,6 +2023,36 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         ref.parameterId = payload["parameterId"].get<std::string>();
     if (payload.contains("parameterValue") && payload["parameterValue"].is_number())
         ref.parameterValue = payload["parameterValue"].get<double>();
+
+    if (!exposedResourceId.empty())
+    {
+        auto* targetGraph = ResolveEditTarget();
+        auto* targetNode = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+        if (targetNode && targetNode->type.rfind("composite:", 0) == 0)
+        {
+            const std::string definitionId = targetNode->type.substr(std::string("composite:").size());
+            if (const auto* definition = mCompositeLibrary.GetDefinition(definitionId))
+            {
+                const auto exposedIt = std::find_if(
+                    definition->exposedResources.begin(),
+                    definition->exposedResources.end(),
+                    [&](const ExposedResource& exposed)
+                    {
+                        return exposed.resourceId == exposedResourceId;
+                    });
+
+                if (exposedIt != definition->exposedResources.end())
+                {
+                    if (ref.resourceType.empty())
+                        ref.resourceType = exposedIt->resourceType;
+                    if (ref.parameterId.empty() && !exposedIt->parameterId.empty())
+                        ref.parameterId = exposedIt->parameterId;
+                    if (!ref.parameterValue.has_value() && exposedIt->parameterValue.has_value())
+                        ref.parameterValue = *exposedIt->parameterValue;
+                }
+            }
+        }
+    }
 
     if (!ref.parameterId.empty() && ref.parameterValue.has_value())
         ref.parameters[ref.parameterId] = *ref.parameterValue;
@@ -2025,12 +2160,13 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
     std::string nodeId = payload.value("nodeId", "");
     std::string resourceType = payload.value("resourceType", "nam");
     const int resourceIndex = payload.value("resourceIndex", -1);
+    const std::string exposedResourceId = payload.value("exposedResourceId", "");
 
     BrowseFileType fileType = BrowseFileType::NAMModel;
     if (resourceType == "ir") fileType = BrowseFileType::IRFile;
 
     mHost.BrowseFileAsync(fileType, "Select Resource",
-        [this, nodeId, resourceType, resourceIndex](const BrowseFileResult& result)
+        [this, nodeId, resourceType, resourceIndex, exposedResourceId](const BrowseFileResult& result)
         {
             if (result.success)
             {
@@ -2040,6 +2176,8 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
                 payload["resourceType"] = resourceType;
                 if (resourceIndex >= 0)
                     payload["resourceIndex"] = resourceIndex;
+                if (!exposedResourceId.empty())
+                    payload["exposedResourceId"] = exposedResourceId;
                 HandleUpdateNodeResourceRequest(payload);
             }
         });
@@ -2462,7 +2600,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     auto targetDir = settingsDir / "resources" / sanitizedProvider;
     const auto sanitizedSubfolder = util::SanitizeSubfolderPath(subfolder);
     if (!sanitizedSubfolder.empty()) targetDir /= sanitizedSubfolder;
-    mFileSystem.EnsureDirectory(targetDir);
+    [[maybe_unused]] const auto ensuredTargetDir = mFileSystem.EnsureDirectory(targetDir);
 
     std::string resolvedName = fileName.empty() ? resourceId : fileName;
     resolvedName = util::SanitizeFilename(resolvedName);
@@ -2532,7 +2670,7 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     if (bytes.empty()) { AppendSessionLog("Preview failed: invalid base64 payload"); return; }
 
     const auto tempDir = mFileSystem.ResolveSettingsDirectory() / "temp";
-    mFileSystem.EnsureDirectory(tempDir);
+    [[maybe_unused]] const auto ensuredTempDir = mFileSystem.EnsureDirectory(tempDir);
 
     const std::string extension = resourceType == "ir" ? ".wav" : ".nam";
     std::filesystem::path tempPath = tempDir / ("preview_" + std::to_string(std::hash<std::string>{}(tempResourceId)) + extension);
@@ -2745,15 +2883,21 @@ void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
 {
     const std::string effectType = payload.value("effectType", "");
     const std::string blendId = payload.value("blendId", "");
+    const std::string layoutId = payload.value("layoutId", "");
     if (effectType.empty())
     {
         ReportErrorToUI("Delete layout failed", "Missing effect type");
         return;
     }
 
-    const std::string storageKey = blendId.empty() ? effectType : (effectType + "--" + blendId);
-    const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
-    const auto layoutFile = settingsDir / "layouts" / (storageKey + ".layout.json");
+    if (layoutId.empty())
+    {
+        ReportErrorToUI("Delete layout failed", "Missing layoutId");
+        return;
+    }
+
+    const std::string lookupKey = blendId.empty() ? effectType : (effectType + "::" + blendId);
+    const auto layoutFile = ResolveLayoutFilePath(mFileSystem, layoutId);
 
     std::error_code ec;
     if (std::filesystem::exists(layoutFile, ec))
@@ -2767,6 +2911,44 @@ void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
         AppendSessionLog("Layout deleted: " + layoutFile.generic_string());
     }
 
+    // Update associations mapping
+    nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+    if (settings.contains("associations") && settings["associations"].is_object())
+    {
+        auto& assoc = settings["associations"];
+        if (assoc.contains(lookupKey) && assoc[lookupKey].is_object())
+        {
+            auto& entry = assoc[lookupKey];
+            auto ids = entry.value("layoutIds", nlohmann::json::array());
+            if (!ids.is_array()) ids = nlohmann::json::array();
+
+            nlohmann::json updated = nlohmann::json::array();
+            for (const auto& id : ids)
+            {
+                if (id.is_string() && id.get<std::string>() == layoutId)
+                    continue;
+                updated.push_back(id);
+            }
+            entry["layoutIds"] = updated;
+
+            const std::string currentDefault = entry.value("defaultLayoutId", "");
+            if (currentDefault == layoutId)
+            {
+                if (!updated.empty() && updated[0].is_string())
+                    entry["defaultLayoutId"] = updated[0].get<std::string>();
+                else
+                    entry["defaultLayoutId"] = "";
+            }
+
+            // Remove empty association entries
+            if (entry.value("layoutIds", nlohmann::json::array()).empty())
+            {
+                assoc.erase(lookupKey);
+            }
+        }
+    }
+    SaveEffectLayoutsSettings(mFileSystem, settings);
+
     LoadLayoutLibrary();
 }
 
@@ -2774,25 +2956,66 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
 {
     const std::string effectType = payload.value("effectType", "");
     const std::string blendId = payload.value("blendId", "");
+    std::string layoutId = payload.value("layoutId", "");
     const auto layoutIt = payload.find("layout");
 
     if (effectType.empty() || layoutIt == payload.end() || !layoutIt->is_object())
     { ReportErrorToUI("Save layout failed", "Missing effect type or layout data"); return; }
 
-    const std::string storageKey = blendId.empty() ? effectType : (effectType + "--" + blendId);
-    SaveLayoutToFile(storageKey, *layoutIt);
-
     const std::string lookupKey = blendId.empty() ? effectType : (effectType + "::" + blendId);
+
+    if (layoutId.empty())
+        layoutId = GenerateGuidV4String();
+
+    // Persist layout JSON by GUID filename and embed layoutId into the payload for round-trip.
+    nlohmann::json layoutJson = *layoutIt;
+    layoutJson["layoutId"] = layoutId;
+    SaveLayoutToFile(layoutId, layoutJson);
+
+    // Update association mapping
+    nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+    if (!settings.contains("associations") || !settings["associations"].is_object())
+        settings["associations"] = nlohmann::json::object();
+    if (!settings["associations"].contains(lookupKey) || !settings["associations"][lookupKey].is_object())
+    {
+        settings["associations"][lookupKey] = nlohmann::json::object({
+            {"defaultLayoutId", layoutId},
+            {"layoutIds", nlohmann::json::array()}
+        });
+    }
+
+    auto& assocEntry = settings["associations"][lookupKey];
+    auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+    if (!ids.is_array()) ids = nlohmann::json::array();
+    bool found = false;
+    for (const auto& id : ids)
+    {
+        if (id.is_string() && id.get<std::string>() == layoutId)
+        {
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        ids.push_back(layoutId);
+    assocEntry["layoutIds"] = ids;
+    assocEntry["defaultLayoutId"] = layoutId;
+
+    SaveEffectLayoutsSettings(mFileSystem, settings);
 
     SendMessageToUI(nlohmann::json{
         {"type", "layoutSaved"},
         {"effectType", effectType},
         {"blendId", blendId},
         {"lookupKey", lookupKey},
-        {"layout", *layoutIt}
+        {"layoutId", layoutId},
+        {"layout", layoutJson}
     }.dump());
 
-    AppendSessionLog("Effect layout saved for: " + storageKey);
+    AppendSessionLog("Effect layout saved: " + lookupKey + " -> " + layoutId);
+
+    // Broadcast updated library so UI can select/apply immediately.
+    LoadLayoutLibrary();
 }
 
 void PluginController::HandleExportEffectLayoutRequest(const nlohmann::json& payload)
@@ -2834,7 +3057,7 @@ void PluginController::HandleBrowseLayoutImageRequest(const nlohmann::json& payl
 
             const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
             const auto imagesDir = settingsDir / "layouts" / "images";
-            mFileSystem.EnsureDirectory(imagesDir);
+            [[maybe_unused]] const auto ensuredImagesDir = mFileSystem.EnsureDirectory(imagesDir);
 
             const auto selectedPath = result.path;
             const auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
@@ -2886,7 +3109,7 @@ void PluginController::HandleSaveLayoutImageRequest(const nlohmann::json& payloa
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto imagesDir = settingsDir / "layouts" / "images";
-    mFileSystem.EnsureDirectory(imagesDir);
+    [[maybe_unused]] const auto ensuredImagesDir = mFileSystem.EnsureDirectory(imagesDir);
 
     const auto decodedBytes = util::DecodeBase64(dataEncoded);
     if (decodedBytes.empty()) { AppendSessionLog("SaveLayoutImage: failed to decode base64 data for " + imageId); return; }
@@ -2996,7 +3219,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
             if (!t.empty() && !i.empty() && removedSet.count(makeKey(t, i)) > 0) continue;
             updated.push_back(e);
         }
-        mFileSystem.EnsureDirectory(libraryDir);
+        [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryDir);
         std::ofstream output(libraryFile);
         if (output) output << updated.dump(2);
     }
@@ -3907,7 +4130,7 @@ void PluginController::StoreNamCalibrationInCache(const std::string& hash, const
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto filePath = settingsDir / kNamCalibrationFileName;
-    mFileSystem.EnsureDirectory(settingsDir);
+    [[maybe_unused]] const auto ensuredSettingsDir = mFileSystem.EnsureDirectory(settingsDir);
 
     nlohmann::json root = nlohmann::json::object();
     if (std::filesystem::exists(filePath))
@@ -4014,7 +4237,7 @@ void PluginController::SaveAppSettings() const
 
     try
     {
-        mFileSystem.EnsureDirectory(settingsPath.parent_path());
+        [[maybe_unused]] const auto ensuredSettingsParent = mFileSystem.EnsureDirectory(settingsPath.parent_path());
         std::ofstream ofs(settingsPath);
         if (ofs.is_open())
             ofs << mAppSettings.dump(2);
@@ -4143,7 +4366,7 @@ void PluginController::SaveBlendLibrary() const
     auto blendPath = mFileSystem.ResolveSettingsDirectory() / "blends.json";
     try
     {
-        mFileSystem.EnsureDirectory(blendPath.parent_path());
+        [[maybe_unused]] const auto ensuredBlendParent = mFileSystem.EnsureDirectory(blendPath.parent_path());
         std::ofstream ofs(blendPath);
         if (ofs.is_open())
             ofs << mBlendLibrary.dump(2);
@@ -4155,12 +4378,26 @@ void PluginController::LoadCompositeLibrary()
 {
     try
     {
-        const auto factoryDir = mResourceRoot / "composites";
+        const auto bundledRoot = mHost.GetBundledAssetsPath();
+        const auto factoryDir = bundledRoot / "ui" / "assets" / "composites";
         if (std::filesystem::exists(factoryDir))
         {
             mCompositeLibrary.LoadFromDirectory(factoryDir);
-            std::cout << "[Plugin] Loaded factory composite definitions: "
+            std::cout << "[Plugin] Loaded factory composite definitions from "
+                      << factoryDir.string() << ": "
                       << mCompositeLibrary.GetAllDefinitions().size() << std::endl;
+        }
+        else
+        {
+            // Backward-compatible fallback for older layouts.
+            const auto legacyFactoryDir = mResourceRoot / "composites";
+            if (std::filesystem::exists(legacyFactoryDir))
+            {
+                mCompositeLibrary.LoadFromDirectory(legacyFactoryDir);
+                std::cout << "[Plugin] Loaded legacy factory composite definitions from "
+                          << legacyFactoryDir.string() << ": "
+                          << mCompositeLibrary.GetAllDefinitions().size() << std::endl;
+            }
         }
 
         const auto userDir = mFileSystem.ResolveSettingsDirectory() / "composites";
@@ -4187,44 +4424,96 @@ void PluginController::LoadLayoutLibrary()
     library["defaults"] = nlohmann::json::object();
     library["images"] = nlohmann::json::array();
 
+    // Load / migrate associations.
+    nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+
+    // Migrate legacy effect-named layouts (effectType[--blendId].layout.json) into GUID-based files.
+    // This uses effectType/blendId from the layout JSON only during migration.
+    bool migrated = false;
     if (std::filesystem::exists(layoutsDir))
     {
         for (const auto& entry : std::filesystem::directory_iterator(layoutsDir))
         {
-            if (entry.is_regular_file() && entry.path().extension() == ".json" &&
-                entry.path().stem().string().ends_with(".layout"))
+            if (!entry.is_regular_file() || entry.path().extension() != ".json")
+                continue;
+
+            const auto filename = entry.path().filename().string();
+            if (filename.size() < 11 || filename.substr(filename.size() - 11) != ".layout.json")
+                continue;
+
+            const auto stem = entry.path().stem().string();
+            const bool isLegacyStem = stem.size() >= 7 && stem.compare(stem.size() - 7, 7, ".layout") == 0;
+            if (!isLegacyStem)
+            {
+                // Non-legacy layout file already (likely GUID-based). Leave it.
+                continue;
+            }
+
+            try
             {
                 std::ifstream input(entry.path());
-                if (input)
+                if (!input)
+                    continue;
+
+                nlohmann::json layoutJson;
+                input >> layoutJson;
+
+                const std::string effectType = layoutJson.value("effectType", "");
+                if (effectType.empty())
+                    continue;
+
+                const std::string blendId = layoutJson.value("blendId", "");
+                const std::string lookupKey = blendId.empty() ? effectType : (effectType + "::" + blendId);
+                std::string layoutId = layoutJson.value("layoutId", "");
+                if (layoutId.empty())
+                    layoutId = GenerateGuidV4String();
+
+                layoutJson["layoutId"] = layoutId;
+
+                // Write GUID-based file
+                SaveLayoutToFile(layoutId, layoutJson);
+
+                // Update association mapping
+                if (!settings.contains("associations") || !settings["associations"].is_object())
+                    settings["associations"] = nlohmann::json::object();
+                if (!settings["associations"].contains(lookupKey) || !settings["associations"][lookupKey].is_object())
                 {
-                    try
+                    settings["associations"][lookupKey] = nlohmann::json::object({
+                        {"defaultLayoutId", layoutId},
+                        {"layoutIds", nlohmann::json::array()}
+                    });
+                }
+                auto& assocEntry = settings["associations"][lookupKey];
+                auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+                if (!ids.is_array()) ids = nlohmann::json::array();
+                bool found = false;
+                for (const auto& id : ids)
+                {
+                    if (id.is_string() && id.get<std::string>() == layoutId)
                     {
-                        nlohmann::json layoutJson;
-                        input >> layoutJson;
-
-                        const std::string effectType = layoutJson.value("effectType", "");
-                        if (!effectType.empty())
-                        {
-                            const std::string blendId = layoutJson.value("blendId", "");
-                            const std::string lookupKey = blendId.empty() ? effectType : (effectType + "::" + blendId);
-                            const std::string layoutId = lookupKey + "-default";
-
-                            nlohmann::json layoutEntry;
-                            layoutEntry["layout"] = layoutJson;
-                            layoutEntry["isDefault"] = true;
-                            layoutEntry["layoutId"] = layoutId;
-                            layoutEntry["filePath"] = entry.path().generic_string();
-
-                            library["byEffectType"][lookupKey] = nlohmann::json::array({layoutEntry});
-                            library["defaults"][lookupKey] = layoutId;
-                        }
-                    }
-                    catch (const std::exception& e)
-                    {
-                        AppendSessionLog("Failed to parse layout file " + entry.path().generic_string() + ": " + e.what());
+                        found = true;
+                        break;
                     }
                 }
+                if (!found)
+                    ids.push_back(layoutId);
+                assocEntry["layoutIds"] = ids;
+                assocEntry["defaultLayoutId"] = layoutId;
+
+                // Remove legacy file to avoid duplicates
+                std::error_code ec;
+                std::filesystem::remove(entry.path(), ec);
+                migrated = true;
             }
+            catch (const std::exception& e)
+            {
+                AppendSessionLog("Failed to migrate legacy layout file " + entry.path().generic_string() + ": " + e.what());
+            }
+        }
+
+        if (migrated)
+        {
+            SaveEffectLayoutsSettings(mFileSystem, settings);
         }
 
         const auto imagesDir = layoutsDir / "images";
@@ -4262,6 +4551,66 @@ void PluginController::LoadLayoutLibrary()
         }
     }
 
+    // Build layout library from mapping (not inferred from filenames).
+    if (settings.contains("associations") && settings["associations"].is_object())
+    {
+        for (auto it = settings["associations"].begin(); it != settings["associations"].end(); ++it)
+        {
+            const std::string lookupKey = it.key();
+            const auto& assocEntry = it.value();
+            if (!assocEntry.is_object())
+                continue;
+
+            const std::string defaultLayoutId = assocEntry.value("defaultLayoutId", "");
+            const auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+            if (!ids.is_array())
+                continue;
+
+            nlohmann::json entries = nlohmann::json::array();
+            for (const auto& id : ids)
+            {
+                if (!id.is_string())
+                    continue;
+                const std::string layoutId = id.get<std::string>();
+                const auto filePath = ResolveLayoutFilePath(mFileSystem, layoutId);
+                if (!std::filesystem::exists(filePath))
+                    continue;
+
+                try
+                {
+                    std::ifstream input(filePath);
+                    if (!input)
+                        continue;
+                    nlohmann::json layoutJson;
+                    input >> layoutJson;
+                    if (!layoutJson.is_object())
+                        continue;
+
+                    // Ensure layoutId is embedded for UI round-trip.
+                    layoutJson["layoutId"] = layoutId;
+
+                    nlohmann::json layoutEntry;
+                    layoutEntry["layout"] = layoutJson;
+                    layoutEntry["isDefault"] = (layoutId == defaultLayoutId);
+                    layoutEntry["layoutId"] = layoutId;
+                    layoutEntry["filePath"] = filePath.generic_string();
+                    entries.push_back(layoutEntry);
+                }
+                catch (const std::exception& e)
+                {
+                    AppendSessionLog("Failed to parse layout file " + filePath.generic_string() + ": " + e.what());
+                }
+            }
+
+            if (!entries.empty())
+            {
+                library["byEffectType"][lookupKey] = entries;
+                if (!defaultLayoutId.empty())
+                    library["defaults"][lookupKey] = defaultLayoutId;
+            }
+        }
+    }
+
     SendMessageToUI(nlohmann::json{
         {"type", "layoutLibraryLoaded"},
         {"layoutLibrary", library}
@@ -4273,10 +4622,10 @@ void PluginController::SaveLayoutToFile(const std::string& effectType, const nlo
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto layoutsDir = settingsDir / "layouts";
 
-    if (!std::filesystem::exists(layoutsDir))
-        std::filesystem::create_directories(layoutsDir);
+    [[maybe_unused]] const auto ensuredLayoutsDir = mFileSystem.EnsureDirectory(layoutsDir);
 
-    const auto layoutFile = layoutsDir / (effectType + ".layout.json");
+    const std::string fileStem = util::SanitizeFilename(effectType);
+    const auto layoutFile = layoutsDir / (fileStem + ".layout.json");
     std::ofstream output(layoutFile);
     if (output)
     {
@@ -4293,7 +4642,7 @@ void PluginController::SaveLayoutToFile(const std::string& effectType, const nlo
 std::filesystem::path PluginController::ResolveUiStoragePath(const std::string& filename) const
 {
     const auto dir = mFileSystem.ResolveSettingsDirectory() / "ui";
-    mFileSystem.EnsureDirectory(dir);
+    [[maybe_unused]] const auto ensuredUiDir = mFileSystem.EnsureDirectory(dir);
     return dir / filename;
 }
 
@@ -4322,7 +4671,7 @@ void PluginController::SaveUiStorageJson(const std::string& filename, const nloh
 
     try
     {
-        mFileSystem.EnsureDirectory(path.parent_path());
+        [[maybe_unused]] const auto ensuredUiStorageParent = mFileSystem.EnsureDirectory(path.parent_path());
         std::ofstream ofs(path);
         if (ofs.is_open())
             ofs << payload.dump(2);
@@ -4365,6 +4714,9 @@ void PluginController::SendEffectCatalogToUI()
         entry["type"] = info.type;
         entry["name"] = info.displayName;
         entry["category"] = info.category;
+        entry["requiresResource"] = info.requiresResource;
+        if (!info.resourceType.empty())
+            entry["resourceType"] = info.resourceType;
 
         nlohmann::json params = nlohmann::json::array();
         for (const auto& p : info.parameters)
@@ -4379,6 +4731,32 @@ void PluginController::SendEffectCatalogToUI()
             params.push_back(param);
         }
         entry["parameters"] = params;
+
+        if (info.type.rfind("composite:", 0) == 0)
+        {
+            const std::string definitionId = info.type.substr(std::string("composite:").size());
+            if (const auto* def = mCompositeLibrary.GetDefinition(definitionId))
+            {
+                nlohmann::json exposedResources = nlohmann::json::array();
+                for (const auto& er : def->exposedResources)
+                {
+                    nlohmann::json resource;
+                    resource["resourceId"] = er.resourceId;
+                    resource["displayName"] = er.displayName;
+                    resource["nodeId"] = er.nodeId;
+                    resource["resourceType"] = er.resourceType;
+                    resource["resourceIndex"] = er.resourceIndex;
+                    resource["allowBrowseFile"] = er.allowBrowseFile;
+                    if (!er.parameterId.empty())
+                        resource["parameterId"] = er.parameterId;
+                    if (er.parameterValue.has_value())
+                        resource["parameterValue"] = *er.parameterValue;
+                    exposedResources.push_back(resource);
+                }
+                entry["exposedResources"] = exposedResources;
+            }
+        }
+
         catalog.push_back(entry);
     }
     msg["catalog"] = catalog;

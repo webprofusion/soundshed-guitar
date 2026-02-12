@@ -10,6 +10,8 @@ import { uiState } from "./state.js";
 import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
 import { showNotification } from "./notifications.js";
 import { arrayBufferToBase64 } from "./utils.js";
+import { renderCustomLayoutPreviewLayers, type LayoutResourceControlDef } from "./layoutRenderer.js";
+import type { GraphNode } from "./types.js";
 import {
   type EffectLayout,
   type LayoutControl,
@@ -43,12 +45,22 @@ interface DragState {
   id: string;
 }
 
+interface LayoutResourceCandidate {
+  controlKey: string;
+  displayName: string;
+  resourceType: string;
+  resourceIndex: number;
+  exposedResourceId?: string;
+  allowBrowseFile?: boolean;
+}
+
 export class LayoutDesignerModal {
   private initialized = false;
   private effectType = "";
   private blendId = "";
   private layout: EffectLayout | null = null;
   private paramDefs: ParameterDef[] = [];
+  private resourceCandidates: LayoutResourceCandidate[] = [];
 
   // Selection and drag state
   private selectedElement: SelectedElement = null;
@@ -241,6 +253,7 @@ export class LayoutDesignerModal {
     } else {
       this.paramDefs = typeInfo?.parameters || [];
     }
+    this.resourceCandidates = this.buildResourceCandidates(typeInfo);
 
     // Set title — include blend name when designing a per-blend layout
     if (this.titleEl) {
@@ -297,6 +310,13 @@ export class LayoutDesignerModal {
   private save(): void {
     if (!this.layout) return;
 
+    // Ensure a stable GUID-based layoutId so subsequent edits overwrite the same file.
+    if (!this.layout.layoutId) {
+      this.layout.layoutId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : generateLayoutId();
+    }
+
     this.layout.modifiedAt = new Date().toISOString();
 
     // Ensure blendId is stored in the layout itself
@@ -309,6 +329,7 @@ export class LayoutDesignerModal {
       type: "saveEffectLayout",
       effectType: this.effectType,
       blendId: this.blendId || undefined,
+      layoutId: this.layout.layoutId,
       layout: this.layout,
     });
 
@@ -575,7 +596,10 @@ export class LayoutDesignerModal {
     
     if (this.previewMode) {
       this.selectElement(null);
+      return;
     }
+
+    this.renderCanvas();
   }
 
   // === Undo / Redo ===
@@ -691,8 +715,42 @@ export class LayoutDesignerModal {
 
     this.updateCanvasSize();
     this.renderBackgrounds();
+
+    if (this.previewMode) {
+      this.renderRuntimePreview();
+      return;
+    }
+
     this.renderControls();
     this.renderTextLabels();
+  }
+
+  private renderRuntimePreview(): void {
+    if (!this.controlsLayer || !this.layout) return;
+
+    const previewNode = {
+      id: "layout-designer-preview",
+      type: this.effectType,
+      params: Object.fromEntries(this.paramDefs.map((paramDef) => [paramDef.key, paramDef.default ?? 0])),
+    } as unknown as GraphNode;
+
+    const resourceControls: LayoutResourceControlDef[] = this.resourceCandidates.map((candidate) => ({
+      resourceControlKey: candidate.controlKey,
+      displayName: candidate.displayName,
+      resourceType: candidate.resourceType,
+      resourceIndex: candidate.resourceIndex,
+      exposedResourceId: candidate.exposedResourceId,
+      allowBrowseFile: candidate.allowBrowseFile,
+      currentDisplayName: candidate.displayName,
+      currentFilePath: "",
+      isMissing: false,
+    }));
+
+    this.controlsLayer.innerHTML = `
+      <div class="layout-runtime-preview" style="position: absolute; inset: 0; pointer-events: none;">
+        ${renderCustomLayoutPreviewLayers(previewNode, this.layout, this.paramDefs, resourceControls)}
+      </div>
+    `;
   }
 
   private renderBackgrounds(): void {
@@ -765,7 +823,7 @@ export class LayoutDesignerModal {
     if (!this.controlsLayer || !this.layout) return;
 
     // Clear existing controls
-    this.controlsLayer.querySelectorAll(".layout-control-placeholder").forEach((el) => el.remove());
+    this.controlsLayer.querySelectorAll(".layout-control-placeholder, .layout-runtime-preview").forEach((el) => el.remove());
 
     // Render each control
     this.layout.controls.forEach((control) => {
@@ -775,8 +833,10 @@ export class LayoutDesignerModal {
   }
 
   private createControlElement(control: LayoutControl): HTMLElement {
-    const paramDef = this.paramDefs.find((p) => p.key === control.paramKey);
-    const label = control.labelOverride || paramDef?.name || control.paramKey;
+    const isResourceControl = this.isResourceControl(control);
+    const paramDef = isResourceControl ? undefined : this.paramDefs.find((p) => p.key === control.paramKey);
+    const resourceDef = isResourceControl ? this.resourceCandidates.find((candidate) => candidate.controlKey === control.paramKey) : undefined;
+    const label = control.labelOverride || resourceDef?.displayName || paramDef?.name || control.paramKey;
     const isSelected =
       this.selectedElement?.type === "control" && this.selectedElement.paramKey === control.paramKey;
 
@@ -792,16 +852,19 @@ export class LayoutDesignerModal {
     }
 
     const labelPos = control.style?.labelPosition || "top";
+    const hideLabel = control.style?.hideLabel === true || labelPos === "none";
     const showValue = control.style?.showValue !== false;
 
     // Build control HTML
     let html = "";
 
-    if (labelPos === "top") {
+    if (!hideLabel && labelPos === "top") {
       html += `<span class="control-label">${label}</span>`;
     }
 
-    if (control.type === "toggle") {
+    if (isResourceControl || control.type === "dropdown") {
+      html += `<div class="control-dropdown">${label}</div>`;
+    } else if (control.type === "toggle") {
       html += `<div class="control-toggle"></div>`;
     } else if (control.type === "slider") {
       html += `<div class="control-slider"><div class="control-slider-track"><div class="control-slider-thumb"></div></div></div>`;
@@ -809,11 +872,11 @@ export class LayoutDesignerModal {
       html += `<div class="control-knob" data-style="${control.style?.knobStyle || "default"}"></div>`;
     }
 
-    if (labelPos === "bottom") {
+    if (!hideLabel && labelPos === "bottom") {
       html += `<span class="control-label position-bottom">${label}</span>`;
     }
 
-    if (showValue) {
+    if (!isResourceControl && showValue) {
       html += `<span class="control-value">0.00</span>`;
     }
 
@@ -834,7 +897,7 @@ export class LayoutDesignerModal {
     if (!this.controlsLayer || !this.layout) return;
 
     // Clear existing text labels
-    this.controlsLayer.querySelectorAll(".layout-text-label").forEach((el) => el.remove());
+    this.controlsLayer.querySelectorAll(".layout-text-label, .layout-runtime-preview").forEach((el) => el.remove());
 
     // Render each label
     this.layout.textLabels.forEach((label) => {
@@ -1140,69 +1203,27 @@ export class LayoutDesignerModal {
     const control = this.layout.controls.find((c) => c.paramKey === paramKey);
     if (!control) return;
 
-    const paramDef = this.paramDefs.find((p) => p.key === paramKey);
+    const isResourceControl = this.isResourceControl(control);
+    const paramDef = isResourceControl ? undefined : this.paramDefs.find((p) => p.key === paramKey);
+    const resourceDef = isResourceControl
+      ? this.resourceCandidates.find((candidate) => candidate.controlKey === paramKey)
+      : undefined;
 
-    this.sidebarContent.innerHTML = `
-      <div class="layout-property-group">
-        <div class="layout-property-group-title">Control</div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Parameter</span>
-          <span class="layout-property-input">${paramDef?.name || paramKey}</span>
-        </div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Type</span>
-          <div class="layout-property-input">
-            <select id="prop-control-type">
+    const bindingLabel = isResourceControl
+      ? `${resourceDef?.displayName || paramKey} (${resourceDef?.resourceType || "resource"})`
+      : (paramDef?.name || paramKey);
+
+    const typeOptions = isResourceControl
+      ? `<option value="dropdown" selected>Dropdown</option>`
+      : `
               <option value="knob" ${control.type === "knob" ? "selected" : ""}>Knob</option>
               <option value="toggle" ${control.type === "toggle" ? "selected" : ""}>Toggle</option>
               <option value="slider" ${control.type === "slider" ? "selected" : ""}>Slider</option>
-            </select>
-          </div>
-        </div>
-      </div>
+            `;
 
-      <div class="layout-property-group">
-        <div class="layout-property-group-title">Position</div>
-        <div class="layout-position-inputs">
-          <label>X <input type="number" id="prop-pos-x" value="${control.position.x}" step="8"></label>
-          <label>Y <input type="number" id="prop-pos-y" value="${control.position.y}" step="8"></label>
-        </div>
-      </div>
-
-      <div class="layout-property-group">
-        <div class="layout-property-group-title">Label</div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Hide Label</span>
-          <div class="layout-property-input">
-            <input type="checkbox" id="prop-hide-label" ${control.style?.hideLabel ? "checked" : ""}>
-          </div>
-        </div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Override</span>
-          <div class="layout-property-input">
-            <input type="text" id="prop-label-override" value="${control.labelOverride || ""}" placeholder="${paramDef?.name || paramKey}">
-          </div>
-        </div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Position</span>
-          <div class="layout-property-input">
-            <select id="prop-label-position">
-              <option value="top" ${control.style?.labelPosition === "top" ? "selected" : ""}>Top</option>
-              <option value="bottom" ${control.style?.labelPosition === "bottom" ? "selected" : ""}>Bottom</option>
-              <option value="left" ${control.style?.labelPosition === "left" ? "selected" : ""}>Left</option>
-              <option value="right" ${control.style?.labelPosition === "right" ? "selected" : ""}>Right</option>
-              <option value="none" ${control.style?.labelPosition === "none" ? "selected" : ""}>Hidden</option>
-            </select>
-          </div>
-        </div>
-        <div class="layout-property-row">
-          <span class="layout-property-label">Color</span>
-          <div class="layout-property-input">
-            <input type="color" id="prop-label-color" value="${control.style?.labelColor || "#ffffff"}">
-          </div>
-        </div>
-      </div>
-
+    const styleSection = isResourceControl
+      ? ""
+      : `
       <div class="layout-property-group">
         <div class="layout-property-group-title">Style</div>
         <div class="layout-property-row">
@@ -1233,6 +1254,68 @@ export class LayoutDesignerModal {
           </div>
         </div>
       </div>
+      `;
+
+    this.sidebarContent.innerHTML = `
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Control</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Binding</span>
+          <span class="layout-property-input">${bindingLabel}</span>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Type</span>
+          <div class="layout-property-input">
+            <select id="prop-control-type">
+              ${typeOptions}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Position</div>
+        <div class="layout-position-inputs">
+          <label>X <input type="number" id="prop-pos-x" value="${control.position.x}" step="8"></label>
+          <label>Y <input type="number" id="prop-pos-y" value="${control.position.y}" step="8"></label>
+        </div>
+      </div>
+
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Label</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Hide Label</span>
+          <div class="layout-property-input">
+            <input type="checkbox" id="prop-hide-label" ${control.style?.hideLabel ? "checked" : ""}>
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Override</span>
+          <div class="layout-property-input">
+            <input type="text" id="prop-label-override" value="${control.labelOverride || ""}" placeholder="${bindingLabel}">
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Position</span>
+          <div class="layout-property-input">
+            <select id="prop-label-position">
+              <option value="top" ${control.style?.labelPosition === "top" ? "selected" : ""}>Top</option>
+              <option value="bottom" ${control.style?.labelPosition === "bottom" ? "selected" : ""}>Bottom</option>
+              <option value="left" ${control.style?.labelPosition === "left" ? "selected" : ""}>Left</option>
+              <option value="right" ${control.style?.labelPosition === "right" ? "selected" : ""}>Right</option>
+              <option value="none" ${control.style?.labelPosition === "none" ? "selected" : ""}>Hidden</option>
+            </select>
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Color</span>
+          <div class="layout-property-input">
+            <input type="color" id="prop-label-color" value="${control.style?.labelColor || "#ffffff"}">
+          </div>
+        </div>
+      </div>
+
+      ${styleSection}
 
       <div class="layout-property-group">
         <button id="prop-delete-control" style="width: 100%; background: rgba(255,100,100,0.2); color: #ff6b6b;">Remove from Layout</button>
@@ -1259,9 +1342,10 @@ export class LayoutDesignerModal {
     const deleteBtn = document.getElementById("prop-delete-control") as HTMLButtonElement;
     const browseKnobBtn = document.getElementById("prop-browse-knob-image") as HTMLButtonElement;
     const clearKnobBtn = document.getElementById("prop-clear-knob-image") as HTMLButtonElement;
+    const isResourceControl = this.isResourceControl(control);
 
     typeSelect?.addEventListener("change", () => {
-      control.type = typeSelect.value as "knob" | "toggle" | "slider";
+      control.type = typeSelect.value as "knob" | "toggle" | "slider" | "dropdown";
       this.renderCanvas();
     });
 
@@ -1331,6 +1415,10 @@ export class LayoutDesignerModal {
         this.renderSidebar();
       }
     });
+
+    if (isResourceControl) {
+      control.type = "dropdown";
+    }
   }
 
   private renderLabelProperties(labelId: string): void {
@@ -1539,9 +1627,10 @@ export class LayoutDesignerModal {
     // Find params not already in layout
     const usedKeys = new Set(this.layout.controls.map((c) => c.paramKey));
     const availableParams = this.paramDefs.filter((p) => !usedKeys.has(p.key));
+    const availableResources = this.resourceCandidates.filter((resource) => !usedKeys.has(resource.controlKey));
 
-    if (availableParams.length === 0) {
-      showNotification("All parameters are already in the layout", "info");
+    if (availableParams.length === 0 && availableResources.length === 0) {
+      showNotification("All controls are already in the layout", "info");
       return;
     }
 
@@ -1550,7 +1639,7 @@ export class LayoutDesignerModal {
     this.sidebarContent.innerHTML = `
       <div class="layout-property-group">
         <div class="layout-property-group-title">Add Parameter Control</div>
-        <div style="font-size: 11px; color: var(--text-dark-muted); margin-bottom: 8px;">Click a parameter to add it to the layout</div>
+        <div style="font-size: 11px; color: var(--text-dark-muted); margin-bottom: 8px;">Click a parameter or resource selector to add it to the layout</div>
         ${availableParams
           .map(
             (p) => `
@@ -1576,6 +1665,34 @@ export class LayoutDesignerModal {
         `
           )
           .join("")}
+        ${availableResources.length > 0 ? `
+          <div style="margin: 10px 0 6px; font-size: 11px; color: var(--text-dark-muted);">Resource Selectors</div>
+          ${availableResources
+            .map(
+              (resource) => `
+            <button
+              class="layout-add-control-btn"
+              data-resource-key="${resource.controlKey}"
+              style="
+                display: block;
+                width: 100%;
+                padding: 6px 10px;
+                margin-bottom: 4px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                color: var(--text-dark-primary);
+                font-size: 12px;
+                cursor: pointer;
+                text-align: left;
+              "
+            >
+              ${resource.displayName} <span style="opacity: 0.5; font-size: 10px;">${resource.resourceType}</span>
+            </button>
+          `,
+            )
+            .join("")}
+        ` : ""}
       </div>
     `;
 
@@ -1583,8 +1700,11 @@ export class LayoutDesignerModal {
     this.sidebarContent.querySelectorAll(".layout-add-control-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const paramKey = (btn as HTMLElement).dataset.paramKey;
+        const resourceKey = (btn as HTMLElement).dataset.resourceKey;
         if (paramKey) {
           this.addControlForParam(paramKey);
+        } else if (resourceKey) {
+          this.addControlForResource(resourceKey);
         }
       });
     });
@@ -1600,6 +1720,7 @@ export class LayoutDesignerModal {
     // Place in center of canvas
     const newControl: LayoutControl = {
       paramKey,
+      bindingType: "parameter",
       type: paramDef.unit === "toggle" ? "toggle" : "knob",
       position: {
         x: snapToGrid(this.layout.dimensions.width / 2 - 24),
@@ -1616,6 +1737,85 @@ export class LayoutDesignerModal {
     this.layout.controls.push(newControl);
     this.selectElement({ type: "control", paramKey });
     this.renderCanvas();
+  }
+
+  private addControlForResource(resourceKey: string): void {
+    if (!this.layout) return;
+
+    const resource = this.resourceCandidates.find((candidate) => candidate.controlKey === resourceKey);
+    if (!resource) return;
+
+    this.pushUndoState();
+
+    const newControl: LayoutControl = {
+      paramKey: resource.controlKey,
+      bindingType: "resource",
+      type: "dropdown",
+      resourceType: resource.resourceType,
+      resourceIndex: resource.resourceIndex,
+      exposedResourceId: resource.exposedResourceId,
+      allowBrowseFile: resource.allowBrowseFile,
+      position: {
+        x: snapToGrid(this.layout.dimensions.width / 2 - 90),
+        y: snapToGrid(this.layout.dimensions.height / 2 - 18),
+      },
+      size: {
+        width: 180,
+        height: 36,
+      },
+      style: {
+        labelPosition: "top",
+        showValue: false,
+        valuePosition: "bottom",
+      },
+      labelOverride: resource.displayName,
+    };
+
+    this.layout.controls.push(newControl);
+    this.selectElement({ type: "control", paramKey: resource.controlKey });
+    this.renderCanvas();
+  }
+
+  private isResourceControl(control: LayoutControl): boolean {
+    return control.bindingType === "resource" || control.paramKey.startsWith("__resource__:");
+  }
+
+  private buildResourceCandidates(typeInfo?: { requiresResource?: boolean; resourceType?: string; exposedResources?: Array<{
+    resourceId: string;
+    displayName: string;
+    resourceType: string;
+    resourceIndex?: number;
+    allowBrowseFile?: boolean;
+  }> }): LayoutResourceCandidate[] {
+    const candidates: LayoutResourceCandidate[] = [];
+
+    const exposed = typeInfo?.exposedResources ?? [];
+    if (exposed.length > 0) {
+      exposed.forEach((resource, index) => {
+        const resourceIndex = typeof resource.resourceIndex === "number" ? resource.resourceIndex : index;
+        candidates.push({
+          controlKey: `__resource__:${resource.resourceId}:${resourceIndex}`,
+          displayName: resource.displayName || resource.resourceId,
+          resourceType: resource.resourceType,
+          resourceIndex,
+          exposedResourceId: resource.resourceId,
+          allowBrowseFile: resource.allowBrowseFile ?? true,
+        });
+      });
+      return candidates;
+    }
+
+    if (typeInfo?.requiresResource && typeInfo.resourceType) {
+      candidates.push({
+        controlKey: `__resource__:primary:0`,
+        displayName: typeInfo.resourceType === "nam" ? "Model" : typeInfo.resourceType === "ir" ? "IR" : "Resource",
+        resourceType: typeInfo.resourceType,
+        resourceIndex: 0,
+        allowBrowseFile: true,
+      });
+    }
+
+    return candidates;
   }
 
   private browseKnobImage(control: LayoutControl): void {

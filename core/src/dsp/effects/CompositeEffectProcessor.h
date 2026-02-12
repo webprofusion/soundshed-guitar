@@ -42,6 +42,8 @@ namespace guitarfx
     void SetConfig(const std::string &key, const std::string &value) override;
     [[nodiscard]] double GetParam(const std::string &key) const override;
     [[nodiscard]] std::string GetConfig(const std::string &key) const override;
+    bool LoadResources(const std::vector<ResourceRef> &refs,
+               const std::vector<std::filesystem::path> &paths) override;
 
     [[nodiscard]] std::string GetType() const override;
     [[nodiscard]] std::string GetCategory() const override;
@@ -61,12 +63,21 @@ namespace guitarfx
   private:
     /// Build the exposed parameter lookup map.
     void BuildParamMap();
+    void ApplyPendingResourceOverrides();
+
+    struct PendingResourceOverride
+    {
+      std::string nodeId;
+      ResourceRef ref;
+    };
 
     CompositeEffectDefinition mDefinition;
     SignalGraphExecutor mInnerExecutor;
 
     /// Map from exposed paramId → ExposedParameter for fast lookup.
     std::unordered_map<std::string, const ExposedParameter *> mParamMap;
+    std::vector<PendingResourceOverride> mPendingResourceOverrides;
+    bool mInnerPrepared = false;
   };
 
   /**

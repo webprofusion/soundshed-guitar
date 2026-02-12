@@ -232,6 +232,16 @@ function registerCompositeEffectType(def: CompositeEffectDefinition): void {
       max: ep.maxValue ?? 1,
       unit: ep.unit ?? "",
     })),
+    exposedResources: (def.exposedResources ?? []).map((er) => ({
+      resourceId: er.resourceId,
+      displayName: er.displayName,
+      nodeId: er.nodeId,
+      resourceType: er.resourceType,
+      resourceIndex: er.resourceIndex ?? 0,
+      allowBrowseFile: er.allowBrowseFile ?? true,
+      parameterId: er.parameterId,
+      parameterValue: er.parameterValue,
+    })),
   });
 }
 

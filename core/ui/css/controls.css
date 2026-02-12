@@ -688,10 +688,10 @@
   flex: 1;
   padding: 6px 10px;
   font-size: 12px;
-  background: #3a3a4a;
-  border: 1px solid #5a5a6a;
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
-  color: #e0e0f0;
+  color: var(--text-primary);
   cursor: pointer;
   min-width: 150px;
 }

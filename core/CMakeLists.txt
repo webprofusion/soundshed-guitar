@@ -240,9 +240,19 @@ if(NPM_EXECUTABLE)
         "${GUITARFX_CORE_ROOT}/ui/tsconfig.json"
         "${GUITARFX_CORE_ROOT}/ui/package.json")
     set(_UI_STAMP "${CMAKE_CURRENT_BINARY_DIR}/ui_build.stamp")
+
+    # On Windows, npm is typically a .cmd shim. When invoked from another batch
+    # context (MSBuild CustomBuild), it must be called via `call` or the
+    # remaining commands (stamp touch) will not execute.
+    if(WIN32)
+        set(_UI_BUILD_CMD cmd /c call "${NPM_EXECUTABLE}" run build)
+    else()
+        set(_UI_BUILD_CMD "${NPM_EXECUTABLE}" run build)
+    endif()
+
     add_custom_command(
         OUTPUT "${_UI_STAMP}"
-        COMMAND "${NPM_EXECUTABLE}" run build
+        COMMAND ${_UI_BUILD_CMD}
         COMMAND ${CMAKE_COMMAND} -E touch "${_UI_STAMP}"
         WORKING_DIRECTORY "${GUITARFX_CORE_ROOT}/ui"
         DEPENDS ${_UI_TS_SOURCES}

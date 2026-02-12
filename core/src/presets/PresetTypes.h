@@ -207,6 +207,24 @@ namespace guitarfx
   };
 
   /**
+   * Maps a user-facing resource selector to an inner node resource slot
+   * within a composite effect.
+   */
+  struct ExposedResource
+  {
+    std::string resourceId;    // User-facing resource key (e.g., "ampModel", "cabIr")
+    std::string displayName;   // Label shown in UI
+    std::string nodeId;        // Target node ID within the inner graph
+    std::string resourceType;  // Expected resource type (e.g., "nam", "ir")
+    int resourceIndex = 0;     // Target resource slot on the inner node
+    bool allowBrowseFile = true; // Whether custom file browsing is allowed
+
+    // Optional resource parameter mapping (used by some resource-driven systems)
+    std::string parameterId;
+    std::optional<double> parameterValue;
+  };
+
+  /**
    * Defines a composite effect — a reusable mini signal path that appears
    * as a single node in the parent graph. Contains an inner graph of effects
    * with only selected parameters exposed to the user.
@@ -223,6 +241,7 @@ namespace guitarfx
 
     SignalGraph innerGraph;    // The mini signal graph of inner effects
     std::vector<ExposedParameter> exposedParams; // Parameters surfaced to the user
+    std::vector<ExposedResource> exposedResources; // Resources surfaced to the user
 
     // Optional layout JSON stored as a string (parsed by UI)
     std::string layoutJson;

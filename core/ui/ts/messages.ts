@@ -729,39 +729,17 @@ export function handleIncomingMessage(message: string): void {
         uiState.layoutLibrary = libraryPayload.layoutLibrary;
         appendLog("Layout library loaded");
         renderLayoutList();
+        // Ensure any open node params panel picks up the updated layout mapping.
+        renderActivePreset();
       }
       break;
     }
     case "layoutSaved": {
-      const savePayload = payload as { effectType?: string; blendId?: string; lookupKey?: string; layout?: EffectLayout };
-      if (savePayload.effectType && savePayload.layout && uiState.layoutLibrary) {
-        // Use the lookup key from the backend, or compute it from effectType + blendId
-        const key = savePayload.lookupKey || layoutLookupKey(savePayload.effectType, savePayload.blendId);
-
-        // Update layout in library using the composite key
-        if (!uiState.layoutLibrary.byEffectType[key]) {
-          uiState.layoutLibrary.byEffectType[key] = [];
-        }
-        const layouts = uiState.layoutLibrary.byEffectType[key];
-        const existingIdx = layouts.findIndex(e => e.layoutId === key + "-default");
-        const entry = {
-          layout: savePayload.layout,
-          isDefault: true,
-          layoutId: key + "-default",
-        };
-        if (existingIdx >= 0) {
-          layouts[existingIdx] = entry;
-        } else {
-          layouts.push(entry);
-        }
-        uiState.layoutLibrary.defaults[key] = entry.layoutId;
-
-        const displayKey = savePayload.blendId ? `${savePayload.effectType} (blend: ${savePayload.blendId})` : savePayload.effectType;
-        appendLog(`Layout saved for ${displayKey}`);
-        showNotification("Layout saved", "success");
-        // Refresh signal path view to use new layout
-        renderActivePreset();
-      }
+      const savePayload = payload as { effectType?: string; blendId?: string; layoutId?: string; lookupKey?: string };
+      const displayKey = savePayload.blendId ? `${savePayload.effectType} (blend: ${savePayload.blendId})` : savePayload.effectType;
+      appendLog(`Layout saved for ${displayKey ?? "effect"}${savePayload.layoutId ? ` (${savePayload.layoutId})` : ""}`);
+      showNotification("Layout saved", "success");
+      // layoutLibraryLoaded will follow and trigger a full refresh.
       break;
     }
     case "layoutImageSelected": {
@@ -828,6 +806,7 @@ export function handleIncomingMessage(message: string): void {
             parameters?: unknown;
             requiresResource?: unknown;
             resourceType?: unknown;
+            exposedResources?: unknown;
           };
           const type = typeof effect.type === "string" ? effect.type : "";
           if (!type) {
@@ -877,6 +856,34 @@ export function handleIncomingMessage(message: string): void {
                 .filter((param) => param.key !== "")
             : existing?.parameters ?? [];
 
+          const exposedResources = Array.isArray(effect.exposedResources)
+            ? effect.exposedResources
+                .filter((resource) => resource && typeof resource === "object")
+                .map((resource) => {
+                  const r = resource as {
+                    resourceId?: unknown;
+                    displayName?: unknown;
+                    nodeId?: unknown;
+                    resourceType?: unknown;
+                    resourceIndex?: unknown;
+                    allowBrowseFile?: unknown;
+                    parameterId?: unknown;
+                    parameterValue?: unknown;
+                  };
+                  return {
+                    resourceId: typeof r.resourceId === "string" ? r.resourceId : "",
+                    displayName: typeof r.displayName === "string" ? r.displayName : "",
+                    nodeId: typeof r.nodeId === "string" ? r.nodeId : "",
+                    resourceType: typeof r.resourceType === "string" ? r.resourceType : "",
+                    resourceIndex: typeof r.resourceIndex === "number" ? r.resourceIndex : 0,
+                    allowBrowseFile: typeof r.allowBrowseFile === "boolean" ? r.allowBrowseFile : true,
+                    parameterId: typeof r.parameterId === "string" ? r.parameterId : undefined,
+                    parameterValue: typeof r.parameterValue === "number" ? r.parameterValue : undefined,
+                  };
+                })
+                .filter((resource) => resource.resourceId && resource.resourceType)
+            : existing?.exposedResources;
+
           EffectTypeRegistry.register(type, {
             type,
             displayName,
@@ -884,6 +891,7 @@ export function handleIncomingMessage(message: string): void {
             requiresResource,
             resourceType,
             parameters,
+            exposedResources,
           });
         }
         refreshFxSelector();

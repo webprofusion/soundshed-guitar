@@ -24,7 +24,7 @@ import {
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { BlendEditorModal } from "./blendEditor.js";
 import { resourceBrowserModal } from "./resourceBrowser.js";
-import { hasCustomLayout, getCustomLayout, renderCustomLayout } from "./layoutRenderer.js";
+import { hasCustomLayout, getCustomLayout, renderCustomLayout, type LayoutResourceControlDef } from "./layoutRenderer.js";
 import { layoutDesigner } from "./layoutDesigner.js";
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
@@ -504,9 +504,9 @@ function getLibraryResourceName(resourceType: string | undefined, resourceId: st
   return match?.name?.trim() ?? "";
 }
 
-function getNodeResourceDisplayName(node: GraphNode, index = 0): string {
+function getNodeResourceDisplayName(node: GraphNode, index = 0, overrideResourceType?: string): string {
   const typeInfo = EffectTypeRegistry.get(node.type);
-  const resourceType = typeInfo?.resourceType;
+  const resourceType = overrideResourceType || typeInfo?.resourceType;
   const resource = getNodeResourceAtIndex(node, index);
 
   if (resource.filePath) {
@@ -1710,9 +1710,76 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     `
     : "";
 
-  // Build resource selector if this node type requires a resource
+  // Build resource selector if this node type requires a resource,
+  // or if a composite node surfaces inner resources.
   let resourceSelector = "";
-  if (typeInfo?.requiresResource && typeInfo.resourceType) {
+  const customLayoutResourceControls: LayoutResourceControlDef[] = [];
+  const exposedResources = typeInfo?.exposedResources ?? [];
+  if (exposedResources.length > 0) {
+    resourceSelector = exposedResources
+      .map((exposedResource, exposedResourceIndex) => {
+        const resourceType = exposedResource.resourceType;
+        const resourceIndex = exposedResourceIndex;
+        const browseAccept = resourceType === "nam" ? ".nam,.json" : resourceType === "ir" ? ".wav" : "*";
+        const current = getNodeResourceAtIndex(node, resourceIndex);
+        const displayName = current.id
+          ? getNodeResourceDisplayName(node, resourceIndex, resourceType)
+          : resourceType === "ir" ? "No IR selected" : "No model selected";
+        const isMissing = Boolean(current.id)
+          && !current.filePath
+          && !getLibraryResource(resourceType, current.id);
+        const missingClass = isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
+        const canBrowseFile = exposedResource.allowBrowseFile ?? true;
+
+        customLayoutResourceControls.push({
+          resourceControlKey: `__resource__:${exposedResource.resourceId}:${resourceIndex}`,
+          displayName: exposedResource.displayName || exposedResource.resourceId,
+          resourceType,
+          resourceIndex,
+          exposedResourceId: exposedResource.resourceId,
+          allowBrowseFile: canBrowseFile,
+          currentDisplayName: displayName,
+          currentFilePath: current.filePath,
+          isMissing,
+        });
+
+        return `
+          <div class="node-resource-selector" data-node-id="${node.id}">
+            <label>${escapeHtml(exposedResource.displayName || exposedResource.resourceId)}</label>
+            <div class="resource-controls">
+              <button
+                class="resource-picker-btn"
+                data-node-id="${node.id}"
+                data-resource-type="${resourceType}"
+                data-resource-index="${resourceIndex}"
+                data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+              >Browse</button>
+              <div
+                class="${missingClass}"
+                data-node-id="${node.id}"
+                data-resource-type="${resourceType}"
+                data-resource-index="${resourceIndex}"
+                data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                title="${escapeHtml(displayName)}"
+              >${escapeHtml(displayName)}</div>
+              ${canBrowseFile ? `
+                <button
+                  class="resource-browse-btn"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceType}"
+                  data-resource-index="${resourceIndex}"
+                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                  data-accept="${browseAccept}"
+                  title="Browse for file..."
+                >${renderIcon("folder", "resource-browse-icon")}</button>
+              ` : ""}
+            </div>
+            ${current.filePath ? `<div class="resource-path-info" title="${current.filePath}">${current.filePath}</div>` : ""}
+          </div>
+        `;
+      })
+      .join("");
+  } else if (typeInfo?.requiresResource && typeInfo.resourceType) {
     const resourceType = typeInfo.resourceType;
     const resources = uiState.resourceLibrary[resourceType] || [];
     const browseAccept = resourceType === "nam" ? ".nam,.json" : resourceType === "ir" ? ".wav" : "*";
@@ -1751,6 +1818,17 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         && !current.filePath
         && !getLibraryResource(resourceType, current.id);
       const missingClass = isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
+
+      customLayoutResourceControls.push({
+        resourceControlKey: `__resource__:primary:${index}`,
+        displayName: label,
+        resourceType,
+        resourceIndex: index,
+        allowBrowseFile: true,
+        currentDisplayName: displayName,
+        currentFilePath: current.filePath,
+        isMissing,
+      });
 
       return `
         <div class="node-resource-selector">
@@ -1827,8 +1905,11 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     ? (getCustomLayout(node.type, nodeBlendId) ?? getCustomLayout(node.type))
     : getCustomLayout(node.type);
   const customLayoutHtml = customLayout
-    ? renderCustomLayout(node, customLayout, paramDefs)
+    ? renderCustomLayout(node, customLayout, paramDefs, customLayoutResourceControls)
     : null;
+  const layoutIncludesResourceControls = Boolean(
+    customLayout && customLayout.controls.some((control) => control.bindingType === "resource" || control.paramKey.startsWith("__resource__:")),
+  );
 
   // Customize layout button (include blend ID for per-blend layout selection)
   // Only shown when advanced options are enabled
@@ -1841,7 +1922,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   nodeParamsPanelElement.innerHTML = `
     
     <div class="node-params-body">
-      ${resourceSelector}
+      ${layoutIncludesResourceControls ? "" : resourceSelector}
       ${eqVisualizer}
       ${mixerInputControls}
       ${customLayoutHtml ? customLayoutHtml : `
@@ -2285,6 +2366,7 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       const nodeId = picker.dataset.nodeId;
       const resourceType = picker.dataset.resourceType as "nam" | "ir" | undefined;
       const resourceIndex = picker.dataset.resourceIndex ? parseInt(picker.dataset.resourceIndex, 10) : 0;
+      const exposedResourceId = picker.dataset.exposedResourceId;
       if (!nodeId || !resourceType || (resourceType !== "nam" && resourceType !== "ir")) {
         return;
       }
@@ -2296,14 +2378,17 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
         nodeId,
         resourceIndex,
         onSelect: (resourceId) => {
-          sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex);
+          sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex, undefined, exposedResourceId);
           const label = getLibraryResourceName(resourceType, resourceId) || resourceId || "";
           const labelText = label || (resourceType === "ir" ? "No IR selected" : "No model selected");
           const indexAttr = picker.dataset.resourceIndex !== undefined
             ? `[data-resource-index="${resourceIndex}"]`
             : "";
+          const exposedSelector = exposedResourceId
+            ? `[data-exposed-resource-id="${exposedResourceId}"]`
+            : "";
           const labelEl = nodeParamsPanelElement?.querySelector(
-            `.resource-picker-label[data-node-id="${nodeId}"]${indexAttr}`,
+            `.resource-picker-label[data-node-id="${nodeId}"]${indexAttr}${exposedSelector}`,
           ) as HTMLElement | null;
           if (labelEl) {
             labelEl.textContent = labelText;
@@ -2323,9 +2408,10 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       const nodeId = browseBtn.dataset.nodeId;
       const resourceType = browseBtn.dataset.resourceType;
       const resourceIndex = browseBtn.dataset.resourceIndex ? parseInt(browseBtn.dataset.resourceIndex, 10) : undefined;
+      const exposedResourceId = browseBtn.dataset.exposedResourceId;
       
       if (nodeId && resourceType) {
-        sendBrowseNodeResource(nodeId, resourceType, resourceIndex);
+        sendBrowseNodeResource(nodeId, resourceType, resourceIndex, exposedResourceId);
       }
     });
   });
@@ -2509,6 +2595,7 @@ function sendNodeResourceUpdate(
   filePath: string,
   resourceIndex?: number,
   parameterValue?: number,
+  exposedResourceId?: string,
 ): void {
   postMessage({
     type: "updateNodeResource",
@@ -2518,16 +2605,23 @@ function sendNodeResourceUpdate(
     filePath,
     resourceIndex,
     parameterValue,
+    exposedResourceId,
   });
   setPresetDirty(true);
 }
 
-function sendBrowseNodeResource(nodeId: string, resourceType: string, resourceIndex?: number): void {
+function sendBrowseNodeResource(
+  nodeId: string,
+  resourceType: string,
+  resourceIndex?: number,
+  exposedResourceId?: string,
+): void {
   postMessage({
     type: "browseNodeResource",
     nodeId,
     resourceType,
     resourceIndex,
+    exposedResourceId,
   });
 }
 

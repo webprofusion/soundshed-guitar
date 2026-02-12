@@ -1971,6 +1971,58 @@
   box-sizing: border-box;
 }
 
+.custom-layout-resource-selector {
+  padding: 0;
+  margin: 0;
+  gap: 4px;
+}
+
+.custom-layout-resource-selector .resource-controls {
+  gap: 6px;
+  width: 100%;
+}
+
+.custom-layout-resource-selector .resource-picker-btn {
+  min-width: 62px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.custom-layout-resource-selector .resource-picker-label {
+  padding: 5px 8px;
+  font-size: 11px;
+  border-color: var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+}
+
+.custom-layout-resource-selector .resource-browse-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-layout-resource-selector .resource-browse-btn:hover {
+  color: var(--text-dark-primary);
+  border-color: var(--accent-primary);
+}
+
+.custom-layout-resource-selector .resource-path-info {
+  font-size: 10px;
+  color: var(--text-dark-muted);
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .custom-layout-bg {
   pointer-events: none;
 }

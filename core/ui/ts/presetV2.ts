@@ -27,6 +27,16 @@ export interface EffectTypeInfo {
   requiresResource: boolean;
   resourceType?: string;
   parameters: ParameterDef[];
+  exposedResources?: Array<{
+    resourceId: string;
+    displayName: string;
+    nodeId: string;
+    resourceType: string;
+    resourceIndex?: number;
+    allowBrowseFile?: boolean;
+    parameterId?: string;
+    parameterValue?: number;
+  }>;
 }
 
 /**

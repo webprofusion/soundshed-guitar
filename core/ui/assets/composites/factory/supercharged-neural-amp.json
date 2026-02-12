@@ -1,0 +1,228 @@
+{
+  "id": "supercharged-neural-amp",
+  "name": "Supercharged Neural Amp",
+  "category": "amp",
+  "description": "Gate, preamp drive, pre-EQ, optimized NAM amp, IR cab, and room reverb with surfaced model/IR selectors.",
+  "author": "Soundshed",
+  "tags": ["supercharged", "neural", "amp", "composite"],
+  "version": 1,
+  "innerGraph": {
+    "nodes": [
+      { "id": "in", "type": "input" },
+      {
+        "id": "gate",
+        "type": "dynamics_gate",
+        "category": "dynamics",
+        "params": {
+          "thresholdDb": -55.0,
+          "attackMs": 1.0,
+          "releaseMs": 80.0
+        }
+      },
+      {
+        "id": "preamp",
+        "type": "overdrive",
+        "category": "dynamics",
+        "params": {
+          "drive": 0.35,
+          "tone": 0.5,
+          "level": 0.0,
+          "mix": 1.0
+        }
+      },
+      {
+        "id": "pre_eq",
+        "type": "eq_parametric",
+        "category": "eq",
+        "params": {
+          "lowGain": 0.0,
+          "lowFreq": 120.0,
+          "lowMidGain": 0.0,
+          "lowMidFreq": 500.0,
+          "lowMidQ": 1.0,
+          "highMidGain": 0.0,
+          "highMidFreq": 1800.0,
+          "highMidQ": 1.0,
+          "highGain": 0.0,
+          "highFreq": 7000.0
+        }
+      },
+      {
+        "id": "amp",
+        "type": "amp_nam_optimized",
+        "category": "amp",
+        "resources": [
+          { "resourceType": "nam", "resourceId": "plexi-bright" }
+        ],
+        "params": {
+          "inputGain": 0.0,
+          "outputGain": 0.0,
+          "autoLevelInput": 1.0,
+          "autoLevelOutput": 1.0
+        }
+      },
+      {
+        "id": "cab",
+        "type": "cab_ir",
+        "category": "cab",
+        "resources": [
+          { "resourceType": "ir", "resourceId": "4x12-sm57" }
+        ],
+        "params": {
+          "mix": 1.0,
+          "outputGain": 0.0,
+          "quality": 1.0
+        }
+      },
+      {
+        "id": "verb",
+        "type": "reverb_room",
+        "category": "reverb",
+        "params": {
+          "decay": 0.25,
+          "damping": 0.55,
+          "mix": 0.12
+        }
+      },
+      { "id": "out", "type": "output" }
+    ],
+    "edges": [
+      { "from": "in", "to": "gate" },
+      { "from": "gate", "to": "preamp" },
+      { "from": "preamp", "to": "pre_eq" },
+      { "from": "pre_eq", "to": "amp" },
+      { "from": "amp", "to": "cab" },
+      { "from": "cab", "to": "verb" },
+      { "from": "verb", "to": "out" }
+    ]
+  },
+  "exposedParams": [
+    {
+      "paramId": "gateThreshold",
+      "displayName": "Gate",
+      "nodeId": "gate",
+      "nodeParamKey": "thresholdDb",
+      "minValue": -80.0,
+      "maxValue": -20.0,
+      "defaultValue": -55.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "preampDrive",
+      "displayName": "Preamp",
+      "nodeId": "preamp",
+      "nodeParamKey": "drive",
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "defaultValue": 0.35,
+      "unit": "amount"
+    },
+    {
+      "paramId": "low",
+      "displayName": "Low",
+      "nodeId": "pre_eq",
+      "nodeParamKey": "lowGain",
+      "minValue": -12.0,
+      "maxValue": 12.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "high",
+      "displayName": "High",
+      "nodeId": "pre_eq",
+      "nodeParamKey": "highGain",
+      "minValue": -12.0,
+      "maxValue": 12.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "namInput",
+      "displayName": "AMP In",
+      "nodeId": "amp",
+      "nodeParamKey": "inputGain",
+      "minValue": -24.0,
+      "maxValue": 24.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "namOutput",
+      "displayName": "AMP Out",
+      "nodeId": "amp",
+      "nodeParamKey": "outputGain",
+      "minValue": -24.0,
+      "maxValue": 24.0,
+      "defaultValue": 0.0,
+      "unit": "dB"
+    },
+    {
+      "paramId": "cabMix",
+      "displayName": "Cab Mix",
+      "nodeId": "cab",
+      "nodeParamKey": "mix",
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "defaultValue": 1.0
+    },
+    {
+      "paramId": "reverb",
+      "displayName": "Reverb",
+      "nodeId": "verb",
+      "nodeParamKey": "mix",
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "defaultValue": 0.12
+    }
+  ],
+  "exposedResources": [
+    {
+      "resourceId": "ampModel",
+      "displayName": "Amp Model",
+      "nodeId": "amp",
+      "resourceType": "nam",
+      "resourceIndex": 0,
+      "allowBrowseFile": true
+    },
+    {
+      "resourceId": "cabIr",
+      "displayName": "Cab IR",
+      "nodeId": "cab",
+      "resourceType": "ir",
+      "resourceIndex": 0,
+      "allowBrowseFile": true
+    }
+  ],
+  "layout": {
+    "effectType": "composite:supercharged-neural-amp",
+    "version": 1,
+    "name": "Supercharged Neural Amp",
+    "dimensions": { "width": 560, "height": 260 },
+    "backgrounds": [
+      { "layerIndex": 0, "type": "gradient", "value": "linear-gradient(135deg, #121826 0%, #080c14 100%)" }
+    ],
+    "controls": [
+      { "paramKey": "gateThreshold", "type": "knob", "position": { "x": 48, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "preampDrive", "type": "knob", "position": { "x": 118, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "low", "type": "knob", "position": { "x": 208, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "high", "type": "knob", "position": { "x": 278, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "namInput", "type": "knob", "position": { "x": 368, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "namOutput", "type": "knob", "position": { "x": 438, "y": 84 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "cabMix", "type": "knob", "position": { "x": 208, "y": 176 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } },
+      { "paramKey": "reverb", "type": "knob", "position": { "x": 278, "y": 176 }, "style": { "knobStyle": "amp", "accentColor": "#6aa8ff" } }
+    ],
+    "textLabels": [
+      {
+        "id": "title",
+        "text": "SUPERCHARGED NEURAL AMP",
+        "position": { "x": 280, "y": 16 },
+        "fontSize": 16,
+        "fontWeight": "bold",
+        "color": "#6aa8ff",
+        "textAlign": "center"
+      }
+    ]
+  },
+  "createdAt": "2026-02-12T00:00:00.000Z"
+}
