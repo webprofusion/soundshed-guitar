@@ -58,6 +58,11 @@ interface PreviewState {
   tempResourceId: string;
 }
 
+interface PreviewLoadingState {
+  toneId: string;
+  modelId: string;
+}
+
 export class ResourceBrowserModal {
   private initialized = false;
   private options: ResourceBrowserOptions | null = null;
@@ -102,6 +107,7 @@ export class ResourceBrowserModal {
   private tone3000TotalPages = 1;
   private expandedToneId: string | null = null;
   private toneModelsCache: Map<string, Tone3000Model[]> = new Map();
+  private previewLoading: PreviewLoadingState | null = null;
   
   initialize(): void {
     if (this.initialized) {
@@ -206,6 +212,7 @@ export class ResourceBrowserModal {
     this.selectedResourceId = options.currentId ?? "";
     this.originalResourceId = options.currentId ?? ""; // Store original for cancel/revert
     this.previewState = null;
+    this.previewLoading = null;
     this.libraryPreviewActive = false;
     
     // Update title
@@ -636,12 +643,19 @@ export class ResourceBrowserModal {
     }
     
     const previewingModelId = this.previewState?.toneId === String(tone.id) ? this.previewState.modelId : null;
+    const loadingModelId = this.previewLoading?.toneId === String(tone.id) ? this.previewLoading.modelId : null;
     
     return `
       <div class="resource-browser-tone-models">
         ${models.map((model) => {
           const isPreviewing = String(model.id) === previewingModelId;
-          const previewClass = isPreviewing ? "resource-browser-model is-previewing" : "resource-browser-model";
+          const isLoadingPreview = String(model.id) === loadingModelId;
+          const previewClass = isPreviewing
+            ? "resource-browser-model is-previewing"
+            : isLoadingPreview
+              ? "resource-browser-model is-preview-loading"
+              : "resource-browser-model";
+          const previewLabel = isPreviewing ? "⏹ Stop" : isLoadingPreview ? "Loading..." : "▶ Preview";
           
           return `
             <div class="${previewClass}" data-model-id="${String(model.id)}">
@@ -650,8 +664,9 @@ export class ResourceBrowserModal {
                 <button class="resource-browser-model-preview" type="button" 
                         data-tone-id="${String(tone.id)}" 
                         data-model-id="${String(model.id)}"
-                        data-model-url="${escapeHtml(model.model_url)}">
-                  ${isPreviewing ? "⏹ Stop" : "▶ Preview"}
+                        data-model-url="${escapeHtml(model.model_url)}"
+                        ${isLoadingPreview ? "disabled" : ""}>
+                  ${previewLabel}
                 </button>
                 <button class="resource-browser-model-select" type="button"
                         data-tone-id="${String(tone.id)}"
@@ -805,6 +820,8 @@ export class ResourceBrowserModal {
     }
     
     // Update UI to show loading
+    this.previewLoading = { toneId, modelId };
+    this.renderTone3000List();
     if (this.tone3000Status) {
       this.tone3000Status.textContent = "Downloading for preview...";
     }
@@ -862,6 +879,11 @@ export class ResourceBrowserModal {
       if (this.tone3000Status) {
         this.tone3000Status.textContent = "";
       }
+    } finally {
+      if (this.previewLoading?.toneId === toneId && this.previewLoading?.modelId === modelId) {
+        this.previewLoading = null;
+        this.renderTone3000List();
+      }
     }
   }
   
@@ -878,6 +900,7 @@ export class ResourceBrowserModal {
     });
     
     this.previewState = null;
+    this.previewLoading = null;
     this.renderTone3000List();
     
     if (this.tone3000Status) {

@@ -24,6 +24,7 @@ import {
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { BlendEditorModal } from "./blendEditor.js";
 import { resourceBrowserModal } from "./resourceBrowser.js";
+import { findMatchingResourcePickerLabel } from "./resourcePickerLabel.js";
 import { hasCustomLayout, getCustomLayout, renderCustomLayout, type LayoutResourceControlDef } from "./layoutRenderer.js";
 import { layoutDesigner } from "./layoutDesigner.js";
 
@@ -2385,15 +2386,17 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
           sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex, undefined, exposedResourceId);
           const label = getLibraryResourceName(resourceType, resourceId) || resourceId || "";
           const labelText = label || (resourceType === "ir" ? "No IR selected" : "No model selected");
-          const indexAttr = picker.dataset.resourceIndex !== undefined
-            ? `[data-resource-index="${resourceIndex}"]`
-            : "";
-          const exposedSelector = exposedResourceId
-            ? `[data-exposed-resource-id="${exposedResourceId}"]`
-            : "";
-          const labelEl = nodeParamsPanelElement?.querySelector(
-            `.resource-picker-label[data-node-id="${nodeId}"]${indexAttr}${exposedSelector}`,
-          ) as HTMLElement | null;
+          const labelCandidates = nodeParamsPanelElement?.querySelectorAll(
+            `.resource-picker-label[data-node-id="${nodeId}"]`,
+          ) as NodeListOf<HTMLElement> | null;
+          const labelEl = findMatchingResourcePickerLabel(
+            labelCandidates,
+            nodeId,
+            resourceType,
+            resourceIndex,
+            exposedResourceId,
+          );
+
           if (labelEl) {
             labelEl.textContent = labelText;
             labelEl.title = labelText;

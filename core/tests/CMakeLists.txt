@@ -8,6 +8,7 @@ set(TEST_SOURCES
     MultiPresetMixerTests.cpp
     NAMPerformanceBenchmark.cpp
     PresetDSPLoadingTests.cpp
+    PresetManagementWorkflowTests.cpp
     PresetStorageTests.cpp
     ResourcePreviewWorkflowTests.cpp
     SignalGraphExecutorTests.cpp

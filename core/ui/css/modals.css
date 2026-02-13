@@ -983,6 +983,37 @@
   color: white;
 }
 
+.resource-browser-model.is-preview-loading {
+  border-color: var(--color-primary);
+}
+
+.resource-browser-model.is-preview-loading .resource-browser-model-preview {
+  position: relative;
+  padding-left: 24px;
+  background: var(--color-primary);
+  color: white;
+  cursor: wait;
+  opacity: 0.9;
+}
+
+.resource-browser-model.is-preview-loading .resource-browser-model-preview::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: resource-browser-spin 0.8s linear infinite;
+}
+
+@keyframes resource-browser-spin {
+  to { transform: rotate(360deg); }
+}
+
 .resource-browser-model-select {
   background: var(--color-primary);
   color: white;
