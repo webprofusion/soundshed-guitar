@@ -130,7 +130,7 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
         std::lock_guard<std::mutex> lock(mDSPMutex);
         mPresetMixer.Reset();
         mDemoAudioCursor.store(0, std::memory_order_release);
-        std::atomic_store_explicit(&mDemoAudioBuffer, std::move(buffer), std::memory_order_release);
+        std::atomic_store_explicit(&mDemoAudioBuffer, buffer, std::memory_order_release);
         mDemoAudioActive.store(true, std::memory_order_release);
     }
 
