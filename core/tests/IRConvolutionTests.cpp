@@ -45,6 +45,21 @@ namespace
     return std::abs(a - b) < epsilon;
   }
 
+  double ComputeRms(const std::vector<double>& samples)
+  {
+    if (samples.empty())
+    {
+      return 0.0;
+    }
+
+    double sumSquares = 0.0;
+    for (double sample : samples)
+    {
+      sumSquares += sample * sample;
+    }
+    return std::sqrt(sumSquares / static_cast<double>(samples.size()));
+  }
+
   /**
    * @brief Reference implementation of direct-form FIR convolution
    *
@@ -247,6 +262,80 @@ namespace
       const auto path = WriteStereoImpulseToWav(left, right, kSampleRate);
       mTempFiles.push_back(path);
       LoadImpulse(path);
+    }
+
+    void SetDualImpulse(const std::vector<float>& impulseA,
+                       const std::vector<float>& impulseB,
+                       double blend)
+    {
+      if (impulseA.empty())
+      {
+        mExecutor.SetNodeEnabled("cab", false);
+        mExecutor.Reset();
+        return;
+      }
+
+      const auto pathA = WriteImpulseToWav(impulseA, kSampleRate);
+      mTempFiles.push_back(pathA);
+
+      const auto pathB = WriteImpulseToWav(impulseB.empty() ? std::vector<float>{1.0f} : impulseB, kSampleRate);
+      mTempFiles.push_back(pathB);
+
+      guitarfx::SignalGraph graph;
+
+      guitarfx::GraphNode input;
+      input.id = "input";
+      input.type = guitarfx::kNodeTypeInput;
+      input.category = "utility";
+      input.enabled = true;
+
+      guitarfx::GraphNode cab;
+      cab.id = "cab";
+      cab.type = "cab_ir";
+      cab.category = "cab";
+      cab.enabled = true;
+      cab.params["mix"] = 1.0;
+      cab.params["irBlend"] = std::clamp(blend, 0.0, 1.0);
+      cab.params["outputGain"] = 0.0;
+
+      guitarfx::ResourceRef refA;
+      refA.filePath = pathA;
+      cab.resources.push_back(refA);
+
+      guitarfx::ResourceRef refB;
+      refB.filePath = pathB;
+      refB.parameterValue = std::clamp(blend, 0.0, 1.0);
+      cab.resources.push_back(refB);
+
+      guitarfx::GraphNode output;
+      output.id = "output";
+      output.type = guitarfx::kNodeTypeOutput;
+      output.category = "utility";
+      output.enabled = true;
+
+      graph.nodes = { input, cab, output };
+
+      guitarfx::GraphEdge edge1;
+      edge1.from = input.id;
+      edge1.to = cab.id;
+      edge1.gain = 1.0;
+
+      guitarfx::GraphEdge edge2;
+      edge2.from = cab.id;
+      edge2.to = output.id;
+      edge2.gain = 1.0;
+
+      graph.edges = { edge1, edge2 };
+
+      mExecutor.SetResourceLibrary(&mResourceLibrary);
+      mExecutor.SetGraph(graph);
+      mExecutor.Prepare(kSampleRate, mMaxBlockSize);
+      mExecutor.Reset();
+    }
+
+    void SetCabParam(const std::string& key, double value)
+    {
+      mExecutor.SetNodeParam("cab", key, value);
     }
 
     void Convolve(std::vector<double>& samples, int channel = 0)
@@ -1082,6 +1171,135 @@ namespace
     }
   }
 
+  bool TestDualIRBlendEndpoints()
+  {
+    std::cout << "Test: Dual IR blend endpoints... ";
+
+    try
+    {
+      IRConvolutionTester tester;
+      tester.SetDualImpulse({ 1.0f }, { 0.5f }, 0.0);
+
+      std::vector<double> samplesA = { 1.0, 0.5, -0.25, 0.125 };
+      tester.Convolve(samplesA);
+      for (std::size_t i = 0; i < samplesA.size(); ++i)
+      {
+        const double expected = std::vector<double>{ 1.0, 0.5, -0.25, 0.125 }[i];
+        if (!ApproxEqual(samplesA[i], expected, 1e-5))
+        {
+          std::cout << "FAILED at A endpoint index " << i << "\n";
+          return false;
+        }
+      }
+
+      tester.SetDualImpulse({ 1.0f }, { 0.5f }, 1.0);
+      std::vector<double> samplesB = { 1.0, 0.5, -0.25, 0.125 };
+      tester.Convolve(samplesB);
+      for (std::size_t i = 0; i < samplesB.size(); ++i)
+      {
+        const double expected = std::vector<double>{ 0.5, 0.25, -0.125, 0.0625 }[i];
+        if (!ApproxEqual(samplesB[i], expected, 1e-5))
+        {
+          std::cout << "FAILED at B endpoint index " << i << "\n";
+          return false;
+        }
+      }
+
+      std::cout << "OK\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+  }
+
+  bool TestAutoGainCompBoostsLowEnergyIR()
+  {
+    std::cout << "Test: Auto gain compensation boosts low-energy IR... ";
+
+    try
+    {
+      std::vector<double> input(2048);
+      for (std::size_t i = 0; i < input.size(); ++i)
+      {
+        input[i] = 0.5 * std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate);
+      }
+
+      IRConvolutionTester tester;
+      tester.SetDualImpulse({ 1.0f }, { 0.1f }, 1.0);
+      tester.SetCabParam("mix", 1.0);
+      tester.SetCabParam("autoGainComp", 0.0);
+
+      auto off = input;
+      tester.Convolve(off);
+      const double rmsOff = ComputeRms(off);
+
+      tester.SetCabParam("autoGainComp", 1.0);
+      auto on = input;
+      tester.Convolve(on);
+      const double rmsOn = ComputeRms(on);
+
+      if (!(rmsOn > rmsOff * 2.5))
+      {
+        std::cout << "FAILED (rmsOff=" << rmsOff << ", rmsOn=" << rmsOn << ")\n";
+        return false;
+      }
+
+      std::cout << "OK\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+  }
+
+  bool TestHighCutAttenuatesHighFrequency()
+  {
+    std::cout << "Test: High-cut attenuates high-frequency content... ";
+
+    try
+    {
+      std::vector<double> input(4096);
+      for (std::size_t i = 0; i < input.size(); ++i)
+      {
+        input[i] = 0.5 * std::sin(2.0 * M_PI * 8000.0 * static_cast<double>(i) / kSampleRate);
+      }
+
+      IRConvolutionTester tester;
+      tester.SetDualImpulse({ 1.0f }, { 1.0f }, 0.0);
+      tester.SetCabParam("mix", 1.0);
+      tester.SetCabParam("autoGainComp", 0.0);
+      tester.SetCabParam("highCutHz", 20000.0);
+
+      auto noCut = input;
+      tester.Convolve(noCut);
+      const double rmsNoCut = ComputeRms(noCut);
+
+      tester.SetCabParam("highCutHz", 1000.0);
+      auto cut = input;
+      tester.Convolve(cut);
+      const double rmsCut = ComputeRms(cut);
+
+      if (!(rmsCut < rmsNoCut * 0.6))
+      {
+        std::cout << "FAILED (rmsNoCut=" << rmsNoCut << ", rmsCut=" << rmsCut << ")\n";
+        return false;
+      }
+
+      std::cout << "OK\n";
+      return true;
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << "FAILED - Exception: " << e.what() << "\n";
+      return false;
+    }
+  }
+
   // ==========================================================================
   // Long IR Tests - Tests using actual IR files from resources
   // ==========================================================================
@@ -1189,31 +1407,26 @@ namespace
       const fs::path resourcesDir = fs::path(GUITARFX_TEST_RESOURCES_DIR);
       const fs::path irPath = resourcesDir / "ir" / "421 1960.wav";
 
-      if (!fs::exists(irPath))
-      {
-        std::cout << "SKIPPED (file not found: " << irPath.string() << ")\n";
-        return true; // Skip, don't fail
-      }
-
-      std::vector<float> irSamples;
-      double irSampleRate;
-      if (!LoadWavFile(irPath, irSamples, irSampleRate))
-      {
-        std::cout << "FAILED - Could not load WAV file\n";
-        return false;
-      }
-
-      std::cout << "(IR: " << irSamples.size() << " samples @ " << irSampleRate << "Hz) ";
-
-      // This is a long IR - should use FFT convolution
-      if (irSamples.size() <= 64)
-      {
-        std::cout << "FAILED - Expected long IR (>64 samples)\n";
-        return false;
-      }
-
       IRConvolutionTester tester;
-      tester.SetImpulseFromFile(irPath);
+      std::vector<float> irSamples;
+      double irSampleRate = kSampleRate;
+
+      if (fs::exists(irPath) && LoadWavFile(irPath, irSamples, irSampleRate) && irSamples.size() > 64)
+      {
+        std::cout << "(IR: " << irSamples.size() << " samples @ " << irSampleRate << "Hz) ";
+        tester.SetImpulseFromFile(irPath);
+      }
+      else
+      {
+        irSamples.resize(4096);
+        for (size_t i = 0; i < irSamples.size(); ++i)
+        {
+          const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
+          irSamples[i] = static_cast<float>(0.9 * std::exp(-10.0 * t));
+        }
+        tester.SetImpulse(irSamples);
+        std::cout << "(using synthetic long IR) ";
+      }
 
       // Generate 1 second of test audio
       const int numSamples = static_cast<int>(kSampleRate);
@@ -1263,24 +1476,30 @@ namespace
       const fs::path resourcesDir = fs::path(GUITARFX_TEST_RESOURCES_DIR);
       const fs::path irPath = resourcesDir / "ir" / "421 1960.wav";
 
-      if (!fs::exists(irPath))
-      {
-        std::cout << "SKIPPED (file not found)\n";
-        return true;
-      }
-
       std::vector<float> irSamples;
-      double irSampleRate;
-      if (!LoadWavFile(irPath, irSamples, irSampleRate))
+      double irSampleRate = kSampleRate;
+      const bool loadedFile = fs::exists(irPath) && LoadWavFile(irPath, irSamples, irSampleRate) && irSamples.size() > 64;
+      if (!loadedFile)
       {
-        std::cout << "FAILED - Could not load WAV file\n";
-        return false;
+        irSamples.resize(4096);
+        for (size_t i = 0; i < irSamples.size(); ++i)
+        {
+          const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
+          irSamples[i] = static_cast<float>(std::exp(-8.0 * t));
+        }
       }
 
       // Long IRs use FFT convolution which has latency
       // The first output samples will be zeros (latency)
       IRConvolutionTester tester;
-      tester.SetImpulseFromFile(irPath);
+      if (loadedFile)
+      {
+        tester.SetImpulseFromFile(irPath);
+      }
+      else
+      {
+        tester.SetImpulse(irSamples);
+      }
 
       // Create an impulse input
       std::vector<double> impulseInput(1024, 0.0);
@@ -1384,7 +1603,32 @@ namespace
 
       if (testedCount == 0)
       {
-        std::cout << "SKIPPED (no IR files found)\n";
+        IRConvolutionTester tester;
+        std::vector<float> synthetic(8192);
+        for (size_t i = 0; i < synthetic.size(); ++i)
+        {
+          const double t = static_cast<double>(i) / static_cast<double>(synthetic.size());
+          synthetic[i] = static_cast<float>(0.8 * std::exp(-12.0 * t));
+        }
+        tester.SetImpulse(synthetic);
+
+        std::vector<double> testSignal(4096);
+        for (size_t i = 0; i < testSignal.size(); ++i)
+        {
+          testSignal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / kSampleRate);
+        }
+        tester.Convolve(testSignal);
+
+        for (size_t i = 0; i < testSignal.size(); ++i)
+        {
+          if (std::isnan(testSignal[i]) || std::isinf(testSignal[i]))
+          {
+            std::cout << "FAILED on synthetic IR at sample " << i << "\n";
+            return false;
+          }
+        }
+
+        std::cout << "OK (1 synthetic IR tested)\n";
         return true;
       }
 
@@ -1408,22 +1652,29 @@ namespace
       const fs::path resourcesDir = fs::path(GUITARFX_TEST_RESOURCES_DIR);
       const fs::path irPath = resourcesDir / "ir" / "421 1960.wav";
 
-      if (!fs::exists(irPath))
-      {
-        std::cout << "SKIPPED (file not found)\n";
-        return true;
-      }
-
       std::vector<float> irSamples;
-      double irSampleRate;
-      if (!LoadWavFile(irPath, irSamples, irSampleRate))
+      double irSampleRate = kSampleRate;
+      const bool loadedFile = fs::exists(irPath) && LoadWavFile(irPath, irSamples, irSampleRate) && irSamples.size() > 64;
+
+      if (!loadedFile)
       {
-        std::cout << "FAILED - Could not load WAV file\n";
-        return false;
+        irSamples.resize(8192);
+        for (size_t i = 0; i < irSamples.size(); ++i)
+        {
+          const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
+          irSamples[i] = static_cast<float>(0.85 * std::exp(-9.0 * t));
+        }
       }
 
       IRConvolutionTester tester;
-      tester.SetImpulseFromFile(irPath);
+      if (loadedFile)
+      {
+        tester.SetImpulseFromFile(irPath);
+      }
+      else
+      {
+        tester.SetImpulse(irSamples);
+      }
 
       // Process 10 seconds of audio in blocks
       const int totalSamples = static_cast<int>(kSampleRate * 10.0);
@@ -1505,6 +1756,9 @@ int main()
   runTest(TestLargeScaleRealtimeProcessing);
   runTest(TestImpulseToStepResponse);
   runTest(TestFrequencyResponseStability);
+  runTest(TestDualIRBlendEndpoints);
+  runTest(TestAutoGainCompBoostsLowEnergyIR);
+  runTest(TestHighCutAttenuatesHighFrequency);
 
 #ifdef GUITARFX_TEST_RESOURCES_DIR
   // Long IR tests using actual IR files

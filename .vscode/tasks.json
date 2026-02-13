@@ -143,7 +143,7 @@
 			"command": "cmake",
 			"args": [
 				"--build",
-				"${workspaceFolder}/iplug2/src/build",
+				"${workspaceFolder}/core/build",
 				"--config",
 				"Debug"
 			],
@@ -155,12 +155,12 @@
 			"type": "shell",
 			"command": "ctest",
 			"args": [
-				"--build-config",
+				"-C",
 				"Debug",
 				"--output-on-failure"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/iplug2/src/src/build"
+				"cwd": "${workspaceFolder}/core/build"
 			},
 			"group": "test",
 			"problemMatcher": []

@@ -154,6 +154,7 @@ namespace guitarfx
       const double blend = hasB ? std::clamp(mIRBlend, 0.0, 1.0) : 0.0;
       const double slotAGain = (1.0 - blend) * mSlotAGain * (mSlotAPolarityInverted ? -1.0 : 1.0);
       const double slotBGain = blend * mSlotBGain * (mSlotBPolarityInverted ? -1.0 : 1.0);
+      const double autoCompGain = ComputeAutoCompGain(hasB, slotAGain, slotBGain);
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -194,6 +195,9 @@ namespace guitarfx
             mPrevConvolverBR.Reset();
           }
         }
+
+        wetL *= autoCompGain;
+        wetR *= autoCompGain;
 
         wetL = ProcessCabFilters(wetL, 0);
         wetR = ProcessCabFilters(wetR, 1);
@@ -238,6 +242,8 @@ namespace guitarfx
         mSlotAPolarityInverted = value > 0.5;
       else if (key == "slotBPolarity")
         mSlotBPolarityInverted = value > 0.5;
+      else if (key == "autoGainComp")
+        mAutoGainCompEnabled = value > 0.5;
       else if (key == "outputGain")
         mOutputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
       else if (key == "enabled")
@@ -280,6 +286,8 @@ namespace guitarfx
         return mSlotAPolarityInverted ? 1.0 : 0.0;
       if (key == "slotBPolarity")
         return mSlotBPolarityInverted ? 1.0 : 0.0;
+      if (key == "autoGainComp")
+        return mAutoGainCompEnabled ? 1.0 : 0.0;
       if (key == "outputGain")
         return 20.0 * std::log10(mOutputGain);
       if (key == "enabled")
@@ -577,7 +585,8 @@ namespace guitarfx
                                         bool isStereo,
                                         double impulseSampleRate,
                                         RealtimeConvolver &convolverL,
-                                        RealtimeConvolver &convolverR)
+                                        RealtimeConvolver &convolverR,
+                                        double *outEnergy = nullptr)
     {
       if (impulseL.empty() || mMaxBlockSize == 0)
         return false;
@@ -600,6 +609,11 @@ namespace guitarfx
           irwav::ResampleLinear(processedR, impulseSampleRate, mSampleRate);
         }
 
+        if (outEnergy)
+        {
+          *outEnergy = ComputeSignalEnergyStereo(processedL, processedR);
+        }
+
         if (!convolverL.SetImpulse(processedL, mMaxBlockSize) ||
             !convolverR.SetImpulse(processedR, mMaxBlockSize))
         {
@@ -617,6 +631,11 @@ namespace guitarfx
 
       if (std::abs(impulseSampleRate - mSampleRate) > 1.0)
         irwav::ResampleLinear(processedIR, impulseSampleRate, mSampleRate);
+
+      if (outEnergy)
+      {
+        *outEnergy = ComputeSignalEnergy(processedIR);
+      }
 
       if (!convolverL.SetImpulse(processedIR, mMaxBlockSize) ||
           !convolverR.SetImpulse(processedIR, mMaxBlockSize))
@@ -669,7 +688,8 @@ namespace guitarfx
         mIsStereo,
         mIRSampleRate,
         mConvolverL,
-        mConvolverR);
+        mConvolverR,
+        &mIRSlotEnergyA);
     }
 
     bool InitializeConvolverB()
@@ -680,7 +700,68 @@ namespace guitarfx
         mIsStereoB,
         mIRSampleRateB,
         mConvolverBL,
-        mConvolverBR);
+        mConvolverBR,
+        &mIRSlotEnergyB);
+    }
+
+    static double ComputeSignalEnergy(const std::vector<float> &samples)
+    {
+      if (samples.empty())
+        return 1.0;
+
+      double sum = 0.0;
+      for (const float sample : samples)
+      {
+        const double value = static_cast<double>(sample);
+        sum += value * value;
+      }
+
+      const double mean = sum / static_cast<double>(samples.size());
+      return std::max(1e-8, mean);
+    }
+
+    static double ComputeSignalEnergyStereo(const std::vector<float> &left,
+                                            const std::vector<float> &right)
+    {
+      const size_t count = std::min(left.size(), right.size());
+      if (count == 0)
+      {
+        return ComputeSignalEnergy(left.empty() ? right : left);
+      }
+
+      double sum = 0.0;
+      for (size_t i = 0; i < count; ++i)
+      {
+        const double l = static_cast<double>(left[i]);
+        const double r = static_cast<double>(right[i]);
+        sum += (l * l + r * r) * 0.5;
+      }
+
+      const double mean = sum / static_cast<double>(count);
+      return std::max(1e-8, mean);
+    }
+
+    double ComputeAutoCompGain(bool hasB, double slotAGain, double slotBGain) const
+    {
+      if (!mAutoGainCompEnabled)
+      {
+        return 1.0;
+      }
+
+      const double energyA = std::max(1e-8, mIRSlotEnergyA);
+      const double gainASq = slotAGain * slotAGain;
+      double blendedEnergy = gainASq * energyA;
+
+      if (hasB)
+      {
+        const double energyB = std::max(1e-8, mIRSlotEnergyB);
+        const double gainBSq = slotBGain * slotBGain;
+        blendedEnergy += gainBSq * energyB;
+      }
+
+      const double safeEnergy = std::max(1e-8, blendedEnergy);
+      const double gain = 1.0 / std::sqrt(safeEnergy);
+      return std::clamp(gain, 0.25, 4.0);
     }
 
     void ApplyPendingQuality()
@@ -828,7 +909,7 @@ namespace guitarfx
 
       const double nyquist = mSampleRate * 0.5;
       mLowCutActive = mLowCutHz > 20.5;
-      mHighCutActive = mHighCutHz < (nyquist - 100.0);
+      mHighCutActive = (mHighCutHz < 19999.5) && (mHighCutHz < (nyquist - 100.0));
 
       if (mLowCutActive)
       {
@@ -931,6 +1012,9 @@ namespace guitarfx
     bool mEnabled = true;
     IRQuality mQuality = IRQuality::Standard;
     std::atomic<int> mPendingQuality{-1};
+    bool mAutoGainCompEnabled = false;
+    double mIRSlotEnergyA = 1.0;
+    double mIRSlotEnergyB = 1.0;
     bool mHasLoadedResource = false;
     bool mPrevHasSlotA = false;
     bool mPrevHasSlotB = false;
@@ -975,6 +1059,7 @@ namespace guitarfx
         {"slotBGain", "IR B Level", 0.0, -24.0, 24.0, "dB"},
         {"slotAPolarity", "IR A Invert", 0.0, 0.0, 1.0, "toggle"},
         {"slotBPolarity", "IR B Invert", 0.0, 0.0, 1.0, "toggle"},
+        {"autoGainComp", "Auto Gain", 0.0, 0.0, 1.0, "toggle"},
         {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
       {"air", "Air", 0.0, 0.0, 1.0, "amount"},
       {"airMode", "Air Mode", 0.0, 0.0, 2.0, "enum"},
