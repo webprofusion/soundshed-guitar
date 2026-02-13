@@ -26,10 +26,14 @@ public:
 
 private:
     void timerCallback() override;
+    [[nodiscard]] juce::File getStandaloneWindowStateFile() const;
+    [[nodiscard]] juce::Rectangle<int> loadStandaloneWindowSize() const;
+    void saveStandaloneWindowSize() const;
 
     PluginProcessorAdapter& processorRef;
 
     juce::File resourceRoot;
+    juce::Rectangle<int> mLastWindowBounds;
 
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     juce::String getResourceRootUrl() const;

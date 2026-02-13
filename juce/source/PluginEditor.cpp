@@ -11,6 +11,22 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
+    bool isMacStandaloneAppExecutable()
+    {
+       #if JUCE_MAC
+        auto current = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+        while (current != juce::File())
+        {
+            const auto ext = current.getFileExtension().toLowerCase();
+            if (ext == ".app") return true;
+            if (ext == ".vst3" || ext == ".component" || ext == ".au") return false;
+            current = current.getParentDirectory();
+        }
+       #endif
+
+        return false;
+    }
+
     const char* getMimeForExtension (const juce::String& extension)
     {
         static const std::unordered_map<juce::String, const char*> mimeMap = {
@@ -135,7 +151,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 
     setResizable (true, true);
     setResizeLimits (1024, 768, 4096, 3072);
-    setSize (1600, 1200);
+    const auto initialSize = loadStandaloneWindowSize();
+    setSize (initialSize.getWidth(), initialSize.getHeight());
+    mLastWindowBounds = getBounds();
+    saveStandaloneWindowSize();
 
     // Start periodic idle timer (~60 fps) to match iPlug2's OnIdle() cadence.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.
@@ -144,8 +163,67 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 
 PluginEditor::~PluginEditor()
 {
+    saveStandaloneWindowSize();
     stopTimer();
     processorRef.setWebMessageCallback (nullptr);
+}
+
+juce::File PluginEditor::getStandaloneWindowStateFile() const
+{
+    if (! isMacStandaloneAppExecutable())
+        return {};
+
+    const auto userDataPath = processorRef.GetUserDataPath() / "window-state.json";
+    return juce::File (userDataPath.string());
+}
+
+juce::Rectangle<int> PluginEditor::loadStandaloneWindowSize() const
+{
+    constexpr int kDefaultWidth = 1600;
+    constexpr int kDefaultHeight = 1200;
+    constexpr int kMinWidth = 1024;
+    constexpr int kMinHeight = 768;
+    constexpr int kMaxWidth = 4096;
+    constexpr int kMaxHeight = 3072;
+
+    auto width = kDefaultWidth;
+    auto height = kDefaultHeight;
+
+    const auto stateFile = getStandaloneWindowStateFile();
+    if (stateFile.existsAsFile())
+    {
+        const auto parsed = juce::JSON::parse (stateFile.loadFileAsString());
+        if (auto* obj = parsed.getDynamicObject(); obj != nullptr)
+        {
+            const auto widthId = juce::Identifier { "width" };
+            const auto heightId = juce::Identifier { "height" };
+
+            if (obj->hasProperty (widthId))
+                width = static_cast<int> (obj->getProperty (widthId));
+
+            if (obj->hasProperty (heightId))
+                height = static_cast<int> (obj->getProperty (heightId));
+        }
+    }
+
+    width = juce::jlimit (kMinWidth, kMaxWidth, width);
+    height = juce::jlimit (kMinHeight, kMaxHeight, height);
+    return { 0, 0, width, height };
+}
+
+void PluginEditor::saveStandaloneWindowSize() const
+{
+    const auto stateFile = getStandaloneWindowStateFile();
+    if (stateFile == juce::File{})
+        return;
+
+    stateFile.getParentDirectory().createDirectory();
+
+    juce::DynamicObject::Ptr state (new juce::DynamicObject());
+    state->setProperty ("width", mLastWindowBounds.getWidth());
+    state->setProperty ("height", mLastWindowBounds.getHeight());
+    const auto payload = juce::JSON::toString (juce::var (state));
+    stateFile.replaceWithText (payload);
 }
 
 void PluginEditor::timerCallback()
@@ -201,4 +279,10 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     webView.setBounds (getLocalBounds());
+    const auto newBounds = getBounds();
+    if (newBounds != mLastWindowBounds)
+    {
+        mLastWindowBounds = newBounds;
+        saveStandaloneWindowSize();
+    }
 }
