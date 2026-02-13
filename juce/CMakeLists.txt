@@ -86,6 +86,7 @@ add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 juce_add_plugin("${PROJECT_NAME}"
     # Icons for the standalone app
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../core/ui/images/icon.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/../core/ui/images/icon_sm.png"
 
     # Change me!
     COMPANY_NAME "${COMPANY_NAME}"
