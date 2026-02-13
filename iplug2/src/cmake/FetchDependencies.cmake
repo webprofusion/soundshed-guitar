@@ -77,19 +77,6 @@ if(GUITARFX_FETCH_DEPENDENCIES)
     FetchContent_MakeAvailable(nlohmann_json)
   endif()
 
-  if(NOT TARGET httplib::httplib)
-    FetchContent_Declare(
-      cpp_httplib
-      GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-      GIT_TAG v0.15.3
-    )
-    FetchContent_MakeAvailable(cpp_httplib)
-    if(NOT TARGET httplib::httplib)
-      add_library(httplib::httplib INTERFACE IMPORTED)
-      target_include_directories(httplib::httplib INTERFACE ${cpp_httplib_SOURCE_DIR})
-    endif()
-  endif()
-
   # Signalsmith headers are provided transitively by SoundshedGuitarCore.
 
   if(NOT TARGET WebView2::Loader)

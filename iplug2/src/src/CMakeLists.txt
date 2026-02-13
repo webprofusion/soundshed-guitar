@@ -35,7 +35,6 @@ target_link_libraries(GuitarFXCore
   PUBLIC
     SoundshedGuitarCore
     nlohmann_json::nlohmann_json
-    httplib::httplib
 )
 
 target_compile_definitions(GuitarFXCore

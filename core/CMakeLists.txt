@@ -50,15 +50,6 @@ if(NOT DEFINED signalsmith_stretch_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     FetchContent_MakeAvailable(signalsmith_stretch)
 endif()
 
-# cpp-httplib — only needed by network module; consumer can skip it
-if(NOT TARGET httplib::httplib AND GUITARFX_CORE_FETCH_DEPS)
-    include(FetchContent)
-    FetchContent_Declare(httplib
-        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-        GIT_TAG v0.14.3)
-    FetchContent_MakeAvailable(httplib)
-endif()
-
 # NeuralAmpModelerCore + Eigen (used by NAM effects)
 if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam)
     include(FetchContent)
@@ -209,10 +200,6 @@ set(GUITARFX_CORE_SOURCES
     src/models/ModelHasher.h
     src/models/ModelHasher.cpp
 
-    # Network
-    src/network/PresetServiceClient.h
-    src/network/PresetServiceClient.cpp
-
     # Utilities
     src/util/Base64.h
     src/util/Base64.cpp
@@ -279,12 +266,6 @@ target_link_libraries(SoundshedGuitarCore
     PUBLIC
         nlohmann_json::nlohmann_json
 )
-
-# Optional: httplib (for network module)
-if(TARGET httplib::httplib)
-    target_link_libraries(SoundshedGuitarCore PUBLIC httplib::httplib)
-    target_compile_definitions(SoundshedGuitarCore PUBLIC GUITARFX_HAS_HTTPLIB=1)
-endif()
 
 # NeuralAmpModelerCore — consumer must provide this target or set include dirs
 if(TARGET NeuralAmpModelerCore)

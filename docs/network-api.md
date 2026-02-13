@@ -1,14 +1,13 @@
 # Network API
 
 ## Key Files
-- `src/src/network/PresetServiceClient.h` — HTTP client for remote preset service
 - `src/src/platform/vst3/` — VST3 wrapper implementation
 - `src/src/platform/au/` — Audio Unit wrapper (macOS)
 - `src/src/platform/app/` — Standalone application
 
 ## Overview
 
-This document covers the REST API for remote preset services, the network client implementation, and plugin format wrappers (VST3, AU, AAX, Standalone).
+This document covers plugin format wrappers (VST3, AU, AAX, Standalone).
 
 ---
 
@@ -117,49 +116,6 @@ Returns binary file with headers:
 Content-Type: application/octet-stream
 X-Content-Hash: sha256:abc123...
 ```
-
----
-
-## Network Client
-
-### Interface
-```cpp
-class PresetServiceClient {
-    SearchResult Search(const SearchQuery& query);
-    PresetPackage GetPreset(const std::string& id);
-    bool DownloadResource(const std::string& type, const std::string& id, const std::string& destPath);
-    ServiceStatus HealthCheck();
-};
-```
-
-### Configuration
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Timeout | 30s | Request timeout |
-| Retry Count | 3 | Automatic retries |
-| Retry Delay | 1s, 2s, 4s | Exponential backoff |
-
-### Caching
-
-| Layer | TTL | Storage |
-|-------|-----|---------|
-| Search results | 1 hour | In-memory |
-| Preset metadata | 24 hours | On-disk |
-| Resources | Permanent | Content-addressed on-disk |
-
-### Offline Mode
-- Search returns cached results only
-- Downloads queued for retry on connectivity
-- UI shows offline indicator
-
-### Rate Limiting
-
-| Endpoint | Limit |
-|----------|-------|
-| Search | 60/minute |
-| Get Preset | 120/minute |
-| Download | 30/minute |
 
 ---
 

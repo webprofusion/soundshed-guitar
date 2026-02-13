@@ -8,21 +8,19 @@ GuitarFX is a cross-format audio plugin (VST3/AU/AAX) powered by iPlug2 and the 
 - Configurable FX chain with noise gate, soft-saturation drive, and spectral tilt tone shaping
 - Convolution-based cabinet section powered by user-supplied impulse responses
 - Categorised preset system with JSON persistence and content-addressed resource deduplication
-- Remote preset search/download client with HTTP integration via cpp-httplib
 - WebView-driven UI (HTML/JS/CSS) with live parameter synchronisation and preset browsing
 
 ## Project Layout
 
 ```
 CMakeLists.txt
-cmake/FetchDependencies.cmake   # Dependency bootstrap (iPlug2, NAM Core, httplib, nlohmann::json)
+cmake/FetchDependencies.cmake   # Dependency bootstrap (iPlug2, NAM Core, nlohmann::json)
 config/GuitarFXConfig.h        # Plug-in metadata shared by all formats
 resources/ui/                   # WebView UI bundle (HTML/JS/CSS) and TypeScript source
 src/                            # Shared plug-in code
   GuitarFXPlugin.*              # Main iPlug2 plug-in implementation
   dsp/                          # Neural Amp + FX processing
   presets/                      # Preset management and storage
-  network/                      # Remote preset service client
   ui/                           # WebView bridge helpers
   util/                         # Filesystem helpers
   platform/                     # Format-specific wrapper targets (VST3/AU/AAX)
@@ -39,7 +37,7 @@ src/                            # Shared plug-in code
 >
 > The Steinberg VST3 SDK must be downloaded separately (see https://www.steinberg.net/vst3sdk) and extracted. Point `VST3_SDK_ROOT` at the extracted folder or drop it into `[_deps/iplug2-src/Dependencies/IPlug/VST3_SDK](./_deps/iplug2-src/Dependencies/IPlug/VST3_SDK)` before configuring.
 >
-> iPlug2 and NeuralAmpModelerCore are fetched automatically the first time you configure the project. The build will also fetch `nlohmann::json` and `cpp-httplib` for preset management and HTTP support.
+> iPlug2 and NeuralAmpModelerCore are fetched automatically the first time you configure the project. The build will also fetch `nlohmann::json` for preset management.
 
 ```powershell
 mkdir build
@@ -59,7 +57,7 @@ Presets are stored as JSON in the user data folder (`~/.guitarfx/`) and embed:
 - Parameter snapshots keyed by stable IDs (`input_trim`, `drive`, `tone`, etc.)
 - Optional attachment metadata for `.nam` models and impulse response files, content-addressed by SHA-256
 
-Remote presets can be searched via the HTTP client (`PresetServiceClient`). Configure the service endpoint by adjusting `mRemoteApiBaseUrl` inside `GuitarFXPlugin.cpp` or by extending the preset manager to read from user preferences.
+Preset operations are local-only in the C++ backend.
 
 ## Web UI Messaging
 
