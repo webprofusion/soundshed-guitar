@@ -1,5 +1,8 @@
+git submodule update --init --recursive
 
- git submodule update --init --recursive
+If `JUCE/` is still missing (some clones do not have gitlink entries for the submodule), fetch it manually:
+
+`git clone --depth 1 --branch develop https://github.com/juce-framework/JUCE.git JUCE`
 
  modify CmakeLists https://melatonin.dev/manuals/pamplejuce/getting-started/setting-your-project-up/
  
