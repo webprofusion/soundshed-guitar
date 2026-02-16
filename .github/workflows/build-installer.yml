@@ -108,6 +108,37 @@ jobs:
 
           Install-Package Microsoft.Web.WebView2 -Scope CurrentUser -RequiredVersion $packageVersion -Source nugetRepository -Force
 
+          $candidateRoots = @(
+            (Join-Path $env:USERPROFILE "AppData/Local/PackageManagement/NuGet/Packages"),
+            (Join-Path $env:USERPROFILE ".nuget/packages")
+          )
+
+          $webViewPackageDir = $null
+          foreach ($root in $candidateRoots) {
+            if (-Not (Test-Path $root)) {
+              continue
+            }
+
+            $found = Get-ChildItem -Path $root -Directory -Filter "*Microsoft.Web.WebView2*" -ErrorAction SilentlyContinue |
+              Where-Object { Test-Path (Join-Path $_.FullName "build/native/include/WebView2.h") } |
+              Select-Object -First 1
+
+            if ($found) {
+              $webViewPackageDir = $found.FullName
+              break
+            }
+          }
+
+          if (-Not $webViewPackageDir) {
+            throw "WebView2 package directory was not found after installation."
+          }
+
+          $webViewPackageLocation = Split-Path -Path $webViewPackageDir -Parent
+          "WEBVIEW2_PACKAGE_LOCATION=$webViewPackageLocation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WEBVIEW2_ROOT_DIR=$webViewPackageDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using WebView2 package location: $webViewPackageLocation"
+          Write-Host "Using WebView2 root dir: $webViewPackageDir"
+
       - name: Fetch ASIO SDK
         shell: pwsh
         run: |
@@ -136,7 +167,7 @@ jobs:
 
       - name: Configure JUCE CMake
         shell: pwsh
-        run: cmake -S juce -B juce/Builds -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR"
+        run: cmake -S juce -B juce/Builds -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$env:WEBVIEW2_PACKAGE_LOCATION" -DWebView2_root_dir="$env:WEBVIEW2_ROOT_DIR"
 
       - name: Build JUCE Release
         run: cmake --build juce/Builds --config Release
