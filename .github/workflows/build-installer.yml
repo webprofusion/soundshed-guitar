@@ -1,27 +1,47 @@
-name: Build Installer
+name: Build Installers
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Which installer to build
+        type: choice
+        default: both
+        options:
+          - both
+          - iplug2
+          - juce
 
 jobs:
-  build-installer:
+  build-installer-iplug2:
+    name: Build iPlug2 Installer
+    if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'iplug2' }}
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
 
       - name: Install Inno Setup
         run: choco install innosetup -y
 
       - name: Configure CMake
-        run: cmake -S src -B src/build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S iplug2/src -B src/build
 
       - name: Build UI
-        working-directory: src/resources/ui
+        working-directory: core/ui
         run: npm ci
 
       - name: Build UI bundle
-        working-directory: src/resources/ui
+        working-directory: core/ui
         run: npm run build
 
       - name: Build VST3 and App
@@ -33,5 +53,57 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: SoundshedGuitar-Installer
+          name: SoundshedGuitar-iPlug2-Installer
           path: installer/dist/*.exe
+
+  build-installer-juce:
+    name: Build JUCE Installer
+    if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'juce' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build UI
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Build UI bundle
+        working-directory: core/ui
+        run: npm run build
+
+      - name: Configure JUCE CMake
+        run: cmake -S juce -B juce/Builds
+
+      - name: Build JUCE Release
+        run: cmake --build juce/Builds --config Release
+
+      - name: Export JUCE build env
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "juce/.env")) {
+            throw "Expected juce/.env after configure, but it was not found."
+          }
+          Get-Content "juce/.env" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build JUCE Installer
+        working-directory: juce
+        run: iscc "packaging\installer.iss"
+
+      - name: Upload JUCE Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundshedGuitar-JUCE-Installer
+          path: juce/packaging/Output/*.exe
