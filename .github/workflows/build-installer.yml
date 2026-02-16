@@ -11,6 +11,10 @@ on:
           - both
           - iplug2
           - juce
+      asio_sdk_url:
+        description: Direct download URL for the Steinberg ASIO SDK zip
+        type: string
+        default: https://www.steinberg.net/asiosdk
 
 jobs:
   build-installer-iplug2:
@@ -93,8 +97,46 @@ jobs:
             git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
           }
 
+      - name: Install WebView2 NuGet package
+        shell: pwsh
+        run: |
+          $packageVersion = "1.0.3485.44"
+
+          if (-Not (Get-PackageSource -Name "nugetRepository" -ErrorAction SilentlyContinue)) {
+            Register-PackageSource -ProviderName NuGet -Name nugetRepository -Location "https://www.nuget.org/api/v2" -Trusted -Force
+          }
+
+          Install-Package Microsoft.Web.WebView2 -Scope CurrentUser -RequiredVersion $packageVersion -Source nugetRepository -Force
+
+      - name: Fetch ASIO SDK
+        shell: pwsh
+        run: |
+          $downloadUrl = "${{ github.event.inputs.asio_sdk_url }}"
+          $zipPath = Join-Path $env:RUNNER_TEMP "asio-sdk.zip"
+          $extractDir = Join-Path $env:RUNNER_TEMP "asio-sdk"
+
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -MaximumRedirection 10
+
+          try {
+            Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+          } catch {
+            throw "Failed to extract ASIO SDK zip from '$downloadUrl'. Provide a direct .zip download URL from Steinberg."
+          }
+
+          $asioSdkDir = Get-ChildItem -Path $extractDir -Directory -Recurse |
+            Where-Object { $_.Name -eq "ASIOSDK" } |
+            Select-Object -First 1
+
+          if (-Not $asioSdkDir) {
+            throw "ASIOSDK folder not found in extracted archive from '$downloadUrl'."
+          }
+
+          "ASIO_SDK_DIR=$($asioSdkDir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Detected ASIO SDK at $($asioSdkDir.FullName)"
+
       - name: Configure JUCE CMake
-        run: cmake -S juce -B juce/Builds
+        shell: pwsh
+        run: cmake -S juce -B juce/Builds -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR"
 
       - name: Build JUCE Release
         run: cmake --build juce/Builds --config Release

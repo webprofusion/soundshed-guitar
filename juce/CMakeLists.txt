@@ -62,8 +62,37 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core
 include(JUCEDefaults)
 
 # WebView2 static SDK package location (NuGet packages root)
-set(JUCE_WEBVIEW2_PACKAGE_LOCATION "C:/Users/chris/.nuget/packages")
-set(WebView2_root_dir "C:/Users/chris/.nuget/packages/microsoft.web.webview2/1.0.3179.45" CACHE PATH "" FORCE)
+if(WIN32)
+    if(DEFINED ENV{NUGET_PACKAGES} AND NOT "$ENV{NUGET_PACKAGES}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{NUGET_PACKAGES}" _nuget_packages_root)
+    elseif(DEFINED ENV{USERPROFILE} AND NOT "$ENV{USERPROFILE}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{USERPROFILE}/.nuget/packages" _nuget_packages_root)
+    else()
+        set(_nuget_packages_root "")
+    endif()
+
+    if(NOT DEFINED JUCE_WEBVIEW2_PACKAGE_LOCATION OR JUCE_WEBVIEW2_PACKAGE_LOCATION STREQUAL "")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${_nuget_packages_root}" CACHE PATH "WebView2 NuGet packages root")
+    endif()
+
+    if(NOT DEFINED WebView2_root_dir OR WebView2_root_dir STREQUAL "")
+        set(WebView2_root_dir "${JUCE_WEBVIEW2_PACKAGE_LOCATION}/microsoft.web.webview2/1.0.3485.44" CACHE PATH "WebView2 package directory")
+    endif()
+
+    set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)")
+    if(GUITARFX_ASIO_SDK_DIR STREQUAL "" AND DEFINED ENV{ASIO_SDK_DIR} AND NOT "$ENV{ASIO_SDK_DIR}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{ASIO_SDK_DIR}" _asio_sdk_dir_from_env)
+        set(GUITARFX_ASIO_SDK_DIR "${_asio_sdk_dir_from_env}" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)" FORCE)
+    endif()
+
+    if(NOT GUITARFX_ASIO_SDK_DIR STREQUAL "" AND EXISTS "${GUITARFX_ASIO_SDK_DIR}")
+        set(GUITARFX_JUCE_ASIO_ENABLED 1)
+    else()
+        set(GUITARFX_JUCE_ASIO_ENABLED 0)
+    endif()
+else()
+    set(GUITARFX_JUCE_ASIO_ENABLED 0)
+endif()
 
 # Force JUCE to work with sccache
 # instruct MSVC to embed debug info (/Z7) instead of emitting a .pdb
@@ -153,8 +182,7 @@ target_compile_definitions(SharedCode
     JUCE_VST3_CAN_REPLACE_VST2=0
 
     # Enable ASIO on Windows (requires Steinberg ASIO SDK)
-    JUCE_ASIO=1
-    JUCE_ASIO_PATH="C:/Work/GIT/ThirdParty/asio"
+    JUCE_ASIO=${GUITARFX_JUCE_ASIO_ENABLED}
 
     # Use WebView2 on Windows
     JUCE_USE_WIN_WEBVIEW2=1
@@ -170,6 +198,13 @@ target_compile_definitions(SharedCode
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
     PRODUCT_NAME_WITHOUT_VERSION="Pamplejuce"
 )
+
+if(GUITARFX_JUCE_ASIO_ENABLED)
+    target_compile_definitions(SharedCode
+        INTERFACE
+        JUCE_ASIO_PATH="${GUITARFX_ASIO_SDK_DIR}"
+    )
+endif()
 
 # Link to any other modules you added (with juce_add_module) here!
 # Usually JUCE modules must have PRIVATE visibility
