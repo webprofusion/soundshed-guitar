@@ -840,15 +840,15 @@ namespace guitarfx
       }
 
       // Option A (default): subtle high-shelf lift in the air band.
-      const double shelfGainDb = clamped * 6.0; // 0..+6 dB
-      const double shelfFreq = 9000.0;
+      const double shelfGainDb = clamped * 12.0; // 0..+12 dB
+      const double shelfFreq = 7000.0;
       const double shelfSlope = 0.7;
       ComputeHighShelf(shelfFreq, shelfSlope, shelfGainDb, mAirShelfB0, mAirShelfB1, mAirShelfB2, mAirShelfA1, mAirShelfA2);
 
       // Option B (optional): high-mid presence peak.
-      const double peakGainDb = clamped * 4.0; // 0..+4 dB
-      const double peakFreq = 4500.0;
-      const double peakQ = 1.2;
+      const double peakGainDb = clamped * 8.0; // 0..+8 dB
+      const double peakFreq = 3600.0;
+      const double peakQ = 1.8;
       ComputePeakingEQ(peakFreq, peakQ, peakGainDb, mAirPeakB0, mAirPeakB1, mAirPeakB2, mAirPeakA1, mAirPeakA2);
 
       // Option C (optional): shelf + peak combined (handled in ProcessAirSample).

@@ -241,7 +241,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
       { key: "slotBPolarity", name: "IR B Invert", default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
       { key: "autoGainComp", name: "Auto Gain", default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
       { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: true },
+      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: false },
       {
         key: "airMode",
         name: "Air Mode",
