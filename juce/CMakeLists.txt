@@ -16,10 +16,10 @@ set(PROJECT_NAME "SoundshedGuitar")
 #   set(PROJECT_NAME "MyPlugin_v${MAJOR_VERSION}")
 # Doing so enables major versions to show up in IDEs and DAWs as separate plugins
 # allowing you to change parameters and behavior without breaking existing user projects
-set(PRODUCT_NAME "SoundshedGuitar")
+set(PRODUCT_NAME "Soundshed Guitar")
 
 # Change me! Used for the MacOS bundle name and Installers
-set(COMPANY_NAME "soundshed.com")
+set(COMPANY_NAME "Soundshed")
 
 # Change me! Used for the MacOS bundle identifier (and signing)
 set(BUNDLE_ID "com.soundshed.guitar")
@@ -200,7 +200,7 @@ target_compile_definitions(SharedCode
     VERSION="${CURRENT_VERSION}"
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
-    PRODUCT_NAME_WITHOUT_VERSION="Pamplejuce"
+    PRODUCT_NAME_WITHOUT_VERSION="Soundshed Guitar"
 )
 
 if(GUITARFX_JUCE_ASIO_ENABLED)

@@ -9,8 +9,10 @@ set(res_dir "${contents_dir}/Resources")
 execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${arch_dir}")
 execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${res_dir}")
 
+get_filename_component(source_dll_name "${SOURCE_DLL}" NAME)
+
 execute_process(
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SOURCE_DLL}" "${arch_dir}/SoundshedGuitar.vst3"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SOURCE_DLL}" "${arch_dir}/${source_dll_name}"
   RESULT_VARIABLE copy_result
 )
 

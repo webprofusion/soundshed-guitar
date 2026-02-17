@@ -57,7 +57,7 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: SoundshedGuitar-iPlug2-Installer
+          name: Soundshed Guitar-iPlug2-Installer
           path: installer/dist/*.exe
 
   build-installer-juce:
@@ -213,7 +213,7 @@ jobs:
       - name: Upload JUCE Installer
         uses: actions/upload-artifact@v4
         with:
-          name: SoundshedGuitar-JUCE-Installer
+          name: Soundshed Guitar-JUCE-Installer
           path: juce/packaging/Output/*.exe
 
   build-juce-macos-dmg:

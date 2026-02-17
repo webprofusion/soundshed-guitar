@@ -79,7 +79,7 @@ if(MSVC)
 endif()
 
 set_target_properties(SoundshedGuitar_App PROPERTIES
-  OUTPUT_NAME SoundshedGuitar
+  OUTPUT_NAME "Soundshed Guitar"
   FOLDER "GuitarFX/Formats"
 )
 

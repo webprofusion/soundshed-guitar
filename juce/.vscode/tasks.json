@@ -39,7 +39,7 @@
         "/c",
         "start",
         "\"\"",
-        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Debug\\Standalone\\SoundshedGuitar.exe\""
+        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Debug\\Standalone\\Soundshed Guitar.exe\""
       ],
       "dependsOn": "Build Standalone (Release)",
       "problemMatcher": []
@@ -52,7 +52,7 @@
         "/c",
         "start",
         "\"\"",
-        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Release\\Standalone\\SoundshedGuitar.exe\""
+        "\"${workspaceFolder}\\build\\SoundshedGuitar_artefacts\\Release\\Standalone\\Soundshed Guitar.exe\""
       ],
       "dependsOn": "Build Standalone (Release)",
       "problemMatcher": []

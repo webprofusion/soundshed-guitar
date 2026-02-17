@@ -7,7 +7,7 @@
       "name": "Debug SoundshedGuitar App",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Debug/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Debug/Soundshed Guitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Debug",
@@ -19,7 +19,7 @@
       "name": "Run SoundshedGuitar App Release",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Release/Soundshed Guitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",
@@ -34,7 +34,7 @@
       "program": "${workspaceFolder}/src/build/tools/VST3DebugHost.exe",
       "args": [
        // "-w",
-        "${workspaceFolder}/src/build/SoundshedGuitar.vst3/Contents/x86_64-win/SoundshedGuitar.vst3"
+        "${workspaceFolder}/src/build/Soundshed Guitar.vst3/Contents/x86_64-win/Soundshed Guitar.vst3"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build",
@@ -60,7 +60,7 @@
       "name": "Launch SoundshedGuitar App (Release)",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/src/build/src/platform/app/Release/SoundshedGuitar.exe",
+      "program": "${workspaceFolder}/src/build/src/platform/app/Release/Soundshed Guitar.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/build/src/platform/app/Release",

@@ -1,15 +1,15 @@
 ; Inno Setup script for Soundshed Guitar
 ; Build outputs expected:
-;  - VST3 bundle: src\build\SoundshedGuitar.vst3
-;  - Standalone app: src\build\src\platform\app\Release\SoundshedGuitar.exe
+;  - VST3 bundle: src\build\Soundshed Guitar.vst3
+;  - Standalone app: src\build\src\platform\app\Release\Soundshed Guitar.exe
 ;  - Standalone resources: src\build\src\platform\app\Release\resources\
 
 #define AppName "Soundshed Guitar"
 #define AppPublisher "Soundshed"
 #define AppVersion "0.4.0"
 #define AppURL "https://soundshed.com"
-#define AppExeName "SoundshedGuitar.exe"
-#define Vst3BundleName "SoundshedGuitar.vst3"
+#define AppExeName "Soundshed Guitar.exe"
+#define Vst3BundleName "Soundshed Guitar.vst3"
 
 [Setup]
 AppId={{FBA4B6C7-3B1E-4B6C-9AE6-78B6F2E1F2F1}
