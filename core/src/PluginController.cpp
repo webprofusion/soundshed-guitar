@@ -2879,7 +2879,7 @@ void PluginController::HandleSaveBlendArchiveRequest(const nlohmann::json& paylo
 void PluginController::HandleSavePresetArchiveRequest(const nlohmann::json& payload)
 {
     const std::string dataEncoded = payload.value("data", "");
-    const std::string suggestedName = payload.value("fileName", "preset.soundshed.zip");
+    const std::string suggestedName = payload.value("fileName", "preset.soundshed.preset");
     if (dataEncoded.empty())
     { SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Missing export data"}}.dump()); return; }
 

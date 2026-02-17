@@ -416,7 +416,7 @@ void GuitarFXPluginAdapter::BrowseFileAsync(
                 filters = {{ L"Audio Files", L"*.wav;*.mp3;*.flac;*.ogg" }, { L"All Files", L"*.*" }};
                 break;
             case BrowseFileType::ArchiveFile:
-                filters = {{ L"Archive Files", L"*.zip" }, { L"All Files", L"*.*" }};
+                filters = {{ L"Preset Archives", L"*.soundshed.preset;*.soundshed.presets;*.zip" }, { L"All Files", L"*.*" }};
                 break;
             default:
                 filters = {{ L"All Files", L"*.*" }};
@@ -479,7 +479,7 @@ void GuitarFXPluginAdapter::SaveFileAsync(
                 filters = {{ L"JSON Files", L"*.json" }};
                 break;
             case BrowseFileType::ArchiveFile:
-                filters = {{ L"ZIP Archive", L"*.zip" }};
+                filters = {{ L"Preset Archive", L"*.soundshed.preset;*.soundshed.presets;*.zip" }};
                 break;
             default:
                 filters = {{ L"All Files", L"*.*" }};

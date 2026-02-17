@@ -12,7 +12,7 @@ Add SHA-256 hashes to all exported resources and de-duplicate imports by resourc
 - Hash matching is case-insensitive.
 
 ## Scope
-- Preset archive export/import (.soundshed.zip)
+- Preset archive export/import (.soundshed.preset for single preset, .soundshed.presets for multi-preset archives)
 - Blend archive export/import (.namz)
 - Library export (.soundshed-library.zip)
 - Resource library metadata persistence

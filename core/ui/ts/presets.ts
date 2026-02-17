@@ -4,7 +4,7 @@ import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views
 import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRender, setActivePresetDraft, setActivePresetSnapshot, setPresetDirty } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
-import { buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
+import { buildArchiveFileNameWithHash, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
 import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode } from "./types.js";
 import { createEmptyPresetV2 } from "./presetV2.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
@@ -2010,13 +2010,13 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
       missingCount += 1;
       continue;
     }
-    const fileName = buildArchiveFileName(resource, resourceType);
     const data = await requestResourceData(resourceType, resourceId);
     if (!data) {
       missingCount += 1;
       continue;
     }
     const hash = await sha256HexFromBase64(data);
+    const fileName = buildArchiveFileNameWithHash(resource, resourceType, hash);
     resourcesFolder.file(fileName, data, { base64: true });
     exportResources.push({
       id: resource.id,
@@ -2048,7 +2048,7 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
 
   postMessage({
     type: "savePresetArchive",
-    fileName: `${sanitizeFilename(archiveName)}.soundshed.zip`,
+    fileName: `${sanitizeFilename(archiveName)}.soundshed.presets`,
     data,
   });
 }
@@ -2110,12 +2110,12 @@ async function exportCurrentPresetArchive(): Promise<void> {
     if (!resource) {
       continue;
     }
-    const fileName = buildArchiveFileName(resource, resourceType);
     const data = await requestResourceData(resourceType, resourceId);
     if (!data) {
       continue;
     }
     const hash = await sha256HexFromBase64(data);
+    const fileName = buildArchiveFileNameWithHash(resource, resourceType, hash);
     resourcesFolder.file(fileName, data, { base64: true });
     exportResources.push({
       id: resource.id,
@@ -2140,7 +2140,7 @@ async function exportCurrentPresetArchive(): Promise<void> {
   const data = arrayBufferToBase64(buffer);
   postMessage({
     type: "savePresetArchive",
-    fileName: `${sanitizeFilename(preset.name || preset.id || "preset")}.soundshed.zip`,
+    fileName: `${sanitizeFilename(preset.name || preset.id || "preset")}.soundshed.preset`,
     data,
   });
 }
@@ -2155,16 +2155,36 @@ async function importPresetArchive(file: File): Promise<void> {
   const buffer = await file.arrayBuffer();
   const zip = await zipLib.loadAsync(buffer);
   const presetEntry = zip.file("preset.json");
-  if (!presetEntry) {
-    showNotification("Import failed", "Archive is missing preset.json");
+  const presetsEntry = zip.file("presets.json");
+  if (!presetEntry && !presetsEntry) {
+    showNotification("Import failed", "Archive is missing preset.json or presets.json");
     return;
   }
 
-  const presetText = await presetEntry.async("text");
-  const archive = JSON.parse(presetText) as PresetArchive;
-  if (!archive.preset) {
-    showNotification("Import failed", "Archive has no preset data");
-    return;
+  let resourcesToImport: PresetArchiveResource[] = [];
+  let blends: BlendDefinition[] = [];
+  let presetsToImport: Preset[] = [];
+
+  if (presetEntry) {
+    const presetText = await presetEntry.async("text");
+    const archive = JSON.parse(presetText) as PresetArchive;
+    if (!archive.preset) {
+      showNotification("Import failed", "Archive has no preset data");
+      return;
+    }
+    resourcesToImport = archive.resources ?? [];
+    blends = archive.blends ?? [];
+    presetsToImport = [archive.preset];
+  } else if (presetsEntry) {
+    const presetsText = await presetsEntry.async("text");
+    const archive = JSON.parse(presetsText) as PresetCollectionArchive;
+    if (!Array.isArray(archive.presets) || archive.presets.length === 0) {
+      showNotification("Import failed", "Archive has no presets data");
+      return;
+    }
+    resourcesToImport = archive.resources ?? [];
+    blends = archive.blends ?? [];
+    presetsToImport = archive.presets;
   }
 
   const zipFiles = Object.values(zip.files) as JSZipObject[];
@@ -2177,7 +2197,6 @@ async function importPresetArchive(file: File): Promise<void> {
   });
 
   const idMap = new Map<string, string>();
-  const resourcesToImport = archive.resources ?? [];
   for (const resource of resourcesToImport) {
     const fileName = resource.fileName ?? "";
     const existing = getLibraryResourceByHash(resource.type, resource.hash);
@@ -2214,7 +2233,6 @@ async function importPresetArchive(file: File): Promise<void> {
   }
 
   const blendIdMap = new Map<string, string>();
-  const blends = archive.blends ?? [];
   blends.forEach((blend) => {
     const newBlendId = generateResourceId(blend.id || blend.name || "blend");
     blendIdMap.set(blend.id, newBlendId);
@@ -2237,54 +2255,67 @@ async function importPresetArchive(file: File): Promise<void> {
     });
   });
 
-  const importedPreset = clonePreset(archive.preset);
-  importedPreset.id = generateResourceId(importedPreset.id || importedPreset.name || "preset");
-  importedPreset.name = importedPreset.name?.endsWith(" (Imported)")
-    ? importedPreset.name
-    : `${importedPreset.name || "Imported Preset"} (Imported)`;
+  const importedPresets: Preset[] = [];
+  for (const sourcePreset of presetsToImport) {
+    const importedPreset = clonePreset(sourcePreset);
+    importedPreset.id = generateResourceId(importedPreset.id || importedPreset.name || "preset");
+    importedPreset.name = importedPreset.name?.endsWith(" (Imported)")
+      ? importedPreset.name
+      : `${importedPreset.name || "Imported Preset"} (Imported)`;
 
-  if (importedPreset.graph?.nodes) {
-    importedPreset.graph.nodes.forEach((node) => {
-      if (Array.isArray(node.resources)) {
-        node.resources.forEach((res) => {
-          const resourceId = res.resourceId ?? res.id;
-          if (resourceId) {
-            const mapped = idMap.get(resourceId) ?? resourceId;
-            res.resourceId = mapped;
-            res.id = mapped;
-          }
-        });
-      }
-      if (node.config?.blendId) {
-        node.config.blendId = blendIdMap.get(node.config.blendId) ?? node.config.blendId;
-      }
-    });
+    if (importedPreset.graph?.nodes) {
+      importedPreset.graph.nodes.forEach((node) => {
+        if (Array.isArray(node.resources)) {
+          node.resources.forEach((res) => {
+            const resourceId = res.resourceId ?? res.id;
+            if (resourceId) {
+              const mapped = idMap.get(resourceId) ?? resourceId;
+              res.resourceId = mapped;
+              res.id = mapped;
+            }
+          });
+        }
+        if (node.config?.blendId) {
+          node.config.blendId = blendIdMap.get(node.config.blendId) ?? node.config.blendId;
+        }
+      });
+    }
+
+    if (importedPreset.audioFxModelId) {
+      importedPreset.audioFxModelId = idMap.get(importedPreset.audioFxModelId) ?? importedPreset.audioFxModelId;
+    }
+    if (importedPreset.irId) {
+      importedPreset.irId = idMap.get(importedPreset.irId) ?? importedPreset.irId;
+    }
+
+    if (Array.isArray(importedPreset.attachments)) {
+      importedPreset.attachments = importedPreset.attachments.map((attachment) => ({
+        ...attachment,
+        id: attachment.id ? (idMap.get(attachment.id) ?? attachment.id) : attachment.id,
+      }));
+    }
+
+    cachePresetInMemory(importedPreset);
+    uiState.presets.unshift(importedPreset);
+    addPresetToImportedFolder(importedPreset.id);
+    uiState.presetCache.set(importedPreset.id, importedPreset);
+    importedPresets.push(importedPreset);
   }
 
-  if (importedPreset.audioFxModelId) {
-    importedPreset.audioFxModelId = idMap.get(importedPreset.audioFxModelId) ?? importedPreset.audioFxModelId;
-  }
-  if (importedPreset.irId) {
-    importedPreset.irId = idMap.get(importedPreset.irId) ?? importedPreset.irId;
+  if (importedPresets.length === 0) {
+    showNotification("Import failed", "No presets were imported");
+    return;
   }
 
-  if (Array.isArray(importedPreset.attachments)) {
-    importedPreset.attachments = importedPreset.attachments.map((attachment) => ({
-      ...attachment,
-      id: attachment.id ? (idMap.get(attachment.id) ?? attachment.id) : attachment.id,
-    }));
-  }
-
-  cachePresetInMemory(importedPreset);
-  uiState.presets.unshift(importedPreset);
-  addPresetToImportedFolder(importedPreset.id);
   uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
-  uiState.presetCache.set(importedPreset.id, importedPreset);
-  uiState.activePresetId = importedPreset.id;
+  const latestPreset = importedPresets[importedPresets.length - 1];
+  uiState.activePresetId = latestPreset.id;
   populatePresetDropdown();
-  renderPresetUI(clonePreset(importedPreset));
+  renderPresetUI(clonePreset(latestPreset));
   updatePresetDropdownSelection();
-  showNotification("Preset imported", importedPreset.name ?? "");
+  showNotification(importedPresets.length === 1 ? "Preset imported" : "Presets imported", importedPresets.length === 1
+    ? (latestPreset.name ?? "")
+    : `${importedPresets.length} presets imported`);
   updatePresetActionButtons();
 }
 

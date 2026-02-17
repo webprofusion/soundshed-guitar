@@ -195,7 +195,7 @@ void PluginProcessorAdapter::BrowseFileAsync(
         case guitarfx::BrowseFileType::PresetFile:  filters = "*.json"; break;
         case guitarfx::BrowseFileType::ImageFile:   filters = "*.png;*.jpg;*.jpeg;*.svg"; break;
         case guitarfx::BrowseFileType::AudioFile:   filters = "*.wav;*.mp3;*.flac;*.ogg"; break;
-        case guitarfx::BrowseFileType::ArchiveFile: filters = "*.zip"; break;
+        case guitarfx::BrowseFileType::ArchiveFile: filters = "*.soundshed.preset;*.soundshed.presets;*.zip"; break;
         default:                                    filters = "*.*"; break;
     }
 
@@ -231,7 +231,7 @@ void PluginProcessorAdapter::SaveFileAsync(
     switch (type)
     {
         case guitarfx::BrowseFileType::PresetFile:  filters = "*.json"; break;
-        case guitarfx::BrowseFileType::ArchiveFile: filters = "*.zip"; break;
+        case guitarfx::BrowseFileType::ArchiveFile: filters = "*.soundshed.preset;*.soundshed.presets;*.zip"; break;
         default:                                    filters = "*.*"; break;
     }
 

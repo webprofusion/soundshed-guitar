@@ -25,6 +25,16 @@ export function buildArchiveFileName(resource: LibraryResource, resourceType: st
   return `${sanitizeFilename(resource.id || resource.name || "resource")}${ext}`;
 }
 
+export function buildArchiveFileNameWithHash(
+  resource: LibraryResource,
+  resourceType: string,
+  contentHash: string,
+): string {
+  const baseName = buildArchiveFileName(resource, resourceType);
+  const hashPrefix = sanitizeFilename((contentHash || "").trim().toLowerCase(), "resource");
+  return `${hashPrefix}-${baseName}`;
+}
+
 export function generateResourceId(seed: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
