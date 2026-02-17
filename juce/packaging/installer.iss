@@ -37,7 +37,7 @@ Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}Data"
 [Files]
 Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk; Flags: ignoreversion recursesubdirs; Components: vst3
 Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Flags: ignoreversion; Components: standalone
+Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Flags: ignoreversion recursesubdirs; Components: standalone
 
 [Icons]
 Name: "{autoprograms}\{#ProductName}"; Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone
