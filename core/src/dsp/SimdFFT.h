@@ -21,12 +21,18 @@
 #include <cstring>
 #include <memory>
 
-#ifdef _MSC_VER
-#include <intrin.h>
-#include <malloc.h>
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+#define GUITARFX_ARCH_X86 1
+#endif
+
+#if defined(GUITARFX_ARCH_X86) && defined(_MSC_VER)
+  #include <intrin.h>
+  #include <malloc.h>
+#elif defined(GUITARFX_ARCH_X86)
+  #include <x86intrin.h>
+  #include <cstdlib>
 #else
-#include <x86intrin.h>
-#include <cstdlib>
+  #include <cstdlib>
 #endif
 
 #ifndef M_PI
@@ -170,6 +176,7 @@ namespace guitarfx
         const std::complex<double> *b,
         size_t count)
     {
+  #if defined(GUITARFX_ARCH_X86)
       // Process 2 complex numbers at a time using SSE2
       // Each complex = 2 doubles, so we process 4 doubles = 2 __m128d
 
@@ -226,6 +233,12 @@ namespace guitarfx
       {
         acc[i] += a[i] * b[i];
       }
+#else
+      for (size_t i = 0; i < count; ++i)
+      {
+        acc[i] += a[i] * b[i];
+      }
+#endif
     }
 
     /**
@@ -236,6 +249,7 @@ namespace guitarfx
       double *p = reinterpret_cast<double *>(buffer);
       const size_t doubleCount = count * 2;
 
+#if defined(GUITARFX_ARCH_X86)
       __m128d zero = _mm_setzero_pd();
 
       size_t i = 0;
@@ -250,6 +264,12 @@ namespace guitarfx
       {
         p[i] = 0.0;
       }
+#else
+      for (size_t i = 0; i < doubleCount; ++i)
+      {
+        p[i] = 0.0;
+      }
+#endif
     }
 
     [[nodiscard]] size_t GetSize() const noexcept { return mSize; }
@@ -335,6 +355,7 @@ namespace guitarfx
           // SIMD butterfly processing
           size_t j = 0;
 
+#if defined(GUITARFX_ARCH_X86)
           // Process pairs of butterflies using SSE2
           for (; j + 1 < halfM; j += 2)
           {
@@ -393,6 +414,7 @@ namespace guitarfx
             _mm_storeu_pd(data + idx1, y1_lo);
             _mm_storeu_pd(data + idx1h, y1_hi);
           }
+#endif
 
           // Handle remaining butterfly (if halfM is odd)
           for (; j < halfM; ++j)

@@ -8,29 +8,35 @@
 #include <cmath>
 #include <cstdint>
 
-// Platform detection
-#if defined(_MSC_VER)
-  #include <intrin.h>
-  #define GUITARFX_MSVC 1
-#elif defined(__GNUC__) || defined(__clang__)
-  #include <x86intrin.h>
-  #define GUITARFX_GCC_CLANG 1
+// Architecture and platform detection
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+  #define GUITARFX_ARCH_X86 1
+#endif
+
+#if defined(GUITARFX_ARCH_X86)
+  #if defined(_MSC_VER)
+    #include <intrin.h>
+    #define GUITARFX_MSVC 1
+  #elif defined(__GNUC__) || defined(__clang__)
+    #include <x86intrin.h>
+    #define GUITARFX_GCC_CLANG 1
+  #endif
 #endif
 
 // SIMD feature detection
-#if defined(__AVX2__) || (defined(_MSC_VER) && defined(__AVX2__))
+#if defined(GUITARFX_ARCH_X86) && (defined(__AVX2__) || (defined(_MSC_VER) && defined(__AVX2__)))
   #define GUITARFX_HAS_AVX2 1
 #endif
 
-#if defined(__AVX__) || (defined(_MSC_VER) && defined(__AVX__))
+#if defined(GUITARFX_ARCH_X86) && (defined(__AVX__) || (defined(_MSC_VER) && defined(__AVX__)))
   #define GUITARFX_HAS_AVX 1
 #endif
 
-#if defined(__SSE4_1__) || defined(__SSE4_2__) || (defined(_MSC_VER) && (defined(__SSE4_1__) || defined(__SSE4_2__)))
+#if defined(GUITARFX_ARCH_X86) && (defined(__SSE4_1__) || defined(__SSE4_2__) || (defined(_MSC_VER) && (defined(__SSE4_1__) || defined(__SSE4_2__))))
   #define GUITARFX_HAS_SSE4 1
 #endif
 
-#if defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64))
+#if defined(GUITARFX_ARCH_X86) && (defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64)))
   #define GUITARFX_HAS_SSE2 1
 #endif
 

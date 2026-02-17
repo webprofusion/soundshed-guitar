@@ -217,9 +217,22 @@ jobs:
           path: juce/packaging/Output/*.exe
 
   build-juce-macos-dmg:
-    name: Build JUCE macOS DMG
+    name: Build JUCE macOS (${{ matrix.variant }})
     if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'juce' }}
     runs-on: macos-latest
+    env:
+      DMG_NAME: ""
+      DMG_PATH: ""
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: arm64-check
+            cmake_architectures: arm64
+            package_dmg: false
+          - variant: universal
+            cmake_architectures: arm64;x86_64
+            package_dmg: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -259,7 +272,7 @@ jobs:
           fi
 
       - name: Configure JUCE CMake
-        run: cmake -S juce -B juce/Builds -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+        run: cmake -S juce -B juce/Builds -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake_architectures }}"
 
       - name: Build JUCE Standalone Release
         run: cmake --build juce/Builds --config Release --target SoundshedGuitar_Standalone
@@ -273,6 +286,7 @@ jobs:
           cat juce/.env >> "$GITHUB_ENV"
 
       - name: Create DMG
+        if: ${{ matrix.package_dmg }}
         run: |
           APP_PATH="juce/Builds/${PROJECT_NAME}_artefacts/Release/Standalone/${PRODUCT_NAME}.app"
           if [ ! -d "$APP_PATH" ]; then
@@ -291,6 +305,7 @@ jobs:
           echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Upload macOS DMG
+        if: ${{ matrix.package_dmg }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DMG_NAME }}
