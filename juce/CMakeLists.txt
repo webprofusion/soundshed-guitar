@@ -63,6 +63,9 @@ include(JUCEDefaults)
 
 # WebView2 static SDK package location (NuGet packages root)
 if(WIN32)
+    set(GUITARFX_WEBVIEW2_VERSION "1.0.3485.44" CACHE STRING "WebView2 NuGet package version")
+    option(GUITARFX_AUTO_INSTALL_WEBVIEW2 "Auto-download WebView2 NuGet package when missing" ON)
+
     set(_nuget_packages_root "")
 
     if(DEFINED ENV{JUCE_WEBVIEW2_PACKAGE_LOCATION} AND NOT "$ENV{JUCE_WEBVIEW2_PACKAGE_LOCATION}" STREQUAL "")
@@ -80,7 +83,37 @@ if(WIN32)
     endif()
 
     if((NOT DEFINED WebView2_root_dir OR WebView2_root_dir STREQUAL "") AND NOT JUCE_WEBVIEW2_PACKAGE_LOCATION STREQUAL "")
-        set(WebView2_root_dir "${JUCE_WEBVIEW2_PACKAGE_LOCATION}/microsoft.web.webview2/1.0.3485.44" CACHE PATH "WebView2 package directory")
+        set(WebView2_root_dir "${JUCE_WEBVIEW2_PACKAGE_LOCATION}/microsoft.web.webview2/${GUITARFX_WEBVIEW2_VERSION}" CACHE PATH "WebView2 package directory")
+    endif()
+
+    set(_webview2_header_hint "${WebView2_root_dir}/build/native/include/WebView2.h")
+    if((NOT DEFINED WebView2_root_dir OR WebView2_root_dir STREQUAL "" OR NOT EXISTS "${_webview2_header_hint}") AND GUITARFX_AUTO_INSTALL_WEBVIEW2)
+        set(_webview2_download_root "${CMAKE_BINARY_DIR}/_deps/microsoft.web.webview2/${GUITARFX_WEBVIEW2_VERSION}")
+        set(_webview2_header_downloaded "${_webview2_download_root}/build/native/include/WebView2.h")
+
+        if(NOT EXISTS "${_webview2_header_downloaded}")
+            file(MAKE_DIRECTORY "${_webview2_download_root}")
+            set(_webview2_nupkg "${CMAKE_BINARY_DIR}/_deps/microsoft.web.webview2.${GUITARFX_WEBVIEW2_VERSION}.nupkg")
+            file(DOWNLOAD
+                "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/${GUITARFX_WEBVIEW2_VERSION}"
+                "${_webview2_nupkg}"
+                STATUS _webview2_download_status
+                SHOW_PROGRESS
+                TLS_VERIFY ON)
+
+            list(GET _webview2_download_status 0 _webview2_download_code)
+            if(_webview2_download_code EQUAL 0)
+                file(ARCHIVE_EXTRACT INPUT "${_webview2_nupkg}" DESTINATION "${_webview2_download_root}")
+            else()
+                list(GET _webview2_download_status 1 _webview2_download_message)
+                message(WARNING "WebView2 NuGet auto-download failed: ${_webview2_download_message}")
+            endif()
+        endif()
+
+        if(EXISTS "${_webview2_header_downloaded}")
+            set(WebView2_root_dir "${_webview2_download_root}" CACHE PATH "WebView2 package directory" FORCE)
+            message(STATUS "Using auto-downloaded WebView2 package at ${WebView2_root_dir}")
+        endif()
     endif()
 
     set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)")
