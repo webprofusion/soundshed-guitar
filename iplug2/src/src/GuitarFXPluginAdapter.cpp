@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -472,6 +473,16 @@ void GuitarFXPluginAdapter::SaveFileAsync(
                                        IID_PPV_ARGS(&dialog));
         if (FAILED(hr)) { callback(result); return; }
 
+        auto normalizedDefaultName = defaultName;
+        std::transform(normalizedDefaultName.begin(), normalizedDefaultName.end(), normalizedDefaultName.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+        const auto hasSuffix = [&normalizedDefaultName](std::string_view suffix)
+        {
+            return normalizedDefaultName.size() >= suffix.size()
+                && normalizedDefaultName.compare(normalizedDefaultName.size() - suffix.size(), suffix.size(), suffix) == 0;
+        };
+
         std::vector<COMDLG_FILTERSPEC> filters;
         switch (type)
         {
@@ -479,7 +490,14 @@ void GuitarFXPluginAdapter::SaveFileAsync(
                 filters = {{ L"JSON Files", L"*.json" }};
                 break;
             case BrowseFileType::ArchiveFile:
-                filters = {{ L"Preset Archive", L"*.soundshed.preset;*.soundshed.presets;*.zip" }};
+                if (hasSuffix(".soundshed.preset"))
+                    filters = {{ L"Preset Archive", L"*.soundshed.preset" }};
+                else if (hasSuffix(".soundshed.presets"))
+                    filters = {{ L"Preset Archives", L"*.soundshed.presets" }};
+                else if (hasSuffix(".zip"))
+                    filters = {{ L"ZIP Archives", L"*.zip" }};
+                else
+                    filters = {{ L"Preset Archive", L"*.soundshed.preset" }};
                 break;
             default:
                 filters = {{ L"All Files", L"*.*" }};

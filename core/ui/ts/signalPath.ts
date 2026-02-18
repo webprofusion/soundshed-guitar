@@ -956,13 +956,28 @@ function renderGraphSignalPath(preset: Preset): void {
     const html = `
       <div class="parallel-container" data-splitter-id="${splitterId}" data-mixer-id="${joinId}">
         <div class="parallel-split">
-          <div class="split-icon">⤵️</div>
+          <div class="split-icon" aria-hidden="true">
+            <svg class="parallel-flow-icon" viewBox="0 0 24 24" role="presentation" focusable="false">
+              <path d="M4 12h6" />
+              <path d="M10 12c3 0 4-2 8-5" />
+              <path d="M10 12c3 0 4 2 8 5" />
+              <path d="M16 6l2 1-1 2" />
+              <path d="M16 16l2 1-1 2" />
+            </svg>
+          </div>
         </div>
         <div class="parallel-branches">
           ${branchesHtml}
         </div>
         <div class="parallel-join">
-          <div class="join-icon">⤴️</div>
+          <div class="join-icon" aria-hidden="true">
+            <svg class="parallel-flow-icon" viewBox="0 0 24 24" role="presentation" focusable="false">
+              <path d="M6 7c3 1 4 3 8 5" />
+              <path d="M6 17c3-1 4-3 8-5" />
+              <path d="M14 12h6" />
+              <path d="M18 10l2 2-2 2" />
+            </svg>
+          </div>
           ${canCollapse ? `<button class="parallel-collapse-btn" data-splitter-id="${splitterId}" data-mixer-id="${joinId}" title="Collapse split (only if empty)">×</button>` : ""}
         </div>
       </div>

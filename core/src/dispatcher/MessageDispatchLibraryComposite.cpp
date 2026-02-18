@@ -18,6 +18,11 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
         c.HandleImportRemoteResourceRequest(msg);
         return true;
     }
+    if (type == "importToneSharingPack")
+    {
+        c.HandleImportToneSharingPackRequest(msg);
+        return true;
+    }
     if (type == "previewRemoteResource")
     {
         c.HandlePreviewRemoteResourceRequest(msg);

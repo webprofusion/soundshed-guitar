@@ -59,42 +59,24 @@ CREATE TABLE IF NOT EXISTS items (
   creator_user_id TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('preset', 'blend', 'layout', 'composite', 'combo')),
   title TEXT NOT NULL,
-  description TEXT,
-  visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'unlisted', 'private')),
   moderation_status TEXT NOT NULL DEFAULT 'draft' CHECK (moderation_status IN ('draft', 'pending_review', 'approved', 'rejected')),
-  app_min_version TEXT,
-  app_max_version TEXT,
-  payload_asset_id TEXT,
-  manifest_asset_id TEXT,
-  thumbnail_asset_id TEXT,
-  preview_asset_id TEXT,
-  download_count INTEGER NOT NULL DEFAULT 0,
-  avg_rating REAL NOT NULL DEFAULT 0,
-  rating_count INTEGER NOT NULL DEFAULT 0,
+  config_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
-  FOREIGN KEY (creator_user_id) REFERENCES users(id),
-  FOREIGN KEY (payload_asset_id) REFERENCES assets(id),
-  FOREIGN KEY (manifest_asset_id) REFERENCES assets(id),
-  FOREIGN KEY (thumbnail_asset_id) REFERENCES assets(id),
-  FOREIGN KEY (preview_asset_id) REFERENCES assets(id)
+  FOREIGN KEY (creator_user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS packs (
   id TEXT PRIMARY KEY,
   creator_user_id TEXT NOT NULL,
   title TEXT NOT NULL,
-  description TEXT,
   moderation_status TEXT NOT NULL DEFAULT 'draft' CHECK (moderation_status IN ('draft', 'pending_review', 'approved', 'rejected')),
-  zip_asset_id TEXT,
-  thumbnail_asset_id TEXT,
+  config_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
-  FOREIGN KEY (creator_user_id) REFERENCES users(id),
-  FOREIGN KEY (zip_asset_id) REFERENCES assets(id),
-  FOREIGN KEY (thumbnail_asset_id) REFERENCES assets(id)
+  FOREIGN KEY (creator_user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS pack_items (

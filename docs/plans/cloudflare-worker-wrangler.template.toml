@@ -5,7 +5,7 @@ compatibility_date = "2026-02-17"
 workers_dev = false
 
 routes = [
-  { pattern = "api.soundshed.com/*", zone_name = "soundshed.com" }
+  { pattern = "api.guitar.soundshed.com/*", zone_name = "soundshed.com" }
 ]
 
 [vars]
@@ -15,7 +15,6 @@ COOKIE_NAME = "ss_session"
 SESSION_TTL_SECONDS = "2592000"
 MAGIC_LINK_TTL_SECONDS = "900"
 SIGNED_URL_TTL_SECONDS = "300"
-TURNSTILE_SITE_KEY = "replace-me"
 
 [[d1_databases]]
 binding = "DB"
@@ -57,7 +56,6 @@ COOKIE_NAME = "ss_session_dev"
 SESSION_TTL_SECONDS = "2592000"
 MAGIC_LINK_TTL_SECONDS = "900"
 SIGNED_URL_TTL_SECONDS = "300"
-TURNSTILE_SITE_KEY = "replace-me"
 
 [[env.dev.d1_databases]]
 binding = "DB"

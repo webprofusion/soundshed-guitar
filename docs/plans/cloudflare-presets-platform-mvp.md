@@ -33,7 +33,7 @@
 
 ### Flow
 
-1. `POST /auth/start` with email + Turnstile token.
+1. `POST /auth/start` with email.
 2. Worker generates one-time login token, stores **hash** in `auth_tokens`.
 3. Worker sends link/code via email provider.
 4. `POST /auth/verify` validates token and expiry, marks token used.
@@ -108,7 +108,6 @@
 
 ## Security baseline
 
-- Turnstile on auth start + upload init + report endpoints.
 - Signed R2 URLs with short expiry (2-5 minutes).
 - Per-IP and per-user rate limiting in Worker.
 - Token hashing at rest; no plaintext one-time tokens in D1.

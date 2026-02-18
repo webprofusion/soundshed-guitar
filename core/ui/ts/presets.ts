@@ -11,6 +11,7 @@ import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
 import { showConfirm } from "./dialogs.js";
+import { isToneSharingSignedIn, openToneSharingPublishPresetModal } from "./toneSharingPanel.js";
 
 const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
 const presetFavoriteToggle = document.getElementById("preset-favorite");
@@ -1446,6 +1447,83 @@ function getActivePresetIndex(): number {
   return uiState.presets.findIndex((p) => p.id === uiState.activePresetId);
 }
 
+const exportChooserId = "preset-export-chooser";
+
+function getOrCreateExportChooser(): HTMLDivElement {
+  let chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
+  if (chooser) {
+    return chooser;
+  }
+
+  chooser = document.createElement("div");
+  chooser.id = exportChooserId;
+  chooser.className = "preset-export-chooser";
+  chooser.setAttribute("role", "menu");
+  chooser.setAttribute("aria-hidden", "true");
+
+  const exportItem = document.createElement("button");
+  exportItem.type = "button";
+  exportItem.className = "preset-export-chooser-item";
+  exportItem.dataset.action = "export";
+  exportItem.textContent = "Export Preset File…";
+  chooser.appendChild(exportItem);
+
+  const publishItem = document.createElement("button");
+  publishItem.type = "button";
+  publishItem.className = "preset-export-chooser-item";
+  publishItem.dataset.action = "publish";
+  publishItem.textContent = "Publish Preset…";
+  chooser.appendChild(publishItem);
+
+  chooser.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(".preset-export-chooser-item");
+    if (!button || button.disabled) {
+      return;
+    }
+
+    const action = button.dataset.action;
+    closeExportChooser();
+
+    if (action === "export") {
+      void exportCurrentPresetArchive();
+      return;
+    }
+
+    if (action === "publish") {
+      const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+      openToneSharingPublishPresetModal(activePreset?.name ?? "", activePreset?.description ?? "");
+    }
+  });
+
+  document.body.appendChild(chooser);
+  return chooser;
+}
+
+function closeExportChooser(): void {
+  const chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
+  if (!chooser) {
+    return;
+  }
+  chooser.classList.remove("open");
+  chooser.setAttribute("aria-hidden", "true");
+}
+
+function openExportChooser(anchor: HTMLElement): void {
+  const chooser = getOrCreateExportChooser();
+  const publishItem = chooser.querySelector<HTMLButtonElement>('[data-action="publish"]');
+  const signedIn = isToneSharingSignedIn();
+  if (publishItem) {
+    publishItem.disabled = !signedIn;
+    publishItem.title = signedIn ? "Publish preset" : "Sign in to Tone Sharing to publish";
+  }
+
+  const anchorRect = anchor.getBoundingClientRect();
+  chooser.style.left = `${Math.max(8, anchorRect.left + window.scrollX)}px`;
+  chooser.style.top = `${anchorRect.bottom + window.scrollY + 6}px`;
+  chooser.classList.add("open");
+  chooser.setAttribute("aria-hidden", "false");
+}
+
 export async function selectPreviousPreset(): Promise<void> {
   if (!uiState.presets.length) return;
 
@@ -2046,9 +2124,19 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
     showNotification("Export warning", `${missingCount} resources could not be read`);
   }
 
+  const normalizeArchiveExportBaseName = (raw: string, fallback: string): string => {
+    let normalized = sanitizeFilename(raw, fallback);
+    const suffixPattern = /\.(?:soundshed\.(?:preset|presets)|zip)$/i;
+    while (suffixPattern.test(normalized)) {
+      normalized = normalized.replace(suffixPattern, "");
+    }
+    normalized = normalized.replace(/\.+$/, "");
+    return normalized || fallback;
+  };
+
   postMessage({
     type: "savePresetArchive",
-    fileName: `${sanitizeFilename(archiveName)}.soundshed.presets`,
+    fileName: `${normalizeArchiveExportBaseName(archiveName, "presets")}.soundshed.presets`,
     data,
   });
 }
@@ -2138,9 +2226,19 @@ async function exportCurrentPresetArchive(): Promise<void> {
   const blob = await zip.generateAsync({ type: "blob" });
   const buffer = await blob.arrayBuffer();
   const data = arrayBufferToBase64(buffer);
+  const normalizeArchiveExportBaseName = (raw: string, fallback: string): string => {
+    let normalized = sanitizeFilename(raw, fallback);
+    const suffixPattern = /\.(?:soundshed\.(?:preset|presets)|zip)$/i;
+    while (suffixPattern.test(normalized)) {
+      normalized = normalized.replace(suffixPattern, "");
+    }
+    normalized = normalized.replace(/\.+$/, "");
+    return normalized || fallback;
+  };
+
   postMessage({
     type: "savePresetArchive",
-    fileName: `${sanitizeFilename(preset.name || preset.id || "preset")}.soundshed.preset`,
+    fileName: `${normalizeArchiveExportBaseName(preset.name || preset.id || "preset", "preset")}.soundshed.preset`,
     data,
   });
 }
@@ -2528,7 +2626,7 @@ export function updatePresetActionButtons(): void {
   }
   if (exportBtn) {
     exportBtn.disabled = !uiState.activePresetId;
-    exportBtn.title = uiState.activePresetId ? "Export Preset" : "No preset to export";
+    exportBtn.title = uiState.activePresetId ? "Export or Publish Preset" : "No preset to export";
   }
 }
 
@@ -2584,7 +2682,20 @@ export function initializePresetActionButtons(): void {
   }
 
   if (exportBtn) {
-    exportBtn.addEventListener("click", () => void exportCurrentPresetArchive());
+    exportBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if ((exportBtn as HTMLButtonElement).disabled) {
+        return;
+      }
+
+      const chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
+      if (chooser?.classList.contains("open")) {
+        closeExportChooser();
+        return;
+      }
+
+      openExportChooser(exportBtn as HTMLElement);
+    });
   }
 
   if (importBtn) {
@@ -2602,5 +2713,23 @@ export function initializePresetActionButtons(): void {
   }
 
   // Initial state
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      closeExportChooser();
+      return;
+    }
+    if (target.closest(`#${exportChooserId}`) || target.closest("#preset-export-btn")) {
+      return;
+    }
+    closeExportChooser();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeExportChooser();
+    }
+  });
+
   updatePresetActionButtons();
 }

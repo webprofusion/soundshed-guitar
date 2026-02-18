@@ -219,6 +219,7 @@ private:
     void HandleReorderSignalPathNodeRequest(const nlohmann::json& payload);
     void HandleDeleteSignalPathNodeRequest(const nlohmann::json& payload);
     void HandleImportRemoteResourceRequest(const nlohmann::json& payload);
+    void HandleImportToneSharingPackRequest(const nlohmann::json& payload);
     void HandlePreviewRemoteResourceRequest(const nlohmann::json& payload);
     void HandleCancelPreviewResourceRequest(const nlohmann::json& payload);
     void HandleSaveBlendDefinitionRequest(const nlohmann::json& payload);

@@ -12,6 +12,7 @@ import { applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComp
 import { refreshSelectedNodeParams, renderSignalPathBar } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
+import { applyToneSharingAppSettings } from "./toneSharingPanel.js";
 import type { GlobalSignalChainConfig, Preset, PresetFolder, ResourceRef, Setlist, UiSettings } from "./types.js";
 import { handleResourceDataMessage } from "./archiveUtils.js";
 import { layoutDesigner } from "./layoutDesigner.js";
@@ -189,6 +190,7 @@ export function handleIncomingMessage(message: string): void {
       if (appSettings) {
         uiState.appSettings = appSettings as import("./types.js").AppSettings;
         applyStoredInputChannel();
+        applyToneSharingAppSettings(appSettings);
       }
       const globalSignalChain = (payload as { globalSignalChain?: GlobalSignalChainConfig }).globalSignalChain;
       if (globalSignalChain) {
@@ -570,6 +572,19 @@ export function handleIncomingMessage(message: string): void {
       const info = payload as { message?: string; detail?: string };
       appendLog(`resource import failed ← ${info.message ?? "unknown"}`);
       showNotification(info.message ?? "Import failed", info.detail ?? "");
+      break;
+    }
+    case "toneSharingPackImported": {
+      const info = payload as { fileName?: string; path?: string; byteSize?: number };
+      const detail = info.path ?? info.fileName ?? "";
+      appendLog(`tone sharing pack imported ← ${detail}`);
+      showNotification("Pack imported", detail);
+      break;
+    }
+    case "toneSharingPackImportFailed": {
+      const info = payload as { message?: string };
+      appendLog(`tone sharing pack import failed ← ${info.message ?? "unknown"}`);
+      showNotification("Pack import failed", info.message ?? "");
       break;
     }
     case "resourceData": {

@@ -419,6 +419,7 @@
 
 .parallel-split,
 .parallel-join {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -433,8 +434,58 @@
 
 .split-icon,
 .join-icon {
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  color: var(--text-light);
   opacity: 0.8;
+}
+
+.parallel-flow-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.parallel-collapse-btn {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 14px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.parallel-join:hover .parallel-collapse-btn,
+.parallel-join:focus-within .parallel-collapse-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.parallel-collapse-btn:hover {
+  background: rgba(255, 80, 80, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 80, 80, 0.35);
+}
+
+.parallel-collapse-btn:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 .parallel-branches {
@@ -1178,6 +1229,40 @@
 .theme-light .param-control label,
 .theme-light .node-param-label {
   color: var(--text-muted);
+}
+
+.theme-light .parallel-split,
+.theme-light .parallel-join {
+  background: linear-gradient(180deg, #f6f8fc 0%, #e8edf6 100%);
+  border-color: var(--border-light);
+}
+
+.theme-light .split-icon,
+.theme-light .join-icon {
+  color: var(--text-secondary);
+}
+
+.theme-light .parallel-branches {
+  background: rgba(128, 148, 180, 0.08);
+  border-color: rgba(128, 148, 180, 0.32);
+}
+
+.theme-light .parallel-branch {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(128, 148, 180, 0.26);
+  border-left-width: 3px;
+}
+
+.theme-light .parallel-collapse-btn {
+  border-color: rgba(80, 92, 112, 0.2);
+  background: rgba(80, 92, 112, 0.12);
+  color: var(--text-tertiary);
+}
+
+.theme-light .parallel-collapse-btn:hover {
+  background: rgba(255, 80, 80, 0.16);
+  color: var(--text-primary);
+  border-color: rgba(255, 80, 80, 0.3);
 }
 
 .theme-classic .effect-visualization .node-params-panel {

@@ -629,27 +629,8 @@
 
             <section class="tone-sharing-card tone-sharing-upload-card">
               <h3>Publish Preset</h3>
-              <div class="tone-sharing-grid-form">
-                <label for="tone-sharing-item-title">Title</label>
-                <input id="tone-sharing-item-title" type="text" placeholder="My Heavy Rhythm" />
-
-                <label for="tone-sharing-item-type">Type</label>
-                <select id="tone-sharing-item-type">
-                  <option value="preset">Preset</option>
-                  <option value="blend">Blend</option>
-                  <option value="layout">Layout</option>
-                  <option value="composite">Composite</option>
-                  <option value="combo">Combo</option>
-                </select>
-
-                <label for="tone-sharing-item-description">Description</label>
-                <textarea id="tone-sharing-item-description" rows="3" placeholder="Describe the tone, guitar, and mix context"></textarea>
-
-                <label for="tone-sharing-item-file">Preset File</label>
-                <input id="tone-sharing-item-file" type="file" />
-              </div>
               <div class="tone-sharing-actions">
-                <button id="tone-sharing-upload-item" type="button">Upload + Publish</button>
+                <button id="tone-sharing-open-publish-modal" type="button">Publish Preset...</button>
               </div>
               <div class="tone-sharing-status" id="tone-sharing-upload-status">Idle</div>
             </section>
@@ -1573,7 +1554,7 @@
               </div>
               <pre class="preset-json-report" id="preset-json-report"></pre>
               <div class="preset-advanced-json" aria-label="Preset JSON">
-                <pre id="preset-json-view"></pre>
+                <pre id="preset-json-view" style="user-select: all;"></pre>
               </div>
             </div>
           </div>
@@ -1581,6 +1562,41 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" id="save-preset-cancel">Cancel</button>
           <button class="btn btn-primary" id="save-preset-confirm">Save Preset</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tone-sharing-publish-modal" class="modal tone-sharing-publish-modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Publish Preset</h3>
+          <button id="tone-sharing-publish-modal-close" class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="tone-sharing-grid-form">
+            <label for="tone-sharing-item-title">Title</label>
+            <input id="tone-sharing-item-title" type="text" placeholder="My Heavy Rhythm" />
+
+            <label for="tone-sharing-item-type">Type</label>
+            <select id="tone-sharing-item-type">
+              <option value="preset">Preset</option>
+              <option value="blend">Blend</option>
+              <option value="layout">Layout</option>
+              <option value="composite">Composite</option>
+              <option value="combo">Combo</option>
+            </select>
+
+            <label for="tone-sharing-item-description">Description</label>
+            <textarea id="tone-sharing-item-description" rows="3" placeholder="Describe the tone, guitar, and mix context"></textarea>
+
+            <label for="tone-sharing-item-file">Preset File</label>
+            <input id="tone-sharing-item-file" type="file" />
+          </div>
+          <div class="tone-sharing-status" id="tone-sharing-publish-modal-status">Upload a preset file to publish.</div>
+        </div>
+        <div class="modal-footer">
+          <button id="tone-sharing-publish-modal-cancel" type="button" class="btn-secondary">Cancel</button>
+          <button id="tone-sharing-upload-item" type="button">Upload + Publish</button>
         </div>
       </div>
     </div>

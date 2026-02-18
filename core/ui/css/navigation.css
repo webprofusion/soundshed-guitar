@@ -182,6 +182,50 @@
   color: var(--color-error);
 }
 
+.preset-export-chooser {
+  position: absolute;
+  z-index: 1100;
+  min-width: 190px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  box-shadow: var(--shadow-xl);
+}
+
+.preset-export-chooser.open {
+  display: flex;
+}
+
+.preset-export-chooser-item {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dark-primary);
+  text-align: left;
+  font-size: 12px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+
+.preset-export-chooser-item:hover {
+  background: var(--bg-dark-tertiary);
+  border-color: var(--border-dark-light);
+}
+
+.preset-export-chooser-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preset-export-chooser-item:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
 .preset-selector {
   display: flex;
   align-items: center;

@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -227,11 +228,26 @@ void PluginProcessorAdapter::SaveFileAsync(
     const std::string& defaultName,
     std::function<void(const guitarfx::BrowseFileResult&)> callback)
 {
+    auto normalizedDefaultName = defaultName;
+    std::transform(normalizedDefaultName.begin(), normalizedDefaultName.end(), normalizedDefaultName.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+    const auto hasSuffix = [&normalizedDefaultName](std::string_view suffix)
+    {
+        return normalizedDefaultName.size() >= suffix.size()
+            && normalizedDefaultName.compare(normalizedDefaultName.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+
     juce::String filters;
     switch (type)
     {
         case guitarfx::BrowseFileType::PresetFile:  filters = "*.json"; break;
-        case guitarfx::BrowseFileType::ArchiveFile: filters = "*.soundshed.preset;*.soundshed.presets;*.zip"; break;
+        case guitarfx::BrowseFileType::ArchiveFile:
+            if (hasSuffix(".soundshed.preset"))      filters = "*.soundshed.preset";
+            else if (hasSuffix(".soundshed.presets")) filters = "*.soundshed.presets";
+            else if (hasSuffix(".zip"))               filters = "*.zip";
+            else                                        filters = "*.soundshed.preset";
+            break;
         default:                                    filters = "*.*"; break;
     }
 
