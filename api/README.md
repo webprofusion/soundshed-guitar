@@ -24,7 +24,9 @@ wrangler secret put SENDGRID_API_KEY
 npm run d1:migrate
 ```
 
-6. Start local dev server
+Note: the current schema file is treated as a fresh bootstrap (no in-place migration scripts). If your local D1 already has older tables, recreate/reset it before running `npm run d1:migrate`.
+
+5. Start local dev server
 
 ```bash
 npm run dev
@@ -44,6 +46,7 @@ npm run dev
 - `POST /v1/items`
 - `GET /v1/items/me/list`
 - `PATCH /v1/items/:itemId`
+- `DELETE /v1/items/:itemId`
 - `POST /v1/items/:itemId/submit`
 - `POST /v1/items/:itemId/publish`
 - `GET /v1/items/:itemId`
@@ -52,6 +55,7 @@ npm run dev
 - `POST /v1/packs`
 - `GET /v1/packs/me/list`
 - `PATCH /v1/packs/:packId`
+- `DELETE /v1/packs/:packId`
 - `POST /v1/packs/:packId/items`
 - `POST /v1/packs/:packId/submit`
 - `POST /v1/packs/:packId/publish`
@@ -64,11 +68,10 @@ npm run dev
 ## Notes
 
 - `POST /v1/auth/start` sends the one-time code through SendGrid.
-- `POST /v1/auth/start` requires `turnstileToken` in the request body.
-- `POST /v1/uploads/init` requires `turnstileToken` in the request body.
+- CORS is configured to allow all origins and common methods for desktop/WebView access.
+- Download response headers (`content-disposition`, `content-length`, `content-type`) are exposed for cross-origin clients.
 - Ensure your sender domain/email is verified in SendGrid before use.
 - If `SENDGRID_API_KEY` is not set in `development`, auth falls back to logging the one-time code in Worker logs.
 - If `SENDGRID_API_KEY` is not set in `production`, `/v1/auth/start` fails with an email configuration error.
-- If `TURNSTILE_SECRET_KEY` is not set in `development`, Turnstile checks are bypassed with a warning log.
-- If `TURNSTILE_SECRET_KEY` is not set in `production`, Turnstile-protected endpoints fail.
 - Upload path currently stores binary through Worker endpoint, not direct pre-signed R2 URL.
+- Uploads are validated by `kind` during `PUT /v1/uploads/:uploadId` (e.g., preset payload archives must be ZIPs containing only `.json`, `.wav`, and `.nam` files, with at least one `.json` and one `.wav`/`.nam`).

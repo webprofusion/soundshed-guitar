@@ -30,35 +30,78 @@ type ItemRow = {
   creator_user_id: string;
   type: ItemType;
   title: string;
-  description: string | null;
-  visibility: ItemVisibility;
   moderation_status: "draft" | "pending_review" | "approved" | "rejected";
-  app_min_version: string | null;
-  app_max_version: string | null;
-  payload_asset_id: string | null;
-  manifest_asset_id: string | null;
-  thumbnail_asset_id: string | null;
-  preview_asset_id: string | null;
+  config_json: string;
   published_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
+type ItemConfig = {
+  description: string | null;
+  visibility: ItemVisibility;
+  appMinVersion: string | null;
+  appMaxVersion: string | null;
+  payloadAssetId: string | null;
+  manifestAssetId: string | null;
+  thumbnailAssetId: string | null;
+  previewAssetId: string | null;
+};
+
+function parseItemConfig(configJson: string | null | undefined): ItemConfig {
+  const defaults: ItemConfig = {
+    description: null,
+    visibility: "public",
+    appMinVersion: null,
+    appMaxVersion: null,
+    payloadAssetId: null,
+    manifestAssetId: null,
+    thumbnailAssetId: null,
+    previewAssetId: null
+  };
+
+  if (!configJson) {
+    return defaults;
+  }
+
+  try {
+    const parsed = JSON.parse(configJson) as Partial<ItemConfig>;
+    const visibility = parsed.visibility;
+    return {
+      description: typeof parsed.description === "string" ? parsed.description : null,
+      visibility: visibility && allowedVisibility.has(visibility) ? visibility : "public",
+      appMinVersion: typeof parsed.appMinVersion === "string" ? parsed.appMinVersion : null,
+      appMaxVersion: typeof parsed.appMaxVersion === "string" ? parsed.appMaxVersion : null,
+      payloadAssetId: typeof parsed.payloadAssetId === "string" ? parsed.payloadAssetId : null,
+      manifestAssetId: typeof parsed.manifestAssetId === "string" ? parsed.manifestAssetId : null,
+      thumbnailAssetId: typeof parsed.thumbnailAssetId === "string" ? parsed.thumbnailAssetId : null,
+      previewAssetId: typeof parsed.previewAssetId === "string" ? parsed.previewAssetId : null
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function stringifyItemConfig(config: ItemConfig): string {
+  return JSON.stringify(config);
+}
+
 function toItemResponse(item: ItemRow) {
+  const config = parseItemConfig(item.config_json);
   return {
     id: item.id,
     creatorUserId: item.creator_user_id,
     type: item.type,
     title: item.title,
-    description: item.description,
-    visibility: item.visibility,
+    description: config.description,
+    visibility: config.visibility,
     moderationStatus: item.moderation_status,
-    appMinVersion: item.app_min_version,
-    appMaxVersion: item.app_max_version,
-    payloadAssetId: item.payload_asset_id,
-    manifestAssetId: item.manifest_asset_id,
-    thumbnailAssetId: item.thumbnail_asset_id,
-    previewAssetId: item.preview_asset_id,
+    appMinVersion: config.appMinVersion,
+    appMaxVersion: config.appMaxVersion,
+    payloadAssetId: config.payloadAssetId,
+    manifestAssetId: config.manifestAssetId,
+    thumbnailAssetId: config.thumbnailAssetId,
+    previewAssetId: config.previewAssetId,
     publishedAt: item.published_at,
     createdAt: item.created_at,
     updatedAt: item.updated_at
@@ -91,8 +134,7 @@ export function itemRoutes() {
 
     const params: unknown[] = [];
     let sql = `
-      SELECT DISTINCT i.id, i.creator_user_id, i.type, i.title, i.description, i.visibility, i.moderation_status,
-             i.app_min_version, i.app_max_version, i.payload_asset_id, i.manifest_asset_id, i.thumbnail_asset_id, i.preview_asset_id,
+      SELECT DISTINCT i.id, i.creator_user_id, i.type, i.title, i.moderation_status, i.config_json,
              i.published_at, i.created_at, i.updated_at
       FROM items i
       LEFT JOIN item_taxonomies it ON it.item_id = i.id
@@ -124,10 +166,10 @@ export function itemRoutes() {
     });
   });
 
-  app.get("/me/list", requireAuth, async (c) => {
+  app.get("/me/list", optionalAuth, async (c) => {
     const auth = c.get("auth");
     if (!auth) {
-      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+      return ok(c, { items: [] });
     }
 
     const status = (c.req.query("status") ?? "").trim();
@@ -135,8 +177,7 @@ export function itemRoutes() {
 
     const params: unknown[] = [auth.userId];
     let sql = `
-      SELECT id, creator_user_id, type, title, description, visibility, moderation_status,
-             app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+      SELECT id, creator_user_id, type, title, moderation_status, config_json,
              published_at, created_at, updated_at
       FROM items
       WHERE creator_user_id = ?
@@ -179,34 +220,36 @@ export function itemRoutes() {
     }
 
     const itemId = randomId("itm");
+    const config: ItemConfig = {
+      description: body?.description?.trim() ?? null,
+      visibility,
+      appMinVersion: body?.appMinVersion?.trim() ?? null,
+      appMaxVersion: body?.appMaxVersion?.trim() ?? null,
+      payloadAssetId: body?.payloadAssetId?.trim() ?? null,
+      manifestAssetId: body?.manifestAssetId?.trim() ?? null,
+      thumbnailAssetId: body?.thumbnailAssetId?.trim() ?? null,
+      previewAssetId: body?.previewAssetId?.trim() ?? null
+    };
+
     await c.env.DB
       .prepare(
         `INSERT INTO items (
-          id, creator_user_id, type, title, description, visibility, moderation_status,
-          app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+          id, creator_user_id, type, title, moderation_status, config_json,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        ) VALUES (?, ?, ?, ?, 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       )
       .bind(
         itemId,
         auth.userId,
         type,
         title,
-        body?.description?.trim() ?? null,
-        visibility,
-        body?.appMinVersion?.trim() ?? null,
-        body?.appMaxVersion?.trim() ?? null,
-        body?.payloadAssetId?.trim() ?? null,
-        body?.manifestAssetId?.trim() ?? null,
-        body?.thumbnailAssetId?.trim() ?? null,
-        body?.previewAssetId?.trim() ?? null
+        stringifyItemConfig(config)
       )
       .run();
 
     const created = await c.env.DB
       .prepare(
-        `SELECT id, creator_user_id, type, title, description, visibility, moderation_status,
-                app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
                 published_at, created_at, updated_at
          FROM items WHERE id = ?`
       )
@@ -225,8 +268,7 @@ export function itemRoutes() {
     const itemId = c.req.param("itemId");
     const existing = await c.env.DB
       .prepare(
-        `SELECT id, creator_user_id, type, title, description, visibility, moderation_status,
-                app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
                 published_at, created_at, updated_at
          FROM items WHERE id = ?`
       )
@@ -247,7 +289,8 @@ export function itemRoutes() {
 
     const type = body.type ?? existing.type;
     const title = body.title !== undefined ? body.title.trim() : existing.title;
-    const visibility = body.visibility ?? existing.visibility;
+    const existingConfig = parseItemConfig(existing.config_json);
+    const visibility = body.visibility ?? existingConfig.visibility;
 
     if (!allowedTypes.has(type)) {
       return fail(c, "INVALID_TYPE", "Invalid item type", 422);
@@ -259,41 +302,37 @@ export function itemRoutes() {
       return fail(c, "INVALID_VISIBILITY", "Invalid visibility", 422);
     }
 
+    const nextConfig: ItemConfig = {
+      description: body.description !== undefined ? body.description?.trim() ?? null : existingConfig.description,
+      visibility,
+      appMinVersion: body.appMinVersion !== undefined ? body.appMinVersion?.trim() ?? null : existingConfig.appMinVersion,
+      appMaxVersion: body.appMaxVersion !== undefined ? body.appMaxVersion?.trim() ?? null : existingConfig.appMaxVersion,
+      payloadAssetId: body.payloadAssetId !== undefined ? body.payloadAssetId?.trim() ?? null : existingConfig.payloadAssetId,
+      manifestAssetId: body.manifestAssetId !== undefined ? body.manifestAssetId?.trim() ?? null : existingConfig.manifestAssetId,
+      thumbnailAssetId: body.thumbnailAssetId !== undefined ? body.thumbnailAssetId?.trim() ?? null : existingConfig.thumbnailAssetId,
+      previewAssetId: body.previewAssetId !== undefined ? body.previewAssetId?.trim() ?? null : existingConfig.previewAssetId
+    };
+
     await c.env.DB
       .prepare(
         `UPDATE items SET
           type = ?,
           title = ?,
-          description = ?,
-          visibility = ?,
-          app_min_version = ?,
-          app_max_version = ?,
-          payload_asset_id = ?,
-          manifest_asset_id = ?,
-          thumbnail_asset_id = ?,
-          preview_asset_id = ?,
+          config_json = ?,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`
       )
       .bind(
         type,
         title,
-        body.description !== undefined ? body.description?.trim() ?? null : existing.description,
-        visibility,
-        body.appMinVersion !== undefined ? body.appMinVersion?.trim() ?? null : existing.app_min_version,
-        body.appMaxVersion !== undefined ? body.appMaxVersion?.trim() ?? null : existing.app_max_version,
-        body.payloadAssetId !== undefined ? body.payloadAssetId?.trim() ?? null : existing.payload_asset_id,
-        body.manifestAssetId !== undefined ? body.manifestAssetId?.trim() ?? null : existing.manifest_asset_id,
-        body.thumbnailAssetId !== undefined ? body.thumbnailAssetId?.trim() ?? null : existing.thumbnail_asset_id,
-        body.previewAssetId !== undefined ? body.previewAssetId?.trim() ?? null : existing.preview_asset_id,
+        stringifyItemConfig(nextConfig),
         itemId
       )
       .run();
 
     const updated = await c.env.DB
       .prepare(
-        `SELECT id, creator_user_id, type, title, description, visibility, moderation_status,
-                app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
                 published_at, created_at, updated_at
          FROM items WHERE id = ?`
       )
@@ -338,9 +377,9 @@ export function itemRoutes() {
 
     const itemId = c.req.param("itemId");
     const item = await c.env.DB
-      .prepare("SELECT id, creator_user_id, payload_asset_id FROM items WHERE id = ?")
+      .prepare("SELECT id, creator_user_id, config_json FROM items WHERE id = ?")
       .bind(itemId)
-      .first<{ id: string; creator_user_id: string; payload_asset_id: string | null }>();
+      .first<{ id: string; creator_user_id: string; config_json: string | null }>();
 
     if (!item) {
       return fail(c, "NOT_FOUND", "Item not found", 404);
@@ -348,7 +387,8 @@ export function itemRoutes() {
     if (item.creator_user_id !== auth.userId) {
       return fail(c, "FORBIDDEN", "You do not own this item", 403);
     }
-    if (!item.payload_asset_id) {
+    const config = parseItemConfig(item.config_json);
+    if (!config.payloadAssetId) {
       return fail(c, "MISSING_PAYLOAD", "Cannot publish without payloadAssetId", 422);
     }
 
@@ -368,8 +408,7 @@ export function itemRoutes() {
 
     const item = await c.env.DB
       .prepare(
-        `SELECT id, creator_user_id, type, title, description, visibility, moderation_status,
-                app_min_version, app_max_version, payload_asset_id, manifest_asset_id, thumbnail_asset_id, preview_asset_id,
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
                 published_at, created_at, updated_at
          FROM items WHERE id = ?`
       )
@@ -394,14 +433,14 @@ export function itemRoutes() {
     const auth = c.get("auth");
 
     const item = await c.env.DB
-      .prepare("SELECT id, creator_user_id, title, moderation_status, payload_asset_id FROM items WHERE id = ?")
+      .prepare("SELECT id, creator_user_id, title, moderation_status, config_json FROM items WHERE id = ?")
       .bind(itemId)
       .first<{
         id: string;
         creator_user_id: string;
         title: string;
         moderation_status: string;
-        payload_asset_id: string | null;
+        config_json: string | null;
       }>();
 
     if (!item) {
@@ -413,13 +452,14 @@ export function itemRoutes() {
     if (!isOwner && !isPublic) {
       return fail(c, "NOT_FOUND", "Item not found", 404);
     }
-    if (!item.payload_asset_id) {
+    const config = parseItemConfig(item.config_json);
+    if (!config.payloadAssetId) {
       return fail(c, "MISSING_PAYLOAD", "Item payload is not available", 409);
     }
 
     const asset = await c.env.DB
       .prepare("SELECT r2_key, mime_type FROM assets WHERE id = ?")
-      .bind(item.payload_asset_id)
+      .bind(config.payloadAssetId)
       .first<{ r2_key: string; mime_type: string }>();
 
     if (!asset) {
@@ -436,8 +476,6 @@ export function itemRoutes() {
       .bind(randomId("dwl"), auth?.userId ?? null, itemId)
       .run();
 
-    await c.env.DB.prepare("UPDATE items SET download_count = download_count + 1 WHERE id = ?").bind(itemId).run();
-
     const contentType = object.httpMetadata?.contentType ?? asset.mime_type ?? "application/octet-stream";
     const fileName = downloadFileName(item.title, "preset");
 
@@ -448,6 +486,41 @@ export function itemRoutes() {
         "content-disposition": `attachment; filename=\"${fileName}\"`
       }
     });
+  });
+
+  app.delete("/:itemId", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    const item = await c.env.DB
+      .prepare("SELECT id, creator_user_id FROM items WHERE id = ?")
+      .bind(itemId)
+      .first<{ id: string; creator_user_id: string }>();
+
+    if (!item) {
+      return fail(c, "NOT_FOUND", "Item not found", 404);
+    }
+    if (item.creator_user_id !== auth.userId) {
+      return fail(c, "FORBIDDEN", "You do not own this item", 403);
+    }
+
+    await c.env.DB.prepare("DELETE FROM pack_items WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM featured_row_items WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM favorites WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM ratings WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM item_taxonomies WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM downloads WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB.prepare("DELETE FROM reports WHERE item_id = ?").bind(itemId).run();
+    await c.env.DB
+      .prepare("DELETE FROM moderation_actions WHERE target_type = 'item' AND target_id = ?")
+      .bind(itemId)
+      .run();
+    await c.env.DB.prepare("DELETE FROM items WHERE id = ?").bind(itemId).run();
+
+    return ok(c, { itemId, deleted: true });
   });
 
   return app;

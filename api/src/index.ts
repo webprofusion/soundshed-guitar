@@ -18,9 +18,11 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use(
   "*",
   cors({
-    origin: "*",
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
-    allowHeaders: ["content-type", "x-session-id"]
+    origin: (origin) => origin || "*",
+    credentials: true,
+    allowMethods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    exposeHeaders: ["content-disposition", "content-length", "content-type"],
+    maxAge: 86400
   })
 );
 
