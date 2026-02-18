@@ -238,6 +238,18 @@ private:
     void HandleExitCompositeEditModeRequest(const nlohmann::json& payload);
     void HandlePreviewDemoRequest(const nlohmann::json& payload);
     void HandleStopDemoRequest();
+    void HandleGetRiffLibraryRequest();
+    void HandleSetRiffLibraryPathRequest(const nlohmann::json& payload);
+    void HandleStartRiffCaptureRequest(const nlohmann::json& payload);
+    void HandleStopRiffCaptureRequest(const nlohmann::json& payload);
+    void HandleImportRiffWavRequest(const nlohmann::json& payload);
+    void HandleTrimCapturedRiffRequest(const nlohmann::json& payload);
+    void HandleSaveRiffTakeRequest(const nlohmann::json& payload);
+    void HandleDeleteRiffRequest(const nlohmann::json& payload);
+    void HandleSetRiffFavoriteRequest(const nlohmann::json& payload);
+    void HandleMarkRiffUsedRequest(const nlohmann::json& payload);
+    void HandlePreviewRiffTakeRequest(const nlohmann::json& payload);
+    void HandlePreviewCapturedRiffRequest(const nlohmann::json& payload);
 
     // Signal diagnostics / performance
     void HandleGetSignalDiagnosticsRequest();
@@ -280,6 +292,7 @@ private:
     void SendSignalDiagnosticsToUI();
     void SendPerformanceStatsToUI();
     void SendMetronomeStateToUI();
+    void SendRiffLibraryStateToUI();
 
     // Composite edit helpers
     [[nodiscard]] bool IsCompositeEditMode() const;
@@ -325,6 +338,15 @@ private:
     [[nodiscard]] std::filesystem::path ResolveUiStoragePath(const std::string& filename) const;
     [[nodiscard]] nlohmann::json LoadUiStorageJson(const std::string& filename, const nlohmann::json& fallback) const;
     void SaveUiStorageJson(const std::string& filename, const nlohmann::json& payload) const;
+    [[nodiscard]] std::filesystem::path ResolveRiffLibraryPath() const;
+    [[nodiscard]] std::filesystem::path ResolveRiffLibraryIndexPath() const;
+    [[nodiscard]] nlohmann::json LoadRiffLibraryIndex() const;
+    bool SaveRiffLibraryIndex(const nlohmann::json& payload) const;
+    [[nodiscard]] std::string BuildRiffTakeId() const;
+    [[nodiscard]] std::string BuildRiffId() const;
+    [[nodiscard]] std::string BuildTimestampUtcIso() const;
+    [[nodiscard]] std::optional<nlohmann::json> FindRiffTakeById(const std::string& takeId) const;
+    void FinalizeRiffCaptureLocked(bool canceled);
 
     bool WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const;
 
@@ -452,6 +474,40 @@ private:
     std::shared_ptr<MetronomeClickSamples> mMetronomeClickSamples;
 
     std::unique_ptr<DemoPreviewService> mDemoPreview;
+
+    struct RiffCaptureConfig
+    {
+        double tempoBpm = 120.0;
+        int timeSigNum = 4;
+        int timeSigDen = 4;
+        int bars = 1;
+        int countInBars = 1;
+        std::string patternType = "click";
+        std::string patternId;
+        std::string presetId;
+        std::string presetName;
+    };
+
+    struct RiffCaptureRuntime
+    {
+        bool active = false;
+        bool complete = false;
+        std::string takeId;
+        RiffCaptureConfig config;
+        std::vector<float> left;
+        std::vector<float> right;
+        std::size_t writeIndex = 0;
+        std::size_t targetSamples = 0;
+        std::size_t countInSamples = 0;
+        double sampleRate = 0.0;
+        int bitsPerSample = 16;
+        std::chrono::steady_clock::time_point startedAt;
+        std::chrono::steady_clock::time_point endedAt;
+    };
+
+    mutable std::mutex mRiffLibraryMutex;
+    nlohmann::json mRiffLibraryIndex = nlohmann::json::object();
+    RiffCaptureRuntime mRiffCapture;
 
     // Resource preview state (for temp loading from Tone3000)
     struct PreviewState

@@ -23,6 +23,7 @@ import { initializeBlendEditorModal } from "./signalPath.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeIconBarTabs, initializeTabButtons, switchMainPanel } from "./navigation.js";
 import { initializeToneSharingPanel } from "./toneSharingPanel.js";
+import { initializeRiffLibraryPanel } from "./riffLibrary.js";
 const eqModal = document.getElementById("eq-modal");
 const eqModalCloseBtn = document.getElementById("eq-modal-close");
 
@@ -64,6 +65,7 @@ async function bootstrap(): Promise<void> {
   initializePresetActionButtons();
   initializeTuner();
   initializeMetronome();
+  initializeRiffLibraryPanel();
   initializeToneSharingPanel();
   if (eqModalCloseBtn) {
     eqModalCloseBtn.addEventListener("click", closeEqModal);

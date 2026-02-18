@@ -119,26 +119,116 @@ Clean digital delay.
 | `feedback` | 0.0–0.95 | 0.3 | — |
 | `mix` | 0.0–1.0 | 0.3 | — |
 
-### Room Reverb (`reverb_room`)
-Algorithmic room reverberation.
+### Algorithmic Reverbs
+The reverb family uses a shared multi-mode algorithmic engine with dedicated type IDs:
+
+- `reverb_room`
+- `reverb_hall`
+- `reverb_plate`
+- `reverb_chamber`
+- `reverb_spring`
+- `reverb_shimmer`
+- `reverb_ambient`
+- `reverb_advanced`
+
+Each mode has tuned internals, but only exposes the controls typically needed for that style.
+
+#### Room Reverb (`reverb_room`)
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `decay` | 0.0–1.0 | 0.5 | — |
-| `damping` | 0.0–1.0 | 0.5 | — |
-| `mix` | 0.0–1.0 | 0.3 | — |
-| `safetyClip` | 0.0–1.0 | 0.0 | — |
+| `decay` | 0.0–1.0 | 0.46 | — |
+| `size` | 0.0–1.0 | 0.42 | — |
+| `damping` | 0.0–1.0 | 0.56 | — |
+| `preDelay` | 0–220 | 8.0 | ms |
+| `mix` | 0.0–1.0 | 0.22 | — |
 
-### Spring Reverb (`reverb_spring`)
-Spring-style reverb with tonal coloration.
+#### Hall Reverb (`reverb_hall`)
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `decay` | 0.0–1.0 | 0.6 | — |
-| `tone` | 0.0–1.0 | 0.6 | — |
-| `drive` | 0.0–1.0 | 0.2 | — |
-| `tension` | 0.0–1.0 | 0.4 | — |
-| `mix` | 0.0–1.0 | 0.3 | — |
+| `decay` | 0.0–1.0 | 0.76 | — |
+| `size` | 0.0–1.0 | 0.70 | — |
+| `preDelay` | 0–220 | 24.0 | ms |
+| `damping` | 0.0–1.0 | 0.46 | — |
+| `width` | 0.0–1.2 | 1.05 | — |
+| `mix` | 0.0–1.0 | 0.27 | — |
+
+#### Plate Reverb (`reverb_plate`)
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.58 | — |
+| `preDelay` | 0–220 | 12.0 | ms |
+| `tone` | 0.0–1.0 | 0.76 | — |
+| `damping` | 0.0–1.0 | 0.35 | — |
+| `mix` | 0.0–1.0 | 0.24 | — |
+
+#### Chamber Reverb (`reverb_chamber`)
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.60 | — |
+| `size` | 0.0–1.0 | 0.56 | — |
+| `tone` | 0.0–1.0 | 0.52 | — |
+| `preDelay` | 0–220 | 15.0 | ms |
+| `mix` | 0.0–1.0 | 0.24 | — |
+
+#### Spring Reverb (`reverb_spring`)
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.50 | — |
+| `tone` | 0.0–1.0 | 0.68 | — |
+| `drive` | 0.0–1.0 | 0.22 | — |
+| `mix` | 0.0–1.0 | 0.23 | — |
+
+#### Shimmer Reverb (`reverb_shimmer`)
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.84 | — |
+| `size` | 0.0–1.0 | 0.80 | — |
+| `shimmer` | 0.0–1.0 | 0.45 | — |
+| `preDelay` | 0–220 | 28.0 | ms |
+| `mix` | 0.0–1.0 | 0.30 | — |
+
+#### Ambient Reverb (`reverb_ambient`)
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.86 | — |
+| `size` | 0.0–1.0 | 0.90 | — |
+| `diffusion` | 0.0–1.0 | 0.90 | — |
+| `width` | 0.0–1.2 | 1.10 | — |
+| `mix` | 0.0–1.0 | 0.32 | — |
+
+#### Advanced Reverb (`reverb_advanced`)
+
+Common controls:
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `decay` | 0.0–1.0 | 0.64 | — |
+| `size` | 0.0–1.0 | 0.55 | — |
+| `mix` | 0.0–1.0 | 0.24 | — |
+| `damping` | 0.0–1.0 | 0.46 | — |
+| `preDelay` | 0–220 | 16.0 | ms |
+| `tone` | 0.0–1.0 | 0.62 | — |
+| `width` | 0.0–1.2 | 1.00 | — |
+
+Advanced controls:
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `diffusion` | 0.0–1.0 | 0.70 | — |
+| `lowCut` | 20–1200 | 140 | Hz |
+| `highCut` | 1000–20000 | 12000 | Hz |
+| `modRate` | 0.02–8.0 | 0.45 | Hz |
+| `modDepth` | 0.0–1.0 | 0.18 | — |
+| `ducking` | 0.0–1.0 | 0.08 | — |
+| `drive` | 0.0–1.0 | 0.00 | — |
+| `shimmer` | 0.0–1.0 | 0.00 | — |
 
 ### Simple Cabinet (`cab_simple`)
 Filter-based cabinet simulation (no IR required).

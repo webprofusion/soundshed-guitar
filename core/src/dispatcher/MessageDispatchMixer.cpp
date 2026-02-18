@@ -139,6 +139,36 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
         c.HandleStopDemoRequest();
         return true;
     }
+    if (type == "startRiffCapture")
+    {
+        c.HandleStartRiffCaptureRequest(msg);
+        return true;
+    }
+    if (type == "stopRiffCapture")
+    {
+        c.HandleStopRiffCaptureRequest(msg);
+        return true;
+    }
+    if (type == "importRiffWav")
+    {
+        c.HandleImportRiffWavRequest(msg);
+        return true;
+    }
+    if (type == "trimCapturedRiff")
+    {
+        c.HandleTrimCapturedRiffRequest(msg);
+        return true;
+    }
+    if (type == "previewRiffTake")
+    {
+        c.HandlePreviewRiffTakeRequest(msg);
+        return true;
+    }
+    if (type == "previewCapturedRiff")
+    {
+        c.HandlePreviewCapturedRiffRequest(msg);
+        return true;
+    }
     return false;
 }
 

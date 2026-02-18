@@ -8,18 +8,54 @@ import type { DemoSample } from "./types.js";
 // Track whether demo audio is currently playing
 let demoAudioPlaying = false;
 
-function getSelectedDemoAudio(): DemoSample | null {
-  if (!DEMO_AUDIO_SAMPLES.length) {
+type DemoAudioSource =
+  | { id: string; title: string; kind: "builtin"; path: string }
+  | { id: string; title: string; kind: "riff"; takeId: string };
+
+function getDemoAudioSources(): DemoAudioSource[] {
+  const builtins: DemoAudioSource[] = DEMO_AUDIO_SAMPLES.map((sample) => ({
+    id: sample.id,
+    title: sample.title,
+    kind: "builtin",
+    path: sample.path,
+  }));
+
+  const riffs = uiState.riffLibrary?.riffs ?? [];
+  const favorites: DemoAudioSource[] = riffs
+    .filter((riff) => Boolean(riff.favorite) && Array.isArray(riff.takes) && riff.takes.length > 0)
+    .map((riff) => {
+      const preferredTakeId = riff.preferredTakeId && riff.takes.some((take) => take.id === riff.preferredTakeId)
+        ? riff.preferredTakeId
+        : riff.takes[0].id;
+      return {
+        id: `riff:${preferredTakeId}`,
+        title: `★ ${riff.title}`,
+        kind: "riff",
+        takeId: preferredTakeId,
+      };
+    });
+
+  return [...builtins, ...favorites];
+}
+
+function getSelectedDemoAudio(): DemoAudioSource | null {
+  const sources = getDemoAudioSources();
+  if (!sources.length) {
     return null;
   }
-  const selectedId = uiState.demoAudioSelectedId ?? DEMO_AUDIO_SAMPLES[0].id;
-  return DEMO_AUDIO_SAMPLES.find((sample) => sample.id === selectedId) ?? DEMO_AUDIO_SAMPLES[0];
+  const selectedId = uiState.demoAudioSelectedId ?? sources[0].id;
+  return sources.find((sample) => sample.id === selectedId) ?? sources[0];
 }
 
 function renderDemoAudioOptions(): string {
-  return DEMO_AUDIO_SAMPLES
+  const sources = getDemoAudioSources();
+  if (!sources.length) {
+    return "";
+  }
+  const selectedId = uiState.demoAudioSelectedId ?? sources[0].id;
+  return sources
     .map((sample) => {
-      const selected = sample.id === (uiState.demoAudioSelectedId ?? DEMO_AUDIO_SAMPLES[0].id);
+      const selected = sample.id === selectedId;
       return `<option value="${sample.id}"${selected ? " selected" : ""}>${sample.title}</option>`;
     })
     .join("");
@@ -98,7 +134,7 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
  * Returns an HTML string with select, play, and repeat controls.
  */
 export function renderFooterDemoAudioControls(): string {
-  if (!DEMO_AUDIO_SAMPLES.length) {
+  if (!getDemoAudioSources().length) {
     return "";
   }
   const options = renderDemoAudioOptions();
@@ -138,7 +174,7 @@ export function bindFooterDemoAudioControls(): void {
 }
 
 export function renderDemoAudioControls(): string {
-  if (!DEMO_AUDIO_SAMPLES.length) {
+  if (!getDemoAudioSources().length) {
     return "";
   }
   const options = renderDemoAudioOptions();
@@ -187,6 +223,17 @@ export async function previewSelectedDemoAudio(): Promise<void> {
   }
 
   try {
+    if (sample.kind === "riff") {
+      postMessage({
+        type: "previewRiffTake",
+        takeId: sample.takeId,
+      });
+      showNotification("Starting riff preview", sample.title);
+      appendLog(`riff preview sent → ${sample.takeId}`);
+      return;
+    }
+
+    const demoSample = sample as DemoSample;
     const resolvedPath = resolveDemoSamplePath(sample.path);
     if (!resolvedPath) {
       throw new Error("Demo audio path is not set");
@@ -203,9 +250,9 @@ export async function previewSelectedDemoAudio(): Promise<void> {
     const metadata = parseWavMetadata(buffer);
 
     const audioPayload: Record<string, unknown> = {
-      id: sample.id,
-      title: sample.title,
-      path: sample.path,
+      id: demoSample.id,
+      title: demoSample.title,
+      path: demoSample.path,
       size: buffer.byteLength,
       contentType: "audio/wav",
       data: base64,
@@ -228,6 +275,31 @@ export async function previewSelectedDemoAudio(): Promise<void> {
     console.error("Failed to preview demo audio", error);
     appendLog(`preview error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
     showNotification("Failed to preview demo audio", error instanceof Error ? error.message : String(error));
+  }
+}
+
+export function refreshDemoAudioSelectors(): void {
+  const options = renderDemoAudioOptions();
+  const sources = getDemoAudioSources();
+  if (!sources.length) {
+    return;
+  }
+
+  const selectedId = uiState.demoAudioSelectedId && sources.some((entry) => entry.id === uiState.demoAudioSelectedId)
+    ? uiState.demoAudioSelectedId
+    : sources[0].id;
+  uiState.demoAudioSelectedId = selectedId;
+
+  const mainSelect = document.getElementById("demo-audio-select") as HTMLSelectElement | null;
+  if (mainSelect) {
+    mainSelect.innerHTML = options;
+    mainSelect.value = selectedId;
+  }
+
+  const footerSelect = document.getElementById("footer-demo-audio-select") as HTMLSelectElement | null;
+  if (footerSelect) {
+    footerSelect.innerHTML = options;
+    footerSelect.value = selectedId;
   }
 }
 

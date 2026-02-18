@@ -100,6 +100,16 @@ bool MessageDispatcher::DispatchStateAndLists(PluginController& c,
         c.HandleGetPerformanceStatsRequest();
         return true;
     }
+    if (type == "getRiffLibrary")
+    {
+        c.HandleGetRiffLibraryRequest();
+        return true;
+    }
+    if (type == "setRiffLibraryPath")
+    {
+        c.HandleSetRiffLibraryPathRequest(msg);
+        return true;
+    }
     return false;
 }
 

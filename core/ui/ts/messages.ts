@@ -3,11 +3,12 @@ import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, upd
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
-import { previewSelectedDemoAudio, onDemoAudioStarted, onDemoAudioStopped } from "./demoAudio.js";
+import { previewSelectedDemoAudio, onDemoAudioStarted, onDemoAudioStopped, refreshDemoAudioSelectors } from "./demoAudio.js";
 import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
 import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView } from "./settings.js";
+import { applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, renderRiffLibraryPanel } from "./riffLibrary.js";
 import { refreshSelectedNodeParams, renderSignalPathBar } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
@@ -226,6 +227,11 @@ export function handleIncomingMessage(message: string): void {
             : uiState.metronome?.clickTypes,
         });
       }
+      const riffLibrary = (payload as { riffLibrary?: import("./types.js").RiffLibrary }).riffLibrary;
+      if (riffLibrary) {
+        applyRiffLibraryState(riffLibrary);
+        refreshDemoAudioSelectors();
+      }
       const mixer = (payload as { mixer?: import("./types.js").MixerState }).mixer;
       if (mixer) {
         const activePresetIds = Array.isArray(mixer.activePresetIds) ? mixer.activePresetIds.slice() : [];
@@ -302,6 +308,77 @@ export function handleIncomingMessage(message: string): void {
               .map((entry) => ({ id: entry.id ?? "", label: typeof entry.label === "string" ? entry.label : entry.id }))
           : uiState.metronome?.clickTypes,
       });
+      break;
+    }
+    case "riffLibraryState": {
+      const riffPayload = payload as {
+        library?: import("./types.js").RiffLibrary;
+        capture?: import("./types.js").RiffCaptureState;
+      };
+      if (riffPayload.library) {
+        applyRiffLibraryState(riffPayload.library);
+        refreshDemoAudioSelectors();
+      }
+      if (riffPayload.capture) {
+        applyRiffCaptureState(riffPayload.capture);
+      }
+      break;
+    }
+    case "riffCaptureStarted": {
+      appendLog(`riff capture started ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+      applyRiffCaptureState({
+        active: true,
+        complete: false,
+        takeId: (payload as { takeId?: string }).takeId ?? "",
+        bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
+        tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
+        timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
+        timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+        hasAudio: false,
+        waveformPeaks: [],
+      });
+      showNotification("Riff capture started");
+      break;
+    }
+    case "riffCaptureStopped": {
+      appendLog(`riff capture stopped ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+      const source = (payload as { source?: string }).source ?? "capture";
+      applyRiffCaptureState({
+        active: false,
+        complete: true,
+        takeId: (payload as { takeId?: string }).takeId ?? uiState.riffCapture?.takeId ?? "",
+        bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
+        tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
+        timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
+        timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+        capturedSamples: (payload as { capturedSamples?: number }).capturedSamples ?? uiState.riffCapture?.capturedSamples ?? 0,
+        sampleRate: (payload as { sampleRate?: number }).sampleRate ?? uiState.riffCapture?.sampleRate ?? 0,
+        hasAudio: Boolean((payload as { hasAudio?: boolean }).hasAudio),
+        waveformPeaks: Array.isArray((payload as { waveformPeaks?: unknown[] }).waveformPeaks)
+          ? ((payload as { waveformPeaks?: unknown[] }).waveformPeaks as unknown[])
+              .filter((value): value is number => typeof value === "number")
+          : [],
+      });
+      showNotification(
+        source === "import"
+          ? "Riff WAV imported"
+          : source === "trim"
+            ? "Riff cropped to markers"
+            : "Riff capture complete",
+      );
+      break;
+    }
+    case "riffCaptureCanceled": {
+      appendLog(`riff capture cancelled ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+      applyRiffCaptureState({ active: false, complete: false, takeId: "", capturedSamples: 0, sampleRate: 0, hasAudio: false, waveformPeaks: [] });
+      showNotification("Riff capture canceled");
+      break;
+    }
+    case "riffSaved": {
+      appendLog(`riff saved ← ${(payload as { riffId?: string }).riffId ?? "riff"}`);
+      showNotification("Riff saved", (payload as { path?: string }).path ?? "");
+      renderRiffLibraryPanel();
+      refreshDemoAudioSelectors();
       break;
     }
     case "resourceCleanupResult": {
@@ -391,6 +468,7 @@ export function handleIncomingMessage(message: string): void {
     }
     case "previewStarted": {
       appendLog(`preview started ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+      handleRiffPreviewPlayback("start", (payload as { id?: string }).id ?? "");
       uiState.demoAudioSelectedId = (payload as { id?: string }).id ?? uiState.demoAudioSelectedId;
       const selector = document.getElementById("demo-audio-select") as HTMLSelectElement | null;
       if (selector && uiState.demoAudioSelectedId) {
@@ -402,7 +480,13 @@ export function handleIncomingMessage(message: string): void {
     }
     case "previewComplete": {
       appendLog(`preview complete ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+      const previewId = (payload as { id?: string }).id ?? "";
+      handleRiffPreviewPlayback("stop", previewId);
+      const riffLooped = handleCapturedPreviewComplete(previewId);
       onDemoAudioStopped();
+      if (riffLooped) {
+        break;
+      }
       if (uiState.demoAudioRepeat) {
         previewSelectedDemoAudio();
       } else {
@@ -412,6 +496,7 @@ export function handleIncomingMessage(message: string): void {
     }
     case "previewStopped": {
       appendLog(`preview stopped ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+      handleRiffPreviewPlayback("stop", (payload as { id?: string }).id ?? "");
       onDemoAudioStopped();
       showNotification("Demo playback stopped", (payload as { title?: string }).title ?? "Demo");
       break;

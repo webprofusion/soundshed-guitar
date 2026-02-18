@@ -309,6 +309,58 @@ export interface MetronomeState {
   clickTypes?: MetronomeClickTypeOption[];
 }
 
+export interface RiffTake {
+  id: string;
+  filePath: string;
+  durationSec: number;
+  bars: number;
+  tempoBpm: number;
+  timeSigNum: number;
+  timeSigDen: number;
+  patternType?: string;
+  patternId?: string;
+  presetId?: string;
+  presetName?: string;
+  sampleRate?: number;
+  bitsPerSample?: number;
+  createdAt?: string;
+}
+
+export interface RiffEntry {
+  id: string;
+  title: string;
+  categories: string[];
+  tags: string[];
+  notes?: string;
+  favorite?: boolean;
+  used?: boolean;
+  usedSongTitle?: string;
+  usedAt?: string;
+  preferredTakeId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  takes: RiffTake[];
+}
+
+export interface RiffLibrary {
+  path: string;
+  riffs: RiffEntry[];
+}
+
+export interface RiffCaptureState {
+  active: boolean;
+  complete: boolean;
+  takeId: string;
+  bars: number;
+  tempoBpm: number;
+  timeSigNum: number;
+  timeSigDen: number;
+  capturedSamples: number;
+  sampleRate: number;
+  hasAudio?: boolean;
+  waveformPeaks?: number[];
+}
+
 export interface UiState {
   presets: Preset[];
   filteredPresets: Preset[];
@@ -341,6 +393,8 @@ export interface UiState {
   signalDiagnostics?: SignalLevelDiagnostics | null;
   environment?: EnvironmentState;
   metronome?: MetronomeState;
+  riffLibrary?: RiffLibrary;
+  riffCapture?: RiffCaptureState;
   namCalibrationStatus?: Record<string, "calibrating" | "ready" | "failed">;
   missingNodeResources?: Array<{ nodeId: string; resourceType?: string; resourceId?: string; filePath?: string }>;
   layoutLibrary?: LayoutLibrary;

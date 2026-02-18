@@ -238,6 +238,10 @@ export function activateLibraryTab(tabId: string): void {
     postMessage({ type: "requestState" });
   }
 
+  if (tabId === "riffs") {
+    postMessage({ type: "getRiffLibrary" });
+  }
+
   if (tabId === "advanced") {
     initAdvancedSubTabs();
   }

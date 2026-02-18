@@ -113,6 +113,26 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
         c.HandleOpenAudioPreferencesRequest();
         return true;
     }
+    if (type == "saveRiffTake")
+    {
+        c.HandleSaveRiffTakeRequest(msg);
+        return true;
+    }
+    if (type == "deleteRiff")
+    {
+        c.HandleDeleteRiffRequest(msg);
+        return true;
+    }
+    if (type == "setRiffFavorite")
+    {
+        c.HandleSetRiffFavoriteRequest(msg);
+        return true;
+    }
+    if (type == "markRiffUsed")
+    {
+        c.HandleMarkRiffUsedRequest(msg);
+        return true;
+    }
     return false;
 }
 

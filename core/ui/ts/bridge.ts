@@ -86,3 +86,89 @@ export function setMetronome(payload: {
 }): void {
   postMessage({ type: "setMetronome", ...payload });
 }
+
+export function getRiffLibrary(): void {
+  postMessage({ type: "getRiffLibrary" });
+}
+
+export function setRiffLibraryPath(path: string): void {
+  postMessage({ type: "setRiffLibraryPath", path });
+}
+
+export function startRiffCapture(payload: {
+  tempoBpm: number;
+  timeSigNum: number;
+  timeSigDen: number;
+  bars: number;
+  countInBars: number;
+  patternType: "click" | "drum";
+  patternId?: string;
+}): void {
+  postMessage({ type: "startRiffCapture", ...payload });
+}
+
+export function stopRiffCapture(canceled = false): void {
+  postMessage({ type: "stopRiffCapture", canceled });
+}
+
+export function saveRiffTake(payload: {
+  riffId?: string;
+  title: string;
+  categories: string[];
+  tags: string[];
+  notes?: string;
+  favorite?: boolean;
+  tempoBpm?: number;
+  timeSigNum?: number;
+  timeSigDen?: number;
+  bars?: number;
+  patternType?: "click" | "drum";
+  patternId?: string;
+}): void {
+  postMessage({ type: "saveRiffTake", ...payload });
+}
+
+export function setRiffFavorite(riffId: string, favorite: boolean): void {
+  postMessage({ type: "setRiffFavorite", riffId, favorite });
+}
+
+export function markRiffUsed(riffId: string, used: boolean, songTitle = ""): void {
+  postMessage({ type: "markRiffUsed", riffId, used, songTitle });
+}
+
+export function deleteRiff(riffId: string): void {
+  postMessage({ type: "deleteRiff", riffId });
+}
+
+export function previewRiffTake(takeId: string): void {
+  postMessage({ type: "previewRiffTake", takeId });
+}
+
+export function previewCapturedRiff(): void {
+  postMessage({ type: "previewCapturedRiff" });
+}
+
+export function previewCapturedRiffRange(startRatio: number, endRatio: number): void {
+  postMessage({ type: "previewCapturedRiff", startRatio, endRatio });
+}
+
+export function stopPreviewPlayback(): void {
+  postMessage({ type: "stopDemoAudio" });
+}
+
+export function importRiffWav(payload: {
+  data: string;
+  fileName?: string;
+  tempoBpm: number;
+  timeSigNum: number;
+  timeSigDen: number;
+  bars: number;
+  patternType: "click" | "drum";
+  patternId?: string;
+}): void {
+  postMessage({ type: "importRiffWav", ...payload });
+}
+
+export function trimCapturedRiff(startRatio: number, endRatio: number): void {
+  postMessage({ type: "trimCapturedRiff", startRatio, endRatio });
+}

@@ -72,6 +72,9 @@ namespace
     constexpr double kMetronomeClickSeconds = 0.02;
     constexpr double kMetronomeClickFrequencyHz = 1800.0;
     constexpr double kTwoPi = 6.28318530717958647692;
+    constexpr const char* kRiffLibraryPathSettingKey = "riffLibrary.path";
+    constexpr const char* kRiffLibraryDefaultFolder = "riff-library";
+    constexpr const char* kRiffLibraryIndexFile = "riff-library-index.json";
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
     constexpr const char* kInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
     constexpr const char* kInterfaceCalibrationReferenceDbuSettingKey = "audio.interfaceCalibration.referenceDbu";
@@ -181,6 +184,182 @@ namespace
     double ClampValue(double value, double minimum, double maximum)
     {
         return std::min(maximum, std::max(minimum, value));
+    }
+
+    std::string BuildUtcIsoTimestamp()
+    {
+        const auto now = std::chrono::system_clock::now();
+        const auto tt = std::chrono::system_clock::to_time_t(now);
+        std::tm utcTime{};
+#ifdef _WIN32
+        gmtime_s(&utcTime, &tt);
+#else
+        gmtime_r(&tt, &utcTime);
+#endif
+        std::ostringstream oss;
+        oss << std::put_time(&utcTime, "%Y-%m-%dT%H:%M:%SZ");
+        return oss.str();
+    }
+
+    void WriteUint16LE(std::ofstream& output, std::uint16_t value)
+    {
+        const std::array<char, 2> bytes{
+            static_cast<char>(value & 0xFFu),
+            static_cast<char>((value >> 8u) & 0xFFu)
+        };
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    void WriteUint32LE(std::ofstream& output, std::uint32_t value)
+    {
+        const std::array<char, 4> bytes{
+            static_cast<char>(value & 0xFFu),
+            static_cast<char>((value >> 8u) & 0xFFu),
+            static_cast<char>((value >> 16u) & 0xFFu),
+            static_cast<char>((value >> 24u) & 0xFFu)
+        };
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    bool WriteStereo16BitWav(const std::filesystem::path& path,
+                             const std::vector<float>& left,
+                             const std::vector<float>& right,
+                             int sampleRate)
+    {
+        if (left.empty() || right.empty() || left.size() != right.size() || sampleRate <= 0)
+            return false;
+
+        try
+        {
+            std::filesystem::create_directories(path.parent_path());
+            std::ofstream output(path, std::ios::binary);
+            if (!output)
+                return false;
+
+            const std::uint16_t channels = 2;
+            const std::uint16_t bitsPerSample = 16;
+            const std::uint16_t blockAlign = static_cast<std::uint16_t>(channels * (bitsPerSample / 8));
+            const std::uint32_t byteRate = static_cast<std::uint32_t>(sampleRate) * blockAlign;
+            const std::uint32_t frameCount = static_cast<std::uint32_t>(left.size());
+            const std::uint32_t dataSize = frameCount * blockAlign;
+
+            output.write("RIFF", 4);
+            WriteUint32LE(output, 36u + dataSize);
+            output.write("WAVE", 4);
+
+            output.write("fmt ", 4);
+            WriteUint32LE(output, 16u);
+            WriteUint16LE(output, 1u);
+            WriteUint16LE(output, channels);
+            WriteUint32LE(output, static_cast<std::uint32_t>(sampleRate));
+            WriteUint32LE(output, byteRate);
+            WriteUint16LE(output, blockAlign);
+            WriteUint16LE(output, bitsPerSample);
+
+            output.write("data", 4);
+            WriteUint32LE(output, dataSize);
+
+            for (std::size_t i = 0; i < left.size(); ++i)
+            {
+                const float clampedL = static_cast<float>(std::clamp(left[i], -1.0f, 1.0f));
+                const float clampedR = static_cast<float>(std::clamp(right[i], -1.0f, 1.0f));
+                const auto sampleL = static_cast<std::int16_t>(std::round(clampedL * 32767.0f));
+                const auto sampleR = static_cast<std::int16_t>(std::round(clampedR * 32767.0f));
+                WriteUint16LE(output, static_cast<std::uint16_t>(sampleL));
+                WriteUint16LE(output, static_cast<std::uint16_t>(sampleR));
+            }
+
+            return static_cast<bool>(output);
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    std::vector<std::uint8_t> EncodeStereo16BitWav(const std::vector<float>& left,
+                                                   const std::vector<float>& right,
+                                                   int sampleRate)
+    {
+        if (left.empty() || right.empty() || left.size() != right.size() || sampleRate <= 0)
+            return {};
+
+        std::vector<std::uint8_t> bytes;
+        const std::uint16_t channels = 2;
+        const std::uint16_t bitsPerSample = 16;
+        const std::uint16_t blockAlign = static_cast<std::uint16_t>(channels * (bitsPerSample / 8));
+        const std::uint32_t frameCount = static_cast<std::uint32_t>(left.size());
+        const std::uint32_t dataSize = frameCount * blockAlign;
+        const std::uint32_t totalSize = 44u + dataSize;
+        bytes.reserve(static_cast<std::size_t>(totalSize));
+
+        auto pushChars = [&](const char* data, std::size_t count) {
+            bytes.insert(bytes.end(), data, data + count);
+        };
+        auto pushU16 = [&](std::uint16_t value) {
+            bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+            bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+        };
+        auto pushU32 = [&](std::uint32_t value) {
+            bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+            bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+            bytes.push_back(static_cast<std::uint8_t>((value >> 16u) & 0xFFu));
+            bytes.push_back(static_cast<std::uint8_t>((value >> 24u) & 0xFFu));
+        };
+
+        pushChars("RIFF", 4);
+        pushU32(36u + dataSize);
+        pushChars("WAVE", 4);
+        pushChars("fmt ", 4);
+        pushU32(16u);
+        pushU16(1u);
+        pushU16(channels);
+        pushU32(static_cast<std::uint32_t>(sampleRate));
+        pushU32(static_cast<std::uint32_t>(sampleRate) * blockAlign);
+        pushU16(blockAlign);
+        pushU16(bitsPerSample);
+        pushChars("data", 4);
+        pushU32(dataSize);
+
+        for (std::size_t i = 0; i < left.size(); ++i)
+        {
+            const float clampedL = static_cast<float>(std::clamp(left[i], -1.0f, 1.0f));
+            const float clampedR = static_cast<float>(std::clamp(right[i], -1.0f, 1.0f));
+            const auto sampleL = static_cast<std::int16_t>(std::round(clampedL * 32767.0f));
+            const auto sampleR = static_cast<std::int16_t>(std::round(clampedR * 32767.0f));
+            pushU16(static_cast<std::uint16_t>(sampleL));
+            pushU16(static_cast<std::uint16_t>(sampleR));
+        }
+
+        return bytes;
+    }
+
+    nlohmann::json BuildWaveformPeaks(const std::vector<float>& left,
+                                      const std::vector<float>& right,
+                                      std::size_t bins)
+    {
+        nlohmann::json peaks = nlohmann::json::array();
+        if (left.empty() || right.empty() || left.size() != right.size() || bins == 0)
+            return peaks;
+
+        const std::size_t totalSamples = left.size();
+        const std::size_t binCount = std::min<std::size_t>(bins, totalSamples);
+
+        for (std::size_t b = 0; b < binCount; ++b)
+        {
+            const std::size_t start = (b * totalSamples) / binCount;
+            const std::size_t end = std::max(start + 1, ((b + 1) * totalSamples) / binCount);
+            float peak = 0.0f;
+            for (std::size_t i = start; i < end && i < totalSamples; ++i)
+            {
+                const float p = std::max(std::fabs(left[i]), std::fabs(right[i]));
+                if (p > peak)
+                    peak = p;
+            }
+            peaks.push_back(static_cast<double>(std::clamp(peak, 0.0f, 1.0f)));
+        }
+
+        return peaks;
     }
 
     // ── Utility helpers ─────────────────────────────────────────────
@@ -394,6 +573,10 @@ void PluginController::Initialize()
     LoadBlendLibrary();
     LoadCompositeLibrary();
     LoadLayoutLibrary();
+    {
+        std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+        mRiffLibraryIndex = LoadRiffLibraryIndex();
+    }
     LoadLastSessionState();
 }
 
@@ -432,6 +615,43 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
     if (!lock.owns_lock())
         return false; // Caller should output silence
+
+    if (mRiffCapture.active && !mRiffCapture.complete)
+    {
+        const std::size_t channelsReady = (inputs && inputs[0] && inputs[1]) ? 2u : 0u;
+        if (channelsReady == 2u && mRiffCapture.writeIndex < mRiffCapture.targetSamples)
+        {
+            const std::size_t countInSamples = mRiffCapture.countInSamples;
+            for (int i = 0; i < numSamples && mRiffCapture.writeIndex < mRiffCapture.targetSamples; ++i)
+            {
+                if (mRiffCapture.writeIndex >= countInSamples)
+                {
+                    const std::size_t captureIndex = mRiffCapture.writeIndex - countInSamples;
+                    if (captureIndex < mRiffCapture.left.size() && captureIndex < mRiffCapture.right.size())
+                    {
+                        mRiffCapture.left[captureIndex] = inputs[0][i];
+                        mRiffCapture.right[captureIndex] = inputs[1][i];
+                    }
+                }
+                ++mRiffCapture.writeIndex;
+            }
+
+            if (mRiffCapture.writeIndex >= mRiffCapture.targetSamples)
+            {
+                mRiffCapture.complete = true;
+                mRiffCapture.active = false;
+                mRiffCapture.endedAt = std::chrono::steady_clock::now();
+                nlohmann::json msg;
+                msg["type"] = "riffCaptureStopped";
+                msg["takeId"] = mRiffCapture.takeId;
+                msg["capturedSamples"] = mRiffCapture.left.size();
+                msg["sampleRate"] = mRiffCapture.sampleRate;
+                msg["hasAudio"] = !mRiffCapture.left.empty() && !mRiffCapture.right.empty();
+                msg["waveformPeaks"] = BuildWaveformPeaks(mRiffCapture.left, mRiffCapture.right, 256);
+                SendMessageToUI(msg.dump());
+            }
+        }
+    }
 
     // Mix in demo audio preview if active
     if (mDemoPreview)
@@ -3395,6 +3615,585 @@ void PluginController::HandleStopDemoRequest()
         mDemoPreview->StopPreview();
 }
 
+void PluginController::HandleGetRiffLibraryRequest()
+{
+    SendRiffLibraryStateToUI();
+}
+
+void PluginController::HandleSetRiffLibraryPathRequest(const nlohmann::json& payload)
+{
+    const std::string requestedPath = payload.value("path", "");
+    if (requestedPath.empty())
+    {
+        ReportErrorToUI("Riff Library", "Path is required");
+        return;
+    }
+
+    try
+    {
+        const std::filesystem::path libraryPath = std::filesystem::path(requestedPath);
+        std::filesystem::create_directories(libraryPath);
+        mAppSettings[kRiffLibraryPathSettingKey] = libraryPath.string();
+        SaveAppSettings();
+
+        {
+            std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+            mRiffLibraryIndex = LoadRiffLibraryIndex();
+            mRiffLibraryIndex["path"] = libraryPath.string();
+            if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+                mRiffLibraryIndex["riffs"] = nlohmann::json::array();
+            SaveRiffLibraryIndex(mRiffLibraryIndex);
+        }
+
+        SendRiffLibraryStateToUI();
+    }
+    catch (const std::exception& ex)
+    {
+        ReportErrorToUI("Riff Library", ex.what());
+    }
+}
+
+void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& payload)
+{
+    std::lock_guard<std::mutex> lock(mDSPMutex);
+    if (mRiffCapture.active)
+    {
+        ReportErrorToUI("Riff Capture", "Capture is already running");
+        return;
+    }
+
+    const double sampleRate = mHost.GetSampleRate();
+    if (sampleRate <= 0.0)
+    {
+        ReportErrorToUI("Riff Capture", "Audio device sample rate is unavailable");
+        return;
+    }
+
+    RiffCaptureConfig config;
+    config.tempoBpm = ClampValue(payload.value("tempoBpm", GetEffectiveTempoBpm()), kMetronomeMinBpm, kMetronomeMaxBpm);
+    config.timeSigNum = std::max(1, payload.value("timeSigNum", 4));
+    config.timeSigDen = std::max(1, payload.value("timeSigDen", 4));
+    config.bars = std::max(1, payload.value("bars", 1));
+    config.countInBars = std::max(0, payload.value("countInBars", 1));
+    config.patternType = payload.value("patternType", std::string("click"));
+    config.patternId = payload.value("patternId", std::string{});
+    config.presetId = mActivePresetId;
+    config.presetName = mActivePreset ? mActivePreset->name : std::string{};
+
+    const double beatScale = 4.0 / static_cast<double>(config.timeSigDen);
+    const double samplesPerBeat = sampleRate * (60.0 / std::max(1.0, config.tempoBpm)) * beatScale;
+    const std::size_t captureSamples = std::max<std::size_t>(1,
+        static_cast<std::size_t>(std::llround(samplesPerBeat * static_cast<double>(config.timeSigNum * config.bars))));
+    const std::size_t countInSamples = config.countInBars > 0
+        ? std::max<std::size_t>(0,
+            static_cast<std::size_t>(std::llround(samplesPerBeat * static_cast<double>(config.timeSigNum * config.countInBars))))
+        : 0;
+
+    mRiffCapture = RiffCaptureRuntime{};
+    mRiffCapture.active = true;
+    mRiffCapture.complete = false;
+    mRiffCapture.takeId = BuildRiffTakeId();
+    mRiffCapture.config = config;
+    mRiffCapture.left.assign(captureSamples, 0.0f);
+    mRiffCapture.right.assign(captureSamples, 0.0f);
+    mRiffCapture.writeIndex = 0;
+    mRiffCapture.targetSamples = captureSamples + countInSamples;
+    mRiffCapture.countInSamples = countInSamples;
+    mRiffCapture.sampleRate = sampleRate;
+    mRiffCapture.bitsPerSample = 16;
+    mRiffCapture.startedAt = std::chrono::steady_clock::now();
+
+    nlohmann::json msg;
+    msg["type"] = "riffCaptureStarted";
+    msg["takeId"] = mRiffCapture.takeId;
+    msg["bars"] = config.bars;
+    msg["tempoBpm"] = config.tempoBpm;
+    msg["timeSigNum"] = config.timeSigNum;
+    msg["timeSigDen"] = config.timeSigDen;
+    msg["countInBars"] = config.countInBars;
+    msg["estimatedSeconds"] = static_cast<double>(captureSamples) / sampleRate;
+    SendMessageToUI(msg.dump());
+}
+
+void PluginController::HandleStopRiffCaptureRequest(const nlohmann::json& payload)
+{
+    const bool canceled = payload.value("canceled", false);
+    std::lock_guard<std::mutex> lock(mDSPMutex);
+    FinalizeRiffCaptureLocked(canceled);
+}
+
+void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
+{
+    const std::string base64 = payload.value("data", std::string{});
+    if (base64.empty())
+    {
+        ReportErrorToUI("Riff Library", "Dropped WAV data is missing");
+        return;
+    }
+
+    const auto bytes = util::DecodeBase64(base64);
+    if (bytes.empty())
+    {
+        ReportErrorToUI("Riff Library", "Failed to decode dropped WAV data");
+        return;
+    }
+
+    const auto decodedOpt = util::DecodePcmWav(bytes);
+    if (!decodedOpt)
+    {
+        ReportErrorToUI("Riff Library", "Unsupported WAV file (expected PCM/float WAV)");
+        return;
+    }
+
+    const auto& decoded = *decodedOpt;
+    if (decoded.channelSamples.empty() || decoded.channelSamples.front().empty())
+    {
+        ReportErrorToUI("Riff Library", "Dropped WAV has no audio samples");
+        return;
+    }
+
+    const std::size_t frameCount = decoded.channelSamples.front().size();
+    if (frameCount == 0)
+    {
+        ReportErrorToUI("Riff Library", "Dropped WAV has no audio frames");
+        return;
+    }
+
+    RiffCaptureRuntime imported;
+    imported.active = false;
+    imported.complete = true;
+    imported.takeId = BuildRiffTakeId();
+    imported.config.tempoBpm = ClampValue(payload.value("tempoBpm", GetEffectiveTempoBpm()), kMetronomeMinBpm, kMetronomeMaxBpm);
+    imported.config.timeSigNum = std::max(1, payload.value("timeSigNum", 4));
+    imported.config.timeSigDen = std::max(1, payload.value("timeSigDen", 4));
+    imported.config.bars = std::max(1, payload.value("bars", 1));
+    imported.config.countInBars = 0;
+    imported.config.patternType = payload.value("patternType", std::string("click"));
+    imported.config.patternId = payload.value("patternId", std::string{});
+    imported.config.presetId = mActivePresetId;
+    imported.config.presetName = mActivePreset ? mActivePreset->name : std::string{};
+    imported.sampleRate = decoded.sampleRate > 0.0 ? decoded.sampleRate : mHost.GetSampleRate();
+    imported.bitsPerSample = decoded.bitsPerSample > 0 ? decoded.bitsPerSample : 16;
+    imported.left.resize(frameCount, 0.0f);
+    imported.right.resize(frameCount, 0.0f);
+
+    const std::size_t rightChannelIndex = decoded.channelSamples.size() > 1 ? 1u : 0u;
+    for (std::size_t i = 0; i < frameCount; ++i)
+    {
+        imported.left[i] = static_cast<float>(std::clamp(decoded.channelSamples[0][i], -1.0, 1.0));
+        imported.right[i] = static_cast<float>(std::clamp(decoded.channelSamples[rightChannelIndex][i], -1.0, 1.0));
+    }
+
+    imported.writeIndex = frameCount;
+    imported.targetSamples = frameCount;
+    imported.countInSamples = 0;
+    imported.startedAt = std::chrono::steady_clock::now();
+    imported.endedAt = imported.startedAt;
+
+    RiffCaptureRuntime captureSnapshot;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mRiffCapture = std::move(imported);
+        captureSnapshot = mRiffCapture;
+    }
+
+    nlohmann::json msg;
+    msg["type"] = "riffCaptureStopped";
+    msg["takeId"] = captureSnapshot.takeId;
+    msg["capturedSamples"] = captureSnapshot.left.size();
+    msg["sampleRate"] = captureSnapshot.sampleRate;
+    msg["hasAudio"] = !captureSnapshot.left.empty() && !captureSnapshot.right.empty();
+    msg["waveformPeaks"] = BuildWaveformPeaks(captureSnapshot.left, captureSnapshot.right, 256);
+    msg["bars"] = captureSnapshot.config.bars;
+    msg["tempoBpm"] = captureSnapshot.config.tempoBpm;
+    msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
+    msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
+    msg["patternType"] = captureSnapshot.config.patternType;
+    if (!captureSnapshot.config.patternId.empty())
+        msg["patternId"] = captureSnapshot.config.patternId;
+    msg["source"] = "import";
+    SendMessageToUI(msg.dump());
+}
+
+void PluginController::HandleTrimCapturedRiffRequest(const nlohmann::json& payload)
+{
+    RiffCaptureRuntime captureSnapshot;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
+        {
+            ReportErrorToUI("Riff Library", "No captured take available to trim");
+            return;
+        }
+
+        const std::size_t totalSamples = mRiffCapture.left.size();
+        const double startRatioRaw = payload.value("startRatio", 0.0);
+        const double endRatioRaw = payload.value("endRatio", 1.0);
+        const double startRatio = std::clamp(startRatioRaw, 0.0, 1.0);
+        const double endRatio = std::clamp(endRatioRaw, 0.0, 1.0);
+
+        std::size_t startSample = static_cast<std::size_t>(std::floor(startRatio * static_cast<double>(totalSamples)));
+        std::size_t endSample = static_cast<std::size_t>(std::ceil(endRatio * static_cast<double>(totalSamples)));
+        startSample = std::min(startSample, totalSamples > 0 ? totalSamples - 1 : 0);
+        endSample = std::max(endSample, startSample + 1);
+        endSample = std::min(endSample, totalSamples);
+
+        if (startSample >= endSample)
+        {
+            ReportErrorToUI("Riff Library", "Invalid trim markers");
+            return;
+        }
+
+        std::vector<float> trimmedLeft(mRiffCapture.left.begin() + startSample,
+                           mRiffCapture.left.begin() + endSample);
+        std::vector<float> trimmedRight(mRiffCapture.right.begin() + startSample,
+                        mRiffCapture.right.begin() + endSample);
+
+        mRiffCapture.left = std::move(trimmedLeft);
+        mRiffCapture.right = std::move(trimmedRight);
+        mRiffCapture.writeIndex = mRiffCapture.left.size();
+        mRiffCapture.targetSamples = mRiffCapture.left.size();
+        mRiffCapture.countInSamples = 0;
+        mRiffCapture.endedAt = std::chrono::steady_clock::now();
+
+        captureSnapshot = mRiffCapture;
+    }
+
+    nlohmann::json msg;
+    msg["type"] = "riffCaptureStopped";
+    msg["takeId"] = captureSnapshot.takeId;
+    msg["capturedSamples"] = captureSnapshot.left.size();
+    msg["sampleRate"] = captureSnapshot.sampleRate;
+    msg["hasAudio"] = !captureSnapshot.left.empty() && !captureSnapshot.right.empty();
+    msg["waveformPeaks"] = BuildWaveformPeaks(captureSnapshot.left, captureSnapshot.right, 256);
+    msg["bars"] = captureSnapshot.config.bars;
+    msg["tempoBpm"] = captureSnapshot.config.tempoBpm;
+    msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
+    msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
+    msg["patternType"] = captureSnapshot.config.patternType;
+    if (!captureSnapshot.config.patternId.empty())
+        msg["patternId"] = captureSnapshot.config.patternId;
+    msg["source"] = "trim";
+    SendMessageToUI(msg.dump());
+}
+
+void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
+{
+    RiffCaptureRuntime capture;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
+        {
+            ReportErrorToUI("Riff Library", "No completed take to save");
+            return;
+        }
+        capture = mRiffCapture;
+    }
+
+    if (payload.contains("tempoBpm"))
+        capture.config.tempoBpm = ClampValue(payload.value("tempoBpm", capture.config.tempoBpm), kMetronomeMinBpm, kMetronomeMaxBpm);
+    if (payload.contains("timeSigNum"))
+        capture.config.timeSigNum = std::max(1, payload.value("timeSigNum", capture.config.timeSigNum));
+    if (payload.contains("timeSigDen"))
+        capture.config.timeSigDen = std::max(1, payload.value("timeSigDen", capture.config.timeSigDen));
+    if (payload.contains("bars"))
+        capture.config.bars = std::max(1, payload.value("bars", capture.config.bars));
+    if (payload.contains("patternType") && payload["patternType"].is_string())
+        capture.config.patternType = payload.value("patternType", capture.config.patternType);
+    if (payload.contains("patternId") && payload["patternId"].is_string())
+        capture.config.patternId = payload.value("patternId", std::string{});
+
+    const std::string riffId = payload.value("riffId", std::string{}).empty() ? BuildRiffId() : payload.value("riffId", std::string{});
+    const std::string baseTitle = payload.value("title", std::string("New Riff"));
+    const std::string safeTitle = util::SanitizeFilename(baseTitle.empty() ? "New Riff" : baseTitle);
+    const auto libraryPath = ResolveRiffLibraryPath();
+    const auto takesDir = libraryPath / "takes" / riffId;
+    const auto fileName = safeTitle + "_" + capture.takeId + ".wav";
+    const auto wavPath = takesDir / fileName;
+
+    if (!WriteStereo16BitWav(wavPath, capture.left, capture.right, static_cast<int>(std::llround(capture.sampleRate))))
+    {
+        ReportErrorToUI("Riff Library", "Failed to write WAV file");
+        return;
+    }
+
+    nlohmann::json takeJson;
+    takeJson["id"] = capture.takeId;
+    takeJson["filePath"] = wavPath.string();
+    takeJson["durationSec"] = capture.sampleRate > 0.0
+        ? static_cast<double>(capture.left.size()) / capture.sampleRate
+        : 0.0;
+    takeJson["bars"] = capture.config.bars;
+    takeJson["tempoBpm"] = capture.config.tempoBpm;
+    takeJson["timeSigNum"] = capture.config.timeSigNum;
+    takeJson["timeSigDen"] = capture.config.timeSigDen;
+    takeJson["patternType"] = capture.config.patternType;
+    if (!capture.config.patternId.empty())
+        takeJson["patternId"] = capture.config.patternId;
+    if (!capture.config.presetId.empty())
+        takeJson["presetId"] = capture.config.presetId;
+    if (!capture.config.presetName.empty())
+        takeJson["presetName"] = capture.config.presetName;
+    takeJson["sampleRate"] = capture.sampleRate;
+    takeJson["bitsPerSample"] = capture.bitsPerSample;
+    takeJson["createdAt"] = BuildTimestampUtcIso();
+
+    {
+        std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+        if (!mRiffLibraryIndex.is_object())
+            mRiffLibraryIndex = nlohmann::json::object();
+
+        mRiffLibraryIndex["path"] = libraryPath.string();
+        if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+            mRiffLibraryIndex["riffs"] = nlohmann::json::array();
+
+        auto& riffs = mRiffLibraryIndex["riffs"];
+        nlohmann::json* riffEntry = nullptr;
+        for (auto& riff : riffs)
+        {
+            if (riff.is_object() && riff.value("id", std::string{}) == riffId)
+            {
+                riffEntry = &riff;
+                break;
+            }
+        }
+
+        if (!riffEntry)
+        {
+            nlohmann::json newRiff;
+            newRiff["id"] = riffId;
+            newRiff["title"] = baseTitle;
+            newRiff["categories"] = nlohmann::json::array();
+            newRiff["tags"] = nlohmann::json::array();
+            newRiff["notes"] = "";
+            newRiff["favorite"] = payload.value("favorite", false);
+            newRiff["used"] = false;
+            newRiff["createdAt"] = BuildTimestampUtcIso();
+            newRiff["updatedAt"] = newRiff["createdAt"];
+            newRiff["takes"] = nlohmann::json::array();
+            riffs.push_back(std::move(newRiff));
+            riffEntry = &riffs.back();
+        }
+
+        if (riffEntry)
+        {
+            (*riffEntry)["title"] = baseTitle;
+            (*riffEntry)["updatedAt"] = BuildTimestampUtcIso();
+            if (payload.contains("categories") && payload["categories"].is_array())
+                (*riffEntry)["categories"] = payload["categories"];
+            if (payload.contains("tags") && payload["tags"].is_array())
+                (*riffEntry)["tags"] = payload["tags"];
+            if (payload.contains("notes") && payload["notes"].is_string())
+                (*riffEntry)["notes"] = payload["notes"];
+            if (payload.contains("favorite") && payload["favorite"].is_boolean())
+                (*riffEntry)["favorite"] = payload["favorite"];
+            if (!(*riffEntry).contains("takes") || !(*riffEntry)["takes"].is_array())
+                (*riffEntry)["takes"] = nlohmann::json::array();
+            (*riffEntry)["takes"].push_back(takeJson);
+            (*riffEntry)["preferredTakeId"] = capture.takeId;
+        }
+
+        SaveRiffLibraryIndex(mRiffLibraryIndex);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mRiffCapture = RiffCaptureRuntime{};
+    }
+
+    nlohmann::json msg;
+    msg["type"] = "riffSaved";
+    msg["riffId"] = riffId;
+    msg["takeId"] = capture.takeId;
+    msg["path"] = wavPath.string();
+    SendMessageToUI(msg.dump());
+    SendRiffLibraryStateToUI();
+}
+
+void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
+{
+    const std::string riffId = payload.value("riffId", "");
+    if (riffId.empty())
+        return;
+
+    std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+    if (!mRiffLibraryIndex.is_object() || !mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+        return;
+
+    auto& riffs = mRiffLibraryIndex["riffs"];
+    riffs.erase(std::remove_if(riffs.begin(), riffs.end(),
+        [&](const nlohmann::json& riff) { return riff.value("id", std::string{}) == riffId; }), riffs.end());
+    SaveRiffLibraryIndex(mRiffLibraryIndex);
+    SendRiffLibraryStateToUI();
+}
+
+void PluginController::HandleSetRiffFavoriteRequest(const nlohmann::json& payload)
+{
+    const std::string riffId = payload.value("riffId", "");
+    if (riffId.empty())
+        return;
+
+    const bool favorite = payload.value("favorite", false);
+    std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+    if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+        return;
+
+    for (auto& riff : mRiffLibraryIndex["riffs"])
+    {
+        if (!riff.is_object() || riff.value("id", std::string{}) != riffId)
+            continue;
+        riff["favorite"] = favorite;
+        riff["updatedAt"] = BuildTimestampUtcIso();
+        break;
+    }
+
+    SaveRiffLibraryIndex(mRiffLibraryIndex);
+    SendRiffLibraryStateToUI();
+}
+
+void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
+{
+    const std::string riffId = payload.value("riffId", "");
+    if (riffId.empty())
+        return;
+
+    const bool used = payload.value("used", false);
+    const std::string songTitle = payload.value("songTitle", std::string{});
+    std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+    if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+        return;
+
+    for (auto& riff : mRiffLibraryIndex["riffs"])
+    {
+        if (!riff.is_object() || riff.value("id", std::string{}) != riffId)
+            continue;
+        riff["used"] = used;
+        if (used)
+        {
+            riff["usedSongTitle"] = songTitle;
+            riff["usedAt"] = BuildTimestampUtcIso();
+        }
+        else
+        {
+            riff.erase("usedSongTitle");
+            riff.erase("usedAt");
+        }
+        riff["updatedAt"] = BuildTimestampUtcIso();
+        break;
+    }
+
+    SaveRiffLibraryIndex(mRiffLibraryIndex);
+    SendRiffLibraryStateToUI();
+}
+
+void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payload)
+{
+    const std::string takeId = payload.value("takeId", "");
+    if (takeId.empty())
+    {
+        ReportErrorToUI("Riff preview", "Missing takeId");
+        return;
+    }
+
+    const auto take = FindRiffTakeById(takeId);
+    if (!take)
+    {
+        ReportErrorToUI("Riff preview", "Take not found");
+        return;
+    }
+
+    const std::string filePath = take->value("filePath", std::string{});
+    if (filePath.empty() || !std::filesystem::exists(filePath))
+    {
+        ReportErrorToUI("Riff preview", "Take WAV file is missing");
+        return;
+    }
+
+    std::ifstream input(filePath, std::ios::binary);
+    if (!input)
+    {
+        ReportErrorToUI("Riff preview", "Unable to open take WAV file");
+        return;
+    }
+
+    std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(input)),
+        std::istreambuf_iterator<char>());
+    if (bytes.empty())
+    {
+        ReportErrorToUI("Riff preview", "Take WAV file is empty");
+        return;
+    }
+
+    nlohmann::json preview;
+    preview["audio"] = {
+        {"id", takeId},
+        {"title", take->value("title", std::string("Riff Take"))},
+        {"data", util::EncodeBase64(bytes)},
+        {"contentType", "audio/wav"}
+    };
+
+    if (mDemoPreview)
+        mDemoPreview->StartPreview(preview);
+}
+
+void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& payload)
+{
+    RiffCaptureRuntime capture;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
+        {
+            ReportErrorToUI("Riff preview", "No captured take available yet");
+            return;
+        }
+        capture = mRiffCapture;
+    }
+
+    std::vector<float> previewLeft = capture.left;
+    std::vector<float> previewRight = capture.right;
+    if (!previewLeft.empty() && !previewRight.empty())
+    {
+        const std::size_t totalSamples = previewLeft.size();
+        const double startRatioRaw = payload.value("startRatio", 0.0);
+        const double endRatioRaw = payload.value("endRatio", 1.0);
+        const double startRatio = std::clamp(startRatioRaw, 0.0, 1.0);
+        const double endRatio = std::clamp(endRatioRaw, 0.0, 1.0);
+
+        std::size_t startSample = static_cast<std::size_t>(std::floor(startRatio * static_cast<double>(totalSamples)));
+        std::size_t endSample = static_cast<std::size_t>(std::ceil(endRatio * static_cast<double>(totalSamples)));
+        startSample = std::min(startSample, totalSamples > 0 ? totalSamples - 1 : 0);
+        endSample = std::max(endSample, startSample + 1);
+        endSample = std::min(endSample, totalSamples);
+
+        previewLeft = std::vector<float>(previewLeft.begin() + startSample,
+                         previewLeft.begin() + endSample);
+        previewRight = std::vector<float>(previewRight.begin() + startSample,
+                          previewRight.begin() + endSample);
+    }
+
+    const auto wavBytes = EncodeStereo16BitWav(
+        previewLeft,
+        previewRight,
+        static_cast<int>(std::llround(capture.sampleRate)));
+    if (wavBytes.empty())
+    {
+        ReportErrorToUI("Riff preview", "Unable to encode captured take");
+        return;
+    }
+
+    nlohmann::json preview;
+    preview["audio"] = {
+        {"id", capture.takeId.empty() ? std::string("captured-take") : capture.takeId},
+        {"title", std::string("Captured Riff")},
+        {"data", util::EncodeBase64(wavBytes)},
+        {"contentType", "audio/wav"}
+    };
+
+    if (mDemoPreview)
+        mDemoPreview->StartPreview(preview);
+}
+
 // ── Additional message handlers (from JUCE version) ────────────────
 
 void PluginController::HandleGetSignalDiagnosticsRequest()
@@ -3679,6 +4478,12 @@ void PluginController::BroadcastState()
 
     // Blend library
     state["blendLibrary"] = mBlendLibrary;
+
+    // Riff library
+    {
+        std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+        state["riffLibrary"] = mRiffLibraryIndex;
+    }
 
     SendMessageToUI(state.dump());
 
@@ -4766,6 +5571,151 @@ void PluginController::SaveUiStorageJson(const std::string& filename, const nloh
     catch (const std::exception&) {}
 }
 
+std::filesystem::path PluginController::ResolveRiffLibraryPath() const
+{
+    if (mAppSettings.contains(kRiffLibraryPathSettingKey) && mAppSettings[kRiffLibraryPathSettingKey].is_string())
+    {
+        const auto configured = std::filesystem::path(mAppSettings[kRiffLibraryPathSettingKey].get<std::string>());
+        if (!configured.empty())
+            return configured;
+    }
+
+    return mFileSystem.ResolveSettingsDirectory() / kRiffLibraryDefaultFolder;
+}
+
+std::filesystem::path PluginController::ResolveRiffLibraryIndexPath() const
+{
+    return ResolveRiffLibraryPath() / kRiffLibraryIndexFile;
+}
+
+nlohmann::json PluginController::LoadRiffLibraryIndex() const
+{
+    nlohmann::json index = nlohmann::json::object();
+    const auto path = ResolveRiffLibraryPath();
+    const auto indexPath = ResolveRiffLibraryIndexPath();
+
+    try
+    {
+        std::filesystem::create_directories(path);
+        if (std::filesystem::exists(indexPath))
+        {
+            std::ifstream input(indexPath);
+            if (input)
+            {
+                index = nlohmann::json::parse(input, nullptr, false);
+                if (index.is_discarded() || !index.is_object())
+                    index = nlohmann::json::object();
+            }
+        }
+    }
+    catch (...)
+    {
+        index = nlohmann::json::object();
+    }
+
+    index["path"] = path.string();
+    if (!index.contains("riffs") || !index["riffs"].is_array())
+        index["riffs"] = nlohmann::json::array();
+    return index;
+}
+
+bool PluginController::SaveRiffLibraryIndex(const nlohmann::json& payload) const
+{
+    const auto indexPath = ResolveRiffLibraryIndexPath();
+    try
+    {
+        std::filesystem::create_directories(indexPath.parent_path());
+        std::ofstream output(indexPath);
+        if (!output)
+            return false;
+        output << payload.dump(2);
+        return static_cast<bool>(output);
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+std::string PluginController::BuildRiffTakeId() const
+{
+    return "take-" + GenerateGuidV4String();
+}
+
+std::string PluginController::BuildRiffId() const
+{
+    return "riff-" + GenerateGuidV4String();
+}
+
+std::string PluginController::BuildTimestampUtcIso() const
+{
+    return BuildUtcIsoTimestamp();
+}
+
+std::optional<nlohmann::json> PluginController::FindRiffTakeById(const std::string& takeId) const
+{
+    std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+    if (!mRiffLibraryIndex.is_object() || !mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
+        return std::nullopt;
+
+    for (const auto& riff : mRiffLibraryIndex["riffs"])
+    {
+        if (!riff.is_object())
+            continue;
+        const std::string riffTitle = riff.value("title", std::string("Riff"));
+        const auto takes = riff.value("takes", nlohmann::json::array());
+        if (!takes.is_array())
+            continue;
+        for (const auto& take : takes)
+        {
+            if (!take.is_object() || take.value("id", std::string{}) != takeId)
+                continue;
+            nlohmann::json result = take;
+            result["title"] = riffTitle;
+            return result;
+        }
+    }
+
+    return std::nullopt;
+}
+
+void PluginController::FinalizeRiffCaptureLocked(bool canceled)
+{
+    if (!mRiffCapture.active && !mRiffCapture.complete)
+        return;
+
+    if (canceled)
+    {
+        const std::string takeId = mRiffCapture.takeId;
+        mRiffCapture = RiffCaptureRuntime{};
+        nlohmann::json msg;
+        msg["type"] = "riffCaptureCanceled";
+        msg["takeId"] = takeId;
+        SendMessageToUI(msg.dump());
+        return;
+    }
+
+    const std::size_t written = std::min(mRiffCapture.writeIndex, mRiffCapture.targetSamples);
+    const std::size_t captured = written > mRiffCapture.countInSamples ? (written - mRiffCapture.countInSamples) : 0;
+    if (captured < mRiffCapture.left.size())
+        mRiffCapture.left.resize(captured);
+    if (captured < mRiffCapture.right.size())
+        mRiffCapture.right.resize(captured);
+
+    mRiffCapture.active = false;
+    mRiffCapture.complete = captured > 0;
+    mRiffCapture.endedAt = std::chrono::steady_clock::now();
+
+    nlohmann::json msg;
+    msg["type"] = "riffCaptureStopped";
+    msg["takeId"] = mRiffCapture.takeId;
+    msg["capturedSamples"] = captured;
+    msg["sampleRate"] = mRiffCapture.sampleRate;
+    msg["hasAudio"] = captured > 0;
+    msg["waveformPeaks"] = BuildWaveformPeaks(mRiffCapture.left, mRiffCapture.right, 256);
+    SendMessageToUI(msg.dump());
+}
+
 // ── Messaging helpers ──────────────────────────────────────────────
 
 void PluginController::SendGlobalChainStateToUI()
@@ -4971,6 +5921,34 @@ void PluginController::SendMetronomeStateToUI()
     for (const auto& config : mMetronomeClickConfig)
         clickTypes.push_back({ {"id", config.id}, {"label", config.label} });
     msg["clickTypes"] = std::move(clickTypes);
+    SendMessageToUI(msg.dump());
+}
+
+void PluginController::SendRiffLibraryStateToUI()
+{
+    nlohmann::json msg;
+    msg["type"] = "riffLibraryState";
+    {
+        std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+        if (!mRiffLibraryIndex.is_object())
+            mRiffLibraryIndex = LoadRiffLibraryIndex();
+        msg["library"] = mRiffLibraryIndex;
+    }
+
+    nlohmann::json capture;
+    capture["active"] = mRiffCapture.active;
+    capture["complete"] = mRiffCapture.complete;
+    capture["takeId"] = mRiffCapture.takeId;
+    capture["bars"] = mRiffCapture.config.bars;
+    capture["tempoBpm"] = mRiffCapture.config.tempoBpm;
+    capture["timeSigNum"] = mRiffCapture.config.timeSigNum;
+    capture["timeSigDen"] = mRiffCapture.config.timeSigDen;
+    capture["capturedSamples"] = mRiffCapture.left.size();
+    capture["sampleRate"] = mRiffCapture.sampleRate;
+    capture["hasAudio"] = !mRiffCapture.left.empty() && !mRiffCapture.right.empty();
+    capture["waveformPeaks"] = BuildWaveformPeaks(mRiffCapture.left, mRiffCapture.right, 256);
+    msg["capture"] = capture;
+
     SendMessageToUI(msg.dump());
 }
 
