@@ -394,7 +394,7 @@
   font-size: 11px;
 }
 
-.library-tab-panel.riff-drop-active .riff-drop-hint {
+#app.riff-drop-active .riff-drop-hint {
   border-color: var(--color-primary);
   background: var(--bg-card);
   color: var(--text-primary);
@@ -442,6 +442,10 @@
 
 .riff-save-modal-content {
   width: min(640px, 90vw);
+}
+
+.riff-capture-modal-content {
+  width: min(760px, 92vw);
 }
 
 .riff-library-item .equipment-library-item-meta {

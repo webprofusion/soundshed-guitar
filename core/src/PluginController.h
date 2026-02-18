@@ -244,6 +244,7 @@ private:
     void HandleStopRiffCaptureRequest(const nlohmann::json& payload);
     void HandleImportRiffWavRequest(const nlohmann::json& payload);
     void HandleTrimCapturedRiffRequest(const nlohmann::json& payload);
+    void HandleLoadRiffTakeForEditRequest(const nlohmann::json& payload);
     void HandleSaveRiffTakeRequest(const nlohmann::json& payload);
     void HandleDeleteRiffRequest(const nlohmann::json& payload);
     void HandleSetRiffFavoriteRequest(const nlohmann::json& payload);
@@ -431,6 +432,7 @@ private:
     mutable std::mutex mTunerMutex;
 
     // Metronome helpers
+    struct RiffCaptureConfig;
     [[nodiscard]] double GetEffectiveTempoBpm() const;
     void RenderMetronome(float** outputs, int numSamples);
     void ApplyMetronomeSettingsFromAppSettings();
@@ -440,6 +442,8 @@ private:
     struct MetronomeClickSamples;
     std::shared_ptr<MetronomeClickSamples> BuildMetronomeClickSamples(const MetronomeClickTypeConfig& config, double targetSampleRate) const;
     void RefreshMetronomeClickSamples(double sampleRate);
+    void ActivateRiffGuidance(const RiffCaptureConfig& config, bool forPreview);
+    void DeactivateRiffGuidance(bool previewOnly = false);
 
     // Metronome state
     std::atomic<double> mMetronomeBpm{120.0};
@@ -472,6 +476,12 @@ private:
 
     std::vector<MetronomeClickTypeConfig> mMetronomeClickConfig;
     std::shared_ptr<MetronomeClickSamples> mMetronomeClickSamples;
+    bool mRiffGuidanceActive = false;
+    bool mRiffGuidanceForPreview = false;
+    double mRiffGuidanceBpm = 120.0;
+    int mRiffGuidanceBeatsPerBar = 4;
+    double mRiffGuidanceBeatScale = 1.0;
+    std::shared_ptr<MetronomeClickSamples> mRiffGuidanceClickSamples;
 
     std::unique_ptr<DemoPreviewService> mDemoPreview;
 

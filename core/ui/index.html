@@ -52,7 +52,7 @@
       </button>
       <button class="icon-btn" data-panel="sharing" title="Tone Sharing">
         <svg viewBox="0 0 24 24">
-          <path d="M21 8a4 4 0 0 0-6.8-2.8L12 7.4 9.8 5.2A4 4 0 0 0 3 8c0 4.5 5.2 7.7 9 11.1 3.8-3.4 9-6.6 9-11.1z" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M7 18a4 4 0 0 1 0-8 5.5 5.5 0 0 1 10.6-1.6A3.5 3.5 0 1 1 18.5 18H7z" stroke="currentColor" stroke-width="1.5" fill="none" />
         </svg>
       </button>
       <button class="icon-btn" data-panel="settings" title="Settings">
@@ -467,75 +467,12 @@
           <div class="library-tab-panel" id="library-tab-riffs">
             <div class="settings-section">
               <h3>Riff Library</h3>
-              <div class="riff-drop-hint" id="riff-drop-hint">Drop a WAV file anywhere in this Riff tab to import it as the current take.</div>
-              <div class="settings-row">
-                <label for="riff-library-path">Library Path</label>
-                <input type="text" id="riff-library-path" placeholder="C:\\Users\\you\\Documents\\SoundshedRiffs" />
-                <button id="riff-library-path-save" type="button">Set Path</button>
-                <button id="riff-library-refresh" type="button" class="secondary">Refresh</button>
+              <div class="riff-drop-hint" id="riff-drop-hint">Drop a WAV file anywhere on the page to import it into the current riff take.</div>
+              <div class="settings-row settings-row-two">
+                <label for="riff-open-capture-modal">Capture</label>
+                <button id="riff-open-capture-modal" type="button">New Riff</button>
               </div>
               <div class="settings-hint">Riffs are saved as measure-aligned DI WAV takes with metadata for tempo, time signature, pattern, and preset context.</div>
-            </div>
-
-            <div class="settings-section">
-              <h3>Capture</h3>
-              <div class="settings-row riff-capture-row">
-                <label for="riff-capture-tempo">Tempo</label>
-                <input type="number" id="riff-capture-tempo" min="30" max="300" step="1" value="120" />
-                <span class="settings-unit">BPM</span>
-              </div>
-              <div class="settings-row riff-capture-row">
-                <label for="riff-capture-timesig-num">Time Signature</label>
-                <div class="riff-timesig-inline">
-                  <input type="number" id="riff-capture-timesig-num" min="1" max="16" step="1" value="4" />
-                  <span>/</span>
-                  <input type="number" id="riff-capture-timesig-den" min="1" max="16" step="1" value="4" />
-                </div>
-                <span class="settings-unit">bars</span>
-                <input type="number" id="riff-capture-bars" min="1" max="64" step="1" value="2" />
-              </div>
-              <div class="settings-row riff-capture-row">
-                <label for="riff-capture-pattern-type">Pattern</label>
-                <select id="riff-capture-pattern-type">
-                  <option value="click" selected>Click</option>
-                  <option value="drum">Drum (MIDI)</option>
-                </select>
-                <span class="settings-unit">pattern id</span>
-                <input type="text" id="riff-capture-pattern-id" placeholder="e.g. rock_4_4_01" />
-              </div>
-              <div class="settings-row riff-capture-row">
-                <label for="riff-capture-countin">Count-in</label>
-                <input type="number" id="riff-capture-countin" min="0" max="8" step="1" value="1" />
-                <span class="settings-unit">bars</span>
-                <span id="riff-capture-status" class="settings-unit">Idle</span>
-              </div>
-              <div class="settings-row">
-                <label>Actions</label>
-                <div class="riff-capture-actions">
-                  <button id="riff-capture-record-toggle" type="button">● Record</button>
-                  <button id="riff-capture-play" type="button" class="secondary">▶</button>
-                  <button id="riff-open-save-modal" type="button" class="secondary">Save Take</button>
-                </div>
-              </div>
-              <div class="settings-row">
-                <label>Trim + Loop</label>
-                <div class="riff-trim-controls">
-                  <span class="settings-unit">Start</span>
-                  <span class="settings-unit" id="riff-trim-start-label">0.00s</span>
-                  <span class="settings-unit">End</span>
-                  <span class="settings-unit" id="riff-trim-end-label">0.00s</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="riff-capture-repeat" />
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="settings-unit">Repeat</span>
-                  <button id="riff-capture-trim" type="button" class="secondary">Crop To Markers</button>
-                </div>
-              </div>
-              <div class="riff-waveform-wrap">
-                <canvas id="riff-capture-waveform" class="riff-capture-waveform" width="640" height="120" tabindex="0" aria-label="Riff trim waveform"></canvas>
-              </div>
-              <div class="settings-hint">Drag the vertical trim markers in the waveform to set loop/crop start and end.</div>
             </div>
 
             <div class="settings-section">
@@ -666,7 +603,7 @@
             </div>
             <div class="tone-sharing-endpoint">
               <label for="tone-sharing-api-base">API</label>
-              <input id="tone-sharing-api-base" type="text" value="https://api.soundshed.com/v1" />
+              <input id="tone-sharing-api-base" type="text" value="https://api.guitar.soundshed.com/v1" />
               <button id="tone-sharing-refresh" type="button">Refresh</button>
             </div>
           </div>
@@ -682,10 +619,6 @@
               <div class="tone-sharing-auth-row">
                 <label for="tone-sharing-code">Code</label>
                 <input id="tone-sharing-code" type="text" placeholder="One-time code" />
-              </div>
-              <div class="tone-sharing-auth-row">
-                <label for="tone-sharing-turnstile-token">Human Check Token</label>
-                <input id="tone-sharing-turnstile-token" type="text" placeholder="Optional in development" />
               </div>
               <div class="tone-sharing-actions">
                 <button id="tone-sharing-send-code" type="button">Send Code</button>
@@ -729,6 +662,9 @@
 
                 <label for="tone-sharing-pack-description">Description</label>
                 <textarea id="tone-sharing-pack-description" rows="2" placeholder="Short pack description"></textarea>
+
+                <label for="tone-sharing-pack-image">Pack Image (optional)</label>
+                <input id="tone-sharing-pack-image" type="file" accept="image/*" />
               </div>
               <div class="tone-sharing-select-list" id="tone-sharing-pack-items"></div>
               <div class="tone-sharing-actions">
@@ -748,6 +684,7 @@
                 <button id="tone-sharing-browse-mine" type="button">My Content</button>
               </div>
             </div>
+            <div class="tone-sharing-pack-detail" id="tone-sharing-pack-detail"></div>
             <div class="tone-sharing-feed" id="tone-sharing-feed"></div>
           </section>
         </div>
@@ -848,6 +785,18 @@
                 <span class="settings-unit">.soundshed-library.zip</span>
               </div>
               <div class="settings-hint">Exports all presets and blends, plus IR/NAM files from the library based on the selected scope.</div>
+            </div>
+
+            <h2>Riff Library</h2>
+            <div class="settings-section">
+              <h3>Storage</h3>
+              <div class="settings-row">
+                <label for="riff-library-path">Library Path</label>
+                <input type="text" id="riff-library-path" placeholder="C:\\Users\\you\\Documents\\SoundshedRiffs" />
+                <button id="riff-library-path-save" type="button">Set Path</button>
+                <button id="riff-library-refresh" type="button" class="secondary">Refresh</button>
+              </div>
+              <div class="settings-hint">Sets where riff takes and riff metadata are stored on disk.</div>
             </div>
           </div>
 
@@ -1037,6 +986,77 @@
         <div class="modal-footer">
           <button id="riff-save-modal-cancel" class="secondary" type="button">Cancel</button>
           <button id="riff-save-modal-confirm" type="button">Save Take</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="riff-capture-modal" class="modal riff-capture-modal" style="display: none;">
+      <div class="modal-content riff-capture-modal-content">
+        <div class="modal-header">
+          <h3>New Riff</h3>
+          <button id="riff-capture-modal-close" class="modal-close" type="button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-row riff-capture-row">
+            <label for="riff-capture-tempo">Tempo</label>
+            <input type="number" id="riff-capture-tempo" min="30" max="300" step="1" value="120" />
+            <span class="settings-unit">BPM</span>
+          </div>
+          <div class="settings-row riff-capture-row">
+            <label for="riff-capture-timesig-num">Time Signature</label>
+            <div class="riff-timesig-inline">
+              <input type="number" id="riff-capture-timesig-num" min="1" max="16" step="1" value="4" />
+              <span>/</span>
+              <input type="number" id="riff-capture-timesig-den" min="1" max="16" step="1" value="4" />
+            </div>
+            <span class="settings-unit">bars</span>
+            <input type="number" id="riff-capture-bars" min="1" max="64" step="1" value="2" />
+          </div>
+          <div class="settings-row riff-capture-row">
+            <label for="riff-capture-pattern-type">Pattern</label>
+            <select id="riff-capture-pattern-type">
+              <option value="click" selected>Click</option>
+              <option value="drum">Drum (MIDI)</option>
+            </select>
+            <span class="settings-unit">pattern id</span>
+            <input type="text" id="riff-capture-pattern-id" placeholder="e.g. rock_4_4_01" />
+          </div>
+          <div class="settings-row riff-capture-row">
+            <label for="riff-capture-countin">Count-in</label>
+            <input type="number" id="riff-capture-countin" min="0" max="8" step="1" value="1" />
+            <span class="settings-unit">bars</span>
+            <span id="riff-capture-status" class="settings-unit">Idle</span>
+          </div>
+          <div class="settings-row">
+            <label>Actions</label>
+            <div class="riff-capture-actions">
+              <button id="riff-capture-record-toggle" type="button">● Record</button>
+              <button id="riff-capture-play" type="button" class="secondary">▶</button>
+              <button id="riff-open-save-modal" type="button" class="secondary">Save Take</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>Trim + Loop</label>
+            <div class="riff-trim-controls">
+              <span class="settings-unit">Start</span>
+              <span class="settings-unit" id="riff-trim-start-label">0.00s</span>
+              <span class="settings-unit">End</span>
+              <span class="settings-unit" id="riff-trim-end-label">0.00s</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="riff-capture-repeat" />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="settings-unit">Repeat</span>
+              <button id="riff-capture-trim" type="button" class="secondary">Crop To Markers</button>
+            </div>
+          </div>
+          <div class="riff-waveform-wrap">
+            <canvas id="riff-capture-waveform" class="riff-capture-waveform" width="640" height="120" tabindex="0" aria-label="Riff trim waveform"></canvas>
+          </div>
+          <div class="settings-hint">Drag the vertical trim markers in the waveform to set loop/crop start and end.</div>
+        </div>
+        <div class="modal-footer">
+          <button id="riff-capture-modal-cancel" class="secondary" type="button">Close</button>
         </div>
       </div>
     </div>

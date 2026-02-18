@@ -17,6 +17,27 @@ let activeTrimHandle: "start" | "end" | null = null;
 let selectedTrimHandle: "start" | "end" = "start";
 let editingRiffId = "";
 
+function openRiffCaptureModal(): void {
+  const modal = document.getElementById("riff-capture-modal") as HTMLDivElement | null;
+  if (!modal) {
+    return;
+  }
+  modal.style.display = "flex";
+}
+
+function closeRiffCaptureModal(): void {
+  const modal = document.getElementById("riff-capture-modal") as HTMLDivElement | null;
+  if (!modal) {
+    return;
+  }
+  modal.style.display = "none";
+}
+
+function hasFilePayload(event: DragEvent): boolean {
+  const types = Array.from(event.dataTransfer?.types ?? []);
+  return types.includes("Files");
+}
+
 function splitCsv(value: string): string[] {
   return value
     .split(",")
@@ -537,6 +558,10 @@ function bindRiffLibraryActions(): void {
   const pathInput = document.getElementById("riff-library-path") as HTMLInputElement | null;
   const pathSaveBtn = document.getElementById("riff-library-path-save") as HTMLButtonElement | null;
   const refreshBtn = document.getElementById("riff-library-refresh") as HTMLButtonElement | null;
+  const openCaptureModalBtn = document.getElementById("riff-open-capture-modal") as HTMLButtonElement | null;
+  const captureModal = document.getElementById("riff-capture-modal") as HTMLDivElement | null;
+  const captureModalCloseBtn = document.getElementById("riff-capture-modal-close") as HTMLButtonElement | null;
+  const captureModalCancelBtn = document.getElementById("riff-capture-modal-cancel") as HTMLButtonElement | null;
   const recordToggleBtn = document.getElementById("riff-capture-record-toggle") as HTMLButtonElement | null;
   const playCaptureBtn = document.getElementById("riff-capture-play") as HTMLButtonElement | null;
   const trimButton = document.getElementById("riff-capture-trim") as HTMLButtonElement | null;
@@ -564,6 +589,36 @@ function bindRiffLibraryActions(): void {
     refreshBtn.dataset.bound = "true";
     refreshBtn.addEventListener("click", () => {
       getRiffLibrary();
+    });
+  }
+
+  if (openCaptureModalBtn && openCaptureModalBtn.dataset.bound !== "true") {
+    openCaptureModalBtn.dataset.bound = "true";
+    openCaptureModalBtn.addEventListener("click", () => {
+      openRiffCaptureModal();
+    });
+  }
+
+  if (captureModalCloseBtn && captureModalCloseBtn.dataset.bound !== "true") {
+    captureModalCloseBtn.dataset.bound = "true";
+    captureModalCloseBtn.addEventListener("click", () => {
+      closeRiffCaptureModal();
+    });
+  }
+
+  if (captureModalCancelBtn && captureModalCancelBtn.dataset.bound !== "true") {
+    captureModalCancelBtn.dataset.bound = "true";
+    captureModalCancelBtn.addEventListener("click", () => {
+      closeRiffCaptureModal();
+    });
+  }
+
+  if (captureModal && captureModal.dataset.bound !== "true") {
+    captureModal.dataset.bound = "true";
+    captureModal.addEventListener("click", (event) => {
+      if (event.target === captureModal) {
+        closeRiffCaptureModal();
+      }
     });
   }
 
@@ -687,34 +742,63 @@ function bindRiffLibraryActions(): void {
     });
   }
 
-  const riffTab = document.getElementById("library-tab-riffs");
-  if (riffTab && riffTab.dataset.dropBound !== "true") {
-    riffTab.dataset.dropBound = "true";
+  const appRoot = document.getElementById("app");
+  if (appRoot && appRoot.dataset.riffDropBound !== "true") {
+    appRoot.dataset.riffDropBound = "true";
 
     const setActive = (active: boolean) => {
-      riffTab.classList.toggle("riff-drop-active", active);
+      appRoot.classList.toggle("riff-drop-active", active);
     };
 
-    riffTab.addEventListener("dragover", (event) => {
+    document.addEventListener("dragenter", (event) => {
+      if (!hasFilePayload(event)) {
+        return;
+      }
       event.preventDefault();
       setActive(true);
     });
 
-    riffTab.addEventListener("dragleave", (event) => {
+    document.addEventListener("dragover", (event) => {
+      if (!hasFilePayload(event)) {
+        return;
+      }
+      event.preventDefault();
+      setActive(true);
+    });
+
+    document.addEventListener("dragleave", (event) => {
       const related = event.relatedTarget as Node | null;
-      if (!related || !riffTab.contains(related)) {
+      if (!related || !appRoot.contains(related)) {
         setActive(false);
       }
     });
 
-    riffTab.addEventListener("drop", async (event) => {
+    document.addEventListener("dragend", () => {
+      setActive(false);
+    });
+
+    document.addEventListener("drop", async (event) => {
+      if (!hasFilePayload(event)) {
+        return;
+      }
       event.preventDefault();
       setActive(false);
+
       const files = Array.from(event.dataTransfer?.files ?? []);
       if (!files.length) {
         return;
       }
-      await importDroppedRiffWav(files[0]);
+
+      const wavFile = files.find((file) => file.name.toLowerCase().endsWith(".wav")
+        || file.type === "audio/wav"
+        || file.type === "audio/x-wav");
+      if (!wavFile) {
+        showNotification("Only WAV files are supported for riff import");
+        return;
+      }
+
+      openRiffCaptureModal();
+      await importDroppedRiffWav(wavFile);
     });
   }
 
