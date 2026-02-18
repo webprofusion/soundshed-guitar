@@ -4815,6 +4815,10 @@ void PluginController::SendEffectCatalogToUI()
             param["max"] = p.maxValue;
             param["default"] = p.defaultValue;
             param["unit"] = p.unit;
+            if (!p.group.empty())
+                param["group"] = p.group;
+            if (p.advanced)
+                param["advanced"] = true;
             params.push_back(param);
         }
         entry["parameters"] = params;

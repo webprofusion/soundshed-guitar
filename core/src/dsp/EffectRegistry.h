@@ -23,6 +23,8 @@ namespace guitarfx
     double minValue = 0.0;
     double maxValue = 1.0;
     std::string unit; // "dB", "Hz", "ms", "%", etc.
+    std::string group;
+    bool advanced = false;
   };
 
   /**

@@ -456,10 +456,51 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     category: "reverb",
     requiresResource: false,
     parameters: [
-      { key: "decay", name: "Decay", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "damping", name: "Damping", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" },
-      { key: "safetyClip", name: "Safety Clip", default: 0.0, min: 0, max: 1, unit: "amount" }
+      { key: "decay", name: "Decay", default: 0.46, min: 0, max: 1, unit: "amount" },
+      { key: "size", name: "Size", default: 0.42, min: 0, max: 1, unit: "amount" },
+      { key: "damping", name: "Damping", default: 0.56, min: 0, max: 1, unit: "amount" },
+      { key: "preDelay", name: "Pre Delay", default: 8, min: 0, max: 220, unit: "ms" },
+      { key: "mix", name: "Mix", default: 0.22, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_hall",
+    displayName: "Hall Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.76, min: 0, max: 1, unit: "amount" },
+      { key: "size", name: "Size", default: 0.7, min: 0, max: 1, unit: "amount" },
+      { key: "preDelay", name: "Pre Delay", default: 24, min: 0, max: 220, unit: "ms" },
+      { key: "damping", name: "Damping", default: 0.46, min: 0, max: 1, unit: "amount" },
+      { key: "width", name: "Width", default: 1.05, min: 0, max: 1.2, unit: "amount" },
+      { key: "mix", name: "Mix", default: 0.27, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_plate",
+    displayName: "Plate Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.58, min: 0, max: 1, unit: "amount" },
+      { key: "preDelay", name: "Pre Delay", default: 12, min: 0, max: 220, unit: "ms" },
+      { key: "tone", name: "Tone", default: 0.76, min: 0, max: 1, unit: "amount" },
+      { key: "damping", name: "Damping", default: 0.35, min: 0, max: 1, unit: "amount" },
+      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_chamber",
+    displayName: "Chamber Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.6, min: 0, max: 1, unit: "amount" },
+      { key: "size", name: "Size", default: 0.56, min: 0, max: 1, unit: "amount" },
+      { key: "tone", name: "Tone", default: 0.52, min: 0, max: 1, unit: "amount" },
+      { key: "preDelay", name: "Pre Delay", default: 15, min: 0, max: 220, unit: "ms" },
+      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount" }
     ]
   },
   {
@@ -468,11 +509,59 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     category: "reverb",
     requiresResource: false,
     parameters: [
-      { key: "decay", name: "Decay", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "drive", name: "Drive", default: 0.2, min: 0, max: 1, unit: "amount" },
-      { key: "tension", name: "Tension", default: 0.4, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" }
+      { key: "decay", name: "Decay", default: 0.5, min: 0, max: 1, unit: "amount" },
+      { key: "tone", name: "Tone", default: 0.68, min: 0, max: 1, unit: "amount" },
+      { key: "drive", name: "Drive", default: 0.22, min: 0, max: 1, unit: "amount" },
+      { key: "mix", name: "Mix", default: 0.23, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_shimmer",
+    displayName: "Shimmer Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.84, min: 0, max: 1, unit: "amount" },
+      { key: "size", name: "Size", default: 0.8, min: 0, max: 1, unit: "amount" },
+      { key: "shimmer", name: "Shimmer", default: 0.45, min: 0, max: 1, unit: "amount" },
+      { key: "preDelay", name: "Pre Delay", default: 28, min: 0, max: 220, unit: "ms" },
+      { key: "mix", name: "Mix", default: 0.30, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_ambient",
+    displayName: "Ambient Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.86, min: 0, max: 1, unit: "amount" },
+      { key: "size", name: "Size", default: 0.9, min: 0, max: 1, unit: "amount" },
+      { key: "diffusion", name: "Diffusion", default: 0.9, min: 0, max: 1, unit: "amount" },
+      { key: "width", name: "Width", default: 1.1, min: 0, max: 1.2, unit: "amount" },
+      { key: "mix", name: "Mix", default: 0.32, min: 0, max: 1, unit: "amount" }
+    ]
+  },
+  {
+    type: "reverb_advanced",
+    displayName: "Advanced Reverb",
+    category: "reverb",
+    requiresResource: false,
+    parameters: [
+      { key: "decay", name: "Decay", default: 0.64, min: 0, max: 1, unit: "amount", group: "Common" },
+      { key: "size", name: "Size", default: 0.55, min: 0, max: 1, unit: "amount", group: "Common" },
+      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount", group: "Common" },
+      { key: "damping", name: "Damping", default: 0.46, min: 0, max: 1, unit: "amount", group: "Common" },
+      { key: "preDelay", name: "Pre Delay", default: 16, min: 0, max: 220, unit: "ms", group: "Common" },
+      { key: "tone", name: "Tone", default: 0.62, min: 0, max: 1, unit: "amount", group: "Common" },
+      { key: "width", name: "Width", default: 1, min: 0, max: 1.2, unit: "amount", group: "Common" },
+      { key: "diffusion", name: "Diffusion", default: 0.7, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
+      { key: "lowCut", name: "Low Cut", default: 140, min: 20, max: 1200, unit: "Hz", group: "Advanced", advanced: true },
+      { key: "highCut", name: "High Cut", default: 12000, min: 1000, max: 20000, unit: "Hz", group: "Advanced", advanced: true },
+      { key: "modRate", name: "Mod Rate", default: 0.45, min: 0.02, max: 8, unit: "Hz", group: "Advanced", advanced: true },
+      { key: "modDepth", name: "Mod Depth", default: 0.18, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
+      { key: "ducking", name: "Ducking", default: 0.08, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
+      { key: "drive", name: "Drive", default: 0.0, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
+      { key: "shimmer", name: "Shimmer", default: 0.0, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true }
     ]
   },
   {
