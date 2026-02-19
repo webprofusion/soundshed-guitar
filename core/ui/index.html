@@ -219,6 +219,10 @@
               Default Preset
             </button>
           </div>
+          <div class="tone-sharing-preview-indicator" id="tone-sharing-preview-indicator" style="display: none;" aria-live="polite">
+            <span class="tone-sharing-preview-label" id="tone-sharing-preview-text">Previewing preset:</span>
+            <button class="tone-sharing-preview-clear" id="tone-sharing-preview-clear" type="button" title="Clear preview and restore original preset">✕</button>
+          </div>
           <button class="nav-btn" id="next-preset" title="Next Preset">→</button>
         </div>
 
@@ -596,78 +600,25 @@
 
       <div class="tab-panel" id="panel-sharing">
         <div class="panel-content tone-sharing-panel">
-          <div class="tone-sharing-header">
-            <div>
-              <h2>Tone Sharing</h2>
-              <p class="tone-sharing-subtitle">Discover featured tones, sign in, and publish your own presets.</p>
+          <div class="tone-sharing-toolbar">
+            <div class="tone-sharing-browse-tabs">
+              <button id="tone-sharing-browse-featured" type="button" class="active">Featured</button>
+              <button id="tone-sharing-browse-items" type="button">Presets</button>
+              <button id="tone-sharing-browse-packs" type="button">Packs</button>
+              <button id="tone-sharing-browse-mine" type="button">My Content</button>
             </div>
-            <div class="tone-sharing-endpoint">
-              <label for="tone-sharing-api-base">API</label>
-              <input id="tone-sharing-api-base" type="text" value="https://api.guitar.soundshed.com/v1" />
-              <button id="tone-sharing-refresh" type="button">Refresh</button>
+            <div class="tone-sharing-toolbar-actions">
+              <button id="tone-sharing-open-pack-modal" type="button" class="tone-sharing-toolbar-btn" disabled>+ Create Pack</button>
+              <button id="tone-sharing-account-btn" type="button" class="tone-sharing-account-chip">Sign In</button>
+              <button id="tone-sharing-api-toggle" type="button" class="tone-sharing-icon-btn" title="API settings">⚙</button>
             </div>
           </div>
-
-          <div class="tone-sharing-layout">
-            <section class="tone-sharing-card tone-sharing-auth-card">
-              <h3>Account</h3>
-              <div class="tone-sharing-auth-status" id="tone-sharing-auth-status">Signed out</div>
-              <div class="tone-sharing-auth-row">
-                <label for="tone-sharing-email">Email</label>
-                <input id="tone-sharing-email" type="email" placeholder="you@example.com" />
-              </div>
-              <div class="tone-sharing-auth-row">
-                <label for="tone-sharing-code">Code</label>
-                <input id="tone-sharing-code" type="text" placeholder="One-time code" />
-              </div>
-              <div class="tone-sharing-actions">
-                <button id="tone-sharing-send-code" type="button">Send Code</button>
-                <button id="tone-sharing-verify" type="button">Sign In</button>
-                <button id="tone-sharing-logout" type="button" class="secondary">Sign Out</button>
-              </div>
-            </section>
-
-            <section class="tone-sharing-card tone-sharing-upload-card">
-              <h3>Publish Preset</h3>
-              <div class="tone-sharing-actions">
-                <button id="tone-sharing-open-publish-modal" type="button">Publish Preset...</button>
-              </div>
-              <div class="tone-sharing-status" id="tone-sharing-upload-status">Idle</div>
-            </section>
-
-            <section class="tone-sharing-card tone-sharing-pack-card">
-              <h3>Publish Pack</h3>
-              <div class="tone-sharing-grid-form">
-                <label for="tone-sharing-pack-title">Pack Title</label>
-                <input id="tone-sharing-pack-title" type="text" placeholder="Modern Metal Essentials" />
-
-                <label for="tone-sharing-pack-description">Description</label>
-                <textarea id="tone-sharing-pack-description" rows="2" placeholder="Short pack description"></textarea>
-
-                <label for="tone-sharing-pack-image">Pack Image (optional)</label>
-                <input id="tone-sharing-pack-image" type="file" accept="image/*" />
-              </div>
-              <div class="tone-sharing-select-list" id="tone-sharing-pack-items"></div>
-              <div class="tone-sharing-actions">
-                <button id="tone-sharing-create-pack" type="button">Create + Publish Pack</button>
-              </div>
-              <div class="tone-sharing-status" id="tone-sharing-pack-status">Select your own published items.</div>
-            </section>
+          <div class="tone-sharing-endpoint tone-sharing-endpoint--hidden" id="tone-sharing-endpoint-row">
+            <label for="tone-sharing-api-base">API</label>
+            <input id="tone-sharing-api-base" type="text" value="https://api.guitar.soundshed.com/v1" />
+            <button id="tone-sharing-refresh" type="button">Refresh</button>
           </div>
-
-          <section class="tone-sharing-card tone-sharing-browse-card">
-            <div class="tone-sharing-card-header">
-              <h3>Browse</h3>
-              <div class="tone-sharing-actions compact">
-                <button id="tone-sharing-browse-featured" type="button" class="active">Featured</button>
-                <button id="tone-sharing-browse-items" type="button">Latest Presets</button>
-                <button id="tone-sharing-browse-packs" type="button">Latest Packs</button>
-                <button id="tone-sharing-browse-mine" type="button">My Content</button>
-              </div>
-            </div>
-            <div class="tone-sharing-pack-detail" id="tone-sharing-pack-detail"></div>
-            <div class="tone-sharing-feed" id="tone-sharing-feed"></div>
-          </section>
+          <div class="tone-sharing-feed" id="tone-sharing-feed"></div>
         </div>
       </div>
 
@@ -1013,7 +964,6 @@
             <div class="riff-capture-actions">
               <button id="riff-capture-record-toggle" type="button">● Record</button>
               <button id="riff-capture-play" type="button" class="secondary">▶</button>
-              <button id="riff-open-save-modal" type="button" class="secondary">Save Take</button>
             </div>
           </div>
           <div class="settings-row">
@@ -1037,7 +987,8 @@
           <div class="settings-hint">Drag the vertical trim markers in the waveform to set loop/crop start and end.</div>
         </div>
         <div class="modal-footer">
-          <button id="riff-capture-modal-cancel" class="secondary" type="button">Close</button>
+          <button id="riff-capture-modal-cancel" class="secondary" type="button">Cancel</button>
+          <button id="riff-capture-modal-save-take" type="button">Save Take</button>
         </div>
       </div>
     </div>
@@ -1566,6 +1517,23 @@
       </div>
     </div>
 
+    <div id="tone-sharing-pack-view-modal" class="modal tone-sharing-pack-view-modal" style="display: none;">
+      <div class="tone-sharing-pack-view-content">
+        <div class="tone-sharing-pack-view-hero" id="tone-sharing-pack-view-hero">
+          <button class="tone-sharing-pack-view-close" id="tone-sharing-pack-view-close" type="button" aria-label="Close">&#x2715;</button>
+          <div class="tone-sharing-pack-view-hero-info">
+            <div class="tone-sharing-pack-view-badge">Pack</div>
+            <h2 class="tone-sharing-pack-view-title" id="tone-sharing-pack-view-title"></h2>
+            <p class="tone-sharing-pack-view-description" id="tone-sharing-pack-view-description"></p>
+          </div>
+        </div>
+        <div class="tone-sharing-pack-view-body">
+          <div class="tone-sharing-pack-view-count" id="tone-sharing-pack-view-count"></div>
+          <div class="tone-sharing-pack-view-presets" id="tone-sharing-pack-view-presets"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="tone-sharing-publish-modal" class="modal tone-sharing-publish-modal" style="display: none;">
       <div class="modal-content">
         <div class="modal-header">
@@ -1580,11 +1548,75 @@
             <label for="tone-sharing-item-description">Description</label>
             <textarea id="tone-sharing-item-description" rows="3" placeholder="Describe the tone, guitar, and mix context"></textarea>
           </div>
+          <div class="tone-sharing-pack-assign">
+            <div class="tone-sharing-pack-assign-label">Add to pack after publishing (optional)</div>
+            <div class="tone-sharing-pack-assign-row">
+              <button id="tone-sharing-add-to-new-pack" type="button" class="btn btn-secondary">+ New Pack</button>
+              <select id="tone-sharing-pack-assign-select">
+                <option value="">Or add to existing draft pack…</option>
+              </select>
+            </div>
+          </div>
           <div class="tone-sharing-status" id="tone-sharing-publish-modal-status"></div>
         </div>
         <div class="modal-footer">
           <button id="tone-sharing-publish-modal-cancel" type="button" class="btn btn-secondary">Cancel</button>
           <button id="tone-sharing-upload-item" type="button" class="btn btn-primary">Upload + Publish</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tone-sharing-signin-modal" class="modal" style="display: none;">
+      <div class="modal-content tone-sharing-signin-modal-content">
+        <div class="modal-header">
+          <h3>Account</h3>
+          <button id="tone-sharing-signin-modal-close" class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="tone-sharing-auth-status" id="tone-sharing-auth-status">Signed out</div>
+          <div class="tone-sharing-grid-form">
+            <label for="tone-sharing-email">Email</label>
+            <input id="tone-sharing-email" type="email" placeholder="you@example.com" autocomplete="email" />
+            <label for="tone-sharing-code">One-time Code</label>
+            <input id="tone-sharing-code" type="text" placeholder="Enter code from email" autocomplete="one-time-code" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="tone-sharing-logout" type="button" class="btn btn-secondary">Sign Out</button>
+          <button id="tone-sharing-send-code" type="button" class="btn btn-secondary">Send Code</button>
+          <button id="tone-sharing-verify" type="button" class="btn btn-primary">Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tone-sharing-pack-modal" class="modal" style="display: none;">
+      <div class="modal-content tone-sharing-pack-modal-content">
+        <div class="modal-header">
+          <h3 id="tone-sharing-pack-modal-title">Create Pack</h3>
+          <button id="tone-sharing-pack-modal-close" class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="tone-sharing-grid-form">
+            <label for="tone-sharing-pack-title">Pack Title</label>
+            <input id="tone-sharing-pack-title" type="text" placeholder="Modern Metal Essentials" />
+            <label for="tone-sharing-pack-description">Description</label>
+            <textarea id="tone-sharing-pack-description" rows="2" placeholder="Short pack description"></textarea>
+            <label for="tone-sharing-pack-image">Pack Image (optional)</label>
+            <input id="tone-sharing-pack-image" type="file" accept="image/*" />
+          </div>
+          <div class="tone-sharing-pack-items-section">
+            <div class="tone-sharing-pack-items-header">
+              <span class="tone-sharing-label">My Published Presets</span>
+              <span class="tone-sharing-status" id="tone-sharing-pack-items-hint">Check presets to include in this pack</span>
+            </div>
+            <div class="tone-sharing-select-list" id="tone-sharing-pack-items"></div>
+          </div>
+          <div class="tone-sharing-status" id="tone-sharing-pack-status"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="tone-sharing-pack-modal-cancel" type="button" class="btn btn-secondary">Cancel</button>
+          <button id="tone-sharing-save-pack-draft" type="button" class="btn btn-secondary">Save Draft</button>
+          <button id="tone-sharing-create-pack" type="button" class="btn btn-primary">Publish Pack</button>
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ let trimEndRatio = 1;
 let activeTrimHandle: "start" | "end" | null = null;
 let selectedTrimHandle: "start" | "end" = "start";
 let editingRiffId = "";
+let savingFromCapture = false;
 
 function openRiffCaptureModal(): void {
   const modal = document.getElementById("riff-capture-modal") as HTMLDivElement | null;
@@ -75,9 +76,12 @@ function populateSaveModalFields(riff?: RiffLibrary["riffs"][number]): void {
   const favoriteInput = document.getElementById("riff-save-favorite") as HTMLInputElement | null;
 
   if (!riff) {
-    if (titleInput) titleInput.value = "";
-    if (categoriesInput) categoriesInput.value = "";
-    if (tagsInput) tagsInput.value = "";
+    const riffs = uiState.riffLibrary?.riffs ?? [];
+    const nextNumber = riffs.length + 1;
+    if (titleInput) titleInput.value = `riff-${nextNumber}`;
+    const mostRecent = riffs.length > 0 ? riffs[riffs.length - 1] : null;
+    if (categoriesInput) categoriesInput.value = mostRecent?.categories?.join(", ") ?? "";
+    if (tagsInput) tagsInput.value = mostRecent?.tags?.join(", ") ?? "";
     if (notesInput) notesInput.value = "";
     if (favoriteInput) favoriteInput.checked = false;
     return;
@@ -644,6 +648,18 @@ function bindRiffLibraryActions(): void {
     openSaveModalBtn.dataset.bound = "true";
     openSaveModalBtn.addEventListener("click", () => {
       editingRiffId = "";
+      savingFromCapture = false;
+      populateSaveModalFields();
+      openSaveModal(false);
+    });
+  }
+
+  const captureModalSaveTakeBtn = document.getElementById("riff-capture-modal-save-take") as HTMLButtonElement | null;
+  if (captureModalSaveTakeBtn && captureModalSaveTakeBtn.dataset.bound !== "true") {
+    captureModalSaveTakeBtn.dataset.bound = "true";
+    captureModalSaveTakeBtn.addEventListener("click", () => {
+      editingRiffId = "";
+      savingFromCapture = true;
       populateSaveModalFields();
       openSaveModal(false);
     });
@@ -736,8 +752,14 @@ function bindRiffLibraryActions(): void {
         bars: Math.max(1, Number(barsInput?.value ?? uiState.riffCapture?.bars ?? 1)),
         patternType: (patternTypeSelect?.value === "drum" ? "drum" : "click") as "click" | "drum",
         patternId: patternIdInput?.value.trim() ?? "",
+        presetId: uiState.activePresetId ?? undefined,
       });
+      const fromCapture = savingFromCapture;
       closeSaveModal();
+      if (fromCapture) {
+        closeRiffCaptureModal();
+        savingFromCapture = false;
+      }
       appendLog(`riff save requested → ${title}`);
     });
   }
@@ -944,6 +966,7 @@ function bindRiffLibraryActions(): void {
           return;
         }
         editingRiffId = riffId;
+        savingFromCapture = false;
         populateSaveModalFields(riff);
         openSaveModal(true);
 

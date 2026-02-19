@@ -16,10 +16,10 @@
 }
 
 .modal-content {
-  background: var(--bg-dark-primary);
+  background: var(--modal-bg);
   border-radius: 16px;
-  color: var(--text-dark-primary);
-  border: 1px solid var(--border-dark-light);
+  color: var(--modal-text);
+  border: 1px solid var(--modal-border);
   box-shadow: var(--shadow-xl);
   overflow: hidden;
 }
@@ -29,15 +29,15 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: var(--bg-dark-secondary);
-  border-bottom: 1px solid var(--border-dark-medium);
+  background: var(--modal-bg-raised);
+  border-bottom: 1px solid var(--modal-border-medium);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-dark-primary);
+  color: var(--modal-text);
 }
 
 .modal-close {
@@ -45,7 +45,7 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: var(--text-dark-muted);
+  color: var(--modal-text-muted);
   font-size: 20px;
   cursor: pointer;
   border-radius: 4px;
@@ -53,14 +53,14 @@
 }
 
 .modal-close:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-dark-primary);
+  background: var(--modal-close-hover);
+  color: var(--modal-text);
 }
 
 .modal-body {
   padding: 20px;
-  background: var(--bg-dark-primary);
-  color: var(--text-dark-secondary);
+  background: var(--modal-bg);
+  color: var(--modal-text-secondary);
 }
 
 .modal-footer {
@@ -68,8 +68,8 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
-  background: var(--bg-dark-secondary);
-  border-top: 1px solid var(--border-dark-medium);
+  background: var(--modal-bg-raised);
+  border-top: 1px solid var(--modal-border-medium);
 }
 
 /* Alert/Confirm Dialog */
@@ -82,7 +82,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text-dark-secondary);
+  color: var(--modal-text-secondary);
   white-space: pre-wrap;
 }
 
@@ -97,7 +97,7 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: var(--text-dark-muted);
+  color: var(--modal-text-muted);
   font-size: 20px;
   cursor: pointer;
   border-radius: 4px;
@@ -105,8 +105,8 @@
 }
 
 .tone3000-details-close:hover {
-  background: var(--bg-browser-hover);
-  color: var(--text-dark-primary);
+  background: var(--modal-close-hover);
+  color: var(--modal-text);
 }
 
 .tone3000-details-body {
@@ -114,7 +114,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--bg-dark-primary);
+  background: var(--modal-bg);
 }
 
 .tone3000-details-hero {
@@ -128,8 +128,8 @@
   height: 120px;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--bg-dark-tertiary);
-  border: 1px solid var(--border-dark-medium);
+  background: var(--modal-bg-raised);
+  border: 1px solid var(--modal-border-medium);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -149,20 +149,20 @@
 
 .tone3000-details-meta {
   font-size: 11px;
-  color: var(--text-dark-muted);
+  color: var(--modal-text-muted);
   line-height: 1.5;
 }
 
 .tone3000-details-section h4 {
   margin: 0 0 6px;
   font-size: 12px;
-  color: var(--text-dark-primary);
+  color: var(--modal-text);
 }
 
 .tone3000-details-section p {
   margin: 0;
   font-size: 11px;
-  color: var(--text-dark-secondary);
+  color: var(--modal-text-secondary);
   line-height: 1.5;
   white-space: pre;
   max-height: 300px;
@@ -253,8 +253,8 @@
 .blend-editor-modal {
   width: 860px;
   max-width: 98vw;
-  background: var(--bg-dark-primary);
-  border: 1px solid var(--border-dark-light);
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
   box-shadow: var(--shadow-xl);
 }
 
@@ -269,14 +269,14 @@
 }
 
 .save-preset-modal .form-group label {
-  color: var(--text-dark-primary);
+  color: var(--modal-text);
 }
 
 .save-preset-modal .form-group input,
 .save-preset-modal .form-group textarea {
-  background: var(--bg-dark-tertiary);
-  border-color: var(--border-dark-medium);
-  color: var(--text-dark-primary);
+  background: var(--modal-input-bg);
+  border-color: var(--modal-input-border);
+  color: var(--modal-input-text);
 }
 
 .save-preset-modal .form-group select {
@@ -314,7 +314,7 @@
 
 .save-preset-modal .form-group input::placeholder,
 .save-preset-modal .form-group textarea::placeholder {
-  color: var(--text-dark-muted);
+  color: var(--modal-input-placeholder);
 }
 
 .save-preset-modal .form-group input:focus,
@@ -326,14 +326,14 @@
 }
 
 .save-preset-modal .btn-secondary {
-  background: var(--bg-dark-secondary);
-  color: var(--text-dark-primary);
-  border: 1px solid var(--border-dark-medium);
+  background: var(--modal-bg-raised);
+  color: var(--modal-text);
+  border: 1px solid var(--modal-border-medium);
 }
 
 .save-preset-modal .btn-secondary:hover {
-  background: var(--bg-dark-tertiary);
-  border-color: var(--border-dark-strong);
+  background: var(--modal-input-bg);
+  border-color: var(--modal-border);
 }
 
 .preset-modal-tabs {
@@ -406,7 +406,7 @@
 
 .preset-advanced-json pre {
   margin: 0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-family: monospace;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-dark-primary);

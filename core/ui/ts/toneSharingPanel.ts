@@ -3,6 +3,7 @@ import { showConfirm } from "./dialogs.js";
 import { buildPresetArchiveBlob } from "./presets.js";
 import { clonePreset, uiState } from "./state.js";
 import type { Preset } from "./types.js";
+import { escapeHtml, idAccentColor } from "./utils.js";
 
 type ToneSharingUser = {
   id: string;
@@ -29,7 +30,7 @@ type ToneSharingPack = {
 
 type ToneSharingPackDetails = {
   pack: ToneSharingPack;
-  items: Array<{ itemId: string; sortOrder: number; title: string; type: string }>;
+  items: Array<{ itemId: string; sortOrder: number; title: string; type: string; description?: string | null }>;
 };
 
 type ToneSharingRow = {
@@ -43,6 +44,7 @@ type ToneSharingRow = {
     type: string | null;
     description?: string | null;
     thumbnailUrl?: string | null;
+    thumbnailAssetId?: string | null;
   }>;
 };
 
@@ -61,6 +63,10 @@ const state = {
 const packThumbnailObjectUrls = new Map<string, string>();
 
 let browseMode: "featured" | "items" | "packs" | "mine" = "featured";
+let editingPackId: string | null = null;
+let previewingItemId: string | null = null;
+let previewingItemTitle = "";
+let previewPriorPresetId: string | null = null;
 
 function element<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -124,6 +130,12 @@ export function openToneSharingPublishPresetModal(defaultTitle?: string, default
 
   setUploadStatus(activePreset ? `Publishing: ${activePreset.name ?? activePreset.id}` : "");
 
+  // Reset pack assign UI
+  element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.remove("active");
+  const packSelect = element<HTMLSelectElement>("tone-sharing-pack-assign-select");
+  if (packSelect) packSelect.value = "";
+  void loadMyDraftPacksForSelect();
+
   modal.style.display = "flex";
 }
 
@@ -135,10 +147,206 @@ function closeToneSharingPublishPresetModal(): void {
   modal.style.display = "none";
 }
 
+function openSignInModal(): void {
+  const modal = element<HTMLElement>("tone-sharing-signin-modal");
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+function closeSignInModal(): void {
+  const modal = element<HTMLElement>("tone-sharing-signin-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+async function openPackModal(packId?: string, preCheckItemId?: string): Promise<void> {
+  editingPackId = packId ?? null;
+  const modal = element<HTMLElement>("tone-sharing-pack-modal");
+  if (!modal) {
+    return;
+  }
+
+  const titleEl = element<HTMLInputElement>("tone-sharing-pack-title");
+  const descEl = element<HTMLTextAreaElement>("tone-sharing-pack-description");
+  const imageEl = element<HTMLInputElement>("tone-sharing-pack-image");
+  const titleHeader = element<HTMLElement>("tone-sharing-pack-modal-title");
+
+  if (titleEl) titleEl.value = "";
+  if (descEl) descEl.value = "";
+  if (imageEl) imageEl.value = "";
+  setText("tone-sharing-pack-status", "");
+
+  let checkedItemIds = new Set<string>(preCheckItemId ? [preCheckItemId] : []);
+
+  if (packId) {
+    if (titleHeader) titleHeader.textContent = "Edit Pack";
+    setText("tone-sharing-pack-status", "Loading...");
+    try {
+      const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
+      if (titleEl) titleEl.value = details.pack.title;
+      if (descEl) descEl.value = details.pack.description ?? "";
+      checkedItemIds = new Set(details.items.map((item) => item.itemId));
+      if (preCheckItemId) {
+        checkedItemIds.add(preCheckItemId);
+      }
+    } catch (error) {
+      setText("tone-sharing-pack-status", `Load failed: ${(error as Error).message}`);
+    }
+  } else {
+    if (titleHeader) titleHeader.textContent = "Create Pack";
+  }
+
+  renderPackItemSelection(state.myItems, checkedItemIds);
+  setText("tone-sharing-pack-status", "");
+  modal.style.display = "flex";
+}
+
+function closePackModal(): void {
+  const modal = element<HTMLElement>("tone-sharing-pack-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  editingPackId = null;
+}
+
+async function loadMyDraftPacksForSelect(): Promise<void> {
+  const select = element<HTMLSelectElement>("tone-sharing-pack-assign-select");
+  if (!select || !state.user) {
+    return;
+  }
+  try {
+    const data = await apiFetch<{ packs: ToneSharingPack[] }>("/packs/me/list");
+    const drafts = data.packs.filter((p) => p.moderationStatus === "draft");
+    select.innerHTML =
+      `<option value="">Or add to existing draft pack\u2026</option>` +
+      drafts.map((p) => `<option value="${p.id}">${p.title}</option>`).join("");
+  } catch {
+    // pack assignment is optional; silent fail
+  }
+}
+
+async function addItemToExistingPack(packId: string, itemId: string): Promise<void> {
+  const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
+  const existingIds = details.items.map((item) => item.itemId);
+  if (!existingIds.includes(itemId)) {
+    existingIds.push(itemId);
+  }
+  await apiFetch(`/packs/${packId}/items`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ itemIds: existingIds })
+  });
+}
+
+async function savePack(publish: boolean): Promise<void> {
+  if (!state.user) {
+    setText("tone-sharing-pack-status", "Sign in first.");
+    return;
+  }
+
+  const title = element<HTMLInputElement>("tone-sharing-pack-title")?.value.trim() ?? "";
+  const description = element<HTMLTextAreaElement>("tone-sharing-pack-description")?.value.trim() ?? "";
+  const imageFile = element<HTMLInputElement>("tone-sharing-pack-image")?.files?.[0] ?? null;
+
+  if (!title) {
+    setText("tone-sharing-pack-status", "Pack title is required.");
+    return;
+  }
+
+  const itemIds = Array.from(
+    document.querySelectorAll<HTMLInputElement>("#tone-sharing-pack-items input[data-pack-item-id]:checked")
+  ).map((input) => input.dataset.packItemId || "").filter(Boolean);
+
+  if (publish && !itemIds.length) {
+    setText("tone-sharing-pack-status", "Select at least one preset to publish.");
+    return;
+  }
+
+  setText("tone-sharing-pack-status", editingPackId ? "Saving..." : "Creating pack...");
+
+  try {
+    let thumbnailAssetId: string | undefined;
+    if (imageFile) {
+      const variants = await buildPackImageVariants(imageFile);
+      const thumbnailBlob = variants.small.blob;
+
+      const init = await apiFetch<{ uploadId: string }>("/uploads/init", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "thumbnail",
+          mimeType: thumbnailBlob.type || "application/octet-stream",
+          byteSize: thumbnailBlob.size
+        })
+      });
+
+      const uploadResponse = await fetch(buildApiUrl(`/uploads/${init.uploadId}`), {
+        method: "PUT",
+        headers: {
+          "content-type": thumbnailBlob.type || "application/octet-stream",
+          ...(state.sessionId ? { "x-session-id": state.sessionId } : {})
+        },
+        body: thumbnailBlob,
+        credentials: "include"
+      });
+      const uploadPayload = await uploadResponse.json().catch(() => null);
+      if (!uploadResponse.ok || uploadPayload?.ok === false) {
+        throw new Error(uploadPayload?.error?.message || `Pack image upload failed (${uploadResponse.status})`);
+      }
+
+      const complete = await apiFetch<{ assetId: string }>("/uploads/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ uploadId: init.uploadId })
+      });
+      thumbnailAssetId = complete.assetId;
+    }
+
+    let packId: string;
+    if (editingPackId) {
+      await apiFetch(`/packs/${editingPackId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, description, ...(thumbnailAssetId ? { thumbnailAssetId } : {}) })
+      });
+      packId = editingPackId;
+    } else {
+      const pack = await apiFetch<{ pack: ToneSharingPack }>("/packs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, description, thumbnailAssetId })
+      });
+      packId = pack.pack.id;
+      editingPackId = packId;
+    }
+
+    await apiFetch(`/packs/${packId}/items`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemIds })
+    });
+
+    if (publish) {
+      await apiFetch(`/packs/${packId}/publish`, { method: "POST" });
+      setText("tone-sharing-pack-status", "Pack published successfully.");
+      closePackModal();
+    } else {
+      setText("tone-sharing-pack-status", "Draft saved.");
+    }
+
+    await Promise.all([loadBrowse(), loadMine()]);
+  } catch (error) {
+    setText("tone-sharing-pack-status", `${publish ? "Publish" : "Save"} failed: ${(error as Error).message}`);
+  }
+}
+
 function updateAuthButtonVisibility(): void {
   const signInButton = element<HTMLButtonElement>("tone-sharing-verify");
   const signOutButton = element<HTMLButtonElement>("tone-sharing-logout");
-  const publishButton = element<HTMLButtonElement>("tone-sharing-open-publish-modal");
+  const accountChip = element<HTMLButtonElement>("tone-sharing-account-btn");
+  const createPackButton = element<HTMLButtonElement>("tone-sharing-open-pack-modal");
   const signedIn = !!state.user;
 
   if (signInButton) {
@@ -147,12 +355,17 @@ function updateAuthButtonVisibility(): void {
   if (signOutButton) {
     signOutButton.style.display = signedIn ? "" : "none";
   }
-  if (publishButton) {
-    publishButton.disabled = !signedIn;
-    publishButton.title = signedIn ? "Publish preset" : "Sign in to publish presets";
+  if (accountChip) {
+    accountChip.textContent = signedIn ? (state.user?.email ?? "Account") : "Sign In";
+    accountChip.classList.toggle("signed-in", signedIn);
+  }
+  if (createPackButton) {
+    createPackButton.disabled = !signedIn;
+    createPackButton.title = signedIn ? "Create a new pack" : "Sign in to create packs";
   }
   if (!signedIn) {
     closeToneSharingPublishPresetModal();
+    closePackModal();
   }
 }
 
@@ -323,7 +536,6 @@ async function loadAuthSession(): Promise<void> {
       await loadMine();
     } else {
       setText("tone-sharing-auth-status", "Signed out");
-      renderPackItemSelection([]);
     }
   } catch (error) {
     setText("tone-sharing-auth-status", `Auth check failed: ${(error as Error).message}`);
@@ -371,6 +583,7 @@ async function verifyCode(): Promise<void> {
     updateAuthButtonVisibility();
     persistToneSharingSession(state.sessionId);
     setText("tone-sharing-auth-status", `Signed in as ${data.user.email}`);
+    closeSignInModal();
     await Promise.all([loadBrowse(), loadMine()]);
   } catch (error) {
     setText("tone-sharing-auth-status", `Sign-in failed: ${(error as Error).message}`);
@@ -388,6 +601,7 @@ async function signOut(): Promise<void> {
   updateAuthButtonVisibility();
   persistToneSharingSession("");
   setText("tone-sharing-auth-status", "Signed out");
+  closeSignInModal();
   await loadBrowse();
 }
 
@@ -414,7 +628,7 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
             const packForThumbnail: ToneSharingPack = {
               id: item.id,
               title: item.title,
-              thumbnailUrl: item.thumbnailUrl ?? null
+              thumbnailUrl: item.thumbnailUrl ?? (item.thumbnailAssetId ? `/packs/${item.id}/thumbnail` : null)
             };
             if (packForThumbnail.thumbnailUrl) {
               try {
@@ -426,17 +640,30 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
             }
           }
 
+          const isPreviewing = previewingItemId === item.id;
+          const accentStyleAttr = item.kind === "item"
+            ? ` style="border-left: 3px solid ${idAccentColor(item.id)}"`
+            : "";
           return `
-                  <div class=\"${cardClass}\" data-kind=\"${item.kind}\" data-id=\"${item.id}\"${backgroundStyle}>
+                  <div class=\"${cardClass}${isPreviewing ? " is-previewing" : ""}\" data-kind=\"${item.kind}\" data-id=\"${item.id}\" data-title=\"${item.title}\"${backgroundStyle}${accentStyleAttr}>
                     <div class=\"tone-sharing-card-item-content\">
                       <div class=\"tone-sharing-card-item-title\">${item.title}</div>
                       <div class=\"tone-sharing-card-item-meta\">${item.kind === "item" ? item.type ?? "preset" : "pack"}</div>
-                      ${item.kind === "pack" && item.description ? `<div class=\"tone-sharing-card-item-description\">${item.description}</div>` : ""}
+                      ${item.description ? `<div class=\"tone-sharing-card-item-description\">${item.description}</div>` : ""}
                     </div>
                     <div class=\"tone-sharing-card-item-actions\">
-                      <button type=\"button\" data-action=\"${item.kind === "item" ? "preview" : "view"}\">${item.kind === "item" ? "Preview" : "View"}</button>
-                      <button type=\"button\" data-action=\"download\">Download</button>
-                      ${browseMode === "mine" ? `<button type=\"button\" data-action=\"delete\">Delete</button>` : ""}
+                      ${item.kind === "item" ? `
+                        <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"preview\">
+                          <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><polygon points=\"3,2 14,8 3,14\"/></svg>
+                          ${isPreviewing ? "Previewing" : "Preview"}
+                        </button>` : `
+                        <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"view\">View</button>`}
+                      <button class=\"btn btn-primary tone-sharing-card-btn\" type=\"button\" data-action=\"download\">
+                        <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1a1 1 0 011 1v6.172l1.586-1.586a1 1 0 111.414 1.414l-3.293 3.293a1 1 0 01-1.414 0L3.999 8.001a1 1 0 111.414-1.414L7.001 8.172V2A1 1 0 018 1z\"/><rect x=\"2\" y=\"12.5\" width=\"12\" height=\"2\" rx=\"1\"/></svg>
+                        Download
+                      </button>
+                      ${browseMode === "mine" && item.kind === "pack" ? `<button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"edit-pack\">Edit</button>` : ""}
+                      ${browseMode === "mine" ? `<button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"delete\">Delete</button>` : ""}
                     </div>
                   </div>
                 `;
@@ -467,7 +694,7 @@ function buildSingleRow(title: string, entries: Array<{ id: string; title: strin
       kind,
       title: entry.title,
       type: entry.type ?? null,
-      description: kind === "pack" ? (entry as ToneSharingPack).description ?? null : null,
+      description: kind === "pack" ? (entry as ToneSharingPack).description ?? null : (entry as ToneSharingItem).description ?? null,
       thumbnailUrl: kind === "pack"
         ? ((entry as ToneSharingPack).thumbnailUrl ?? ((entry as ToneSharingPack).thumbnailAssetId ? `/packs/${entry.id}/thumbnail` : null))
         : null
@@ -476,46 +703,76 @@ function buildSingleRow(title: string, entries: Array<{ id: string; title: strin
 }
 
 function clearPackDetail(): void {
-  const host = element<HTMLElement>("tone-sharing-pack-detail");
-  if (!host) {
-    return;
+  const modal = element<HTMLElement>("tone-sharing-pack-view-modal");
+  if (modal) {
+    modal.style.display = "none";
   }
-  host.classList.remove("visible");
-  host.innerHTML = "";
 }
 
 async function renderPackDetail(details: ToneSharingPackDetails): Promise<void> {
-  const host = element<HTMLElement>("tone-sharing-pack-detail");
-  if (!host) {
+  const modal = element<HTMLElement>("tone-sharing-pack-view-modal");
+  if (!modal) {
     return;
   }
 
   const pack = details.pack;
-  let imageUrl = "";
-  let thumbnailLoadFailed = false;
-  if (pack.thumbnailUrl) {
-    try {
-      imageUrl = await resolvePackThumbnailUrl(pack);
-    } catch {
-      thumbnailLoadFailed = true;
-      imageUrl = "";
+  const heroEl = element<HTMLElement>("tone-sharing-pack-view-hero");
+  if (heroEl) {
+    let imageUrl = "";
+    if (pack.thumbnailUrl) {
+      try {
+        imageUrl = await resolvePackThumbnailUrl(pack);
+      } catch { }
+    }
+    heroEl.style.backgroundImage = imageUrl
+      ? `linear-gradient(180deg, rgba(5,6,12,0.08) 0%, rgba(5,6,12,0.65) 55%, rgba(5,6,12,0.97) 100%), url('${imageUrl}')`
+      : "";
+  }
+
+  setText("tone-sharing-pack-view-title", pack.title);
+  const descEl = element<HTMLElement>("tone-sharing-pack-view-description");
+  if (descEl) {
+    descEl.textContent = pack.description ?? "";
+    descEl.style.display = pack.description ? "" : "none";
+  }
+
+  setText("tone-sharing-pack-view-count", `${details.items.length} preset${details.items.length !== 1 ? "s" : ""}`);
+
+  const presetsEl = element<HTMLElement>("tone-sharing-pack-view-presets");
+  if (presetsEl) {
+    if (!details.items.length) {
+      presetsEl.innerHTML = `<div class=\"tone-sharing-status\">No presets in this pack.</div>`;
+    } else {
+      presetsEl.innerHTML = [...details.items]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(
+          (item) => `
+          <div class=\"tone-sharing-pack-preset-row\" data-item-id=\"${escapeHtml(item.itemId)}\" style=\"border-left: 3px solid ${idAccentColor(item.itemId)}\">
+            <div class=\"tone-sharing-pack-preset-info\">
+              <div class=\"tone-sharing-pack-preset-title\">${escapeHtml(item.title)}</div>
+              ${item.type ? `<div class=\"tone-sharing-pack-preset-type\">${escapeHtml(item.type)}</div>` : ""}
+              ${item.description ? `<div class=\"tone-sharing-pack-preset-desc\">${escapeHtml(item.description)}</div>` : ""}
+            </div>
+            <div class=\"tone-sharing-pack-preset-actions\">
+              <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\"
+                data-pack-action=\"preview\" data-item-id=\"${escapeHtml(item.itemId)}\" data-item-title=\"${escapeHtml(item.title)}\">
+                <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><polygon points=\"3,2 14,8 3,14\"/></svg>
+                Preview
+              </button>
+              <button class=\"btn btn-primary tone-sharing-card-btn\" type=\"button\"
+                data-pack-action=\"download\" data-item-id=\"${escapeHtml(item.itemId)}\" data-item-title=\"${escapeHtml(item.title)}\">
+                <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1a1 1 0 011 1v6.172l1.586-1.586a1 1 0 111.414 1.414l-3.293 3.293a1 1 0 01-1.414 0L3.999 8.001a1 1 0 111.414-1.414L7.001 8.172V2A1 1 0 018 1z\"/><rect x=\"2\" y=\"12.5\" width=\"12\" height=\"2\" rx=\"1\"/></svg>
+                Download
+              </button>
+            </div>
+          </div>`
+        )
+        .join("");
     }
   }
-  const itemsHtml = details.items
-    .map((item) => `<li>${item.title}${item.type ? ` <span class=\"tone-sharing-card-item-meta\">(${item.type})</span>` : ""}</li>`)
-    .join("");
 
-  host.innerHTML = `
-    <h4>${pack.title}</h4>
-    ${pack.description ? `<div class="tone-sharing-status">${pack.description}</div>` : ""}
-    ${imageUrl ? `<img src="${imageUrl}" alt="${pack.title} thumbnail" />` : ""}
-    ${thumbnailLoadFailed ? `<div class="tone-sharing-status">Thumbnail unavailable (check API image endpoint and local HTTP/HTTPS policy).</div>` : ""}
-    <div class="tone-sharing-status">Presets in pack: ${details.items.length}</div>
-    <ul class="tone-sharing-pack-detail-list">${itemsHtml || "<li>No presets in this pack.</li>"}</ul>
-  `;
-  host.classList.add("visible");
+  modal.style.display = "flex";
 }
-
 async function viewPack(packId: string): Promise<void> {
   const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
   await renderPackDetail(details);
@@ -545,7 +802,55 @@ async function readPresetFromArchive(buffer: ArrayBuffer): Promise<Record<string
   return (parsed.preset as Record<string, unknown>) ?? parsed;
 }
 
-async function previewPreset(itemId: string): Promise<void> {
+function showPreviewIndicator(title: string): void {
+  const selector = element<HTMLElement>("preset-selector");
+  const indicator = element<HTMLElement>("tone-sharing-preview-indicator");
+  const indicatorText = element<HTMLElement>("tone-sharing-preview-text");
+  if (selector) selector.style.display = "none";
+  if (indicator) indicator.style.display = "flex";
+  if (indicatorText) indicatorText.textContent = `Previewing preset: ${title}`;
+}
+
+function hidePreviewIndicator(): void {
+  const selector = element<HTMLElement>("preset-selector");
+  const indicator = element<HTMLElement>("tone-sharing-preview-indicator");
+  if (selector) selector.style.display = "";
+  if (indicator) indicator.style.display = "none";
+}
+
+async function clearPreviewPreset(): Promise<void> {
+  const feedEl = element<HTMLElement>("tone-sharing-feed");
+  if (previewingItemId) {
+    const card = feedEl?.querySelector(`.tone-sharing-card-item[data-id="${CSS.escape(previewingItemId)}"]`) as HTMLElement | null;
+    if (card) {
+      card.classList.remove("is-previewing");
+      const btn = card.querySelector<HTMLButtonElement>("[data-action='preview']");
+      if (btn) {
+        const svg = btn.querySelector("svg")?.cloneNode(true) as SVGElement | null;
+        btn.textContent = "";
+        if (svg) btn.appendChild(svg);
+        btn.append(" Preview");
+      }
+    }
+  }
+  previewingItemId = null;
+  previewingItemTitle = "";
+  hidePreviewIndicator();
+  if (previewPriorPresetId) {
+    const priorPreset = uiState.presetCache.get(previewPriorPresetId);
+    if (priorPreset) {
+      postMessage({ type: "loadPreset", preset: priorPreset, presetId: priorPreset.id });
+    }
+    previewPriorPresetId = null;
+  }
+}
+
+async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
+  // Save original preset ID so we can restore it later (only on first preview)
+  if (!previewingItemId) {
+    previewPriorPresetId = uiState.activePresetId ?? null;
+  }
+
   const response = await fetch(buildApiUrl(`/items/${itemId}/download`), {
     headers: state.sessionId ? { "x-session-id": state.sessionId } : {},
     credentials: "include"
@@ -557,6 +862,39 @@ async function previewPreset(itemId: string): Promise<void> {
   const buffer = await response.arrayBuffer();
   const preset = await readPresetFromArchive(buffer);
   postMessage({ type: "loadPreset", preset, presetId: `preview-${itemId}` });
+
+  // Update DOM to reflect new preview state without a full re-fetch
+  const feedEl = element<HTMLElement>("tone-sharing-feed");
+  if (previewingItemId && previewingItemId !== itemId) {
+    const prevCard = feedEl?.querySelector(`.tone-sharing-card-item[data-id="${CSS.escape(previewingItemId)}"]`) as HTMLElement | null;
+    if (prevCard) {
+      prevCard.classList.remove("is-previewing");
+      const prevBtn = prevCard.querySelector<HTMLButtonElement>("[data-action='preview']");
+      if (prevBtn) {
+        const svg = prevBtn.querySelector("svg")?.cloneNode(true) as SVGElement | null;
+        prevBtn.textContent = "";
+        if (svg) prevBtn.appendChild(svg);
+        prevBtn.append(" Preview");
+      }
+    }
+  }
+
+  previewingItemId = itemId;
+  previewingItemTitle = itemTitle;
+
+  const newCard = feedEl?.querySelector(`.tone-sharing-card-item[data-id="${CSS.escape(itemId)}"]`) as HTMLElement | null;
+  if (newCard) {
+    newCard.classList.add("is-previewing");
+    const newBtn = newCard.querySelector<HTMLButtonElement>("[data-action='preview']");
+    if (newBtn) {
+      const svg = newBtn.querySelector("svg")?.cloneNode(true) as SVGElement | null;
+      newBtn.textContent = "";
+      if (svg) newBtn.appendChild(svg);
+      newBtn.append(" Previewing");
+    }
+  }
+
+  showPreviewIndicator(itemTitle);
 }
 
 async function loadBrowse(): Promise<void> {
@@ -616,7 +954,6 @@ async function loadMine(): Promise<void> {
     ]);
 
     state.myItems = itemsData.items;
-    renderPackItemSelection(itemsData.items);
 
     if (browseMode === "mine") {
       await renderFeedRows([
@@ -631,14 +968,14 @@ async function loadMine(): Promise<void> {
   }
 }
 
-function renderPackItemSelection(items: ToneSharingItem[]): void {
+function renderPackItemSelection(items: ToneSharingItem[], checked = new Set<string>()): void {
   const host = element<HTMLElement>("tone-sharing-pack-items");
   if (!host) {
     return;
   }
 
   if (!items.length) {
-    host.innerHTML = `<div class="tone-sharing-select-item">Publish an item first.</div>`;
+    host.innerHTML = `<div class="tone-sharing-select-item">No published presets yet. Publish a preset first.</div>`;
     return;
   }
 
@@ -646,7 +983,7 @@ function renderPackItemSelection(items: ToneSharingItem[]): void {
     .map(
       (item) => `
         <label class="tone-sharing-select-item">
-          <input type="checkbox" data-pack-item-id="${item.id}" />
+          <input type="checkbox" data-pack-item-id="${item.id}" ${checked.has(item.id) ? "checked" : ""} />
           <span>${item.title}</span>
         </label>
       `
@@ -735,8 +1072,23 @@ async function uploadAndPublishItem(): Promise<void> {
 
     await apiFetch(`/items/${item.item.id}/publish`, { method: "POST" });
 
-    setUploadStatus("Published successfully.");
+    const addToNewPack = element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.contains("active") ?? false;
+    const assignPackId = element<HTMLSelectElement>("tone-sharing-pack-assign-select")?.value ?? "";
     closeToneSharingPublishPresetModal();
+
+    if (addToNewPack) {
+      await openPackModal(undefined, item.item.id);
+    } else if (assignPackId) {
+      try {
+        await addItemToExistingPack(assignPackId, item.item.id);
+        setUploadStatus("Published and added to pack.");
+      } catch (error) {
+        setUploadStatus(`Published but pack update failed: ${(error as Error).message}`);
+      }
+    } else {
+      setUploadStatus("Published successfully.");
+    }
+
     await Promise.all([loadBrowse(), loadMine()]);
   } catch (error) {
     setUploadStatus(`Publish failed: ${(error as Error).message}`);
@@ -744,86 +1096,7 @@ async function uploadAndPublishItem(): Promise<void> {
 }
 
 async function createAndPublishPack(): Promise<void> {
-  if (!state.user) {
-    setText("tone-sharing-pack-status", "Sign in first.");
-    return;
-  }
-
-  const title = element<HTMLInputElement>("tone-sharing-pack-title")?.value.trim() ?? "";
-  const description = element<HTMLTextAreaElement>("tone-sharing-pack-description")?.value.trim() ?? "";
-  const imageFile = element<HTMLInputElement>("tone-sharing-pack-image")?.files?.[0] ?? null;
-  if (!title) {
-    setText("tone-sharing-pack-status", "Pack title is required.");
-    return;
-  }
-
-  const itemIds = Array.from(document.querySelectorAll<HTMLInputElement>("#tone-sharing-pack-items input[data-pack-item-id]:checked")).map(
-    (input) => input.dataset.packItemId || ""
-  );
-
-  if (!itemIds.length) {
-    setText("tone-sharing-pack-status", "Select at least one item.");
-    return;
-  }
-
-  setText("tone-sharing-pack-status", "Publishing pack...");
-
-  try {
-    let thumbnailAssetId: string | undefined;
-    if (imageFile) {
-      const variants = await buildPackImageVariants(imageFile);
-      const thumbnailBlob = variants.small.blob;
-
-      const init = await apiFetch<{ uploadId: string }>("/uploads/init", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          kind: "thumbnail",
-          mimeType: thumbnailBlob.type || "application/octet-stream",
-          byteSize: thumbnailBlob.size
-        })
-      });
-
-      const uploadResponse = await fetch(buildApiUrl(`/uploads/${init.uploadId}`), {
-        method: "PUT",
-        headers: {
-          "content-type": thumbnailBlob.type || "application/octet-stream",
-          ...(state.sessionId ? { "x-session-id": state.sessionId } : {})
-        },
-        body: thumbnailBlob,
-        credentials: "include"
-      });
-      const uploadPayload = await uploadResponse.json().catch(() => null);
-      if (!uploadResponse.ok || uploadPayload?.ok === false) {
-        throw new Error(uploadPayload?.error?.message || `Pack image upload failed (${uploadResponse.status})`);
-      }
-
-      const complete = await apiFetch<{ assetId: string }>("/uploads/complete", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uploadId: init.uploadId })
-      });
-      thumbnailAssetId = complete.assetId;
-    }
-
-    const pack = await apiFetch<{ pack: ToneSharingPack }>("/packs", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title, description, thumbnailAssetId })
-    });
-
-    await apiFetch(`/packs/${pack.pack.id}/items`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemIds })
-    });
-
-    await apiFetch(`/packs/${pack.pack.id}/publish`, { method: "POST" });
-    setText("tone-sharing-pack-status", "Pack published successfully.");
-    await Promise.all([loadBrowse(), loadMine()]);
-  } catch (error) {
-    setText("tone-sharing-pack-status", `Pack publish failed: ${(error as Error).message}`);
-  }
+  return savePack(true);
 }
 
 async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
@@ -907,9 +1180,15 @@ function bindBrowseActions(): void {
       return;
     }
 
+    if (button.dataset.action === "edit-pack" && kind === "pack") {
+      void openPackModal(id);
+      return;
+    }
+
     if (button.dataset.action === "preview" && kind === "item") {
+      const itemTitle = card.dataset.title ?? "";
       try {
-        await previewPreset(id);
+        await previewPreset(id, itemTitle);
         setUploadStatus("Preset preview applied (not installed).");
       } catch (error) {
         setUploadStatus(`Preview failed: ${(error as Error).message}`);
@@ -1047,6 +1326,13 @@ export function applyToneSharingAppSettings(settings?: Record<string, unknown>):
 }
 
 function bindTopControls(): void {
+  element<HTMLButtonElement>("tone-sharing-api-toggle")?.addEventListener("click", () => {
+    const row = element<HTMLElement>("tone-sharing-endpoint-row");
+    if (row) {
+      row.classList.toggle("tone-sharing-endpoint--hidden");
+    }
+  });
+
   const refreshButton = element<HTMLButtonElement>("tone-sharing-refresh");
   const apiInput = element<HTMLInputElement>("tone-sharing-api-base");
   if (refreshButton && apiInput) {
@@ -1059,6 +1345,23 @@ function bindTopControls(): void {
     });
   }
 
+  // Account chip opens sign-in modal
+  element<HTMLButtonElement>("tone-sharing-account-btn")?.addEventListener("click", () => {
+    openSignInModal();
+  });
+
+  element<HTMLButtonElement>("tone-sharing-preview-clear")?.addEventListener("click", () => {
+    void clearPreviewPreset();
+  });
+  element<HTMLButtonElement>("tone-sharing-signin-modal-close")?.addEventListener("click", () => {
+    closeSignInModal();
+  });
+  element<HTMLElement>("tone-sharing-signin-modal")?.addEventListener("mousedown", (event) => {
+    if (event.target === event.currentTarget) {
+      closeSignInModal();
+    }
+  });
+
   element<HTMLButtonElement>("tone-sharing-send-code")?.addEventListener("click", () => {
     void sendCode();
   });
@@ -1068,9 +1371,75 @@ function bindTopControls(): void {
   element<HTMLButtonElement>("tone-sharing-logout")?.addEventListener("click", () => {
     void signOut();
   });
-  element<HTMLButtonElement>("tone-sharing-open-publish-modal")?.addEventListener("click", () => {
-    openToneSharingPublishPresetModal();
+
+  // Create Pack / Edit Pack modal
+  element<HTMLButtonElement>("tone-sharing-open-pack-modal")?.addEventListener("click", () => {
+    void openPackModal();
   });
+  element<HTMLButtonElement>("tone-sharing-pack-modal-close")?.addEventListener("click", () => {
+    closePackModal();
+  });
+  element<HTMLButtonElement>("tone-sharing-pack-modal-cancel")?.addEventListener("click", () => {
+    closePackModal();
+  });
+  element<HTMLButtonElement>("tone-sharing-save-pack-draft")?.addEventListener("click", () => {
+    void savePack(false);
+  });
+  element<HTMLButtonElement>("tone-sharing-create-pack")?.addEventListener("click", () => {
+    void savePack(true);
+  });
+  element<HTMLElement>("tone-sharing-pack-modal")?.addEventListener("mousedown", (event) => {
+    if (event.target === event.currentTarget) {
+      closePackModal();
+    }
+  });
+
+  // Pack view modal (Netflix-style)
+  element<HTMLButtonElement>("tone-sharing-pack-view-close")?.addEventListener("click", () => {
+    clearPackDetail();
+  });
+  element<HTMLElement>("tone-sharing-pack-view-modal")?.addEventListener("mousedown", (event) => {
+    if (event.target === event.currentTarget) {
+      clearPackDetail();
+    }
+  });
+  element<HTMLElement>("tone-sharing-pack-view-presets")?.addEventListener("click", async (event) => {
+    const target = event.target as HTMLElement;
+    const button = target.closest("[data-pack-action]") as HTMLButtonElement | null;
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.packAction!;
+    const itemId = button.dataset.itemId!;
+    const itemTitle = button.dataset.itemTitle!;
+    if (action === "preview") {
+      try {
+        await previewPreset(itemId, itemTitle);
+        const presetsEl = element<HTMLElement>("tone-sharing-pack-view-presets");
+        presetsEl?.querySelectorAll<HTMLElement>(".tone-sharing-pack-preset-row").forEach((row) => {
+          row.classList.toggle("is-previewing", row.dataset.itemId === itemId);
+        });
+        presetsEl?.querySelectorAll<HTMLButtonElement>("[data-pack-action='preview']").forEach((btn) => {
+          const isThis = btn.dataset.itemId === itemId;
+          const svg = btn.querySelector("svg")?.cloneNode(true) as SVGElement | null;
+          btn.textContent = "";
+          if (svg) btn.appendChild(svg);
+          btn.append(isThis ? " Previewing" : " Preview");
+        });
+        setUploadStatus("Preset preview applied (not installed).");
+      } catch (error) {
+        setUploadStatus(`Preview failed: ${(error as Error).message}`);
+      }
+    } else if (action === "download") {
+      try {
+        await downloadAsset("item", itemId);
+      } catch (error) {
+        setUploadStatus(`Download failed: ${(error as Error).message}`);
+      }
+    }
+  });
+
+  // Publish preset modal (opened from preset chooser)
   element<HTMLButtonElement>("tone-sharing-publish-modal-close")?.addEventListener("click", () => {
     closeToneSharingPublishPresetModal();
   });
@@ -1080,13 +1449,26 @@ function bindTopControls(): void {
   element<HTMLButtonElement>("tone-sharing-upload-item")?.addEventListener("click", () => {
     void uploadAndPublishItem();
   });
-  element<HTMLButtonElement>("tone-sharing-create-pack")?.addEventListener("click", () => {
-    void createAndPublishPack();
-  });
-
   element<HTMLElement>("tone-sharing-publish-modal")?.addEventListener("mousedown", (event) => {
     if (event.target === event.currentTarget) {
       closeToneSharingPublishPresetModal();
+    }
+  });
+
+  // Pack assign controls in publish modal
+  element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.addEventListener("click", () => {
+    const btn = element<HTMLButtonElement>("tone-sharing-add-to-new-pack");
+    if (!btn) return;
+    btn.classList.toggle("active");
+    if (btn.classList.contains("active")) {
+      const sel = element<HTMLSelectElement>("tone-sharing-pack-assign-select");
+      if (sel) sel.value = "";
+    }
+  });
+  element<HTMLSelectElement>("tone-sharing-pack-assign-select")?.addEventListener("change", () => {
+    const sel = element<HTMLSelectElement>("tone-sharing-pack-assign-select");
+    if (sel?.value) {
+      element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.remove("active");
     }
   });
 }

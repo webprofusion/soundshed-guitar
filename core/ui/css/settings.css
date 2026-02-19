@@ -440,6 +440,10 @@
   cursor: ew-resize;
 }
 
+.riff-save-modal {
+  z-index: 1010;
+}
+
 .riff-save-modal-content {
   width: min(640px, 90vw);
 }

@@ -1,7 +1,7 @@
 import { renderDemoAudioControls, bindDemoAudioControls } from "./demoAudio.js";
 import { uiState } from "./state.js";
 import { addActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled } from "./bridge.js";
-import { escapeHtml } from "./utils.js";
+import { escapeHtml, idAccentColor } from "./utils.js";
 import { updateSignalPathClipIndicators } from "./signalPath.js";
 import { renderIcon } from "./iconAssets.js";
 import type { Preset, PresetFolder } from "./types.js";
@@ -353,7 +353,7 @@ export function renderPresetList(
         ].filter(Boolean).join("");
 
         return `
-        <article class="preset-item ${preset.id === activePresetId ? "active" : ""}" data-id="${preset.id}" draggable="true">
+        <article class="preset-item ${preset.id === activePresetId ? "active" : ""}" data-id="${preset.id}" draggable="true" style="border-left: 3px solid ${idAccentColor(preset.id)}">
           <header>
             <h3>${escapeHtml(preset.name)}</h3>
           </header>

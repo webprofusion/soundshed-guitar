@@ -311,6 +311,7 @@
 
 .preset-list .preset-item {
   border: 1px solid var(--border-dark);
+  border-left-width: 3px;
   border-radius: 8px;
   padding: 10px;
   margin-bottom: 8px;

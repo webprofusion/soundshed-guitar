@@ -157,7 +157,7 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
             "data:text/html;charset=UTF-8," \
             "<!doctype html><html><head><meta charset='utf-8'/>" \
             "<title>Soundshed Guitar</title></head>" \
-            "<body style='font-family:Segoe UI,Arial,sans-serif;background:#101014;color:#eee;padding:24px;line-height:1.5;'>" \
+            "<body style='font-family:sans-serif;background:#101014;color:#eee;padding:24px;line-height:1.5;'>" \
             "<h2>Microsoft Edge WebView2 Runtime is required</h2>" \
             "<p>The Soundshed Guitar UI cannot start because WebView2 is not available.</p>" \
             "<p>Install the runtime, then restart the app.</p>" \

@@ -124,6 +124,7 @@ export function saveRiffTake(payload: {
   bars?: number;
   patternType?: "click" | "drum";
   patternId?: string;
+  presetId?: string;
 }): void {
   postMessage({ type: "saveRiffTake", ...payload });
 }

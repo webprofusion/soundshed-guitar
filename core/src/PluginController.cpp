@@ -4188,6 +4188,8 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
         capture.config.patternType = payload.value("patternType", capture.config.patternType);
     if (payload.contains("patternId") && payload["patternId"].is_string())
         capture.config.patternId = payload.value("patternId", std::string{});
+    if (payload.contains("presetId") && payload["presetId"].is_string())
+        capture.config.presetId = payload.value("presetId", capture.config.presetId);
 
     const std::string riffId = payload.value("riffId", std::string{}).empty() ? BuildRiffId() : payload.value("riffId", std::string{});
     const std::string baseTitle = payload.value("title", std::string("New Riff"));

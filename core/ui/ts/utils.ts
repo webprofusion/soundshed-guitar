@@ -1,5 +1,19 @@
 import type { Attachment } from "./types.js";
 
+/**
+ * Derives a stable HSL accent colour from an ID string via a simple hash.
+ * Hue is spread across the full 360° wheel; saturation/lightness are fixed
+ * so every colour looks equally vibrant in both light and dark themes.
+ */
+export function idAccentColor(id: string): string {
+  let hash = 5381;
+  for (let i = 0; i < id.length; i++) {
+    hash = (((hash * 33) ^ id.charCodeAt(i)) >>> 0);
+  }
+  const hue = hash % 360;
+  return `hsl(${hue}, 62%, 55%)`;
+}
+
 export function escapeHtml(value: unknown): string {
   return String(value)
     .replace(/&/g, "&amp;")

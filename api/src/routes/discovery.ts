@@ -7,6 +7,7 @@ type RowItem = {
   kind: "item" | "pack";
   title: string;
   type: string | null;
+  thumbnailAssetId?: string | null;
 };
 
 export function discoveryRoutes() {
@@ -26,7 +27,7 @@ export function discoveryRoutes() {
     const resultRows: Array<{ id: string; slug: string; title: string; items: RowItem[] }> = [];
     for (const row of rows.results) {
       const rowItems = await c.env.DB.prepare(
-        `SELECT fri.item_id, fri.pack_id, i.title AS item_title, i.type AS item_type, p.title AS pack_title
+        `SELECT fri.item_id, fri.pack_id, i.title AS item_title, i.type AS item_type, p.title AS pack_title, p.config_json AS pack_config_json
          FROM featured_row_items fri
          LEFT JOIN items i ON i.id = fri.item_id
          LEFT JOIN packs p ON p.id = fri.pack_id
@@ -41,6 +42,7 @@ export function discoveryRoutes() {
           item_title: string | null;
           item_type: string | null;
           pack_title: string | null;
+          pack_config_json: string | null;
         }>();
 
       const mappedItems: RowItem[] = rowItems.results.map((entry) => {
@@ -52,11 +54,19 @@ export function discoveryRoutes() {
             type: entry.item_type
           };
         }
+        let thumbnailAssetId: string | null = null;
+        if (entry.pack_config_json) {
+          try {
+            const cfg = JSON.parse(entry.pack_config_json) as { thumbnailAssetId?: string | null };
+            thumbnailAssetId = typeof cfg.thumbnailAssetId === "string" ? cfg.thumbnailAssetId : null;
+          } catch { }
+        }
         return {
           id: entry.pack_id ?? "",
           kind: "pack",
           title: entry.pack_title ?? "Untitled Pack",
-          type: null
+          type: null,
+          thumbnailAssetId
         };
       });
 
@@ -81,13 +91,13 @@ export function discoveryRoutes() {
 
       const latestPacks = await c.env.DB
         .prepare(
-          `SELECT id, title
+          `SELECT id, title, config_json
            FROM packs
            WHERE moderation_status = 'approved'
            ORDER BY published_at DESC, updated_at DESC
            LIMIT 20`
         )
-        .all<{ id: string; title: string }>();
+        .all<{ id: string; title: string; config_json: string | null }>();
 
       if (latestItems.results.length > 0) {
         resultRows.push({
@@ -108,12 +118,22 @@ export function discoveryRoutes() {
           id: "fallback_latest_packs",
           slug: "latest-packs",
           title: "Latest Packs",
-          items: latestPacks.results.map((pack) => ({
-            id: pack.id,
-            kind: "pack",
-            title: pack.title,
-            type: null
-          }))
+          items: latestPacks.results.map((pack) => {
+            let thumbnailAssetId: string | null = null;
+            if (pack.config_json) {
+              try {
+                const cfg = JSON.parse(pack.config_json) as { thumbnailAssetId?: string | null };
+                thumbnailAssetId = typeof cfg.thumbnailAssetId === "string" ? cfg.thumbnailAssetId : null;
+              } catch { }
+            }
+            return {
+              id: pack.id,
+              kind: "pack" as const,
+              title: pack.title,
+              type: null,
+              thumbnailAssetId
+            };
+          })
         });
       }
     }

@@ -151,6 +151,27 @@
   --node-output: #6888a8;
   --node-output-hover: #7898b8;
   --node-drag-over: #48e078;
+
+  /* Shared UI Tokens */
+  --accent-primary: var(--color-accent);
+  --bg-control: #e8eaef;
+  --button-bg: linear-gradient(180deg, #edeef2 0%, #dfe1e8 100%);
+  --button-text: #3a3a40;
+  --button-border: #c4c8d4;
+
+  /* Modal Surface Tokens */
+  --modal-bg: linear-gradient(180deg, #2a2a30 0%, #1e1e24 100%);
+  --modal-bg-raised: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
+  --modal-text: #e0e0f0;
+  --modal-text-secondary: #c0c0d0;
+  --modal-text-muted: #a0a0b0;
+  --modal-border: #4a4a58;
+  --modal-border-medium: #3a3a44;
+  --modal-close-hover: rgba(255, 255, 255, 0.08);
+  --modal-input-bg: linear-gradient(180deg, #38384a 0%, #2e2e3a 100%);
+  --modal-input-text: #e0e0f0;
+  --modal-input-border: #3a3a44;
+  --modal-input-placeholder: #a0a0b0;
 }
 
 /* Light Theme */
@@ -205,6 +226,27 @@
   --bg-browser-selected: rgba(216, 100, 40, 0.12);
   --border-browser: rgba(180, 190, 210, 0.5);
   --border-browser-strong: rgba(160, 172, 196, 0.66);
+
+  /* Shared UI Tokens */
+  --accent-primary: var(--color-accent);
+  --bg-control: #f0f2f6;
+  --button-bg: linear-gradient(180deg, #f5f6f8 0%, #eaecf0 100%);
+  --button-text: #1a1a20;
+  --button-border: #d0d4dc;
+
+  /* Modal Surface Tokens */
+  --modal-bg: #ffffff;
+  --modal-bg-raised: #f4f6f9;
+  --modal-text: #1a1a20;
+  --modal-text-secondary: #3a3a48;
+  --modal-text-muted: #7878a0;
+  --modal-border: #d8dce8;
+  --modal-border-medium: #e8eaef;
+  --modal-close-hover: rgba(0, 0, 0, 0.06);
+  --modal-input-bg: #ffffff;
+  --modal-input-text: #1a1a20;
+  --modal-input-border: #d0d4dc;
+  --modal-input-placeholder: #9898b0;
 }
 
 /* Dark Theme */
@@ -305,6 +347,27 @@
   --bg-browser-selected: rgba(255, 136, 80, 0.16);
   --border-browser: rgba(124, 136, 162, 0.42);
   --border-browser-strong: rgba(146, 158, 184, 0.58);
+
+  /* Shared UI Tokens */
+  --accent-primary: var(--color-accent);
+  --bg-control: #28282f;
+  --button-bg: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
+  --button-text: #e0e0f0;
+  --button-border: #4a4a58;
+
+  /* Modal Surface Tokens */
+  --modal-bg: linear-gradient(180deg, #18181e 0%, #101014 100%);
+  --modal-bg-raised: linear-gradient(180deg, #28282f 0%, #1e1e25 100%);
+  --modal-text: #f0f0f8;
+  --modal-text-secondary: #d0d0e0;
+  --modal-text-muted: #b0b0c0;
+  --modal-border: #4a4a58;
+  --modal-border-medium: #3a3a48;
+  --modal-close-hover: rgba(255, 255, 255, 0.08);
+  --modal-input-bg: linear-gradient(180deg, #26262e 0%, #1c1c24 100%);
+  --modal-input-text: #f0f0f8;
+  --modal-input-border: #3a3a48;
+  --modal-input-placeholder: #b0b0c0;
 }
 
 /* Classic 1970s Theme (Palette) */
@@ -424,5 +487,26 @@
   --bg-browser-selected: rgba(216, 133, 47, 0.2);
   --border-browser: rgba(188, 138, 91, 0.42);
   --border-browser-strong: rgba(205, 156, 108, 0.58);
+
+  /* Shared UI Tokens */
+  --accent-primary: var(--color-accent);
+  --bg-control: #7a5638;
+  --button-bg: linear-gradient(180deg, #8a6542 0%, #735237 100%);
+  --button-text: #f7e7c3;
+  --button-border: #a07a4e;
+
+  /* Modal Surface Tokens */
+  --modal-bg: linear-gradient(180deg, #5b3f29 0%, #49311f 100%);
+  --modal-bg-raised: linear-gradient(180deg, #6a4a2f 0%, #563a24 100%);
+  --modal-text: #fff4db;
+  --modal-text-secondary: #f4e3bc;
+  --modal-text-muted: #dbc293;
+  --modal-border: #ab7d52;
+  --modal-border-medium: #855a3a;
+  --modal-close-hover: rgba(255, 255, 255, 0.08);
+  --modal-input-bg: linear-gradient(180deg, #745236 0%, #5d4028 100%);
+  --modal-input-text: #fff4db;
+  --modal-input-border: #855a3a;
+  --modal-input-placeholder: #dbc293;
 }
 
