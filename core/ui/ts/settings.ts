@@ -1,4 +1,4 @@
-import { uiState, clonePreset } from "./state.js";
+import { uiState, clonePreset, isExperimentalFeaturesEnabled } from "./state.js";
 import { setAppSetting, postMessage } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
@@ -22,6 +22,7 @@ const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
 const INTERFACE_CALIBRATION_ENABLED_SETTING = "audio.interfaceCalibration.enabled";
 const INTERFACE_CALIBRATION_REFERENCE_SETTING = "audio.interfaceCalibration.referenceDbu";
 const ADVANCED_OPTIONS_SETTING = "ui.advancedOptionsEnabled";
+const EXPERIMENTAL_FEATURES_SETTING = "ui.experimentalFeaturesEnabled";
 
 const apiKeyInput = document.getElementById("tone3000-api-key-input") as HTMLInputElement | null;
 const saveButton = document.getElementById("tone3000-api-key-save");
@@ -49,6 +50,7 @@ const libraryExportButton = document.getElementById("library-export-btn");
 const libraryExportResourcesSelect = document.getElementById("library-export-resources") as HTMLSelectElement | null;
 const advancedOptionsToggle = document.getElementById("advanced-options-toggle") as HTMLInputElement | null;
 const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
+const experimentalFeaturesToggle = document.getElementById("experimental-features-toggle") as HTMLInputElement | null;
 const advancedTabButton = document.querySelector('.library-tab-btn[data-library-tab="advanced"]') as HTMLElement | null;
 let settingsInitialized = false;
 let libraryFiltersInitialized = false;
@@ -73,6 +75,7 @@ export function initSettingsPanel(): void {
   initInterfaceCalibrationControls();
   initAdvancedOptionsToggle();
   initUpdateCheckToggle();
+  initExperimentalFeaturesToggle();
   initEquipmentTabs();
   initLibraryFilters();
   initLibraryCleanup();
@@ -321,6 +324,28 @@ function initUpdateCheckToggle(): void {
   });
 }
 
+function initExperimentalFeaturesToggle(): void {
+  if (!experimentalFeaturesToggle || experimentalFeaturesToggle.dataset.bound === "true") return;
+  experimentalFeaturesToggle.dataset.bound = "true";
+  experimentalFeaturesToggle.addEventListener("change", () => {
+    const enabled = Boolean(experimentalFeaturesToggle.checked);
+    uiState.appSettings[EXPERIMENTAL_FEATURES_SETTING] = enabled;
+    setAppSetting(EXPERIMENTAL_FEATURES_SETTING, enabled);
+    updateExperimentalFeaturesVisibility();
+  });
+}
+
+function updateExperimentalFeaturesVisibility(): void {
+  const enabled = Boolean(getSettingValue(EXPERIMENTAL_FEATURES_SETTING));
+  if (advancedTabButton) {
+    advancedTabButton.style.display = enabled ? "" : "none";
+  }
+  // If advanced tab was active and now hidden, switch to first library tab
+  if (!enabled && advancedTabButton?.classList.contains("active")) {
+    activateLibraryTab("tone3000");
+  }
+}
+
 function updateAdvancedTabVisibility(): void {
   const enabled = Boolean(getSettingValue(ADVANCED_OPTIONS_SETTING));
   if (advancedTabButton) {
@@ -375,7 +400,11 @@ export function refreshSettingsView(): void {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);
     updateCheckToggle.checked = updateCheckEnabled === null ? true : Boolean(updateCheckEnabled);
   }
+  if (experimentalFeaturesToggle) {
+    experimentalFeaturesToggle.checked = Boolean(getSettingValue(EXPERIMENTAL_FEATURES_SETTING));
+  }
   updateAdvancedTabVisibility();
+  updateExperimentalFeaturesVisibility();
   updateSessionStatus();
   updateSignalDiagnosticsView();
   renderLibraryView();
@@ -951,8 +980,8 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
             </div>
           </div>
           <div class="equipment-library-item-actions">
-            <button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>
-            <button class="equipment-library-delete-group" data-group-id="${escapeHtml(group.groupId)}">Delete Group</button>
+            ${isExperimentalFeaturesEnabled() ? `<button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>` : ""}
+            <button class="equipment-library-delete-group icon-btn danger" data-group-id="${escapeHtml(group.groupId)}" title="Delete Group"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         </div>
       `;

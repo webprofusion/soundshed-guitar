@@ -6,7 +6,6 @@ import { getApiBaseUrl } from "./toneSharingPanel.js";
 
 const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
 const INSTANCE_ID_SETTING = "app.instanceId";
-const LAST_UPDATE_CHECK_SETTING = "app.lastUpdateCheck";
 
 let hasCheckedForUpdates = false;
 
@@ -25,19 +24,15 @@ export function triggerUpdateCheck(): void {
     setAppSetting(INSTANCE_ID_SETTING, instanceId);
   }
 
-  const updateCheckEnabled = uiState.appSettings[UPDATE_CHECK_ENABLED_SETTING] ?? true;
+  const rawEnabled = uiState.appSettings[UPDATE_CHECK_ENABLED_SETTING];
+  const updateCheckEnabled = rawEnabled === undefined ? true : (rawEnabled === true || rawEnabled === "true");
   
   if (updateCheckEnabled) {
-    // Check if we checked recently (e.g., within the last 24 hours)
-    const lastCheck = uiState.appSettings[LAST_UPDATE_CHECK_SETTING] as number | undefined;
-    const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-    
-    if (!lastCheck || now - lastCheck > ONE_DAY) {
-      setTimeout(() => {
-        void performUpdateCheck(instanceId!);
-      }, 5000); // Delay check by 5 seconds to not block startup
-    }
+    setTimeout(() => {
+      void performUpdateCheck(instanceId!);
+    }, 5000); // Delay check by 5 seconds to not block startup
+  } else {
+    console.log("[UpdateCheck] Update check is disabled in settings");
   }
 }
 
@@ -70,10 +65,6 @@ async function performUpdateCheck(instanceId: string): Promise<void> {
     const result = await response.json();
     
     if (result.ok && result.data) {
-      // Update last check time
-      uiState.appSettings[LAST_UPDATE_CHECK_SETTING] = Date.now();
-      setAppSetting(LAST_UPDATE_CHECK_SETTING, Date.now());
-
       if (result.data.is_update_available) {
         showUpdateAvailable(result.data);
       }

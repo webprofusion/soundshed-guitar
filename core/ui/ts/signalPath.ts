@@ -1,4 +1,4 @@
-import { uiState, getActivePresetForRender, setPresetDirty, isCompositeEditMode, isAdvancedOptionsEnabled } from "./state.js";
+import { uiState, getActivePresetForRender, setPresetDirty, isCompositeEditMode, isAdvancedOptionsEnabled, isExperimentalFeaturesEnabled } from "./state.js";
 import type {
   Preset,
   GraphNode,
@@ -1938,7 +1938,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   // Customize layout button (include blend ID for per-blend layout selection)
   // Only shown when advanced options are enabled
-  const customizeLayoutBtn = isAdvancedOptionsEnabled() ? `
+  const customizeLayoutBtn = isExperimentalFeaturesEnabled() ? `
     <button class="node-customize-layout-btn" data-node-id="${node.id}" data-effect-type="${node.type}" data-blend-id="${nodeBlendId}" title="Customize Layout">
       ${renderIcon("gear", "customize-layout-icon")} Layout
     </button>

@@ -320,6 +320,12 @@ export function isAdvancedOptionsEnabled(): boolean {
   return Boolean(uiState.appSettings?.[ADVANCED_OPTIONS_SETTING]);
 }
 
+const EXPERIMENTAL_FEATURES_SETTING = "ui.experimentalFeaturesEnabled";
+
+export function isExperimentalFeaturesEnabled(): boolean {
+  return Boolean(uiState.appSettings?.[EXPERIMENTAL_FEATURES_SETTING]);
+}
+
 export function getCompositeEditDefinition(): CompositeEffectDefinition | null {
   return uiState.compositeEditDefinition ?? null;
 }
