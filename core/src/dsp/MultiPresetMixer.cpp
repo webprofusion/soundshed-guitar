@@ -672,17 +672,29 @@ namespace guitarfx
 
   void MultiPresetMixer::ApplyNamInterfaceCalibration(SignalGraphExecutor &executor) const
   {
-    const std::string enabledValue = mNamInterfaceCalibrationEnabled ? "1" : "0";
+    static const std::vector<std::string> kNamTypes = {"amp_nam", "amp_nam_optimized", "amp_nam_blend"};
     const std::string referenceValue = std::to_string(mNamInterfaceReferenceDbu);
 
-    executor.SetNodeConfigForType("amp_nam", "interfaceCalibrationEnabled", enabledValue);
-    executor.SetNodeConfigForType("amp_nam", "interfaceCalibrationReferenceDbu", referenceValue);
+    // Disable calibration on every NAM node first — only the first in the
+    // execution order should apply interface calibration. Downstream NAMs
+    // receive a signal that has already been normalised by the first NAM's
+    // auto-output gain, so applying the calibration offset again would
+    // mis-level them.
+    for (const auto &type : kNamTypes)
+    {
+      executor.SetNodeConfigForType(type, "interfaceCalibrationEnabled", "0");
+      executor.SetNodeConfigForType(type, "interfaceCalibrationReferenceDbu", referenceValue);
+    }
 
-    executor.SetNodeConfigForType("amp_nam_optimized", "interfaceCalibrationEnabled", enabledValue);
-    executor.SetNodeConfigForType("amp_nam_optimized", "interfaceCalibrationReferenceDbu", referenceValue);
-
-    executor.SetNodeConfigForType("amp_nam_blend", "interfaceCalibrationEnabled", enabledValue);
-    executor.SetNodeConfigForType("amp_nam_blend", "interfaceCalibrationReferenceDbu", referenceValue);
+    // Re-enable calibration on the first NAM in execution order only.
+    if (mNamInterfaceCalibrationEnabled)
+    {
+      const std::string firstNamId = executor.FindFirstNodeOfTypes(kNamTypes);
+      if (!firstNamId.empty())
+      {
+        executor.SetNodeConfig(firstNamId, "interfaceCalibrationEnabled", "1");
+      }
+    }
   }
 
   bool MultiPresetMixer::LoadNodeResource(const std::string &presetId, const std::string &nodeId, const ResourceRef &ref)
