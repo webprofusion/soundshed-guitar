@@ -1,7 +1,6 @@
 export type Env = {
   DB: D1Database;
   ASSETS: R2Bucket;
-  DISCOVERY_CACHE: KVNamespace;
   COOKIE_NAME: string;
   ENVIRONMENT: "development" | "production";
   SESSION_TTL_SECONDS: string;

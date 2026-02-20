@@ -16,12 +16,6 @@ export function discoveryRoutes() {
   const app = new Hono<{ Bindings: Env }>();
 
   app.get("/home", async (c) => {
-    const cacheKey = "home:v1";
-    const cached = await c.env.DISCOVERY_CACHE.get(cacheKey, { type: "json" });
-    if (cached) {
-      return ok(c, cached);
-    }
-
     const rows = await c.env.DB.prepare(
       "SELECT id, slug, title, sort_order FROM featured_rows WHERE active = 1 ORDER BY sort_order ASC LIMIT 12"
     ).all<{ id: string; slug: string; title: string; sort_order: number }>();
@@ -170,7 +164,6 @@ export function discoveryRoutes() {
       rows: resultRows
     };
 
-    await c.env.DISCOVERY_CACHE.put(cacheKey, JSON.stringify(payload), { expirationTtl: 120 });
     return ok(c, payload);
   });
 

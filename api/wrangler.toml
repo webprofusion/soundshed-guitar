@@ -1,11 +1,10 @@
-name = "soundshed-presets-api"
+name = "soundshed-guitar-api"
 main = "src/index.ts"
 compatibility_date = "2026-02-17"
-
 workers_dev = true
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 COOKIE_NAME = "ss_session"
 SESSION_TTL_SECONDS = "2592000"
 MAGIC_LINK_TTL_SECONDS = "900"
@@ -14,15 +13,9 @@ SENDGRID_FROM_NAME = "Soundshed"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "soundshed_presets_dev"
-database_id = "replace-with-d1-database-id"
+database_name = "soundshed-guitar-api-prod"
+database_id = "80cb9fa4-d0bf-4ea8-9aaf-8d7b414cabb8"
 
 [[r2_buckets]]
 binding = "ASSETS"
-bucket_name = "soundshed-presets-assets-dev"
-preview_bucket_name = "soundshed-presets-assets-dev-preview"
-
-[[kv_namespaces]]
-binding = "DISCOVERY_CACHE"
-id = "replace-with-kv-id"
-preview_id = "replace-with-kv-preview-id"
+bucket_name = "soundshed-guitar-assets-prod"

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { appRoutes } from "./routes/app";
 import { authRoutes } from "./routes/auth";
 import { discoveryRoutes } from "./routes/discovery";
 import { fail } from "./lib/http";
@@ -27,6 +28,7 @@ app.use(
 );
 
 app.route("/", healthRoutes());
+app.route("/", appRoutes());
 app.route("/v1/auth", authRoutes());
 app.route("/v1", discoveryRoutes());
 app.route("/v1/items", itemRoutes());
