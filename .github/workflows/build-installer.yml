@@ -15,6 +15,10 @@ on:
         description: Direct download URL for the Steinberg ASIO SDK zip
         type: string
         default: https://www.steinberg.net/asiosdk
+      build_macos:
+        description: Include macOS build
+        type: boolean
+        default: true
 
 jobs:
   build-installer-iplug2:
@@ -218,7 +222,7 @@ jobs:
 
   build-juce-macos-dmg:
     name: Build JUCE macOS (${{ matrix.variant }})
-    if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'juce' }}
+    if: ${{ (github.event.inputs.target == 'both' || github.event.inputs.target == 'juce') && inputs.build_macos }}
     runs-on: macos-latest
     env:
       DMG_NAME: ""
