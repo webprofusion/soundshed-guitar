@@ -43,7 +43,21 @@ export function applyUiSettings(settings?: UiSettings): void {
   const bounds = settings.bounds;
   if (bounds && typeof window.resizeTo === "function") {
     try {
-      window.resizeTo(bounds.width, bounds.height);
+      let targetWidth = bounds.width;
+      let targetHeight = bounds.height;
+
+      if (window.screen) {
+        const maxWidth = window.screen.availWidth || window.screen.width;
+        const maxHeight = window.screen.availHeight || window.screen.height;
+        if (maxWidth && targetWidth > maxWidth) {
+          targetWidth = maxWidth;
+        }
+        if (maxHeight && targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+        }
+      }
+
+      window.resizeTo(targetWidth, targetHeight);
       if (typeof window.moveTo === "function") {
         window.moveTo(bounds.x, bounds.y);
       }
