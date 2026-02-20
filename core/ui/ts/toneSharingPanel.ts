@@ -100,7 +100,7 @@ const storageKeys = {
 };
 
 const state = {
-  apiBase: "http://127.0.0.1:8787/v1", //https://api.soundshed.com/v1",
+  apiBase: "https://api.guitar.soundshed.com/v1", //"http://127.0.0.1:8787/v1", 
   sessionId: "",
   user: null as ToneSharingUser | null,
   myItems: [] as ToneSharingItem[],
