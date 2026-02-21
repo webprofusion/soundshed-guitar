@@ -53,10 +53,10 @@ jobs:
         run: npm run build
 
       - name: Build VST3 and App
-        run: cmake --build src/build --config Release --target SoundshedGuitar_VST3 SoundshedGuitar_App
+        run: cmake --build src/build --config Release --target SoundshedGuitar_VST3 SoundshedGuitar_App --parallel
 
       - name: Build Installer
-        run: cmake --build src/build --config Release --target SoundshedGuitar_Installer
+        run: cmake --build src/build --config Release --target SoundshedGuitar_Installer --parallel
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4
@@ -200,7 +200,7 @@ jobs:
         run: cmake -S juce -B juce/Builds -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$env:WEBVIEW2_PACKAGE_LOCATION" -DWebView2_root_dir="$env:WEBVIEW2_ROOT_DIR"
 
       - name: Build JUCE Release
-        run: cmake --build juce/Builds --config Release
+        run: cmake --build juce/Builds --config Release --parallel
 
       - name: Export JUCE build env
         shell: pwsh
@@ -279,7 +279,7 @@ jobs:
         run: cmake -S juce -B juce/Builds -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake_architectures }}"
 
       - name: Build JUCE Standalone Release
-        run: cmake --build juce/Builds --config Release --target SoundshedGuitar_Standalone
+        run: cmake --build juce/Builds --config Release --target SoundshedGuitar_Standalone --parallel
 
       - name: Export JUCE build env
         run: |
