@@ -23,6 +23,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <iostream>
 
 // Forward declare factory registration helper to avoid linker dead-stripping
 namespace nam
@@ -51,6 +52,7 @@ public:
       ResizeModelBuffers(model, maxBlockSize);
       ResetModel(model, sampleRate, maxBlockSize);
     }
+    CheckAllSampleRates();
   }
 
   void Reset() override
@@ -248,6 +250,7 @@ public:
 
       ResizeModelBuffers(instance, mMaxBlockSize);
       ResetModel(instance, mSampleRate, mMaxBlockSize);
+      CheckInstanceSampleRate(instance);
 
       mModels.push_back(std::move(instance));
     }
@@ -674,6 +677,33 @@ private:
     UpdateEffectiveGains();
   }
   bool mSnapBlend = false;
+
+  static double GetInstanceExpectedSampleRate(const ModelInstance& instance)
+  {
+    if (instance.usingOptimized && instance.optimized)
+      return instance.optimized->GetExpectedSampleRate();
+    if (instance.fallback)
+      return instance.fallback->GetExpectedSampleRate();
+    return -1.0;
+  }
+
+  void CheckInstanceSampleRate(const ModelInstance& instance)
+  {
+    const double expectedSR = GetInstanceExpectedSampleRate(instance);
+    if (expectedSR > 0.0 && std::abs(expectedSR - mSampleRate) > 1.0)
+    {
+      std::cerr << "[MultiModelNAMAmpEffect] Sample rate mismatch in model '"
+                << instance.path.filename().string() << "': expects "
+                << static_cast<int>(expectedSR) << " Hz, plugin running at "
+                << static_cast<int>(mSampleRate) << " Hz - output quality may be degraded\n";
+    }
+  }
+
+  void CheckAllSampleRates()
+  {
+    for (const auto& model : mModels)
+      CheckInstanceSampleRate(model);
+  }
 };
 
 inline void RegisterMultiModelNAMAmpEffect()

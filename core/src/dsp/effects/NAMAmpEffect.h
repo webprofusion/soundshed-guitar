@@ -7,6 +7,7 @@
 #include "NAM/get_dsp.h"
 #include <filesystem>
 #include <algorithm>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -42,6 +43,7 @@ namespace guitarfx
       if (mModel)
       {
         mModel->Reset(sampleRate, maxBlockSize);
+        CheckSampleRateMismatch();
       }
     }
 
@@ -200,6 +202,7 @@ namespace guitarfx
 
         if (mModel)
         {
+          CheckSampleRateMismatch();
           mModelInputLevel = mModel->HasInputLevel() ? std::optional<double>(mModel->GetInputLevel()) : std::nullopt;
           mModelOutputLevel = mModel->HasOutputLevel() ? std::optional<double>(mModel->GetOutputLevel()) : std::nullopt;
           mModelLoudness = mModel->HasLoudness() ? std::optional<double>(mModel->GetLoudness()) : std::nullopt;
@@ -222,6 +225,7 @@ namespace guitarfx
   private:
     std::unique_ptr<nam::DSP> mModel;
     std::filesystem::path mModelPath;
+    bool mSampleRateMismatch = false;
 
     std::vector<NAM_SAMPLE> mInputBuffer;
     std::vector<NAM_SAMPLE> mOutputBuffer;
@@ -287,6 +291,21 @@ namespace guitarfx
       }
 
       UpdateEffectiveGains();
+    }
+
+    void CheckSampleRateMismatch()
+    {
+      if (!mModel)
+        return;
+      const double expectedSR = mModel->GetExpectedSampleRate();
+      const bool mismatch = (expectedSR > 0.0 && std::abs(expectedSR - mSampleRate) > 1.0);
+      if (mismatch && !mSampleRateMismatch)
+      {
+        std::cerr << "[NAMAmpEffect] Sample rate mismatch: model expects "
+                  << static_cast<int>(expectedSR) << " Hz, plugin running at "
+                  << static_cast<int>(mSampleRate) << " Hz - output quality may be degraded\n";
+      }
+      mSampleRateMismatch = mismatch;
     }
 
     static bool ParseBool(const std::string &value)

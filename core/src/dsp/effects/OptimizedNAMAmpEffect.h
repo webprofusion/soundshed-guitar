@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <iostream>
 #include <variant>
 
 // Forward declare factory registration helper to avoid linker dead-stripping
@@ -65,8 +66,7 @@ public:
     else if (mFallbackModel)
     {
       mFallbackModel->Reset(sampleRate, maxBlockSize);
-    }
-  }
+    }    CheckSampleRateMismatch();  }
 
   void Reset() override
   {
@@ -293,6 +293,7 @@ public:
         return false;
 
       mModelPath = resourcePath;
+      CheckSampleRateMismatch();
 
       // Extract metadata
       if (mOptimizedModel)
@@ -352,7 +353,8 @@ private:
 
   std::filesystem::path mModelPath;
   bool mUsingOptimized = false;
-  bool mPreferOptimized = true;  // Default to preferring optimized
+  bool mPreferOptimized = true;
+  bool mSampleRateMismatch = false;  // Default to preferring optimized
 
   std::vector<float> mInputBuffer;
   std::vector<float> mOutputBuffer;
@@ -421,6 +423,24 @@ private:
     }
 
     UpdateEffectiveGains();
+  }
+
+  void CheckSampleRateMismatch()
+  {
+    double expectedSR = -1.0;
+    if (mOptimizedModel)
+      expectedSR = mOptimizedModel->GetExpectedSampleRate();
+    else if (mFallbackModel)
+      expectedSR = mFallbackModel->GetExpectedSampleRate();
+
+    const bool mismatch = (expectedSR > 0.0 && std::abs(expectedSR - mSampleRate) > 1.0);
+    if (mismatch && !mSampleRateMismatch)
+    {
+      std::cerr << "[OptimizedNAMAmpEffect] Sample rate mismatch: model expects "
+                << static_cast<int>(expectedSR) << " Hz, plugin running at "
+                << static_cast<int>(mSampleRate) << " Hz - output quality may be degraded\n";
+    }
+    mSampleRateMismatch = mismatch;
   }
 
   static bool ParseBool(const std::string& value)
