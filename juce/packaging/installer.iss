@@ -40,7 +40,7 @@ Type: filesandordirs; Name: "{commonappdata}\{#ProductName}\resources"
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
 Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,Contents\x86_64-win\resources\ui\*; Flags: ignoreversion recursesubdirs; Components: vst3
-Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
+; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
 Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Excludes: resources\ui\*; Flags: ignoreversion recursesubdirs; Components: standalone
 Source: "..\..\core\ui\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone vst3
 
