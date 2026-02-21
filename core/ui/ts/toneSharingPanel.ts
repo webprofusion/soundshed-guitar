@@ -4,6 +4,7 @@ import { buildPresetArchiveBlob, importPackWithConfirmation } from "./presets.js
 import { clonePreset, uiState } from "./state.js";
 import type { Preset, PresetFolder } from "./types.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
+import { arrayBufferToBase64, generateResourceId } from "./archiveUtils.js";
 
 type ToneSharingUser = {
   id: string;
@@ -1132,6 +1133,139 @@ async function clearPreviewPreset(): Promise<void> {
   }
 }
 
+/**
+ * Walk the preset JSON (as returned by readPresetFromArchive) and replace
+ * every resource-id reference that appears in idMap with its mapped value.
+ * This is needed so that previewed presets resolve to the resources that
+ * were just imported from the tone-sharing archive.
+ */
+function remapPresetResourceIds(preset: Record<string, unknown>, idMap: Map<string, string>): void {
+  const graph = preset.graph as {
+    nodes?: Array<{
+      resources?: Array<{ resourceId?: string; id?: string }>;
+      config?: { blendId?: string };
+    }>;
+  } | undefined;
+
+  if (graph?.nodes) {
+    for (const node of graph.nodes) {
+      if (Array.isArray(node.resources)) {
+        for (const res of node.resources) {
+          const resourceId = res.resourceId ?? res.id;
+          if (resourceId) {
+            const mapped = idMap.get(resourceId);
+            if (mapped) {
+              res.resourceId = mapped;
+              res.id = mapped;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (typeof preset.audioFxModelId === "string" && idMap.has(preset.audioFxModelId)) {
+    preset.audioFxModelId = idMap.get(preset.audioFxModelId);
+  }
+  if (typeof preset.irId === "string" && idMap.has(preset.irId)) {
+    preset.irId = idMap.get(preset.irId);
+  }
+}
+
+/**
+ * For a single-item archive buffer from the tone-sharing API, extract any
+ * embedded resource files (NAM models, IR WAVs, etc.) and import them into
+ * the local library via importRemoteResource messages.  Resources already
+ * present in the library (matched by content hash or id) are skipped.
+ *
+ * Returns a Map<oldId, newId> suitable for remapping the preset JSON before
+ * it is loaded or previewed.
+ */
+async function importPreviewResources(buffer: ArrayBuffer): Promise<Map<string, string>> {
+  const idMap = new Map<string, string>();
+
+  const bytes = new Uint8Array(buffer);
+  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (!isZip) {
+    return idMap; // plain-JSON preset – no embedded resources
+  }
+
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    return idMap;
+  }
+
+  const zip = await zipLib.loadAsync(buffer);
+  const presetEntry = zip.file("preset.json");
+  if (!presetEntry) {
+    return idMap;
+  }
+
+  const archive = JSON.parse(await presetEntry.async("text")) as ItemArchive;
+  const resources = archive.resources ?? [];
+
+  // Build a lookup map from the zip file entries
+  const fileMap = new Map<string, { async(type: "arraybuffer"): Promise<ArrayBuffer> }>();
+  Object.values(zip.files).forEach((entry) => {
+    if (!(entry as { dir?: boolean }).dir) {
+      const stripped = entry.name.replace(/^resources\//, "");
+      const e = entry as { async(type: "arraybuffer"): Promise<ArrayBuffer> };
+      fileMap.set(stripped, e);
+      fileMap.set(entry.name, e);
+    }
+  });
+
+  for (const resource of resources) {
+    const fileName = resource.fileName ?? "";
+
+    // Dedup by content hash
+    if (resource.hash) {
+      const existing = (uiState.resourceLibrary[resource.type] ?? []).find(
+        (r) => r.hash?.toLowerCase() === resource.hash!.toLowerCase()
+      );
+      if (existing) {
+        idMap.set(resource.id, existing.id);
+        continue;
+      }
+    }
+
+    // Dedup by id
+    const existingById = (uiState.resourceLibrary[resource.type] ?? []).find(
+      (r) => r.id === resource.id
+    );
+    if (existingById) {
+      idMap.set(resource.id, resource.id);
+      continue;
+    }
+
+    const entry = fileMap.get(fileName);
+    if (!entry) {
+      continue; // binary not present in archive – skip
+    }
+
+    const dataBuffer = await entry.async("arraybuffer");
+    const data = arrayBufferToBase64(dataBuffer);
+    const newId = generateResourceId(fileName);
+    idMap.set(resource.id, newId);
+
+    postMessage({
+      type: "importRemoteResource",
+      provider: "toneSharing",
+      resourceType: resource.type,
+      resourceId: newId,
+      name: resource.name ?? fileName,
+      description: "",
+      category: resource.category ?? "",
+      subfolder: "tone-sharing",
+      fileName,
+      hash: resource.hash ?? "",
+      data,
+    });
+  }
+
+  return idMap;
+}
+
 async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
   // Save original preset ID so we can restore it later (only on first preview)
   if (!previewingItemId) {
@@ -1147,7 +1281,16 @@ async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
   }
 
   const buffer = await response.arrayBuffer();
+
+  // Import any embedded resources (NAM models, IR files, etc.) into the
+  // local library before loading the preset so the DSP graph can resolve
+  // every resource reference during playback.
+  const idMap = await importPreviewResources(buffer);
+
   const preset = await readPresetFromArchive(buffer);
+  if (idMap.size > 0) {
+    remapPresetResourceIds(preset, idMap);
+  }
   postMessage({ type: "loadPreset", preset, presetId: `preview-${itemId}` });
 
   // Update DOM to reflect new preview state without a full re-fetch
@@ -1521,14 +1664,16 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
 
   const blob = await response.blob();
 
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  // Import the preset (and its bundled resources) directly into the local
+  // library instead of triggering a browser file-save.  importPackWithConfirmation
+  // handles both single-preset and multi-preset archive formats and shows a
+  // confirmation dialog summarising what will be imported.
+  const importFile = new File([blob], fileName, { type: blob.type || "application/octet-stream" });
+  await importPackWithConfirmation(importFile, {
+    source: "toneSharingApi",
+    packId: id,
+    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|zip)$/i, ""),
+  });
 }
 
 async function deleteAsset(kind: "item" | "pack", id: string): Promise<void> {
