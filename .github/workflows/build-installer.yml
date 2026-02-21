@@ -6,7 +6,7 @@ on:
       target:
         description: Which installer to build
         type: choice
-        default: both
+        default: juce
         options:
           - both
           - iplug2
