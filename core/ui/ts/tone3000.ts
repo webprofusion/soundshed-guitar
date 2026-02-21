@@ -88,6 +88,25 @@ export async function ensureTone3000Session(): Promise<void> {
   await startSession(apiKey);
 }
 
+/**
+ * Download a tone3000 resource file using the current authenticated session.
+ * Used during preset archive import when resources carry a tone3000 model URL.
+ */
+export async function downloadTone3000ResourceByModelUrl(modelUrl: string): Promise<ArrayBuffer> {
+  const session = uiState.tone3000Session;
+  if (!session?.accessToken) {
+    throw new Error("Tone3000 session required to download this resource");
+  }
+  const response = await fetch(modelUrl, {
+    headers: { Authorization: `Bearer ${session.accessToken}` },
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Tone3000 download failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+  }
+  return response.arrayBuffer();
+}
+
 export async function handleAppSettingUpdate(key: string, value: AppSettingValue): Promise<void> {
   if (key !== TONE3000_API_KEY_SETTING) {
     return;

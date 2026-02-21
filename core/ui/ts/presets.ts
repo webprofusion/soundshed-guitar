@@ -13,6 +13,7 @@ import { renderSignalPathBar } from "./signalPath.js";
 import { showConfirm } from "./dialogs.js";
 import { isToneSharingSignedIn, openToneSharingPublishPresetModal, registerInstalledToneSharingPack } from "./toneSharingPanel.js";
 import type { InstalledPackMetadata } from "./toneSharingPanel.js";
+import { downloadTone3000ResourceByModelUrl } from "./tone3000.js";
 
 const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
 const presetFavoriteToggle = document.getElementById("preset-favorite");
@@ -2058,11 +2059,27 @@ type PresetArchiveResource = {
   hash?: string;
 };
 
+/**
+ * Reference to a tone3000-sourced resource that must be re-downloaded by the
+ * recipient using their own API key, as redistribution is prohibited by tone3000 terms.
+ */
+type Tone3000ResourceRef = {
+  id: string;
+  name?: string;
+  category?: string;
+  type: string;
+  modelUrl: string; // Authenticated download URL from the tone3000 API
+  toneId?: string;
+  modelId?: string;
+};
+
 type PresetArchive = {
   formatVersion: number;
   preset: Preset;
   resources: PresetArchiveResource[];
   blends?: BlendDefinition[];
+  /** tone3000-sourced resources excluded from the archive per their redistribution terms. */
+  tone3000Resources?: Tone3000ResourceRef[];
 };
 
 type PresetCollectionArchive = {
@@ -2071,6 +2088,8 @@ type PresetCollectionArchive = {
   presets: Preset[];
   resources: PresetArchiveResource[];
   blends?: BlendDefinition[];
+  /** tone3000-sourced resources excluded from the archive per their redistribution terms. */
+  tone3000Resources?: Tone3000ResourceRef[];
 };
 
 type ImportPackSource = "zipImport" | "toneSharingApi" | "generatedPack";
@@ -2087,6 +2106,7 @@ type ImportPackSummary = {
   presetCount: number;
   resourceCount: number;
   blendCount: number;
+  tone3000ResourceCount: number;
   packId?: string;
 };
 
@@ -2098,6 +2118,9 @@ function buildImportSummaryMessage(summary: ImportPackSummary): string {
     `Resources: ${summary.resourceCount}`,
     `Blends: ${summary.blendCount}`,
   ];
+  if (summary.tone3000ResourceCount > 0) {
+    lines.push(`Tone3000 resources: ${summary.tone3000ResourceCount} (requires your Tone3000 API key)`);
+  }
   if (summary.packId) {
     lines.push(`Pack ID: ${summary.packId}`);
   }
@@ -2144,6 +2167,7 @@ async function inspectImportPack(file: File, context: ImportPackContext): Promis
       presetCount,
       resourceCount: generatedResourceCount,
       blendCount: 0,
+      tone3000ResourceCount: 0,
       packId: context.packId ?? manifest.packId,
     };
   }
@@ -2157,17 +2181,20 @@ async function inspectImportPack(file: File, context: ImportPackContext): Promis
   let presetCount = 0;
   let resourceCount = 0;
   let blendCount = 0;
+  let tone3000ResourceCount = 0;
 
   if (presetEntry) {
     const archive = JSON.parse(await presetEntry.async("text")) as PresetArchive;
     presetCount = archive.preset ? 1 : 0;
     resourceCount = Array.isArray(archive.resources) ? archive.resources.length : 0;
     blendCount = Array.isArray(archive.blends) ? archive.blends.length : 0;
+    tone3000ResourceCount = Array.isArray(archive.tone3000Resources) ? archive.tone3000Resources.length : 0;
   } else if (presetsEntry) {
     const archive = JSON.parse(await presetsEntry.async("text")) as PresetCollectionArchive;
     presetCount = Array.isArray(archive.presets) ? archive.presets.length : 0;
     resourceCount = Array.isArray(archive.resources) ? archive.resources.length : 0;
     blendCount = Array.isArray(archive.blends) ? archive.blends.length : 0;
+    tone3000ResourceCount = Array.isArray(archive.tone3000Resources) ? archive.tone3000Resources.length : 0;
   }
 
   return {
@@ -2176,6 +2203,7 @@ async function inspectImportPack(file: File, context: ImportPackContext): Promis
     presetCount,
     resourceCount,
     blendCount,
+    tone3000ResourceCount,
     packId: context.packId,
   };
 }
@@ -2330,6 +2358,7 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
   });
 
   const exportResources: PresetArchiveResource[] = [];
+  const exportTone3000Resources: Tone3000ResourceRef[] = [];
   let missingCount = 0;
 
   for (const ref of refMap.values()) {
@@ -2341,6 +2370,20 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
     const resource = getLibraryResource(resourceType, resourceId);
     if (!resource) {
       missingCount += 1;
+      continue;
+    }
+    // tone3000 resources may not be redistributed per their terms;
+    // store a download reference instead so the recipient fetches with their own key.
+    if (resource.metadata?.provider === "tone3000" && resource.metadata?.modelUrl) {
+      exportTone3000Resources.push({
+        id: resource.id,
+        name: resource.name,
+        category: resource.category,
+        type: resourceType,
+        modelUrl: resource.metadata.modelUrl,
+        toneId: resource.metadata.toneId,
+        modelId: resource.metadata.modelId,
+      });
       continue;
     }
     const data = await requestResourceData(resourceType, resourceId);
@@ -2368,6 +2411,7 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
     presets: exportPresets,
     resources: exportResources,
     blends: blendDefs,
+    ...(exportTone3000Resources.length > 0 && { tone3000Resources: exportTone3000Resources }),
   };
 
   zip.file("presets.json", JSON.stringify(archive, null, 2));
@@ -2433,6 +2477,7 @@ export async function buildPresetArchiveBlob(preset: Preset): Promise<Blob> {
   const blendDefs = (uiState.blendLibrary ?? []).filter((blend) => blendIds.includes(blend.id));
   const resourceRefs = collectPresetResourceRefs(preset, blendDefs);
   const exportResources: PresetArchiveResource[] = [];
+  const exportTone3000Resources: Tone3000ResourceRef[] = [];
 
   for (const ref of resourceRefs) {
     const resourceType = ref.resourceType ?? ref.type ?? "";
@@ -2440,6 +2485,20 @@ export async function buildPresetArchiveBlob(preset: Preset): Promise<Blob> {
     if (!resourceType || !resourceId) continue;
     const resource = getLibraryResource(resourceType, resourceId);
     if (!resource) continue;
+    // tone3000 resources may not be redistributed per their terms;
+    // store a download reference instead so the recipient fetches with their own key.
+    if (resource.metadata?.provider === "tone3000" && resource.metadata?.modelUrl) {
+      exportTone3000Resources.push({
+        id: resource.id,
+        name: resource.name,
+        category: resource.category,
+        type: resourceType,
+        modelUrl: resource.metadata.modelUrl,
+        toneId: resource.metadata.toneId,
+        modelId: resource.metadata.modelId,
+      });
+      continue;
+    }
     const data = await requestResourceData(resourceType, resourceId);
     if (!data) continue;
     const hash = await sha256HexFromBase64(data);
@@ -2460,6 +2519,7 @@ export async function buildPresetArchiveBlob(preset: Preset): Promise<Blob> {
     preset: clonePreset(preset),
     resources: exportResources,
     blends: blendDefs,
+    ...(exportTone3000Resources.length > 0 && { tone3000Resources: exportTone3000Resources }),
   };
 
   zip.file("preset.json", JSON.stringify(archive, null, 2));
@@ -2518,6 +2578,85 @@ function buildInstalledPackEntryId(file: File, context: ArchiveImportContext): s
   return `${context.source}:${base}:${file.size}`;
 }
 
+/**
+ * Download tone3000 resources referenced in a preset archive using the user's
+ * own authenticated session. Redistribution of tone3000 files is prohibited by
+ * their terms, so archives carry only a model URL rather than file bytes.
+ */
+async function importTone3000ArchiveResources(
+  refs: Tone3000ResourceRef[],
+  idMap: Map<string, string>,
+  importedResources: Array<{ type: string; id: string }>,
+): Promise<void> {
+  const session = uiState.tone3000Session;
+  if (!session?.accessToken) {
+    showNotification(
+      "Tone3000 sign-in required",
+      `${refs.length} resource(s) from tone3000 require your API key. Add it in Settings › Library › Tone3000 then re-import the archive.`,
+    );
+    appendLog(`tone3000 archive import: ${refs.length} resource(s) skipped — no active session`);
+    return;
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const ref of refs) {
+    // If the resource was previously imported, reuse it.
+    const existing = getLibraryResource(ref.type, ref.id);
+    if (existing && !existing.fileMissing) {
+      idMap.set(ref.id, existing.id);
+      importedResources.push({ type: ref.type, id: existing.id });
+      succeeded += 1;
+      continue;
+    }
+
+    try {
+      const buffer = await downloadTone3000ResourceByModelUrl(ref.modelUrl);
+      const data = arrayBufferToBase64(buffer);
+      const urlPath = new URL(ref.modelUrl).pathname;
+      const urlFileName = urlPath.split("/").pop() ?? "";
+      const extension = ref.type === "ir" ? ".wav" : ".nam";
+      const fileName = urlFileName || `${sanitizeFilename(ref.name ?? ref.id, "resource")}${extension}`;
+
+      postMessage({
+        type: "importRemoteResource",
+        provider: "tone3000",
+        resourceType: ref.type,
+        resourceId: ref.id,
+        name: ref.name ?? ref.id,
+        description: "",
+        category: ref.category ?? "",
+        subfolder: "preset-imports",
+        fileName,
+        metadata: {
+          provider: "tone3000",
+          toneId: ref.toneId ?? "",
+          modelId: ref.modelId ?? "",
+          modelUrl: ref.modelUrl,
+        },
+        data,
+      });
+
+      idMap.set(ref.id, ref.id);
+      importedResources.push({ type: ref.type, id: ref.id });
+      succeeded += 1;
+      appendLog(`tone3000 archive resource imported: ${ref.name ?? ref.id}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      appendLog(`tone3000 archive resource failed (${ref.name ?? ref.id}): ${msg}`);
+      failed += 1;
+    }
+  }
+
+  if (failed > 0) {
+    showNotification(
+      "Tone3000 download incomplete",
+      `${succeeded} downloaded, ${failed} failed. Check your API key in Settings.`,
+    );
+  }
+}
+
 async function importPresetArchive(file: File, context: ArchiveImportContext = { source: "zipImport" }): Promise<void> {
   const zipLib = window.JSZip;
   if (!zipLib) {
@@ -2535,6 +2674,7 @@ async function importPresetArchive(file: File, context: ArchiveImportContext = {
   }
 
   let resourcesToImport: PresetArchiveResource[] = [];
+  let tone3000ResourcesToImport: Tone3000ResourceRef[] = [];
   let blends: BlendDefinition[] = [];
   let presetsToImport: Preset[] = [];
 
@@ -2546,6 +2686,7 @@ async function importPresetArchive(file: File, context: ArchiveImportContext = {
       return;
     }
     resourcesToImport = archive.resources ?? [];
+    tone3000ResourcesToImport = archive.tone3000Resources ?? [];
     blends = archive.blends ?? [];
     presetsToImport = [archive.preset];
   } else if (presetsEntry) {
@@ -2556,6 +2697,7 @@ async function importPresetArchive(file: File, context: ArchiveImportContext = {
       return;
     }
     resourcesToImport = archive.resources ?? [];
+    tone3000ResourcesToImport = archive.tone3000Resources ?? [];
     blends = archive.blends ?? [];
     presetsToImport = archive.presets;
   }
@@ -2606,6 +2748,11 @@ async function importPresetArchive(file: File, context: ArchiveImportContext = {
       },
       data,
     });
+  }
+
+  // Download tone3000-sourced resources using the user's own authenticated session.
+  if (tone3000ResourcesToImport.length > 0) {
+    await importTone3000ArchiveResources(tone3000ResourcesToImport, idMap, importedResources);
   }
 
   const blendIdMap = new Map<string, string>();
