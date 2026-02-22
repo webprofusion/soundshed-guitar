@@ -1394,6 +1394,7 @@ void PluginController::DeserializeState(const std::string& json)
 
         if (state.contains("globalSignalChain") && state["globalSignalChain"].is_object())
         {
+            std::lock_guard<std::mutex> dspLock(mDSPMutex);
             mPresetMixer.SetGlobalChainConfig(state["globalSignalChain"].get<GlobalSignalChainConfig>());
         }
         if (state.contains("preset"))
@@ -1808,17 +1809,8 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 
         ApplyBlendDefinitions(preset);
 
-        if (preset.globalSignalChain.has_value())
-        {
-            mPresetMixer.SetGlobalChainConfig(*preset.globalSignalChain);
-        }
-        else
-        {
-            mPresetMixer.SetGlobalChainConfig(mPresetMixer.GetGlobalChainConfig());
-        }
-
         mActivePresetId = payload.value("presetId", preset.id);
-        ApplyPreset(preset);
+        ApplyPreset(preset); // SetGlobalChainConfig is called inside ApplyPreset under mDSPMutex
 
         mActivePreset = preset;
         mActivePresetJson = PresetStorage::SerializeToJson(preset);
@@ -4864,6 +4856,7 @@ void PluginController::HandleSetGlobalChainRequest(const nlohmann::json& payload
     if (payload.contains("config"))
     {
         auto config = payload["config"].get<GlobalSignalChainConfig>();
+        std::lock_guard<std::mutex> dspLock(mDSPMutex);
         mPresetMixer.SetGlobalChainConfig(config);
     }
     SendGlobalChainStateToUI();
@@ -5042,6 +5035,14 @@ void PluginController::ApplyPreset(const Preset& preset)
 
     Preset normalizedPreset = preset;
     EnsurePresetBoundaryGainNodes(normalizedPreset);
+
+    // Apply global signal chain config under the DSP lock so the audio thread
+    // cannot be inside mPreChainExecutor/mPostChainExecutor.Process() while
+    // RebuildGlobalChains() tears down and recreates those executors' node states.
+    if (normalizedPreset.globalSignalChain.has_value())
+        mPresetMixer.SetGlobalChainConfig(*normalizedPreset.globalSignalChain);
+    else
+        mPresetMixer.SetGlobalChainConfig(mPresetMixer.GetGlobalChainConfig());
 
     mActivePreset = normalizedPreset;
     mActivePresetJson = PresetStorage::SerializeToJson(normalizedPreset);
