@@ -10,8 +10,8 @@ If `JUCE/` is still missing (some clones do not have gitlink entries for the sub
  
  `cmake -B build -G "Visual Studio 18 2026"`
 
- Configure to include ASIO
- `cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/build -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK";`
+ Configure to include ASIO and use "builds" folder
+ `cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/builds -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK";`
  
  `cmake -B build -G "Xcode"`
 

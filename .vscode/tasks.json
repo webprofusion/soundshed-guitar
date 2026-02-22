@@ -188,7 +188,7 @@
 			"command": "cmake",
 			"args": [
 				"--build",
-				"${workspaceFolder}/juce/build",
+				"${workspaceFolder}/juce/builds",
 				"--config",
 				"Debug",
 				"--target",
@@ -203,7 +203,7 @@
 			"command": "cmake",
 			"args": [
 				"--build",
-				"${workspaceFolder}/juce/build",
+				"${workspaceFolder}/juce/builds",
 				"--config",
 				"Release",
 				"--target",
@@ -219,7 +219,7 @@
 			"command": "cmake",
 			"args": [
 				"--build",
-				"${workspaceFolder}/juce/build",
+				"${workspaceFolder}/juce/builds",
 				"--config",
 				"Release",
 				"--target",
