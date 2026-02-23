@@ -70,7 +70,16 @@ namespace
 
 bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
 {
-    return newURL.startsWith (getResourceProviderRoot());
+    if (newURL.startsWith (getResourceProviderRoot()))
+        return true;
+
+    if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
+    {
+        juce::URL (newURL).launchInDefaultBrowser();
+        return false;
+    }
+
+    return false;
 }
 
 PluginEditor::PluginEditor (PluginProcessorAdapter& p)

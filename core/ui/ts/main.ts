@@ -108,6 +108,18 @@ async function bootstrap(): Promise<void> {
     postMessage({ type: "uiVisibility", visible: !document.hidden });
   });
 
+  // Intercept all https:// link clicks and open them in the system browser
+  // instead of navigating the WebView.
+  document.addEventListener("click", (event) => {
+    const anchor = (event.target as Element | null)?.closest("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") ?? "";
+    if (href.startsWith("https://") || href.startsWith("http://")) {
+      event.preventDefault();
+      postMessage({ type: "openUrl", url: href });
+    }
+  }, true);
+
   window.addEventListener("focus", () => {
     postMessage({ type: "uiVisibility", visible: true });
   });

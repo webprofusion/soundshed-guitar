@@ -355,6 +355,21 @@ void PluginProcessorAdapter::setWebMessageCallback(
 
 void PluginProcessorAdapter::handleWebMessage(const juce::String& message)
 {
+    // Handle openUrl locally — open in the system default browser.
+    const auto parsed = juce::JSON::parse (message);
+    if (auto* obj = parsed.getDynamicObject(); obj != nullptr)
+    {
+        const auto typeId = juce::Identifier { "type" };
+        const auto urlId  = juce::Identifier { "url" };
+        if (obj->getProperty (typeId).toString() == "openUrl")
+        {
+            const auto url = obj->getProperty (urlId).toString();
+            if (url.startsWith ("https://") || url.startsWith ("http://"))
+                juce::URL (url).launchInDefaultBrowser();
+            return;
+        }
+    }
+
     mController.HandleUIMessage(message.toStdString());
 }
 
