@@ -85,3 +85,5 @@ api/.wrangler/
 resources/metal-presets/
 
 juce/builds/
+
+juce/.vs/

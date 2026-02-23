@@ -190,23 +190,11 @@ export const uiState: UiState = {
     "audio.interfaceCalibration.referenceDbu": 12.0,
     "metronome.clickConfig": [
       {
-        id: "click",
-        label: "Click",
-        lowPath: "metronome/click/Low.wav",
-        highPath: "metronome/click/High.wav",
-      },
-      {
         id: "drum",
         label: "Drum",
-        lowPath: "metronome/kit1/Low.wav",
-        highPath: "metronome/kit1/High.wav",
-      },
-      {
-        id: "electronic",
-        label: "Electronic",
-        lowPath: "metronome/digital/Low.wav",
-        highPath: "metronome/digital/High.wav",
-      },
+        lowPath: "metronome/kit1/low.wav",
+        highPath: "metronome/kit1/high.wav",
+      }
     ],
   },
   tone3000Session: null,

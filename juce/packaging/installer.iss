@@ -39,10 +39,9 @@ Type: filesandordirs; Name: "{commonappdata}\{#ProductName}\resources"
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
-Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
 ; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}";  Flags: ignoreversion recursesubdirs; Components: standalone
-Source: "..\..\core\ui\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui";  Excludes: node_modules; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
 
 [Icons]
 Name: "{autoprograms}\{#ProductName}"; Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone
@@ -54,6 +53,9 @@ Filename: "{cmd}"; \
     WorkingDir: "{commoncf64}\VST3"; \
     Parameters: "/C mklink /D ""{commoncf64}\VST3\{#ProductName}Data"" ""{commonappdata}\{#ProductName}"""; \
     Flags: runascurrentuser; Components: vst3
+Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; \
+    Description: "Launch {#ProductName}"; \
+    Flags: nowait postinstall skipifsilent; Components: standalone
 
 [Code]
 function IsWebView2RuntimeInstalled: Boolean;

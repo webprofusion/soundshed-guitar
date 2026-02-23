@@ -1109,9 +1109,10 @@ void PluginController::UpdateMetronomeClickConfigFromSettings()
     if (!hasValidConfig)
     {
         const std::array<std::tuple<std::string, std::string, std::string, std::string>, 3> defaults = {
-            std::make_tuple(std::string{"click"}, std::string{"Click"}, std::string{"metronome/click/Low.wav"}, std::string{"metronome/click/High.wav"}),
-            std::make_tuple(std::string{"drum"}, std::string{"Drum"}, std::string{"metronome/kit1/Low.wav"}, std::string{"metronome/kit1/High.wav"}),
-            std::make_tuple(std::string{"electronic"}, std::string{"Electronic"}, std::string{"metronome/digital/Low.wav"}, std::string{"metronome/digital/High.wav"})
+            
+            std::make_tuple(std::string{"drum"}, std::string{"Drum"}, std::string{"metronome/kit1/low.wav"}, std::string{"metronome/kit1/high.wav"}),
+            //std::make_tuple(std::string{"click"}, std::string{"Click"}, std::string{"metronome/click/Low.wav"}, std::string{"metronome/click/High.wav"}),
+            //std::make_tuple(std::string{"electronic"}, std::string{"Electronic"}, std::string{"metronome/digital/Low.wav"}, std::string{"metronome/digital/High.wav"})
         };
 
         nlohmann::json defaultConfig = nlohmann::json::array();
