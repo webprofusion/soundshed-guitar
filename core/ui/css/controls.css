@@ -736,3 +736,57 @@
   border-color: var(--accent-primary);
   box-shadow: inset 0 0 0 1px var(--accent-primary);
 }
+
+
+/* ===== Input VU Meter ===== */
+.input-vu-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+}
+
+.vu-segments {
+  display: flex;
+  flex-direction: column-reverse; /* bottom = quiet, top = loud */
+  gap: 2px;
+  width: 14px;
+}
+
+.vu-seg {
+  width: 14px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--vu-seg-off, rgba(255,255,255,0.08));
+  transition: background 60ms linear;
+}
+
+/* Segment colours when active */
+.vu-seg.active.vu-seg-green  { background: #3cdb6e; box-shadow: 0 0 4px rgba(60,219,110,0.6); }
+.vu-seg.active.vu-seg-yellow { background: #f0c040; box-shadow: 0 0 4px rgba(240,192,64,0.6); }
+.vu-seg.active.vu-seg-red    { background: #f05050; box-shadow: 0 0 4px rgba(240,80,80,0.7); }
+
+/* Peak-hold tick */
+.vu-peak-hold {
+  position: absolute;
+  left: 0;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: #f9f9f9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.vu-peak-hold.visible {
+  opacity: 0.85;
+}
+
+/* dB readout below segments */
+.vu-db-value {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  letter-spacing: 0.2px;
+}

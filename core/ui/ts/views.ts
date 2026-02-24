@@ -781,6 +781,72 @@ function setClipStatusText(el: HTMLElement, text: string): void {
   }
 }
 
+// Threshold (dBFS) for each segment, top → bottom in the DOM (rendered bottom-up via flex column-reverse).
+// Matches the data-db attributes on .vu-seg elements in index.html.
+const VU_SEGMENT_THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48] as const;
+
+// Cached DOM references for the VU meter (populated on first call).
+let vuSegments: HTMLElement[] | null = null;
+let vuPeakHold: HTMLElement | null = null;
+let vuDbValue: HTMLElement | null = null;
+let vuPeakHoldDbfs = -Infinity;
+let vuPeakHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+function updateInputVuMeter(levels: import("./types.js").SignalLevelMetrics | null): void {
+  if (!vuSegments) {
+    const container = document.getElementById("vu-segments");
+    vuSegments = container
+      ? Array.from(container.querySelectorAll<HTMLElement>(".vu-seg"))
+      : [];
+    vuPeakHold = document.getElementById("vu-peak-hold");
+    vuDbValue = document.getElementById("vu-db-value");
+  }
+
+  if (!vuSegments.length) return;
+
+  if (!levels || !isFinite(levels.peakDbfs)) {
+    vuSegments.forEach((s) => s.classList.remove("active"));
+    if (vuDbValue) vuDbValue.textContent = "—";
+    if (vuPeakHold) vuPeakHold.classList.remove("visible");
+    return;
+  }
+
+  const dbfs = levels.peakDbfs;
+
+  // Light all segments whose threshold is ≤ current peak
+  vuSegments.forEach((seg, i) => {
+    const threshold = VU_SEGMENT_THRESHOLDS[i];
+    seg.classList.toggle("active", dbfs >= threshold);
+  });
+
+  // dB readout
+  if (vuDbValue) {
+    vuDbValue.textContent = `${dbfs.toFixed(1)}`;
+  }
+
+  // Peak-hold tick: update if new peak is higher
+  if (dbfs >= vuPeakHoldDbfs) {
+    vuPeakHoldDbfs = dbfs;
+
+    if (vuPeakHoldTimer !== null) clearTimeout(vuPeakHoldTimer);
+    vuPeakHoldTimer = setTimeout(() => {
+      vuPeakHoldDbfs = -Infinity;
+      if (vuPeakHold) vuPeakHold.classList.remove("visible");
+    }, 2000);
+
+    // Position: each segment is 5px tall + 2px gap = 7px per segment.
+    // The container is flex column-reverse so segment 0 (top of DOM = highest dB) is at the top.
+    // Find the highest lit segment index and position the tick above it.
+    const segHeight = 7; // px per segment (5 + 2 gap)
+    const litCount = vuSegments.filter((s) => s.classList.contains("active")).length;
+    if (litCount > 0 && vuPeakHold) {
+      const bottomOffset = (litCount - 1) * segHeight + 5; // top of that segment
+      vuPeakHold.style.bottom = `${bottomOffset + 20}px`; // +20 accounts for db label
+      vuPeakHold.classList.add("visible");
+    }
+  }
+}
+
 export function updateSignalDiagnosticsView(): void {
   const diagnostics = uiState.signalDiagnostics;
   const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
@@ -941,5 +1007,6 @@ export function updateSignalDiagnosticsView(): void {
     `;
   }
 
+  updateInputVuMeter(enabled ? (diagnostics.rawInput ?? diagnostics.input) : null);
   updateSignalPathClipIndicators();
 }

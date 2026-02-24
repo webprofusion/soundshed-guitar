@@ -85,6 +85,21 @@
             </div>
             <span class="knob-value" id="input-value">+0.0 dB</span>
           </div>
+          <!-- Digital VU meter for raw input peak -->
+          <div class="input-vu-meter" id="input-vu-meter" title="Raw input peak level">
+            <div class="vu-segments" id="vu-segments">
+              <div class="vu-seg vu-seg-red"   data-db="-3"></div>
+              <div class="vu-seg vu-seg-red"   data-db="-6"></div>
+              <div class="vu-seg vu-seg-yellow" data-db="-9"></div>
+              <div class="vu-seg vu-seg-yellow" data-db="-12"></div>
+              <div class="vu-seg vu-seg-yellow" data-db="-18"></div>
+              <div class="vu-seg vu-seg-green"  data-db="-24"></div>
+              <div class="vu-seg vu-seg-green"  data-db="-36"></div>
+              <div class="vu-seg vu-seg-green"  data-db="-48"></div>
+            </div>
+            <div class="vu-peak-hold" id="vu-peak-hold"></div>
+            <span class="vu-db-value" id="vu-db-value">—</span>
+          </div>
         </div>
 
         <div class="control-stack input-mode-control">
