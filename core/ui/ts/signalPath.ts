@@ -1130,14 +1130,14 @@ export function updateSignalPathClipIndicators(): void {
 
   const diagnostics = uiState.signalDiagnostics;
   const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
-  const activePresetId = uiState.activePresetId;
 
+  // Build a map of nodeId → clipped for all nodes in the diagnostics snapshot.
+  // No preset-ID filtering here: effect nodes use unique UUIDs so there is no
+  // collision across preset instances, and __input__/__output__ are resolved via
+  // dedicated diagnostics.input / diagnostics.output fields below.
   const nodeClipMap = new Map<string, boolean>();
   if (enabled && diagnostics) {
     diagnostics.nodes.forEach((node) => {
-      if (node.presetId && activePresetId && node.presetId !== activePresetId) {
-        return;
-      }
       if (typeof node.nodeId === "string") {
         nodeClipMap.set(node.nodeId, Boolean(node.levels?.clipped));
       }

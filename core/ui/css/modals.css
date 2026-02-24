@@ -1365,7 +1365,7 @@
   padding: 8px 16px;
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
-  color: var(--text-dark-secondary);
+  color: var(--text-dark-primary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
