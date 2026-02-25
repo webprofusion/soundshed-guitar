@@ -15,6 +15,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
       mEnvelope = 0.0f;

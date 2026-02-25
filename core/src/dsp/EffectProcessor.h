@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -44,6 +45,9 @@ namespace guitarfx
     [[nodiscard]] virtual bool HasResource() const { return true; }
     [[nodiscard]] virtual std::filesystem::path GetResourcePath() const { return {}; }
 
+    // Latency: effects with algorithmic latency (IR convolution, pitch shift) must override.
+    [[nodiscard]] virtual int GetLatencySamples() const { return 0; }
+
     // Bypass
     void SetEnabled(bool enabled) { mEnabled = enabled; }
     [[nodiscard]] bool IsEnabled() const { return mEnabled; }
@@ -53,6 +57,15 @@ namespace guitarfx
     [[nodiscard]] virtual std::string GetCategory() const = 0;
 
   protected:
+    /**
+     * Guards against invalid Prepare() arguments (zero/negative sample rate or block size).
+     * Effects must call this at the top of their Prepare() override and return early if false.
+     */
+    [[nodiscard]] static bool ValidatePrepare(double sampleRate, int maxBlockSize)
+    {
+      return sampleRate > 0.0 && maxBlockSize > 0;
+    }
+
     bool mEnabled = true;
     double mSampleRate = 44100.0;
     int mMaxBlockSize = 512;
@@ -66,6 +79,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
     }

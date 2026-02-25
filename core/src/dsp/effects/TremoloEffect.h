@@ -2,6 +2,7 @@
 
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 
@@ -15,6 +16,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
       Reset();
@@ -27,7 +30,12 @@ namespace guitarfx
 
     void Process(float **inputs, float **outputs, int numSamples) override
     {
-      const double phaseInc = 2.0 * kPi * mRateHz / std::max(1.0, mSampleRate);
+      const float rateHz = mRateHz.load(std::memory_order_relaxed);
+      const float depth = mDepth.load(std::memory_order_relaxed);
+      const float shape = mShape.load(std::memory_order_relaxed);
+      const float mix = mMix.load(std::memory_order_relaxed);
+
+      const double phaseInc = 2.0 * kPi * rateHz / std::max(1.0, mSampleRate);
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -35,15 +43,15 @@ namespace guitarfx
         const float inR = inputs[1] ? inputs[1][i] : 0.0f;
 
         float lfo = static_cast<float>(std::sin(mPhase));
-        const float shaped = ShapeLfo(lfo, mShape);
+        const float shaped = ShapeLfo(lfo, shape);
         const float mod = 0.5f * (1.0f + shaped);
-        const float gain = (1.0f - mDepth) + mDepth * mod;
+        const float gain = (1.0f - depth) + depth * mod;
 
         const float wetL = inL * gain;
         const float wetR = inR * gain;
 
-        const float outL = inL * (1.0f - mMix) + wetL * mMix;
-        const float outR = inR * (1.0f - mMix) + wetR * mMix;
+        const float outL = inL * (1.0f - mix) + wetL * mix;
+        const float outR = inR * (1.0f - mix) + wetR * mix;
 
         if (outputs[0])
           outputs[0][i] = outL;
@@ -60,19 +68,19 @@ namespace guitarfx
     {
       if (key == "rate")
       {
-        mRateHz = static_cast<float>(std::clamp(value, 0.1, 12.0));
+        mRateHz.store(static_cast<float>(std::clamp(value, 0.1, 12.0)), std::memory_order_relaxed);
       }
       else if (key == "depth")
       {
-        mDepth = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mDepth.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
       else if (key == "shape")
       {
-        mShape = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mShape.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
       else if (key == "mix")
       {
-        mMix = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mMix.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
     }
 
@@ -81,13 +89,13 @@ namespace guitarfx
     [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "rate")
-        return mRateHz;
+        return mRateHz.load(std::memory_order_relaxed);
       if (key == "depth")
-        return mDepth;
+        return mDepth.load(std::memory_order_relaxed);
       if (key == "shape")
-        return mShape;
+        return mShape.load(std::memory_order_relaxed);
       if (key == "mix")
-        return mMix;
+        return mMix.load(std::memory_order_relaxed);
       return 0.0;
     }
 
@@ -103,10 +111,10 @@ namespace guitarfx
       return std::tanh(lfo * amount) / std::tanh(amount);
     }
 
-    float mRateHz = 4.0f;
-    float mDepth = 0.7f;
-    float mShape = 0.0f;
-    float mMix = 1.0f;
+    std::atomic<float> mRateHz{4.0f};
+    std::atomic<float> mDepth{0.7f};
+    std::atomic<float> mShape{0.0f};
+    std::atomic<float> mMix{1.0f};
 
     double mPhase = 0.0;
   };

@@ -21,6 +21,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
       UpdateCoefficients();
@@ -165,6 +167,15 @@ namespace guitarfx
       // High shelf
       mBands[3].isShelf = true;
       CalculateHighShelf(mBands[3]);
+
+      // Reset filter state to prevent instability transients after coefficient changes
+      for (auto &band : mBands)
+      {
+        band.z1L = band.z2L = 0.0f;
+        band.z1R = band.z2R = 0.0f;
+        band.x1L = band.x2L = 0.0f;
+        band.x1R = band.x2R = 0.0f;
+      }
     }
 
     void CalculatePeaking(Band &band)

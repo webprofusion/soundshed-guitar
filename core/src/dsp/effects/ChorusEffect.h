@@ -2,6 +2,7 @@
 
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -16,6 +17,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
       const double maxDelayMs = 50.0;
@@ -38,7 +41,13 @@ namespace guitarfx
       if (mBufferSize == 0)
         return;
 
-      const double phaseInc = 2.0 * kPi * mRateHz / std::max(1.0, mSampleRate);
+      const float rateHz = mRateHz.load(std::memory_order_relaxed);
+      const float depthMs = mDepthMs.load(std::memory_order_relaxed);
+      const float delayMs = mDelayMs.load(std::memory_order_relaxed);
+      const float feedback = mFeedback.load(std::memory_order_relaxed);
+      const float mix = mMix.load(std::memory_order_relaxed);
+
+      const double phaseInc = 2.0 * kPi * rateHz / std::max(1.0, mSampleRate);
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -51,17 +60,17 @@ namespace guitarfx
         const float modL = 0.5f * (1.0f + lfoL);
         const float modR = 0.5f * (1.0f + lfoR);
 
-        const float delayMsL = mDelayMs + mDepthMs * modL;
-        const float delayMsR = mDelayMs + mDepthMs * modR;
+        const float delayMsL = delayMs + depthMs * modL;
+        const float delayMsR = delayMs + depthMs * modR;
 
         const float delayedL = ReadDelay(mDelayBufferL, delayMsL);
         const float delayedR = ReadDelay(mDelayBufferR, delayMsR);
 
-        mDelayBufferL[mWriteIndex] = inL + delayedL * mFeedback;
-        mDelayBufferR[mWriteIndex] = inR + delayedR * mFeedback;
+        mDelayBufferL[mWriteIndex] = inL + delayedL * feedback;
+        mDelayBufferR[mWriteIndex] = inR + delayedR * feedback;
 
-        const float outL = inL * (1.0f - mMix) + delayedL * mMix;
-        const float outR = inR * (1.0f - mMix) + delayedR * mMix;
+        const float outL = inL * (1.0f - mix) + delayedL * mix;
+        const float outR = inR * (1.0f - mix) + delayedR * mix;
 
         if (outputs[0])
           outputs[0][i] = outL;
@@ -79,23 +88,23 @@ namespace guitarfx
     {
       if (key == "rate")
       {
-        mRateHz = static_cast<float>(std::clamp(value, 0.1, 10.0));
+        mRateHz.store(static_cast<float>(std::clamp(value, 0.1, 10.0)), std::memory_order_relaxed);
       }
       else if (key == "depth")
       {
-        mDepthMs = static_cast<float>(std::clamp(value, 0.0, 20.0));
+        mDepthMs.store(static_cast<float>(std::clamp(value, 0.0, 20.0)), std::memory_order_relaxed);
       }
       else if (key == "delay")
       {
-        mDelayMs = static_cast<float>(std::clamp(value, 1.0, 30.0));
+        mDelayMs.store(static_cast<float>(std::clamp(value, 1.0, 30.0)), std::memory_order_relaxed);
       }
       else if (key == "feedback")
       {
-        mFeedback = static_cast<float>(std::clamp(value, 0.0, 0.95));
+        mFeedback.store(static_cast<float>(std::clamp(value, 0.0, 0.95)), std::memory_order_relaxed);
       }
       else if (key == "mix")
       {
-        mMix = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mMix.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
     }
 
@@ -104,15 +113,15 @@ namespace guitarfx
     [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "rate")
-        return mRateHz;
+        return mRateHz.load(std::memory_order_relaxed);
       if (key == "depth")
-        return mDepthMs;
+        return mDepthMs.load(std::memory_order_relaxed);
       if (key == "delay")
-        return mDelayMs;
+        return mDelayMs.load(std::memory_order_relaxed);
       if (key == "feedback")
-        return mFeedback;
+        return mFeedback.load(std::memory_order_relaxed);
       if (key == "mix")
-        return mMix;
+        return mMix.load(std::memory_order_relaxed);
       return 0.0;
     }
 
@@ -147,11 +156,11 @@ namespace guitarfx
     int mBufferSize = 0;
     int mWriteIndex = 0;
 
-    float mRateHz = 1.2f;
-    float mDepthMs = 12.0f;
-    float mDelayMs = 18.0f;
-    float mFeedback = 0.1f;
-    float mMix = 0.4f;
+    std::atomic<float> mRateHz{1.2f};
+    std::atomic<float> mDepthMs{12.0f};
+    std::atomic<float> mDelayMs{18.0f};
+    std::atomic<float> mFeedback{0.1f};
+    std::atomic<float> mMix{0.4f};
 
     double mPhase = 0.0;
   };

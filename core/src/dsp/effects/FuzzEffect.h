@@ -2,6 +2,7 @@
 
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 
@@ -15,6 +16,8 @@ namespace guitarfx
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
+      if (!ValidatePrepare(sampleRate, maxBlockSize))
+        return;
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
       UpdateToneCoefficient();
@@ -29,8 +32,13 @@ namespace guitarfx
 
     void Process(float **inputs, float **outputs, int numSamples) override
     {
-      const float driveGain = 2.0f + 28.0f * mDrive;
-      const float levelGain = static_cast<float>(std::pow(10.0, mLevelDb * 0.05));
+      const float drive = mDrive.load(std::memory_order_relaxed);
+      const float levelDb = mLevelDb.load(std::memory_order_relaxed);
+      const float mix = mMix.load(std::memory_order_relaxed);
+      const float toneCoef = mToneCoef.load(std::memory_order_relaxed);
+
+      const float driveGain = 2.0f + 28.0f * drive;
+      const float levelGain = static_cast<float>(std::pow(10.0, levelDb * 0.05));
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -40,14 +48,14 @@ namespace guitarfx
         float wetL = ShapeFuzz(inL * driveGain);
         float wetR = ShapeFuzz(inR * driveGain);
 
-        wetL = ApplyTone(wetL, mToneStateL);
-        wetR = ApplyTone(wetR, mToneStateR);
+        wetL = ApplyTone(wetL, mToneStateL, toneCoef);
+        wetR = ApplyTone(wetR, mToneStateR, toneCoef);
 
         wetL *= levelGain;
         wetR *= levelGain;
 
-        const float outL = inL * (1.0f - mMix) + wetL * mMix;
-        const float outR = inR * (1.0f - mMix) + wetR * mMix;
+        const float outL = inL * (1.0f - mix) + wetL * mix;
+        const float outR = inR * (1.0f - mix) + wetR * mix;
 
         if (outputs[0])
           outputs[0][i] = outL;
@@ -60,20 +68,20 @@ namespace guitarfx
     {
       if (key == "drive")
       {
-        mDrive = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mDrive.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
       else if (key == "tone")
       {
-        mTone = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mTone.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
         UpdateToneCoefficient();
       }
       else if (key == "level")
       {
-        mLevelDb = static_cast<float>(std::clamp(value, -12.0, 12.0));
+        mLevelDb.store(static_cast<float>(std::clamp(value, -12.0, 12.0)), std::memory_order_relaxed);
       }
       else if (key == "mix")
       {
-        mMix = static_cast<float>(std::clamp(value, 0.0, 1.0));
+        mMix.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
       }
     }
 
@@ -82,13 +90,13 @@ namespace guitarfx
     [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "drive")
-        return mDrive;
+        return mDrive.load(std::memory_order_relaxed);
       if (key == "tone")
-        return mTone;
+        return mTone.load(std::memory_order_relaxed);
       if (key == "level")
-        return mLevelDb;
+        return mLevelDb.load(std::memory_order_relaxed);
       if (key == "mix")
-        return mMix;
+        return mMix.load(std::memory_order_relaxed);
       return 0.0;
     }
 
@@ -102,14 +110,14 @@ namespace guitarfx
     {
       const float minHz = 500.0f;
       const float maxHz = 5000.0f;
-      const float cutoff = minHz + (maxHz - minHz) * mTone;
+      const float cutoff = minHz + (maxHz - minHz) * mTone.load(std::memory_order_relaxed);
       const float x = static_cast<float>(2.0 * kPi * cutoff / std::max(1.0, mSampleRate));
-      mToneCoef = 1.0f - std::exp(-x);
+      mToneCoef.store(1.0f - std::exp(-x), std::memory_order_relaxed);
     }
 
-    float ApplyTone(float input, float &state)
+    static float ApplyTone(float input, float &state, float toneCoef)
     {
-      state += mToneCoef * (input - state);
+      state += toneCoef * (input - state);
       return state;
     }
 
@@ -120,12 +128,12 @@ namespace guitarfx
       return std::copysign(std::min(shaped, 1.0f), x);
     }
 
-    float mDrive = 0.7f;
-    float mTone = 0.5f;
-    float mLevelDb = 0.0f;
-    float mMix = 1.0f;
+    std::atomic<float> mDrive{0.7f};
+    std::atomic<float> mTone{0.5f};
+    std::atomic<float> mLevelDb{0.0f};
+    std::atomic<float> mMix{1.0f};
 
-    float mToneCoef = 0.0f;
+    std::atomic<float> mToneCoef{0.0f};
     float mToneStateL = 0.0f;
     float mToneStateR = 0.0f;
   };
