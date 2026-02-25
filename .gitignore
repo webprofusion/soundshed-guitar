@@ -87,3 +87,5 @@ resources/metal-presets/
 juce/builds/
 
 juce/.vs/
+
+.specstory/
