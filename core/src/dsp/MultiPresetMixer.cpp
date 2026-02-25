@@ -1195,9 +1195,17 @@ namespace guitarfx
     return aggregatedStats;
   }
 
-  // ============================================================================
-  // Tuner implementation
-  // ============================================================================
+  int MultiPresetMixer::GetTotalLatencySamples() const
+  {
+    const int preChain  = mPreChainExecutor.GetTotalLatencySamples();
+    const int postChain = mPostChainExecutor.GetTotalLatencySamples();
+
+    int instanceMax = 0;
+    for (const auto& inst : mInstances)
+      instanceMax = std::max(instanceMax, inst.executor.GetTotalLatencySamples());
+
+    return preChain + instanceMax + postChain;
+  }
 
   void MultiPresetMixer::SetTunerEnabled(bool enabled)
   {

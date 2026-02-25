@@ -175,6 +175,8 @@ namespace guitarfx
     [[nodiscard]] std::optional<InstanceConfig> GetPresetConfig(const std::string &presetId) const;
     [[nodiscard]] size_t GetPresetCount() const { return mInstances.size(); }
     [[nodiscard]] SignalGraphExecutor::DSPPerformanceStats GetPerformanceStats() const;
+    /// Total algorithmic latency in samples: pre-chain + max(preset instances) + post-chain.
+    [[nodiscard]] int GetTotalLatencySamples() const;
 
     // Signal diagnostics
     void SetSignalDiagnosticsEnabled(bool enabled);

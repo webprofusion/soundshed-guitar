@@ -314,6 +314,12 @@ void PluginProcessorAdapter::NotifyStateChanged()
     updateHostDisplay(juce::AudioProcessor::ChangeDetails().withNonParameterStateChanged(true));
 }
 
+void PluginProcessorAdapter::NotifyLatencyChanged(int latencySamples)
+{
+    setLatencySamples(latencySamples);
+    updateHostDisplay(juce::AudioProcessor::ChangeDetails().withLatencyChanged(true));
+}
+
 double PluginProcessorAdapter::GetHostTempo() const
 {
     if (auto* ph = const_cast<PluginProcessorAdapter*>(this)->getPlayHead())

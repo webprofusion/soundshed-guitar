@@ -653,6 +653,18 @@ namespace guitarfx
     return mLastPerformanceStats;
   }
 
+  int SignalGraphExecutor::GetTotalLatencySamples() const
+  {
+    int total = 0;
+    for (const auto& nodeId : mExecutionOrder)
+    {
+      auto it = mNodeStates.find(nodeId);
+      if (it != mNodeStates.end() && it->second.processor)
+        total += it->second.processor->GetLatencySamples();
+    }
+    return total;
+  }
+
   std::vector<SignalGraphExecutor::NodeSignalLevel> SignalGraphExecutor::GetNodeSignalLevels() const
   {
     std::vector<NodeSignalLevel> result;

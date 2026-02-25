@@ -283,6 +283,7 @@ private:
     // ── Internal helpers ───────────────────────────────────────────
     void BroadcastState();
     void ApplyPreset(const Preset& preset);
+    void UpdateHostLatency();
     void ApplyBlendDefinitions(Preset& preset);
     bool ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value);
     void ApplyDiagnosticsSettingsFromAppSettings();

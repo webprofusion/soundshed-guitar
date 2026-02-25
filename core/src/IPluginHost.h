@@ -89,6 +89,10 @@ public:
     /// Notify host that plugin state has changed (marks DAW project dirty).
     virtual void NotifyStateChanged() {}
 
+    /// Notify the host that algorithmic latency has changed (e.g. after loading an IR).
+    /// Implementations should call the host's latency-reporting API (e.g. setLatencySamples).
+    virtual void NotifyLatencyChanged(int /*latencySamples*/) {}
+
     /// Get the DAW/host tempo in BPM, if available.
     [[nodiscard]] virtual double GetHostTempo() const { return 120.0; }
 

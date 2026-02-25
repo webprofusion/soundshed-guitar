@@ -634,6 +634,10 @@ void PluginController::Prepare(double sampleRate, int blockSize)
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.Prepare(sampleRate, blockSize);
 
+    // Report initial latency to the host (e.g. IR cab partition size may be
+    // known only after Prepare sets the sample rate).
+    UpdateHostLatency();
+
     if (mHost.IsStandalone())
     {
         mMetronomeSamplesUntilClick = 0.0;
@@ -5028,6 +5032,15 @@ void PluginController::BroadcastState()
     // Also send supplementary data
     SendCompositeLibraryToUI();
     SendEffectCatalogToUI();
+
+    // Notify the host of any latency change now that the graph is settled.
+    UpdateHostLatency();
+}
+
+void PluginController::UpdateHostLatency()
+{
+    const int latency = mPresetMixer.GetTotalLatencySamples();
+    mHost.NotifyLatencyChanged(latency);
 }
 
 void PluginController::ApplyPreset(const Preset& preset)

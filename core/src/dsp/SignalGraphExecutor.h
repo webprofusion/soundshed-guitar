@@ -79,6 +79,8 @@ namespace guitarfx
     [[nodiscard]] bool IsValid() const { return mIsValid; }
     [[nodiscard]] std::vector<std::string> GetExecutionOrder() const { return mExecutionOrder; }
     [[nodiscard]] DSPPerformanceStats GetPerformanceStats() const;
+    /// Returns the sum of GetLatencySamples() for all active nodes in execution order.
+    [[nodiscard]] int GetTotalLatencySamples() const;
 
   private:
     struct NodeState
