@@ -615,11 +615,11 @@ inline void RegisterOptimizedNAMAmpEffect()
   info.resourceFilterHint = {"amp", "full-rig"};
   info.parameters = {
     {"inputGain",             "Input Gain",         0.0,   -24.0, 24.0,  "dB"},
-    {"outputGain",            "Output Gain",         0.0,   -24.0, 24.0,  "dB"},
     {"bass",                  "Bass",                0.0,   -10.0, 10.0,  "dB"},
     {"mid",                   "Mid",                 0.0,   -10.0, 10.0,  "dB"},
     {"treble",                "Treble",              0.0,   -10.0, 10.0,  "dB"},
     {"presence",              "Presence",            0.0,   -10.0, 10.0,  "dB"},
+    {"outputGain",            "Output Gain",         0.0,   -24.0, 24.0,  "dB"},
     {"autoLevelInput",        "Auto Level Input",    1.0,    0.0,   1.0,  ""},
     {"autoLevelOutput",       "Auto Level Output",   1.0,    0.0,   1.0,  ""},
     {"calibrationInputLevel", "Calibration Input",  -18.0, -60.0, 24.0,  "dB"},

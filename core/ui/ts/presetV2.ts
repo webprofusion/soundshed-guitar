@@ -205,16 +205,16 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     resourceType: "nam",
     resourceFilterHint: ["amp", "full-rig"],
     parameters: [
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB" },
-      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB" },
-      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB" },
-      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB" },
-      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true },
-      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true }
+      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
+      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
+      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
+      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
+      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
+      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
+      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
+      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
+      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}, 
+      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}
     ]
   },
   {
@@ -225,16 +225,16 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     resourceType: "nam",
     resourceFilterHint: ["pedal"],
     parameters: [
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
-      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
-      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
-      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
-      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true },
-      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true }
+      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
+      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
+      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
+      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
+      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
+      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
+      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
+      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
+      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}, 
+      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}
     ]
   },
   {
@@ -257,14 +257,14 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     requiresResource: true,
     resourceType: "ir",
     parameters: [
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
-      { key: "irBlend", name: "IR Blend", default: 0, min: 0, max: 1, unit: "blend" },
-      { key: "lowCutHz", name: "Low Cut", default: 20, min: 20, max: 1000, unit: "Hz" },
-      { key: "highCutHz", name: "High Cut", default: 20000, min: 1000, max: 20000, unit: "Hz" },
+      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount", group:"Level" },
+      { key: "irBlend", name: "IR Blend", default: 0, min: 0, max: 1, unit: "blend", group:"Level" },
+      { key: "lowCutHz", name: "Low Cut", default: 20, min: 20, max: 1000, unit: "Hz", group:"Tone" },
+      { key: "highCutHz", name: "High Cut", default: 20000, min: 1000, max: 20000, unit: "Hz", group:"Tone" },
      
       { key: "autoGainComp", name: "Auto Gain", default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
       { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: false },
+      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: false, group: "Tone" },
       {
         key: "airMode",
         name: "Air Mode",
@@ -273,7 +273,7 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
         max: 2,
         unit: "enum",
         step: 1,
-        labels: ["Shelf", "Presence", "Shelf+Presence"], advanced: true
+        labels: ["Shelf", "Presence", "Both"], advanced: true
       },
       
       { key: "micEmulation",  name: "Mic Emulation",  default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
