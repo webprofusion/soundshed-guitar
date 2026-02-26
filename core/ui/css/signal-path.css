@@ -1529,6 +1529,7 @@
   max-width: 128px;
   align-items: center;
   margin-bottom: 6px;
+  margin-right: auto;
 }
 
 .blend-slider-container {
