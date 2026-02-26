@@ -375,10 +375,17 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
     category: "delay",
     requiresResource: false,
     parameters: [
-      { key: "time", name: "Time", default: 300, min: 1, max: 2000, unit: "ms" },
-      { key: "feedback", name: "Feedback", default: 0.4, min: 0, max: 0.95, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" },
-      { key: "highCut", name: "High Cut", default: 8000, min: 500, max: 20000, unit: "Hz" }
+      { key: "time",       name: "Time",      default: 300,   min: 1,   max: 2000,  unit: "ms" },
+      { key: "feedback",   name: "Feedback",  default: 0.4,   min: 0,   max: 0.95,  unit: "amount" },
+      { key: "mix",        name: "Mix",       default: 0.3,   min: 0,   max: 1,     unit: "amount" },
+      { key: "highCut",    name: "High Cut",  default: 8000,  min: 200, max: 20000, unit: "Hz" },
+      { key: "lowCut",     name: "Low Cut",   default: 20,    min: 20,  max: 5000,  unit: "Hz" },
+      { key: "drive",      name: "Drive",     default: 0,     min: 0,   max: 1,     unit: "amount" },
+      { key: "stereoMode", name: "Stereo",    default: 0,     min: 0,   max: 1,     unit: "enum", step: 1, labels: ["Normal", "Ping-Pong"] },
+      { key: "spread",     name: "Spread",    default: 0,     min: 0,   max: 50,    unit: "ms",     advanced: true },
+      { key: "modRate",    name: "Mod Rate",  default: 0,     min: 0,   max: 10,    unit: "Hz",     advanced: true },
+      { key: "modDepth",   name: "Mod Depth", default: 0,     min: 0,   max: 20,    unit: "ms",     advanced: true },
+      { key: "ducking",    name: "Ducking",   default: 0,     min: 0,   max: 1,     unit: "amount", advanced: true },
     ]
   },
   {
