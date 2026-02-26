@@ -6392,6 +6392,8 @@ void PluginController::SendEffectCatalogToUI()
         entry["requiresResource"] = info.requiresResource;
         if (!info.resourceType.empty())
             entry["resourceType"] = info.resourceType;
+        if (!info.resourceFilterHint.empty())
+            entry["resourceFilterHint"] = info.resourceFilterHint;
 
         nlohmann::json params = nlohmann::json::array();
         for (const auto& p : info.parameters)

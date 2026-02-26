@@ -25,6 +25,7 @@
 #include "dsp/effects/LimiterEffect.h"
 #include "dsp/effects/NAMAmpEffect.h"
 #include "dsp/effects/OptimizedNAMAmpEffect.h"
+#include "dsp/effects/OptimizedNAMFXEffect.h"
 #include "dsp/effects/MultiModelNAMAmpEffect.h"
 #include "dsp/effects/IRCabEffect.h"
 #include "dsp/effects/IRReverbEffect.h"
@@ -81,6 +82,7 @@ namespace guitarfx
     RegisterBuiltinAmpEffect();
     RegisterNAMAmpEffect();
     RegisterOptimizedNAMAmpEffect();  // SIMD-optimized version
+    RegisterOptimizedNAMFXEffect();   // FX variant with advanced tone controls
     RegisterMultiModelNAMAmpEffect();  // Multi-model blend
 
     // Cabinet simulation

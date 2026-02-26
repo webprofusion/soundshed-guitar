@@ -27,6 +27,7 @@ export interface EffectTypeInfo {
   catalogHidden?: boolean;
   requiresResource: boolean;
   resourceType?: string;
+  resourceFilterHint?: string[];
   parameters: ParameterDef[];
   exposedResources?: Array<{
     resourceId: string;
@@ -198,10 +199,11 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
   },
   {
     type: "amp_nam_optimized",
-    displayName: "Neural Amp/FX",
+    displayName: "Neural Amp",
     category: "amp",
     requiresResource: true,
     resourceType: "nam",
+    resourceFilterHint: ["amp", "full-rig"],
     parameters: [
       { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
       { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
@@ -209,6 +211,26 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
       { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB" },
       { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB" },
       { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB" },
+      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
+      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
+      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true },
+      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true }
+    ]
+  },
+  {
+    type: "fx_nam",
+    displayName: "Neural FX (NAM)",
+    category: "fx",
+    requiresResource: true,
+    resourceType: "nam",
+    resourceFilterHint: ["pedal"],
+    parameters: [
+      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
+      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
+      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
+      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
+      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
+      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", advanced: true },
       { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
       { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
       { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true },

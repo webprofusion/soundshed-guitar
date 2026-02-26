@@ -607,11 +607,12 @@ inline void RegisterOptimizedNAMAmpEffect()
 
   EffectTypeInfo info;
   info.type = "amp_nam_optimized";
-  info.displayName = "Neural Amp/FX";
+  info.displayName = "Neural Amp (NAM)";
   info.category = "amp";
-  info.description = "Neural Amp Modeler with SIMD-optimized processing";
+  info.description = "Neural Amp Modeler (NAM) with SIMD-optimized processing";
   info.requiresResource = true;
   info.resourceType = "nam";
+  info.resourceFilterHint = {"amp", "full-rig"};
   info.parameters = {
     {"inputGain",             "Input Gain",         0.0,   -24.0, 24.0,  "dB"},
     {"outputGain",            "Output Gain",         0.0,   -24.0, 24.0,  "dB"},

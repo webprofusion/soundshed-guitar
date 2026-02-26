@@ -1,0 +1,66 @@
+#pragma once
+
+/**
+ * Optimized Neural FX Effect - inherits from OptimizedNAMAmpEffect.
+ *
+ * This is a variant of OptimizedNAMAmpEffect designed for general FX modeling
+ * where the tone stack controls (bass, mid, treble, presence) are marked as
+ * advanced parameters. This keeps the basic controls cleaner in the UI.
+ *
+ * Key improvements:
+ * - Reuses all DSP processing from OptimizedNAMAmpEffect
+ * - SIMD-vectorized activation functions (AVX/SSE) via inherited implementation
+ * - No code duplication - only parameter registration differs
+ */
+
+#include "OptimizedNAMAmpEffect.h"
+#include "dsp/EffectRegistry.h"
+
+namespace guitarfx
+{
+
+/**
+ * Optimized Neural FX effect variant.
+ *
+ * Inherits all processing from OptimizedNAMAmpEffect; only the effect type
+ * identifier and parameter registration differ (tone controls marked as advanced).
+ */
+class OptimizedNAMFXEffect : public OptimizedNAMAmpEffect
+{
+public:
+  [[nodiscard]] std::string GetType() const override { return "fx_nam"; }
+};
+
+inline void RegisterOptimizedNAMFXEffect()
+{
+  // Ensure NAM factory registrations are not optimized out by the linker
+  ::nam::factory::ForceFactoryRegistration();
+
+  EffectTypeInfo info;
+  info.type = "fx_nam";
+  info.displayName = "Neural FX (NAM)";
+  info.category = "fx";
+  info.description = "Neural FX Modeler (NAM) with SIMD-optimized processing";
+  info.requiresResource = true;
+  info.resourceType = "nam";
+  info.resourceFilterHint = {"pedal"};
+  info.parameters = {
+    {"inputGain",             "Input Gain",         0.0,   -24.0, 24.0,  "dB", "", false},
+    {"outputGain",            "Output Gain",         0.0,   -24.0, 24.0,  "dB", "", false},
+    {"bass",                  "Bass",                0.0,   -10.0, 10.0,  "dB", "", true},
+    {"mid",                   "Mid",                 0.0,   -10.0, 10.0,  "dB", "", true},
+    {"treble",                "Treble",              0.0,   -10.0, 10.0,  "dB", "", true},
+    {"presence",              "Presence",            0.0,   -10.0, 10.0,  "dB", "", true},
+    {"autoLevelInput",        "Auto Level Input",    1.0,    0.0,   1.0,  "", "", false},
+    {"autoLevelOutput",       "Auto Level Output",   1.0,    0.0,   1.0,  "", "", false},
+    {"calibrationInputLevel", "Calibration Input",  -18.0, -60.0, 24.0,  "dB", "", true},
+    {"calibrationOutputLevel","Calibration Output", -18.0, -60.0, 24.0,  "dB", "", true}
+  };
+
+  EffectRegistry::Instance().Register("fx_nam", info, []()
+  {
+    return std::make_unique<OptimizedNAMFXEffect>();
+  });
+}
+
+} // namespace guitarfx
