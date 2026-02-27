@@ -138,7 +138,7 @@ namespace guitarfx
     info.type = EffectGuids::kOverdrive;
     info.aliases = {"overdrive"};
     info.displayName = "Overdrive";
-    info.category = "dynamics";
+    info.category = "drive";
     info.description = "Soft clipping overdrive";
     info.requiresResource = false;
     info.parameters = {

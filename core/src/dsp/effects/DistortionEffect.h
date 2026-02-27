@@ -167,7 +167,7 @@ namespace guitarfx
     info.type = EffectGuids::kDistortion;
     info.aliases = {"distortion"};
     info.displayName = "Distortion";
-    info.category = "dynamics";
+    info.category = "drive";
     info.description = "Hard clipping distortion";
     info.requiresResource = false;
     info.parameters = {

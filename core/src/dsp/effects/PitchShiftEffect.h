@@ -197,7 +197,7 @@ namespace guitarfx
     info.type = EffectGuids::kPitchShift;
     info.aliases = {"pitch_shift"};
     info.displayName = "Pitch Shift";
-    info.category = "modulation";
+    info.category = "pitch";
     info.description = "Pitch shift with stepped or free-form control";
     info.requiresResource = false;
     info.parameters = {

@@ -158,7 +158,7 @@ namespace guitarfx
     info.type = EffectGuids::kTranspose;
     info.aliases = {"transpose"};
     info.displayName = "Transpose";
-    info.category = "modulation";
+    info.category = "pitch";
     info.description = "High-quality transpose effect";
     info.requiresResource = false;
     info.parameters = {

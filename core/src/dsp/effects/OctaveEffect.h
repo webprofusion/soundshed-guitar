@@ -137,7 +137,7 @@ namespace guitarfx
     info.type = EffectGuids::kOctave;
     info.aliases = {"octave"};
     info.displayName = "Octave";
-    info.category = "modulation";
+    info.category = "pitch";
     info.description = "Octave up/down blend";
     info.requiresResource = false;
     info.parameters = {

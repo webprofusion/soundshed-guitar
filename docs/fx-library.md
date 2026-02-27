@@ -129,15 +129,17 @@ EffectProcessor* processor = EffectRegistry::Create("amp_nam");
 
 | Category | Description | Examples |
 |----------|-------------|----------|
+| `amp` | Amplifier simulation | NAM amp models, Neural FX |
+| `cab` | Cabinet simulation | IR convolution, simple cab |
+| `drive` | Gain/clipping/saturation | Overdrive, distortion, fuzz |
 | `dynamics` | Dynamics processing | Noise gate, compressor, limiter |
-| `amp` | Amplifier simulation | NAM amp models |
-| `cab` | Cabinet simulation | IR convolution |
-| `eq` | Equalization | Parametric EQ, tilt EQ |
-| `distortion` | Distortion/saturation | Drive, fuzz, overdrive |
-| `modulation` | Modulation effects | Chorus, flanger, phaser |
-| `delay` | Time-based delay | Digital, tape, analog |
-| `reverb` | Reverberation | Room, hall, plate, spring |
+| `eq` | Equalization | Parametric EQ |
+| `modulation` | Modulation effects | Chorus, flanger, phaser, tremolo, auto-wah |
+| `pitch` | Pitch manipulation | Pitch shift, transpose, octave |
+| `delay` | Time-based delay | Digital delay, doubler |
+| `reverb` | Reverberation | Room, hall, plate, spring, IR |
 | `utility` | Utility processing | Gain, splitter, mixer |
+| `synth` | Synthesized tones | Synth saw |
 
 ## Effect Processor Interface
 

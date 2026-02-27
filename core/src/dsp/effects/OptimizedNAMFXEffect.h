@@ -41,7 +41,7 @@ inline void RegisterOptimizedNAMFXEffect()
   info.type = EffectGuids::kFxNam;
   info.aliases = {"fx_nam"};
   info.displayName = "Neural FX (NAM)";
-  info.category = "fx";
+  info.category = "amp";
   info.description = "Neural FX Modeler (NAM) with SIMD-optimized processing";
   info.requiresResource = true;
   info.resourceType = "nam";

@@ -145,7 +145,7 @@ namespace guitarfx
     info.type = EffectGuids::kFuzz;
     info.aliases = {"fuzz"};
     info.displayName = "Fuzz";
-    info.category = "dynamics";
+    info.category = "drive";
     info.description = "Aggressive fuzz distortion";
     info.requiresResource = false;
     info.parameters = {
