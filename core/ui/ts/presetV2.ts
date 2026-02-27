@@ -81,278 +81,75 @@ class EffectRegistry {
 
 export const EffectTypeRegistry = new EffectRegistry();
 
-// Built-in effect types definitions
-export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
-  {
-    type: EffectGuids.kDynamicsGate,
-    aliases: ["dynamics_gate"],
-    displayName: "Noise Gate",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "threshold", name: "Threshold", default: -60, min: -100, max: 0, unit: "dB" },
-      { key: "attack", name: "Attack", default: 0.1, min: 0.01, max: 50, unit: "ms" },
-      { key: "hold", name: "Hold", default: 50, min: 0, max: 500, unit: "ms" },
-      { key: "release", name: "Release", default: 100, min: 10, max: 1000, unit: "ms" }
-    ]
-  },
-  {
-    type: EffectGuids.kCompressorVca,
-    aliases: ["compressor_vca"],
-    displayName: "VCA Compressor",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "threshold", name: "Threshold", default: -20, min: -60, max: 0, unit: "dB" },
-      { key: "ratio", name: "Ratio", default: 4, min: 1, max: 20, unit: ":1" },
-      { key: "attack", name: "Attack", default: 10, min: 0.1, max: 500, unit: "ms" },
-      { key: "release", name: "Release", default: 100, min: 10, max: 2000, unit: "ms" },
-      { key: "knee", name: "Knee", default: 6, min: 0, max: 24, unit: "dB" },
-      { key: "makeup", name: "Makeup", default: 0, min: 0, max: 24, unit: "dB" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kCompressorOpto,
-    aliases: ["compressor_opto"],
-    displayName: "Opto Compressor",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "threshold", name: "Threshold", default: -20, min: -60, max: 0, unit: "dB" },
-      { key: "ratio", name: "Ratio", default: 3, min: 1, max: 20, unit: ":1" },
-      { key: "attack", name: "Attack", default: 20, min: 5, max: 200, unit: "ms" },
-      { key: "release", name: "Release", default: 300, min: 50, max: 3000, unit: "ms" },
-      { key: "makeup", name: "Makeup", default: 0, min: 0, max: 24, unit: "dB" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kOverdrive,
-    aliases: ["overdrive"],
-    displayName: "Overdrive",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "drive", name: "Drive", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "level", name: "Level", default: 0, min: -12, max: 12, unit: "dB" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kDistortion,
-    aliases: ["distortion"],
-    displayName: "Distortion",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "drive", name: "Drive", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "level", name: "Level", default: 0, min: -12, max: 12, unit: "dB" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kFuzz,
-    aliases: ["fuzz"],
-    displayName: "Fuzz",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "drive", name: "Drive", default: 0.7, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "level", name: "Level", default: 0, min: -12, max: 12, unit: "dB" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kLimiterBrickwall,
-    aliases: ["limiter_brickwall"],
-    displayName: "Brickwall Limiter",
-    category: "dynamics",
-    requiresResource: false,
-    parameters: [
-      { key: "ceiling", name: "Ceiling", default: -0.1, min: -24, max: 0, unit: "dB" },
-      { key: "release", name: "Release", default: 50, min: 1, max: 500, unit: "ms" }
-    ]
-  },
-  {
-    type: EffectGuids.kAmpBuiltin,
-    aliases: ["amp_builtin"],
-    displayName: "Heavy American",
-    category: "amp",
-    requiresResource: false,
-    parameters: [
-      { key: "voice", name: "Voice", default: 0, min: 0, max: 1, unit: "toggle", group: "Input" },
-      { key: "gain", name: "Gain", default: 0.45, min: 0, max: 1, unit: "amount", group: "Input" },
-      { key: "bright", name: "Bright", default: 0, min: 0, max: 1, unit: "toggle", group: "Input" },
-      { key: "preEmphasis", name: "Pre Emphasis", default: 0, min: 0, max: 1, unit: "amount", group: "Input", advanced: true },
-      { key: "stageCount", name: "Preamp Stages", default: 2, min: 1, max: 4, unit: "amount", step: 1, group: "Input" },
-      { key: "stageGain", name: "Stage Gain", default: 0, min: -24, max: 24, unit: "dB", group: "Input" },
-      { key: "bass", name: "Bass", default: 0.5, min: 0, max: 1, unit: "amount", group: "Tone" },
-      { key: "middle", name: "Middle", default: 0.5, min: 0, max: 1, unit: "amount", group: "Tone" },
-      { key: "treble", name: "Treble", default: 0.5, min: 0, max: 1, unit: "amount", group: "Tone" },
-      { key: "contour", name: "Contour", default: 0.2, min: 0, max: 1, unit: "amount", group: "Tone" },
-      { key: "presence", name: "Presence", default: 0.5, min: 0, max: 1, unit: "amount", group: "Tone" },
-      { key: "output", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group: "Output" },
-      { key: "powerDrive", name: "Power Drive", default: 0, min: 0, max: 1, unit: "amount", group: "Power", advanced: true },
-      { key: "sag", name: "Sag", default: 0, min: 0, max: 1, unit: "amount", group: "Power", advanced: true },
-      { key: "bias", name: "Bias", default: 0, min: -1, max: 1, unit: "amount", group: "Power", advanced: true },
-      { key: "depth", name: "Depth", default: 0.4, min: 0, max: 1, unit: "amount", group: "Speaker", advanced: true },
-      { key: "resonance", name: "Resonance", default: 0.4, min: 0, max: 1, unit: "amount", group: "Speaker", advanced: true },
-      { key: "damping", name: "Damping", default: 0.5, min: 0, max: 1, unit: "amount", group: "Speaker", advanced: true },
-    ]
-  },
-  {
-    type: EffectGuids.kAmpNam,
-    aliases: ["amp_nam"],
-    displayName: "NAM Amp/FX Model",
-    category: "amp",
-    catalogHidden: true,
-    requiresResource: true,
-    resourceType: "nam",
-    parameters: [
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true },
-      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true },
-      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true }
-    ]
-  },
-  {
-    type: EffectGuids.kAmpNamOptimized,
-    aliases: ["amp_nam_optimized"],
-    displayName: "Neural Amp",
-    category: "amp",
-    requiresResource: true,
-    resourceType: "nam",
-    resourceFilterHint: ["amp", "full-rig"],
-    parameters: [
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
-      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
-      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
-      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
-      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", group: "Tone" },
-      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
-      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
-      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}, 
-      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}
-    ]
-  },
-  {
-    type: EffectGuids.kFxNam,
-    aliases: ["fx_nam"],
-    displayName: "Neural FX (NAM)",
-    category: "fx",
-    requiresResource: true,
-    resourceType: "nam",
-    resourceFilterHint: ["pedal"],
-    parameters: [
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group:"Level" },
-      { key: "bass", name: "Bass", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
-      { key: "mid", name: "Mid", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
-      { key: "treble", name: "Treble", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
-      { key: "presence", name: "Presence", default: 0, min: -10, max: 10, unit: "dB", advanced: true, group: "Tone" },
-      { key: "autoLevelInput", name: "Auto Level Input", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
-      { key: "autoLevelOutput", name: "Auto Level Output", default: 1, min: 0, max: 1, unit: "toggle", advanced: true , group:"Advanced"}, 
-      { key: "calibrationInputLevel", name: "Cal Input", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}, 
-      { key: "calibrationOutputLevel", name: "Cal Output", default: -18, min: -60, max: 24, unit: "dB", advanced: true , group:"Advanced"}
-    ]
-  },
-  {
-    type: EffectGuids.kAmpNamBlend,
-    aliases: ["amp_nam_blend"],
-    displayName: "NAM Blend",
-    category: "amp",
-    catalogHidden: true,
-    requiresResource: true,
-    resourceType: "nam",
-    parameters: [
-      { key: "blend", name: "Blend", default: 0, min: 0, max: 1, unit: "amount" },
-      { key: "inputGain", name: "Input", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" }
-    ]
-  },
-  {
-    type: EffectGuids.kCabIr,
-    aliases: ["cab_ir"],
-    displayName: "IR Cabinet",
-    category: "cab",
-    requiresResource: true,
-    resourceType: "ir",
-    parameters: [
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount", group:"Level" },
-      { key: "irBlend", name: "IR Blend", default: 0, min: 0, max: 1, unit: "blend" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB", group:"Level"},
+// ─── Effect stub registrations ─────────────────────────────────────────────────
+// These seed the EffectTypeRegistry with aliases and UI-only flags (catalogHidden).
+// All other metadata (displayName, category, requiresResource, parameters) is
+// provided authoritatively by the backend via the "effectCatalog" message.
+//
+// Exception: "input" / "output" routing nodes are NOT registered effects in the
+// backend and retain their full definitions here.
+// ───────────────────────────────────────────────────────────────────────────────
 
-      { key: "lowCutHz", name: "Low Cut", default: 20, min: 20, max: 1000, unit: "Hz", group:"Tone" },
-      { key: "highCutHz", name: "High Cut", default: 20000, min: 1000, max: 20000, unit: "Hz", group:"Tone" },
-     
-      { key: "autoGainComp", name: "Auto Gain", default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
-      
-      { key: "air", name: "Air", default: 0, min: 0, max: 1, unit: "amount", advanced: false, group: "Tone" },
-      {
-        key: "airMode",
-        name: "Air Mode",
-        default: 0,
-        min: 0,
-        max: 2,
-        unit: "enum",
-        step: 1,
-        labels: ["Shelf", "Presence", "Both"], advanced: true
-      },
-      
-      { key: "micEmulation",  name: "Mic Emulation",  default: 0, min: 0, max: 1, unit: "toggle", advanced: true },
+interface EffectStub {
+  type: string;
+  aliases?: string[];
+  catalogHidden?: boolean;
+}
 
-      { key: "slotAGain", name: "IR A Level", default: 0, min: -24, max: 24, unit: "dB", advanced: true, group: "IR A" },
-      { key: "slotAPolarity", name: "IR A Invert", default: 0, min: 0, max: 1, unit: "toggle", advanced: true, group: "IR A" },
-      { key: "micRadialA",    name: "Mic A Radial",    default: 0, min: 0, max: 1, unit: "amount", advanced: true, group: "IR A" },
-      { key: "micProximityA", name: "Mic A Proximity", default: 0, min: 0, max: 1, unit: "amount", advanced: true, group: "IR A" },
-  
-      { key: "slotBPolarity", name: "IR B Invert", default: 0, min: 0, max: 1, unit: "toggle", advanced: true, group: "IR B" },
-      { key: "slotBGain", name: "IR B Level", default: 0, min: -24, max: 24, unit: "dB", advanced: true, group: "IR B" },
-      { key: "micRadialB",    name: "Mic B Radial",    default: 0, min: 0, max: 1, unit: "amount", advanced: true, group: "IR B" },
-      { key: "micProximityB", name: "Mic B Proximity", default: 0, min: 0, max: 1, unit: "amount", advanced: true, group: "IR B" },
-      
-      { key: "quality", name: "Quality", default: 1, min: 0, max: 3, unit: "", advanced: true },
-    ]
-  },
-  {
-    type: EffectGuids.kCabSimple,
-    aliases: ["cab_simple"],
-    displayName: "Simple Cabinet",
-    category: "cab",
-    requiresResource: false,
-    parameters: [
-      { key: "bass", name: "Bass", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "presence", name: "Presence", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "brightness", name: "Brightness", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kEqParametric,
-    aliases: ["eq_parametric"],
-    displayName: "Parametric EQ",
-    category: "eq",
-    requiresResource: false,
-    parameters: [
-      { key: "lowGain", name: "Low Gain", default: 0, min: -18, max: 18, unit: "dB", group: "Low" },
-      { key: "lowFreq", name: "Low Freq", default: 100, min: 20, max: 500, unit: "Hz", group: "Low" },
-      { key: "lowMidGain", name: "Low-Mid Gain", default: 0, min: -18, max: 18, unit: "dB", group: "Low Mid" },
-      { key: "lowMidFreq", name: "Low-Mid Freq", default: 400, min: 200, max: 2000, unit: "Hz", group: "Low Mid" },
-      { key: "lowMidQ", name: "Low-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount", group: "Low Mid" },
-      { key: "highMidGain", name: "High-Mid Gain", default: 0, min: -18, max: 18, unit: "dB", group: "High Mid" },
-      { key: "highMidFreq", name: "High-Mid Freq", default: 2000, min: 1000, max: 8000, unit: "Hz", group: "High Mid" },
-      { key: "highMidQ", name: "High-Mid Q", default: 1.0, min: 0.1, max: 10, unit: "amount", group: "High Mid" },
-      { key: "highGain", name: "High Gain", default: 0, min: -18, max: 18, unit: "dB", group: "High" },
-      { key: "highFreq", name: "High Freq", default: 8000, min: 4000, max: 20000, unit: "Hz", group: "High" }
-    ]
-  },
+const EFFECT_STUBS: EffectStub[] = [
+  // Dynamics
+  { type: EffectGuids.kDynamicsGate,     aliases: ["dynamics_gate", "gate_noise"] },
+  { type: EffectGuids.kCompressorVca,    aliases: ["compressor_vca"] },
+  { type: EffectGuids.kCompressorOpto,   aliases: ["compressor_opto"] },
+  { type: EffectGuids.kLimiterBrickwall, aliases: ["limiter_brickwall"] },
+  // Drive
+  { type: EffectGuids.kOverdrive,        aliases: ["overdrive"] },
+  { type: EffectGuids.kDistortion,       aliases: ["distortion"] },
+  { type: EffectGuids.kFuzz,             aliases: ["fuzz"] },
+  // Amp
+  { type: EffectGuids.kAmpBuiltin,       aliases: ["amp_builtin"] },
+  { type: EffectGuids.kAmpNam,           aliases: ["amp_nam"],          catalogHidden: true },
+  { type: EffectGuids.kAmpNamOptimized,  aliases: ["amp_nam_optimized"] },
+  { type: EffectGuids.kFxNam,            aliases: ["fx_nam"] },
+  { type: EffectGuids.kAmpNamBlend,      aliases: ["amp_nam_blend"],    catalogHidden: true },
+  // Cabinet
+  { type: EffectGuids.kCabIr,            aliases: ["cab_ir", "ir_cab"] },
+  { type: EffectGuids.kCabSimple,        aliases: ["cab_simple"] },
+  // EQ
+  { type: EffectGuids.kEqParametric,     aliases: ["eq_parametric"] },
+  // Utility
+  { type: EffectGuids.kGain,             aliases: ["gain"] },
+  { type: EffectGuids.kSplitter,         aliases: ["splitter"] },
+  { type: EffectGuids.kMixer,            aliases: ["mixer"] },
+  // Delay
+  { type: EffectGuids.kDelayDigital,     aliases: ["delay_digital"] },
+  { type: EffectGuids.kDelayDoubler,     aliases: ["delay_doubler"] },
+  // Reverb
+  { type: EffectGuids.kReverbRoom,       aliases: ["reverb_room"] },
+  { type: EffectGuids.kReverbHall,       aliases: ["reverb_hall"] },
+  { type: EffectGuids.kReverbPlate,      aliases: ["reverb_plate"] },
+  { type: EffectGuids.kReverbChamber,    aliases: ["reverb_chamber"] },
+  { type: EffectGuids.kReverbSpring,     aliases: ["reverb_spring"] },
+  { type: EffectGuids.kReverbShimmer,    aliases: ["reverb_shimmer"] },
+  { type: EffectGuids.kReverbAmbient,    aliases: ["reverb_ambient"] },
+  { type: EffectGuids.kReverbAdvanced,   aliases: ["reverb_advanced"] },
+  { type: EffectGuids.kReverbIr,         aliases: ["reverb_ir"] },
+  // Modulation
+  { type: EffectGuids.kChorus,           aliases: ["chorus"] },
+  { type: EffectGuids.kFlanger,          aliases: ["flanger"] },
+  { type: EffectGuids.kPhaser,           aliases: ["phaser"] },
+  { type: EffectGuids.kTremolo,          aliases: ["tremolo"] },
+  { type: EffectGuids.kAutoWah,          aliases: ["auto_wah"] },
+  // Pitch
+  { type: EffectGuids.kPitchShift,       aliases: ["pitch_shift"] },
+  { type: EffectGuids.kTranspose,        aliases: ["transpose"] },
+  { type: EffectGuids.kOctave,           aliases: ["octave"] },
+  // Synth
+  { type: EffectGuids.kSynthSaw,         aliases: ["synth_saw"] },
+];
+
+// Routing nodes — not registered in the backend, need full definitions here.
+const ROUTING_NODE_EFFECTS: EffectTypeInfo[] = [
   {
     type: "input",
     displayName: "Input",
@@ -373,332 +170,26 @@ export const BUILTIN_EFFECTS: EffectTypeInfo[] = [
       { key: "gainDb", name: "Gain", default: 0, min: -24, max: 24, unit: "dB" }
     ]
   },
-  {
-    type: EffectGuids.kGain,
-    aliases: ["gain"],
-    displayName: "Gain",
-    category: "utility",
-    requiresResource: false,
-    parameters: [
-      { key: "gain", name: "Gain", default: 0, min: -60, max: 24, unit: "dB" },
-      { key: "polarity", name: "Invert", default: 0, min: 0, max: 1, unit: "toggle" }
-    ]
-  },
-  {
-    type: EffectGuids.kSplitter,
-    aliases: ["splitter"],
-    displayName: "Splitter",
-    category: "utility",
-    requiresResource: false,
-    parameters: []
-  },
-  {
-    type: EffectGuids.kMixer,
-    aliases: ["mixer"],
-    displayName: "Mixer",
-    category: "utility",
-    requiresResource: false,
-    parameters: [
-      { key: "masterLevel", name: "Master", default: 0, min: -60, max: 12, unit: "dB" },
-      // Per-input parameters are dynamic - UI generates them based on connected inputs
-      // Format: level_N, pan_N, delay_N, mute_N where N is the input port index
-    ]
-  },
-  {
-    type: EffectGuids.kDelayDigital,
-    aliases: ["delay_digital"],
-    displayName: "Digital Delay",
-    category: "delay",
-    requiresResource: false,
-    parameters: [
-      { key: "time",       name: "Time",      default: 300,   min: 1,   max: 2000,  unit: "ms" },
-      { key: "feedback",   name: "Feedback",  default: 0.4,   min: 0,   max: 0.95,  unit: "amount" },
-      { key: "mix",        name: "Mix",       default: 0.3,   min: 0,   max: 1,     unit: "amount" },
-      { key: "highCut",    name: "High Cut",  default: 8000,  min: 200, max: 20000, unit: "Hz" },
-      { key: "lowCut",     name: "Low Cut",   default: 20,    min: 20,  max: 5000,  unit: "Hz" },
-      { key: "drive",      name: "Drive",     default: 0,     min: 0,   max: 1,     unit: "amount" },
-      { key: "stereoMode", name: "Stereo",    default: 0,     min: 0,   max: 1,     unit: "enum", step: 1, labels: ["Normal", "Ping-Pong"] },
-      { key: "spread",     name: "Spread",    default: 0,     min: 0,   max: 50,    unit: "ms",     advanced: true },
-      { key: "modRate",    name: "Mod Rate",  default: 0,     min: 0,   max: 10,    unit: "Hz",     advanced: true },
-      { key: "modDepth",   name: "Mod Depth", default: 0,     min: 0,   max: 20,    unit: "ms",     advanced: true },
-      { key: "ducking",    name: "Ducking",   default: 0,     min: 0,   max: 1,     unit: "amount", advanced: true },
-    ]
-  },
-  {
-    type: EffectGuids.kDelayDoubler,
-    aliases: ["delay_doubler"],
-    displayName: "Doubler",
-    category: "delay",
-    requiresResource: false,
-    parameters: [
-      { key: "time", name: "Delay Time", default: 6, min: 0, max: 100, unit: "ms" },
-      { key: "mix", name: "Mix", default: 0.3, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kPitchShift,
-    aliases: ["pitch_shift"],
-    displayName: "Pitch Shift",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "semitones", name: "Semitones", default: 0, min: -1, max: 1, unit: "amount", step: 0.01 },
-      { key: "minSemitones", name: "Min Semitones", default: -12, min: -12, max: 12, unit: "st", step: 1 },
-      { key: "maxSemitones", name: "Max Semitones", default: 12, min: -12, max: 12, unit: "st", step: 1 },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
-      { key: "stepMode", name: "Step Mode", default: 1, min: 0, max: 1, unit: "enum", step: 1, labels: ["Free", "Stepped"] }
-    ]
-  },
-  {
-    type: EffectGuids.kTranspose,
-    aliases: ["transpose"],
-    displayName: "Transpose",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "semitones", name: "Semitones", default: 0, min: -36, max: 12, unit: "st", step: 1 },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kChorus,
-    aliases: ["chorus"],
-    displayName: "Chorus",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "rate", name: "Rate", default: 1.2, min: 0.1, max: 10, unit: "Hz" },
-      { key: "depth", name: "Depth", default: 12, min: 0, max: 20, unit: "ms" },
-      { key: "delay", name: "Delay", default: 18, min: 1, max: 30, unit: "ms" },
-      { key: "feedback", name: "Feedback", default: 0.1, min: 0, max: 0.95, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.4, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kFlanger,
-    aliases: ["flanger"],
-    displayName: "Flanger",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "rate", name: "Rate", default: 0.25, min: 0.05, max: 5, unit: "Hz" },
-      { key: "depth", name: "Depth", default: 2, min: 0, max: 5, unit: "ms" },
-      { key: "delay", name: "Delay", default: 1, min: 0.1, max: 5, unit: "ms" },
-      { key: "feedback", name: "Feedback", default: 0.2, min: 0, max: 0.95, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.5, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kPhaser,
-    aliases: ["phaser"],
-    displayName: "Phaser",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "rate", name: "Rate", default: 0.4, min: 0.05, max: 8, unit: "Hz" },
-      { key: "depth", name: "Depth", default: 0.8, min: 0, max: 1, unit: "amount" },
-      { key: "feedback", name: "Feedback", default: 0.3, min: 0, max: 0.95, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.5, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kTremolo,
-    aliases: ["tremolo"],
-    displayName: "Tremolo",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "rate", name: "Rate", default: 4, min: 0.1, max: 12, unit: "Hz" },
-      { key: "depth", name: "Depth", default: 0.7, min: 0, max: 1, unit: "amount" },
-      { key: "shape", name: "Shape", default: 0, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kAutoWah,
-    aliases: ["auto_wah"],
-    displayName: "Auto-Wah",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "sensitivity", name: "Sensitivity", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "minFreq", name: "Min Freq", default: 300, min: 200, max: 1000, unit: "Hz" },
-      { key: "maxFreq", name: "Max Freq", default: 2800, min: 800, max: 5000, unit: "Hz" },
-      { key: "resonance", name: "Resonance", default: 2.5, min: 0.5, max: 10, unit: "Q" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kOctave,
-    aliases: ["octave"],
-    displayName: "Octave",
-    category: "modulation",
-    requiresResource: false,
-    parameters: [
-      { key: "octaveUp", name: "Oct Up", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "octaveDown", name: "Oct Down", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kSynthSaw,
-    aliases: ["synth_saw"],
-    displayName: "Synth Saw",
-    category: "synth",
-    requiresResource: false,
-    parameters: [
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
-      { key: "attack", name: "Attack", default: 5, min: 0.1, max: 100, unit: "ms" },
-      { key: "release", name: "Release", default: 100, min: 10, max: 1000, unit: "ms" },
-      { key: "detune", name: "Detune", default: 0, min: -100, max: 100, unit: "cents" },
-      { key: "octaveShift", name: "Octave", default: 0, min: -2, max: 2, unit: "oct", step: 1 },
-      { key: "glide", name: "Glide", default: 10, min: 0, max: 500, unit: "ms" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 12, unit: "dB" },
-      { key: "gate", name: "Gate", default: -60, min: -80, max: 0, unit: "dB" },
-      { key: "voice2Semitones", name: "Voice 2 Pitch", default: 0, min: -24, max: 24, unit: "st", step: 1 },
-      { key: "voice2Mix", name: "Voice 2 Mix", default: 0, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbRoom,
-    aliases: ["reverb_room"],
-    displayName: "Room Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.46, min: 0, max: 1, unit: "amount" },
-      { key: "size", name: "Size", default: 0.42, min: 0, max: 1, unit: "amount" },
-      { key: "damping", name: "Damping", default: 0.56, min: 0, max: 1, unit: "amount" },
-      { key: "preDelay", name: "Pre Delay", default: 8, min: 0, max: 220, unit: "ms" },
-      { key: "mix", name: "Mix", default: 0.22, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbHall,
-    aliases: ["reverb_hall"],
-    displayName: "Hall Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.76, min: 0, max: 1, unit: "amount" },
-      { key: "size", name: "Size", default: 0.7, min: 0, max: 1, unit: "amount" },
-      { key: "preDelay", name: "Pre Delay", default: 24, min: 0, max: 220, unit: "ms" },
-      { key: "damping", name: "Damping", default: 0.46, min: 0, max: 1, unit: "amount" },
-      { key: "width", name: "Width", default: 1.05, min: 0, max: 1.2, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.27, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbPlate,
-    aliases: ["reverb_plate"],
-    displayName: "Plate Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.58, min: 0, max: 1, unit: "amount" },
-      { key: "preDelay", name: "Pre Delay", default: 12, min: 0, max: 220, unit: "ms" },
-      { key: "tone", name: "Tone", default: 0.76, min: 0, max: 1, unit: "amount" },
-      { key: "damping", name: "Damping", default: 0.35, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbChamber,
-    aliases: ["reverb_chamber"],
-    displayName: "Chamber Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.6, min: 0, max: 1, unit: "amount" },
-      { key: "size", name: "Size", default: 0.56, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.52, min: 0, max: 1, unit: "amount" },
-      { key: "preDelay", name: "Pre Delay", default: 15, min: 0, max: 220, unit: "ms" },
-      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbSpring,
-    aliases: ["reverb_spring"],
-    displayName: "Spring Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.5, min: 0, max: 1, unit: "amount" },
-      { key: "tone", name: "Tone", default: 0.68, min: 0, max: 1, unit: "amount" },
-      { key: "drive", name: "Drive", default: 0.22, min: 0, max: 1, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.23, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbShimmer,
-    aliases: ["reverb_shimmer"],
-    displayName: "Shimmer Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.84, min: 0, max: 1, unit: "amount" },
-      { key: "size", name: "Size", default: 0.8, min: 0, max: 1, unit: "amount" },
-      { key: "shimmer", name: "Shimmer", default: 0.45, min: 0, max: 1, unit: "amount" },
-      { key: "preDelay", name: "Pre Delay", default: 28, min: 0, max: 220, unit: "ms" },
-      { key: "mix", name: "Mix", default: 0.30, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbAmbient,
-    aliases: ["reverb_ambient"],
-    displayName: "Ambient Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.86, min: 0, max: 1, unit: "amount" },
-      { key: "size", name: "Size", default: 0.9, min: 0, max: 1, unit: "amount" },
-      { key: "diffusion", name: "Diffusion", default: 0.9, min: 0, max: 1, unit: "amount" },
-      { key: "width", name: "Width", default: 1.1, min: 0, max: 1.2, unit: "amount" },
-      { key: "mix", name: "Mix", default: 0.32, min: 0, max: 1, unit: "amount" }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbAdvanced,
-    aliases: ["reverb_advanced"],
-    displayName: "Advanced Reverb",
-    category: "reverb",
-    requiresResource: false,
-    parameters: [
-      { key: "decay", name: "Decay", default: 0.64, min: 0, max: 1, unit: "amount", group: "Common" },
-      { key: "size", name: "Size", default: 0.55, min: 0, max: 1, unit: "amount", group: "Common" },
-      { key: "mix", name: "Mix", default: 0.24, min: 0, max: 1, unit: "amount", group: "Common" },
-      { key: "damping", name: "Damping", default: 0.46, min: 0, max: 1, unit: "amount", group: "Common" },
-      { key: "preDelay", name: "Pre Delay", default: 16, min: 0, max: 220, unit: "ms", group: "Common" },
-      { key: "tone", name: "Tone", default: 0.62, min: 0, max: 1, unit: "amount", group: "Common" },
-      { key: "width", name: "Width", default: 1, min: 0, max: 1.2, unit: "amount", group: "Common" },
-      { key: "diffusion", name: "Diffusion", default: 0.7, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
-      { key: "lowCut", name: "Low Cut", default: 140, min: 20, max: 1200, unit: "Hz", group: "Advanced", advanced: true },
-      { key: "highCut", name: "High Cut", default: 12000, min: 1000, max: 20000, unit: "Hz", group: "Advanced", advanced: true },
-      { key: "modRate", name: "Mod Rate", default: 0.45, min: 0.02, max: 8, unit: "Hz", group: "Advanced", advanced: true },
-      { key: "modDepth", name: "Mod Depth", default: 0.18, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
-      { key: "ducking", name: "Ducking", default: 0.08, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
-      { key: "drive", name: "Drive", default: 0.0, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true },
-      { key: "shimmer", name: "Shimmer", default: 0.0, min: 0, max: 1, unit: "amount", group: "Advanced", advanced: true }
-    ]
-  },
-  {
-    type: EffectGuids.kReverbIr,
-    aliases: ["reverb_ir"],
-    displayName: "IR Reverb",
-    category: "reverb",
-    requiresResource: true,
-    resourceType: "ir",
-    parameters: [
-      { key: "mix", name: "Mix", default: 1, min: 0, max: 1, unit: "amount" },
-      { key: "outputGain", name: "Output", default: 0, min: -24, max: 24, unit: "dB" },
-      { key: "quality", name: "Quality", default: 1, min: 0, max: 3, unit: "" }
-    ]
-  }
 ];
 
-// Register all built-in effects
-BUILTIN_EFFECTS.forEach(effect => EffectTypeRegistry.register(effect.type, effect));
+// Seed registry: stubs for backend effects, full defs for routing nodes.
+// The backend "effectCatalog" message will hydrate displayName, category,
+// requiresResource and parameters for all EFFECT_STUBS entries.
+EFFECT_STUBS.forEach(stub =>
+  EffectTypeRegistry.register(stub.type, {
+    type: stub.type,
+    aliases: stub.aliases,
+    catalogHidden: stub.catalogHidden,
+    displayName: "",
+    category: "",
+    requiresResource: false,
+    parameters: [],
+  })
+);
+ROUTING_NODE_EFFECTS.forEach(effect => EffectTypeRegistry.register(effect.type, effect));
+
+// Keep a reference to routing nodes for callers that need them.
+export const BUILTIN_EFFECTS: EffectTypeInfo[] = ROUTING_NODE_EFFECTS;
 
 /**
  * Create a new empty preset V2 structure

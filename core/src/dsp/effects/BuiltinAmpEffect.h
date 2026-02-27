@@ -532,24 +532,24 @@ namespace guitarfx
     info.description = "Built-in amp with smooth Clean/Drive voice and modern tone controls";
     info.requiresResource = false;
     info.parameters = {
-      {"voice", "Voice", 0.0, 0.0, 1.0, "toggle"},
-      {"gain", "Gain", 0.45, 0.0, 1.0, "amount"},
-      {"bright", "Bright", 0.0, 0.0, 1.0, "toggle"},
-      {"preEmphasis", "Pre Emphasis", 0.0, 0.0, 1.0, "amount"},
-      {"bass", "Bass", 0.5, 0.0, 1.0, "amount"},
-      {"middle", "Middle", 0.5, 0.0, 1.0, "amount"},
-      {"treble", "Treble", 0.5, 0.0, 1.0, "amount"},
-      {"contour", "Contour", 0.2, 0.0, 1.0, "amount"},
-      {"presence", "Presence", 0.5, 0.0, 1.0, "amount"},
-      {"output", "Output", 0.0, -24.0, 24.0, "dB"},
-      {"stageCount", "Gain Stages", 2.0, 1.0, 4.0, "amount"},
-      {"stageGain", "Stage Gain", 0.0, -24.0, 24.0, "dB"},
-      {"powerDrive", "Power Drive", 0.0, 0.0, 1.0, "amount"},
-      {"sag", "Sag", 0.0, 0.0, 1.0, "amount"},
-      {"bias", "Bias", 0.0, -1.0, 1.0, "amount"},
-      {"depth", "Depth", 0.4, 0.0, 1.0, "amount"},
-      {"resonance", "Resonance", 0.4, 0.0, 1.0, "amount"},
-      {"damping", "Damping", 0.5, 0.0, 1.0, "amount"}
+      {"voice",       "Voice",        0.0,   0.0,   1.0,  "toggle", "Input"},
+      {"gain",        "Gain",         0.45,  0.0,   1.0,  "amount", "Input"},
+      {"bright",      "Bright",       0.0,   0.0,   1.0,  "toggle", "Input"},
+      {"preEmphasis", "Pre Emphasis", 0.0,   0.0,   1.0,  "amount", "Input",   true},
+      {"stageCount",  "Gain Stages",  2.0,   1.0,   4.0,  "amount", "Input",   false, 1.0},
+      {"stageGain",   "Gain Per Stage",   0.0,  -24.0,  24.0, "dB",     "Input"},
+      {"bass",        "Bass",         0.5,   0.0,   1.0,  "amount", "Tone"},
+      {"middle",      "Middle",       0.5,   0.0,   1.0,  "amount", "Tone"},
+      {"treble",      "Treble",       0.5,   0.0,   1.0,  "amount", "Tone"},
+      {"contour",     "Contour",      0.2,   0.0,   1.0,  "amount", "Tone"},
+      {"presence",    "Presence",     0.5,   0.0,   1.0,  "amount", "Tone"},
+      {"output",      "Output",       0.0,  -24.0,  24.0, "dB",     "Output"},
+      {"powerDrive",  "Power Drive",  0.0,   0.0,   1.0,  "amount", "Power",   true},
+      {"sag",         "Sag",          0.0,   0.0,   1.0,  "amount", "Power",   true},
+      {"bias",        "Bias",         0.0,  -1.0,   1.0,  "amount", "Power",   true},
+      {"depth",       "Depth",        0.4,   0.0,   1.0,  "amount", "Speaker", true},
+      {"resonance",   "Resonance",    0.4,   0.0,   1.0,  "amount", "Speaker", true},
+      {"damping",     "Damping",      0.5,   0.0,   1.0,  "amount", "Speaker", true}
     };
 
     EffectRegistry::Instance().Register(info.type, info, []()

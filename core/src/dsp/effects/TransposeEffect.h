@@ -162,7 +162,7 @@ namespace guitarfx
     info.description = "High-quality transpose effect";
     info.requiresResource = false;
     info.parameters = {
-        {"semitones", "Semitones", 0.0, -36.0, 12.0, "st"},
+        {"semitones", "Semitones", 0.0, -36.0, 12.0, "st", "", false, 1.0},
         {"mix", "Mix", 1.0, 0.0, 1.0, "%"}};
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<TransposeEffect>(); });

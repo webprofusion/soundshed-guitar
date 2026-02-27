@@ -357,12 +357,12 @@ namespace guitarfx
     info.requiresResource = true;
     info.resourceType = "nam"; // .nam model files
     info.parameters = {
-      {"inputGain", "Input Gain", 0.0, -24.0, 24.0, "dB"},
-      {"outputGain", "Output Gain", 0.0, -24.0, 24.0, "dB"},
-      {"autoLevelInput", "Auto Level Input", 1.0, 0.0, 1.0, ""},
-      {"autoLevelOutput", "Auto Level Output", 1.0, 0.0, 1.0, ""},
-      {"calibrationInputLevel", "Calibration Input", -18.0, -60.0, 24.0, "dB"},
-      {"calibrationOutputLevel", "Calibration Output", -18.0, -60.0, 24.0, "dB"}};
+      {"inputGain",             "Input Gain",         0.0,   -24.0, 24.0,  "dB"},
+      {"outputGain",            "Output Gain",        0.0,   -24.0, 24.0,  "dB"},
+      {"autoLevelInput",        "Auto Level Input",   1.0,    0.0,   1.0,  "", "", true},
+      {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "", "", true},
+      {"calibrationInputLevel", "Calibration Input",  -18.0, -60.0, 24.0,  "dB", "", true},
+      {"calibrationOutputLevel","Calibration Output", -18.0, -60.0, 24.0,  "dB", "", true}};
 
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<NAMAmpEffect>(); });

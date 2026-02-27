@@ -25,6 +25,8 @@ namespace guitarfx
     std::string unit; // "dB", "Hz", "ms", "%", etc.
     std::string group;
     bool advanced = false;
+    double step = 0.0; // Step size for integer/discrete params (0 = continuous)
+    std::vector<std::string> labels; // Enum labels for discrete params (e.g. {"Off","On"})
   };
 
   /**

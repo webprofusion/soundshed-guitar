@@ -26,7 +26,7 @@ export const EffectGuids = {
   kCompressorOpto:       "9651c79e-6530-4c23-9150-aa4c0ff2f1d8",
   kLimiterBrickwall:     "f4094126-b5de-4c5d-8d05-d56bd8c312d1",
 
-  // Distortion
+  // Drive
   kOverdrive:            "fa9e05a8-168a-4293-aa91-6b770de3da1d",
   kDistortion:           "686773c9-30ac-4f33-b0f8-9222146d45b1",
   kFuzz:                 "3a38b19c-1d97-4989-b5bb-12bcc59d1e6b",
@@ -55,6 +55,8 @@ export const EffectGuids = {
   kPhaser:               "3aa9dc81-31c2-40d5-9b1b-b0b9d1295e9b",
   kTremolo:              "c9debb02-d7e7-43e3-8330-b387be46dcf4",
   kAutoWah:              "b06c6d84-01b3-4d0a-ad98-40eecb64438e",
+
+  // Pitch
   kPitchShift:           "0c15f065-8335-4932-9d2f-366d436ec30a",
   kTranspose:            "9b89cc46-e05b-4f06-981e-1d74d1f628cf",
   kOctave:               "2e4d5380-5a79-412f-bfc0-bf84ef74d561",

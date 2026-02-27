@@ -988,11 +988,11 @@ namespace guitarfx
       {"attack", "Attack", 5.0, 0.1, 100.0, "ms"},
       {"release", "Release", 100.0, 10.0, 1000.0, "ms"},
       {"detune", "Detune", 0.0, -100.0, 100.0, "cents"},
-      {"octaveShift", "Octave", 0.0, -2.0, 2.0, "oct"},
+      {"octaveShift", "Octave", 0.0, -2.0, 2.0, "oct", "", false, 1.0},
       {"glide", "Glide", 10.0, 0.0, 500.0, "ms"},
       {"outputGain", "Output", 0.0, -24.0, 12.0, "dB"},
       {"gate", "Gate", -60.0, -80.0, 0.0, "dB"},
-      {"voice2Semitones", "Voice 2 Pitch", 0.0, -24.0, 24.0, "st"},
+      {"voice2Semitones", "Voice 2 Pitch", 0.0, -24.0, 24.0, "st", "", false, 1.0},
       {"voice2Mix", "Voice 2 Mix", 0.0, 0.0, 1.0, "amount"}
     };
 

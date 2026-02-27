@@ -47,16 +47,16 @@ inline void RegisterOptimizedNAMFXEffect()
   info.resourceType = "nam";
   info.resourceFilterHint = {"pedal"};
   info.parameters = {
-    {"inputGain",             "Input Gain",         0.0,   -24.0, 24.0,  "dB", "", false},
-    {"outputGain",            "Output Gain",         0.0,   -24.0, 24.0,  "dB", "", false},
-    {"bass",                  "Bass",                0.0,   -10.0, 10.0,  "dB", "", true},
-    {"mid",                   "Mid",                 0.0,   -10.0, 10.0,  "dB", "", true},
-    {"treble",                "Treble",              0.0,   -10.0, 10.0,  "dB", "", true},
-    {"presence",              "Presence",            0.0,   -10.0, 10.0,  "dB", "", true},
-    {"autoLevelInput",        "Auto Level Input",    1.0,    0.0,   1.0,  "", "", false},
-    {"autoLevelOutput",       "Auto Level Output",   1.0,    0.0,   1.0,  "", "", false},
-    {"calibrationInputLevel", "Calibration Input",  -18.0, -60.0, 24.0,  "dB", "", true},
-    {"calibrationOutputLevel","Calibration Output", -18.0, -60.0, 24.0,  "dB", "", true}
+    {"inputGain",             "Input Gain",          0.0,   -24.0, 24.0,  "dB",  "Level"},
+    {"outputGain",            "Output Gain",          0.0,   -24.0, 24.0,  "dB",  "Level"},
+    {"bass",                  "Bass",                 0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
+    {"mid",                   "Mid",                  0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
+    {"treble",                "Treble",               0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
+    {"presence",              "Presence",             0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
+    {"autoLevelInput",        "Auto Level Input",     1.0,    0.0,   1.0,  "",    "Advanced", false},
+    {"autoLevelOutput",       "Auto Level Output",    1.0,    0.0,   1.0,  "",    "Advanced", false},
+    {"calibrationInputLevel", "Calibration Input",   -18.0, -60.0, 24.0,  "dB",  "Advanced", true},
+    {"calibrationOutputLevel","Calibration Output",  -18.0, -60.0, 24.0,  "dB",  "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

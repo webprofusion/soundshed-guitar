@@ -201,11 +201,11 @@ namespace guitarfx
     info.description = "Pitch shift with stepped or free-form control";
     info.requiresResource = false;
     info.parameters = {
-      {"semitones", "Semitones", 0.0, -1.0, 1.0, "amount"},
-      {"minSemitones", "Min Semitones", -12.0, -12.0, 12.0, "st"},
-      {"maxSemitones", "Max Semitones", 12.0, -12.0, 12.0, "st"},
+      {"semitones", "Semitones", 0.0, -1.0, 1.0, "amount", "", false, 0.01},
+      {"minSemitones", "Min Semitones", -12.0, -12.0, 12.0, "st", "", false, 1.0},
+      {"maxSemitones", "Max Semitones", 12.0, -12.0, 12.0, "st", "", false, 1.0},
       {"mix", "Mix", 1.0, 0.0, 1.0, "%"},
-      {"stepMode", "Step Mode", 1.0, 0.0, 1.0, "mode"}};
+      {"stepMode", "Step Mode", 1.0, 0.0, 1.0, "mode", "", false, 1.0, {"Free", "Stepped"}}};
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<PitchShiftEffect>(); });
   }

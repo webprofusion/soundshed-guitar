@@ -21,29 +21,25 @@ const fxSelectorToggle = document.getElementById("fx-selector-toggle") as HTMLBu
 const fxSelectorHeader = document.querySelector(".fx-selector-header") as HTMLElement | null;
 
 // State
-let activeCategory = "dynamics"; // Currently selected category tab
+let activeCategory = "amp"; // Currently selected category tab
 let searchFilter = "";
 
-// Category definitions
-interface FxCategory {
-  id: string;
-  name: string;
-  color: string;
-}
-
-const FX_CATEGORIES: FxCategory[] = [
-  { id: "dynamics", name: "Dynamics", color: "#e04848" },
-  { id: "amp", name: "Amplifiers", color: "#e07848" },
-  { id: "cab", name: "Cabinets", color: "#a86830" },
-  { id: "fx", name: "FX Processors", color: "#e0a848" },
-  { id: "eq", name: "Equalizers", color: "#48a8e0" },
-  { id: "modulation", name: "Modulation", color: "#9048e0" },
-  { id: "synth", name: "Synth", color: "#7a8a02" },
-  { id: "delay", name: "Delay", color: "#48e0a8" },
-  { id: "reverb", name: "Reverb", color: "#4878e0" },
-  { id: "utility", name: "Utility", color: "#808080" },
-  { id: "channel", name: "Channels", color: "#c89040" },
-];
+// Category display metadata — id → { name, color }.
+// This is the only UI-side definition needed; the actual category list
+// is derived at render time from what the effect registry contains.
+const CATEGORY_METADATA: Record<string, { name: string; color: string }> = {
+  amp:        { name: "Amplifiers",  color: "#e07848" },
+  cab:        { name: "Cabinets",    color: "#a86830" },
+  drive:      { name: "Drive",       color: "#e04848" },
+  dynamics:   { name: "Dynamics",    color: "#e08030" },
+  eq:         { name: "Equalizers",  color: "#48a8e0" },
+  modulation: { name: "Modulation",  color: "#9048e0" },
+  pitch:      { name: "Pitch",       color: "#c040e0" },
+  delay:      { name: "Delay",       color: "#48e0a8" },
+  reverb:     { name: "Reverb",      color: "#4878e0" },
+  synth:      { name: "Synth",       color: "#7a8a02" },
+  utility:    { name: "Utility",     color: "#808080" },
+};
 
 function getCatalogEffects(): EffectTypeInfo[] {
   return EffectTypeRegistry.getAll().filter((effect) => {
@@ -107,6 +103,8 @@ function selectCategory(categoryId: string): void {
 
 /**
  * Render the category tabs in the left panel.
+ * Categories are derived from the effect registry; only categories that have
+ * at least one effect (or blend/composite) are shown.
  */
 function renderCategories(): void {
   if (!fxSelectorCategories) return;
@@ -114,20 +112,35 @@ function renderCategories(): void {
   const allEffects = getCatalogEffects();
   const blendItems = getBlendFxItems();
   const compositeItems = getCompositeFxItems();
-  
-  const categoriesHtml = FX_CATEGORIES.map((category) => {
-    const effects = allEffects.filter((e) => e.category === category.id);
-    const blends = blendItems.filter((b) => b.category === category.id);
-    const composites = compositeItems.filter((c) => c.category === category.id);
+
+  // Collect all categories that have content, in metadata order first,
+  // then any unknown categories from the registry appended alphabetically.
+  const categoriesWithContent = new Set([
+    ...allEffects.map((e) => e.category),
+    ...blendItems.map((b) => b.category),
+    ...compositeItems.map((c) => c.category),
+  ]);
+
+  const metadataOrder = Object.keys(CATEGORY_METADATA);
+  const orderedCategories = [
+    ...metadataOrder.filter((id) => categoriesWithContent.has(id)),
+    ...[...categoriesWithContent].filter((id) => !CATEGORY_METADATA[id]).sort(),
+  ];
+
+  const categoriesHtml = orderedCategories.map((categoryId) => {
+    const meta = CATEGORY_METADATA[categoryId] ?? { name: categoryId, color: "#606060" };
+    const effects = allEffects.filter((e) => e.category === categoryId);
+    const blends = blendItems.filter((b) => b.category === categoryId);
+    const composites = compositeItems.filter((c) => c.category === categoryId);
     const totalCount = effects.length + blends.length + composites.length;
-    const activeClass = activeCategory === category.id ? "active" : "";
+    const activeClass = activeCategory === categoryId ? "active" : "";
 
     return `
       <div class="fx-category ${activeClass}" 
-           data-category="${category.id}"
-           style="--category-color: ${category.color}">
-        ${getFxCategoryIcon(category.id)}
-        <span class="fx-category-name">${category.name}</span>
+           data-category="${categoryId}"
+           style="--category-color: ${meta.color}">
+        ${getFxCategoryIcon(categoryId)}
+        <span class="fx-category-name">${meta.name}</span>
         <span class="fx-category-count">${totalCount}</span>
       </div>
     `;
@@ -154,7 +167,7 @@ export function renderEffectsList(): void {
   if (!fxSelectorEffectsList) return;
 
   const allEffects = getCatalogEffects();
-  const activeColorCategory = FX_CATEGORIES.find((c) => c.id === activeCategory);
+  const activeColorCategory = CATEGORY_METADATA[activeCategory];
   const categoryColor = activeColorCategory?.color || "#808080";
   
   // Get effects for active category
@@ -193,21 +206,21 @@ export function renderEffectsList(): void {
 
   const effectsHtml = effects.map((effect) => {
     const color = searchFilter 
-      ? FX_CATEGORIES.find((c) => c.id === effect.category)?.color || "#808080"
+      ? CATEGORY_METADATA[effect.category]?.color || "#808080"
       : categoryColor;
     return renderFxItem(effect, color);
   }).join("");
 
   const blendsHtml = blends.map((blend) => {
     const color = searchFilter
-      ? FX_CATEGORIES.find((c) => c.id === blend.category)?.color || "#808080"
+      ? CATEGORY_METADATA[blend.category]?.color || "#808080"
       : categoryColor;
     return renderFxItem(blend, color, blend.blendId, blend.blendCategory);
   }).join("");
 
   const compositesHtml = composites.map((comp) => {
     const color = searchFilter
-      ? FX_CATEGORIES.find((c) => c.id === comp.category)?.color || "#808080"
+      ? CATEGORY_METADATA[comp.category]?.color || "#808080"
       : categoryColor;
     return renderFxItem(comp, color, undefined, undefined, comp.compositeId);
   }).join("");

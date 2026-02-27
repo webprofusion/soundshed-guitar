@@ -34,16 +34,17 @@ export function renderIcon(icon: IconKey, className: string, title?: string): st
 }
 
 const categoryIcons: Record<string, IconKey> = {
-  dynamics: "bolt",
-  amp: "amp",
-  cab: "speaker",
-  fx: "sparkle",
-  eq: "sliders",
+  amp:        "amp",
+  cab:        "speaker",
+  drive:      "flame",
+  dynamics:   "bolt",
+  eq:         "sliders",
   modulation: "wave",
-  delay: "clock",
-  reverb: "hall",
-  synth: "note",
-  utility: "wrench",
+  pitch:      "note",
+  delay:      "clock",
+  reverb:     "hall",
+  synth:      "note",
+  utility:    "wrench",
 };
 
 const effectIcons: Record<string, IconKey> = {

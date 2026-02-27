@@ -6416,6 +6416,10 @@ void PluginController::SendEffectCatalogToUI()
                 param["group"] = p.group;
             if (p.advanced)
                 param["advanced"] = true;
+            if (p.step != 0.0)
+                param["step"] = p.step;
+            if (!p.labels.empty())
+                param["labels"] = p.labels;
             params.push_back(param);
         }
         entry["parameters"] = params;
