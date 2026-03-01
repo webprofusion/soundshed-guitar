@@ -1,5 +1,7 @@
 # Blended Amp Feature (High-Level)
 
+> **Status: IMPLEMENTED.** Blend editor (`core/ui/ts/blendEditor.ts`), blend manager (`core/ui/ts/blendManager.ts`), signal path blend rendering (`core/ui/ts/signalPathBlend.ts`), and DSP multi-model blend (`core/src/dsp/effects/MultiModelNAMAmpEffect.h`) are all in place. Both `snap` and `interpolate` blend modes implemented.
+
 The blended amp effect lets multiple NAM models behave as a single amp node in the signal chain. A blend definition groups models and defines a set of mapped parameters (e.g., Gain, Tone, Presence) that describe where each model should appear in the parameter space. The player adjusts one set of knobs, and the blend resolves to the closest available model (snap mode) or interpolates between nearby models (interpolate mode).
 
 ## Why It Exists

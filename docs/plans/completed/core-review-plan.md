@@ -1,5 +1,7 @@
 # Core Review Plan (Implementation-Agnostic)
 
+> **Status: IMPLEMENTED.** All 13 spec files have been created under `docs/plans/core-review/`: `00-index.md`, `A2` through `D3`, and `Host-adapter-contract.md`. The feature catalog and per-feature requirements are complete.
+
 ## Goal
 Document the **high-level features** of “Core” and the **requirements per feature** in a way that is:
 - **Independent of specific frameworks/libraries/languages**

@@ -1,5 +1,7 @@
 # Supercharged Composite Surface Plan
 
+> **Status: PHASE 1 IMPLEMENTED.** `ExposedResource` is defined in `core/src/presets/PresetTypes.h` and `core/ui/ts/compositeTypes.ts`. Serialization (read/write) in `core/src/presets/PresetTypesJson.h`. Resource routing for composite nodes via `exposedResourceId` handled in `core/src/PluginController.cpp`. UI rendering of surfaced resource controls in `core/ui/ts/signalPath.ts` and `core/ui/ts/compositeEffects.ts`. Factory Supercharged Amp composite definitions in `core/ui/assets/composites/`.
+
 ## Goal
 Enable Supercharged Neural composites (Amp now, Pedal/FX later) to surface both:
 - **Parameters** (existing)

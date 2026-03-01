@@ -1,5 +1,7 @@
 # Custom NAM Blend Library Plan
 
+> **Status: IMPLEMENTED.** Blend CRUD and UI in `core/ui/ts/blendEditor.ts` and `core/ui/ts/blendManager.ts`. The `.namz` export/import (with resource bundling) is in `core/ui/ts/archiveUtils.ts` and `core/ui/ts/blendEditor.ts`. Blend library stored at `settings/resources/blend-fx-library.json`. Backend load/save handled via `PluginController`. Auto-map from model name tokens implemented in `core/ui/ts/blendUtils.ts` (`inferParamValueFromName`).
+
 ## Goals
 - Allow users to create custom blended NAM effects that are stored once and referenced by ID in presets and signal chain nodes.
 - Use GUIDs generated in the UI for blend IDs and imported resource IDs.

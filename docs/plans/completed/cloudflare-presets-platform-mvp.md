@@ -1,5 +1,7 @@
 # Cloudflare Presets Platform MVP Plan
 
+> **Status: IMPLEMENTED.** The Cloudflare Worker API is in `api/src/` with auth, discovery, items, packs, uploads, and admin route modules. D1 schema in `cloudflare-presets-platform-mvp.sql`. Wrangler config at `api/wrangler.toml`.
+
 ## Assumptions
 
 - We are optimizing for the fastest MVP with basic but safe auth.

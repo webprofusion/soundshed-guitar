@@ -1,5 +1,7 @@
 # Effect Layout Editor – Feature Plan
 
+> **Status: IMPLEMENTED.** All planned features are complete and all previously identified bugs have been resolved. File paths in this doc use `core/ui/ts/` (not the older `src/resources/ui/ts/` prefix).
+
 ## Overview
 
 The Effect Layout Editor allows users to create custom visual layouts for effect parameter panels within the signal path. Users can position controls (knobs, toggles, sliders), add background images with layering, and place text labels — all via a drag-and-drop modal designer. Layouts are saved per effect type and rendered at runtime in place of the default parameter grid.
@@ -31,13 +33,13 @@ The Effect Layout Editor allows users to create custom visual layouts for effect
 
 | Area | File |
 |------|------|
-| Types | `src/resources/ui/ts/layoutTypes.ts` |
-| Designer modal | `src/resources/ui/ts/layoutDesigner.ts` |
-| Runtime renderer | `src/resources/ui/ts/layoutRenderer.ts` |
-| Designer CSS | `src/resources/ui/css/layout-designer.css` |
-| HTML (modal) | `src/resources/ui/index.html` (layout-designer-modal) |
-| Message handlers | `src/resources/ui/ts/messages.ts` |
-| Signal path integration | `src/resources/ui/ts/signalPath.ts` |
+| Types | `core/ui/ts/layoutTypes.ts` |
+| Designer modal | `core/ui/ts/layoutDesigner.ts` |
+| Runtime renderer | `core/ui/ts/layoutRenderer.ts` |
+| Designer CSS | `core/ui/css/layout-designer.css` |
+| HTML (modal) | `core/ui/index.html` (layout-designer-modal) |
+| Message handlers | `core/ui/ts/messages.ts` |
+| Signal path integration | `core/ui/ts/signalPath.ts` |
 | C++ handlers | `src/src/GuitarFXPlugin.cpp` (HandleSaveEffectLayout, HandleExportEffectLayout, HandleBrowseLayoutImage, HandleSaveLayoutImage, LoadLayoutLibrary) |
 
 ## Known Bugs

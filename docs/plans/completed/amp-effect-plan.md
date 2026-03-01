@@ -1,5 +1,8 @@
 # Built-in Amp Effect Plan
 
+> **Status: IMPLEMENTED** — Both Phase 1 (original spec) and Phase 2 ("Heavy American v2") are fully implemented in `core/src/dsp/effects/BuiltinAmpEffect.h`.
+
+
 ## Goal
 Create a built-in amp effect that covers clean, driving rock, and heavy modern metal tones. The amp should provide a smooth Clean/Drive voice blend and include controls for Gain, Bass, Middle, Treble, Contour, and Presence.
 
@@ -30,8 +33,8 @@ Create a built-in amp effect that covers clean, driving rock, and heavy modern m
 ## File Touchpoints
 - DSP effect: `src/src/dsp/effects/BuiltinAmpEffect.h`
 - Registry: `src/src/dsp/effects/BuiltinEffects.h`
-- UI effect registry: `src/resources/ui/ts/presetV2.ts`
-- FX icon mapping: `src/resources/ui/ts/iconAssets.ts`
+- UI effect registry: `core/ui/ts/presetV2.ts`
+- FX icon mapping: `core/ui/ts/iconAssets.ts`
 
 ## Notes
 - The voice control is implemented as a smooth blend (not a hard switch).
@@ -40,7 +43,7 @@ Create a built-in amp effect that covers clean, driving rock, and heavy modern m
 
 
 ----------------------------------
-Heavy American v2 Spec (Draft)
+Heavy American v2 Spec (Implemented)
 
 Goals
 

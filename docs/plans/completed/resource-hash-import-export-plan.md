@@ -1,5 +1,11 @@
 # Resource Hash Export/Import Plan
 
+> **Status: IMPLEMENTED.**
+> - SHA-256 utility: `sha256HexFromBase64()` in `core/ui/ts/utils.ts`
+> - Export: `buildArchiveFileNameWithHash()` in `core/ui/ts/archiveUtils.ts` — prefixes resource filenames with hash for dedup
+> - Import dedup: `getLibraryResourceByHash(type, hash)` in `core/ui/ts/dataLibraries.ts` — maps existing resource ID when hash matches, skipping re-import
+> - Applies to: preset archive export/import (`.soundshed.preset`, `.soundshed.presets`), blend archive (`.namz`), and library export
+
 Date: 2026-01-23
 
 ## Goal

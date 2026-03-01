@@ -1,5 +1,12 @@
 # IR Cabinet Realism & Flexibility Plan
 
+> **Status: PHASE 1 IMPLEMENTED.** The dual-IR blend, per-slot controls, crossfade switching, and auto gain compensation are in `core/src/dsp/effects/IRCabEffect.h`. Additional features beyond the original Phase 1 spec were also added: air modeling (simulated room air high-frequency rolloff), and mic position controls (off-axis blend). Phases 2 and 3 remain future work.
+>
+> **As-built deviations from plan:**
+> - DSP parameter names differ from spec. As implemented: `irBlend` (not `blendMix`), `slotAGain` / `slotBGain` (dB, not spec's `irSlots[].level`), `slotAPolarity` / `slotBPolarity` (not `irSlots[].polarity`). The `hpCutHz`, `lpCutHz`, `cabOutputDb` named in the spec are implemented as `hpCut`, `lpCut`, `output` (normalized/dB).
+> - File touchpoints: `core/src/presets/PresetTypes.h` and `core/ui/ts/` (not `core/ui/ts/` as written — but path structure is correct relative to repo root).
+> - Beyond-spec additions: `air` (presence/air high-shelf), `airGain`, `micPosition`, `micBlend` controls added to the effect, giving extra tonal shaping without an external EQ.
+
 ## Goal
 Improve the IR cabinet effect so it sounds more realistic under playing dynamics while remaining easy to shape in mixes and reliable in real-time use.
 

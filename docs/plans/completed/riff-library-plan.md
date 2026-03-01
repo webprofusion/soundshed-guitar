@@ -1,5 +1,7 @@
 # Riff Library Plan
 
+> **Status: PHASES 1 AND 2 IMPLEMENTED.** The riff capture and library UI is in `core/ui/ts/riffLibrary.ts`. Bridge functions cover: `armRiffCapture`, `startRiffCapture`, `stopRiffCapture`, `trimCapturedRiff`, `saveRiffTake`, `importRiffWav`, `getRiffLibrary`, `deleteRiff`, `markRiffUsed`, `setRiffFavorite`, `setRiffLibraryPath`, `previewRiffTake`, and `previewCapturedRiffRange`. Metronome integration (tempo/time-sig/accent) is in place. Takes management, categories/tags, favorite/used workflows are implemented (Phase 2). Phase 3 (advanced indexing/repair tools, looper spike) remains future work.
+
 ## Status
 - Draft
 - Last updated: 2026-02-18

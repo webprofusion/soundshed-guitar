@@ -1,5 +1,7 @@
 # Preset Generator Spec (Node CLI, MVP)
 
+> **Status: IMPLEMENTED.** The CLI tool is in `tools/preset-generator/src/` with the following modules: `index.ts` (CLI entry/commands), `generator.ts`, `pairing.ts`, `tone3000.ts`, `validate.ts`, `cache.ts`, `fs-utils.ts`, `types.ts`. Matches the architecture described in this spec.
+
 ## Purpose
 Create a repeatable offline-friendly process to generate large collections of usable presets with associated NAM/IR resources, grouped into content packs for local app import or remote publishing.
 
