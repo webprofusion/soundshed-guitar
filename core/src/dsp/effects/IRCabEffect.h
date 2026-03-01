@@ -1208,24 +1208,24 @@ namespace guitarfx
     info.requiresResource = true;
     info.resourceType = "ir"; // .wav IR files
     info.parameters = {
-        {"mix", "Mix", 1.0, 0.0, 1.0, ""},
-        {"lowCutHz", "Low Cut", 20.0, 20.0, 1000.0, "Hz"},
-        {"highCutHz", "High Cut", 20000.0, 1000.0, 20000.0, "Hz"},
-        {"slotAGain", "IR A Level", 0.0, -24.0, 24.0, "dB"},
-        {"slotBGain", "IR B Level", 0.0, -24.0, 24.0, "dB"},
-        {"slotAPolarity", "IR A Invert", 0.0, 0.0, 1.0, "toggle"},
-        {"slotBPolarity", "IR B Invert", 0.0, 0.0, 1.0, "toggle"},
-        {"autoGainComp", "Auto Gain", 0.0, 0.0, 1.0, "toggle"},
-        {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
-        {"air", "Air", 0.0, 0.0, 1.0, "amount"},
-        {"airMode", "Air Mode", 0.0, 0.0, 2.0, "enum"},
-        {"irBlend", "IR Blend", 0.0, 0.0, 1.0, "blend"},
-        {"micEmulation",  "Mic Emulation",  0.0, 0.0, 1.0, "toggle"},
-        {"micRadialA",    "Mic A Radial",    0.0, 0.0, 1.0, "amount"},
-        {"micProximityA", "Mic A Proximity", 0.0, 0.0, 1.0, "amount"},
-        {"micRadialB",    "Mic B Radial",    0.0, 0.0, 1.0, "amount"},
-        {"micProximityB", "Mic B Proximity", 0.0, 0.0, 1.0, "amount"},
-        {"quality", "Quality", 1.0, 0.0, 3.0, ""}}; // 0=Economy, 1=Standard, 2=High, 3=Full
+        {"mix",           "Mix",            1.0,  0.0,   1.0,     "amount", "Level"},
+        {"irBlend",       "IR Blend",       0.0,  0.0,   1.0,     "blend", "Tone"},
+        {"outputGain",    "Output",         0.0,  -24.0, 24.0,    "dB",     "Level"},
+        {"lowCutHz",      "Low Cut",        20.0, 20.0,  1000.0,  "Hz",     "Tone"},
+        {"highCutHz",     "High Cut",    20000.0, 1000.0,20000.0, "Hz",     "Tone"},
+        {"autoGainComp",  "Auto Gain",      0.0,  0.0,   1.0,     "toggle", "Level", true},
+        {"air",           "Air",            0.0,  0.0,   1.0,     "amount", "Tone"},
+        {"airMode",       "Air Mode",       0.0,  0.0,   2.0,     "enum",   "Tone",  true, 1.0, {"Shelf", "Presence", "Both"}},
+        {"micEmulation",  "Mic Emulation",  0.0,  0.0,   1.0,     "toggle", "Tone",      true},
+        {"slotAGain",     "IR A Level",     0.0,  -24.0, 24.0,    "dB",     "IR A",  true},
+        {"slotAPolarity", "IR A Invert",    0.0,  0.0,   1.0,     "toggle", "IR A",  true},
+        {"micRadialA",    "Mic A Radial",   0.0,  0.0,   1.0,     "amount", "IR A",  true},
+        {"micProximityA", "Mic A Proximity",0.0,  0.0,   1.0,     "amount", "IR A",  true},
+        {"slotBPolarity", "IR B Invert",    0.0,  0.0,   1.0,     "toggle", "IR B",  true},
+        {"slotBGain",     "IR B Level",     0.0,  -24.0, 24.0,    "dB",     "IR B",  true},
+        {"micRadialB",    "Mic B Radial",   0.0,  0.0,   1.0,     "amount", "IR B",  true},
+        {"micProximityB", "Mic B Proximity",0.0,  0.0,   1.0,     "amount", "IR B",  true},
+        {"quality",       "Quality",        1.0,  0.0,   3.0,     "enum",    "Tone",      true, 1.0, {"Economy","Standard","High","Full"}}}; // 0=Economy, 1=Standard, 2=High, 3=Full
 
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<IRCabEffect>(); });
