@@ -5750,11 +5750,35 @@ void PluginController::SaveAppSettings() const
     try
     {
         [[maybe_unused]] const auto ensuredSettingsParent = mFileSystem.EnsureDirectory(settingsPath.parent_path());
-        std::ofstream ofs(settingsPath);
-        if (ofs.is_open())
+
+        // Write to a temp file first, then atomically rename over the real file.
+        // This prevents a partial write (crash, exception, lock) from truncating
+        // app.json and losing the instanceId or other persistent settings.
+        const auto tempPath = settingsPath.parent_path() / (settingsPath.filename().string() + ".tmp");
+        {
+            std::ofstream ofs(tempPath);
+            if (!ofs.is_open())
+            {
+                std::cerr << "[Plugin] SaveAppSettings: could not open temp file " << tempPath.string() << std::endl;
+                return;
+            }
             ofs << mAppSettings.dump(2);
+        }
+
+        std::error_code ec;
+        std::filesystem::rename(tempPath, settingsPath, ec);
+        if (ec)
+        {
+            // rename failed (e.g. cross-device) – fall back to copy+delete
+            std::filesystem::copy_file(tempPath, settingsPath,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            std::filesystem::remove(tempPath, ec);
+        }
     }
-    catch (const std::exception&) {}
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Plugin] SaveAppSettings failed: " << e.what() << std::endl;
+    }
 }
 
 void PluginController::LoadAppSettings()
@@ -5787,6 +5811,12 @@ void PluginController::LoadAppSettings()
     catch (const std::exception& e)
     {
         std::cerr << "[Plugin] Failed to parse settings: " << e.what() << std::endl;
+        // Back up the corrupt file so the instanceId and other data are not silently lost.
+        std::error_code ec;
+        const auto backupPath = settingsPath.parent_path() / (settingsPath.filename().string() + ".corrupt");
+        std::filesystem::copy_file(settingsPath, backupPath,
+                                   std::filesystem::copy_options::overwrite_existing, ec);
+        std::cerr << "[Plugin] Corrupt settings backed up to " << backupPath.string() << std::endl;
         mAppSettings = nlohmann::json::object();
     }
 }

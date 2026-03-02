@@ -73,6 +73,10 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     if (newURL.startsWith (getResourceProviderRoot()))
         return true;
 
+    // Allow data: URLs (used by the WebView2-missing error page)
+    if (newURL.startsWith ("data:"))
+        return true;
+
     if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
     {
         juce::URL (newURL).launchInDefaultBrowser();
@@ -82,16 +86,58 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     return false;
 }
 
+namespace
+{
+    // Write a line to a persistent startup log file sitting next to the executable.
+    // This survives after the process exits and works in release builds where
+    // OutputDebugString is the only other option.
+    void writeStartupLog (const juce::String& message)
+    {
+        const auto logDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                                .getChildFile ("Soundshed Guitar")
+                                .getChildFile ("logs");
+        logDir.createDirectory();
+        const auto logFile = logDir.getChildFile ("soundshed-startup.log");
+        juce::FileOutputStream stream (logFile);
+        if (stream.openedOk())
+        {
+            stream.setPosition (stream.getFile().getSize()); // append
+            const auto line = juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S") + "  " + message + "\n";
+            stream.writeText (line, false, false, nullptr);
+        }
+        juce::Logger::writeToLog (message);
+    }
+}
+
 PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     : AudioProcessorEditor (&p),
       processorRef (p),
     resourceRoot ([]{
-        // Pass the exe-relative resources path as an extra candidate so the
-        // UI bundle is discovered regardless of the current working directory.
-        const auto exeDir = std::filesystem::path (
-            juce::File::getSpecialLocation (juce::File::currentExecutableFile)
-                .getParentDirectory().getFullPathName().toStdString());
-        return juce::File (guitarfx::ui::ResolveResourceRoot ({ exeDir / "resources" }).string());
+        // --- Resource root resolution logging ---
+        const auto exeFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+        const auto exeDir  = std::filesystem::path (exeFile.getParentDirectory().getFullPathName().toStdString());
+        const auto cwd     = std::filesystem::current_path();
+
+        writeStartupLog ("[PluginEditor] exe       : " + exeFile.getFullPathName());
+        writeStartupLog ("[PluginEditor] cwd       : " + juce::String (cwd.string()));
+        writeStartupLog ("[PluginEditor] candidate : " + juce::String ((exeDir / "resources").string()));
+
+        const auto resolved = guitarfx::ui::ResolveResourceRoot ({ exeDir / "resources" });
+        writeStartupLog ("[PluginEditor] resolved  : " + juce::String (resolved.string()));
+
+        if (resolved.empty())
+        {
+            writeStartupLog ("[PluginEditor] WARNING: resource root NOT found – UI will show fallback");
+        }
+        else
+        {
+            const auto indexPath = resolved / "ui" / "index.html";
+            const bool indexExists = std::filesystem::exists (indexPath);
+            writeStartupLog ("[PluginEditor] index.html exists: " + juce::String (indexExists ? "YES" : "NO")
+                             + " (" + juce::String (indexPath.string()) + ")");
+        }
+
+        return juce::File (resolved.string());
     }()),
       webView (juce::WebBrowserComponent::Options{}
                    .withBackend (juce::WebBrowserComponent::Options::Backend::webview2)
@@ -156,9 +202,18 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     });
 
    #if JUCE_WINDOWS
+    // NOTE: areOptionsSupported must be called with a writable user data folder.
+    // When installed under Program Files the default folder (next to the .exe) is
+    // read-only for standard users, causing the check to falsely return false.
     const auto webView2Supported = juce::WebBrowserComponent::areOptionsSupported (
         juce::WebBrowserComponent::Options{}
-            .withBackend (juce::WebBrowserComponent::Options::Backend::webview2));
+            .withBackend (juce::WebBrowserComponent::Options::Backend::webview2)
+            .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2{}
+                .withUserDataFolder (
+                    juce::File::getSpecialLocation (juce::File::tempDirectory)
+                        .getChildFile ("SoundshedGuitarWebView2Check"))));
+
+    writeStartupLog ("[PluginEditor] WebView2 supported: " + juce::String (webView2Supported ? "YES" : "NO"));
 
     if (! webView2Supported)
     {
@@ -178,7 +233,9 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
    #endif
     {
         const auto cacheBust = "?v=" + juce::String (juce::Time::getCurrentTime().toMilliseconds());
-        webView.goToURL (juce::WebBrowserComponent::getResourceProviderRoot() + cacheBust);
+        const auto startUrl = juce::WebBrowserComponent::getResourceProviderRoot() + cacheBust;
+        writeStartupLog ("[PluginEditor] goToURL: " + startUrl);
+        webView.goToURL (startUrl);
     }
 
     setResizable (true, true);
@@ -288,18 +345,29 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
         if (file.existsAsFile())
         {
             auto data = readFileToVector (file);
+            // Only log first-time requests (index + JS modules) to avoid flooding
+            if (urlToRetrieve == "index.html" || file.getFileExtension() == ".js")
+                writeStartupLog ("[getResource] HIT  " + file.getFullPathName());
             return juce::WebBrowserComponent::Resource { std::move (data),
                                                          getMimeForExtension (file.getFileExtension().substring (1)) };
         }
+
+        writeStartupLog ("[getResource] MISS " + resourceRoot.getChildFile ("ui").getChildFile (urlToRetrieve).getFullPathName());
+    }
+    else
+    {
+        writeStartupLog ("[getResource] resourceRoot invalid (" + resourceRoot.getFullPathName() + ") for: " + urlToRetrieve);
     }
 
     if (urlToRetrieve == "index.html")
     {
+        writeStartupLog ("[getResource] serving fallback index.html (resources not found)");
         const juce::String fallbackHtml =
             "<!doctype html><html><head><meta charset=\"utf-8\"/>"
             "<title>Soundshed Guitar</title></head>"
             "<body style=\"font-family:sans-serif;background:#101014;color:#eee;padding:24px;\">"
             "<h1>UI not found</h1><p>Expected resources/ui/index.html on disk.</p>"
+            "<p>Resource root: " + resourceRoot.getFullPathName() + "</p>"
             "</body></html>";
 
         std::vector<std::byte> bytes (fallbackHtml.getNumBytesAsUTF8());

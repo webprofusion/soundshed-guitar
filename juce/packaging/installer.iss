@@ -32,10 +32,8 @@ LicenseFile="resources\EULA"
 UninstallFilesDir="{commonappdata}\{#ProductName}\uninstall"
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}Data"
-Type: filesandordirs; Name: "{commonpf64}\{#Publisher}\{#ProductName}\resources\ui"
-Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}.vst3\Contents\x86_64-win\resources\ui"
-Type: filesandordirs; Name: "{commonappdata}\{#ProductName}\resources"
+Type: filesandordirs; Name: "{commonpf64}\{#Publisher}\{#ProductName}"
+Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}.vst3"
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
@@ -49,10 +47,6 @@ Name: "{autoprograms}\Uninstall {#ProductName}"; Filename: "{uninstallexe}"
 
 ; This is optional, for preset or other plugin data
 [Run]
-Filename: "{cmd}"; \
-    WorkingDir: "{commoncf64}\VST3"; \
-    Parameters: "/C mklink /D ""{commoncf64}\VST3\{#ProductName}Data"" ""{commonappdata}\{#ProductName}"""; \
-    Flags: runascurrentuser; Components: vst3
 Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; \
     Description: "Launch {#ProductName}"; \
     Flags: nowait postinstall skipifsilent; Components: standalone
@@ -113,91 +107,6 @@ begin
     end;
 end;
 
-function CreateDirectorySymlink(const LinkPath: string; const TargetPath: string): Boolean;
-var
-    ResultCode: Integer;
-begin
-    if not DirExists(TargetPath) then
-    begin
-        Log('Symlink target does not exist: ' + TargetPath);
-        Result := False;
-        Exit;
-    end;
-
-    if DirExists(LinkPath) then
-    begin
-        DelTree(LinkPath, True, True, True);
-    end;
-
-    if not DirExists(ExtractFileDir(LinkPath)) then
-    begin
-        if not ForceDirectories(ExtractFileDir(LinkPath)) then
-        begin
-            Log('Failed to create parent directory for: ' + LinkPath);
-            Result := False;
-            Exit;
-        end;
-    end;
-
-    Result := Exec(ExpandConstant('{cmd}'),
-                   '/C mklink /D "' + LinkPath + '" "' + TargetPath + '"',
-                   '',
-                   SW_HIDE,
-                   ewWaitUntilTerminated,
-                   ResultCode) and (ResultCode = 0);
-
-    if not Result then
-        Log('Failed to create symlink. Link=' + LinkPath + ' Target=' + TargetPath + ' ExitCode=' + IntToStr(ResultCode));
-end;
-
-function CopyDirectoryTree(const SourcePath: string; const DestPath: string): Boolean;
-var
-    ResultCode: Integer;
-begin
-    if not DirExists(SourcePath) then
-    begin
-        Log('Copy source does not exist: ' + SourcePath);
-        Result := False;
-        Exit;
-    end;
-
-    if DirExists(DestPath) then
-    begin
-        DelTree(DestPath, True, True, True);
-    end;
-
-    if not DirExists(ExtractFileDir(DestPath)) then
-    begin
-        if not ForceDirectories(ExtractFileDir(DestPath)) then
-        begin
-            Log('Failed to create copy destination parent: ' + ExtractFileDir(DestPath));
-            Result := False;
-            Exit;
-        end;
-    end;
-
-    Result := Exec(ExpandConstant('{cmd}'),
-                   '/C xcopy /E /I /Y "' + SourcePath + '" "' + DestPath + '"',
-                   '',
-                   SW_HIDE,
-                   ewWaitUntilTerminated,
-                   ResultCode) and (ResultCode = 0);
-
-    if not Result then
-        Log('Fallback copy failed. Source=' + SourcePath + ' Dest=' + DestPath + ' ExitCode=' + IntToStr(ResultCode));
-end;
-
-procedure EnsureUiAtPath(const LinkPath: string; const SharedUiPath: string);
-begin
-    if CreateDirectorySymlink(LinkPath, SharedUiPath) then
-        Exit;
-
-    Log('Falling back to physical UI copy at: ' + LinkPath);
-
-    if not CopyDirectoryTree(SharedUiPath, LinkPath) then
-        Log('UI fallback copy was not successful for: ' + LinkPath);
-end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 var
     SharedUiPath: string;
@@ -213,17 +122,4 @@ begin
 
     SharedUiPath := ExpandConstant('{commonappdata}\{#ProductName}\resources\ui');
 
-    if WizardIsComponentSelected('standalone') then
-    begin
-        EnsureUiAtPath(
-            ExpandConstant('{commonpf64}\{#Publisher}\{#ProductName}\resources\ui'),
-            SharedUiPath);
-    end;
-
-    if WizardIsComponentSelected('vst3') then
-    begin
-        EnsureUiAtPath(
-            ExpandConstant('{commoncf64}\VST3\{#ProductName}.vst3\Contents\x86_64-win\resources\ui'),
-            SharedUiPath);
-    end;
 end;
