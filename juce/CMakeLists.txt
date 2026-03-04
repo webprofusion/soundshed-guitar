@@ -323,6 +323,12 @@ soundshed_copy_ui_resources(${PROJECT_NAME}_VST3)
 # IPP support, comment out to disable
 include(PamplejuceIPP)
 
+# Propagate IPP availability to the core DSP library so it can use IPP code paths
+if(DEFINED IPP_ROOT AND IS_DIRECTORY "${IPP_ROOT}")
+    target_compile_definitions(SoundshedGuitarCore PUBLIC PAMPLEJUCE_IPP=1)
+    target_include_directories(SoundshedGuitarCore PUBLIC "${IPP_INC}")
+endif()
+
 # Everything related to the tests target
 # include(Tests)
 

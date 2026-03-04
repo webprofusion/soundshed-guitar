@@ -108,6 +108,27 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
         file(GLOB NAM_SOURCES CONFIGURE_DEPENDS "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/*.cpp")
         add_library(NeuralAmpModelerCore STATIC ${NAM_SOURCES})
         target_compile_features(NeuralAmpModelerCore PUBLIC cxx_std_17)
+        # Release optimization flags for NAM inference
+        if(MSVC)
+            target_compile_options(NeuralAmpModelerCore PRIVATE
+                $<$<CONFIG:Release>:/Ox>
+                $<$<CONFIG:Release>:/fp:fast>
+                $<$<CONFIG:Release>:/arch:AVX2>)
+        elseif(APPLE)
+            target_compile_options(NeuralAmpModelerCore PRIVATE
+                $<$<CONFIG:Release>:-Ofast>
+                $<$<CONFIG:RelWithDebInfo>:-Ofast>)
+            if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64" OR
+               (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"))
+                target_compile_options(NeuralAmpModelerCore PRIVATE
+                    $<$<CONFIG:Release>:-mavx2>)
+            endif()
+        else()
+            target_compile_options(NeuralAmpModelerCore PRIVATE
+                $<$<CONFIG:Release>:-Ofast>
+                $<$<CONFIG:RelWithDebInfo>:-Ofast>
+                $<$<CONFIG:Release>:-mavx2>)
+        endif()
         target_include_directories(NeuralAmpModelerCore PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}/src/compat"
             "${NeuralAmpModelerCore_SOURCE_DIR}"
@@ -319,6 +340,28 @@ endif()
 if(WIN32)
     target_compile_definitions(SoundshedGuitarCore PUBLIC _WIN32 WIN32 _WINDOWS)
     target_compile_options(SoundshedGuitarCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+endif()
+
+# Release optimization flags — fast-math, full opt, and AVX2 SIMD
+if(MSVC)
+    target_compile_options(SoundshedGuitarCore PRIVATE
+        $<$<CONFIG:Release>:/Ox>
+        $<$<CONFIG:Release>:/fp:fast>
+        $<$<CONFIG:Release>:/arch:AVX2>)
+elseif(APPLE)
+    target_compile_options(SoundshedGuitarCore PRIVATE
+        $<$<CONFIG:Release>:-Ofast>
+        $<$<CONFIG:RelWithDebInfo>:-Ofast>)
+    if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64" OR
+       (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"))
+        target_compile_options(SoundshedGuitarCore PRIVATE
+            $<$<CONFIG:Release>:-mavx2>)
+    endif()
+else()
+    target_compile_options(SoundshedGuitarCore PRIVATE
+        $<$<CONFIG:Release>:-Ofast>
+        $<$<CONFIG:RelWithDebInfo>:-Ofast>
+        $<$<CONFIG:Release>:-mavx2>)
 endif()
 
 set_target_properties(SoundshedGuitarCore PROPERTIES
