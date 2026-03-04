@@ -178,18 +178,23 @@ namespace guitarfx
       // Per-sample: apply gate envelope, advance phase, detect step transitions.
       const float dryMix = static_cast<float>(1.0 - mMix);
       const float wetMix = static_cast<float>(mMix);
-      const float attackFrac = mAttack;
-      const float gateFrac   = mGate;
+      const float attackFrac  = mAttack;
+      const float gateFrac    = mGate;
+      // Release window starts at gateFrac; clamped so it never overruns phase 1.0
+      const float releaseFrac = std::min(mRelease, std::max(0.0f, 1.0f - gateFrac));
+      const float releaseEnd  = gateFrac + releaseFrac;
 
       for (int i = 0; i < numSamples; ++i)
       {
-        // Gate envelope within a step: [0, attack) → ramp up, [attack, gate) → full, [gate, 1) → silent
+        // Gate envelope: [0, attack) ramp up | [attack, gate) hold | [gate, gate+release) ramp down | silence
         const float phase = static_cast<float>(mPhase);
         float gateGain;
         if (phase < attackFrac)
           gateGain = (attackFrac > 0.0f) ? (phase / attackFrac) : 1.0f;
         else if (phase < gateFrac)
           gateGain = 1.0f;
+        else if (releaseFrac > 0.0f && phase < releaseEnd)
+          gateGain = 1.0f - (phase - gateFrac) / releaseFrac;
         else
           gateGain = 0.0f;
 
@@ -253,6 +258,10 @@ namespace guitarfx
       {
         mAttack = static_cast<float>(std::clamp(value, 0.0, 0.5));
       }
+      else if (key == "release")
+      {
+        mRelease = static_cast<float>(std::clamp(value, 0.0, 0.5));
+      }
       else if (key == "mix")
       {
         mMix = std::clamp(value, 0.0, 1.0);
@@ -290,6 +299,7 @@ namespace guitarfx
       if (key == "direction")      return static_cast<double>(mDirection);
       if (key == "gate")           return mGate;
       if (key == "attack")         return mAttack;
+      if (key == "release")        return mRelease;
       if (key == "mix")            return mMix;
       if (key == "pitchMode")      return static_cast<double>(mPitchMode);
       if (key == "pitchThreshold") return mPitchThreshold;
@@ -485,6 +495,7 @@ namespace guitarfx
     int    mDirection     = 0;     // 0=Up, 1=Down, 2=UpDown
     float  mGate          = 0.8f;
     float  mAttack        = 0.05f;
+    float  mRelease       = 0.08f; // short fade-out to avoid clicks at gate close
     int    mCustomSteps[kMaxCustomSteps] = {0, 4, 7, 12, 0, 0, 0, 0};
     double mMix           = 0.8;
     int    mPitchMode     = 0;     // 0=Always, 1=Above threshold, 2=Below threshold
@@ -535,8 +546,9 @@ namespace guitarfx
       {"numSteps",   "Steps",        4.0, 2.0,  8.0,  "enum", "pattern", false, 1.0,
        {"2", "3", "4", "5", "6", "7", "8"}},
       // Envelope
-      {"gate",       "Gate",         0.8, 0.05, 1.0,  "",   "envelope", false, 0.0, {}},
-      {"attack",     "Attack",       0.05,0.0,  0.5,  "",   "envelope", false, 0.0, {}},
+      {"gate",       "Gate",         0.8,  0.05, 1.0,  "",  "envelope", false, 0.0, {}},
+      {"attack",     "Attack",       0.05, 0.0,  0.5,  "",  "envelope", false, 0.0, {}},
+      {"release",    "Release",      0.08, 0.0,  0.5,  "",  "envelope", false, 0.0, {}},
       // Per-step intervals (Custom mode)
       {"step0", "Step 1", 0.0,  -24.0, 24.0, "st", "steps", true, 1.0, {}},
       {"step1", "Step 2", 4.0,  -24.0, 24.0, "st", "steps", true, 1.0, {}},
