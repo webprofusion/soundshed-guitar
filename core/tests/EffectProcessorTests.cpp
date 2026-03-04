@@ -18,6 +18,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/effects/AutoArpEffect.h"
 
 namespace
 {
@@ -183,6 +184,141 @@ bool TestEffectProcessor(const std::string& effectType)
 
 } // anonymous namespace
 
+// ════════════════════════════════════════════════════════════════════
+// Auto-Arpeggiator specific tests
+// ════════════════════════════════════════════════════════════════════
+
+namespace
+{
+
+bool TestAutoArpSpecific()
+{
+  std::cout << "\n--- AutoArpEffect Specific Tests ---\n";
+  int passed = 0, failed = 0;
+
+  auto makeArp = []() -> std::unique_ptr<guitarfx::AutoArpEffect> {
+    auto e = std::make_unique<guitarfx::AutoArpEffect>();
+    e->Prepare(kTestSampleRate, kTestBlockSize);
+    return e;
+  };
+
+  std::vector<float> inL(kTestBlockSize), inR(kTestBlockSize);
+  std::vector<float> outL(kTestBlockSize, 0.f), outR(kTestBlockSize, 0.f);
+  GenerateSineWave(inL, 440.0, 0.5);
+  GenerateSineWave(inR, 440.0, 0.5);
+  float* ins[2]  = {inL.data(), inR.data()};
+  float* outs[2] = {outL.data(), outR.data()};
+
+  // Test 1: SetParam round-trip for timing params
+  {
+    auto e = makeArp();
+    e->SetParam("bpm",      130.0);
+    e->SetParam("stepRate", 2.0);
+    e->SetParam("numSteps", 3.0);
+    const bool ok = (e->GetParam("bpm") == 130.0) &&
+                    (e->GetParam("stepRate") == 2.0) &&
+                    (e->GetParam("numSteps") == 3.0);
+    std::cout << "  SetParam round-trip (bpm/stepRate/numSteps): " << (ok ? "PASS" : "FAIL") << "\n";
+    ok ? ++passed : ++failed;
+  }
+
+  // Test 2: Process produces non-zero output (step 0 = 0 st, bypass path)
+  {
+    auto e = makeArp();
+    std::fill(outL.begin(), outL.end(), 0.f);
+    std::fill(outR.begin(), outR.end(), 0.f);
+    e->Process(ins, outs, kTestBlockSize);
+    const auto analysis = AnalyzeSignal(outL);
+    const bool ok = !analysis.isAllZeros && !analysis.hasNaN && !analysis.hasInf;
+    std::cout << "  Process non-zero output (bypass path):       " << (ok ? "PASS" : "FAIL") << "\n";
+    ok ? ++passed : ++failed;
+  }
+
+  // Test 3: Reset clears phase — two separate instances started at same time
+  //         should produce identical output right after Reset().
+  {
+    auto e = makeArp();
+    e->SetParam("bpm", 90.0);
+    // Process a few blocks to advance phase
+    for (int b = 0; b < 4; ++b)
+      e->Process(ins, outs, kTestBlockSize);
+    e->Reset();
+    // After reset, replaying the same input should match a freshly-prepared instance
+    auto fresh = makeArp();
+    fresh->SetParam("bpm", 90.0);
+
+    std::vector<float> out1(kTestBlockSize, 0.f), out1r(kTestBlockSize, 0.f);
+    std::vector<float> out2(kTestBlockSize, 0.f), out2r(kTestBlockSize, 0.f);
+    float* o1[2] = {out1.data(), out1r.data()};
+    float* o2[2] = {out2.data(), out2r.data()};
+    e->Process(ins, o1, kTestBlockSize);
+    fresh->Process(ins, o2, kTestBlockSize);
+
+    bool match = true;
+    for (int i = 0; i < kTestBlockSize && match; ++i)
+      if (std::abs(out1[static_cast<size_t>(i)] - out2[static_cast<size_t>(i)]) > 1e-5f)
+        match = false;
+    std::cout << "  Reset restores initial state:                " << (match ? "PASS" : "FAIL") << "\n";
+    match ? ++passed : ++failed;
+  }
+
+  // Test 4: Custom pattern — changing step0 changes behaviour
+  {
+    auto e = makeArp();
+    e->SetParam("pattern", 4.0);   // Custom
+    e->SetParam("step0",   0.0);   // Root = bypass stretch
+    e->SetParam("numSteps", 2.0);
+    e->SetParam("step1",   0.0);   // All bypass
+    e->SetParam("gate",    1.0);   // Gate fully open
+    e->SetParam("attack",  0.0);
+    e->SetParam("mix",     1.0);
+    std::fill(outL.begin(), outL.end(), 0.f);
+    std::fill(outR.begin(), outR.end(), 0.f);
+    e->Process(ins, outs, kTestBlockSize);
+    const auto analysis = AnalyzeSignal(outL);
+    const bool ok = !analysis.isAllZeros;
+    std::cout << "  Custom pattern step0=0 produces output:      " << (ok ? "PASS" : "FAIL") << "\n";
+    ok ? ++passed : ++failed;
+  }
+
+  // Test 5: Switching back to predefined pattern
+  {
+    auto e = makeArp();
+    e->SetParam("pattern", 4.0);  // Custom
+    e->SetParam("pattern", 0.0);  // Back to Major Triad — should not crash
+    std::fill(outL.begin(), outL.end(), 0.f);
+    std::fill(outR.begin(), outR.end(), 0.f);
+    e->Process(ins, outs, kTestBlockSize);
+    const auto analysis = AnalyzeSignal(outL);
+    const bool ok = !analysis.hasNaN && !analysis.hasInf;
+    std::cout << "  Switch back to predefined pattern (no NaN):  " << (ok ? "PASS" : "FAIL") << "\n";
+    ok ? ++passed : ++failed;
+  }
+
+  // Test 6: BPM injection via SetParam("bpm") at multiple BPMs
+  {
+    bool allOk = true;
+    for (const double bpm : {60.0, 120.0, 180.0, 300.0})
+    {
+      auto e = makeArp();
+      e->SetParam("bpm", bpm);
+      std::fill(outL.begin(), outL.end(), 0.f);
+      std::fill(outR.begin(), outR.end(), 0.f);
+      e->Process(ins, outs, kTestBlockSize);
+      const auto analysis = AnalyzeSignal(outL);
+      if (analysis.hasNaN || analysis.hasInf)
+        allOk = false;
+    }
+    std::cout << "  BPM range 60-300 no NaN/Inf:                 " << (allOk ? "PASS" : "FAIL") << "\n";
+    allOk ? ++passed : ++failed;
+  }
+
+  std::cout << "AutoArp specific: " << passed << "/" << (passed + failed) << " passed.\n";
+  return failed == 0;
+}
+
+} // anonymous namespace
+
 int main()
 {
   std::cout << "========================================\n";
@@ -237,5 +373,10 @@ int main()
   }
 
   std::cout << "\nAll effects PASSED.\n";
+
+  // AutoArpeggiator-specific behavioural tests
+  if (!TestAutoArpSpecific())
+    return 1;
+
   return 0;
 }

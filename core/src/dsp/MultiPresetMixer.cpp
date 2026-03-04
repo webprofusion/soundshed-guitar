@@ -688,6 +688,14 @@ namespace guitarfx
     }
   }
 
+  void MultiPresetMixer::SetTempo(double bpm)
+  {
+    for (auto &inst : mInstances)
+      inst.executor.SetTempo(bpm);
+    mPreChainExecutor.SetTempo(bpm);
+    mPostChainExecutor.SetTempo(bpm);
+  }
+
   void MultiPresetMixer::ApplyNamInterfaceCalibration(SignalGraphExecutor &executor) const
   {
     static const std::vector<std::string> kNamTypes = {EffectGuids::kAmpNam, EffectGuids::kAmpNamOptimized, EffectGuids::kAmpNamBlend};

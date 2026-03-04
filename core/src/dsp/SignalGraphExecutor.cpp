@@ -707,6 +707,22 @@ namespace guitarfx
     }
   }
 
+  void SignalGraphExecutor::SetTempo(double bpm)
+  {
+    auto &registry = EffectRegistry::Instance();
+    for (auto &[id, state] : mNodeStates)
+    {
+      if (!state.processor)
+        continue;
+      const auto resolvedType = registry.Resolve(state.type);
+      const auto typeInfo = registry.GetTypeInfo(resolvedType);
+      if (typeInfo && typeInfo->requiresTempo)
+      {
+        state.processor->SetParam("bpm", bpm);
+      }
+    }
+  }
+
   void SignalGraphExecutor::SetNodeConfig(const std::string &nodeId, const std::string &key, const std::string &value)
   {
     auto *state = FindNodeState(nodeId);

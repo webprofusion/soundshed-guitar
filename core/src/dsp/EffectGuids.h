@@ -64,6 +64,7 @@ namespace guitarfx
     constexpr const char* kPhaser          = "3aa9dc81-31c2-40d5-9b1b-b0b9d1295e9b";
     constexpr const char* kTremolo         = "c9debb02-d7e7-43e3-8330-b387be46dcf4";
     constexpr const char* kAutoWah         = "b06c6d84-01b3-4d0a-ad98-40eecb64438e";
+    constexpr const char* kAutoArp         = "e4a7c9d0-3b52-4f16-8a9e-2c7f1d0e5b83";
 
     // ── Pitch ─────────────────────────────────────────────────────────────
     constexpr const char* kPitchShift      = "0c15f065-8335-4932-9d2f-366d436ec30a";

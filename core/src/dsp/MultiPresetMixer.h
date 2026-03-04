@@ -165,6 +165,10 @@ namespace guitarfx
     void SetNodeParam(const std::string &presetId, const std::string &nodeId, const std::string &key, double value);
     bool LoadNodeResource(const std::string &presetId, const std::string &nodeId, const ResourceRef &ref);
 
+    // Push the current tempo (BPM) to all tempo-aware nodes in every preset and global chain.
+    // Call once per audio block before Process().
+    void SetTempo(double bpm);
+
     // Lifecycle
     void Prepare(double sampleRate, int maxBlockSize);
     void Reset();

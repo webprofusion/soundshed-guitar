@@ -23,6 +23,7 @@
 #include "dsp/effects/AutoWahEffect.h"
 #include "dsp/effects/OctaveEffect.h"
 #include "dsp/effects/SynthSawEffect.h"
+#include "dsp/effects/AutoArpEffect.h"
 #include "dsp/effects/LimiterEffect.h"
 #include "dsp/effects/NAMAmpEffect.h"
 #include "dsp/effects/OptimizedNAMAmpEffect.h"
@@ -107,6 +108,7 @@ namespace guitarfx
     RegisterTremoloEffect();
     RegisterAutoWahEffect();
     RegisterOctaveEffect();
+    RegisterAutoArpEffect();
 
     // Synth effects
     RegisterSynthSawEffect();

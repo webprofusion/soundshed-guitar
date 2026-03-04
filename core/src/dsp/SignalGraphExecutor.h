@@ -70,6 +70,10 @@ namespace guitarfx
     void SetInputTrim(double dB) { mInputTrim = dB; }
     void SetOutputTrim(double dB) { mOutputTrim = dB; }
 
+    // Push the current tempo (BPM) to all nodes that have requiresTempo == true.
+    // Call this once per audio block before Process().
+    void SetTempo(double bpm);
+
     // Signal level diagnostics (optional)
     void SetSignalDiagnosticsEnabled(bool enabled) { mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release); }
     [[nodiscard]] bool IsSignalDiagnosticsEnabled() const { return mSignalDiagnosticsEnabled.load(std::memory_order_acquire); }

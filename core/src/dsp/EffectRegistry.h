@@ -45,6 +45,7 @@ namespace guitarfx
     std::string category;    // "amp", "cab", "eq", "dynamics", "dist", "mod", "delay", "reverb", "pitch", "utility", "synth"
     std::string description; // User-facing description
     bool requiresResource = false;
+    bool requiresTempo = false; // If true, the effect receives current BPM via SetParam("bpm", bpm) each audio block
     std::string resourceType; // "nam", "ir", etc. (if requiresResource is true)
     std::vector<std::string> resourceFilterHint; // Equipment type filter ("amp", "full-rig", "pedal", etc.)
     std::vector<ParameterDef> parameters;

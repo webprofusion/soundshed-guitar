@@ -888,6 +888,9 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
         }
     }
 
+    // Push current tempo to any tempo-aware effect nodes
+    mPresetMixer.SetTempo(GetEffectiveTempoBpm());
+
     // Main DSP processing
     mPresetMixer.Process(inputs, outputs, numSamples);
 
