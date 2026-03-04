@@ -126,6 +126,7 @@ public:
   {
     mSampleRate = sampleRate;
     mMaxBlockSize = maxBlockSize;
+    mPrepared = true;
 
     mInputBuffer.resize(static_cast<size_t>(maxBlockSize));
     mOutputBuffer.resize(static_cast<size_t>(maxBlockSize));
@@ -474,6 +475,7 @@ private:
   bool mUsingOptimized = false;
   bool mPreferOptimized = true;
   bool mSampleRateMismatch = false;  // Default to preferring optimized
+  bool mPrepared = false;
 
   std::vector<float> mInputBuffer;
   std::vector<float> mOutputBuffer;
@@ -574,7 +576,7 @@ private:
       expectedSR = mFallbackModel->GetExpectedSampleRate();
 
     const bool mismatch = (expectedSR > 0.0 && std::abs(expectedSR - mSampleRate) > 1.0);
-    if (mismatch && !mSampleRateMismatch)
+    if (mismatch && !mSampleRateMismatch && mPrepared)
     {
       std::cerr << "[OptimizedNAMAmpEffect] Sample rate mismatch: model expects "
                 << static_cast<int>(expectedSR) << " Hz, plugin running at "

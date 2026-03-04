@@ -37,6 +37,7 @@ namespace guitarfx
     {
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
+      mPrepared = true;
 
       mInputBuffer.resize(static_cast<size_t>(maxBlockSize));
       mOutputBuffer.resize(static_cast<size_t>(maxBlockSize));
@@ -242,6 +243,7 @@ namespace guitarfx
     std::unique_ptr<nam::DSP> mModel;
     std::filesystem::path mModelPath;
     bool mSampleRateMismatch = false;
+    bool mPrepared = false;
 
     std::vector<NAM_SAMPLE> mInputBuffer;
     std::vector<NAM_SAMPLE> mOutputBuffer;
@@ -315,7 +317,7 @@ namespace guitarfx
         return;
       const double expectedSR = mModel->GetExpectedSampleRate();
       const bool mismatch = (expectedSR > 0.0 && std::abs(expectedSR - mSampleRate) > 1.0);
-      if (mismatch && !mSampleRateMismatch)
+      if (mismatch && !mSampleRateMismatch && mPrepared)
       {
         std::cerr << "[NAMAmpEffect] Sample rate mismatch: model expects "
                   << static_cast<int>(expectedSR) << " Hz, plugin running at "

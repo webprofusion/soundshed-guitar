@@ -80,3 +80,8 @@ ctest --test-dir build
 
 Test Core:
  `ctest --build-config Debug --output-on-failure`
+
+
+ ## Benchmarks
+Build: `cmake --build ./core/build --config Release --target NAMPerformanceBenchmark`
+Run: `./core/build/Release/NAMPerformanceBenchmark.exe`
