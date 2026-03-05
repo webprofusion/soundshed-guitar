@@ -305,16 +305,25 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
 
     add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
         COMMENT "Copying core UI resources for ${FORMAT_TARGET}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${_dst_base}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_UI_SRC_DIR}/index.html" "${_dst_base}/index.html"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/dist"      "${_dst_base}/dist"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/css"       "${_dst_base}/css"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/images"    "${_dst_base}/images"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/data"      "${_dst_base}/data"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/assets"    "${_dst_base}/assets"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/metronome" "${_dst_base}/metronome"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/demo"      "${_dst_base}/demo"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_dst_base}"
     )
+
+    # On Windows, JUCE's COPY_PLUGIN_AFTER_BUILD post-build step fires before ours,
+    # so the bundle is installed to Program Files before resources are present.
+    # Add a second post-build step that writes resources directly to the installed
+    # VST3 bundle so the installed copy always stays in sync.
+    if(WIN32 AND "${FORMAT_TARGET}" MATCHES "VST3")
+        if(DEFINED ENV{COMMONPROGRAMFILES} AND NOT "$ENV{COMMONPROGRAMFILES}" STREQUAL "")
+            file(TO_CMAKE_PATH "$ENV{COMMONPROGRAMFILES}" _common_files)
+        else()
+            set(_common_files "C:/Program Files/Common Files")
+        endif()
+        set(_vst3_install_ui "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/x86_64-win/resources/ui")
+        add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
+            COMMENT "Copying core UI resources to installed VST3 location"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_vst3_install_ui}"
+        )
+    endif()
 endfunction()
 
 soundshed_copy_ui_resources(${PROJECT_NAME}_Standalone)
