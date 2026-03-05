@@ -790,6 +790,13 @@ export class LayoutDesignerModal {
     if (!this.canvas || !this.controlsLayer || !this.layout) return;
 
     this.updateCanvasSize();
+
+    // Mirror the runtime container theme so preview colours match the live experience
+    this.canvas.classList.remove('theme-light', 'theme-dark', 'theme-classic');
+    if (this.layout.containerTheme) {
+      this.canvas.classList.add(`theme-${this.layout.containerTheme}`);
+    }
+
     this.renderBackgrounds();
     this.renderRectangleOverlays();
 
@@ -1260,15 +1267,7 @@ export class LayoutDesignerModal {
     this.sidebarUndoPushed = false;
 
     if (!this.selectedElement) {
-      if (this.layout?.useDefaultControls) {
-        this.renderDefaultControlsProperties();
-      } else {
-        this.sidebarContent.innerHTML = `
-          <div class="layout-designer-sidebar-empty">
-            Select a control, label, background, or rectangle to edit its properties
-          </div>
-        `;
-      }
+      this.renderCanvasProperties();
       return;
     }
 
@@ -1283,15 +1282,17 @@ export class LayoutDesignerModal {
     }
   }
 
-  private renderDefaultControlsProperties(): void {
+  private renderCanvasProperties(): void {
     if (!this.sidebarContent || !this.layout) return;
 
+    const containerTheme = this.layout.containerTheme ?? '';
+    const isBackdrop = this.layout.useDefaultControls === true;
     const offsetX = this.layout.defaultControlsOffset?.x ?? 0;
     const offsetY = this.layout.defaultControlsOffset?.y ?? 0;
     const scaleX = this.layout.defaultControlsScale?.x ?? 1;
     const scaleY = this.layout.defaultControlsScale?.y ?? 1;
 
-    this.sidebarContent.innerHTML = `
+    const backdropSections = isBackdrop ? `
       <div class="layout-property-group">
         <div class="layout-property-group-title">Default Controls — Position</div>
         <div class="layout-property-row">
@@ -1325,17 +1326,49 @@ export class LayoutDesignerModal {
           <button id="prop-dc-scale-reset" style="font-size: 11px;">Reset to 1:1</button>
         </div>
       </div>
+    ` : `
+      <div class="layout-designer-sidebar-empty" style="font-size:11px; padding: 6px 0 0;">
+        Select a control, label, background, or rectangle to edit its properties.
+      </div>
     `;
 
+    this.sidebarContent.innerHTML = `
+      <div class="layout-property-group">
+        <div class="layout-property-group-title">Container</div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Theme</span>
+          <div class="layout-property-input">
+            <select id="prop-container-theme" title="Override CSS colour variables inside this container. Useful when the layout background differs from the global app theme.">
+              <option value="" ${containerTheme === '' ? 'selected' : ''}>Inherit (app theme)</option>
+              <option value="dark" ${containerTheme === 'dark' ? 'selected' : ''}>Dark</option>
+              <option value="light" ${containerTheme === 'light' ? 'selected' : ''}>Light</option>
+              <option value="classic" ${containerTheme === 'classic' ? 'selected' : ''}>Classic</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      ${backdropSections}
+    `;
+
+    // Container theme selector
+    const themeSelect = document.getElementById("prop-container-theme") as HTMLSelectElement | null;
+    themeSelect?.addEventListener("change", () => {
+      if (!this.layout) return;
+      this.pushSidebarUndoOnce();
+      const val = themeSelect.value as 'light' | 'dark' | 'classic' | '';
+      this.layout.containerTheme = val === '' ? undefined : val;
+      this.renderCanvas();
+    });
+
+    if (!isBackdrop) return;
+
+    // Backdrop offset/scale bindings
     const bindNum = (id: string, apply: (v: number) => void) => {
       const el = document.getElementById(id) as HTMLInputElement | null;
       el?.addEventListener("change", () => {
         const v = parseFloat(el.value);
         if (!isNaN(v)) {
-          if (!this.sidebarUndoPushed) {
-            this.sidebarUndoPushed = true;
-            this.pushUndoState();
-          }
+          this.pushSidebarUndoOnce();
           apply(v);
           this.renderCanvas();
         }

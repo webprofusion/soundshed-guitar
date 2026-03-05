@@ -86,10 +86,11 @@ export function renderCustomLayout(
   const overlays = renderOverlays(node, layout.overlays ?? []);
   const controls = renderControls(node, layout.controls, paramDefs, resourceControls);
   const labels = renderTextLabels(layout.textLabels);
+  const themeClass = layout.containerTheme ? ` theme-${layout.containerTheme}` : '';
 
   return `
     <div 
-      class="custom-layout-container" 
+      class="custom-layout-container${themeClass}" 
       style="
         position: relative;
         width: ${Math.round(layout.dimensions.width)}px;
@@ -232,6 +233,7 @@ export function renderCustomLayoutBackdrop(
   const backgrounds = renderBackgrounds(layout.backgrounds);
   const overlays = renderOverlays(node, layout.overlays ?? []);
   const labels = renderTextLabels(layout.textLabels);
+  const themeClass = layout.containerTheme ? ` theme-${layout.containerTheme}` : '';
 
   const offsetX = layout.defaultControlsOffset?.x ?? 0;
   const offsetY = layout.defaultControlsOffset?.y ?? 0;
@@ -247,7 +249,7 @@ export function renderCustomLayoutBackdrop(
 
   return `
     <div
-      class="custom-layout-container custom-layout-backdrop"
+      class="custom-layout-container custom-layout-backdrop${themeClass}"
       style="
         position: relative;
         width: 100%;

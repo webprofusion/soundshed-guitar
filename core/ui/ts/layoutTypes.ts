@@ -177,6 +177,14 @@ export interface EffectLayout {
    * wrapper (transform-origin: top left). Values < 1 shrink, > 1 enlarge.
    */
   defaultControlsScale?: { x: number; y: number };
+  /**
+   * Optional theme override for the visualisation container. When set, the corresponding
+   * theme class (e.g. "theme-dark") is applied to the container div, scoping CSS colour
+   * variables so text labels and controls render with that theme's palette regardless of
+   * the global app theme. Useful when the layout background colour differs from the app
+   * theme (e.g. a light-coloured backdrop that needs dark text).
+   */
+  containerTheme?: 'light' | 'dark' | 'classic';
   /** Creation timestamp */
   createdAt?: string;
   /** Last modified timestamp */
