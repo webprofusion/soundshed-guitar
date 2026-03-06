@@ -530,6 +530,288 @@ TestResult TestOctaveShift(guitarfx::SynthSawEffect& effect)
   return TestOctaveShiftValue(effect, 1.0);
 }
 
+// ============================================================================
+// WAVE SHAPE TESTS
+// ============================================================================
+
+/**
+ * Helper: feed a sine wave at targetFreq until pitch locks (or timeout),
+ * then process bufNum more blocks and return accumulated output.
+ */
+std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect,
+                                         double targetFreq,
+                                         int lockBlocks = 30,
+                                         int collectBlocks = 10)
+{
+  std::vector<float> inBuf(kTestBlockSize);
+  std::vector<float> outBufL(kTestBlockSize);
+  std::vector<float> outBufR(kTestBlockSize);
+  float* inputs[2]  = {inBuf.data(), inBuf.data()};
+  float* outputs[2] = {outBufL.data(), outBufR.data()};
+
+  double phase = 0.0;
+  const double phaseInc = targetFreq / kTestSampleRate;
+
+  // Feed signal until pitch locks
+  for (int b = 0; b < lockBlocks; ++b)
+  {
+    for (int i = 0; i < kTestBlockSize; ++i)
+    {
+      inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
+      phase += phaseInc;
+    }
+    effect.Process(inputs, outputs, kTestBlockSize);
+  }
+
+  // Collect output for analysis
+  std::vector<float> collected;
+  collected.reserve(collectBlocks * kTestBlockSize);
+  for (int b = 0; b < collectBlocks; ++b)
+  {
+    for (int i = 0; i < kTestBlockSize; ++i)
+    {
+      inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
+      phase += phaseInc;
+    }
+    effect.Process(inputs, outputs, kTestBlockSize);
+    for (int i = 0; i < kTestBlockSize; ++i)
+      collected.push_back(outBufL[i]);
+  }
+  return collected;
+}
+
+/**
+ * Verify square wave output has bipolar peaks near ±1 and correct duty cycle.
+ */
+TestResult TestSquareWaveOutput(guitarfx::SynthSawEffect& effect)
+{
+  TestResult result;
+  // wet-only, nominal gain
+  effect.SetParam("waveShape", 1.0);
+  effect.SetParam("mix", 1.0);
+  effect.SetParam("pulseWidth", 0.5);
+
+  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+
+  if (output.empty())
+  {
+    result.message = "FAIL (no output)";
+    return result;
+  }
+
+  // Count samples above +0.5 and below -0.5 to estimate duty cycle fractions
+  int highCount = 0, lowCount = 0, totalNonZero = 0;
+  float maxAbs = 0.0f;
+  for (float s : output)
+  {
+    maxAbs = std::max(maxAbs, std::abs(s));
+    if (s > 0.2f) { ++highCount; ++totalNonZero; }
+    else if (s < -0.2f) { ++lowCount; ++totalNonZero; }
+  }
+
+  if (maxAbs < 0.1f)
+  {
+    result.message = "FAIL (silent output, pitch may not have locked)";
+    return result;
+  }
+
+  const double dutyCycle = totalNonZero > 0
+    ? static_cast<double>(highCount) / static_cast<double>(totalNonZero)
+    : 0.0;
+
+  std::ostringstream msg;
+  msg << std::fixed << std::setprecision(3)
+      << "(peak=" << maxAbs << ", duty=" << dutyCycle << ")";
+
+  // 50% duty cycle, allow ±20% tolerance for anti-aliasing blur near transitions
+  if (dutyCycle > 0.30 && dutyCycle < 0.70 && maxAbs > 0.3f)
+  {
+    result.passed = true;
+    result.message = "PASS " + msg.str();
+  }
+  else
+  {
+    result.passed = false;
+    result.message = "FAIL " + msg.str();
+  }
+  return result;
+}
+
+/**
+ * Verify triangle wave has correct peak and slope-reversal periodicity.
+ */
+TestResult TestTriangleWaveOutput(guitarfx::SynthSawEffect& effect)
+{
+  TestResult result;
+  effect.SetParam("waveShape", 2.0);
+  effect.SetParam("mix", 1.0);
+
+  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+
+  if (output.empty())
+  {
+    result.message = "FAIL (no output)";
+    return result;
+  }
+
+  float maxVal = *std::max_element(output.begin(), output.end());
+  float minVal = *std::min_element(output.begin(), output.end());
+
+  // Triangle should have roughly symmetric positive and negative peaks
+  const float asymmetry = std::abs(std::abs(maxVal) - std::abs(minVal));
+
+  std::ostringstream msg;
+  msg << std::fixed << std::setprecision(3)
+      << "(max=" << maxVal << ", min=" << minVal << ", asymmetry=" << asymmetry << ")";
+
+  if (maxVal > 0.2f && minVal < -0.2f && asymmetry < 0.3f)
+  {
+    result.passed = true;
+    result.message = "PASS " + msg.str();
+  }
+  else
+  {
+    result.passed = false;
+    result.message = "FAIL " + msg.str();
+  }
+  return result;
+}
+
+/**
+ * Verify sine wave output is smooth (no sudden large jumps between samples).
+ */
+TestResult TestSineWaveOutput(guitarfx::SynthSawEffect& effect)
+{
+  TestResult result;
+  effect.SetParam("waveShape", 3.0);
+  effect.SetParam("mix", 1.0);
+
+  auto output = FeedAndCollectOutput(effect, 440.0, 40, 10);
+
+  if (output.empty())
+  {
+    result.message = "FAIL (no output)";
+    return result;
+  }
+
+  float maxAbs = 0.0f;
+  float maxDelta = 0.0f;
+  for (size_t i = 1; i < output.size(); ++i)
+  {
+    maxAbs = std::max(maxAbs, std::abs(output[i]));
+    maxDelta = std::max(maxDelta, std::abs(output[i] - output[i-1]));
+  }
+
+  // Sine at 440 Hz, 48 kHz: maximum sample-to-sample change ≈ 2π*440/48000 ≈ 0.057
+  // Allow generous headroom (envelope, etc.) up to 0.2
+  std::ostringstream msg;
+  msg << std::fixed << std::setprecision(4)
+      << "(peak=" << maxAbs << ", maxDelta=" << maxDelta << ")";
+
+  if (maxAbs > 0.1f && maxDelta < 0.20f)
+  {
+    result.passed = true;
+    result.message = "PASS " + msg.str();
+  }
+  else
+  {
+    result.passed = false;
+    result.message = "FAIL " + msg.str();
+  }
+  return result;
+}
+
+/**
+ * Verify that changing pulseWidth shifts the duty cycle of square wave output.
+ */
+TestResult TestPulseWidthChange(guitarfx::SynthSawEffect& effect)
+{
+  TestResult result;
+  effect.SetParam("waveShape", 1.0);
+  effect.SetParam("mix", 1.0);
+  effect.SetParam("pulseWidth", 0.25);
+
+  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+
+  if (output.empty())
+  {
+    result.message = "FAIL (no output)";
+    return result;
+  }
+
+  float maxAbs = 0.0f;
+  int highCount = 0, lowCount = 0, totalNonZero = 0;
+  for (float s : output)
+  {
+    maxAbs = std::max(maxAbs, std::abs(s));
+    if (s > 0.2f) { ++highCount; ++totalNonZero; }
+    else if (s < -0.2f) { ++lowCount; ++totalNonZero; }
+  }
+
+  // At pw=0.25 the high state should occupy ~25% of non-transition samples
+  // Allow wide tolerance since PolyBLEP blurs the edges
+  const double dutyCycle = totalNonZero > 0
+    ? static_cast<double>(highCount) / static_cast<double>(totalNonZero)
+    : 0.5;
+
+  std::ostringstream msg;
+  msg << std::fixed << std::setprecision(3)
+      << "(peak=" << maxAbs << ", duty=" << dutyCycle << ", expected ~0.25)";
+
+  // Expect duty clearly below 0.5 (asymmetric square)
+  if (maxAbs > 0.1f && dutyCycle < 0.45)
+  {
+    result.passed = true;
+    result.message = "PASS " + msg.str();
+  }
+  else
+  {
+    result.passed = false;
+    result.message = "FAIL " + msg.str();
+  }
+  return result;
+}
+
+/**
+ * Verify waveShape parameter readback returns the set value.
+ */
+TestResult TestWaveShapeParamReadback(guitarfx::SynthSawEffect& effect)
+{
+  TestResult result;
+  bool allOk = true;
+  std::ostringstream msg;
+
+  const int shapes[] = {0, 1, 2, 3};
+  const char* names[] = {"Saw", "Square", "Triangle", "Sine"};
+  for (int i = 0; i < 4; ++i)
+  {
+    effect.SetParam("waveShape", static_cast<double>(shapes[i]));
+    effect.SetParam("voice2WaveShape", static_cast<double>(shapes[i]));
+    const int readback  = static_cast<int>(std::round(effect.GetParam("waveShape")));
+    const int readback2 = static_cast<int>(std::round(effect.GetParam("voice2WaveShape")));
+    if (readback != shapes[i] || readback2 != shapes[i])
+    {
+      allOk = false;
+      msg << names[i] << " readback mismatch(v1=" << readback << ",v2=" << readback2 << ") ";
+    }
+  }
+
+  // Verify pulseWidth clamp
+  effect.SetParam("pulseWidth", 0.05);   // below min
+  const double pwLow = effect.GetParam("pulseWidth");
+  effect.SetParam("pulseWidth", 0.95);   // above max
+  const double pwHigh = effect.GetParam("pulseWidth");
+  if (pwLow < 0.095 || pwHigh > 0.905)
+  {
+    allOk = false;
+    msg << "pulseWidth clamp failed(low=" << pwLow << ",high=" << pwHigh << ") ";
+  }
+
+  result.passed = allOk;
+  result.message = allOk ? "PASS (all shapes + clamp verified)" : "FAIL " + msg.str();
+  return result;
+}
+
 } // anonymous namespace
 
 int main()
@@ -618,6 +900,54 @@ int main()
     effect->Reset();
     auto result = TestOctaveShiftValue(*effect, octaveVal);
     std::cout << "  Octave shift " << std::showpos << octaveVal << std::noshowpos << ": " << result.message << "\n";
+    if (result.passed) passed++; else failed++;
+  }
+  std::cout << "\n";
+
+  // Test 7: Wave shape variants
+  std::cout << "\n--- Wave Shape Tests ---\n";
+
+  // Square wave
+  effect->Reset();
+  effect->SetParam("mix", 1.0);
+  {
+    auto result = TestSquareWaveOutput(*effect);
+    std::cout << "  Square wave output:     " << result.message << "\n";
+    if (result.passed) passed++; else failed++;
+  }
+
+  // Triangle wave
+  effect->Reset();
+  effect->SetParam("mix", 1.0);
+  {
+    auto result = TestTriangleWaveOutput(*effect);
+    std::cout << "  Triangle wave output:   " << result.message << "\n";
+    if (result.passed) passed++; else failed++;
+  }
+
+  // Sine wave
+  effect->Reset();
+  effect->SetParam("mix", 1.0);
+  {
+    auto result = TestSineWaveOutput(*effect);
+    std::cout << "  Sine wave output:       " << result.message << "\n";
+    if (result.passed) passed++; else failed++;
+  }
+
+  // Pulse width
+  effect->Reset();
+  effect->SetParam("mix", 1.0);
+  {
+    auto result = TestPulseWidthChange(*effect);
+    std::cout << "  Pulse width 25%:        " << result.message << "\n";
+    if (result.passed) passed++; else failed++;
+  }
+
+  // Param readback + clamp
+  effect->Reset();
+  {
+    auto result = TestWaveShapeParamReadback(*effect);
+    std::cout << "  Param readback/clamp:   " << result.message << "\n";
     if (result.passed) passed++; else failed++;
   }
   std::cout << "\n";

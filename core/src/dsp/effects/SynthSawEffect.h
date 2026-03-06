@@ -332,11 +332,8 @@ namespace guitarfx
           if (mOscPhase >= 1.0)
             mOscPhase -= 1.0;
 
-          // Raw sawtooth: linear ramp from -1 to +1 over one cycle
-          float voice1Out = static_cast<float>(2.0 * mOscPhase - 1.0);
-          
-          // Apply PolyBLEP correction to reduce aliasing at the discontinuity
-          voice1Out -= PolyBLEP(mOscPhase, phaseInc);
+          // Generate voice 1 waveform sample (shape-selected, PolyBLEP anti-aliased)
+          float voice1Out = GenerateSample(mOscPhase, phaseInc, mWaveShape, mPulseWidth);
 
           // Generate 2nd voice with semitone offset
           float voice2Out = 0.0f;
@@ -350,8 +347,7 @@ namespace guitarfx
             if (mOscPhase2 >= 1.0)
               mOscPhase2 -= 1.0;
 
-            voice2Out = static_cast<float>(2.0 * mOscPhase2 - 1.0);
-            voice2Out -= PolyBLEP(mOscPhase2, phaseInc2);
+            voice2Out = GenerateSample(mOscPhase2, phaseInc2, mWaveShape2, mPulseWidth2);
           }
 
           // Mix voice 1 and voice 2
@@ -424,6 +420,22 @@ namespace guitarfx
       {
         mVoice2Mix = static_cast<float>(std::clamp(value, 0.0, 1.0));
       }
+      else if (key == "waveShape")
+      {
+        mWaveShape = static_cast<int>(std::clamp(std::round(value), 0.0, 3.0));
+      }
+      else if (key == "pulseWidth")
+      {
+        mPulseWidth = std::clamp(value, 0.1, 0.9);
+      }
+      else if (key == "voice2WaveShape")
+      {
+        mWaveShape2 = static_cast<int>(std::clamp(std::round(value), 0.0, 3.0));
+      }
+      else if (key == "voice2PulseWidth")
+      {
+        mPulseWidth2 = std::clamp(value, 0.1, 0.9);
+      }
     }
 
     void SetConfig(const std::string &, const std::string &) override {}
@@ -450,6 +462,14 @@ namespace guitarfx
         return mVoice2Semitones;
       if (key == "voice2Mix")
         return mVoice2Mix;
+      if (key == "waveShape")
+        return static_cast<double>(mWaveShape);
+      if (key == "pulseWidth")
+        return mPulseWidth;
+      if (key == "voice2WaveShape")
+        return static_cast<double>(mWaveShape2);
+      if (key == "voice2PulseWidth")
+        return mPulseWidth2;
       return 0.0;
     }
 
@@ -523,6 +543,46 @@ namespace guitarfx
       }
       // Outside correction regions: no modification needed
       return 0.0f;
+    }
+
+    /**
+     * Generate one sample for the chosen waveform with PolyBLEP anti-aliasing.
+     *
+     * @param phase      Current oscillator phase [0, 1)
+     * @param phaseInc   Phase increment per sample (freq / sampleRate)
+     * @param shape      0=Saw, 1=Square/Pulse, 2=Triangle, 3=Sine
+     * @param pulseWidth Duty cycle for Square waveform [0.1, 0.9] — ignored for other shapes
+     * @return           Waveform sample in approximately [-1, +1]
+     */
+    static float GenerateSample(double phase, double phaseInc, int shape, double pulseWidth)
+    {
+      switch (shape)
+      {
+        default:
+        case 0: // Sawtooth
+        {
+          float out = static_cast<float>(2.0 * phase - 1.0);
+          out -= PolyBLEP(phase, phaseInc);
+          return out;
+        }
+        case 1: // Square / Pulse — two PolyBLEP corrections (rising edge at 0, falling edge at pulseWidth)
+        {
+          float out = (phase < pulseWidth) ? 1.0f : -1.0f;
+          out += PolyBLEP(phase, phaseInc);              // smooth rising edge
+          double phaseFall = phase - pulseWidth;
+          if (phaseFall < 0.0) phaseFall += 1.0;
+          out -= PolyBLEP(phaseFall, phaseInc);          // smooth falling edge
+          return out;
+        }
+        case 2: // Triangle — piecewise linear; continuous waveform, no PolyBLEP required
+        {
+          return static_cast<float>(2.0 * std::abs(2.0 * phase - 1.0) - 1.0);
+        }
+        case 3: // Sine — no anti-aliasing needed
+        {
+          return static_cast<float>(std::sin(2.0 * kPi * phase));
+        }
+      }
     }
 
     void UpdateEnvelopeCoefs()
@@ -952,6 +1012,12 @@ namespace guitarfx
     double mVoice2Semitones = 0.0;  // semitone offset (-12 to +12)
     float mVoice2Mix = 0.0f;        // mix between voice 1 and voice 2 (0 = only voice 1)
 
+    // Waveform selection per voice (0=Saw, 1=Square, 2=Triangle, 3=Sine)
+    int mWaveShape = 0;
+    int mWaveShape2 = 0;
+    double mPulseWidth = 0.5;   // Square duty cycle voice 1 [0.1, 0.9]
+    double mPulseWidth2 = 0.5;  // Square duty cycle voice 2 [0.1, 0.9]
+
     // Pitch detection state
     float mPitchConfidence = 0.0f;
     size_t mMaxYinBufferSize = 2048;
@@ -979,9 +1045,9 @@ namespace guitarfx
     EffectTypeInfo info;
     info.type = EffectGuids::kSynthSaw;
     info.aliases = {"synth_saw"};
-    info.displayName = "Synth Saw";
+    info.displayName = "Synth Voice";
     info.category = "synth";
-    info.description = "Converts audio to sawtooth synth wave via pitch tracking";
+    info.description = "Converts audio to synthesized voice via pitch tracking (Saw, Square, Triangle, Sine)";
     info.requiresResource = false;
     info.parameters = {
       {"mix", "Mix", 1.0, 0.0, 1.0, "amount"},
@@ -992,8 +1058,14 @@ namespace guitarfx
       {"glide", "Glide", 10.0, 0.0, 500.0, "ms"},
       {"outputGain", "Output", 0.0, -24.0, 12.0, "dB"},
       {"gate", "Gate", -60.0, -80.0, 0.0, "dB"},
-      {"voice2Semitones", "Voice 2 Pitch", 0.0, -24.0, 24.0, "st", "", false, 1.0},
-      {"voice2Mix", "Voice 2 Mix", 0.0, 0.0, 1.0, "amount"}
+      {"voice2Semitones", "Voice 2 Pitch",  0.0, -24.0, 24.0, "st",     "",       false, 1.0},
+      {"voice2Mix",       "Voice 2 Mix",    0.0,   0.0,  1.0, "amount", ""},
+      {"waveShape",       "Wave Shape",     0.0,   0.0,  3.0, "enum",   "voice1", false, 1.0,
+          {"Saw", "Square", "Triangle", "Sine"}},
+      {"pulseWidth",      "Pulse Width",    0.5,   0.1,  0.9, "amount", "voice1"},
+      {"voice2WaveShape", "V2 Wave Shape",  0.0,   0.0,  3.0, "enum",   "voice2", false, 1.0,
+          {"Saw", "Square", "Triangle", "Sine"}},
+      {"voice2PulseWidth","V2 Pulse Width", 0.5,   0.1,  0.9, "amount", "voice2"}
     };
 
     EffectRegistry::Instance().Register(info.type, info, []()
