@@ -35,6 +35,9 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
             }
         }
         catch (...) {}
+        // Send updated mixer state (including presetGraphs) back to the UI
+        // so it can display the signal chain for the newly-added slot.
+        c.BroadcastState();
         return true;
     }
     if (type == "removeActivePreset" || type == "removePreset")
@@ -42,6 +45,7 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
         std::string presetId = msg.value("presetId", "");
         if (!presetId.empty())
             c.RemoveActivePreset(presetId);
+        c.BroadcastState();
         return true;
     }
     if (type == "setPresetMix")

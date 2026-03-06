@@ -418,8 +418,11 @@ export function renderSignalPathBar(): void {
 
   const activePresetId = uiState.activePresetId;
   const activePreset = getSignalPathPreset() ?? undefined;
-  const presetChanged = activePresetId !== lastRenderedPresetId;
-  lastRenderedPresetId = activePresetId ?? null;
+  // Track the rendered preset's own ID so that switching mixer tabs (which
+  // changes focusedMixerPresetId but NOT activePresetId) is also detected.
+  const renderedPresetId = activePreset?.id ?? activePresetId;
+  const presetChanged = renderedPresetId !== lastRenderedPresetId;
+  lastRenderedPresetId = renderedPresetId ?? null;
   
   if (!activePreset) {
     signalPathNodesElement.innerHTML = "";
@@ -2729,6 +2732,7 @@ function buildInlineMixerHtml(): string {
     <div class="iml-master">
       <label class="iml-label">Master Gain<input type="range" id="iml-master-gain" min="0" max="2" step="0.01" value="${mixer.masterGain}"/></label>
       <label class="iml-toggle"><input type="checkbox" id="iml-limiter" ${mixer.limiterEnabled ? "checked" : ""}/> Limiter</label>
+      <button type="button" id="iml-save-multi-rig" class="secondary-btn iml-save-multi-rig-btn" title="Save current mixer as a Multi-Rig preset">Save Multi-Rig…</button>
     </div>`;
 }
 
@@ -2790,6 +2794,10 @@ function bindInlineMixerControls(panel: HTMLElement): void {
 
   panel.querySelector<HTMLInputElement>("#iml-limiter")?.addEventListener("change", (e) => {
     setLimiterEnabled((e.target as HTMLInputElement).checked);
+  });
+
+  panel.querySelector<HTMLButtonElement>("#iml-save-multi-rig")?.addEventListener("click", () => {
+    document.dispatchEvent(new CustomEvent("mixerSaveMultiRig"));
   });
 }
 

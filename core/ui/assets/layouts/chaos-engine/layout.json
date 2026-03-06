@@ -1,0 +1,303 @@
+{
+  "formatVersion": 1,
+  "createdAt": "2026-03-05T07:09:45.849Z",
+  "layout": {
+    "backgrounds": [
+      {
+        "layerIndex": 0,
+        "opacity": 1,
+        "size": "contain",
+        "type": "image",
+        "value": "chaos-engine_17726216187144984"
+      }
+    ],
+    "containerTheme": "classic",
+    "controls": [
+      {
+        "paramKey": "stepRate",
+        "position": {
+          "x": 40,
+          "y": 64
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "pattern",
+        "position": {
+          "x": 120,
+          "y": 64
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "direction",
+        "position": {
+          "x": 200,
+          "y": 64
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "numSteps",
+        "position": {
+          "x": 280,
+          "y": 64
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "gate",
+        "position": {
+          "x": 40,
+          "y": 144
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "attack",
+        "position": {
+          "x": 120,
+          "y": 144
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step0",
+        "position": {
+          "x": 200,
+          "y": 144
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step1",
+        "position": {
+          "x": 280,
+          "y": 144
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step2",
+        "position": {
+          "x": 40,
+          "y": 224
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step3",
+        "position": {
+          "x": 120,
+          "y": 224
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step4",
+        "position": {
+          "x": 200,
+          "y": 224
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step5",
+        "position": {
+          "x": 280,
+          "y": 224
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step6",
+        "position": {
+          "x": 40,
+          "y": 304
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "step7",
+        "position": {
+          "x": 120,
+          "y": 304
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "pitchMode",
+        "position": {
+          "x": 200,
+          "y": 304
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "pitchThreshold",
+        "position": {
+          "x": 280,
+          "y": 304
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      },
+      {
+        "paramKey": "mix",
+        "position": {
+          "x": 40,
+          "y": 384
+        },
+        "style": {
+          "knobStyle": "default",
+          "labelPosition": "top",
+          "showValue": true,
+          "valuePosition": "bottom"
+        },
+        "type": "knob"
+      }
+    ],
+    "createdAt": "2026-03-04T03:54:29.971Z",
+    "defaultControlsOffset": {
+      "x": 46,
+      "y": 46
+    },
+    "defaultControlsScale": {
+      "x": 0.8,
+      "y": 0.8
+    },
+    "dimensions": {
+      "height": 440,
+      "width": 576
+    },
+    "effectType": "e4a7c9d0-3b52-4f16-8a9e-2c7f1d0e5b83",
+    "layoutId": "57ea713d-4de4-417b-b6aa-122bb9741b77",
+    "modifiedAt": "2026-03-05T03:01:51.366Z",
+    "overlays": [
+      {
+        "id": "overlay-1772620043155-txqnnq",
+        "position": {
+          "x": 256,
+          "y": 344
+        },
+        "size": {
+          "height": 80,
+          "width": 80
+        },
+        "style": {
+          "backgroundColor": "#000000",
+          "backgroundOpacity": 0,
+          "borderColor": "#ffffff",
+          "borderRadius": 0,
+          "borderWidth": 0,
+          "toggleBypassOnClick": true,
+          "visibilityMode": "always"
+        }
+      }
+    ],
+    "textLabels": [],
+    "useDefaultControls": true,
+    "version": 1
+  },
+  "images": [
+    {
+      "imageId": "chaos-engine_17726216187144984",
+      "fileName": "chaos-engine_17726216187144984.png"
+    }
+  ]
+}
