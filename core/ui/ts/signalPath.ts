@@ -2857,7 +2857,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
     effectsByCategory.get(effect.category)!.push(effect);
   });
 
-  const categoryOrder = ["dynamics", "amp", "fx", "cab", "eq", "modulation", "delay", "reverb", "synth", "utility"];
+  const categoryOrder = ["dynamics", "amp", "fx", "cab", "eq", "modulation", "pitch", "delay", "reverb", "synth", "utility"];
   
   let dropdownHtml = '<div class="effect-dropdown-header">Add Effect</div>';
   
@@ -2869,7 +2869,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
       dropdownHtml += `
         <div class="effect-dropdown-category">
           <div class="effect-dropdown-category-name">
-            ${getFxCategoryIcon(categoryId)} ${categoryInfo?.name || categoryId}
+            ${categoryInfo?.name || categoryId}
           </div>
           ${effects.map(effect => { const thumb = getCustomLayout(effect.type)?.thumbnailDataUrl; const icon = thumb ? `<img src="${thumb.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="effect-dropdown-thumb" />` : `<span class="effect-dropdown-icon">${getNodeIcon(effect.type)}</span>`; return `
             <div class="effect-dropdown-item" data-effect-type="${effect.type}">

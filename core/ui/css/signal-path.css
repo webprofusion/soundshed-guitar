@@ -729,6 +729,15 @@
 .parallel-branch:nth-child(3) { border-left-color: #48e078; }
 .parallel-branch:nth-child(4) { border-left-color: #e048a8; }
 
+/* Stretch the last connector in each parallel branch to fill the remaining width */
+.parallel-branch > .signal-connector-wrapper:last-child {
+  flex-grow: 1;
+}
+
+.parallel-branch > .signal-connector-wrapper:last-child .signal-connector {
+  width: 100%;
+}
+
 /* Signal Chain Panel Styles */
 .signal-chain-container {
   padding: 24px;

@@ -224,6 +224,7 @@ function registerCompositeEffectType(def: CompositeEffectDefinition): void {
     displayName: def.name,
     category: def.category,
     requiresResource: false,
+    catalogHidden: true,
     parameters: def.exposedParams.map((ep) => ({
       key: ep.paramId,
       name: ep.displayName,
