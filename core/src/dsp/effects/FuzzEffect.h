@@ -38,7 +38,7 @@ namespace guitarfx
       const float mix = mMix.load(std::memory_order_relaxed);
       const float toneCoef = mToneCoef.load(std::memory_order_relaxed);
 
-      const float driveGain = 2.0f + 28.0f * drive;
+      const float driveGain = 1.0f + 29.0f * drive;
       const float levelGain = static_cast<float>(std::pow(10.0, levelDb * 0.05));
 
       for (int i = 0; i < numSamples; ++i)
@@ -102,22 +102,29 @@ namespace guitarfx
     }
 
     [[nodiscard]] std::string GetType() const override { return "fuzz"; }
-    [[nodiscard]] std::string GetCategory() const override { return "dynamics"; }
+    [[nodiscard]] std::string GetCategory() const override { return "drive"; }
 
   private:
     static constexpr double kPi = 3.14159265358979323846;
 
     void UpdateToneCoefficient()
     {
+      const float t = mTone.load(std::memory_order_relaxed);
+      if (t >= 1.0f)
+      {
+        mToneCoef.store(1.0f, std::memory_order_relaxed); // sentinel: bypass
+        return;
+      }
       const float minHz = 500.0f;
       const float maxHz = 5000.0f;
-      const float cutoff = minHz + (maxHz - minHz) * mTone.load(std::memory_order_relaxed);
+      const float cutoff = minHz + (maxHz - minHz) * t;
       const float x = static_cast<float>(2.0 * kPi * cutoff / std::max(1.0, mSampleRate));
       mToneCoef.store(1.0f - std::exp(-x), std::memory_order_relaxed);
     }
 
     static float ApplyTone(float input, float &state, float toneCoef)
     {
+      if (toneCoef >= 1.0f) return input; // tone at max: pass through unfiltered
       state += toneCoef * (input - state);
       return state;
     }
@@ -126,7 +133,7 @@ namespace guitarfx
     {
       const float absX = std::abs(x);
       const float shaped = 1.0f - std::exp(-absX);
-      return std::copysign(std::min(shaped, 1.0f), x);
+      return std::copysign(shaped, x);
     }
 
     std::atomic<float> mDrive{0.7f};

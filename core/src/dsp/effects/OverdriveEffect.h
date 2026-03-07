@@ -102,22 +102,29 @@ namespace guitarfx
     }
 
     [[nodiscard]] std::string GetType() const override { return "overdrive"; }
-    [[nodiscard]] std::string GetCategory() const override { return "dynamics"; }
+    [[nodiscard]] std::string GetCategory() const override { return "drive"; }
 
   private:
     static constexpr double kPi = 3.14159265358979323846;
 
     void UpdateToneCoefficient()
     {
+      const float t = mTone.load(std::memory_order_relaxed);
+      if (t >= 1.0f)
+      {
+        mToneCoef.store(1.0f, std::memory_order_relaxed); // sentinel: bypass
+        return;
+      }
       const float minHz = 600.0f;
       const float maxHz = 6000.0f;
-      const float cutoff = minHz + (maxHz - minHz) * mTone.load(std::memory_order_relaxed);
+      const float cutoff = minHz + (maxHz - minHz) * t;
       const float x = static_cast<float>(2.0 * kPi * cutoff / std::max(1.0, mSampleRate));
       mToneCoef.store(1.0f - std::exp(-x), std::memory_order_relaxed);
     }
 
     static float ApplyTone(float input, float &state, float toneCoef)
     {
+      if (toneCoef >= 1.0f) return input; // tone at max: pass through unfiltered
       state += toneCoef * (input - state);
       return state;
     }
