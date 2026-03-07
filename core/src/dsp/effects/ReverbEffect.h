@@ -29,7 +29,7 @@ namespace guitarfx
     explicit ReverbEffect(Mode mode)
         : mMode(mode)
     {
-      ApplyModeDefaults();
+      ApplyModeDefaults(mMode);
     }
 
     void Prepare(double sampleRate, int maxBlockSize) override
@@ -37,7 +37,9 @@ namespace guitarfx
       mSampleRate = sampleRate;
       mMaxBlockSize = maxBlockSize;
 
-      const auto profile = GetProfile(mMode);
+      // When Advanced mode, always allocate Hall-sized buffers so any character can be
+      // switched at runtime without reallocation (Hall has the largest delay line tunings).
+      const auto profile = (mMode == Mode::Advanced) ? GetProfile(Mode::Hall) : GetProfile(mMode);
       constexpr double maxSizeScale = 2.3;
 
       const size_t maxPreDelaySamples = DelayMsToSamples(kMaxPreDelayMs + kMaxTapMs + 4.0);
@@ -278,7 +280,7 @@ namespace guitarfx
             mAllpassWriteR[a] = 0;
         }
 
-        if (mMode == Mode::Shimmer)
+        if (mMode == Mode::Shimmer || (mMode == Mode::Advanced && mCharacter == Mode::Shimmer))
         {
           // Inject shimmer feedback POST-tank so it never re-enters the comb bank.
           // Loop gain = sparkle * shimmerAmount (independent of decay), guaranteeing stability
@@ -299,7 +301,7 @@ namespace guitarfx
 
         // Spring mode: blend two bandpass-filtered signals for dispersive "boing" character.
         // Primary peak (fundamental) + harmonic peak at ~1.75× for authentic spring texture.
-        if (mMode == Mode::Spring)
+        if (mMode == Mode::Spring || (mMode == Mode::Advanced && mCharacter == Mode::Spring))
         {
           const float bpL  = static_cast<float>(ProcessSpringBp (static_cast<double>(wetL), 0));
           const float bpR  = static_cast<float>(ProcessSpringBp (static_cast<double>(wetR), 1));
@@ -400,6 +402,15 @@ namespace guitarfx
       {
         mMix = std::clamp(value, 0.0, 1.0);
       }
+      else if (key == "character" && mMode == Mode::Advanced)
+      {
+        const int idx = static_cast<int>(std::round(std::clamp(value, 0.0, 6.0)));
+        mCharacter = CharacterFromIndex(idx);
+        // Only swap the delay topology and clear buffers — all other parameters are
+        // intentionally preserved so Advanced mode users retain their manual settings.
+        Reset();
+        UpdateParameters();
+      }
     }
 
     void SetConfig(const std::string &, const std::string &) override {}
@@ -436,6 +447,8 @@ namespace guitarfx
         return mShimmer;
       if (key == "mix")
         return mMix;
+      if (key == "character")
+        return static_cast<double>(CharacterToIndex(mCharacter));
       return 0.0;
     }
 
@@ -620,15 +633,6 @@ namespace guitarfx
             {14.0, 24.0, 38.0, 46.0},
             {0.31f, 0.24f, 0.18f, 0.14f},
             1.4, 0.42, 0.9, 0.9, 0.18, 0.0, 0.26};
-      case Mode::Advanced:
-        return {
-            {31.4, 34.5, 37.9, 41.3, 45.0, 48.4, 52.2, 56.0},
-            {32.0, 35.2, 38.7, 42.1, 45.8, 49.4, 53.1, 57.0},
-            {7.2, 10.8, 15.0, 20.3},
-            {7.8, 11.4, 15.7, 21.1},
-            {9.0, 15.0, 24.0, 35.0},
-            {0.36f, 0.24f, 0.18f, 0.13f},
-            1.18, 0.44, 0.78, 0.62, 0.12, 0.08, 0.3};
       case Mode::Room:
       default:
         return {
@@ -728,7 +732,7 @@ namespace guitarfx
 
     void UpdateParameters()
     {
-      const auto profile = GetProfile(mMode);
+      const auto profile = (mMode == Mode::Advanced) ? GetProfile(mCharacter) : GetProfile(mMode);
 
       // Store base delay samples (unscaled, sizeScale=1) for per-sample fractional interpolation.
       // The current size scale is smoothed in Process() to eliminate integer-step zipper noise.
@@ -790,7 +794,7 @@ namespace guitarfx
       // Spring mode: two biquad bandpass filters for dispersive "boing" character.
       // Real spring tanks have a fundamental resonance and a harmonic above it.
       // Both centre frequencies track Tone: darker → lower, brighter → higher.
-      if (mMode == Mode::Spring)
+      if (mMode == Mode::Spring || (mMode == Mode::Advanced && mCharacter == Mode::Spring))
       {
         const double centerHz = 700.0 + mTone * 1800.0;     // primary:  700–2500 Hz
         const double q = 0.75 + mTone * 0.60;
@@ -808,7 +812,7 @@ namespace guitarfx
 
       // Shimmer mode: LP coefficient for HF extraction used in regenerative feedback.
       // Cut-off tracks Tone: brighter Tone → higher shimmer frequency content.
-      if (mMode == Mode::Shimmer)
+      if (mMode == Mode::Shimmer || (mMode == Mode::Advanced && mCharacter == Mode::Shimmer))
       {
         const double shimCutHz = std::clamp(1400.0 + mTone * 2600.0, 200.0, 20000.0);
         const double rcShim = 1.0 / (kTwoPi * shimCutHz);
@@ -816,9 +820,39 @@ namespace guitarfx
       }
     }
 
-    void ApplyModeDefaults()
+    static Mode CharacterFromIndex(int index)
     {
-      switch (mMode)
+      switch (index)
+      {
+      case 1: return Mode::Hall;
+      case 2: return Mode::Plate;
+      case 3: return Mode::Chamber;
+      case 4: return Mode::Spring;
+      case 5: return Mode::Shimmer;
+      case 6: return Mode::Ambient;
+      default: return Mode::Room;
+      }
+    }
+
+    static int CharacterToIndex(Mode mode)
+    {
+      switch (mode)
+      {
+      case Mode::Hall:    return 1;
+      case Mode::Plate:   return 2;
+      case Mode::Chamber: return 3;
+      case Mode::Spring:  return 4;
+      case Mode::Shimmer: return 5;
+      case Mode::Ambient: return 6;
+      default:            return 0;
+      }
+    }
+
+    // ApplyModeDefaults() sets DSP parameter defaults for the given mode.
+    // Called in the constructor (with mMode) and on character changes (with mCharacter).
+    void ApplyModeDefaults(Mode mode)
+    {
+      switch (mode)
       {
       case Mode::Hall:
         mDecay = 0.62;      // Reduced from 0.76 — 0.76+decayBias drove feedback to ~0.94, causing "swimming"
@@ -972,6 +1006,8 @@ namespace guitarfx
     }
 
     Mode mMode;
+    // Active character topology when mMode == Advanced; ignored for all other modes.
+    Mode mCharacter = Mode::Room;
 
     std::vector<float> mPreDelayL;
     std::vector<float> mPreDelayR;
@@ -1172,6 +1208,8 @@ namespace guitarfx
         info.displayName = "Advanced Reverb";
         info.description = "Algorithmic reverb with full common and advanced controls";
         info.parameters = {
+            ParameterDef{"character", "Character", 0.0, 0.0, 6.0, "enum", "Common", false, 1.0,
+                         {"Room", "Hall", "Plate", "Chamber", "Spring", "Shimmer", "Ambient"}},
             param("decay", "Decay", 0.64, 0.0, 1.0, "amount", "Common"),
             param("size", "Size", 0.55, 0.0, 1.0, "amount", "Common"),
             param("mix", "Mix", 0.24, 0.0, 1.0, "amount", "Common"),
