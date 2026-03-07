@@ -141,6 +141,13 @@ namespace guitarfx
       {
         const int q = static_cast<int>(std::clamp(value, 0.0, 3.0));
         mPendingQuality.store(q, std::memory_order_release);
+        // Reinitialise immediately so quality changes take effect without requiring
+        // a prepareToPlay() call. Only safe when called from non-audio thread (UI interaction).
+        if (HasResource())
+        {
+          ApplyPendingQuality();
+          InitializeConvolvers();
+        }
       }
     }
 
@@ -249,7 +256,8 @@ namespace guitarfx
       return frames;
     }
 
-    static std::vector<float> TruncateAndFade(const std::vector<float> &input, std::size_t length)
+    static std::vector<float> TruncateAndFade(const std::vector<float> &input, std::size_t length,
+                                               std::size_t fadeLen = 2048)
     {
       if (input.empty() || length == 0)
         return {};
@@ -257,13 +265,15 @@ namespace guitarfx
       const std::size_t truncLength = std::min(length, input.size());
       std::vector<float> truncated(input.begin(), input.begin() + truncLength);
 
-      constexpr std::size_t kFadeLength = 64;
-      if (truncLength > kFadeLength)
+      // Use a long fade (~42ms at 48kHz) to prevent Gibbs-phenomenon ringing
+      // when the reverb tail is still active at the truncation point.
+      const std::size_t effectiveFade = std::min(fadeLen, truncLength);
+      if (effectiveFade > 1)
       {
-        for (std::size_t i = 0; i < kFadeLength; ++i)
+        for (std::size_t i = 0; i < effectiveFade; ++i)
         {
-          const float fadeGain = static_cast<float>(kFadeLength - 1 - i) / static_cast<float>(kFadeLength - 1);
-          truncated[truncLength - kFadeLength + i] *= fadeGain;
+          const float fadeGain = static_cast<float>(effectiveFade - 1 - i) / static_cast<float>(effectiveFade - 1);
+          truncated[truncLength - effectiveFade + i] *= fadeGain;
         }
       }
 
@@ -286,7 +296,14 @@ namespace guitarfx
       if (mQuality == IRQuality::Full)
         return minLength;
 
-      const size_t maxSamples = GetMaxReverbIRSamples(mQuality, mSampleRate);
+      // GetMaxReverbIRSamples returns a limit expressed in *playback-rate* samples.
+      // The raw impulse response is at mIRSampleRate, so convert to the same units
+      // before comparing, otherwise 96kHz IRs get half the expected truncation length.
+      const size_t maxSamplesPlayback = GetMaxReverbIRSamples(mQuality, mSampleRate);
+      const size_t maxSamples = (maxSamplesPlayback > 0 && mSampleRate > 1.0)
+          ? static_cast<size_t>(static_cast<double>(maxSamplesPlayback) * mIRSampleRate / mSampleRate)
+          : maxSamplesPlayback;
+
       if (maxSamples == 0 || minLength <= maxSamples)
         return minLength;
 
@@ -369,6 +386,28 @@ namespace guitarfx
         {
           irwav::ResampleLinear(processedLR, mIRSampleRate, mSampleRate);
           irwav::ResampleLinear(processedRL, mIRSampleRate, mSampleRate);
+        }
+      }
+
+      // Normalize by peak amplitude across all channels so that un-normalized reverb IRs
+      // (which may have large early-reflection amplitudes) don't saturate the convolver output.
+      float peak = 0.0f;
+      for (float s : processedLL) peak = std::max(peak, std::fabs(s));
+      for (float s : processedRR) peak = std::max(peak, std::fabs(s));
+      if (mHasTrueStereo)
+      {
+        for (float s : processedLR) peak = std::max(peak, std::fabs(s));
+        for (float s : processedRL) peak = std::max(peak, std::fabs(s));
+      }
+      if (peak > 1e-6f)
+      {
+        const float inv = 1.0f / peak;
+        for (float &s : processedLL) s *= inv;
+        for (float &s : processedRR) s *= inv;
+        if (mHasTrueStereo)
+        {
+          for (float &s : processedLR) s *= inv;
+          for (float &s : processedRL) s *= inv;
         }
       }
 
