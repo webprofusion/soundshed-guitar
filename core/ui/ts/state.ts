@@ -199,6 +199,23 @@ export const uiState: UiState = {
     ],
   },
   tone3000Session: null,
+  jam: {
+    activeTab: "search",
+    query: "",
+    results: [],
+    favorites: [],
+    loading: false,
+    error: "",
+    apiKeyAvailable: false,
+    player: {
+      open: false,
+      minimized: false,
+      x: 0,
+      y: 96,
+      width: 420,
+      currentVideo: null,
+    },
+  },
   mixer: {
     activePresetIds: [],
     presets: {},

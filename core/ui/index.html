@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/advanced-panel.css" />
   <link rel="stylesheet" href="css/settings.css" />
   <link rel="stylesheet" href="css/tone-sharing.css" />
+  <link rel="stylesheet" href="css/jam.css" />
 </head>
 
 <body>
@@ -40,6 +41,11 @@
         <svg viewBox="0 0 24 24">
           <path d="M4 6h6v14H4zM14 4h6v16h-6z" stroke="currentColor" stroke-width="1.5" fill="none" />
           <path d="M6 10h2M6 13h2M16 9h2M16 12h2M16 15h2" stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
+      <button class="icon-btn" data-panel="jam" title="Jam">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v11.5a3.5 3.5 0 1 1-2-3.16V7.5l8-2V14.5a3.5 3.5 0 1 1-2-3.16V3.96L12 5z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
       <button class="icon-btn" data-panel="sharing" title="Tone Sharing">
@@ -615,6 +621,26 @@
 
         </div>
 
+      </div>
+
+      <div class="tab-panel" id="panel-jam">
+        <div class="panel-content jam-panel">
+          <div class="jam-panel-header">
+            <div>
+              <h2>Jam</h2>
+              <p class="jam-panel-subtitle">Find a backing track, pin favourites, and keep a floating YouTube player open while using the rest of the app.</p>
+            </div>
+          </div>
+          <div class="jam-tabs tab-bar">
+            <button id="jam-tab-search" class="tab-btn active" type="button">Backing Tracks</button>
+            <button id="jam-tab-favorites" class="tab-btn" type="button">Favourites</button>
+          </div>
+          <div class="jam-search-row">
+            <input type="text" id="jam-search-input" placeholder="Search by artist, song, key, or style..." />
+            <button id="jam-search-button" type="button">Search</button>
+          </div>
+          <div class="jam-results" id="jam-results"></div>
+        </div>
       </div>
 
       <div class="tab-panel" id="panel-sharing">
@@ -1897,6 +1923,7 @@
       </div>
     </div>
   </div>
+  <div id="jam-floating-player-root"></div>
   <script src="dist/jszip.min.js"></script>
   <script type="module" src="dist/main.js"></script>
 </body>

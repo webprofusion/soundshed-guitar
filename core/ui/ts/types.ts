@@ -189,6 +189,33 @@ export interface Tone3000Session {
   expiresAt: number;
 }
 
+export interface JamVideoSummary {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnailUrl: string;
+}
+
+export interface JamPlayerState {
+  open: boolean;
+  minimized: boolean;
+  x: number;
+  y: number;
+  width: number;
+  currentVideo?: JamVideoSummary | null;
+}
+
+export interface JamState {
+  activeTab: "search" | "favorites";
+  query: string;
+  results: JamVideoSummary[];
+  favorites: JamVideoSummary[];
+  loading: boolean;
+  error?: string;
+  apiKeyAvailable: boolean;
+  player: JamPlayerState;
+}
+
 export interface LibraryResource {
   id: string;
   name: string;
@@ -431,6 +458,7 @@ export interface UiState {
   blendLibrary?: BlendLibrary;
   appSettings: AppSettings;
   tone3000Session?: Tone3000Session | null;
+  jam?: JamState;
   mixer?: MixerState;
   uiSettings?: UiSettings;
   uiViewState?: UiViewState;

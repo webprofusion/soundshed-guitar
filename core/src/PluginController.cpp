@@ -44,6 +44,9 @@
 
 namespace
 {
+    constexpr const char* kJamYouTubeApiKeySettingKey = "jam.youtubeApiKey";
+    constexpr const char* kBundledJamYouTubeApiKey = "AIzaSyA9R9tejDnqsQFnz6GYP7xMeu4HdPMscrc";
+
     // ── NAM calibration constants ───────────────────────────────────
 
     constexpr const char* kNamCalibrationFileName = "calibration/models/index.json";
@@ -6027,11 +6030,21 @@ void PluginController::LoadAppSettings()
         return;
     }
 
+    const auto applyBundledDefaults = [this]()
+    {
+        if (!mAppSettings.is_object())
+            mAppSettings = nlohmann::json::object();
+
+        if (std::strlen(kBundledJamYouTubeApiKey) > 0)
+            mAppSettings[kJamYouTubeApiKeySettingKey] = std::string{kBundledJamYouTubeApiKey};
+    };
+
     if (!std::filesystem::exists(settingsPath))
     {
         std::cout << "[Plugin] No settings file found at " << settingsPath.string()
                   << ", using defaults" << std::endl;
         mAppSettings = nlohmann::json::object();
+        applyBundledDefaults();
         return;
     }
 
@@ -6043,6 +6056,7 @@ void PluginController::LoadAppSettings()
             mAppSettings = nlohmann::json::parse(ifs);
             std::cout << "[Plugin] Loaded app settings from " << settingsPath.string() << std::endl;
         }
+        applyBundledDefaults();
     }
     catch (const std::exception& e)
     {
@@ -6054,6 +6068,7 @@ void PluginController::LoadAppSettings()
                                    std::filesystem::copy_options::overwrite_existing, ec);
         std::cerr << "[Plugin] Corrupt settings backed up to " << backupPath.string() << std::endl;
         mAppSettings = nlohmann::json::object();
+        applyBundledDefaults();
     }
 }
 

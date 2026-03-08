@@ -13,6 +13,7 @@ import { refreshSelectedNodeParams, renderSignalPathBar } from "./signalPath.js"
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
 import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport } from "./toneSharingPanel.js";
+import { applyJamAppSettings } from "./jam.js";
 import type { GlobalSignalChainConfig, Preset, PresetFolder, ResourceRef, Setlist, UiSettings, CompositePreset } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
 import { migratePresetNodeTypes } from "./presetV2.js";
@@ -195,6 +196,7 @@ export function handleIncomingMessage(message: string): void {
         uiState.appSettings = appSettings as import("./types.js").AppSettings;
         applyStoredInputChannel();
         applyToneSharingAppSettings(appSettings);
+        applyJamAppSettings();
         triggerUpdateCheck();
       }
       const globalSignalChain = (payload as { globalSignalChain?: GlobalSignalChainConfig }).globalSignalChain;

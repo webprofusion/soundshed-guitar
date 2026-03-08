@@ -1298,6 +1298,61 @@
   gap: 12px;
 }
 
+.effect-visualization-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.effect-visualization-toolbar[hidden] {
+  display: none;
+}
+
+.effect-visualization-toolbar-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  color: #e0e0f0;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.effect-visualization-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+}
+
+.effect-visualization-toolbar-btn:focus-visible {
+  outline: 2px solid rgba(255, 190, 120, 0.8);
+  outline-offset: 2px;
+}
+
+.effect-visualization-toolbar-btn.bypassed {
+  background: linear-gradient(180deg, rgba(106, 56, 56, 0.92) 0%, rgba(86, 48, 48, 0.92) 100%);
+  border-color: rgba(186, 104, 104, 0.8);
+}
+
+.effect-visualization-toolbar-icon,
+.effect-visualization-toolbar-btn .customize-layout-icon,
+.effect-visualization-toolbar-btn .recalibrate-icon,
+.effect-visualization-toolbar-btn .bypass-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+  opacity: 0.92;
+}
+
 .node-param-tabs {
   display: inline-flex;
   gap: 6px;
@@ -1850,35 +1905,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.node-bypass-btn {
-  padding: 8px 16px;
-  background: var(--bg-dark-secondary);
-  border: 1px solid var(--border-dark-medium);
-  border-radius: 6px;
-  color: var(--text-dark-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-.node-bypass-btn:hover {
-  background: var(--bg-dark-tertiary);
-  border-color: var(--border-dark-light);
-  color: var(--text-dark-primary);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-}
-
-.node-bypass-btn.bypassed {
-  background: linear-gradient(180deg, #6a3838 0%, #563030 100%);
-  border-color: #8a5050;
-  color: var(--text-dark-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .node-empty-message {
