@@ -22,23 +22,58 @@
 
 .effect-visualization-header {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.effect-visualization-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .effect-visualization-title {
-  font-size: 18px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .effect-visualization-subtitle {
-  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .effect-visualization-header {
+    gap: 8px;
+  }
+
+  .effect-visualization-heading {
+    gap: 6px;
+  }
+
+  .effect-visualization-title {
+    font-size: 12px;
+  }
+
+  .effect-visualization-subtitle {
+    font-size: 9px;
+  }
 }
 
 .effect-visualization {

@@ -64,6 +64,7 @@ const nodeParamKnobs = new Map<string, GenericKnob>();
 const effectVisualizationElement = document.getElementById("effect-visualization");
 const effectVisualizationTitle = document.getElementById("effect-visualization-title");
 const effectVisualizationSubtitle = document.getElementById("effect-visualization-subtitle");
+const effectVisualizationToolbarElement = document.getElementById("effect-visualization-toolbar");
 
 // Drag-drop state
 let draggedNodeId: string | null = null;
@@ -109,6 +110,7 @@ function updateEffectVisualization(node?: GraphNode): void {
     if (effectVisualizationSubtitle) {
       effectVisualizationSubtitle.textContent = DEFAULT_VISUALIZATION_SUBTITLE;
     }
+    renderEffectVisualizationToolbar();
     return;
   }
 
@@ -134,6 +136,64 @@ function updateEffectVisualization(node?: GraphNode): void {
       : categoryLabel;
     effectVisualizationSubtitle.textContent = subtitle;
   }
+
+  renderEffectVisualizationToolbar(node);
+}
+
+function renderEffectVisualizationToolbar(node?: GraphNode): void {
+  if (!effectVisualizationToolbarElement) {
+    return;
+  }
+
+  if (!node) {
+    effectVisualizationToolbarElement.innerHTML = "";
+    effectVisualizationToolbarElement.hidden = true;
+    return;
+  }
+
+  const bypassed = isNodeBypassed(node);
+  const bypassTitle = bypassed ? "Enable effect" : "Bypass effect";
+  const blendId = getBlendState(node)?.blend?.id || "";
+  const canRecalibrate = node.type === EffectGuids.kFxNam || node.type === EffectGuids.kAmpNam || node.type === EffectGuids.kAmpNamOptimized;
+  const layoutButton = isExperimentalFeaturesEnabled() ? `
+    <button
+      class="effect-visualization-toolbar-btn node-customize-layout-btn"
+      data-node-id="${node.id}"
+      data-effect-type="${node.type}"
+      data-blend-id="${blendId}"
+      type="button"
+      title="Customize layout"
+      aria-label="Customize layout"
+    >
+      ${renderIcon("gear", "effect-visualization-toolbar-icon customize-layout-icon")}
+    </button>
+  ` : "";
+  const recalibrateButton = canRecalibrate ? `
+    <button
+      class="effect-visualization-toolbar-btn node-calibrate-btn"
+      data-node-id="${node.id}"
+      type="button"
+      title="Recalibrate model"
+      aria-label="Recalibrate model"
+    >
+      ${renderIcon("microscope", "effect-visualization-toolbar-icon recalibrate-icon")}
+    </button>
+  ` : "";
+
+  effectVisualizationToolbarElement.innerHTML = `
+    <button
+      class="effect-visualization-toolbar-btn node-bypass-btn ${bypassed ? "bypassed" : ""}"
+      data-node-id="${node.id}"
+      type="button"
+      title="${bypassTitle}"
+      aria-label="${bypassTitle}"
+    >
+      ${renderIcon("mute", "effect-visualization-toolbar-icon bypass-icon")}
+    </button>
+    ${recalibrateButton}
+    ${layoutButton}
+  `;
+  effectVisualizationToolbarElement.hidden = false;
 }
 
 function updateLastSelectedNode(node: GraphNode): void {
@@ -1506,23 +1566,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     }
   }
 
-  const bypassed = isNodeBypassed(node);
-  const bypassButton = `
-    <button 
-      class="node-bypass-btn ${bypassed ? "bypassed" : ""}" 
-      data-node-id="${node.id}"
-    >
-      ${bypassed ? "Enable" : "Bypass"}
-    </button>
-  `;
-
-  const canRecalibrate = node.type === EffectGuids.kFxNam || node.type === EffectGuids.kAmpNam || node.type === EffectGuids.kAmpNamOptimized;
-  const recalibrateButton = canRecalibrate
-    ? `
-      <button class="node-calibrate-btn" data-node-id="${node.id}">Recalibrate</button>
-    `
-    : "";
-
   // Build resource selector if this node type requires a resource,
   // or if a composite node surfaces inner resources.
   let resourceSelector = "";
@@ -1733,14 +1776,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     customLayout && !useDefaultControls && customLayout.controls.some((control) => control.bindingType === "resource" || control.paramKey.startsWith("__resource__:")),
   );
 
-  // Customize layout button (include blend ID for per-blend layout selection)
-  // Only shown when advanced options are enabled
-  const customizeLayoutBtn = isExperimentalFeaturesEnabled() ? `
-    <button class="node-customize-layout-btn" data-node-id="${node.id}" data-effect-type="${node.type}" data-blend-id="${nodeBlendId}" title="Customize Layout">
-      ${renderIcon("gear", "customize-layout-icon")} Layout
-    </button>
-  ` : "";
-
   nodeParamsPanelElement.innerHTML = `
     
     <div class="node-params-body">
@@ -1776,11 +1811,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           ? renderCustomLayoutBackdrop(node, customLayout, defaultControlsHtml)
           : defaultControlsHtml;
       })()}
-      <div class="node-actions">
-        ${bypassButton}
-        ${recalibrateButton}
-        ${customizeLayoutBtn}
-      </div>
     </div>
   `;
 
@@ -2435,8 +2465,8 @@ function bindCloseButton(): void {
 }
 
 function bindBypassButton(node: GraphNode, preset: Preset): void {
-  const bypassBtn = nodeParamsPanelElement?.querySelector(".node-bypass-btn");
-  if (bypassBtn) {
+  const bypassButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-bypass-btn, #effect-visualization-toolbar .node-bypass-btn");
+  bypassButtons.forEach((bypassBtn) => {
     bypassBtn.addEventListener("click", () => {
       const currentBypassed = isNodeBypassed(node);
       const newBypassState = !currentBypassed;
@@ -2448,66 +2478,70 @@ function bindBypassButton(node: GraphNode, preset: Preset): void {
       renderSignalPathBar();
       showNodeParamsPanel(node, preset);
     });
-  }
+  });
 }
 
 function bindCalibrationButton(node: GraphNode): void {
-  const calibrateBtn = nodeParamsPanelElement?.querySelector(".node-calibrate-btn") as HTMLButtonElement | null;
-  if (!calibrateBtn) {
+  const calibrateButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-calibrate-btn, #effect-visualization-toolbar .node-calibrate-btn");
+  if (!calibrateButtons.length) {
     return;
   }
 
-  calibrateBtn.addEventListener("click", () => {
-    showNotification("Recalibration started", getNodeDisplayName(node));
-    postMessage({
-      type: "rerunNamCalibration",
-      nodeId: node.id,
+  calibrateButtons.forEach((calibrateBtn) => {
+    calibrateBtn.addEventListener("click", () => {
+      showNotification("Recalibration started", getNodeDisplayName(node));
+      postMessage({
+        type: "rerunNamCalibration",
+        nodeId: node.id,
+      });
     });
   });
 }
 
 function bindCustomizeLayoutButton(node: GraphNode): void {
-  const layoutBtn = nodeParamsPanelElement?.querySelector(".node-customize-layout-btn") as HTMLButtonElement | null;
-  if (!layoutBtn) {
+  const layoutButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-customize-layout-btn, #effect-visualization-toolbar .node-customize-layout-btn");
+  if (!layoutButtons.length) {
     return;
   }
 
-  layoutBtn.addEventListener("click", () => {
-    const effectType = layoutBtn.dataset.effectType || node.type;
-    const blendId = layoutBtn.dataset.blendId || "";
+  layoutButtons.forEach((layoutBtn) => {
+    layoutBtn.addEventListener("click", () => {
+      const effectType = layoutBtn.dataset.effectType || node.type;
+      const blendId = layoutBtn.dataset.blendId || "";
 
-    // For blend effects, try per-blend layout first, then fall back to effect-type layout
-    const existingLayout = blendId
-      ? (getCustomLayout(effectType, blendId) ?? getCustomLayout(effectType))
-      : getCustomLayout(effectType);
+      // For blend effects, try per-blend layout first, then fall back to effect-type layout
+      const existingLayout = blendId
+        ? (getCustomLayout(effectType, blendId) ?? getCustomLayout(effectType))
+        : getCustomLayout(effectType);
 
-    // Resolve blend params so the designer shows all available controls
-    let blendName = "";
-    let blendParamDefs: Array<{ key: string; name: string; default: number; min: number; max: number; unit: string; step?: number }> | undefined;
-    if (blendId) {
-      const blendState = getBlendState(node);
-      if (blendState) {
-        blendName = blendState.blend?.name || blendId;
-        // Include ALL blend param specs so every possible knob is available in the designer
-        const allBlendParams = BLEND_PARAM_SPECS.map((spec) => ({
-          key: spec.id,
-          name: spec.label,
-          default: 0,
-          min: spec.min,
-          max: spec.max,
-          unit: "amount",
-          step: 0.1,
-        }));
-        const typeInfo = EffectTypeRegistry.get(effectType);
-        const baseParams = (typeInfo?.parameters || []).filter((p) => p.key !== "blend");
-        blendParamDefs = [...allBlendParams, ...baseParams];
+      // Resolve blend params so the designer shows all available controls
+      let blendName = "";
+      let blendParamDefs: Array<{ key: string; name: string; default: number; min: number; max: number; unit: string; step?: number }> | undefined;
+      if (blendId) {
+        const blendState = getBlendState(node);
+        if (blendState) {
+          blendName = blendState.blend?.name || blendId;
+          // Include ALL blend param specs so every possible knob is available in the designer
+          const allBlendParams = BLEND_PARAM_SPECS.map((spec) => ({
+            key: spec.id,
+            name: spec.label,
+            default: 0,
+            min: spec.min,
+            max: spec.max,
+            unit: "amount",
+            step: 0.1,
+          }));
+          const typeInfo = EffectTypeRegistry.get(effectType);
+          const baseParams = (typeInfo?.parameters || []).filter((p) => p.key !== "blend");
+          blendParamDefs = [...allBlendParams, ...baseParams];
+        }
       }
-    }
 
-    layoutDesigner.open(effectType, existingLayout ?? undefined, {
-      blendId: blendId || undefined,
-      blendName: blendName || undefined,
-      blendParamDefs,
+      layoutDesigner.open(effectType, existingLayout ?? undefined, {
+        blendId: blendId || undefined,
+        blendName: blendName || undefined,
+        blendParamDefs,
+      });
     });
   });
 }
