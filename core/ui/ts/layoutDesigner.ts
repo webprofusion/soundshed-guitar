@@ -66,6 +66,16 @@ interface LayoutResourceCandidate {
   allowBrowseFile?: boolean;
 }
 
+interface CopiedTextLabelPayload {
+  text: string;
+  position: { x: number; y: number };
+  fontSize: number;
+  fontWeight?: "normal" | "bold";
+  fontFamily?: string;
+  color?: string;
+  textAlign?: "left" | "center" | "right";
+}
+
 export class LayoutDesignerModal {
   private initialized = false;
   private effectType = "";
@@ -102,6 +112,7 @@ export class LayoutDesignerModal {
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private static readonly MAX_UNDO = 50;
+  private copiedTextLabel: CopiedTextLabelPayload | null = null;
   /** Tracks whether undo was pushed for current sidebar edit session */
   private sidebarUndoPushed = false;
   /** Timer for nudge undo debouncing */
@@ -2995,10 +3006,22 @@ export class LayoutDesignerModal {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (!this.modal || this.modal.style.display === "none") return;
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (this.isEditableKeyboardTarget(e.target)) return;
 
     // Undo/Redo: Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (e.key === "c" || e.key === "C") {
+        if (this.copySelectedTextLabel()) {
+          e.preventDefault();
+        }
+        return;
+      }
+      if (e.key === "v" || e.key === "V") {
+        if (this.pasteCopiedTextLabel()) {
+          e.preventDefault();
+        }
+        return;
+      }
       if (e.key === "z" || e.key === "Z") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -3056,6 +3079,75 @@ export class LayoutDesignerModal {
     if (e.key === "0") {
       this.setZoom(1);
     }
+  }
+
+  private isEditableKeyboardTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+
+    const tagName = target.tagName;
+    return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+  }
+
+  private copySelectedTextLabel(): boolean {
+    if (!this.layout || this.selectedElement?.type !== "label") {
+      return false;
+    }
+
+    const selectedLabelId = this.selectedElement.id;
+    const label = this.layout.textLabels.find((item) => item.id === selectedLabelId);
+    if (!label) {
+      return false;
+    }
+
+    this.copiedTextLabel = {
+      text: label.text,
+      position: { ...label.position },
+      fontSize: label.fontSize,
+      fontWeight: label.fontWeight,
+      fontFamily: label.fontFamily,
+      color: label.color,
+      textAlign: label.textAlign,
+    };
+    return true;
+  }
+
+  private pasteCopiedTextLabel(): boolean {
+    if (!this.layout || !this.copiedTextLabel) {
+      return false;
+    }
+
+    const selectedLabel = this.selectedElement?.type === "label" ? this.selectedElement : null;
+    const sourcePosition = selectedLabel
+      ? this.layout.textLabels.find((item) => item.id === selectedLabel.id)?.position
+      : undefined;
+    const pasteOffset = LAYOUT_GRID_SIZE * 2;
+    const basePosition = sourcePosition ?? this.copiedTextLabel.position;
+    const nextX = Math.max(0, Math.min(
+      this.layout.dimensions.width,
+      snapToGrid(basePosition.x + pasteOffset),
+    ));
+    const nextY = Math.max(0, Math.min(
+      this.layout.dimensions.height,
+      snapToGrid(basePosition.y + pasteOffset),
+    ));
+
+    const newLabel: LayoutTextLabel = {
+      id: generateLabelId(),
+      text: this.copiedTextLabel.text,
+      position: { x: nextX, y: nextY },
+      fontSize: this.copiedTextLabel.fontSize,
+      fontWeight: this.copiedTextLabel.fontWeight,
+      fontFamily: this.copiedTextLabel.fontFamily,
+      color: this.copiedTextLabel.color,
+      textAlign: this.copiedTextLabel.textAlign,
+    };
+
+    this.pushUndoState();
+    this.layout.textLabels.push(newLabel);
+    this.selectElement({ type: "label", id: newLabel.id });
+    this.renderCanvas();
+    return true;
   }
 
   private deleteSelectedElement(): void {
