@@ -9,6 +9,7 @@
   gap: 0;
   min-height: 64px;
   flex-shrink: 0;
+  position: relative;
 }
 
 /* Composite Edit Mode Banner */
@@ -225,6 +226,81 @@
   padding: 8px 12px;
   
   scrollbar-color: var(--border-medium) var(--bg-secondary);
+}
+
+.signal-path-bar.fx-library-collapsed:not(.mix-tab-active) .signal-path-scroll {
+  padding-right: 132px;
+  padding-bottom: 18px;
+}
+
+.signal-path-floating-add-fx {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, var(--border-medium));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-panel) 82%, var(--color-accent) 18%);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  z-index: 4;
+}
+
+.signal-path-floating-add-fx:hover {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--bg-panel) 70%, var(--color-accent) 30%);
+}
+
+.signal-path-floating-add-fx:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.signal-path-floating-add-fx-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.signal-path-bar.fx-library-collapsed:not(.mix-tab-active) .signal-path-floating-add-fx {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.signal-path-bar.mix-tab-active .signal-path-floating-add-fx {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .signal-path-bar.fx-library-collapsed:not(.mix-tab-active) .signal-path-scroll {
+    padding-right: 12px;
+    padding-bottom: 70px;
+  }
+
+  .signal-path-floating-add-fx {
+    right: 12px;
+    bottom: 10px;
+  }
 }
 
 /* Theme-specific scrollbar for signal path */
@@ -1191,15 +1267,14 @@
 
 .effect-visualization .node-params-panel {
   position: absolute;
-  width: min(950px, 92%);
-  max-height: 82%;
+  
   overflow-y: auto;
   border-radius: 14px;
-  border: 1px solid rgba(90, 90, 110, 0.8);
   background: rgba(28, 28, 38, 0);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   z-index: 2;
+  padding: 18px;
 }
 
 .node-params-panel.visible {
@@ -1298,16 +1373,391 @@
   gap: 12px;
 }
 
-.effect-visualization-toolbar {
+.default-effect-shell {
+  position: relative;
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 22px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(149, 164, 198, 0.26);
+  background:
+    linear-gradient(180deg, rgba(84, 26, 30, 0.18) 0%, rgba(17, 20, 29, 0.1) 18%, rgba(17, 20, 29, 0.06) 100%),
+    linear-gradient(160deg, rgba(57, 65, 86, 0.92) 0%, rgba(30, 34, 46, 0.94) 42%, rgba(22, 24, 34, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 28px 55px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+}
+
+.default-effect-shell::before,
+.default-effect-shell::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.24) 0%, rgba(88, 95, 118, 0.4) 24%, rgba(30, 34, 42, 0.95) 100%);
+  border: 1px solid rgba(215, 224, 255, 0.16);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.default-effect-shell::before {
+  top: 12px;
+  left: 12px;
+}
+
+.default-effect-shell::after {
+  top: 12px;
+  right: 12px;
+}
+
+.default-effect-shell.is-bypassed {
+  filter: saturate(0.8);
+}
+
+.default-effect-shell-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.default-effect-shell-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.default-effect-shell-led {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: radial-gradient(circle at 35% 35%, #ffd89a 0%, #ffa546 35%, #b2581d 100%);
+  box-shadow: 0 0 0 3px rgba(255, 165, 70, 0.12), 0 0 18px rgba(255, 147, 73, 0.45);
+}
+
+.default-effect-shell.is-bypassed .default-effect-shell-led {
+  background: radial-gradient(circle at 35% 35%, #f1c7c7 0%, #c56262 35%, #6f2e2e 100%);
+  box-shadow: 0 0 0 3px rgba(197, 98, 98, 0.12), 0 0 12px rgba(197, 98, 98, 0.35);
+}
+
+.default-effect-shell-titles {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.default-effect-shell-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: normal;
+  color: #eef2ff;
+}
+
+.default-effect-shell-subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(198, 206, 225, 0.68);
+}
+
+.default-effect-shell-meta {
+  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex: 0 0 auto;
+  flex-wrap: wrap;
 }
 
-.effect-visualization-toolbar[hidden] {
-  display: none;
+.default-effect-shell-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(190, 204, 236, 0.12);
+  background: linear-gradient(180deg, rgba(18, 21, 30, 0.68) 0%, rgba(10, 12, 19, 0.88) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: rgba(225, 231, 244, 0.84);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.default-effect-shell-chip-status {
+  border-color: rgba(255, 179, 117, 0.26);
+  color: #ffd5b3;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.default-effect-shell-chip-status:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 14px rgba(0, 0, 0, 0.18);
+}
+
+.default-effect-shell-chip-status:focus-visible {
+  outline: 2px solid rgba(255, 190, 120, 0.8);
+  outline-offset: 2px;
+}
+
+.default-effect-shell.is-bypassed .default-effect-shell-chip-status {
+  border-color: rgba(220, 134, 134, 0.26);
+  color: #f1c7c7;
+}
+
+.default-effect-shell-rail {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.54) 0%, rgba(17, 20, 29, 0.2) 100%);
+  border: 1px solid rgba(165, 178, 207, 0.08);
+}
+
+.default-effect-shell-meter {
+  height: 6px;
+  display: block;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(61, 69, 93, 0.42) 0%, rgba(98, 108, 138, 0.16) 100%);
+  overflow: hidden;
+}
+
+.default-effect-shell-meter::after {
+  content: "";
+  display: block;
+  width: var(--meter-fill, 0%);
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.12s ease-out, background 0.12s ease-out, opacity 0.12s ease-out;
+  background: linear-gradient(90deg, rgba(72, 222, 170, 0.55) 0%, rgba(255, 94, 94, 0.92) 100%);
+}
+
+.default-effect-shell-rail.is-inactive {
+  opacity: 0.45;
+}
+
+.default-effect-shell-rail.is-clipped {
+  box-shadow: inset 0 0 0 1px rgba(255, 110, 110, 0.12), 0 0 18px rgba(255, 94, 94, 0.08);
+}
+
+.default-effect-shell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.default-effect-section {
+  position: relative;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(169, 184, 218, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.015) 100%),
+    linear-gradient(180deg, rgba(11, 13, 21, 0.6) 0%, rgba(20, 23, 32, 0.42) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.default-effect-section-controls {
+  padding: 18px;
+}
+
+.default-effect-shell .node-param-tabs {
+  padding: 5px;
+  background: linear-gradient(180deg, rgba(10, 12, 19, 0.82) 0%, rgba(25, 28, 39, 0.72) 100%);
+  border-color: rgba(177, 193, 228, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.default-effect-shell .node-param-tab {
+  min-height: 34px;
+  color: rgba(203, 211, 229, 0.7);
+  letter-spacing: 0.08em;
+}
+
+.default-effect-shell .node-param-tab.is-active {
+  background: linear-gradient(180deg, rgba(228, 232, 241, 0.22) 0%, rgba(173, 182, 201, 0.12) 100%);
+  color: #f4f7ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.default-effect-shell .params-controls {
+  gap: 18px;
+}
+
+.default-effect-shell .node-param-group-block,
+.default-effect-shell .eq-visualizer,
+.default-effect-shell .mixer-inputs-section,
+.default-effect-shell .node-resource-selector {
+  position: relative;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(170, 183, 214, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0.01) 100%),
+    linear-gradient(180deg, rgba(13, 16, 24, 0.6) 0%, rgba(17, 20, 29, 0.32) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.default-effect-shell .node-param-group-block {
+  min-width: 220px;
+  gap: 14px;
+}
+
+.default-effect-shell .node-param-group-title,
+.default-effect-shell .eq-visualizer-header,
+.default-effect-shell .mixer-inputs-header,
+.default-effect-shell .node-resource-selector > label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(220, 227, 243, 0.68);
+}
+
+.default-effect-shell .node-param-group-items {
+  gap: 16px;
+}
+
+.default-effect-shell .node-param-group {
+  gap: 8px;
+  min-width: 86px;
+}
+
+.default-effect-shell .node-param-label {
+  color: rgba(201, 209, 225, 0.72);
+  letter-spacing: 0.12em;
+}
+
+.default-effect-shell .node-param-value {
+  color: rgba(231, 236, 246, 0.76);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.default-effect-shell .node-param-knob {
+  width: 40px;
+  height: 40px;
+  border-width: 1px;
+  border-color: rgba(184, 197, 226, 0.18);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.02) 28%, transparent 34%),
+    linear-gradient(180deg, rgba(66, 73, 93, 0.98) 0%, rgba(34, 38, 50, 1) 42%, rgba(16, 18, 25, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -7px 10px rgba(0, 0, 0, 0.34),
+    0 10px 16px rgba(0, 0, 0, 0.28);
+}
+
+.default-effect-shell .node-param-knob::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.default-effect-shell .node-param-knob:hover {
+  border-color: rgba(255, 190, 120, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -7px 10px rgba(0, 0, 0, 0.34),
+    0 12px 20px rgba(0, 0, 0, 0.32),
+    0 0 0 3px rgba(255, 190, 120, 0.08);
+}
+
+.default-effect-shell .node-param-knob .knob-indicator {
+  width: 3px;
+  height: 14px;
+  top: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff4df 0%, #ffbf5d 100%);
+  box-shadow: 0 0 8px rgba(255, 191, 93, 0.22);
+}
+
+.default-effect-shell .resource-controls {
+  gap: 10px;
+}
+
+.default-effect-shell .resource-picker-btn,
+.default-effect-shell .resource-browse-btn,
+.default-effect-shell .blend-open-btn {
+  border-radius: 10px;
+  border-color: rgba(192, 203, 229, 0.16);
+  background: linear-gradient(180deg, rgba(72, 79, 100, 0.9) 0%, rgba(38, 43, 57, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.default-effect-shell .resource-picker-btn:hover,
+.default-effect-shell .resource-browse-btn:hover,
+.default-effect-shell .blend-open-btn:hover {
+  border-color: rgba(255, 190, 120, 0.36);
+}
+
+.default-effect-shell .close-params-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(190, 204, 236, 0.14);
+  background: linear-gradient(180deg, rgba(22, 24, 34, 0.82) 0%, rgba(10, 12, 19, 0.92) 100%);
+  color: rgba(229, 235, 246, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.default-effect-shell .close-params-btn:hover {
+  background: linear-gradient(180deg, rgba(44, 48, 64, 0.9) 0%, rgba(17, 20, 29, 0.98) 100%);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .effect-visualization .node-params-panel {
+    width: min(100%, 96%);
+    padding: 12px;
+  }
+
+  .default-effect-shell {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .default-effect-shell-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .default-effect-shell-meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .default-effect-shell-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .default-effect-shell .close-params-btn {
+    justify-self: end;
+  }
+
+  .default-effect-shell .node-param-group-block {
+    min-width: 100%;
+  }
 }
 
 .effect-visualization-toolbar-btn {
@@ -1433,6 +1883,55 @@
   backdrop-filter: blur(12px);
 }
 
+.theme-light .default-effect-shell {
+  border-color: rgba(101, 120, 156, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(242, 246, 252, 0.84) 100%),
+    linear-gradient(160deg, rgba(228, 234, 244, 0.98) 0%, rgba(214, 222, 235, 0.98) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 22px 44px rgba(100, 114, 140, 0.18);
+}
+
+.theme-light .default-effect-shell-title {
+  color: #243044;
+}
+
+.theme-light .default-effect-shell-subtitle,
+.theme-light .default-effect-shell .node-param-label,
+.theme-light .default-effect-shell .node-param-group-title,
+.theme-light .default-effect-shell .eq-visualizer-header,
+.theme-light .default-effect-shell .mixer-inputs-header,
+.theme-light .default-effect-shell .node-resource-selector > label {
+  color: rgba(69, 83, 110, 0.72);
+}
+
+.theme-light .default-effect-shell-chip,
+.theme-light .default-effect-shell .close-params-btn,
+.theme-light .default-effect-shell .node-param-tabs,
+.theme-light .default-effect-shell .resource-picker-btn,
+.theme-light .default-effect-shell .resource-browse-btn,
+.theme-light .default-effect-shell .blend-open-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(229, 236, 246, 0.96) 100%);
+  border-color: rgba(120, 138, 172, 0.2);
+  color: #32435f;
+}
+
+.theme-light .default-effect-shell .default-effect-section,
+.theme-light .default-effect-shell .node-param-group-block,
+.theme-light .default-effect-shell .eq-visualizer,
+.theme-light .default-effect-shell .mixer-inputs-section,
+.theme-light .default-effect-shell .node-resource-selector {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(237, 242, 249, 0.95) 100%);
+  border-color: rgba(120, 138, 172, 0.16);
+}
+
+.theme-light .default-effect-shell .node-param-knob {
+  border-color: rgba(120, 138, 172, 0.22);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.15) 30%, transparent 35%),
+    linear-gradient(180deg, #f8fafc 0%, #d6ddea 44%, #b7c3d6 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), inset 0 -6px 8px rgba(126, 143, 170, 0.22), 0 10px 16px rgba(120, 138, 172, 0.18);
+}
+
 .theme-light .node-params-title {
   color: var(--text-primary);
 }
@@ -1529,6 +2028,42 @@
   box-shadow: 0 16px 40px rgba(40, 24, 15, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.theme-classic .default-effect-shell {
+  border-color: rgba(255, 232, 187, 0.2);
+  background:
+    linear-gradient(180deg, rgba(122, 77, 41, 0.18) 0%, rgba(69, 43, 24, 0.08) 100%),
+    linear-gradient(160deg, rgba(88, 55, 31, 0.96) 0%, rgba(53, 33, 19, 0.98) 100%);
+}
+
+.theme-classic .default-effect-shell-title {
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .default-effect-shell-subtitle,
+.theme-classic .default-effect-shell .node-param-label,
+.theme-classic .default-effect-shell .node-param-group-title,
+.theme-classic .default-effect-shell .eq-visualizer-header,
+.theme-classic .default-effect-shell .mixer-inputs-header,
+.theme-classic .default-effect-shell .node-resource-selector > label {
+  color: rgba(249, 228, 187, 0.68);
+}
+
+.theme-classic .default-effect-shell-chip,
+.theme-classic .default-effect-shell .close-params-btn,
+.theme-classic .default-effect-shell .node-param-tabs,
+.theme-classic .default-effect-shell .resource-picker-btn,
+.theme-classic .default-effect-shell .resource-browse-btn,
+.theme-classic .default-effect-shell .blend-open-btn,
+.theme-classic .default-effect-shell .default-effect-section,
+.theme-classic .default-effect-shell .node-param-group-block,
+.theme-classic .default-effect-shell .eq-visualizer,
+.theme-classic .default-effect-shell .mixer-inputs-section,
+.theme-classic .default-effect-shell .node-resource-selector {
+  border-color: rgba(255, 232, 187, 0.16);
+  background: linear-gradient(180deg, rgba(72, 46, 27, 0.82) 0%, rgba(49, 30, 18, 0.94) 100%);
+  color: var(--text-dark-primary);
 }
 
 .theme-classic .node-params-title {
@@ -2354,6 +2889,12 @@
   box-sizing: border-box;
   flex-shrink: 0;
   isolation: isolate;
+}
+
+.effect-visualization .node-params-panel .custom-layout-container {
+  align-self: center;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 .custom-layout-control {

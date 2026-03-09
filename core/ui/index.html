@@ -371,6 +371,10 @@
           </div>
         </div>
       </div>
+      <button class="signal-path-floating-add-fx" id="signal-path-floating-add-fx" type="button" aria-hidden="true">
+        <span class="signal-path-floating-add-fx-icon" aria-hidden="true">+</span>
+        <span>Add FX</span>
+      </button>
     </section>
 
     <!-- FX Library Selector Panel -->
@@ -389,6 +393,7 @@
           <div class="fx-selector-search">
             <input type="text" id="fx-search-input" placeholder="Search effects..." />
           </div>
+          <p>Drag any effect into the signal chain. You can also drag effects around to move them in the chain. </p>
           <div class="fx-selector-effects-list" id="fx-selector-effects-list">
             <!-- Effects rendered by JavaScript -->
           </div>
@@ -415,15 +420,6 @@
       <div class="tab-panel active" id="panel-visualizer">
         <div class="visualization-display">
           <div class="visualization-panel">
-            <div class="effect-visualization-header">
-              <div class="effect-visualization-heading">
-                <div class="effect-visualization-title" id="effect-visualization-title">Effect Visualization</div>
-                <div class="effect-visualization-subtitle" id="effect-visualization-subtitle">
-                  Select a node in the signal chain to edit parameters
-                </div>
-              </div>
-              <div class="effect-visualization-toolbar" id="effect-visualization-toolbar" hidden></div>
-            </div>
             <div class="effect-visualization" id="effect-visualization">
               <div class="effect-visualization-overlay" id="effect-visualization-overlay">
                 <div class="effect-visualization-placeholder">

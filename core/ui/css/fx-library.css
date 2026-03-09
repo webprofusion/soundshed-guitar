@@ -8,10 +8,13 @@
   border-bottom: 1px solid var(--border-browser);
   max-height: 250px;
   overflow: hidden;
+  transition: max-height 0.2s ease, border-color 0.2s ease;
 }
 
 .fx-selector-panel.collapsed {
-  max-height: 40px;
+  max-height: 0;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
 }
 
 .fx-selector-header {
@@ -57,6 +60,11 @@
 }
 
 .fx-selector-panel.collapsed .fx-selector-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fx-selector-panel.collapsed .fx-selector-header {
   opacity: 0;
   pointer-events: none;
 }

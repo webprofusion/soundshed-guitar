@@ -62,9 +62,6 @@ let signalPathEqInteraction: EqCurveInteraction | null = null;
 /** Knob instances for the current node params panel, keyed by param key. */
 const nodeParamKnobs = new Map<string, GenericKnob>();
 const effectVisualizationElement = document.getElementById("effect-visualization");
-const effectVisualizationTitle = document.getElementById("effect-visualization-title");
-const effectVisualizationSubtitle = document.getElementById("effect-visualization-subtitle");
-const effectVisualizationToolbarElement = document.getElementById("effect-visualization-toolbar");
 
 // Drag-drop state
 let draggedNodeId: string | null = null;
@@ -75,8 +72,6 @@ let lastSelectedNodeCategory: string | null = null;
 let lastRenderedPresetId: string | null = null;
 let overlayBypassClickCleanup: (() => void) | null = null;
 
-const DEFAULT_VISUALIZATION_TITLE = "";
-const DEFAULT_VISUALIZATION_SUBTITLE = "Select an item in the signal chain to edit";
 const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
   amp: "url('../images/equipment/amps/amp-04.png')",
   cab: "url('../images/equipment/cabs/cab-02.png')",
@@ -104,96 +99,16 @@ function updateEffectVisualization(node?: GraphNode): void {
     effectVisualizationElement.style.removeProperty("--effect-visual-bg");
     effectVisualizationElement.dataset.effectType = "";
     effectVisualizationElement.dataset.effectCategory = "";
-    if (effectVisualizationTitle) {
-      effectVisualizationTitle.textContent = DEFAULT_VISUALIZATION_TITLE;
-    }
-    if (effectVisualizationSubtitle) {
-      effectVisualizationSubtitle.textContent = DEFAULT_VISUALIZATION_SUBTITLE;
-    }
-    renderEffectVisualizationToolbar();
     return;
   }
 
   const category = getNodeCategory(node);
-  const typeInfo = EffectTypeRegistry.get(node.type);
-  const displayName = getNodeDisplayName(node);
-  const categoryLabel = (typeInfo?.category || category).toUpperCase();
   const background = EFFECT_VISUAL_BACKGROUNDS[category] || EFFECT_VISUAL_BACKGROUNDS.utility;
 
   effectVisualizationElement.classList.add("has-selection");
   effectVisualizationElement.style.setProperty("--effect-visual-bg", background);
   effectVisualizationElement.dataset.effectType = node.type;
   effectVisualizationElement.dataset.effectCategory = category;
-
-  if (effectVisualizationTitle) {
-    effectVisualizationTitle.textContent = displayName || DEFAULT_VISUALIZATION_TITLE;
-  }
-  if (effectVisualizationSubtitle) {
-    const effectTypeName = typeInfo?.displayName;
-    // Omit type name when it would duplicate the title
-    const subtitle = effectTypeName && effectTypeName !== displayName
-      ? `${categoryLabel} · ${effectTypeName}`
-      : categoryLabel;
-    effectVisualizationSubtitle.textContent = subtitle;
-  }
-
-  renderEffectVisualizationToolbar(node);
-}
-
-function renderEffectVisualizationToolbar(node?: GraphNode): void {
-  if (!effectVisualizationToolbarElement) {
-    return;
-  }
-
-  if (!node) {
-    effectVisualizationToolbarElement.innerHTML = "";
-    effectVisualizationToolbarElement.hidden = true;
-    return;
-  }
-
-  const bypassed = isNodeBypassed(node);
-  const bypassTitle = bypassed ? "Enable effect" : "Bypass effect";
-  const blendId = getBlendState(node)?.blend?.id || "";
-  const canRecalibrate = node.type === EffectGuids.kFxNam || node.type === EffectGuids.kAmpNam || node.type === EffectGuids.kAmpNamOptimized;
-  const layoutButton = isExperimentalFeaturesEnabled() ? `
-    <button
-      class="effect-visualization-toolbar-btn node-customize-layout-btn"
-      data-node-id="${node.id}"
-      data-effect-type="${node.type}"
-      data-blend-id="${blendId}"
-      type="button"
-      title="Customize layout"
-      aria-label="Customize layout"
-    >
-      ${renderIcon("gear", "effect-visualization-toolbar-icon customize-layout-icon")}
-    </button>
-  ` : "";
-  const recalibrateButton = canRecalibrate ? `
-    <button
-      class="effect-visualization-toolbar-btn node-calibrate-btn"
-      data-node-id="${node.id}"
-      type="button"
-      title="Recalibrate model"
-      aria-label="Recalibrate model"
-    >
-      ${renderIcon("microscope", "effect-visualization-toolbar-icon recalibrate-icon")}
-    </button>
-  ` : "";
-
-  effectVisualizationToolbarElement.innerHTML = `
-    <button
-      class="effect-visualization-toolbar-btn node-bypass-btn ${bypassed ? "bypassed" : ""}"
-      data-node-id="${node.id}"
-      type="button"
-      title="${bypassTitle}"
-      aria-label="${bypassTitle}"
-    >
-      ${renderIcon("mute", "effect-visualization-toolbar-icon bypass-icon")}
-    </button>
-    ${recalibrateButton}
-    ${layoutButton}
-  `;
-  effectVisualizationToolbarElement.hidden = false;
 }
 
 function updateLastSelectedNode(node: GraphNode): void {
@@ -469,6 +384,9 @@ export function renderSignalPathBar(): void {
     return;
   }
 
+  const signalPathBar = document.getElementById("signal-path-bar");
+  signalPathBar?.classList.toggle("mix-tab-active", mixTabActive);
+
   // Show/hide composite edit mode banner
   updateCompositeEditBanner();
 
@@ -558,6 +476,68 @@ export function refreshSelectedNodeParams(): void {
     return;
   }
   showNodeParamsPanel(node, activePreset);
+}
+
+function getSelectedNodeDiagnostics(): import("./types.js").SignalLevelMetrics | null {
+  if (!selectedNodeId) {
+    return null;
+  }
+
+  const diagnostics = uiState.signalDiagnostics;
+  const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
+  if (!enabled || !diagnostics) {
+    return null;
+  }
+
+  if (selectedNodeId === "__input__") {
+    return diagnostics.input ?? null;
+  }
+  if (selectedNodeId === "__output__") {
+    return diagnostics.output ?? null;
+  }
+
+  const nodeMetrics = diagnostics.nodes.find((entry) => entry.nodeId === selectedNodeId);
+  return nodeMetrics?.levels ?? null;
+}
+
+function normalizePeakDbfsForShellMeter(peakDbfs: number): number {
+  const minDbfs = -48;
+  const maxDbfs = 0;
+  const normalized = (peakDbfs - minDbfs) / (maxDbfs - minDbfs);
+  return Math.max(0, Math.min(1, normalized));
+}
+
+export function updateSelectedNodePeakMeter(): void {
+  const rail = nodeParamsPanelElement?.querySelector(".default-effect-shell-rail") as HTMLElement | null;
+  if (!rail) {
+    return;
+  }
+
+  const meter = rail.querySelector<HTMLElement>(".default-effect-shell-meter");
+  if (!meter) {
+    return;
+  }
+
+  const metrics = getSelectedNodeDiagnostics();
+  rail.classList.remove("is-inactive", "is-clipped");
+
+  if (!metrics || !Number.isFinite(metrics.peakDbfs)) {
+    rail.classList.add("is-inactive");
+    rail.title = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"])
+      ? "No diagnostics data for this node"
+      : "Diagnostics disabled";
+    meter.style.setProperty("--meter-fill", "0%");
+    return;
+  }
+
+  const normalized = normalizePeakDbfsForShellMeter(metrics.peakDbfs);
+  meter.style.setProperty("--meter-fill", `${(normalized * 100).toFixed(1)}%`);
+
+  if (metrics.clipped || metrics.peakDbfs >= -0.3) {
+    rail.classList.add("is-clipped");
+  }
+
+  rail.title = `Node peak: ${metrics.peakDbfs.toFixed(1)} dBFS · Headroom: ${metrics.headroomDb.toFixed(1)} dB`;
 }
 
 type EdgeRef = SignalPathEdgeRef & { gain: number };
@@ -1775,42 +1755,118 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   const layoutIncludesResourceControls = Boolean(
     customLayout && !useDefaultControls && customLayout.controls.some((control) => control.bindingType === "resource" || control.paramKey.startsWith("__resource__:")),
   );
+  const shellTitle = escapeHtml(getNodeDisplayName(node));
+  const shellCategoryLabel = escapeHtml(
+    getNodeCategory(node)
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+  const shellTypeLabel = escapeHtml(typeInfo?.displayName || shellCategoryLabel);
+  const shellStatusLabel = isNodeBypassed(node) ? "BYPASSED" : "ENABLED";
+  const shellBypassTitle = isNodeBypassed(node) ? "Enable effect" : "Bypass effect";
+  const shellBlendId = getBlendState(node)?.blend?.id || "";
+  const shellCanRecalibrate = node.type === EffectGuids.kFxNam || node.type === EffectGuids.kAmpNam || node.type === EffectGuids.kAmpNamOptimized;
+  const shellLayoutButton = isExperimentalFeaturesEnabled() ? `
+    <button
+      class="effect-visualization-toolbar-btn node-customize-layout-btn"
+      data-node-id="${node.id}"
+      data-effect-type="${node.type}"
+      data-blend-id="${shellBlendId}"
+      type="button"
+      title="Customize layout"
+      aria-label="Customize layout"
+    >
+      ${renderIcon("gear", "effect-visualization-toolbar-icon customize-layout-icon")}
+    </button>
+  ` : "";
+  const shellRecalibrateButton = shellCanRecalibrate ? `
+    <button
+      class="effect-visualization-toolbar-btn node-calibrate-btn"
+      data-node-id="${node.id}"
+      type="button"
+      title="Recalibrate model"
+      aria-label="Recalibrate model"
+    >
+      ${renderIcon("microscope", "effect-visualization-toolbar-icon recalibrate-icon")}
+    </button>
+  ` : "";
+  const shellMainContent = customLayoutHtml ? `
+    ${layoutIncludesResourceControls ? "" : resourceSelector}
+    ${eqVisualizer}
+    ${mixerInputControls}
+    <div class="default-effect-section default-effect-section-controls default-effect-section-custom-layout">
+      ${customLayoutHtml}
+    </div>
+  ` : (() => {
+    // Build the standard default controls HTML
+    const defaultControlsHtml = hasAdvancedTab ? `
+      <div class="node-param-tabs" role="tablist" aria-label="Parameter Groups">
+        <button class="node-param-tab is-active" data-tab="main" type="button" role="tab" aria-selected="true">Main</button>
+        <button class="node-param-tab" data-tab="advanced" type="button" role="tab" aria-selected="false">Advanced</button>
+      </div>
+      <div class="node-param-tab-panels">
+        <div class="node-param-tab-panel is-active" data-tab="main" role="tabpanel">
+          <div class="params-controls">
+            ${buildParamControls(mainParamDefs)}
+          </div>
+        </div>
+        <div class="node-param-tab-panel" data-tab="advanced" role="tabpanel">
+          <div class="params-controls">
+            ${buildParamControls(advancedParamDefs)}
+          </div>
+        </div>
+      </div>
+    ` : `
+      <div class="params-controls">
+        ${buildParamControls(paramDefs)}
+      </div>
+    `;
+    // If a backdrop layout exists, wrap the default controls inside it
+    const renderedControls = useDefaultControls && customLayout
+      ? renderCustomLayoutBackdrop(node, customLayout, defaultControlsHtml)
+      : defaultControlsHtml;
+    return `
+      ${layoutIncludesResourceControls ? "" : resourceSelector}
+      ${eqVisualizer}
+      ${mixerInputControls}
+      <div class="default-effect-section default-effect-section-controls">
+        ${renderedControls}
+      </div>
+    `;
+  })();
 
   nodeParamsPanelElement.innerHTML = `
     
     <div class="node-params-body">
-      ${layoutIncludesResourceControls ? "" : resourceSelector}
-      ${eqVisualizer}
-      ${mixerInputControls}
-      ${customLayoutHtml ? customLayoutHtml : (() => {
-        // Build the standard default controls HTML
-        const defaultControlsHtml = hasAdvancedTab ? `
-          <div class="node-param-tabs" role="tablist" aria-label="Parameter Groups">
-            <button class="node-param-tab is-active" data-tab="main" type="button" role="tab" aria-selected="true">Main</button>
-            <button class="node-param-tab" data-tab="advanced" type="button" role="tab" aria-selected="false">Advanced</button>
-          </div>
-          <div class="node-param-tab-panels">
-            <div class="node-param-tab-panel is-active" data-tab="main" role="tabpanel">
-              <div class="params-controls">
-                ${buildParamControls(mainParamDefs)}
-              </div>
-            </div>
-            <div class="node-param-tab-panel" data-tab="advanced" role="tabpanel">
-              <div class="params-controls">
-                ${buildParamControls(advancedParamDefs)}
-              </div>
+      <section class="default-effect-shell${isNodeBypassed(node) ? " is-bypassed" : ""}">
+        <div class="default-effect-shell-header">
+          <div class="default-effect-shell-identity">
+            <span class="default-effect-shell-led" aria-hidden="true"></span>
+            <div class="default-effect-shell-titles">
+              <div class="default-effect-shell-title">${shellTitle}</div>
+              <div class="default-effect-shell-subtitle">${shellCategoryLabel} · ${shellTypeLabel}</div>
             </div>
           </div>
-        ` : `
-          <div class="params-controls">
-            ${buildParamControls(paramDefs)}
+          <div class="default-effect-shell-meta" aria-label="Module status">
+            <button
+              class="default-effect-shell-chip default-effect-shell-chip-status node-bypass-btn ${isNodeBypassed(node) ? "bypassed" : ""}"
+              data-node-id="${node.id}"
+              type="button"
+              title="${shellBypassTitle}"
+              aria-label="${shellBypassTitle}"
+            >${shellStatusLabel}</button>
+            ${shellRecalibrateButton}
+            ${shellLayoutButton}
           </div>
-        `;
-        // If a backdrop layout exists, wrap the default controls inside it
-        return useDefaultControls && customLayout
-          ? renderCustomLayoutBackdrop(node, customLayout, defaultControlsHtml)
-          : defaultControlsHtml;
-      })()}
+          <button class="close-params-btn" type="button" aria-label="Close effect panel" title="Close effect panel">×</button>
+        </div>
+        <div class="default-effect-shell-rail" aria-hidden="true">
+          <span class="default-effect-shell-meter" style="--meter-fill: 0%"></span>
+        </div>
+        <div class="default-effect-shell-content">
+          ${shellMainContent}
+        </div>
+      </section>
     </div>
   `;
 
@@ -1828,6 +1884,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindCalibrationButton(node);
   bindCustomizeLayoutButton(node);
   bindParamTabs();
+  updateSelectedNodePeakMeter();
 }
 
 function bindLayoutOverlayBypassToggles(node: GraphNode, preset: Preset): void {
@@ -2465,7 +2522,7 @@ function bindCloseButton(): void {
 }
 
 function bindBypassButton(node: GraphNode, preset: Preset): void {
-  const bypassButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-bypass-btn, #effect-visualization-toolbar .node-bypass-btn");
+  const bypassButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-bypass-btn");
   bypassButtons.forEach((bypassBtn) => {
     bypassBtn.addEventListener("click", () => {
       const currentBypassed = isNodeBypassed(node);
@@ -2482,7 +2539,7 @@ function bindBypassButton(node: GraphNode, preset: Preset): void {
 }
 
 function bindCalibrationButton(node: GraphNode): void {
-  const calibrateButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-calibrate-btn, #effect-visualization-toolbar .node-calibrate-btn");
+  const calibrateButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-calibrate-btn");
   if (!calibrateButtons.length) {
     return;
   }
@@ -2499,7 +2556,7 @@ function bindCalibrationButton(node: GraphNode): void {
 }
 
 function bindCustomizeLayoutButton(node: GraphNode): void {
-  const layoutButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-customize-layout-btn, #effect-visualization-toolbar .node-customize-layout-btn");
+  const layoutButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-customize-layout-btn");
   if (!layoutButtons.length) {
     return;
   }
@@ -2679,15 +2736,15 @@ function renderMixerPresetTabs(): void {
   const signalPathBar = document.getElementById("signal-path-bar");
   const mixer = uiState.mixer;
 
-  // Show tab bar whenever there is at least one active preset so the user can
-  // always close/clear even the single active slot.
-  const anyActive = !isCompositeEditMode() && mixer && mixer.activePresetIds.length >= 1;
+  const shouldShowTabs = !isCompositeEditMode() && !!mixer && mixer.activePresetIds.length > 1;
 
-  if (!anyActive) {
+  if (!shouldShowTabs) {
     if (tabBar) tabBar.remove();
     mixTabActive = false;
     return;
   }
+
+  const activeMixer = mixer;
 
   if (!tabBar) {
     tabBar = document.createElement("div");
@@ -2701,11 +2758,11 @@ function renderMixerPresetTabs(): void {
     }
   }
 
-  const focusedId = uiState.focusedMixerPresetId ?? mixer.activePresetIds[0];
+  const focusedId = uiState.focusedMixerPresetId ?? activeMixer.activePresetIds[0];
 
-  const presetTabsHtml = mixer.activePresetIds.map((id) => {
-    const name = uiState.presetCache.get(id)?.name ?? mixer.presets[id]?.name ?? id;
-    const ps = mixer.presets[id];
+  const presetTabsHtml = activeMixer.activePresetIds.map((id) => {
+    const name = uiState.presetCache.get(id)?.name ?? activeMixer.presets[id]?.name ?? id;
+    const ps = activeMixer.presets[id];
     const muted = ps?.mute ?? false;
     const soloed = ps?.solo ?? false;
     const active = !mixTabActive && id === focusedId;

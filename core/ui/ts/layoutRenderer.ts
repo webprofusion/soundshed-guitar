@@ -97,7 +97,6 @@ export function renderCustomLayout(
         height: ${Math.round(layout.dimensions.height)}px;
         overflow: hidden;
         border-radius: 8px;
-        background: var(--bg-dark-secondary);
         margin: 0;
         padding: 0;
         box-sizing: border-box;
@@ -256,7 +255,6 @@ export function renderCustomLayoutBackdrop(
         height: ${Math.round(layout.dimensions.height)}px;
         overflow: hidden;
         border-radius: 8px;
-        background: var(--bg-dark-secondary);
         margin: 0;
         padding: 0;
         box-sizing: border-box;

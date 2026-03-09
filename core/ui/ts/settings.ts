@@ -16,6 +16,7 @@ import { showConfirm } from "./dialogs.js";
 import { initCompositeEditor, renderCompositeList } from "./compositeEditor.js";
 import { initLayoutManager, renderLayoutList } from "./layoutManager.js";
 import { initBlendManager, renderBlendList } from "./blendManager.js";
+import { updateSelectedNodePeakMeter } from "./signalPath.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
@@ -481,6 +482,7 @@ function updateDiagnosticsSetting(): void {
     uiState.signalPeakHold = null;
   }
   updateSignalDiagnosticsView();
+  updateSelectedNodePeakMeter();
 }
 
 function initInterfaceCalibrationControls(): void {

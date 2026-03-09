@@ -9,7 +9,7 @@ import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
-import { refreshSelectedNodeParams, renderSignalPathBar } from "./signalPath.js";
+import { refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
 import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport } from "./toneSharingPanel.js";
@@ -908,6 +908,7 @@ export function handleIncomingMessage(message: string): void {
       if (diagnostics && diagnostics.input && diagnostics.output) {
         uiState.signalDiagnostics = diagnostics;
         updateSignalDiagnosticsView();
+        updateSelectedNodePeakMeter();
         refreshSavePresetModalPeakInfoIfOpen();
       }
       break;

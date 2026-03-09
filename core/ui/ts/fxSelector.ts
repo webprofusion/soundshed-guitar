@@ -20,10 +20,42 @@ const fxSelectorEffectsList = document.getElementById("fx-selector-effects-list"
 const fxSearchInput = document.getElementById("fx-search-input") as HTMLInputElement | null;
 const fxSelectorToggle = document.getElementById("fx-selector-toggle") as HTMLButtonElement | null;
 const fxSelectorHeader = document.querySelector(".fx-selector-header") as HTMLElement | null;
+const signalPathBar = document.getElementById("signal-path-bar");
+const floatingAddFxButton = document.getElementById("signal-path-floating-add-fx") as HTMLButtonElement | null;
 
 // State
 let activeCategory = "amp"; // Currently selected category tab
 let searchFilter = "";
+
+function syncFxSelectorCollapsedState(options?: { focusSearch?: boolean }): void {
+  const isCollapsed = fxSelectorPanel?.classList.contains("collapsed") ?? false;
+  fxSelectorToggle?.setAttribute("aria-expanded", String(!isCollapsed));
+  if (fxSelectorToggle) {
+    fxSelectorToggle.title = isCollapsed ? "Expand FX Library" : "Collapse FX Library";
+  }
+  signalPathBar?.classList.toggle("fx-library-collapsed", isCollapsed);
+  floatingAddFxButton?.setAttribute("aria-hidden", String(!isCollapsed));
+
+  if (!isCollapsed && options?.focusSearch) {
+    fxSearchInput?.focus();
+  }
+}
+
+export function isFxSelectorCollapsed(): boolean {
+  return fxSelectorPanel?.classList.contains("collapsed") ?? false;
+}
+
+export function setFxSelectorCollapsed(collapsed: boolean, options?: { focusSearch?: boolean }): void {
+  if (!fxSelectorPanel) {
+    return;
+  }
+  fxSelectorPanel.classList.toggle("collapsed", collapsed);
+  syncFxSelectorCollapsedState(options);
+}
+
+export function expandFxSelector(options?: { focusSearch?: boolean }): void {
+  setFxSelectorCollapsed(false, options);
+}
 
 // Category display metadata — id → { name, color }.
 // This is the only UI-side definition needed; the actual category list
@@ -87,12 +119,11 @@ export function initFxSelector(): void {
     return;
   }
 
+  syncFxSelectorCollapsedState();
+
   // Toggle collapse/expand
   fxSelectorToggle?.addEventListener("click", () => {
-    fxSelectorPanel.classList.toggle("collapsed");
-    const isCollapsed = fxSelectorPanel.classList.contains("collapsed");
-    fxSelectorToggle.setAttribute("aria-expanded", String(!isCollapsed));
-    fxSelectorToggle.title = isCollapsed ? "Expand FX Library" : "Collapse FX Library";
+    setFxSelectorCollapsed(!isFxSelectorCollapsed());
   });
 
   fxSelectorHeader?.addEventListener("click", (event) => {
@@ -100,12 +131,11 @@ export function initFxSelector(): void {
     if (target.closest(".fx-selector-toggle")) {
       return;
     }
-    fxSelectorPanel.classList.toggle("collapsed");
-    const isCollapsed = fxSelectorPanel.classList.contains("collapsed");
-    fxSelectorToggle?.setAttribute("aria-expanded", String(!isCollapsed));
-    if (fxSelectorToggle) {
-      fxSelectorToggle.title = isCollapsed ? "Expand FX Library" : "Collapse FX Library";
-    }
+    setFxSelectorCollapsed(!isFxSelectorCollapsed());
+  });
+
+  floatingAddFxButton?.addEventListener("click", () => {
+    expandFxSelector({ focusSearch: true });
   });
 
   // Search input
