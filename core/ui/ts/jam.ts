@@ -444,6 +444,7 @@ export function renderFloatingPlayer(): void {
             src="${src}"
             title="${escapeHtml(video.title)}"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
             referrerpolicy="strict-origin-when-cross-origin"
             allowfullscreen>
           </iframe>
