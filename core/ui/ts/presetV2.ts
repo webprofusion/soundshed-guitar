@@ -143,6 +143,7 @@ const EFFECT_STUBS: EffectStub[] = [
   // Pitch
   { type: EffectGuids.kPitchShift,       aliases: ["pitch_shift"] },
   { type: EffectGuids.kTranspose,        aliases: ["transpose"] },
+  { type: EffectGuids.kTransposeStft,    aliases: ["transpose_stft"] },
   { type: EffectGuids.kOctave,           aliases: ["octave"] },
   // Synth
   { type: EffectGuids.kSynthSaw,         aliases: ["synth_saw"] },

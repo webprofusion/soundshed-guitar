@@ -69,6 +69,7 @@ namespace guitarfx
     // ── Pitch ─────────────────────────────────────────────────────────────
     constexpr const char* kPitchShift      = "0c15f065-8335-4932-9d2f-366d436ec30a";
     constexpr const char* kTranspose       = "9b89cc46-e05b-4f06-981e-1d74d1f628cf";
+    constexpr const char* kTransposeStft   = "66b3a43a-72eb-4c7a-9c47-50e9ab24b718";
     constexpr const char* kOctave          = "2e4d5380-5a79-412f-bfc0-bf84ef74d561";
 
     // ── Utility ───────────────────────────────────────────────────────────

@@ -84,6 +84,7 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kAutoWah` | `b06c6d84-01b3-4d0a-ad98-40eecb64438e` | `auto_wah` |
 | `kPitchShift` | `0c15f065-8335-4932-9d2f-366d436ec30a` | `pitch_shift` |
 | `kTranspose` | `9b89cc46-e05b-4f06-981e-1d74d1f628cf` | `transpose` |
+| `kTransposeStft` | `66b3a43a-72eb-4c7a-9c47-50e9ab24b718` | `transpose_stft` |
 | `kOctave` | `2e4d5380-5a79-412f-bfc0-bf84ef74d561` | `octave` |
 | `kGain` | `0bcd895e-5d36-4247-a351-6bed1fcb37a8` | `gain` |
 | `kSynthSaw` | `608e846e-0e60-4064-9c83-37c0df573c38` | `synth_saw` |
@@ -386,6 +387,14 @@ High-quality transpose effect optimized for integer semitone steps using Signals
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `semitones` | -36..+12 | 0.0 | st |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+### Transpose (STFT) (`transpose_stft`)
+STFT phase-vocoder transpose intended for direct comparison with the default Signalsmith-based transpose, tuned for low-latency down-tuning to -12 semitones.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `semitones` | -12..+12 | 0.0 | st |
 | `mix` | 0.0–1.0 | 1.0 | — |
 
 ### Gain (`gain`)

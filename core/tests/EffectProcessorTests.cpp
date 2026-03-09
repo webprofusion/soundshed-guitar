@@ -109,6 +109,46 @@ SignalAnalysis AnalyzeSignal(const std::vector<float>& buffer)
   return result;
 }
 
+double EstimateFrequencyFromPositiveZeroCrossings(const std::vector<float>& buffer,
+                                                  double sampleRate)
+{
+  std::vector<double> crossingIndices;
+  crossingIndices.reserve(buffer.size() / 32);
+
+  for (size_t i = 1; i < buffer.size(); ++i)
+  {
+    const float previous = buffer[i - 1];
+    const float current = buffer[i];
+    if (previous <= 0.0f && current > 0.0f)
+    {
+      const float delta = current - previous;
+      const double fraction = std::abs(delta) > 1.0e-9f ? (-previous / delta) : 0.0;
+      crossingIndices.push_back(static_cast<double>(i - 1) + fraction);
+    }
+  }
+
+  if (crossingIndices.size() < 2)
+    return 0.0;
+
+  double totalPeriod = 0.0;
+  int periods = 0;
+  for (size_t i = 1; i < crossingIndices.size(); ++i)
+  {
+    const double period = crossingIndices[i] - crossingIndices[i - 1];
+    if (period > 1.0)
+    {
+      totalPeriod += period;
+      ++periods;
+    }
+  }
+
+  if (periods == 0)
+    return 0.0;
+
+  const double averagePeriod = totalPeriod / static_cast<double>(periods);
+  return averagePeriod > 0.0 ? sampleRate / averagePeriod : 0.0;
+}
+
 DriveMetrics MeasureDriveMetrics(const std::vector<float>& buffer)
 {
   DriveMetrics metrics;
@@ -942,6 +982,130 @@ bool TestTransposeLatencySpecific()
   return lowShiftResponsive && slightDownTuneStillResponsive && deepShiftStillBounded && qualityModeIsHigherLatency;
 }
 
+bool TestStftTransposeSpecific()
+{
+  std::cout << "\n--- StftTransposeEffect Tests ---\n";
+
+  auto& registry = guitarfx::EffectRegistry::Instance();
+  auto effect = registry.Create(guitarfx::EffectGuids::kTransposeStft);
+  if (!effect)
+  {
+    std::cout << "  FAIL: Could not create STFT transpose effect\n";
+    return false;
+  }
+
+  effect->Prepare(kTestSampleRate, kTestBlockSize);
+  effect->SetParam("mix", 1.0);
+  effect->SetParam("semitones", -12.0);
+
+  const int latencySamples = effect->GetLatencySamples();
+  const int latencyBlocks = std::max(0, (latencySamples + kTestBlockSize - 1) / kTestBlockSize);
+  const int blocksToProcess = latencyBlocks + 10;
+  const int totalSamples = blocksToProcess * kTestBlockSize;
+
+  std::vector<float> inputL(static_cast<size_t>(totalSamples), 0.0f);
+  std::vector<float> inputR(static_cast<size_t>(totalSamples), 0.0f);
+  std::vector<float> outputL(static_cast<size_t>(totalSamples), 0.0f);
+  std::vector<float> outputR(static_cast<size_t>(totalSamples), 0.0f);
+  std::vector<float> blockOutL(kTestBlockSize, 0.0f);
+  std::vector<float> blockOutR(kTestBlockSize, 0.0f);
+
+  GenerateSineWave(inputL, 440.0, 0.5);
+  GenerateSineWave(inputR, 440.0, 0.5);
+
+  float* outputs[2] = {blockOutL.data(), blockOutR.data()};
+  for (int block = 0; block < blocksToProcess; ++block)
+  {
+    std::fill(blockOutL.begin(), blockOutL.end(), 0.0f);
+    std::fill(blockOutR.begin(), blockOutR.end(), 0.0f);
+    float* inputs[2] = {
+      inputL.data() + block * kTestBlockSize,
+      inputR.data() + block * kTestBlockSize
+    };
+    effect->Process(inputs, outputs, kTestBlockSize);
+    std::copy(blockOutL.begin(), blockOutL.end(), outputL.begin() + static_cast<size_t>(block * kTestBlockSize));
+    std::copy(blockOutR.begin(), blockOutR.end(), outputR.begin() + static_cast<size_t>(block * kTestBlockSize));
+  }
+
+  const size_t warmupStart = static_cast<size_t>(std::min(totalSamples - 1,
+    latencySamples + kTestBlockSize * 2));
+  std::vector<float> steadyState(outputL.begin() + static_cast<std::ptrdiff_t>(warmupStart), outputL.end());
+  const auto analysis = AnalyzeSignal(steadyState);
+  const double detectedFrequency = EstimateFrequencyFromPositiveZeroCrossings(steadyState, kTestSampleRate);
+
+  const bool latencyBounded = latencySamples > 0 && latencySamples <= kTestBlockSize * 2;
+  const bool outputHealthy = !analysis.hasNaN && !analysis.hasInf && !analysis.isAllZeros && analysis.peakValue > 0.05;
+  const bool octaveDownDetected = detectedFrequency >= 205.0 && detectedFrequency <= 235.0;
+
+  std::cout << "  " << std::left << std::setw(44) << "Latency stays within two blocks:"
+            << (latencyBounded ? "PASS" : "FAIL")
+            << " (latency=" << latencySamples << ")\n";
+  std::cout << "  " << std::left << std::setw(44) << "Steady-state output remains valid:"
+            << (outputHealthy ? "PASS" : "FAIL")
+            << " (peak=" << std::fixed << std::setprecision(3) << analysis.peakValue << ")\n";
+  std::cout << "  " << std::left << std::setw(44) << "-12 st lands near one octave down:"
+            << (octaveDownDetected ? "PASS" : "FAIL")
+            << " (freq=" << std::fixed << std::setprecision(1) << detectedFrequency << " Hz)\n";
+
+  return latencyBounded && outputHealthy && octaveDownDetected;
+}
+
+bool TestStftTransposeLiveChangesSpecific()
+{
+  std::cout << "\n--- StftTransposeEffect Live Change Tests ---\n";
+
+  auto& registry = guitarfx::EffectRegistry::Instance();
+  auto effect = registry.Create(guitarfx::EffectGuids::kTransposeStft);
+  if (!effect)
+  {
+    std::cout << "  FAIL: Could not create STFT transpose effect\n";
+    return false;
+  }
+
+  effect->Prepare(kTestSampleRate, kTestBlockSize);
+  effect->SetParam("mix", 1.0);
+
+  std::vector<float> inputL(kTestBlockSize, 0.0f);
+  std::vector<float> inputR(kTestBlockSize, 0.0f);
+  std::vector<float> outputL(kTestBlockSize, 0.0f);
+  std::vector<float> outputR(kTestBlockSize, 0.0f);
+  GenerateSineWave(inputL, 440.0, 0.5);
+  GenerateSineWave(inputR, 440.0, 0.5);
+
+  float* inputs[2] = {inputL.data(), inputR.data()};
+  float* outputs[2] = {outputL.data(), outputR.data()};
+
+  const std::vector<int> semitoneSequence = {-1, -12, -2, 0, 5, -12, 2, 0};
+  bool allBlocksHealthy = true;
+  bool latencyTracksTarget = true;
+
+  for (const int semitones : semitoneSequence)
+  {
+    effect->SetParam("semitones", static_cast<double>(semitones));
+
+    const int reportedLatency = effect->GetLatencySamples();
+    const int expectedLatency = (semitones == 0) ? 0 : (std::abs(semitones) <= 2 ? 384 : 768);
+    latencyTracksTarget = latencyTracksTarget && (reportedLatency == expectedLatency);
+
+    for (int block = 0; block < 4; ++block)
+    {
+      std::fill(outputL.begin(), outputL.end(), 0.0f);
+      std::fill(outputR.begin(), outputR.end(), 0.0f);
+      effect->Process(inputs, outputs, kTestBlockSize);
+
+      const auto analysis = AnalyzeSignal(outputL);
+      allBlocksHealthy = allBlocksHealthy && !analysis.hasNaN && !analysis.hasInf;
+    }
+  }
+
+  std::cout << "  " << std::left << std::setw(44) << "Reported latency tracks pending target:"
+            << (latencyTracksTarget ? "PASS" : "FAIL") << "\n";
+  std::cout << "  " << std::left << std::setw(44) << "Rapid semitone changes stay finite:"
+            << (allBlocksHealthy ? "PASS" : "FAIL") << "\n";
+
+  return latencyTracksTarget && allBlocksHealthy;
+}
+
 bool TestPitchShiftQualitySpecific()
 {
   std::cout << "\n--- PitchShiftEffect Quality Tests ---\n";
@@ -1039,6 +1203,12 @@ int main()
     return 1;
 
   if (!TestOctaveSpecific())
+    return 1;
+
+  if (!TestStftTransposeSpecific())
+    return 1;
+
+  if (!TestStftTransposeLiveChangesSpecific())
     return 1;
 
   if (!TestTransposeLatencySpecific())

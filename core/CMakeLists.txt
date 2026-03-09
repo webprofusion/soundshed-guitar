@@ -101,6 +101,14 @@ if(NOT DEFINED signalsmith_stretch_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     FetchContent_MakeAvailable(signalsmith_stretch)
 endif()
 
+if(NOT DEFINED stftpitchshift_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(stftpitchshift
+        GIT_REPOSITORY https://github.com/jurihock/stftPitchShift.git
+        GIT_TAG main)
+    FetchContent_MakeAvailable(stftpitchshift)
+endif()
+
 # NeuralAmpModelerCore + Eigen (used by NAM effects)
 if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam)
     include(FetchContent)
@@ -246,6 +254,7 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/effects/AutoWahEffect.h
     src/dsp/effects/OctaveEffect.h
     src/dsp/effects/PitchShiftEffect.h
+    src/dsp/effects/StftTransposeEffect.h
     src/dsp/effects/TransposeEffect.h
     src/dsp/effects/DoublerEffect.h
     src/dsp/effects/SynthSawEffect.h
@@ -368,6 +377,12 @@ if(TARGET signalsmith_stretch::headers)
     target_link_libraries(SoundshedGuitarCore PUBLIC signalsmith_stretch::headers)
 elseif(DEFINED signalsmith_stretch_SOURCE_DIR)
     target_include_directories(SoundshedGuitarCore PUBLIC "${signalsmith_stretch_SOURCE_DIR}")
+endif()
+
+if(DEFINED stftpitchshift_SOURCE_DIR)
+    target_include_directories(SoundshedGuitarCore PUBLIC "${stftpitchshift_SOURCE_DIR}/cpp")
+else()
+    message(FATAL_ERROR "stftPitchShift sources are required for transpose_stft. Set stftpitchshift_SOURCE_DIR or enable GUITARFX_CORE_FETCH_DEPS.")
 endif()
 
 # Platform flags
