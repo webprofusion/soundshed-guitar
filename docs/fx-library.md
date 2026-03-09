@@ -214,7 +214,7 @@ Clean digital delay.
 | `mix` | 0.0–1.0 | 0.3 | — |
 
 ### Algorithmic Reverbs
-The reverb family uses a shared multi-mode algorithmic engine with dedicated type IDs:
+Room, chamber, and advanced reverb share a common algorithmic engine. Spring and ambient use dedicated processors because their topology and voicing diverge more strongly from the shared room/chamber design:
 
 - `reverb_room`
 - `reverb_chamber`
@@ -222,7 +222,7 @@ The reverb family uses a shared multi-mode algorithmic engine with dedicated typ
 - `reverb_advanced`
 - `reverb_ambient`
 
-Each mode has tuned internals, but only exposes the controls typically needed for that style.
+Each effect exposes the controls most relevant to that style rather than sharing one universal surface.
 
 #### Room Reverb (`reverb_room`)
 
@@ -246,12 +246,14 @@ Each mode has tuned internals, but only exposes the controls typically needed fo
 
 #### Spring Reverb (`reverb_spring`)
 
+Dedicated spring-tank model with short dispersive delays, resonant drip emphasis, and nonlinear tank drive.
+
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `decay` | 0.0–1.0 | 0.34 | — |
+| `decay` | 0.0–1.0 | 0.42 | — |
 | `tone` | 0.0–1.0 | 0.52 | — |
-| `drive` | 0.0–1.0 | 0.10 | — |
-| `mix` | 0.0–1.0 | 0.14 | — |
+| `drive` | 0.0–1.0 | 0.18 | — |
+| `mix` | 0.0–1.0 | 0.18 | — |
 
 #### Advanced Reverb (`reverb_advanced`)
 

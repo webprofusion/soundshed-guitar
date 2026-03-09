@@ -118,7 +118,7 @@ guitarfx::SignalGraph MakeSpringReverbPath()
   g.nodes.push_back({"spring", "reverb_spring", "reverb", "Spring", true});
   g.nodes.back().params["mix"] = 0.35;
   g.nodes.back().params["decay"] = 0.5;
-  g.nodes.back().params["tension"] = 0.5;
+  g.nodes.back().params["drive"] = 0.3;
   g.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
 
   g.edges.push_back({"in", "spring", 0, 0, 1.0});

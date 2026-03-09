@@ -967,10 +967,9 @@ namespace guitarfx
 
   inline void RegisterReverbEffect()
   {
-    const std::array<ReverbEffect::Mode, 4> modes = {
+    const std::array<ReverbEffect::Mode, 3> modes = {
         ReverbEffect::Mode::Room,
         ReverbEffect::Mode::Chamber,
-        ReverbEffect::Mode::Spring,
         ReverbEffect::Mode::Advanced};
 
     for (const auto mode : modes)
@@ -1011,13 +1010,6 @@ namespace guitarfx
             param("tone", "Tone", 0.52, 0.0, 1.0, "amount"),
             param("preDelay", "Pre Delay", 15.0, 0.0, 220.0, "ms"),
             param("mix", "Mix", 0.24, 0.0, 1.0, "amount")};
-        break;
-      case ReverbEffect::Mode::Spring:
-        info.parameters = {
-            param("decay", "Decay", 0.5, 0.0, 1.0, "amount"),
-            param("tone", "Tone", 0.68, 0.0, 1.0, "amount"),
-            param("drive", "Drive", 0.22, 0.0, 1.0, "amount"),
-            param("mix", "Mix", 0.23, 0.0, 1.0, "amount")};
         break;
       case ReverbEffect::Mode::Advanced:
         info.displayName = "Advanced Reverb";

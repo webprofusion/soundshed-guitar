@@ -8,13 +8,13 @@ Reverb adds the sense of space and dimension that makes a sound feel like it exi
 
 ## Common parameters
 
-All reverb types share these controls:
+Most reverb types share these controls:
 
 | Parameter | Range | What it does |
 |-----------|-------|--------------|
 | **Decay** | 0–100% (or in seconds, varies per type) | How long the reverb tail rings out before fading to silence. Short Decay = tight, close space; long Decay = huge, cavernous wash |
 | **Mix** | 0–100% | Blends the reverb (wet) signal with the dry signal. Keep Mix moderate (10–30%) for most guitar use — too much washes out note definition |
-| **Pre-Delay** | 0–220 ms | A short silence between the dry note and the onset of reverb. Adding a few ms of Pre-Delay (10–30 ms) separates the dry attack from the reverb wash, preserving clarity while still sounding spacious |
+| **Pre-Delay** | 0–220 ms | A short silence between the dry note and the onset of reverb. Adding a few ms of Pre-Delay (10–30 ms) separates the dry attack from the reverb wash, preserving clarity while still sounding spacious. Spring reverb uses an internal tank attack delay instead of exposing this control directly |
 
 ---
 
@@ -59,14 +59,14 @@ Chamber reverb sits between a small room and a larger live room in size: intimat
 
 > Recreates the wobbly, splashy character of a spring reverb tank built into vintage combo amplifiers.
 
-Spring reverb has a very distinct, characterful sound. The mechanical nature of a spring tank creates a slightly sharp, dripping character — particularly noticeable on transients and in the reverb tail. It is the signature sound of surf guitar, vintage country, and rockabilly.
+Spring reverb has a very distinct, characterful sound. The mechanical nature of a spring tank creates a slightly sharp, dripping character — particularly noticeable on transients and in the reverb tail. It is the signature sound of surf guitar, vintage country, and rockabilly. The dedicated spring processor models a short, dispersive tank rather than reusing the general room/chamber engine.
 
 ### Parameters
 
 | Parameter | Range | Default | What it does |
 |-----------|-------|---------|--------------|
 | **Tone** | 0–100% | 52% | Adjusts the overall brightness and harshness of the spring character. Lower for a warmer spring; higher for the classic bright, glassy drip |
-| **Drive** | 0–100% | 10% | Controls how hard the spring is "driven." Higher Drive increases the splashy, saturated character — higher values can produce the overloaded spring "crash" effect |
+| **Drive** | 0–100% | 18% | Controls how hard the spring is "driven." Higher Drive increases the splashy, saturated character — higher values can produce the overloaded spring "crash" effect |
 
 ### Tips
 - Spring is most effective at moderate-to-high Mix levels (30–50%) — the character becomes apparent and musical at these levels.

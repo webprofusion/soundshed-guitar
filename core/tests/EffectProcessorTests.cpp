@@ -680,6 +680,70 @@ bool TestAlgorithmicReverbsStaySilentOnSilence()
   return allSilent;
 }
 
+bool TestSpringReverbTailDecaysCleanly()
+{
+  std::cout << "\n--- Spring Reverb Decay Test ---\n";
+
+  auto& registry = guitarfx::EffectRegistry::Instance();
+  auto effect = registry.Create(guitarfx::EffectGuids::kReverbSpring);
+  if (!effect)
+  {
+    std::cout << "  FAIL: Could not create spring reverb\n";
+    return false;
+  }
+
+  effect->Prepare(kTestSampleRate, kTestBlockSize);
+  effect->Reset();
+  effect->SetParam("mix", 1.0);
+  effect->SetParam("decay", 0.85);
+  effect->SetParam("tone", 0.65);
+  effect->SetParam("drive", 0.35);
+
+  constexpr int kBlocksToProcess = 220;
+  constexpr int kExcitationBlock = 0;
+  constexpr int kTailStartBlock = 180;
+  constexpr double kTailPeakLimit = 1.0e-3;
+
+  std::vector<float> inputL(kTestBlockSize, 0.0f);
+  std::vector<float> inputR(kTestBlockSize, 0.0f);
+  std::vector<float> outputL(kTestBlockSize, 0.0f);
+  std::vector<float> outputR(kTestBlockSize, 0.0f);
+  float* inputs[2] = {inputL.data(), inputR.data()};
+  float* outputs[2] = {outputL.data(), outputR.data()};
+
+  double tailPeak = 0.0;
+  for (int block = 0; block < kBlocksToProcess; ++block)
+  {
+    std::fill(inputL.begin(), inputL.end(), 0.0f);
+    std::fill(inputR.begin(), inputR.end(), 0.0f);
+    if (block == kExcitationBlock)
+    {
+      inputL[0] = 0.8f;
+      inputR[0] = 0.8f;
+    }
+
+    std::fill(outputL.begin(), outputL.end(), 0.0f);
+    std::fill(outputR.begin(), outputR.end(), 0.0f);
+    effect->Process(inputs, outputs, kTestBlockSize);
+
+    const auto leftAnalysis = AnalyzeSignal(outputL);
+    const auto rightAnalysis = AnalyzeSignal(outputR);
+    if (leftAnalysis.hasNaN || rightAnalysis.hasNaN || leftAnalysis.hasInf || rightAnalysis.hasInf)
+    {
+      std::cout << "  FAIL: Tail produced invalid samples\n";
+      return false;
+    }
+
+    if (block >= kTailStartBlock)
+      tailPeak = std::max({tailPeak, leftAnalysis.peakValue, rightAnalysis.peakValue});
+  }
+
+  const bool decayed = tailPeak <= kTailPeakLimit;
+  std::cout << "  Spring tail decay: " << (decayed ? "PASS" : "FAIL")
+            << " (tailPeak=" << std::scientific << tailPeak << ")\n" << std::defaultfloat;
+  return decayed;
+}
+
 bool TestTempoSyncSpecific()
 {
   std::cout << "\n--- Tempo Sync Effect Tests ---\n";
@@ -1329,6 +1393,9 @@ int main()
     return 1;
 
   if (!TestAlgorithmicReverbsStaySilentOnSilence())
+    return 1;
+
+  if (!TestSpringReverbTailDecaysCleanly())
     return 1;
 
   if (!TestStftTransposeSpecific())

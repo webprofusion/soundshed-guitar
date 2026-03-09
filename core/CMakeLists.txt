@@ -235,6 +235,7 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/effects/ParametricEQEffect.h
     src/dsp/effects/DelayEffect.h
     src/dsp/effects/ReverbEffect.h
+    src/dsp/effects/SpringReverbEffect.h
     src/dsp/effects/CompressorEffect.h
     src/dsp/effects/LimiterEffect.h
     src/dsp/effects/NAMAmpEffect.h
