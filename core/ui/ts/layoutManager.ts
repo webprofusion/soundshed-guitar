@@ -42,6 +42,10 @@ export function initLayoutManager(): void {
     renderLayoutList();
   });
 
+  window.addEventListener("layout-library-changed", () => {
+    renderLayoutList();
+  });
+
   renderLayoutList();
 }
 

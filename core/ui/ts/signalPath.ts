@@ -17,6 +17,7 @@ import { EffectGuids } from "./effectGuids.js";
 import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon, renderIcon } from "./iconAssets.js";
 import {
   CATEGORY_METADATA,
+  focusFxSelectorCategory,
   getFxLibraryItems,
   getOrderedFxCategories,
   sendAddSignalPathNode,
@@ -71,6 +72,12 @@ let lastSelectedNodeType: string | null = null;
 let lastSelectedNodeCategory: string | null = null;
 let lastRenderedPresetId: string | null = null;
 let overlayBypassClickCleanup: (() => void) | null = null;
+let nodeDragStartPoint: { nodeId: string; x: number; y: number } | null = null;
+let lastNodeDragPoint: { x: number; y: number } | null = null;
+let nodeDragDropHandled = false;
+
+const NODE_BYPASS_DRAG_DISTANCE_PX = 36;
+const NODE_BYPASS_DRAG_DIRECTION_RATIO = 1.2;
 
 const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
   amp: "url('../images/equipment/amps/amp-04.png')",
@@ -114,6 +121,50 @@ function updateEffectVisualization(node?: GraphNode): void {
 function updateLastSelectedNode(node: GraphNode): void {
   lastSelectedNodeType = node.type || null;
   lastSelectedNodeCategory = getNodeCategory(node) || null;
+}
+
+function buildDefaultParamsForEffect(effectType: string): Record<string, number> {
+  const typeInfo = EffectTypeRegistry.get(effectType);
+  if (!typeInfo) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    typeInfo.parameters.map((paramDef) => [paramDef.key, paramDef.default]),
+  );
+}
+
+function applyOptimisticNodeReplacement(
+  targetNode: GraphNode,
+  newEffectType: string,
+  preset: Preset,
+  options?: { config?: Record<string, string>; label?: string; category?: string },
+): void {
+  const typeInfo = EffectTypeRegistry.get(newEffectType);
+  if (!typeInfo) {
+    return;
+  }
+
+  targetNode.type = newEffectType;
+  targetNode.displayName = options?.label || typeInfo.displayName || newEffectType;
+  targetNode.category = options?.category || typeInfo.category || targetNode.category;
+  targetNode.params = buildDefaultParamsForEffect(newEffectType);
+  targetNode.config = options?.config ? { ...options.config } : {};
+  targetNode.resources = typeInfo.requiresResource ? [] : undefined;
+  (targetNode as unknown as { enabled?: boolean }).enabled = true;
+  targetNode.bypassed = false;
+
+  selectedNodeId = targetNode.id;
+  updateLastSelectedNode(targetNode);
+  renderSignalPathBar();
+  showNodeParamsPanel(targetNode, preset);
+
+  const visualizerButton = document.querySelector(
+    '.icon-bar .icon-btn[data-panel="visualizer"]',
+  ) as HTMLElement | null;
+  if (visualizerButton && !visualizerButton.classList.contains("active")) {
+    visualizerButton.click();
+  }
 }
 
 function selectNodeForPreset(preset: Preset, presetChanged: boolean): void {
@@ -357,6 +408,48 @@ function isNodeBypassed(node: GraphNode): boolean {
   if (typeof anyNode.bypassed === "boolean") return anyNode.bypassed;
   if (typeof anyNode.enabled === "boolean") return !anyNode.enabled;
   return false;
+}
+
+function applySignalPathNodeBypassState(node: GraphNode, preset: Preset, bypassed: boolean): void {
+  sendSignalPathNodeBypassUpdate(node.id, bypassed);
+  (node as unknown as { bypassed?: boolean }).bypassed = bypassed;
+  (node as unknown as { enabled?: boolean }).enabled = !bypassed;
+  renderSignalPathBar();
+  if (selectedNodeId === node.id && nodeParamsPanelElement?.classList.contains("visible")) {
+    showNodeParamsPanel(node, preset);
+  }
+}
+
+function toggleSignalPathNodeBypass(node: GraphNode, preset: Preset): void {
+  applySignalPathNodeBypassState(node, preset, !isNodeBypassed(node));
+}
+
+function isProtectedSignalPathNode(node: GraphNode): boolean {
+  return node.type === EffectGuids.kSplitter || node.type === EffectGuids.kMixer;
+}
+
+function updateNodeDragPoint(event: DragEvent): void {
+  if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    lastNodeDragPoint = { x: event.clientX, y: event.clientY };
+  }
+}
+
+function shouldToggleNodeBypassFromDrag(event: DragEvent): boolean {
+  if (!nodeDragStartPoint || nodeDragDropHandled || !draggedNodeId) {
+    return false;
+  }
+
+  const endX = Number.isFinite(event.clientX) && event.clientX !== 0 ? event.clientX : lastNodeDragPoint?.x;
+  const endY = Number.isFinite(event.clientY) && event.clientY !== 0 ? event.clientY : lastNodeDragPoint?.y;
+
+  if (typeof endX !== "number" || typeof endY !== "number") {
+    return false;
+  }
+
+  const deltaX = endX - nodeDragStartPoint.x;
+  const deltaY = endY - nodeDragStartPoint.y;
+  return Math.abs(deltaY) >= NODE_BYPASS_DRAG_DISTANCE_PX
+    && Math.abs(deltaY) > Math.abs(deltaX) * NODE_BYPASS_DRAG_DIRECTION_RATIO;
 }
 
 function getNodeResourceAtIndex(node: GraphNode, index = 0): { id: string; filePath: string; parameterValue?: number } {
@@ -1044,12 +1137,32 @@ function bindNodeClickHandlers(preset: Preset): void {
         }
       }
     });
+
+    el.addEventListener("dblclick", () => {
+      const nodeId = el.dataset.nodeId;
+      if (!nodeId || !preset.graph) {
+        return;
+      }
+
+      const node = preset.graph.nodes.find((n) => n.id === nodeId);
+      if (!node) {
+        return;
+      }
+
+      focusFxSelectorCategory(getNodeCategory(node), {
+        expand: true,
+        clearSearch: true,
+      });
+    });
     
     // Drag start
     el.addEventListener("dragstart", (e: DragEvent) => {
       const nodeId = el.dataset.nodeId;
       if (nodeId) {
         draggedNodeId = nodeId;
+        nodeDragStartPoint = { nodeId, x: e.clientX, y: e.clientY };
+        lastNodeDragPoint = { x: e.clientX, y: e.clientY };
+        nodeDragDropHandled = false;
         el.classList.add("dragging");
         e.dataTransfer?.setData("text/plain", nodeId);
         e.dataTransfer?.setData("application/x-signal-node", nodeId);
@@ -1062,6 +1175,7 @@ function bindNodeClickHandlers(preset: Preset): void {
     // Drag over
     el.addEventListener("dragover", (e: DragEvent) => {
       e.preventDefault();
+      updateNodeDragPoint(e);
       const nodeId = el.dataset.nodeId;
       
       // Check if dragging from FX library
@@ -1089,6 +1203,7 @@ function bindNodeClickHandlers(preset: Preset): void {
     // Drop
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
+      updateNodeDragPoint(e);
       const targetNodeId = el.dataset.nodeId;
       
       // Check if dropping from FX library
@@ -1101,26 +1216,28 @@ function bindNodeClickHandlers(preset: Preset): void {
       if (resourceGroupPayload && targetNodeId && preset.graph) {
         const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
         if (targetNode && targetNode.type === EffectGuids.kAmpNamBlend) {
+          nodeDragDropHandled = true;
           handleResourceGroupDrop(resourceGroupPayload, targetNodeId, true);
         } else {
+          nodeDragDropHandled = true;
           handleResourceGroupDrop(resourceGroupPayload, targetNodeId, false);
         }
       } else if ((fxEffectType || fxBlendId) && targetNodeId && preset.graph) {
         const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
-        // Dropping FX library item onto existing node - replace if same category
         const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
-        const effectTypeInfo = EffectTypeRegistry.get(resolvedType);
-        
-        if (targetNode && effectTypeInfo) {
-          if (targetNode.category === effectTypeInfo.category) {
-            // Same category - replace the node
-            sendReplaceSignalPathNode(targetNodeId, resolvedType, {
-              config: fxBlendId ? { blendId: fxBlendId } : undefined,
-              label: fxBlendName || undefined,
-              category: fxBlendCategory || undefined,
-            });
-          }
-          // Different category - ignore the drop (could show a message)
+
+        if (targetNode && !isProtectedSignalPathNode(targetNode)) {
+          nodeDragDropHandled = true;
+          applyOptimisticNodeReplacement(targetNode, resolvedType, preset, {
+            config: fxBlendId ? { blendId: fxBlendId } : undefined,
+            label: fxBlendName || undefined,
+            category: fxBlendCategory || undefined,
+          });
+          sendReplaceSignalPathNode(targetNodeId, resolvedType, {
+            config: fxBlendId ? { blendId: fxBlendId } : undefined,
+            label: fxBlendName || undefined,
+            category: fxBlendCategory || undefined,
+          });
         }
       } else if (draggedNodeId && targetNodeId && draggedNodeId !== targetNodeId) {
         // Reordering existing nodes
@@ -1128,6 +1245,7 @@ function bindNodeClickHandlers(preset: Preset): void {
         const targetNode = getGraphNode(targetNodeId);
         const blockedTypes = new Set<string>([EffectGuids.kSplitter, EffectGuids.kMixer]);
         if (draggedNode && targetNode && !blockedTypes.has(draggedNode.type) && !blockedTypes.has(targetNode.type)) {
+          nodeDragDropHandled = true;
           sendSignalPathNodeReorder(draggedNodeId, targetNodeId);
         }
       }
@@ -1136,10 +1254,19 @@ function bindNodeClickHandlers(preset: Preset): void {
     });
     
     // Drag end
-    el.addEventListener("dragend", () => {
+    el.addEventListener("dragend", (e: DragEvent) => {
+      const nodeId = el.dataset.nodeId;
+      const node = nodeId ? getGraphNode(nodeId) : undefined;
+
       el.classList.remove("dragging");
+      if (node && shouldToggleNodeBypassFromDrag(e)) {
+        toggleSignalPathNodeBypass(node, preset);
+      }
       draggedNodeId = null;
       dragOverNodeId = null;
+      nodeDragStartPoint = null;
+      lastNodeDragPoint = null;
+      nodeDragDropHandled = false;
       // Clean up any remaining drag-over states
       nodeElements.forEach((n) => n.classList.remove("drag-over"));
     });
@@ -1177,6 +1304,7 @@ function bindConnectorDropHandlers(preset: Preset): void {
     // Drag over
     el.addEventListener("dragover", (e: DragEvent) => {
       e.preventDefault();
+      updateNodeDragPoint(e);
       
       // Only accept drops from FX library
       const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
@@ -1205,6 +1333,7 @@ function bindConnectorDropHandlers(preset: Preset): void {
     // Drop
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
+      updateNodeDragPoint(e);
       const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
       const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
       const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
@@ -1214,8 +1343,10 @@ function bindConnectorDropHandlers(preset: Preset): void {
 
       const edge = parseEdgeFromDataset(el);
       if (resourceGroupPayload && preset.graph) {
+        nodeDragDropHandled = true;
         handleResourceGroupDrop(resourceGroupPayload, null, false, edge);
       } else if ((fxEffectType || fxBlendId) && preset.graph) {
+        nodeDragDropHandled = true;
         const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
         sendAddEffectAtEdgeOrFallback(resolvedType, edge, "__input__", {
           config: fxBlendId ? { blendId: fxBlendId } : undefined,
@@ -1225,6 +1356,7 @@ function bindConnectorDropHandlers(preset: Preset): void {
       } else if (signalNodeId && edge && preset.graph) {
         const node = preset.graph.nodes.find((n) => n.id === signalNodeId);
         if (node && node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer) {
+          nodeDragDropHandled = true;
           sendMoveSignalPathNodeToEdge(signalNodeId, edge);
         }
       }
@@ -1904,14 +2036,7 @@ function bindLayoutOverlayBypassToggles(node: GraphNode, preset: Preset): void {
     event.preventDefault();
     event.stopPropagation();
 
-    const currentBypassed = isNodeBypassed(node);
-    const newBypassState = !currentBypassed;
-    sendSignalPathNodeBypassUpdate(node.id, newBypassState);
-
-    (node as unknown as { bypassed?: boolean }).bypassed = newBypassState;
-    (node as unknown as { enabled?: boolean }).enabled = !newBypassState;
-    renderSignalPathBar();
-    showNodeParamsPanel(node, preset);
+    toggleSignalPathNodeBypass(node, preset);
   };
 
   nodeParamsPanelElement.addEventListener("click", clickHandler);
@@ -2525,15 +2650,7 @@ function bindBypassButton(node: GraphNode, preset: Preset): void {
   const bypassButtons = document.querySelectorAll<HTMLButtonElement>("#node-params-panel .node-bypass-btn");
   bypassButtons.forEach((bypassBtn) => {
     bypassBtn.addEventListener("click", () => {
-      const currentBypassed = isNodeBypassed(node);
-      const newBypassState = !currentBypassed;
-      sendSignalPathNodeBypassUpdate(node.id, newBypassState);
-      
-      // Update UI
-      (node as unknown as { bypassed?: boolean }).bypassed = newBypassState;
-      (node as unknown as { enabled?: boolean }).enabled = !newBypassState;
-      renderSignalPathBar();
-      showNodeParamsPanel(node, preset);
+      toggleSignalPathNodeBypass(node, preset);
     });
   });
 }

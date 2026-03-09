@@ -9,6 +9,7 @@ import { postMessage } from "./bridge.js";
 import { uiState } from "./state.js";
 import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
 import { showNotification } from "./notifications.js";
+import { showConfirm } from "./dialogs.js";
 import { arrayBufferToBase64 } from "./utils.js";
 import { renderCustomLayoutPreviewLayers, type LayoutResourceControlDef } from "./layoutRenderer.js";
 import { buildDefaultParamControlsHtml } from "./signalPath.js";
@@ -77,6 +78,7 @@ interface CopiedTextLabelPayload {
 }
 
 export class LayoutDesignerModal {
+  private static readonly LIBRARY_CHANGED_EVENT = "layout-library-changed";
   private initialized = false;
   private effectType = "";
   private blendId = "";
@@ -123,6 +125,7 @@ export class LayoutDesignerModal {
   private closeBtn: HTMLButtonElement | null = null;
   private cancelBtn: HTMLButtonElement | null = null;
   private saveBtn: HTMLButtonElement | null = null;
+  private deleteBtn: HTMLButtonElement | null = null;
   private exportBtn: HTMLButtonElement | null = null;
   private importBtn: HTMLButtonElement | null = null;
   private importFileInput: HTMLInputElement | null = null;
@@ -174,6 +177,7 @@ export class LayoutDesignerModal {
     this.closeBtn = document.getElementById("layout-designer-close") as HTMLButtonElement;
     this.cancelBtn = document.getElementById("layout-designer-cancel") as HTMLButtonElement;
     this.saveBtn = document.getElementById("layout-designer-save") as HTMLButtonElement;
+    this.deleteBtn = document.getElementById("layout-designer-delete") as HTMLButtonElement;
     this.exportBtn = document.getElementById("layout-designer-export") as HTMLButtonElement;
     this.importBtn = document.getElementById("layout-designer-import") as HTMLButtonElement;
     this.importFileInput = document.getElementById("layout-designer-import-file") as HTMLInputElement;
@@ -215,6 +219,7 @@ export class LayoutDesignerModal {
     this.closeBtn?.addEventListener("click", () => this.close());
     this.cancelBtn?.addEventListener("click", () => this.close());
     this.saveBtn?.addEventListener("click", () => { void this.save(); });
+    this.deleteBtn?.addEventListener("click", () => { void this.confirmDeleteCurrentLayout(); });
     this.exportBtn?.addEventListener("click", () => this.exportLayout());
     this.importBtn?.addEventListener("click", () => this.importFileInput?.click());
     this.importFileInput?.addEventListener("change", () => this.handleImportFileSelected());
@@ -383,6 +388,7 @@ export class LayoutDesignerModal {
     this.updateDimensionInputs();
     this.updateZoomUI();
     this.updateUndoRedoButtons();
+    this.updateDeleteButtonVisibility();
     this.renderCanvas();
     this.renderSidebar();
 
@@ -444,6 +450,95 @@ export class LayoutDesignerModal {
       ...entry,
       isDefault: entry.layoutId === layoutId,
     }));
+    window.dispatchEvent(new CustomEvent(LayoutDesignerModal.LIBRARY_CHANGED_EVENT));
+  }
+
+  private updateDeleteButtonVisibility(): void {
+    if (!this.deleteBtn) {
+      return;
+    }
+    const canDelete = !!this.layout?.layoutId && !this.isFactoryLayout && !this.isNewLayout;
+    this.deleteBtn.hidden = !canDelete;
+    this.deleteBtn.disabled = !canDelete;
+  }
+
+  private findCurrentLibraryEntry(): { key: string; entries: LayoutLibraryEntry[]; entry: LayoutLibraryEntry } | null {
+    const library = uiState.layoutLibrary;
+    const layoutId = this.layout?.layoutId;
+    if (!library || !layoutId || !this.layout) {
+      return null;
+    }
+
+    const lookupKeys = Array.from(new Set([
+      layoutLookupKey(this.effectType || this.layout.effectType, this.blendId || this.layout.blendId || undefined),
+      layoutLookupKey(this.layout.effectType, this.layout.blendId || undefined),
+      this.effectType || this.layout.effectType,
+      this.layout.effectType,
+    ].filter(Boolean)));
+
+    for (const key of lookupKeys) {
+      const entries = library.byEffectType[key] ?? [];
+      const entry = entries.find((candidate) => candidate.layoutId === layoutId);
+      if (entry) {
+        return { key, entries, entry };
+      }
+    }
+
+    return null;
+  }
+
+  private async confirmDeleteCurrentLayout(): Promise<void> {
+    const current = this.findCurrentLibraryEntry();
+    if (!current || current.entry.isFactory) {
+      return;
+    }
+
+    const name = current.entry.layout.name || current.entry.layout.effectType;
+    const confirmed = await showConfirm(`Delete layout "${name}"? This cannot be undone.`, "Delete Layout");
+    if (!confirmed) {
+      return;
+    }
+
+    this.deleteCurrentLayout(current.key, current.entries, current.entry);
+  }
+
+  private deleteCurrentLayout(key: string, entries: LayoutLibraryEntry[], entry: LayoutLibraryEntry): void {
+    const library = uiState.layoutLibrary;
+    if (!library) {
+      return;
+    }
+    const layoutName = entry.layout.name || entry.layout.effectType;
+
+    postMessage({
+      type: "deleteLayout",
+      effectType: entry.layout.effectType,
+      blendId: entry.layout.blendId ?? "",
+      layoutId: entry.layoutId,
+    });
+
+    library.byEffectType[key] = entries.filter((candidate) => candidate.layoutId !== entry.layoutId);
+    if (library.defaults[key] === entry.layoutId) {
+      const nextDefault =
+        library.byEffectType[key]?.find((candidate) => !candidate.isFactory)?.layoutId ??
+        library.byEffectType[key]?.[0]?.layoutId;
+      if (nextDefault) {
+        library.defaults[key] = nextDefault;
+        library.byEffectType[key] = library.byEffectType[key].map((candidate) => ({
+          ...candidate,
+          isDefault: candidate.layoutId === nextDefault,
+        }));
+      } else {
+        delete library.defaults[key];
+      }
+    }
+
+    if ((library.byEffectType[key] ?? []).length === 0) {
+      delete library.byEffectType[key];
+    }
+
+    window.dispatchEvent(new CustomEvent(LayoutDesignerModal.LIBRARY_CHANGED_EVENT));
+    showNotification(`Layout "${layoutName}" deleted`, "success");
+    this.close(false);
   }
 
   /** Collect all image IDs referenced by the current layout. */
@@ -492,6 +587,7 @@ export class LayoutDesignerModal {
     // After first save the layout is no longer new/factory
     this.isNewLayout = false;
     this.isFactoryLayout = false;
+    this.updateDeleteButtonVisibility();
 
     this.persistLayoutLocally(this.layout);
 

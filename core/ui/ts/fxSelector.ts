@@ -57,6 +57,30 @@ export function expandFxSelector(options?: { focusSearch?: boolean }): void {
   setFxSelectorCollapsed(false, options);
 }
 
+export function focusFxSelectorCategory(
+  categoryId: string,
+  options?: { expand?: boolean; focusSearch?: boolean; clearSearch?: boolean },
+): void {
+  if (!categoryId) {
+    return;
+  }
+
+  if (options?.clearSearch) {
+    searchFilter = "";
+    if (fxSearchInput) {
+      fxSearchInput.value = "";
+    }
+  }
+
+  activeCategory = categoryId;
+  renderCategories();
+  renderEffectsList();
+
+  if (options?.expand) {
+    expandFxSelector({ focusSearch: options.focusSearch });
+  }
+}
+
 // Category display metadata — id → { name, color }.
 // This is the only UI-side definition needed; the actual category list
 // is derived at render time from what the effect registry contains.
