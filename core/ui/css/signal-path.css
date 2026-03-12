@@ -626,16 +626,6 @@
   max-width: 140px;
 }
 
-.node-resource {
-  font-size: 7px;
-  font-weight: 400;
-  color: var(--color-primary);
-  white-space: nowrap;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .node-bypass-badge {
   position: absolute;
   top: 2px;
@@ -1512,28 +1502,6 @@
   overflow: hidden;
 }
 
-.default-effect-shell::before,
-.default-effect-shell::after {
-  content: "";
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.24) 0%, rgba(88, 95, 118, 0.4) 24%, rgba(30, 34, 42, 0.95) 100%);
-  border: 1px solid rgba(215, 224, 255, 0.16);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.45);
-}
-
-.default-effect-shell::before {
-  top: 12px;
-  left: 12px;
-}
-
-.default-effect-shell::after {
-  top: 12px;
-  right: 12px;
-}
-
 .default-effect-shell.is-bypassed {
   filter: saturate(0.8);
 }
@@ -1646,9 +1614,6 @@
 .default-effect-shell-rail {
   display: block;
   padding: 10px 14px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(8, 10, 18, 0.54) 0%, rgba(17, 20, 29, 0.2) 100%);
-  border: 1px solid rgba(165, 178, 207, 0.08);
 }
 
 .default-effect-shell-meter {
@@ -2046,11 +2011,25 @@
 }
 
 .theme-light .default-effect-shell .node-param-knob {
-  border-color: rgba(120, 138, 172, 0.22);
-  background:
-    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.15) 30%, transparent 35%),
-    linear-gradient(180deg, #f8fafc 0%, #d6ddea 44%, #b7c3d6 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), inset 0 -6px 8px rgba(126, 143, 170, 0.22), 0 10px 16px rgba(120, 138, 172, 0.18);
+  border-width: 2px;
+  border-color: var(--border-light);
+  background: var(--control-bg);
+  box-shadow:
+    0 2px 4px var(--overlay-dark),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.theme-light .default-effect-shell .node-param-knob::after {
+  content: none;
+}
+
+.theme-light .default-effect-shell .node-param-knob .knob-indicator {
+  width: 3px;
+  height: 10px;
+  top: 5px;
+  border-radius: 2px;
+  background: var(--control-indicator);
+  box-shadow: none;
 }
 
 .theme-light .node-params-title {
@@ -2411,11 +2390,12 @@
 }
 
 .theme-dark .node-param-knob {
-  background: var(--control-knob-bg);
-  border-color: var(--border-light);
+  background: linear-gradient(180deg, #2a2d33 0%, #15171b 44%, #050608 100%);
+  border-color: #3b404b;
   box-shadow:
-    0 2px 4px var(--overlay-dark),
-    inset 0 1px 0 rgba(255,255,255,0.5);
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -6px 8px rgba(0, 0, 0, 0.38);
 }
 
 .theme-dark .node-param-knob .knob-indicator {

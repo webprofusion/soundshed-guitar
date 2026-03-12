@@ -380,12 +380,12 @@ function getNodeDisplayName(node: GraphNode): string {
     }
   }
 
+  const resourceTitle = typeInfo?.requiresResource ? getNodeResourceSummary(node) : "";
+  if (resourceTitle) return resourceTitle;
+
   if (explicit && explicit !== (typeInfo?.displayName || "")) {
     return explicit;
   }
-
-  const resourceTitle = typeInfo?.requiresResource ? getNodeResourceSummary(node) : "";
-  if (resourceTitle) return resourceTitle;
 
   if (explicit) return explicit;
   return typeInfo?.displayName || nodeType || "(Unknown)";
@@ -989,23 +989,19 @@ function renderNodeElement(node: GraphNode): string {
   const missingEntries = getMissingResourceEntries(node);
   const missingClass = missingEntries.length ? "missing-resource" : "";
   const allowDelete = node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer;
-  const displayName = getNodeDisplayName(node);
   const nodeTypeInfo = EffectTypeRegistry.get(node.type);
-  // Show effect type name only when it adds info (not a duplicate of the node name)
-  const effectTypeName = nodeTypeInfo?.displayName && nodeTypeInfo.displayName !== displayName
-    ? nodeTypeInfo.displayName
-    : "";
+  const firstResourceTitle = nodeTypeInfo?.requiresResource ? getNodeResourceDisplayName(node, 0) : "";
+  const displayName = firstResourceTitle || getNodeDisplayName(node);
+  const effectTypeName = firstResourceTitle
+    ? (nodeTypeInfo?.displayName || "")
+    : (nodeTypeInfo?.displayName && nodeTypeInfo.displayName !== displayName
+      ? nodeTypeInfo.displayName
+      : "");
   const isCalibrating = uiState.namCalibrationStatus?.[node.id] === "calibrating";
   const missingTooltip = buildMissingResourceTooltip(missingEntries);
   const missingBadge = missingEntries.length
     ? `<div class="node-missing-badge" title="${escapeHtml(missingTooltip)}" aria-label="Missing resource">⚠</div>`
     : "";
-  
-  let resourceLabel = "";
-  const resourceSummary = getNodeResourceSummary(node);
-  if (resourceSummary) {
-    resourceLabel = `<div class="node-resource">${resourceSummary}</div>`;
-  }
 
   // Use the layout thumbnail as a small avatar at the top-left of the node if available.
   const blendId = (() => {
@@ -1032,7 +1028,6 @@ function renderNodeElement(node: GraphNode): string {
       <div class="node-info">
         <div class="node-name">${displayName}</div>
         ${effectTypeName ? `<div class="node-type">${effectTypeName}</div>` : ""}
-        ${resourceLabel}
       </div>
       <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
       ${isCalibrating ? '<div class="node-calibration-badge">CAL</div>' : ""}
