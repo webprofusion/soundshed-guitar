@@ -57,6 +57,7 @@ export { initializeBlendEditorModal, openBlendEditorWithDefinition } from "./sig
 
 const signalPathNodesElement = document.getElementById("signal-path-nodes");
 const nodeParamsPanelElement = document.getElementById("node-params-panel");
+const signalPathToolbarSceneButton = document.getElementById("signal-path-toolbar-scene-btn") as HTMLButtonElement | null;
 
 /** Whether the Mix tab is currently active in the multi-preset tab bar. */
 let mixTabActive = false;
@@ -503,6 +504,11 @@ export function renderSignalPathBar(): void {
 
   const activePresetId = uiState.activePresetId;
   const activePreset = getSignalPathPreset() ?? undefined;
+  if (signalPathToolbarSceneButton) {
+    const showToolbarSceneButton = Boolean(activePreset) && !mixTabActive;
+    signalPathToolbarSceneButton.disabled = !activePreset;
+    signalPathToolbarSceneButton.setAttribute("aria-hidden", String(!showToolbarSceneButton));
+  }
   // Track the rendered preset's own ID so that switching mixer tabs (which
   // changes focusedMixerPresetId but NOT activePresetId) is also detected.
   const renderedPresetId = activePreset?.id ?? activePresetId;
@@ -2876,11 +2882,24 @@ function buildPresetScenePanelMarkup(preset: Preset, activeSceneId: string): str
       <div class="preset-scene-tab-strip">${tabsHtml}</div>
       <div class="preset-scene-controls">
         <input class="preset-scene-title-input" type="text" value="${escapeHtml(activeScene?.title ?? "")}" maxlength="80" placeholder="Scene title" />
-        <button class="preset-scene-action" type="button" data-scene-action="add" title="Add scene">+ Scene</button>
         <button class="preset-scene-action" type="button" data-scene-action="remove" title="Remove scene" ${scenes.length <= 1 ? "disabled" : ""}>Remove</button>
       </div>
     </div>
   `;
+}
+
+function addSceneFromToolbar(): void {
+  const activePreset = getSignalPathPreset();
+  if (!activePreset) {
+    return;
+  }
+
+  const editablePreset = getEditableSignalPathPreset(activePreset);
+  const newScene = createPresetScene(editablePreset, uiState.activePresetSceneId ?? undefined);
+  uiState.activePresetSceneId = newScene.id;
+  setPresetDirty(true);
+  pushScenePresetToBackend(editablePreset);
+  renderSignalPathBar();
 }
 
 function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void {
@@ -2914,15 +2933,6 @@ function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void 
     renderSignalPathBar();
   });
 
-  panel.querySelector<HTMLButtonElement>("[data-scene-action='add']")?.addEventListener("click", () => {
-    const editablePreset = getEditableSignalPathPreset(renderedPreset);
-    const newScene = createPresetScene(editablePreset, uiState.activePresetSceneId ?? undefined);
-    uiState.activePresetSceneId = newScene.id;
-    setPresetDirty(true);
-    pushScenePresetToBackend(editablePreset);
-    renderSignalPathBar();
-  });
-
   panel.querySelector<HTMLButtonElement>("[data-scene-action='remove']")?.addEventListener("click", () => {
     const editablePreset = getEditableSignalPathPreset(renderedPreset);
     if ((editablePreset.scenes?.length ?? 0) <= 1) {
@@ -2936,6 +2946,10 @@ function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void 
     renderSignalPathBar();
   });
 }
+
+signalPathToolbarSceneButton?.addEventListener("click", () => {
+  addSceneFromToolbar();
+});
 
 function renderMixerPresetTabs(): void {
   let tabBar = document.getElementById("mixer-preset-tabs");

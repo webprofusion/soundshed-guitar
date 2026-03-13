@@ -1110,6 +1110,10 @@ export function handleIncomingMessage(message: string): void {
           });
         }
         refreshFxSelector();
+        if (getActivePresetForRender()) {
+          renderActivePreset();
+          refreshSelectedNodeParams();
+        }
       }
       break;
     }

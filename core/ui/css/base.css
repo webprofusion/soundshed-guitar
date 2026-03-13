@@ -21,9 +21,7 @@ body {
 body.theme-classic {
   background-color: #5b3f29;
   background-image:
-    radial-gradient(circle at 24% 14%, rgba(248, 213, 151, 0.22) 0%, rgba(248, 213, 151, 0) 48%),
-    linear-gradient(180deg, rgba(45, 28, 17, 0.22) 0%, rgba(45, 28, 17, 0.48) 100%),
-    url("../images/themes/steampunk2.png");
+   radial-gradient(circle at 24% 14%, rgba(248, 213, 151, 0.22) 0%, rgba(248, 213, 151, 0) 48%), linear-gradient(180deg, rgb(170 89 36 / 86%) 0%, rgb(0 0 0 / 48%) 100%), url(../images/themes/steampunk2.png);
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
