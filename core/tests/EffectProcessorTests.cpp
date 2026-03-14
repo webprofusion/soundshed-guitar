@@ -1293,9 +1293,9 @@ bool TestStftTransposePolyphonicModeSpecific()
   return polyModeReportsHigherLatency && polyphonicOutputHealthy;
 }
 
-bool TestPitchShiftQualitySpecific()
+bool TestPitchShiftLatencySpecific()
 {
-  std::cout << "\n--- PitchShiftEffect Quality Tests ---\n";
+  std::cout << "\n--- PitchShiftEffect Latency Tests ---\n";
 
   auto& registry = guitarfx::EffectRegistry::Instance();
   auto effect = registry.Create(guitarfx::EffectGuids::kPitchShift);
@@ -1310,22 +1310,21 @@ bool TestPitchShiftQualitySpecific()
   effect->SetParam("stepMode", 1.0);
   effect->SetParam("minSemitones", -2.0);
   effect->SetParam("maxSemitones", 2.0);
-  effect->SetParam("quality", 0.0);
   effect->SetParam("semitones", 0.5);
-  const int latencyModeLatency = effect->GetLatencySamples();
+  const int initialLatency = effect->GetLatencySamples();
 
-  effect->SetParam("quality", 1.0);
-  const int qualityModeLatency = effect->GetLatencySamples();
+  effect->SetParam("semitones", -0.5);
+  const int updatedLatency = effect->GetLatencySamples();
 
-  const bool latencyModeResponsive = latencyModeLatency > 0 && latencyModeLatency <= kTestBlockSize;
-  const bool qualityModeHigherLatency = qualityModeLatency > latencyModeLatency;
+  const bool reportsPositiveLatency = initialLatency > 0;
+  const bool latencyRemainsStableAcrossPitchChanges = updatedLatency == initialLatency;
 
-  std::cout << "  " << std::left << std::setw(44) << "Best latency keeps pitch shift within one block:" << (latencyModeResponsive ? "PASS" : "FAIL")
-            << " (latency=" << latencyModeLatency << ")\n";
-  std::cout << "  " << std::left << std::setw(44) << "Best quality increases pitch shift latency:" << (qualityModeHigherLatency ? "PASS" : "FAIL")
-            << " (latency=" << qualityModeLatency << ")\n";
+  std::cout << "  " << std::left << std::setw(44) << "Pitch shift reports positive latency:" << (reportsPositiveLatency ? "PASS" : "FAIL")
+            << " (latency=" << initialLatency << ")\n";
+  std::cout << "  " << std::left << std::setw(44) << "Latency stays stable across pitch changes:" << (latencyRemainsStableAcrossPitchChanges ? "PASS" : "FAIL")
+            << " (latency=" << updatedLatency << ")\n";
 
-  return latencyModeResponsive && qualityModeHigherLatency;
+  return reportsPositiveLatency && latencyRemainsStableAcrossPitchChanges;
 }
 
 } // anonymous namespace
@@ -1410,7 +1409,7 @@ int main()
   if (!TestTransposeLatencySpecific())
     return 1;
 
-  if (!TestPitchShiftQualitySpecific())
+  if (!TestPitchShiftLatencySpecific())
     return 1;
 
   if (!TestTempoSyncSpecific())

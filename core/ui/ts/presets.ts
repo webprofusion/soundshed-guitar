@@ -157,6 +157,9 @@ function stripLegacyGlobals(preset: Preset): Preset {
 function stripGlobalSignalChainForSave(preset: Preset): Preset {
   const cleaned = clonePreset(preset);
   delete (cleaned as Record<string, unknown>).globalSignalChain;
+  if (Array.isArray(cleaned.scenes) && cleaned.scenes.length > 0) {
+    delete (cleaned as Record<string, unknown>).graph;
+  }
   return cleaned;
 }
 
@@ -473,7 +476,7 @@ function updatePresetModalJson(preset: Preset | null): void {
   }
   const withGlobalChain = preset
     ? (() => {
-        const cleaned = stripLegacyGlobals(preset);
+        const cleaned = stripGlobalSignalChainForSave(stripLegacyGlobals(preset));
         const chain = (preset as Preset & { globalSignalChain?: unknown }).globalSignalChain;
         return chain ? { ...cleaned, globalSignalChain: chain } : cleaned;
       })()

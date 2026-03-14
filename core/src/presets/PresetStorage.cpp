@@ -369,20 +369,6 @@ namespace guitarfx
     if (normalizedPreset.globalSignalChain.has_value())
       json["globalSignalChain"] = *normalizedPreset.globalSignalChain;
 
-    // Signal graph
-    nlohmann::json graph;
-    graph["nodes"] = nlohmann::json::array();
-    for (const auto& node : normalizedPreset.graph.nodes)
-    {
-      graph["nodes"].push_back(SerializeGraphNode(node, noBaseDirectory));
-    }
-    graph["edges"] = nlohmann::json::array();
-    for (const auto& edge : normalizedPreset.graph.edges)
-    {
-      graph["edges"].push_back(SerializeGraphEdge(edge));
-    }
-    json["graph"] = graph;
-
     if (!normalizedPreset.scenes.empty())
     {
       json["scenes"] = nlohmann::json::array();
@@ -390,6 +376,21 @@ namespace guitarfx
       {
         json["scenes"].push_back(SerializePresetScene(scene, noBaseDirectory));
       }
+    }
+    else
+    {
+      nlohmann::json graph;
+      graph["nodes"] = nlohmann::json::array();
+      for (const auto& node : normalizedPreset.graph.nodes)
+      {
+        graph["nodes"].push_back(SerializeGraphNode(node, noBaseDirectory));
+      }
+      graph["edges"] = nlohmann::json::array();
+      for (const auto& edge : normalizedPreset.graph.edges)
+      {
+        graph["edges"].push_back(SerializeGraphEdge(edge));
+      }
+      json["graph"] = graph;
     }
 
     // Embedded resources
@@ -570,19 +571,6 @@ namespace guitarfx
       if (normalizedPreset.globalSignalChain.has_value())
         json["globalSignalChain"] = *normalizedPreset.globalSignalChain;
 
-      nlohmann::json graph;
-      graph["nodes"] = nlohmann::json::array();
-      for (const auto& node : normalizedPreset.graph.nodes)
-      {
-        graph["nodes"].push_back(SerializeGraphNode(node, baseDirectory));
-      }
-      graph["edges"] = nlohmann::json::array();
-      for (const auto& edge : normalizedPreset.graph.edges)
-      {
-        graph["edges"].push_back(SerializeGraphEdge(edge));
-      }
-      json["graph"] = graph;
-
       if (!normalizedPreset.scenes.empty())
       {
         json["scenes"] = nlohmann::json::array();
@@ -590,6 +578,21 @@ namespace guitarfx
         {
           json["scenes"].push_back(SerializePresetScene(scene, baseDirectory));
         }
+      }
+      else
+      {
+        nlohmann::json graph;
+        graph["nodes"] = nlohmann::json::array();
+        for (const auto& node : normalizedPreset.graph.nodes)
+        {
+          graph["nodes"].push_back(SerializeGraphNode(node, baseDirectory));
+        }
+        graph["edges"] = nlohmann::json::array();
+        for (const auto& edge : normalizedPreset.graph.edges)
+        {
+          graph["edges"].push_back(SerializeGraphEdge(edge));
+        }
+        json["graph"] = graph;
       }
 
       if (!normalizedPreset.embeddedResources.empty())

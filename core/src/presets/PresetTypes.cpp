@@ -13,6 +13,11 @@ namespace
     return "scene-" + std::to_string(index + 1);
   }
 
+  bool HasSignalGraphContent(const SignalGraph& graph)
+  {
+    return !graph.nodes.empty() || !graph.edges.empty();
+  }
+
   void ApplyDefaultParamsFromRegistry(GraphNode& node)
   {
     auto info = EffectRegistry::Instance().GetTypeInfo(node.type);
@@ -99,6 +104,8 @@ void EnsurePresetBoundaryGainNodes(SignalGraph& graph)
 
 void NormalizePresetScenes(Preset& preset)
 {
+  const bool hasLegacyGraph = HasSignalGraphContent(preset.graph);
+
   if (preset.scenes.empty())
   {
     PresetScene scene;
@@ -107,6 +114,10 @@ void NormalizePresetScenes(Preset& preset)
     scene.graph = preset.graph;
     EnsurePresetBoundaryGainNodes(scene.graph);
     preset.scenes.push_back(std::move(scene));
+  }
+  else if (preset.scenes.size() == 1 && hasLegacyGraph && !HasSignalGraphContent(preset.scenes.front().graph))
+  {
+    preset.scenes.front().graph = preset.graph;
   }
 
   for (std::size_t index = 0; index < preset.scenes.size(); ++index)

@@ -300,6 +300,18 @@ bool TestLegacyGraphCreatesSingleScene()
     return false;
   }
 
+  const auto migratedJson = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(*preset));
+  if (migratedJson.contains("graph"))
+  {
+    std::cout << "FAIL (legacy graph should be removed from serialized preset once scenes exist)" << std::endl;
+    return false;
+  }
+  if (!migratedJson.contains("scenes") || !migratedJson["scenes"].is_array() || migratedJson["scenes"].size() != 1)
+  {
+    std::cout << "FAIL (serialized preset missing migrated scene)" << std::endl;
+    return false;
+  }
+
   std::cout << "PASS" << std::endl;
   return true;
 }
@@ -331,6 +343,12 @@ bool TestSerializeDeserializeScenes()
   preset.graph = leadScene.graph;
 
   const std::string json = guitarfx::PresetStorage::SerializeToJson(preset);
+  const auto serializedJson = nlohmann::json::parse(json);
+  if (serializedJson.contains("graph"))
+  {
+    std::cout << "FAIL (serialized scene preset should not duplicate top-level graph)" << std::endl;
+    return false;
+  }
   auto roundTripped = guitarfx::PresetStorage::DeserializeFromJson(json);
   if (!roundTripped)
   {
@@ -355,6 +373,64 @@ bool TestSerializeDeserializeScenes()
   if (!ampNode || ampNode->params.find("drive") == ampNode->params.end() || ampNode->params.at("drive") != 0.9)
   {
     std::cout << "FAIL (lead scene graph contents not preserved)" << std::endl;
+    return false;
+  }
+
+  std::cout << "PASS" << std::endl;
+  return true;
+}
+
+bool TestSingleSceneNormalizationPreservesSceneGraph()
+{
+  std::cout << "Test: SingleSceneNormalizationPreservesSceneGraph... ";
+
+  auto preset = CreateTestPreset("single-scene-normalize", "Single Scene Normalize", "models/amp.nam");
+
+  guitarfx::PresetScene scene;
+  scene.id = "scene-1";
+  scene.title = "Scene 1";
+  scene.graph = preset.graph;
+  if (auto* ampNode = scene.graph.FindNode("amp"))
+  {
+    ampNode->params["drive"] = 0.91;
+  }
+  else
+  {
+    std::cout << "FAIL (scene graph missing amp node)" << std::endl;
+    return false;
+  }
+
+  if (auto* presetAmpNode = preset.graph.FindNode("amp"))
+  {
+    presetAmpNode->params["drive"] = 0.12;
+  }
+  else
+  {
+    std::cout << "FAIL (preset graph missing amp node)" << std::endl;
+    return false;
+  }
+
+  preset.scenes = { scene };
+  guitarfx::NormalizePresetScenes(preset);
+
+  const auto* normalizedScene = guitarfx::FindPresetScene(preset, "scene-1");
+  if (!normalizedScene)
+  {
+    std::cout << "FAIL (normalized scene missing)" << std::endl;
+    return false;
+  }
+
+  const auto* normalizedAmpNode = normalizedScene->graph.FindNode("amp");
+  if (!normalizedAmpNode)
+  {
+    std::cout << "FAIL (normalized scene amp missing)" << std::endl;
+    return false;
+  }
+
+  const auto driveIt = normalizedAmpNode->params.find("drive");
+  if (driveIt == normalizedAmpNode->params.end() || driveIt->second != 0.91)
+  {
+    std::cout << "FAIL (single scene graph was overwritten during normalization)" << std::endl;
     return false;
   }
 
@@ -693,7 +769,15 @@ bool TestPresetFilePathNormalizationOnDisk()
     return false;
   }
 
-  const auto nodes = raw.value("graph", nlohmann::json::object()).value("nodes", nlohmann::json::array());
+  nlohmann::json nodes = nlohmann::json::array();
+  if (raw.contains("graph") && raw["graph"].is_object())
+  {
+    nodes = raw["graph"].value("nodes", nlohmann::json::array());
+  }
+  else if (raw.contains("scenes") && raw["scenes"].is_array() && !raw["scenes"].empty() && raw["scenes"][0].is_object())
+  {
+    nodes = raw["scenes"][0].value("graph", nlohmann::json::object()).value("nodes", nlohmann::json::array());
+  }
   if (!nodes.is_array() || nodes.empty())
   {
     std::cout << "FAIL (missing serialized nodes)" << std::endl;
@@ -795,6 +879,7 @@ int main()
   runTest(TestSaveLoadFile);
   runTest(TestLegacyGraphCreatesSingleScene);
   runTest(TestSerializeDeserializeScenes);
+  runTest(TestSingleSceneNormalizationPreservesSceneGraph);
   runTest(TestLoadAllFromDirectory);
   runTest(TestGraphNodeFinding);
   runTest(TestResourceRefValidation);
