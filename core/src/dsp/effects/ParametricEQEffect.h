@@ -10,6 +10,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include <algorithm>
 #include <array>
 
 namespace guitarfx
@@ -34,8 +35,7 @@ namespace guitarfx
     {
       for (auto &band : mBands)
       {
-        band.z1L = band.z2L = 0.0f;
-        band.z1R = band.z2R = 0.0f;
+        ResetBandState(band);
       }
     }
 
@@ -52,8 +52,17 @@ namespace guitarfx
           if (!band.enabled)
             continue;
 
+          sampleL = SanitizeSample(sampleL);
+          sampleR = SanitizeSample(sampleR);
+          SanitizeBandState(band);
+
           // Left channel
           float outL = band.b0 * sampleL + band.b1 * band.z1L + band.b2 * band.z2L - band.a1 * band.x1L - band.a2 * band.x2L;
+          if (!std::isfinite(outL))
+          {
+            ResetBandState(band);
+            outL = sampleL;
+          }
           band.z2L = band.z1L;
           band.z1L = sampleL;
           band.x2L = band.x1L;
@@ -62,6 +71,11 @@ namespace guitarfx
 
           // Right channel
           float outR = band.b0 * sampleR + band.b1 * band.z1R + band.b2 * band.z2R - band.a1 * band.x1R - band.a2 * band.x2R;
+          if (!std::isfinite(outR))
+          {
+            ResetBandState(band);
+            outR = sampleR;
+          }
           band.z2R = band.z1R;
           band.z1R = sampleR;
           band.x2R = band.x1R;
@@ -99,6 +113,7 @@ namespace guitarfx
       else if (key == "highFreq")
         mBands[3].freq = value;
 
+      ClampBandParams();
       UpdateCoefficients();
     }
 
@@ -154,6 +169,8 @@ namespace guitarfx
 
     void UpdateCoefficients()
     {
+      ClampBandParams();
+
       // Low shelf
       mBands[0].isShelf = true;
       CalculateLowShelf(mBands[0]);
@@ -172,10 +189,73 @@ namespace guitarfx
       // Reset filter state to prevent instability transients after coefficient changes
       for (auto &band : mBands)
       {
-        band.z1L = band.z2L = 0.0f;
-        band.z1R = band.z2R = 0.0f;
-        band.x1L = band.x2L = 0.0f;
-        band.x1R = band.x2R = 0.0f;
+        SanitizeBandCoefficients(band);
+        ResetBandState(band);
+      }
+    }
+
+    void ClampBandParams()
+    {
+      const double maxFreq = std::max(20.0, mSampleRate * 0.49);
+      mBands[0].gainDb = ClampFinite(mBands[0].gainDb, -12.0, 12.0, 0.0);
+      mBands[0].freq = ClampFinite(mBands[0].freq, 20.0, std::min(500.0, maxFreq), 100.0);
+
+      mBands[1].gainDb = ClampFinite(mBands[1].gainDb, -12.0, 12.0, 0.0);
+      mBands[1].freq = ClampFinite(mBands[1].freq, 100.0, std::min(2000.0, maxFreq), 400.0);
+      mBands[1].q = ClampFinite(mBands[1].q, 0.1, 10.0, 1.0);
+
+      mBands[2].gainDb = ClampFinite(mBands[2].gainDb, -12.0, 12.0, 0.0);
+      mBands[2].freq = ClampFinite(mBands[2].freq, 500.0, std::min(8000.0, maxFreq), 2000.0);
+      mBands[2].q = ClampFinite(mBands[2].q, 0.1, 10.0, 1.0);
+
+      mBands[3].gainDb = ClampFinite(mBands[3].gainDb, -12.0, 12.0, 0.0);
+      mBands[3].freq = ClampFinite(mBands[3].freq, 2000.0, std::min(16000.0, maxFreq), 8000.0);
+    }
+
+    static double ClampFinite(double value, double minimum, double maximum, double fallback)
+    {
+      if (!std::isfinite(value))
+        return fallback;
+      return std::clamp(value, minimum, maximum);
+    }
+
+    static float SanitizeSample(float sample)
+    {
+      return std::isfinite(sample) ? sample : 0.0f;
+    }
+
+    static void ResetBandState(Band &band)
+    {
+      band.z1L = band.z2L = 0.0f;
+      band.z1R = band.z2R = 0.0f;
+      band.x1L = band.x2L = 0.0f;
+      band.x1R = band.x2R = 0.0f;
+    }
+
+    static void SanitizeBandState(Band &band)
+    {
+      band.z1L = SanitizeSample(band.z1L);
+      band.z2L = SanitizeSample(band.z2L);
+      band.z1R = SanitizeSample(band.z1R);
+      band.z2R = SanitizeSample(band.z2R);
+      band.x1L = SanitizeSample(band.x1L);
+      band.x2L = SanitizeSample(band.x2L);
+      band.x1R = SanitizeSample(band.x1R);
+      band.x2R = SanitizeSample(band.x2R);
+    }
+
+    static void SetIdentity(Band &band)
+    {
+      band.b0 = 1.0f;
+      band.b1 = band.b2 = band.a1 = band.a2 = 0.0f;
+    }
+
+    static void SanitizeBandCoefficients(Band &band)
+    {
+      if (!std::isfinite(band.b0) || !std::isfinite(band.b1) || !std::isfinite(band.b2) ||
+          !std::isfinite(band.a1) || !std::isfinite(band.a2))
+      {
+        SetIdentity(band);
       }
     }
 
@@ -183,8 +263,7 @@ namespace guitarfx
     {
       if (std::abs(band.gainDb) < 0.001)
       {
-        band.b0 = 1.0f;
-        band.b1 = band.b2 = band.a1 = band.a2 = 0.0f;
+        SetIdentity(band);
         return;
       }
 
@@ -195,6 +274,11 @@ namespace guitarfx
       const double alpha = sinw0 / (2.0 * band.q);
 
       const double a0 = 1.0 + alpha / A;
+      if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
+      {
+        SetIdentity(band);
+        return;
+      }
       band.b0 = static_cast<float>((1.0 + alpha * A) / a0);
       band.b1 = static_cast<float>((-2.0 * cosw0) / a0);
       band.b2 = static_cast<float>((1.0 - alpha * A) / a0);
@@ -206,8 +290,7 @@ namespace guitarfx
     {
       if (std::abs(band.gainDb) < 0.001)
       {
-        band.b0 = 1.0f;
-        band.b1 = band.b2 = band.a1 = band.a2 = 0.0f;
+        SetIdentity(band);
         return;
       }
 
@@ -219,6 +302,11 @@ namespace guitarfx
       const double sqrtA = std::sqrt(A);
 
       const double a0 = (A + 1.0) + (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha;
+      if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
+      {
+        SetIdentity(band);
+        return;
+      }
       band.b0 = static_cast<float>(A * ((A + 1.0) - (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha) / a0);
       band.b1 = static_cast<float>(2.0 * A * ((A - 1.0) - (A + 1.0) * cosw0) / a0);
       band.b2 = static_cast<float>(A * ((A + 1.0) - (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0);
@@ -230,8 +318,7 @@ namespace guitarfx
     {
       if (std::abs(band.gainDb) < 0.001)
       {
-        band.b0 = 1.0f;
-        band.b1 = band.b2 = band.a1 = band.a2 = 0.0f;
+        SetIdentity(band);
         return;
       }
 
@@ -243,6 +330,11 @@ namespace guitarfx
       const double sqrtA = std::sqrt(A);
 
       const double a0 = (A + 1.0) - (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha;
+      if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
+      {
+        SetIdentity(band);
+        return;
+      }
       band.b0 = static_cast<float>(A * ((A + 1.0) + (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha) / a0);
       band.b1 = static_cast<float>(-2.0 * A * ((A - 1.0) + (A + 1.0) * cosw0) / a0);
       band.b2 = static_cast<float>(A * ((A + 1.0) + (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0);

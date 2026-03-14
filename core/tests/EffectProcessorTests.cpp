@@ -866,6 +866,68 @@ bool TestDriveEffectCharacter()
   return distinctOk && distortionCompressed && fuzzAsymmetric && fuzzCleansUp && protectedOutput;
 }
 
+bool TestParametricEQClippingStability()
+{
+  std::cout << "\n--- Parametric EQ Clipping Stability Test ---\n";
+
+  auto& registry = guitarfx::EffectRegistry::Instance();
+  auto effect = registry.Create(guitarfx::EffectGuids::kEqParametric);
+  if (!effect)
+  {
+    std::cout << "  FAIL: Could not create parametric EQ\n";
+    return false;
+  }
+
+  effect->Prepare(kTestSampleRate, kTestBlockSize);
+  effect->Reset();
+  effect->SetParam("lowGain", 12.0);
+  effect->SetParam("lowFreq", 180.0);
+  effect->SetParam("lowMidGain", 12.0);
+  effect->SetParam("lowMidFreq", 850.0);
+  effect->SetParam("lowMidQ", 8.0);
+  effect->SetParam("highMidGain", 12.0);
+  effect->SetParam("highMidFreq", 3200.0);
+  effect->SetParam("highMidQ", 8.0);
+  effect->SetParam("highGain", 12.0);
+  effect->SetParam("highFreq", 12000.0);
+
+  std::vector<float> inputL(kTestBlockSize, 0.0f);
+  std::vector<float> inputR(kTestBlockSize, 0.0f);
+  std::vector<float> outputL(kTestBlockSize, 0.0f);
+  std::vector<float> outputR(kTestBlockSize, 0.0f);
+  float* inputs[2] = {inputL.data(), inputR.data()};
+  float* outputs[2] = {outputL.data(), outputR.data()};
+
+  constexpr int kBlocksToProcess = 12;
+  for (int block = 0; block < kBlocksToProcess; ++block)
+  {
+    const std::size_t startIndex = static_cast<std::size_t>(block * kTestBlockSize);
+    for (int i = 0; i < kTestBlockSize; ++i)
+    {
+      const double phase = 2.0 * kPi * 110.0 * static_cast<double>(startIndex + static_cast<std::size_t>(i)) / kTestSampleRate;
+      const float clipped = static_cast<float>(2.8 * std::sin(phase));
+      inputL[static_cast<std::size_t>(i)] = clipped;
+      inputR[static_cast<std::size_t>(i)] = clipped;
+    }
+
+    std::fill(outputL.begin(), outputL.end(), 0.0f);
+    std::fill(outputR.begin(), outputR.end(), 0.0f);
+    effect->Process(inputs, outputs, kTestBlockSize);
+  }
+
+  const auto analysis = AnalyzeSignal(outputL);
+  const bool finite = !analysis.hasNaN && !analysis.hasInf;
+  const bool audible = !analysis.isAllZeros && analysis.peakValue > 1.0e-4;
+  const bool bounded = analysis.peakValue < 100.0;
+
+  std::cout << "  Output remains finite under clipped input:    " << (finite ? "PASS" : "FAIL")
+            << " (peak=" << std::fixed << std::setprecision(3) << analysis.peakValue << ")\n";
+  std::cout << "  Output remains audible after overload:        " << (audible ? "PASS" : "FAIL") << "\n";
+  std::cout << "  Output stays numerically bounded:             " << (bounded ? "PASS" : "FAIL") << "\n";
+
+  return finite && audible && bounded;
+}
+
 bool TestDynamicsSoftClipOptions()
 {
   std::cout << "\n--- Dynamics Soft Clip Option Tests ---\n";
@@ -1416,6 +1478,9 @@ int main()
     return 1;
 
   if (!TestDriveEffectCharacter())
+    return 1;
+
+  if (!TestParametricEQClippingStability())
     return 1;
 
   if (!TestDynamicsSoftClipOptions())
