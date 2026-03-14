@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { sendToneSharingModerationNotification } from "../lib/email";
 import { fail, ok, safeJson } from "../lib/http";
 import { optionalAuth, requireAuth } from "../middleware/session";
 import { Env } from "../types/env";
@@ -26,6 +27,20 @@ type PackRow = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type AuthContext = { userId: string; email: string; role: string; sessionId: string };
+
+type CreatorRow = {
+  id: string;
+  email: string;
+  role: string;
+  display_name: string | null;
+};
+
+type ModeratePackBody = {
+  action?: "approve" | "reject";
+  notes?: string;
 };
 
 type PackConfig = {
@@ -61,11 +76,23 @@ function stringifyPackConfig(config: PackConfig): string {
   return JSON.stringify(config);
 }
 
-function toPackResponse(pack: PackRow) {
+async function loadCreator(db: D1Database, creatorUserId: string): Promise<CreatorRow | null> {
+  return db.prepare(
+    `SELECT u.id, u.email, u.role, u.display_name
+     FROM users u
+     WHERE u.id = ?`
+  ).bind(creatorUserId).first<CreatorRow>();
+}
+
+async function toPackResponse(db: D1Database, pack: PackRow) {
   const config = parsePackConfig(pack.config_json);
+  const creator = await loadCreator(db, pack.creator_user_id);
   return {
     id: pack.id,
     creatorUserId: pack.creator_user_id,
+    creatorEmail: creator?.email ?? null,
+    creatorDisplayName: creator?.display_name ?? null,
+    creatorRole: creator?.role ?? null,
     title: pack.title,
     description: config.description,
     moderationStatus: pack.moderation_status,
@@ -75,6 +102,10 @@ function toPackResponse(pack: PackRow) {
     createdAt: pack.created_at,
     updatedAt: pack.updated_at
   };
+}
+
+function requireAdmin(auth: AuthContext | undefined) {
+  return Boolean(auth && auth.role === "admin");
 }
 
 function downloadFileName(base: string, ext: string): string {
@@ -91,7 +122,7 @@ function downloadFileName(base: string, ext: string): string {
 export function packRoutes() {
   const app = new Hono<{ Bindings: Env; Variables: { auth?: { userId: string; email: string; role: string; sessionId: string } } }>();
 
-  app.get("/", async (c) => {
+  app.get("/", optionalAuth, async (c) => {
     const page = Math.max(1, Number.parseInt((c.req.query("page") ?? "1").trim(), 10) || 1);
     const pageSizeRaw = Number.parseInt((c.req.query("pageSize") ?? "24").trim(), 10) || 24;
     const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
@@ -119,7 +150,7 @@ export function packRoutes() {
     return ok(c, {
       page,
       pageSize,
-      packs: rows.results.map(toPackResponse)
+      packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack)))
     });
   });
 
@@ -147,7 +178,25 @@ export function packRoutes() {
     sql += " ORDER BY updated_at DESC LIMIT 200";
 
     const rows = await c.env.DB.prepare(sql).bind(...params).all<PackRow>();
-    return ok(c, { packs: rows.results.map(toPackResponse) });
+    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack))) });
+  });
+
+  app.get("/pending/list", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!requireAdmin(auth)) {
+      return fail(c, "FORBIDDEN", "Admin access required", 403);
+    }
+
+    const rows = await c.env.DB.prepare(
+      `SELECT id, creator_user_id, title, moderation_status,
+              config_json, published_at, created_at, updated_at
+       FROM packs
+       WHERE moderation_status = 'pending_review'
+       ORDER BY updated_at ASC
+       LIMIT 200`
+    ).all<PackRow>();
+
+    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack))) });
   });
 
   app.post("/", requireAuth, async (c) => {
@@ -188,7 +237,7 @@ export function packRoutes() {
       .bind(packId)
       .first<PackRow>();
 
-    return ok(c, { pack: created ? toPackResponse(created) : null }, 201);
+    return ok(c, { pack: created ? await toPackResponse(c.env.DB, created) : null }, 201);
   });
 
   app.patch("/:packId", requireAuth, async (c) => {
@@ -251,7 +300,7 @@ export function packRoutes() {
       .bind(packId)
       .first<PackRow>();
 
-    return ok(c, { pack: updated ? toPackResponse(updated) : null });
+    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated) : null });
   });
 
   app.post("/:packId/items", requireAuth, async (c) => {
@@ -343,9 +392,9 @@ export function packRoutes() {
 
     const packId = c.req.param("packId");
     const pack = await c.env.DB
-      .prepare("SELECT id, creator_user_id FROM packs WHERE id = ?")
+      .prepare("SELECT id, creator_user_id, title FROM packs WHERE id = ?")
       .bind(packId)
-      .first<{ id: string; creator_user_id: string }>();
+      .first<{ id: string; creator_user_id: string; title: string }>();
 
     if (!pack) {
       return fail(c, "NOT_FOUND", "Pack not found", 404);
@@ -365,12 +414,80 @@ export function packRoutes() {
 
     await c.env.DB
       .prepare(
-        "UPDATE packs SET moderation_status = 'approved', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE packs SET moderation_status = 'pending_review', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
       )
       .bind(packId)
       .run();
 
-    return ok(c, { packId, moderationStatus: "approved" });
+    try {
+      await sendToneSharingModerationNotification(c.env, {
+        targetType: "pack",
+        targetId: packId,
+        title: pack.title,
+        creatorEmail: auth.email,
+        creatorUserId: auth.userId,
+      });
+    } catch (error) {
+      console.error("Failed to send tone sharing moderation notification", error);
+    }
+
+    return ok(c, { packId, moderationStatus: "pending_review" });
+  });
+
+  app.post("/:packId/moderate", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!requireAdmin(auth)) {
+      return fail(c, "FORBIDDEN", "Admin access required", 403);
+    }
+
+    const packId = c.req.param("packId");
+    const body = await safeJson<ModeratePackBody>(c.req.raw);
+    const action = body?.action;
+    const notes = body?.notes?.trim() ?? null;
+    if (action !== "approve" && action !== "reject") {
+      return fail(c, "INVALID_ACTION", "Action must be approve or reject", 422);
+    }
+
+    const pack = await c.env.DB
+      .prepare(
+        `SELECT id, creator_user_id, title, moderation_status,
+                config_json, published_at, created_at, updated_at
+         FROM packs WHERE id = ?`
+      )
+      .bind(packId)
+      .first<PackRow>();
+
+    if (!pack) {
+      return fail(c, "NOT_FOUND", "Pack not found", 404);
+    }
+
+    const nextStatus = action === "approve" ? "approved" : "rejected";
+    await c.env.DB
+      .prepare(
+        `UPDATE packs SET
+           moderation_status = ?,
+           published_at = CASE WHEN ? = 'approved' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .bind(nextStatus, nextStatus, packId)
+      .run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO moderation_actions (id, target_type, target_id, action, actor_user_id, notes)
+       VALUES (?, 'pack', ?, ?, ?, ?)`
+    ).bind(randomId("mod"), packId, action, auth!.userId, notes).run();
+
+    const updated = await c.env.DB
+      .prepare(
+        `SELECT id, creator_user_id, title, moderation_status,
+                config_json, published_at, created_at, updated_at
+         FROM packs WHERE id = ?`
+      )
+      .bind(packId)
+      .first<PackRow>();
+
+    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated) : null });
   });
 
   app.get("/:packId", optionalAuth, async (c) => {
@@ -411,7 +528,7 @@ export function packRoutes() {
 
     return ok(c, {
       pack: {
-        ...toPackResponse(pack),
+        ...(await toPackResponse(c.env.DB, pack)),
         thumbnailUrl: packConfig.thumbnailAssetId ? `/v1/packs/${packId}/thumbnail` : null
       },
       items: packItems.results.map((entry) => ({

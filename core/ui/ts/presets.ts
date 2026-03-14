@@ -5,13 +5,13 @@ import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRe
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileNameWithHash, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
-import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode } from "./types.js";
+import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode, ToneSharingOriginMetadata } from "./types.js";
 import { createEmptyPresetV2, migratePresetNodeTypes } from "./presetV2.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage, setAppSetting } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
 import { showConfirm } from "./dialogs.js";
-import { isToneSharingSignedIn, openToneSharingPublishPresetModal, registerInstalledToneSharingPack } from "./toneSharingPanel.js";
+import { isToneSharingSignedIn, openToneSharingPublishPresetModal, registerInstalledToneSharingPack, syncToneSharingFavoriteForPreset, syncToneSharingRatingForPreset } from "./toneSharingPanel.js";
 import type { InstalledPackMetadata } from "./toneSharingPanel.js";
 import { downloadTone3000ResourceByReference, saveTone3000ApiKey } from "./tone3000.js";
 import { switchMainPanel } from "./navigation.js";
@@ -617,6 +617,10 @@ function toggleFavoritePreset(presetId: string): void {
     favorites.add(presetId);
   }
   saveFavoritePresetIds(favorites);
+  const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((candidate) => candidate.id === presetId) ?? null;
+  void syncToneSharingFavoriteForPreset(preset, favorites.has(presetId)).catch((error) => {
+    console.warn("Tone Sharing favorite sync failed", error);
+  });
   setFavoriteToggleState(presetId);
   if (uiState.activePresetFolderId === PRESET_FOLDER_FAVORITES_ID) {
     filterPresets(presetSearchElement?.value ?? "");
@@ -646,6 +650,10 @@ function setPresetRating(presetId: string, rating: number | null): void {
     ratings[presetId] = rating;
   }
   savePresetRatings(ratings);
+  const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((candidate) => candidate.id === presetId) ?? null;
+  void syncToneSharingRatingForPreset(preset, rating).catch((error) => {
+    console.warn("Tone Sharing rating sync failed", error);
+  });
   renderPresetUI(uiState.presetCache.get(uiState.activePresetId ?? "") ?? null);
 }
 
@@ -1719,9 +1727,15 @@ function openExportChooser(anchor: HTMLElement): void {
   const chooser = getOrCreateExportChooser();
   const publishItem = chooser.querySelector<HTMLButtonElement>('[data-action="publish"]');
   const signedIn = isToneSharingSignedIn();
+  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  const toneSharingOrigin = getToneSharingOriginMetadata(activePreset);
   if (publishItem) {
-    publishItem.disabled = !signedIn;
-    publishItem.title = signedIn ? "Publish preset" : "Sign in to Tone Sharing to publish";
+    publishItem.disabled = !signedIn || Boolean(toneSharingOrigin?.republishBlocked);
+    publishItem.title = !signedIn
+      ? "Sign in to Tone Sharing to publish"
+      : toneSharingOrigin?.republishBlocked
+        ? "Use Save As before republishing a preset imported from Tone Sharing"
+        : "Publish preset";
   }
 
   const anchorRect = anchor.getBoundingClientRect();
@@ -2090,6 +2104,7 @@ export function saveCurrentPreset(): void {
     tags: tags.length > 0 ? tags : undefined,
     attachments: baseAttachments,
   };
+  delete (newPreset as Record<string, unknown>).toneSharingOrigin;
   if (stagedDesignedPeak !== undefined && isFinite(stagedDesignedPeak)) {
     newPreset.designedPeakInputDbfs = Math.round(stagedDesignedPeak * 10) / 10;
   }
@@ -2256,6 +2271,8 @@ type Tone3000ResourceRef = {
   modelUrl?: string;
   toneId?: string;
   modelId?: string;
+  creatorId?: string;
+  creatorName?: string;
 };
 
 type PresetArchive = {
@@ -2282,6 +2299,7 @@ type ImportPackSource = "zipImport" | "toneSharingApi" | "generatedPack";
 type ImportPackContext = {
   source: ImportPackSource;
   packId?: string;
+  itemId?: string;
   titleHint?: string;
 };
 
@@ -2724,6 +2742,8 @@ export async function buildToneSharingPresetArchiveBlobs(preset: Preset): Promis
         type: resourceType,
         toneId,
         modelId,
+        creatorId: resource.metadata.creatorId?.trim() || undefined,
+        creatorName: resource.metadata.creatorName?.trim() || resource.metadata.authorUsername?.trim() || undefined,
       });
       continue;
     }
@@ -2879,10 +2899,49 @@ async function exportCurrentPresetArchive(): Promise<void> {
 type ArchiveImportContext = {
   source: InstalledPackMetadata["source"];
   packId?: string;
+  itemId?: string;
   titleHint?: string;
 };
 
+function normalizeToneSharingOrigin(value: unknown): ToneSharingOriginMetadata | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const origin = value as Record<string, unknown>;
+  const source = origin.source === "toneSharingApi" ? "toneSharingApi" : null;
+  const itemId = typeof origin.itemId === "string" ? origin.itemId.trim() : "";
+  if (!source || !itemId) {
+    return undefined;
+  }
+  return {
+    source,
+    itemId,
+    originalPresetId: typeof origin.originalPresetId === "string" ? origin.originalPresetId : undefined,
+    importedAt: typeof origin.importedAt === "string" ? origin.importedAt : undefined,
+    importedFromPackId: typeof origin.importedFromPackId === "string" ? origin.importedFromPackId : undefined,
+    republishBlocked: origin.republishBlocked !== false,
+  };
+}
+
+function createToneSharingOrigin(itemId: string, sourcePresetId: string, packId?: string): ToneSharingOriginMetadata {
+  return {
+    source: "toneSharingApi",
+    itemId,
+    originalPresetId: sourcePresetId,
+    importedAt: new Date().toISOString(),
+    importedFromPackId: packId,
+    republishBlocked: true,
+  };
+}
+
+function getToneSharingOriginMetadata(preset: Preset | null | undefined): ToneSharingOriginMetadata | undefined {
+  return normalizeToneSharingOrigin(preset?.toneSharingOrigin);
+}
+
 function buildInstalledPackEntryId(file: File, context: ArchiveImportContext): string {
+  if (context.source === "toneSharingApi" && context.itemId) {
+    return `tone-sharing-api:item:${context.itemId}`;
+  }
   if (context.source === "toneSharingApi" && context.packId) {
     return `tone-sharing-api:${context.packId}`;
   }
@@ -2947,6 +3006,9 @@ async function importTone3000ArchiveResources(
         metadata: {
           provider: "tone3000",
           toneId: ref.toneId ?? "",
+          creatorId: ref.creatorId ?? "",
+          creatorName: ref.creatorName ?? "",
+          authorUsername: ref.creatorName ?? "",
           modelId: ref.modelId ?? "",
           ...(ref.modelUrl ? { modelUrl: ref.modelUrl } : {}),
         },
@@ -3094,8 +3156,23 @@ async function importPresetArchive(file: File, context: ArchiveImportContext = {
   for (const sourcePreset of presetsToImport) {
     const importedPreset = clonePreset(sourcePreset);
     migratePresetNodeTypes(importedPreset);
-    importedPreset.id = generateResourceId(importedPreset.id || importedPreset.name || "preset");
+    const sourcePresetId = importedPreset.id || importedPreset.name || "preset";
+    const archiveOrigin = getToneSharingOriginMetadata(importedPreset);
+    importedPreset.id = generateResourceId(sourcePresetId);
     importedPreset.name = importedPreset.name || "Imported Preset";
+    const contextOrigin = context.source === "toneSharingApi" && context.itemId
+      ? createToneSharingOrigin(context.itemId, sourcePresetId, context.packId)
+      : undefined;
+    const resolvedOrigin = archiveOrigin ?? contextOrigin;
+    if (resolvedOrigin) {
+      importedPreset.toneSharingOrigin = {
+        ...resolvedOrigin,
+        originalPresetId: resolvedOrigin.originalPresetId ?? sourcePresetId,
+        importedAt: resolvedOrigin.importedAt ?? new Date().toISOString(),
+        importedFromPackId: resolvedOrigin.importedFromPackId ?? context.packId,
+        republishBlocked: resolvedOrigin.republishBlocked !== false,
+      };
+    }
 
     if (importedPreset.graph?.nodes) {
       importedPreset.graph.nodes.forEach((node) => {

@@ -269,6 +269,7 @@ export const uiState: UiState = {
     tempoBpm: 120,
     timeSigNum: 4,
     timeSigDen: 4,
+    metronomeClickEnabled: false,
     capturedSamples: 0,
     sampleRate: 0,
     hasAudio: false,

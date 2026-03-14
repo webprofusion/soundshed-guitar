@@ -20,6 +20,13 @@ type ToneSharingItem = {
   title: string;
   type: string;
   moderationStatus?: string;
+  creatorEmail?: string | null;
+  creatorDisplayName?: string | null;
+  favoriteCount?: number;
+  ratingCount?: number;
+  averageRating?: number | null;
+  currentUserFavorite?: boolean;
+  currentUserRating?: number | null;
   description?: string | null;
   tags?: string[] | null;
 };
@@ -28,6 +35,8 @@ type ToneSharingPack = {
   id: string;
   title: string;
   moderationStatus?: string;
+  creatorEmail?: string | null;
+  creatorDisplayName?: string | null;
   description?: string | null;
   thumbnailUrl?: string | null;
   thumbnailAssetId?: string | null;
@@ -35,7 +44,7 @@ type ToneSharingPack = {
 
 type ToneSharingPackDetails = {
   pack: ToneSharingPack;
-  items: Array<{ itemId: string; sortOrder: number; title: string; type: string; description?: string | null; tags?: string[] | null }>;
+  items: Array<{ itemId: string; sortOrder: number; title: string; type: string; moderationStatus?: string; description?: string | null; tags?: string[] | null }>;
 };
 
 type ItemArchiveResource = {
@@ -55,6 +64,8 @@ type Tone3000ResourceRef = {
   toneId?: string;
   modelId?: string;
   modelUrl?: string;
+  creatorId?: string;
+  creatorName?: string;
 };
 
 type ItemArchive = {
@@ -90,6 +101,14 @@ type ToneSharingRow = {
     kind: "item" | "pack";
     title: string;
     type: string | null;
+    moderationStatus?: string;
+    creatorEmail?: string | null;
+    creatorDisplayName?: string | null;
+    favoriteCount?: number;
+    ratingCount?: number;
+    averageRating?: number | null;
+    currentUserFavorite?: boolean;
+    currentUserRating?: number | null;
     description?: string | null;
     tags?: string[] | null;
     thumbnailUrl?: string | null;
@@ -135,7 +154,9 @@ const state = {
 
 const packThumbnailObjectUrls = new Map<string, string>();
 
-let browseMode: "featured" | "items" | "packs" | "installed" | "mine" | "ai-search" = "featured";
+let browseMode: "featured" | "items" | "packs" | "installed" | "mine" | "ai-search" | "review" = "featured";
+let publishItemInFlight = false;
+let publishPackInFlight = false;
 
 type AiToneEffect = { type: string; name: string; settings?: Record<string, string | number> };
 
@@ -180,6 +201,82 @@ function setText(id: string, value: string): void {
 function setUploadStatus(value: string): void {
   setText("tone-sharing-upload-status", value);
   setText("tone-sharing-publish-modal-status", value);
+}
+
+function isToneSharingAdmin(): boolean {
+  return state.user?.role === "admin";
+}
+
+function getPresetToneSharingOrigin(preset: Preset | null | undefined): { itemId: string; republishBlocked: boolean } | null {
+  if (!preset || !preset.toneSharingOrigin || typeof preset.toneSharingOrigin !== "object") {
+    return null;
+  }
+  const origin = preset.toneSharingOrigin as Record<string, unknown>;
+  if (origin.source !== "toneSharingApi") {
+    return null;
+  }
+  const itemId = typeof origin.itemId === "string" ? origin.itemId.trim() : "";
+  if (!itemId) {
+    return null;
+  }
+  return {
+    itemId,
+    republishBlocked: origin.republishBlocked !== false,
+  };
+}
+
+function setPublishItemBusy(busy: boolean, message?: string): void {
+  publishItemInFlight = busy;
+  const closeButton = element<HTMLButtonElement>("tone-sharing-publish-modal-close");
+  const cancelButton = element<HTMLButtonElement>("tone-sharing-publish-modal-cancel");
+  const submitButton = element<HTMLButtonElement>("tone-sharing-upload-item");
+  const progress = element<HTMLElement>("tone-sharing-publish-progress");
+  const titleInput = element<HTMLInputElement>("tone-sharing-item-title");
+  const descriptionInput = element<HTMLTextAreaElement>("tone-sharing-item-description");
+  const packSelect = element<HTMLSelectElement>("tone-sharing-pack-assign-select");
+  const newPackButton = element<HTMLButtonElement>("tone-sharing-add-to-new-pack");
+  document.querySelectorAll<HTMLButtonElement>("#tone-sharing-tags-picker .tone-sharing-tag-chip").forEach((button) => {
+    button.disabled = busy;
+  });
+  [closeButton, cancelButton, submitButton, titleInput, descriptionInput, packSelect, newPackButton].forEach((control) => {
+    if (control) {
+      control.disabled = busy;
+    }
+  });
+  if (progress) {
+    progress.style.display = busy ? "flex" : "none";
+    const label = progress.querySelector<HTMLElement>(".tone-sharing-progress-label");
+    if (label) {
+      label.textContent = message ?? "Working...";
+    }
+  }
+}
+
+function setPublishPackBusy(busy: boolean, message?: string): void {
+  publishPackInFlight = busy;
+  const closeButton = element<HTMLButtonElement>("tone-sharing-pack-modal-close");
+  const cancelButton = element<HTMLButtonElement>("tone-sharing-pack-modal-cancel");
+  const saveDraftButton = element<HTMLButtonElement>("tone-sharing-save-pack-draft");
+  const publishButton = element<HTMLButtonElement>("tone-sharing-create-pack");
+  const titleInput = element<HTMLInputElement>("tone-sharing-pack-title");
+  const descriptionInput = element<HTMLTextAreaElement>("tone-sharing-pack-description");
+  const imageInput = element<HTMLInputElement>("tone-sharing-pack-image");
+  const progress = element<HTMLElement>("tone-sharing-pack-progress");
+  [closeButton, cancelButton, saveDraftButton, publishButton, titleInput, descriptionInput, imageInput].forEach((control) => {
+    if (control) {
+      control.disabled = busy;
+    }
+  });
+  document.querySelectorAll<HTMLInputElement>("#tone-sharing-pack-items input[type='checkbox']").forEach((checkbox) => {
+    checkbox.disabled = busy;
+  });
+  if (progress) {
+    progress.style.display = busy ? "flex" : "none";
+    const label = progress.querySelector<HTMLElement>(".tone-sharing-progress-label");
+    if (label) {
+      label.textContent = message ?? "Working...";
+    }
+  }
 }
 
 function normalizeSettingString(value: unknown): string {
@@ -303,6 +400,38 @@ export function isToneSharingSignedIn(): boolean {
   return Boolean(state.user);
 }
 
+export async function syncToneSharingFavoriteForPreset(preset: Preset | null | undefined, favorite: boolean): Promise<void> {
+  if (!state.user) {
+    return;
+  }
+  const origin = getPresetToneSharingOrigin(preset);
+  if (!origin?.itemId) {
+    return;
+  }
+  await apiFetch(`/items/${origin.itemId}/favorite`, {
+    method: favorite ? "PUT" : "DELETE",
+  });
+}
+
+export async function syncToneSharingRatingForPreset(preset: Preset | null | undefined, rating: number | null): Promise<void> {
+  if (!state.user) {
+    return;
+  }
+  const origin = getPresetToneSharingOrigin(preset);
+  if (!origin?.itemId) {
+    return;
+  }
+  if (rating === null) {
+    await apiFetch(`/items/${origin.itemId}/rating`, { method: "DELETE" });
+    return;
+  }
+  await apiFetch(`/items/${origin.itemId}/rating`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rating }),
+  });
+}
+
 export function openToneSharingPublishPresetModal(defaultTitle?: string, defaultDescription?: string): void {
   const modal = element<HTMLElement>("tone-sharing-publish-modal");
   if (!modal) {
@@ -324,8 +453,23 @@ export function openToneSharingPublishPresetModal(defaultTitle?: string, default
     descriptionInput.value = resolvedDescription;
   }
   setToneSharingTagsPickerValue(activePreset?.tags ?? []);
+  setPublishItemBusy(false, "Publishing preset...");
 
   setUploadStatus(activePreset ? `Publishing: ${activePreset.name ?? activePreset.id}` : "");
+
+  const publishButton = element<HTMLButtonElement>("tone-sharing-upload-item");
+  const origin = getPresetToneSharingOrigin(activePreset);
+  if (publishButton) {
+    publishButton.disabled = false;
+    publishButton.title = "";
+  }
+  if (origin?.republishBlocked) {
+    setUploadStatus("This preset came from Tone Sharing. Use Save As to create a local copy before publishing.");
+    if (publishButton) {
+      publishButton.disabled = true;
+      publishButton.title = "Use Save As to create a new local preset before publishing";
+    }
+  }
 
   // Reset pack assign UI
   element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.remove("active");
@@ -336,7 +480,10 @@ export function openToneSharingPublishPresetModal(defaultTitle?: string, default
   modal.style.display = "flex";
 }
 
-function closeToneSharingPublishPresetModal(): void {
+function closeToneSharingPublishPresetModal(force = false): void {
+  if (publishItemInFlight && !force) {
+    return;
+  }
   const modal = element<HTMLElement>("tone-sharing-publish-modal");
   if (!modal) {
     return;
@@ -364,6 +511,7 @@ async function openPackModal(packId?: string, preCheckItemId?: string): Promise<
   if (!modal) {
     return;
   }
+  setPublishPackBusy(false, "Publishing pack...");
 
   const titleEl = element<HTMLInputElement>("tone-sharing-pack-title");
   const descEl = element<HTMLTextAreaElement>("tone-sharing-pack-description");
@@ -400,7 +548,10 @@ async function openPackModal(packId?: string, preCheckItemId?: string): Promise<
   modal.style.display = "flex";
 }
 
-function closePackModal(): void {
+function closePackModal(force = false): void {
+  if (publishPackInFlight && !force) {
+    return;
+  }
   const modal = element<HTMLElement>("tone-sharing-pack-modal");
   if (modal) {
     modal.style.display = "none";
@@ -417,27 +568,16 @@ async function loadMyDraftPacksForSelect(): Promise<void> {
     const data = await apiFetch<{ packs: ToneSharingPack[] }>("/packs/me/list");
     const drafts = data.packs.filter((p) => p.moderationStatus === "draft");
     select.innerHTML =
-      `<option value="">Or add to existing draft pack\u2026</option>` +
+      `<option value="">Or add to existing draft pack…</option>` +
       drafts.map((p) => `<option value="${p.id}">${p.title}</option>`).join("");
   } catch {
-    // pack assignment is optional; silent fail
   }
-}
-
-async function addItemToExistingPack(packId: string, itemId: string): Promise<void> {
-  const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
-  const existingIds = details.items.map((item) => item.itemId);
-  if (!existingIds.includes(itemId)) {
-    existingIds.push(itemId);
-  }
-  await apiFetch(`/packs/${packId}/items`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ itemIds: existingIds })
-  });
 }
 
 async function savePack(publish: boolean): Promise<void> {
+  if (publishPackInFlight) {
+    return;
+  }
   if (!state.user) {
     setText("tone-sharing-pack-status", "Sign in first.");
     return;
@@ -452,12 +592,19 @@ async function savePack(publish: boolean): Promise<void> {
     return;
   }
 
-  const itemIds = Array.from(
-    document.querySelectorAll<HTMLInputElement>("#tone-sharing-pack-items input[data-pack-item-id]:checked")
-  ).map((input) => input.dataset.packItemId || "").filter(Boolean);
+  if (publish) {
+    setPublishPackBusy(true, editingPackId ? "Submitting pack for approval..." : "Publishing pack...");
+  }
 
-  if (publish && !itemIds.length) {
-    setText("tone-sharing-pack-status", "Select at least one preset to publish.");
+  const itemIds = Array.from(document.querySelectorAll<HTMLInputElement>("#tone-sharing-pack-items input[data-pack-item-id]:checked"))
+    .map((input) => input.dataset.packItemId ?? "")
+    .filter(Boolean);
+
+  if (itemIds.length === 0) {
+    setText("tone-sharing-pack-status", "Select at least one preset.");
+    if (publish) {
+      setPublishPackBusy(false, "Publishing pack...");
+    }
     return;
   }
 
@@ -468,7 +615,6 @@ async function savePack(publish: boolean): Promise<void> {
     if (imageFile) {
       const variants = await buildPackImageVariants(imageFile);
       const thumbnailBlob = variants.small.blob;
-
       const init = await apiFetch<{ uploadId: string }>("/uploads/init", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -527,8 +673,9 @@ async function savePack(publish: boolean): Promise<void> {
 
     if (publish) {
       await apiFetch(`/packs/${packId}/publish`, { method: "POST" });
-      setText("tone-sharing-pack-status", "Pack published successfully.");
-      closePackModal();
+      setText("tone-sharing-pack-status", "Pack submitted for moderator approval.");
+      setPublishPackBusy(false, "Publishing pack...");
+      closePackModal(true);
     } else {
       setText("tone-sharing-pack-status", "Draft saved.");
     }
@@ -536,6 +683,10 @@ async function savePack(publish: boolean): Promise<void> {
     await Promise.all([loadBrowse(), loadMine()]);
   } catch (error) {
     setText("tone-sharing-pack-status", `${publish ? "Publish" : "Save"} failed: ${(error as Error).message}`);
+  } finally {
+    if (publish) {
+      setPublishPackBusy(false, "Publishing pack...");
+    }
   }
 }
 
@@ -559,6 +710,13 @@ function updateAuthButtonVisibility(): void {
   if (createPackButton) {
     createPackButton.disabled = !signedIn;
     createPackButton.title = signedIn ? "Create a new pack" : "Sign in to create packs";
+  }
+  const reviewButton = element<HTMLButtonElement>("tone-sharing-browse-review");
+  if (reviewButton) {
+    reviewButton.style.display = isToneSharingAdmin() ? "" : "none";
+  }
+  if (!isToneSharingAdmin() && browseMode === "review") {
+    browseMode = "featured";
   }
   if (!signedIn) {
     closeToneSharingPublishPresetModal();
@@ -1008,6 +1166,14 @@ function buildSingleRow(title: string, entries: Array<{ id: string; title: strin
       kind,
       title: entry.title,
       type: entry.type ?? null,
+      moderationStatus: (entry as ToneSharingItem | ToneSharingPack).moderationStatus,
+      creatorEmail: (entry as ToneSharingItem | ToneSharingPack).creatorEmail ?? null,
+      creatorDisplayName: (entry as ToneSharingItem | ToneSharingPack).creatorDisplayName ?? null,
+      favoriteCount: kind === "item" ? (entry as ToneSharingItem).favoriteCount : undefined,
+      ratingCount: kind === "item" ? (entry as ToneSharingItem).ratingCount : undefined,
+      averageRating: kind === "item" ? (entry as ToneSharingItem).averageRating ?? null : undefined,
+      currentUserFavorite: kind === "item" ? (entry as ToneSharingItem).currentUserFavorite : undefined,
+      currentUserRating: kind === "item" ? (entry as ToneSharingItem).currentUserRating ?? null : undefined,
       description: kind === "pack" ? (entry as ToneSharingPack).description ?? null : (entry as ToneSharingItem).description ?? null,
       tags: kind === "item" ? (entry as ToneSharingItem).tags ?? null : null,
       thumbnailUrl: kind === "pack"
@@ -1015,6 +1181,18 @@ function buildSingleRow(title: string, entries: Array<{ id: string; title: strin
         : null
     }))
   };
+}
+
+async function moderateTarget(kind: "item" | "pack", id: string, action: "approve" | "reject"): Promise<void> {
+  const notes = action === "reject"
+    ? (window.prompt("Optional rejection reason", "") ?? "").trim()
+    : "";
+  const endpoint = kind === "item" ? `/items/${id}/moderate` : `/packs/${id}/moderate`;
+  await apiFetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, notes: notes || undefined }),
+  });
 }
 
 function clearPackDetail(): void {
@@ -1363,7 +1541,16 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
     const bytes = new Uint8Array(buffer);
     const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
     if (!isZip) {
-      mergedPresets.push(await readPresetFromArchive(buffer));
+      const preset = await readPresetFromArchive(buffer);
+      preset.toneSharingOrigin = {
+        source: "toneSharingApi",
+        itemId: item.itemId,
+        originalPresetId: typeof preset.id === "string" ? preset.id : item.itemId,
+        importedAt: new Date().toISOString(),
+        importedFromPackId: details.pack.id,
+        republishBlocked: true,
+      };
+      mergedPresets.push(preset);
       continue;
     }
 
@@ -1374,6 +1561,14 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
     if (presetEntry) {
       const parsed = JSON.parse(await presetEntry.async("text")) as ItemArchive;
       if (parsed.preset) {
+        parsed.preset.toneSharingOrigin = {
+          source: "toneSharingApi",
+          itemId: item.itemId,
+          originalPresetId: typeof parsed.preset.id === "string" ? parsed.preset.id : item.itemId,
+          importedAt: new Date().toISOString(),
+          importedFromPackId: details.pack.id,
+          republishBlocked: true,
+        };
         mergedPresets.push(parsed.preset);
       }
       for (const resource of parsed.resources ?? []) {
@@ -1407,7 +1602,17 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
 
     if (presetsEntry) {
       const parsed = JSON.parse(await presetsEntry.async("text")) as ItemCollectionArchive;
-      mergedPresets.push(...(parsed.presets ?? []));
+      mergedPresets.push(...(parsed.presets ?? []).map((preset) => ({
+        ...preset,
+        toneSharingOrigin: {
+          source: "toneSharingApi",
+          itemId: item.itemId,
+          originalPresetId: typeof preset.id === "string" ? preset.id : item.itemId,
+          importedAt: new Date().toISOString(),
+          importedFromPackId: details.pack.id,
+          republishBlocked: true,
+        },
+      })));
       for (const resource of parsed.resources ?? []) {
         const file = zip.file(`resources/${resource.fileName}`) ?? zip.file(resource.fileName);
         if (!file) {
@@ -1742,6 +1947,22 @@ async function loadBrowse(): Promise<void> {
       return;
     }
 
+    if (browseMode === "review") {
+      if (!isToneSharingAdmin()) {
+        feed.innerHTML = `<div class="tone-sharing-status">Admin access required.</div>`;
+        return;
+      }
+      const [items, packs] = await Promise.all([
+        apiFetch<{ items: ToneSharingItem[] }>("/items/pending/list"),
+        apiFetch<{ packs: ToneSharingPack[] }>("/packs/pending/list"),
+      ]);
+      await renderFeedRows([
+        buildSingleRow("Presets Awaiting Approval", items.items, "item"),
+        buildSingleRow("Packs Awaiting Approval", packs.packs, "pack"),
+      ]);
+      return;
+    }
+
     await loadMine();
   } catch (error) {
     feed.innerHTML = `<div class="tone-sharing-status">Load failed: ${(error as Error).message}</div>`;
@@ -1837,8 +2058,8 @@ async function loadMine(): Promise<void> {
 
     if (browseMode === "mine") {
       await renderFeedRows([
-        buildSingleRow("My Presets", itemsData.items, "item"),
-        buildSingleRow("My Packs", packsData.packs, "pack")
+        buildSingleRow("My Presets on Tone Sharing", itemsData.items, "item"),
+        buildSingleRow("My Packs on Tone Sharing", packsData.packs, "pack")
       ]);
     }
   } catch (error) {
@@ -1889,6 +2110,9 @@ function setToneSharingTagsPickerValue(tags: string[]): void {
 }
 
 async function uploadAndPublishItem(): Promise<void> {
+  if (publishItemInFlight) {
+    return;
+  }
   let title = element<HTMLInputElement>("tone-sharing-item-title")?.value.trim() ?? "";
   let description = element<HTMLTextAreaElement>("tone-sharing-item-description")?.value.trim() ?? "";
   const selectedTags = getToneSharingTagsPickerValue();
@@ -1912,6 +2136,12 @@ async function uploadAndPublishItem(): Promise<void> {
   }
   if (!title) {
     setUploadStatus("Title is required.");
+    return;
+  }
+
+  const origin = getPresetToneSharingOrigin(activePreset);
+  if (origin?.republishBlocked) {
+    setUploadStatus("This preset came from Tone Sharing. Use Save As before publishing it again.");
     return;
   }
 
@@ -1944,6 +2174,7 @@ async function uploadAndPublishItem(): Promise<void> {
   }
 
   setUploadStatus("Building & uploading archive...");
+  setPublishItemBusy(true, "Uploading preset for approval...");
 
   try {
     const init = await apiFetch<{ uploadId: string }>("/uploads/init", {
@@ -2025,24 +2256,27 @@ async function uploadAndPublishItem(): Promise<void> {
 
     const addToNewPack = element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.contains("active") ?? false;
     const assignPackId = element<HTMLSelectElement>("tone-sharing-pack-assign-select")?.value ?? "";
-    closeToneSharingPublishPresetModal();
+    setPublishItemBusy(false, "Uploading preset for approval...");
+    closeToneSharingPublishPresetModal(true);
 
     if (addToNewPack) {
       await openPackModal(undefined, item.item.id);
     } else if (assignPackId) {
       try {
         await addItemToExistingPack(assignPackId, item.item.id);
-        setUploadStatus("Published and added to pack.");
+        setUploadStatus("Submitted for approval and added to pack.");
       } catch (error) {
-        setUploadStatus(`Published but pack update failed: ${(error as Error).message}`);
+        setUploadStatus(`Submitted for approval but pack update failed: ${(error as Error).message}`);
       }
     } else {
-      setUploadStatus("Published successfully.");
+      setUploadStatus("Preset submitted for moderator approval.");
     }
 
     await Promise.all([loadBrowse(), loadMine()]);
   } catch (error) {
     setUploadStatus(`Publish failed: ${(error as Error).message}`);
+  } finally {
+    setPublishItemBusy(false, "Uploading preset for approval...");
   }
 }
 
@@ -2096,7 +2330,7 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
   const importFile = new File([blob], fileName, { type: blob.type || "application/octet-stream" });
   await importPackWithConfirmation(importFile, {
     source: "toneSharingApi",
-    packId: id,
+    itemId: id,
     titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|zip)$/i, ""),
   });
 }
@@ -2269,6 +2503,17 @@ function bindBrowseActions(): void {
       return;
     }
 
+    if ((button.dataset.action === "approve" || button.dataset.action === "reject") && browseMode === "review") {
+      try {
+        await moderateTarget(kind, id, button.dataset.action === "approve" ? "approve" : "reject");
+        setUploadStatus(`${kind === "item" ? "Preset" : "Pack"} ${button.dataset.action}d.`);
+        await loadBrowse();
+      } catch (error) {
+        setUploadStatus(`Moderation failed: ${(error as Error).message}`);
+      }
+      return;
+    }
+
     if (button.dataset.action === "delete") {
       const title = card.querySelector(".tone-sharing-card-item-title")?.textContent?.trim() || `${kind} ${id}`;
       const confirmed = await showConfirm(`Delete ${kind} \"${title}\"? This cannot be undone.`);
@@ -2295,6 +2540,7 @@ function bindBrowseModeButtons(): void {
     { id: "tone-sharing-browse-featured", mode: "featured" },
     { id: "tone-sharing-browse-items", mode: "items" },
     { id: "tone-sharing-browse-packs", mode: "packs" },
+    { id: "tone-sharing-browse-review", mode: "review" },
     { id: "tone-sharing-browse-ai-search", mode: "ai-search" },
     { id: "tone-sharing-browse-installed", mode: "installed" },
     { id: "tone-sharing-browse-mine", mode: "mine" }

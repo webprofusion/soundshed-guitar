@@ -678,6 +678,7 @@
               <button id="tone-sharing-browse-featured" type="button" class="tab-btn active">Featured</button>
               <button id="tone-sharing-browse-items" type="button" class="tab-btn">Presets</button>
               <button id="tone-sharing-browse-packs" type="button" class="tab-btn">Packs</button>
+              <button id="tone-sharing-browse-review" type="button" class="tab-btn" style="display: none;">Review</button>
               <button id="tone-sharing-browse-ai-search" type="button" class="tab-btn">AI Tone Search</button>
               <button id="tone-sharing-browse-installed" type="button" class="tab-btn">Installed</button>
               <button id="tone-sharing-browse-mine" type="button" class="tab-btn">My Content</button>
@@ -1734,6 +1735,10 @@
             </div>
           </div>
           <div class="tone-sharing-status" id="tone-sharing-publish-modal-status"></div>
+          <div class="tone-sharing-progress" id="tone-sharing-publish-progress" style="display: none;">
+            <span class="tone-sharing-progress-spinner" aria-hidden="true"></span>
+            <span class="tone-sharing-progress-label">Uploading preset for approval...</span>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="tone-sharing-publish-modal-cancel" type="button" class="btn btn-secondary">Cancel</button>
@@ -1809,6 +1814,10 @@
             <div class="tone-sharing-select-list" id="tone-sharing-pack-items"></div>
           </div>
           <div class="tone-sharing-status" id="tone-sharing-pack-status"></div>
+          <div class="tone-sharing-progress" id="tone-sharing-pack-progress" style="display: none;">
+            <span class="tone-sharing-progress-spinner" aria-hidden="true"></span>
+            <span class="tone-sharing-progress-label">Publishing pack...</span>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="tone-sharing-pack-modal-cancel" type="button" class="btn btn-secondary">Cancel</button>

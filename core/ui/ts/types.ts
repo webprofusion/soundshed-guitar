@@ -57,6 +57,7 @@ export interface Preset {
   category?: string;
   description?: string;
   tags?: string[];
+  toneSharingOrigin?: ToneSharingOriginMetadata;
   designedPeakInputDbfs?: number | null;
   attachments?: Attachment[];
   fxChain?: string[];
@@ -70,6 +71,15 @@ export interface Preset {
   globals?: GlobalSettings;
   embeddedResources?: EmbeddedResource[];
   [key: string]: unknown;
+}
+
+export interface ToneSharingOriginMetadata {
+  source: "toneSharingApi";
+  itemId: string;
+  originalPresetId?: string;
+  importedAt?: string;
+  importedFromPackId?: string;
+  republishBlocked?: boolean;
 }
 
 export interface PresetFolder {

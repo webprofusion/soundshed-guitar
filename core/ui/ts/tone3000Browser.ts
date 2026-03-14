@@ -44,7 +44,7 @@ interface Tone3000Tone {
   platform?: string;
   models_count?: number;
   downloads_count?: number;
-  user?: { username?: string };
+  user?: { id?: string | number; username?: string; name?: string; display_name?: string };
   images?: string[];
   tags?: Array<{ name?: string }>;
   equipment_image_url?: string;
@@ -760,6 +760,8 @@ async function importZipBuffer(
         modelUrl: options.modelUrl,
         entryName: entry.name,
         sourceUrl: `https://www.tone3000.com/tones/${tone.slug ?? tone.id}`,
+        creatorId: tone.user?.id != null ? String(tone.user.id) : "",
+        creatorName: tone.user?.display_name ?? tone.user?.name ?? tone.user?.username ?? "",
         authorUsername: tone.user?.username ?? "",
       },
       data,
@@ -850,6 +852,8 @@ async function importToneModelsList(
           modelName: model.name ?? "",
           modelUrl: model.model_url,
           sourceUrl: `https://www.tone3000.com/tones/${tone.slug ?? tone.id}`,
+          creatorId: tone.user?.id != null ? String(tone.user.id) : "",
+          creatorName: tone.user?.display_name ?? tone.user?.name ?? tone.user?.username ?? "",
           authorUsername: tone.user?.username ?? "",
         },
         data,

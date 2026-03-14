@@ -45,7 +45,7 @@ function openRiffCaptureModal(): void {
   const clickEnabledInput = document.getElementById("riff-capture-enable-click") as HTMLInputElement | null;
   if (metroVolumeSlider) metroVolumeSlider.value = String(Math.round(volumeDb));
   if (metroVolumeLabel) metroVolumeLabel.textContent = `${Math.round(volumeDb)} dB`;
-  if (clickEnabledInput) clickEnabledInput.checked = uiState.riffCapture?.metronomeClickEnabled ?? true;
+  if (clickEnabledInput) clickEnabledInput.checked = uiState.riffCapture?.metronomeClickEnabled ?? false;
   activateRiffCaptureTab("main");
   modal.style.display = "flex";
 }

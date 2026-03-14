@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { sendToneSharingModerationNotification } from "../lib/email";
 import { fail, ok, safeJson } from "../lib/http";
 import { hasToneSharingPublishConsent } from "../lib/shareConsent";
 import { optionalAuth, requireAuth } from "../middleware/session";
@@ -38,6 +39,31 @@ type ItemRow = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type AuthContext = { userId: string; email: string; role: string; sessionId: string };
+
+type CreatorRow = {
+  id: string;
+  email: string;
+  role: string;
+  display_name: string | null;
+};
+
+type ItemStatsRow = {
+  favoriteCount: number;
+  ratingCount: number;
+  averageRating: number | null;
+};
+
+type ItemUserStateRow = {
+  isFavorite: number | null;
+  rating: number | null;
+};
+
+type ModerateItemBody = {
+  action?: "approve" | "reject";
+  notes?: string;
 };
 
 type ItemConfig = {
@@ -96,11 +122,55 @@ function stringifyItemConfig(config: ItemConfig): string {
   return JSON.stringify(config);
 }
 
-function toItemResponse(item: ItemRow) {
+async function loadCreator(db: D1Database, creatorUserId: string): Promise<CreatorRow | null> {
+  return db.prepare(
+    `SELECT u.id, u.email, u.role, u.display_name
+     FROM users u
+     WHERE u.id = ?`
+  ).bind(creatorUserId).first<CreatorRow>();
+}
+
+async function loadItemStats(db: D1Database, itemId: string): Promise<ItemStatsRow> {
+  const favorites = await db.prepare(
+    `SELECT COUNT(*) AS favoriteCount FROM favorites WHERE item_id = ?`
+  ).bind(itemId).first<{ favoriteCount: number | null }>();
+  const ratings = await db.prepare(
+    `SELECT COUNT(*) AS ratingCount, AVG(score) AS averageRating FROM ratings WHERE item_id = ?`
+  ).bind(itemId).first<{ ratingCount: number | null; averageRating: number | null }>();
+
+  return {
+    favoriteCount: Number(favorites?.favoriteCount ?? 0),
+    ratingCount: Number(ratings?.ratingCount ?? 0),
+    averageRating: ratings?.averageRating == null ? null : Number(ratings.averageRating),
+  };
+}
+
+async function loadItemUserState(db: D1Database, itemId: string, userId: string): Promise<ItemUserStateRow> {
+  const row = await db.prepare(
+    `SELECT
+       EXISTS(SELECT 1 FROM favorites WHERE user_id = ? AND item_id = ?) AS isFavorite,
+       (SELECT score FROM ratings WHERE user_id = ? AND item_id = ?) AS rating`
+  ).bind(userId, itemId, userId, itemId).first<ItemUserStateRow>();
+
+  return {
+    isFavorite: row?.isFavorite ?? 0,
+    rating: row?.rating ?? null,
+  };
+}
+
+async function toItemResponse(db: D1Database, item: ItemRow, auth?: AuthContext) {
   const config = parseItemConfig(item.config_json);
+  const [creator, stats, userState] = await Promise.all([
+    loadCreator(db, item.creator_user_id),
+    loadItemStats(db, item.id),
+    auth ? loadItemUserState(db, item.id, auth.userId) : Promise.resolve<ItemUserStateRow | null>(null),
+  ]);
   return {
     id: item.id,
     creatorUserId: item.creator_user_id,
+    creatorEmail: creator?.email ?? null,
+    creatorDisplayName: creator?.display_name ?? null,
+    creatorRole: creator?.role ?? null,
     type: item.type,
     title: item.title,
     description: config.description,
@@ -114,10 +184,19 @@ function toItemResponse(item: ItemRow) {
     manifestAssetId: config.manifestAssetId,
     thumbnailAssetId: config.thumbnailAssetId,
     previewAssetId: config.previewAssetId,
+    favoriteCount: stats.favoriteCount,
+    ratingCount: stats.ratingCount,
+    averageRating: stats.averageRating,
+    currentUserFavorite: Boolean(userState?.isFavorite),
+    currentUserRating: userState?.rating == null ? null : Number(userState.rating),
     publishedAt: item.published_at,
     createdAt: item.created_at,
     updatedAt: item.updated_at
   };
+}
+
+function requireAdmin(auth: AuthContext | undefined) {
+  return Boolean(auth && auth.role === "admin");
 }
 
 function downloadFileName(base: string, ext: string): string {
@@ -134,7 +213,8 @@ function downloadFileName(base: string, ext: string): string {
 export function itemRoutes() {
   const app = new Hono<{ Bindings: Env; Variables: { auth?: { userId: string; email: string; role: string; sessionId: string } } }>();
 
-  app.get("/", async (c) => {
+  app.get("/", optionalAuth, async (c) => {
+    const auth = c.get("auth");
     const page = Math.max(1, Number.parseInt((c.req.query("page") ?? "1").trim(), 10) || 1);
     const pageSizeRaw = Number.parseInt((c.req.query("pageSize") ?? "24").trim(), 10) || 24;
     const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
@@ -174,7 +254,7 @@ export function itemRoutes() {
     return ok(c, {
       page,
       pageSize,
-      items: rows.results.map(toItemResponse)
+      items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth)))
     });
   });
 
@@ -207,7 +287,25 @@ export function itemRoutes() {
     sql += " ORDER BY updated_at DESC LIMIT 200";
 
     const rows = await c.env.DB.prepare(sql).bind(...params).all<ItemRow>();
-    return ok(c, { items: rows.results.map(toItemResponse) });
+    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth))) });
+  });
+
+  app.get("/pending/list", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!requireAdmin(auth)) {
+      return fail(c, "FORBIDDEN", "Admin access required", 403);
+    }
+
+    const rows = await c.env.DB.prepare(
+      `SELECT id, creator_user_id, type, title, moderation_status, config_json,
+              published_at, created_at, updated_at
+       FROM items
+       WHERE moderation_status = 'pending_review'
+       ORDER BY updated_at ASC
+       LIMIT 200`
+    ).all<ItemRow>();
+
+    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth))) });
   });
 
   app.post("/", requireAuth, async (c) => {
@@ -271,7 +369,7 @@ export function itemRoutes() {
       .bind(itemId)
       .first<ItemRow>();
 
-    return ok(c, { item: created ? toItemResponse(created) : null }, 201);
+    return ok(c, { item: created ? await toItemResponse(c.env.DB, created, auth) : null }, 201);
   });
 
   app.patch("/:itemId", requireAuth, async (c) => {
@@ -358,7 +456,7 @@ export function itemRoutes() {
       .bind(itemId)
       .first<ItemRow>();
 
-    return ok(c, { item: updated ? toItemResponse(updated) : null });
+    return ok(c, { item: updated ? await toItemResponse(c.env.DB, updated, auth) : null });
   });
 
   app.post("/:itemId/submit", requireAuth, async (c) => {
@@ -396,9 +494,9 @@ export function itemRoutes() {
 
     const itemId = c.req.param("itemId");
     const item = await c.env.DB
-      .prepare("SELECT id, creator_user_id, type, config_json FROM items WHERE id = ?")
+      .prepare("SELECT id, creator_user_id, type, title, config_json FROM items WHERE id = ?")
       .bind(itemId)
-      .first<{ id: string; creator_user_id: string; type: ItemType; config_json: string | null }>();
+      .first<{ id: string; creator_user_id: string; type: ItemType; title: string; config_json: string | null }>();
 
     if (!item) {
       return fail(c, "NOT_FOUND", "Item not found", 404);
@@ -414,12 +512,152 @@ export function itemRoutes() {
 
     await c.env.DB
       .prepare(
-        "UPDATE items SET moderation_status = 'approved', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE items SET moderation_status = 'pending_review', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
       )
       .bind(itemId)
       .run();
 
-    return ok(c, { itemId, moderationStatus: "approved" });
+    try {
+      await sendToneSharingModerationNotification(c.env, {
+        targetType: "item",
+        targetId: itemId,
+        title: item.title,
+        creatorEmail: auth.email,
+        creatorUserId: auth.userId,
+      });
+    } catch (error) {
+      console.error("Failed to send tone sharing moderation notification", error);
+    }
+
+    return ok(c, { itemId, moderationStatus: "pending_review" });
+  });
+
+  app.post("/:itemId/moderate", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!requireAdmin(auth)) {
+      return fail(c, "FORBIDDEN", "Admin access required", 403);
+    }
+
+    const itemId = c.req.param("itemId");
+    const body = await safeJson<ModerateItemBody>(c.req.raw);
+    const action = body?.action;
+    const notes = body?.notes?.trim() ?? null;
+    if (action !== "approve" && action !== "reject") {
+      return fail(c, "INVALID_ACTION", "Action must be approve or reject", 422);
+    }
+
+    const item = await c.env.DB
+      .prepare(
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
+                published_at, created_at, updated_at
+         FROM items WHERE id = ?`
+      )
+      .bind(itemId)
+      .first<ItemRow>();
+
+    if (!item) {
+      return fail(c, "NOT_FOUND", "Item not found", 404);
+    }
+
+    const nextStatus = action === "approve" ? "approved" : "rejected";
+    await c.env.DB
+      .prepare(
+        `UPDATE items SET
+           moderation_status = ?,
+           published_at = CASE WHEN ? = 'approved' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .bind(nextStatus, nextStatus, itemId)
+      .run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO moderation_actions (id, target_type, target_id, action, actor_user_id, notes)
+       VALUES (?, 'item', ?, ?, ?, ?)`
+    ).bind(randomId("mod"), itemId, action, auth!.userId, notes).run();
+
+    const updated = await c.env.DB
+      .prepare(
+        `SELECT id, creator_user_id, type, title, moderation_status, config_json,
+                published_at, created_at, updated_at
+         FROM items WHERE id = ?`
+      )
+      .bind(itemId)
+      .first<ItemRow>();
+
+    return ok(c, { item: updated ? await toItemResponse(c.env.DB, updated, auth) : null });
+  });
+
+  app.put("/:itemId/favorite", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    const item = await c.env.DB.prepare("SELECT id FROM items WHERE id = ? AND moderation_status = 'approved'").bind(itemId).first<{ id: string }>();
+    if (!item) {
+      return fail(c, "NOT_FOUND", "Item not found", 404);
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO favorites (user_id, item_id, created_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, item_id) DO NOTHING`
+    ).bind(auth.userId, itemId).run();
+
+    return ok(c, { itemId, favorite: true });
+  });
+
+  app.delete("/:itemId/favorite", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    await c.env.DB.prepare("DELETE FROM favorites WHERE user_id = ? AND item_id = ?").bind(auth.userId, itemId).run();
+    return ok(c, { itemId, favorite: false });
+  });
+
+  app.put("/:itemId/rating", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    const body = await safeJson<{ rating?: number }>(c.req.raw);
+    const rating = typeof body?.rating === "number" ? Math.round(body.rating) : NaN;
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return fail(c, "INVALID_RATING", "Rating must be an integer between 1 and 5", 422);
+    }
+
+    const item = await c.env.DB.prepare("SELECT id FROM items WHERE id = ? AND moderation_status = 'approved'").bind(itemId).first<{ id: string }>();
+    if (!item) {
+      return fail(c, "NOT_FOUND", "Item not found", 404);
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO ratings (user_id, item_id, score, created_at, updated_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, item_id) DO UPDATE SET
+         score = excluded.score,
+         updated_at = CURRENT_TIMESTAMP`
+    ).bind(auth.userId, itemId, rating).run();
+
+    return ok(c, { itemId, rating });
+  });
+
+  app.delete("/:itemId/rating", requireAuth, async (c) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return fail(c, "UNAUTHORIZED", "Authentication required", 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    await c.env.DB.prepare("DELETE FROM ratings WHERE user_id = ? AND item_id = ?").bind(auth.userId, itemId).run();
+    return ok(c, { itemId, rating: null });
   });
 
   app.get("/:itemId", optionalAuth, async (c) => {
@@ -445,7 +683,7 @@ export function itemRoutes() {
       return fail(c, "NOT_FOUND", "Item not found", 404);
     }
 
-    return ok(c, { item: toItemResponse(item) });
+    return ok(c, { item: await toItemResponse(c.env.DB, item, auth) });
   });
 
   app.get("/:itemId/download", optionalAuth, async (c) => {

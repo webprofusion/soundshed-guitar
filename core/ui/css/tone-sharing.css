@@ -448,6 +448,45 @@
 .tone-sharing-card-item-meta {
   font-size: 11px;
   color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tone-sharing-moderation-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-medium);
+}
+
+.tone-sharing-moderation-badge--approved {
+  color: #2c6e49;
+  background: rgba(44, 110, 73, 0.12);
+  border-color: rgba(44, 110, 73, 0.3);
+}
+
+.tone-sharing-moderation-badge--pending_review {
+  color: #9a6700;
+  background: rgba(154, 103, 0, 0.12);
+  border-color: rgba(154, 103, 0, 0.28);
+}
+
+.tone-sharing-moderation-badge--rejected {
+  color: #b42318;
+  background: rgba(180, 35, 24, 0.12);
+  border-color: rgba(180, 35, 24, 0.28);
+}
+
+.tone-sharing-moderation-badge--draft {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-control), transparent 18%);
 }
 
 .tone-sharing-card-item-actions {
@@ -582,6 +621,42 @@
 
 .tone-sharing-publish-modal .modal-footer button {
   min-width: 120px;
+}
+
+.tone-sharing-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in srgb, var(--bg-control), transparent 14%);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tone-sharing-progress-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent-primary), transparent 70%);
+  border-top-color: var(--accent-primary);
+  animation: tone-sharing-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.tone-sharing-progress-label {
+  min-width: 0;
+}
+
+@keyframes tone-sharing-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tone-sharing-pack-modal-content {
