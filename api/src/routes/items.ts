@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fail, ok, safeJson } from "../lib/http";
+import { hasToneSharingPublishConsent } from "../lib/shareConsent";
 import { optionalAuth, requireAuth } from "../middleware/session";
 import { Env } from "../types/env";
 import { randomId } from "../lib/utils";
@@ -16,6 +17,7 @@ type CreateItemBody = {
   appMinVersion?: string;
   appMaxVersion?: string;
   payloadAssetId?: string;
+  privatePayloadAssetId?: string;
   manifestAssetId?: string;
   thumbnailAssetId?: string;
   previewAssetId?: string;
@@ -45,6 +47,7 @@ type ItemConfig = {
   appMinVersion: string | null;
   appMaxVersion: string | null;
   payloadAssetId: string | null;
+  privatePayloadAssetId: string | null;
   manifestAssetId: string | null;
   thumbnailAssetId: string | null;
   previewAssetId: string | null;
@@ -58,6 +61,7 @@ function parseItemConfig(configJson: string | null | undefined): ItemConfig {
     appMinVersion: null,
     appMaxVersion: null,
     payloadAssetId: null,
+    privatePayloadAssetId: null,
     manifestAssetId: null,
     thumbnailAssetId: null,
     previewAssetId: null
@@ -78,6 +82,7 @@ function parseItemConfig(configJson: string | null | undefined): ItemConfig {
       appMinVersion: typeof parsed.appMinVersion === "string" ? parsed.appMinVersion : null,
       appMaxVersion: typeof parsed.appMaxVersion === "string" ? parsed.appMaxVersion : null,
       payloadAssetId: typeof parsed.payloadAssetId === "string" ? parsed.payloadAssetId : null,
+      privatePayloadAssetId: typeof parsed.privatePayloadAssetId === "string" ? parsed.privatePayloadAssetId : null,
       manifestAssetId: typeof parsed.manifestAssetId === "string" ? parsed.manifestAssetId : null,
       thumbnailAssetId: typeof parsed.thumbnailAssetId === "string" ? parsed.thumbnailAssetId : null,
       previewAssetId: typeof parsed.previewAssetId === "string" ? parsed.previewAssetId : null
@@ -105,6 +110,7 @@ function toItemResponse(item: ItemRow) {
     appMinVersion: config.appMinVersion,
     appMaxVersion: config.appMaxVersion,
     payloadAssetId: config.payloadAssetId,
+    privatePayloadAssetId: config.privatePayloadAssetId,
     manifestAssetId: config.manifestAssetId,
     thumbnailAssetId: config.thumbnailAssetId,
     previewAssetId: config.previewAssetId,
@@ -234,6 +240,7 @@ export function itemRoutes() {
       appMinVersion: body?.appMinVersion?.trim() ?? null,
       appMaxVersion: body?.appMaxVersion?.trim() ?? null,
       payloadAssetId: body?.payloadAssetId?.trim() ?? null,
+      privatePayloadAssetId: body?.privatePayloadAssetId?.trim() ?? null,
       manifestAssetId: body?.manifestAssetId?.trim() ?? null,
       thumbnailAssetId: body?.thumbnailAssetId?.trim() ?? null,
       previewAssetId: body?.previewAssetId?.trim() ?? null
@@ -319,6 +326,7 @@ export function itemRoutes() {
       appMinVersion: body.appMinVersion !== undefined ? body.appMinVersion?.trim() ?? null : existingConfig.appMinVersion,
       appMaxVersion: body.appMaxVersion !== undefined ? body.appMaxVersion?.trim() ?? null : existingConfig.appMaxVersion,
       payloadAssetId: body.payloadAssetId !== undefined ? body.payloadAssetId?.trim() ?? null : existingConfig.payloadAssetId,
+      privatePayloadAssetId: body.privatePayloadAssetId !== undefined ? body.privatePayloadAssetId?.trim() ?? null : existingConfig.privatePayloadAssetId,
       manifestAssetId: body.manifestAssetId !== undefined ? body.manifestAssetId?.trim() ?? null : existingConfig.manifestAssetId,
       thumbnailAssetId: body.thumbnailAssetId !== undefined ? body.thumbnailAssetId?.trim() ?? null : existingConfig.thumbnailAssetId,
       previewAssetId: body.previewAssetId !== undefined ? body.previewAssetId?.trim() ?? null : existingConfig.previewAssetId
@@ -388,9 +396,9 @@ export function itemRoutes() {
 
     const itemId = c.req.param("itemId");
     const item = await c.env.DB
-      .prepare("SELECT id, creator_user_id, config_json FROM items WHERE id = ?")
+      .prepare("SELECT id, creator_user_id, type, config_json FROM items WHERE id = ?")
       .bind(itemId)
-      .first<{ id: string; creator_user_id: string; config_json: string | null }>();
+      .first<{ id: string; creator_user_id: string; type: ItemType; config_json: string | null }>();
 
     if (!item) {
       return fail(c, "NOT_FOUND", "Item not found", 404);
@@ -398,6 +406,12 @@ export function itemRoutes() {
     if (item.creator_user_id !== auth.userId) {
       return fail(c, "FORBIDDEN", "You do not own this item", 403);
     }
+
+    const hasConsent = item.type !== "preset" || await hasToneSharingPublishConsent(c.env.DB, auth.userId);
+    if (!hasConsent) {
+      return fail(c, "CONSENT_REQUIRED", "Accept the tone sharing consent before publishing presets", 409);
+    }
+
     await c.env.DB
       .prepare(
         "UPDATE items SET moderation_status = 'approved', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?"

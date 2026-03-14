@@ -1734,6 +1734,27 @@
       </div>
     </div>
 
+    <div id="tone-sharing-consent-modal" class="modal" style="display: none;">
+      <div class="modal-content tone-sharing-signin-modal-content">
+        <div class="modal-header">
+          <h3>Share Preset Terms</h3>
+          <button id="tone-sharing-consent-close" class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body">
+          <p>Community presets are published under the Creative Commons CC-0 Open Data license. By continuing, you confirm you are allowed to share this preset and agree that the Soundshed app and related services may store and use the preset resources and metadata you upload.</p>
+          <label class="tone-sharing-select-item">
+            <input id="tone-sharing-consent-checkbox" type="checkbox" />
+            <span>I agree to publish this preset under CC0 and allow Soundshed to store the uploaded preset resources and metadata.</span>
+          </label>
+          <div class="tone-sharing-status" id="tone-sharing-consent-status"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="tone-sharing-consent-cancel" type="button" class="btn btn-secondary">Cancel</button>
+          <button id="tone-sharing-consent-accept" type="button" class="btn btn-primary" disabled>Agree and Continue</button>
+        </div>
+      </div>
+    </div>
+
     <div id="tone-sharing-signin-modal" class="modal" style="display: none;">
       <div class="modal-content tone-sharing-signin-modal-content">
         <div class="modal-header">
@@ -1923,6 +1944,29 @@
         <div class="modal-footer dialog-footer">
           <button class="btn btn-secondary" id="dialog-cancel" type="button">Cancel</button>
           <button class="btn btn-primary" id="dialog-ok" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tone3000-required-modal" class="modal" style="display: none;">
+      <div class="modal-content tone-sharing-signin-modal-content">
+        <div class="modal-header">
+          <h3>Tone3000 API Key Required</h3>
+          <button id="tone3000-required-close" class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="tone3000-required-message">This shared preset includes Tone3000 resources.</p>
+          <p>You need your own Tone3000 API key before import can continue. Get one from <a href="https://www.tone3000.com" target="_blank" rel="noreferrer">tone3000.com</a>, then paste it below.</p>
+          <div class="tone-sharing-grid-form">
+            <label for="tone3000-required-api-key">Tone3000 API Key</label>
+            <input id="tone3000-required-api-key" type="password" placeholder="Enter your Tone3000 API key" />
+          </div>
+          <div class="tone-sharing-status" id="tone3000-required-status"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="tone3000-required-cancel" type="button" class="btn btn-secondary">Cancel Import</button>
+          <button id="tone3000-required-open-settings" type="button" class="btn btn-secondary">Open Settings</button>
+          <button id="tone3000-required-save" type="button" class="btn btn-primary">Save Key and Continue</button>
         </div>
       </div>
     </div>

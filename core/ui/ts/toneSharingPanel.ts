@@ -1,6 +1,6 @@
 import { postMessage, setAppSetting } from "./bridge.js";
 import { showConfirm } from "./dialogs.js";
-import { buildPresetArchiveBlob, importPackWithConfirmation } from "./presets.js";
+import { buildToneSharingPresetArchiveBlobs, importPackWithConfirmation } from "./presets.js";
 import { clonePreset, uiState } from "./state.js";
 import type { Preset, PresetFolder } from "./types.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
@@ -47,11 +47,22 @@ type ItemArchiveResource = {
   hash?: string;
 };
 
+type Tone3000ResourceRef = {
+  id: string;
+  name?: string;
+  category?: string;
+  type: string;
+  toneId?: string;
+  modelId?: string;
+  modelUrl?: string;
+};
+
 type ItemArchive = {
   formatVersion: number;
   preset: Record<string, unknown>;
   resources: ItemArchiveResource[];
   blends?: Array<Record<string, unknown>>;
+  tone3000Resources?: Tone3000ResourceRef[];
 };
 
 type ItemCollectionArchive = {
@@ -60,6 +71,14 @@ type ItemCollectionArchive = {
   presets: Array<Record<string, unknown>>;
   resources: ItemArchiveResource[];
   blends?: Array<Record<string, unknown>>;
+  tone3000Resources?: Tone3000ResourceRef[];
+};
+
+type ShareConsentStatus = {
+  consentType: string;
+  version: number;
+  accepted: boolean;
+  acceptedAt: string | null;
 };
 
 type ToneSharingRow = {
@@ -100,8 +119,11 @@ export type InstalledPackMetadata = {
 const storageKeys = {
   apiBase: "toneSharing.apiBase",
   sessionId: "toneSharing.sessionId",
-  installedPacks: "toneSharing.installedPacks"
+  installedPacks: "toneSharing.installedPacks",
+  publishConsent: "toneSharing.publishConsent"
 };
+
+const TONE_SHARING_PUBLISH_CONSENT_VERSION = 1;
 
 const state = {
   apiBase: "https://api-guitar.soundshed.com/v1", //"http://127.0.0.1:8787/v1", 
@@ -701,6 +723,122 @@ async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Prom
   return payload.data as T;
 }
 
+function getLocalPublishConsent(): { version: number; acceptedAt: string; userId?: string } | null {
+  const raw = uiState.appSettings?.[storageKeys.publishConsent];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const value = raw as Record<string, unknown>;
+  const version = Number(value.version ?? 0);
+  const acceptedAt = typeof value.acceptedAt === "string" ? value.acceptedAt : "";
+  const userId = typeof value.userId === "string" ? value.userId : undefined;
+  if (!acceptedAt || !Number.isFinite(version)) {
+    return null;
+  }
+
+  return { version, acceptedAt, userId };
+}
+
+function persistLocalPublishConsent(status: ShareConsentStatus): void {
+  const value = {
+    version: status.version,
+    acceptedAt: status.acceptedAt ?? new Date().toISOString(),
+    userId: state.user?.id ?? "",
+  };
+  uiState.appSettings[storageKeys.publishConsent] = value;
+  setAppSetting(storageKeys.publishConsent, value);
+}
+
+let shareConsentResolve: ((value: boolean) => void) | null = null;
+
+function closeShareConsentModal(result: boolean): void {
+  const modal = element<HTMLElement>("tone-sharing-consent-modal");
+  const checkbox = element<HTMLInputElement>("tone-sharing-consent-checkbox");
+  const status = element<HTMLElement>("tone-sharing-consent-status");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  if (checkbox) {
+    checkbox.checked = false;
+  }
+  if (status) {
+    status.textContent = "";
+  }
+  if (shareConsentResolve) {
+    shareConsentResolve(result);
+    shareConsentResolve = null;
+  }
+}
+
+async function promptForShareConsent(): Promise<boolean> {
+  const modal = element<HTMLElement>("tone-sharing-consent-modal");
+  const checkbox = element<HTMLInputElement>("tone-sharing-consent-checkbox");
+  const acceptButton = element<HTMLButtonElement>("tone-sharing-consent-accept");
+  const cancelButton = element<HTMLButtonElement>("tone-sharing-consent-cancel");
+  const closeButton = element<HTMLButtonElement>("tone-sharing-consent-close");
+  const status = element<HTMLElement>("tone-sharing-consent-status");
+  if (!modal || !checkbox || !acceptButton || !cancelButton || !closeButton || !status) {
+    throw new Error("Tone sharing consent modal is not available");
+  }
+
+  if (shareConsentResolve) {
+    shareConsentResolve(false);
+    shareConsentResolve = null;
+  }
+
+  checkbox.checked = false;
+  acceptButton.disabled = true;
+  status.textContent = "";
+  modal.style.display = "flex";
+
+  return new Promise<boolean>((resolve) => {
+    shareConsentResolve = resolve;
+    checkbox.onchange = () => {
+      acceptButton.disabled = !checkbox.checked;
+    };
+    acceptButton.onclick = () => closeShareConsentModal(true);
+    cancelButton.onclick = () => closeShareConsentModal(false);
+    closeButton.onclick = () => closeShareConsentModal(false);
+    modal.onmousedown = (event) => {
+      if (event.target === modal) {
+        closeShareConsentModal(false);
+      }
+    };
+  });
+}
+
+async function ensurePublishConsent(): Promise<void> {
+  if (!state.user) {
+    throw new Error("Sign in first.");
+  }
+
+  const remote = await apiFetch<ShareConsentStatus>("/share-consent/status");
+  const local = getLocalPublishConsent();
+  const localAccepted = Boolean(
+    local && local.version >= remote.version && (!local.userId || local.userId === state.user.id)
+  );
+
+  if (remote.accepted) {
+    if (!localAccepted) {
+      persistLocalPublishConsent(remote);
+    }
+    return;
+  }
+
+  const accepted = await promptForShareConsent();
+  if (!accepted) {
+    throw new Error("Tone sharing consent is required before publishing.");
+  }
+
+  const stored = await apiFetch<ShareConsentStatus>("/share-consent/accept", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version: TONE_SHARING_PUBLISH_CONSENT_VERSION }),
+  });
+  persistLocalPublishConsent(stored);
+}
+
 async function loadAuthSession(): Promise<void> {
   try {
     const data = await apiFetch<{ user: ToneSharingUser | null }>("/auth/me");
@@ -1207,6 +1345,7 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
   const mergedPresets: Array<Record<string, unknown>> = [];
   const mergedResources = new Map<string, { entry: ItemArchiveResource; bytes: Uint8Array }>();
   const mergedBlends = new Map<string, Record<string, unknown>>();
+  const mergedTone3000Resources = new Map<string, Tone3000ResourceRef>();
 
   const sortedItems = [...details.items].sort((a, b) => a.sortOrder - b.sortOrder);
   for (const item of sortedItems) {
@@ -1257,6 +1396,12 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
           mergedBlends.set(blendId, blend);
         }
       }
+      for (const ref of parsed.tone3000Resources ?? []) {
+        const key = `${ref.type}:${ref.id}:${ref.toneId ?? ""}:${ref.modelId ?? ""}`;
+        if (!mergedTone3000Resources.has(key)) {
+          mergedTone3000Resources.set(key, ref);
+        }
+      }
       continue;
     }
 
@@ -1283,6 +1428,12 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
           mergedBlends.set(blendId, blend);
         }
       }
+      for (const ref of parsed.tone3000Resources ?? []) {
+        const key = `${ref.type}:${ref.id}:${ref.toneId ?? ""}:${ref.modelId ?? ""}`;
+        if (!mergedTone3000Resources.has(key)) {
+          mergedTone3000Resources.set(key, ref);
+        }
+      }
       continue;
     }
 
@@ -1305,6 +1456,7 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
     presets: mergedPresets,
     resources: Array.from(mergedResources.values()).map((entry) => entry.entry),
     blends: Array.from(mergedBlends.values()),
+    ...(mergedTone3000Resources.size > 0 ? { tone3000Resources: Array.from(mergedTone3000Resources.values()) } : {}),
   };
   outZip.file("presets.json", JSON.stringify(archive, null, 2));
 
@@ -1763,6 +1915,13 @@ async function uploadAndPublishItem(): Promise<void> {
     return;
   }
 
+  try {
+    await ensurePublishConsent();
+  } catch (error) {
+    setUploadStatus(`Publish cancelled: ${(error as Error).message}`);
+    return;
+  }
+
   // Validate signal chain: requires input + output + at least one effect node
   const graphNodes = activePreset.graph?.nodes ?? [];
   const hasInput = graphNodes.some((n) => n.type === "input");
@@ -1773,9 +1932,12 @@ async function uploadAndPublishItem(): Promise<void> {
     return;
   }
 
-  let uploadPayload: Blob;
+  let publicPayload: Blob;
+  let privatePayload: Blob;
   try {
-    uploadPayload = await buildPresetArchiveBlob(clonePreset(activePreset));
+    const archiveBlobs = await buildToneSharingPresetArchiveBlobs(clonePreset(activePreset));
+    publicPayload = archiveBlobs.publicBlob;
+    privatePayload = archiveBlobs.privateBlob;
   } catch (error) {
     setUploadStatus(`Publish failed: ${(error as Error).message}`);
     return;
@@ -1789,18 +1951,18 @@ async function uploadAndPublishItem(): Promise<void> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         kind: "item_payload",
-        mimeType: uploadPayload.type || "application/octet-stream",
-        byteSize: uploadPayload.size
+        mimeType: publicPayload.type || "application/octet-stream",
+        byteSize: publicPayload.size
       })
     });
 
     const uploadResponse = await fetch(buildApiUrl(`/uploads/${init.uploadId}`), {
       method: "PUT",
       headers: {
-        "content-type": uploadPayload.type || "application/octet-stream",
+        "content-type": publicPayload.type || "application/octet-stream",
         ...(state.sessionId ? { "x-session-id": state.sessionId } : {})
       },
-      body: uploadPayload,
+      body: publicPayload,
       credentials: "include"
     });
 
@@ -1815,6 +1977,37 @@ async function uploadAndPublishItem(): Promise<void> {
       body: JSON.stringify({ uploadId: init.uploadId })
     });
 
+    const backupInit = await apiFetch<{ uploadId: string }>("/uploads/init", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "item_payload",
+        mimeType: privatePayload.type || "application/octet-stream",
+        byteSize: privatePayload.size
+      })
+    });
+
+    const backupUploadResponse = await fetch(buildApiUrl(`/uploads/${backupInit.uploadId}`), {
+      method: "PUT",
+      headers: {
+        "content-type": privatePayload.type || "application/octet-stream",
+        ...(state.sessionId ? { "x-session-id": state.sessionId } : {})
+      },
+      body: privatePayload,
+      credentials: "include"
+    });
+
+    const backupUploadResult = await backupUploadResponse.json();
+    if (!backupUploadResponse.ok || backupUploadResult?.ok === false) {
+      throw new Error(backupUploadResult?.error?.message || `Backup upload failed (${backupUploadResponse.status})`);
+    }
+
+    const backupComplete = await apiFetch<{ assetId: string }>("/uploads/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ uploadId: backupInit.uploadId })
+    });
+
     const item = await apiFetch<{ item: ToneSharingItem }>("/items", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1823,7 +2016,8 @@ async function uploadAndPublishItem(): Promise<void> {
         title,
         description,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
-        payloadAssetId: complete.assetId
+        payloadAssetId: complete.assetId,
+        privatePayloadAssetId: backupComplete.assetId
       })
     });
 

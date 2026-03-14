@@ -61,6 +61,8 @@ npm run dev
 - `POST /v1/packs/:packId/publish`
 - `GET /v1/packs/:packId`
 - `GET /v1/packs/:packId/download`
+- `GET /v1/share-consent/status`
+- `POST /v1/share-consent/accept`
 - `POST /v1/uploads/init`
 - `PUT /v1/uploads/:uploadId`
 - `POST /v1/uploads/complete`
@@ -75,3 +77,5 @@ npm run dev
 - If `SENDGRID_API_KEY` is not set in `production`, `/v1/auth/start` fails with an email configuration error.
 - Upload path currently stores binary through Worker endpoint, not direct pre-signed R2 URL.
 - Uploads are validated by `kind` during `PUT /v1/uploads/:uploadId` (e.g., preset payload archives must be ZIPs containing only `.json`, `.wav`, and `.nam` files, with at least one `.json` and one `.wav`/`.nam`).
+- Tone-sharing preset publishes now expect the public `payloadAssetId` to be the sanitized shareable archive. If the client also uploads a full private backup archive, store it in `privatePayloadAssetId` so it is retained by the API but never served by `/v1/items/:itemId/download`.
+- Publishing a preset now requires an accepted `tone_sharing_publish` consent record. The desktop app records it locally and also persists it through `/v1/share-consent/accept`.

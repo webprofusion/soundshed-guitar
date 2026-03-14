@@ -62,6 +62,11 @@ Global app settings and integration values.
   "lastPresetId": "user-6bae78fb-5225-4b6c-8707-93895fa22823",
   "theme": "dark",
   "tone3000.apiKey": "...",
+  "toneSharing.publishConsent": {
+    "version": 1,
+    "acceptedAt": "2026-03-14T12:00:00Z",
+    "userId": "usr_123"
+  },
   "diagnostics.signalLevelsEnabled": true,
   "ui.advancedOptionsEnabled": true,
   "featureFlags": {}
@@ -121,3 +126,4 @@ Canonical index for managed resources.
 - Write JSON atomically where practical (tmp + rename).
 - Readers should tolerate missing or unknown fields.
 - New writes target only `<ROOT>/data/v1`.
+- Local preset archive exports remain full-fidelity and can include all referenced resources. Tone-sharing publishes use a separate sanitized archive for public sharing and may also upload a private full archive for API retention.

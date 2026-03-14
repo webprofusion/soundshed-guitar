@@ -188,6 +188,16 @@ CREATE TABLE IF NOT EXISTS moderation_actions (
   FOREIGN KEY (actor_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS share_consents (
+  user_id TEXT NOT NULL,
+  consent_type TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, consent_type),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
@@ -209,6 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_featured_row_items_row_sort ON featured_row_items
 CREATE INDEX IF NOT EXISTS idx_downloads_item_created ON downloads(item_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_downloads_pack_created ON downloads(pack_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_share_consents_type_version ON share_consents(consent_type, version);
 
 CREATE TABLE IF NOT EXISTS app_instances (
   id TEXT PRIMARY KEY,
