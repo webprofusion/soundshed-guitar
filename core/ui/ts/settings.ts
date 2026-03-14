@@ -1007,10 +1007,10 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
         ? `<span class="equipment-library-used" title="${usedCount} used by presets or blends">${renderIcon("link", "equipment-library-used-icon")}</span>`
         : "";
       return `
-        <div class="equipment-library-item equipment-library-group" draggable="true" data-group-id="${escapeHtml(group.groupId)}">
-          <div class="equipment-library-item-main">
-            <div class="equipment-library-item-title">${escapeHtml(group.title)}${usedBadge}</div>
-            <div class="equipment-library-item-meta">
+        <div class="results-item equipment-library-item equipment-library-group" draggable="true" data-group-id="${escapeHtml(group.groupId)}">
+          <div class="results-item-main equipment-library-item-main">
+            <div class="results-item-title equipment-library-item-title">${escapeHtml(group.title)}${usedBadge}</div>
+            <div class="results-item-meta equipment-library-item-meta">
               <span>${escapeHtml(typeLabel)}</span>
               <span>${escapeHtml(categoryLabel)}</span>
               <span>${escapeHtml(originLabel)}</span>
@@ -1020,7 +1020,7 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
               ${(group.items[0]?.metadata?.sourceUrl ?? "").startsWith("https://www.tone3000.com/") ? `<a href="${escapeHtml(group.items[0].metadata!.sourceUrl!)}" target="_blank" rel="noopener noreferrer">↗ tone3000</a>` : ""}
             </div>
           </div>
-          <div class="equipment-library-item-actions">
+          <div class="results-item-actions equipment-library-item-actions">
             ${isExperimentalFeaturesEnabled() ? `<button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>` : ""}
             <button class="equipment-library-delete-group icon-btn danger" data-group-id="${escapeHtml(group.groupId)}" title="Delete Group"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
@@ -1047,10 +1047,10 @@ function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): st
     ? `<span class="equipment-library-used" title="Used by preset">${renderIcon("link", "equipment-library-used-icon")}</span>`
     : "";
   return `
-    <div class="equipment-library-item">
-      <div class="equipment-library-item-main">
-        <div class="equipment-library-item-title">${escapeHtml(item.name || item.id)}${usedBadge}</div>
-        <div class="equipment-library-item-meta">
+    <div class="results-item equipment-library-item">
+      <div class="results-item-main equipment-library-item-main">
+        <div class="results-item-title equipment-library-item-title">${escapeHtml(item.name || item.id)}${usedBadge}</div>
+        <div class="results-item-meta equipment-library-item-meta">
           <span>${escapeHtml(typeLabel)}</span>
           <span>${escapeHtml(categoryLabel)}</span>
           <span>${escapeHtml(originLabel)}</span>
@@ -1058,9 +1058,9 @@ function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): st
           <span>${escapeHtml(item.id)}</span>
           ${metadataBadges}
         </div>
-        <div class="equipment-library-item-path" title="${escapeHtml(item.filePath)}">${escapeHtml(item.filePath || "(no file path)")}</div>
+        <div class="results-item-path equipment-library-item-path" title="${escapeHtml(item.filePath)}">${escapeHtml(item.filePath || "(no file path)")}</div>
       </div>
-      <div class="equipment-library-item-actions">
+      <div class="results-item-actions equipment-library-item-actions">
         ${browseAction}
       </div>
     </div>

@@ -45,6 +45,7 @@
   line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -256,34 +257,74 @@
   margin-bottom: 10px;
 }
 
-.equipment-library-results {
+.results {
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
 }
 
-.equipment-library-item {
+.results-item {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--bg-browser-card);
-  border: 1px solid var(--border-browser);
   transition: border-color 0.2s ease, background 0.2s ease;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-.equipment-library-item:hover {
+.results-item:hover {
   background: var(--bg-browser-hover);
   border-color: var(--border-browser-strong);
 }
 
-.equipment-library-item-actions {
+.results-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.results-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.results-item-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.results-item-actions {
   display: flex;
   align-items: center;
+}
+
+.results-item-path {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.results-empty {
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--bg-browser-card);
+  border: 1px dashed var(--border-browser);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+}
+
+.equipment-library-item-actions {
+  gap: 8px;
 }
 
 .equipment-library-create-blend {
@@ -298,35 +339,10 @@
   cursor: pointer;
 }
 
-.equipment-library-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
 .equipment-library-item-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.equipment-library-item-meta {
-  font-size: 10px;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.equipment-library-item-path {
-  margin-top: 6px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  opacity: 0.85;
-  word-break: break-all;
 }
 
 .equipment-library-used {
@@ -370,16 +386,6 @@
 
 .equipment-library-browse:hover {
   background: var(--bg-card);
-}
-
-.equipment-library-empty {
-  padding: 14px;
-  border-radius: 8px;
-  background: var(--bg-browser-card);
-  border: 1px dashed var(--border-browser);
-  color: var(--text-secondary);
-  font-size: 11px;
-  text-align: center;
 }
 
 /* Attribution links in the resource library list */
@@ -625,9 +631,7 @@
 }
 
 .tone3000-results {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  min-width: 0;
 }
 
 .tone3000-search {
@@ -674,24 +678,6 @@
   opacity: 0.88;
 }
 
-.tone3000-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bg-browser-card);
-  border: 1px solid var(--border-browser);
-  transition: border-color 0.2s ease, background 0.2s ease;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.tone3000-item:hover {
-  background: var(--bg-browser-hover);
-  border-color: var(--border-browser-strong);
-}
-
 .tone3000-item-image {
   width: 56px;
   height: 56px;
@@ -711,26 +697,6 @@
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.tone3000-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.tone3000-item-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.tone3000-item-meta {
-  font-size: 10px;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .tone3000-item-actions {
@@ -766,16 +732,6 @@
 .tone3000-import-btn[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.tone3000-empty {
-  padding: 14px;
-  border-radius: 8px;
-  background: var(--bg-browser-card);
-  border: 1px dashed var(--border-browser);
-  color: var(--text-secondary);
-  font-size: 11px;
-  text-align: center;
 }
 
 .tone3000-pagination {

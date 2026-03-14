@@ -372,7 +372,7 @@ export class ResourceBrowserModal {
     filtered.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
     
     if (!filtered.length) {
-      this.libraryList.innerHTML = `<div class="resource-browser-empty">No ${resourceType === "ir" ? "IRs" : "models"} match the current filters.</div>`;
+      this.libraryList.innerHTML = `<div class="results-empty resource-browser-empty">No ${resourceType === "ir" ? "IRs" : "models"} match the current filters.</div>`;
       return;
     }
     
@@ -381,7 +381,7 @@ export class ResourceBrowserModal {
         const title = res.name?.trim() || res.id;
         const categoryLabel = (res.category ?? "").trim() || "Uncategorized";
         const isSelected = res.id === currentId;
-        const selectedClass = isSelected ? "resource-browser-item is-selected" : "resource-browser-item";
+        const selectedClass = isSelected ? "results-item resource-browser-item is-selected" : "results-item resource-browser-item";
         const metadata = res.metadata ?? {};
         const provider = metadata.provider ?? "";
         const providerBadge = provider ? `<span class="resource-browser-provider">${escapeHtml(provider)}</span>` : "";
@@ -392,9 +392,9 @@ export class ResourceBrowserModal {
         
         return `
           <div class="${selectedClass}" data-resource-id="${escapeHtml(res.id)}" data-source="library">
-            <div class="resource-browser-item-info">
-              <div class="resource-browser-item-title">${escapeHtml(title)}</div>
-              <div class="resource-browser-item-meta">
+            <div class="results-item-main resource-browser-item-info">
+              <div class="results-item-title resource-browser-item-title">${escapeHtml(title)}</div>
+              <div class="results-item-meta resource-browser-item-meta">
                 <span>${escapeHtml(categoryLabel)}</span>
                 ${providerBadge}${authorBadge}${sourceLinkBadge}
               </div>

@@ -1371,20 +1371,20 @@ export function renderRiffLibraryPanel(): void {
         ? `${take.bars} bar(s) · ${take.tempoBpm.toFixed(1)} BPM · ${take.timeSigNum}/${take.timeSigDen} · ${formatDuration(take.durationSec)}`
         : "No take";
       return `
-        <div class="equipment-library-item riff-library-item">
-          <div class="equipment-library-item-main">
-            <div class="equipment-library-item-title">
+        <div class="results-item equipment-library-item riff-library-item">
+          <div class="results-item-main equipment-library-item-main">
+            <div class="results-item-title equipment-library-item-title">
               ${riff.title}
             </div>
-            <div class="equipment-library-item-meta">
+            <div class="results-item-meta equipment-library-item-meta">
               <span>Categories: ${categoriesText}</span>
               <span>Tags: ${tagText}</span>
               <span>${usedText}</span>
               <span>Takes: ${riff.takes.length}</span>
             </div>
-            <div class="equipment-library-item-path" title="${take?.filePath ?? ""}">${takeSummary}</div>
+            <div class="results-item-path equipment-library-item-path" title="${take?.filePath ?? ""}">${takeSummary}</div>
           </div>
-          <div class="equipment-library-item-actions riff-library-actions">
+          <div class="results-item-actions equipment-library-item-actions riff-library-actions">
             <button class="equipment-library-browse riff-preview-btn riff-icon-btn" data-take-id="${take?.id ?? ""}" ${take ? "" : "disabled"} title="Preview" aria-label="Preview">▶</button>
             <button class="equipment-library-browse riff-icon-btn riff-edit-btn" data-riff-id="${riff.id}" data-take-id="${take?.id ?? ""}" title="Edit" aria-label="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
             <button class="equipment-library-browse riff-icon-btn riff-favorite-btn${riff.favorite ? " riff-fav-active" : ""}" data-riff-id="${riff.id}" data-favorite="${riff.favorite ? "true" : "false"}" title="${riff.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="${riff.favorite ? "Remove from favourites" : "Add to favourites"}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="${riff.favorite ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>

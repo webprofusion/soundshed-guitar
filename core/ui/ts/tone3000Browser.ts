@@ -402,11 +402,11 @@ function renderResults(tones: Tone3000Tone[]): void {
         `
         : `<div class="tone3000-item-image tone3000-item-image-placeholder"></div>`;
       return `
-        <div class="tone3000-item" data-tone-id="${String(tone.id)}">
+        <div class="results-item tone3000-item" data-tone-id="${String(tone.id)}">
           ${imageMarkup}
-          <div class="tone3000-item-main">
-            <div class="tone3000-item-title">${escapeHtml(tone.title)}</div>
-            <div class="tone3000-item-meta">
+          <div class="results-item-main tone3000-item-main">
+            <div class="results-item-title tone3000-item-title">${escapeHtml(tone.title)}</div>
+            <div class="results-item-meta tone3000-item-meta">
               <span>${escapeHtml(tone.gear ?? "")}</span>
               <span>${escapeHtml(tone.platform ?? "")}</span>
               <span>${modelCount} models</span>
@@ -415,7 +415,7 @@ function renderResults(tones: Tone3000Tone[]): void {
               ${statusBadge}
             </div>
           </div>
-          <div class="tone3000-item-actions">
+          <div class="results-item-actions tone3000-item-actions">
             <button class="tone3000-details-btn" data-tone-id="${String(tone.id)}" type="button">Details</button>
             <button class="tone3000-import-btn" data-tone-id="${String(tone.id)}" ${disableImport ? "disabled" : ""}>${buttonLabel}</button>
           </div>
