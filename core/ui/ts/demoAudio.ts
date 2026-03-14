@@ -227,6 +227,7 @@ export async function previewSelectedDemoAudio(): Promise<void> {
       postMessage({
         type: "previewRiffTake",
         takeId: sample.takeId,
+        enableGuidance: false,
       });
       showNotification("Starting riff preview", sample.title);
       appendLog(`riff preview sent → ${sample.takeId}`);

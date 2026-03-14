@@ -260,7 +260,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 420px;
   overflow-y: auto;
 }
 
@@ -431,6 +430,18 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.riff-capture-tabs {
+  margin-bottom: 12px;
+}
+
+.riff-capture-tab-panel {
+  display: none;
+}
+
+.riff-capture-tab-panel.active {
+  display: block;
 }
 
 .riff-trim-controls {

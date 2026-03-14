@@ -42,9 +42,68 @@ function openRiffCaptureModal(): void {
   const volumeDb = uiState.metronome?.volumeDb ?? -12;
   const metroVolumeSlider = document.getElementById("riff-capture-metro-volume") as HTMLInputElement | null;
   const metroVolumeLabel = document.getElementById("riff-capture-metro-volume-label") as HTMLElement | null;
+  const clickEnabledInput = document.getElementById("riff-capture-enable-click") as HTMLInputElement | null;
   if (metroVolumeSlider) metroVolumeSlider.value = String(Math.round(volumeDb));
   if (metroVolumeLabel) metroVolumeLabel.textContent = `${Math.round(volumeDb)} dB`;
+  if (clickEnabledInput) clickEnabledInput.checked = uiState.riffCapture?.metronomeClickEnabled ?? true;
+  activateRiffCaptureTab("main");
   modal.style.display = "flex";
+}
+
+function activateRiffCaptureTab(tab: "main" | "advanced"): void {
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".riff-capture-tab-btn"));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>(".riff-capture-tab-panel"));
+  buttons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.riffCaptureTab === tab);
+  });
+  panels.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.riffCaptureTabPanel === tab);
+  });
+}
+
+function bindRiffCaptureTabs(): void {
+  const container = document.querySelector<HTMLElement>(".riff-capture-tabs");
+  if (!container || container.dataset.bound === "true") {
+    return;
+  }
+  container.dataset.bound = "true";
+  container.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(".riff-capture-tab-btn");
+    const tab = button?.dataset.riffCaptureTab;
+    if (tab === "main" || tab === "advanced") {
+      activateRiffCaptureTab(tab);
+    }
+  });
+}
+
+function startRiffCaptureFromModal(): boolean {
+  if (isArmed || uiState.riffCapture?.active) {
+    return false;
+  }
+
+  const tempoInput = document.getElementById("riff-capture-tempo") as HTMLInputElement | null;
+  const numInput = document.getElementById("riff-capture-timesig-num") as HTMLInputElement | null;
+  const denInput = document.getElementById("riff-capture-timesig-den") as HTMLInputElement | null;
+  const countInInput = document.getElementById("riff-capture-countin") as HTMLInputElement | null;
+  const patternTypeSelect = document.getElementById("riff-capture-pattern-type") as HTMLSelectElement | null;
+  const patternIdInput = document.getElementById("riff-capture-pattern-id") as HTMLInputElement | null;
+  const accentInput = document.getElementById("riff-capture-accent") as HTMLInputElement | null;
+
+  const tempo = Math.max(30, Math.min(300, Number(tempoInput?.value ?? 120)));
+  const timeSigNum = Math.max(1, Number(numInput?.value ?? 4));
+  const timeSigDen = Math.max(1, Number(denInput?.value ?? 4));
+  const bars = 64;
+  const countInBars = Math.max(0, Number(countInInput?.value ?? 1));
+  const metronomeClickEnabled = isCaptureMetronomeClickEnabled();
+  const patternType = (patternTypeSelect?.value === "drum" ? "drum" : "click") as "click" | "drum";
+  const patternId = patternIdInput?.value.trim() || undefined;
+  const beatPattern = accentInput?.value.trim().toUpperCase() || undefined;
+
+  armRiffCapture({ tempoBpm: tempo, timeSigNum, timeSigDen, bars, countInBars, metronomeClickEnabled, patternType, patternId, beatPattern });
+  isArmed = true;
+  appendLog(`riff capture armed → unlimited (64-bar buffer) @ ${tempo} bpm (${timeSigNum}/${timeSigDen}), count-in: ${countInBars} bars (waiting for signal)`);
+  renderRiffCaptureStatus();
+  return true;
 }
 
 function closeRiffCaptureModal(): void {
@@ -164,6 +223,9 @@ export function applyRiffCaptureState(capture: Partial<RiffCaptureState>): void 
     tempoBpm: typeof capture.tempoBpm === "number" ? capture.tempoBpm : uiState.riffCapture?.tempoBpm ?? 120,
     timeSigNum: typeof capture.timeSigNum === "number" ? capture.timeSigNum : uiState.riffCapture?.timeSigNum ?? 4,
     timeSigDen: typeof capture.timeSigDen === "number" ? capture.timeSigDen : uiState.riffCapture?.timeSigDen ?? 4,
+    metronomeClickEnabled: typeof capture.metronomeClickEnabled === "boolean"
+      ? capture.metronomeClickEnabled
+      : uiState.riffCapture?.metronomeClickEnabled ?? true,
     capturedSamples: typeof capture.capturedSamples === "number" ? capture.capturedSamples : uiState.riffCapture?.capturedSamples ?? 0,
     sampleRate: typeof capture.sampleRate === "number" ? capture.sampleRate : uiState.riffCapture?.sampleRate ?? 0,
     hasAudio: typeof capture.hasAudio === "boolean" ? capture.hasAudio : uiState.riffCapture?.hasAudio ?? false,
@@ -357,6 +419,11 @@ function nudgeSelectedTrimHandle(direction: -1 | 1, coarse = false): void {
 function isCapturedRepeatEnabled(): boolean {
   const repeatInput = document.getElementById("riff-capture-repeat") as HTMLInputElement | null;
   return Boolean(repeatInput?.checked);
+}
+
+function isCaptureMetronomeClickEnabled(): boolean {
+  const input = document.getElementById("riff-capture-enable-click") as HTMLInputElement | null;
+  return input ? input.checked : (uiState.riffCapture?.metronomeClickEnabled ?? true);
 }
 
 export function handleCapturedPreviewComplete(previewId: string): boolean {
@@ -556,9 +623,11 @@ function renderCapturedPlayButton(): void {
   }
 
   const hasAudio = Boolean(uiState.riffCapture?.hasAudio);
+  const hideWhileRecording = Boolean(uiState.riffCapture?.active) || isArmed;
   playCaptureBtn.disabled = !hasAudio;
   playCaptureBtn.textContent = capturedPreviewActive ? "■" : "▶";
   playCaptureBtn.classList.add("riff-icon-btn");
+  playCaptureBtn.classList.toggle("hidden", hideWhileRecording);
 
   const trimBtn = document.getElementById("riff-capture-trim") as HTMLButtonElement | null;
   if (trimBtn) {
@@ -739,6 +808,7 @@ function bindRiffLibraryActions(): void {
   const pathSaveBtn = document.getElementById("riff-library-path-save") as HTMLButtonElement | null;
   const refreshBtn = document.getElementById("riff-library-refresh") as HTMLButtonElement | null;
   const openCaptureModalBtn = document.getElementById("riff-open-capture-modal") as HTMLButtonElement | null;
+  const footerRecordButton = document.getElementById("footer-riff-record-btn") as HTMLButtonElement | null;
   const captureModal = document.getElementById("riff-capture-modal") as HTMLDivElement | null;
   const captureModalCloseBtn = document.getElementById("riff-capture-modal-close") as HTMLButtonElement | null;
   const captureModalCancelBtn = document.getElementById("riff-capture-modal-cancel") as HTMLButtonElement | null;
@@ -793,6 +863,16 @@ function bindRiffLibraryActions(): void {
     openCaptureModalBtn.dataset.bound = "true";
     openCaptureModalBtn.addEventListener("click", () => {
       openRiffCaptureModal();
+    });
+  }
+
+  if (footerRecordButton && footerRecordButton.dataset.bound !== "true") {
+    footerRecordButton.dataset.bound = "true";
+    footerRecordButton.addEventListener("click", () => {
+      openRiffCaptureModal();
+      if (!startRiffCaptureFromModal()) {
+        appendLog("riff capture footer rec ignored — capture already active");
+      }
     });
   }
 
@@ -881,6 +961,7 @@ function bindRiffLibraryActions(): void {
         timeSigNum: Math.max(1, Number(numInput?.value ?? uiState.riffCapture?.timeSigNum ?? 4)),
         timeSigDen: Math.max(1, Number(denInput?.value ?? uiState.riffCapture?.timeSigDen ?? 4)),
         bars: computeBarsFromTrimWindow(),
+        metronomeClickEnabled: isCaptureMetronomeClickEnabled(),
         patternType: (patternTypeSelect?.value === "drum" ? "drum" : "click") as "click" | "drum",
         patternId: patternIdInput?.value.trim() ?? "",
         presetId: uiState.activePresetId ?? undefined,
@@ -920,29 +1001,7 @@ function bindRiffLibraryActions(): void {
         renderRiffCaptureStatus();
         return;
       }
-
-      const tempoInput = document.getElementById("riff-capture-tempo") as HTMLInputElement | null;
-      const numInput = document.getElementById("riff-capture-timesig-num") as HTMLInputElement | null;
-      const denInput = document.getElementById("riff-capture-timesig-den") as HTMLInputElement | null;
-      const countInInput = document.getElementById("riff-capture-countin") as HTMLInputElement | null;
-      const patternTypeSelect = document.getElementById("riff-capture-pattern-type") as HTMLSelectElement | null;
-      const patternIdInput = document.getElementById("riff-capture-pattern-id") as HTMLInputElement | null;
-      const accentInput = document.getElementById("riff-capture-accent") as HTMLInputElement | null;
-
-      const tempo = Math.max(30, Math.min(300, Number(tempoInput?.value ?? 120)));
-      const timeSigNum = Math.max(1, Number(numInput?.value ?? 4));
-      const timeSigDen = Math.max(1, Number(denInput?.value ?? 4));
-      // Allocate 64-bar buffer; recording is unlimited until the user clicks Stop
-      const bars = 64;
-      const countInBars = Math.max(0, Number(countInInput?.value ?? 1));
-      const patternType = (patternTypeSelect?.value === "drum" ? "drum" : "click") as "click" | "drum";
-      const patternId = patternIdInput?.value.trim() || undefined;
-      const beatPattern = accentInput?.value.trim().toUpperCase() || undefined;
-
-      armRiffCapture({ tempoBpm: tempo, timeSigNum, timeSigDen, bars, countInBars, patternType, patternId, beatPattern });
-      isArmed = true;
-      appendLog(`riff capture armed → unlimited (64-bar buffer) @ ${tempo} bpm (${timeSigNum}/${timeSigDen}), count-in: ${countInBars} bars (waiting for signal)`);
-      renderRiffCaptureStatus();
+      startRiffCaptureFromModal();
     });
   }
 
@@ -992,6 +1051,7 @@ function bindRiffLibraryActions(): void {
         timeSigNum: Math.max(1, Number(numInput?.value ?? uiState.riffCapture?.timeSigNum ?? 4)),
         timeSigDen: Math.max(1, Number(denInput?.value ?? uiState.riffCapture?.timeSigDen ?? 4)),
         bars: computeBarsFromTrimWindow(),
+        metronomeClickEnabled: isCaptureMetronomeClickEnabled(),
         patternType: (patternTypeSelect?.value === "drum" ? "drum" : "click") as "click" | "drum",
         patternId: patternIdInput?.value.trim() ?? "",
         presetId: uiState.activePresetId ?? undefined,
@@ -1228,12 +1288,14 @@ function bindRiffLibraryActions(): void {
           const denInput = document.getElementById("riff-capture-timesig-den") as HTMLInputElement | null;
           const patternTypeSelect = document.getElementById("riff-capture-pattern-type") as HTMLSelectElement | null;
           const patternIdInput = document.getElementById("riff-capture-pattern-id") as HTMLInputElement | null;
+          const clickEnabledInput = document.getElementById("riff-capture-enable-click") as HTMLInputElement | null;
 
           if (tempoInput) tempoInput.value = String(Math.round(take.tempoBpm ?? 120));
           if (numInput) numInput.value = String(take.timeSigNum ?? 4);
           if (denInput) denInput.value = String(take.timeSigDen ?? 4);
           if (patternTypeSelect) patternTypeSelect.value = take.patternType === "drum" ? "drum" : "click";
           if (patternIdInput) patternIdInput.value = take.patternId ?? "";
+          if (clickEnabledInput) clickEnabledInput.checked = take.metronomeClickEnabled ?? true;
 
           loadRiffTakeForEdit(take.id);
           appendLog(`riff edit load requested → ${take.id}`);
@@ -1343,6 +1405,7 @@ export function renderRiffLibraryPanel(): void {
 }
 
 export function initializeRiffLibraryPanel(): void {
+  bindRiffCaptureTabs();
   bindRiffLibraryActions();
   renderRiffCaptureStatus();
   syncTrimControlsFromState();

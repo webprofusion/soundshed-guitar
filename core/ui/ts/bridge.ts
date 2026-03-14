@@ -102,6 +102,7 @@ export function armRiffCapture(payload: {
   timeSigDen: number;
   bars: number;
   countInBars: number;
+  metronomeClickEnabled?: boolean;
   patternType: "click" | "drum";
   patternId?: string;
   beatPattern?: string;
@@ -115,6 +116,7 @@ export function startRiffCapture(payload: {
   timeSigDen: number;
   bars: number;
   countInBars: number;
+  metronomeClickEnabled?: boolean;
   patternType: "click" | "drum";
   patternId?: string;
   beatPattern?: string;
@@ -137,6 +139,7 @@ export function saveRiffTake(payload: {
   timeSigNum?: number;
   timeSigDen?: number;
   bars?: number;
+  metronomeClickEnabled?: boolean;
   patternType?: "click" | "drum";
   patternId?: string;
   presetId?: string;
@@ -156,8 +159,8 @@ export function deleteRiff(riffId: string): void {
   postMessage({ type: "deleteRiff", riffId });
 }
 
-export function previewRiffTake(takeId: string): void {
-  postMessage({ type: "previewRiffTake", takeId });
+export function previewRiffTake(takeId: string, enableGuidance = true): void {
+  postMessage({ type: "previewRiffTake", takeId, enableGuidance });
 }
 
 export function loadRiffTakeForEdit(takeId: string): void {

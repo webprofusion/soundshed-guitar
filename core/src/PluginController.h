@@ -515,6 +515,7 @@ private:
         int timeSigDen = 4;
         int bars = 1;
         int countInBars = 1;
+        bool metronomeClickEnabled = true;
         std::string patternType = "click";
         std::string patternId;
         std::string beatPattern; // e.g. "HLLL" (H=High L=Low S=Silent)

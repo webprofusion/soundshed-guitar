@@ -954,6 +954,7 @@
       <button class="footer-btn footer-btn-disabled" disabled>MIDI</button>
       <span class="footer-divider">|</span>
       <button class="footer-btn" id="footer-tap-btn">TAP</button>
+      <button class="footer-btn metronome-only" id="footer-riff-record-btn">REC</button>
       <button class="bpm-display metronome-only" id="footer-bpm-btn" title="Set BPM">
         <span id="footer-bpm-value">120.0</span> BPM
       </button>
@@ -1027,45 +1028,63 @@
           <button id="riff-capture-modal-close" class="modal-close" type="button">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-tempo">Tempo</label>
-            <input type="number" id="riff-capture-tempo" min="30" max="300" step="1" value="120" />
-            <span class="settings-unit">BPM</span>
-            <button id="riff-sync-metronome-btn" type="button" class="secondary riff-sync-metro-btn" title="Copy current metronome tempo">↩ Metro</button>
+          <div class="riff-capture-tabs preset-modal-tabs" role="tablist" aria-label="Riff capture settings tabs">
+            <button class="riff-capture-tab-btn tab-btn active" data-riff-capture-tab="main" type="button">Main</button>
+            <button class="riff-capture-tab-btn tab-btn" data-riff-capture-tab="advanced" type="button">Advanced</button>
           </div>
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-timesig-num">Time Signature</label>
-            <div class="riff-timesig-inline">
-              <input type="number" id="riff-capture-timesig-num" min="1" max="16" step="1" value="4" />
-              <span>/</span>
-              <input type="number" id="riff-capture-timesig-den" min="1" max="16" step="1" value="4" />
+          <div class="riff-capture-tab-panel active" data-riff-capture-tab-panel="main">
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-tempo">Tempo</label>
+              <input type="number" id="riff-capture-tempo" min="30" max="300" step="1" value="120" />
+              <span class="settings-unit">BPM</span>
+              <button id="riff-sync-metronome-btn" type="button" class="secondary riff-sync-metro-btn" title="Copy current metronome tempo">↩ Metro</button>
             </div>
-            <span class="settings-unit" id="riff-capture-bars-display">— bars</span>
+            <div class="settings-row riff-capture-row">
+              <label>Status</label>
+              <span id="riff-capture-status" class="settings-unit">Idle</span>
+            </div>
           </div>
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-pattern-type">Pattern</label>
-            <select id="riff-capture-pattern-type">
-              <option value="click" selected>Click</option>
-              <option value="drum">Drum (MIDI)</option>
-            </select>
-            <span class="settings-unit">pattern id</span>
-            <input type="text" id="riff-capture-pattern-id" placeholder="e.g. rock_4_4_01" />
-          </div>
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-countin">Count-in</label>
-            <input type="number" id="riff-capture-countin" min="0" max="8" step="1" value="1" />
-            <span class="settings-unit">bars</span>
-            <span id="riff-capture-status" class="settings-unit">Idle</span>
-          </div>
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-metro-volume">Click Volume</label>
-            <input type="range" id="riff-capture-metro-volume" min="-60" max="6" step="1" value="-12" />
-            <span class="settings-unit" id="riff-capture-metro-volume-label">-12 dB</span>
-          </div>
-          <div class="settings-row riff-capture-row">
-            <label for="riff-capture-accent">Beat Pattern</label>
-            <input type="text" id="riff-capture-accent" maxlength="16" placeholder="LHLH" title="H=High L=Low S=Silent" />
-            <span class="settings-unit">H=High L=Low S=Silent</span>
+          <div class="riff-capture-tab-panel" data-riff-capture-tab-panel="advanced">
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-timesig-num">Time Signature</label>
+              <div class="riff-timesig-inline">
+                <input type="number" id="riff-capture-timesig-num" min="1" max="16" step="1" value="4" />
+                <span>/</span>
+                <input type="number" id="riff-capture-timesig-den" min="1" max="16" step="1" value="4" />
+              </div>
+              <span class="settings-unit" id="riff-capture-bars-display">— bars</span>
+            </div>
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-pattern-type">Pattern</label>
+              <select id="riff-capture-pattern-type">
+                <option value="click" selected>Click</option>
+                <option value="drum">Drum (MIDI)</option>
+              </select>
+              <span class="settings-unit">pattern id</span>
+              <input type="text" id="riff-capture-pattern-id" placeholder="e.g. rock_4_4_01" />
+            </div>
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-countin">Count-in</label>
+              <input type="number" id="riff-capture-countin" min="0" max="8" step="1" value="1" />
+              <span class="settings-unit">bars</span>
+            </div>
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-metro-volume">Click Volume</label>
+              <input type="range" id="riff-capture-metro-volume" min="-60" max="6" step="1" value="-12" />
+              <span class="settings-unit" id="riff-capture-metro-volume-label">-12 dB</span>
+            </div>
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-enable-click">Metronome Click</label>
+              <label class="settings-checkbox">
+                <input type="checkbox" id="riff-capture-enable-click" checked />
+                <span>Play click during count-in, capture, and riff preview</span>
+              </label>
+            </div>
+            <div class="settings-row riff-capture-row">
+              <label for="riff-capture-accent">Beat Pattern</label>
+              <input type="text" id="riff-capture-accent" maxlength="16" placeholder="LHLH" title="H=High L=Low S=Silent" />
+              <span class="settings-unit">H=High L=Low S=Silent</span>
+            </div>
           </div>
           <div class="settings-row">
             <label>Actions</label>

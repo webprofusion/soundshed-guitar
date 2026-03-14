@@ -9,6 +9,7 @@ import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
+import { getRiffLibrary } from "./bridge.js";
 import { refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
@@ -376,6 +377,9 @@ export function handleIncomingMessage(message: string): void {
         tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
         timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
         timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+        metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
+          ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
+          : uiState.riffCapture?.metronomeClickEnabled ?? true,
         hasAudio: false,
         waveformPeaks: [],
       });
@@ -402,6 +406,9 @@ export function handleIncomingMessage(message: string): void {
         tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
         timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
         timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+        metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
+          ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
+          : uiState.riffCapture?.metronomeClickEnabled ?? true,
         hasAudio: false,
         waveformPeaks: [],
         barAlignOffsetSamples: typeof (payload as { barAlignOffsetSamples?: number }).barAlignOffsetSamples === "number"
@@ -422,6 +429,9 @@ export function handleIncomingMessage(message: string): void {
         tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
         timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
         timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+        metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
+          ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
+          : uiState.riffCapture?.metronomeClickEnabled ?? true,
         capturedSamples: (payload as { capturedSamples?: number }).capturedSamples ?? uiState.riffCapture?.capturedSamples ?? 0,
         sampleRate: (payload as { sampleRate?: number }).sampleRate ?? uiState.riffCapture?.sampleRate ?? 0,
         hasAudio: Boolean((payload as { hasAudio?: boolean }).hasAudio),
@@ -449,8 +459,14 @@ export function handleIncomingMessage(message: string): void {
     }
     case "riffSaved": {
       appendLog(`riff saved ← ${(payload as { riffId?: string }).riffId ?? "riff"}`);
+      const riffLibrary = (payload as { library?: import("./types.js").RiffLibrary }).library;
+      if (riffLibrary) {
+        applyRiffLibraryState(riffLibrary);
+      }
       showNotification("Riff saved", (payload as { path?: string }).path ?? "");
-      renderRiffLibraryPanel();
+      if (!riffLibrary) {
+        getRiffLibrary();
+      }
       refreshDemoAudioSelectors();
       break;
     }

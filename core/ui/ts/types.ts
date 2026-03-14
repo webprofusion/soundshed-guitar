@@ -400,6 +400,7 @@ export interface RiffTake {
   tempoBpm: number;
   timeSigNum: number;
   timeSigDen: number;
+  metronomeClickEnabled?: boolean;
   patternType?: string;
   patternId?: string;
   beatPattern?: string;
@@ -440,6 +441,7 @@ export interface RiffCaptureState {
   tempoBpm: number;
   timeSigNum: number;
   timeSigDen: number;
+  metronomeClickEnabled?: boolean;
   capturedSamples: number;
   sampleRate: number;
   hasAudio?: boolean;

@@ -680,6 +680,17 @@ void PluginController::ActivateRiffGuidance(const RiffCaptureConfig& config, boo
     if (!mHost.IsStandalone())
         return;
 
+    if (!config.metronomeClickEnabled)
+    {
+        mRiffGuidanceActive = false;
+        mRiffGuidanceForPreview = false;
+        mRiffGuidancePreviewWasActive = false;
+        mRiffGuidanceBeatScale = 1.0;
+        mRiffGuidanceClickSamples.reset();
+        mMetronomeResetPending.store(true, std::memory_order_release);
+        return;
+    }
+
     mRiffGuidanceActive = true;
     mRiffGuidanceForPreview = forPreview;
     mRiffGuidancePreviewWasActive = false;
@@ -4304,6 +4315,7 @@ void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& paylo
     config.timeSigDen = std::max(1, payload.value("timeSigDen", 4));
     config.bars = std::max(1, payload.value("bars", 1));
     config.countInBars = std::max(0, payload.value("countInBars", 1));
+    config.metronomeClickEnabled = payload.value("metronomeClickEnabled", true);
     config.patternType = payload.value("patternType", std::string("click"));
     config.patternId = payload.value("patternId", std::string{});
     config.beatPattern = payload.value("beatPattern", mMetronomeBeatPattern); // use UI value or fall back to global
@@ -4346,6 +4358,7 @@ void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& paylo
     msg["timeSigNum"] = config.timeSigNum;
     msg["timeSigDen"] = config.timeSigDen;
     msg["countInBars"] = config.countInBars;
+    msg["metronomeClickEnabled"] = config.metronomeClickEnabled;
     msg["estimatedSeconds"] = static_cast<double>(captureSamples) / sampleRate;
     SendMessageToUI(msg.dump());
 }
@@ -4374,6 +4387,7 @@ void PluginController::HandleArmRiffCaptureRequest(const nlohmann::json& payload
     config.bars = 16;
     config.bars = std::max(1, std::min(64, payload.value("bars", 16)));
     config.countInBars = std::max(0, payload.value("countInBars", 1));
+    config.metronomeClickEnabled = payload.value("metronomeClickEnabled", true);
     config.patternType = payload.value("patternType", std::string("click"));
     config.patternId = payload.value("patternId", std::string{});
     config.beatPattern = payload.value("beatPattern", mMetronomeBeatPattern);
@@ -4420,6 +4434,7 @@ void PluginController::HandleArmRiffCaptureRequest(const nlohmann::json& payload
     msg["timeSigDen"] = config.timeSigDen;
     msg["countInBars"] = config.countInBars;
     msg["bars"] = config.bars;
+    msg["metronomeClickEnabled"] = config.metronomeClickEnabled;
     SendMessageToUI(msg.dump());
 }
 
@@ -4516,6 +4531,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     msg["tempoBpm"] = captureSnapshot.config.tempoBpm;
     msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
+    msg["metronomeClickEnabled"] = captureSnapshot.config.metronomeClickEnabled;
     msg["patternType"] = captureSnapshot.config.patternType;
     if (!captureSnapshot.config.patternId.empty())
         msg["patternId"] = captureSnapshot.config.patternId;
@@ -4575,6 +4591,7 @@ void PluginController::HandleTrimCapturedRiffRequest(const nlohmann::json& paylo
     msg["hasAudio"] = !captureSnapshot.left.empty() && !captureSnapshot.right.empty();
     msg["waveformPeaks"] = BuildWaveformPeaks(captureSnapshot.left, captureSnapshot.right, 256);
     msg["bars"] = captureSnapshot.config.bars;
+    msg["metronomeClickEnabled"] = captureSnapshot.config.metronomeClickEnabled;
     msg["tempoBpm"] = captureSnapshot.config.tempoBpm;
     msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
@@ -4650,6 +4667,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     imported.config.timeSigDen = std::max(1, take->value("timeSigDen", 4));
     imported.config.bars = std::max(1, take->value("bars", 1));
     imported.config.countInBars = 0;
+    imported.config.metronomeClickEnabled = take->value("metronomeClickEnabled", true);
     imported.config.patternType = take->value("patternType", std::string("click"));
     imported.config.patternId = take->value("patternId", std::string{});
     imported.config.presetId = take->value("presetId", std::string{});
@@ -4687,6 +4705,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     msg["tempoBpm"] = captureSnapshot.config.tempoBpm;
     msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
+    msg["metronomeClickEnabled"] = captureSnapshot.config.metronomeClickEnabled;
     msg["patternType"] = captureSnapshot.config.patternType;
     if (!captureSnapshot.config.patternId.empty())
         msg["patternId"] = captureSnapshot.config.patternId;
@@ -4698,6 +4717,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
 void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
 {
     RiffCaptureRuntime capture;
+    nlohmann::json updatedLibrary = nlohmann::json::object();
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
         if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
@@ -4716,6 +4736,8 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
         capture.config.timeSigDen = std::max(1, payload.value("timeSigDen", capture.config.timeSigDen));
     if (payload.contains("bars"))
         capture.config.bars = std::max(1, payload.value("bars", capture.config.bars));
+    if (payload.contains("metronomeClickEnabled"))
+        capture.config.metronomeClickEnabled = payload.value("metronomeClickEnabled", capture.config.metronomeClickEnabled);
     if (payload.contains("patternType") && payload["patternType"].is_string())
         capture.config.patternType = payload.value("patternType", capture.config.patternType);
     if (payload.contains("patternId") && payload["patternId"].is_string())
@@ -4747,6 +4769,7 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
     takeJson["tempoBpm"] = capture.config.tempoBpm;
     takeJson["timeSigNum"] = capture.config.timeSigNum;
     takeJson["timeSigDen"] = capture.config.timeSigDen;
+    takeJson["metronomeClickEnabled"] = capture.config.metronomeClickEnabled;
     takeJson["patternType"] = capture.config.patternType;
     if (!capture.config.patternId.empty())
         takeJson["patternId"] = capture.config.patternId;
@@ -4816,6 +4839,8 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
         }
 
         SaveRiffLibraryIndex(mRiffLibraryIndex);
+        updatedLibrary = LoadRiffLibraryIndex();
+        mRiffLibraryIndex = updatedLibrary;
     }
 
     {
@@ -4828,6 +4853,7 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
     msg["riffId"] = riffId;
     msg["takeId"] = capture.takeId;
     msg["path"] = wavPath.string();
+    msg["library"] = updatedLibrary;
     SendMessageToUI(msg.dump());
     SendRiffLibraryStateToUI();
 }
@@ -4838,16 +4864,53 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
     if (riffId.empty())
         return;
 
+    std::vector<std::filesystem::path> takeFiles;
+    std::filesystem::path takesDirToRemove;
+
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
         if (!mRiffLibraryIndex.is_object() || !mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
             return;
 
         auto& riffs = mRiffLibraryIndex["riffs"];
+        for (const auto& riff : riffs)
+        {
+            if (!riff.is_object() || riff.value("id", std::string{}) != riffId)
+                continue;
+
+            const auto takes = riff.value("takes", nlohmann::json::array());
+            if (takes.is_array())
+            {
+                for (const auto& take : takes)
+                {
+                    if (!take.is_object() || !take.contains("filePath") || !take["filePath"].is_string())
+                        continue;
+                    const auto runtimePath = std::filesystem::path(take["filePath"].get<std::string>());
+                    if (!runtimePath.empty())
+                        takeFiles.push_back(runtimePath);
+                }
+            }
+            break;
+        }
+
         riffs.erase(std::remove_if(riffs.begin(), riffs.end(),
             [&](const nlohmann::json& riff) { return riff.value("id", std::string{}) == riffId; }), riffs.end());
         SaveRiffLibraryIndex(mRiffLibraryIndex);
+        takesDirToRemove = ResolveRiffLibraryPath() / "takes" / riffId;
     }
+
+    for (const auto& path : takeFiles)
+    {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+
+    if (!takesDirToRemove.empty())
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(takesDirToRemove, ec);
+    }
+
     SendRiffLibraryStateToUI();
 }
 
@@ -4917,6 +4980,7 @@ void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
 void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payload)
 {
     const std::string takeId = payload.value("takeId", "");
+    const bool enableGuidance = payload.value("enableGuidance", true);
     if (takeId.empty())
     {
         ReportErrorToUI("Riff preview", "Missing takeId");
@@ -4965,6 +5029,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     guideConfig.tempoBpm = ClampValue(take->value("tempoBpm", GetEffectiveTempoBpm()), kMetronomeMinBpm, kMetronomeMaxBpm);
     guideConfig.timeSigNum = std::max(1, take->value("timeSigNum", 4));
     guideConfig.timeSigDen = std::max(1, take->value("timeSigDen", 4));
+    guideConfig.metronomeClickEnabled = take->value("metronomeClickEnabled", true);
     guideConfig.patternType = take->value("patternType", std::string("click"));
     guideConfig.patternId = take->value("patternId", std::string{});
     guideConfig.beatPattern = take->value("beatPattern", mMetronomeBeatPattern);
@@ -4973,7 +5038,10 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     {
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
-            ActivateRiffGuidance(guideConfig, true);
+            if (enableGuidance)
+                ActivateRiffGuidance(guideConfig, true);
+            else
+                DeactivateRiffGuidance(true);
         }
         mDemoPreview->StartPreview(preview);
     }
@@ -6854,6 +6922,7 @@ void PluginController::FinalizeRiffCaptureLocked(bool canceled)
     msg["capturedSamples"] = captured;
     msg["sampleRate"] = mRiffCapture.sampleRate;
     msg["hasAudio"] = captured > 0;
+    msg["metronomeClickEnabled"] = mRiffCapture.config.metronomeClickEnabled;
     msg["waveformPeaks"] = BuildWaveformPeaks(mRiffCapture.left, mRiffCapture.right, 256);
     SendMessageToUI(msg.dump());
 }
@@ -7094,8 +7163,7 @@ void PluginController::SendRiffLibraryStateToUI()
     msg["type"] = "riffLibraryState";
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
-        if (!mRiffLibraryIndex.is_object())
-            mRiffLibraryIndex = LoadRiffLibraryIndex();
+        mRiffLibraryIndex = LoadRiffLibraryIndex();
         msg["library"] = mRiffLibraryIndex;
     }
 
