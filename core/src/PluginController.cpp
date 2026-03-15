@@ -3661,17 +3661,28 @@ void PluginController::HandleSavePresetArchiveRequest(const nlohmann::json& payl
                    [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 
     const std::string presetSuffix = ".soundshed.preset";
-    while (lowerSuggested.size() >= presetSuffix.size() &&
-           lowerSuggested.compare(lowerSuggested.size() - presetSuffix.size(), presetSuffix.size(), presetSuffix) == 0)
+    const std::string presetsSuffix = ".soundshed.presets";
+
+    const auto hasSuffix = [&lowerSuggested](const std::string& suffix) -> bool
     {
-        suggestedName.erase(suggestedName.size() - presetSuffix.size());
-        lowerSuggested.erase(lowerSuggested.size() - presetSuffix.size());
+        return lowerSuggested.size() >= suffix.size() &&
+               lowerSuggested.compare(lowerSuggested.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+
+    const std::string selectedSuffix = hasSuffix(presetsSuffix) ? presetsSuffix : presetSuffix;
+
+    while (hasSuffix(presetSuffix) || hasSuffix(presetsSuffix))
+    {
+        const std::string& suffixToTrim = hasSuffix(presetsSuffix) ? presetsSuffix : presetSuffix;
+        suggestedName.erase(suggestedName.size() - suffixToTrim.size());
+        lowerSuggested.erase(lowerSuggested.size() - suffixToTrim.size());
     }
+
     if (suggestedName.empty())
     {
         suggestedName = "preset";
     }
-    suggestedName += presetSuffix;
+    suggestedName += selectedSuffix;
 
     if (dataEncoded.empty())
     { SendMessageToUI(nlohmann::json{{"type", "presetExportFailed"}, {"message", "Missing export data"}}.dump()); return; }
