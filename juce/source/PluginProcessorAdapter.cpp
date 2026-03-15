@@ -18,6 +18,11 @@
 #include <filesystem>
 #include <iostream>
 
+namespace juce
+{
+void JUCE_CALLTYPE juce_showStandaloneAudioSettingsDialog();
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // Parameter string IDs and labels — keep in sync with enum
 // ════════════════════════════════════════════════════════════════════════
@@ -315,9 +320,15 @@ int PluginProcessorAdapter::GetBlockSize() const
 
 void PluginProcessorAdapter::OpenAudioPreferences()
 {
-    // In standalone builds, the JUCE standalone wrapper provides audio
-    // preferences in its own menu bar. No additional action needed here.
-    // For plugin formats (VST3, AU), this is a no-op.
+    if (wrapperType != wrapperType_Standalone)
+    {
+        return;
+    }
+
+    juce::MessageManager::callAsync([]
+    {
+        juce::juce_showStandaloneAudioSettingsDialog();
+    });
 }
 
 void PluginProcessorAdapter::NotifyStateChanged()

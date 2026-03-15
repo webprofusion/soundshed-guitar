@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -589,9 +590,12 @@ void GuitarFXPluginAdapter::OpenAudioPreferences()
     // In the iPlug2 standalone app, show the system preferences dialog.
     // The iPlug2 APP wrapper exposes no direct API for this; use the
     // host-specific mechanism or a platform dialog.
-    // On Windows, open the Sound control panel.
 #ifdef _WIN32
     ShellExecuteW(nullptr, L"open", L"mmsys.cpl", nullptr, nullptr, SW_SHOW);
+#elif defined(__APPLE__)
+    std::system("open -a 'Audio MIDI Setup'");
+#elif defined(__linux__)
+    std::system("(pavucontrol || gnome-control-center sound || true) >/dev/null 2>&1 &");
 #endif
 #endif
 }
