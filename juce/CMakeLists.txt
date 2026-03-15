@@ -28,6 +28,24 @@ set(BUNDLE_ID "com.soundshed.guitar")
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
 set(FORMATS Standalone AU AAX VST3)
 
+# Register soundshed:// URL scheme on macOS for browser-to-app handoff.
+set(GUITARFX_XCODE_EXTRA_PLIST_ENTRIES "")
+if(APPLE)
+        set(GUITARFX_XCODE_EXTRA_PLIST_ENTRIES [=[
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>com.soundshed.guitar</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>soundshed</string>
+        </array>
+    </dict>
+</array>
+]=])
+endif()
+
 # For simplicity, the name of the CMake project is also the name of the target
 project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 
@@ -178,6 +196,7 @@ juce_add_plugin("${PROJECT_NAME}"
     FORMATS "${FORMATS}"
     NEEDS_WEB_BROWSER TRUE
     NEEDS_WEBVIEW2 TRUE
+    XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"
 
     # The name of your final executable
     # This is how it's listed in the DAW

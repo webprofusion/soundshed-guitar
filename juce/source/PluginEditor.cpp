@@ -84,6 +84,52 @@ namespace
         return bounds.constrainedWithin (displayArea);
     }
 
+    juce::String extractToneSharingDeepLinkQuery (juce::String commandLine)
+    {
+        const auto marker = juce::String ("soundshed://tone-sharing?");
+        const auto markerIndex = commandLine.indexOfIgnoreCase (marker);
+        if (markerIndex < 0)
+            return {};
+
+        auto query = commandLine.substring (markerIndex + marker.length());
+
+        // Strip wrapping quotes and trailing args.
+        query = query.unquoted().trim();
+        const auto firstSpace = query.indexOfChar (' ');
+        if (firstSpace >= 0)
+            query = query.substring (0, firstSpace);
+
+        const auto hashPos = query.indexOfChar ('#');
+        if (hashPos >= 0)
+            query = query.substring (0, hashPos);
+
+        if (query.isEmpty())
+            return {};
+
+        // Keep only supported target keys.
+        juce::StringArray parts;
+        parts.addTokens (query, "&", "");
+
+        juce::String sanitized;
+        for (const auto& part : parts)
+        {
+            const auto trimmed = part.trim();
+            if (trimmed.startsWithIgnoreCase ("itemId=") || trimmed.startsWithIgnoreCase ("packId="))
+            {
+                if (sanitized.isNotEmpty())
+                    sanitized << "&";
+                sanitized << trimmed;
+            }
+        }
+
+        return sanitized;
+    }
+
+    juce::String getStandaloneDeepLinkQuery()
+    {
+        return extractToneSharingDeepLinkQuery (juce::JUCEApplicationBase::getCommandLineParameters());
+    }
+
 }
 
 bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
@@ -260,7 +306,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     else
    #endif
     {
-        const auto cacheBust = "?v=" + juce::String (juce::Time::getCurrentTime().toMilliseconds());
+        auto cacheBust = "?v=" + juce::String (juce::Time::getCurrentTime().toMilliseconds());
+        const auto deepLinkQuery = getStandaloneDeepLinkQuery();
+        if (deepLinkQuery.isNotEmpty())
+            cacheBust << "&" << deepLinkQuery;
         juce::String startUrl;
 
        #if JUCE_WEB_BROWSER_RESOURCE_PROVIDER_AVAILABLE

@@ -54,6 +54,13 @@ Source: "..\src\build\src\platform\app\Release\resources\*"; DestDir: "{app}\res
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Components: standalone; Tasks: startmenu
 Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Components: standalone; Tasks: desktopicon
 
+[Registry]
+; Register soundshed:// protocol for browser-to-app tone sharing handoff.
+Root: HKCU; Subkey: "Software\Classes\soundshed"; ValueType: string; ValueName: ""; ValueData: "URL:Soundshed Protocol"; Flags: uninsdeletekey; Components: standalone
+Root: HKCU; Subkey: "Software\Classes\soundshed"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Components: standalone
+Root: HKCU; Subkey: "Software\Classes\soundshed\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExeName},0"; Components: standalone
+Root: HKCU; Subkey: "Software\Classes\soundshed\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""; Components: standalone
+
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent; Components: standalone
 

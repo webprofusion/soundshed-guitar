@@ -195,6 +195,11 @@ let previewingItemId: string | null = null;
 let previewingItemTitle = "";
 let previewPriorPresetId: string | null = null;
 
+type ToneSharingShareTarget = {
+  kind: "item" | "pack";
+  id: string;
+};
+
 function element<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -209,6 +214,43 @@ function setText(id: string, value: string): void {
 function setUploadStatus(value: string): void {
   setText("tone-sharing-upload-status", value);
   setText("tone-sharing-publish-modal-status", value);
+}
+
+function getApiOrigin(): string {
+  try {
+    return new URL(state.apiBase).origin;
+  } catch {
+    return "https://api-guitar.soundshed.com";
+  }
+}
+
+function buildToneSharingShareLink(target: ToneSharingShareTarget): string {
+  const kindPath = target.kind === "pack" ? "pack" : "item";
+  return `${getApiOrigin()}/share/${kindPath}/${encodeURIComponent(target.id)}`;
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "readonly");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard unavailable");
+  }
+}
+
+async function copyToneSharingShareLink(target: ToneSharingShareTarget): Promise<void> {
+  await copyTextToClipboard(buildToneSharingShareLink(target));
 }
 
 function isToneSharingAdmin(): boolean {
@@ -1207,6 +1249,7 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
                         <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1a1 1 0 011 1v6.172l1.586-1.586a1 1 0 111.414 1.414l-3.293 3.293a1 1 0 01-1.414 0L3.999 8.001a1 1 0 111.414-1.414L7.001 8.172V2A1 1 0 018 1z\"/><rect x=\"2\" y=\"12.5\" width=\"12\" height=\"2\" rx=\"1\"/></svg>
                         Download
                       </button>
+                      <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"share\">Share</button>
                       ${reviewMode ? `<button class=\"btn btn-primary tone-sharing-card-btn\" type=\"button\" data-action=\"approve\">Approve</button>
                       <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"reject\">Reject</button>` : ""}
                       ${browseMode === "mine" && item.kind === "pack" ? `<button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"edit-pack\">Edit</button>` : ""}
@@ -1510,6 +1553,9 @@ async function renderPackDetail(details: ToneSharingPackDetails): Promise<void> 
   const actionsEl = element<HTMLElement>("tone-sharing-pack-view-actions");
   if (actionsEl) {
     actionsEl.innerHTML = `
+      <button class="btn btn-secondary tone-sharing-card-btn" type="button" data-pack-action="share-pack">
+        Share Pack
+      </button>
       <button class="btn btn-primary tone-sharing-card-btn" type="button" data-pack-action="download-pack">
         <svg class="tone-sharing-btn-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a1 1 0 011 1v6.172l1.586-1.586a1 1 0 111.414 1.414l-3.293 3.293a1 1 0 01-1.414 0L3.999 8.001a1 1 0 111.414-1.414L7.001 8.172V2A1 1 0 018 1z"/><rect x="2" y="12.5" width="12" height="2" rx="1"/></svg>
         Download Pack
@@ -1556,6 +1602,55 @@ async function renderPackDetail(details: ToneSharingPackDetails): Promise<void> 
 async function viewPack(packId: string): Promise<void> {
   const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
   await renderPackDetail(details);
+}
+
+function parseShareTargetFromLocation(): ToneSharingShareTarget | null {
+  let url: URL;
+  try {
+    url = new URL(window.location.href);
+  } catch {
+    return null;
+  }
+
+  const itemId = (url.searchParams.get("itemId") ?? "").trim();
+  if (itemId) {
+    return { kind: "item", id: itemId };
+  }
+
+  const packId = (url.searchParams.get("packId") ?? "").trim();
+  if (packId) {
+    return { kind: "pack", id: packId };
+  }
+
+  const match = url.pathname.match(/\/share\/(item|pack)\/([^/?#]+)/i);
+  if (match) {
+    const kind = match[1].toLowerCase() === "pack" ? "pack" : "item";
+    return { kind, id: decodeURIComponent(match[2]) };
+  }
+
+  return null;
+}
+
+async function openSharedTargetFromLocation(): Promise<void> {
+  const target = parseShareTargetFromLocation();
+  if (!target) {
+    return;
+  }
+
+  switchMainPanel("sharing");
+  browseMode = target.kind === "pack" ? "packs" : "items";
+
+  if (target.kind === "item") {
+    const itemResult = await apiFetch<{ item: ToneSharingItem }>(`/items/${target.id}`);
+    await renderFeedRows([buildSingleRow("Shared Preset", [itemResult.item], "item")]);
+    setUploadStatus(`Opened shared preset: ${itemResult.item.title}`);
+    return;
+  }
+
+  const packResult = await apiFetch<{ pack: ToneSharingPack }>(`/packs/${target.id}`);
+  await renderFeedRows([buildSingleRow("Shared Pack", [packResult.pack], "pack")]);
+  await viewPack(target.id);
+  setUploadStatus(`Opened shared pack: ${packResult.pack.title}`);
 }
 
 async function readPresetFromArchive(buffer: ArrayBuffer): Promise<Record<string, unknown>> {
@@ -2628,6 +2723,16 @@ function bindBrowseActions(): void {
       return;
     }
 
+    if (button.dataset.action === "share") {
+      try {
+        await copyToneSharingShareLink({ kind, id });
+        setUploadStatus("Share link copied to clipboard.");
+      } catch (error) {
+        setUploadStatus(`Share failed: ${(error as Error).message}`);
+      }
+      return;
+    }
+
     if ((button.dataset.action === "approve" || button.dataset.action === "reject") && browseMode === "review") {
       try {
         const action = button.dataset.action === "approve" ? "approve" : "reject";
@@ -2796,6 +2901,7 @@ export function applyToneSharingAppSettings(settings?: Record<string, unknown>):
   void (async () => {
     await loadAuthSession();
     await Promise.all([loadBrowse(), loadMine()]);
+    await openSharedTargetFromLocation();
   })();
 }
 
@@ -2879,7 +2985,7 @@ function bindTopControls(): void {
   });
   element<HTMLElement>("tone-sharing-pack-view-actions")?.addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
-    const button = target.closest("[data-pack-action='download-pack']") as HTMLButtonElement | null;
+    const button = target.closest("[data-pack-action]") as HTMLButtonElement | null;
     if (!button) {
       return;
     }
@@ -2887,6 +2993,16 @@ function bindTopControls(): void {
     const modal = element<HTMLElement>("tone-sharing-pack-view-modal");
     const packId = modal?.dataset.packId ?? "";
     if (!packId) {
+      return;
+    }
+
+    if (button.dataset.packAction === "share-pack") {
+      try {
+        await copyToneSharingShareLink({ kind: "pack", id: packId });
+        setUploadStatus("Pack share link copied to clipboard.");
+      } catch (error) {
+        setUploadStatus(`Share failed: ${(error as Error).message}`);
+      }
       return;
     }
 
