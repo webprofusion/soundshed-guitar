@@ -505,7 +505,7 @@
                   <option value="all">All Categories</option>
                 </select>
               </div>
-              <div class="settings-row">
+              <div class="settings-row" id="equipment-library-cleanup-row">
                 <label for="equipment-library-cleanup-scope">Cleanup unused</label>
                 <select id="equipment-library-cleanup-scope">
                   <option value="all" selected>All types</option>
@@ -713,11 +713,14 @@
             <a id="settings-update-banner-link" href="#" target="_blank" rel="noopener noreferrer" class="settings-update-banner-btn">Download</a>
           </div>
 
-          <div class="equipment-tabs tab-bar">
-            <button class="equipment-tab-btn tab-btn active" data-equipment-tab="settings">General</button>
-            <button class="equipment-tab-btn tab-btn" data-equipment-tab="performance">DSP Performance</button>
-          </div>
+          <div class="settings-layout">
+            <div class="equipment-tabs tab-bar" role="tablist" aria-label="Settings sections">
+              <button class="equipment-tab-btn tab-btn active" data-equipment-tab="settings" role="tab" aria-selected="true" aria-controls="equipment-tab-settings">General</button>
+              <button class="equipment-tab-btn tab-btn" data-equipment-tab="performance" role="tab" aria-selected="false" aria-controls="equipment-tab-performance">DSP Performance</button>
+              <button class="equipment-tab-btn tab-btn" data-equipment-tab="help" role="tab" aria-selected="false" aria-controls="equipment-tab-help">Help</button>
+            </div>
 
+            <div class="settings-content">
           <div class="equipment-tab-panel active" id="equipment-tab-settings">
 
             <h2>Audio</h2>
@@ -750,22 +753,6 @@
               <div class="settings-hint">Sets the analog reference level used to align NAM input metadata to digital
                 peak levels, for the first NAM effect/amp in the chain. When Auto Level Input is enabled on a NAM amp and the model has a known training input level, the calibration reference is used to compute an input gain correction to normalize your interface's headroom to what the model expects.</div>
             </div>
-            <div class="settings-section">
-              <h3>IR Quality</h3>
-              <div class="settings-row settings-row-two">
-                <label for="ir-quality-select">Quality</label>
-                <select id="ir-quality-select" class="themed-select">
-                  <option value="0">Economy</option>
-                  <option value="1" selected>Standard</option>
-                  <option value="2">High</option>
-                  <option value="3">Full</option>
-                </select>
-              </div>
-              <div class="settings-hint">
-                <span id="ir-quality-samples">~2048 samples (~43 ms)</span>
-              </div>
-            </div>
-
             <h2>Tone3000</h2>
             <div class="settings-section">
               <h3>Tone3000 API</h3>
@@ -924,6 +911,43 @@
               <div id="signal-diagnostics-list">
                 <!-- Signal diagnostics details will be populated here -->
               </div>
+            </div>
+          </div>
+
+          <div class="equipment-tab-panel" id="equipment-tab-help">
+            <h2>Help</h2>
+
+            <div class="settings-section help-section">
+              <h3>Signal Path</h3>
+              <p class="settings-help-copy">Build your tone by adding and ordering effects in the chain. Click a node to edit parameters, bypass it, or swap models and IRs. Drag and drop to re-order items. Save your preset when the chain sounds right.</p>
+            </div>
+
+            <div class="settings-section help-section">
+              <h3>Presets And Scenes</h3>
+              <p class="settings-help-copy">Use the Presets panel to load, save, and organize tones. Scenes let you store multiple variations inside one preset for quick changes during practice or performance. Add to Mixer lets you use multiple presets at the same time abd mix between them.</p>
+            </div>
+
+            <div class="settings-section help-section">
+              <h3>Jam</h3>
+              <p class="settings-help-copy">Search backing tracks, pin favorites, and keep the floating player visible while you tweak your sound. Use keywords like artist, key, tempo, or style for better results.</p>
+            </div>
+
+            <div class="settings-section help-section">
+              <h3>Library And Sharing</h3>
+              <p class="settings-help-copy">Browse Tone3000 and local resources to load amps, cabinets, and riffs. Import content to your library, then export complete library bundles when you need backups or transfers.</p>
+            </div>
+
+            <div class="settings-section help-section">
+              <h3>Performance And Diagnostics</h3>
+              <p class="settings-help-copy">In DSP Performance, monitor load, latency, and signal diagnostics. Enable diagnostics when troubleshooting clipping or gain staging, then disable for normal use.</p>
+            </div>
+
+            <div class="settings-section help-section">
+              <h3>More Guides</h3>
+              <p class="settings-help-copy">For full walkthroughs, troubleshooting tips, and feature updates, visit <a href="https://guitar.soundshed.com" target="_blank" rel="noopener noreferrer">guitar.soundshed.com</a>.</p>
+            </div>
+          </div>
+
             </div>
           </div>
 

@@ -42,6 +42,7 @@ const libraryViewSelect = document.getElementById("equipment-library-view") as H
 const libraryCategorySelect = document.getElementById("equipment-library-category") as HTMLSelectElement | null;
 const libraryCleanupSelect = document.getElementById("equipment-library-cleanup-scope") as HTMLSelectElement | null;
 const libraryCleanupButton = document.getElementById("equipment-library-cleanup-btn") as HTMLButtonElement | null;
+const libraryCleanupRow = document.getElementById("equipment-library-cleanup-row") as HTMLElement | null;
 const libraryResults = document.getElementById("equipment-library-results");
 const librarySummary = document.getElementById("equipment-library-summary");
 const libraryTabButtons = Array.from(document.querySelectorAll(".library-tab-btn"));
@@ -182,11 +183,13 @@ export function activateEquipmentTab(tabId: string): void {
   equipmentTabButtons.forEach((button) => {
     const isActive = (button as HTMLElement).dataset.equipmentTab === tabId;
     button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
 
   equipmentTabPanels.forEach((panel) => {
     const isMatch = (panel as HTMLElement).id === `equipment-tab-${tabId}`;
     panel.classList.toggle("active", isMatch);
+    panel.toggleAttribute("hidden", !isMatch);
   });
 
   if (tabId === "performance") {
@@ -328,9 +331,22 @@ function updateAdvancedTabVisibility(): void {
   if (advancedTabButton) {
     advancedTabButton.style.display = enabled ? "" : "none";
   }
+  updateResourceCleanupVisibility(enabled);
   // If advanced tab was active but now hidden, switch to first tab
   if (!enabled && advancedTabButton?.classList.contains("active")) {
     activateLibraryTab("tone3000");
+  }
+}
+
+function updateResourceCleanupVisibility(enabled: boolean): void {
+  if (libraryCleanupRow) {
+    libraryCleanupRow.toggleAttribute("hidden", !enabled);
+  }
+  if (libraryCleanupSelect) {
+    libraryCleanupSelect.disabled = !enabled;
+  }
+  if (libraryCleanupButton) {
+    libraryCleanupButton.disabled = !enabled;
   }
 }
 
@@ -1232,6 +1248,11 @@ async function createBlendFromGroup(group: ToneGroup): Promise<void> {
 }
 
 async function cleanupUnusedResources(): Promise<void> {
+  if (!isAdvancedOptionsEnabled()) {
+    showNotification("Cleanup unavailable", "Enable Advanced Options to use Resource Library cleanup.");
+    return;
+  }
+
   const scope = libraryCleanupSelect?.value ?? "all";
   const allItems = getLibraryItems();
   const usedResources = buildUsedResourceSet();

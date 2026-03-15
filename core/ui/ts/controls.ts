@@ -451,7 +451,6 @@ export function initializeControls(): void {
   initializeInputOutputKnobs();
   initializeAutoLevelControls();
   initializeGateControls();
-  initializeIRQualityControls();
   initializeEQControls();
 }
 
@@ -541,7 +540,6 @@ export function syncControlsFromState(): void {
   syncDoublerControlsFromState();
   syncGateControlsFromState();
   syncAutoLevelControlsFromState();
-  syncIRQualityFromState();
   syncEQControlsFromState();
 }
 
@@ -763,57 +761,6 @@ export function handleAmpCabStateChanged(newAmpEnabled: boolean, newCabEnabled: 
 
   if (cabPowerSwitch) {
     cabPowerSwitch.classList.toggle("off", !cabEnabled);
-  }
-}
-
-// ===== IR Quality Control =====
-let currentIRQuality = 1; // Default to Standard
-
-const irQualityInfo: Record<number, string> = {
-  0: "~480 samples (~10 ms)",
-  1: "~2048 samples (~43 ms)",
-  2: "~8192 samples (~170 ms)",
-  3: "Full length (unlimited)",
-};
-
-function updateIRQualityDisplay(): void {
-  const infoSpan = document.getElementById("ir-quality-samples");
-  if (infoSpan) {
-    infoSpan.textContent = irQualityInfo[currentIRQuality] || "";
-  }
-}
-
-function initializeIRQualityControls(): void {
-  const irQualitySelect = document.getElementById("ir-quality-select") as HTMLSelectElement | null;
-
-  if (irQualitySelect) {
-    irQualitySelect.addEventListener("change", () => {
-      currentIRQuality = parseInt(irQualitySelect.value, 10);
-      setParameter("ir_quality", currentIRQuality);
-      appendLog(`ir_quality → ${currentIRQuality} (${["Economy", "Standard", "High", "Full"][currentIRQuality]})`);
-      updateIRQualityDisplay();
-    });
-  }
-
-  // Initial display update
-  updateIRQualityDisplay();
-}
-
-export function syncIRQualityFromState(): void {
-  const paramValues: Record<string, number> = {};
-  if (Array.isArray(uiState.parameters.values)) {
-    uiState.parameters.values.forEach((param) => {
-      if (typeof param.value === "number") {
-        paramValues[param.id] = param.value;
-      }
-    });
-  }
-
-  const irQualitySelect = document.getElementById("ir-quality-select") as HTMLSelectElement | null;
-  if (irQualitySelect && typeof paramValues.ir_quality === "number") {
-    currentIRQuality = Math.round(paramValues.ir_quality);
-    irQualitySelect.value = currentIRQuality.toString();
-    updateIRQualityDisplay();
   }
 }
 
@@ -1338,7 +1285,7 @@ export function syncEQControlsFromState(): void {
   updateEqModalVisualization();
 }
 
-export { initializeEQControls, initializeIRQualityControls };
+export { initializeEQControls };
 
 
 function getActivePresetGlobals(): import("./types.js").GlobalSettings | null {
