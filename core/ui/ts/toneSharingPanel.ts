@@ -1128,6 +1128,7 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
           const accentStyleAttr = item.kind === "item"
             ? ` style="border-left: 3px solid ${idAccentColor(item.id)}"`
             : "";
+          const reviewMode = browseMode === "review";
           return `
                   <div class=\"${cardClass}${isPreviewing ? " is-previewing" : ""}\" data-kind=\"${item.kind}\" data-id=\"${item.id}\" data-title=\"${item.title}\"${backgroundStyle}${accentStyleAttr}>
                     <div class=\"tone-sharing-card-item-content\">
@@ -1147,6 +1148,8 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
                         <svg class=\"tone-sharing-btn-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1a1 1 0 011 1v6.172l1.586-1.586a1 1 0 111.414 1.414l-3.293 3.293a1 1 0 01-1.414 0L3.999 8.001a1 1 0 111.414-1.414L7.001 8.172V2A1 1 0 018 1z\"/><rect x=\"2\" y=\"12.5\" width=\"12\" height=\"2\" rx=\"1\"/></svg>
                         Download
                       </button>
+                      ${reviewMode ? `<button class=\"btn btn-primary tone-sharing-card-btn\" type=\"button\" data-action=\"approve\">Approve</button>
+                      <button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"reject\">Reject</button>` : ""}
                       ${browseMode === "mine" && item.kind === "pack" ? `<button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"edit-pack\">Edit</button>` : ""}
                       ${browseMode === "mine" ? `<button class=\"btn btn-secondary tone-sharing-card-btn\" type=\"button\" data-action=\"delete\">Delete</button>` : ""}
                     </div>
@@ -2518,8 +2521,9 @@ function bindBrowseActions(): void {
 
     if ((button.dataset.action === "approve" || button.dataset.action === "reject") && browseMode === "review") {
       try {
-        await moderateTarget(kind, id, button.dataset.action === "approve" ? "approve" : "reject");
-        setUploadStatus(`${kind === "item" ? "Preset" : "Pack"} ${button.dataset.action}d.`);
+        const action = button.dataset.action === "approve" ? "approve" : "reject";
+        await moderateTarget(kind, id, action);
+        setUploadStatus(`${kind === "item" ? "Preset" : "Pack"} ${action === "approve" ? "approved" : "rejected"}.`);
         await loadBrowse();
       } catch (error) {
         setUploadStatus(`Moderation failed: ${(error as Error).message}`);
