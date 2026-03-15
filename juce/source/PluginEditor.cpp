@@ -66,6 +66,24 @@ namespace
         return result;
     }
 
+    juce::Rectangle<int> getDisplayAreaForBounds (juce::Rectangle<int> bounds)
+    {
+        auto& displays = juce::Desktop::getInstance().getDisplays();
+        if (auto* display = displays.getDisplayForRect (bounds))
+            return display->userArea;
+        if (auto* primary = displays.getPrimaryDisplay())
+            return primary->userArea;
+        return { 0, 0, 1920, 1080 };
+    }
+
+    juce::Rectangle<int> clampBoundsToDisplay (juce::Rectangle<int> bounds)
+    {
+        const auto displayArea = getDisplayAreaForBounds (bounds);
+        bounds.setWidth (juce::jmin (bounds.getWidth(), displayArea.getWidth()));
+        bounds.setHeight (juce::jmin (bounds.getHeight(), displayArea.getHeight()));
+        return bounds.constrainedWithin (displayArea);
+    }
+
 }
 
 bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
@@ -239,9 +257,15 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     }
 
     setResizable (true, true);
-    setResizeLimits (1024, 768, 4096, 3072);
+
+    const auto initialDisplayArea = getDisplayAreaForBounds ({ 0, 0, 1600, 1200 });
+    const auto maxWidth = juce::jmax (640, initialDisplayArea.getWidth());
+    const auto maxHeight = juce::jmax (480, initialDisplayArea.getHeight());
+    setResizeLimits (juce::jmin (1024, maxWidth), juce::jmin (768, maxHeight), maxWidth, maxHeight);
+
     const auto initialSize = loadStandaloneWindowSize();
     setSize (initialSize.getWidth(), initialSize.getHeight());
+    constrainStandaloneWindowToDisplay();
     mLastWindowBounds = getBounds();
     saveStandaloneWindowSize();
 
@@ -298,18 +322,26 @@ juce::Rectangle<int> PluginEditor::loadStandaloneWindowSize() const
     width = juce::jlimit (kMinWidth, kMaxWidth, width);
     height = juce::jlimit (kMinHeight, kMaxHeight, height);
 
-    if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
-    {
-        JUCE_BEGIN_IGNORE_DEPRECATION_WARNINGS
-        const auto userBounds = display->totalArea;
-        JUCE_END_IGNORE_DEPRECATION_WARNINGS
-        if (width > userBounds.getWidth())
-            width = userBounds.getWidth();
-        if (height > userBounds.getHeight())
-            height = userBounds.getHeight();
-    }
+    const auto displayBounds = getDisplayAreaForBounds ({ 0, 0, width, height });
+    width = juce::jmin (width, displayBounds.getWidth());
+    height = juce::jmin (height, displayBounds.getHeight());
 
     return { 0, 0, width, height };
+}
+
+void PluginEditor::constrainStandaloneWindowToDisplay()
+{
+    if (mApplyingBoundsConstraint)
+        return;
+
+    const auto current = getBounds();
+    const auto clamped = clampBoundsToDisplay (current);
+    if (current == clamped)
+        return;
+
+    mApplyingBoundsConstraint = true;
+    setBounds (clamped);
+    mApplyingBoundsConstraint = false;
 }
 
 void PluginEditor::saveStandaloneWindowSize() const
@@ -390,8 +422,16 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::resized()
 {
+    constrainStandaloneWindowToDisplay();
+
+    const auto constrained = getBounds();
+    const auto displayArea = getDisplayAreaForBounds (constrained);
+    const auto maxWidth = juce::jmax (640, displayArea.getWidth());
+    const auto maxHeight = juce::jmax (480, displayArea.getHeight());
+    setResizeLimits (juce::jmin (1024, maxWidth), juce::jmin (768, maxHeight), maxWidth, maxHeight);
+
     webView.setBounds (getLocalBounds());
-    const auto newBounds = getBounds();
+    const auto newBounds = constrained;
     if (newBounds != mLastWindowBounds)
     {
         mLastWindowBounds = newBounds;
