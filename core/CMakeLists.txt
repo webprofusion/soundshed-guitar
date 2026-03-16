@@ -22,6 +22,13 @@ endif()
 option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
 
+if(MSVC)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("/arch:AVX2" GUITARFX_MSVC_HAS_ARCH_AVX2)
+    check_cxx_compiler_flag("/arch:armv8.2" GUITARFX_MSVC_HAS_ARCH_ARMV82)
+    check_cxx_compiler_flag("/arch:armv8.1" GUITARFX_MSVC_HAS_ARCH_ARMV81)
+endif()
+
 function(guitarfx_apply_release_optimizations target_name)
     if(MSVC)
         target_compile_options(${target_name} PRIVATE
@@ -29,10 +36,26 @@ function(guitarfx_apply_release_optimizations target_name)
             $<$<CONFIG:RelWithDebInfo>:/Ox>
             $<$<CONFIG:Release>:/fp:fast>
             $<$<CONFIG:RelWithDebInfo>:/fp:fast>)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+        set(_guitarfx_windows_arch "${CMAKE_GENERATOR_PLATFORM}")
+        if(NOT _guitarfx_windows_arch)
+            set(_guitarfx_windows_arch "${CMAKE_SYSTEM_PROCESSOR}")
+        endif()
+        string(TOLOWER "${_guitarfx_windows_arch}" _guitarfx_windows_arch)
+
+        if(_guitarfx_windows_arch MATCHES "^(x64|amd64|x86_64)$" AND GUITARFX_MSVC_HAS_ARCH_AVX2)
             target_compile_options(${target_name} PRIVATE
                 $<$<CONFIG:Release>:/arch:AVX2>
                 $<$<CONFIG:RelWithDebInfo>:/arch:AVX2>)
+        elseif(_guitarfx_windows_arch MATCHES "^(arm64|arm64ec|aarch64)$")
+            if(GUITARFX_MSVC_HAS_ARCH_ARMV82)
+                target_compile_options(${target_name} PRIVATE
+                    $<$<CONFIG:Release>:/arch:armv8.2>
+                    $<$<CONFIG:RelWithDebInfo>:/arch:armv8.2>)
+            elseif(GUITARFX_MSVC_HAS_ARCH_ARMV81)
+                target_compile_options(${target_name} PRIVATE
+                    $<$<CONFIG:Release>:/arch:armv8.1>
+                    $<$<CONFIG:RelWithDebInfo>:/arch:armv8.1>)
+            endif()
         endif()
     elseif(APPLE)
         target_compile_options(${target_name} PRIVATE

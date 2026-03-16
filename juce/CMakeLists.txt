@@ -28,6 +28,15 @@ set(BUNDLE_ID "com.soundshed.guitar")
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
 set(FORMATS Standalone AU AAX VST3)
 
+set(GUITARFX_VST3_AUTO_MANIFEST TRUE)
+
+if(WIN32
+    AND CMAKE_GENERATOR_PLATFORM MATCHES "^ARM64(EC)?$"
+   AND NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "ARM64"
+   AND NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    set(GUITARFX_VST3_AUTO_MANIFEST FALSE)
+endif()
+
 # Register soundshed:// URL scheme on macOS for browser-to-app handoff.
 set(GUITARFX_XCODE_EXTRA_PLIST_ENTRIES "")
 if(APPLE)
@@ -88,6 +97,33 @@ include(JUCEDefaults)
 if(WIN32)
     set(GUITARFX_WEBVIEW2_VERSION "1.0.3485.44" CACHE STRING "WebView2 NuGet package version")
     option(GUITARFX_AUTO_INSTALL_WEBVIEW2 "Auto-download WebView2 NuGet package when missing" ON)
+    set(GUITARFX_WEBVIEW2_STATIC_LINKING 1)
+    set(GUITARFX_WEBVIEW2_LOADER_ARCH "x64")
+    set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86_64-win")
+
+    set(_guitarfx_windows_target_arch "${CMAKE_GENERATOR_PLATFORM}")
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${MSVC_CXX_ARCHITECTURE_ID}")
+    endif()
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${CMAKE_VS_PLATFORM_NAME}")
+    endif()
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    string(TOLOWER "${_guitarfx_windows_target_arch}" _guitarfx_windows_target_arch)
+
+    if(_guitarfx_windows_target_arch MATCHES "^(arm64ec)$")
+        set(GUITARFX_WEBVIEW2_STATIC_LINKING 0)
+        set(GUITARFX_WEBVIEW2_LOADER_ARCH "arm64")
+        set(GUITARFX_WINDOWS_PACKAGE_ARCH "arm64ec-win")
+    elseif(_guitarfx_windows_target_arch MATCHES "^(arm64|aarch64)$")
+        set(GUITARFX_WEBVIEW2_LOADER_ARCH "arm64")
+        set(GUITARFX_WINDOWS_PACKAGE_ARCH "arm64-win")
+    elseif(_guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
+        set(GUITARFX_WEBVIEW2_LOADER_ARCH "x86")
+        set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86-win")
+    endif()
 
     set(_nuget_packages_root "")
 
@@ -138,6 +174,8 @@ if(WIN32)
             message(STATUS "Using auto-downloaded WebView2 package at ${WebView2_root_dir}")
         endif()
     endif()
+
+    set(GUITARFX_WEBVIEW2_LOADER_DLL "${WebView2_root_dir}/build/native/${GUITARFX_WEBVIEW2_LOADER_ARCH}/WebView2Loader.dll")
 
     set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)")
     if(GUITARFX_ASIO_SDK_DIR STREQUAL "" AND DEFINED ENV{ASIO_SDK_DIR} AND NOT "$ENV{ASIO_SDK_DIR}" STREQUAL "")
@@ -194,6 +232,7 @@ juce_add_plugin("${PROJECT_NAME}"
     # Note: this must have at least one upper-case character
     PLUGIN_CODE P001
     FORMATS "${FORMATS}"
+    VST3_AUTO_MANIFEST ${GUITARFX_VST3_AUTO_MANIFEST}
     NEEDS_WEB_BROWSER TRUE
     NEEDS_WEBVIEW2 TRUE
     XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"
@@ -247,7 +286,7 @@ target_compile_definitions(SharedCode
 
     # Use WebView2 on Windows
     JUCE_USE_WIN_WEBVIEW2=1
-    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
+    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=${GUITARFX_WEBVIEW2_STATIC_LINKING}
     JUCE_WEBVIEW2_DEVTOOLS_ENABLED=1
 
     # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3
@@ -332,6 +371,13 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_dst_base}"
     )
 
+    if(WIN32 AND NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")
+        add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
+            COMMENT "Copying WebView2 loader for ${FORMAT_TARGET}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GUITARFX_WEBVIEW2_LOADER_DLL}" "$<TARGET_FILE_DIR:${FORMAT_TARGET}>/WebView2Loader.dll"
+        )
+    endif()
+
     # On Windows, JUCE's COPY_PLUGIN_AFTER_BUILD post-build step fires before ours,
     # so the bundle is installed to Program Files before resources are present.
     # Add a second post-build step that writes resources directly to the installed
@@ -342,11 +388,19 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
         else()
             set(_common_files "C:/Program Files/Common Files")
         endif()
-        set(_vst3_install_ui "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/x86_64-win/resources/ui")
+        set(_vst3_install_ui "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/${GUITARFX_WINDOWS_PACKAGE_ARCH}/resources/ui")
         add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
             COMMENT "Copying core UI resources to installed VST3 location"
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_vst3_install_ui}"
         )
+
+        if(NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")
+            set(_vst3_install_loader_dll "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/${GUITARFX_WINDOWS_PACKAGE_ARCH}/WebView2Loader.dll")
+            add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
+                COMMENT "Copying WebView2 loader to installed VST3 location"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GUITARFX_WEBVIEW2_LOADER_DLL}" "${_vst3_install_loader_dll}"
+            )
+        endif()
     endif()
 endfunction()
 

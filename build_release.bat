@@ -7,7 +7,7 @@ setlocal
 :: ---------------------------------------------------------------------------
 
 set "WORKSPACE_ROOT=%~dp0"
-set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\builds"
+set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\builds-x64"
 set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
 

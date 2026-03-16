@@ -89,3 +89,9 @@ juce/builds/
 juce/.vs/
 
 .specstory/
+
+juce/builds-arm64/
+
+juce/builds-x64/
+
+juce/builds-arm64ec/

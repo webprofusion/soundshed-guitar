@@ -64,53 +64,18 @@ jobs:
           name: Soundshed Guitar-iPlug2-Installer
           path: installer/dist/*.exe
 
-      - name: Check R2 configuration (iPlug2)
-        id: r2-check-iplug2
-        shell: pwsh
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
-          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          $enabled = -not [string]::IsNullOrWhiteSpace($env:R2_ACCESS_KEY_ID) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_SECRET_ACCESS_KEY) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_BUCKET) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_ACCOUNT_ID)
-          if ($enabled) {
-            "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "R2 upload enabled for iPlug2 installer"
-          } else {
-            "enabled=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "R2 upload disabled (missing one or more required secrets)"
-          }
-
-      - name: Configure AWS credentials for R2 (iPlug2)
-        if: steps.r2-check-iplug2.outputs.enabled == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
-
-      - name: Upload iPlug2 installer to R2
-        if: steps.r2-check-iplug2.outputs.enabled == 'true'
-        shell: pwsh
-        run: |
-          $endpoint = "https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com"
-          $bucket = "${{ secrets.CLOUDFLARE_R2_BUCKET }}"
-          $prefix = "installers/iplug2/${{ github.ref_name }}/${{ github.run_number }}"
-
-          Get-ChildItem -Path "installer/dist" -Filter "*.exe" | ForEach-Object {
-            $key = "$prefix/$($_.Name)"
-            aws s3 cp $_.FullName "s3://$bucket/$key" --endpoint-url $endpoint --only-show-errors
-            Write-Host "Uploaded to r2://$bucket/$key"
-          }
-
   build-installer-juce:
-    name: Build JUCE Installer
+    name: Build JUCE Installer (Windows ${{ matrix.arch }})
     if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'juce' }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            cmake_arch: x64
+          - arch: arm64
+            cmake_arch: ARM64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -240,7 +205,7 @@ jobs:
 
       - name: Configure JUCE CMake
         shell: pwsh
-        run: cmake -S juce -B juce/Builds -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$env:WEBVIEW2_PACKAGE_LOCATION" -DWebView2_root_dir="$env:WEBVIEW2_ROOT_DIR"
+        run: cmake -S juce -B juce/Builds -G "Visual Studio 17 2022" -A "${{ matrix.cmake_arch }}" -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$env:WEBVIEW2_PACKAGE_LOCATION" -DWebView2_root_dir="$env:WEBVIEW2_ROOT_DIR"
 
       - name: Build JUCE Release
         run: cmake --build juce/Builds --config Release --parallel
@@ -260,51 +225,19 @@ jobs:
       - name: Upload JUCE Installer
         uses: actions/upload-artifact@v4
         with:
-          name: Soundshed Guitar-JUCE-Installer
+          name: Soundshed Guitar-JUCE-Installer-${{ matrix.arch }}
           path: juce/packaging/Output/*.exe
 
-      - name: Check R2 configuration (JUCE)
-        id: r2-check-juce
-        shell: pwsh
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
-          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          $enabled = -not [string]::IsNullOrWhiteSpace($env:R2_ACCESS_KEY_ID) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_SECRET_ACCESS_KEY) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_BUCKET) -and `
-                     -not [string]::IsNullOrWhiteSpace($env:R2_ACCOUNT_ID)
-          if ($enabled) {
-            "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "R2 upload enabled for JUCE installer"
-          } else {
-            "enabled=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "R2 upload disabled (missing one or more required secrets)"
-          }
-
-      - name: Configure AWS credentials for R2 (JUCE)
-        if: steps.r2-check-juce.outputs.enabled == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Upload artifacts to R2
+        uses: ryand56/r2-upload-action@v1.4
         with:
-          aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
-
-      - name: Upload JUCE installer to R2
-        if: steps.r2-check-juce.outputs.enabled == 'true'
-        shell: pwsh
-        run: |
-          $endpoint = "https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com"
-          $bucket = "${{ secrets.CLOUDFLARE_R2_BUCKET }}"
-          $prefix = "installers/juce/${{ github.ref_name }}/${{ github.run_number }}"
-
-          Get-ChildItem -Path "juce/packaging/Output" -Filter "*.exe" | ForEach-Object {
-            $key = "$prefix/$($_.Name)"
-            aws s3 cp $_.FullName "s3://$bucket/$key" --endpoint-url $endpoint --only-show-errors
-            Write-Host "Uploaded to r2://$bucket/$key"
-          }
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: juce/packaging/Output
+          destination-dir: ./build-artifacts
+          keep-file-fresh: true
 
   build-juce-macos-dmg:
     name: Build JUCE macOS (${{ matrix.variant }})
@@ -441,36 +374,14 @@ jobs:
           name: ${{ env.DMG_NAME }}
           path: ${{ env.DMG_PATH }}
 
-      - name: Check R2 configuration (macOS)
-        if: ${{ matrix.package_dmg }}
-        id: r2-check-macos
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
-          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET" ] && [ -n "$R2_ACCOUNT_ID" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "R2 upload enabled for macOS DMG"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "R2 upload disabled (missing one or more required secrets)"
-          fi
-
-      - name: Configure AWS credentials for R2 (macOS)
+      - name: Upload artifacts to R2
         if: ${{ matrix.package_dmg && steps.r2-check-macos.outputs.enabled == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: ryand56/r2-upload-action@v1.4
         with:
-          aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
-
-      - name: Upload macOS DMG to R2
-        if: ${{ matrix.package_dmg && steps.r2-check-macos.outputs.enabled == 'true' }}
-        run: |
-          ENDPOINT="https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com"
-          BUCKET="${{ secrets.CLOUDFLARE_R2_BUCKET }}"
-          KEY="installers/macos/${{ github.ref_name }}/${{ github.run_number }}/${DMG_NAME}"
-          aws s3 cp "$DMG_PATH" "s3://$BUCKET/$KEY" --endpoint-url "$ENDPOINT" --only-show-errors
-          echo "Uploaded to r2://$BUCKET/$KEY"
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: $DMG_PATH
+          destination-dir: ./build-artifacts
+          keep-file-fresh: true
