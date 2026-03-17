@@ -74,7 +74,7 @@ jobs:
       - name: Install WebView2 NuGet package
         shell: pwsh
         run: |
-          $packageVersion = "1.0.3485.44"
+          $packageVersion = "1.0.3856.49"
 
           if (-Not (Get-PackageSource -Name "nugetRepository" -ErrorAction SilentlyContinue)) {
             Register-PackageSource -ProviderName NuGet -Name nugetRepository -Location "https://www.nuget.org/api/v2" -Trusted -Force

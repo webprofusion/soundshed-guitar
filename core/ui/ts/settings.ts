@@ -851,8 +851,8 @@ function renderLibraryView(): void {
 
   if (sourceFilter !== "all") {
     filtered = filtered.filter((item) => {
-      const origin = inferResourceOrigin(item.filePath).toLowerCase();
-      return sourceFilter === "imported" ? origin === "imported" : origin === "built-in";
+      const origin = inferResourceOrigin(item.filePath, item.metadata).toLowerCase();
+      return origin === sourceFilter;
     });
   }
 
@@ -886,6 +886,20 @@ function bindLibraryActions(): void {
     if (!target) {
       return;
     }
+
+    const editButton = target.closest(".equipment-library-edit") as HTMLButtonElement | null;
+    if (editButton) {
+      const resourceType = editButton.dataset.resourceType ?? "";
+      const resourceId = editButton.dataset.resourceId ?? "";
+      const item = getLibraryItems().find((entry) => entry.type === resourceType && entry.id === resourceId);
+      if (!item) {
+        showNotification("Edit failed", "Resource not found in library.");
+        return;
+      }
+      void promptEditLibraryResource(item);
+      return;
+    }
+
     const browseButton = target.closest(".equipment-library-browse") as HTMLButtonElement | null;
     if (!browseButton) {
       return;
@@ -903,7 +917,150 @@ function bindLibraryActions(): void {
       return;
     }
 
+    if (inferResourceOrigin(item.filePath, item.metadata) === "Local") {
+      postMessage({
+        type: "browseLibraryResourcePath",
+        resourceType: item.type,
+        resourceId: item.id,
+      });
+      return;
+    }
+
     promptReplaceLibraryResource(item);
+  });
+
+  const updateDropActive = (active: boolean) => {
+    libraryResults.classList.toggle("riff-drop-active", active);
+  };
+
+  const extractSupportedLocalFiles = (event: DragEvent): File[] => {
+    return Array.from(event.dataTransfer?.files ?? []).filter((file) => inferDroppedLocalResourceType(file.name) !== null);
+  };
+
+  libraryResults.addEventListener("dragover", (event) => {
+    const files = extractSupportedLocalFiles(event);
+    if (!files.length) {
+      return;
+    }
+    event.preventDefault();
+    updateDropActive(true);
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  });
+
+  libraryResults.addEventListener("dragleave", (event) => {
+    if (event.target === libraryResults) {
+      updateDropActive(false);
+    }
+  });
+
+  libraryResults.addEventListener("drop", (event) => {
+    const files = extractSupportedLocalFiles(event);
+    updateDropActive(false);
+    if (!files.length) {
+      return;
+    }
+    event.preventDefault();
+    void importDroppedLibraryFiles(files);
+  });
+}
+
+function inferDroppedLocalResourceType(fileName: string): "nam" | "ir" | null {
+  const lower = fileName.trim().toLowerCase();
+  if (lower.endsWith(".wav") || lower.endsWith(".ir")) {
+    return "ir";
+  }
+  if (lower.endsWith(".nam") || lower.endsWith(".json")) {
+    return "nam";
+  }
+  return null;
+}
+
+async function importDroppedLibraryFiles(files: File[]): Promise<void> {
+  for (const file of files) {
+    await importDroppedLibraryFile(file);
+  }
+}
+
+async function importDroppedLibraryFile(file: File): Promise<void> {
+  const resourceType = inferDroppedLocalResourceType(file.name);
+  if (!resourceType) {
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const data = arrayBufferToBase64(buffer);
+  const hash = await sha256HexFromBase64(data);
+  const nativePath = typeof (file as File & { path?: unknown }).path === "string"
+    ? String((file as File & { path?: unknown }).path)
+    : "";
+  const label = file.name.replace(/\.[^.]+$/, "").trim() || file.name;
+
+  postMessage({
+    type: "saveLocalLibraryResource",
+    resourceType,
+    ...(nativePath ? { filePath: nativePath } : { data }),
+    fileName: sanitizeFilename(file.name),
+    name: label,
+    category: "Local",
+    hash,
+    metadata: {
+      provider: "local",
+    },
+  });
+}
+
+async function promptEditLibraryResource(item: LibraryItem): Promise<void> {
+  if (inferResourceOrigin(item.filePath, item.metadata) === "Built-in") {
+    showNotification("Edit unavailable", "Built-in resources cannot be edited.");
+    return;
+  }
+
+  const name = window.prompt("Resource title", item.name);
+  if (name === null) {
+    return;
+  }
+  const category = window.prompt("Category", item.category);
+  if (category === null) {
+    return;
+  }
+  const description = window.prompt("Description", item.description ?? "");
+  if (description === null) {
+    return;
+  }
+  const metadataText = window.prompt("Metadata JSON", JSON.stringify(item.metadata ?? {}, null, 2));
+  if (metadataText === null) {
+    return;
+  }
+
+  let metadata: Record<string, string> = {};
+  const trimmedMetadata = metadataText.trim();
+  if (trimmedMetadata) {
+    try {
+      const parsed = JSON.parse(trimmedMetadata) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Metadata must be a JSON object.");
+      }
+      metadata = Object.fromEntries(
+        Object.entries(parsed)
+          .filter(([, value]) => value !== null && value !== undefined)
+          .map(([key, value]) => [key, String(value)]),
+      );
+    } catch (error) {
+      showNotification("Invalid metadata", error instanceof Error ? error.message : "Metadata must be valid JSON.");
+      return;
+    }
+  }
+
+  postMessage({
+    type: "updateLibraryResource",
+    resourceType: item.type,
+    resourceId: item.id,
+    name: name.trim() || item.id,
+    category: category.trim(),
+    description,
+    metadata,
   });
 }
 
@@ -1030,11 +1187,16 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
 function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): string {
   const typeLabel = item.type === "ir" ? "Cab IR" : item.type === "nam" ? "Amp Model" : item.type.toUpperCase();
   const categoryLabel = item.category ? item.category : "Uncategorized";
-  const originLabel = inferResourceOrigin(item.filePath);
+  const originLabel = inferResourceOrigin(item.filePath, item.metadata);
   const metadataBadges = buildMetadataBadges(item.metadata);
   const missingBadge = item.fileMissing ? "<span class=\"equipment-library-missing\">Missing File</span>" : "";
-  const browseLabel = item.fileMissing ? "Browse File" : "Replace File";
+  const browseLabel = originLabel === "Local"
+    ? (item.fileMissing ? "Set Path" : "Change Path")
+    : (item.fileMissing ? "Browse File" : "Replace File");
   const browseAction = `<button class="equipment-library-browse" data-resource-type="${escapeHtml(item.type)}" data-resource-id="${escapeHtml(item.id)}">${browseLabel}</button>`;
+  const editAction = originLabel !== "Built-in"
+    ? `<button class="equipment-library-edit" data-resource-type="${escapeHtml(item.type)}" data-resource-id="${escapeHtml(item.id)}">Edit</button>`
+    : "";
   const usedKey = `${item.type}:${item.id}`;
   const usedBadge = usedResources.has(usedKey)
     ? `<span class="equipment-library-used" title="Used by preset">${renderIcon("link", "equipment-library-used-icon")}</span>`
@@ -1054,6 +1216,7 @@ function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): st
         <div class="results-item-path equipment-library-item-path" title="${escapeHtml(item.filePath)}">${escapeHtml(item.filePath || "(no file path)")}</div>
       </div>
       <div class="results-item-actions equipment-library-item-actions">
+        ${editAction}
         ${browseAction}
       </div>
     </div>
@@ -1083,7 +1246,7 @@ function groupLibraryItemsByTone(items: LibraryItem[]): ToneGroup[] {
 
     const key = `${toneId}:${toneTitle}`;
     const existing = groups.get(key);
-    const origin = inferResourceOrigin(item.filePath);
+    const origin = inferResourceOrigin(item.filePath, item.metadata);
     const gear = item.metadata?.gear ?? item.category;
     if (existing) {
       existing.count += 1;
@@ -1150,7 +1313,7 @@ function bindBlendDeleteButtons(groups: ToneGroup[]): void {
       }
 
       const deletable = group.items.filter((item) =>
-        inferResourceOrigin(item.filePath) === "Imported"
+        inferResourceOrigin(item.filePath, item.metadata) === "Imported"
         && !usedResources.has(`${item.type}:${item.id}`)
       );
       const usedCount = group.items.filter((item) => usedResources.has(`${item.type}:${item.id}`)).length;
@@ -1266,7 +1429,7 @@ async function cleanupUnusedResources(): Promise<void> {
   const scoped = scope === "all"
     ? unused
     : unused.filter((item) => item.type === scope);
-  const deletable = scoped.filter((item) => inferResourceOrigin(item.filePath) === "Imported");
+  const deletable = scoped.filter((item) => inferResourceOrigin(item.filePath, item.metadata) === "Imported");
   const skippedBuiltIn = scoped.length - deletable.length;
 
   if (!deletable.length) {
@@ -1324,13 +1487,42 @@ function updateCategoryOptions(items: LibraryItem[]): void {
   }
 }
 
-function inferResourceOrigin(filePath: string): string {
+function inferResourceOrigin(filePath: string, metadata?: Record<string, string>): string {
+  const provider = (metadata?.provider ?? metadata?.archiveProvider ?? metadata?.source ?? "").trim().toLowerCase();
+  if (provider === "tone3000") {
+    return "Tone3000";
+  }
+
+  const importedProviders = new Set([
+    "presetarchive",
+    "blendarchive",
+    "factory-archives",
+    "remote",
+    "generatedpack",
+    "zipimport",
+    "tonesharingapi",
+    "imported",
+  ]);
+  if (provider && importedProviders.has(provider)) {
+    return "Imported";
+  }
+
   if (!filePath) {
     return "Unknown";
   }
   const normalized = filePath.toLowerCase().replace(/\\/g, "/");
-  if (normalized.includes("/settings/") || normalized.includes("/appdata/") || normalized.includes("/documents/")) {
+  if (normalized.includes("/content/tone3000/")) {
+    return "Tone3000";
+  }
+  if (normalized.includes("/content/presetarchive/")
+    || normalized.includes("/content/blendarchive/")
+    || normalized.includes("/content/factory-archives/")
+    || normalized.includes("/content/remote/")
+    || normalized.includes("/imports/")) {
     return "Imported";
+  }
+  if (normalized.includes("/settings/") || normalized.includes("/appdata/") || normalized.includes("/documents/")) {
+    return "Local";
   }
   return "Built-in";
 }
@@ -1367,6 +1559,13 @@ function buildMetadataBadges(metadata?: Record<string, string>): string {
 
 function dedupeLibraryItems(items: LibraryItem[]): LibraryItem[] {
   const map = new Map<string, LibraryItem>();
+  const originRank = (origin: string): number => {
+    if (origin === "Imported") return 3;
+    if (origin === "Local") return 2;
+    if (origin === "Built-in") return 1;
+    return 0;
+  };
+
   items.forEach((item) => {
     const key = `${item.type}:${item.id}`;
     const existing = map.get(key);
@@ -1374,9 +1573,9 @@ function dedupeLibraryItems(items: LibraryItem[]): LibraryItem[] {
       map.set(key, item);
       return;
     }
-    const existingOrigin = inferResourceOrigin(existing.filePath);
-    const currentOrigin = inferResourceOrigin(item.filePath);
-    if (existingOrigin === "Built-in" && currentOrigin === "Imported") {
+    const existingOrigin = inferResourceOrigin(existing.filePath, existing.metadata);
+    const currentOrigin = inferResourceOrigin(item.filePath, item.metadata);
+    if (originRank(currentOrigin) > originRank(existingOrigin)) {
       map.set(key, item);
     }
   });

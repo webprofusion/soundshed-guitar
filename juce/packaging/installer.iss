@@ -37,9 +37,10 @@ Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}.vst3"
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
-Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
 ; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
+
 
 [Icons]
 Name: "{autoprograms}\{#ProductName}"; Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone

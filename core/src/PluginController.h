@@ -220,6 +220,9 @@ private:
     void HandleReorderSignalPathNodeRequest(const nlohmann::json& payload);
     void HandleDeleteSignalPathNodeRequest(const nlohmann::json& payload);
     void HandleImportRemoteResourceRequest(const nlohmann::json& payload);
+    void HandleSaveLocalLibraryResourceRequest(const nlohmann::json& payload);
+    void HandleUpdateLibraryResourceRequest(const nlohmann::json& payload);
+    void HandleBrowseLibraryResourcePathRequest(const nlohmann::json& payload);
     void HandleImportToneSharingPackRequest(const nlohmann::json& payload);
     void HandleDeleteImportedToneSharingPackRequest(const nlohmann::json& payload);
     void HandlePreviewRemoteResourceRequest(const nlohmann::json& payload);
@@ -278,6 +281,10 @@ private:
     void HandleSetSetlistsRequest(const nlohmann::json& payload);
     void HandleGetThemeRequest();
     void HandleSetThemeRequest(const nlohmann::json& payload);
+
+    [[nodiscard]] std::optional<LibraryResource> SaveLocalLibraryResource(const nlohmann::json& payload,
+                                                                          std::string& error,
+                                                                          bool allowCreate = true);
     void HandleGetAppInfoRequest();
     void HandleGetGlobalChainRequest();
     void HandleSetGlobalChainRequest(const nlohmann::json& payload);
@@ -346,6 +353,7 @@ private:
     void LoadAppSettings();
     void LoadLastSessionState();
     void LoadResourceLibraries();
+    void LoadFactoryPresetArchives();
     void LoadBlendLibrary();
     void SaveBlendLibrary() const;
     void LoadCompositeLibrary();
@@ -378,6 +386,9 @@ private:
     // Resources and libraries
     ResourceLibrary mResourceLibrary;
     nlohmann::json mBlendLibrary = nlohmann::json::array();
+    std::unordered_set<std::string> mFactoryArchiveBlendIds;
+    std::unordered_set<std::string> mFactoryArchivePresetIds;
+    std::unordered_map<std::string, std::string> mFactoryArchivePresetAliases;
     CompositeEffectLibrary mCompositeLibrary;
     FileSystem mFileSystem;
     ModelHasher mHasher;
@@ -385,6 +396,7 @@ private:
     // Paths
     std::filesystem::path mResourceRoot;
     std::filesystem::path mUserPresetsPath;
+    std::map<std::string, Preset> mFactoryArchivePresets;
 
     // Active preset state
     std::optional<Preset> mActivePreset;

@@ -18,6 +18,21 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
         c.HandleImportRemoteResourceRequest(msg);
         return true;
     }
+    if (type == "saveLocalLibraryResource")
+    {
+        c.HandleSaveLocalLibraryResourceRequest(msg);
+        return true;
+    }
+    if (type == "updateLibraryResource")
+    {
+        c.HandleUpdateLibraryResourceRequest(msg);
+        return true;
+    }
+    if (type == "browseLibraryResourcePath")
+    {
+        c.HandleBrowseLibraryResourcePathRequest(msg);
+        return true;
+    }
     if (type == "importToneSharingPack")
     {
         c.HandleImportToneSharingPackRequest(msg);

@@ -83,3 +83,15 @@ This document tracks outstanding tasks and improvements for the GuitarFX project
 - Model count: Start with 2-model blending, extensible to N models for finer parameter resolution
 - Latency: Models should ideally be from the same architecture family for consistent latency
 - Parameter semantics: Blend is unit-less (0–1); UI can optionally display mapped parameter range (e.g., "Gain: 1–10")
+
+
+# Facotry Presets general notes
+- Preset archive export from a presets folder should include information on the preset subfolder structure, import should (optionally) recreate that subfolder structure. Factory preset import should create/update the folder structure
+
+- Hash the factory preset archive to decide if it has changed on startup, if it has changed re-import it. New factory presets should be added, existing presets should be updated
+
+- Factory preset import should change the preset category to Factory in import
+
+- Factory preset import should persits the imported persets and folder structure in the users preset structure, under a top level Factory Pesets folder
+
+- Factory presets should Import to a Factory Presets folder with a folder structure, it should also import to our resource library with resource item metadata. Like a partial resource library export/import.

@@ -95,7 +95,7 @@ include(JUCEDefaults)
 
 # WebView2 static SDK package location (NuGet packages root)
 if(WIN32)
-    set(GUITARFX_WEBVIEW2_VERSION "1.0.3485.44" CACHE STRING "WebView2 NuGet package version")
+    set(GUITARFX_WEBVIEW2_VERSION "1.0.3856.49" CACHE STRING "WebView2 NuGet package version")
     option(GUITARFX_AUTO_INSTALL_WEBVIEW2 "Auto-download WebView2 NuGet package when missing" ON)
     set(GUITARFX_WEBVIEW2_STATIC_LINKING 1)
     set(GUITARFX_WEBVIEW2_LOADER_ARCH "x64")
@@ -219,8 +219,8 @@ juce_add_plugin("${PROJECT_NAME}"
     COMPANY_NAME "${COMPANY_NAME}"
     BUNDLE_ID "${BUNDLE_ID}"
 
-    # On MacOS, plugin is copied to /Users/yourname/Library/Audio/Plug-Ins/
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    # Keep build artefacts local; installers handle deployment to system plugin folders.
+    COPY_PLUGIN_AFTER_BUILD FALSE
 
     # Change me!
     # A four-character plugin id
@@ -378,30 +378,6 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
         )
     endif()
 
-    # On Windows, JUCE's COPY_PLUGIN_AFTER_BUILD post-build step fires before ours,
-    # so the bundle is installed to Program Files before resources are present.
-    # Add a second post-build step that writes resources directly to the installed
-    # VST3 bundle so the installed copy always stays in sync.
-    if(WIN32 AND "${FORMAT_TARGET}" MATCHES "VST3")
-        if(DEFINED ENV{COMMONPROGRAMFILES} AND NOT "$ENV{COMMONPROGRAMFILES}" STREQUAL "")
-            file(TO_CMAKE_PATH "$ENV{COMMONPROGRAMFILES}" _common_files)
-        else()
-            set(_common_files "C:/Program Files/Common Files")
-        endif()
-        set(_vst3_install_ui "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/${GUITARFX_WINDOWS_PACKAGE_ARCH}/resources/ui")
-        add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
-            COMMENT "Copying core UI resources to installed VST3 location"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_vst3_install_ui}"
-        )
-
-        if(NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")
-            set(_vst3_install_loader_dll "${_common_files}/VST3/${PRODUCT_NAME}.vst3/Contents/${GUITARFX_WINDOWS_PACKAGE_ARCH}/WebView2Loader.dll")
-            add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
-                COMMENT "Copying WebView2 loader to installed VST3 location"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GUITARFX_WEBVIEW2_LOADER_DLL}" "${_vst3_install_loader_dll}"
-            )
-        endif()
-    endif()
 endfunction()
 
 soundshed_copy_ui_resources(${PROJECT_NAME}_Standalone)

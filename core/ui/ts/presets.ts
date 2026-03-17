@@ -5,7 +5,7 @@ import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRe
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileNameWithHash, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
-import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode, ToneSharingOriginMetadata } from "./types.js";
+import type { Preset, Attachment, BlendDefinition, ResourceRef, LibraryResource, PresetFolder, Setlist, GraphNode, SignalGraph, ToneSharingOriginMetadata } from "./types.js";
 import { createEmptyPresetV2, migratePresetNodeTypes } from "./presetV2.js";
 import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage, setAppSetting } from "./bridge.js";
@@ -878,6 +878,44 @@ function getPresetFolderPath(presetId: string): string | null {
   return path ? path.join(" > ") : folder.name;
 }
 
+function buildArchivePresetFolder(folder: PresetFolder, allowedPresetIds: Set<string>): PresetArchiveFolder | null {
+  const presetIds = (folder.presetIds ?? []).filter((presetId) => allowedPresetIds.has(presetId));
+  const children = (folder.children ?? [])
+    .map((child) => buildArchivePresetFolder(child, allowedPresetIds))
+    .filter((child): child is PresetArchiveFolder => Boolean(child));
+
+  if (presetIds.length === 0 && children.length === 0) {
+    return null;
+  }
+
+  return {
+    name: folder.name,
+    ...(presetIds.length > 0 ? { presetIds } : {}),
+    ...(children.length > 0 ? { children } : {}),
+  };
+}
+
+function buildArchivePresetFoldersForExport(folderId: string, presets: Preset[]): PresetArchiveFolder[] {
+  if (isVirtualPresetFolderId(folderId) && folderId !== PRESET_FOLDER_ALL_ID) {
+    return [];
+  }
+
+  const allowedPresetIds = new Set(presets.map((preset) => preset.id));
+  if (allowedPresetIds.size === 0) {
+    return [];
+  }
+
+  if (folderId !== PRESET_FOLDER_ALL_ID) {
+    const folder = findFolderById(uiState.presetFolders ?? [], folderId);
+    const serializedFolder = folder ? buildArchivePresetFolder(folder, allowedPresetIds) : null;
+    return serializedFolder ? [serializedFolder] : [];
+  }
+
+  return (uiState.presetFolders ?? [])
+    .map((folder) => buildArchivePresetFolder(folder, allowedPresetIds))
+    .filter((folder): folder is PresetArchiveFolder => Boolean(folder));
+}
+
 function populatePresetFolderSelect(select: HTMLSelectElement | null, selectedId?: string | null): void {
   if (!select) return;
 
@@ -1335,7 +1373,7 @@ function createFolder(name: string, parentId?: string): boolean {
   return true;
 }
 
-function addPresetToImportedFolder(presetId: string): void {
+function addPresetsToImportedFolder(presetIds: string[]): void {
   const folders = uiState.presetFolders ?? [];
   let imported = findFolderByName(folders, PRESET_FOLDER_IMPORTED_NAME);
   if (!imported) {
@@ -1347,9 +1385,87 @@ function addPresetToImportedFolder(presetId: string): void {
     };
     folders.push(imported);
   }
-  if (!imported.presetIds.includes(presetId)) {
-    imported.presetIds.push(presetId);
+  presetIds.forEach((presetId) => {
+    if (!imported?.presetIds.includes(presetId)) {
+      imported?.presetIds.push(presetId);
+    }
+  });
+  persistPresetFolders();
+}
+
+function addPresetToImportedFolder(presetId: string): void {
+  addPresetsToImportedFolder([presetId]);
+}
+
+function findFolderByNameInList(folders: PresetFolder[], name: string): PresetFolder | undefined {
+  const normalized = normalizeFolderName(name);
+  return folders.find((folder) => normalizeFolderName(folder.name) === normalized);
+}
+
+function applyImportedPresetFolders(
+  archiveFolders: PresetArchiveFolder[],
+  presetIdMap: Map<string, string>,
+  importedPresetIds: string[],
+): void {
+  const folders = uiState.presetFolders ?? [];
+  let importedRoot = findFolderByName(folders, PRESET_FOLDER_IMPORTED_NAME);
+  if (!importedRoot) {
+    importedRoot = {
+      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
+      name: PRESET_FOLDER_IMPORTED_NAME,
+      children: [],
+      presetIds: [],
+    };
+    folders.push(importedRoot);
   }
+
+  const assignedPresetIds = new Set<string>();
+  const ensureChildFolder = (siblings: PresetFolder[], name: string): PresetFolder => {
+    const existing = findFolderByNameInList(siblings, name);
+    if (existing) {
+      existing.children = existing.children ?? [];
+      existing.presetIds = existing.presetIds ?? [];
+      return existing;
+    }
+
+    const created: PresetFolder = {
+      id: generateResourceId(name),
+      name,
+      children: [],
+      presetIds: [],
+    };
+    siblings.push(created);
+    return created;
+  };
+
+  const applyFolderNodes = (siblings: PresetFolder[], nodes: PresetArchiveFolder[]): void => {
+    nodes.forEach((node) => {
+      const folder = ensureChildFolder(siblings, node.name);
+      (node.presetIds ?? []).forEach((sourcePresetId) => {
+        const importedPresetId = presetIdMap.get(sourcePresetId);
+        if (!importedPresetId) {
+          return;
+        }
+        if (!folder.presetIds.includes(importedPresetId)) {
+          folder.presetIds.push(importedPresetId);
+        }
+        assignedPresetIds.add(importedPresetId);
+      });
+      applyFolderNodes(folder.children, node.children ?? []);
+    });
+  };
+
+  importedRoot.children = importedRoot.children ?? [];
+  applyFolderNodes(importedRoot.children, archiveFolders);
+
+  importedPresetIds
+    .filter((presetId) => !assignedPresetIds.has(presetId))
+    .forEach((presetId) => {
+      if (!importedRoot?.presetIds.includes(presetId)) {
+        importedRoot?.presetIds.push(presetId);
+      }
+    });
+
   persistPresetFolders();
 }
 
@@ -2323,6 +2439,7 @@ type PresetArchiveResource = {
   type: string;
   fileName: string;
   hash?: string;
+  metadata?: Record<string, string>;
 };
 
 /**
@@ -2341,6 +2458,12 @@ type Tone3000ResourceRef = {
   creatorName?: string;
 };
 
+type PresetArchiveFolder = {
+  name: string;
+  presetIds?: string[];
+  children?: PresetArchiveFolder[];
+};
+
 type PresetArchive = {
   formatVersion: number;
   preset: Preset;
@@ -2356,6 +2479,7 @@ type PresetCollectionArchive = {
   presets: Preset[];
   resources: PresetArchiveResource[];
   blends?: BlendDefinition[];
+  presetFolders?: PresetArchiveFolder[];
   /** tone3000-sourced resources excluded from the archive per their redistribution terms. */
   tone3000Resources?: Tone3000ResourceRef[];
 };
@@ -2530,17 +2654,34 @@ function getLibraryResourceByHash(resourceType: string, hash?: string): LibraryR
   return resources.find((res) => res.hash?.toLowerCase() === hash.toLowerCase());
 }
 
-function collectPresetBlendIds(preset: Preset): string[] {
-  if (!preset.graph?.nodes) {
-    return [];
+function getPresetGraphs(preset: Preset | null | undefined): SignalGraph[] {
+  const graphs: SignalGraph[] = [];
+  if (preset?.graph) {
+    graphs.push(preset.graph);
   }
+  if (Array.isArray(preset?.scenes)) {
+    preset.scenes.forEach((scene) => {
+      if (scene?.graph) {
+        graphs.push(scene.graph);
+      }
+    });
+  }
+  return graphs;
+}
 
+function hasAnyGraphNodes(preset: Preset | null | undefined): boolean {
+  return getPresetGraphs(preset).some((graph) => Array.isArray(graph.nodes) && graph.nodes.length > 0);
+}
+
+function collectPresetBlendIds(preset: Preset): string[] {
   const ids = new Set<string>();
-  preset.graph.nodes.forEach((node) => {
-    const blendId = node.config?.blendId ?? "";
-    if (blendId) {
-      ids.add(blendId);
-    }
+  getPresetGraphs(preset).forEach((graph) => {
+    graph.nodes?.forEach((node) => {
+      const blendId = node.config?.blendId ?? "";
+      if (blendId) {
+        ids.add(blendId);
+      }
+    });
   });
 
   return Array.from(ids);
@@ -2562,13 +2703,13 @@ function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[])
     refs.push({ type, id, filePath });
   };
 
-  if (preset.graph?.nodes) {
-    preset.graph.nodes.forEach((node) => {
+  getPresetGraphs(preset).forEach((graph) => {
+    graph.nodes?.forEach((node) => {
       if (Array.isArray(node.resources)) {
-        node.resources.forEach((res) => addRef(res.type, res.id, res.filePath));
+        node.resources.forEach((res) => addRef(res.resourceType ?? res.type, res.resourceId ?? res.id, res.filePath));
       }
     });
-  }
+  });
 
   if (preset.audioFxModelId) {
     addRef("nam", preset.audioFxModelId);
@@ -2587,12 +2728,13 @@ function collectPresetResourceRefs(preset: Preset, blendDefs: BlendDefinition[])
 
   blendDefs.forEach((blend) => {
     (blend.models ?? []).forEach((modelId) => addRef("nam", modelId));
+    (blend.modelMappings ?? []).forEach((mapping) => addRef("nam", mapping.id));
   });
 
   return refs;
 }
 
-async function exportPresetCollectionArchive(presets: Preset[], archiveName: string): Promise<void> {
+async function exportPresetCollectionArchive(presets: Preset[], archiveName: string, sourceFolderId: string): Promise<void> {
   if (!presets.length) {
     showNotification("Export failed", "No presets to export");
     return;
@@ -2611,13 +2753,32 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
     return;
   }
 
+  const exportSourcePresets: Preset[] = [];
+  let unresolvedPresetCount = 0;
+  for (const listedPreset of presets) {
+    const cachedPreset = uiState.presetCache.get(listedPreset.id) ?? listedPreset;
+    if (hasAnyGraphNodes(cachedPreset)) {
+      exportSourcePresets.push(clonePreset(cachedPreset));
+      continue;
+    }
+
+    try {
+      const fetchedPreset = await requestPresetFromBackend(listedPreset.id);
+      exportSourcePresets.push(clonePreset(fetchedPreset));
+    } catch {
+      // Fall back to whatever is available so metadata/name still exports.
+      exportSourcePresets.push(clonePreset(cachedPreset));
+      unresolvedPresetCount += 1;
+    }
+  }
+
   const blendIds = new Set<string>();
-  presets.forEach((preset) => {
+  exportSourcePresets.forEach((preset) => {
     collectPresetBlendIds(preset).forEach((id) => blendIds.add(id));
   });
   const blendDefs = (uiState.blendLibrary ?? []).filter((blend) => blendIds.has(blend.id));
   const refMap = new Map<string, ResourceRef>();
-  presets.forEach((preset) => {
+  exportSourcePresets.forEach((preset) => {
     collectPresetResourceRefs(preset, blendDefs).forEach((ref) => {
       const resourceType = ref.resourceType ?? ref.type ?? "";
       const resourceId = ref.resourceId ?? ref.id ?? "";
@@ -2657,16 +2818,19 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
       type: resourceType,
       fileName,
       hash,
+      ...(resource.metadata && Object.keys(resource.metadata).length > 0 ? { metadata: { ...resource.metadata } } : {}),
     });
   }
 
-  const exportPresets = presets.map((preset) => clonePreset(uiState.presetCache.get(preset.id) ?? preset));
+  const exportPresets = exportSourcePresets.map((preset) => clonePreset(preset));
+  const presetFolders = buildArchivePresetFoldersForExport(sourceFolderId, exportPresets);
   const archive: PresetCollectionArchive = {
     formatVersion: 1,
     createdAt: new Date().toISOString(),
     presets: exportPresets,
     resources: exportResources,
     blends: blendDefs,
+    ...(presetFolders.length > 0 ? { presetFolders } : {}),
   };
 
   zip.file("presets.json", JSON.stringify(archive, null, 2));
@@ -2676,6 +2840,9 @@ async function exportPresetCollectionArchive(presets: Preset[], archiveName: str
 
   if (missingCount > 0) {
     showNotification("Export warning", `${missingCount} resources could not be read`);
+  }
+  if (unresolvedPresetCount > 0) {
+    showNotification("Export warning", `${unresolvedPresetCount} presets could not be fully resolved before export`);
   }
 
   const normalizeArchiveExportBaseName = (raw: string, fallback: string): string => {
@@ -2699,12 +2866,12 @@ async function exportActivePresetFolderArchive(): Promise<void> {
   const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
   const presets = getPresetsForFolderId(activeFolderId);
   const archiveName = getPresetFolderExportName(activeFolderId);
-  await exportPresetCollectionArchive(presets, archiveName);
+  await exportPresetCollectionArchive(presets, archiveName, activeFolderId);
 }
 
 async function exportAllPresetsArchive(): Promise<void> {
   const presets = uiState.presets.slice();
-  await exportPresetCollectionArchive(presets, "All-Presets");
+  await exportPresetCollectionArchive(presets, "All-Presets", PRESET_FOLDER_ALL_ID);
 }
 
 async function exportSelectedPresetCollectionArchive(): Promise<void> {
@@ -2751,6 +2918,7 @@ export async function buildPresetArchiveBlob(preset: Preset): Promise<Blob> {
       type: resourceType,
       fileName,
       hash,
+      ...(resource.metadata && Object.keys(resource.metadata).length > 0 ? { metadata: { ...resource.metadata } } : {}),
     });
   }
 
@@ -3156,6 +3324,7 @@ export async function importPresetArchive(
   let tone3000ResourcesToImport: Tone3000ResourceRef[] = [];
   let blends: BlendDefinition[] = [];
   let presetsToImport: Preset[] = [];
+  let presetFoldersToImport: PresetArchiveFolder[] = [];
 
   if (presetEntry) {
     const presetText = await presetEntry.async("text");
@@ -3179,6 +3348,7 @@ export async function importPresetArchive(
     tone3000ResourcesToImport = archive.tone3000Resources ?? [];
     blends = archive.blends ?? [];
     presetsToImport = archive.presets;
+    presetFoldersToImport = archive.presetFolders ?? [];
   }
 
   const zipFiles = Object.values(zip.files) as JSZipObject[];
@@ -3222,7 +3392,8 @@ export async function importPresetArchive(
       fileName,
       hash: resource.hash ?? "",
       metadata: {
-        provider: "presetArchive",
+        ...(resource.metadata ?? {}),
+        archiveProvider: "presetArchive",
         sourceFile: fileName,
       },
       data,
@@ -3235,6 +3406,7 @@ export async function importPresetArchive(
   }
 
   const blendIdMap = new Map<string, string>();
+  const presetIdMap = new Map<string, string>();
   blends.forEach((blend) => {
     const newBlendId = generateResourceId(blend.id || blend.name || "blend");
     blendIdMap.set(blend.id, newBlendId);
@@ -3264,6 +3436,7 @@ export async function importPresetArchive(
     const sourcePresetId = importedPreset.id || importedPreset.name || "preset";
     const archiveOrigin = getToneSharingOriginMetadata(importedPreset);
     importedPreset.id = generateResourceId(sourcePresetId);
+    presetIdMap.set(sourcePresetId, importedPreset.id);
     importedPreset.name = importedPreset.name || "Imported Preset";
     const contextOrigin = context.source === "toneSharingApi" && context.itemId
       ? createToneSharingOrigin(context.itemId, sourcePresetId, {
@@ -3320,7 +3493,6 @@ export async function importPresetArchive(
     if (!previewOnly) {
       cachePresetInMemory(importedPreset);
       uiState.presets = [importedPreset, ...uiState.presets.filter((preset) => preset.id !== importedPreset.id)];
-      addPresetToImportedFolder(importedPreset.id);
       uiState.presetCache.set(importedPreset.id, importedPreset);
     }
     importedPresets.push(importedPreset);
@@ -3338,10 +3510,15 @@ export async function importPresetArchive(
   uiState.filteredPresets = getFilteredPresets(presetSearchElement?.value ?? "");
   const latestPreset = importedPresets[importedPresets.length - 1];
   uiState.activePresetId = latestPreset.id;
+  const importedPresetIds = importedPresets.map((preset) => preset.id);
+  if (presetFoldersToImport.length > 0) {
+    applyImportedPresetFolders(presetFoldersToImport, presetIdMap, importedPresetIds);
+  } else {
+    addPresetsToImportedFolder(importedPresetIds);
+  }
   populatePresetDropdown();
   renderPresetUI(clonePreset(latestPreset));
   updatePresetDropdownSelection();
-  const importedPresetIds = importedPresets.map((preset) => preset.id);
   const uniqueResources = Array.from(new Map(importedResources.map((entry) => [`${entry.type}:${entry.id}`, entry])).values());
   registerInstalledToneSharingPack({
     id: buildInstalledPackEntryId(file, context),

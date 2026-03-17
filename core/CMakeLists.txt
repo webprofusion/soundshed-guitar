@@ -132,6 +132,28 @@ if(NOT DEFINED stftpitchshift_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     FetchContent_MakeAvailable(stftpitchshift)
 endif()
 
+# miniz — required for startup factory preset archive support (.preset/.presets)
+if(NOT TARGET guitarfx_miniz)
+    include(FetchContent)
+    FetchContent_Declare(guitarfx_miniz_src
+        GIT_REPOSITORY https://github.com/richgel999/miniz.git
+        GIT_TAG 3.0.2)
+    FetchContent_GetProperties(guitarfx_miniz_src)
+    if(NOT guitarfx_miniz_src_POPULATED)
+        FetchContent_Populate(guitarfx_miniz_src)
+    endif()
+
+    file(WRITE "${guitarfx_miniz_src_SOURCE_DIR}/miniz_export.h" "#ifndef MINIZ_EXPORT\n#define MINIZ_EXPORT\n#endif\n")
+
+    add_library(guitarfx_miniz STATIC
+        "${guitarfx_miniz_src_SOURCE_DIR}/miniz.c"
+        "${guitarfx_miniz_src_SOURCE_DIR}/miniz_tdef.c"
+        "${guitarfx_miniz_src_SOURCE_DIR}/miniz_tinfl.c"
+        "${guitarfx_miniz_src_SOURCE_DIR}/miniz_zip.c")
+    target_include_directories(guitarfx_miniz PUBLIC
+        "${guitarfx_miniz_src_SOURCE_DIR}")
+endif()
+
 # NeuralAmpModelerCore + Eigen (used by NAM effects)
 if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam)
     include(FetchContent)
@@ -369,6 +391,8 @@ target_compile_definitions(SoundshedGuitarCore
 target_link_libraries(SoundshedGuitarCore
     PUBLIC
         nlohmann_json::nlohmann_json
+    PRIVATE
+        guitarfx_miniz
 )
 
 # NeuralAmpModelerCore — consumer must provide this target or set include dirs

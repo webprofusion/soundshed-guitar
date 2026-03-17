@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -9,6 +10,7 @@
 
 #include "IPluginHost.h"
 #include "PluginController.h"
+#include "dsp/EffectGuids.h"
 #include "presets/PresetStorage.h"
 #include "presets/PresetTypes.h"
 
@@ -19,8 +21,9 @@ namespace
 class TestHost final : public guitarfx::IPluginHost
 {
 public:
-    explicit TestHost(fs::path userDataPath)
+    explicit TestHost(fs::path userDataPath, fs::path bundledAssetsPath = {})
         : mUserDataPath(std::move(userDataPath))
+        , mBundledAssetsPath(bundledAssetsPath.empty() ? mUserDataPath : std::move(bundledAssetsPath))
     {
     }
 
@@ -56,7 +59,7 @@ public:
 
     [[nodiscard]] fs::path GetBundledAssetsPath() const override
     {
-        return mUserDataPath;
+        return mBundledAssetsPath;
     }
 
     [[nodiscard]] double GetSampleRate() const override
@@ -73,6 +76,7 @@ public:
 
 private:
     fs::path mUserDataPath;
+    fs::path mBundledAssetsPath;
 };
 
 void SetSettingsEnvRoot(const fs::path& root)
@@ -137,6 +141,113 @@ std::optional<nlohmann::json> FindLatestMessageOfType(const std::vector<std::str
     }
 
     return std::nullopt;
+}
+
+std::uint32_t Crc32(const std::vector<std::uint8_t>& data)
+{
+    std::uint32_t crc = 0xFFFFFFFFu;
+    for (std::uint8_t byte : data)
+    {
+        crc ^= static_cast<std::uint32_t>(byte);
+        for (int bit = 0; bit < 8; ++bit)
+        {
+            const std::uint32_t mask = -(crc & 1u);
+            crc = (crc >> 1u) ^ (0xEDB88320u & mask);
+        }
+    }
+    return ~crc;
+}
+
+void AppendLe16(std::vector<std::uint8_t>& bytes, std::uint16_t value)
+{
+    bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+    bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+}
+
+void AppendLe32(std::vector<std::uint8_t>& bytes, std::uint32_t value)
+{
+    AppendLe16(bytes, static_cast<std::uint16_t>(value & 0xFFFFu));
+    AppendLe16(bytes, static_cast<std::uint16_t>((value >> 16u) & 0xFFFFu));
+}
+
+struct StoredZipEntry
+{
+    std::string name;
+    std::vector<std::uint8_t> data;
+};
+
+std::vector<std::uint8_t> BuildStoredZip(const std::vector<StoredZipEntry>& entries)
+{
+    std::vector<std::uint8_t> bytes;
+    struct CentralRecord
+    {
+        std::string name;
+        std::uint32_t crc = 0;
+        std::uint32_t size = 0;
+        std::uint32_t localOffset = 0;
+    };
+    std::vector<CentralRecord> central;
+    central.reserve(entries.size());
+
+    for (const auto& entry : entries)
+    {
+        CentralRecord record;
+        record.name = entry.name;
+        record.crc = Crc32(entry.data);
+        record.size = static_cast<std::uint32_t>(entry.data.size());
+        record.localOffset = static_cast<std::uint32_t>(bytes.size());
+
+        AppendLe32(bytes, 0x04034B50u);
+        AppendLe16(bytes, 20);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe32(bytes, record.crc);
+        AppendLe32(bytes, record.size);
+        AppendLe32(bytes, record.size);
+        AppendLe16(bytes, static_cast<std::uint16_t>(record.name.size()));
+        AppendLe16(bytes, 0);
+        bytes.insert(bytes.end(), record.name.begin(), record.name.end());
+        bytes.insert(bytes.end(), entry.data.begin(), entry.data.end());
+
+        central.push_back(record);
+    }
+
+    const std::uint32_t centralOffset = static_cast<std::uint32_t>(bytes.size());
+    for (const auto& record : central)
+    {
+        AppendLe32(bytes, 0x02014B50u);
+        AppendLe16(bytes, 20);
+        AppendLe16(bytes, 20);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe32(bytes, record.crc);
+        AppendLe32(bytes, record.size);
+        AppendLe32(bytes, record.size);
+        AppendLe16(bytes, static_cast<std::uint16_t>(record.name.size()));
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe16(bytes, 0);
+        AppendLe32(bytes, 0);
+        AppendLe32(bytes, record.localOffset);
+        bytes.insert(bytes.end(), record.name.begin(), record.name.end());
+    }
+
+    const std::uint32_t centralSize = static_cast<std::uint32_t>(bytes.size()) - centralOffset;
+    AppendLe32(bytes, 0x06054B50u);
+    AppendLe16(bytes, 0);
+    AppendLe16(bytes, 0);
+    AppendLe16(bytes, static_cast<std::uint16_t>(central.size()));
+    AppendLe16(bytes, static_cast<std::uint16_t>(central.size()));
+    AppendLe32(bytes, centralSize);
+    AppendLe32(bytes, centralOffset);
+    AppendLe16(bytes, 0);
+
+    return bytes;
 }
 
 bool TestRiffLibraryPathNormalization()
@@ -400,6 +511,219 @@ bool TestSaveGetDeletePresetWorkflow()
     return true;
 }
 
+bool TestFactoryPresetArchiveStartupImport()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "factory-archive";
+    const fs::path bundledAssets = sandbox / "bundled-assets";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(bundledAssets / "ui" / "presets" / "factory", ec);
+    SetSettingsEnvRoot(sandbox);
+
+    guitarfx::Preset preset = BuildPreset("factory-archive-preset", "Archive Factory Preset");
+    preset.category = "Factory Archive";
+    if (preset.graph.nodes.size() > 1)
+    {
+        preset.graph.nodes[1].resources.clear();
+        preset.graph.nodes[1].type = guitarfx::EffectGuids::kAmpNamBlend;
+        preset.graph.nodes[1].config["blendId"] = "archive-blend";
+    }
+
+    nlohmann::json archive;
+    archive["formatVersion"] = 1;
+    archive["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
+    archive["resources"] = nlohmann::json::array({
+        {
+            {"id", "archive-model"},
+            {"name", "Archive Model"},
+            {"category", "Archive"},
+            {"type", "nam"},
+            {"fileName", "archive-model.nam"},
+            {"hash", "test-hash"}
+        }
+    });
+    archive["blends"] = nlohmann::json::array({
+        {
+            {"id", "archive-blend"},
+            {"name", "Archive Blend"},
+            {"models", nlohmann::json::array({"archive-model"})}
+        }
+    });
+    archive["presetFolders"] = nlohmann::json::array({
+        {
+            {"name", "High Gain"},
+            {"presetIds", nlohmann::json::array({preset.id})},
+            {"children", nlohmann::json::array()}
+        }
+    });
+
+    const auto archiveText = archive.dump(2);
+    const auto archiveBytes = BuildStoredZip({
+        {"preset.json", std::vector<std::uint8_t>(archiveText.begin(), archiveText.end())},
+        {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm'}}
+    });
+    const fs::path archivePath = bundledAssets / "ui" / "presets" / "factory" / "bundle.soundshed.preset";
+    {
+        std::ofstream output(archivePath, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(archiveBytes.data()), static_cast<std::streamsize>(archiveBytes.size()));
+    }
+
+    nlohmann::json settings = nlohmann::json::object();
+    settings["lastPresetId"] = "bundle__factory-archive-preset";
+    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    fs::create_directories(settingsPath.parent_path(), ec);
+    {
+        std::ofstream output(settingsPath);
+        output << settings.dump(2);
+    }
+
+    TestHost host(sandbox, bundledAssets);
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    const auto& active = controller.GetActivePreset();
+    if (!active || active->name != "Archive Factory Preset")
+    {
+        std::cerr << "Archive-backed factory preset was not restored at startup\n";
+        return false;
+    }
+
+    nlohmann::json getList;
+    getList["type"] = "getPresetList";
+    controller.HandleUIMessage(getList.dump());
+    const auto presetListMsg = FindLatestMessageOfType(host.sentMessages, "presetList");
+    if (!presetListMsg)
+    {
+        std::cerr << "presetList not emitted\n";
+        return false;
+    }
+
+    const auto presets = presetListMsg->value("presets", nlohmann::json::array());
+    bool foundArchivePreset = false;
+    for (const auto& item : presets)
+    {
+        if (item.value("name", "") == "Archive Factory Preset" && item.value("source", "") == "factory")
+        {
+            foundArchivePreset = true;
+            break;
+        }
+    }
+    if (!foundArchivePreset)
+    {
+        std::cerr << "Archive-backed factory preset missing from presetList\n";
+        return false;
+    }
+
+    const auto resources = controller.GetResourceLibrary().GetAllResources();
+    const auto resourceIt = std::find_if(resources.begin(), resources.end(), [](const guitarfx::LibraryResource& resource)
+    {
+        return resource.name == "Archive Model";
+    });
+    if (resourceIt == resources.end() || !fs::exists(resourceIt->filePath))
+    {
+        std::cerr << "Archive-backed factory resource was not imported into the runtime library\n";
+        return false;
+    }
+
+    const fs::path persistedPresetPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user" / "bundle__factory-archive-preset.json";
+    const auto persistedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    if (!persistedPreset || persistedPreset->category != "Factory")
+    {
+        std::cerr << "Archive-backed factory preset was not persisted as a Factory preset\n";
+        return false;
+    }
+
+    const fs::path presetFoldersPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "preset-folders.json";
+    if (!fs::exists(presetFoldersPath))
+    {
+        std::cerr << "Factory preset folders file was not created\n";
+        return false;
+    }
+
+    nlohmann::json presetFoldersJson;
+    {
+        std::ifstream input(presetFoldersPath);
+        input >> presetFoldersJson;
+    }
+
+    bool foundFactoryRoot = false;
+    bool foundArchiveFolder = false;
+    bool foundPresetInFolder = false;
+    for (const auto& folder : presetFoldersJson.value("folders", nlohmann::json::array()))
+    {
+        if (!folder.is_object() || folder.value("name", "") != "Factory Presets")
+            continue;
+        foundFactoryRoot = true;
+        for (const auto& child : folder.value("children", nlohmann::json::array()))
+        {
+            if (!child.is_object() || child.value("name", "") != "bundle")
+                continue;
+            foundArchiveFolder = true;
+            for (const auto& nested : child.value("children", nlohmann::json::array()))
+            {
+                if (!nested.is_object() || nested.value("name", "") != "High Gain")
+                    continue;
+                for (const auto& presetIdValue : nested.value("presetIds", nlohmann::json::array()))
+                {
+                    if (presetIdValue.is_string() && presetIdValue.get<std::string>() == "bundle__factory-archive-preset")
+                    {
+                        foundPresetInFolder = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!foundFactoryRoot || !foundArchiveFolder || !foundPresetInFolder)
+    {
+        std::cerr << "Factory preset folder structure was not persisted correctly\n";
+        return false;
+    }
+
+    auto locallyModifiedPreset = *persistedPreset;
+    locallyModifiedPreset.name = "Local Factory Override";
+    if (!guitarfx::PresetStorage::SaveToFile(locallyModifiedPreset, persistedPresetPath))
+    {
+        std::cerr << "Unable to modify persisted factory preset for hash check\n";
+        return false;
+    }
+
+    guitarfx::PluginController unchangedController(host);
+    unchangedController.Initialize();
+    const auto unchangedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    if (!unchangedPreset || unchangedPreset->name != "Local Factory Override")
+    {
+        std::cerr << "Unchanged factory archive should not have been re-imported\n";
+        return false;
+    }
+
+    auto updatedPreset = preset;
+    updatedPreset.name = "Archive Factory Preset Updated";
+    nlohmann::json updatedArchive = archive;
+    updatedArchive["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(updatedPreset));
+    const auto updatedArchiveText = updatedArchive.dump(2);
+    const auto updatedArchiveBytes = BuildStoredZip({
+        {"preset.json", std::vector<std::uint8_t>(updatedArchiveText.begin(), updatedArchiveText.end())},
+        {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm', '2'}}
+    });
+    {
+        std::ofstream output(archivePath, std::ios::binary | std::ios::trunc);
+        output.write(reinterpret_cast<const char*>(updatedArchiveBytes.data()), static_cast<std::streamsize>(updatedArchiveBytes.size()));
+    }
+
+    guitarfx::PluginController updatedController(host);
+    updatedController.Initialize();
+    const auto reimportedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    if (!reimportedPreset || reimportedPreset->name != "Archive Factory Preset Updated")
+    {
+        std::cerr << "Changed factory archive was not re-imported\n";
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 int main()
@@ -414,6 +738,7 @@ int main()
 
     run("Load preset via message", TestLoadPresetViaMessage());
     run("Save/Get/Delete preset workflow", TestSaveGetDeletePresetWorkflow());
+    run("Factory preset archive startup import", TestFactoryPresetArchiveStartupImport());
     run("Riff library path normalization", TestRiffLibraryPathNormalization());
 
     std::cout << "\nPreset management workflow tests: " << passed << " passed, " << failed << " failed\n";
