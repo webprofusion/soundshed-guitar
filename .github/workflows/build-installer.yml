@@ -11,6 +11,10 @@ on:
         description: Include macOS build
         type: boolean
         default: true
+      upload_r2:
+        description: Upload build artifacts to Cloudflare R2
+        type: boolean
+        default: false
       asio_sdk_url:
         description: Direct download URL for the Steinberg ASIO SDK zip
         type: string
@@ -182,6 +186,7 @@ jobs:
           path: juce/packaging/Output/*.exe
 
       - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
         uses: ryand56/r2-upload-action@v1.4
         with:
           r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -328,7 +333,7 @@ jobs:
           path: ${{ env.DMG_PATH }}
 
       - name: Upload artifacts to R2
-        if: ${{ matrix.package_dmg }}
+        if: ${{ matrix.package_dmg && inputs.upload_r2 }}
         uses: ryand56/r2-upload-action@v1.4
         with:
           r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
