@@ -77,6 +77,7 @@ namespace
     constexpr const char* kFactoryPresetRootFolderName = "Factory Presets";
     constexpr const char* kFactoryArchiveStateFileName = "factory-archive-state.json";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
+    constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
 
     // ── NAM calibration constants ───────────────────────────────────
 
@@ -1958,6 +1959,14 @@ void PluginController::ApplyUiSettingsFromAppSettings()
         mUiSettings = legacy;
 }
 
+bool PluginController::IsFactoryPresetArchiveLoadingEnabled() const
+{
+    const auto it = mAppSettings.find(kFactoryArchiveLoadingEnabledSettingKey);
+    if (it == mAppSettings.end() || !it->is_boolean())
+        return true;
+    return it->get<bool>();
+}
+
 // ════════════════════════════════════════════════════════════════════
 // State serialization
 // ════════════════════════════════════════════════════════════════════
@@ -2324,6 +2333,12 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
 {
     const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
     const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : presetId;
+
+    if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
+    {
+        ReportErrorToUI("Cannot add preset to mixer", "Factory preset archive loading is disabled in Advanced settings");
+        return false;
+    }
 
     // If the active preset matches, use it directly
     if (mActivePreset && mActivePreset->id == resolvedPresetId)
@@ -3039,6 +3054,12 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
 
     const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
     const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : presetId;
+
+    if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
+    {
+        ReportErrorToUI("Preset unavailable", "Factory preset archive loading is disabled in Advanced settings");
+        return;
+    }
 
     if (mUserPresetsPath.empty())
         mUserPresetsPath = mFileSystem.ResolvePresetDirectory() / "user";
@@ -6008,10 +6029,42 @@ void PluginController::HandleGetPresetListRequest()
 void PluginController::HandleGetPresetFoldersRequest()
 {
     const auto payload = LoadUiStorageJson("preset-folders.json", nlohmann::json::object());
+    nlohmann::json folders = payload.value("folders", nlohmann::json::array());
+    std::string activeFolderId = payload.value("activeFolderId", "__all__");
+
+    if (!IsFactoryPresetArchiveLoadingEnabled() && folders.is_array())
+    {
+        nlohmann::json filtered = nlohmann::json::array();
+        for (const auto& folder : folders)
+        {
+            if (!folder.is_object())
+                continue;
+
+            const std::string folderId = folder.value("id", "");
+            const std::string folderName = folder.value("name", "");
+            if (folderId == kFactoryPresetRootFolderId
+                || folderName == kFactoryPresetRootFolderName
+                || folderId.rfind("factory-archive::", 0) == 0)
+            {
+                continue;
+            }
+
+            filtered.push_back(folder);
+        }
+
+        if (activeFolderId == kFactoryPresetRootFolderId
+            || activeFolderId.rfind("factory-archive::", 0) == 0)
+        {
+            activeFolderId = "__all__";
+        }
+
+        folders = std::move(filtered);
+    }
+
     nlohmann::json msg;
     msg["type"] = "presetFolders";
-    msg["folders"] = payload.value("folders", nlohmann::json::array());
-    msg["activeFolderId"] = payload.value("activeFolderId", "__all__");
+    msg["folders"] = std::move(folders);
+    msg["activeFolderId"] = activeFolderId;
     SendMessageToUI(msg.dump());
 }
 
@@ -7107,6 +7160,14 @@ void PluginController::LoadLastSessionState()
 
     if (!lastPresetId.empty())
     {
+        if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(lastPresetId))
+        {
+            std::cout << "[Plugin] Skipping last factory archive preset restore because archive loading is disabled" << std::endl;
+            mPendingStateBroadcast = true;
+            std::cout << "[Plugin] Last session state restored" << std::endl;
+            return;
+        }
+
         std::cout << "[Plugin] Restoring last preset: " << lastPresetId << std::endl;
         try
         {
@@ -7176,11 +7237,8 @@ void PluginController::LoadFactoryPresetArchives()
     mFactoryArchivePresets.clear();
     mFactoryArchiveBlendIds.clear();
     mFactoryArchivePresetIds.clear();
+    mTrackedFactoryArchivePresetIds.clear();
     mFactoryArchivePresetAliases.clear();
-
-    const auto factoryDir = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
-    if (!std::filesystem::exists(factoryDir))
-        return;
 
     auto factoryArchiveState = LoadJsonFile(ResolveFactoryArchiveStatePath(mFileSystem), nlohmann::json::object());
     if (!factoryArchiveState.is_object())
@@ -7201,10 +7259,37 @@ void PluginController::LoadFactoryPresetArchives()
             const std::string importedId = mapping.value().get<std::string>();
             if (importedId.empty())
                 continue;
-            mFactoryArchivePresetAliases[mapping.key()] = importedId;
-            mFactoryArchivePresetIds.insert(importedId);
+            mTrackedFactoryArchivePresetIds.insert(importedId);
         }
     }
+
+    if (!IsFactoryPresetArchiveLoadingEnabled())
+    {
+        AppendSessionLog("Factory preset archive loading disabled by app setting");
+        return;
+    }
+
+    for (const auto& archiveEntry : factoryArchiveState["archives"].items())
+    {
+        const auto& mappings = archiveEntry.value().value("presetMappings", nlohmann::json::object());
+        if (!mappings.is_object())
+            continue;
+        for (const auto& mapping : mappings.items())
+        {
+            if (!mapping.value().is_string())
+                continue;
+            const std::string importedId = mapping.value().get<std::string>();
+            if (importedId.empty())
+                continue;
+            mFactoryArchivePresetAliases[mapping.key()] = importedId;
+            mFactoryArchivePresetIds.insert(importedId);
+            mTrackedFactoryArchivePresetIds.insert(importedId);
+        }
+    }
+
+    const auto factoryDir = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
+    if (!std::filesystem::exists(factoryDir))
+        return;
 
     const auto extractedRoot = mFileSystem.ResolveSettingsDirectory() / "resources" / "content" / kFactoryArchiveResourceProvider;
     [[maybe_unused]] const auto ensuredExtractedRoot = mFileSystem.EnsureDirectory(extractedRoot);
@@ -7398,6 +7483,7 @@ void PluginController::LoadFactoryPresetArchives()
             importedPresetIds.push_back(uniquePresetId);
             mFactoryArchivePresetAliases[sourcePresetId] = uniquePresetId;
             mFactoryArchivePresetIds.insert(uniquePresetId);
+            mTrackedFactoryArchivePresetIds.insert(uniquePresetId);
             occupiedPresetIds.insert(uniquePresetId);
 
             preset.id = uniquePresetId;
@@ -8197,6 +8283,7 @@ void PluginController::SendPresetListToUI()
     nlohmann::json msg;
     msg["type"] = "presetList";
     nlohmann::json presets = nlohmann::json::array();
+    const bool factoryArchiveLoadingEnabled = IsFactoryPresetArchiveLoadingEnabled();
 
     auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
     auto userPath = mUserPresetsPath;
@@ -8213,6 +8300,8 @@ void PluginController::SendPresetListToUI()
                     auto presetOpt = PresetStorage::LoadFromFile(entry.path());
                     if (!presetOpt) continue;
                     auto& preset = *presetOpt;
+                    if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+                        continue;
                     nlohmann::json p;
                     p["id"] = preset.id;
                     p["name"] = preset.name;
@@ -8236,6 +8325,8 @@ void PluginController::SendPresetListToUI()
     }
     for (const auto& [presetId, preset] : mFactoryArchivePresets)
     {
+        if (!factoryArchiveLoadingEnabled)
+            continue;
         if (seenPresetIds.contains(presetId))
             continue;
         nlohmann::json p;

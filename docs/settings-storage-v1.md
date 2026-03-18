@@ -69,6 +69,7 @@ Global app settings and integration values.
   },
   "diagnostics.signalLevelsEnabled": true,
   "ui.advancedOptionsEnabled": true,
+  "factoryPresets.archiveLoadingEnabled": true,
   "featureFlags": {}
 }
 ```

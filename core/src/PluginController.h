@@ -303,6 +303,7 @@ private:
     void ApplyDiagnosticsSettingsFromAppSettings();
     void ApplyInterfaceCalibrationSettingsFromAppSettings();
     void ApplyUiSettingsFromAppSettings();
+    [[nodiscard]] bool IsFactoryPresetArchiveLoadingEnabled() const;
     void SendMessageToUI(const std::string& jsonMessage);
     void ReportErrorToUI(const std::string& message, const std::string& detail = {});
     void SendGlobalChainStateToUI();
@@ -390,6 +391,7 @@ private:
     nlohmann::json mBlendLibrary = nlohmann::json::array();
     std::unordered_set<std::string> mFactoryArchiveBlendIds;
     std::unordered_set<std::string> mFactoryArchivePresetIds;
+    std::unordered_set<std::string> mTrackedFactoryArchivePresetIds;
     std::unordered_map<std::string, std::string> mFactoryArchivePresetAliases;
     CompositeEffectLibrary mCompositeLibrary;
     FileSystem mFileSystem;

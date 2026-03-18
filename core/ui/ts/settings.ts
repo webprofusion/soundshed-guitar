@@ -23,6 +23,7 @@ const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
 const INTERFACE_CALIBRATION_ENABLED_SETTING = "audio.interfaceCalibration.enabled";
 const INTERFACE_CALIBRATION_REFERENCE_SETTING = "audio.interfaceCalibration.referenceDbu";
 const ADVANCED_OPTIONS_SETTING = "ui.advancedOptionsEnabled";
+const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 
 const apiKeyInput = document.getElementById("tone3000-api-key-input") as HTMLInputElement | null;
 const saveButton = document.getElementById("tone3000-api-key-save");
@@ -52,6 +53,8 @@ const libraryTabPanels = Array.from(document.querySelectorAll(".library-tab-pane
 const libraryExportButton = document.getElementById("library-export-btn");
 const libraryExportResourcesSelect = document.getElementById("library-export-resources") as HTMLSelectElement | null;
 const advancedOptionsToggle = document.getElementById("advanced-options-toggle") as HTMLInputElement | null;
+const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
+const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
 const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
 const advancedTabButton = document.querySelector('.library-tab-btn[data-library-tab="advanced"]') as HTMLElement | null;
 let settingsInitialized = false;
@@ -76,6 +79,7 @@ export function initSettingsPanel(): void {
   initDiagnosticsToggle();
   initInterfaceCalibrationControls();
   initAdvancedOptionsToggle();
+  initFactoryArchiveLoadingToggle();
   initUpdateCheckToggle();
   initEquipmentTabs();
   initLibraryFilters();
@@ -328,10 +332,26 @@ function initUpdateCheckToggle(): void {
   });
 }
 
+function initFactoryArchiveLoadingToggle(): void {
+  if (!factoryArchiveLoadingToggle || factoryArchiveLoadingToggle.dataset.bound === "true") return;
+  factoryArchiveLoadingToggle.dataset.bound = "true";
+  factoryArchiveLoadingToggle.addEventListener("change", () => {
+    const enabled = Boolean(factoryArchiveLoadingToggle.checked);
+    uiState.appSettings[FACTORY_ARCHIVE_LOADING_SETTING] = enabled;
+    setAppSetting(FACTORY_ARCHIVE_LOADING_SETTING, enabled);
+  });
+}
+
 function updateAdvancedTabVisibility(): void {
   const enabled = Boolean(getSettingValue(ADVANCED_OPTIONS_SETTING));
   if (advancedTabButton) {
     advancedTabButton.style.display = enabled ? "" : "none";
+  }
+  if (factoryArchiveLoadingRow) {
+    factoryArchiveLoadingRow.toggleAttribute("hidden", !enabled);
+  }
+  if (factoryArchiveLoadingToggle) {
+    factoryArchiveLoadingToggle.disabled = !enabled;
   }
   updateResourceCleanupVisibility(enabled);
   // If advanced tab was active but now hidden, switch to first tab
@@ -425,6 +445,10 @@ export function refreshSettingsView(): void {
   }
   if (advancedOptionsToggle) {
     advancedOptionsToggle.checked = Boolean(getSettingValue(ADVANCED_OPTIONS_SETTING));
+  }
+  if (factoryArchiveLoadingToggle) {
+    const factoryArchiveLoadingEnabled = getSettingValue(FACTORY_ARCHIVE_LOADING_SETTING);
+    factoryArchiveLoadingToggle.checked = factoryArchiveLoadingEnabled === null ? true : Boolean(factoryArchiveLoadingEnabled);
   }
   if (updateCheckToggle) {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);
