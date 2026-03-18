@@ -284,9 +284,16 @@ void PluginProcessorAdapter::OpenAudioPreferences()
         return;
     }
 
-    // This adapter is built into shared code used by multiple plugin targets.
-    // Avoid directly linking standalone-only helper symbols here.
-    DBG ("OpenAudioPreferences requested in standalone wrapper; no shared-code dialog hook is available in this target.");
+    if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+    {
+        juce::juce_showStandaloneAudioSettingsDialog();
+        return;
+    }
+
+    juce::MessageManager::callAsync ([]()
+    {
+        juce::juce_showStandaloneAudioSettingsDialog();
+    });
 }
 
 void PluginProcessorAdapter::NotifyStateChanged()
