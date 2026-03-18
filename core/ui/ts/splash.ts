@@ -1,30 +1,52 @@
 /**
  * Splash Screen Manager
- * 
- * Displays a splash screen during app initialization and hides it when the app
- * is ready. This prevents flash of unthemed content while the UI loads and theme
- * is applied.
+ *
+ * Displays a splash screen during app initialization and keeps it on-screen for
+ * a minimum duration to avoid startup flashing.
  */
 
-/** Hides the splash screen with a fade-out animation. */
-export function hideSplashScreen(): void {
+const MIN_SPLASH_MS = 3000;
+const THEME_TRANSITION_MS = 260;
+const FADE_OUT_MS = 300;
+
+let splashShownAt = 0;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Hides the splash screen after ensuring a minimum on-screen time.
+ * Before fade-out, it briefly transitions from dark startup styling to theme colors.
+ */
+export async function hideSplashScreen(): Promise<void> {
   const splash = document.getElementById("splash-screen");
   if (!splash) return;
 
-  // Add fade-out class for animation
-  splash.classList.add("splash-hidden");
+  const elapsed = Math.max(0, performance.now() - splashShownAt);
+  const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+  if (remaining > 0) {
+    await delay(remaining);
+  }
 
-  // Remove from DOM after animation completes (300ms)
-  setTimeout(() => {
-    splash.remove();
-  }, 300);
+  // Switch splash palette from startup dark to the user's active theme.
+  splash.classList.add("splash-theme-ready");
+  await delay(THEME_TRANSITION_MS);
+
+  // Fade-out and remove from DOM.
+  splash.classList.add("splash-hidden");
+  await delay(FADE_OUT_MS);
+  splash.remove();
 }
 
-/** Initializes the splash screen (currently just ensures it's visible). */
+/** Initializes splash timing and ensures startup dark visual state. */
 export function initSplashScreen(): void {
   const splash = document.getElementById("splash-screen");
   if (!splash) return;
 
-  // Ensure splash is visible (should be by default)
+  splashShownAt = performance.now();
+  splash.classList.remove("splash-hidden", "splash-theme-ready");
   splash.style.display = "flex";
 }

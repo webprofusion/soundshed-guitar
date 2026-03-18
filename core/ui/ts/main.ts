@@ -27,7 +27,7 @@ import { initializeToneSharingPanel } from "./toneSharingPanel.js";
 import { initializeRiffLibraryPanel } from "./riffLibrary.js";
 import { initMultiRigTab } from "./multiPresetMixer.js";
 import { initializeJamPanel } from "./jam.js";
-import { hideSplashScreen } from "./splash.js";
+import { hideSplashScreen, initSplashScreen } from "./splash.js";
 const eqModal = document.getElementById("eq-modal");
 const eqModalCloseBtn = document.getElementById("eq-modal-close");
 
@@ -45,6 +45,8 @@ function closeEqModal(): void {
 
 
 async function bootstrap(): Promise<void> {
+  initSplashScreen();
+
   installFetchLogger();
   renderLogEntries();
 
@@ -146,7 +148,7 @@ async function bootstrap(): Promise<void> {
   }
 
   // Hide splash screen now that app is fully initialized
-  hideSplashScreen();
+  await hideSplashScreen();
 }
 
 bootstrap();

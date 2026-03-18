@@ -1645,10 +1645,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(44, 89, 170, 0.22) 0%, rgba(44, 89, 170, 0) 40%),
+    radial-gradient(circle at 80% 85%, rgba(16, 146, 166, 0.16) 0%, rgba(16, 146, 166, 0) 42%),
+    #0a0f16;
+  color: #e8eef8;
+  color-scheme: dark;
   z-index: 10000;
   transition: opacity 0.3s ease-out;
   opacity: 1;
+}
+
+#splash-screen.splash-theme-ready {
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 #splash-screen.splash-hidden {
@@ -1667,8 +1677,9 @@
 .splash-logo {
   width: 120px;
   height: 120px;
-  color: var(--accent-color, #4a9eff);
+  color: #63a4ff;
   animation: splash-fade-in 0.6s ease-out;
+  transition: color 0.26s ease;
 }
 
 .splash-logo svg {
@@ -1682,24 +1693,44 @@
   font-weight: 300;
   margin: 0;
   letter-spacing: -0.5px;
-  color: var(--text-primary);
+  color: #f4f7ff;
   animation: splash-fade-in 0.6s ease-out 0.1s both;
+  transition: color 0.26s ease;
 }
 
 .splash-subtitle {
   font-size: 13px;
   margin: 0;
-  color: var(--text-secondary);
+  color: #9aa9c0;
   animation: splash-fade-in 0.6s ease-out 0.2s both;
+  transition: color 0.26s ease;
 }
 
 .splash-spinner {
   width: 32px;
   height: 32px;
-  border: 2px solid rgba(74, 158, 255, 0.2);
-  border-top-color: var(--accent-color, #4a9eff);
+  border: 2px solid rgba(99, 164, 255, 0.24);
+  border-top-color: #63a4ff;
   border-radius: 50%;
   animation: splash-spin 0.8s linear infinite, splash-fade-in 0.6s ease-out 0.3s both;
+  transition: border-color 0.26s ease;
+}
+
+#splash-screen.splash-theme-ready .splash-logo {
+  color: var(--accent-color, #4a9eff);
+}
+
+#splash-screen.splash-theme-ready .splash-title {
+  color: var(--text-primary);
+}
+
+#splash-screen.splash-theme-ready .splash-subtitle {
+  color: var(--text-secondary);
+}
+
+#splash-screen.splash-theme-ready .splash-spinner {
+  border-color: color-mix(in srgb, var(--accent-color, #4a9eff) 22%, transparent);
+  border-top-color: var(--accent-color, #4a9eff);
 }
 
 @keyframes splash-spin {
