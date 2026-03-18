@@ -11,22 +11,6 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
-    bool isMacStandaloneAppExecutable()
-    {
-       #if JUCE_MAC
-        auto current = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
-        while (current != juce::File())
-        {
-            const auto ext = current.getFileExtension().toLowerCase();
-            if (ext == ".app") return true;
-            if (ext == ".vst3" || ext == ".component" || ext == ".au") return false;
-            current = current.getParentDirectory();
-        }
-       #endif
-
-        return false;
-    }
-
     const char* getMimeForExtension (const juce::String& extension)
     {
         static const std::unordered_map<juce::String, const char*> mimeMap = {
@@ -64,24 +48,6 @@ namespace
 
         stream.read (result.data(), static_cast<int> (result.size()));
         return result;
-    }
-
-    juce::Rectangle<int> getDisplayAreaForBounds (juce::Rectangle<int> bounds)
-    {
-        auto& displays = juce::Desktop::getInstance().getDisplays();
-        if (auto* display = displays.getDisplayForRect (bounds))
-            return display->userArea;
-        if (auto* primary = displays.getPrimaryDisplay())
-            return primary->userArea;
-        return { 0, 0, 1920, 1080 };
-    }
-
-    juce::Rectangle<int> clampBoundsToDisplay (juce::Rectangle<int> bounds)
-    {
-        const auto displayArea = getDisplayAreaForBounds (bounds);
-        bounds.setWidth (juce::jmin (bounds.getWidth(), displayArea.getWidth()));
-        bounds.setHeight (juce::jmin (bounds.getHeight(), displayArea.getHeight()));
-        return bounds.constrainedWithin (displayArea);
     }
 
     juce::String extractToneSharingDeepLinkQuery (juce::String commandLine)
@@ -176,7 +142,7 @@ namespace
 PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     : AudioProcessorEditor (&p),
       processorRef (p),
-    resourceRoot ([]{
+      resourceRoot ([]{
         // --- Resource root resolution logging ---
         const auto exeFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
         const auto exeDir  = std::filesystem::path (exeFile.getParentDirectory().getFullPathName().toStdString());
@@ -326,19 +292,6 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
         webView.goToURL (startUrl);
     }
 
-    setResizable (true, true);
-
-    const auto initialDisplayArea = getDisplayAreaForBounds ({ 0, 0, 1200, 900 });
-    const auto maxWidth = juce::jmax (640, initialDisplayArea.getWidth());
-    const auto maxHeight = juce::jmax (480, initialDisplayArea.getHeight());
-    setResizeLimits (juce::jmin (1024, maxWidth), juce::jmin (768, maxHeight), maxWidth, maxHeight);
-
-    const auto initialSize = loadStandaloneWindowSize();
-    setSize (initialSize.getWidth(), initialSize.getHeight());
-    constrainStandaloneWindowToDisplay();
-    mLastWindowBounds = getBounds();
-    saveStandaloneWindowSize();
-
     // Start periodic idle timer (~60 fps) to match iPlug2's OnIdle() cadence.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.
     startTimerHz (60);
@@ -346,87 +299,8 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 
 PluginEditor::~PluginEditor()
 {
-    saveStandaloneWindowSize();
     stopTimer();
     processorRef.setWebMessageCallback (nullptr);
-}
-
-juce::File PluginEditor::getStandaloneWindowStateFile() const
-{
-    if (! isMacStandaloneAppExecutable())
-        return {};
-
-    const auto userDataPath = processorRef.GetUserDataPath() / "data" / "v1" / "settings" / "ui" / "window-state.json";
-    return juce::File (userDataPath.string());
-}
-
-juce::Rectangle<int> PluginEditor::loadStandaloneWindowSize() const
-{
-    constexpr int kDefaultWidth = 1200;
-    constexpr int kDefaultHeight = 900;
-    constexpr int kMinWidth = 1024;
-    constexpr int kMinHeight = 768;
-    constexpr int kMaxWidth = 4096;
-    constexpr int kMaxHeight = 3072;
-
-    auto width = kDefaultWidth;
-    auto height = kDefaultHeight;
-
-    const auto stateFile = getStandaloneWindowStateFile();
-    if (stateFile.existsAsFile())
-    {
-        const auto parsed = juce::JSON::parse (stateFile.loadFileAsString());
-        if (auto* obj = parsed.getDynamicObject(); obj != nullptr)
-        {
-            const auto widthId = juce::Identifier { "width" };
-            const auto heightId = juce::Identifier { "height" };
-
-            if (obj->hasProperty (widthId))
-                width = static_cast<int> (obj->getProperty (widthId));
-
-            if (obj->hasProperty (heightId))
-                height = static_cast<int> (obj->getProperty (heightId));
-        }
-    }
-
-    width = juce::jlimit (kMinWidth, kMaxWidth, width);
-    height = juce::jlimit (kMinHeight, kMaxHeight, height);
-
-    const auto displayBounds = getDisplayAreaForBounds ({ 0, 0, width, height });
-    width = juce::jmin (width, displayBounds.getWidth());
-    height = juce::jmin (height, displayBounds.getHeight());
-
-    return { 0, 0, width, height };
-}
-
-void PluginEditor::constrainStandaloneWindowToDisplay()
-{
-    if (mApplyingBoundsConstraint)
-        return;
-
-    const auto current = getBounds();
-    const auto clamped = clampBoundsToDisplay (current);
-    if (current == clamped)
-        return;
-
-    mApplyingBoundsConstraint = true;
-    setBounds (clamped);
-    mApplyingBoundsConstraint = false;
-}
-
-void PluginEditor::saveStandaloneWindowSize() const
-{
-    const auto stateFile = getStandaloneWindowStateFile();
-    if (stateFile == juce::File{})
-        return;
-
-    stateFile.getParentDirectory().createDirectory();
-
-    juce::DynamicObject::Ptr state (new juce::DynamicObject());
-    state->setProperty ("width", mLastWindowBounds.getWidth());
-    state->setProperty ("height", mLastWindowBounds.getHeight());
-    const auto payload = juce::JSON::toString (juce::var (state));
-    stateFile.replaceWithText (payload);
 }
 
 void PluginEditor::timerCallback()
@@ -492,19 +366,5 @@ void PluginEditor::paint (juce::Graphics& g)
 
 void PluginEditor::resized()
 {
-    constrainStandaloneWindowToDisplay();
-
-    const auto constrained = getBounds();
-    const auto displayArea = getDisplayAreaForBounds (constrained);
-    const auto maxWidth = juce::jmax (640, displayArea.getWidth());
-    const auto maxHeight = juce::jmax (480, displayArea.getHeight());
-    setResizeLimits (juce::jmin (1024, maxWidth), juce::jmin (768, maxHeight), maxWidth, maxHeight);
-
     webView.setBounds (getLocalBounds());
-    const auto newBounds = constrained;
-    if (newBounds != mLastWindowBounds)
-    {
-        mLastWindowBounds = newBounds;
-        saveStandaloneWindowSize();
-    }
 }

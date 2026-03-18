@@ -259,6 +259,7 @@ include(SharedCodeDefaults)
 # and utility code are now provided by the SoundshedGuitarCore library.
 # Only the JUCE adapter and editor sources are compiled here.
 set(SourceFiles
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/Main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessorAdapter.h"
@@ -275,6 +276,9 @@ include(XcodePrettify)
 # This is where you can set preprocessor definitions for JUCE and your plugin
 target_compile_definitions(SharedCode
     INTERFACE
+
+    # Use custom standalone app entry point (Main.cpp)
+    JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1
 
     # JUCE_WEB_BROWSER and JUCE_USE_CURL off by default
     JUCE_WEB_BROWSER=1  # If you set this to 1, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call

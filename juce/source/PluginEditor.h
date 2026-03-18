@@ -26,19 +26,12 @@ public:
 
 private:
     void timerCallback() override;
-    [[nodiscard]] juce::File getStandaloneWindowStateFile() const;
-    [[nodiscard]] juce::Rectangle<int> loadStandaloneWindowSize() const;
-    void constrainStandaloneWindowToDisplay();
-    void saveStandaloneWindowSize() const;
+    std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
+    juce::String getResourceRootUrl() const;
 
     PluginProcessorAdapter& processorRef;
 
     juce::File resourceRoot;
-    juce::Rectangle<int> mLastWindowBounds;
-    bool mApplyingBoundsConstraint = false;
-
-    std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
-    juce::String getResourceRootUrl() const;
 
     SinglePageBrowser webView;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
