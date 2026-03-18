@@ -38,10 +38,10 @@ body.theme-classic {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   width: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* Main Content Area */
