@@ -95,3 +95,5 @@ juce/builds-arm64/
 juce/builds-x64/
 
 juce/builds-arm64ec/
+
+macos-dist/
