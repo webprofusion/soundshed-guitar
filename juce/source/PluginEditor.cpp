@@ -11,6 +11,15 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
+    juce::WebBrowserComponent::Options::Backend getPreferredBrowserBackend()
+    {
+       #if JUCE_WINDOWS
+        return juce::WebBrowserComponent::Options::Backend::webview2;
+       #else
+        return juce::WebBrowserComponent::Options::Backend::defaultBackend;
+       #endif
+    }
+
     const char* getMimeForExtension (const juce::String& extension)
     {
         static const std::unordered_map<juce::String, const char*> mimeMap = {
@@ -172,7 +181,7 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
       webView ([this]
       {
           auto options = juce::WebBrowserComponent::Options{}
-                             .withBackend (juce::WebBrowserComponent::Options::Backend::webview2)
+                             .withBackend (getPreferredBrowserBackend())
                              .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2{}
                                                           .withUserDataFolder (
                                                               juce::File::getSpecialLocation (juce::File::tempDirectory)
@@ -247,7 +256,7 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     // read-only for standard users, causing the check to falsely return false.
     const auto webView2Supported = juce::WebBrowserComponent::areOptionsSupported (
         juce::WebBrowserComponent::Options{}
-            .withBackend (juce::WebBrowserComponent::Options::Backend::webview2)
+            .withBackend (getPreferredBrowserBackend())
             .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2{}
                 .withUserDataFolder (
                     juce::File::getSpecialLocation (juce::File::tempDirectory)
