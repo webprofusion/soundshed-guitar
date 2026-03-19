@@ -353,6 +353,9 @@ private:
     void SaveAppSettings() const;
     void LoadAppSettings();
     void LoadLastSessionState();
+    [[nodiscard]] std::optional<Preset> LoadPresetById(const std::string& presetId) const;
+    [[nodiscard]] std::optional<std::string> FindPresetIdByTitle(const std::string& presetTitle) const;
+    bool TryLoadConfiguredDefaultPreset();
     void LoadResourceLibraries();
     void LoadFactoryPresetArchives();
     void LoadBlendLibrary();

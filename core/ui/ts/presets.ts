@@ -48,7 +48,6 @@ const setlistPanel = document.getElementById("setlist-panel");
 const PRESET_FOLDER_ALL_ID = "__all__";
 const PRESET_FOLDER_FAVORITES_ID = "__favorites__";
 const PRESET_FOLDER_RECENTS_ID = "__recents__";
-const PRESET_FOLDER_IMPORTED_NAME = "Imported";
 const PRESET_REQUEST_TIMEOUT_MS = 5000;
 const PRESET_RECENTS_SETTING = "presets.recents";
 const MAX_RECENT_PRESETS = 4;
@@ -946,25 +945,15 @@ function populatePresetFolderSelect(select: HTMLSelectElement | null, selectedId
 
 function ensurePresetFolders(persistChanges: boolean = true): void {
   const stored = loadPresetFoldersFromState();
-  let didModify = false;
-  const importedFolder = findFolderByName(stored, PRESET_FOLDER_IMPORTED_NAME);
-  if (!importedFolder) {
-    stored.push({
-      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
-      name: PRESET_FOLDER_IMPORTED_NAME,
-      children: [],
-      presetIds: [],
-    });
-    didModify = true;
-  }
   uiState.presetFolders = stored;
+  const requestedActive = uiState.activePresetFolderId;
 
-  const resolvedActive = uiState.activePresetFolderId && !isVirtualPresetFolderId(uiState.activePresetFolderId)
-    ? findFolderById(stored, uiState.activePresetFolderId)?.id
-    : uiState.activePresetFolderId;
+  const resolvedActive = requestedActive && !isVirtualPresetFolderId(requestedActive)
+    ? findFolderById(stored, requestedActive)?.id
+    : requestedActive;
   uiState.activePresetFolderId = resolvedActive || PRESET_FOLDER_ALL_ID;
 
-  if (didModify && persistChanges) {
+  if (persistChanges && (requestedActive ?? PRESET_FOLDER_ALL_ID) !== uiState.activePresetFolderId) {
     savePresetFoldersToBackend(uiState.presetFolders ?? [], uiState.activePresetFolderId);
   }
 }
@@ -1373,30 +1362,6 @@ function createFolder(name: string, parentId?: string): boolean {
   return true;
 }
 
-function addPresetsToImportedFolder(presetIds: string[]): void {
-  const folders = uiState.presetFolders ?? [];
-  let imported = findFolderByName(folders, PRESET_FOLDER_IMPORTED_NAME);
-  if (!imported) {
-    imported = {
-      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
-      name: PRESET_FOLDER_IMPORTED_NAME,
-      children: [],
-      presetIds: [],
-    };
-    folders.push(imported);
-  }
-  presetIds.forEach((presetId) => {
-    if (!imported?.presetIds.includes(presetId)) {
-      imported?.presetIds.push(presetId);
-    }
-  });
-  persistPresetFolders();
-}
-
-function addPresetToImportedFolder(presetId: string): void {
-  addPresetsToImportedFolder([presetId]);
-}
-
 function findFolderByNameInList(folders: PresetFolder[], name: string): PresetFolder | undefined {
   const normalized = normalizeFolderName(name);
   return folders.find((folder) => normalizeFolderName(folder.name) === normalized);
@@ -1408,17 +1373,6 @@ function applyImportedPresetFolders(
   importedPresetIds: string[],
 ): void {
   const folders = uiState.presetFolders ?? [];
-  let importedRoot = findFolderByName(folders, PRESET_FOLDER_IMPORTED_NAME);
-  if (!importedRoot) {
-    importedRoot = {
-      id: generateResourceId(PRESET_FOLDER_IMPORTED_NAME),
-      name: PRESET_FOLDER_IMPORTED_NAME,
-      children: [],
-      presetIds: [],
-    };
-    folders.push(importedRoot);
-  }
-
   const assignedPresetIds = new Set<string>();
   const ensureChildFolder = (siblings: PresetFolder[], name: string): PresetFolder => {
     const existing = findFolderByNameInList(siblings, name);
@@ -1455,18 +1409,11 @@ function applyImportedPresetFolders(
     });
   };
 
-  importedRoot.children = importedRoot.children ?? [];
-  applyFolderNodes(importedRoot.children, archiveFolders);
+  applyFolderNodes(folders, archiveFolders);
 
-  importedPresetIds
-    .filter((presetId) => !assignedPresetIds.has(presetId))
-    .forEach((presetId) => {
-      if (!importedRoot?.presetIds.includes(presetId)) {
-        importedRoot?.presetIds.push(presetId);
-      }
-    });
-
-  persistPresetFolders();
+  if (assignedPresetIds.size > 0 || importedPresetIds.length > 0) {
+    persistPresetFolders();
+  }
 }
 
 export function bindLoadButtons(): void {
@@ -3513,8 +3460,6 @@ export async function importPresetArchive(
   const importedPresetIds = importedPresets.map((preset) => preset.id);
   if (presetFoldersToImport.length > 0) {
     applyImportedPresetFolders(presetFoldersToImport, presetIdMap, importedPresetIds);
-  } else {
-    addPresetsToImportedFolder(importedPresetIds);
   }
   populatePresetDropdown();
   renderPresetUI(clonePreset(latestPreset));
@@ -3713,7 +3658,6 @@ export async function importGeneratedPack(file: File, context: ArchiveImportCont
 
     cachePresetInMemory(appPreset);
     uiState.presets = [appPreset, ...uiState.presets.filter((preset) => preset.id !== appPreset.id)];
-    addPresetToImportedFolder(importedId);
     uiState.presetCache.set(importedId, appPreset);
     importedPresets.push(appPreset);
   }

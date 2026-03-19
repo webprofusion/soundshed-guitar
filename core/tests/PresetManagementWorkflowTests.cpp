@@ -646,38 +646,27 @@ bool TestFactoryPresetArchiveStartupImport()
         input >> presetFoldersJson;
     }
 
-    bool foundFactoryRoot = false;
     bool foundArchiveFolder = false;
     bool foundPresetInFolder = false;
     for (const auto& folder : presetFoldersJson.value("folders", nlohmann::json::array()))
     {
-        if (!folder.is_object() || folder.value("name", "") != "Factory Presets")
+        if (!folder.is_object() || folder.value("name", "") != "High Gain")
             continue;
-        foundFactoryRoot = true;
-        for (const auto& child : folder.value("children", nlohmann::json::array()))
+
+        foundArchiveFolder = true;
+        for (const auto& presetIdValue : folder.value("presetIds", nlohmann::json::array()))
         {
-            if (!child.is_object() || child.value("name", "") != "bundle")
-                continue;
-            foundArchiveFolder = true;
-            for (const auto& nested : child.value("children", nlohmann::json::array()))
+            if (presetIdValue.is_string() && presetIdValue.get<std::string>() == "bundle__factory-archive-preset")
             {
-                if (!nested.is_object() || nested.value("name", "") != "High Gain")
-                    continue;
-                for (const auto& presetIdValue : nested.value("presetIds", nlohmann::json::array()))
-                {
-                    if (presetIdValue.is_string() && presetIdValue.get<std::string>() == "bundle__factory-archive-preset")
-                    {
-                        foundPresetInFolder = true;
-                        break;
-                    }
-                }
+                foundPresetInFolder = true;
+                break;
             }
         }
     }
 
-    if (!foundFactoryRoot || !foundArchiveFolder || !foundPresetInFolder)
+    if (!foundArchiveFolder || !foundPresetInFolder)
     {
-        std::cerr << "Factory preset folder structure was not persisted correctly\n";
+        std::cerr << "Factory preset archive folder was not persisted at the top level\n";
         return false;
     }
 

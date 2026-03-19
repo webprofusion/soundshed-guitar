@@ -392,6 +392,8 @@ endif()
 target_include_directories(SoundshedGuitarCore
     PUBLIC
         "${GUITARFX_CORE_ROOT}/src"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../iplug2/src/config"
 )
 
 # Framework-agnostic — no iPlug2 or JUCE includes here

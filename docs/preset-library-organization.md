@@ -32,8 +32,8 @@ Define a flexible preset organization model with hierarchical folders and ordere
 5. **Name matching**: folder name matching is case-insensitive for merge purposes.
 
 ## Import Behavior
-- **Default imports**: presets without folder paths go into a top-level `Imported` folder.
-- **Folder paths provided**: imported presets with folder paths go into root (top-level) unless specified by a full-export merge.
+- **Default imports**: presets without folder paths remain unassigned and appear in `All Presets` until the user moves them into a folder.
+- **Folder paths provided**: imported presets with folder paths merge into root (top-level) folders using case-insensitive name matching.
 - **Full exports**: merge folders at the same tree level using case-insensitive name matching to avoid duplicates.
 - **ID variance**: if imports vary by `id`, keep both entries.
 

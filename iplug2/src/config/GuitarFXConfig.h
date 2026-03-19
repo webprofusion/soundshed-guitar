@@ -40,6 +40,11 @@
 
 #define SHARED_RESOURCES_SUBPATH GUITARFX_BRAND_PRODUCT_STR
 
+// Leave empty to disable automatic startup preset loading.
+// When set, the title is matched after initialization and factory preset imports
+// if no previous preset selection is stored.
+#define GUITARFX_DEFAULT_STARTUP_PRESET_TITLE "Big Metal Rhythm"
+
 #define PLUG_BG_COLOR 0x202020FF
 
 #define VST3_SUBCATEGORY "Fx"
@@ -51,5 +56,10 @@ inline constexpr const char* kCompany = GUITARFX_BRAND_COMPANY_STR;
 inline constexpr const char* kProduct = GUITARFX_BRAND_PRODUCT_STR;
 inline constexpr const char* kDisplay = GUITARFX_BRAND_DISPLAY_STR;
 inline constexpr const char* kDomain = GUITARFX_BRAND_DOMAIN_STR;
+}
+
+namespace guitarfx::config
+{
+inline constexpr const char* kDefaultStartupPresetTitle = GUITARFX_DEFAULT_STARTUP_PRESET_TITLE;
 }
 #endif

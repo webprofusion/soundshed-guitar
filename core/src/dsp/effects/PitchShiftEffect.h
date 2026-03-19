@@ -12,7 +12,7 @@ namespace guitarfx
 {
   /**
    * Pitchshift effect using Signalsmith Stretch.
-   * Supports stepped semitones or free-form pitch shift (-12 to +12).
+    * Uses a direct semitone control (-12 to +12).
    */
   class PitchShiftEffect : public EffectProcessor
   {
@@ -48,7 +48,7 @@ namespace guitarfx
       // Clamp to allocated buffer size to prevent out-of-bounds writes
       numSamples = std::min(numSamples, mMaxBlockSize);
 
-      if (GetMappedSemitones() == 0.0 && mMix >= 1.0)
+      if (mSemitones == 0.0 && mMix >= 1.0)
       {
         for (int ch = 0; ch < 2; ++ch)
         {
@@ -100,27 +100,12 @@ namespace guitarfx
     {
       if (key == "semitones")
       {
-        mSemitoneControl = std::clamp(value, -1.0, 1.0);
+        mSemitones = std::clamp(value, kHardMinSemitones, kHardMaxSemitones);
         ApplyTranspose();
       }
       else if (key == "mix")
       {
         mMix = std::clamp(value, 0.0, 1.0);
-      }
-      else if (key == "stepMode")
-      {
-        mStepMode = value > 0.5;
-        ApplyTranspose();
-      }
-      else if (key == "minSemitones")
-      {
-        mMinSemitones = std::clamp(value, kHardMinSemitones, mMaxSemitones);
-        ApplyTranspose();
-      }
-      else if (key == "maxSemitones")
-      {
-        mMaxSemitones = std::clamp(value, mMinSemitones, kHardMaxSemitones);
-        ApplyTranspose();
       }
     }
 
@@ -129,15 +114,9 @@ namespace guitarfx
     [[nodiscard]] double GetParam(const std::string &key) const override
     {
       if (key == "semitones")
-        return mSemitoneControl;
+        return mSemitones;
       if (key == "mix")
         return mMix;
-      if (key == "stepMode")
-        return mStepMode ? 1.0 : 0.0;
-      if (key == "minSemitones")
-        return mMinSemitones;
-      if (key == "maxSemitones")
-        return mMaxSemitones;
       return 0.0;
     }
 
@@ -151,26 +130,12 @@ namespace guitarfx
     }
 
   private:
-    double GetMappedSemitones() const
-    {
-      const double rawRange = mMaxSemitones - mMinSemitones;
-      const double range = rawRange < 0.0 ? 0.0 : rawRange;
-      double semitones = mMinSemitones + (mSemitoneControl + 1.0) * 0.5 * range;
-      semitones = std::clamp(semitones, mMinSemitones, mMaxSemitones);
-      if (mStepMode)
-      {
-        semitones = std::round(semitones);
-      }
-      return semitones;
-    }
-
     void ApplyTranspose()
     {
       if (!mConfigured)
         return;
-      const double semitones = GetMappedSemitones();
       const float tonalityLimit = static_cast<float>(kTonalityLimitHz / mSampleRate);
-      mStretch.setTransposeSemitones(static_cast<float>(semitones), tonalityLimit);
+      mStretch.setTransposeSemitones(static_cast<float>(mSemitones), tonalityLimit);
     }
 
     static constexpr double kTonalityLimitHz = 8000.0;
@@ -178,11 +143,8 @@ namespace guitarfx
     static constexpr double kHardMinSemitones = -12.0;
     static constexpr double kHardMaxSemitones = 12.0;
 
-    double mSemitoneControl = 0.0;
+    double mSemitones = 0.0;
     double mMix = 1.0;
-    bool mStepMode = true;
-    double mMinSemitones = kHardMinSemitones;
-    double mMaxSemitones = kHardMaxSemitones;
     bool mConfigured = false;
 
     signalsmith::stretch::SignalsmithStretch<float> mStretch;
@@ -198,14 +160,12 @@ namespace guitarfx
     info.aliases = {"pitch_shift"};
     info.displayName = "Pitch Shift";
     info.category = "pitch";
-    info.description = "Pitch shift with stepped or free-form control";
+    info.description = "Pitch shift with a direct semitone control";
     info.requiresResource = false;
     info.parameters = {
-      {"semitones", "Semitones", 0.0, -1.0, 1.0, "amount", "", false, 0.01},
-      {"minSemitones", "Min Semitones", -12.0, -12.0, 12.0, "st", "", false, 1.0},
-      {"maxSemitones", "Max Semitones", 12.0, -12.0, 12.0, "st", "", false, 1.0},
-      {"mix", "Mix", 1.0, 0.0, 1.0, "amount"},
-      {"stepMode", "Step Mode", 1.0, 0.0, 1.0, "enum", "", false, 1.0, {"Free", "Stepped"}}};
+      {"semitones", "Semitones", 0.0, -12.0, 12.0, "st", "", false, 1.0},
+      {"mix", "Mix", 1.0, 0.0, 1.0, "amount"}
+    };
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<PitchShiftEffect>(); });
   }

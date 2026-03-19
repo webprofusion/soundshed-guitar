@@ -40,10 +40,12 @@
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <cctype>
 #include <string_view>
 #include <utility>
 #include <unordered_set>
 
+#include "GuitarFXConfig.h"
 #include "NAM/get_dsp.h"
 
 namespace
@@ -73,8 +75,6 @@ namespace
     constexpr const char* kFactoryArchiveResourceProvider = "factory-archives";
     constexpr const char* kLocalResourceProvider = "local";
     constexpr const char* kLocalResourceStorageFolder = "local";
-    constexpr const char* kFactoryPresetRootFolderId = "factory-presets";
-    constexpr const char* kFactoryPresetRootFolderName = "Factory Presets";
     constexpr const char* kFactoryArchiveStateFileName = "factory-archive-state.json";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
     constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
@@ -316,38 +316,6 @@ namespace
         return sanitized;
     }
 
-    std::string StripFactoryArchiveSuffix(std::string name)
-    {
-        constexpr std::array<std::string_view, 4> suffixes = {
-            ".soundshed.presets",
-            ".soundshed.preset",
-            ".presets",
-            ".preset",
-        };
-
-        std::string lowerName = name;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
-                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-        for (const auto suffix : suffixes)
-        {
-            if (lowerName.size() >= suffix.size()
-                && lowerName.compare(lowerName.size() - suffix.size(), suffix.size(), suffix.data()) == 0)
-            {
-                name.erase(name.size() - suffix.size());
-                break;
-            }
-        }
-        return name;
-    }
-
-    std::string BuildFactoryArchiveDisplayName(const std::filesystem::path& archivePath)
-    {
-        std::string displayName = StripFactoryArchiveSuffix(archivePath.filename().string());
-        if (displayName.empty())
-            displayName = "Factory Archive";
-        return displayName;
-    }
-
     std::string BuildScopedFactoryArchiveId(const std::string& archiveKey, const std::string& rawId)
     {
         auto sanitizedRaw = guitarfx::util::SanitizePathSegment(rawId, true);
@@ -362,6 +330,24 @@ namespace
         std::transform(extension.begin(), extension.end(), extension.begin(),
                        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
         return extension == ".preset" || extension == ".presets";
+    }
+
+    std::string NormalizePresetTitle(std::string value)
+    {
+        const auto isSpace = [](unsigned char ch) { return std::isspace(ch) != 0; };
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](char ch)
+        {
+            return !isSpace(static_cast<unsigned char>(ch));
+        }));
+        value.erase(std::find_if(value.rbegin(), value.rend(), [&](char ch)
+        {
+            return !isSpace(static_cast<unsigned char>(ch));
+        }).base(), value.end());
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        });
+        return value;
     }
 
     std::filesystem::path ResolvePresetFoldersPath(const guitarfx::FileSystem& fileSystem)
@@ -417,9 +403,10 @@ namespace
         };
     }
 
-    std::string BuildFactoryArchiveFolderId(const std::string& archiveKey)
+    bool IsFactoryArchiveFolderId(const std::string& folderId)
     {
-        return "factory-archive::" + archiveKey;
+        return folderId.rfind("factory-archive::", 0) == 0
+            || folderId.rfind("factory-archive-folder::", 0) == 0;
     }
 
     std::string BuildFactoryArchiveNestedFolderId(const std::string& archiveKey, const std::string& folderPath)
@@ -432,14 +419,10 @@ namespace
         return "factory-archive-folder::" + archiveKey + "::" + sanitized;
     }
 
-    nlohmann::json BuildFactoryArchiveFolderTree(const std::string& archiveKey,
-                                                 const std::string& displayName,
-                                                 const nlohmann::json& archivePresetFolders,
-                                                 const std::unordered_map<std::string, std::string>& presetIdMapping,
-                                                 const std::vector<std::string>& importedPresetIds)
+    nlohmann::json BuildFactoryArchiveFolders(const std::string& archiveKey,
+                                              const nlohmann::json& archivePresetFolders,
+                                              const std::unordered_map<std::string, std::string>& presetIdMapping)
     {
-        std::unordered_set<std::string> assignedPresetIds;
-
         std::function<nlohmann::json(const nlohmann::json&, const std::string&)> buildFolders;
         buildFolders = [&](const nlohmann::json& sourceFolders, const std::string& parentPath) -> nlohmann::json
         {
@@ -471,7 +454,6 @@ namespace
                         if (mappedIt == presetIdMapping.end())
                             continue;
                         folder["presetIds"].push_back(mappedIt->second);
-                        assignedPresetIds.insert(mappedIt->second);
                     }
                 }
 
@@ -482,24 +464,24 @@ namespace
             return result;
         };
 
-        nlohmann::json archiveFolder = MakePresetFolderEntry(BuildFactoryArchiveFolderId(archiveKey), displayName);
-        archiveFolder["children"] = buildFolders(archivePresetFolders, std::string{});
+        return buildFolders(archivePresetFolders, std::string{});
+    }
 
-        for (const auto& presetId : importedPresetIds)
-        {
-            if (!assignedPresetIds.contains(presetId))
-                archiveFolder["presetIds"].push_back(presetId);
-        }
+    bool IsFactoryArchiveTopLevelFolder(const std::string& archiveKey, const nlohmann::json& folder)
+    {
+        if (!folder.is_object())
+            return false;
 
-        return archiveFolder;
+        const std::string folderId = folder.value("id", "");
+        const std::string expectedPrefix = "factory-archive-folder::" + archiveKey + "::";
+        return folderId.rfind(expectedPrefix, 0) == 0;
     }
 
     void UpdateFactoryPresetFolders(const guitarfx::FileSystem& fileSystem,
                                     const std::string& archiveKey,
-                                    const std::string& displayName,
                                     const nlohmann::json& archivePresetFolders,
                                     const std::unordered_map<std::string, std::string>& presetIdMapping,
-                                    const std::vector<std::string>& importedPresetIds)
+                                    const std::vector<std::string>&)
     {
         auto payload = LoadJsonFile(ResolvePresetFoldersPath(fileSystem), nlohmann::json::object());
         if (!payload.is_object())
@@ -510,53 +492,22 @@ namespace
         if (!payload.contains("activeFolderId") || !payload["activeFolderId"].is_string())
             payload["activeFolderId"] = "__all__";
 
-        auto& folders = payload["folders"];
-        nlohmann::json* factoryRoot = nullptr;
-        for (auto& folder : folders)
+        nlohmann::json filteredFolders = nlohmann::json::array();
+        for (const auto& folder : payload["folders"])
         {
-            if (!folder.is_object())
-                continue;
-            if (folder.value("id", "") == kFactoryPresetRootFolderId
-                || folder.value("name", "") == kFactoryPresetRootFolderName)
-            {
-                factoryRoot = &folder;
-                break;
-            }
+            if (!IsFactoryArchiveTopLevelFolder(archiveKey, folder))
+                filteredFolders.push_back(folder);
         }
 
-        if (!factoryRoot)
-        {
-            folders.push_back(MakePresetFolderEntry(kFactoryPresetRootFolderId, kFactoryPresetRootFolderName));
-            factoryRoot = &folders.back();
-        }
-
-        (*factoryRoot)["id"] = kFactoryPresetRootFolderId;
-        (*factoryRoot)["name"] = kFactoryPresetRootFolderName;
-        if (!factoryRoot->contains("children") || !(*factoryRoot)["children"].is_array())
-            (*factoryRoot)["children"] = nlohmann::json::array();
-        if (!factoryRoot->contains("presetIds") || !(*factoryRoot)["presetIds"].is_array())
-            (*factoryRoot)["presetIds"] = nlohmann::json::array();
-
-        auto archiveFolder = BuildFactoryArchiveFolderTree(
+        auto archiveFolders = BuildFactoryArchiveFolders(
             archiveKey,
-            displayName,
             archivePresetFolders,
-            presetIdMapping,
-            importedPresetIds);
+            presetIdMapping);
 
-        auto& children = (*factoryRoot)["children"];
-        bool replaced = false;
-        for (auto& child : children)
-        {
-            if (child.is_object() && child.value("id", "") == archiveFolder.value("id", ""))
-            {
-                child = archiveFolder;
-                replaced = true;
-                break;
-            }
-        }
-        if (!replaced)
-            children.push_back(std::move(archiveFolder));
+        for (const auto& folder : archiveFolders)
+            filteredFolders.push_back(folder);
+
+        payload["folders"] = std::move(filteredFolders);
 
         SaveJsonFile(fileSystem, ResolvePresetFoldersPath(fileSystem), payload);
     }
@@ -6041,10 +5992,7 @@ void PluginController::HandleGetPresetFoldersRequest()
                 continue;
 
             const std::string folderId = folder.value("id", "");
-            const std::string folderName = folder.value("name", "");
-            if (folderId == kFactoryPresetRootFolderId
-                || folderName == kFactoryPresetRootFolderName
-                || folderId.rfind("factory-archive::", 0) == 0)
+            if (IsFactoryArchiveFolderId(folderId))
             {
                 continue;
             }
@@ -6052,8 +6000,7 @@ void PluginController::HandleGetPresetFoldersRequest()
             filtered.push_back(folder);
         }
 
-        if (activeFolderId == kFactoryPresetRootFolderId
-            || activeFolderId.rfind("factory-archive::", 0) == 0)
+        if (IsFactoryArchiveFolderId(activeFolderId))
         {
             activeFolderId = "__all__";
         }
@@ -7214,8 +7161,124 @@ void PluginController::LoadLastSessionState()
         }
     }
 
+    if (lastPresetId.empty())
+        TryLoadConfiguredDefaultPreset();
+
     mPendingStateBroadcast = true;
     std::cout << "[Plugin] Last session state restored" << std::endl;
+}
+
+std::optional<Preset> PluginController::LoadPresetById(const std::string& presetId) const
+{
+    if (presetId.empty())
+        return std::nullopt;
+
+    const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
+    const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end()
+        ? aliasIt->second
+        : presetId;
+
+    if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
+        return std::nullopt;
+
+    std::optional<Preset> presetOpt;
+    if (!mUserPresetsPath.empty())
+    {
+        const auto userPath = mUserPresetsPath / (resolvedPresetId + ".json");
+        presetOpt = PresetStorage::LoadFromFile(userPath);
+    }
+    if (!presetOpt)
+    {
+        const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
+        presetOpt = PresetStorage::LoadFromFile(factoryPath);
+    }
+    if (!presetOpt)
+    {
+        const auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
+        if (archiveIt != mFactoryArchivePresets.end())
+            presetOpt = archiveIt->second;
+    }
+
+    return presetOpt;
+}
+
+std::optional<std::string> PluginController::FindPresetIdByTitle(const std::string& presetTitle) const
+{
+    const std::string normalizedTitle = NormalizePresetTitle(presetTitle);
+    if (normalizedTitle.empty())
+        return std::nullopt;
+    const bool factoryArchiveLoadingEnabled = IsFactoryPresetArchiveLoadingEnabled();
+
+    auto matchesTitle = [&](const Preset& preset) -> bool
+    {
+        return NormalizePresetTitle(preset.name) == normalizedTitle;
+    };
+
+    if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(mUserPresetsPath))
+        {
+            if (entry.path().extension() != ".json")
+                continue;
+            const auto presetOpt = PresetStorage::LoadFromFile(entry.path());
+            if (presetOpt && !factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(presetOpt->id))
+                continue;
+            if (presetOpt && matchesTitle(*presetOpt))
+                return presetOpt->id;
+        }
+    }
+
+    const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
+    if (std::filesystem::exists(factoryPath))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(factoryPath))
+        {
+            if (entry.path().extension() != ".json")
+                continue;
+            const auto presetOpt = PresetStorage::LoadFromFile(entry.path());
+            if (presetOpt && matchesTitle(*presetOpt))
+                return presetOpt->id;
+        }
+    }
+
+    if (factoryArchiveLoadingEnabled)
+    {
+        for (const auto& [presetId, preset] : mFactoryArchivePresets)
+        {
+            if (matchesTitle(preset))
+                return presetId;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool PluginController::TryLoadConfiguredDefaultPreset()
+{
+    const std::string configuredTitle = guitarfx::config::kDefaultStartupPresetTitle;
+    if (NormalizePresetTitle(configuredTitle).empty())
+        return false;
+
+    const auto presetId = FindPresetIdByTitle(configuredTitle);
+    if (!presetId)
+    {
+        std::cerr << "[Plugin] Configured default preset title not found: " << configuredTitle << std::endl;
+        return false;
+    }
+
+    const auto presetOpt = LoadPresetById(*presetId);
+    if (!presetOpt)
+    {
+        std::cerr << "[Plugin] Configured default preset could not be loaded: " << configuredTitle << std::endl;
+        return false;
+    }
+
+    mActivePresetId = *presetId;
+    mActivePreset = *presetOpt;
+    mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
+    ApplyPreset(*presetOpt);
+    std::cout << "[Plugin] Loaded configured default preset: " << presetOpt->name << std::endl;
+    return true;
 }
 
 void PluginController::LoadResourceLibraries()
@@ -7334,7 +7397,6 @@ void PluginController::LoadFactoryPresetArchives()
 
         auto parsed = std::move(*parsedOpt);
         const std::string archiveKey = BuildFactoryArchiveKey(entry.path());
-        const std::string archiveDisplayName = BuildFactoryArchiveDisplayName(entry.path());
         const std::string archiveHash = mHasher.HashFile(entry.path());
         auto archiveState = factoryArchiveState["archives"].contains(archiveKey)
             && factoryArchiveState["archives"][archiveKey].is_object()
@@ -7500,11 +7562,10 @@ void PluginController::LoadFactoryPresetArchives()
         }
 
         UpdateFactoryPresetFolders(mFileSystem,
-                                   archiveKey,
-                                   archiveDisplayName,
-                                   parsed.presetFolders,
-                                   presetIdMapping,
-                                   importedPresetIds);
+                       archiveKey,
+                       parsed.presetFolders,
+                       presetIdMapping,
+                       importedPresetIds);
 
         archiveState["hash"] = archiveHash;
         archiveState["fileName"] = entry.path().filename().string();
