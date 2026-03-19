@@ -77,6 +77,32 @@ find_first_match() {
     find "$search_dir" -mindepth 1 -maxdepth 1 -name "$pattern" | sort | head -n 1
 }
 
+prune_ui_payload() {
+    local ui_root="$1"
+
+    if [[ ! -d "$ui_root" ]]; then
+        return
+    fi
+
+    rm -rf \
+        "$ui_root/node_modules" \
+        "$ui_root/tests" \
+        "$ui_root/Testing" \
+        "$ui_root/ts"
+
+    rm -f \
+        "$ui_root/package.json" \
+        "$ui_root/package-lock.json" \
+        "$ui_root/tsconfig.json"
+}
+
+prune_staged_ui_payloads() {
+    while IFS= read -r ui_root; do
+        prune_ui_payload "$ui_root"
+        echo "  ✓ Pruned non-runtime UI files → ${ui_root#"$SCRIPT_DIR/"}"
+    done < <(find "$DIST_DIR" -type d -path "*/resources/ui" | sort)
+}
+
 check_linux_dependencies() {
     if ! command -v pkg-config >/dev/null 2>&1; then
         echo "" >&2
@@ -154,7 +180,9 @@ if [[ "$SKIP_CONFIGURE" == false ]]; then
     echo ""
     echo "▶ Configuring CMake…"
     mapfile -t generator_args < <(choose_generator_args)
-    cmake -S "${SCRIPT_DIR}/juce" -B "$BUILD_DIR" "${generator_args[@]}" -DCMAKE_BUILD_TYPE=Release
+    cmake -Wno-dev -S "${SCRIPT_DIR}/juce" -B "$BUILD_DIR" "${generator_args[@]}" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SUPPRESS_DEVELOPER_WARNINGS=ON
     echo "  ✓ Configure complete"
 fi
 
@@ -201,6 +229,8 @@ echo "  ✓ Standalone payload → ${APP_DST#"$SCRIPT_DIR/"}"
 
 copy_artifact "$VST3_SRC" "$VST3_DST"
 copy_artifact "$CLAP_SRC" "$CLAP_DST"
+
+prune_staged_ui_payloads
 
 echo ""
 echo "═══════════════════════════════════════════════════"

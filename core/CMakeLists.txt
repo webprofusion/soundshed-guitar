@@ -138,9 +138,19 @@ if(NOT TARGET guitarfx_miniz)
     FetchContent_Declare(guitarfx_miniz_src
         GIT_REPOSITORY https://github.com/richgel999/miniz.git
         GIT_TAG 3.0.2)
+
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
     FetchContent_GetProperties(guitarfx_miniz_src)
     if(NOT guitarfx_miniz_src_POPULATED)
         FetchContent_Populate(guitarfx_miniz_src)
+    endif()
+
+    if(POLICY CMP0169)
+        cmake_policy(POP)
     endif()
 
     file(WRITE "${guitarfx_miniz_src_SOURCE_DIR}/miniz_export.h" "#ifndef MINIZ_EXPORT\n#define MINIZ_EXPORT\n#endif\n")

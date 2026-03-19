@@ -172,6 +172,7 @@ void PluginProcessorAdapter::BrowseFileAsync(
         case guitarfx::BrowseFileType::ImageFile:   filters = "*.png;*.jpg;*.jpeg;*.svg"; break;
         case guitarfx::BrowseFileType::AudioFile:   filters = "*.wav;*.mp3;*.flac;*.ogg"; break;
         case guitarfx::BrowseFileType::ArchiveFile: filters = "*.soundshed.preset;*.soundshed.presets;*.zip"; break;
+        case guitarfx::BrowseFileType::Any:         filters = "*.*"; break;
         default:                                    filters = "*.*"; break;
     }
 
@@ -223,6 +224,11 @@ void PluginProcessorAdapter::SaveFileAsync(
             else if (hasSuffix(".zip"))               filters = "*.zip";
             else                                        filters = "*.soundshed.preset";
             break;
+        case guitarfx::BrowseFileType::NAMModel:
+        case guitarfx::BrowseFileType::IRFile:
+        case guitarfx::BrowseFileType::ImageFile:
+        case guitarfx::BrowseFileType::AudioFile:
+        case guitarfx::BrowseFileType::Any:
         default:                                    filters = "*.*"; break;
     }
 
@@ -301,9 +307,9 @@ void PluginProcessorAdapter::NotifyStateChanged()
     updateHostDisplay(juce::AudioProcessor::ChangeDetails().withNonParameterStateChanged(true));
 }
 
-void PluginProcessorAdapter::NotifyLatencyChanged(int latencySamples)
+void PluginProcessorAdapter::NotifyLatencyChanged(int newLatencySamples)
 {
-    setLatencySamples(latencySamples);
+    setLatencySamples(newLatencySamples);
     updateHostDisplay(juce::AudioProcessor::ChangeDetails().withLatencyChanged(true));
 }
 

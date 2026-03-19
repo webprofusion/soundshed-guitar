@@ -204,6 +204,9 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 add_subdirectory(JUCE)
 
 # Add CLAP format
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
 add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 
 # Add any other modules you want modules here, before the juce_add_plugin call

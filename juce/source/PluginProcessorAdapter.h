@@ -28,6 +28,8 @@ public:
     ~PluginProcessorAdapter() override;
 
     // ── juce::AudioProcessor overrides ─────────────────────────────
+    using juce::AudioProcessor::processBlock;
+
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;

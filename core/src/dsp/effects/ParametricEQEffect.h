@@ -360,16 +360,16 @@ namespace guitarfx
     info.description = "4-band parametric equalizer";
     info.requiresResource = false;
     info.parameters = {
-        {"lowGain",    "Low Gain",      0.0, -12.0,  12.0,   "dB",     "Low"},
-        {"lowFreq",    "Low Freq",    100.0,  20.0,  500.0,   "Hz",     "Low"},
-        {"lowMidGain", "Low-Mid Gain",  0.0, -12.0,  12.0,   "dB",     "Low Mid"},
-        {"lowMidFreq", "Low-Mid Freq",400.0, 100.0, 2000.0,  "Hz",     "Low Mid"},
-        {"lowMidQ",    "Low-Mid Q",     1.0,   0.1,   10.0,   "amount", "Low Mid"},
-        {"highMidGain","High-Mid Gain", 0.0, -12.0,  12.0,   "dB",     "High Mid"},
-        {"highMidFreq","High-Mid Freq",2000.0,500.0,8000.0,  "Hz",     "High Mid"},
-        {"highMidQ",   "High-Mid Q",    1.0,   0.1,   10.0,   "amount", "High Mid"},
-        {"highGain",   "High Gain",     0.0, -12.0,  12.0,   "dB",     "High"},
-        {"highFreq",   "High Freq",  8000.0,2000.0,16000.0,  "Hz",     "High"}};
+      {"lowGain",    "Low Gain",      0.0, -12.0,  12.0,   "dB",     "Low",      false, 0.0, {}},
+      {"lowFreq",    "Low Freq",    100.0,  20.0,  500.0,   "Hz",     "Low",      false, 0.0, {}},
+      {"lowMidGain", "Low-Mid Gain",  0.0, -12.0,  12.0,   "dB",     "Low Mid",  false, 0.0, {}},
+      {"lowMidFreq", "Low-Mid Freq",400.0, 100.0, 2000.0,  "Hz",     "Low Mid",  false, 0.0, {}},
+      {"lowMidQ",    "Low-Mid Q",     1.0,   0.1,   10.0,   "amount", "Low Mid",  false, 0.0, {}},
+      {"highMidGain","High-Mid Gain", 0.0, -12.0,  12.0,   "dB",     "High Mid", false, 0.0, {}},
+      {"highMidFreq","High-Mid Freq",2000.0,500.0,8000.0,  "Hz",     "High Mid", false, 0.0, {}},
+      {"highMidQ",   "High-Mid Q",    1.0,   0.1,   10.0,   "amount", "High Mid", false, 0.0, {}},
+      {"highGain",   "High Gain",     0.0, -12.0,  12.0,   "dB",     "High",     false, 0.0, {}},
+      {"highFreq",   "High Freq",  8000.0,2000.0,16000.0,  "Hz",     "High",     false, 0.0, {}}};
 
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<ParametricEQEffect>(); });

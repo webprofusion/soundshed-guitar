@@ -1,6 +1,9 @@
 #pragma once
 
 #include "presets/PresetTypes.h"
+
+#include <cmath>
+
 #include <nlohmann/json.hpp>
 
 namespace guitarfx
@@ -164,6 +167,8 @@ namespace guitarfx
 
   inline nlohmann::json SerializeEdge(const GraphEdge& edge)
   {
+    constexpr double kUnityGainEpsilon = 1.0e-12;
+
     nlohmann::json json;
     json["from"] = edge.from;
     json["to"] = edge.to;
@@ -171,7 +176,7 @@ namespace guitarfx
       json["fromPort"] = edge.fromPort;
     if (edge.toPort != 0)
       json["toPort"] = edge.toPort;
-    if (edge.gain != 1.0)
+    if (std::abs(edge.gain - 1.0) > kUnityGainEpsilon)
       json["gain"] = edge.gain;
     return json;
   }
