@@ -42,7 +42,12 @@ async function performUpdateCheck(instanceId: string): Promise<void> {
     const os = uiState.environment?.os ?? "Unknown";
     const cpu = uiState.environment?.cpu ?? "x64";
     const isStandalone = uiState.environment?.standalone ?? false;
-    const currentVersion = uiState.environment?.version ?? "1.0.1";
+    const currentVersion = uiState.environment?.version?.trim();
+
+    if (!currentVersion) {
+      console.warn("[UpdateCheck] Skipping update check because the current version is unavailable");
+      return;
+    }
 
     const apiBase = getApiBaseUrl();
     const response = await fetch(`${apiBase}/app/updatecheck`, {
@@ -66,8 +71,12 @@ async function performUpdateCheck(instanceId: string): Promise<void> {
     const result = await response.json();
     
     if (result.ok && result.data) {
-      if (result.data.is_update_available) {
+      if (isVersionNewer(result.data.latest_version, currentVersion)) {
         showUpdateAvailable(result.data);
+      } else if (result.data.is_update_available) {
+        console.info(
+          `[UpdateCheck] Ignoring update notification because ${result.data.latest_version} is not newer than ${currentVersion}`,
+        );
       }
     }
   } catch (error) {
@@ -81,6 +90,48 @@ interface UpdateCheckResult {
   latest_version: string;
   download_url: string;
   release_notes: string;
+}
+
+function toNumericSemver(version: string | null | undefined): [number, number, number] | null {
+  if (typeof version !== "string") {
+    return null;
+  }
+
+  const match = version.trim().match(/^[^\d]*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const major = Number.parseInt(match[1] ?? "0", 10);
+  const minor = Number.parseInt(match[2] ?? "0", 10);
+  const patch = Number.parseInt(match[3] ?? "0", 10);
+
+  if (![major, minor, patch].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    return null;
+  }
+
+  return [major, minor, patch];
+}
+
+function isVersionNewer(candidateVersion: string, currentVersion: string): boolean {
+  const candidate = toNumericSemver(candidateVersion);
+  const current = toNumericSemver(currentVersion);
+
+  if (candidate === null || current === null) {
+    console.warn("[UpdateCheck] Unable to compare app versions", {
+      candidateVersion,
+      currentVersion,
+    });
+    return false;
+  }
+
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (candidate[index] !== current[index]) {
+      return candidate[index] > current[index];
+    }
+  }
+
+  return false;
 }
 
 function showUpdateAvailable(data: UpdateCheckResult): void {
