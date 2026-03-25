@@ -11,6 +11,13 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
+    bool isYouTubeUrl (const juce::String& url)
+    {
+        return url.containsIgnoreCase ("youtube-nocookie.com")
+            || url.containsIgnoreCase ("youtube.com")
+            || url.containsIgnoreCase ("youtu.be");
+    }
+
     juce::WebBrowserComponent::Options::Backend getPreferredBrowserBackend()
     {
        #if JUCE_WINDOWS
@@ -116,12 +123,10 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     if (newURL.startsWith ("data:"))
         return true;
 
-    // On macOS, WKWebView escalates iframe popup/new-window requests (e.g. from the
-    // YouTube embed in the Jam view) to main-frame navigations via
-    // createWebViewWithConfiguration, triggering pageAboutToLoad with a youtube.com URL.
-    // Silently cancel these so the embed keeps working without opening an external window.
-    if (newURL.contains ("youtube-nocookie.com") || newURL.contains ("youtube.com"))
-        return false;
+    // The Jam view uses a YouTube iframe. Allow those navigations to stay inside the
+    // embedded webview so the player can render and continue handling playback inline.
+    if (isYouTubeUrl (newURL))
+        return true;
 
     if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
     {
@@ -130,6 +135,17 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     }
 
     return false;
+}
+
+void SinglePageBrowser::newWindowAttemptingToLoad (const juce::String& newURL)
+{
+    // YouTube embeds frequently request popup windows for watch pages, sign-in, and
+    // player chrome. Ignore those requests so the iframe remains in-place on macOS.
+    if (isYouTubeUrl (newURL))
+        return;
+
+    if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
+        juce::URL (newURL).launchInDefaultBrowser();
 }
 
 namespace

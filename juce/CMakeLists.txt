@@ -93,6 +93,9 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core
 # Couple tweaks that IMO should be JUCE defaults
 include(JUCEDefaults)
 
+option(GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK "Enable inline media playback on Apple WKWebView where supported" ON)
+option(GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION "Disable Apple WKWebView user-action requirement for media playback where supported" ON)
+
 # WebView2 static SDK package location (NuGet packages root)
 if(WIN32)
     set(GUITARFX_WEBVIEW2_VERSION "1.0.3856.49" CACHE STRING "WebView2 NuGet package version")
@@ -295,6 +298,11 @@ target_compile_definitions(SharedCode
     JUCE_USE_WIN_WEBVIEW2=1
     JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=${GUITARFX_WEBVIEW2_STATIC_LINKING}
     JUCE_WEBVIEW2_DEVTOOLS_ENABLED=1
+    # JUCE disables WebView2 DevTools when JUCE_DEBUG=0; restore prior behavior in release-family Windows builds.
+    JUCE_FORCE_DEBUG=1
+    GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK=${GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK}
+    GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION=${GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION}
+
 
     # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3
     # JUCE_DISPLAY_SPLASH_SCREEN=0
