@@ -4,6 +4,7 @@ import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
 import type { AppSettingValue, JamPlayerState, JamState, JamVideoSummary } from "./types.js";
 import { escapeHtml } from "./utils.js";
+import { getApiBaseUrl } from "./toneSharingPanel.js";
 
 const API_KEY_SETTING = "jam.youtubeApiKey";
 const FAVORITES_SETTING = "jam.favorites";
@@ -421,7 +422,8 @@ export function renderFloatingPlayer(): void {
   const dockRect = jam.player.minimized ? getDockHostRect() : null;
   const width = jam.player.minimized ? Math.round(dockRect?.width ?? PLAYER_MINIMIZED_WIDTH) : jam.player.width;
   const video = jam.player.currentVideo;
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.videoId)}?autoplay=1&rel=0&playsinline=1`;
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.videoId)}?autoplay=1&rel=0&playsinline=1`;
+  const src = embedUrl; //`${getApiBaseUrl()}/corsproxy?url=${encodeURIComponent(embedUrl)}`;
 
   let panel = root.querySelector<HTMLElement>(".jam-floating-player");
   const currentVideoId = panel?.dataset.videoId ?? "";
