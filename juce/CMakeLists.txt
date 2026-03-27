@@ -259,6 +259,8 @@ juce_add_plugin("${PROJECT_NAME}"
     VST3_AUTO_MANIFEST ${GUITARFX_VST3_AUTO_MANIFEST}
     NEEDS_WEB_BROWSER TRUE
     NEEDS_WEBVIEW2 TRUE
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Soundshed Guitar needs microphone access to record and process live audio input."
     XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"
 
     # The name of your final executable
