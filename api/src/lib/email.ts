@@ -41,8 +41,7 @@ export async function sendMagicCodeEmail(
     subject,
     html,
     text,
-    devLogLabel: "auth",
-    devLogDetails: `email=${recipientEmail} code=${code} expiresInMinutes=${expiresInMinutes}`,
+    devLogLabel: "auth"
   });
 }
 
@@ -62,9 +61,7 @@ async function sendEmail(env: Env, options: SendEmailOptions): Promise<void> {
     if (isProduction) {
       throw new Error("SENDGRID_API_KEY is required in production");
     }
-    console.warn(
-      `[${options.devLogLabel}] SENDGRID_API_KEY is not set. Dev fallback active.${options.devLogDetails ? ` ${options.devLogDetails}` : ""}`
-    );
+    console.warn(`[${options.devLogLabel}] SENDGRID_API_KEY is not set. Dev fallback active.`);
     return;
   }
 
