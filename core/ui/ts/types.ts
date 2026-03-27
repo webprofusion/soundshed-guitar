@@ -524,6 +524,9 @@ declare global {
     IPlugSendMsg?: (payload: unknown) => void;
     IPlugReceiveData?: (message: string) => void;
     AUDIOFX_REMOTE_BASE_URL?: string;
+    SOUNDSHED_BUILD_FLAGS?: {
+      jamEnabled?: boolean;
+    };
   }
 }
 

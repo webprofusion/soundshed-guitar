@@ -1,0 +1,7 @@
+window.SOUNDSHED_BUILD_FLAGS = Object.freeze({
+  jamEnabled: @GUITARFX_ENABLE_JAM_JS@
+});
+
+if (document.documentElement) {
+  document.documentElement.dataset.jamEnabled = window.SOUNDSHED_BUILD_FLAGS.jamEnabled ? "true" : "false";
+}

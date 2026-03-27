@@ -96,6 +96,24 @@ include(JUCEDefaults)
 option(GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK "Enable inline media playback on Apple WKWebView where supported" ON)
 option(GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION "Disable Apple WKWebView user-action requirement for media playback where supported" ON)
 
+set(_guitarfx_enable_jam_default ON)
+if(APPLE)
+    set(_guitarfx_enable_jam_default OFF)
+endif()
+option(GUITARFX_ENABLE_JAM "Enable the Jam panel in the packaged UI" ${_guitarfx_enable_jam_default})
+
+set(_GUITARFX_GENERATED_UI_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/ui")
+file(MAKE_DIRECTORY "${_GUITARFX_GENERATED_UI_DIR}")
+if(GUITARFX_ENABLE_JAM)
+    set(GUITARFX_ENABLE_JAM_JS "true")
+else()
+    set(GUITARFX_ENABLE_JAM_JS "false")
+endif()
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ui-build-flags.js.in"
+    "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js"
+    @ONLY)
+
 # WebView2 static SDK package location (NuGet packages root)
 if(WIN32)
     set(GUITARFX_WEBVIEW2_VERSION "1.0.3856.49" CACHE STRING "WebView2 NuGet package version")
@@ -384,6 +402,7 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
     add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
         COMMENT "Copying core UI resources for ${FORMAT_TARGET}"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_dst_base}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js" "${_dst_base}/build-flags.js"
     )
 
     if(WIN32 AND NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")

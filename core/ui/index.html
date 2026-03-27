@@ -5,6 +5,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=2" />
   <title>Soundshed GuitarX</title>
+  <script src="build-flags.js"></script>
+  <style>
+    html[data-jam-enabled="false"] [data-panel="jam"],
+    html[data-jam-enabled="false"] #panel-jam,
+    html[data-jam-enabled="false"] #jam-player-dock,
+    html[data-jam-enabled="false"] #jam-floating-player-root {
+      display: none !important;
+    }
+  </style>
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/controls.css" />
