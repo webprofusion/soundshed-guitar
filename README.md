@@ -81,15 +81,25 @@ Edit `src/config/GuitarFXConfig.h` to customize plugin name and manufacturer. Re
 The JUCE target can be built and staged on Linux with the root helper script:
 
 ```bash
-bash ./build_linux.sh --zip
+bash ./build_linux.sh --arch x64 --zip
+bash ./build_linux.sh --arch arm64 --zip
 ```
 
-This configures `juce/builds-linux`, builds the JUCE Standalone, VST3, and CLAP targets, stages a Linux distribution layout in `linux-dist/`, and optionally creates a zip archive for distribution.
+This configures `juce/builds-linux-x64` and `juce/builds-linux-arm64`, builds the JUCE Standalone, VST3, and CLAP targets, stages Linux distribution layouts in `linux-dist-x64/` and `linux-dist-arm64/`, writes the standalone app to `opt/Soundshed/soundshed-guitar/soundshed-guitar`, and creates per-architecture archives for distribution.
+
+To build both Linux targets in one invocation, use:
+
+```bash
+bash ./build_linux.sh --arch all --zip
+```
+
+When cross-compiling, the helper uses the repo toolchain files under `cmake/toolchains/`. Install the matching cross compiler plus target sysroot, and set `GUITARFX_LINUX_SYSROOT`, `GUITARFX_LINUX_PKG_CONFIG_LIBDIR`, and `GUITARFX_LINUX_PKG_CONFIG_SYSROOT_DIR` if your distro packages live outside the default search paths.
 
 To include the LV2 bundle in the Linux build and staging layout, enable it explicitly:
 
 ```bash
-bash ./build_linux.sh --lv2 --zip
+bash ./build_linux.sh --arch x64 --lv2 --zip
+bash ./build_linux.sh --arch arm64 --lv2 --zip
 ```
 
 If you need to match CI dependencies on Ubuntu, install the JUCE Linux packages used by the workflow first:

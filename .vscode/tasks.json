@@ -258,11 +258,64 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "Build SoundshedGuitar (JUCE Linux) Release",
+			"label": "Build SoundshedGuitar (JUCE Linux x64) Release",
 			"type": "shell",
 			"command": "bash",
 			"args": [
 				"${workspaceFolder}/build_linux.sh",
+				"--arch",
+				"x64",
+				"--zip"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE Linux arm64) Release",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/build_linux.sh",
+				"--arch",
+				"arm64",
+				"--zip"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE Linux) Release",
+			"dependsOn": [
+				"Build SoundshedGuitar (JUCE Linux x64) Release",
+				"Build SoundshedGuitar (JUCE Linux arm64) Release"
+			],
+			"dependsOrder": "sequence",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE Linux x64) Release + LV2",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/build_linux.sh",
+				"--arch",
+				"x64",
+				"--lv2",
+				"--zip"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE Linux arm64) Release + LV2",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/build_linux.sh",
+				"--arch",
+				"arm64",
+				"--lv2",
 				"--zip"
 			],
 			"group": "build",
@@ -270,13 +323,11 @@
 		},
 		{
 			"label": "Build SoundshedGuitar (JUCE Linux) Release + LV2",
-			"type": "shell",
-			"command": "bash",
-			"args": [
-				"${workspaceFolder}/build_linux.sh",
-				"--lv2",
-				"--zip"
+			"dependsOn": [
+				"Build SoundshedGuitar (JUCE Linux x64) Release + LV2",
+				"Build SoundshedGuitar (JUCE Linux arm64) Release + LV2"
 			],
+			"dependsOrder": "sequence",
 			"group": "build",
 			"problemMatcher": []
 		},
