@@ -24,7 +24,7 @@ public:
         if (auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr)
         {
             auto* editor = processor->hasEditor()
-                ? processor->createEditorAndMakeActive()
+                ? processor->createEditorIfNeeded()
                 : static_cast<juce::AudioProcessorEditor*> (new juce::GenericAudioProcessorEditor (*processor));
 
             if (editor != nullptr)
@@ -34,13 +34,20 @@ public:
             }
         }
 
-        centreWithSize (1200, 900);
+        const auto state = loadWindowState();
+        centreWithSize (state.width, state.height);
+
+        if (state.maximized)
+            setFullScreen (true);
+
         mPluginHolder->startPlaying();
         setVisible (true);
     }
 
     ~MainWindow() override
     {
+        saveWindowState();
+
         if (auto* editor = dynamic_cast<juce::AudioProcessorEditor*> (getContentComponent()))
             if (auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr)
                 processor->editorBeingDeleted (editor);
@@ -51,8 +58,18 @@ public:
             mPluginHolder->stopPlaying();
     }
 
+    void resized() override
+    {
+        juce::DocumentWindow::resized();
+
+        if (! isFullScreen())
+            mLastNonMaximizedBounds = getBounds();
+    }
+
     void closeButtonPressed() override
     {
+        saveWindowState();
+
         if (mPluginHolder != nullptr)
             mPluginHolder->savePluginState();
 
@@ -65,7 +82,79 @@ public:
     }
 
 private:
+    struct WindowState
+    {
+        int width    = 1200;
+        int height   = 900;
+        bool maximized = false;
+    };
+
+    juce::File getWindowStateFile() const
+    {
+        auto* adapter = dynamic_cast<PluginProcessorAdapter*> (
+            mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr);
+        if (adapter == nullptr)
+            return {};
+
+        const auto path = adapter->GetUserDataPath() / "data" / "v1" / "settings" / "ui" / "window-state.json";
+        return juce::File (path.string());
+    }
+
+    WindowState loadWindowState() const
+    {
+        WindowState state;
+
+        const auto file = getWindowStateFile();
+        if (file.existsAsFile())
+        {
+            const auto parsed = juce::JSON::parse (file.loadFileAsString());
+            if (auto* obj = parsed.getDynamicObject(); obj != nullptr)
+            {
+                const auto widthId     = juce::Identifier { "width" };
+                const auto heightId    = juce::Identifier { "height" };
+                const auto maximizedId = juce::Identifier { "maximized" };
+
+                if (obj->hasProperty (widthId))
+                    state.width = static_cast<int> (obj->getProperty (widthId));
+                if (obj->hasProperty (heightId))
+                    state.height = static_cast<int> (obj->getProperty (heightId));
+                if (obj->hasProperty (maximizedId))
+                    state.maximized = static_cast<bool> (obj->getProperty (maximizedId));
+            }
+        }
+
+        // Clamp to the primary display's usable area.
+        if (auto* primary = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        {
+            const auto userArea = primary->userArea;
+            state.width  = juce::jmin (state.width,  userArea.getWidth());
+            state.height = juce::jmin (state.height, userArea.getHeight());
+        }
+
+        state.width  = juce::jlimit (1024, 8192, state.width);
+        state.height = juce::jlimit (768,  8192, state.height);
+
+        return state;
+    }
+
+    void saveWindowState() const
+    {
+        const auto file = getWindowStateFile();
+        if (file == juce::File{})
+            return;
+
+        file.getParentDirectory().createDirectory();
+
+        juce::DynamicObject::Ptr state (new juce::DynamicObject());
+        state->setProperty ("width",     mLastNonMaximizedBounds.getWidth());
+        state->setProperty ("height",    mLastNonMaximizedBounds.getHeight());
+        state->setProperty ("maximized", isFullScreen());
+        file.replaceWithText (juce::JSON::toString (juce::var (state)));
+    }
+
     std::unique_ptr<juce::StandalonePluginHolder> mPluginHolder;
+
+    juce::Rectangle<int> mLastNonMaximizedBounds { 0, 0, 1200, 900 };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
 };
 

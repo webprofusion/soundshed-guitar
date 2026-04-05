@@ -2455,6 +2455,11 @@
   border-color: #50b878;
 }
 
+.node-param-knob:focus-visible {
+  outline: 2px solid #50b878;
+  outline-offset: 2px;
+}
+
 .theme-dark .node-param-knob {
   background: linear-gradient(180deg, #2a2d33 0%, #15171b 44%, #050608 100%);
   border-color: #3b404b;

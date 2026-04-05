@@ -5,6 +5,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=2" />
   <title>Soundshed GuitarX</title>
+  <script src="build-flags.js"></script>
+  <style>
+    html[data-jam-enabled="false"] [data-panel="jam"],
+    html[data-jam-enabled="false"] #panel-jam,
+    html[data-jam-enabled="false"] #jam-player-dock,
+    html[data-jam-enabled="false"] #jam-floating-player-root {
+      display: none !important;
+    }
+  </style>
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/controls.css" />
@@ -860,16 +869,7 @@
             <h2>DSP Performance</h2>
             <div class="performance-section">
               <h3>Diagnostics</h3>
-              <div class="settings-row">
-                <label for="signal-diagnostics-toggle">Signal Level Diagnostics</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="signal-diagnostics-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-             
-              <div class="settings-hint">Continuously report signal levels, headroom, and clipping for chain input/output
-                and nodes.</div>
+              <div class="settings-hint">Signal levels, headroom, and clipping are reported continuously for chain input/output and nodes.</div>
             </div>
             <div class="performance-stats">
               <div class="performance-metric">

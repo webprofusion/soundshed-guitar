@@ -1,6 +1,6 @@
 import { uiState } from "./state.js";
 import { setMetronome } from "./bridge.js";
-import { GenericKnob } from "./controls.js";
+import { GenericKnob, enhanceRangeInput } from "./controls.js";
 import type { EnvironmentState, MetronomeState } from "./types.js";
 
 const BPM_MIN = 30;
@@ -489,6 +489,7 @@ export function initializeMetronome(): void {
   }
 
   if (bpmSlider) {
+    enhanceRangeInput(bpmSlider);
     bpmSlider.addEventListener("input", () => {
       const value = parseFloat(bpmSlider.value);
       updateBpm(value);
@@ -612,6 +613,7 @@ export function initializeMetronome(): void {
   }
 
   if (footerBpmSlider) {
+    enhanceRangeInput(footerBpmSlider);
     footerBpmSlider.addEventListener("input", () => {
       const value = parseFloat(footerBpmSlider.value);
       updateBpm(value);

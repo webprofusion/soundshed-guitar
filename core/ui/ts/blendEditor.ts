@@ -1011,6 +1011,8 @@ export class BlendEditorModal {
         defaultValue,
         displayFormat: (value) => value.toFixed(1),
         valueDisplay,
+        labelElement: knob.parentElement?.querySelector(".knob-label") as HTMLElement | null,
+        stepValue: 0.1,
         sensitivity,
         sendParameter: false,
         onValueChange: (value) => {

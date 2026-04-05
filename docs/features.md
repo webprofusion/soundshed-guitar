@@ -413,7 +413,7 @@ Real-time performance and signal monitoring.
 - **Signal level meters**: Input and output levels per active preset node, streamed as `signalLevelDiagnostics` messages.
 - **DSP performance**: CPU load %, per-block timing (µs), node-level timing breakdown — streamed as `dspPerformance` messages.
 - **Signal path test**: `runSignalPathTest` message triggers a test tone through the graph and reports frequency, duration, and elapsed time.
-- **Diagnostics toggle**: Enabled via `diagnostics.signalLevelsEnabled` in `settings/app.json`.
+- **Diagnostics**: Signal level diagnostics are always enabled and persisted as `diagnostics.signalLevelsEnabled: true` for compatibility.
 - **Log panel**: Console log capture displayed in the UI log tab (`core/ui/ts/logging.ts`).
 
 ---
@@ -429,7 +429,7 @@ Application configuration panel.
 - **NAM interface calibration**: Reference level (dBu @ 0 dBFS) for auto-leveling. Enabled by default at +12.0 dBu. Can be disabled to use model metadata as-is.
 - **Theme selection**: Cycle or select UI theme (see §20).
 - **Tone3000 API key**: Enter and persist API key for Tone3000 integration.
-- **Diagnostics toggle**: Enable/disable real-time signal level and DSP performance streaming.
+- **Diagnostics**: Real-time signal level and DSP performance streaming stays enabled at all times.
 - **Advanced options toggle**: Reveals additional developer/power-user controls.
 - **Update check**: Software version checking and notification (`core/ui/ts/updateCheck.ts`).
 - **Window state persistence**: Width, height stored in `settings/ui/window-state.json`.

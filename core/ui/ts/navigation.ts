@@ -4,6 +4,7 @@ import { initLibraryFilters, initLibraryTabs, initSettingsPanel, updateSettingsS
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import type { UiViewState } from "./types.js";
+import { isJamEnabled } from "./buildFlags.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
@@ -71,14 +72,17 @@ export function activateTab(tabId: string): void {
 
 export function switchMainPanel(panelId: string): void {
   const normalizedPanelId = panelId === "scalex" ? "sharing" : panelId;
+  const effectivePanelId = !isJamEnabled() && normalizedPanelId === "jam"
+    ? "visualizer"
+    : normalizedPanelId;
 
   panelSwitchButtons.forEach((btn) => {
     const btnPanel = (btn as HTMLElement).dataset.panel;
-    btn.classList.toggle("active", btnPanel === normalizedPanelId);
+    btn.classList.toggle("active", btnPanel === effectivePanelId);
   });
 
   mainTabPanels.forEach((panel) => {
-    const isPanelMatch = (panel as HTMLElement).id === `panel-${normalizedPanelId}`;
+    const isPanelMatch = (panel as HTMLElement).id === `panel-${effectivePanelId}`;
     panel.classList.toggle("active", isPanelMatch);
   });
 
@@ -86,7 +90,7 @@ export function switchMainPanel(panelId: string): void {
   const signalPathBar = document.getElementById("signal-path-bar");
   const mainContent = document.querySelector(".main-content") as HTMLElement | null;
   const fullHeightPanels = ["library", "jam", "settings", "sharing", "advanced", "mixer"];
-  const isFullHeight = fullHeightPanels.includes(normalizedPanelId);
+  const isFullHeight = fullHeightPanels.includes(effectivePanelId);
 
   if (signalPathBar) {
     signalPathBar.style.display = isFullHeight ? "none" : "";
@@ -95,12 +99,12 @@ export function switchMainPanel(panelId: string): void {
     mainContent.classList.toggle("full-height", isFullHeight);
   }
 
-  if (normalizedPanelId === "settings") {
+  if (effectivePanelId === "settings") {
     initSettingsPanel();
     void ensureTone3000Session().then(() => updateSettingsSessionStatus());
   }
 
-  if (normalizedPanelId === "library") {
+  if (effectivePanelId === "library") {
     initLibraryTabs();
     initLibraryFilters();
     if (!tone3000BrowserInitialized) {
@@ -110,7 +114,7 @@ export function switchMainPanel(panelId: string): void {
     void ensureTone3000Session();
   }
 
-  updateUiViewState({ mainPanel: normalizedPanelId });
+  updateUiViewState({ mainPanel: effectivePanelId });
 }
 
 export function initializeIconBarTabs(options?: { onEq?: () => void; onMetronome?: () => void }): void {

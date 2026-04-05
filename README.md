@@ -42,8 +42,8 @@ For minimal context with high coverage, load these files:
 
 1. **Clone and configure**
    ```powershell
-   git clone 
-   cd /src
+   git clone <repo-url>
+   cd soundshed-guitar\src
    cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
    ```
    CMake fetches dependencies (iPlug2, NeuralAmpModelerCore) via FetchContent.
@@ -52,18 +52,6 @@ For minimal context with high coverage, load these files:
    ```powershell
    cmake --build build --config RelWithDebInfo
    ```
-
-Clean and refetch-deps (/src):
-
-`Remove-Item -Recurse -Force .\build`
-Copy the vst3sdk content to `src/build/_deps/iplug2-src/Dependencies/IPlug/VST3_SDK`
--- `cmake -S . -B build -DGUITARFX_FETCH_DEPENDENCIES=ON`
-
-Configure cmake:
-` cmake -S . -B build -G "Visual Studio 18 2026`
-Run configured release build (under /src):
-`cmake --build build --config Release`
-`cmake --build build --config Release --target SoundshedGuitar_App`
 
 3. **Install**
    - **Windows VST3**: Copy `.vst3` from `build/SoundshedGuitar.vst3` to `C:\Program Files\Common Files\VST3\`
@@ -124,29 +112,7 @@ cmake --build build --config Debug --target GuitarFX_OfflineProcessingTest
 cmake --build build --config Debug --target VST3DebugHost
 ./VST3DebugHost.exe --windowed
 ```
-Testing plugin (version with external resources) with pluginval:
-`C:\Tools>pluginval.exe  src\build\SoundshedGuitar.vst3`
-
-
-# IPlug WebView DPI scaling issues
-The webview rendering does not properly compensate for scaled desktop sizes on windows e.g. 150%.
-Patch IPlugWebView_win.cpp at
-
-src\out\build\x64-Debug\_deps\iplug2-src\IPlug\Extras\WebView\IPlugWebView_win.cpp:L492
-
-```
-void IWebViewImpl::SetWebViewBounds(float x, float y, float w, float h, float scale)
-{
-  auto s = GetScaleForHWND(mParentWnd);
-  s= 1; // hack otherwise scale for window at 150 is 1.5 and webview bound is off the screen;
-  mWebViewBounds = GetScaledRect(x, y, w, h, s);
-
-  if (mWebViewCtrlr)
-  {
-    mWebViewCtrlr->SetBoundsAndZoomFactor(mWebViewBounds, scale);
-  }
-}
-```
+Testing plugin builds with external resources can be done with pluginval against the generated VST3.
 
 ## License
 

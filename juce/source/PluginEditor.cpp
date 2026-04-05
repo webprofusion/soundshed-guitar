@@ -11,6 +11,13 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
+    bool isYouTubeUrl (const juce::String& url)
+    {
+        return url.containsIgnoreCase ("youtube-nocookie.com")
+            || url.containsIgnoreCase ("youtube.com")
+            || url.containsIgnoreCase ("youtu.be");
+    }
+
     juce::WebBrowserComponent::Options::Backend getPreferredBrowserBackend()
     {
        #if JUCE_WINDOWS
@@ -116,6 +123,11 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     if (newURL.startsWith ("data:"))
         return true;
 
+    // The Jam view uses a YouTube iframe. Allow those navigations to stay inside the
+    // embedded webview so the player can render and continue handling playback inline.
+    if (isYouTubeUrl (newURL))
+        return true;
+
     if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
     {
         juce::URL (newURL).launchInDefaultBrowser();
@@ -123,6 +135,17 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     }
 
     return false;
+}
+
+void SinglePageBrowser::newWindowAttemptingToLoad (const juce::String& newURL)
+{
+    // YouTube embeds frequently request popup windows for watch pages, sign-in, and
+    // player chrome. Ignore those requests so the iframe remains in-place on macOS.
+    if (isYouTubeUrl (newURL))
+        return;
+
+    if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))
+        juce::URL (newURL).launchInDefaultBrowser();
 }
 
 namespace
@@ -300,6 +323,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
         writeStartupLog ("[PluginEditor] goToURL: " + startUrl);
         webView.goToURL (startUrl);
     }
+
+    setResizable (true, true);
+    setResizeLimits (800, 600, 8192, 8192);
+    setSize (1200, 900);
 
     // Start periodic idle timer (~60 fps) to match iPlug2's OnIdle() cadence.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.

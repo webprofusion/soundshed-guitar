@@ -173,6 +173,7 @@
   grid-template-columns: 120px 1fr auto auto;
   gap: 10px;
   align-items: center;
+  margin-bottom:6px;
 }
 
 .settings-row.settings-row-two {

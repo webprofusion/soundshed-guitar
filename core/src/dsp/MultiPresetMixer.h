@@ -280,7 +280,7 @@ namespace guitarfx
       std::atomic<int> clipCount{0};
     };
 
-    std::atomic<bool> mSignalDiagnosticsEnabled{false};
+    std::atomic<bool> mSignalDiagnosticsEnabled{true};
     AtomicLevelStats mRawInputLevels;
     AtomicLevelStats mInputLevels;
     AtomicLevelStats mOutputLevels;

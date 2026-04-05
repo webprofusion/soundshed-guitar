@@ -32,7 +32,6 @@ const sessionStatus = document.getElementById("tone3000-session-status");
 const openAudioPreferencesButton = document.getElementById("open-audio-preferences");
 const openAudioPreferencesRow = document.getElementById("open-audio-preferences-row");
 const openAudioPreferencesHint = document.getElementById("open-audio-preferences-hint");
-const diagnosticsToggle = document.getElementById("signal-diagnostics-toggle") as HTMLInputElement | null;
 const interfaceCalibrationToggle = document.getElementById("interface-calibration-toggle") as HTMLInputElement | null;
 const interfaceCalibrationReferenceInput = document.getElementById("interface-calibration-reference") as HTMLInputElement | null;
 const equipmentTabButtons = Array.from(document.querySelectorAll(".equipment-tab-btn"));
@@ -90,6 +89,13 @@ export function initSettingsPanel(): void {
 
   refreshSettingsView();
   initTone3000Browser();
+}
+
+function forceDiagnosticsEnabled(): void {
+  if (uiState.appSettings[DIAGNOSTICS_SETTING] !== true) {
+    uiState.appSettings[DIAGNOSTICS_SETTING] = true;
+    setAppSetting(DIAGNOSTICS_SETTING, true);
+  }
 }
 
 function updateSettingsViewState(update: { equipmentTab?: string; libraryTab?: string; advancedTab?: string }): void {
@@ -373,16 +379,7 @@ function updateResourceCleanupVisibility(enabled: boolean): void {
 }
 
 export function initDiagnosticsToggle(): void {
-  if (!diagnosticsToggle) {
-    return;
-  }
-
-  if (diagnosticsToggle.dataset.bound === "true") {
-    return;
-  }
-
-  diagnosticsToggle.dataset.bound = "true";
-  diagnosticsToggle.addEventListener("change", () => void updateDiagnosticsSetting());
+  forceDiagnosticsEnabled();
 
   const applyBtn = document.getElementById("apply-designed-peak-btn") as HTMLButtonElement | null;
   if (applyBtn && applyBtn.dataset.bound !== "true") {
@@ -426,9 +423,7 @@ export function refreshSettingsView(): void {
     apiKeyInput.value = "";
     apiKeyInput.placeholder = stored ? "API key stored" : "Enter your Tone3000 API key";
   }
-  if (diagnosticsToggle) {
-    diagnosticsToggle.checked = Boolean(getSettingValue(DIAGNOSTICS_SETTING));
-  }
+  forceDiagnosticsEnabled();
   const interfaceEnabledSetting = getSettingValue(INTERFACE_CALIBRATION_ENABLED_SETTING);
   const interfaceEnabled = interfaceEnabledSetting === null ? true : Boolean(interfaceEnabledSetting);
   if (interfaceCalibrationToggle) {
@@ -489,18 +484,6 @@ async function clearApiKey(): Promise<void> {
 
   await handleAppSettingUpdate(API_KEY_SETTING, null);
   updateSessionStatus();
-}
-
-function updateDiagnosticsSetting(): void {
-  const enabled = Boolean(diagnosticsToggle?.checked);
-  uiState.appSettings[DIAGNOSTICS_SETTING] = enabled;
-  setAppSetting(DIAGNOSTICS_SETTING, enabled);
-  if (!enabled) {
-    uiState.signalDiagnostics = null;
-    uiState.signalPeakHold = null;
-  }
-  updateSignalDiagnosticsView();
-  updateSelectedNodePeakMeter();
 }
 
 function initInterfaceCalibrationControls(): void {

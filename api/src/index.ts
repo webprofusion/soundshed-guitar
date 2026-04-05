@@ -8,6 +8,7 @@ import { healthRoutes } from "./routes/health";
 import { itemRoutes } from "./routes/items";
 import { packRoutes } from "./routes/packs";
 import { shareConsentRoutes } from "./routes/share-consent";
+import { corsProxyRoutes } from "./routes/corsproxy";
 import { toneAdvisorRoutes } from "./routes/tone-advisor";
 import { uploadRoutes } from "./routes/uploads";
 import { Env } from "./types/env";
@@ -38,6 +39,7 @@ app.route("/v1/packs", packRoutes());
 app.route("/v1/share-consent", shareConsentRoutes());
 app.route("/v1/uploads", uploadRoutes());
 app.route("/v1", toneAdvisorRoutes());
+app.route("/v1", corsProxyRoutes());
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Route not found", 404));
 

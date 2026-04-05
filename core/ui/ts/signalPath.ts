@@ -25,7 +25,7 @@ import {
   type FxLibraryItem,
   type SignalPathEdgeRef,
 } from "./fxSelector.js";
-import { GenericKnob } from "./controls.js";
+import { GenericKnob, enhanceRangeInput } from "./controls.js";
 import {
   EqCurveInteraction,
   buildEqBandConfigsFromParams,
@@ -719,8 +719,7 @@ function getSelectedNodeDiagnostics(): import("./types.js").SignalLevelMetrics |
   }
 
   const diagnostics = uiState.signalDiagnostics;
-  const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
-  if (!enabled || !diagnostics) {
+  if (!diagnostics) {
     return null;
   }
 
@@ -758,9 +757,7 @@ export function updateSelectedNodePeakMeter(): void {
 
   if (!metrics || !Number.isFinite(metrics.peakDbfs)) {
     rail.classList.add("is-inactive");
-    rail.title = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"])
-      ? "No diagnostics data for this node"
-      : "Diagnostics disabled";
+    rail.title = "No diagnostics data for this node";
     meter.style.setProperty("--meter-fill", "0%");
     return;
   }
@@ -1166,14 +1163,13 @@ export function updateSignalPathClipIndicators(): void {
   }
 
   const diagnostics = uiState.signalDiagnostics;
-  const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
 
   // Build a map of nodeId → clipped for all nodes in the diagnostics snapshot.
   // No preset-ID filtering here: effect nodes use unique UUIDs so there is no
   // collision across preset instances, and __input__/__output__ are resolved via
   // dedicated diagnostics.input / diagnostics.output fields below.
   const nodeClipMap = new Map<string, boolean>();
-  if (enabled && diagnostics) {
+  if (diagnostics) {
     diagnostics.nodes.forEach((node) => {
       if (typeof node.nodeId === "string") {
         nodeClipMap.set(node.nodeId, Boolean(node.levels?.clipped));
@@ -2321,6 +2317,7 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
   const sliders = nodeParamsPanelElement?.querySelectorAll(".node-param-slider");
   sliders?.forEach((sliderEl) => {
     const input = sliderEl as HTMLInputElement;
+    enhanceRangeInput(input);
     input.addEventListener("input", () => {
       const nodeId = input.dataset.nodeId;
       const paramKey = input.dataset.paramKey;
@@ -2352,6 +2349,7 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
   const blendSliders = nodeParamsPanelElement?.querySelectorAll(".node-param-blend-slider");
   blendSliders?.forEach((sliderEl) => {
     const input = sliderEl as HTMLInputElement;
+    enhanceRangeInput(input);
     input.addEventListener("input", () => {
       const nodeId = input.dataset.nodeId;
       const paramKey = input.dataset.paramKey;
@@ -2520,7 +2518,9 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
       defaultValue,
       displayFormat: (value) => formatValue(value),
       valueDisplay,
+      labelElement: knob.parentElement?.querySelector(".node-param-label, .custom-control-label") as HTMLElement | null,
       sensitivity,
+      stepValue: step,
       sendParameter: false,
       onValueChange: (value) => {
         if (!nodeId || !paramKey) return;
@@ -3281,15 +3281,23 @@ function bindInlineMixerControls(panel: HTMLElement): void {
     const pid = strip.dataset.presetId ?? "";
     if (!pid) return;
 
-    strip.querySelector<HTMLInputElement>(".iml-mix")?.addEventListener("input", (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      setPresetMix(pid, isFinite(v) ? v : 1.0);
-    });
+    const mixInput = strip.querySelector<HTMLInputElement>(".iml-mix");
+    if (mixInput) {
+      enhanceRangeInput(mixInput);
+      mixInput.addEventListener("input", (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        setPresetMix(pid, isFinite(v) ? v : 1.0);
+      });
+    }
 
-    strip.querySelector<HTMLInputElement>(".iml-pan")?.addEventListener("input", (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      setPresetPan(pid, isFinite(v) ? v : 0.0);
-    });
+    const panInput = strip.querySelector<HTMLInputElement>(".iml-pan");
+    if (panInput) {
+      enhanceRangeInput(panInput);
+      panInput.addEventListener("input", (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        setPresetPan(pid, isFinite(v) ? v : 0.0);
+      });
+    }
 
     const muteBtn = strip.querySelector<HTMLButtonElement>(".iml-mute-btn");
     muteBtn?.addEventListener("click", () => {
@@ -3310,10 +3318,14 @@ function bindInlineMixerControls(panel: HTMLElement): void {
     });
   });
 
-  panel.querySelector<HTMLInputElement>("#iml-master-gain")?.addEventListener("input", (e) => {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    setMasterGain(isFinite(v) ? v : 1.0);
-  });
+  const masterGainInput = panel.querySelector<HTMLInputElement>("#iml-master-gain");
+  if (masterGainInput) {
+    enhanceRangeInput(masterGainInput);
+    masterGainInput.addEventListener("input", (e) => {
+      const v = parseFloat((e.target as HTMLInputElement).value);
+      setMasterGain(isFinite(v) ? v : 1.0);
+    });
+  }
 
   panel.querySelector<HTMLInputElement>("#iml-limiter")?.addEventListener("change", (e) => {
     setLimiterEnabled((e.target as HTMLInputElement).checked);

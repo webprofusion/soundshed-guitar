@@ -1,6 +1,7 @@
 {
   "version": "0.2.0",
   "configurations": [
+  
 
 
 
@@ -54,19 +55,11 @@
     },
     {
       "name": "Run App (JUCE) Release (macOS)",
-      "type": "cppdbg",
+      "type": "node-terminal",
       "request": "launch",
-      "program": "${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone/Soundshed Guitar.app/Contents/MacOS/Soundshed Guitar",
-      "args": [],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone/Soundshed Guitar.app/Contents/MacOS",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb",
-      "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release",
-      "osx": {
-        "MIMode": "lldb"
-      }
+      "command": "open \"${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone/Soundshed Guitar.app\"",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release"
     },
      {
       "name": "Debug SoundshedGuitar VST Host",

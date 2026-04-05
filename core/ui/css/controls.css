@@ -38,6 +38,54 @@
   cursor: pointer;
 }
 
+.knob:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 2px;
+}
+
+.knob-label,
+.amp-knob-label,
+.effect-knob-label,
+.node-param-label,
+.custom-control-label {
+  cursor: default;
+}
+
+.knob-value,
+.node-param-value {
+  cursor: default;
+}
+
+.knob-label.is-editing,
+.amp-knob-label.is-editing,
+.effect-knob-label.is-editing,
+.node-param-label.is-editing,
+.custom-control-label.is-editing {
+  min-height: 1.4em;
+}
+
+.knob-value.is-editing,
+.node-param-value.is-editing {
+  min-height: 1.4em;
+}
+
+.knob-inline-editor {
+  width: 64px;
+  max-width: 100%;
+  padding: 1px 4px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-elevated, rgba(24, 24, 30, 0.92));
+  color: var(--text-primary);
+  font: inherit;
+  text-align: center;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 2px;
+}
+
 .knob .knob-indicator {
   position: absolute;
   top: 5px;

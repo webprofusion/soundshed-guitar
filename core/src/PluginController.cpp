@@ -1845,16 +1845,8 @@ void PluginController::RefreshMetronomeClickSamples(double sampleRate)
 
 void PluginController::ApplyDiagnosticsSettingsFromAppSettings()
 {
-    const auto it = mAppSettings.find(kSignalDiagnosticsSettingKey);
-    if (it == mAppSettings.end())
-        return;
-
-    bool enabled = false;
-    if (it->is_boolean())
-        enabled = it->get<bool>();
-    else if (it->is_number())
-        enabled = it->get<double>() != 0.0;
-
+    const bool enabled = true;
+    mAppSettings[kSignalDiagnosticsSettingKey] = enabled;
     mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
     mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
 }
@@ -5960,7 +5952,8 @@ void PluginController::HandleGetPerformanceStatsRequest()
 
 void PluginController::HandleSetSignalDiagnosticsEnabledRequest(const nlohmann::json& payload)
 {
-    bool enabled = payload.value("enabled", false);
+    (void)payload;
+    const bool enabled = true;
     mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
     mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
     mAppSettings[kSignalDiagnosticsSettingKey] = enabled;

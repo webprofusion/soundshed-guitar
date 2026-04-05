@@ -586,7 +586,7 @@ private:
     PreviewState mPreviewState;
 
     // Signal diagnostics
-    std::atomic<bool> mSignalDiagnosticsEnabled{false};
+    std::atomic<bool> mSignalDiagnosticsEnabled{true};
     int mDSPPerformanceUpdateCounter = 0;
     int mSignalDiagnosticsUpdateCounter = 0;
 

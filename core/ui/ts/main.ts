@@ -27,6 +27,7 @@ import { initializeToneSharingPanel } from "./toneSharingPanel.js";
 import { initializeRiffLibraryPanel } from "./riffLibrary.js";
 import { initMultiRigTab } from "./multiPresetMixer.js";
 import { initializeJamPanel } from "./jam.js";
+import { applyBuildFlags } from "./buildFlags.js";
 import { hideSplashScreen, initSplashScreen } from "./splash.js";
 const eqModal = document.getElementById("eq-modal");
 const eqModalCloseBtn = document.getElementById("eq-modal-close");
@@ -49,6 +50,8 @@ async function bootstrap(): Promise<void> {
 
   installFetchLogger();
   renderLogEntries();
+
+  applyBuildFlags();
 
   initializeTabButtons();
 

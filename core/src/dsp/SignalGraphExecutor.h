@@ -127,7 +127,7 @@ namespace guitarfx
     DSPPerformanceStats mLastPerformanceStats;
     mutable std::mutex mPerformanceStatsMutex;
 
-    std::atomic<bool> mSignalDiagnosticsEnabled{false};
+    std::atomic<bool> mSignalDiagnosticsEnabled{true};
 
     // Temporary buffers for mixing
     std::vector<float> mTempLeftBuffer;

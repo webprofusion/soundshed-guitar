@@ -24,10 +24,107 @@ export interface KnobConfig {
   displayFormat: (value: number) => string;
   valueDisplayId?: string;
   valueDisplay?: HTMLElement | null;
+  labelElement?: HTMLElement | null;
   sensitivity?: number;
+  stepValue?: number;
   onValueChange?: (value: number) => void;
   onValueCommit?: (value: number) => void;
   sendParameter?: boolean;
+}
+
+interface RangeInputInteractionOptions {
+  onImmediateChange?: (value: number) => void;
+}
+
+function clampValue(value: number, minValue: number, maxValue: number): number {
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+function countStepDecimals(stepValue: number): number {
+  if (!isFinite(stepValue) || stepValue <= 0) {
+    return 2;
+  }
+
+  const normalized = stepValue.toString().toLowerCase();
+  if (normalized.includes("e-")) {
+    const exponent = Number.parseInt(normalized.split("e-")[1] ?? "0", 10);
+    return Number.isFinite(exponent) ? exponent : 2;
+  }
+
+  const fractional = normalized.split(".")[1];
+  return fractional ? fractional.length : 0;
+}
+
+function deriveRangeStep(minValue: number, maxValue: number, stepValue?: number): number {
+  if (typeof stepValue === "number" && isFinite(stepValue) && stepValue > 0) {
+    return stepValue;
+  }
+
+  const range = Math.abs(maxValue - minValue);
+  if (!isFinite(range) || range <= 0) {
+    return 0.01;
+  }
+
+  if (range <= 2) {
+    return 0.01;
+  }
+  if (range <= 24) {
+    return 0.1;
+  }
+  return Math.max(1, range / 100);
+}
+
+export function enhanceRangeInput(
+  input: HTMLInputElement,
+  options: RangeInputInteractionOptions = {},
+): void {
+  if (input.dataset.rangeInteractionsBound === "true") {
+    return;
+  }
+
+  input.dataset.rangeInteractionsBound = "true";
+  input.tabIndex = input.disabled ? -1 : 0;
+
+  const getBounds = (): { min: number; max: number; step: number; decimals: number } => {
+    const min = Number.parseFloat(input.min || "0");
+    const max = Number.parseFloat(input.max || "100");
+    const parsedStep = Number.parseFloat(input.step || "");
+    const step = deriveRangeStep(min, max, Number.isFinite(parsedStep) && parsedStep > 0 ? parsedStep : undefined);
+    return { min, max, step, decimals: countStepDecimals(step) };
+  };
+
+  input.addEventListener("pointerdown", () => {
+    if (!input.disabled) {
+      input.focus();
+    }
+  });
+
+  input.addEventListener(
+    "wheel",
+    (event) => {
+      if (input.disabled) {
+        return;
+      }
+
+      event.preventDefault();
+      input.focus();
+
+      const { min, max, step, decimals } = getBounds();
+      const currentValue = Number.parseFloat(input.value || "0");
+      const delta = event.deltaY < 0 ? step : -step;
+      const nextValue = clampValue(currentValue + delta, min, max);
+      const formatted = decimals > 0 ? nextValue.toFixed(decimals) : `${Math.round(nextValue)}`;
+
+      if (formatted === input.value) {
+        return;
+      }
+
+      input.value = formatted;
+      options.onImmediateChange?.(nextValue);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+    { passive: false },
+  );
 }
 
 export class GenericKnob {
@@ -39,13 +136,17 @@ export class GenericKnob {
   private currentValue: number;
   private displayFormat: (value: number) => string;
   private valueDisplay: HTMLElement | null;
+  private labelElement: HTMLElement | null;
+  private editableValueElement: HTMLElement | null;
   private sensitivity: number;
+  private stepValue: number;
   private onValueChange?: (value: number) => void;
   private onValueCommit?: (value: number) => void;
   private sendParameter: boolean;
   private isDragging = false;
   private startY = 0;
   private startValue = 0;
+  private inlineEditor: HTMLInputElement | null = null;
 
   constructor(config: KnobConfig) {
     this.knobElement = config.knobElement;
@@ -56,12 +157,21 @@ export class GenericKnob {
     this.currentValue = config.defaultValue;
     this.displayFormat = config.displayFormat;
     this.sensitivity = config.sensitivity ?? 0.5;
+    this.stepValue = deriveRangeStep(this.minValue, this.maxValue, config.stepValue);
     this.onValueChange = config.onValueChange;
     this.onValueCommit = config.onValueCommit;
     this.sendParameter = config.sendParameter ?? true;
     
     this.valueDisplay = config.valueDisplay
       ?? (config.valueDisplayId ? document.getElementById(config.valueDisplayId) : null);
+    this.labelElement = config.labelElement
+      ?? (this.knobElement.parentElement?.querySelector(
+        ".knob-label, .amp-knob-label, .effect-knob-label, .node-param-label, .custom-control-label",
+      ) as HTMLElement | null);
+    this.editableValueElement = this.valueDisplay;
+    if (this.editableValueElement && !this.editableValueElement.dataset.originalLabel) {
+      this.editableValueElement.dataset.originalLabel = this.editableValueElement.textContent?.trim() ?? "";
+    }
 
     this.initialize();
   }
@@ -73,20 +183,61 @@ export class GenericKnob {
       this.currentValue = dataValue;
     }
 
+    this.knobElement.tabIndex = this.knobElement.tabIndex >= 0 ? this.knobElement.tabIndex : 0;
+    this.knobElement.setAttribute("role", "slider");
+    this.knobElement.setAttribute("aria-label", this.labelElement?.textContent?.trim() || this.paramId);
+    this.knobElement.setAttribute("aria-valuemin", this.minValue.toString());
+    this.knobElement.setAttribute("aria-valuemax", this.maxValue.toString());
+
     this.updateDisplay(this.currentValue);
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
+    this.knobElement.addEventListener("pointerdown", () => {
+      this.knobElement.focus();
+    });
     this.knobElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
     this.knobElement.addEventListener("dblclick", (e) => this.onDoubleClick(e));
+    this.knobElement.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     document.addEventListener("mousemove", (e) => this.onMouseMove(e));
     document.addEventListener("mouseup", () => this.onMouseUp());
+    this.editableValueElement?.addEventListener("dblclick", (e) => this.onValueDoubleClick(e));
+  }
+
+  private emitLiveValue(value: number): void {
+    if (this.sendParameter) {
+      setParameter(this.paramId, value);
+    }
+
+    if (this.onValueChange) {
+      this.onValueChange(value);
+    }
+  }
+
+  private commitCurrentValue(): void {
+    if (this.sendParameter) {
+      setParameter(this.paramId, this.currentValue);
+      appendLog(`${this.paramId} → ${this.currentValue.toFixed(2)}`);
+    }
+
+    if (this.onValueCommit) {
+      this.onValueCommit(this.currentValue);
+    }
+  }
+
+  private applyValue(value: number, commit = false): void {
+    this.setValue(value);
+    this.emitLiveValue(this.currentValue);
+    if (commit) {
+      this.commitCurrentValue();
+    }
   }
 
   private onDoubleClick(e: MouseEvent): void {
     e.preventDefault();
     e.stopPropagation();
+    this.closeInlineEditor(true);
     this.setValue(this.defaultValue);
     if (this.sendParameter) {
       setParameter(this.paramId, this.defaultValue);
@@ -103,6 +254,7 @@ export class GenericKnob {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    this.closeInlineEditor(true);
     this.isDragging = true;
     this.startY = e.clientY;
     this.startValue = this.currentValue;
@@ -114,41 +266,117 @@ export class GenericKnob {
 
     const deltaY = this.startY - e.clientY;
     let newValue = this.startValue + deltaY * this.sensitivity;
-    newValue = Math.max(this.minValue, Math.min(this.maxValue, newValue));
+    newValue = clampValue(newValue, this.minValue, this.maxValue);
     
     this.currentValue = newValue;
     this.knobElement.dataset.value = newValue.toString();
     this.updateDisplay(newValue);
     
-    // Send parameter value while dragging
-    if (this.sendParameter) {
-      setParameter(this.paramId, this.currentValue);
-    }
-    
-    if (this.onValueChange) {
-      this.onValueChange(this.currentValue);
-    }
+    this.emitLiveValue(this.currentValue);
   }
 
   private onMouseUp(): void {
     if (!this.isDragging) return;
     
     this.isDragging = false;
-    // Final value send and log on release
-    if (this.sendParameter) {
-      setParameter(this.paramId, this.currentValue);
-      appendLog(`${this.paramId} → ${this.currentValue.toFixed(2)}`);
+    this.commitCurrentValue();
+  }
+
+  private onWheel(e: WheelEvent): void {
+    if (this.isDragging) {
+      return;
     }
 
-    if (this.onValueCommit) {
-      this.onValueCommit(this.currentValue);
+    e.preventDefault();
+    this.knobElement.focus();
+    const delta = e.deltaY < 0 ? this.stepValue : -this.stepValue;
+    this.applyValue(this.currentValue + delta, true);
+  }
+
+  private onValueDoubleClick(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.openInlineEditor();
+  }
+
+  private openInlineEditor(): void {
+    if (!this.editableValueElement || this.inlineEditor) {
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "knob-inline-editor";
+    input.min = this.minValue.toString();
+    input.max = this.maxValue.toString();
+    input.step = this.stepValue.toString();
+    input.value = this.currentValue.toFixed(countStepDecimals(this.stepValue));
+
+    this.inlineEditor = input;
+    this.editableValueElement.classList.add("is-editing");
+    this.editableValueElement.textContent = "";
+    this.editableValueElement.appendChild(input);
+
+    const finish = (revertToLabel = false) => {
+      this.closeInlineEditor(revertToLabel);
+    };
+
+    input.addEventListener("input", () => {
+      const parsedValue = Number.parseFloat(input.value);
+      if (!Number.isFinite(parsedValue)) {
+        return;
+      }
+
+      this.applyValue(parsedValue, false);
+      input.value = this.currentValue.toFixed(countStepDecimals(this.stepValue));
+    });
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(false);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(true);
+      }
+    });
+
+    input.focus();
+    input.select();
+  }
+
+  private closeInlineEditor(revertToLabel = false): void {
+    if (!this.editableValueElement || !this.inlineEditor) {
+      return;
+    }
+
+    const input = this.inlineEditor;
+    this.inlineEditor = null;
+    this.editableValueElement.classList.remove("is-editing");
+    input.remove();
+
+    if (revertToLabel) {
+      this.editableValueElement.textContent = this.editableValueElement.dataset.originalLabel ?? "";
+      return;
+    }
+
+    this.updateDisplay(this.currentValue);
+    if (!revertToLabel) {
+      this.commitCurrentValue();
     }
   }
 
   private updateDisplay(value: number): void {
     if (this.valueDisplay) {
-      this.valueDisplay.textContent = this.displayFormat(value);
+      const formattedValue = this.displayFormat(value);
+      if (!this.inlineEditor) {
+        this.valueDisplay.textContent = formattedValue;
+        this.valueDisplay.dataset.originalLabel = formattedValue;
+      }
     }
+
+    this.knobElement.setAttribute("aria-valuenow", value.toString());
+    this.knobElement.setAttribute("aria-valuetext", this.displayFormat(value));
 
     const rotation = ((value - this.minValue) / (this.maxValue - this.minValue)) * 270 - 135;
     const indicator = this.knobElement.querySelector(".knob-indicator") as HTMLElement | null;
@@ -158,7 +386,7 @@ export class GenericKnob {
   }
 
   public setValue(value: number): void {
-    this.currentValue = Math.max(this.minValue, Math.min(this.maxValue, value));
+    this.currentValue = clampValue(value, this.minValue, this.maxValue);
     this.knobElement.dataset.value = this.currentValue.toString();
     this.updateDisplay(this.currentValue);
   }
@@ -434,6 +662,8 @@ export function initializeControls(): void {
   controls.forEach(({ id, paramId, format }) => {
     const slider = document.getElementById(`control-${id}`) as HTMLInputElement | null;
     if (!slider) return;
+
+    enhanceRangeInput(slider);
 
     slider.addEventListener("input", () => {
       const value = parseFloat(slider.value);

@@ -100,6 +100,27 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core
 # Couple tweaks that IMO should be JUCE defaults
 include(JUCEDefaults)
 
+option(GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK "Enable inline media playback on Apple WKWebView where supported" ON)
+option(GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION "Disable Apple WKWebView user-action requirement for media playback where supported" ON)
+
+set(_guitarfx_enable_jam_default ON)
+if(APPLE)
+    set(_guitarfx_enable_jam_default OFF)
+endif()
+option(GUITARFX_ENABLE_JAM "Enable the Jam panel in the packaged UI" ${_guitarfx_enable_jam_default})
+
+set(_GUITARFX_GENERATED_UI_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/ui")
+file(MAKE_DIRECTORY "${_GUITARFX_GENERATED_UI_DIR}")
+if(GUITARFX_ENABLE_JAM)
+    set(GUITARFX_ENABLE_JAM_JS "true")
+else()
+    set(GUITARFX_ENABLE_JAM_JS "false")
+endif()
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ui-build-flags.js.in"
+    "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js"
+    @ONLY)
+
 # WebView2 static SDK package location (NuGet packages root)
 if(WIN32)
     set(GUITARFX_WEBVIEW2_VERSION "1.0.3856.49" CACHE STRING "WebView2 NuGet package version")
@@ -235,7 +256,7 @@ juce_add_plugin("${PROJECT_NAME}"
     # Change me!
     # A four-character plugin id
     # First character MUST be uppercase for AU formats
-    PLUGIN_MANUFACTURER_CODE SndG
+    PLUGIN_MANUFACTURER_CODE Shed
 
     # Change me!
     # A unique four-character plugin id
@@ -246,6 +267,8 @@ juce_add_plugin("${PROJECT_NAME}"
     VST3_AUTO_MANIFEST ${GUITARFX_VST3_AUTO_MANIFEST}
     NEEDS_WEB_BROWSER TRUE
     NEEDS_WEBVIEW2 TRUE
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Soundshed Guitar needs microphone access to record and process live audio input."
     XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"
 
     # The name of your final executable
@@ -303,6 +326,11 @@ target_compile_definitions(SharedCode
     JUCE_USE_WIN_WEBVIEW2=1
     JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=${GUITARFX_WEBVIEW2_STATIC_LINKING}
     JUCE_WEBVIEW2_DEVTOOLS_ENABLED=1
+    # JUCE disables WebView2 DevTools when JUCE_DEBUG=0; restore prior behavior in release-family Windows builds.
+    JUCE_FORCE_DEBUG=1
+    GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK=${GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK}
+    GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION=${GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION}
+
 
     # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3
     # JUCE_DISPLAY_SPLASH_SCREEN=0
@@ -384,6 +412,7 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
     add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
         COMMENT "Copying core UI resources for ${FORMAT_TARGET}"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_dst_base}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js" "${_dst_base}/build-flags.js"
     )
 
     if(WIN32 AND NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")

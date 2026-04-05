@@ -6,6 +6,7 @@ import { updateSignalPathClipIndicators, renderSignalPathBar } from "./signalPat
 import { renderIcon } from "./iconAssets.js";
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
+import { enhanceRangeInput } from "./controls.js";
 import type { GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelNodeMetrics } from "./types.js";
 
 const presetListElement = document.getElementById("preset-list");
@@ -168,6 +169,7 @@ function buildMixerMarkup(): string {
 function bindMixerControls(container: HTMLElement): void {
   const masterGainSlider = container.querySelector<HTMLInputElement>("#mixer-master-gain");
   if (masterGainSlider) {
+    enhanceRangeInput(masterGainSlider);
     masterGainSlider.addEventListener("input", () => {
       const val = parseFloat(masterGainSlider.value);
       setMasterGain(isFinite(val) ? val : 1.0);
@@ -198,6 +200,13 @@ function bindMixerControls(container: HTMLElement): void {
     const soloEl = row.querySelector<HTMLInputElement>(".mixer-solo");
     const viewBtn = row.querySelector<HTMLButtonElement>(".mixer-view-chain-btn");
     const removeBtn = row.querySelector<HTMLButtonElement>(".mixer-remove-btn");
+
+    if (mixEl) {
+      enhanceRangeInput(mixEl);
+    }
+    if (panEl) {
+      enhanceRangeInput(panEl);
+    }
 
     if (viewBtn) {
       viewBtn.addEventListener("click", () => {
@@ -1119,6 +1128,38 @@ function formatLatencyValue(stats: import("./types.js").DSPPerformanceStats | nu
   return `${latencySamples} samples`;
 }
 
+/** Returns a map of nodeId → topological position (0-based) for ordering. */
+function getGraphTopologicalOrder(graph: SignalGraph | undefined): Map<string, number> {
+  const order = new Map<string, number>();
+  if (!graph || !graph.nodes.length) return order;
+
+  const indegree = new Map<string, number>();
+  const outgoingByNode = new Map<string, string[]>();
+
+  for (const node of graph.nodes) {
+    indegree.set(node.id, 0);
+  }
+  for (const edge of graph.edges) {
+    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
+    const out = outgoingByNode.get(edge.from);
+    if (out) out.push(edge.to);
+    else outgoingByNode.set(edge.from, [edge.to]);
+  }
+
+  const queue = graph.nodes.map((n) => n.id).filter((id) => (indegree.get(id) ?? 0) === 0);
+  let idx = 0;
+  while (queue.length) {
+    const nodeId = queue.shift()!;
+    order.set(nodeId, idx++);
+    for (const to of outgoingByNode.get(nodeId) ?? []) {
+      const remaining = (indegree.get(to) ?? 0) - 1;
+      indegree.set(to, remaining);
+      if (remaining === 0) queue.push(to);
+    }
+  }
+  return order;
+}
+
 function computeGraphCriticalPathNodeIds(graph: SignalGraph | undefined, scopedPrefix: string): Set<string> {
   if (!graph || !graph.nodes.length) {
     return new Set<string>();
@@ -1332,11 +1373,10 @@ function updateInputVuMeter(levels: import("./types.js").SignalLevelMetrics | nu
 
 export function updateSignalDiagnosticsView(): void {
   const diagnostics = uiState.signalDiagnostics;
-  const enabled = Boolean(uiState.appSettings?.["diagnostics.signalLevelsEnabled"]);
 
   const statusEl = document.getElementById("signal-diagnostics-status");
   if (statusEl) {
-    statusEl.textContent = enabled ? "Enabled" : "Disabled";
+    statusEl.textContent = "Enabled";
   }
 
   const inputPeak = document.getElementById("signal-input-peak");
@@ -1351,7 +1391,7 @@ export function updateSignalDiagnosticsView(): void {
 
   const listEl = document.getElementById("signal-diagnostics-list");
 
-  if (!enabled || !diagnostics) {
+  if (!diagnostics) {
     if (inputPeak) inputPeak.textContent = "—";
     if (inputRms) inputRms.textContent = "—";
     if (inputHeadroom) inputHeadroom.textContent = "—";
@@ -1477,7 +1517,38 @@ export function updateSignalDiagnosticsView(): void {
       input.clipCount
     );
 
-    const nodeRows = (diagnostics.nodes ?? [])
+    // Build topological order maps for each graph so nodes render in signal-chain order.
+    const preOrder = getGraphTopologicalOrder(uiState.globalSignalChain?.preChainGraph);
+    const postOrder = getGraphTopologicalOrder(uiState.globalSignalChain?.postChainGraph);
+    const presetOrderCache = new Map<string, Map<string, number>>();
+    const getPresetOrder = (presetId: string): Map<string, number> => {
+      if (!presetOrderCache.has(presetId)) {
+        const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((p) => p.id === presetId);
+        presetOrderCache.set(presetId, getGraphTopologicalOrder(preset?.graph));
+      }
+      return presetOrderCache.get(presetId)!;
+    };
+
+    const scopeRank = (scope: string) => scope === "pre" ? 0 : scope === "preset" ? 1 : 2;
+
+    const sortedNodes = (diagnostics.nodes ?? []).slice().sort((a, b) => {
+      const scopeDiff = scopeRank(a.scope) - scopeRank(b.scope);
+      if (scopeDiff !== 0) return scopeDiff;
+      if (a.scope === "pre") {
+        return (preOrder.get(a.nodeId) ?? 9999) - (preOrder.get(b.nodeId) ?? 9999);
+      }
+      if (a.scope === "post") {
+        return (postOrder.get(a.nodeId) ?? 9999) - (postOrder.get(b.nodeId) ?? 9999);
+      }
+      // preset scope — group by preset, then topological order within preset
+      const aPreset = a.presetId ?? "";
+      const bPreset = b.presetId ?? "";
+      if (aPreset !== bPreset) return aPreset.localeCompare(bPreset);
+      const presetOrder = getPresetOrder(aPreset);
+      return (presetOrder.get(a.nodeId) ?? 9999) - (presetOrder.get(b.nodeId) ?? 9999);
+    });
+
+    const nodeRows = sortedNodes
       .map((node) => {
         const nodeLabel = escapeHtml(getSignalDiagnosticsNodeLabel(node));
         const isCriticalPath = isNodeOnCriticalPath(node, criticalPathMembership);

@@ -13,17 +13,17 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
         std::string key = msg.value("key", "");
         if (!key.empty() && msg.contains("value"))
         {
+            if (key == "diagnostics.signalLevelsEnabled")
+            {
+                nlohmann::json payload;
+                payload["enabled"] = true;
+                c.HandleSetSignalDiagnosticsEnabledRequest(payload);
+                return true;
+            }
             if (msg["value"].is_null())
             {
                 c.mAppSettings.erase(key);
                 c.SaveAppSettings();
-                return true;
-            }
-            if (key == "diagnostics.signalLevelsEnabled")
-            {
-                nlohmann::json payload;
-                payload["enabled"] = msg["value"];
-                c.HandleSetSignalDiagnosticsEnabledRequest(payload);
                 return true;
             }
             c.mAppSettings[key] = msg["value"];

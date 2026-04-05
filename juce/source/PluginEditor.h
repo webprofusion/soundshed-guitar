@@ -10,6 +10,7 @@ class SinglePageBrowser : public juce::WebBrowserComponent
 public:
     using juce::WebBrowserComponent::WebBrowserComponent;
     bool pageAboutToLoad (const juce::String& newURL) override;
+    void newWindowAttemptingToLoad (const juce::String& newURL) override;
 };
 
 //==============================================================================
