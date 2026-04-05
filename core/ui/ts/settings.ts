@@ -387,7 +387,7 @@ export function initDiagnosticsToggle(): void {
     applyBtn.addEventListener("click", () => {
       const peakDbfs = (applyBtn as HTMLButtonElement & { _peakDbfs?: number })._peakDbfs;
       if (peakDbfs == null || !isFinite(peakDbfs)) {
-        showNotification("No peak value available — enable diagnostics and play first");
+        showNotification("No peak value available yet — play audio first");
         return;
       }
       const activeId = uiState.activePresetId;

@@ -1184,9 +1184,9 @@ export function updateSignalPathClipIndicators(): void {
 
     indicator.classList.remove("clip-on", "clip-off", "clip-inactive", "clip-unknown");
 
-    if (!enabled || !diagnostics) {
+    if (!diagnostics) {
       indicator.classList.add("clip-inactive");
-      indicator.title = "Diagnostics disabled";
+      indicator.title = "Waiting for diagnostics data";
       return;
     }
 

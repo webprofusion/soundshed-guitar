@@ -1408,7 +1408,7 @@ export function updateSignalDiagnosticsView(): void {
       outputClip.classList.add("clip-off");
       setClipStatusText(outputClip, "—");
     }
-    if (listEl) listEl.innerHTML = "<div class=\"performance-detail-item\">Diagnostics disabled.</div>";
+    if (listEl) listEl.innerHTML = "<div class=\"performance-detail-item\">Waiting for signal data.</div>";
     return;
   }
 
@@ -1452,7 +1452,7 @@ export function updateSignalDiagnosticsView(): void {
   const designedPeakCurrentEl = document.getElementById("designed-peak-current-value");
   const designedPeakStoredEl = document.getElementById("designed-peak-stored-value");
   const applyDesignedPeakBtn = document.getElementById("apply-designed-peak-btn") as HTMLButtonElement | null;
-  if (!enabled || !diagnostics) {
+  if (!diagnostics) {
     if (designedPeakCurrentEl) designedPeakCurrentEl.textContent = "\u2014";
     if (applyDesignedPeakBtn) applyDesignedPeakBtn.disabled = true;
   } else {
@@ -1578,6 +1578,6 @@ export function updateSignalDiagnosticsView(): void {
     `;
   }
 
-  updateInputVuMeter(enabled ? (diagnostics.rawInput ?? diagnostics.input) : null);
+  updateInputVuMeter(diagnostics ? (diagnostics.rawInput ?? diagnostics.input) : null);
   updateSignalPathClipIndicators();
 }
