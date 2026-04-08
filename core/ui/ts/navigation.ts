@@ -1,16 +1,16 @@
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
-import { initLibraryFilters, initLibraryTabs, initSettingsPanel, updateSettingsSessionStatus, activateEquipmentTab, activateLibraryTab, activateAdvancedSubTab, setSettingsViewStateSuppressed } from "./settings.js";
-import { initTone3000Browser } from "./tone3000Browser.js";
+import { initSettingsPanel, updateSettingsSessionStatus, activateEquipmentTab, activateLibraryTab, activateAdvancedSubTab, setSettingsViewStateSuppressed } from "./settings.js";
 import { ensureTone3000Session } from "./tone3000.js";
+import { handleJamPanelActivated } from "./jam.js";
 import type { UiViewState } from "./types.js";
 import { isJamEnabled } from "./buildFlags.js";
+import { Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 const panelSwitchButtons = Array.from(document.querySelectorAll(".icon-bar .icon-btn, .panel-switch"));
 const mainTabPanels = Array.from(document.querySelectorAll(".main-content .tab-panel"));
-let tone3000BrowserInitialized = false;
 
 let pendingSend = false;
 const sendDelayMs = 200;
@@ -71,10 +71,21 @@ export function activateTab(tabId: string): void {
 }
 
 export function switchMainPanel(panelId: string): void {
-  const normalizedPanelId = panelId === "scalex" ? "sharing" : panelId;
-  const effectivePanelId = !isJamEnabled() && normalizedPanelId === "jam"
-    ? "visualizer"
-    : normalizedPanelId;
+  const requestedSettingsTab = panelId === "library" ? "library" : null;
+  const normalizedPanelId = panelId === "scalex"
+    ? "sharing"
+    : requestedSettingsTab
+      ? "settings"
+      : panelId;
+  const effectivePanelId = (() => {
+    if (normalizedPanelId === "jam" && (!isJamEnabled() || !isJamExperienceEnabled())) {
+      return "visualizer";
+    }
+    if (normalizedPanelId === "sharing" && !isFeatureEnabled(Features.ToneSharing)) {
+      return "visualizer";
+    }
+    return normalizedPanelId;
+  })();
 
   panelSwitchButtons.forEach((btn) => {
     const btnPanel = (btn as HTMLElement).dataset.panel;
@@ -89,7 +100,7 @@ export function switchMainPanel(panelId: string): void {
   // Hide signal path bar for full-height panels (everything except visualizer)
   const signalPathBar = document.getElementById("signal-path-bar");
   const mainContent = document.querySelector(".main-content") as HTMLElement | null;
-  const fullHeightPanels = ["library", "jam", "settings", "sharing", "advanced", "mixer"];
+  const fullHeightPanels = ["jam", "settings", "sharing", "advanced", "mixer"];
   const isFullHeight = fullHeightPanels.includes(effectivePanelId);
 
   if (signalPathBar) {
@@ -101,17 +112,16 @@ export function switchMainPanel(panelId: string): void {
 
   if (effectivePanelId === "settings") {
     initSettingsPanel();
-    void ensureTone3000Session().then(() => updateSettingsSessionStatus());
+    if (requestedSettingsTab) {
+      activateEquipmentTab(requestedSettingsTab);
+    }
+    if (isFeatureEnabled(Features.Tone3000)) {
+      void ensureTone3000Session().then(() => updateSettingsSessionStatus());
+    }
   }
 
-  if (effectivePanelId === "library") {
-    initLibraryTabs();
-    initLibraryFilters();
-    if (!tone3000BrowserInitialized) {
-      initTone3000Browser();
-      tone3000BrowserInitialized = true;
-    }
-    void ensureTone3000Session();
+  if (effectivePanelId === "jam") {
+    handleJamPanelActivated();
   }
 
   updateUiViewState({ mainPanel: effectivePanelId });

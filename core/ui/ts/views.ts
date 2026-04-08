@@ -1,5 +1,5 @@
 import { renderDemoAudioControls, bindDemoAudioControls } from "./demoAudio.js";
-import { uiState, setFocusedMixerPresetId, isAdvancedOptionsEnabled } from "./state.js";
+import { uiState, setFocusedMixerPresetId } from "./state.js";
 import { addActivePreset, removeActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled } from "./bridge.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
 import { updateSignalPathClipIndicators, renderSignalPathBar } from "./signalPath.js";
@@ -8,6 +8,7 @@ import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput } from "./controls.js";
 import type { GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelNodeMetrics } from "./types.js";
+import { Features, isFeatureEnabled } from "./featureFlags.js";
 
 const presetListElement = document.getElementById("preset-list");
 const presetDetailsElement = document.getElementById("preset-details");
@@ -441,7 +442,7 @@ export function renderPresetList(
           ? `<div class="preset-item-tags">${(preset.tags ?? []).map((t) => `<span class="preset-item-tag">${escapeHtml(t)}</span>`).join("")}</div>`
           : "";
         const inMixer = uiState.mixer?.activePresetIds.includes(preset.id) ?? false;
-        const showMixerControls = isAdvancedOptionsEnabled();
+        const showMixerControls = isFeatureEnabled(Features.MultiRig);
         const addToMixerBtn = showMixerControls
           ? `<button class="preset-add-to-mixer-btn${inMixer ? " in-mixer" : ""}" data-preset-id="${preset.id}" title="${inMixer ? "Already in mixer" : "Add to mixer"}" type="button">${inMixer ? "✓ In Mixer" : "+ Mixer"}</button>`
           : "";

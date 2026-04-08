@@ -36,8 +36,35 @@
   color: rgba(20, 24, 31, 0.7);
 }
 
+.jam-sections,
 .jam-tabs {
   align-self: flex-start;
+}
+
+.jam-section-panel {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jam-section-panel.active {
+  display: flex;
+}
+
+.jam-tab-panel {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jam-tab-panel.active {
+  display: flex;
+}
+
+.jam-riff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .jam-search-row {

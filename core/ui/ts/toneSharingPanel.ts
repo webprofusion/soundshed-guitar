@@ -6,8 +6,9 @@ import type { Preset, PresetFolder } from "./types.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
 import { arrayBufferToBase64, generateResourceId } from "./archiveUtils.js";
 import { switchMainPanel } from "./navigation.js";
-import { activateLibraryTab, initLibraryTabs } from "./settings.js";
-import { initTone3000Browser, setTone3000Search } from "./tone3000Browser.js";
+import { activateEquipmentTab, activateLibraryTab } from "./settings.js";
+import { setTone3000Search } from "./tone3000Browser.js";
+import { Features, isFeatureEnabled } from "./featureFlags.js";
 
 type ToneSharingUser = {
   id: string;
@@ -1426,11 +1427,14 @@ function renderAiSearchView(): void {
       const query = btn.dataset.t3kQuery ?? "";
       const category = btn.dataset.t3kCategory ?? "";
       if (!query) return;
-      // Ensure the tone3000 browser is initialised then navigate to it
-      switchMainPanel("library");
-      initLibraryTabs();
-      activateLibraryTab("tone3000");
-      setTone3000Search(query, category || undefined);
+      switchMainPanel("settings");
+      activateEquipmentTab("library");
+      if (isFeatureEnabled(Features.Tone3000)) {
+        activateLibraryTab("tone3000");
+        setTone3000Search(query, category || undefined);
+      } else {
+        activateLibraryTab("resources");
+      }
     });
   });
 

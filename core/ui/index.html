@@ -66,13 +66,6 @@
       <button class="icon-btn active" data-panel="visualizer" title="Visualizer">
         <span aria-hidden="true" style="display: block; width: 24px; height: 24px; background-color: currentColor; -webkit-mask: url('images/icons/amp.svg') center / contain no-repeat; mask: url('images/icons/amp.svg') center / contain no-repeat;"></span>
       </button>
-
-      <button class="icon-btn" data-panel="library" title="Equipment Library">
-        <svg viewBox="0 0 24 24">
-          <path d="M4 6h6v14H4zM14 4h6v16h-6z" stroke="currentColor" stroke-width="1.5" fill="none" />
-          <path d="M6 10h2M6 13h2M16 9h2M16 12h2M16 15h2" stroke="currentColor" stroke-width="1.5" fill="none" />
-        </svg>
-      </button>
       <button class="icon-btn" data-panel="sharing" title="Tone Sharing">
         <svg viewBox="0 0 24 24">
           <path d="M7 18a4 4 0 0 1 0-8 5.5 5.5 0 0 1 10.6-1.6A3.5 3.5 0 1 1 18.5 18H7z" stroke="currentColor" stroke-width="1.5" fill="none" />
@@ -471,218 +464,6 @@
           </div>
         </div>
       </div>
-
-
-      <div class="tab-panel" id="panel-library">
-        <div class="panel-content">
-
-          <div class="library-tabs tab-bar">
-            <button class="library-tab-btn tab-btn active" data-library-tab="tone3000">Tone 3000</button>
-            <button class="library-tab-btn tab-btn" data-library-tab="resources">Resource Library</button>
-            <button class="library-tab-btn tab-btn" data-library-tab="riffs">Riff Library</button>
-            <button class="library-tab-btn tab-btn" data-library-tab="advanced">Advanced</button>
-          </div>
-
-          <div class="library-tab-panel active" id="library-tab-tone3000">
-            <div class="settings-section">
-              <h3>Tone3000 Browser</h3>
-              <div class="tone3000-search">
-                <input type="text" id="tone3000-search-input" placeholder="Search tones..." />
-                <select id="tone3000-sort-select" class="themed-select">
-                  <option value="popular">Most Popular</option>
-                  <option value="recent">Most Recent</option>
-                  <option value="trending">Trending</option>
-                  <option value="name">Name A-Z</option>
-                </select>
-                <button id="tone3000-search-button">Search</button>
-              </div>
-              <div class="tone3000-browser">
-                <div class="tone3000-categories" id="tone3000-category-list">
-                  <!-- Category buttons rendered by JS -->
-                </div>
-                <div class="results tone3000-results" id="tone3000-results">
-                  <!-- Search results rendered by JS -->
-                </div>
-              </div>
-              <div class="tone3000-pagination" id="tone3000-pagination">
-                <button class="tone3000-page-btn" id="tone3000-prev-btn" type="button">Previous</button>
-                <span class="tone3000-page-label" id="tone3000-page-label">Page 1</span>
-                <button class="tone3000-page-btn" id="tone3000-next-btn" type="button">Next</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="library-tab-panel" id="library-tab-resources">
-            <div class="settings-section">
-              <h3>Resource Library</h3>
-              <div class="equipment-library-filters">
-                <input type="text" id="equipment-library-search" placeholder="Search models and IRs..." />
-                <select id="equipment-library-type">
-                  <option value="all">All Types</option>
-                  <option value="nam">Amp Models</option>
-                  <option value="ir">Cab IRs</option>
-                </select>
-                <select id="equipment-library-source">
-                  <option value="all">All Sources</option>
-                  <option value="built-in">Built-in</option>
-                  <option value="local">Local</option>
-                  <option value="tone3000">Tone3000</option>
-                  <option value="imported">Imported</option>
-                </select>
-                <select id="equipment-library-view">
-                  <option value="list">List View</option>
-                  <option value="grouped" selected>Group by Tone</option>
-                </select>
-                <select id="equipment-library-category">
-                  <option value="all">All Categories</option>
-                </select>
-              </div>
-              <div class="settings-row" id="equipment-library-cleanup-row">
-                <label for="equipment-library-cleanup-scope">Cleanup unused</label>
-                <select id="equipment-library-cleanup-scope">
-                  <option value="all" selected>All types</option>
-                  <option value="nam">Amp models only</option>
-                  <option value="ir">IRs only</option>
-                </select>
-                <button id="equipment-library-cleanup-btn" type="button">Remove unused</button>
-              </div>
-              <div class="equipment-library-summary" id="equipment-library-summary"></div>
-              <div class="results equipment-library-results" id="equipment-library-results">
-                <!-- Library results rendered by JS -->
-              </div>
-            </div>
-          </div>
-
-          <div class="library-tab-panel" id="library-tab-riffs">
-            <div class="settings-section">
-              <h3>Riff Library</h3>
-              <div class="riff-drop-hint" id="riff-drop-hint">Drop a WAV file anywhere on the page to import it into the current riff take.</div>
-              <div class="settings-row settings-row-two">
-                <label for="riff-open-capture-modal">Capture</label>
-                <button id="riff-open-capture-modal" type="button">New Riff</button>
-              </div>
-              <div class="settings-hint">Riffs are saved as measure-aligned DI WAV takes with metadata for tempo, time signature, pattern, and preset context.</div>
-            </div>
-
-            <div class="settings-section">
-              <h3>Saved Riffs</h3>
-              <div class="results equipment-library-results" id="riff-library-list">
-                <!-- Riff entries rendered by JS -->
-              </div>
-            </div>
-          </div>
-
-          <!-- Advanced Tab Panel -->
-          <div class="library-tab-panel" id="library-tab-advanced">
-            <div class="advanced-panel">
-              <div class="advanced-sub-tabs tab-bar">
-                <button class="advanced-sub-tab-btn tab-btn active" data-advanced-tab="composites">Composite Effects</button>
-                <button class="advanced-sub-tab-btn tab-btn" data-advanced-tab="blends">Blends</button>
-                <button class="advanced-sub-tab-btn tab-btn" data-advanced-tab="layouts">Effect Layouts</button>
-              </div>
-
-              <!-- Composite Effects Sub-Tab -->
-              <div class="advanced-sub-panel active" id="advanced-tab-composites">
-                <div class="advanced-toolbar">
-                  <input type="text" id="composite-search-input" class="advanced-search-input" placeholder="Search composites..." />
-                  <button id="composite-new-btn" class="advanced-action-btn" title="Create new composite effect">+ New Composite</button>
-                </div>
-                <div class="composite-list" id="composite-list">
-                  <!-- Composite list rendered by JS -->
-                </div>
-
-                <!-- Composite Editor (hidden until editing) -->
-                <div class="composite-editor" id="composite-editor" style="display: none;">
-                  <div class="composite-editor-header">
-                    <h3 id="composite-editor-title">Edit Composite Effect</h3>
-                    <div class="composite-editor-actions">
-                      <button id="composite-editor-save-btn" class="advanced-action-btn primary" title="Save composite">Save</button>
-                      <button id="composite-editor-save-as-btn" class="advanced-action-btn" title="Save as new composite">Save As New</button>
-                      <button id="composite-editor-cancel-btn" class="advanced-action-btn" title="Cancel editing">Cancel</button>
-                    </div>
-                  </div>
-                  <div class="composite-editor-body">
-                    <div class="composite-editor-meta">
-                      <div class="composite-field-row">
-                        <label for="composite-edit-name">Name</label>
-                        <input type="text" id="composite-edit-name" placeholder="Effect name" />
-                      </div>
-                      <div class="composite-field-row">
-                        <label for="composite-edit-category">Category</label>
-                        <select id="composite-edit-category">
-                          <option value="channel">Channel Strip</option>
-                          <option value="amp">Amplifier</option>
-                          <option value="cab">Cabinet</option>
-                          <option value="dynamics">Dynamics</option>
-                          <option value="eq">Equalizer</option>
-                          <option value="modulation">Modulation</option>
-                          <option value="delay">Delay</option>
-                          <option value="reverb">Reverb</option>
-                          <option value="utility">Utility</option>
-                        </select>
-                      </div>
-                      <div class="composite-field-row">
-                        <label for="composite-edit-description">Description</label>
-                        <textarea id="composite-edit-description" rows="2" placeholder="Description..."></textarea>
-                      </div>
-                      <div class="composite-field-row">
-                        <label for="composite-edit-author">Author</label>
-                        <input type="text" id="composite-edit-author" placeholder="Author name" />
-                      </div>
-                      <div class="composite-field-row">
-                        <label for="composite-edit-tags">Tags</label>
-                        <input type="text" id="composite-edit-tags" placeholder="Comma-separated tags" />
-                      </div>
-                    </div>
-
-                    <!-- Inner Signal Graph — edited via main signal path -->
-                    <div class="composite-editor-section">
-                      <h4>Inner Signal Path</h4>
-                      <p class="section-hint">
-                        The signal chain above shows this composite's inner effects.
-                        Use it to add, remove, and configure effects just like a normal preset.
-                      </p>
-                    </div>
-
-                    <!-- Exposed Parameters -->
-                    <div class="composite-editor-section">
-                      <h4>Exposed Parameters</h4>
-                      <p class="section-hint">Select which parameters are surfaced to the user.</p>
-                      <div class="composite-exposed-params" id="composite-exposed-params">
-                        <!-- Exposed params rendered by JS -->
-                      </div>
-                      <button id="composite-add-param-btn" class="advanced-action-btn">+ Expose Parameter</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Blends Sub-Tab -->
-              <div class="advanced-sub-panel" id="advanced-tab-blends">
-                <div class="advanced-toolbar">
-                  <input type="text" id="blend-search-input" class="advanced-search-input" placeholder="Search blends..." />
-                </div>
-                <div class="composite-list" id="blend-list">
-                  <!-- Blend list rendered by JS -->
-                </div>
-              </div>
-
-              <!-- Effect Layouts Sub-Tab -->
-              <div class="advanced-sub-panel" id="advanced-tab-layouts">
-                <div class="advanced-toolbar">
-                  <input type="text" id="layout-search-input" class="advanced-search-input" placeholder="Search layouts..." />
-                </div>
-                <div class="layout-list" id="layout-list">
-                  <!-- Layout list rendered by JS -->
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
       <div class="tab-panel" id="panel-jam">
         <div class="panel-content jam-panel">
           <div class="jam-panel-header">
@@ -691,15 +472,57 @@
               <p class="jam-panel-subtitle">Find a backing track, pin favourites, and keep a floating YouTube player open while using the rest of the app.</p>
             </div>
           </div>
-          <div class="jam-tabs tab-bar">
-            <button id="jam-tab-search" class="tab-btn active" type="button">Backing Tracks</button>
-            <button id="jam-tab-favorites" class="tab-btn" type="button">Favourites</button>
+          <div class="jam-sections tab-bar">
+            <button id="jam-section-backing-tracks" class="tab-btn active" type="button">Backing Tracks</button>
+            <button id="jam-section-riffs" class="tab-btn" type="button">Riff Library</button>
           </div>
-          <div class="jam-search-row">
-            <input type="text" id="jam-search-input" placeholder="Search by artist, song, key, or style..." />
-            <button id="jam-search-button" type="button">Search</button>
+          <div class="jam-section-panel active" id="jam-section-panel-backing-tracks">
+            <div class="jam-tabs tab-bar">
+              <button id="jam-backing-tab-search" class="tab-btn active" type="button">Search</button>
+              <button id="jam-backing-tab-favorites" class="tab-btn" type="button">Favourites</button>
+            </div>
+            <div class="jam-tab-panel active" id="jam-backing-tab-panel-search">
+              <div class="jam-search-row">
+                <input type="text" id="jam-search-input" placeholder="Search by artist, song, key, or style..." />
+                <button id="jam-search-button" type="button">Search</button>
+              </div>
+              <div class="jam-results" id="jam-results"></div>
+            </div>
+            <div class="jam-tab-panel" id="jam-backing-tab-panel-favorites" hidden>
+              <div class="jam-results" id="jam-favorites-results"></div>
+            </div>
           </div>
-          <div class="jam-results" id="jam-results"></div>
+          <div class="jam-section-panel" id="jam-section-panel-riffs" hidden>
+            <div class="jam-riff-panel">
+              <div class="settings-section">
+                <h3>Riff Library</h3>
+                <div class="riff-drop-hint" id="riff-drop-hint">Drop a WAV file anywhere on the page to import it into the current riff take.</div>
+                <div class="settings-row settings-row-two">
+                  <label for="riff-open-capture-modal">Capture</label>
+                  <button id="riff-open-capture-modal" type="button">New Riff</button>
+                </div>
+                <div class="settings-hint">Riffs are saved as measure-aligned DI WAV takes with metadata for tempo, time signature, pattern, and preset context.</div>
+              </div>
+
+              <div class="settings-section">
+                <h3>Storage</h3>
+                <div class="settings-row">
+                  <label for="riff-library-path">Library Path</label>
+                  <input type="text" id="riff-library-path" placeholder="C:\\Users\\you\\Documents\\SoundshedRiffs" />
+                  <button id="riff-library-path-save" type="button">Set Path</button>
+                  <button id="riff-library-refresh" type="button" class="secondary">Refresh</button>
+                </div>
+                <div class="settings-hint">Sets where riff takes and riff metadata are stored on disk.</div>
+              </div>
+
+              <div class="settings-section">
+                <h3>Saved Riffs</h3>
+                <div class="results equipment-library-results" id="riff-library-list">
+                  <!-- Riff entries rendered by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -748,6 +571,8 @@
           <div class="settings-layout">
             <div class="equipment-tabs tab-bar" role="tablist" aria-label="Settings sections">
               <button class="equipment-tab-btn tab-btn active" data-equipment-tab="settings" role="tab" aria-selected="true" aria-controls="equipment-tab-settings">General</button>
+              <button class="equipment-tab-btn tab-btn" data-equipment-tab="library" role="tab" aria-selected="false" aria-controls="equipment-tab-library">Library</button>
+              <button class="equipment-tab-btn tab-btn" data-equipment-tab="features" role="tab" aria-selected="false" aria-controls="equipment-tab-features">Features</button>
               <button class="equipment-tab-btn tab-btn" data-equipment-tab="performance" role="tab" aria-selected="false" aria-controls="equipment-tab-performance">DSP Performance</button>
               <button class="equipment-tab-btn tab-btn" data-equipment-tab="help" role="tab" aria-selected="false" aria-controls="equipment-tab-help">Help</button>
             </div>
@@ -785,8 +610,8 @@
               <div class="settings-hint">Sets the analog reference level used to align NAM input metadata to digital
                 peak levels, for the first NAM effect/amp in the chain. When Auto Level Input is enabled on a NAM amp and the model has a known training input level, the calibration reference is used to compute an input gain correction to normalize your interface's headroom to what the model expects.</div>
             </div>
-            <h2>Tone3000</h2>
-            <div class="settings-section">
+            <h2 id="settings-tone3000-heading">Tone3000</h2>
+            <div class="settings-section" id="settings-tone3000-section">
               <h3>Tone3000 API</h3>
               <div class="settings-row">
                 <label for="tone3000-api-key-input">API Key</label>
@@ -796,42 +621,8 @@
               </div>
               <div class="settings-hint" id="tone3000-session-status">Session not started.</div>
             </div>
-
-            <h2>User Interface</h2>
-            <div class="settings-section">
-              <h3>Advanced Options</h3>
-              <div class="settings-row">
-                <label for="advanced-options-toggle">Enable Advanced Options</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="advanced-options-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Shows the Advanced tab in the Library panel and enables advanced editing features such as Composite Effect editing and Custom Effect Layout editing.</div>
-              <div class="settings-row" id="factory-archive-loading-row" hidden>
-                <label for="factory-archive-loading-toggle">Load Factory Preset Archives on Startup</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="factory-archive-loading-toggle" checked />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Advanced workflow: disable this while authoring factory preset archives in development so bundled preset packs stay on disk without being imported and listed at startup.</div>
-            </div>
-
-            <h2>Riff Library</h2>
-            <div class="settings-section">
-              <h3>Storage</h3>
-              <div class="settings-row">
-                <label for="riff-library-path">Library Path</label>
-                <input type="text" id="riff-library-path" placeholder="C:\\Users\\you\\Documents\\SoundshedRiffs" />
-                <button id="riff-library-path-save" type="button">Set Path</button>
-                <button id="riff-library-refresh" type="button" class="secondary">Refresh</button>
-              </div>
-              <div class="settings-hint">Sets where riff takes and riff metadata are stored on disk.</div>
-            </div>
-
-            <h2>Library</h2>
-            <div class="settings-section">
+            <h2 id="settings-library-tools-heading">Library</h2>
+            <div class="settings-section" id="settings-library-tools-section">
               <h3>Export Presets &amp; Blends</h3>
               <div class="settings-row">
                 <label for="library-export-resources">Resources</label>
@@ -863,6 +654,202 @@
               <div class="settings-hint">Automatically checks if a new version of Soundshed Guitar is available.</div>
             </div>
 
+          </div>
+
+          <div class="equipment-tab-panel" id="equipment-tab-library" hidden>
+            <div class="library-tabs tab-bar">
+              <button class="library-tab-btn tab-btn active" data-library-tab="tone3000">Tone 3000</button>
+              <button class="library-tab-btn tab-btn" data-library-tab="resources">Resource Library</button>
+              <button class="library-tab-btn tab-btn" data-library-tab="advanced">Advanced</button>
+            </div>
+
+            <div class="library-tab-panel active" id="library-tab-tone3000">
+              <div class="settings-section">
+                <h3>Tone3000 Browser</h3>
+                 <p>Tone 3000 is a 3rd party website with community provided NAM Models and IRs. You can browse them here but the easiest way to hear them is to select a Neural FX or Neural Amp effect in your main signal chain and use the resource selector built nto those. </p>
+                <div class="tone3000-search">
+                  <input type="text" id="tone3000-search-input" placeholder="Search tones..." />
+                  <select id="tone3000-sort-select" class="themed-select">
+                    <option value="popular">Most Popular</option>
+                    <option value="recent">Most Recent</option>
+                    <option value="trending">Trending</option>
+                    <option value="name">Name A-Z</option>
+                  </select>
+                  <button id="tone3000-search-button">Search</button>
+                </div>
+                <div class="tone3000-browser">
+                  <div class="tone3000-categories" id="tone3000-category-list">
+                    <!-- Category buttons rendered by JS -->
+                  </div>
+                  <div class="results tone3000-results" id="tone3000-results">
+                    <!-- Search results rendered by JS -->
+                  </div>
+                </div>
+                <div class="tone3000-pagination" id="tone3000-pagination">
+                  <button class="tone3000-page-btn" id="tone3000-prev-btn" type="button">Previous</button>
+                  <span class="tone3000-page-label" id="tone3000-page-label">Page 1</span>
+                  <button class="tone3000-page-btn" id="tone3000-next-btn" type="button">Next</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="library-tab-panel" id="library-tab-resources">
+              <div class="settings-section">
+                <h3>Resource Library</h3>
+                <p>The resource library shows the list of items (NAM models, Impulse Responses) already imported for use in the app. </p>
+                <div class="equipment-library-filters">
+                  <input type="text" id="equipment-library-search" placeholder="Search models and IRs..." />
+                  <select id="equipment-library-type">
+                    <option value="all">All Types</option>
+                    <option value="nam">Amp Models</option>
+                    <option value="ir">Cab IRs</option>
+                  </select>
+                  <select id="equipment-library-source">
+                    <option value="all">All Sources</option>
+                    <option value="built-in">Built-in</option>
+                    <option value="local">Local</option>
+                    <option value="tone3000">Tone3000</option>
+                    <option value="imported">Imported</option>
+                  </select>
+                  <select id="equipment-library-view">
+                    <option value="list">List View</option>
+                    <option value="grouped" selected>Group by Tone</option>
+                  </select>
+                  <select id="equipment-library-category">
+                    <option value="all">All Categories</option>
+                  </select>
+                </div>
+                <div class="settings-row" id="equipment-library-cleanup-row">
+                  <label for="equipment-library-cleanup-scope">Cleanup unused</label>
+                  <select id="equipment-library-cleanup-scope">
+                    <option value="all" selected>All types</option>
+                    <option value="nam">Amp models only</option>
+                    <option value="ir">IRs only</option>
+                  </select>
+                  <button id="equipment-library-cleanup-btn" type="button">Remove unused</button>
+                </div>
+                <div class="equipment-library-summary" id="equipment-library-summary"></div>
+                <div class="results equipment-library-results" id="equipment-library-results">
+                  <!-- Library results rendered by JS -->
+                </div>
+              </div>
+            </div>
+            <div class="library-tab-panel" id="library-tab-advanced">
+              <div class="advanced-panel">
+                <div class="advanced-sub-tabs tab-bar">
+                  <button class="advanced-sub-tab-btn tab-btn active" data-advanced-tab="composites">Composite Effects</button>
+                  <button class="advanced-sub-tab-btn tab-btn" data-advanced-tab="blends">Blends</button>
+                  <button class="advanced-sub-tab-btn tab-btn" data-advanced-tab="layouts">Effect Layouts</button>
+                </div>
+
+                <div class="advanced-sub-panel active" id="advanced-tab-composites">
+                  <div class="advanced-toolbar">
+                    <input type="text" id="composite-search-input" class="advanced-search-input" placeholder="Search composites..." />
+                    <button id="composite-new-btn" class="advanced-action-btn" title="Create new composite effect">+ New Composite</button>
+                  </div>
+                  <div class="composite-list" id="composite-list">
+                    <!-- Composite list rendered by JS -->
+                  </div>
+
+                  <div class="composite-editor" id="composite-editor" style="display: none;">
+                    <div class="composite-editor-header">
+                      <h3 id="composite-editor-title">Edit Composite Effect</h3>
+                      <div class="composite-editor-actions">
+                        <button id="composite-editor-save-btn" class="advanced-action-btn primary" title="Save composite">Save</button>
+                        <button id="composite-editor-save-as-btn" class="advanced-action-btn" title="Save as new composite">Save As New</button>
+                        <button id="composite-editor-cancel-btn" class="advanced-action-btn" title="Cancel editing">Cancel</button>
+                      </div>
+                    </div>
+                    <div class="composite-editor-body">
+                      <div class="composite-editor-meta">
+                        <div class="composite-field-row">
+                          <label for="composite-edit-name">Name</label>
+                          <input type="text" id="composite-edit-name" placeholder="Effect name" />
+                        </div>
+                        <div class="composite-field-row">
+                          <label for="composite-edit-category">Category</label>
+                          <select id="composite-edit-category">
+                            <option value="channel">Channel Strip</option>
+                            <option value="amp">Amplifier</option>
+                            <option value="cab">Cabinet</option>
+                            <option value="dynamics">Dynamics</option>
+                            <option value="eq">Equalizer</option>
+                            <option value="modulation">Modulation</option>
+                            <option value="delay">Delay</option>
+                            <option value="reverb">Reverb</option>
+                            <option value="utility">Utility</option>
+                          </select>
+                        </div>
+                        <div class="composite-field-row">
+                          <label for="composite-edit-description">Description</label>
+                          <textarea id="composite-edit-description" rows="2" placeholder="Description..."></textarea>
+                        </div>
+                        <div class="composite-field-row">
+                          <label for="composite-edit-author">Author</label>
+                          <input type="text" id="composite-edit-author" placeholder="Author name" />
+                        </div>
+                        <div class="composite-field-row">
+                          <label for="composite-edit-tags">Tags</label>
+                          <input type="text" id="composite-edit-tags" placeholder="Comma-separated tags" />
+                        </div>
+                      </div>
+
+                      <div class="composite-editor-section">
+                        <h4>Inner Signal Path</h4>
+                        <p class="section-hint">
+                          The signal chain above shows this composite's inner effects.
+                          Use it to add, remove, and configure effects just like a normal preset.
+                        </p>
+                      </div>
+
+                      <div class="composite-editor-section">
+                        <h4>Exposed Parameters</h4>
+                        <p class="section-hint">Select which parameters are surfaced to the user.</p>
+                        <div class="composite-exposed-params" id="composite-exposed-params">
+                          <!-- Exposed params rendered by JS -->
+                        </div>
+                        <button id="composite-add-param-btn" class="advanced-action-btn">+ Expose Parameter</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="advanced-sub-panel" id="advanced-tab-blends">
+                  <div class="advanced-toolbar">
+                    <input type="text" id="blend-search-input" class="advanced-search-input" placeholder="Search blends..." />
+                  </div>
+                  <div class="composite-list" id="blend-list">
+                    <!-- Blend list rendered by JS -->
+                  </div>
+                </div>
+
+                <div class="advanced-sub-panel" id="advanced-tab-layouts">
+                  <div class="advanced-toolbar">
+                    <input type="text" id="layout-search-input" class="advanced-search-input" placeholder="Search layouts..." />
+                  </div>
+                  <div class="layout-list" id="layout-list">
+                    <!-- Layout list rendered by JS -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="equipment-tab-panel" id="equipment-tab-features" hidden>
+            <h2>Feature Toggles</h2>
+            <div class="settings-hint">Simplify the options available in the app depedning on your preferences for trying online or advacned features..</div>
+            <div id="settings-feature-groups"></div>
+            <div class="settings-section" id="factory-archive-settings-section" hidden>
+              <h3>Factory Preset Archives</h3>
+              <div class="settings-row" id="factory-archive-loading-row">
+                <label for="factory-archive-loading-toggle">Load Factory Preset Archives on Startup</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="factory-archive-loading-toggle" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint">Disable this while authoring factory preset archives in development so bundled preset packs stay on disk without being imported at startup.</div>
+            </div>
           </div>
 
           <div class="equipment-tab-panel" id="equipment-tab-performance">

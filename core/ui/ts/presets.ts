@@ -1,7 +1,7 @@
 import { appendLog } from "./logging.js";
 import { clearNotification, showNotification } from "./notifications.js";
 import { renderPresetDetails, renderPresetList, renderMixerPanel } from "./views.js";
-import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRender, setActivePresetDraft, setActivePresetSnapshot, setPresetDirty, isAdvancedOptionsEnabled } from "./state.js";
+import { clonePreset, uiState, DEFAULT_GLOBAL_SIGNAL_CHAIN, getActivePresetForRender, setActivePresetDraft, setActivePresetSnapshot, setPresetDirty } from "./state.js";
 import { buildAttachments, buildAttachmentsFromPreset, getDefaultPresets, initializeDataLibraries, REMOTE_BASE_URL } from "./dataLibraries.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl, sha256HexFromBase64 } from "./utils.js";
 import { buildArchiveFileNameWithHash, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
@@ -18,6 +18,7 @@ import { switchMainPanel } from "./navigation.js";
 import { activateLibraryTab } from "./settings.js";
 import { updateUiSettings } from "./windowSettings.js";
 import { normalizePresetScenes } from "./presetScenes.js";
+import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 
 const presetChooserLabel = document.getElementById("preset-chooser-label") as HTMLButtonElement | null;
 const presetFavoriteToggle = document.getElementById("preset-favorite");
@@ -729,7 +730,7 @@ function togglePresetLibraryPopover(): void {
 }
 
 export function syncPresetLibraryFeatureVisibility(): void {
-  const multiRigEnabled = isAdvancedOptionsEnabled();
+  const multiRigEnabled = isFeatureEnabled(Features.MultiRig);
 
   presetLibraryPopover?.classList.toggle("preset-library-popover-simple", !multiRigEnabled);
 
@@ -758,7 +759,7 @@ export function syncPresetLibraryFeatureVisibility(): void {
   }
 }
 
-document.addEventListener("advancedOptionsChanged", () => {
+document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => {
   syncPresetLibraryFeatureVisibility();
 });
 

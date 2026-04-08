@@ -12,6 +12,7 @@ import { postMessage } from "./bridge.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { showNotification } from "./notifications.js";
 import { arrayBufferToBase64 } from "./utils.js";
+import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import type { LibraryResource } from "./types.js";
 
 const API_BASE = "https://www.tone3000.com/api/v1";
@@ -79,6 +80,7 @@ export class ResourceBrowserModal {
   private selectBtn: HTMLButtonElement | null = null;
   
   // Tab elements
+  private tabsContainer: HTMLElement | null = null;
   private tabButtons: HTMLButtonElement[] = [];
   private tabPanels: HTMLElement[] = [];
   private activeTab: "library" | "tone3000" = "library";
@@ -129,6 +131,7 @@ export class ResourceBrowserModal {
     this.selectBtn = document.getElementById("resource-browser-select") as HTMLButtonElement | null;
     
     // Tab buttons and panels
+    this.tabsContainer = this.modal.querySelector(".resource-browser-tabs") as HTMLElement | null;
     this.tabButtons = Array.from(this.modal.querySelectorAll(".resource-browser-tab-btn")) as HTMLButtonElement[];
     this.tabPanels = Array.from(this.modal.querySelectorAll(".resource-browser-tab-panel")) as HTMLElement[];
     
@@ -201,6 +204,9 @@ export class ResourceBrowserModal {
     
     // Tone3000 list events
     this.tone3000List?.addEventListener("click", (event) => this.handleTone3000Click(event));
+
+    document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => this.handleFeatureFlagsChanged());
+    this.syncAvailableTabs();
   }
   
   open(options: ResourceBrowserOptions): void {
@@ -253,6 +259,7 @@ export class ResourceBrowserModal {
       this.tone3000List.innerHTML = `<div class="resource-browser-empty">Enter a search query to browse Tone3000.</div>`;
     }
     this.updateTone3000Pagination(true);
+    this.syncAvailableTabs();
     
     // Show library tab by default
     this.setActiveTab("library");
@@ -290,22 +297,69 @@ export class ResourceBrowserModal {
     this.modal.style.display = "none";
     this.options = null;
   }
+
+  private handleFeatureFlagsChanged(): void {
+    if (!this.initialized) {
+      return;
+    }
+
+    if (!isFeatureEnabled(Features.Tone3000)) {
+      if (this.previewState?.active) {
+        this.cancelPreview();
+      }
+      this.previewLoading = null;
+      if (this.tone3000Status) {
+        this.tone3000Status.textContent = "";
+      }
+    }
+
+    this.syncAvailableTabs();
+    this.updateSelectButtonState();
+  }
+
+  private syncAvailableTabs(): void {
+    const tone3000Enabled = isFeatureEnabled(Features.Tone3000);
+    const tone3000TabButton = this.tabButtons.find((button) => button.dataset.tab === "tone3000") ?? null;
+    const tone3000TabPanel = this.tabPanels.find((panel) => panel.dataset.tabPanel === "tone3000") ?? null;
+
+    this.tabsContainer?.toggleAttribute("hidden", !tone3000Enabled);
+    tone3000TabButton?.toggleAttribute("hidden", !tone3000Enabled);
+    tone3000TabPanel?.toggleAttribute("hidden", !tone3000Enabled);
+
+    if (!tone3000Enabled && this.activeTab === "tone3000") {
+      this.setActiveTab("library");
+      return;
+    }
+
+    this.tabButtons.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === this.activeTab && !btn.hasAttribute("hidden"));
+    });
+
+    this.tabPanels.forEach((panel) => {
+      const isActive = panel.dataset.tabPanel === this.activeTab && !panel.hasAttribute("hidden");
+      panel.classList.toggle("active", isActive);
+    });
+  }
   
   private setActiveTab(tab: "library" | "tone3000"): void {
-    this.activeTab = tab;
+    const resolvedTab = tab === "tone3000" && !isFeatureEnabled(Features.Tone3000) ? "library" : tab;
+    this.activeTab = resolvedTab;
     
     this.tabButtons.forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tab === tab);
+      btn.classList.toggle("active", btn.dataset.tab === resolvedTab && !btn.hasAttribute("hidden"));
     });
     
     this.tabPanels.forEach((panel) => {
-      panel.classList.toggle("active", panel.dataset.tabPanel === tab);
+      const isActive = panel.dataset.tabPanel === resolvedTab && !panel.hasAttribute("hidden");
+      panel.classList.toggle("active", isActive);
     });
     
     // Run initial Tone3000 search if switching to that tab
-    if (tab === "tone3000" && !this.tone3000Tones.length) {
+    if (resolvedTab === "tone3000" && !this.tone3000Tones.length) {
       void this.runTone3000Search();
     }
+
+    this.updateSelectButtonState();
   }
   
   private updateCategoryOptions(): void {

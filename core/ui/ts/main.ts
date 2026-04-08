@@ -29,6 +29,7 @@ import { initMultiRigTab } from "./multiPresetMixer.js";
 import { initializeJamPanel } from "./jam.js";
 import { applyBuildFlags } from "./buildFlags.js";
 import { hideSplashScreen, initSplashScreen } from "./splash.js";
+import { FEATURE_FLAGS_CHANGED_EVENT } from "./featureFlags.js";
 const eqModal = document.getElementById("eq-modal");
 const eqModalCloseBtn = document.getElementById("eq-modal-close");
 
@@ -93,6 +94,9 @@ async function bootstrap(): Promise<void> {
   initFxSelector();
   startUiSettingsTracking();
   initDiagnosticsToggle();
+  document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => {
+    renderActivePreset();
+  });
 
   // Initialize footer demo audio controls
   const footerDemoContainer = document.getElementById("footer-demo-audio-container");

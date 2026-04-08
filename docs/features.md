@@ -430,7 +430,7 @@ Application configuration panel.
 - **Theme selection**: Cycle or select UI theme (see §20).
 - **Tone3000 API key**: Enter and persist API key for Tone3000 integration.
 - **Diagnostics**: Real-time signal level and DSP performance streaming stays enabled at all times.
-- **Advanced options toggle**: Reveals additional developer/power-user controls.
+- **Features tab**: Exposes per-feature toggles for core workflows and power-user tools.
 - **Update check**: Software version checking and notification (`core/ui/ts/updateCheck.ts`).
 - **Window state persistence**: Width, height stored in `settings/ui/window-state.json`.
 - **App settings file**: `settings/app.json` (schemaVersion, theme, lastPresetId, feature flags).

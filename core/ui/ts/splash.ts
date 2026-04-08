@@ -5,7 +5,7 @@
  * a minimum duration to avoid startup flashing.
  */
 
-const MIN_SPLASH_MS = 1000;
+const MIN_SPLASH_MS = 50;
 const THEME_TRANSITION_MS = 260;
 const FADE_OUT_MS = 300;
 

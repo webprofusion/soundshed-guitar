@@ -71,7 +71,7 @@ namespace
     };
 
     constexpr const char* kJamYouTubeApiKeySettingKey = "jam.youtubeApiKey";
-    constexpr const char* kBundledJamYouTubeApiKey = "AIzaSyA9R9tejDnqsQFnz6GYP7xMeu4HdPMscrc";
+    constexpr const char* kBundledJamYouTubeApiKey = "AIzaSyDs_H5FswLGwL0kjnBhd_EDV5eRM9D64sc";
     constexpr const char* kFactoryArchiveResourceProvider = "factory-archives";
     constexpr const char* kLocalResourceProvider = "local";
     constexpr const char* kLocalResourceStorageFolder = "local";

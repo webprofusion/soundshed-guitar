@@ -1,4 +1,4 @@
-import { uiState, clonePreset, isAdvancedOptionsEnabled } from "./state.js";
+import { uiState, clonePreset } from "./state.js";
 import { setAppSetting, postMessage } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
@@ -17,12 +17,23 @@ import { initCompositeEditor, renderCompositeList } from "./compositeEditor.js";
 import { initLayoutManager, renderLayoutList } from "./layoutManager.js";
 import { initBlendManager, renderBlendList } from "./blendManager.js";
 import { updateSelectedNodePeakMeter } from "./signalPath.js";
+import {
+  FEATURE_DEFINITIONS,
+  FEATURE_FLAGS_CHANGED_EVENT,
+  FEATURE_GROUPS,
+  Features,
+  areAdvancedLibraryFeaturesEnabled,
+  getFeatureSettingKey,
+  isJamExperienceEnabled,
+  isLibraryExperienceEnabled,
+  isFeatureEnabled,
+  type FeatureId,
+} from "./featureFlags.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
 const INTERFACE_CALIBRATION_ENABLED_SETTING = "audio.interfaceCalibration.enabled";
 const INTERFACE_CALIBRATION_REFERENCE_SETTING = "audio.interfaceCalibration.referenceDbu";
-const ADVANCED_OPTIONS_SETTING = "ui.advancedOptionsEnabled";
 const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 
 const apiKeyInput = document.getElementById("tone3000-api-key-input") as HTMLInputElement | null;
@@ -36,6 +47,7 @@ const interfaceCalibrationToggle = document.getElementById("interface-calibratio
 const interfaceCalibrationReferenceInput = document.getElementById("interface-calibration-reference") as HTMLInputElement | null;
 const equipmentTabButtons = Array.from(document.querySelectorAll(".equipment-tab-btn"));
 const equipmentTabPanels = Array.from(document.querySelectorAll(".equipment-tab-panel"));
+const equipmentLibraryTabButton = document.querySelector('.equipment-tab-btn[data-equipment-tab="library"]') as HTMLElement | null;
 const themeSelect = document.getElementById("theme-select") as HTMLSelectElement | null;
 const librarySearchInput = document.getElementById("equipment-library-search") as HTMLInputElement | null;
 const libraryTypeSelect = document.getElementById("equipment-library-type") as HTMLSelectElement | null;
@@ -51,11 +63,31 @@ const libraryTabButtons = Array.from(document.querySelectorAll(".library-tab-btn
 const libraryTabPanels = Array.from(document.querySelectorAll(".library-tab-panel"));
 const libraryExportButton = document.getElementById("library-export-btn");
 const libraryExportResourcesSelect = document.getElementById("library-export-resources") as HTMLSelectElement | null;
-const advancedOptionsToggle = document.getElementById("advanced-options-toggle") as HTMLInputElement | null;
+const featureGroupsContainer = document.getElementById("settings-feature-groups") as HTMLElement | null;
 const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
 const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
+const factoryArchiveSettingsSection = document.getElementById("factory-archive-settings-section") as HTMLElement | null;
 const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
 const advancedTabButton = document.querySelector('.library-tab-btn[data-library-tab="advanced"]') as HTMLElement | null;
+const tone3000TabButton = document.querySelector('.library-tab-btn[data-library-tab="tone3000"]') as HTMLElement | null;
+const resourceLibraryTabButton = document.querySelector('.library-tab-btn[data-library-tab="resources"]') as HTMLElement | null;
+const compositeTabButton = document.querySelector('.advanced-sub-tab-btn[data-advanced-tab="composites"]') as HTMLElement | null;
+const blendsTabButton = document.querySelector('.advanced-sub-tab-btn[data-advanced-tab="blends"]') as HTMLElement | null;
+const layoutsTabButton = document.querySelector('.advanced-sub-tab-btn[data-advanced-tab="layouts"]') as HTMLElement | null;
+const compositeTabPanel = document.getElementById("advanced-tab-composites") as HTMLElement | null;
+const blendsTabPanel = document.getElementById("advanced-tab-blends") as HTMLElement | null;
+const layoutsTabPanel = document.getElementById("advanced-tab-layouts") as HTMLElement | null;
+const tone3000SettingsHeading = document.getElementById("settings-tone3000-heading") as HTMLElement | null;
+const tone3000SettingsSection = document.getElementById("settings-tone3000-section") as HTMLElement | null;
+const libraryToolsHeading = document.getElementById("settings-library-tools-heading") as HTMLElement | null;
+const libraryToolsSection = document.getElementById("settings-library-tools-section") as HTMLElement | null;
+const sharingPanelButton = document.querySelector('.icon-btn[data-panel="sharing"]') as HTMLElement | null;
+const jamPanelButton = document.querySelector('.icon-btn[data-panel="jam"]') as HTMLElement | null;
+const sharingPanel = document.getElementById("panel-sharing") as HTMLElement | null;
+const jamPanel = document.getElementById("panel-jam") as HTMLElement | null;
+const jamPlayerDock = document.getElementById("jam-player-dock") as HTMLElement | null;
+const jamFloatingPlayerRoot = document.getElementById("jam-floating-player-root") as HTMLElement | null;
+const footerRiffRecordButton = document.getElementById("footer-riff-record-btn") as HTMLElement | null;
 let settingsInitialized = false;
 let libraryFiltersInitialized = false;
 let equipmentTabsInitialized = false;
@@ -77,7 +109,7 @@ export function initSettingsPanel(): void {
   });
   initDiagnosticsToggle();
   initInterfaceCalibrationControls();
-  initAdvancedOptionsToggle();
+  initFeatureToggles();
   initFactoryArchiveLoadingToggle();
   initUpdateCheckToggle();
   initEquipmentTabs();
@@ -121,6 +153,256 @@ function updateSettingsViewState(update: { equipmentTab?: string; libraryTab?: s
 
 export function setSettingsViewStateSuppressed(suppressed: boolean): void {
   suppressViewStateUpdates = suppressed;
+}
+
+function initFeatureToggles(): void {
+  if (!featureGroupsContainer) {
+    return;
+  }
+
+  if (!featureGroupsContainer.innerHTML.trim()) {
+    featureGroupsContainer.innerHTML = FEATURE_GROUPS.map((group) => {
+      const featureRows = group.featureIds.map((featureId) => {
+        const feature = FEATURE_DEFINITIONS.find((entry) => entry.id === featureId);
+        if (!feature) {
+          return "";
+        }
+
+        return `
+          <div class="settings-row">
+            <label for="feature-toggle-${feature.id}">${escapeHtml(feature.label)}</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="feature-toggle-${feature.id}" data-feature-id="${feature.id}" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-hint">${escapeHtml(feature.description)}</div>
+        `;
+      }).join("");
+
+      return `
+        <div class="settings-section" data-feature-group="${group.id}">
+          <h3>${escapeHtml(group.title)}</h3>
+          <div class="settings-hint">${escapeHtml(group.description)}</div>
+          ${featureRows}
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (featureGroupsContainer.dataset.bound === "true") {
+    return;
+  }
+
+  featureGroupsContainer.dataset.bound = "true";
+  featureGroupsContainer.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const featureId = target.dataset.featureId as FeatureId | undefined;
+    if (!featureId) {
+      return;
+    }
+
+    const enabled = Boolean(target.checked);
+    const key = getFeatureSettingKey(featureId);
+    uiState.appSettings[key] = enabled;
+    setAppSetting(key, enabled);
+    syncFeatureVisibility();
+    renderLibraryView();
+    updateSelectedNodePeakMeter();
+    document.dispatchEvent(new CustomEvent(FEATURE_FLAGS_CHANGED_EVENT, {
+      detail: { featureId, enabled },
+    }));
+  });
+}
+
+function refreshFeatureToggleStates(): void {
+  if (!featureGroupsContainer) {
+    return;
+  }
+
+  featureGroupsContainer.querySelectorAll<HTMLInputElement>("input[data-feature-id]").forEach((input) => {
+    const featureId = input.dataset.featureId as FeatureId | undefined;
+    if (!featureId) {
+      return;
+    }
+
+    const feature = FEATURE_DEFINITIONS.find((entry) => entry.id === featureId);
+    if (!feature) {
+      return;
+    }
+
+    input.checked = feature ? Boolean(getFeatureSettingValue(featureId)) : false;
+  });
+}
+
+function getFeatureSettingValue(featureId: FeatureId): boolean {
+  return isFeatureEnabled(featureId);
+}
+
+function setElementVisibility(element: HTMLElement | null, visible: boolean): void {
+  if (!element) {
+    return;
+  }
+
+  element.toggleAttribute("hidden", !visible);
+  if (!visible) {
+    element.classList.remove("active");
+  }
+}
+
+function setSectionVisibility(heading: HTMLElement | null, section: HTMLElement | null, visible: boolean): void {
+  setElementVisibility(heading, visible);
+  setElementVisibility(section, visible);
+}
+
+function ensureVisibleMainPanel(): void {
+  const activePanel = document.querySelector<HTMLElement>(".main-content .tab-panel.active");
+  if (!activePanel) {
+    return;
+  }
+
+  if (!activePanel.hasAttribute("hidden")) {
+    return;
+  }
+
+  (document.querySelector('.icon-btn[data-panel="visualizer"]') as HTMLButtonElement | null)?.click();
+}
+
+function isLibraryTabEnabled(tabId: string): boolean {
+  switch (tabId) {
+    case "tone3000":
+      return isFeatureEnabled(Features.Tone3000);
+    case "resources":
+      return isFeatureEnabled(Features.ResourceLibrary);
+    case "advanced":
+      return areAdvancedLibraryFeaturesEnabled();
+    default:
+      return true;
+  }
+}
+
+function resolveLibraryTabId(preferredTabId: string): string | null {
+  const orderedTabs = ["tone3000", "resources", "advanced"];
+  if (isLibraryTabEnabled(preferredTabId)) {
+    return preferredTabId;
+  }
+
+  return orderedTabs.find((tabId) => isLibraryTabEnabled(tabId)) ?? null;
+}
+
+function isEquipmentTabEnabled(tabId: string): boolean {
+  switch (tabId) {
+    case "library":
+      return isLibraryExperienceEnabled();
+    default:
+      return true;
+  }
+}
+
+function resolveEquipmentTabId(preferredTabId: string): string {
+  const orderedTabs = ["settings", "library", "features", "performance", "help"];
+  if (isEquipmentTabEnabled(preferredTabId)) {
+    return preferredTabId;
+  }
+
+  return orderedTabs.find((tabId) => isEquipmentTabEnabled(tabId)) ?? "settings";
+}
+
+function isAdvancedSubTabEnabled(tabId: string): boolean {
+  switch (tabId) {
+    case "composites":
+      return isFeatureEnabled(Features.CompositeEffects);
+    case "blends":
+      return isFeatureEnabled(Features.BlendTools);
+    case "layouts":
+      return isFeatureEnabled(Features.EffectLayout);
+    default:
+      return true;
+  }
+}
+
+function resolveAdvancedSubTabId(preferredTabId: string): string | null {
+  const orderedTabs = ["composites", "blends", "layouts"];
+  if (isAdvancedSubTabEnabled(preferredTabId)) {
+    return preferredTabId;
+  }
+
+  return orderedTabs.find((tabId) => isAdvancedSubTabEnabled(tabId)) ?? null;
+}
+
+function syncFeatureVisibility(): void {
+  refreshFeatureToggleStates();
+
+  const tone3000Enabled = isFeatureEnabled(Features.Tone3000);
+  const resourceLibraryEnabled = isFeatureEnabled(Features.ResourceLibrary);
+  const riffLibraryEnabled = isFeatureEnabled(Features.RiffLibrary);
+  const toneSharingEnabled = isFeatureEnabled(Features.ToneSharing);
+  const jamEnabled = isFeatureEnabled(Features.Jam);
+  const jamExperienceEnabled = isJamExperienceEnabled();
+  const resourceCleanupEnabled = isFeatureEnabled(Features.ResourceCleanup);
+  const factoryPresetArchivesEnabled = isFeatureEnabled(Features.FactoryPresetArchives);
+  const libraryEnabled = isLibraryExperienceEnabled();
+  const advancedLibraryEnabled = areAdvancedLibraryFeaturesEnabled();
+
+  setSectionVisibility(tone3000SettingsHeading, tone3000SettingsSection, tone3000Enabled);
+  setSectionVisibility(libraryToolsHeading, libraryToolsSection, resourceLibraryEnabled);
+
+  setElementVisibility(tone3000TabButton, tone3000Enabled);
+  setElementVisibility(resourceLibraryTabButton, resourceLibraryEnabled);
+  setElementVisibility(advancedTabButton, advancedLibraryEnabled);
+
+  setElementVisibility(compositeTabButton, isFeatureEnabled(Features.CompositeEffects));
+  setElementVisibility(compositeTabPanel, isFeatureEnabled(Features.CompositeEffects));
+  setElementVisibility(blendsTabButton, isFeatureEnabled(Features.BlendTools));
+  setElementVisibility(blendsTabPanel, isFeatureEnabled(Features.BlendTools));
+  setElementVisibility(layoutsTabButton, isFeatureEnabled(Features.EffectLayout));
+  setElementVisibility(layoutsTabPanel, isFeatureEnabled(Features.EffectLayout));
+
+  setElementVisibility(equipmentLibraryTabButton, libraryEnabled);
+  setElementVisibility(sharingPanelButton, toneSharingEnabled);
+  setElementVisibility(sharingPanel, toneSharingEnabled);
+  setElementVisibility(jamPanelButton, jamExperienceEnabled);
+  setElementVisibility(jamPanel, jamExperienceEnabled);
+  setElementVisibility(jamPlayerDock, jamEnabled);
+  setElementVisibility(jamFloatingPlayerRoot, jamEnabled);
+  setElementVisibility(footerRiffRecordButton, riffLibraryEnabled);
+
+  if (factoryArchiveSettingsSection) {
+    factoryArchiveSettingsSection.toggleAttribute("hidden", !factoryPresetArchivesEnabled);
+  }
+  if (factoryArchiveLoadingRow) {
+    factoryArchiveLoadingRow.toggleAttribute("hidden", !factoryPresetArchivesEnabled);
+  }
+  if (factoryArchiveLoadingToggle) {
+    factoryArchiveLoadingToggle.disabled = !factoryPresetArchivesEnabled;
+  }
+
+  updateResourceCleanupVisibility(resourceCleanupEnabled);
+
+  const activeLibraryTab = libraryTabButtons.find((button) => button.classList.contains("active"))?.getAttribute("data-library-tab") ?? "tone3000";
+  const resolvedLibraryTab = resolveLibraryTabId(activeLibraryTab);
+  if (resolvedLibraryTab && resolvedLibraryTab !== activeLibraryTab) {
+    activateLibraryTab(resolvedLibraryTab);
+  }
+
+  const activeEquipmentTab = equipmentTabButtons.find((button) => button.classList.contains("active"))?.getAttribute("data-equipment-tab") ?? "settings";
+  const resolvedEquipmentTab = resolveEquipmentTabId(activeEquipmentTab);
+  if (resolvedEquipmentTab !== activeEquipmentTab) {
+    activateEquipmentTab(resolvedEquipmentTab);
+  }
+
+  const activeAdvancedSubTab = Array.from(document.querySelectorAll<HTMLElement>(".advanced-sub-tab-btn")).find((button) => button.classList.contains("active"))?.dataset.advancedTab ?? "composites";
+  const resolvedAdvancedSubTab = resolveAdvancedSubTabId(activeAdvancedSubTab);
+  if (advancedLibraryEnabled && resolvedAdvancedSubTab && resolvedAdvancedSubTab !== activeAdvancedSubTab) {
+    activateAdvancedSubTab(resolvedAdvancedSubTab);
+  }
+
+  ensureVisibleMainPanel();
+  window.dispatchEvent(new Event("resize"));
 }
 
 function initLibraryExport(): void {
@@ -192,23 +474,25 @@ export function initThemeSelect(): void {
 }
 
 export function activateEquipmentTab(tabId: string): void {
+  const resolvedTabId = resolveEquipmentTabId(tabId);
+
   equipmentTabButtons.forEach((button) => {
-    const isActive = (button as HTMLElement).dataset.equipmentTab === tabId;
+    const isActive = (button as HTMLElement).dataset.equipmentTab === resolvedTabId;
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
 
   equipmentTabPanels.forEach((panel) => {
-    const isMatch = (panel as HTMLElement).id === `equipment-tab-${tabId}`;
+    const isMatch = (panel as HTMLElement).id === `equipment-tab-${resolvedTabId}`;
     panel.classList.toggle("active", isMatch);
     panel.toggleAttribute("hidden", !isMatch);
   });
 
-  if (tabId === "performance") {
+  if (resolvedTabId === "performance") {
     updateDSPPerformancePlot();
   }
 
-  updateSettingsViewState({ equipmentTab: tabId });
+  updateSettingsViewState({ equipmentTab: resolvedTabId });
 }
 
 export function initLibraryFilters(): void {
@@ -242,29 +526,35 @@ export function initLibraryTabs(): void {
 }
 
 export function activateLibraryTab(tabId: string): void {
+  const resolvedTabId = resolveLibraryTabId(tabId);
+
   libraryTabButtons.forEach((button) => {
-    const isActive = (button as HTMLElement).dataset.libraryTab === tabId;
+    const isActive = resolvedTabId !== null && (button as HTMLElement).dataset.libraryTab === resolvedTabId;
     button.classList.toggle("active", isActive);
   });
 
   libraryTabPanels.forEach((panel) => {
-    const isMatch = (panel as HTMLElement).id === `library-tab-${tabId}`;
+    const isMatch = resolvedTabId !== null && (panel as HTMLElement).id === `library-tab-${resolvedTabId}`;
     panel.classList.toggle("active", isMatch);
   });
 
-  if (tabId === "resources" && !suppressViewStateUpdates) {
+  if (!resolvedTabId) {
+    return;
+  }
+
+  if (resolvedTabId === "resources" && !suppressViewStateUpdates) {
     postMessage({ type: "requestState" });
   }
 
-  if (tabId === "riffs") {
+  if (resolvedTabId === "riffs") {
     postMessage({ type: "getRiffLibrary" });
   }
 
-  if (tabId === "advanced") {
+  if (resolvedTabId === "advanced") {
     initAdvancedSubTabs();
   }
 
-  updateSettingsViewState({ libraryTab: tabId });
+  updateSettingsViewState({ libraryTab: resolvedTabId });
 }
 
 let advancedSubTabsInitialized = false;
@@ -296,37 +586,31 @@ export function activateAdvancedSubTab(tabId: string): void {
 }
 
 function applyAdvancedSubTab(tabId: string, subTabButtons: HTMLElement[], subTabPanels: HTMLElement[]): void {
+  const resolvedTabId = resolveAdvancedSubTabId(tabId);
+
   subTabButtons.forEach((b) => {
-    b.classList.toggle("active", (b as HTMLElement).dataset.advancedTab === tabId);
+    b.classList.toggle("active", resolvedTabId !== null && (b as HTMLElement).dataset.advancedTab === resolvedTabId);
   });
   subTabPanels.forEach((p) => {
-    p.classList.toggle("active", (p as HTMLElement).id === `advanced-tab-${tabId}`);
+    p.classList.toggle("active", resolvedTabId !== null && (p as HTMLElement).id === `advanced-tab-${resolvedTabId}`);
   });
 
-  if (tabId === "composites") {
+  if (!resolvedTabId) {
+    return;
+  }
+
+  if (resolvedTabId === "composites") {
     renderCompositeList();
-  } else if (tabId === "blends") {
+  } else if (resolvedTabId === "blends") {
     renderBlendList();
-  } else if (tabId === "layouts") {
+  } else if (resolvedTabId === "layouts") {
     renderLayoutList();
   }
 
-  updateSettingsViewState({ advancedTab: tabId });
+  updateSettingsViewState({ advancedTab: resolvedTabId });
 }
 
 const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
-
-function initAdvancedOptionsToggle(): void {
-  if (!advancedOptionsToggle || advancedOptionsToggle.dataset.bound === "true") return;
-  advancedOptionsToggle.dataset.bound = "true";
-  advancedOptionsToggle.addEventListener("change", () => {
-    const enabled = Boolean(advancedOptionsToggle.checked);
-    uiState.appSettings[ADVANCED_OPTIONS_SETTING] = enabled;
-    setAppSetting(ADVANCED_OPTIONS_SETTING, enabled);
-    updateAdvancedTabVisibility();
-    document.dispatchEvent(new CustomEvent("advancedOptionsChanged"));
-  });
-}
 
 function initUpdateCheckToggle(): void {
   if (!updateCheckToggle || updateCheckToggle.dataset.bound === "true") return;
@@ -346,24 +630,6 @@ function initFactoryArchiveLoadingToggle(): void {
     uiState.appSettings[FACTORY_ARCHIVE_LOADING_SETTING] = enabled;
     setAppSetting(FACTORY_ARCHIVE_LOADING_SETTING, enabled);
   });
-}
-
-function updateAdvancedTabVisibility(): void {
-  const enabled = Boolean(getSettingValue(ADVANCED_OPTIONS_SETTING));
-  if (advancedTabButton) {
-    advancedTabButton.style.display = enabled ? "" : "none";
-  }
-  if (factoryArchiveLoadingRow) {
-    factoryArchiveLoadingRow.toggleAttribute("hidden", !enabled);
-  }
-  if (factoryArchiveLoadingToggle) {
-    factoryArchiveLoadingToggle.disabled = !enabled;
-  }
-  updateResourceCleanupVisibility(enabled);
-  // If advanced tab was active but now hidden, switch to first tab
-  if (!enabled && advancedTabButton?.classList.contains("active")) {
-    activateLibraryTab("tone3000");
-  }
 }
 
 function updateResourceCleanupVisibility(enabled: boolean): void {
@@ -438,9 +704,7 @@ export function refreshSettingsView(): void {
   if (themeSelect) {
     themeSelect.value = themeSwitcher.getCurrentTheme();
   }
-  if (advancedOptionsToggle) {
-    advancedOptionsToggle.checked = Boolean(getSettingValue(ADVANCED_OPTIONS_SETTING));
-  }
+  refreshFeatureToggleStates();
   if (factoryArchiveLoadingToggle) {
     const factoryArchiveLoadingEnabled = getSettingValue(FACTORY_ARCHIVE_LOADING_SETTING);
     factoryArchiveLoadingToggle.checked = factoryArchiveLoadingEnabled === null ? true : Boolean(factoryArchiveLoadingEnabled);
@@ -452,7 +716,7 @@ export function refreshSettingsView(): void {
   const showAudioPreferences = Boolean(uiState.environment?.standalone);
   openAudioPreferencesRow?.toggleAttribute("hidden", !showAudioPreferences);
   openAudioPreferencesHint?.toggleAttribute("hidden", !showAudioPreferences);
-  updateAdvancedTabVisibility();
+  syncFeatureVisibility();
   updateSessionStatus();
   updateSignalDiagnosticsView();
   updateCurrentVersionDisplay();
@@ -1179,7 +1443,7 @@ function renderGroupedLibraryView(filtered: LibraryItem[], totalCount: number): 
             </div>
           </div>
           <div class="results-item-actions equipment-library-item-actions">
-            ${isAdvancedOptionsEnabled() ? `<button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>` : ""}
+            ${isFeatureEnabled(Features.BlendTools) ? `<button class="equipment-library-create-blend" data-group-id="${escapeHtml(group.groupId)}">Create Blend</button>` : ""}
             <button class="equipment-library-delete-group icon-btn danger" data-group-id="${escapeHtml(group.groupId)}" title="Delete Group"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         </div>
@@ -1424,8 +1688,8 @@ async function createBlendFromGroup(group: ToneGroup): Promise<void> {
 }
 
 async function cleanupUnusedResources(): Promise<void> {
-  if (!isAdvancedOptionsEnabled()) {
-    showNotification("Cleanup unavailable", "Enable Advanced Options to use Resource Library cleanup.");
+  if (!isFeatureEnabled(Features.ResourceCleanup)) {
+    showNotification("Cleanup unavailable", "Enable Resource Cleanup Tools in Settings > Features to use Resource Library cleanup.");
     return;
   }
 

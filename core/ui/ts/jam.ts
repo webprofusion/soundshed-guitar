@@ -6,6 +6,8 @@ import type { AppSettingValue, JamPlayerState, JamState, JamVideoSummary } from 
 import { escapeHtml } from "./utils.js";
 import { getApiBaseUrl } from "./toneSharingPanel.js";
 import { isJamEnabled } from "./buildFlags.js";
+import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
+import { renderRiffLibraryPanel } from "./riffLibrary.js";
 
 const API_KEY_SETTING = "jam.youtubeApiKey";
 const FAVORITES_SETTING = "jam.favorites";
@@ -18,12 +20,17 @@ const DEFAULT_JAM_QUERY = "backing track";
 const SEARCH_MAX_RESULTS = 12;
 
 let initialized = false;
-let initialSearchTriggered = false;
 let searchRequestId = 0;
+let initialSearchTriggered = false;
+
+type JamSectionId = "backingTracks" | "riffs";
+type BackingTracksTabId = "search" | "favorites";
+type LegacyJamState = JamState & { activeSection?: JamSectionId; activeTab?: BackingTracksTabId | "riffs" };
 
 function ensureJamState(): JamState {
   if (!uiState.jam) {
     uiState.jam = {
+      activeSection: "backingTracks",
       activeTab: "search",
       query: DEFAULT_JAM_QUERY,
       results: [],
@@ -41,7 +48,17 @@ function ensureJamState(): JamState {
       },
     };
   }
-  return uiState.jam;
+
+  const jam = uiState.jam as LegacyJamState;
+  const legacyActiveTab = (uiState.jam as { activeTab?: BackingTracksTabId | "riffs" }).activeTab;
+  if (jam.activeSection !== "backingTracks" && jam.activeSection !== "riffs") {
+    jam.activeSection = legacyActiveTab === "riffs" ? "riffs" : "backingTracks";
+  }
+  if (jam.activeTab !== "search" && jam.activeTab !== "favorites") {
+    jam.activeTab = "search";
+  }
+
+  return jam as JamState;
 }
 
 function isJamVideoSummary(value: unknown): value is JamVideoSummary {
@@ -143,10 +160,77 @@ function isFavorite(videoId: string): boolean {
   return ensureJamState().favorites.some((favorite) => favorite.videoId === videoId);
 }
 
-function setActiveTab(tab: "search" | "favorites"): void {
+function isBackingTracksFeatureEnabled(): boolean {
+  return isFeatureEnabled(Features.Jam);
+}
+
+function isRiffLibraryFeatureEnabled(): boolean {
+  return isFeatureEnabled(Features.RiffLibrary);
+}
+
+function resolveJamSection(preferredSection: JamSectionId): JamSectionId {
+  const orderedSections: JamSectionId[] = ["backingTracks", "riffs"];
+  const enabledSections = orderedSections.filter((sectionId) => {
+    if (sectionId === "riffs") {
+      return isRiffLibraryFeatureEnabled();
+    }
+    return isBackingTracksFeatureEnabled();
+  });
+
+  if (enabledSections.includes(preferredSection)) {
+    return preferredSection;
+  }
+
+  return enabledSections[0] ?? "backingTracks";
+}
+
+function resolveBackingTracksTab(preferredTab: BackingTracksTabId): BackingTracksTabId {
+  return preferredTab === "favorites" ? "favorites" : "search";
+}
+
+function isJamPanelVisible(): boolean {
+  return document.getElementById("panel-jam")?.classList.contains("active") ?? false;
+}
+
+function maybeRunInitialSearch(): void {
   const jam = ensureJamState();
-  jam.activeTab = tab;
+  if (!isJamPanelVisible() || !isBackingTracksFeatureEnabled() || jam.activeSection !== "backingTracks" || jam.activeTab !== "search") {
+    return;
+  }
+
+  jam.apiKeyAvailable = getApiKey().length > 0;
+  if (!jam.apiKeyAvailable || jam.results.length > 0 || jam.loading || initialSearchTriggered) {
+    return;
+  }
+
+  initialSearchTriggered = true;
+  void runSearch();
+}
+
+function setActiveSection(section: JamSectionId): void {
+  const jam = ensureJamState();
+  jam.activeSection = resolveJamSection(section);
+  jam.activeTab = resolveBackingTracksTab(jam.activeTab);
   renderJamPanel();
+
+  if (jam.activeSection === "riffs") {
+    renderRiffLibraryPanel();
+    return;
+  }
+
+  if (jam.activeTab === "search") {
+    maybeRunInitialSearch();
+  }
+}
+
+function setBackingTracksTab(tab: BackingTracksTabId): void {
+  const jam = ensureJamState();
+  jam.activeSection = resolveJamSection("backingTracks");
+  jam.activeTab = resolveBackingTracksTab(tab);
+  renderJamPanel();
+  if (jam.activeTab === "search") {
+    maybeRunInitialSearch();
+  }
 }
 
 function normalizeSearchQuery(rawQuery: string): string {
@@ -310,6 +394,9 @@ function toggleMinimized(): void {
 }
 
 function renderSearchStatus(jam: JamState): string {
+  if (!isBackingTracksFeatureEnabled()) {
+    return '<div class="jam-empty-state">Backing tracks are disabled in Settings &gt; Features.</div>';
+  }
   if (jam.loading) {
     return '<div class="jam-empty-state">Searching YouTube for backing tracks…</div>';
   }
@@ -344,25 +431,62 @@ function renderResultCard(video: JamVideoSummary): string {
 
 export function renderJamPanel(): void {
   const jam = ensureJamState();
-  const resultsHost = document.getElementById("jam-results");
+  const resolvedSection = resolveJamSection(jam.activeSection);
+  const resolvedTab = resolveBackingTracksTab(jam.activeTab);
+  const searchResultsHost = document.getElementById("jam-results");
+  const favoritesResultsHost = document.getElementById("jam-favorites-results");
   const searchInput = document.getElementById("jam-search-input") as HTMLInputElement | null;
-  const searchTab = document.getElementById("jam-tab-search");
-  const favoritesTab = document.getElementById("jam-tab-favorites");
+  const backingTracksSectionButton = document.getElementById("jam-section-backing-tracks");
+  const riffsSectionButton = document.getElementById("jam-section-riffs");
+  const searchTab = document.getElementById("jam-backing-tab-search");
+  const favoritesTab = document.getElementById("jam-backing-tab-favorites");
+  const backingTracksPanel = document.getElementById("jam-section-panel-backing-tracks");
+  const riffsPanel = document.getElementById("jam-section-panel-riffs");
+  const searchPanel = document.getElementById("jam-backing-tab-panel-search");
+  const favoritesPanel = document.getElementById("jam-backing-tab-panel-favorites");
 
-  if (!resultsHost) {
+  if (!searchResultsHost || !favoritesResultsHost) {
     return;
   }
+
+  jam.activeSection = resolvedSection;
+  jam.activeTab = resolvedTab;
+
+  const backingTracksEnabled = isBackingTracksFeatureEnabled();
+  const riffLibraryEnabled = isRiffLibraryFeatureEnabled();
 
   if (searchInput && searchInput.value !== jam.query) {
     searchInput.value = jam.query;
   }
 
-  searchTab?.classList.toggle("active", jam.activeTab === "search");
-  favoritesTab?.classList.toggle("active", jam.activeTab === "favorites");
+  backingTracksSectionButton?.toggleAttribute("hidden", !backingTracksEnabled);
+  riffsSectionButton?.toggleAttribute("hidden", !riffLibraryEnabled);
+  searchTab?.toggleAttribute("hidden", !backingTracksEnabled);
+  favoritesTab?.toggleAttribute("hidden", !backingTracksEnabled);
 
-  const source = jam.activeTab === "favorites" ? jam.favorites : jam.results;
+  backingTracksSectionButton?.classList.toggle("active", resolvedSection === "backingTracks");
+  riffsSectionButton?.classList.toggle("active", resolvedSection === "riffs");
+  searchTab?.classList.toggle("active", resolvedTab === "search");
+  favoritesTab?.classList.toggle("active", resolvedTab === "favorites");
+
+  backingTracksPanel?.classList.toggle("active", resolvedSection === "backingTracks" && backingTracksEnabled);
+  backingTracksPanel?.toggleAttribute("hidden", resolvedSection !== "backingTracks" || !backingTracksEnabled);
+  riffsPanel?.classList.toggle("active", resolvedSection === "riffs" && riffLibraryEnabled);
+  riffsPanel?.toggleAttribute("hidden", resolvedSection !== "riffs" || !riffLibraryEnabled);
+  searchPanel?.classList.toggle("active", resolvedTab === "search" && backingTracksEnabled);
+  searchPanel?.toggleAttribute("hidden", resolvedTab !== "search" || !backingTracksEnabled);
+  favoritesPanel?.classList.toggle("active", resolvedTab === "favorites" && backingTracksEnabled);
+  favoritesPanel?.toggleAttribute("hidden", resolvedTab !== "favorites" || !backingTracksEnabled);
+
+  if (resolvedSection === "riffs") {
+    renderRiffLibraryPanel();
+    return;
+  }
+
+  const source = resolvedTab === "favorites" ? jam.favorites : jam.results;
   const status = renderSearchStatus(jam);
-  resultsHost.innerHTML = status || source.map(renderResultCard).join("");
+  const targetHost = resolvedTab === "favorites" ? favoritesResultsHost : searchResultsHost;
+  targetHost.innerHTML = status || source.map(renderResultCard).join("");
 }
 
 function bindFloatingPlayerDrag(panel: HTMLElement, handle: HTMLElement): void {
@@ -514,10 +638,12 @@ function findVideoById(videoId: string): JamVideoSummary | undefined {
 function bindPanelActions(): void {
   const searchInput = document.getElementById("jam-search-input") as HTMLInputElement | null;
   const searchButton = document.getElementById("jam-search-button");
-  const resultsHost = document.getElementById("jam-results");
+  const resultsHosts = [document.getElementById("jam-results"), document.getElementById("jam-favorites-results")];
 
-  document.getElementById("jam-tab-search")?.addEventListener("click", () => setActiveTab("search"));
-  document.getElementById("jam-tab-favorites")?.addEventListener("click", () => setActiveTab("favorites"));
+  document.getElementById("jam-section-backing-tracks")?.addEventListener("click", () => setActiveSection("backingTracks"));
+  document.getElementById("jam-section-riffs")?.addEventListener("click", () => setActiveSection("riffs"));
+  document.getElementById("jam-backing-tab-search")?.addEventListener("click", () => setBackingTracksTab("search"));
+  document.getElementById("jam-backing-tab-favorites")?.addEventListener("click", () => setBackingTracksTab("favorites"));
 
   searchInput?.addEventListener("input", () => {
     ensureJamState().query = searchInput.value;
@@ -529,35 +655,39 @@ function bindPanelActions(): void {
   });
   searchButton?.addEventListener("click", () => void runSearch());
 
-  resultsHost?.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement | null;
-    if (!target) {
-      return;
-    }
-    const actionElement = target.closest<HTMLElement>("[data-jam-action]");
-    const videoId = actionElement?.dataset.videoId ?? target.closest<HTMLElement>("[data-video-id]")?.dataset.videoId ?? "";
-    const video = findVideoById(videoId);
-    if (!video) {
-      return;
-    }
+  resultsHosts.forEach((resultsHost) => {
+    resultsHost?.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+      const actionElement = target.closest<HTMLElement>("[data-jam-action]");
+      const videoId = actionElement?.dataset.videoId ?? target.closest<HTMLElement>("[data-video-id]")?.dataset.videoId ?? "";
+      const video = findVideoById(videoId);
+      if (!video) {
+        return;
+      }
 
-    if (actionElement?.dataset.jamAction === "favorite") {
-      toggleFavorite(video);
-      return;
-    }
+      if (actionElement?.dataset.jamAction === "favorite") {
+        toggleFavorite(video);
+        return;
+      }
 
-    if (actionElement?.dataset.jamAction === "play") {
-      openPlayer(video);
-    }
+      if (actionElement?.dataset.jamAction === "play") {
+        openPlayer(video);
+      }
+    });
   });
 }
 
 export function applyJamAppSettings(): void {
-  if (!isJamEnabled()) {
+  if (!isJamEnabled() || !isJamExperienceEnabled()) {
     return;
   }
 
   const jam = ensureJamState();
+  jam.activeSection = resolveJamSection(jam.activeSection);
+  jam.activeTab = resolveBackingTracksTab(jam.activeTab);
   if (!jam.query.trim()) {
     jam.query = DEFAULT_JAM_QUERY;
   }
@@ -568,11 +698,35 @@ export function applyJamAppSettings(): void {
   clampPlayerPosition(jam.player);
   renderJamPanel();
   renderFloatingPlayer();
+}
 
-  if (!initialSearchTriggered && jam.apiKeyAvailable && jam.results.length === 0 && !jam.loading) {
-    initialSearchTriggered = true;
-    void runSearch();
+function handleFeatureFlagsChanged(): void {
+  if (!initialized) {
+    return;
   }
+
+  const jam = ensureJamState();
+  jam.activeSection = resolveJamSection(jam.activeSection);
+  jam.activeTab = resolveBackingTracksTab(jam.activeTab);
+  if (!isBackingTracksFeatureEnabled()) {
+    jam.loading = false;
+  }
+  renderJamPanel();
+  if (isJamPanelVisible()) {
+    maybeRunInitialSearch();
+  }
+}
+
+export function handleJamPanelActivated(): void {
+  if (!initialized || !isJamEnabled() || !isJamExperienceEnabled()) {
+    return;
+  }
+
+  const jam = ensureJamState();
+  jam.activeSection = resolveJamSection(jam.activeSection);
+  jam.activeTab = resolveBackingTracksTab(jam.activeTab);
+  renderJamPanel();
+  maybeRunInitialSearch();
 }
 
 export function initializeJamPanel(): void {
@@ -586,5 +740,6 @@ export function initializeJamPanel(): void {
   initialized = true;
   bindPanelActions();
   window.addEventListener("resize", () => renderFloatingPlayer());
+  document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, handleFeatureFlagsChanged);
   applyJamAppSettings();
 }

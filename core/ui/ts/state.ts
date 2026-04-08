@@ -203,6 +203,7 @@ export const uiState: UiState = {
   },
   tone3000Session: null,
   jam: {
+    activeSection: "backingTracks",
     activeTab: "search",
     query: "",
     results: [],
@@ -378,12 +379,6 @@ export function setPresetDirty(isDirty: boolean): void {
 
 export function isCompositeEditMode(): boolean {
   return !!uiState.compositeEditMode;
-}
-
-const ADVANCED_OPTIONS_SETTING = "ui.advancedOptionsEnabled";
-
-export function isAdvancedOptionsEnabled(): boolean {
-  return Boolean(uiState.appSettings?.[ADVANCED_OPTIONS_SETTING]);
 }
 
 export function getCompositeEditDefinition(): CompositeEffectDefinition | null {
