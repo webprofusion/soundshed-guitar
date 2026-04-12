@@ -20,6 +20,12 @@ on:
         type: string
         default: https://www.steinberg.net/asiosdk
 
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24
+
 jobs:
   build-installer-juce:
     name: Build JUCE Installer (Windows ${{ matrix.arch }})
@@ -35,14 +41,14 @@ jobs:
             cmake_arch: ARM64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: core/ui/package-lock.json
 
@@ -59,7 +65,7 @@ jobs:
 
       - name: Cache JUCE source
         id: cache-juce-source
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: juce/JUCE
           key: ${{ runner.os }}-juce-source-v2
@@ -119,7 +125,7 @@ jobs:
 
       - name: Cache ASIO SDK
         id: cache-asio-sdk
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/asio-sdk
           key: ${{ runner.os }}-asio-sdk-v1
@@ -180,7 +186,7 @@ jobs:
         run: iscc "packaging\installer.iss"
 
       - name: Upload JUCE Installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Soundshed Guitar-JUCE-Installer-${{ matrix.arch }}
           path: juce/packaging/Output/*.exe
@@ -216,14 +222,14 @@ jobs:
             package_dmg: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: core/ui/package-lock.json
 
@@ -237,7 +243,7 @@ jobs:
 
       - name: Cache JUCE source
         id: cache-juce-source-macos
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: juce/JUCE
           key: ${{ runner.os }}-juce-source-v2
@@ -327,7 +333,7 @@ jobs:
 
       - name: Upload macOS DMG
         if: ${{ matrix.package_dmg }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.DMG_NAME }}
           path: ${{ env.DMG_PATH }}
@@ -340,6 +346,6 @@ jobs:
           r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           r2-bucket: soundshed-guitar-builds
-          source-dir: $DMG_PATH
+          source-dir: ${{ env.DMG_PATH }}
           destination-dir: ./build-artifacts
           keep-file-fresh: true
