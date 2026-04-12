@@ -60,7 +60,11 @@ private:
     juce::Label linuxWebViewStatusLabel;
     bool linuxWebViewLoadCompleted = false;
     bool linuxWebViewFallbackShown = false;
+    bool linuxWebViewSlowLoadLogged = false;
+    bool linuxWebViewRetryAttempted = false;
+    int linuxWebViewNetworkErrorCount = 0;
     juce::uint32 linuxWebViewInitTimeMs = 0;
+    juce::String linuxInitialUrl;
    #endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)

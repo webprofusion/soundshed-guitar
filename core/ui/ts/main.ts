@@ -45,6 +45,57 @@ function closeEqModal(): void {
   eqModal.style.display = "none";
 }
 
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function showBootstrapError(details: string): void {
+  const splash = document.getElementById("splash-screen");
+  if (!splash) return;
+
+  const subtitle = splash.querySelector(".splash-subtitle");
+  if (subtitle) {
+    subtitle.textContent = "Startup failed";
+  }
+
+  let detailNode = splash.querySelector(".splash-error") as HTMLElement | null;
+  if (!detailNode) {
+    detailNode = document.createElement("p");
+    detailNode.className = "splash-error";
+    detailNode.style.marginTop = "10px";
+    detailNode.style.fontSize = "12px";
+    detailNode.style.maxWidth = "360px";
+    detailNode.style.textAlign = "center";
+    detailNode.style.opacity = "0.92";
+
+    const splashContent = splash.querySelector(".splash-content");
+    if (splashContent) {
+      splashContent.appendChild(detailNode);
+    }
+  }
+
+  if (detailNode) {
+    detailNode.textContent = details;
+  }
+}
+
+function reportBootstrapFailure(source: string, error: unknown): void {
+  const details = describeError(error);
+  console.error(`[JS] UI bootstrap failure (${source}):`, error);
+  showBootstrapError(details);
+  postMessage({ type: "uiBootstrapError", source, details });
+}
+
 
 async function bootstrap(): Promise<void> {
   initSplashScreen();
@@ -158,4 +209,30 @@ async function bootstrap(): Promise<void> {
   await hideSplashScreen();
 }
 
-bootstrap();
+let bootstrapSettled = false;
+let bootstrapFailureReported = false;
+
+const reportBootstrapFailureOnce = (source: string, error: unknown): void => {
+  if (bootstrapFailureReported) return;
+  bootstrapFailureReported = true;
+  reportBootstrapFailure(source, error);
+};
+
+window.addEventListener("error", (event) => {
+  if (bootstrapSettled) return;
+  reportBootstrapFailureOnce("window.error", event.error ?? event.message);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  if (bootstrapSettled) return;
+  reportBootstrapFailureOnce("unhandledrejection", event.reason);
+});
+
+bootstrap()
+  .then(() => {
+    bootstrapSettled = true;
+  })
+  .catch((error) => {
+    reportBootstrapFailureOnce("bootstrap", error);
+    bootstrapSettled = true;
+  });

@@ -119,6 +119,10 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     if (newURL.startsWith (getResourceProviderRoot()))
         return true;
 
+    // Allow local file navigation when resource-provider mode is unavailable.
+    if (newURL.startsWith ("file://") || newURL.startsWith ("about:blank"))
+        return true;
+
     // Allow data: URLs (used by the WebView2-missing error page)
     if (newURL.startsWith ("data:"))
         return true;
@@ -306,6 +310,9 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     });
 
     linuxWebViewInitTimeMs = juce::Time::getMillisecondCounter();
+    linuxWebViewSlowLoadLogged = false;
+    linuxWebViewRetryAttempted = false;
+    linuxWebViewNetworkErrorCount = 0;
     linuxWebViewStatusLabel.setJustificationType (juce::Justification::centred);
     linuxWebViewStatusLabel.setColour (juce::Label::backgroundColourId, juce::Colour::fromRGBA (18, 19, 24, 242));
     linuxWebViewStatusLabel.setColour (juce::Label::textColourId, juce::Colours::white);
@@ -377,7 +384,7 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
        #else
         const auto indexFile = resourceRoot.getChildFile ("ui").getChildFile ("index.html");
         if (indexFile.existsAsFile())
-            startUrl = indexFile.getFullPathName() + cacheBust;
+            startUrl = juce::URL (indexFile).toString (false) + cacheBust;
         else
             startUrl = "data:text/html;charset=UTF-8,<html><body><h2>UI not found</h2></body></html>";
        #endif
@@ -386,7 +393,14 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 
        #if JUCE_LINUX
         if (! linuxWebViewFallbackShown)
+        {
+            linuxInitialUrl = startUrl;
+            linuxWebViewInitTimeMs = juce::Time::getMillisecondCounter();
+            linuxWebViewSlowLoadLogged = false;
+            linuxWebViewRetryAttempted = false;
+            linuxWebViewNetworkErrorCount = 0;
             webView.goToURL (startUrl);
+        }
        #else
         webView.goToURL (startUrl);
        #endif
@@ -414,8 +428,26 @@ void PluginEditor::timerCallback()
    #if JUCE_LINUX
     if (! linuxWebViewLoadCompleted && ! linuxWebViewFallbackShown)
     {
-        constexpr juce::uint32 loadTimeoutMs = 8000;
+        constexpr juce::uint32 loadWarningMs = 8000;
+        constexpr juce::uint32 loadRetryMs = 12000;
+        constexpr juce::uint32 loadTimeoutMs = 25000;
         const auto elapsedMs = juce::Time::getMillisecondCounter() - linuxWebViewInitTimeMs;
+
+        if (! linuxWebViewSlowLoadLogged && elapsedMs > loadWarningMs)
+        {
+            linuxWebViewSlowLoadLogged = true;
+            writeStartupLog ("[PluginEditor] Linux WebView still loading after 8s");
+        }
+
+        if (! linuxWebViewRetryAttempted && elapsedMs > loadRetryMs && linuxInitialUrl.isNotEmpty())
+        {
+            linuxWebViewRetryAttempted = true;
+            linuxWebViewInitTimeMs = juce::Time::getMillisecondCounter();
+            linuxWebViewNetworkErrorCount = 0;
+            writeStartupLog ("[PluginEditor] Linux WebView load retry after slow startup");
+            webView.goToURL (linuxInitialUrl);
+            return;
+        }
 
         if (elapsedMs > loadTimeoutMs)
             showLinuxWebViewDependencyMessage ("Timed out while waiting for the embedded WebView to finish loading.");
@@ -481,6 +513,7 @@ void PluginEditor::markLinuxWebViewLoaded (const juce::String& url)
         writeStartupLog ("[PluginEditor] Linux WebView loaded: " + url);
 
     linuxWebViewLoadCompleted = true;
+    linuxWebViewNetworkErrorCount = 0;
 
     if (linuxWebViewFallbackShown)
     {
@@ -491,7 +524,20 @@ void PluginEditor::markLinuxWebViewLoaded (const juce::String& url)
 
 bool PluginEditor::handleLinuxWebViewNetworkError (const juce::String& errorInfo)
 {
-    showLinuxWebViewDependencyMessage ("Network/WebView error: " + errorInfo);
+    writeStartupLog ("[PluginEditor] Linux WebView network error: " + errorInfo);
+
+    if (linuxWebViewLoadCompleted || linuxWebViewFallbackShown)
+        return false;
+
+    ++linuxWebViewNetworkErrorCount;
+
+    const bool missingResourceError = errorInfo.containsIgnoreCase ("ERR_FILE_NOT_FOUND")
+                                   || errorInfo.containsIgnoreCase ("FILE_DOES_NOT_EXIST")
+                                   || errorInfo.containsIgnoreCase ("404");
+
+    if (missingResourceError || linuxWebViewNetworkErrorCount >= 3)
+        showLinuxWebViewDependencyMessage ("Network/WebView error: " + errorInfo);
+
     return false;
 }
 

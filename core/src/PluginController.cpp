@@ -2090,6 +2090,22 @@ void PluginController::DeserializeState(const std::string& json)
 
 void PluginController::HandleUIMessage(const std::string& jsonMessage)
 {
+    try
+    {
+        const auto msg = nlohmann::json::parse(jsonMessage);
+        if (msg.is_object() && msg.value("type", std::string{}) == "uiBootstrapError")
+        {
+            const auto source = msg.value("source", std::string{"unknown"});
+            const auto details = msg.value("details", std::string{"(no details)"});
+            AppendSessionLog("UI bootstrap error (" + source + "): " + details);
+            return;
+        }
+    }
+    catch (const std::exception&)
+    {
+        // Defer malformed payload handling to the dispatcher.
+    }
+
     // Delegate to the MessageDispatcher which routes by message type.
     MessageDispatcher::Dispatch(*this, jsonMessage);
 }
