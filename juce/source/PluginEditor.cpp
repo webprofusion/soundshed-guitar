@@ -137,6 +137,30 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     return false;
 }
 
+void SinglePageBrowser::setPageFinishedCallback (PageFinishedCallback callback)
+{
+    pageFinishedCallback = std::move (callback);
+}
+
+void SinglePageBrowser::setNetworkErrorCallback (NetworkErrorCallback callback)
+{
+    networkErrorCallback = std::move (callback);
+}
+
+void SinglePageBrowser::pageFinishedLoading (const juce::String& url)
+{
+    if (pageFinishedCallback != nullptr)
+        pageFinishedCallback (url);
+}
+
+bool SinglePageBrowser::pageLoadHadNetworkError (const juce::String& errorInfo)
+{
+    if (networkErrorCallback != nullptr)
+        return networkErrorCallback (errorInfo);
+
+    return false;
+}
+
 void SinglePageBrowser::newWindowAttemptingToLoad (const juce::String& newURL)
 {
     // YouTube embeds frequently request popup windows for watch pages, sign-in, and
@@ -167,7 +191,10 @@ namespace
             const auto line = juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S") + "  " + message + "\n";
             stream.writeText (line, false, false, nullptr);
         }
+
+       #if ! JUCE_LINUX
         juce::Logger::writeToLog (message);
+       #endif
     }
 }
 
@@ -267,10 +294,45 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 {
     addAndMakeVisible (webView);
 
+   #if JUCE_LINUX
+    webView.setPageFinishedCallback ([this] (const juce::String& url)
+    {
+        markLinuxWebViewLoaded (url);
+    });
+
+    webView.setNetworkErrorCallback ([this] (const juce::String& errorInfo)
+    {
+        return handleLinuxWebViewNetworkError (errorInfo);
+    });
+
+    linuxWebViewInitTimeMs = juce::Time::getMillisecondCounter();
+    linuxWebViewStatusLabel.setJustificationType (juce::Justification::centred);
+    linuxWebViewStatusLabel.setColour (juce::Label::backgroundColourId, juce::Colour::fromRGBA (18, 19, 24, 242));
+    linuxWebViewStatusLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    linuxWebViewStatusLabel.setVisible (false);
+
+    const auto linuxWebViewSupported = juce::WebBrowserComponent::areOptionsSupported (
+        juce::WebBrowserComponent::Options{}
+            .withBackend (getPreferredBrowserBackend())
+            .withNativeIntegrationEnabled());
+
+    if (! linuxWebViewSupported)
+    {
+        showLinuxWebViewDependencyMessage ("Embedded WebKit support was not detected. webkit2gtk is required.");
+        writeStartupLog ("[PluginEditor] Linux WebView unsupported: missing runtime dependencies");
+    }
+   #endif
+
     processorRef.setWebMessageCallback ([this] (const juce::String& message)
     {
         const auto script = guitarfx::ui::BuildIPlugReceiveScript (message.toStdString());
+       #if JUCE_LINUX
+        // JUCE's Linux WebKit backend emits evaluation callbacks even when none
+        // were requested; providing a no-op callback avoids assertion noise.
+        webView.evaluateJavascript (juce::String (script), [] (const auto&) {});
+       #else
         webView.evaluateJavascript (juce::String (script));
+       #endif
     });
 
    #if JUCE_WINDOWS
@@ -321,7 +383,13 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
        #endif
 
         writeStartupLog ("[PluginEditor] goToURL: " + startUrl);
+
+       #if JUCE_LINUX
+        if (! linuxWebViewFallbackShown)
+            webView.goToURL (startUrl);
+       #else
         webView.goToURL (startUrl);
+       #endif
     }
 
     setResizable (true, true);
@@ -342,6 +410,17 @@ PluginEditor::~PluginEditor()
 void PluginEditor::timerCallback()
 {
     processorRef.getController().OnIdle();
+
+   #if JUCE_LINUX
+    if (! linuxWebViewLoadCompleted && ! linuxWebViewFallbackShown)
+    {
+        constexpr juce::uint32 loadTimeoutMs = 8000;
+        const auto elapsedMs = juce::Time::getMillisecondCounter() - linuxWebViewInitTimeMs;
+
+        if (elapsedMs > loadTimeoutMs)
+            showLinuxWebViewDependencyMessage ("Timed out while waiting for the embedded WebView to finish loading.");
+    }
+   #endif
 }
 
 std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (const juce::String& url)
@@ -395,6 +474,53 @@ juce::String PluginEditor::getResourceRootUrl() const
     return kResourceOrigin;
 }
 
+#if JUCE_LINUX
+void PluginEditor::markLinuxWebViewLoaded (const juce::String& url)
+{
+    if (! linuxWebViewLoadCompleted)
+        writeStartupLog ("[PluginEditor] Linux WebView loaded: " + url);
+
+    linuxWebViewLoadCompleted = true;
+
+    if (linuxWebViewFallbackShown)
+    {
+        linuxWebViewFallbackShown = false;
+        linuxWebViewStatusLabel.setVisible (false);
+    }
+}
+
+bool PluginEditor::handleLinuxWebViewNetworkError (const juce::String& errorInfo)
+{
+    showLinuxWebViewDependencyMessage ("Network/WebView error: " + errorInfo);
+    return false;
+}
+
+void PluginEditor::showLinuxWebViewDependencyMessage (const juce::String& reason)
+{
+    if (! linuxWebViewFallbackShown)
+    {
+        writeStartupLog ("[PluginEditor] Linux WebView fallback shown: " + reason);
+        linuxWebViewFallbackShown = true;
+    }
+
+    const juce::String message =
+        "The Soundshed Guitar UI could not be displayed in the embedded browser on Linux.\n\n"
+        "Please confirm the required app dependencies are installed.\n"
+        "See guitar.soundshed.com for details.\n\n"
+        "Details: " + reason;
+
+    linuxWebViewStatusLabel.setText (message, juce::dontSendNotification);
+
+    if (linuxWebViewStatusLabel.getParentComponent() == nullptr)
+        addAndMakeVisible (linuxWebViewStatusLabel);
+    else
+        linuxWebViewStatusLabel.setVisible (true);
+
+    linuxWebViewStatusLabel.toFront (false);
+    resized();
+}
+#endif
+
 void PluginEditor::paint (juce::Graphics& g)
 {
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
@@ -403,4 +529,8 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     webView.setBounds (getLocalBounds());
+
+   #if JUCE_LINUX
+    linuxWebViewStatusLabel.setBounds (getLocalBounds().reduced (24));
+   #endif
 }
