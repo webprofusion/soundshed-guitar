@@ -8,12 +8,14 @@ If `JUCE/` is still missing (some clones do not have gitlink entries for the sub
  
  Generate project files and fetch dependencies e.g.:
  
- Configure to include ASIO and use "builds" folder
- `cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/builds-x64 -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK"`
+ Configure for Windows and use "builds" folder. ASIO is enabled by default via JUCE's bundled ASIO sources.
+ `cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/builds-x64`
  
-  `cmake -G "Visual Studio 18 2026" -A ARM64 -S juce -B juce/builds-arm64 -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK"`
+  `cmake -G "Visual Studio 18 2026" -A ARM64 -S juce -B juce/builds-arm64`
 
- `cmake -G "Visual Studio 18 2026" -A ARM64EC -S juce -B juce/builds-arm64ec -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK"`
+ `cmake -G "Visual Studio 18 2026" -A ARM64EC -S juce -B juce/builds-arm64ec`
+
+ If you need a custom external Steinberg ASIO SDK instead of JUCE's bundled ASIO headers, pass `-DGUITARFX_ASIO_SDK_DIR="C:/path/to/ASIOSDK"` and make sure that directory contains `iasiodrv.h`.
 
  `cmake -B build -G "Xcode"`
 

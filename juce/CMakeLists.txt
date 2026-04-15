@@ -205,19 +205,46 @@ if(WIN32)
 
     set(GUITARFX_WEBVIEW2_LOADER_DLL "${WebView2_root_dir}/build/native/${GUITARFX_WEBVIEW2_LOADER_ARCH}/WebView2Loader.dll")
 
-    set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)")
+    set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Optional path to a custom Steinberg ASIO SDK root folder")
+    set(GUITARFX_JUCE_ASIO_ENABLED 1)
+    set(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK 0)
+    set(_guitarfx_asio_external_include_dirs "")
+
     if(GUITARFX_ASIO_SDK_DIR STREQUAL "" AND DEFINED ENV{ASIO_SDK_DIR} AND NOT "$ENV{ASIO_SDK_DIR}" STREQUAL "")
         file(TO_CMAKE_PATH "$ENV{ASIO_SDK_DIR}" _asio_sdk_dir_from_env)
-        set(GUITARFX_ASIO_SDK_DIR "${_asio_sdk_dir_from_env}" CACHE PATH "Path to Steinberg ASIO SDK root folder (ASIOSDK)" FORCE)
+        set(GUITARFX_ASIO_SDK_DIR "${_asio_sdk_dir_from_env}" CACHE PATH "Optional path to a custom Steinberg ASIO SDK root folder" FORCE)
     endif()
 
-    if(NOT GUITARFX_ASIO_SDK_DIR STREQUAL "" AND EXISTS "${GUITARFX_ASIO_SDK_DIR}")
-        set(GUITARFX_JUCE_ASIO_ENABLED 1)
+    if(NOT GUITARFX_ASIO_SDK_DIR STREQUAL "")
+        set(_guitarfx_asio_header_candidates
+            "${GUITARFX_ASIO_SDK_DIR}/iasiodrv.h"
+            "${GUITARFX_ASIO_SDK_DIR}/host/iasiodrv.h"
+            "${GUITARFX_ASIO_SDK_DIR}/common/iasiodrv.h")
+
+        foreach(_guitarfx_asio_header IN LISTS _guitarfx_asio_header_candidates)
+            if(EXISTS "${_guitarfx_asio_header}")
+                set(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK 1)
+                break()
+            endif()
+        endforeach()
+
+        if(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK)
+            list(APPEND _guitarfx_asio_external_include_dirs
+                "${GUITARFX_ASIO_SDK_DIR}"
+                "${GUITARFX_ASIO_SDK_DIR}/host"
+                "${GUITARFX_ASIO_SDK_DIR}/common")
+            list(REMOVE_DUPLICATES _guitarfx_asio_external_include_dirs)
+            message(STATUS "Windows ASIO enabled using external SDK at ${GUITARFX_ASIO_SDK_DIR}")
+        else()
+            message(WARNING "GUITARFX_ASIO_SDK_DIR='${GUITARFX_ASIO_SDK_DIR}' does not contain iasiodrv.h; falling back to JUCE bundled ASIO sources.")
+        endif()
     else()
-        set(GUITARFX_JUCE_ASIO_ENABLED 0)
+        message(STATUS "Windows ASIO enabled using JUCE bundled ASIO sources")
     endif()
 else()
     set(GUITARFX_JUCE_ASIO_ENABLED 0)
+    set(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK 0)
+    set(_guitarfx_asio_external_include_dirs "")
 endif()
 
 # Force JUCE to work with sccache
@@ -319,8 +346,9 @@ target_compile_definitions(SharedCode
     JUCE_USE_CURL=0     # If you set this to 1, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
     JUCE_VST3_CAN_REPLACE_VST2=0
 
-    # Enable ASIO on Windows (requires Steinberg ASIO SDK)
+    # Enable ASIO on Windows. JUCE 8.0.11+ uses bundled ASIO sources by default.
     JUCE_ASIO=${GUITARFX_JUCE_ASIO_ENABLED}
+    JUCE_ASIO_USE_EXTERNAL_SDK=${GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK}
 
     # Use WebView2 on Windows
     JUCE_USE_WIN_WEBVIEW2=1
@@ -343,11 +371,8 @@ target_compile_definitions(SharedCode
     PRODUCT_NAME_WITHOUT_VERSION="Soundshed Guitar"
 )
 
-if(GUITARFX_JUCE_ASIO_ENABLED)
-    target_compile_definitions(SharedCode
-        INTERFACE
-        JUCE_ASIO_PATH="${GUITARFX_ASIO_SDK_DIR}"
-    )
+if(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK)
+    target_include_directories(SharedCode INTERFACE ${_guitarfx_asio_external_include_dirs})
 endif()
 
 # Link to any other modules you added (with juce_add_module) here!

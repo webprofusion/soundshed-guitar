@@ -166,6 +166,7 @@ const packThumbnailObjectUrls = new Map<string, string>();
 let browseMode: "featured" | "items" | "packs" | "installed" | "mine" | "ai-search" | "review" = "featured";
 let publishItemInFlight = false;
 let publishPackInFlight = false;
+let authCodeRequested = false;
 
 type AiToneEffect = { type: string; name: string; settings?: Record<string, string | number> };
 
@@ -542,9 +543,10 @@ function closeToneSharingPublishPresetModal(force = false): void {
   modal.style.display = "none";
 }
 
-function openSignInModal(): void {
+export function openToneSharingSignInModal(): void {
   const modal = element<HTMLElement>("tone-sharing-signin-modal");
   if (modal) {
+    updateAuthButtonVisibility();
     modal.style.display = "flex";
   }
 }
@@ -755,14 +757,21 @@ async function savePack(publish: boolean): Promise<void> {
 }
 
 function updateAuthButtonVisibility(): void {
+  const sendCodeButton = element<HTMLButtonElement>("tone-sharing-send-code");
   const signInButton = element<HTMLButtonElement>("tone-sharing-verify");
   const signOutButton = element<HTMLButtonElement>("tone-sharing-logout");
   const accountChip = element<HTMLButtonElement>("tone-sharing-account-btn");
   const createPackButton = element<HTMLButtonElement>("tone-sharing-open-pack-modal");
   const signedIn = !!state.user;
+  const showVerifyActions = !signedIn && authCodeRequested;
+
+  if (sendCodeButton) {
+    sendCodeButton.style.display = signedIn ? "none" : "";
+    sendCodeButton.textContent = authCodeRequested ? "Re-Send Code" : "Send Code";
+  }
 
   if (signInButton) {
-    signInButton.style.display = signedIn ? "none" : "";
+    signInButton.style.display = showVerifyActions ? "" : "none";
   }
   if (signOutButton) {
     signOutButton.style.display = signedIn ? "" : "none";
@@ -1110,6 +1119,7 @@ async function loadAuthSession(): Promise<void> {
   try {
     const data = await apiFetch<{ user: ToneSharingUser | null }>("/auth/me");
     state.user = data.user;
+    authCodeRequested = false;
     updateAuthButtonVisibility();
     if (data.user) {
       setText("tone-sharing-auth-status", `Signed in as ${data.user.email}`);
@@ -1136,6 +1146,8 @@ async function sendCode(): Promise<void> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email })
     });
+    authCodeRequested = true;
+    updateAuthButtonVisibility();
     setText("tone-sharing-auth-status", "Code sent. Check your email.");
   } catch (error) {
     setText("tone-sharing-auth-status", `Send code failed: ${(error as Error).message}`);
@@ -1160,6 +1172,7 @@ async function verifyCode(): Promise<void> {
 
     state.user = data.user;
     state.sessionId = data.sessionId ?? "";
+    authCodeRequested = false;
     updateAuthButtonVisibility();
     persistToneSharingSession(state.sessionId);
     setText("tone-sharing-auth-status", `Signed in as ${data.user.email}`);
@@ -1178,6 +1191,7 @@ async function signOut(): Promise<void> {
 
   state.sessionId = "";
   state.user = null;
+  authCodeRequested = false;
   updateAuthButtonVisibility();
   persistToneSharingSession("");
   setText("tone-sharing-auth-status", "Signed out");
@@ -2931,7 +2945,7 @@ function bindTopControls(): void {
 
   // Account chip opens sign-in modal
   element<HTMLButtonElement>("tone-sharing-account-btn")?.addEventListener("click", () => {
-    openSignInModal();
+    openToneSharingSignInModal();
   });
 
   element<HTMLButtonElement>("tone-sharing-preview-clear")?.addEventListener("click", () => {

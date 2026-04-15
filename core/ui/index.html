@@ -33,12 +33,11 @@
 
 <body>
   <div id="app" class="prevent-select">
-    <!-- Splash Screen — shown during initialization, hidden once app is ready -->
+    <!-- Splash Screen - shown during initialization, hidden once app is ready -->
     <div id="splash-screen" class="splash-screen" role="status" aria-live="polite" aria-label="Application loading">
       <div class="splash-content">
         <div class="splash-logo">
           <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <!-- Soundshed Guitar stylized icon -->
             <circle cx="100" cy="100" r="95" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/>
             <path d="M 60 80 Q 100 50 140 80 Q 140 120 100 140 Q 60 120 60 80" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             <circle cx="100" cy="110" r="8" fill="currentColor"/>
@@ -50,11 +49,11 @@
           </svg>
         </div>
         <h1 class="splash-title">Soundshed Guitar</h1>
-        <p class="splash-subtitle">Initializing…</p>
+        <p class="splash-subtitle">Initializing...</p>
         <div class="splash-spinner"></div>
       </div>
     </div>
-    <!-- Top Icon Bar -->
+
     <header class="icon-bar">
      <!-- <button class="icon-btn" data-panel="advanced" title="Advanced">
         <svg viewBox="0 0 24 24">
@@ -78,33 +77,28 @@
       </button>
       <button class="icon-btn" data-panel="settings" title="Settings">
         <svg viewBox="0 0 24 24">
-          <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.5"
-        fill="none" />
-          <path
-        d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.03.03a2 2 0 0 1-2.83 2.83l-.03-.03A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.53V21a2 2 0 0 1-4 0v-.07a1.7 1.7 0 0 0-1-1.53 1.7 1.7 0 0 0-1.86.34l-.03.03a2 2 0 1 1-2.83-2.83l.03-.03A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.53-1H3a2 2 0 0 1 0-4h.07a1.7 1.7 0 0 0 1.53-1 1.7 1.7 0 0 0-.34-1.86l-.03-.03a2 2 0 1 1 2.83-2.83l.03.03A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.07V3a2 2 0 0 1 4 0v.07a1.7 1.7 0 0 0 1 1.53 1.7 1.7 0 0 0 1.86-.34l.03-.03a2 2 0 1 1 2.83 2.83l-.03.03A1.7 1.7 0 0 0 19.4 9c0 .46.17.9.46 1.24.3.33.74.53 1.21.56H21a2 2 0 0 1 0 4h-.07a1.7 1.7 0 0 0-1.53 1z"
-        stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.03.03a2 2 0 0 1-2.83 2.83l-.03-.03A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.53V21a2 2 0 0 1-4 0v-.07a1.7 1.7 0 0 0-1-1.53 1.7 1.7 0 0 0-1.86.34l-.03.03a2 2 0 1 1-2.83-2.83l.03-.03A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.53-1H3a2 2 0 0 1 0-4h.07a1.7 1.7 0 0 0 1.53-1 1.7 1.7 0 0 0-.34-1.86l-.03-.03a2 2 0 1 1 2.83-2.83l.03.03A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.07V3a2 2 0 0 1 4 0v.07a1.7 1.7 0 0 0 1 1.53 1.7 1.7 0 0 0 1.86-.34l.03-.03a2 2 0 1 1 2.83 2.83l-.03.03A1.7 1.7 0 0 0 19.4 9c0 .46.17.9.46 1.24.3.33.74.53 1.21.56H21a2 2 0 0 1 0 4h-.07a1.7 1.7 0 0 0-1.53 1z" stroke="currentColor" stroke-width="1.5" fill="none" />
         </svg>
       </button>
 
     </header>
 
-    <!-- Top Control Bar -->
     <section class="control-bar">
       <div class="control-bar-group">
-        <!-- Digital VU meter for raw input peak -->
         <div class="input-vu-meter" id="input-vu-meter" title="Raw input peak level">
           <div class="vu-segments" id="vu-segments">
-            <div class="vu-seg vu-seg-red"    data-db="-3"></div>
-            <div class="vu-seg vu-seg-red"    data-db="-6"></div>
+            <div class="vu-seg vu-seg-red" data-db="-3"></div>
+            <div class="vu-seg vu-seg-red" data-db="-6"></div>
             <div class="vu-seg vu-seg-yellow" data-db="-9"></div>
             <div class="vu-seg vu-seg-yellow" data-db="-12"></div>
             <div class="vu-seg vu-seg-yellow" data-db="-18"></div>
-            <div class="vu-seg vu-seg-green"  data-db="-24"></div>
-            <div class="vu-seg vu-seg-green"  data-db="-36"></div>
-            <div class="vu-seg vu-seg-green"  data-db="-48"></div>
+            <div class="vu-seg vu-seg-green" data-db="-24"></div>
+            <div class="vu-seg vu-seg-green" data-db="-36"></div>
+            <div class="vu-seg vu-seg-green" data-db="-48"></div>
             <div class="vu-peak-hold" id="vu-peak-hold"></div>
           </div>
-          <span class="vu-db-value" id="vu-db-value">—</span>
+          <span class="vu-db-value" id="vu-db-value">--</span>
           <button
             id="user-input-calibration-toolbar-trigger"
             class="input-vu-meter-dropdown-trigger"
@@ -191,86 +185,117 @@
 
       </div>
 
-      <div class="control-bar-group preset-group">
-        <div class="preset-row preset-row-top">
-          <div class="preset-actions">
-            <button class="preset-action-btn" id="preset-random-btn" title="Random Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="4" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <circle cx="15.5" cy="15.5" r="1.5" />
-                <circle cx="8.5" cy="15.5" r="1.5" />
-                <circle cx="15.5" cy="8.5" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-new-btn" title="New Preset from Default">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="4" />
-                <line x1="12" y1="7" x2="12" y2="17" />
-                <line x1="7" y1="12" x2="17" y2="12" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-edit-btn" title="Edit Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-save-btn" title="Save Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-save-as-btn" title="Save As New Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <line x1="12" y1="11" x2="12" y2="17" />
-                <line x1="9" y1="14" x2="15" y2="14" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-export-btn" title="Export Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 5 17 10" />
-                <line x1="12" y1="5" x2="12" y2="19" />
-              </svg>
-            </button>
-            <button class="preset-action-btn" id="preset-import-btn" title="Import Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 14 12 19 7 14" />
-                <line x1="12" y1="5" x2="12" y2="19" />
-              </svg>
-            </button>
-            <button class="preset-action-btn preset-action-btn-danger" id="preset-delete-btn" title="Delete Preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
-              </svg>
-            </button>
-            <input type="file" id="preset-import-input" accept=".soundshed.preset,.soundshed.presets,.zip,.presetz,application/zip" style="display: none;" />
-          </div>
-        </div>
+        <div class="control-bar-group preset-group">
+          <div class="preset-row preset-toolbar-row">
+            <div class="preset-toolbar" aria-label="Preset actions">
+              <div class="preset-toolbar-group">
+                <span class="preset-toolbar-group-label">Presets</span>
+                <div class="preset-actions">
+                  <button class="preset-action-btn" id="preset-random-btn" type="button" title="Load a random preset">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M16 3h5v5" />
+                      <path d="M4 20L21 3" />
+                      <path d="M21 16v5h-5" />
+                      <path d="M15 15l6 6" />
+                      <path d="M4 4l5 5" />
+                    </svg>
+                    <span class="preset-action-btn-label">Random</span>
+                  </button>
+                  <button class="preset-action-btn" id="preset-new-btn" type="button" title="Start a new preset from the default rig">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="4" />
+                      <line x1="12" y1="7" x2="12" y2="17" />
+                      <line x1="7" y1="12" x2="17" y2="12" />
+                    </svg>
+                    <span class="preset-action-btn-label">New</span>
+                  </button>
+                </div>
+              </div>
 
-        <div class="preset-row preset-row-bottom">
-          <button class="nav-btn" id="prev-preset" title="Previous Preset">←</button>
-          <div class="preset-selector" id="preset-selector">
-            <span class="preset-favorite" id="preset-favorite" title="Toggle Favorite">♡</span>
-            <button class="preset-chooser-label" id="preset-chooser-label" type="button" aria-haspopup="dialog" aria-expanded="false">
-              Default Preset
-            </button>
+              <span class="preset-toolbar-separator" aria-hidden="true"></span>
+
+              <div class="preset-toolbar-group">
+                <span class="preset-toolbar-group-label">Manage</span>
+                <div class="preset-actions">
+                  <button class="preset-action-btn" id="preset-edit-btn" type="button" title="Edit preset details">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span class="preset-action-btn-label">Edit</span>
+                  </button>
+                  <button class="preset-action-btn" id="preset-save-btn" type="button" title="Save changes to this preset">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    <span class="preset-action-btn-label">Save</span>
+                  </button>
+                </div>
+              </div>
+
+              <span class="preset-toolbar-separator" aria-hidden="true"></span>
+
+              <div class="preset-toolbar-group">
+                <span class="preset-toolbar-group-label">Share</span>
+                <div class="preset-actions">
+                  <button class="preset-action-btn preset-action-btn-primary" id="preset-publish-btn" type="button" title="Publish this preset to Tone Sharing">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <path d="M8.6 10.7l6.8-4.4" />
+                      <path d="M8.6 13.3l6.8 4.4" />
+                    </svg>
+                    <span class="preset-action-btn-label">Publish</span>
+                  </button>
+                </div>
+              </div>
+
+              <span class="preset-toolbar-separator" aria-hidden="true"></span>
+
+              <div class="preset-toolbar-group preset-extra-actions">
+                
+                <div class="preset-actions">
+                  <button class="preset-action-btn preset-extra-actions-btn" id="preset-extra-actions-btn" type="button" title="Extra preset functions" aria-haspopup="menu" aria-expanded="false" aria-controls="preset-extra-actions-menu">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="12" r="1.75" />
+                      <circle cx="12" cy="12" r="1.75" />
+                      <circle cx="19" cy="12" r="1.75" />
+                    </svg>
+                    <span class="preset-action-btn-label">Options</span>
+                    <span class="preset-extra-actions-caret" aria-hidden="true">▾</span>
+                  </button>
+                </div>
+                <div class="preset-extra-actions-menu" id="preset-extra-actions-menu" role="menu" aria-hidden="true">
+                  <button class="preset-extra-action-item" id="preset-save-as-btn" type="button" role="menuitem" title="Save a new copy of this preset">Copy preset</button>
+                  <button class="preset-extra-action-item" id="preset-export-btn" type="button" role="menuitem" title="Export this preset as a file">Export preset</button>
+                  <button class="preset-extra-action-item" id="preset-import-btn" type="button" role="menuitem" title="Import a preset file">Import preset</button>
+                  <button class="preset-extra-action-item preset-extra-action-item-danger" id="preset-delete-btn" type="button" role="menuitem" title="Delete this preset">Delete preset</button>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <div class="preset-row preset-selector-row">
+            <button class="nav-btn preset-nav-btn" id="prev-preset" type="button" title="Previous Preset">←</button>
+            <div class="preset-selector" id="preset-selector">
+              <button class="preset-favorite" id="preset-favorite" type="button" title="Toggle Favorite" aria-label="Toggle favorite">♡</button>
+              <button class="preset-chooser-label" id="preset-chooser-label" type="button" aria-haspopup="dialog" aria-expanded="false">
+                Default Preset
+              </button>
+              <span class="preset-selector-status" id="preset-selector-status">Factory</span>
+            </div>
+            <button class="nav-btn preset-nav-btn" id="next-preset" type="button" title="Next Preset">→</button>
+          </div>
+
+          <input type="file" id="preset-import-input" accept=".soundshed.preset,.soundshed.presets,.zip,.presetz,application/zip" style="display: none;" />
+
           <div class="tone-sharing-preview-indicator" id="tone-sharing-preview-indicator" style="display: none;" aria-live="polite">
             <span class="tone-sharing-preview-label" id="tone-sharing-preview-text">Previewing preset:</span>
             <button class="tone-sharing-preview-clear" id="tone-sharing-preview-clear" type="button" title="Clear preview and restore original preset">✕</button>
           </div>
-          <button class="nav-btn" id="next-preset" title="Next Preset">→</button>
-        </div>
 
         <div class="preset-library-popover" id="preset-library-popover" aria-hidden="true">
           <section class="preset-library" id="preset-library">

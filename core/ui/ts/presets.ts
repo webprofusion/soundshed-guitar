@@ -11,7 +11,7 @@ import { bindDemoAudioControls } from "./demoAudio.js";
 import { postMessage, setAppSetting } from "./bridge.js";
 import { renderSignalPathBar } from "./signalPath.js";
 import { showConfirm } from "./dialogs.js";
-import { isToneSharingSignedIn, openToneSharingPublishPresetModal, registerInstalledToneSharingPack, syncToneSharingFavoriteForPreset, syncToneSharingRatingForPreset } from "./toneSharingPanel.js";
+import { isToneSharingSignedIn, openToneSharingPublishPresetModal, openToneSharingSignInModal, registerInstalledToneSharingPack, syncToneSharingFavoriteForPreset, syncToneSharingRatingForPreset } from "./toneSharingPanel.js";
 import type { InstalledPackMetadata } from "./toneSharingPanel.js";
 import { downloadTone3000ResourceByReference, saveTone3000ApiKey } from "./tone3000.js";
 import { switchMainPanel } from "./navigation.js";
@@ -25,8 +25,12 @@ const presetFavoriteToggle = document.getElementById("preset-favorite");
 const prevPresetBtn = document.getElementById("prev-preset");
 const nextPresetBtn = document.getElementById("next-preset");
 const randomPresetBtn = document.getElementById("preset-random-btn");
+const presetPublishBtn = document.getElementById("preset-publish-btn") as HTMLButtonElement | null;
+const presetExtraActionsBtn = document.getElementById("preset-extra-actions-btn") as HTMLButtonElement | null;
+const presetExtraActionsMenu = document.getElementById("preset-extra-actions-menu") as HTMLDivElement | null;
 const presetSearchElement = document.getElementById("preset-search") as HTMLInputElement | null;
 const presetSelector = document.getElementById("preset-selector");
+const presetSelectorStatus = document.getElementById("preset-selector-status") as HTMLElement | null;
 const presetLibraryPopover = document.getElementById("preset-library-popover");
 const presetLibraryTabs = document.querySelector(".preset-library-tabs") as HTMLElement | null;
 const presetLibraryPresetsPanel = document.getElementById("preset-library-presets-panel") as HTMLElement | null;
@@ -703,6 +707,7 @@ function openPresetLibraryPopover(): void {
   if (!presetLibraryPopover) {
     return;
   }
+  closePresetExtraActionsMenu();
   syncPresetLibraryFeatureVisibility();
   presetLibraryPopover.classList.add("open");
   presetLibraryPopover.setAttribute("aria-hidden", "false");
@@ -726,6 +731,36 @@ function togglePresetLibraryPopover(): void {
     closePresetLibraryPopover();
   } else {
     openPresetLibraryPopover();
+  }
+}
+
+function openPresetExtraActionsMenu(): void {
+  if (!presetExtraActionsBtn || !presetExtraActionsMenu) {
+    return;
+  }
+  closePresetLibraryPopover();
+  presetExtraActionsMenu.classList.add("open");
+  presetExtraActionsMenu.setAttribute("aria-hidden", "false");
+  presetExtraActionsBtn.setAttribute("aria-expanded", "true");
+}
+
+function closePresetExtraActionsMenu(): void {
+  if (!presetExtraActionsBtn || !presetExtraActionsMenu) {
+    return;
+  }
+  presetExtraActionsMenu.classList.remove("open");
+  presetExtraActionsMenu.setAttribute("aria-hidden", "true");
+  presetExtraActionsBtn.setAttribute("aria-expanded", "false");
+}
+
+function togglePresetExtraActionsMenu(): void {
+  if (!presetExtraActionsMenu) {
+    return;
+  }
+  if (presetExtraActionsMenu.classList.contains("open")) {
+    closePresetExtraActionsMenu();
+  } else {
+    openPresetExtraActionsMenu();
   }
 }
 
@@ -1790,87 +1825,26 @@ function getActivePresetIndex(): number {
   return uiState.presets.findIndex((p) => p.id === uiState.activePresetId);
 }
 
-const exportChooserId = "preset-export-chooser";
-
-function getOrCreateExportChooser(): HTMLDivElement {
-  let chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
-  if (chooser) {
-    return chooser;
-  }
-
-  chooser = document.createElement("div");
-  chooser.id = exportChooserId;
-  chooser.className = "preset-export-chooser";
-  chooser.setAttribute("role", "menu");
-  chooser.setAttribute("aria-hidden", "true");
-
-  const exportItem = document.createElement("button");
-  exportItem.type = "button";
-  exportItem.className = "preset-export-chooser-item";
-  exportItem.dataset.action = "export";
-  exportItem.textContent = "Export Preset File…";
-  chooser.appendChild(exportItem);
-
-  const publishItem = document.createElement("button");
-  publishItem.type = "button";
-  publishItem.className = "preset-export-chooser-item";
-  publishItem.dataset.action = "publish";
-  publishItem.textContent = "Publish Preset…";
-  chooser.appendChild(publishItem);
-
-  chooser.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(".preset-export-chooser-item");
-    if (!button || button.disabled) {
-      return;
-    }
-
-    const action = button.dataset.action;
-    closeExportChooser();
-
-    if (action === "export") {
-      void exportCurrentPresetArchive();
-      return;
-    }
-
-    if (action === "publish") {
-      const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
-      openToneSharingPublishPresetModal(activePreset?.name ?? "", activePreset?.description ?? "");
-    }
-  });
-
-  document.body.appendChild(chooser);
-  return chooser;
-}
-
-function closeExportChooser(): void {
-  const chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
-  if (!chooser) {
+function openPublishPresetFlow(): void {
+  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
+  if (!activePreset) {
+    showNotification("No preset", "Select a preset to publish.");
     return;
   }
-  chooser.classList.remove("open");
-  chooser.setAttribute("aria-hidden", "true");
-}
 
-function openExportChooser(anchor: HTMLElement): void {
-  const chooser = getOrCreateExportChooser();
-  const publishItem = chooser.querySelector<HTMLButtonElement>('[data-action="publish"]');
-  const signedIn = isToneSharingSignedIn();
-  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
   const toneSharingOrigin = getToneSharingOriginMetadata(activePreset);
-  if (publishItem) {
-    publishItem.disabled = !signedIn || Boolean(toneSharingOrigin?.republishBlocked);
-    publishItem.title = !signedIn
-      ? "Sign in to Tone Sharing to publish"
-      : toneSharingOrigin?.republishBlocked
-        ? "Use Save As before republishing a preset imported from Tone Sharing"
-        : "Publish preset";
+  if (toneSharingOrigin?.republishBlocked) {
+    showNotification("Save Copy first", "Imported Tone Sharing presets need a local copy before they can be published again.");
+    return;
   }
 
-  const anchorRect = anchor.getBoundingClientRect();
-  chooser.style.left = `${Math.max(8, anchorRect.left + window.scrollX)}px`;
-  chooser.style.top = `${anchorRect.bottom + window.scrollY + 6}px`;
-  chooser.classList.add("open");
-  chooser.setAttribute("aria-hidden", "false");
+  if (!isToneSharingSignedIn()) {
+    switchMainPanel("sharing");
+    openToneSharingSignInModal();
+    return;
+  }
+
+  openToneSharingPublishPresetModal(activePreset.name ?? "", activePreset.description ?? "");
 }
 
 export async function selectPreviousPreset(): Promise<void> {
@@ -3878,27 +3852,83 @@ export function openEditPresetModal(): void {
 export function updatePresetActionButtons(): void {
   const editBtn = document.getElementById("preset-edit-btn") as HTMLButtonElement | null;
   const saveBtn = document.getElementById("preset-save-btn") as HTMLButtonElement | null;
+  const saveAsBtn = document.getElementById("preset-save-as-btn") as HTMLButtonElement | null;
   const deleteBtn = document.getElementById("preset-delete-btn") as HTMLButtonElement | null;
   const exportBtn = document.getElementById("preset-export-btn") as HTMLButtonElement | null;
+  const importBtn = document.getElementById("preset-import-btn") as HTMLButtonElement | null;
+  const publishBtn = document.getElementById("preset-publish-btn") as HTMLButtonElement | null;
 
+  const activePreset = uiState.presetCache.get(uiState.activePresetId ?? "") ?? null;
   const canModify = isUserPreset(uiState.activePresetId);
+  const toneSharingOrigin = getToneSharingOriginMetadata(activePreset);
+  const hasActivePreset = Boolean(activePreset);
 
   if (editBtn) {
     editBtn.disabled = !canModify;
-    editBtn.title = canModify ? "Edit Preset" : "Cannot edit factory presets";
+    editBtn.title = canModify ? "Edit preset details" : "Save Copy to edit factory presets";
   }
   if (saveBtn) {
     saveBtn.disabled = !canModify;
     saveBtn.title = canModify ? "Save Preset" : "Cannot overwrite factory presets";
     saveBtn.classList.toggle("preset-action-btn-unsaved", Boolean(uiState.presetDirty));
   }
+  if (saveAsBtn) {
+    saveAsBtn.disabled = false;
+    saveAsBtn.title = hasActivePreset ? "Save a new copy of this preset" : "Create a new preset from current state";
+  }
   if (deleteBtn) {
     deleteBtn.disabled = !canModify;
     deleteBtn.title = canModify ? "Delete Preset" : "Cannot delete factory presets";
   }
   if (exportBtn) {
-    exportBtn.disabled = !uiState.activePresetId;
-    exportBtn.title = uiState.activePresetId ? "Export or Publish Preset" : "No preset to export";
+    exportBtn.disabled = !hasActivePreset;
+    exportBtn.title = hasActivePreset ? "Export preset file" : "No preset to export";
+  }
+  if (importBtn) {
+    importBtn.disabled = false;
+    importBtn.title = "Import a preset file";
+  }
+  if (publishBtn) {
+    publishBtn.disabled = !hasActivePreset;
+    publishBtn.title = !hasActivePreset
+      ? "No preset to publish"
+      : toneSharingOrigin?.republishBlocked
+        ? "Save Copy before publishing this imported preset"
+        : !isToneSharingSignedIn()
+          ? "Sign in to Tone Sharing to publish"
+          : "Publish to Tone Sharing";
+  }
+
+  if (presetSelector) {
+    presetSelector.classList.toggle("has-unsaved-changes", Boolean(activePreset && uiState.presetDirty));
+  }
+  if (presetSelectorStatus) {
+    let status = "No preset";
+    let statusTitle = "No preset selected";
+    presetSelectorStatus.classList.remove("is-warning", "is-dirty");
+
+    if (activePreset) {
+      if (toneSharingOrigin?.republishBlocked) {
+        status = "Imported";
+        statusTitle = "Imported from Tone Sharing. Use Save Copy to publish.";
+        presetSelectorStatus.classList.add("is-warning");
+      } else if (canModify) {
+        status = "User";
+        statusTitle = "User preset";
+      } else {
+        status = "Factory";
+        statusTitle = "Factory preset. Use Save Copy to edit.";
+      }
+
+      if (uiState.presetDirty) {
+        status += " • Unsaved";
+        statusTitle += " Unsaved changes.";
+        presetSelectorStatus.classList.add("is-dirty");
+      }
+    }
+
+    presetSelectorStatus.textContent = status;
+    presetSelectorStatus.title = statusTitle;
   }
 }
 
@@ -3934,7 +3964,11 @@ export function initializePresetActionButtons(): void {
   const editBtn = document.getElementById("preset-edit-btn");
   const newBtn = document.getElementById("preset-new-btn");
   const saveBtn = document.getElementById("preset-save-btn");
+  const saveAsBtn = document.getElementById("preset-save-as-btn");
   const deleteBtn = document.getElementById("preset-delete-btn");
+  const publishBtn = document.getElementById("preset-publish-btn");
+  const extraActionsBtn = document.getElementById("preset-extra-actions-btn") as HTMLButtonElement | null;
+  const extraActionsMenu = document.getElementById("preset-extra-actions-menu");
   const exportBtn = document.getElementById("preset-export-btn");
   const importBtn = document.getElementById("preset-import-btn");
   const importInput = document.getElementById("preset-import-input") as HTMLInputElement | null;
@@ -3951,8 +3985,42 @@ export function initializePresetActionButtons(): void {
     saveBtn.addEventListener("click", saveOverwriteCurrentPreset);
   }
 
+  if (saveAsBtn) {
+    saveAsBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closePresetExtraActionsMenu();
+    });
+  }
+
   if (deleteBtn) {
-    deleteBtn.addEventListener("click", () => void deleteCurrentPreset());
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closePresetExtraActionsMenu();
+      void deleteCurrentPreset();
+    });
+  }
+
+  if (publishBtn) {
+    publishBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if ((publishBtn as HTMLButtonElement).disabled) {
+        return;
+      }
+      openPublishPresetFlow();
+    });
+  }
+
+  if (extraActionsBtn) {
+    extraActionsBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      togglePresetExtraActionsMenu();
+    });
+  }
+
+  if (extraActionsMenu) {
+    extraActionsMenu.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
   }
 
   if (exportBtn) {
@@ -3961,19 +4029,17 @@ export function initializePresetActionButtons(): void {
       if ((exportBtn as HTMLButtonElement).disabled) {
         return;
       }
-
-      const chooser = document.getElementById(exportChooserId) as HTMLDivElement | null;
-      if (chooser?.classList.contains("open")) {
-        closeExportChooser();
-        return;
-      }
-
-      openExportChooser(exportBtn as HTMLElement);
+      closePresetExtraActionsMenu();
+      void exportCurrentPresetArchive();
     });
   }
 
   if (importBtn) {
-    importBtn.addEventListener("click", () => importInput?.click());
+    importBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closePresetExtraActionsMenu();
+      importInput?.click();
+    });
   }
 
   if (importInput) {
@@ -3986,22 +4052,13 @@ export function initializePresetActionButtons(): void {
     });
   }
 
-  // Initial state
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement | null;
-    if (!target) {
-      closeExportChooser();
-      return;
-    }
-    if (target.closest(`#${exportChooserId}`) || target.closest("#preset-export-btn")) {
-      return;
-    }
-    closeExportChooser();
+  document.addEventListener("click", () => {
+    closePresetExtraActionsMenu();
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      closeExportChooser();
+      closePresetExtraActionsMenu();
     }
   });
 

@@ -15,7 +15,7 @@ set "ARCH=x64"
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
 
 echo [0/4] Configuring CMake...
-cmake -G "Visual Studio 18 2026" -A %ARCH% -S juce -B "%JUCE_BUILDS%" -DGUITARFX_ASIO_SDK_DIR="C:/Work/GIT/soundshed-guitar/juce/ASIOSDK"
+cmake -G "Visual Studio 18 2026" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail

@@ -200,6 +200,7 @@ input[type="range"]:focus-visible {
   width: 32px;
   height: 32px;
   margin-top: calc(var(--control-stack-header-height, 22px) + var(--control-stack-gap, 8px) + 4px);
+  margin-left: 6px;
   padding: 0;
   border: 1px solid var(--border-light);
   border-radius: 999px;
