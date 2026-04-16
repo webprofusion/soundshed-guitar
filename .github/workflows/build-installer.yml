@@ -4,13 +4,41 @@ on:
   workflow_dispatch:
     inputs:
       build_windows:
-        description: Include Windows build
+        description: Include Windows builds
         type: boolean
         default: true
+      windows_targets:
+        description: Windows CPU targets
+        type: choice
+        default: all
+        options:
+          - all
+          - x64
+          - arm64
       build_macos:
-        description: Include macOS build
+        description: Include macOS builds
         type: boolean
         default: true
+      macos_targets:
+        description: macOS CPU targets
+        type: choice
+        default: all
+        options:
+          - all
+          - arm64
+          - universal
+      build_linux:
+        description: Include Linux builds
+        type: boolean
+        default: true
+      linux_targets:
+        description: Linux CPU targets
+        type: choice
+        default: all
+        options:
+          - all
+          - x64
+          - arm64
       upload_r2:
         description: Upload build artifacts to Cloudflare R2
         type: boolean
@@ -27,18 +55,14 @@ env:
   NODE_VERSION: 24
 
 jobs:
-  build-installer-juce:
-    name: Build JUCE Installer (Windows ${{ matrix.arch }})
-    if: ${{ inputs.build_windows }}
+  build-windows-x64:
+    name: Build Windows Installer (x64)
+    if: ${{ inputs.build_windows && (inputs.windows_targets == 'all' || inputs.windows_targets == 'x64') }}
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            cmake_arch: x64
-          - arch: arm64
-            cmake_arch: ARM64
+    env:
+      WINDOWS_ARCH: x64
+      WINDOWS_CMAKE_ARCH: x64
+      WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -55,7 +79,7 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y
 
-      - name: Build UI
+      - name: Install UI dependencies
         working-directory: core/ui
         run: npm ci
 
@@ -128,12 +152,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cache/asio-sdk
-          key: ${{ runner.os }}-asio-sdk-v1
+          key: ${{ runner.os }}-asio-sdk-v2-${{ inputs.asio_sdk_url }}
 
       - name: Fetch ASIO SDK
         shell: pwsh
         run: |
-          $downloadUrl = "${{ github.event.inputs.asio_sdk_url }}"
+          $downloadUrl = "${{ inputs.asio_sdk_url }}"
           $zipPath = Join-Path $env:RUNNER_TEMP "asio-sdk.zip"
           $extractDir = Join-Path $env:GITHUB_WORKSPACE ".cache/asio-sdk"
 
@@ -166,30 +190,50 @@ jobs:
           "ASIO_SDK_DIR=$($asioSdkDir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Detected ASIO SDK at $($asioSdkDir.FullName)"
 
-      - name: Configure JUCE CMake
-        shell: pwsh
-        run: cmake -S juce -B juce/Builds -G "Visual Studio 17 2022" -A "${{ matrix.cmake_arch }}" -DGUITARFX_ASIO_SDK_DIR="$env:ASIO_SDK_DIR" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$env:WEBVIEW2_PACKAGE_LOCATION" -DWebView2_root_dir="$env:WEBVIEW2_ROOT_DIR"
-
-      - name: Build JUCE Release
-        run: cmake --build juce/Builds --config Release --parallel
+      - name: Build Windows release installer
+        shell: cmd
+        env:
+          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
+          GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
+        run: build_windows.bat
 
       - name: Export JUCE build env
         shell: pwsh
         run: |
           if (-Not (Test-Path "juce/.env")) {
-            throw "Expected juce/.env after configure, but it was not found."
+            throw "Expected juce/.env after build, but it was not found."
           }
           Get-Content "juce/.env" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build JUCE Installer
-        working-directory: juce
-        run: iscc "packaging\installer.iss"
+      - name: Rename installer artifact
+        id: rename-installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "juce/packaging/Output" -File -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
 
-      - name: Upload JUCE Installer
+          if (-Not $installer) {
+            throw "Installer output not found in juce/packaging/Output."
+          }
+
+          $renamedName = "Soundshed Guitar-$env:VERSION-Windows-$env:WINDOWS_ARCH.exe"
+          $renamedPath = Join-Path $installer.DirectoryName $renamedName
+
+          if ($installer.FullName -ne $renamedPath) {
+            if (Test-Path $renamedPath) {
+              Remove-Item -Path $renamedPath -Force
+            }
+            Rename-Item -Path $installer.FullName -NewName $renamedName
+          }
+
+          "path=$renamedPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v6
         with:
-          name: Soundshed Guitar-JUCE-Installer-${{ matrix.arch }}
-          path: juce/packaging/Output/*.exe
+          name: Soundshed Guitar-Windows-${{ env.WINDOWS_ARCH }}
+          path: ${{ steps.rename-installer.outputs.path }}
 
       - name: Upload artifacts to R2
         if: ${{ inputs.upload_r2 }}
@@ -199,27 +243,18 @@ jobs:
           r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           r2-bucket: soundshed-guitar-builds
-          source-dir: juce/packaging/Output
-          destination-dir: ./build-artifacts
+          source-dir: ${{ steps.rename-installer.outputs.path }}
+          destination-dir: ./build-artifacts/windows/x64
           keep-file-fresh: true
 
-  build-juce-macos-dmg:
-    name: Build JUCE macOS (${{ matrix.variant }})
-    if: ${{ inputs.build_macos }}
-    runs-on: macos-latest
+  build-windows-arm64:
+    name: Build Windows Installer (arm64)
+    if: ${{ inputs.build_windows && (inputs.windows_targets == 'all' || inputs.windows_targets == 'arm64') }}
+    runs-on: windows-latest
     env:
-      DMG_NAME: ""
-      DMG_PATH: ""
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: arm64-check
-            cmake_architectures: arm64
-            package_dmg: false
-          - variant: universal
-            cmake_architectures: arm64;x86_64
-            package_dmg: true
+      WINDOWS_ARCH: arm64
+      WINDOWS_CMAKE_ARCH: ARM64
+      WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -233,7 +268,10 @@ jobs:
           cache: npm
           cache-dependency-path: core/ui/package-lock.json
 
-      - name: Build UI
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Install UI dependencies
         working-directory: core/ui
         run: npm ci
 
@@ -242,7 +280,191 @@ jobs:
         run: npm run build
 
       - name: Cache JUCE source
-        id: cache-juce-source-macos
+        id: cache-juce-source
+        uses: actions/cache@v5
+        with:
+          path: juce/JUCE
+          key: ${{ runner.os }}-juce-source-v2
+
+      - name: Fetch JUCE source
+        shell: pwsh
+        run: |
+          if ("${{ steps.cache-juce-source.outputs.cache-hit }}" -eq "true") {
+            Write-Host "JUCE source restored from cache"
+          } elseif (Test-Path "juce/JUCE/CMakeLists.txt") {
+            Write-Host "JUCE source already present at juce/JUCE"
+          } else {
+            git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
+          }
+
+      - name: Install WebView2 NuGet package
+        shell: pwsh
+        run: |
+          $packageVersion = "1.0.3856.49"
+
+          if (-Not (Get-PackageSource -Name "nugetRepository" -ErrorAction SilentlyContinue)) {
+            Register-PackageSource -ProviderName NuGet -Name nugetRepository -Location "https://www.nuget.org/api/v2" -Trusted -Force
+          }
+
+          Install-Package Microsoft.Web.WebView2 -Scope CurrentUser -RequiredVersion $packageVersion -Source nugetRepository -Force
+
+          $candidateRoots = @(
+            (Join-Path $env:USERPROFILE "AppData/Local/PackageManagement/NuGet/Packages"),
+            (Join-Path $env:USERPROFILE ".nuget/packages")
+          )
+
+          $webViewPackageDir = $null
+          foreach ($root in $candidateRoots) {
+            if (-Not (Test-Path $root)) {
+              continue
+            }
+
+            $found = Get-ChildItem -Path $root -Directory -Filter "*Microsoft.Web.WebView2*" -ErrorAction SilentlyContinue |
+              Where-Object { Test-Path (Join-Path $_.FullName "build/native/include/WebView2.h") } |
+              Select-Object -First 1
+
+            if ($found) {
+              $webViewPackageDir = $found.FullName
+              break
+            }
+          }
+
+          if (-Not $webViewPackageDir) {
+            throw "WebView2 package directory was not found after installation."
+          }
+
+          $webViewPackageLocation = Split-Path -Path $webViewPackageDir -Parent
+          "WEBVIEW2_PACKAGE_LOCATION=$webViewPackageLocation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WEBVIEW2_ROOT_DIR=$webViewPackageDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using WebView2 package location: $webViewPackageLocation"
+          Write-Host "Using WebView2 root dir: $webViewPackageDir"
+
+      - name: Cache ASIO SDK
+        id: cache-asio-sdk
+        uses: actions/cache@v5
+        with:
+          path: .cache/asio-sdk
+          key: ${{ runner.os }}-asio-sdk-v2-${{ inputs.asio_sdk_url }}
+
+      - name: Fetch ASIO SDK
+        shell: pwsh
+        run: |
+          $downloadUrl = "${{ inputs.asio_sdk_url }}"
+          $zipPath = Join-Path $env:RUNNER_TEMP "asio-sdk.zip"
+          $extractDir = Join-Path $env:GITHUB_WORKSPACE ".cache/asio-sdk"
+
+          if ("${{ steps.cache-asio-sdk.outputs.cache-hit }}" -eq "true") {
+            Write-Host "ASIO SDK restored from cache"
+          } else {
+            if (Test-Path $extractDir) {
+              Remove-Item -Path $extractDir -Recurse -Force
+            }
+
+            New-Item -Path $extractDir -ItemType Directory -Force | Out-Null
+
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -MaximumRedirection 10
+
+            try {
+              Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+            } catch {
+              throw "Failed to extract ASIO SDK zip from '$downloadUrl'. Provide a direct .zip download URL from Steinberg."
+            }
+          }
+
+          $asioSdkDir = Get-ChildItem -Path $extractDir -Directory -Recurse |
+            Where-Object { $_.Name -eq "ASIOSDK" } |
+            Select-Object -First 1
+
+          if (-Not $asioSdkDir) {
+            throw "ASIOSDK folder not found in extracted archive from '$downloadUrl'."
+          }
+
+          "ASIO_SDK_DIR=$($asioSdkDir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Detected ASIO SDK at $($asioSdkDir.FullName)"
+
+      - name: Build Windows release installer
+        shell: cmd
+        env:
+          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
+          GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
+        run: build_windows.bat
+
+      - name: Export JUCE build env
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "juce/.env")) {
+            throw "Expected juce/.env after build, but it was not found."
+          }
+          Get-Content "juce/.env" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Rename installer artifact
+        id: rename-installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "juce/packaging/Output" -File -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-Not $installer) {
+            throw "Installer output not found in juce/packaging/Output."
+          }
+
+          $renamedName = "Soundshed Guitar-$env:VERSION-Windows-$env:WINDOWS_ARCH.exe"
+          $renamedPath = Join-Path $installer.DirectoryName $renamedName
+
+          if ($installer.FullName -ne $renamedPath) {
+            if (Test-Path $renamedPath) {
+              Remove-Item -Path $renamedPath -Force
+            }
+            Rename-Item -Path $installer.FullName -NewName $renamedName
+          }
+
+          "path=$renamedPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: Soundshed Guitar-Windows-${{ env.WINDOWS_ARCH }}
+          path: ${{ steps.rename-installer.outputs.path }}
+
+      - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: ${{ steps.rename-installer.outputs.path }}
+          destination-dir: ./build-artifacts/windows/arm64
+          keep-file-fresh: true
+
+  build-macos-arm64:
+    name: Build macOS Installer (arm64)
+    if: ${{ inputs.build_macos && (inputs.macos_targets == 'all' || inputs.macos_targets == 'arm64') }}
+    runs-on: macos-latest
+    env:
+      MACOS_TARGET: arm64
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Cache JUCE source
+        id: cache-juce-source
         uses: actions/cache@v5
         with:
           path: juce/JUCE
@@ -250,7 +472,7 @@ jobs:
 
       - name: Fetch JUCE source
         run: |
-          if [ "${{ steps.cache-juce-source-macos.outputs.cache-hit }}" = "true" ]; then
+          if [ "${{ steps.cache-juce-source.outputs.cache-hit }}" = "true" ]; then
             echo "JUCE source restored from cache"
           elif [ -f "juce/JUCE/CMakeLists.txt" ]; then
             echo "JUCE source already present at juce/JUCE"
@@ -258,94 +480,338 @@ jobs:
             git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
           fi
 
-      - name: Configure JUCE CMake
-        run: cmake -S juce -B juce/builds -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake_architectures }}"
-
-      - name: Build JUCE Standalone + Plugin Release
-        run: cmake --build juce/builds --config Release --target SoundshedGuitar_Standalone SoundshedGuitar_VST3 SoundshedGuitar_AU SoundshedGuitar_CLAP --parallel
+      - name: Build macOS release package
+        run: bash ./build_macos.sh --pkg --dist-dir macos-dist-arm64
 
       - name: Export JUCE build env
         run: |
           if [ ! -f "juce/.env" ]; then
-            echo "Expected juce/.env after configure, but it was not found."
+            echo "Expected juce/.env after build, but it was not found."
             exit 1
           fi
           cat juce/.env >> "$GITHUB_ENV"
 
-      - name: Validate macOS bundles and UI resources
+      - name: Rename macOS package
+        id: rename-package
         run: |
-          ARTEFACTS_BASE="juce/builds/${PROJECT_NAME}_artefacts/Release"
-          STANDALONE_PATH="$ARTEFACTS_BASE/Standalone/${PRODUCT_NAME}.app"
-          VST3_PATH="$ARTEFACTS_BASE/VST3/${PRODUCT_NAME}.vst3"
-          AU_PATH="$ARTEFACTS_BASE/AU/${PRODUCT_NAME}.component"
-          CLAP_PATH="$ARTEFACTS_BASE/CLAP/${PRODUCT_NAME}.clap"
+          PACKAGE_PATH="macos-dist-arm64/SoundshedGuitar-${VERSION}.pkg"
+          RENAMED_PATH="macos-dist-arm64/SoundshedGuitar-${VERSION}-macOS-arm64.pkg"
 
-          for bundle in "$STANDALONE_PATH" "$VST3_PATH" "$AU_PATH"; do
-            if [ ! -d "$bundle" ]; then
-              echo "Required macOS bundle not found: $bundle"
-              exit 1
-            fi
-          done
-
-          for bundle in "$STANDALONE_PATH" "$VST3_PATH" "$AU_PATH"; do
-            if [ ! -f "$bundle/Contents/Resources/ui/index.html" ]; then
-              echo "Missing bundled UI resources in $bundle"
-              exit 1
-            fi
-          done
-
-          if [ -d "$CLAP_PATH" ]; then
-            if [ ! -f "$CLAP_PATH/Contents/Resources/ui/index.html" ]; then
-              echo "Missing bundled UI resources in $CLAP_PATH"
-              exit 1
-            fi
+          if [ ! -f "$PACKAGE_PATH" ]; then
+            echo "Expected macOS package not found: $PACKAGE_PATH"
+            exit 1
           fi
 
-          echo "STANDALONE_PATH=$STANDALONE_PATH" >> "$GITHUB_ENV"
-          echo "VST3_PATH=$VST3_PATH" >> "$GITHUB_ENV"
-          echo "AU_PATH=$AU_PATH" >> "$GITHUB_ENV"
-          if [ -d "$CLAP_PATH" ]; then
-            echo "CLAP_PATH=$CLAP_PATH" >> "$GITHUB_ENV"
-          fi
+          mv "$PACKAGE_PATH" "$RENAMED_PATH"
+          echo "path=$RENAMED_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Create DMG
-        if: ${{ matrix.package_dmg }}
-        run: |
-          STAGING_DIR="${RUNNER_TEMP}/dmg-root"
-          rm -rf "$STAGING_DIR"
-          mkdir -p "$STAGING_DIR/Plug-Ins/VST3"
-          mkdir -p "$STAGING_DIR/Plug-Ins/Components"
-
-          cp -R "$STANDALONE_PATH" "$STAGING_DIR/"
-          cp -R "$VST3_PATH" "$STAGING_DIR/Plug-Ins/VST3/"
-          cp -R "$AU_PATH" "$STAGING_DIR/Plug-Ins/Components/"
-
-          if [ -n "${CLAP_PATH:-}" ] && [ -d "$CLAP_PATH" ]; then
-            mkdir -p "$STAGING_DIR/Plug-Ins/CLAP"
-            cp -R "$CLAP_PATH" "$STAGING_DIR/Plug-Ins/CLAP/"
-          fi
-
-          DMG_NAME="${PRODUCT_NAME}-${VERSION}-macOS.dmg"
-          DMG_PATH="${RUNNER_TEMP}/${DMG_NAME}"
-          hdiutil create -volname "${PRODUCT_NAME}" -srcfolder "$STAGING_DIR" -ov -format UDZO "$DMG_PATH"
-          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
-          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
-
-      - name: Upload macOS DMG
-        if: ${{ matrix.package_dmg }}
+      - name: Upload macOS package
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ env.DMG_NAME }}
-          path: ${{ env.DMG_PATH }}
+          name: SoundshedGuitar-macOS-arm64
+          path: ${{ steps.rename-package.outputs.path }}
 
       - name: Upload artifacts to R2
-        if: ${{ matrix.package_dmg && inputs.upload_r2 }}
+        if: ${{ inputs.upload_r2 }}
         uses: ryand56/r2-upload-action@v1.4
         with:
           r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           r2-bucket: soundshed-guitar-builds
-          source-dir: ${{ env.DMG_PATH }}
-          destination-dir: ./build-artifacts
+          source-dir: ${{ steps.rename-package.outputs.path }}
+          destination-dir: ./build-artifacts/macos/arm64
+          keep-file-fresh: true
+
+  build-macos-universal:
+    name: Build macOS Installer (universal)
+    if: ${{ inputs.build_macos && (inputs.macos_targets == 'all' || inputs.macos_targets == 'universal') }}
+    runs-on: macos-latest
+    env:
+      MACOS_TARGET: universal
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Cache JUCE source
+        id: cache-juce-source
+        uses: actions/cache@v5
+        with:
+          path: juce/JUCE
+          key: ${{ runner.os }}-juce-source-v2
+
+      - name: Fetch JUCE source
+        run: |
+          if [ "${{ steps.cache-juce-source.outputs.cache-hit }}" = "true" ]; then
+            echo "JUCE source restored from cache"
+          elif [ -f "juce/JUCE/CMakeLists.txt" ]; then
+            echo "JUCE source already present at juce/JUCE"
+          else
+            git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
+          fi
+
+      - name: Build macOS release package
+        run: bash ./build_macos.sh --universal --pkg --dist-dir macos-dist-universal
+
+      - name: Export JUCE build env
+        run: |
+          if [ ! -f "juce/.env" ]; then
+            echo "Expected juce/.env after build, but it was not found."
+            exit 1
+          fi
+          cat juce/.env >> "$GITHUB_ENV"
+
+      - name: Rename macOS package
+        id: rename-package
+        run: |
+          PACKAGE_PATH="macos-dist-universal/SoundshedGuitar-${VERSION}.pkg"
+          RENAMED_PATH="macos-dist-universal/SoundshedGuitar-${VERSION}-macOS-universal.pkg"
+
+          if [ ! -f "$PACKAGE_PATH" ]; then
+            echo "Expected macOS package not found: $PACKAGE_PATH"
+            exit 1
+          fi
+
+          mv "$PACKAGE_PATH" "$RENAMED_PATH"
+          echo "path=$RENAMED_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v6
+        with:
+          name: SoundshedGuitar-macOS-universal
+          path: ${{ steps.rename-package.outputs.path }}
+
+      - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: ${{ steps.rename-package.outputs.path }}
+          destination-dir: ./build-artifacts/macos/universal
+          keep-file-fresh: true
+
+  build-linux-x64:
+    name: Build Linux Archive (x64)
+    if: ${{ inputs.build_linux && (inputs.linux_targets == 'all' || inputs.linux_targets == 'x64') }}
+    runs-on: ubuntu-latest
+    env:
+      LINUX_ARCH: x64
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            zip \
+            libasound2-dev \
+            libcurl4-openssl-dev \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libx11-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev
+
+      - name: Install UI dependencies
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Cache JUCE source
+        id: cache-juce-source
+        uses: actions/cache@v5
+        with:
+          path: juce/JUCE
+          key: ${{ runner.os }}-juce-source-v2
+
+      - name: Fetch JUCE source
+        run: |
+          if [ "${{ steps.cache-juce-source.outputs.cache-hit }}" = "true" ]; then
+            echo "JUCE source restored from cache"
+          elif [ -f "juce/JUCE/CMakeLists.txt" ]; then
+            echo "JUCE source already present at juce/JUCE"
+          else
+            git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
+          fi
+
+      - name: Build Linux release archive
+        run: bash ./build_linux.sh --arch x64
+
+      - name: Export JUCE build env
+        run: |
+          if [ ! -f "juce/.env" ]; then
+            echo "Expected juce/.env after build, but it was not found."
+            exit 1
+          fi
+          cat juce/.env >> "$GITHUB_ENV"
+
+      - name: Record Linux archive path
+        id: record-archive
+        run: |
+          ZIP_PATH="SoundshedGuitar-${VERSION}-Linux-${LINUX_ARCH}.zip"
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "Expected Linux archive not found: $ZIP_PATH"
+            exit 1
+          fi
+          echo "path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux archive
+        uses: actions/upload-artifact@v6
+        with:
+          name: SoundshedGuitar-Linux-${{ env.LINUX_ARCH }}
+          path: ${{ steps.record-archive.outputs.path }}
+
+      - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: ${{ steps.record-archive.outputs.path }}
+          destination-dir: ./build-artifacts/linux/x64
+          keep-file-fresh: true
+
+  build-linux-arm64:
+    name: Build Linux Archive (arm64)
+    if: ${{ inputs.build_linux && (inputs.linux_targets == 'all' || inputs.linux_targets == 'arm64') }}
+    runs-on: ubuntu-latest
+    env:
+      LINUX_ARCH: arm64
+      CMAKE_GENERATOR: Ninja
+      GUITARFX_LINUX_PKG_CONFIG_LIBDIR: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+      GUITARFX_LINUX_PKG_CONFIG_SYSROOT_DIR: /
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install Linux cross-build dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            ninja-build \
+            pkg-config \
+            zip \
+            libasound2-dev:arm64 \
+            libcurl4-openssl-dev:arm64 \
+            libfreetype6-dev:arm64 \
+            libfontconfig1-dev:arm64 \
+            libgl1-mesa-dev:arm64 \
+            libglu1-mesa-dev:arm64 \
+            libgtk-3-dev:arm64 \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libx11-dev:arm64 \
+            libxext-dev:arm64 \
+            libxinerama-dev:arm64 \
+            libxrandr-dev:arm64
+
+      - name: Install UI dependencies
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Cache JUCE source
+        id: cache-juce-source
+        uses: actions/cache@v5
+        with:
+          path: juce/JUCE
+          key: ${{ runner.os }}-juce-source-v2
+
+      - name: Fetch JUCE source
+        run: |
+          if [ "${{ steps.cache-juce-source.outputs.cache-hit }}" = "true" ]; then
+            echo "JUCE source restored from cache"
+          elif [ -f "juce/JUCE/CMakeLists.txt" ]; then
+            echo "JUCE source already present at juce/JUCE"
+          else
+            git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
+          fi
+
+      - name: Build Linux release archive
+        run: bash ./build_linux.sh --arch arm64
+
+      - name: Export JUCE build env
+        run: |
+          if [ ! -f "juce/.env" ]; then
+            echo "Expected juce/.env after build, but it was not found."
+            exit 1
+          fi
+          cat juce/.env >> "$GITHUB_ENV"
+
+      - name: Record Linux archive path
+        id: record-archive
+        run: |
+          ZIP_PATH="SoundshedGuitar-${VERSION}-Linux-${LINUX_ARCH}.zip"
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "Expected Linux archive not found: $ZIP_PATH"
+            exit 1
+          fi
+          echo "path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux archive
+        uses: actions/upload-artifact@v6
+        with:
+          name: SoundshedGuitar-Linux-${{ env.LINUX_ARCH }}
+          path: ${{ steps.record-archive.outputs.path }}
+
+      - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: ${{ steps.record-archive.outputs.path }}
+          destination-dir: ./build-artifacts/linux/arm64
           keep-file-fresh: true

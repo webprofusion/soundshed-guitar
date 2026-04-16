@@ -21,6 +21,30 @@ UNIVERSAL=false
 BUILD_PKG=false
 DIST_DIR="${SCRIPT_DIR}/macos-dist"
 
+normalize_arch() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        arm64|aarch64)
+            printf '%s\n' "arm64"
+            ;;
+        x64|x86_64|amd64)
+            printf '%s\n' "x86_64"
+            ;;
+        *)
+            printf '%s\n' "$1"
+            ;;
+    esac
+}
+
+choose_generator_args() {
+    if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
+        printf '%s\n' "-G" "$CMAKE_GENERATOR"
+    elif command -v ninja >/dev/null 2>&1; then
+        printf '%s\n' "-G" "Ninja"
+    fi
+}
+
+HOST_ARCH="$(normalize_arch "$(uname -m)")"
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-ts)    SKIP_TS=true ;;
@@ -50,7 +74,7 @@ PRODUCT="Soundshed Guitar"
 echo "═══════════════════════════════════════════════════"
 echo "  Soundshed Guitar — macOS Distribution Build"
 echo "  Dist dir: ${DIST_DIR}"
-[[ "$UNIVERSAL" == true ]] && echo "  Architecture: universal (arm64 + x86_64)" || echo "  Architecture: native host"
+[[ "$UNIVERSAL" == true ]] && echo "  Architecture: universal (arm64 + x86_64)" || echo "  Architecture: native host (${HOST_ARCH})"
 [[ "$BUILD_PKG"  == true ]] && echo "  Installer .pkg: yes"
 echo "═══════════════════════════════════════════════════"
 
@@ -64,18 +88,26 @@ fi
 
 # ── Step 2: CMake build ───────────────────────────────────────────────────────
 if [[ "$SKIP_BUILD" == false ]]; then
+    if [[ "$UNIVERSAL" == true ]]; then
+        TARGET_ARCHITECTURES="arm64;x86_64"
+        echo ""
+        echo "▶ Configuring for universal binary (arm64 + x86_64)…"
+    else
+        TARGET_ARCHITECTURES="${HOST_ARCH}"
+        echo ""
+        echo "▶ Configuring for native host build (${HOST_ARCH})…"
+    fi
 
-    # When targeting both Intel and Apple Silicon, reconfigure the build directory
-    # with the universal architecture setting.  PamplejuceMacOS.cmake enables this
-    # automatically when CI=1; we can also pass it explicitly so local release
-    # builds don't require that env var.
+    mapfile -t generator_args < <(choose_generator_args)
+    cmake -B "$JUCE_BUILDS" -S "${SCRIPT_DIR}/juce" \
+        "${generator_args[@]}" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_OSX_ARCHITECTURES="${TARGET_ARCHITECTURES}"
+    echo "  ✓ Configured"
+
     if [[ "$UNIVERSAL" == true ]]; then
         echo ""
-        echo "▶ Reconfiguring for universal binary (arm64 + x86_64)…"
-        cmake -B "$JUCE_BUILDS" -S "${SCRIPT_DIR}/juce" \
-            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
-            -DCMAKE_BUILD_TYPE=Release
-        echo "  ✓ Reconfigured"
+        echo "  Architecture verification will run after staging."
     fi
 
     echo ""

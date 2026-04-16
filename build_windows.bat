@@ -10,12 +10,23 @@ set "WORKSPACE_ROOT=%~dp0"
 set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds"
 set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
-set "ARCH=x64" 
+if defined GUITARFX_WINDOWS_ARCH (
+    set "ARCH=%GUITARFX_WINDOWS_ARCH%"
+) else (
+    set "ARCH=x64"
+)
+if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
+    set "CMAKE_GENERATOR=%GUITARFX_WINDOWS_CMAKE_GENERATOR%"
+) else (
+    set "CMAKE_GENERATOR=Visual Studio 18 2026"
+)
 
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
 
 echo [0/4] Configuring CMake...
-cmake -G "Visual Studio 18 2026" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
+echo       Generator: %CMAKE_GENERATOR%
+echo       Architecture: %ARCH%
+cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail
