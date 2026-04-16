@@ -34,7 +34,7 @@ Use this as the active checklist. The detailed sections below preserve the origi
 - [ ] Surface analysis coverage so missing measurements are visible in tooling instead of silently relying on fallbacks.
 - [ ] Run corpus-level validation against the Tone3000 NAM and IR libraries using the actual measured-data pipeline.
 - [ ] Validate representative user calibration scenarios across different guitars, pickups, interfaces, and interface gain positions.
-- [ ] Update product/docs language anywhere it still implies legacy interface calibration semantics instead of named user input profiles plus resource normalization.
+- [x] Update product/docs language anywhere it still implies legacy interface calibration semantics instead of named user input profiles plus resource normalization.
 
 ## Assumptions
 
@@ -64,15 +64,16 @@ Use this as the active checklist. The detailed sections below preserve the origi
 
 ### NAM Processing
 
-- NAM effects currently combine user gain, metadata-driven auto input gain, and metadata-driven auto output gain.
-- `calibrationInputLevel` and `calibrationOutputLevel` still override metadata when present.
-- NAM nodes still default `autoLevelInput` and `autoLevelOutput` to enabled when their level state is reset.
-- Interface calibration is currently implemented as live NAM input adjustment on the first NAM in the chain.
+- NAM runtime behavior is now centered on explicit user gain plus output-side normalization.
+- Resource-owned `normalizationGainDb` is preferred when present; model loudness metadata is the fallback.
+- `autoLevelInput`, `calibrationInputLevel`, and `calibrationOutputLevel` remain in compatibility paths but are sanitized out of normal preset loads.
+- NAM level-state reset now forces `autoLevelInput` off and keeps `autoLevelOutput` on.
+- User input calibration is applied once globally before the chain rather than as a live NAM-specific interface calibration step.
 
 ### IR Processing
 
 - The IR cabinet effect already computes an energy-based auto compensation gain.
-- That compensation is optional instead of baseline behavior.
+- That compensation is baseline behavior for normal IR switching.
 
 ### Resource Storage
 

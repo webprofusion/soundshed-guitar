@@ -60,11 +60,11 @@ This document tracks outstanding tasks and improvements for the GuitarFX project
 - Audio mixing works with any model architectures and uses proven patterns
 
 **Implementation Steps**:
-1. Extend `ResourceRef` in [PresetTypes.h](../src/src/presets/PresetTypes.h) to support multiple resources per node
-2. Create `MultiModelNAMAmpEffect` in [dsp/effects/](../src/src/dsp/effects/) holding multiple `nam::DSP` instances (use optimized NAM processing where possible)
+1. Extend `ResourceRef` in [PresetTypes.h](../core/src/presets/PresetTypes.h) to support multiple resources per node
+2. Create `MultiModelNAMAmpEffect` in [dsp/effects/](../core/src/dsp/effects/) holding multiple `nam::DSP` instances (use optimized NAM processing where possible)
 3. Implement parameter-mapped blending: map blend control to model indices with piecewise interpolation
-4. Register effect in [BuiltinEffects.h](../src/src/dsp/effects/BuiltinEffects.h) as `amp_nam_blend`
-5. Add UI support in [presetV2.ts](../src/resources/ui/ts/presetV2.ts) and [fxSelector.ts](../src/resources/ui/ts/fxSelector.ts)
+4. Register effect in [BuiltinEffects.h](../core/src/dsp/effects/BuiltinEffects.h) as `amp_nam_blend`
+5. Add UI support in [presetV2.ts](../core/ui/ts/presetV2.ts) and [fxSelector.ts](../core/ui/ts/fxSelector.ts)
 6. Optimize: skip inactive model when blend is at 0.0 or 1.0
 
 **Parameters**:

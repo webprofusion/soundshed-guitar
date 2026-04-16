@@ -20,11 +20,11 @@ The core DSP engine routes audio through a directed acyclic graph (DAG) of effec
 - **Implicit I/O**: If edges reference `__input__` or `__output__` but nodes are absent, the executor inserts them.
 - **Parallel paths**: Created by inserting a `splitter` node; a `mixer` node is auto-inserted to rejoin branches. Example use: dual-cab routing or wet/dry parallel delay.
 - **Global processing loop**:
-  1. Input trim + mono/auto-level
+  1. Raw input metering, mono routing, and user input calibration
   2. Global pre-chain (shared across all presets)
   3. Per-preset signal graphs (mixed in parallel)
   4. Global post-chain (shared EQ, doubler)
-  5. Master gain + output limiter
+  5. Master gain + final output protection
 
 **Global pre/post chains** (`GlobalSignalChainConfig`): Independent `SignalGraph` instances that wrap around all presets. Defaults: pre = gate; post = EQ + doubler. Edited via the signal path UI.
 
@@ -132,8 +132,9 @@ All types share `decay`, `mix`, and `preDelay`. Each has tuned internals for its
 
 - Loads `.nam` model files (NAM community format).
 - **SIMD-optimized inference**: `simd/OptimizedNAM.h`, `simd/OptimizedLSTM.h`, `simd/OptimizedWaveNet.h`, `simd/OptimizedActivations.h` (~2× speedup over scalar).
-- **NAM level matching**: Reads model metadata (`input_level_dbu`, `output_level_dbu`, `loudness`) and aligns compatible NAM captures to the configured interface reference without a separate user recalibration step.
-- **Auto-level**: NAM nodes apply metadata-based input/output gain internally; the main UI now relies on explicit Input and Output controls for user correction. Interface calibration reference defaults to +12.0 dBu @ 0 dBFS peak (configurable in Settings).
+- **NAM output normalization**: Applies product-owned `normalizationGainDb` from resource metadata when available, otherwise falls back to model loudness metadata against the shared nominal operating target.
+- **Input behavior**: Per-model input auto-leveling is retired in normal product flow. User-to-user matching is handled globally by user input calibration profiles rather than NAM metadata interpretation.
+- **Runtime target**: The shared nominal operating level defaults to `-18 dBFS` and can be changed in Settings.
 - **Model hashing**: `ModelHasher` computes SHA-256 for deduplication and resource identity tracking.
 
 ---
@@ -159,10 +160,11 @@ Runs multiple presets simultaneously with independent mix controls — used for 
 
 - Each preset runs its own full `SignalGraphExecutor` instance in parallel.
 - Per-preset controls: **mix level**, **pan** (equal-power), **mute**, **solo**.
-- **Master gain** and **output limiter** applied post-mix.
-- **Input trim** and **auto-level** applied globally before per-preset processing.
+- **Master gain** and **final output limiter** applied post-mix.
+- **Global input stage**: mono/stereo input routing plus one fixed user input calibration gain before pre-chain and preset processing.
+- **Legacy mixer auto-level**: Simple peak-based input/output auto-level paths still exist in code but are forced off in current product flow.
 - **Mono/stereo input mode** selection.
-- **Signal diagnostics**: Per-node input/output signal levels, DSP load % and timing — streamed to UI as `dspPerformance` and `signalLevelDiagnostics` messages.
+- **Signal diagnostics**: Streams raw input, processed input, output, and per-node levels plus DSP timing via `signalLevelDiagnostics` and `dspPerformance` messages.
 - **Tuner callback**: DSP thread notifies tuner of pitch data.
 - **Metronome audio**: Mixed into output stream.
 
@@ -212,11 +214,12 @@ Blending maps multiple NAM models to a set of physical parameters, enabling smoo
 | `name` | string | Display name (max 100 chars) |
 | `version` | int | Schema version (must be 2) |
 | `author`, `category`, `description`, `tags` | string/array | Metadata |
-| `global` | GlobalSettings | Input/output trim, auto-level, transpose |
+| `global` | GlobalSettings | Input/output trim, legacy auto-level flags, transpose |
+| `globalSignalChain` | GlobalSignalChainConfig | Shared pre/post chain configuration, mono routing, limiter |
 | `graph` | SignalGraph | Effect signal graph |
 | `embeddedResources` | EmbeddedResource[] | Portable base64-encoded resources |
 
-**GlobalSettings**: `inputTrim`, `outputTrim`, `outputVolume`, `autoLevelInput`, `autoLevelOutput`, `transpose` (semitones, -24..+12).
+**GlobalSettings**: `inputTrim`, `outputTrim`, `outputVolume`, `autoLevelInput`, `autoLevelOutput`, `transpose` (semitones, -24..+12). The `autoLevel*` fields remain in the schema for compatibility, but current preset normalization forces the retired mixer-wide path off during normal loads.
 
 ### 8.2 CRUD Operations
 
@@ -410,7 +413,7 @@ Record and playback of user guitar takes for offline preset editing.
 
 Real-time performance and signal monitoring.
 
-- **Signal level meters**: Input and output levels per active preset node, streamed as `signalLevelDiagnostics` messages.
+- **Signal level meters**: Raw input, processed input, output, and per-node levels streamed as `signalLevelDiagnostics` messages.
 - **DSP performance**: CPU load %, per-block timing (µs), node-level timing breakdown — streamed as `dspPerformance` messages.
 - **Signal path test**: `runSignalPathTest` message triggers a test tone through the graph and reports frequency, duration, and elapsed time.
 - **Diagnostics**: Signal level diagnostics are always enabled and persisted as `diagnostics.signalLevelsEnabled: true` for compatibility.
@@ -426,7 +429,8 @@ Application configuration panel.
 
 - **Audio device preferences**: Open native audio device settings dialog (`openAudioPreferences` message).
 - **Resource folders**: Configure search paths for NAM models and IR files.
-- **NAM interface calibration**: Reference level (dBu @ 0 dBFS) for auto-leveling. Enabled by default at +12.0 dBu. Can be disabled to use model metadata as-is.
+- **User input calibration**: Named calibration profiles apply one fixed gain before the chain to match a guitar/interface setup.
+- **Advanced DSP level targets**: Shared nominal operating level and output protection ceiling are configurable and apply immediately at runtime.
 - **Theme selection**: Cycle or select UI theme (see §20).
 - **Tone3000 API key**: Enter and persist API key for Tone3000 integration.
 - **Diagnostics**: Real-time signal level and DSP performance streaming stays enabled at all times.

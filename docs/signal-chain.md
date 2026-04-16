@@ -1,11 +1,11 @@
 # Signal Chain
 
 ## Key Files
-- `src/src/dsp/SignalGraphExecutor.h` — Graph execution, buffer routing, topological sort
-- `src/src/dsp/SignalGraphExecutor.cpp` — Executor implementation
-- `src/src/presets/PresetTypes.h` — `SignalGraph`, `GraphNode`, `GraphEdge` structures
-- `src/src/dsp/effects/NAMAmpEffect.h` — Neural amp model loading and processing
-- `src/src/dsp/MultiPresetMixer.h` — Multi-preset mixing, global chain orchestration
+- `core/src/dsp/SignalGraphExecutor.h` — Graph execution, buffer routing, topological sort
+- `core/src/dsp/SignalGraphExecutor.cpp` — Executor implementation
+- `core/src/presets/PresetTypes.h` — `SignalGraph`, `GraphNode`, `GraphEdge` structures
+- `core/src/dsp/effects/NAMAmpEffect.h` — Neural amp model loading and processing
+- `core/src/dsp/MultiPresetMixer.h` — Multi-preset mixing, global chain orchestration
 
 ## Overview
 
@@ -109,11 +109,13 @@ Nodes execute in dependency order via Kahn's algorithm. The executor validates a
 - No allocations during audio processing
 
 ### Processing Loop
-1. Apply global input processing (mono mode, auto-level, etc.).
-2. Process global pre-chain (e.g., noise gate).
-3. For each preset: Process preset graph, mix outputs with pan/gain.
-4. Process global post-chain (e.g., EQ).
-5. Apply master gain, auto-level output, limiter.
+1. Measure raw input diagnostics.
+2. Apply mono routing and the active user input calibration gain.
+3. Measure processed input diagnostics.
+4. Process global pre-chain (for example noise gate and transpose).
+5. For each preset: process the preset graph, then mix outputs with pan and mix gain.
+6. Process global post-chain (for example EQ and doubler).
+7. Apply master gain, then final output protection if enabled.
 
 ### Bypass Semantics
 Disabled nodes skip processing; their buffer becomes a pass-through of gathered inputs. The signal path remains connected.
@@ -145,7 +147,7 @@ Applied outside the graph:
 | `inputTrim` | -40..+20 dB | 0.0 | Gain before graph |
 | `outputTrim` | -40..+20 dB | 0.0 | Gain after graph |
 
-Global chains may include additional parameters, but core trims remain, and global effects are now integrated into chains.
+Global chains may include additional parameters, but core trims remain, and global effects are now integrated into chains. User input calibration is separate from the preset schema and is applied once from app settings before the pre-chain.
 
 ## Global Signal Chains
 

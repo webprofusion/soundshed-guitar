@@ -34,16 +34,33 @@ Soundshed Guitar searches these folders when building the library of models and 
 
 ---
 
-## NAM Level Matching
+## User Input Calibration
 
-Compatible Neural Amp Models carry metadata describing their intended input and output level. Soundshed Guitar uses that metadata automatically and applies the interface reference setting globally.
+User input calibration is the main global input-level system.
 
 | Setting | What it does |
 |---------|--------------|
-| **Enabled** | Interprets compatible NAM input metadata against your interface reference. Leave this on unless you have a specific reason to compare raw metadata directly |
-| **Reference Level** | The dBu level that corresponds to 0 dBFS at your interface's input. Default is +12.0 dBu. Change this if your interface has a different headroom specification |
+| **Active Profile** | Chooses which named calibration profile is applied before the signal chain |
+| **Train** | Temporarily bypasses the active profile, watches your live input, and recommends a fixed gain offset |
+| **Delete** | Removes a saved profile |
 
-There is no separate per-model recalibration step in normal use. If a model still feels too hot or too quiet, use the main **Input** and **Output** controls first.
+Each profile stores one fixed gain value. That gain is applied once before the shared pre-chain and before any preset processing.
+
+## Advanced DSP Level Targets
+
+These settings control the shared output normalization targets used by the DSP engine.
+
+| Setting | What it does |
+|---------|--------------|
+| **Nominal Operating Level** | Shared loudness target used by NAM output normalization when resource-owned normalization data is missing |
+| **Output Protection Ceiling** | Final mixer ceiling used by master output protection |
+
+Defaults:
+
+- Nominal operating level: **-18 dBFS**
+- Output protection ceiling: **-1 dBFS**
+
+Changes apply immediately.
 
 ---
 
@@ -74,7 +91,7 @@ Enter your Tone3000 API key here to enable community model browsing, downloads, 
 | Control | What it does |
 |---------|--------------|
 | **CPU Load display** | Shows real-time CPU usage per audio block; identifies which effects are most expensive |
-| **Signal Level Diagnostics** | Streams live input and output levels per node in the chain — useful for finding where a signal is too hot or too quiet |
+| **Signal Level Diagnostics** | Streams raw input, processed input, output, and per-node levels — useful for finding where a signal is too hot or too quiet |
 | **Run Signal Path Test** | Sends a test tone through the chain and reports any nodes that are not producing output |
 
 ---

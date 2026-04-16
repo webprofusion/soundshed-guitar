@@ -16,6 +16,7 @@ A brickwall limiter is a compressor with an instantaneous attack and an extremel
 ## Tips
 
 - **Leave the Ceiling at −0.1 dB** in almost all cases. This is the standard "true peak" protection setting used in professional audio.
-- The limiter is most valuable on the **Multi-Preset Mixer master output** — when blending multiple presets, the combined levels can briefly spike much louder than each individual preset.
+- This effect node is separate from the **Multi-Preset Mixer** master output protection. Use this node when you want a limiter inside the signal chain itself.
+- For overall mixer protection when blending multiple presets, use the mixer's **Output Limiter**. Its ceiling follows **Settings → Advanced DSP Level Targets** and defaults to `-1 dBFS`.
 - A 50 ms release works well for most uses. If you hear the signal "pumping" (volume ducking briefly after loud peaks), try lengthening the release to 100–200 ms.
 - If you are recording and the limiter is working frequently (the level is hitting the ceiling often), it is better to reduce the Output Trim or makeup gain earlier in the chain rather than relying on the limiter to tame a consistently too-loud signal.

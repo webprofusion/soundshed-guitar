@@ -1,8 +1,8 @@
 # Data Models
 
 ## Key Files
-- `src/src/presets/PresetTypes.h` — Core data structures (`PresetV2`, `SignalGraph`, `GraphNode`, etc.)
-- `src/src/presets/PresetStorage.h` — Preset file I/O and storage layout
+- `core/src/presets/PresetTypes.h` — Core data structures (`Preset`, `SignalGraph`, `GraphNode`, etc.)
+- `core/src/presets/PresetStorage.h` — Preset file I/O and storage layout
 
 ## Overview
 
@@ -30,7 +30,9 @@ Top-level preset structure (schema version 2).
 | `tags` | string[] | No | Searchable tags |
 | `createdAt` | datetime | No | ISO 8601 timestamp |
 | `modifiedAt` | datetime | No | Last modification |
+| `designedPeakInputDbfs` | float | No | Stored reference peak captured from raw input during preset design |
 | `global` | GlobalSettings | Yes | Global parameters |
+| `globalSignalChain` | GlobalSignalChainConfig | No | Shared pre/post chain configuration and input/output routing |
 | `graph` | SignalGraph | Yes | Effect signal graph |
 | `scenes` | PresetScene[] | No | Multiple named signal-chain variants within one preset |
 | `embeddedResources` | EmbeddedResource[] | No | Portable resources |
@@ -53,9 +55,25 @@ field remains for backward compatibility and mirrors the currently active scene 
 | `inputTrim` | float | 0.0 | -40..+20 | Input gain (dB) |
 | `outputTrim` | float | 0.0 | -40..+20 | Output gain (dB) |
 | `outputVolume` | float | 1.0 | 0.0..1.0 | Output volume (linear) |
-| `autoLevelInput` | bool | false | — | Apply model-referenced input gain |
-| `autoLevelOutput` | bool | false | — | Apply model-referenced output trim |
+| `autoLevelInput` | bool | false | — | Legacy compatibility flag for retired mixer-wide input auto-level |
+| `autoLevelOutput` | bool | false | — | Legacy compatibility flag for retired mixer-wide output auto-level |
 | `transpose` | int | 0 | -24..+12 | Pitch shift (semitones) |
+
+`autoLevelInput` and `autoLevelOutput` remain in the preset schema for compatibility, but current preset normalization forces the retired mixer-wide path off in normal product flow.
+
+### GlobalSignalChainConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `preChainGraph` | SignalGraph | default pre-chain | Shared graph before all presets |
+| `postChainGraph` | SignalGraph | default post-chain | Shared graph after all presets |
+| `inputGain` | float | 0.0 | Shared input gain in dB |
+| `monoMode` | bool | false | Mono input routing toggle |
+| `inputChannel` | int | 0 | Channel selection used when mono mode is enabled |
+| `autoLevelInput` | bool | false | Legacy compatibility flag for retired mixer-wide auto input |
+| `outputGain` | float | 0.0 | Shared output gain in dB |
+| `autoLevelOutput` | bool | false | Legacy compatibility flag for retired mixer-wide auto output |
+| `limiterEnabled` | bool | false | Final mixer output protection toggle |
 
 ## SignalGraph
 

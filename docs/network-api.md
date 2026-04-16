@@ -1,221 +1,132 @@
 # Network API
 
 ## Key Files
-- `src/src/platform/vst3/` — VST3 wrapper implementation
-- `src/src/platform/au/` — Audio Unit wrapper (macOS)
-- `src/src/platform/app/` — Standalone application
+- `api/src/index.ts` — Worker entry point and route mounting
+- `api/src/routes/` — Route groups for auth, discovery, items, packs, uploads, and sharing
+- `api/src/lib/http.ts` — Standard success/error envelopes
+- `api/README.md` — Quickstart and implemented endpoint inventory
 
 ## Overview
 
-This document covers plugin format wrappers (VST3, AU, AAX, Standalone).
+This document covers the current cloud API project in this repository.
 
----
+The API is a Cloudflare Worker built with Hono. It backs authentication, discovery, item and pack publishing, upload flows, and sharing consent.
 
-## REST API Specification
+## Runtime Shape
 
-### Base URL
-```
-Production: https://api.guitar.soundshed.com/v1
-```
+- Runtime: Cloudflare Worker
+- Router: Hono
+- CORS: enabled for desktop/WebView clients
+- Mount points:
+  - `/health`
+  - `/v1/auth/*`
+  - `/v1/*` discovery routes
+  - `/v1/items/*`
+  - `/v1/packs/*`
+  - `/v1/share-consent/*`
+  - `/v1/uploads/*`
+  - additional `/v1/*` routes for tone advisor and proxy helpers
 
-### Common Headers
+## Response Envelopes
 
-| Header | Required | Description |
-|--------|----------|-------------|
-| `Content-Type` | Yes (POST) | `application/json` |
-| `User-Agent` | Yes | Client identifier |
-| `X-Client-Version` | Yes | Plugin version |
+Successful responses use:
 
-### Error Response Format
 ```json
 {
+  "ok": true,
+  "data": {}
+}
+```
+
+Error responses use:
+
+```json
+{
+  "ok": false,
   "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "The requested preset was not found",
-    "details": {"presetId": "abc123"}
+    "code": "NOT_FOUND",
+    "message": "Route not found"
   }
 }
 ```
 
-### Error Codes
+## Implemented Route Groups
 
-| HTTP | Code | Description |
-|------|------|-------------|
-| 400 | INVALID_REQUEST | Malformed request |
-| 400 | VALIDATION_ERROR | Invalid parameters |
-| 404 | RESOURCE_NOT_FOUND | Resource not found |
-| 429 | RATE_LIMITED | Too many requests |
-| 500 | INTERNAL_ERROR | Server error |
+### Health
 
----
+- `GET /health`
 
-### Endpoints
+### Authentication
 
-#### Search Presets
-```
-GET /presets/search?q=crunch&category=Rock&page=1&limit=20
-```
+- `POST /v1/auth/start`
+- `POST /v1/auth/verify`
+- `GET /v1/auth/me`
+- `POST /v1/auth/logout`
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `q` | string | — | Free text search |
-| `category` | string | — | Filter by category |
-| `tags` | string | — | Comma-separated tags |
-| `sort` | string | `relevance` | Sort field |
-| `page` | int | 1 | Page number |
-| `limit` | int | 20 | Results per page (max 100) |
+### Discovery
 
-**Response:**
-```json
-{
-  "total": 156,
-  "page": 1,
-  "pageSize": 20,
-  "results": [
-    {
-      "id": "abc123",
-      "name": "Vintage Crunch",
-      "author": {"id": "user456", "name": "ToneHunter"},
-      "category": "Crunch",
-      "tags": ["marshall", "rock"],
-      "downloads": 1234,
-      "rating": {"average": 4.5, "count": 89}
-    }
-  ]
-}
-```
+- `GET /v1/home`
+- `GET /v1/rows/:slug`
+- `GET /v1/search`
 
-#### Get Preset
-```
-GET /presets/{id}
-```
+### Items
 
-**Response:**
-```json
-{
-  "preset": { /* Full PresetV2 object */ },
-  "resources": [
-    {
-      "type": "nam",
-      "id": "plexi-bright",
-      "hash": "sha256:abc123...",
-      "size": 2048576,
-      "downloadUrl": "/resources/nam/plexi-bright"
-    }
-  ]
-}
-```
+- `GET /v1/items`
+- `POST /v1/items`
+- `GET /v1/items/me/list`
+- `GET /v1/items/:itemId`
+- `PATCH /v1/items/:itemId`
+- `DELETE /v1/items/:itemId`
+- `POST /v1/items/:itemId/submit`
+- `POST /v1/items/:itemId/publish`
+- `GET /v1/items/:itemId/download`
 
-#### Download Resource
-```
-GET /resources/{type}/{id}
-```
+### Packs
 
-Returns binary file with headers:
-```
-Content-Type: application/octet-stream
-X-Content-Hash: sha256:abc123...
+- `GET /v1/packs`
+- `POST /v1/packs`
+- `GET /v1/packs/me/list`
+- `GET /v1/packs/:packId`
+- `PATCH /v1/packs/:packId`
+- `DELETE /v1/packs/:packId`
+- `POST /v1/packs/:packId/items`
+- `POST /v1/packs/:packId/submit`
+- `POST /v1/packs/:packId/publish`
+- `GET /v1/packs/:packId/download`
+
+### Share Consent
+
+- `GET /v1/share-consent/status`
+- `POST /v1/share-consent/accept`
+
+### Uploads
+
+- `POST /v1/uploads/init`
+- `PUT /v1/uploads/:uploadId`
+- `POST /v1/uploads/complete`
+
+## Operational Notes
+
+- CORS allows desktop/WebView access and exposes `content-disposition`, `content-length`, and `content-type`.
+- Auth startup uses SendGrid when configured.
+- In development, auth can fall back to logging the one-time code when the SendGrid secret is absent.
+- Uploads currently stream through the Worker rather than using direct pre-signed R2 uploads.
+- Shared preset publishing depends on an accepted `tone_sharing_publish` consent record.
+
+## Local Development
+
+From `api/`:
+
+```bash
+npm install
+npm run d1:migrate
+npm run dev
 ```
 
----
-
-## Plugin Formats
-
-### VST3 (Windows, macOS)
-
-**SDK**: VST3 SDK 3.7.0+
-
-**Features:**
-- Full parameter automation
-- Preset management via host
-- Latency compensation reporting
-- Stereo I/O (1 stereo bus)
-
-**Installation:**
-- Windows: `C:\Program Files\Common Files\VST3\`
-- macOS: `~/Library/Audio/Plug-Ins/VST3/`
-
-### Audio Unit (macOS)
-
-**SDK**: macOS SDK 10.13+
-
-**Types:**
-- AU v2 (legacy compatibility)
-- AU v3 (App Extension)
-
-**Installation:** `~/Library/Audio/Plug-Ins/Components/`
-
-### AAX (Windows, macOS)
-
-**SDK**: AAX SDK 2.4.0+ (requires Avid developer agreement)
-
-**Features:**
-- Pro Tools integration
-- Parameter pages for control surface
-- PACE signing required for release
-
-**Installation:**
-- Windows: `C:\Program Files\Common Files\Avid\Audio\Plug-Ins\`
-- macOS: `/Library/Application Support/Avid/Audio/Plug-Ins/`
-
-### Standalone Application
-
-**Audio APIs:**
-- Windows: WASAPI, ASIO
-- macOS: CoreAudio
-
-**Features:**
-- Audio device selection
-- Buffer size configuration
-- Optional MIDI for preset switching
-- No DAW required
-
----
-
-## Common Plugin Interface
-
-All formats implement:
-
-```cpp
-interface PluginInterface {
-    void Initialize(double sampleRate, int maxBlockSize);
-    void Process(float** inputs, float** outputs, int numSamples);
-    void SetParameter(int index, float value);
-    float GetParameter(int index);
-    void GetState(std::vector<uint8_t>& data);
-    void SetState(const std::vector<uint8_t>& data);
-    void CreateEditor(void* parentWindow);
-};
-```
-
-### State Serialization
-1. Version header
-2. Parameter values (normalized 0–1)
-3. Preset JSON blob (compressed)
-
-### Latency Reporting
-Each format reports processing latency to the host for automatic delay compensation.
-
----
-
-## Build Targets
-
-```
-SoundshedGuitar_VST3    # VST3 plugin bundle
-GuitarFX_AU      # Audio Unit bundle (macOS)
-GuitarFX_AAX     # AAX plugin (requires SDK)
-SoundshedGuitar_App     # Standalone application
-```
-
-### Environment Variables
-```
-VST3_SDK_ROOT=/path/to/vst3sdk
-AAX_SDK_ROOT=/path/to/aax-sdk
-```
-
----
+Set `SENDGRID_API_KEY` as a Worker secret when email delivery is required.
 
 ## See Also
-- [Architecture Overview](architecture-overview.md) — System layers
-- [Data Models](data-models.md) — Preset schema
-- [User Interface](user-interface.md) — UI message protocol
+
+- [api/README.md](../api/README.md) — quickstart and full implemented endpoint list
+- [Architecture Overview](architecture-overview.md) — repo-wide system layers
+- [Data Models](data-models.md) — preset and resource schema

@@ -1,11 +1,11 @@
 # User Interface
 
 ## Key Files
-- `src/resources/ui/ts/messages.ts` — Message type definitions and handlers
-- `src/resources/ui/ts/state.ts` — UI state management
-- `src/resources/ui/ts/main.ts` — Application entry point
-- `src/src/GuitarFXPlugin.cpp` — `HandleUIMessage()` for C++ side
-- `src/src/ui/WebUIBridge.h` — Native bridge interface
+- `core/ui/ts/messages.ts` — Message handlers and state application
+- `core/ui/ts/state.ts` — UI state management
+- `core/ui/ts/main.ts` — Application entry point
+- `core/src/PluginController.cpp` — Engine-side state and message handling
+- `core/src/UiBridge.h` — Native bridge interface
 
 ## Overview
 
@@ -74,7 +74,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `globalChain` | `{config}` | Global signal chain configuration |
 | `effectCatalog` | `{effects: [...]}` | Available effect types |
 | `dspPerformance` | `{...}` | DSP performance statistics |
-| `signalLevelDiagnostics` | `{input, output}` | Signal level meters |
+| `signalLevelDiagnostics` | `{rawInput, input, output, nodes}` | Signal level diagnostics and per-node meters |
 | `metronomeState` | `{bpm, enabled, ...}` | Metronome state |
 | `layoutSaved` | `{...}` | Effect layout saved |
 | `layoutLibraryLoaded` | `{layoutLibrary}` | Layout library loaded |
@@ -115,13 +115,15 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setLimiterEnabled` | `{enabled}` | Enable/disable limiter |
 | `setInputMode` | `{mode}` | Set input mode (mono/stereo) |
 | `setAmpCabState` | `{...}` | Set amp/cab enable state |
-| `setAutoLevel` | `{...}` | Set auto-level configuration |
+| `setAutoLevel` | `{...}` | Legacy compatibility message; controller forces mixer-wide auto-level back off |
 | `setMetronome` | `{bpm?, enabled?, ...}` | Update metronome settings |
 | `tuner` | `{action}` | Start/stop/configure tuner |
 | `runSignalPathTest` | `{}` | Run signal path diagnostic |
 | `previewDemoAudio` | `{audio}` | Preview demo audio clip |
 | `stopDemoAudio` | `{}` | Stop demo audio playback |
 | `importRemoteResource` | `{...}` | Import resource from remote |
+| `setSetting` | `{key, value}` | Persist and apply an app setting |
+| `setUserInputCalibrationTrainingActive` | `{active}` | Temporarily bypass the active calibration profile while training |
 | `setGlobalChainParam` | `{param, value}` | Set global chain parameter |
 | `getGlobalChain` | `{}` | Request global chain state |
 | `getEffectCatalog` | `{}` | Request effect catalog |
@@ -219,19 +221,25 @@ treated as a one-scene preset automatically.
 
 ## Settings → Audio
 
-### Interface Calibration (NAM)
+### User Input Calibration
 
-This global setting aligns NAM input metadata (dBu, RMS) to the DAW’s peak reference (dBFS peak) for auto‑leveling. It is **on by default** to provide consistent first‑run behavior.
+The live product uses named user input calibration profiles instead of the older NAM interface calibration reference model.
 
 **Behavior**
-- When enabled and a model provides input metadata, the auto‑level input gain uses:
-  - $\text{effectiveInputLevel} = \text{modelInputLevel}_{\mathrm{dBu}} - \text{referenceDbu}$
-- When disabled, the model’s input metadata is used as‑is.
-- If a per‑node calibration input level is present, it always takes precedence.
+- A profile stores one fixed gain value in dB.
+- The active profile applies that gain once at the mixer input before the pre-chain and preset graphs.
+- While calibration training is active, the live calibration gain is bypassed temporarily so the capture reflects the raw input.
+
+### Advanced DSP Level Targets
+
+Two advanced settings affect runtime level behavior immediately:
+
+- **Nominal Operating Level**: shared loudness target used by NAM output normalization when resource-owned normalization data is unavailable.
+- **Output Protection Ceiling**: final ceiling used by mixer output protection.
 
 **Defaults**
-- Enabled: **true**
-- Reference level: **+12.0 dBu @ 0 dBFS peak**
+- Nominal operating level: **-18 dBFS**
+- Output protection ceiling: **-1 dBFS**
 
 ## Parameter Controls
 

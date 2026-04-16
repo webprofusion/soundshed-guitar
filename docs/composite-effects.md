@@ -1,11 +1,11 @@
 # Composite Effects
 
 ## Key Files
-- `src/src/presets/PresetTypes.h` — `CompositeEffectDefinition`, `ExposedParameter` structures
-- `src/src/dsp/effects/CompositeEffectProcessor.h` — Processor that runs a nested signal graph
-- `src/src/dsp/effects/CompositeEffectProcessor.cpp` — Implementation
-- `src/resources/ui/ts/compositeTypes.ts` — TypeScript types for composite effects
-- `src/resources/ui/ts/compositeEffects.ts` — UI composite effect management
+- `core/src/presets/PresetTypes.h` — `CompositeEffectDefinition`, `ExposedParameter` structures
+- `core/src/dsp/effects/CompositeEffectProcessor.h` — Processor that runs a nested signal graph
+- `core/src/dsp/effects/CompositeEffectProcessor.cpp` — Implementation
+- `core/ui/ts/compositeTypes.ts` — TypeScript types for composite effects
+- `core/ui/ts/compositeEffects.ts` — UI composite effect management
 
 ## Overview
 

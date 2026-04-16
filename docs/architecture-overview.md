@@ -1,13 +1,15 @@
 # Architecture Overview
 
 ## Key Files
-- `src/src/GuitarFXPlugin.cpp` — Main plugin entry, message handling, state management
-- `src/src/GuitarFXPlugin.h` — Plugin interface, parameter definitions
-- `src/config/GuitarFXConfig.h` — Branding, plugin metadata, build configuration
+- `core/src/PluginController.cpp` — Main application controller, state management, UI messaging
+- `core/src/MessageDispatcher.cpp` — Message routing across UI, mixer, preset, and settings domains
+- `core/src/UiBridge.cpp` — Native UI bridge plumbing
+- `core/src/dsp/MultiPresetMixer.cpp` — Shared mixer and global chain orchestration
+- `juce/` and `iplug2/` — Front-end builds that host the shared core engine
 
 ## Overview
 
-GuitarFX is a modular, layered audio plugin combining Neural Amp Modeling (NAM) with a flexible signal graph architecture. The system separates concerns across four layers: Platform, Audio Engine, Application, and UI.
+Soundshed Guitar is a modular audio application built around a shared core engine. The system separates concerns across four layers: front-end hosts, audio engine, application controller, and UI.
 
 ## System Layers
 
@@ -15,21 +17,20 @@ GuitarFX is a modular, layered audio plugin combining Neural Amp Modeling (NAM) 
 ┌─────────────────────────────────────────┐
 │           User Interface Layer          │  WebView SPA (HTML/CSS/TypeScript)
 ├─────────────────────────────────────────┤
-│           Application Layer             │  Preset Manager, Resource Library, Network Client
+│           Application Layer             │  PluginController, MessageDispatcher, resource and preset state
 ├─────────────────────────────────────────┤
 │           Audio Engine Layer            │  SignalGraphExecutor, Effect Processors, NAM/IR
 ├─────────────────────────────────────────┤
-│           Platform Layer                │  VST3, AU, AAX, Standalone wrappers
+│           Platform Layer                │  JUCE / iPlug2 front ends and host integration
 └─────────────────────────────────────────┘
 ```
 
 ### Platform Layer
-Abstracts plugin format differences and host DAW integration.
-- Plugin lifecycle (activation, deactivation)
-- Audio buffer routing from host
+Front-end projects host the shared core engine and UI bridge.
+- Host lifecycle and audio callback integration
 - Parameter exposure and automation
-- State persistence hooks
-- **Formats**: VST3 (Windows/macOS), AU (macOS), AAX (Windows/macOS), Standalone
+- Standalone application packaging and plugin targets
+- **Current repo structure**: shared engine in `core/`, front ends in `juce/` and `iplug2/`
 
 ### Audio Engine Layer
 Real-time DSP processing with zero allocations in the audio callback.
@@ -40,9 +41,10 @@ Real-time DSP processing with zero allocations in the audio callback.
 
 ### Application Layer
 Coordinates state and business logic.
-- **Preset Manager**: CRUD operations, import/export, versioning
+- **PluginController**: Main orchestration point for presets, settings, messaging, and host state
+- **MessageDispatcher**: Routes JSON UI messages by domain
 - **Resource Library**: NAM/IR catalog with content-addressed deduplication
-- **Network Client**: Remote preset search/download (future community sharing)
+- **API integration**: Cloud-backed discovery/sharing lives in the separate `api/` worker project
 
 ### User Interface Layer
 Web-based SPA in a native WebView container.

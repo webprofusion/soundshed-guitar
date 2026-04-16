@@ -42,9 +42,6 @@ All persisted app data lives under `<ROOT>/data/v1/`.
           effect-layouts.json
         images/
           <image-file>
-      calibration/
-        models/
-          index.json
       logs/
         session-log.txt
 ```
@@ -68,6 +65,10 @@ Global app settings and integration values.
     "userId": "usr_123"
   },
   "diagnostics.signalLevelsEnabled": true,
+  "audio.userInputCalibration.profiles": [],
+  "audio.userInputCalibration.activeProfileId": null,
+  "audio.dsp.nominalOperatingLevelDbfs": -18.0,
+  "audio.dsp.outputProtectionCeilingDbfs": -1.0,
   "ui.advancedOptionsEnabled": true,
   "factoryPresets.archiveLoadingEnabled": true,
   "featureFlags": {}
@@ -127,4 +128,6 @@ Canonical index for managed resources.
 - Write JSON atomically where practical (tmp + rename).
 - Readers should tolerate missing or unknown fields.
 - New writes target only `<ROOT>/data/v1`.
+- `diagnostics.signalLevelsEnabled` is forced to `true` by the current product for compatibility.
+- User input calibration profiles and advanced DSP level targets are stored directly in `settings/app.json`.
 - Local preset archive exports remain full-fidelity and can include all referenced resources. Tone-sharing publishes use a separate sanitized archive for public sharing and may also upload a private full archive for API retention.

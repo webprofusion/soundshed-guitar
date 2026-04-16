@@ -1,9 +1,9 @@
 # Theme System
 
 ## Key Files
-- `src/resources/ui/ts/theme-switcher.ts` — Core theme management logic
-- `src/resources/ui/ts/theme-switcher-ui.ts` — Theme switcher UI component
-- `src/resources/ui/css/variables.css` — CSS variable definitions for all themes
+- `core/ui/ts/theme-switcher.ts` — Core theme management logic
+- `core/ui/ts/theme-switcher-ui.ts` — Theme switcher UI component
+- `core/ui/css/variables.css` — CSS variable definitions for all themes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
 ## Overview
@@ -123,11 +123,11 @@ background: rgba(255, 255, 255, 0.3);
 
 ```powershell
 # Build TypeScript
-cd src/resources/ui
+cd core/ui
 npm run build
 
-# Build app
-cmake --build src/build --config Debug --target SoundshedGuitar_App
+# Build JUCE standalone app
+cmake --build juce/builds --config Debug --target SoundshedGuitar_Standalone
 
 # Test: launch app, click 🎨 icon to cycle themes
 ```

@@ -15,25 +15,25 @@ If you only load a few files, use these:
 
 ## Core Entry Points
 
-- Plugin entry and UI bridge: src/src/GuitarFXPlugin.cpp
-- DSP graph executor: src/src/dsp/SignalGraphExecutor.h
-- Effect base and registry: src/src/dsp/EffectProcessor.h, src/src/dsp/EffectRegistry.h
-- Preset schema and storage: src/src/presets/PresetTypes.h
-- UI messages and state: src/resources/ui/ts/messages.ts, src/resources/ui/ts/state.ts
+- Application controller and UI bridge: core/src/PluginController.cpp, core/src/UiBridge.cpp
+- DSP graph executor: core/src/dsp/SignalGraphExecutor.h
+- Effect base and registry: core/src/dsp/EffectProcessor.h, core/src/dsp/EffectRegistry.h
+- Preset schema and storage: core/src/presets/PresetTypes.h
+- UI messages and state: core/ui/ts/messages.ts, core/ui/ts/state.ts
 
 ## Common Agent Tasks
 
 ### Add a New Effect
 
-1. Implement EffectProcessor in src/src/dsp/effects/.
+1. Implement EffectProcessor in core/src/dsp/effects/.
 2. Register it via EffectRegistry in BuiltinEffects.h.
 3. Define parameters (ranges, defaults) and category.
 4. Update docs/fx-library.md if behavior changes.
 
 ### Add or Change a UI Message
 
-1. Update types and handler in src/resources/ui/ts/messages.ts.
-2. Update HandleUIMessage in src/src/GuitarFXPlugin.cpp.
+1. Update types and handler in core/ui/ts/messages.ts.
+2. Update the relevant dispatcher/controller path in core/src/dispatcher/ and core/src/PluginController.cpp.
 3. Keep messages backward compatible and validate payloads.
 4. Update docs/user-interface.md for the protocol contract.
 
@@ -52,7 +52,7 @@ If you only load a few files, use these:
 
 ## Build and Test Shortcuts
 
-- Configure: cmake -G "Visual Studio 18 2026" -A x64 -S src -B src/build
-- Build App Debug: cmake --build src/build --config Debug --target SoundshedGuitar_App
-- UI build: cd src/resources/ui && npm run build
-- Tests (Debug): ctest --build-config Debug --output-on-failure
+- Configure core: cmake -G "Visual Studio 18 2026" -A x64 -S core -B core/build
+- Build JUCE standalone debug: cmake --build juce/builds --config Debug --target SoundshedGuitar_Standalone
+- UI build: cd core/ui && npm run build
+- Tests (Debug): cd core/build && ctest -C Debug --output-on-failure

@@ -41,7 +41,7 @@ At the right side (or bottom) of the mixer:
 | Control | What it does |
 |---------|--------------|
 | **Master Gain** | Scales the final combined output level |
-| **Output Limiter** | Toggle a brickwall limiter on the master output to prevent clipping when mixing multiple loud presets |
+| **Output Limiter** | Toggles the mixer's final master-output protection clamp to prevent clipping when mixing multiple loud presets |
 
 ---
 
@@ -55,4 +55,4 @@ You can automate smooth fades between preset levels during a performance by assi
 
 - Use **Mute** to quickly audition the contribution of a single amp — mute everything else rather than soloing, so you can flip back to the full blend with one click.
 - Pan two similar-character amps slightly left and right to widen the stereo image without changing the tone character.
-- Keep the master output limiter on when blending multiple presets so the combined level never clips the output.
+- Keep the master output limiter on when blending multiple presets so the combined level never clips the output. The ceiling it uses is set in **Settings → Advanced DSP Level Targets**.

@@ -24,5 +24,6 @@ Click the **folder icon** on the NAM node to open the resource browser. You can 
 
 - **Input Gain is like a boost pedal into the amp.** +3 to +6 dB can push a model that feels slightly clean into a more saturated character, just as a clean boost into a real amp does.
 - **Match output levels** when A/B comparing two models — a louder model will always sound more impressive, so level-match to make a fair comparison.
-- **Auto-Level calibration** (in Settings) adjusts the input level automatically based on the model's training data. Leave this on for the most accurate behaviour out of the box.
+- **User Input Calibration** (in Settings) is the main way to match your guitar and interface to the app. It applies one fixed gain before the chain, not a hidden per-model input correction.
+- **NAM output normalization** may still trim the model's output automatically. Soundshed first uses product-owned `normalizationGainDb` metadata when present, then falls back to model loudness against the shared nominal target.
 - Always follow the NAM node with a [Cabinet IR](cab-ir.md) or [Simple Cabinet](cab-simple.md) — the model is the amp head only, without a speaker cabinet.

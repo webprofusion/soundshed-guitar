@@ -1,10 +1,10 @@
 # FX Library
 
 ## Key Files
-- `src/src/dsp/EffectProcessor.h` — Base interface for all effect processors
-- `src/src/dsp/EffectRegistry.h` — Type registration and factory
-- `src/src/dsp/effects/` — Individual effect implementations
-- `src/src/presets/PresetTypes.h` — `ResourceRef` structure
+- `core/src/dsp/EffectProcessor.h` — Base interface for all effect processors
+- `core/src/dsp/EffectRegistry.h` — Type registration and factory
+- `core/src/dsp/effects/` — Individual effect implementations
+- `core/src/presets/PresetTypes.h` — `ResourceRef` structure
 
 ## Overview
 
