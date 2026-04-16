@@ -98,7 +98,11 @@ if [[ "$SKIP_BUILD" == false ]]; then
         echo "▶ Configuring for native host build (${HOST_ARCH})…"
     fi
 
-    mapfile -t generator_args < <(choose_generator_args)
+    generator_args=()
+    while IFS= read -r generator_arg; do
+        generator_args+=("$generator_arg")
+    done < <(choose_generator_args)
+
     cmake -B "$JUCE_BUILDS" -S "${SCRIPT_DIR}/juce" \
         "${generator_args[@]}" \
         -DCMAKE_BUILD_TYPE=Release \
