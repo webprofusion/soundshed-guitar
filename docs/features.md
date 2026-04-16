@@ -47,7 +47,7 @@ All effects register via `EffectRegistry` (singleton factory). Effect type IDs, 
 
 | Type ID | Name | Resource | Key Parameters |
 |---------|------|----------|----------------|
-| `amp_nam` | NAM Amp | `.nam` model file | `inputGain` (-24..+24 dB), `outputGain` (-24..+24 dB) |
+| `amp_nam` | NAM Amp | `.nam` model file | `inputGain` (-24..+24 dB), `outputGain` (-24..+24 dB), advanced `mix` (wet/dry, 0–1) |
 | `cab_ir` | IR Cabinet | `.wav` IR file | `mix` (0–1), `outputGain` (-24..+24 dB), `quality` (0–3: Economy/Standard/High/Full) |
 | `cab_simple` | Simple Cabinet | none | `bass`, `presence`, `brightness`, `mix` (all 0–1) |
 
@@ -133,6 +133,7 @@ All types share `decay`, `mix`, and `preDelay`. Each has tuned internals for its
 - Loads `.nam` model files (NAM community format).
 - **SIMD-optimized inference**: `simd/OptimizedNAM.h`, `simd/OptimizedLSTM.h`, `simd/OptimizedWaveNet.h`, `simd/OptimizedActivations.h` (~2× speedup over scalar).
 - **NAM output normalization**: Applies product-owned `normalizationGainDb` from resource metadata when available, otherwise falls back to model loudness metadata against the shared nominal operating target.
+- **Wet/dry control**: NAM amp, NAM FX, and NAM blend nodes expose an Advanced `mix` control that crossfades between the unprocessed input and the NAM output. Default is fully wet (`1.0`).
 - **Input behavior**: Per-model input auto-leveling is retired in normal product flow. User-to-user matching is handled globally by user input calibration profiles rather than NAM metadata interpretation.
 - **Runtime target**: The shared nominal operating level defaults to `-18 dBFS` and can be changed in Settings.
 - **Model hashing**: `ModelHasher` computes SHA-256 for deduplication and resource identity tracking.

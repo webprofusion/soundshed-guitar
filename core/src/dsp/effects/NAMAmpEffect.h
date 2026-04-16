@@ -44,6 +44,8 @@ namespace guitarfx
       mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
       mOutputBufferR.resize(static_cast<size_t>(maxBlockSize));
+      mDryBufferL.resize(static_cast<size_t>(maxBlockSize));
+      mDryBufferR.resize(static_cast<size_t>(maxBlockSize));
 
       if (mModelLeft)
       {
@@ -71,6 +73,8 @@ namespace guitarfx
       std::fill(mInputBufferR.begin(), mInputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
       std::fill(mOutputBufferL.begin(), mOutputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
       std::fill(mOutputBufferR.begin(), mOutputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
+      std::fill(mDryBufferL.begin(), mDryBufferL.end(), 0.0f);
+      std::fill(mDryBufferR.begin(), mDryBufferR.end(), 0.0f);
     }
 
     void Process(float **inputs, float **outputs, int numSamples) override
@@ -93,12 +97,17 @@ namespace guitarfx
       {
         float inL = inputs[0] ? inputs[0][i] : 0.0f;
         float inR = inputs[1] ? inputs[1][i] : inL;
+        mDryBufferL[i] = inL;
+        mDryBufferR[i] = inR;
         mInputBufferL[i] = static_cast<NAM_SAMPLE>(inL * static_cast<float>(mInputGain));
         mInputBufferR[i] = static_cast<NAM_SAMPLE>(inR * static_cast<float>(mInputGain));
       }
 
       if (mModelLeft && mModelRight && mEnabled)
       {
+        const float wetMix = static_cast<float>(mMix);
+        const float dryMix = 1.0f - wetMix;
+
         NAM_SAMPLE* inputPtrL = mInputBufferL.data();
         NAM_SAMPLE* outputPtrL = mOutputBufferL.data();
         NAM_SAMPLE* inputPtrsL[1] = { inputPtrL };
@@ -113,8 +122,10 @@ namespace guitarfx
 
         for (int i = 0; i < numSamples; ++i)
         {
-          const float outL = static_cast<float>(mOutputBufferL[i]) * static_cast<float>(mOutputGain);
-          const float outR = static_cast<float>(mOutputBufferR[i]) * static_cast<float>(mOutputGain);
+          const float wetL = static_cast<float>(mOutputBufferL[i]) * static_cast<float>(mOutputGain);
+          const float wetR = static_cast<float>(mOutputBufferR[i]) * static_cast<float>(mOutputGain);
+          const float outL = mDryBufferL[i] * dryMix + wetL * wetMix;
+          const float outR = mDryBufferR[i] * dryMix + wetR * wetMix;
           if (outputs[0])
             outputs[0][i] = outL;
           if (outputs[1])
@@ -146,6 +157,10 @@ namespace guitarfx
       {
         mUserOutputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
         UpdateEffectiveGains();
+      }
+      else if (key == "mix")
+      {
+        mMix = std::clamp(value, 0.0, 1.0);
       }
       else if (key == "autoLevelInput")
       {
@@ -199,6 +214,8 @@ namespace guitarfx
         return 20.0 * std::log10(mUserInputGain);
       if (key == "outputGain")
         return 20.0 * std::log10(mUserOutputGain);
+      if (key == "mix")
+        return mMix;
       if (key == "enabled")
         return mEnabled ? 1.0 : 0.0;
       return 0.0;
@@ -302,6 +319,8 @@ namespace guitarfx
     std::vector<NAM_SAMPLE> mInputBufferR;
     std::vector<NAM_SAMPLE> mOutputBufferL;
     std::vector<NAM_SAMPLE> mOutputBufferR;
+    std::vector<float> mDryBufferL;
+    std::vector<float> mDryBufferR;
 
     double mUserInputGain = 1.0;
     double mUserOutputGain = 1.0;
@@ -309,6 +328,7 @@ namespace guitarfx
     double mAutoOutputGain = 1.0;
     double mInputGain = 1.0;
     double mOutputGain = 1.0;
+    double mMix = 1.0;
     bool mAutoLevelInput = false;
     bool mAutoLevelOutput = true;
     std::optional<double> mModelInputLevel;
@@ -406,7 +426,8 @@ namespace guitarfx
     info.parameters = {
       {"inputGain",             "Input",              0.0,   -24.0, 24.0,  "dB"},
       {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB"},
-      {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "toggle", "", true}};
+      {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
+      {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "toggle", "Advanced", true}};
 
     EffectRegistry::Instance().Register(info.type, info, []()
                                         { return std::make_unique<NAMAmpEffect>(); });

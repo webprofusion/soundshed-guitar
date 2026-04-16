@@ -49,6 +49,8 @@ public:
 
     mInputBufferL.resize(static_cast<size_t>(maxBlockSize));
     mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
+    mDryBufferL.resize(static_cast<size_t>(maxBlockSize));
+    mDryBufferR.resize(static_cast<size_t>(maxBlockSize));
 
     for (auto& model : mModels)
     {
@@ -67,6 +69,8 @@ public:
 
     std::fill(mInputBufferL.begin(), mInputBufferL.end(), 0.0f);
     std::fill(mInputBufferR.begin(), mInputBufferR.end(), 0.0f);
+    std::fill(mDryBufferL.begin(), mDryBufferL.end(), 0.0f);
+    std::fill(mDryBufferR.begin(), mDryBufferR.end(), 0.0f);
     mCachedAutoInputGain = 1.0;
     mCachedAutoOutputGain = 1.0;
   }
@@ -91,6 +95,8 @@ public:
     {
       float inL = inputs[0] ? inputs[0][i] : 0.0f;
       float inR = inputs[1] ? inputs[1][i] : inL;
+      mDryBufferL[i] = inL;
+      mDryBufferR[i] = inR;
       mInputBufferL[i] = inL;
       mInputBufferR[i] = inR;
     }
@@ -114,6 +120,8 @@ public:
 
     const float inputGain = static_cast<float>(mInputGain);
     const float outputGain = static_cast<float>(mOutputGain);
+    const float wetMix = static_cast<float>(mMix);
+    const float dryMix = 1.0f - wetMix;
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -126,7 +134,9 @@ public:
       auto& model = mModels[selection.lowerIndex];
       ProcessModel(model, mInputBufferL.data(), model.outputBufferL.data(), numSamples, 0);
       ProcessModel(model, mInputBufferR.data(), model.outputBufferR.data(), numSamples, 1);
-      WriteOutputs(model.outputBufferL.data(), model.outputBufferR.data(), outputs, numSamples, outputGain);
+      WriteOutputs(model.outputBufferL.data(), model.outputBufferR.data(),
+                   mDryBufferL.data(), mDryBufferR.data(),
+                   outputs, numSamples, outputGain, wetMix, dryMix);
       return;
     }
 
@@ -145,8 +155,8 @@ public:
     {
       float mixedL = modelA.outputBufferL[i] * weightA + modelB.outputBufferL[i] * weightB;
       float mixedR = modelA.outputBufferR[i] * weightA + modelB.outputBufferR[i] * weightB;
-      mixedL *= outputGain;
-      mixedR *= outputGain;
+      mixedL = mDryBufferL[i] * dryMix + mixedL * outputGain * wetMix;
+      mixedR = mDryBufferR[i] * dryMix + mixedR * outputGain * wetMix;
       if (outputs[0])
         outputs[0][i] = mixedL;
       if (outputs[1])
@@ -163,6 +173,10 @@ public:
     else if (key == "outputGain")
     {
       mUserOutputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
+    }
+    else if (key == "mix")
+    {
+      mMix = std::clamp(value, 0.0, 1.0);
     }
     else if (key == "autoLevelInput")
     {
@@ -213,6 +227,8 @@ public:
       return 20.0 * std::log10(mUserInputGain);
     if (key == "outputGain")
       return 20.0 * std::log10(mUserOutputGain);
+    if (key == "mix")
+      return mMix;
     if (key == "blend")
       return mBlend;
     if (key == "enabled")
@@ -325,6 +341,8 @@ private:
   std::vector<ModelInstance> mModels;
   std::vector<float> mInputBufferL;
   std::vector<float> mInputBufferR;
+  std::vector<float> mDryBufferL;
+  std::vector<float> mDryBufferR;
 
   double mUserInputGain = 1.0;
   double mUserOutputGain = 1.0;
@@ -332,6 +350,7 @@ private:
   double mAutoOutputGain = 1.0;
   double mInputGain = 1.0;
   double mOutputGain = 1.0;
+  double mMix = 1.0;
   double mBlend = 0.0;
   std::map<std::string, double> mTargetParams;
   bool mHasModelParameters = false;
@@ -483,12 +502,20 @@ private:
     std::fill_n(output, numSamples, 0.0f);
   }
 
-  void WriteOutputs(const float* left, const float* right, float** outputs, int numSamples, float gain)
+  void WriteOutputs(const float* left,
+                    const float* right,
+                    const float* dryLeft,
+                    const float* dryRight,
+                    float** outputs,
+                    int numSamples,
+                    float gain,
+                    float wetMix,
+                    float dryMix)
   {
     for (int i = 0; i < numSamples; ++i)
     {
-      const float outL = left[i] * gain;
-      const float outR = right[i] * gain;
+      const float outL = dryLeft[i] * dryMix + left[i] * gain * wetMix;
+      const float outR = dryRight[i] * dryMix + right[i] * gain * wetMix;
       if (outputs[0])
         outputs[0][i] = outL;
       if (outputs[1])
@@ -773,7 +800,8 @@ inline void RegisterMultiModelNAMAmpEffect()
   info.parameters = {
     {"blend", "Blend", 0.0, 0.0, 1.0, "amount"},
     {"inputGain", "Input", 0.0, -24.0, 24.0, "dB"},
-    {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"}
+    {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
+    {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

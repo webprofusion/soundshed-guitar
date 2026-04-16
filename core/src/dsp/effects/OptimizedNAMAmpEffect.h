@@ -133,6 +133,8 @@ public:
     mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
     mOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
     mOutputBufferR.resize(static_cast<size_t>(maxBlockSize));
+    mDryBufferL.resize(static_cast<size_t>(maxBlockSize));
+    mDryBufferR.resize(static_cast<size_t>(maxBlockSize));
     mFallbackInputBufferL.resize(static_cast<size_t>(maxBlockSize));
     mFallbackInputBufferR.resize(static_cast<size_t>(maxBlockSize));
     mFallbackOutputBufferL.resize(static_cast<size_t>(maxBlockSize));
@@ -181,6 +183,8 @@ public:
     std::fill(mInputBufferR.begin(), mInputBufferR.end(), 0.0f);
     std::fill(mOutputBufferL.begin(), mOutputBufferL.end(), 0.0f);
     std::fill(mOutputBufferR.begin(), mOutputBufferR.end(), 0.0f);
+    std::fill(mDryBufferL.begin(), mDryBufferL.end(), 0.0f);
+    std::fill(mDryBufferR.begin(), mDryBufferR.end(), 0.0f);
     std::fill(mFallbackInputBufferL.begin(), mFallbackInputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mFallbackInputBufferR.begin(), mFallbackInputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mFallbackOutputBufferL.begin(), mFallbackOutputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
@@ -216,6 +220,8 @@ public:
     {
       float inL = inputs[0] ? inputs[0][i] : 0.0f;
       float inR = inputs[1] ? inputs[1][i] : inL;
+      mDryBufferL[i] = inL;
+      mDryBufferR[i] = inR;
       mInputBufferL[i] = inL * inputGainF;
       mInputBufferR[i] = inR * inputGainF;
     }
@@ -225,6 +231,9 @@ public:
 
     if ((hasOptimized || hasFallback) && mEnabled)
     {
+      const float wetMix = static_cast<float>(mMix);
+      const float dryMix = 1.0f - wetMix;
+
       if (hasOptimized)
       {
         mOptimizedModelLeft->process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
@@ -239,6 +248,7 @@ public:
           outL = mTrebleFilter[0].Process(outL);
           outL = mPresenceFilter[0].Process(outL);
           outL *= outputGainF;
+          outL = mDryBufferL[i] * dryMix + outL * wetMix;
 
           float outR = mOutputBufferR[i];
           outR = mBassFilter[1].Process(outR);
@@ -246,6 +256,7 @@ public:
           outR = mTrebleFilter[1].Process(outR);
           outR = mPresenceFilter[1].Process(outR);
           outR *= outputGainF;
+          outR = mDryBufferR[i] * dryMix + outR * wetMix;
 
           if (outputs[0])
             outputs[0][i] = outL;
@@ -282,6 +293,7 @@ public:
           outL = mTrebleFilter[0].Process(outL);
           outL = mPresenceFilter[0].Process(outL);
           outL *= outputGainF;
+          outL = mDryBufferL[i] * dryMix + outL * wetMix;
 
           float outR = static_cast<float>(mFallbackOutputBufferR[i]);
           outR = mBassFilter[1].Process(outR);
@@ -289,6 +301,7 @@ public:
           outR = mTrebleFilter[1].Process(outR);
           outR = mPresenceFilter[1].Process(outR);
           outR *= outputGainF;
+          outR = mDryBufferR[i] * dryMix + outR * wetMix;
 
           if (outputs[0])
             outputs[0][i] = outL;
@@ -322,6 +335,10 @@ public:
     {
       mUserOutputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
       UpdateEffectiveGains();
+    }
+    else if (key == "mix")
+    {
+      mMix = std::clamp(value, 0.0, 1.0);
     }
     else if (key == "autoLevelInput")
     {
@@ -404,6 +421,8 @@ public:
       return 20.0 * std::log10(mUserInputGain);
     if (key == "outputGain")
       return 20.0 * std::log10(mUserOutputGain);
+    if (key == "mix")
+      return mMix;
     if (key == "bass")
       return mBassDb;
     if (key == "mid")
@@ -568,6 +587,8 @@ private:
   std::vector<float> mInputBufferR;
   std::vector<float> mOutputBufferL;
   std::vector<float> mOutputBufferR;
+  std::vector<float> mDryBufferL;
+  std::vector<float> mDryBufferR;
   std::vector<NAM_SAMPLE> mFallbackInputBufferL;
   std::vector<NAM_SAMPLE> mFallbackInputBufferR;
   std::vector<NAM_SAMPLE> mFallbackOutputBufferL;
@@ -579,6 +600,7 @@ private:
   double mAutoOutputGain = 1.0;
   double mInputGain = 1.0;
   double mOutputGain = 1.0;
+  double mMix = 1.0;
   bool mAutoLevelInput = false;
   bool mAutoLevelOutput = true;
   std::optional<double> mModelInputLevel;
@@ -707,6 +729,7 @@ inline void RegisterOptimizedNAMAmpEffect()
     {"treble",                "Treble",             0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"presence",              "Presence",           0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB",  "Level"},
+    {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
     {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "toggle", "Advanced", true}
   };
 

@@ -53,6 +53,7 @@ inline void RegisterOptimizedNAMFXEffect()
     {"mid",                   "Mid",                  0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
     {"treble",                "Treble",               0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
     {"presence",              "Presence",             0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
+    {"mix",                   "Mix",                  1.0,    0.0,   1.0,  "amount", "Advanced", true},
     {"autoLevelOutput",       "Auto Level Output",    1.0,    0.0,   1.0,  "toggle", "Advanced", true}
   };
 

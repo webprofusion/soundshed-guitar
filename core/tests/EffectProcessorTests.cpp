@@ -9,6 +9,7 @@
  */
 
 #include <cmath>
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +24,7 @@
 #include "dsp/effects/BuiltinEffects.h"
 #include "dsp/effects/AutoArpEffect.h"
 #include "dsp/effects/TempoSync.h"
+#include "presets/PresetTypes.h"
 
 namespace
 {
@@ -32,6 +34,10 @@ namespace fs = std::filesystem;
 constexpr double kTestSampleRate = 48000.0;
 constexpr int kTestBlockSize = 512;
 constexpr double kPi = 3.14159265358979323846;
+
+#ifndef GUITARFX_TEST_RESOURCES_DIR
+#error "GUITARFX_TEST_RESOURCES_DIR must be defined"
+#endif
 
 // Generate a simple sine wave for testing
 void GenerateSineWave(std::vector<float>& buffer, double frequency, double amplitude = 0.5)
@@ -108,6 +114,36 @@ SignalAnalysis AnalyzeSignal(const std::vector<float>& buffer)
   result.isAllSameValue = allSame;
 
   return result;
+}
+
+std::vector<fs::path> FindTestNamModels(std::size_t count)
+{
+  std::vector<fs::path> models;
+  const fs::path assetsDir = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets";
+  if (!fs::exists(assetsDir))
+    return models;
+
+  for (const auto& entry : fs::recursive_directory_iterator(assetsDir))
+  {
+    if (!entry.is_regular_file())
+      continue;
+    if (entry.path().extension() == ".nam")
+      models.push_back(entry.path());
+  }
+
+  std::sort(models.begin(), models.end());
+  if (models.size() > count)
+    models.resize(count);
+  return models;
+}
+
+double MaxAbsDifference(const std::vector<float>& left, const std::vector<float>& right)
+{
+  const std::size_t count = std::min(left.size(), right.size());
+  double maxDiff = 0.0;
+  for (std::size_t i = 0; i < count; ++i)
+    maxDiff = std::max(maxDiff, static_cast<double>(std::abs(left[i] - right[i])));
+  return maxDiff;
 }
 
 double EstimateFrequencyFromPositiveZeroCrossings(const std::vector<float>& buffer,
@@ -1060,6 +1096,161 @@ bool TestDynamicsSoftClipOptions()
   return limiterBounded && limiterChangesShape && vcaSoftProtects && optoSoftProtects;
 }
 
+bool TestNamWetDryMixSpecific()
+{
+  std::cout << "\n--- NAM Wet/Dry Mix Tests ---\n";
+
+  struct MixCase
+  {
+    const char* label;
+    std::string type;
+  };
+
+  const std::array<MixCase, 4> cases = {{
+    {"Legacy NAM amp advertises advanced mix:", guitarfx::EffectGuids::kAmpNam},
+    {"Optimized NAM amp advertises advanced mix:", guitarfx::EffectGuids::kAmpNamOptimized},
+    {"NAM FX advertises advanced mix:", guitarfx::EffectGuids::kFxNam},
+    {"NAM blend advertises advanced mix:", guitarfx::EffectGuids::kAmpNamBlend},
+  }};
+
+  auto& registry = guitarfx::EffectRegistry::Instance();
+  bool metadataOk = true;
+
+  for (const auto& testCase : cases)
+  {
+    const auto infoOpt = registry.GetTypeInfo(testCase.type);
+    const auto mixIt = infoOpt
+      ? std::find_if(infoOpt->parameters.begin(), infoOpt->parameters.end(), [](const guitarfx::ParameterDef& param) {
+          return param.id == "mix";
+        })
+      : std::vector<guitarfx::ParameterDef>::const_iterator{};
+    const bool hasMix = infoOpt && mixIt != infoOpt->parameters.end();
+    const bool defaultOk = hasMix && std::abs(mixIt->defaultValue - 1.0) < 1.0e-9;
+    const bool rangeOk = hasMix && std::abs(mixIt->minValue) < 1.0e-9 && std::abs(mixIt->maxValue - 1.0) < 1.0e-9;
+    const bool advancedOk = hasMix && mixIt->advanced;
+    const bool ok = hasMix && defaultOk && rangeOk && advancedOk;
+
+    std::cout << "  " << std::left << std::setw(44) << testCase.label
+              << (ok ? "PASS" : "FAIL")
+              << " (default=" << (hasMix ? mixIt->defaultValue : -1.0)
+              << ", advanced=" << (advancedOk ? "true" : "false") << ")\n";
+    metadataOk = metadataOk && ok;
+  }
+
+  const auto models = FindTestNamModels(2);
+  if (models.empty())
+  {
+    std::cout << "  FAIL: No test NAM models found under " << (fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets") << "\n";
+    return false;
+  }
+
+  auto runSingleModelDryTest = [&](const std::string& effectType, const char* label) {
+    auto effect = registry.Create(effectType);
+    if (!effect)
+    {
+      std::cout << "  " << std::left << std::setw(44) << label << "FAIL (create)\n";
+      return false;
+    }
+
+    effect->Prepare(kTestSampleRate, kTestBlockSize);
+    if (!effect->LoadResource(models.front()))
+    {
+      std::cout << "  " << std::left << std::setw(44) << label << "FAIL (load)\n";
+      return false;
+    }
+
+    effect->Reset();
+    effect->SetParam("mix", 0.0);
+    effect->SetParam("inputGain", 0.0);
+    effect->SetParam("outputGain", 0.0);
+
+    std::vector<float> inputL(kTestBlockSize, 0.0f);
+    std::vector<float> inputR(kTestBlockSize, 0.0f);
+    std::vector<float> outputL(kTestBlockSize, 0.0f);
+    std::vector<float> outputR(kTestBlockSize, 0.0f);
+    GenerateSineWave(inputL, 220.0, 0.35);
+    GenerateSineWave(inputR, 220.0, 0.35);
+
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
+    effect->Process(inputs, outputs, kTestBlockSize);
+
+    const double maxDiff = std::max(MaxAbsDifference(inputL, outputL), MaxAbsDifference(inputR, outputR));
+    const bool ok = maxDiff <= 1.0e-6;
+    std::cout << "  " << std::left << std::setw(44) << label
+              << (ok ? "PASS" : "FAIL")
+              << " (maxDiff=" << std::scientific << maxDiff << ")\n" << std::defaultfloat;
+    return ok;
+  };
+
+  auto runBlendDryTest = [&](const char* label) {
+    if (models.size() < 2)
+    {
+      std::cout << "  " << std::left << std::setw(44) << label << "FAIL (need 2 models)\n";
+      return false;
+    }
+
+    auto effect = registry.Create(guitarfx::EffectGuids::kAmpNamBlend);
+    if (!effect)
+    {
+      std::cout << "  " << std::left << std::setw(44) << label << "FAIL (create)\n";
+      return false;
+    }
+
+    effect->Prepare(kTestSampleRate, kTestBlockSize);
+    effect->SetConfig("parameterId", "gain");
+
+    std::vector<guitarfx::ResourceRef> refs;
+    refs.reserve(models.size());
+    for (std::size_t index = 0; index < models.size(); ++index)
+    {
+      guitarfx::ResourceRef ref;
+      ref.resourceType = "nam";
+      ref.filePath = models[index];
+      ref.parameterId = "gain";
+      ref.parameterValue = static_cast<double>(index);
+      refs.push_back(std::move(ref));
+    }
+
+    if (!effect->LoadResources(refs, models))
+    {
+      std::cout << "  " << std::left << std::setw(44) << label << "FAIL (load)\n";
+      return false;
+    }
+
+    effect->Reset();
+    effect->SetParam("mix", 0.0);
+    effect->SetParam("inputGain", 0.0);
+    effect->SetParam("outputGain", 0.0);
+    effect->SetParam("blend", 0.5);
+
+    std::vector<float> inputL(kTestBlockSize, 0.0f);
+    std::vector<float> inputR(kTestBlockSize, 0.0f);
+    std::vector<float> outputL(kTestBlockSize, 0.0f);
+    std::vector<float> outputR(kTestBlockSize, 0.0f);
+    GenerateSineWave(inputL, 220.0, 0.35);
+    GenerateSineWave(inputR, 220.0, 0.35);
+
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
+    effect->Process(inputs, outputs, kTestBlockSize);
+
+    const double maxDiff = std::max(MaxAbsDifference(inputL, outputL), MaxAbsDifference(inputR, outputR));
+    const bool ok = maxDiff <= 1.0e-6;
+    std::cout << "  " << std::left << std::setw(44) << label
+              << (ok ? "PASS" : "FAIL")
+              << " (maxDiff=" << std::scientific << maxDiff << ")\n" << std::defaultfloat;
+    return ok;
+  };
+
+  const bool legacyDryOk = runSingleModelDryTest(guitarfx::EffectGuids::kAmpNam, "Legacy NAM dry mix preserves input:");
+  const bool optimizedDryOk = runSingleModelDryTest(guitarfx::EffectGuids::kAmpNamOptimized, "Optimized NAM dry mix preserves input:");
+  const bool fxDryOk = runSingleModelDryTest(guitarfx::EffectGuids::kFxNam, "NAM FX dry mix preserves input:");
+  const bool blendDryOk = runBlendDryTest("NAM blend dry mix preserves input:");
+
+  return metadataOk && legacyDryOk && optimizedDryOk && fxDryOk && blendDryOk;
+}
+
 bool TestOctaveSpecific()
 {
   std::cout << "\n--- OctaveEffect Specific Tests ---\n";
@@ -1448,6 +1639,9 @@ int main()
 
   // AutoArpeggiator-specific behavioural tests
   if (!TestAutoArpSpecific())
+    return 1;
+
+  if (!TestNamWetDryMixSpecific())
     return 1;
 
   if (!TestOctaveSpecific())
