@@ -671,7 +671,7 @@ jobs:
           fi
 
       - name: Build Linux release archive
-        run: bash ./build_linux.sh --arch x64
+        run: bash ./build_linux.sh --arch x64 --lv2
 
       - name: Export JUCE build env
         run: |
@@ -778,7 +778,7 @@ jobs:
           fi
 
       - name: Build Linux release archive
-        run: bash ./build_linux.sh --arch arm64
+        run: bash ./build_linux.sh --arch arm64 --lv2
 
       - name: Export JUCE build env
         run: |

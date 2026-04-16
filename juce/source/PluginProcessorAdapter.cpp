@@ -15,12 +15,44 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 
 namespace juce
 {
 void JUCE_CALLTYPE juce_showStandaloneAudioSettingsDialog();
+}
+
+namespace
+{
+#if JUCE_LINUX
+class HeadlessLv2ManifestEditor final : public juce::AudioProcessorEditor
+{
+public:
+    explicit HeadlessLv2ManifestEditor(juce::AudioProcessor& processor)
+        : juce::AudioProcessorEditor(&processor)
+    {
+        setResizable(true, true);
+        setResizeLimits(800, 600, 8192, 8192);
+        setSize(1200, 900);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colours::black);
+    }
+
+    void resized() override {}
+};
+
+bool shouldUseHeadlessLv2ManifestEditor(const PluginProcessorAdapter& processor)
+{
+    return processor.wrapperType == juce::AudioProcessor::wrapperType_LV2
+        && std::getenv("DISPLAY") == nullptr
+        && std::getenv("WAYLAND_DISPLAY") == nullptr;
+}
+#endif
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -106,6 +138,13 @@ void PluginProcessorAdapter::processBlock(juce::AudioBuffer<float>& buffer,
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
 {
+#if JUCE_LINUX
+    // JUCE's LV2 manifest helper instantiates the editor in headless CI just to query
+    // resize metadata. Avoid constructing the real WebView-based editor in that path.
+    if (shouldUseHeadlessLv2ManifestEditor(*this))
+        return new HeadlessLv2ManifestEditor(*this);
+#endif
+
     return new PluginEditor(*this);
 }
 
