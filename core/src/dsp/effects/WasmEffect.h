@@ -31,6 +31,7 @@ struct WasmModuleDescriptor {
   std::string displayName;
   std::string description;
   std::string category = "utility";
+  std::string thumbnailDataUrl;
   std::vector<WasmGuestParameterDescriptor> parameters;
   std::vector<ExposedResource> exposedResources;
 };

@@ -326,7 +326,7 @@ function renderFxItem(effect: EffectTypeInfo, categoryColor: string, blendId?: s
           data-effect-category="${effect.category}"
          draggable="true"
          style="--category-color: ${categoryColor}">
-      <div class="fx-item-icon">${(() => { const thumb = blendId ? (getCustomLayout(effect.type, blendId) ?? getCustomLayout(effect.type)) : getCustomLayout(effect.type); const url = thumb?.thumbnailDataUrl; return url ? `<img src="${url.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="fx-item-thumb" />` : getFxEffectIcon(effect.type); })()}</div>
+      <div class="fx-item-icon">${(() => { const thumb = blendId ? (getCustomLayout(effect.type, blendId) ?? getCustomLayout(effect.type)) : getCustomLayout(effect.type); const url = thumb?.thumbnailDataUrl ?? effect.thumbnailDataUrl; return url ? `<img src="${url.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="fx-item-thumb" />` : getFxEffectIcon(effect.type); })()}</div>
       <div class="fx-item-info">
         <div class="fx-item-name">${effect.displayName}</div>
         <div class="fx-item-type">${effect.category}</div>

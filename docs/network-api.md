@@ -130,3 +130,4 @@ Set `SENDGRID_API_KEY` as a Worker secret when email delivery is required.
 - [api/README.md](../api/README.md) — quickstart and full implemented endpoint list
 - [Architecture Overview](architecture-overview.md) — repo-wide system layers
 - [Data Models](data-models.md) — preset and resource schema
+- [AI Module Generation API Architecture](plans/2026-04-17-ai-module-generation-api-architecture.md) — proposed session, job, artifact, and publish flow for AI-generated WASM modules

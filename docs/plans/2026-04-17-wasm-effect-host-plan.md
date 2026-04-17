@@ -36,10 +36,10 @@ Reasons:
 
 The guest module exports:
 
-- `guitarfx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32`
-- `guitarfx_reset() -> void`
-- `guitarfx_process(inLeft: f32, inRight: f32) -> (f32, f32)`
-- `guitarfx_get_latency_samples() -> i32` (optional)
+- `audiofx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32`
+- `audiofx_reset() -> void`
+- `audiofx_process(inLeft: f32, inRight: f32) -> (f32, f32)`
+- `audiofx_get_latency_samples() -> i32` (optional)
 
 The host exposes imports in module `host`:
 

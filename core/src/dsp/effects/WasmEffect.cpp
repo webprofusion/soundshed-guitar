@@ -190,6 +190,8 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
 
   std::map<std::size_t, std::map<std::string, std::string>> parameterFields;
   std::map<std::size_t, std::map<std::string, std::string>> resourceFields;
+  std::string thumbnailBase64;
+  std::string thumbnailMimeType = "image/png";
 
   for (const auto& entry : entries)
   {
@@ -208,6 +210,24 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
     if (entry.key == "effect.category")
     {
       descriptor.category = entry.value.empty() ? "utility" : entry.value;
+      continue;
+    }
+
+    if (entry.key == "effect.thumbnailDataUrl")
+    {
+      descriptor.thumbnailDataUrl = entry.value;
+      continue;
+    }
+
+    if (entry.key == "effect.thumbnailBase64")
+    {
+      thumbnailBase64 = entry.value;
+      continue;
+    }
+
+    if (entry.key == "effect.thumbnailMimeType")
+    {
+      thumbnailMimeType = entry.value.empty() ? "image/png" : entry.value;
       continue;
     }
 
@@ -343,6 +363,9 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
 
     descriptor.exposedResources.push_back(std::move(resource));
   }
+
+  if (descriptor.thumbnailDataUrl.empty() && !thumbnailBase64.empty())
+    descriptor.thumbnailDataUrl = "data:" + thumbnailMimeType + ";base64," + thumbnailBase64;
 
   return descriptor;
 }
@@ -627,8 +650,10 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
 
   for (int sample = 0; sample < numSamples; ++sample)
   {
-    const float dryLeft = inputLeft ? inputLeft[sample] : 0.0f;
-    const float dryRight = inputRight ? inputRight[sample] : 0.0f;
+    // Treat a single live input channel as dual-mono so stereo guest modules
+    // behave sensibly on mono sources.
+    const float dryLeft = inputLeft ? inputLeft[sample] : (inputRight ? inputRight[sample] : 0.0f);
+    const float dryRight = inputRight ? inputRight[sample] : dryLeft;
 
     float wetLeft = dryLeft * inputGain;
     float wetRight = dryRight * inputGain;
@@ -937,6 +962,40 @@ bool WasmEffect::BuildRuntimeOnly()
     return false;
   }
 
+  const auto loadAliasedFunctionExport = [&](const char* preferredName,
+                                             const char* legacyName,
+                                             wasmtime_func_t& outFunction,
+                                             bool required,
+                                             bool& found) -> bool {
+    bool hasPreferred = false;
+    if (!LoadFunctionExport(preferredName, outFunction, false, hasPreferred))
+      return false;
+    if (hasPreferred)
+    {
+      found = true;
+      return true;
+    }
+
+    bool hasLegacy = false;
+    if (!LoadFunctionExport(legacyName, outFunction, false, hasLegacy))
+      return false;
+    if (hasLegacy)
+    {
+      found = true;
+      return true;
+    }
+
+    found = false;
+    if (required)
+    {
+      SetError(std::string("WASM module is missing required export '") + preferredName
+          + "' (legacy '" + legacyName + "' is also accepted).");
+      return false;
+    }
+
+    return true;
+  };
+
   wasm_trap_t* trap = nullptr;
   if (wasmtime_error_t* error = wasmtime_linker_instantiate(mLinker, mContext, mModule, &mInstance, &trap))
   {
@@ -954,10 +1013,10 @@ bool WasmEffect::BuildRuntimeOnly()
 
   mHasInstance = true;
 
-  if (!LoadFunctionExport("guitarfx_prepare", mPrepareFunction, true, mHasPrepareFunction)
-      || !LoadFunctionExport("guitarfx_reset", mResetFunction, true, mHasResetFunction)
-      || !LoadFunctionExport("guitarfx_process", mProcessFunction, true, mHasProcessFunction)
-      || !LoadFunctionExport("guitarfx_get_latency_samples", mLatencyFunction, false, mHasLatencyFunction))
+  if (!loadAliasedFunctionExport("audiofx_prepare", "guitarfx_prepare", mPrepareFunction, true, mHasPrepareFunction)
+      || !loadAliasedFunctionExport("audiofx_reset", "guitarfx_reset", mResetFunction, true, mHasResetFunction)
+      || !loadAliasedFunctionExport("audiofx_process", "guitarfx_process", mProcessFunction, true, mHasProcessFunction)
+      || !loadAliasedFunctionExport("audiofx_get_latency_samples", "guitarfx_get_latency_samples", mLatencyFunction, false, mHasLatencyFunction))
   {
     TeardownRuntime();
     return false;
@@ -1144,17 +1203,47 @@ bool WasmEffect::LoadGuestDescriptor()
   wasmtime_func_t descriptorLenFunction{};
   bool hasDescriptorPtr = false;
   bool hasDescriptorLen = false;
+  const char* descriptorPtrName = "audiofx_descriptor_ptr";
+  const char* descriptorLenName = "audiofx_descriptor_len";
 
-  if (!LoadFunctionExport("guitarfx_descriptor_ptr", descriptorPtrFunction, false, hasDescriptorPtr)
-      || !LoadFunctionExport("guitarfx_descriptor_len", descriptorLenFunction, false, hasDescriptorLen))
+  bool hasAudioDescriptorPtr = false;
+  bool hasAudioDescriptorLen = false;
+  if (!LoadFunctionExport("audiofx_descriptor_ptr", descriptorPtrFunction, false, hasAudioDescriptorPtr)
+      || !LoadFunctionExport("audiofx_descriptor_len", descriptorLenFunction, false, hasAudioDescriptorLen))
   {
     return false;
   }
 
-  if (hasDescriptorPtr != hasDescriptorLen)
+  if (hasAudioDescriptorPtr != hasAudioDescriptorLen)
   {
-    SetError("WASM descriptor exports must provide both 'guitarfx_descriptor_ptr' and 'guitarfx_descriptor_len'.");
+    SetError("WASM descriptor exports must provide both 'audiofx_descriptor_ptr' and 'audiofx_descriptor_len'.");
     return false;
+  }
+
+  if (hasAudioDescriptorPtr)
+  {
+    hasDescriptorPtr = true;
+    hasDescriptorLen = true;
+  }
+  else
+  {
+    if (!LoadFunctionExport("guitarfx_descriptor_ptr", descriptorPtrFunction, false, hasDescriptorPtr)
+        || !LoadFunctionExport("guitarfx_descriptor_len", descriptorLenFunction, false, hasDescriptorLen))
+    {
+      return false;
+    }
+
+    if (hasDescriptorPtr != hasDescriptorLen)
+    {
+      SetError("WASM descriptor exports must provide both 'guitarfx_descriptor_ptr' and 'guitarfx_descriptor_len'.");
+      return false;
+    }
+
+    if (hasDescriptorPtr)
+    {
+      descriptorPtrName = "guitarfx_descriptor_ptr";
+      descriptorLenName = "guitarfx_descriptor_len";
+    }
   }
 
   if (!hasDescriptorPtr)
@@ -1196,8 +1285,8 @@ bool WasmEffect::LoadGuestDescriptor()
     return results[0].of.i32;
   };
 
-  const auto descriptorPtr = callI32Function(descriptorPtrFunction, "guitarfx_descriptor_ptr");
-  const auto descriptorLen = callI32Function(descriptorLenFunction, "guitarfx_descriptor_len");
+  const auto descriptorPtr = callI32Function(descriptorPtrFunction, descriptorPtrName);
+  const auto descriptorLen = callI32Function(descriptorLenFunction, descriptorLenName);
   if (!descriptorPtr || !descriptorLen)
     return false;
 

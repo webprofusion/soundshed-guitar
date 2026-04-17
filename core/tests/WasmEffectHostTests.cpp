@@ -329,6 +329,7 @@ ByteVector MakeGainModule()
       { "effect.name", "WASM Gain" },
       { "effect.category", "utility" },
       { "effect.description", "Simple gain module with self-described guest metadata." },
+      { "effect.thumbnailBase64", "dGVzdA==" },
       { "param.0.id", "gain" },
       { "param.0.title", "Gain" },
       { "param.0.slot", "0" },
@@ -371,12 +372,12 @@ ByteVector MakeGainModule()
 
   return MakeModule(types, imports, {}, functions,
                     {
-                        { "guitarfx_prepare", 1 },
-                        { "guitarfx_reset", 2 },
-                        { "guitarfx_process", 3 },
-                        { "guitarfx_get_latency_samples", 4 },
-              { "guitarfx_descriptor_ptr", 5 },
-              { "guitarfx_descriptor_len", 6 },
+                        { "audiofx_prepare", 1 },
+                        { "audiofx_reset", 2 },
+                        { "audiofx_process", 3 },
+                        { "audiofx_get_latency_samples", 4 },
+              { "audiofx_descriptor_ptr", 5 },
+              { "audiofx_descriptor_len", 6 },
             },
             true,
             { { 0, descriptorBlob } });
@@ -509,10 +510,10 @@ ByteVector MakeResourceScalerModule()
 
   return MakeModule(types, imports, {}, functions,
                     {
-                        { "guitarfx_prepare", 1 },
-                        { "guitarfx_reset", 2 },
-                        { "guitarfx_process", 3 },
-                        { "guitarfx_get_latency_samples", 4 },
+              { "audiofx_prepare", 1 },
+              { "audiofx_reset", 2 },
+              { "audiofx_process", 3 },
+              { "audiofx_get_latency_samples", 4 },
                     });
 }
 
@@ -562,10 +563,10 @@ ByteVector MakeStatefulBiasModule()
 
   return MakeModule(types, {}, globals, functions,
                     {
-                        { "guitarfx_prepare", 0 },
-                        { "guitarfx_reset", 1 },
-                        { "guitarfx_process", 2 },
-                        { "guitarfx_get_latency_samples", 3 },
+              { "audiofx_prepare", 0 },
+              { "audiofx_reset", 1 },
+              { "audiofx_process", 2 },
+              { "audiofx_get_latency_samples", 3 },
                     });
 }
 
@@ -623,7 +624,10 @@ bool TestDescriptorInspection(const TempDir& tempDir)
     return false;
   }
 
-  if (descriptor->displayName != "WASM Gain" || descriptor->parameters.size() != 1 || descriptor->parameters.front().definition.id != "gain")
+  if (descriptor->displayName != "WASM Gain"
+      || descriptor->thumbnailDataUrl != "data:image/png;base64,dGVzdA=="
+      || descriptor->parameters.size() != 1
+      || descriptor->parameters.front().definition.id != "gain")
   {
     std::cerr << "Descriptor inspection returned unexpected metadata.\n";
     return false;
@@ -675,6 +679,53 @@ bool TestDirectGainModule(const TempDir& tempDir)
   if (!NearlyEqual(leftOut[0], 0.5f) || !NearlyEqual(rightOut[0], -0.25f))
   {
     std::cerr << "Gain module output mismatch.\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool TestMonoInputToStereoGuestUsesDualMono(const TempDir& tempDir)
+{
+  const auto modulePath = tempDir.root / "stereo_average_mono_input.wasm";
+  if (!WriteBytes(modulePath, MakeStereoAverageModule()))
+  {
+    std::cerr << "Failed to write stereo-average WASM module for mono-input test.\n";
+    return false;
+  }
+
+  auto effect = CreateWasmHost();
+  if (!effect)
+  {
+    std::cerr << "Failed to create WASM effect instance.\n";
+    return false;
+  }
+
+  ResourceRef moduleRef;
+  moduleRef.resourceType = "wasm";
+  moduleRef.filePath = modulePath.string();
+
+  if (!effect->LoadResources({ moduleRef }, { modulePath }))
+  {
+    std::cerr << "Stereo-average module failed to load for mono-input test.\n";
+    return false;
+  }
+
+  effect->SetParam("gain", 1.0);
+  effect->Prepare(kSampleRate, kBlockSize);
+
+  std::array<float, kBlockSize> leftIn{};
+  std::array<float, kBlockSize> leftOut{};
+  std::array<float, kBlockSize> rightOut{};
+  leftIn[0] = 1.0f;
+
+  float* inputs[] = { leftIn.data(), nullptr };
+  float* outputs[] = { leftOut.data(), rightOut.data() };
+  effect->Process(inputs, outputs, kBlockSize);
+
+  if (!NearlyEqual(leftOut[0], 1.0f) || !NearlyEqual(rightOut[0], 1.0f))
+  {
+    std::cerr << "Mono input was not mirrored to dual-mono for stereo WASM guest processing.\n";
     return false;
   }
 
@@ -858,6 +909,7 @@ int main()
   allPassed = guitarfx::TestRegistryMetadata() && allPassed;
   allPassed = guitarfx::TestDescriptorInspection(tempDir) && allPassed;
   allPassed = guitarfx::TestDirectGainModule(tempDir) && allPassed;
+  allPassed = guitarfx::TestMonoInputToStereoGuestUsesDualMono(tempDir) && allPassed;
   allPassed = guitarfx::TestSignalGraphStereoModule(tempDir) && allPassed;
   allPassed = guitarfx::TestResourceBackedModule(tempDir) && allPassed;
   allPassed = guitarfx::TestResetStatefulModule(tempDir) && allPassed;

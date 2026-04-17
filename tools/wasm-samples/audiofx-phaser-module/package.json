@@ -1,0 +1,11 @@
+{
+  "name": "audiofx-phaser-module",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "wabt": "latest"
+  }
+}

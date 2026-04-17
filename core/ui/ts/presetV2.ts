@@ -26,6 +26,7 @@ export interface EffectTypeInfo {
   displayName: string;
   category: string;
   description?: string;
+  thumbnailDataUrl?: string;
   catalogHidden?: boolean;
   requiresResource: boolean;
   resourceType?: string;
@@ -160,6 +161,9 @@ function buildWasmNodeEffectInfo(base: EffectTypeInfo, node: Pick<GraphNode, "co
   let displayName = "";
   let category = "";
   let description = "";
+  let thumbnailDataUrl = "";
+  let thumbnailBase64 = "";
+  let thumbnailMimeType = "image/png";
 
   for (const entry of entries) {
     if (entry.key === "effect.name" || entry.key === "effect.title") {
@@ -172,6 +176,18 @@ function buildWasmNodeEffectInfo(base: EffectTypeInfo, node: Pick<GraphNode, "co
     }
     if (entry.key === "effect.description") {
       description = entry.value;
+      continue;
+    }
+    if (entry.key === "effect.thumbnailDataUrl") {
+      thumbnailDataUrl = entry.value;
+      continue;
+    }
+    if (entry.key === "effect.thumbnailBase64") {
+      thumbnailBase64 = entry.value;
+      continue;
+    }
+    if (entry.key === "effect.thumbnailMimeType") {
+      thumbnailMimeType = entry.value || "image/png";
       continue;
     }
 
@@ -241,11 +257,16 @@ function buildWasmNodeEffectInfo(base: EffectTypeInfo, node: Pick<GraphNode, "co
     });
   }
 
+  if (!thumbnailDataUrl && thumbnailBase64) {
+    thumbnailDataUrl = `data:${thumbnailMimeType};base64,${thumbnailBase64}`;
+  }
+
   return {
     ...base,
     displayName: displayName || base.displayName,
     category: category || base.category,
     description: description || base.description,
+    thumbnailDataUrl: thumbnailDataUrl || base.thumbnailDataUrl,
     parameters: [...parameters, ...(base.parameters ?? [])],
     exposedResources: [...(base.exposedResources ?? []), ...exposedResources],
   };

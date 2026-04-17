@@ -1130,7 +1130,7 @@ function renderNodeElement(node: GraphNode): string {
   const nodeLayout = blendId
     ? (getCustomLayout(node.type, blendId) ?? getCustomLayout(node.type))
     : getCustomLayout(node.type);
-  const thumbUrl = nodeLayout?.thumbnailDataUrl ?? null;
+  const thumbUrl = nodeLayout?.thumbnailDataUrl ?? nodeTypeInfo?.thumbnailDataUrl ?? null;
   const thumbAvatar = thumbUrl
     ? `<img class="node-layout-thumb" src="${thumbUrl.replace(/"/g, "&quot;")}" alt="" aria-hidden="true" />` 
     : "";

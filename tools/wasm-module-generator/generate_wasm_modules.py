@@ -20,6 +20,16 @@ F32_MUL = bytes([0x94])
 F32_DIV = bytes([0x95])
 F32_MIN = bytes([0x96])
 F32_MAX = bytes([0x97])
+F32_ABS = bytes([0x8B])
+F32_GT = bytes([0x5E])
+
+I32_ADD = bytes([0x6A])
+I32_MUL = bytes([0x6C])
+I32_AND = bytes([0x71])
+
+IF_VOID = bytes([0x04, 0x40])
+ELSE = bytes([0x05])
+END = bytes([0x0B])
 
 
 @dataclass(frozen=True)
@@ -98,6 +108,9 @@ class ModuleSpec:
     description: str
     category: str
     host_imports: Sequence[str]
+    title: str = ""
+    thumbnail_base64: str = ""
+    thumbnail_mime_type: str = "image/png"
     params: Sequence[ParamDoc] = field(default_factory=tuple)
     resources: Sequence[ResourceDoc] = field(default_factory=tuple)
     notes: Sequence[str] = field(default_factory=tuple)
@@ -293,10 +306,14 @@ def build_descriptor_blob(entries: Sequence[tuple[str, str]]) -> bytes:
 
 def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = [
-        ("effect.name", title_from_identifier(spec.identifier)),
+        ("effect.name", spec.title or title_from_identifier(spec.identifier)),
         ("effect.category", spec.category),
         ("effect.description", spec.description),
     ]
+    if spec.thumbnail_base64:
+        entries.append(("effect.thumbnailBase64", spec.thumbnail_base64))
+        if spec.thumbnail_mime_type:
+            entries.append(("effect.thumbnailMimeType", spec.thumbnail_mime_type))
     for index, param in enumerate(spec.params):
         prefix = f"param.{index}"
         entries.extend(
@@ -362,10 +379,10 @@ def make_standard_module(
     ]
     import_count = len(imports)
     exports = [
-        ("guitarfx_prepare", import_count),
-        ("guitarfx_reset", import_count + 1),
-        ("guitarfx_process", import_count + 2),
-        ("guitarfx_get_latency_samples", import_count + 3),
+        ("audiofx_prepare", import_count),
+        ("audiofx_reset", import_count + 1),
+        ("audiofx_process", import_count + 2),
+        ("audiofx_get_latency_samples", import_count + 3),
     ]
     export_memory = False
     data_segments: list[DataSegmentDef] = []
@@ -378,8 +395,8 @@ def make_standard_module(
         )
         exports.extend(
             [
-                ("guitarfx_descriptor_ptr", import_count + 4),
-                ("guitarfx_descriptor_len", import_count + 5),
+                ("audiofx_descriptor_ptr", import_count + 4),
+                ("audiofx_descriptor_len", import_count + 5),
             ]
         )
         export_memory = True
@@ -411,6 +428,58 @@ def clamped_param_ops(index: int) -> bytes:
         F32_MIN,
         f32_const(-1.0),
         F32_MAX,
+    )
+
+
+def clamped_unipolar_param_ops(index: int) -> bytes:
+    return combine_ops(
+        i32_const(index),
+        call(0),
+        f32_const(1.0),
+        F32_MIN,
+        f32_const(0.0),
+        F32_MAX,
+    )
+
+
+def random_bipolar_target_ops(seed_global: int, base_global: int, amount_global: int) -> bytes:
+    return combine_ops(
+        global_get(seed_global),
+        i32_const(1_664_525),
+        I32_MUL,
+        i32_const(1_013_904_223),
+        I32_ADD,
+        global_set(seed_global),
+        global_get(seed_global),
+        i32_const(0x7FFF_FFFF),
+        I32_AND,
+        bytes([0xB2]),
+        f32_const(2_147_483_647.0),
+        F32_DIV,
+        f32_const(2.0),
+        F32_MUL,
+        f32_const(1.0),
+        F32_SUB,
+        global_get(amount_global),
+        F32_MUL,
+        global_get(base_global),
+        F32_ADD,
+        f32_const(1.0),
+        F32_MIN,
+        f32_const(-1.0),
+        F32_MAX,
+    )
+
+
+def random_slew_ops(speed_global: int, sample_rate_global: int) -> bytes:
+    return combine_ops(
+        f32_const(1.0),
+        global_get(speed_global),
+        f32_const(11.0),
+        F32_MUL,
+        F32_ADD,
+        global_get(sample_rate_global),
+        F32_DIV,
     )
 
 
@@ -541,6 +610,182 @@ def stereo_spatial_module(spec: ModuleSpec) -> bytes:
         latency_type_index=4,
         prepare_ops=standard_prepare_ops(),
         reset_ops=b"",
+        process_ops=process_ops,
+        latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
+    )
+
+
+def stereo_spatial_random_module(spec: ModuleSpec) -> bytes:
+    types = [
+        FuncTypeDef([I32], [F32]),
+        FuncTypeDef([F32, I32, I32], [I32]),
+        FuncTypeDef([], []),
+        FuncTypeDef([F32, F32], [F32, F32]),
+        FuncTypeDef([], [I32]),
+    ]
+    imports = [ImportFuncDef("host", "read_param", 0)]
+    globals_ = [
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(0.35)),
+        GlobalDef(F32, True, f32_const(0.5)),
+        GlobalDef(I32, True, i32_const(0x13579BDF)),
+        GlobalDef(F32, True, f32_const(48_000.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+    ]
+
+    prepare_ops = combine_ops(local_get(0), global_set(10), i32_const(0))
+    reset_ops = combine_ops(
+        f32_const(0.0),
+        global_set(2),
+        f32_const(0.0),
+        global_set(3),
+        f32_const(0.0),
+        global_set(4),
+        f32_const(0.0),
+        global_set(5),
+        i32_const(0x13579BDF),
+        global_set(9),
+    )
+
+    process_ops = combine_ops(
+        clamped_param_ops(0),
+        global_set(0),
+        clamped_param_ops(1),
+        global_set(1),
+        clamped_unipolar_param_ops(2),
+        global_set(6),
+        clamped_unipolar_param_ops(3),
+        global_set(7),
+        clamped_unipolar_param_ops(4),
+        global_set(8),
+        global_get(6),
+        f32_const(0.5),
+        F32_GT,
+        IF_VOID,
+        global_get(4),
+        global_get(2),
+        F32_SUB,
+        F32_ABS,
+        f32_const(0.03),
+        bytes([0x5D]),
+        global_get(5),
+        global_get(3),
+        F32_SUB,
+        F32_ABS,
+        f32_const(0.03),
+        bytes([0x5D]),
+        I32_AND,
+        IF_VOID,
+        random_bipolar_target_ops(9, 0, 8),
+        global_set(4),
+        random_bipolar_target_ops(9, 1, 8),
+        global_set(5),
+        END,
+        global_get(2),
+        global_get(4),
+        global_get(2),
+        F32_SUB,
+        random_slew_ops(7, 10),
+        F32_MUL,
+        F32_ADD,
+        global_set(2),
+        global_get(3),
+        global_get(5),
+        global_get(3),
+        F32_SUB,
+        random_slew_ops(7, 10),
+        F32_MUL,
+        F32_ADD,
+        global_set(3),
+        ELSE,
+        global_get(0),
+        global_set(2),
+        global_get(1),
+        global_set(3),
+        global_get(0),
+        global_set(4),
+        global_get(1),
+        global_set(5),
+        END,
+        global_get(2),
+        f32_const(1.0),
+        F32_ADD,
+        f32_const(0.5),
+        F32_MUL,
+        global_set(11),
+        f32_const(0.6),
+        global_get(11),
+        f32_const(0.4),
+        F32_MUL,
+        F32_ADD,
+        global_set(12),
+        f32_const(1.0),
+        global_get(3),
+        F32_SUB,
+        f32_const(1.0),
+        F32_MIN,
+        global_set(13),
+        f32_const(1.0),
+        global_get(3),
+        F32_ADD,
+        f32_const(1.0),
+        F32_MIN,
+        global_set(14),
+        local_get(0),
+        local_get(1),
+        F32_ADD,
+        f32_const(0.5),
+        F32_MUL,
+        global_set(15),
+        global_get(11),
+        local_get(0),
+        F32_MUL,
+        f32_const(1.0),
+        global_get(11),
+        F32_SUB,
+        global_get(15),
+        F32_MUL,
+        F32_ADD,
+        global_get(12),
+        F32_MUL,
+        global_get(13),
+        F32_MUL,
+        global_get(11),
+        local_get(1),
+        F32_MUL,
+        f32_const(1.0),
+        global_get(11),
+        F32_SUB,
+        global_get(15),
+        F32_MUL,
+        F32_ADD,
+        global_get(12),
+        F32_MUL,
+        global_get(14),
+        F32_MUL,
+    )
+
+    return make_standard_module(
+        types=types,
+        imports=imports,
+        globals_=globals_,
+        prepare_type_index=1,
+        reset_type_index=2,
+        process_type_index=3,
+        latency_type_index=4,
+        prepare_ops=prepare_ops,
+        reset_ops=reset_ops,
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
         descriptor_entries=descriptor_entries_for_spec(spec),
@@ -879,6 +1124,79 @@ def module_specs() -> list[ModuleSpec]:
             build_module=stereo_spatial_module,
         ),
         ModuleSpec(
+            identifier="stereo_spatial_random",
+            file_name="stereo_spatial_random.wasm",
+            description="Stereo spatial utility with base depth and pan controls plus smooth random wandering.",
+            category="spatial",
+            host_imports=("read_param",),
+            params=(
+                ParamDoc(
+                    identifier="depth",
+                    title="Base Depth",
+                    description="Center point for the back/forward image position before random wandering is applied.",
+                    default=0.0,
+                    min_value=-1.0,
+                    max_value=1.0,
+                    unit="amount",
+                    step=0.01,
+                    slot=0,
+                ),
+                ParamDoc(
+                    identifier="pan",
+                    title="Base Pan",
+                    description="Center point for the left/right image position before random wandering is applied.",
+                    default=0.0,
+                    min_value=-1.0,
+                    max_value=1.0,
+                    unit="pan",
+                    step=0.01,
+                    slot=1,
+                ),
+                ParamDoc(
+                    identifier="randomMode",
+                    title="Random Mode",
+                    description="Turns smooth random target wandering on or off.",
+                    default=1.0,
+                    min_value=0.0,
+                    max_value=1.0,
+                    unit="enum",
+                    group="random",
+                    step=1.0,
+                    labels=("Off", "On"),
+                    slot=2,
+                ),
+                ParamDoc(
+                    identifier="speed",
+                    title="Random Speed",
+                    description="How quickly the module glides toward each new random pan/depth target.",
+                    default=0.35,
+                    min_value=0.0,
+                    max_value=1.0,
+                    unit="amount",
+                    group="random",
+                    step=0.01,
+                    slot=3,
+                ),
+                ParamDoc(
+                    identifier="amount",
+                    title="Random Amount",
+                    description="How far the pan and depth can wander away from their base settings.",
+                    default=0.5,
+                    min_value=0.0,
+                    max_value=1.0,
+                    unit="amount",
+                    group="random",
+                    step=0.01,
+                    slot=4,
+                ),
+            ),
+            notes=(
+                "Chooses new random pan and depth targets around the base settings, then slews toward them instead of jumping.",
+                "The wander seed resets deterministically, so reloading the module restarts the same motion path.",
+            ),
+            build_module=stereo_spatial_random_module,
+        ),
+        ModuleSpec(
             identifier="stereo_average",
             file_name="stereo_average.wasm",
             description="Averages left/right input to mono and writes the same signal to both outputs.",
@@ -1030,13 +1348,13 @@ def example_graph_node(spec: ModuleSpec) -> dict[str, object]:
 def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
     host_abi = {
         "exports": [
-            "guitarfx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32",
-            "guitarfx_reset() -> void",
-            "guitarfx_process(inLeft: f32, inRight: f32) -> (f32, f32)",
-            "guitarfx_get_latency_samples() -> i32",
+            "audiofx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32",
+            "audiofx_reset() -> void",
+            "audiofx_process(inLeft: f32, inRight: f32) -> (f32, f32)",
+            "audiofx_get_latency_samples() -> i32",
             "memory (optional, required when exporting a descriptor blob)",
-            "guitarfx_descriptor_ptr() -> i32 (optional descriptor blob offset)",
-            "guitarfx_descriptor_len() -> i32 (optional descriptor blob byte length)",
+            "audiofx_descriptor_ptr() -> i32 (optional descriptor blob offset)",
+            "audiofx_descriptor_len() -> i32 (optional descriptor blob byte length)",
         ],
         "imports": [
             "host.read_param(index: i32) -> f32",
@@ -1044,6 +1362,7 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
             "host.read_resource_byte(slot: i32, offset: i32) -> i32",
         ],
         "descriptorBlobFormat": "UTF-8 newline-delimited key=value entries stored in guest memory.",
+        "monoInputBehavior": "If only one input channel is present, the host mirrors it to both guest inputs before calling the WASM process function.",
         "paramIndices": {**{f"param{index}": index - 1 for index in range(1, 9)}, "bpm": 8},
         "resourceSlots": {
             "0": "WASM module bytes",
