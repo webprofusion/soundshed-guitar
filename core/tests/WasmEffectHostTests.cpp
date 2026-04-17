@@ -2,6 +2,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/effects/WasmEffect.h"
 #include "resources/ResourceLibrary.h"
 
 #include <algorithm>
@@ -50,6 +51,11 @@ struct GlobalDef {
 struct DefinedFuncDef {
   uint32_t typeIndex = 0;
   ByteVector ops;
+};
+
+struct DataSegmentDef {
+  uint32_t offset = 0;
+  ByteVector bytes;
 };
 
 struct TempDir {
@@ -179,7 +185,9 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types,
                       const std::vector<ImportFuncDef>& imports,
                       const std::vector<GlobalDef>& globals,
                       const std::vector<DefinedFuncDef>& definedFunctions,
-                      const std::vector<std::pair<std::string, uint32_t>>& exports)
+                      const std::vector<std::pair<std::string, uint32_t>>& exports,
+                      bool exportMemory = false,
+                      const std::vector<DataSegmentDef>& dataSegments = {})
 {
   ByteVector module{ 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00 };
 
@@ -220,6 +228,15 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types,
     AppendBytes(module, MakeSection(3, functionPayload));
   }
 
+  if (exportMemory || !dataSegments.empty())
+  {
+    ByteVector memoryPayload;
+    AppendU32Leb(memoryPayload, 1);
+    AppendU8(memoryPayload, 0x00);
+    AppendU32Leb(memoryPayload, 1);
+    AppendBytes(module, MakeSection(5, memoryPayload));
+  }
+
   if (!globals.empty())
   {
     ByteVector globalPayload;
@@ -235,12 +252,18 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types,
   }
 
   ByteVector exportPayload;
-  AppendU32Leb(exportPayload, static_cast<uint32_t>(exports.size()));
+  AppendU32Leb(exportPayload, static_cast<uint32_t>(exports.size() + (exportMemory ? 1 : 0)));
   for (const auto& [name, functionIndex] : exports)
   {
     AppendString(exportPayload, name);
     AppendU8(exportPayload, 0x00);
     AppendU32Leb(exportPayload, functionIndex);
+  }
+  if (exportMemory)
+  {
+    AppendString(exportPayload, "memory");
+    AppendU8(exportPayload, 0x02);
+    AppendU32Leb(exportPayload, 0);
   }
   AppendBytes(module, MakeSection(7, exportPayload));
 
@@ -257,7 +280,35 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types,
   }
   AppendBytes(module, MakeSection(10, codePayload));
 
+  if (!dataSegments.empty())
+  {
+    ByteVector dataPayload;
+    AppendU32Leb(dataPayload, static_cast<uint32_t>(dataSegments.size()));
+    for (const auto& segment : dataSegments)
+    {
+      AppendU8(dataPayload, 0x00);
+      AppendOp(dataPayload, I32Const(static_cast<int32_t>(segment.offset)));
+      AppendU8(dataPayload, 0x0b);
+      AppendU32Leb(dataPayload, static_cast<uint32_t>(segment.bytes.size()));
+      AppendBytes(dataPayload, segment.bytes);
+    }
+    AppendBytes(module, MakeSection(11, dataPayload));
+  }
+
   return module;
+}
+
+ByteVector BuildDescriptorBlob(std::initializer_list<std::pair<std::string, std::string>> entries)
+{
+  ByteVector blob;
+  for (const auto& [key, value] : entries)
+  {
+    blob.insert(blob.end(), key.begin(), key.end());
+    blob.push_back('=');
+    blob.insert(blob.end(), value.begin(), value.end());
+    blob.push_back('\n');
+  }
+  return blob;
 }
 
 ByteVector MakeGainModule()
@@ -274,6 +325,19 @@ ByteVector MakeGainModule()
       { "host", "read_param", 0 },
   };
 
+  const ByteVector descriptorBlob = BuildDescriptorBlob({
+      { "effect.name", "WASM Gain" },
+      { "effect.category", "utility" },
+      { "effect.description", "Simple gain module with self-described guest metadata." },
+      { "param.0.id", "gain" },
+      { "param.0.title", "Gain" },
+      { "param.0.slot", "0" },
+      { "param.0.default", "0.5" },
+      { "param.0.min", "0.0" },
+      { "param.0.max", "2.0" },
+      { "param.0.unit", "amount" },
+  });
+
   ByteVector prepareOps;
   AppendOp(prepareOps, I32Const(0));
 
@@ -290,11 +354,19 @@ ByteVector MakeGainModule()
   ByteVector latencyOps;
   AppendOp(latencyOps, I32Const(0));
 
+    ByteVector descriptorPtrOps;
+    AppendOp(descriptorPtrOps, I32Const(0));
+
+    ByteVector descriptorLenOps;
+    AppendOp(descriptorLenOps, I32Const(static_cast<int32_t>(descriptorBlob.size())));
+
   const std::vector<DefinedFuncDef> functions = {
       { 1, prepareOps },
       { 2, {} },
       { 3, processOps },
       { 4, latencyOps },
+      { 4, descriptorPtrOps },
+      { 4, descriptorLenOps },
   };
 
   return MakeModule(types, imports, {}, functions,
@@ -303,7 +375,11 @@ ByteVector MakeGainModule()
                         { "guitarfx_reset", 2 },
                         { "guitarfx_process", 3 },
                         { "guitarfx_get_latency_samples", 4 },
-                    });
+              { "guitarfx_descriptor_ptr", 5 },
+              { "guitarfx_descriptor_len", 6 },
+            },
+            true,
+            { { 0, descriptorBlob } });
 }
 
 ByteVector MakeStereoAverageModule()
@@ -320,6 +396,18 @@ ByteVector MakeStereoAverageModule()
       { "host", "read_param", 0 },
   };
 
+  const ByteVector descriptorBlob = BuildDescriptorBlob({
+      { "effect.name", "Stereo Average" },
+      { "effect.category", "utility" },
+      { "param.0.id", "gain" },
+      { "param.0.title", "Output Gain" },
+      { "param.0.slot", "0" },
+      { "param.0.default", "1.0" },
+      { "param.0.min", "0.0" },
+      { "param.0.max", "2.0" },
+      { "param.0.unit", "amount" },
+  });
+
   ByteVector prepareOps;
   AppendOp(prepareOps, I32Const(0));
 
@@ -345,11 +433,19 @@ ByteVector MakeStereoAverageModule()
   ByteVector latencyOps;
   AppendOp(latencyOps, I32Const(0));
 
+    ByteVector descriptorPtrOps;
+    AppendOp(descriptorPtrOps, I32Const(0));
+
+    ByteVector descriptorLenOps;
+    AppendOp(descriptorLenOps, I32Const(static_cast<int32_t>(descriptorBlob.size())));
+
   const std::vector<DefinedFuncDef> functions = {
       { 1, prepareOps },
       { 2, {} },
       { 3, processOps },
       { 4, latencyOps },
+      { 4, descriptorPtrOps },
+      { 4, descriptorLenOps },
   };
 
   return MakeModule(types, imports, {}, functions,
@@ -358,7 +454,11 @@ ByteVector MakeStereoAverageModule()
                         { "guitarfx_reset", 2 },
                         { "guitarfx_process", 3 },
                         { "guitarfx_get_latency_samples", 4 },
-                    });
+              { "guitarfx_descriptor_ptr", 5 },
+              { "guitarfx_descriptor_len", 6 },
+            },
+            true,
+            { { 0, descriptorBlob } });
 }
 
 ByteVector MakeResourceScalerModule()
@@ -497,9 +597,35 @@ bool TestRegistryMetadata()
     return false;
   }
 
-  if (!info->requiresResource || !info->requiresTempo || info->exposedResources.size() != 4)
+  if (!info->requiresResource || !info->requiresTempo || info->exposedResources.size() != 1 || info->parameters.size() != 3)
   {
     std::cerr << "WASM host metadata is missing required resource or slot information.\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool TestDescriptorInspection(const TempDir& tempDir)
+{
+  const auto modulePath = tempDir.root / "gain_descriptor.wasm";
+  if (!WriteBytes(modulePath, MakeGainModule()))
+  {
+    std::cerr << "Failed to write descriptor-enabled gain module.\n";
+    return false;
+  }
+
+  std::string error;
+  const auto descriptor = WasmEffect::InspectModuleFile(modulePath, &error);
+  if (!descriptor)
+  {
+    std::cerr << "Failed to inspect WASM descriptor: " << error << "\n";
+    return false;
+  }
+
+  if (descriptor->displayName != "WASM Gain" || descriptor->parameters.size() != 1 || descriptor->parameters.front().definition.id != "gain")
+  {
+    std::cerr << "Descriptor inspection returned unexpected metadata.\n";
     return false;
   }
 
@@ -532,7 +658,7 @@ bool TestDirectGainModule(const TempDir& tempDir)
     return false;
   }
 
-  effect->SetParam("param1", 0.5);
+  effect->SetParam("gain", 0.5);
   effect->Prepare(kSampleRate, kBlockSize);
 
   std::array<float, kBlockSize> leftIn{};
@@ -572,7 +698,7 @@ bool TestSignalGraphStereoModule(const TempDir& tempDir)
   wasmNode.type = EffectGuids::kWasmHost;
   wasmNode.category = "utility";
   wasmNode.label = "WASM Host";
-  wasmNode.params["param1"] = 1.0;
+  wasmNode.params["gain"] = 1.0;
   wasmNode.resources.resize(1);
   wasmNode.resources[0].resourceType = "wasm";
   wasmNode.resources[0].filePath = modulePath.string();
@@ -730,6 +856,7 @@ int main()
   guitarfx::TempDir tempDir;
   bool allPassed = true;
   allPassed = guitarfx::TestRegistryMetadata() && allPassed;
+  allPassed = guitarfx::TestDescriptorInspection(tempDir) && allPassed;
   allPassed = guitarfx::TestDirectGainModule(tempDir) && allPassed;
   allPassed = guitarfx::TestSignalGraphStereoModule(tempDir) && allPassed;
   allPassed = guitarfx::TestResourceBackedModule(tempDir) && allPassed;

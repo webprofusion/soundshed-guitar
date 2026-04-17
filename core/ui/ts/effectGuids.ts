@@ -62,6 +62,7 @@ export const EffectGuids = {
 
   // Utility
   kGain:                 "0bcd895e-5d36-4247-a351-6bed1fcb37a8",
+  kWasmHost:             "b96693c3-b1f4-44f8-99b4-016620f89d95",
   kSynthSaw:             "608e846e-0e60-4064-9c83-37c0df573c38",
   kSplitter:             "f5f2541b-fcea-4cfd-9e62-eeddf583ef4e",
   kMixer:                "d7d1e40f-9c79-4582-9a82-d5fa5bbbfb97",
@@ -110,6 +111,7 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   transpose_stft:        EffectGuids.kTransposeStft,
   octave:                EffectGuids.kOctave,
   gain:                  EffectGuids.kGain,
+  wasm_host:             EffectGuids.kWasmHost,
   synth_saw:             EffectGuids.kSynthSaw,
   splitter:              EffectGuids.kSplitter,
   mixer:                 EffectGuids.kMixer,

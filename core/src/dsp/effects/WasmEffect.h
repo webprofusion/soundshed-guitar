@@ -7,19 +7,47 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <wasmtime.h>
 
 namespace guitarfx {
 
+struct WasmMetadataEntry {
+  std::string key;
+  std::string value;
+};
+
+struct WasmGuestParameterDescriptor {
+  std::size_t slot = 0;
+  ParameterDef definition;
+};
+
+struct WasmModuleDescriptor {
+  std::vector<WasmMetadataEntry> entries;
+  std::string displayName;
+  std::string description;
+  std::string category = "utility";
+  std::vector<WasmGuestParameterDescriptor> parameters;
+  std::vector<ExposedResource> exposedResources;
+};
+
 class WasmEffect final : public EffectProcessor {
 public:
   static constexpr std::size_t kGuestMacroCount = 8;
+  static constexpr const char* kDescriptorConfigKey = "wasmGuestDescriptor";
 
   WasmEffect();
   ~WasmEffect() override;
+
+  [[nodiscard]] static std::optional<WasmModuleDescriptor> InspectModuleFile(const std::filesystem::path& modulePath,
+                                                                             std::string* error = nullptr);
+  [[nodiscard]] static std::optional<WasmModuleDescriptor> ParseDescriptorConfig(const std::string& configJson,
+                                                                                  std::string* error = nullptr);
+  [[nodiscard]] static std::string SerializeDescriptorConfig(const std::vector<WasmMetadataEntry>& entries);
 
   void Prepare(double sampleRate, int maxBlockSize) override;
   void Reset() override;
@@ -45,20 +73,29 @@ public:
   int ReadGuestResourceByte(int slot, int offset) const;
 
 private:
+  bool LoadGuestDescriptor();
   bool RebuildRuntime();
   bool BuildRuntimeOnly();
   bool LoadFunctionExport(const char* exportName, wasmtime_func_t& outFunction, bool required, bool& found);
   bool InvokePrepare();
   bool InvokeProcess(float inputLeft, float inputRight, float& outputLeft, float& outputRight);
   int QueryLatencySamples();
+  void ResetGuestDescriptor();
+  void ApplyGuestDescriptor(const WasmModuleDescriptor& descriptor);
+  void ResetGuestMacrosToDefaults();
+  void ApplyPendingGuestParamValues();
   void TeardownRuntime();
   void SetError(const std::string& message);
 
   std::array<double, kGuestMacroCount> mGuestMacros{};
+  std::array<double, kGuestMacroCount> mGuestMacroDefaults{};
   double mMix = 1.0;
   double mInputGainDb = 0.0;
   double mOutputGainDb = 0.0;
   double mBpm = 120.0;
+  std::unordered_map<std::string, std::size_t> mGuestParamSlots;
+  std::unordered_map<std::string, double> mPendingGuestParamValues;
+  WasmModuleDescriptor mGuestDescriptor;
 
   std::vector<uint8_t> mModuleBytes;
   std::vector<std::vector<uint8_t>> mResourceBytesBySlot;

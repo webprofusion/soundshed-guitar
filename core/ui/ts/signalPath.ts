@@ -13,7 +13,7 @@ import type {
 import { postMessage, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset } from "./bridge.js";
 import { idAccentColor } from "./utils.js";
 import { showNotification } from "./notifications.js";
-import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
+import { EffectTypeRegistry, getNodeEffectInfo, type EffectTypeInfo } from "./presetV2.js";
 import { EffectGuids } from "./effectGuids.js";
 import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon, renderIcon } from "./iconAssets.js";
 import {
@@ -270,7 +270,7 @@ function getLibraryResourceName(resourceType: string | undefined, resourceId: st
 }
 
 function getNodeResourceDisplayName(node: GraphNode, index = 0, overrideResourceType?: string): string {
-  const typeInfo = EffectTypeRegistry.get(node.type);
+  const typeInfo = getNodeEffectInfo(node);
   const resourceType = overrideResourceType || typeInfo?.resourceType;
   const resource = getNodeResourceAtIndex(node, index);
 
@@ -296,7 +296,7 @@ function getNodeResourceSummary(node: GraphNode): string {
 }
 
 function getMissingResourceEntries(node: GraphNode): Array<{ resourceType?: string; resourceId?: string; filePath?: string }> {
-  const typeInfo = EffectTypeRegistry.get(node.type);
+  const typeInfo = getNodeEffectInfo(node);
   const backendMissing = (uiState.missingNodeResources ?? []).filter((entry) => entry.nodeId === node.id);
 
   const refs: Array<{ resourceType?: string; resourceId?: string; filePath?: string }> = [];
@@ -372,7 +372,7 @@ function getNodeDisplayName(node: GraphNode): string {
   const explicit = typeof anyNode.displayName === "string" && anyNode.displayName.trim()
     ? anyNode.displayName.trim()
     : (typeof anyNode.label === "string" && anyNode.label.trim() ? anyNode.label.trim() : "");
-  const typeInfo = nodeType ? EffectTypeRegistry.get(nodeType) : undefined;
+  const typeInfo = getNodeEffectInfo(node);
   const blendId = (node as unknown as { config?: Record<string, string> }).config?.blendId;
   if (blendId) {
     const blend = uiState.blendLibrary?.find((entry) => entry.id === blendId);
@@ -397,7 +397,7 @@ function getNodeCategory(node: GraphNode): string {
   const explicit = typeof anyNode.category === "string" ? anyNode.category : "";
   if (explicit) return explicit;
   const nodeType = typeof anyNode.type === "string" ? anyNode.type : "";
-  const typeInfo = nodeType ? EffectTypeRegistry.get(nodeType) : undefined;
+  const typeInfo = getNodeEffectInfo(node);
   const category = typeInfo?.category || "utility";
   if (category === "pedal" || category === "preamp" || category === "full-rig") {
     return "amp";
@@ -1109,7 +1109,7 @@ function renderNodeElement(node: GraphNode): string {
   const missingEntries = getMissingResourceEntries(node);
   const missingClass = missingEntries.length ? "missing-resource" : "";
   const allowDelete = node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer;
-  const nodeTypeInfo = EffectTypeRegistry.get(node.type);
+  const nodeTypeInfo = getNodeEffectInfo(node);
   const firstResourceTitle = nodeTypeInfo?.requiresResource ? getNodeResourceDisplayName(node, 0) : "";
   const displayName = firstResourceTitle || getNodeDisplayName(node);
   const effectTypeName = firstResourceTitle
@@ -1557,7 +1557,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   updateEffectVisualization(node);
   
   // Get parameter definitions from registry
-  const typeInfo = EffectTypeRegistry.get(node.type);
+  const typeInfo = getNodeEffectInfo(node);
   let paramDefs = typeInfo?.parameters || [];
 
   const blendState = getBlendState(node);
@@ -1736,7 +1736,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           // Get source node name for this input
           const edge = incomingEdges.find(e => e.toPort === portIndex);
           const sourceNode = edge ? preset.graph?.nodes?.find(n => n.id === edge.from) : null;
-          const sourceTypeInfo = sourceNode ? EffectTypeRegistry.get(sourceNode.type) : null;
+          const sourceTypeInfo = sourceNode ? getNodeEffectInfo(sourceNode) : null;
           const inputLabel = sourceTypeInfo?.displayName ?? sourceNode?.type ?? `Input ${portIndex + 1}`;
           
           // Get current values from node params
@@ -2349,7 +2349,7 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
         const parentControl = input.closest(".custom-layout-control");
         const valueEl = parentControl?.querySelector(".node-param-value") as HTMLElement | null;
         if (valueEl) {
-          const paramDef = EffectTypeRegistry.get(node.type)?.parameters.find((p) => p.key === paramKey);
+          const paramDef = getNodeEffectInfo(node)?.parameters.find((p) => p.key === paramKey);
           if (paramDef) {
             if (paramDef.unit === "dB" || paramDef.unit === "ms" || paramDef.unit === "Hz") {
               valueEl.textContent = `${value.toFixed(1)}${paramDef.unit}`;
@@ -2638,7 +2638,7 @@ function bindNodeParamControls(node: GraphNode, preset: Preset): void {
 }
 
 function updateEqVisualization(node: GraphNode): void {
-  const typeInfo = EffectTypeRegistry.get(node.type);
+  const typeInfo = getNodeEffectInfo(node);
   if (!typeInfo || (typeInfo.category !== "eq" && !node.type.startsWith("eq_"))) {
     return;
   }
@@ -2863,7 +2863,7 @@ function bindCustomizeLayoutButton(node: GraphNode): void {
             unit: "amount",
             step: 0.1,
           }));
-          const typeInfo = EffectTypeRegistry.get(effectType);
+          const typeInfo = getNodeEffectInfo(node);
           const baseParams = (typeInfo?.parameters || []).filter((p) => p.key !== "blend");
           blendParamDefs = [...allBlendParams, ...baseParams];
         }

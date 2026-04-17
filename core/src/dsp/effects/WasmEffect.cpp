@@ -3,6 +3,8 @@
 #include "util/FileIO.h"
 
 #include <algorithm>
+#include <cctype>
+#include <map>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +13,8 @@
 #include <optional>
 #include <sstream>
 #include <utility>
+
+#include <nlohmann/json.hpp>
 
 namespace guitarfx {
 
@@ -64,6 +68,80 @@ std::optional<std::size_t> ParseGuestMacroIndex(const std::string& key)
   }
 }
 
+std::string TrimDescriptorToken(std::string value)
+{
+  const auto notSpace = [](unsigned char ch) {
+    return !std::isspace(ch);
+  };
+
+  value.erase(value.begin(), std::find_if(value.begin(), value.end(), notSpace));
+  value.erase(std::find_if(value.rbegin(), value.rend(), notSpace).base(), value.end());
+  return value;
+}
+
+bool ParseBoolLike(const std::string& value)
+{
+  std::string normalized = value;
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+}
+
+std::optional<double> ParseDoubleLike(const std::string& value)
+{
+  try
+  {
+    return std::stod(value);
+  }
+  catch (...)
+  {
+    return std::nullopt;
+  }
+}
+
+std::optional<std::size_t> ParseSizeTLike(const std::string& value)
+{
+  try
+  {
+    return static_cast<std::size_t>(std::stoul(value));
+  }
+  catch (...)
+  {
+    return std::nullopt;
+  }
+}
+
+std::vector<std::string> SplitLabels(const std::string& value)
+{
+  std::vector<std::string> labels;
+  std::string current;
+  std::istringstream stream(value);
+  while (std::getline(stream, current, '|'))
+  {
+    labels.push_back(TrimDescriptorToken(current));
+  }
+  return labels;
+}
+
+std::optional<std::pair<std::size_t, std::string>> ParseIndexedDescriptorKey(const std::string& key,
+                                                                              const std::string& prefix)
+{
+  const std::string stem = prefix + ".";
+  if (key.rfind(stem, 0) != 0)
+    return std::nullopt;
+
+  const std::size_t fieldSeparator = key.find('.', stem.size());
+  if (fieldSeparator == std::string::npos)
+    return std::nullopt;
+
+  const auto index = ParseSizeTLike(key.substr(stem.size(), fieldSeparator - stem.size()));
+  if (!index)
+    return std::nullopt;
+
+  return std::make_pair(*index, key.substr(fieldSeparator + 1));
+}
+
 using FunctionTypePtr = std::unique_ptr<wasm_functype_t, decltype(&wasm_functype_delete)>;
 
 std::string CopyWasmMessage(const wasm_name_t& message)
@@ -102,6 +180,208 @@ std::string TakeTrapMessage(wasm_trap_t* trap)
   wasm_byte_vec_delete(&message);
   wasm_trap_delete(trap);
   return text;
+}
+
+std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector<WasmMetadataEntry>& entries,
+                                                               std::string* error)
+{
+  WasmModuleDescriptor descriptor;
+  descriptor.entries = entries;
+
+  std::map<std::size_t, std::map<std::string, std::string>> parameterFields;
+  std::map<std::size_t, std::map<std::string, std::string>> resourceFields;
+
+  for (const auto& entry : entries)
+  {
+    if (entry.key == "effect.name" || entry.key == "effect.title")
+    {
+      descriptor.displayName = entry.value;
+      continue;
+    }
+
+    if (entry.key == "effect.description")
+    {
+      descriptor.description = entry.value;
+      continue;
+    }
+
+    if (entry.key == "effect.category")
+    {
+      descriptor.category = entry.value.empty() ? "utility" : entry.value;
+      continue;
+    }
+
+    if (const auto parsed = ParseIndexedDescriptorKey(entry.key, "param"))
+    {
+      parameterFields[parsed->first][parsed->second] = entry.value;
+      continue;
+    }
+
+    if (const auto parsed = ParseIndexedDescriptorKey(entry.key, "resource"))
+    {
+      resourceFields[parsed->first][parsed->second] = entry.value;
+      continue;
+    }
+  }
+
+  std::unordered_map<std::string, std::size_t> usedParamIds;
+  std::unordered_map<std::size_t, std::string> usedSlots;
+
+  for (const auto& [declIndex, fields] : parameterFields)
+  {
+    const auto idIt = fields.find("id");
+    if (idIt == fields.end() || idIt->second.empty())
+    {
+      if (error)
+        *error = "WASM descriptor param." + std::to_string(declIndex) + " is missing required 'id'.";
+      return std::nullopt;
+    }
+
+    const auto slotIt = fields.find("slot");
+    const std::size_t slot = slotIt != fields.end()
+        ? ParseSizeTLike(slotIt->second).value_or(WasmEffect::kGuestMacroCount)
+        : declIndex;
+    if (slot >= WasmEffect::kGuestMacroCount)
+    {
+      if (error)
+        *error = "WASM descriptor param." + std::to_string(declIndex) + " declares slot outside the supported 0..7 range.";
+      return std::nullopt;
+    }
+
+    if (usedParamIds.count(idIt->second) > 0)
+    {
+      if (error)
+        *error = "WASM descriptor declares duplicate parameter id '" + idIt->second + "'.";
+      return std::nullopt;
+    }
+    if (usedSlots.count(slot) > 0)
+    {
+      if (error)
+        *error = "WASM descriptor declares multiple parameters for guest slot " + std::to_string(slot) + ".";
+      return std::nullopt;
+    }
+
+    WasmGuestParameterDescriptor paramDescriptor;
+    paramDescriptor.slot = slot;
+    paramDescriptor.definition.id = idIt->second;
+
+    if (const auto titleIt = fields.find("title"); titleIt != fields.end() && !titleIt->second.empty())
+      paramDescriptor.definition.displayName = titleIt->second;
+    else if (const auto nameIt = fields.find("name"); nameIt != fields.end() && !nameIt->second.empty())
+      paramDescriptor.definition.displayName = nameIt->second;
+    else
+      paramDescriptor.definition.displayName = idIt->second;
+
+    if (const auto defaultIt = fields.find("default"); defaultIt != fields.end())
+      paramDescriptor.definition.defaultValue = ParseDoubleLike(defaultIt->second).value_or(0.0);
+    if (const auto minIt = fields.find("min"); minIt != fields.end())
+      paramDescriptor.definition.minValue = ParseDoubleLike(minIt->second).value_or(0.0);
+    if (const auto maxIt = fields.find("max"); maxIt != fields.end())
+      paramDescriptor.definition.maxValue = ParseDoubleLike(maxIt->second).value_or(1.0);
+    if (paramDescriptor.definition.maxValue < paramDescriptor.definition.minValue)
+    {
+      if (error)
+        *error = "WASM descriptor param '" + idIt->second + "' has max < min.";
+      return std::nullopt;
+    }
+
+    if (const auto unitIt = fields.find("unit"); unitIt != fields.end())
+      paramDescriptor.definition.unit = unitIt->second;
+    if (const auto groupIt = fields.find("group"); groupIt != fields.end())
+      paramDescriptor.definition.group = groupIt->second;
+    if (const auto advancedIt = fields.find("advanced"); advancedIt != fields.end())
+      paramDescriptor.definition.advanced = ParseBoolLike(advancedIt->second);
+    if (const auto stepIt = fields.find("step"); stepIt != fields.end())
+      paramDescriptor.definition.step = ParseDoubleLike(stepIt->second).value_or(0.0);
+    if (const auto labelsIt = fields.find("labels"); labelsIt != fields.end())
+      paramDescriptor.definition.labels = SplitLabels(labelsIt->second);
+    if (!paramDescriptor.definition.labels.empty() && paramDescriptor.definition.unit.empty())
+      paramDescriptor.definition.unit = "enum";
+    if (!paramDescriptor.definition.labels.empty() && paramDescriptor.definition.step == 0.0)
+      paramDescriptor.definition.step = 1.0;
+
+    usedParamIds[paramDescriptor.definition.id] = slot;
+    usedSlots[slot] = paramDescriptor.definition.id;
+    descriptor.parameters.push_back(std::move(paramDescriptor));
+  }
+
+  for (const auto& [declIndex, fields] : resourceFields)
+  {
+    const auto idIt = fields.find("id");
+    if (idIt == fields.end() || idIt->second.empty())
+    {
+      if (error)
+        *error = "WASM descriptor resource." + std::to_string(declIndex) + " is missing required 'id'.";
+      return std::nullopt;
+    }
+
+    ExposedResource resource;
+    resource.resourceId = idIt->second;
+    if (const auto titleIt = fields.find("title"); titleIt != fields.end() && !titleIt->second.empty())
+      resource.displayName = titleIt->second;
+    else if (const auto nameIt = fields.find("name"); nameIt != fields.end() && !nameIt->second.empty())
+      resource.displayName = nameIt->second;
+    else
+      resource.displayName = idIt->second;
+
+    resource.resourceType = fields.contains("type") ? fields.at("type") : "blob";
+    resource.resourceIndex = static_cast<int>(fields.contains("slot")
+        ? ParseSizeTLike(fields.at("slot")).value_or(declIndex + 1)
+        : declIndex + 1);
+    resource.allowBrowseFile = !fields.contains("allowBrowseFile") || ParseBoolLike(fields.at("allowBrowseFile"));
+    if (resource.resourceIndex <= 0)
+    {
+      if (error)
+        *error = "WASM descriptor resource '" + resource.resourceId + "' must use a positive resource slot; slot 0 is reserved for the module itself.";
+      return std::nullopt;
+    }
+
+    if (const auto parameterIdIt = fields.find("parameterId"); parameterIdIt != fields.end())
+      resource.parameterId = parameterIdIt->second;
+    if (const auto parameterValueIt = fields.find("parameterValue"); parameterValueIt != fields.end())
+      resource.parameterValue = ParseDoubleLike(parameterValueIt->second).value_or(0.0);
+
+    descriptor.exposedResources.push_back(std::move(resource));
+  }
+
+  return descriptor;
+}
+
+std::optional<WasmModuleDescriptor> ParseDescriptorBlob(const std::string& text, std::string* error)
+{
+  std::vector<WasmMetadataEntry> entries;
+  std::istringstream stream(text);
+  std::string line;
+  while (std::getline(stream, line))
+  {
+    if (!line.empty() && line.back() == '\r')
+      line.pop_back();
+
+    line = TrimDescriptorToken(line);
+    if (line.empty() || line[0] == '#')
+      continue;
+
+    const std::size_t separator = line.find('=');
+    if (separator == std::string::npos)
+    {
+      if (error)
+        *error = "WASM descriptor line is missing '=': " + line;
+      return std::nullopt;
+    }
+
+    WasmMetadataEntry entry;
+    entry.key = TrimDescriptorToken(line.substr(0, separator));
+    entry.value = TrimDescriptorToken(line.substr(separator + 1));
+    if (entry.key.empty())
+    {
+      if (error)
+        *error = "WASM descriptor contains an empty key.";
+      return std::nullopt;
+    }
+    entries.push_back(std::move(entry));
+  }
+
+  return BuildDescriptorFromEntries(entries, error);
 }
 
 FunctionTypePtr MakeFunctionType(wasm_functype_t* type)
@@ -189,7 +469,7 @@ extern "C" wasm_trap_t* HostReadResourceByteRaw(void* env,
 
 WasmEffect::WasmEffect()
 {
-  mGuestMacros[0] = 1.0;
+  ResetGuestDescriptor();
   mEngine = wasm_engine_new();
   if (!mEngine)
     SetError("Failed to create Wasmtime engine.");
@@ -204,6 +484,94 @@ WasmEffect::~WasmEffect()
     wasm_engine_delete(mEngine);
     mEngine = nullptr;
   }
+}
+
+std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::filesystem::path& modulePath,
+                                                                  std::string* error)
+{
+  if (!std::filesystem::exists(modulePath))
+  {
+    if (error)
+      *error = "WASM module file not found: " + modulePath.string();
+    return std::nullopt;
+  }
+
+  WasmEffect probe;
+  probe.mModuleBytes = guitarfx::util::ReadFileBytes(modulePath);
+  probe.mModulePath = modulePath;
+  if (probe.mModuleBytes.empty())
+  {
+    if (error)
+      *error = "WASM module file is empty: " + modulePath.string();
+    return std::nullopt;
+  }
+
+  if (!probe.BuildRuntimeOnly())
+  {
+    if (error)
+      *error = probe.mLastError;
+    return std::nullopt;
+  }
+
+  if (!probe.LoadGuestDescriptor())
+  {
+    if (error)
+      *error = probe.mLastError;
+    probe.TeardownRuntime();
+    return std::nullopt;
+  }
+
+  probe.TeardownRuntime();
+  return probe.mGuestDescriptor;
+}
+
+std::optional<WasmModuleDescriptor> WasmEffect::ParseDescriptorConfig(const std::string& configJson,
+                                                                      std::string* error)
+{
+  try
+  {
+    const auto parsed = nlohmann::json::parse(configJson);
+    if (!parsed.is_array())
+    {
+      if (error)
+        *error = "WASM descriptor config must be a JSON array of { key, value } entries.";
+      return std::nullopt;
+    }
+
+    std::vector<WasmMetadataEntry> entries;
+    for (const auto& item : parsed)
+    {
+      if (!item.is_object())
+        continue;
+
+      WasmMetadataEntry entry;
+      entry.key = item.value("key", "");
+      entry.value = item.value("value", "");
+      if (!entry.key.empty())
+        entries.push_back(std::move(entry));
+    }
+
+    return BuildDescriptorFromEntries(entries, error);
+  }
+  catch (const std::exception& ex)
+  {
+    if (error)
+      *error = std::string("Failed to parse WASM descriptor config: ") + ex.what();
+    return std::nullopt;
+  }
+}
+
+std::string WasmEffect::SerializeDescriptorConfig(const std::vector<WasmMetadataEntry>& entries)
+{
+  nlohmann::json payload = nlohmann::json::array();
+  for (const auto& entry : entries)
+  {
+    payload.push_back({
+        { "key", entry.key },
+        { "value", entry.value },
+    });
+  }
+  return payload.dump();
 }
 
 void WasmEffect::Prepare(double sampleRate, int maxBlockSize)
@@ -316,7 +684,15 @@ void WasmEffect::SetParam(const std::string& key, double value)
   }
 
   if (const auto macroIndex = ParseGuestMacroIndex(key))
+  {
+    mPendingGuestParamValues[key] = value;
     mGuestMacros[*macroIndex] = value;
+    return;
+  }
+
+  mPendingGuestParamValues[key] = value;
+  if (const auto slotIt = mGuestParamSlots.find(key); slotIt != mGuestParamSlots.end())
+    mGuestMacros[slotIt->second] = value;
 }
 
 double WasmEffect::GetParam(const std::string& key) const
@@ -331,6 +707,10 @@ double WasmEffect::GetParam(const std::string& key) const
     return mBpm;
   if (const auto macroIndex = ParseGuestMacroIndex(key))
     return mGuestMacros[*macroIndex];
+  if (const auto pendingIt = mPendingGuestParamValues.find(key); pendingIt != mPendingGuestParamValues.end())
+    return pendingIt->second;
+  if (const auto slotIt = mGuestParamSlots.find(key); slotIt != mGuestParamSlots.end())
+    return mGuestMacros[slotIt->second];
   return 0.0;
 }
 
@@ -355,6 +735,7 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
   mLatencySamples = 0;
   mRuntimeReady = false;
   mLastError.clear();
+  ResetGuestDescriptor();
   TeardownRuntime();
 
   const std::size_t resourceCount = std::min(refs.size(), paths.size());
@@ -385,6 +766,17 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
     SetError("WASM effect could not load a module from resource slot 0.");
     return false;
   }
+
+  if (!BuildRuntimeOnly())
+    return false;
+
+  if (!LoadGuestDescriptor())
+  {
+    TeardownRuntime();
+    return false;
+  }
+
+  TeardownRuntime();
 
   if (mSampleRate > 0.0 && mMaxBlockSize > 0)
     return RebuildRuntime();
@@ -441,6 +833,12 @@ bool WasmEffect::RebuildRuntime()
 
   if (!BuildRuntimeOnly())
     return false;
+
+  if (!LoadGuestDescriptor())
+  {
+    TeardownRuntime();
+    return false;
+  }
 
   if (!InvokePrepare())
   {
@@ -738,6 +1136,174 @@ int WasmEffect::QueryLatencySamples()
   return std::max(latencySamples, 0);
 }
 
+bool WasmEffect::LoadGuestDescriptor()
+{
+  ResetGuestDescriptor();
+
+  wasmtime_func_t descriptorPtrFunction{};
+  wasmtime_func_t descriptorLenFunction{};
+  bool hasDescriptorPtr = false;
+  bool hasDescriptorLen = false;
+
+  if (!LoadFunctionExport("guitarfx_descriptor_ptr", descriptorPtrFunction, false, hasDescriptorPtr)
+      || !LoadFunctionExport("guitarfx_descriptor_len", descriptorLenFunction, false, hasDescriptorLen))
+  {
+    return false;
+  }
+
+  if (hasDescriptorPtr != hasDescriptorLen)
+  {
+    SetError("WASM descriptor exports must provide both 'guitarfx_descriptor_ptr' and 'guitarfx_descriptor_len'.");
+    return false;
+  }
+
+  if (!hasDescriptorPtr)
+  {
+    ApplyPendingGuestParamValues();
+    return true;
+  }
+
+  if (!mContext || !mHasInstance)
+  {
+    SetError("WASM runtime is not ready for descriptor lookup.");
+    return false;
+  }
+
+  auto callI32Function = [&](wasmtime_func_t& function, const char* functionName) -> std::optional<int32_t> {
+    std::array<wasmtime_val_t, 1> results{};
+    wasm_trap_t* trap = nullptr;
+    if (wasmtime_error_t* error = wasmtime_func_call(mContext,
+                                                     &function,
+                                                     nullptr,
+                                                     0,
+                                                     results.data(),
+                                                     results.size(),
+                                                     &trap))
+    {
+      SetError(std::string("WASM descriptor call failed for '") + functionName + "': " + TakeErrorMessage(error));
+      return std::nullopt;
+    }
+    if (trap)
+    {
+      SetError(std::string("WASM descriptor call trapped for '") + functionName + "': " + TakeTrapMessage(trap));
+      return std::nullopt;
+    }
+    if (results[0].kind != WASMTIME_I32)
+    {
+      SetError(std::string("WASM descriptor function '") + functionName + "' returned a non-i32 result.");
+      return std::nullopt;
+    }
+    return results[0].of.i32;
+  };
+
+  const auto descriptorPtr = callI32Function(descriptorPtrFunction, "guitarfx_descriptor_ptr");
+  const auto descriptorLen = callI32Function(descriptorLenFunction, "guitarfx_descriptor_len");
+  if (!descriptorPtr || !descriptorLen)
+    return false;
+
+  if (*descriptorPtr < 0 || *descriptorLen < 0)
+  {
+    SetError("WASM descriptor pointer and length must be non-negative.");
+    return false;
+  }
+
+  if (*descriptorLen == 0)
+  {
+    ApplyPendingGuestParamValues();
+    return true;
+  }
+
+  wasmtime_extern_t memoryItem{};
+  if (!wasmtime_instance_export_get(mContext, &mInstance, "memory", std::strlen("memory"), &memoryItem))
+  {
+    SetError("WASM descriptor exports require an exported linear memory named 'memory'.");
+    return false;
+  }
+  if (memoryItem.kind != WASMTIME_EXTERN_MEMORY)
+  {
+    wasmtime_extern_delete(&memoryItem);
+    SetError("WASM export 'memory' is not a memory object.");
+    return false;
+  }
+
+  const size_t memorySize = wasmtime_memory_data_size(mContext, &memoryItem.of.memory);
+  std::uint8_t* memoryData = wasmtime_memory_data(mContext, &memoryItem.of.memory);
+  const std::size_t descriptorOffset = static_cast<std::size_t>(*descriptorPtr);
+  const std::size_t descriptorSize = static_cast<std::size_t>(*descriptorLen);
+  if (!memoryData || descriptorOffset + descriptorSize > memorySize)
+  {
+    wasmtime_extern_delete(&memoryItem);
+    SetError("WASM descriptor range falls outside exported guest memory.");
+    return false;
+  }
+
+  const std::string descriptorBlob(reinterpret_cast<const char*>(memoryData + descriptorOffset), descriptorSize);
+  wasmtime_extern_delete(&memoryItem);
+
+  std::string parseError;
+  const auto descriptor = ParseDescriptorBlob(descriptorBlob, &parseError);
+  if (!descriptor)
+  {
+    SetError(parseError.empty() ? "Failed to parse WASM descriptor." : parseError);
+    return false;
+  }
+
+  ApplyGuestDescriptor(*descriptor);
+  return true;
+}
+
+void WasmEffect::ResetGuestDescriptor()
+{
+  mGuestDescriptor = {};
+  mGuestParamSlots.clear();
+  mGuestMacroDefaults.fill(0.0);
+  mGuestMacroDefaults[0] = 1.0;
+  ResetGuestMacrosToDefaults();
+}
+
+void WasmEffect::ApplyGuestDescriptor(const WasmModuleDescriptor& descriptor)
+{
+  mGuestDescriptor = descriptor;
+  mGuestParamSlots.clear();
+  mGuestMacroDefaults.fill(0.0);
+
+  for (const auto& guestParam : descriptor.parameters)
+  {
+    if (guestParam.slot >= mGuestMacroDefaults.size())
+      continue;
+
+    mGuestParamSlots[guestParam.definition.id] = guestParam.slot;
+    mGuestMacroDefaults[guestParam.slot] = guestParam.definition.defaultValue;
+  }
+
+  ResetGuestMacrosToDefaults();
+  ApplyPendingGuestParamValues();
+}
+
+void WasmEffect::ResetGuestMacrosToDefaults()
+{
+  mGuestMacros = mGuestMacroDefaults;
+}
+
+void WasmEffect::ApplyPendingGuestParamValues()
+{
+  for (std::size_t slot = 0; slot < kGuestMacroCount; ++slot)
+  {
+    const std::string genericKey = "param" + std::to_string(slot + 1);
+    if (const auto genericIt = mPendingGuestParamValues.find(genericKey); genericIt != mPendingGuestParamValues.end())
+      mGuestMacros[slot] = genericIt->second;
+  }
+
+  for (const auto& [key, value] : mPendingGuestParamValues)
+  {
+    if (ParseGuestMacroIndex(key).has_value())
+      continue;
+
+    if (const auto slotIt = mGuestParamSlots.find(key); slotIt != mGuestParamSlots.end())
+      mGuestMacros[slotIt->second] = value;
+  }
+}
+
 void WasmEffect::TeardownRuntime()
 {
   mPrepareFunction = {};
@@ -784,7 +1350,9 @@ void RegisterWasmEffect()
                             double maxValue,
                             double defaultValue,
                             std::string unit,
-                            double step) {
+                            double step,
+                            std::string group = {},
+                            bool advanced = false) {
     ParameterDef param;
     param.id = id;
     param.displayName = displayName;
@@ -793,36 +1361,27 @@ void RegisterWasmEffect()
     param.maxValue = maxValue;
     param.unit = unit;
     param.step = step;
+    param.group = std::move(group);
+    param.advanced = advanced;
     return param;
   };
 
   EffectTypeInfo info;
   info.type = EffectGuids::kWasmHost;
   info.displayName = "WASM Host";
-  info.description = "Runs a generic stereo WASM effect with fixed params and resource slots.";
+    info.description = "Runs a stereo WASM effect that can self-describe guest parameters and optional resource slots.";
   info.category = "utility";
   info.requiresResource = true;
   info.requiresTempo = true;
   info.resourceType = "wasm";
   info.aliases = { "wasm_host" };
   info.parameters = {
-      makeParam("mix", "Mix", 0.0, 1.0, 1.0, "", 0.01),
-      makeParam("inputGainDb", "Input Gain", -24.0, 24.0, 0.0, "dB", 0.1),
-      makeParam("outputGainDb", "Output Gain", -24.0, 24.0, 0.0, "dB", 0.1),
-      makeParam("param1", "Param 1", -4.0, 4.0, 1.0, "", 0.01),
-      makeParam("param2", "Param 2", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param3", "Param 3", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param4", "Param 4", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param5", "Param 5", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param6", "Param 6", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param7", "Param 7", -4.0, 4.0, 0.0, "", 0.01),
-      makeParam("param8", "Param 8", -4.0, 4.0, 0.0, "", 0.01),
+      makeParam("mix", "Mix", 0.0, 1.0, 1.0, "", 0.01, "Host"),
+      makeParam("inputGainDb", "Input Gain", -24.0, 24.0, 0.0, "dB", 0.1, "Host", true),
+      makeParam("outputGainDb", "Output Gain", -24.0, 24.0, 0.0, "dB", 0.1, "Host", true),
   };
   info.exposedResources = {
       { "module", "Module", "", "wasm", 0, true, {}, std::nullopt },
-      { "data_a", "Data A", "", "blob", 1, true, {}, std::nullopt },
-      { "data_b", "Data B", "", "blob", 2, true, {}, std::nullopt },
-      { "data_c", "Data C", "", "blob", 3, true, {}, std::nullopt },
   };
 
   EffectRegistry::Instance().Register(info.type, info, []() {

@@ -18,6 +18,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/LevelTargets.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/effects/WasmEffect.h"
 #include "presets/CompositePresetStorage.h"
 #include "presets/CompositePresetTypes.h"
 #include "util/Base64.h"
@@ -3275,6 +3276,8 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         if (!ref.parameters.empty())
             slot.parameters = ref.parameters;
 
+        RefreshWasmNodeDescriptor(*target);
+
         if (IsCompositeEditMode())
         {
             BroadcastCompositeEditState();
@@ -3304,6 +3307,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         {
             node->resources.clear();
             node->resources.push_back(ref);
+            RefreshWasmNodeDescriptor(*node);
 
             if (IsCompositeEditMode())
             {
@@ -3328,6 +3332,12 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     }
 
     UpdateResourceForNodeId(nodeId, ref);
+
+    if (auto* targetGraph = ResolveEditTarget())
+    {
+        if (auto* node = targetGraph->FindNode(nodeId))
+            RefreshWasmNodeDescriptor(*node);
+    }
 
     if (mActivePreset)
     {
@@ -6455,6 +6465,11 @@ void PluginController::ApplyPreset(const Preset& preset)
 
     for (auto& node : normalizedPreset.graph.nodes)
     {
+        RefreshWasmNodeDescriptor(node);
+    }
+
+    for (auto& node : normalizedPreset.graph.nodes)
+    {
         if (!IsNamEffectType(node.type))
             continue;
 
@@ -6805,9 +6820,115 @@ bool PluginController::UpdateResourceForNodeId(const std::string& nodeId,
     return true;
 }
 
+void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
+{
+    auto& registry = EffectRegistry::Instance();
+    if (registry.Resolve(node.type) != EffectGuids::kWasmHost)
+        return;
+
+    std::optional<WasmModuleDescriptor> previousDescriptor;
+    if (const auto existingDescriptorIt = node.config.find(WasmEffect::kDescriptorConfigKey);
+        existingDescriptorIt != node.config.end())
+    {
+        std::string parseError;
+        previousDescriptor = WasmEffect::ParseDescriptorConfig(existingDescriptorIt->second, &parseError);
+        if (!previousDescriptor && !parseError.empty())
+            AppendSessionLog("WASM descriptor cache parse failed for node " + node.id + ": " + parseError);
+    }
+
+    const auto typeInfo = registry.GetTypeInfo(EffectGuids::kWasmHost);
+    const auto labelIsDefault = [&]() {
+        return node.label.empty()
+            || (typeInfo && node.label == typeInfo->displayName)
+            || (previousDescriptor && !previousDescriptor->displayName.empty() && node.label == previousDescriptor->displayName);
+    };
+    const auto categoryIsDefault = [&]() {
+        return node.category.empty()
+            || (typeInfo && node.category == typeInfo->category)
+            || (previousDescriptor && !previousDescriptor->category.empty() && node.category == previousDescriptor->category);
+    };
+
+    const auto clearDescriptorState = [&]() {
+        if (previousDescriptor)
+        {
+            for (const auto& oldParam : previousDescriptor->parameters)
+                node.params.erase(oldParam.definition.id);
+        }
+
+        node.config.erase(WasmEffect::kDescriptorConfigKey);
+        if (typeInfo && labelIsDefault())
+            node.label = typeInfo->displayName;
+        if (typeInfo && categoryIsDefault())
+            node.category = typeInfo->category;
+    };
+
+    if (node.resources.empty() || !node.resources.front().IsValid())
+    {
+        clearDescriptorState();
+        return;
+    }
+
+    const auto modulePath = ResolveResourceRef(node.resources.front());
+    if (!modulePath)
+        return;
+
+    std::string readError;
+    const auto descriptor = WasmEffect::InspectModuleFile(*modulePath, &readError);
+    if (!descriptor)
+    {
+        clearDescriptorState();
+        if (!readError.empty())
+            AppendSessionLog("WASM descriptor read failed for node " + node.id + ": " + readError);
+        return;
+    }
+
+    if (descriptor->entries.empty())
+    {
+        clearDescriptorState();
+        return;
+    }
+
+    node.config[WasmEffect::kDescriptorConfigKey] = WasmEffect::SerializeDescriptorConfig(descriptor->entries);
+    if (labelIsDefault() && !descriptor->displayName.empty())
+        node.label = descriptor->displayName;
+    if (categoryIsDefault() && !descriptor->category.empty())
+        node.category = descriptor->category;
+
+    std::unordered_set<std::string> currentGuestParamIds;
+    for (const auto& guestParam : descriptor->parameters)
+    {
+        currentGuestParamIds.insert(guestParam.definition.id);
+        if (node.params.count(guestParam.definition.id) > 0)
+            continue;
+
+        double initialValue = guestParam.definition.defaultValue;
+        if (!previousDescriptor.has_value())
+        {
+            const std::string legacyParamKey = "param" + std::to_string(guestParam.slot + 1);
+            if (const auto legacyIt = node.params.find(legacyParamKey); legacyIt != node.params.end())
+                initialValue = legacyIt->second;
+        }
+
+        node.params[guestParam.definition.id] = initialValue;
+    }
+
+    if (previousDescriptor)
+    {
+        for (const auto& oldParam : previousDescriptor->parameters)
+        {
+            if (currentGuestParamIds.count(oldParam.definition.id) == 0)
+                node.params.erase(oldParam.definition.id);
+        }
+    }
+}
+
 std::optional<std::filesystem::path> PluginController::ResolveResourceRef(const ResourceRef& ref) const
 {
-    return mResourceLibrary.ResolveResource(ref);
+    if (auto resolved = mResourceLibrary.ResolveResource(ref))
+        return resolved;
+    if (!ref.filePath.empty())
+        return ref.filePath;
+    return std::nullopt;
 }
 
 void PluginController::AppendUserLibraryResource(const LibraryResource& resource)

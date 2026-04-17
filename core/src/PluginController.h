@@ -305,6 +305,7 @@ private:
     bool UpdateResourceForNodeId(const std::string& nodeId,
                                  const ResourceRef& ref,
                                  bool applyPreset = true);
+    void RefreshWasmNodeDescriptor(GraphNode& node);
     [[nodiscard]] std::optional<std::filesystem::path> ResolveResourceRef(const ResourceRef& ref) const;
     void AppendUserLibraryResource(const LibraryResource& resource);
     void EnsureBasicGraph();

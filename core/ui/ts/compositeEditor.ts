@@ -20,7 +20,7 @@ import type {
   CompositeEffectDefinition,
   ExposedParameter,
 } from "./compositeTypes.js";
-import { EffectTypeRegistry } from "./presetV2.js";
+import { getNodeEffectInfo } from "./presetV2.js";
 import { postMessage } from "./bridge.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
@@ -383,9 +383,9 @@ function renderExposedParams(): void {
     paramSelect?.addEventListener("change", () => {
       ep.nodeParamKey = paramSelect.value;
       // Auto-fill range from param def
-      const nodeType = editingDef!.innerGraph.nodes.find((n) => n.id === ep.nodeId)?.type;
-      if (nodeType) {
-        const pDef = EffectTypeRegistry.get(nodeType)?.parameters.find((p) => p.key === ep.nodeParamKey);
+      const node = editingDef!.innerGraph.nodes.find((n) => n.id === ep.nodeId);
+      if (node) {
+        const pDef = getNodeEffectInfo(node)?.parameters.find((p) => p.key === ep.nodeParamKey);
         if (pDef) {
           if (minInput) { minInput.value = String(pDef.min); ep.minValue = pDef.min; }
           if (maxInput) { maxInput.value = String(pDef.max); ep.maxValue = pDef.max; }
@@ -422,7 +422,7 @@ function addExposedParam(): void {
   );
 
   const firstNode = effectNodes[0];
-  const firstNodeType = firstNode ? EffectTypeRegistry.get(firstNode.type) : undefined;
+  const firstNodeType = firstNode ? getNodeEffectInfo(firstNode) : undefined;
   const firstParam = firstNodeType?.parameters[0];
 
   const newParam: ExposedParameter = {
@@ -445,7 +445,7 @@ function getInnerEffectNodeOptions(selectedNodeId: string): string {
   return editingDef.innerGraph.nodes
     .filter((n) => n.type !== "input" && n.type !== "output")
     .map((n) => {
-      const typeInfo = EffectTypeRegistry.get(n.type);
+      const typeInfo = getNodeEffectInfo(n);
       const label = n.displayName || typeInfo?.displayName || n.type;
       return `<option value="${n.id}" ${n.id === selectedNodeId ? "selected" : ""}>${escHtml(label)} (${n.id})</option>`;
     })
@@ -457,7 +457,7 @@ function getNodeParamOptions(nodeId: string, selectedKey: string): string {
   const node = editingDef.innerGraph.nodes.find((n) => n.id === nodeId);
   if (!node) return '<option value="">—</option>';
 
-  const typeInfo = EffectTypeRegistry.get(node.type);
+  const typeInfo = getNodeEffectInfo(node);
   const params = typeInfo?.parameters ?? [];
 
   if (params.length === 0) {

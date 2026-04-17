@@ -49,17 +49,38 @@ class DefinedFuncDef:
 
 
 @dataclass(frozen=True)
+class DataSegmentDef:
+    offset: int
+    contents: bytes
+
+
+@dataclass(frozen=True)
 class ParamDoc:
     identifier: str
+    title: str
     description: str
     default: float
+    min_value: float = 0.0
+    max_value: float = 1.0
+    unit: str = ""
+    group: str = ""
+    advanced: bool = False
+    step: float = 0.0
+    labels: Sequence[str] = field(default_factory=tuple)
+    slot: int = 0
 
 
 @dataclass(frozen=True)
 class ResourceDoc:
+    identifier: str
+    title: str
     slot: int
     file_name: str
     description: str
+    resource_type: str = "blob"
+    allow_browse_file: bool = True
+    parameter_id: str | None = None
+    parameter_value: float | None = None
     required: bool = True
 
 
@@ -81,7 +102,7 @@ class ModuleSpec:
     resources: Sequence[ResourceDoc] = field(default_factory=tuple)
     notes: Sequence[str] = field(default_factory=tuple)
     generated_resources: Sequence[GeneratedResource] = field(default_factory=tuple)
-    build_module: Callable[[], bytes] = lambda: b""
+    build_module: Callable[["ModuleSpec"], bytes] = lambda _spec: b""
 
 
 def append_u32_leb(target: bytearray, value: int) -> None:
@@ -173,6 +194,9 @@ def make_module(
     globals_: Sequence[GlobalDef],
     defined_functions: Sequence[DefinedFuncDef],
     exports: Sequence[tuple[str, int]],
+    *,
+    export_memory: bool = False,
+    data_segments: Sequence[DataSegmentDef] = (),
 ) -> bytes:
     module = bytearray([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00])
 
@@ -203,6 +227,13 @@ def make_module(
             append_u32_leb(function_payload, defined.type_index)
         module.extend(make_section(3, bytes(function_payload)))
 
+    if export_memory or data_segments:
+        memory_payload = bytearray()
+        append_u32_leb(memory_payload, 1)
+        memory_payload.append(0x00)
+        append_u32_leb(memory_payload, 1)
+        module.extend(make_section(5, bytes(memory_payload)))
+
     if globals_:
         global_payload = bytearray()
         append_u32_leb(global_payload, len(globals_))
@@ -214,11 +245,15 @@ def make_module(
         module.extend(make_section(6, bytes(global_payload)))
 
     export_payload = bytearray()
-    append_u32_leb(export_payload, len(exports))
+    append_u32_leb(export_payload, len(exports) + (1 if export_memory else 0))
     for name, function_index in exports:
         append_string(export_payload, name)
         export_payload.append(0x00)
         append_u32_leb(export_payload, function_index)
+    if export_memory:
+        append_string(export_payload, "memory")
+        export_payload.append(0x02)
+        append_u32_leb(export_payload, 0)
     module.extend(make_section(7, bytes(export_payload)))
 
     code_payload = bytearray()
@@ -232,7 +267,75 @@ def make_module(
         code_payload.extend(body)
     module.extend(make_section(10, bytes(code_payload)))
 
+    if data_segments:
+        data_payload = bytearray()
+        append_u32_leb(data_payload, len(data_segments))
+        for segment in data_segments:
+            data_payload.append(0x00)
+            data_payload.extend(i32_const(segment.offset))
+            data_payload.append(0x0B)
+            append_u32_leb(data_payload, len(segment.contents))
+            data_payload.extend(segment.contents)
+        module.extend(make_section(11, bytes(data_payload)))
+
     return bytes(module)
+
+
+def title_from_identifier(identifier: str) -> str:
+    return " ".join(part.capitalize() for part in identifier.split("_"))
+
+
+def build_descriptor_blob(entries: Sequence[tuple[str, str]]) -> bytes:
+    if not entries:
+        return b""
+    return "".join(f"{key}={value}\n" for key, value in entries).encode("utf-8")
+
+
+def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = [
+        ("effect.name", title_from_identifier(spec.identifier)),
+        ("effect.category", spec.category),
+        ("effect.description", spec.description),
+    ]
+    for index, param in enumerate(spec.params):
+        prefix = f"param.{index}"
+        entries.extend(
+            [
+                (f"{prefix}.id", param.identifier),
+                (f"{prefix}.title", param.title),
+                (f"{prefix}.slot", str(param.slot)),
+                (f"{prefix}.default", str(param.default)),
+                (f"{prefix}.min", str(param.min_value)),
+                (f"{prefix}.max", str(param.max_value)),
+            ]
+        )
+        if param.unit:
+            entries.append((f"{prefix}.unit", param.unit))
+        if param.group:
+            entries.append((f"{prefix}.group", param.group))
+        if param.advanced:
+            entries.append((f"{prefix}.advanced", "true"))
+        if param.step:
+            entries.append((f"{prefix}.step", str(param.step)))
+        if param.labels:
+            entries.append((f"{prefix}.labels", "|".join(param.labels)))
+    for index, resource in enumerate(spec.resources):
+        prefix = f"resource.{index}"
+        entries.extend(
+            [
+                (f"{prefix}.id", resource.identifier),
+                (f"{prefix}.title", resource.title),
+                (f"{prefix}.slot", str(resource.slot)),
+                (f"{prefix}.type", resource.resource_type),
+            ]
+        )
+        if not resource.allow_browse_file:
+            entries.append((f"{prefix}.allowBrowseFile", "false"))
+        if resource.parameter_id:
+            entries.append((f"{prefix}.parameterId", resource.parameter_id))
+        if resource.parameter_value is not None:
+            entries.append((f"{prefix}.parameterValue", str(resource.parameter_value)))
+    return entries
 
 
 def make_standard_module(
@@ -248,7 +351,9 @@ def make_standard_module(
     reset_ops: bytes,
     process_ops: bytes,
     latency_ops: bytes,
+    descriptor_entries: Sequence[tuple[str, str]] = (),
 ) -> bytes:
+    descriptor_blob = build_descriptor_blob(descriptor_entries)
     defined_functions = [
         DefinedFuncDef(prepare_type_index, prepare_ops),
         DefinedFuncDef(reset_type_index, reset_ops),
@@ -262,7 +367,32 @@ def make_standard_module(
         ("guitarfx_process", import_count + 2),
         ("guitarfx_get_latency_samples", import_count + 3),
     ]
-    return make_module(types, imports, globals_, defined_functions, exports)
+    export_memory = False
+    data_segments: list[DataSegmentDef] = []
+    if descriptor_blob:
+        defined_functions.extend(
+            [
+                DefinedFuncDef(latency_type_index, i32_const(0)),
+                DefinedFuncDef(latency_type_index, i32_const(len(descriptor_blob))),
+            ]
+        )
+        exports.extend(
+            [
+                ("guitarfx_descriptor_ptr", import_count + 4),
+                ("guitarfx_descriptor_len", import_count + 5),
+            ]
+        )
+        export_memory = True
+        data_segments.append(DataSegmentDef(0, descriptor_blob))
+    return make_module(
+        types,
+        imports,
+        globals_,
+        defined_functions,
+        exports,
+        export_memory=export_memory,
+        data_segments=data_segments,
+    )
 
 
 def standard_prepare_ops() -> bytes:
@@ -273,7 +403,18 @@ def standard_latency_ops() -> bytes:
     return i32_const(0)
 
 
-def gain_module() -> bytes:
+def clamped_param_ops(index: int) -> bytes:
+    return combine_ops(
+        i32_const(index),
+        call(0),
+        f32_const(1.0),
+        F32_MIN,
+        f32_const(-1.0),
+        F32_MAX,
+    )
+
+
+def gain_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32], [F32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -304,10 +445,109 @@ def gain_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def stereo_average_module() -> bytes:
+def stereo_spatial_module(spec: ModuleSpec) -> bytes:
+    types = [
+        FuncTypeDef([I32], [F32]),
+        FuncTypeDef([F32, I32, I32], [I32]),
+        FuncTypeDef([], []),
+        FuncTypeDef([F32, F32], [F32, F32]),
+        FuncTypeDef([], [I32]),
+    ]
+    imports = [ImportFuncDef("host", "read_param", 0)]
+    globals_ = [
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(1.0)),
+        GlobalDef(F32, True, f32_const(0.0)),
+    ]
+
+    process_ops = combine_ops(
+        clamped_param_ops(0),
+        global_set(0),
+        clamped_param_ops(1),
+        global_set(1),
+        global_get(0),
+        f32_const(1.0),
+        F32_ADD,
+        f32_const(0.5),
+        F32_MUL,
+        global_set(2),
+        f32_const(0.6),
+        global_get(2),
+        f32_const(0.4),
+        F32_MUL,
+        F32_ADD,
+        global_set(3),
+        f32_const(1.0),
+        global_get(1),
+        F32_SUB,
+        f32_const(1.0),
+        F32_MIN,
+        global_set(4),
+        f32_const(1.0),
+        global_get(1),
+        F32_ADD,
+        f32_const(1.0),
+        F32_MIN,
+        global_set(5),
+        local_get(0),
+        local_get(1),
+        F32_ADD,
+        f32_const(0.5),
+        F32_MUL,
+        global_set(6),
+        global_get(2),
+        local_get(0),
+        F32_MUL,
+        f32_const(1.0),
+        global_get(2),
+        F32_SUB,
+        global_get(6),
+        F32_MUL,
+        F32_ADD,
+        global_get(3),
+        F32_MUL,
+        global_get(4),
+        F32_MUL,
+        global_get(2),
+        local_get(1),
+        F32_MUL,
+        f32_const(1.0),
+        global_get(2),
+        F32_SUB,
+        global_get(6),
+        F32_MUL,
+        F32_ADD,
+        global_get(3),
+        F32_MUL,
+        global_get(5),
+        F32_MUL,
+    )
+
+    return make_standard_module(
+        types=types,
+        imports=imports,
+        globals_=globals_,
+        prepare_type_index=1,
+        reset_type_index=2,
+        process_type_index=3,
+        latency_type_index=4,
+        prepare_ops=standard_prepare_ops(),
+        reset_ops=b"",
+        process_ops=process_ops,
+        latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
+    )
+
+
+def stereo_average_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32], [F32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -346,10 +586,11 @@ def stereo_average_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def channel_swap_module() -> bytes:
+def channel_swap_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([F32, I32, I32], [I32]),
         FuncTypeDef([], []),
@@ -369,6 +610,7 @@ def channel_swap_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
@@ -376,7 +618,7 @@ def hard_clip_threshold_ops() -> bytes:
     return combine_ops(i32_const(0), call(0), f32_const(0.05), F32_MAX)
 
 
-def hard_clip_module() -> bytes:
+def hard_clip_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32], [F32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -412,10 +654,11 @@ def hard_clip_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def bpm_ducker_module() -> bytes:
+def bpm_ducker_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32], [F32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -450,10 +693,11 @@ def bpm_ducker_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def stateful_bias_module() -> bytes:
+def stateful_bias_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([F32, I32, I32], [I32]),
         FuncTypeDef([], []),
@@ -486,10 +730,11 @@ def stateful_bias_module() -> bytes:
         reset_ops=reset_ops,
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def resource_scaler_module() -> bytes:
+def resource_scaler_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32, I32], [I32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -528,10 +773,11 @@ def resource_scaler_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
-def resource_size_gain_module() -> bytes:
+def resource_size_gain_module(spec: ModuleSpec) -> bytes:
     types = [
         FuncTypeDef([I32], [I32]),
         FuncTypeDef([F32, I32, I32], [I32]),
@@ -568,6 +814,7 @@ def resource_size_gain_module() -> bytes:
         reset_ops=b"",
         process_ops=process_ops,
         latency_ops=standard_latency_ops(),
+        descriptor_entries=descriptor_entries_for_spec(spec),
     )
 
 
@@ -576,12 +823,60 @@ def module_specs() -> list[ModuleSpec]:
         ModuleSpec(
             identifier="gain",
             file_name="gain.wasm",
-            description="Stereo gain controlled by param1.",
+            description="Stereo gain controlled by a self-described guest parameter named gain.",
             category="utility",
             host_imports=("read_param",),
-            params=(ParamDoc("param1", "Linear gain multiplier.", 0.5),),
+            params=(
+                ParamDoc(
+                    identifier="gain",
+                    title="Gain",
+                    description="Linear gain multiplier.",
+                    default=0.5,
+                    min_value=0.0,
+                    max_value=2.0,
+                    unit="amount",
+                    step=0.01,
+                    slot=0,
+                ),
+            ),
             notes=("Good first smoke test for param import wiring.",),
             build_module=gain_module,
+        ),
+        ModuleSpec(
+            identifier="stereo_spatial",
+            file_name="stereo_spatial.wasm",
+            description="Stereo spatial utility with self-described depth and pan parameters.",
+            category="spatial",
+            host_imports=("read_param",),
+            params=(
+                ParamDoc(
+                    identifier="depth",
+                    title="Depth",
+                    description="Back/forward pan from -1.0 (back: narrower and quieter) to 1.0 (forward: wider and more present).",
+                    default=0.0,
+                    min_value=-1.0,
+                    max_value=1.0,
+                    unit="amount",
+                    step=0.01,
+                    slot=0,
+                ),
+                ParamDoc(
+                    identifier="pan",
+                    title="Pan",
+                    description="Left/right pan from -1.0 (left) to 1.0 (right).",
+                    default=0.0,
+                    min_value=-1.0,
+                    max_value=1.0,
+                    unit="pan",
+                    step=0.01,
+                    slot=1,
+                ),
+            ),
+            notes=(
+                "Implements a simple stereo-only depth and pan matrix, not an HRTF or surround spatializer.",
+                "Back movement narrows toward mono and reduces level; forward movement restores full width and level.",
+            ),
+            build_module=stereo_spatial_module,
         ),
         ModuleSpec(
             identifier="stereo_average",
@@ -589,7 +884,19 @@ def module_specs() -> list[ModuleSpec]:
             description="Averages left/right input to mono and writes the same signal to both outputs.",
             category="utility",
             host_imports=("read_param",),
-            params=(ParamDoc("param1", "Post-average output gain.", 1.0),),
+            params=(
+                ParamDoc(
+                    identifier="gain",
+                    title="Output Gain",
+                    description="Post-average output gain.",
+                    default=1.0,
+                    min_value=0.0,
+                    max_value=2.0,
+                    unit="amount",
+                    step=0.01,
+                    slot=0,
+                ),
+            ),
             notes=("Useful for checking multivalue output ordering and utility-style processing.",),
             build_module=stereo_average_module,
         ),
@@ -605,10 +912,22 @@ def module_specs() -> list[ModuleSpec]:
         ModuleSpec(
             identifier="hard_clip",
             file_name="hard_clip.wasm",
-            description="Hard clips both channels to +/- param1.",
+            description="Hard clips both channels to +/- a self-described threshold parameter.",
             category="drive",
             host_imports=("read_param",),
-            params=(ParamDoc("param1", "Clip threshold with an internal minimum floor of 0.05.", 0.8),),
+            params=(
+                ParamDoc(
+                    identifier="threshold",
+                    title="Threshold",
+                    description="Clip threshold with an internal minimum floor of 0.05.",
+                    default=0.8,
+                    min_value=0.05,
+                    max_value=1.0,
+                    unit="amount",
+                    step=0.01,
+                    slot=0,
+                ),
+            ),
             notes=("Demonstrates a simple effect rather than a utility process.",),
             build_module=hard_clip_module,
         ),
@@ -638,6 +957,8 @@ def module_specs() -> list[ModuleSpec]:
             host_imports=("read_resource_size",),
             resources=(
                 ResourceDoc(
+                    identifier="payload",
+                    title="Payload",
                     slot=1,
                     file_name="resource_size_gain_payload.bin",
                     description="Binary payload whose byte length is divided by 64 to produce a gain scalar. Default example length: 32 bytes.",
@@ -661,6 +982,8 @@ def module_specs() -> list[ModuleSpec]:
             host_imports=("read_resource_byte",),
             resources=(
                 ResourceDoc(
+                    identifier="scale",
+                    title="Scale Data",
                     slot=1,
                     file_name="resource_scaler_scale.bin",
                     description="First byte is interpreted as a gain numerator and divided by 64. Default example byte: 32.",
@@ -689,7 +1012,7 @@ def example_graph_node(spec: ModuleSpec) -> dict[str, object]:
     for resource in spec.resources:
         resources.append(
             {
-                "resourceType": "binary",
+                "resourceType": resource.resource_type,
                 "filePath": f"resources/{resource.file_name}",
                 "metadata": {"resourceSlotIndex": str(resource.slot)},
             }
@@ -711,12 +1034,16 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
             "guitarfx_reset() -> void",
             "guitarfx_process(inLeft: f32, inRight: f32) -> (f32, f32)",
             "guitarfx_get_latency_samples() -> i32",
+            "memory (optional, required when exporting a descriptor blob)",
+            "guitarfx_descriptor_ptr() -> i32 (optional descriptor blob offset)",
+            "guitarfx_descriptor_len() -> i32 (optional descriptor blob byte length)",
         ],
         "imports": [
             "host.read_param(index: i32) -> f32",
             "host.read_resource_size(slot: i32) -> i32",
             "host.read_resource_byte(slot: i32, offset: i32) -> i32",
         ],
+        "descriptorBlobFormat": "UTF-8 newline-delimited key=value entries stored in guest memory.",
         "paramIndices": {**{f"param{index}": index - 1 for index in range(1, 9)}, "bpm": 8},
         "resourceSlots": {
             "0": "WASM module bytes",
@@ -736,16 +1063,31 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
                 "parameters": [
                     {
                         "id": param.identifier,
+                        "title": param.title,
                         "description": param.description,
                         "default": param.default,
+                        "min": param.min_value,
+                        "max": param.max_value,
+                        "unit": param.unit,
+                        "group": param.group,
+                        "advanced": param.advanced,
+                        "step": param.step,
+                        "labels": list(param.labels),
+                        "slot": param.slot,
                     }
                     for param in spec.params
                 ],
                 "resources": [
                     {
+                        "id": resource.identifier,
+                        "title": resource.title,
                         "slot": resource.slot,
+                        "resourceType": resource.resource_type,
                         "file": f"resources/{resource.file_name}",
                         "description": resource.description,
+                        "allowBrowseFile": resource.allow_browse_file,
+                        "parameterId": resource.parameter_id,
+                        "parameterValue": resource.parameter_value,
                         "required": resource.required,
                     }
                     for resource in spec.resources
@@ -772,7 +1114,7 @@ def write_output(root: Path, specs: Sequence[ModuleSpec]) -> None:
     resources_dir.mkdir(parents=True, exist_ok=True)
 
     for spec in specs:
-        (modules_dir / spec.file_name).write_bytes(spec.build_module())
+        (modules_dir / spec.file_name).write_bytes(spec.build_module(spec))
         for generated_resource in spec.generated_resources:
             (resources_dir / generated_resource.file_name).write_bytes(generated_resource.contents)
 

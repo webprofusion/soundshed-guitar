@@ -25,6 +25,7 @@ export interface EffectTypeInfo {
   type: string;
   displayName: string;
   category: string;
+  description?: string;
   catalogHidden?: boolean;
   requiresResource: boolean;
   resourceType?: string;
@@ -43,6 +44,13 @@ export interface EffectTypeInfo {
     parameterValue?: number;
   }>;
 }
+
+export interface WasmDescriptorEntry {
+  key: string;
+  value: string;
+}
+
+export const WASM_GUEST_DESCRIPTOR_CONFIG_KEY = "wasmGuestDescriptor";
 
 /**
  * Effect type registry - mirrors the C++ EffectRegistry
@@ -80,6 +88,179 @@ class EffectRegistry {
 }
 
 export const EffectTypeRegistry = new EffectRegistry();
+
+function parseNumericDescriptorValue(value: string | undefined, fallback: number): number {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseBooleanDescriptorValue(value: string | undefined, fallback: boolean): boolean {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function parseIndexedDescriptorKey(key: string, prefix: string): { index: number; field: string } | null {
+  const stem = `${prefix}.`;
+  if (!key.startsWith(stem)) {
+    return null;
+  }
+  const fieldSeparator = key.indexOf(".", stem.length);
+  if (fieldSeparator < 0) {
+    return null;
+  }
+  const index = Number.parseInt(key.slice(stem.length, fieldSeparator), 10);
+  if (!Number.isInteger(index) || index < 0) {
+    return null;
+  }
+  return { index, field: key.slice(fieldSeparator + 1) };
+}
+
+function parseWasmDescriptorEntries(configValue: unknown): WasmDescriptorEntry[] {
+  if (typeof configValue !== "string" || !configValue.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(configValue) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((entry): entry is { key?: unknown; value?: unknown } => Boolean(entry) && typeof entry === "object")
+      .map((entry) => ({
+        key: typeof entry.key === "string" ? entry.key : "",
+        value: typeof entry.value === "string" ? entry.value : "",
+      }))
+      .filter((entry) => entry.key.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function buildWasmNodeEffectInfo(base: EffectTypeInfo, node: Pick<GraphNode, "config">): EffectTypeInfo {
+  const entries = parseWasmDescriptorEntries(node.config?.[WASM_GUEST_DESCRIPTOR_CONFIG_KEY]);
+  if (entries.length === 0) {
+    return base;
+  }
+
+  const paramGroups = new Map<number, Record<string, string>>();
+  const resourceGroups = new Map<number, Record<string, string>>();
+  let displayName = "";
+  let category = "";
+  let description = "";
+
+  for (const entry of entries) {
+    if (entry.key === "effect.name" || entry.key === "effect.title") {
+      displayName = entry.value;
+      continue;
+    }
+    if (entry.key === "effect.category") {
+      category = entry.value;
+      continue;
+    }
+    if (entry.key === "effect.description") {
+      description = entry.value;
+      continue;
+    }
+
+    const paramKey = parseIndexedDescriptorKey(entry.key, "param");
+    if (paramKey) {
+      const group = paramGroups.get(paramKey.index) ?? {};
+      group[paramKey.field] = entry.value;
+      paramGroups.set(paramKey.index, group);
+      continue;
+    }
+
+    const resourceKey = parseIndexedDescriptorKey(entry.key, "resource");
+    if (resourceKey) {
+      const group = resourceGroups.get(resourceKey.index) ?? {};
+      group[resourceKey.field] = entry.value;
+      resourceGroups.set(resourceKey.index, group);
+    }
+  }
+
+  const parameters = [...paramGroups.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([index, fields]): ParameterDef | null => {
+      if (!fields.id) {
+        return null;
+      }
+      const labels = typeof fields.labels === "string"
+        ? fields.labels.split("|").map((label) => label.trim()).filter(Boolean)
+        : undefined;
+      const unit = fields.unit || (labels && labels.length > 0 ? "enum" : "");
+      const min = parseNumericDescriptorValue(fields.min, 0);
+      const max = parseNumericDescriptorValue(fields.max, 1);
+      return {
+        key: fields.id,
+        name: fields.title || fields.name || fields.id,
+        default: parseNumericDescriptorValue(fields.default, 0),
+        min,
+        max: max >= min ? max : min,
+        unit,
+        step: parseNumericDescriptorValue(fields.step, labels && labels.length > 0 ? 1 : 0) || undefined,
+        labels,
+        group: fields.group,
+        advanced: parseBooleanDescriptorValue(fields.advanced, false),
+      };
+    })
+    .filter((param): param is ParameterDef => param !== null);
+
+  const exposedResources: NonNullable<EffectTypeInfo["exposedResources"]> = [];
+  for (const [index, fields] of [...resourceGroups.entries()].sort((left, right) => left[0] - right[0])) {
+    if (!fields.id) {
+      continue;
+    }
+    const resourceIndex = Number.parseInt(fields.slot ?? `${index + 1}`, 10);
+    if (!Number.isInteger(resourceIndex) || resourceIndex <= 0) {
+      continue;
+    }
+    exposedResources.push({
+      resourceId: fields.id,
+      displayName: fields.title || fields.name || fields.id,
+      nodeId: "",
+      resourceType: fields.type || "blob",
+      resourceIndex,
+      allowBrowseFile: parseBooleanDescriptorValue(fields.allowBrowseFile, true),
+      parameterId: fields.parameterId,
+      parameterValue: typeof fields.parameterValue === "string"
+        ? parseNumericDescriptorValue(fields.parameterValue, 0)
+        : undefined,
+    });
+  }
+
+  return {
+    ...base,
+    displayName: displayName || base.displayName,
+    category: category || base.category,
+    description: description || base.description,
+    parameters: [...parameters, ...(base.parameters ?? [])],
+    exposedResources: [...(base.exposedResources ?? []), ...exposedResources],
+  };
+}
+
+export function getNodeEffectInfo(node: Pick<GraphNode, "type" | "config">): EffectTypeInfo | undefined {
+  const base = EffectTypeRegistry.get(node.type);
+  if (!base) {
+    return undefined;
+  }
+  if (node.type !== EffectGuids.kWasmHost) {
+    return base;
+  }
+  return buildWasmNodeEffectInfo(base, node);
+}
 
 // ─── Effect stub registrations ─────────────────────────────────────────────────
 // These seed the EffectTypeRegistry with aliases and UI-only flags (catalogHidden).
@@ -119,6 +300,7 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kEqParametric,     aliases: ["eq_parametric"] },
   // Utility
   { type: EffectGuids.kGain,             aliases: ["gain"] },
+  { type: EffectGuids.kWasmHost,         aliases: ["wasm_host"] },
   { type: EffectGuids.kSplitter,         aliases: ["splitter"] },
   { type: EffectGuids.kMixer,            aliases: ["mixer"] },
   // Delay
