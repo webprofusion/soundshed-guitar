@@ -15,6 +15,7 @@ set(TEST_SOURCES
     StereoProcessingTests.cpp
     SynthSawEffectTests.cpp
     TestWavLoad.cpp
+    WasmEffectHostTests.cpp
 )
 
 option(GUITARFX_TEST_WITH_IPLUG2 "Build tests that require iPlug2 headers" OFF)

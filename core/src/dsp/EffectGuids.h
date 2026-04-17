@@ -71,6 +71,7 @@ namespace guitarfx
 
     // ── Utility ───────────────────────────────────────────────────────────
     constexpr const char* kGain            = "0bcd895e-5d36-4247-a351-6bed1fcb37a8";
+    constexpr const char* kWasmHost        = "b96693c3-b1f4-44f8-99b4-016620f89d95";
     constexpr const char* kSplitter        = "f5f2541b-fcea-4cfd-9e62-eeddf583ef4e";
     constexpr const char* kMixer           = "d7d1e40f-9c79-4582-9a82-d5fa5bbbfb97";
 

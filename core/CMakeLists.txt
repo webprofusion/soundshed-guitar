@@ -21,6 +21,7 @@ endif()
 # ---------------------------------------------------------------------------
 option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
+option(GUITARFX_CORE_ENABLE_WASM_EFFECTS "Build the generic WASM effect host" ON)
 
 if(MSVC)
     include(CheckCXXCompilerFlag)
@@ -101,6 +102,65 @@ function(guitarfx_disable_linux_gnu_unique target_name)
     endif()
 endfunction()
 
+function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_lib)
+    if(WIN32)
+        set(_guitarfx_wasmtime_arch "${CMAKE_GENERATOR_PLATFORM}")
+        if(NOT _guitarfx_wasmtime_arch)
+            set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
+        endif()
+    elseif(APPLE)
+        set(_guitarfx_wasmtime_arch "${CMAKE_OSX_ARCHITECTURES}")
+        if(NOT _guitarfx_wasmtime_arch)
+            set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
+        endif()
+        if(_guitarfx_wasmtime_arch MATCHES ";")
+            message(FATAL_ERROR "Universal macOS builds are not supported when GUITARFX_CORE_ENABLE_WASM_EFFECTS is ON because Wasmtime C API bundles are single-architecture.")
+        endif()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    else()
+        message(FATAL_ERROR "WASM effects are only supported on Windows, macOS, and Linux.")
+    endif()
+
+    string(TOLOWER "${_guitarfx_wasmtime_arch}" _guitarfx_wasmtime_arch)
+
+    if(WIN32)
+        set(_guitarfx_wasmtime_ext "zip")
+        set(_guitarfx_wasmtime_lib "lib/wasmtime.lib")
+        if(_guitarfx_wasmtime_arch MATCHES "^(x64|amd64|x86_64)$")
+            set(_guitarfx_wasmtime_platform "x86_64-windows")
+        elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|arm64ec|aarch64)$")
+            set(_guitarfx_wasmtime_platform "aarch64-windows")
+        else()
+            message(FATAL_ERROR "Unsupported Windows architecture for Wasmtime bundle: ${_guitarfx_wasmtime_arch}")
+        endif()
+    elseif(APPLE)
+        set(_guitarfx_wasmtime_ext "tar.xz")
+        set(_guitarfx_wasmtime_lib "lib/libwasmtime.a")
+        if(_guitarfx_wasmtime_arch MATCHES "^(x86_64|amd64)$")
+            set(_guitarfx_wasmtime_platform "x86_64-macos")
+        elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|aarch64)$")
+            set(_guitarfx_wasmtime_platform "aarch64-macos")
+        else()
+            message(FATAL_ERROR "Unsupported macOS architecture for Wasmtime bundle: ${_guitarfx_wasmtime_arch}")
+        endif()
+    else()
+        set(_guitarfx_wasmtime_ext "tar.xz")
+        set(_guitarfx_wasmtime_lib "lib/libwasmtime.a")
+        if(_guitarfx_wasmtime_arch MATCHES "^(x86_64|amd64)$")
+            set(_guitarfx_wasmtime_platform "x86_64-linux")
+        elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|aarch64)$")
+            set(_guitarfx_wasmtime_platform "aarch64-linux")
+        else()
+            message(FATAL_ERROR "Unsupported Linux architecture for Wasmtime bundle: ${_guitarfx_wasmtime_arch}")
+        endif()
+    endif()
+
+    set(${out_platform} "${_guitarfx_wasmtime_platform}" PARENT_SCOPE)
+    set(${out_archive_ext} "${_guitarfx_wasmtime_ext}" PARENT_SCOPE)
+    set(${out_static_lib} "${_guitarfx_wasmtime_lib}" PARENT_SCOPE)
+endfunction()
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -171,6 +231,60 @@ if(NOT TARGET guitarfx_miniz)
         POSITION_INDEPENDENT_CODE ON)
     target_include_directories(guitarfx_miniz PUBLIC
         "${guitarfx_miniz_src_SOURCE_DIR}")
+endif()
+
+# Wasmtime C API — embedded WebAssembly runtime used by the generic WASM effect host
+if(GUITARFX_CORE_ENABLE_WASM_EFFECTS AND NOT TARGET guitarfx_wasmtime)
+    include(FetchContent)
+    set(GUITARFX_WASMTIME_VERSION "43.0.1")
+    guitarfx_get_wasmtime_bundle(_guitarfx_wasmtime_platform _guitarfx_wasmtime_ext _guitarfx_wasmtime_static_lib)
+
+    FetchContent_Declare(guitarfx_wasmtime_src
+        URL "https://github.com/bytecodealliance/wasmtime/releases/download/v${GUITARFX_WASMTIME_VERSION}/wasmtime-v${GUITARFX_WASMTIME_VERSION}-${_guitarfx_wasmtime_platform}-c-api.${_guitarfx_wasmtime_ext}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_GetProperties(guitarfx_wasmtime_src)
+    if(NOT guitarfx_wasmtime_src_POPULATED)
+        FetchContent_Populate(guitarfx_wasmtime_src)
+    endif()
+
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
+
+    set(_guitarfx_wasmtime_root "${guitarfx_wasmtime_src_SOURCE_DIR}")
+    if(NOT EXISTS "${_guitarfx_wasmtime_root}/include" OR NOT EXISTS "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}")
+        file(GLOB _guitarfx_wasmtime_children LIST_DIRECTORIES TRUE "${guitarfx_wasmtime_src_SOURCE_DIR}/*")
+        foreach(_guitarfx_wasmtime_child IN LISTS _guitarfx_wasmtime_children)
+            if(IS_DIRECTORY "${_guitarfx_wasmtime_child}"
+               AND EXISTS "${_guitarfx_wasmtime_child}/include"
+               AND EXISTS "${_guitarfx_wasmtime_child}/${_guitarfx_wasmtime_static_lib}")
+                set(_guitarfx_wasmtime_root "${_guitarfx_wasmtime_child}")
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if(NOT EXISTS "${_guitarfx_wasmtime_root}/include" OR NOT EXISTS "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}")
+        message(FATAL_ERROR "Unable to locate the Wasmtime C API bundle contents under ${guitarfx_wasmtime_src_SOURCE_DIR}")
+    endif()
+
+    add_library(guitarfx_wasmtime STATIC IMPORTED GLOBAL)
+    set_target_properties(guitarfx_wasmtime PROPERTIES
+        IMPORTED_LOCATION "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_guitarfx_wasmtime_root}/include")
+
+    if(WIN32)
+        target_compile_definitions(guitarfx_wasmtime INTERFACE WASM_API_EXTERN= WASI_API_EXTERN=)
+        target_link_libraries(guitarfx_wasmtime INTERFACE ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_libraries(guitarfx_wasmtime INTERFACE pthread dl m)
+    endif()
 endif()
 
 # NeuralAmpModelerCore + Eigen (used by NAM effects)
@@ -361,6 +475,13 @@ set(GUITARFX_CORE_SOURCES
     src/util/Wav.cpp
 )
 
+if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
+    list(APPEND GUITARFX_CORE_SOURCES
+        src/dsp/effects/WasmEffect.h
+        src/dsp/effects/WasmEffect.cpp
+    )
+endif()
+
 # ---------------------------------------------------------------------------
 # Library target
 # ---------------------------------------------------------------------------
@@ -428,6 +549,10 @@ target_compile_definitions(SoundshedGuitarCore
         GUITARFX_APP_VERSION="${GUITARFX_APP_VERSION}"
 )
 
+if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
+    target_compile_definitions(SoundshedGuitarCore PUBLIC GUITARFX_ENABLE_WASM_EFFECTS=1)
+endif()
+
 # Link dependencies
 target_link_libraries(SoundshedGuitarCore
     PUBLIC
@@ -435,6 +560,10 @@ target_link_libraries(SoundshedGuitarCore
     PRIVATE
         guitarfx_miniz
 )
+
+if(TARGET guitarfx_wasmtime)
+    target_link_libraries(SoundshedGuitarCore PUBLIC guitarfx_wasmtime)
+endif()
 
 # NeuralAmpModelerCore — consumer must provide this target or set include dirs
 if(TARGET NeuralAmpModelerCore)

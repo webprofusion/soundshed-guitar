@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "presets/PresetTypes.h"
+
 namespace guitarfx
 {
   class EffectProcessor;
@@ -49,6 +51,7 @@ namespace guitarfx
     std::string resourceType; // "nam", "ir", etc. (if requiresResource is true)
     std::vector<std::string> resourceFilterHint; // Equipment type filter ("amp", "full-rig", "pedal", etc.)
     std::vector<ParameterDef> parameters;
+    std::vector<ExposedResource> exposedResources; // Generic resource slots surfaced to the UI
     // Legacy IDs that resolve to this effect (for preset backward-compatibility).
     // Populated by RegisterAlias() or set directly before calling Register().
     std::vector<std::string> aliases;

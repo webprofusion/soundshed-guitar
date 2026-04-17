@@ -15,10 +15,16 @@ elseif(NOT DEFINED IPLUG2_DIR)
     set(IPLUG2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../_deps/iplug2-src")
 endif()
 
-set(VST3_SDK_DIR "${IPLUG2_DIR}/Dependencies/IPlug/VST3_SDK")
+if(DEFINED VST3_SDK_ROOT AND EXISTS "${VST3_SDK_ROOT}")
+    set(VST3_SDK_DIR "${VST3_SDK_ROOT}")
+elseif(DEFINED ENV{VST3_SDK_ROOT} AND NOT "$ENV{VST3_SDK_ROOT}" STREQUAL "")
+    set(VST3_SDK_DIR "$ENV{VST3_SDK_ROOT}")
+else()
+    set(VST3_SDK_DIR "${IPLUG2_DIR}/Dependencies/IPlug/VST3_SDK")
+endif()
 
 # Skip building if VST3 SDK not available
-if(NOT EXISTS "${VST3_SDK_DIR}/pluginterfaces")
+if(NOT EXISTS "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp")
     message(WARNING "VST3 SDK not found at ${VST3_SDK_DIR} - skipping VST3DebugHost")
     return()
 endif()

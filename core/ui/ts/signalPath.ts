@@ -1838,17 +1838,37 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     resourceSelector = exposedResources
       .map((exposedResource, exposedResourceIndex) => {
         const resourceType = exposedResource.resourceType;
-        const resourceIndex = exposedResourceIndex;
-        const browseAccept = resourceType === "nam" ? ".nam,.json" : resourceType === "ir" ? ".wav" : "*";
+        const resourceIndex = exposedResource.resourceIndex ?? exposedResourceIndex;
+        const browseAccept = resourceType === "nam"
+          ? ".nam,.json"
+          : resourceType === "ir"
+            ? ".wav"
+            : resourceType === "wasm"
+              ? ".wasm"
+              : "*";
+        const resources = uiState.resourceLibrary[resourceType] || [];
+        const emptyDisplayName = resourceType === "ir"
+          ? "No IR selected"
+          : resourceType === "nam"
+            ? "No model selected"
+            : "No resource selected";
         const current = getNodeResourceAtIndex(node, resourceIndex);
         const displayName = current.id
           ? getNodeResourceDisplayName(node, resourceIndex, resourceType)
-          : resourceType === "ir" ? "No IR selected" : "No model selected";
+          : emptyDisplayName;
         const isMissing = Boolean(current.id)
           && !current.filePath
           && !getLibraryResource(resourceType, current.id);
         const missingClass = isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
         const canBrowseFile = exposedResource.allowBrowseFile ?? true;
+        const isLibraryPicker = resourceType === "nam" || resourceType === "ir";
+        const resourceOptions = resources.map((res: LibraryResource) => {
+          const selected = current.id === res.id && !current.filePath ? "selected" : "";
+          return `<option value="${res.id}" ${selected}>${res.name}</option>`;
+        }).join("");
+        const customOption = current.filePath
+          ? `<option value="__custom__" selected>Custom: ${current.filePath.split("/").pop()}</option>`
+          : "";
 
         customLayoutResourceControls.push({
           resourceControlKey: `__resource__:${exposedResource.resourceId}:${resourceIndex}`,
@@ -1866,21 +1886,35 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           <div class="node-resource-selector" data-node-id="${node.id}">
             <label>${escapeHtml(exposedResource.displayName || exposedResource.resourceId)}</label>
             <div class="resource-controls">
-              <button
-                class="resource-picker-btn"
-                data-node-id="${node.id}"
-                data-resource-type="${resourceType}"
-                data-resource-index="${resourceIndex}"
-                data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
-              >Browse</button>
-              <div
-                class="${missingClass}"
-                data-node-id="${node.id}"
-                data-resource-type="${resourceType}"
-                data-resource-index="${resourceIndex}"
-                data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
-                title="${escapeHtml(displayName)}"
-              >${escapeHtml(displayName)}</div>
+              ${isLibraryPicker ? `
+                <button
+                  class="resource-picker-btn"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceType}"
+                  data-resource-index="${resourceIndex}"
+                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                >Browse</button>
+                <div
+                  class="${missingClass}"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceType}"
+                  data-resource-index="${resourceIndex}"
+                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                  title="${escapeHtml(displayName)}"
+                >${escapeHtml(displayName)}</div>
+              ` : `
+                <select
+                  class="resource-selector"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceType}"
+                  data-resource-index="${resourceIndex}"
+                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                >
+                  <option value="">${escapeHtml(emptyDisplayName)}</option>
+                  ${resourceOptions}
+                  ${customOption}
+                </select>
+              `}
               ${canBrowseFile ? `
                 <button
                   class="resource-browse-btn"

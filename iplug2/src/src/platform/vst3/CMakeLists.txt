@@ -5,7 +5,15 @@ if(NOT DEFINED iPlug2_SOURCE_DIR)
 endif()
 
 # Define VST3 SDK root for cleaner path references
-set(VST3_SDK_ROOT "${iPlug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
+if(DEFINED VST3_SDK_ROOT AND EXISTS "${VST3_SDK_ROOT}")
+  set(_guitarfx_vst3_sdk_root "${VST3_SDK_ROOT}")
+elseif(DEFINED ENV{VST3_SDK_ROOT} AND NOT "$ENV{VST3_SDK_ROOT}" STREQUAL "")
+  set(_guitarfx_vst3_sdk_root "$ENV{VST3_SDK_ROOT}")
+else()
+  set(_guitarfx_vst3_sdk_root "${iPlug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
+endif()
+
+set(VST3_SDK_ROOT "${_guitarfx_vst3_sdk_root}")
 
 # Validate VST3 SDK presence (iPlug2 does not bundle it by default)
 if(NOT EXISTS "${VST3_SDK_ROOT}/base/source/baseiids.cpp")

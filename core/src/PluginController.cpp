@@ -3347,8 +3347,9 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
     const int resourceIndex = payload.value("resourceIndex", -1);
     const std::string exposedResourceId = payload.value("exposedResourceId", "");
 
-    BrowseFileType fileType = BrowseFileType::NAMModel;
-    if (resourceType == "ir") fileType = BrowseFileType::IRFile;
+    BrowseFileType fileType = BrowseFileType::Any;
+    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
+    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
 
     mHost.BrowseFileAsync(fileType, "Select Resource",
         [this, nodeId, resourceType, resourceIndex, exposedResourceId](const BrowseFileResult& result)
@@ -4088,7 +4089,9 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
     if (resourceType.empty() || resourceId.empty())
         return;
 
-    BrowseFileType fileType = resourceType == "ir" ? BrowseFileType::IRFile : BrowseFileType::NAMModel;
+    BrowseFileType fileType = BrowseFileType::Any;
+    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
+    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
     mHost.BrowseFileAsync(fileType, "Select Local Resource",
         [this, payload, resourceType, resourceId](const BrowseFileResult& result)
         {
@@ -8185,7 +8188,27 @@ void PluginController::SendEffectCatalogToUI()
         }
         entry["parameters"] = params;
 
-        if (info.type.rfind("composite:", 0) == 0)
+        if (!info.exposedResources.empty())
+        {
+            nlohmann::json exposedResources = nlohmann::json::array();
+            for (const auto& er : info.exposedResources)
+            {
+                nlohmann::json resource;
+                resource["resourceId"] = er.resourceId;
+                resource["displayName"] = er.displayName;
+                resource["nodeId"] = er.nodeId;
+                resource["resourceType"] = er.resourceType;
+                resource["resourceIndex"] = er.resourceIndex;
+                resource["allowBrowseFile"] = er.allowBrowseFile;
+                if (!er.parameterId.empty())
+                    resource["parameterId"] = er.parameterId;
+                if (er.parameterValue.has_value())
+                    resource["parameterValue"] = *er.parameterValue;
+                exposedResources.push_back(resource);
+            }
+            entry["exposedResources"] = exposedResources;
+        }
+        else if (info.type.rfind("composite:", 0) == 0)
         {
             const std::string definitionId = info.type.substr(std::string("composite:").size());
             if (const auto* def = mCompositeLibrary.GetDefinition(definitionId))

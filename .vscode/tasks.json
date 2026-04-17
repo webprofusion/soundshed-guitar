@@ -104,7 +104,7 @@
 				"-A",
 				"x64",
 				"-S",
-				"${workspaceFolder}/src",
+				"${workspaceFolder}/iplug2/src",
 				"-B",
 				"${workspaceFolder}/iplug2/src/build"
 			],

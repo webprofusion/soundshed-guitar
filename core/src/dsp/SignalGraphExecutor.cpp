@@ -344,19 +344,21 @@ namespace guitarfx
         }
 
         // Load resources if needed
-        if (!node.resources.empty() && mResourceLibrary)
+        if (!node.resources.empty())
         {
           std::vector<ResourceRef> resolvedRefs;
           std::vector<std::filesystem::path> resolvedPaths;
           resolvedRefs.reserve(node.resources.size());
           resolvedPaths.reserve(node.resources.size());
 
-          for (const auto& res : node.resources)
+          for (std::size_t resourceIndex = 0; resourceIndex < node.resources.size(); ++resourceIndex)
           {
+            const auto& res = node.resources[resourceIndex];
             if (!res.IsValid())
               continue;
 
-            const ResourceRef hydratedRef = HydrateResolvedResourceRef(res, mResourceLibrary);
+            ResourceRef hydratedRef = HydrateResolvedResourceRef(res, mResourceLibrary);
+            hydratedRef.metadata["resourceSlotIndex"] = std::to_string(resourceIndex);
             auto path = ResolveResourcePath(hydratedRef, mResourceLibrary);
             if (path)
             {

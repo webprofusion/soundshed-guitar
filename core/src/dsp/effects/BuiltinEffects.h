@@ -37,6 +37,9 @@
 #include "dsp/effects/MixerEffect.h"
 #include "dsp/effects/SimpleCabEffect.h"
 #include "dsp/effects/CompositeEffectProcessor.h"
+#if defined(GUITARFX_ENABLE_WASM_EFFECTS)
+#include "dsp/effects/WasmEffect.h"
+#endif
 
 namespace guitarfx
 {
@@ -48,6 +51,9 @@ namespace guitarfx
   {
     // Utility effects
     RegisterGainEffect();
+#if defined(GUITARFX_ENABLE_WASM_EFFECTS)
+    RegisterWasmEffect();
+#endif
     {
       EffectTypeInfo splitterInfo;
       splitterInfo.type = EffectGuids::kSplitter;

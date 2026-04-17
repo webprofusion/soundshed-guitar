@@ -3,6 +3,10 @@ include(FetchContent)
 if(GUITARFX_FETCH_DEPENDENCIES)
   message(STATUS "Fetching iPlug2 dependencies")
 
+  if(NOT DEFINED VST3_SDK_ROOT AND DEFINED ENV{VST3_SDK_ROOT} AND NOT "$ENV{VST3_SDK_ROOT}" STREQUAL "")
+    set(VST3_SDK_ROOT "$ENV{VST3_SDK_ROOT}" CACHE PATH "Path to the Steinberg VST3 SDK")
+  endif()
+
   # Check for local iPlug2 copy first (with VST3_SDK included)
   set(_local_iplug2 "${CMAKE_CURRENT_SOURCE_DIR}/_deps/iplug2-src")
   if(EXISTS "${_local_iplug2}/IPlug/VST3_SDK" AND NOT DEFINED iPlug2_SOURCE_DIR)
@@ -34,25 +38,50 @@ if(GUITARFX_FETCH_DEPENDENCIES)
     message(FATAL_ERROR "iPlug2 dependency not found at ${iPlug2_SOURCE_DIR}. Ensure git access is available or set iPlug2_SOURCE_DIR to a local iPlug2 checkout with VST3_SDK included.")
   endif()
 
-  # Ensure VST3 SDK is available for VST3 builds (clone into iPlug2 dependency tree if missing).
+  # Ensure VST3 SDK is available for VST3 builds.
   set(_vst3_sdk_dir "${iPlug2_SOURCE_DIR}/Dependencies/IPlug/VST3_SDK")
-  if(NOT EXISTS "${_vst3_sdk_dir}/base/source/baseiids.cpp")
+  set(_vst3_sdk_probe "base/source/baseiids.cpp")
+  set(_vst3_sdk_ready FALSE)
+
+  if(DEFINED VST3_SDK_ROOT AND EXISTS "${VST3_SDK_ROOT}/${_vst3_sdk_probe}")
+    set(_vst3_sdk_dir "${VST3_SDK_ROOT}")
+    set(_vst3_sdk_ready TRUE)
+  elseif(EXISTS "${_vst3_sdk_dir}/${_vst3_sdk_probe}")
+    set(_vst3_sdk_ready TRUE)
+  endif()
+
+  if(NOT _vst3_sdk_ready)
     find_program(GIT_EXECUTABLE git)
     if(GIT_EXECUTABLE)
-      if(EXISTS "${_vst3_sdk_dir}")
-        file(REMOVE_RECURSE "${_vst3_sdk_dir}")
+      if(EXISTS "${_vst3_sdk_dir}/.gitmodules")
+        message(STATUS "Initializing VST3 SDK submodules in ${_vst3_sdk_dir}")
+        execute_process(
+          COMMAND "${GIT_EXECUTABLE}" -C "${_vst3_sdk_dir}" submodule update --init --recursive
+          RESULT_VARIABLE _vst3_git_result
+        )
+      else()
+        if(EXISTS "${_vst3_sdk_dir}")
+          file(REMOVE_RECURSE "${_vst3_sdk_dir}")
+        endif()
+        message(STATUS "Fetching VST3 SDK into ${_vst3_sdk_dir}")
+        execute_process(
+          COMMAND "${GIT_EXECUTABLE}" clone --recursive https://github.com/steinbergmedia/vst3sdk.git "${_vst3_sdk_dir}"
+          RESULT_VARIABLE _vst3_git_result
+        )
       endif()
-      message(STATUS "Fetching VST3 SDK into ${_vst3_sdk_dir}")
-      execute_process(
-        COMMAND "${GIT_EXECUTABLE}" clone https://github.com/steinbergmedia/vst3sdk.git "${_vst3_sdk_dir}"
-        RESULT_VARIABLE _vst3_git_result
-      )
-      if(NOT _vst3_git_result EQUAL 0)
-        message(WARNING "Failed to clone VST3 SDK. Clone https://github.com/steinbergmedia/vst3sdk.git into ${_vst3_sdk_dir} manually.")
+
+      if(_vst3_git_result EQUAL 0 AND EXISTS "${_vst3_sdk_dir}/${_vst3_sdk_probe}")
+        set(_vst3_sdk_ready TRUE)
+      else()
+        message(WARNING "Failed to prepare VST3 SDK with submodules. Clone https://github.com/steinbergmedia/vst3sdk.git --recursive into ${_vst3_sdk_dir} manually or set VST3_SDK_ROOT.")
       endif()
     else()
-      message(WARNING "git not found; cannot auto-fetch VST3 SDK. Clone https://github.com/steinbergmedia/vst3sdk.git into ${_vst3_sdk_dir} manually.")
+      message(WARNING "git not found; cannot auto-fetch VST3 SDK. Clone https://github.com/steinbergmedia/vst3sdk.git --recursive into ${_vst3_sdk_dir} manually or set VST3_SDK_ROOT.")
     endif()
+  endif()
+
+  if(_vst3_sdk_ready)
+    set(VST3_SDK_ROOT "${_vst3_sdk_dir}" CACHE PATH "Path to the Steinberg VST3 SDK" FORCE)
   endif()
 
   # Patch iPlug2 WebView scaling to avoid DPI issues on Windows.
