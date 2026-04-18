@@ -13,7 +13,7 @@ import { updateDSPPerformancePlot } from "./views.js";
 import { handleIncomingMessage } from "./messages.js";
 import { requestSignalPathTest } from "./presets.js";
 import { initializeTuner } from "./tuner.js";
-import { initFxSelector } from "./fxSelector.js";
+import { initFxSelector, refreshFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
@@ -21,6 +21,7 @@ import { initDiagnosticsToggle, initThemeSelect, initUserInputCalibrationControl
 import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
 import { initializeBlendEditorModal } from "./signalPath.js";
+import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeIconBarTabs, initializeTabButtons, switchMainPanel } from "./navigation.js";
 import { initializeToneSharingPanel } from "./toneSharingPanel.js";
@@ -131,6 +132,7 @@ async function bootstrap(): Promise<void> {
   initializeJamPanel();
   initializeToneSharingPanel();
   initMultiRigTab();
+  initializeCustomEffectDesignerModal();
   if (eqModalCloseBtn) {
     eqModalCloseBtn.addEventListener("click", closeEqModal);
   }
@@ -147,6 +149,7 @@ async function bootstrap(): Promise<void> {
   initDiagnosticsToggle();
   initUserInputCalibrationControls();
   document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => {
+    refreshFxSelector();
     renderActivePreset();
   });
 

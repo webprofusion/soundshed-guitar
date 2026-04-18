@@ -262,6 +262,7 @@ export interface LibraryResource {
 export interface ResourceLibrary {
   nam?: LibraryResource[];
   ir?: LibraryResource[];
+  wasm?: LibraryResource[];
   [key: string]: LibraryResource[] | undefined;
 }
 
@@ -288,6 +289,34 @@ export interface BlendDefinition {
 }
 
 export type BlendLibrary = BlendDefinition[];
+
+export interface CustomEffectDescriptorSummary {
+  displayName?: string;
+  version?: string;
+  category?: string;
+  parameterCount?: number;
+  resourceCount?: number;
+}
+
+export interface CustomEffectLibraryEntry {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  baseEffectType: string;
+  moduleResourceType: string;
+  moduleResourceId: string;
+  latestRevisionId?: string;
+  thumbnailDataUrl?: string;
+  tags?: string[];
+  defaultParams?: Record<string, number>;
+  descriptorSummary?: CustomEffectDescriptorSummary;
+  origin?: "generated" | "imported" | "duplicated" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CustomEffectLibrary = CustomEffectLibraryEntry[];
 
 export interface MixerPresetState {
   id: string;
@@ -498,6 +527,7 @@ export interface UiState {
   logs: LogEntry[];
   resourceLibrary: ResourceLibrary;
   blendLibrary?: BlendLibrary;
+  customEffectLibrary?: CustomEffectLibrary;
   appSettings: AppSettings;
   tone3000Session?: Tone3000Session | null;
   jam?: JamState;

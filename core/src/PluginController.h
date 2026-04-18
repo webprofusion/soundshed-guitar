@@ -19,6 +19,7 @@
 #include "presets/PresetTypes.h"
 #include "presets/PresetStorage.h"
 #include "presets/PresetTypesJson.h"
+#include "resources/CustomEffectLibrary.h"
 #include "resources/ResourceLibrary.h"
 #include "util/FileSystem.h"
 
@@ -202,6 +203,11 @@ private:
     void HandleCancelPreviewResourceRequest(const nlohmann::json& payload);
     void HandleSaveBlendDefinitionRequest(const nlohmann::json& payload);
     void HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload);
+    void HandleSaveCustomEffectEntryRequest(const nlohmann::json& payload);
+    void HandleSaveCurrentCustomEffectRequest(const nlohmann::json& payload);
+    void HandleImportGeneratedCustomEffectRequest(const nlohmann::json& payload);
+    void HandleExportGeneratedCustomEffectBundleRequest(const nlohmann::json& payload);
+    void HandleDeleteCustomEffectEntryRequest(const nlohmann::json& payload);
     void HandleRequestResourceDataRequest(const nlohmann::json& payload);
     void HandleSaveBlendArchiveRequest(const nlohmann::json& payload);
     void HandleSavePresetArchiveRequest(const nlohmann::json& payload);
@@ -282,6 +288,7 @@ private:
     void ReportErrorToUI(const std::string& message, const std::string& detail = {});
     void SendGlobalChainStateToUI();
     void SendCompositeLibraryToUI();
+    void SendCustomEffectLibraryToUI();
     void SendEffectCatalogToUI();
     void SendPresetListToUI();
     void SendCompositePresetListToUI();
@@ -328,6 +335,8 @@ private:
     void LoadFactoryPresetArchives();
     void LoadBlendLibrary();
     void SaveBlendLibrary() const;
+    void LoadCustomEffectLibrary();
+    void SaveCustomEffectLibrary() const;
     void LoadCompositeLibrary();
     void LoadLayoutLibrary();
     void SaveLayoutToFile(const std::string& effectType, const nlohmann::json& layoutJson);
@@ -360,6 +369,7 @@ private:
     // Resources and libraries
     ResourceLibrary mResourceLibrary;
     nlohmann::json mBlendLibrary = nlohmann::json::array();
+    CustomEffectLibrary mCustomEffectLibrary;
     std::unordered_set<std::string> mFactoryArchiveBlendIds;
     std::unordered_set<std::string> mFactoryArchivePresetIds;
     std::unordered_set<std::string> mTrackedFactoryArchivePresetIds;

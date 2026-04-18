@@ -61,6 +61,7 @@ Supported effect-level keys:
 
 - `effect.name`
 - `effect.title`
+- `effect.version`
 - `effect.category`
 - `effect.description`
 - `effect.thumbnailBase64`
@@ -96,6 +97,7 @@ Supported resource keys:
 Notes:
 
 - Prefer `effect.thumbnailBase64` plus `effect.thumbnailMimeType` over `effect.thumbnailDataUrl` if generating from raw bytes.
+- `effect.version` is an opaque module author version string. The host does not interpret its format, so semantic versions like `1.4.2` are recommended.
 - Parameter slot numbers must stay in the `0..7` range.
 - Resource slot `0` is reserved for the module itself and must not be used for `resource.N.slot`.
 
@@ -111,6 +113,7 @@ Shared descriptor blob:
 
 ```text
 effect.name=AI Gain
+effect.version=1.0.0
 effect.category=utility
 effect.description=Simple stereo gain module generated for the AudioFX WASM host.
 param.0.id=gain
@@ -160,6 +163,7 @@ This is the most exact and reliable form because it directly describes the final
   ;; Replace DESCRIPTOR_BYTES with the exact UTF-8 descriptor string.
   (data (i32.const 0)
     "effect.name=AI Gain\n"
+    "effect.version=1.0.0\n"
     "effect.category=utility\n"
     "effect.description=Simple stereo gain module generated for the AudioFX WASM host.\n"
     "param.0.id=gain\n"
@@ -222,6 +226,7 @@ extern "C" {
 }
 
 static DESCRIPTOR: &[u8] = b"effect.name=AI Gain\n\
+effect.version=1.0.0\n\
 effect.category=utility\n\
 effect.description=Simple stereo gain module generated for the AudioFX WASM host.\n\
 param.0.id=gain\n\
@@ -282,6 +287,7 @@ func read_param(index int32) float32
 
 var descriptor = []byte("" +
     "effect.name=AI Gain\n" +
+  "effect.version=1.0.0\n" +
     "effect.category=utility\n" +
     "effect.description=Simple stereo gain module generated for the AudioFX WASM host.\n" +
     "param.0.id=gain\n" +
@@ -344,6 +350,7 @@ extern float read_param(int32_t index);
 
 static const unsigned char descriptor[] =
   "effect.name=AI Gain\n"
+  "effect.version=1.0.0\n"
   "effect.category=utility\n"
   "effect.description=Simple stereo gain module generated for the AudioFX WASM host.\n"
   "param.0.id=gain\n"

@@ -101,7 +101,7 @@ Descriptor blob format:
 - one `key=value` entry per line
 - extensible by convention; unknown keys are ignored by the current host
 - current keys include:
-	- `effect.name`, `effect.title`, `effect.category`, `effect.description`, `effect.thumbnailBase64`, `effect.thumbnailMimeType`
+	- `effect.name`, `effect.title`, `effect.version`, `effect.category`, `effect.description`, `effect.thumbnailBase64`, `effect.thumbnailMimeType`
 	- `param.N.id`, `param.N.title`, `param.N.slot`, `param.N.default`, `param.N.min`, `param.N.max`, `param.N.unit`, `param.N.group`, `param.N.advanced`, `param.N.step`, `param.N.labels`
 	- `resource.N.id`, `resource.N.title`, `resource.N.slot`, `resource.N.type`, `resource.N.allowBrowseFile`, `resource.N.parameterId`, `resource.N.parameterValue`
 

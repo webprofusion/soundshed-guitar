@@ -1087,6 +1087,54 @@
       </div>
     </footer>
 
+    <div id="custom-effect-designer-modal" class="modal custom-effect-designer-modal" style="display: none;">
+      <div class="modal-content custom-effect-designer-content">
+        <div class="modal-header">
+          <div class="custom-effect-designer-header-copy">
+            <h3>Custom Effect Designer</h3>
+            <p id="custom-effect-designer-subtitle" class="custom-effect-designer-subtitle">Describe the Custom Effect you want to build.</p>
+          </div>
+          <button id="custom-effect-designer-close" class="modal-close" type="button">&times;</button>
+        </div>
+        <div class="modal-body custom-effect-designer-body">
+          <div class="custom-effect-designer-layout">
+            <section class="custom-effect-designer-chat" aria-label="Design conversation">
+              <div id="custom-effect-designer-thread" class="custom-effect-designer-thread"></div>
+              <div class="custom-effect-designer-composer">
+                <label for="custom-effect-designer-input">Describe the sound or behavior</label>
+                <textarea id="custom-effect-designer-input" placeholder="Example: Make this wider and slowly wander left/right for ambient clean parts."></textarea>
+                <div class="custom-effect-designer-composer-actions">
+                  <div id="custom-effect-designer-status" class="custom-effect-designer-status" aria-live="polite"></div>
+                  <div class="custom-effect-designer-composer-buttons">
+                    <button id="custom-effect-designer-send" class="custom-effect-designer-btn" type="button">Refine Design</button>
+                    <button id="custom-effect-designer-generate" class="custom-effect-designer-btn custom-effect-designer-btn-primary" type="button">Generate Module</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <aside class="custom-effect-designer-sidebar">
+              <div class="custom-effect-designer-card">
+                <h4>Current Design</h4>
+                <div id="custom-effect-designer-plan" class="custom-effect-designer-plan"></div>
+              </div>
+              <div class="custom-effect-designer-card">
+                <h4>Latest Revision</h4>
+                <div id="custom-effect-designer-revision" class="custom-effect-designer-revision"></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="modal-footer custom-effect-designer-footer">
+          <span id="custom-effect-designer-footer-note" class="custom-effect-designer-footer-note">Generated modules are saved locally only when you choose Save or Use.</span>
+          <div class="custom-effect-designer-footer-actions">
+            <button id="custom-effect-designer-download" class="secondary" type="button" disabled>Download Bundle</button>
+            <button id="custom-effect-designer-save" class="secondary" type="button" disabled>Save To My Custom Effects</button>
+            <button id="custom-effect-designer-apply" type="button" disabled>Use This Effect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="riff-save-modal" class="modal riff-save-modal" style="display: none;">
       <div class="modal-content riff-save-modal-content">
         <div class="modal-header">

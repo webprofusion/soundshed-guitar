@@ -207,6 +207,12 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
       continue;
     }
 
+    if (entry.key == "effect.version")
+    {
+      descriptor.version = entry.value;
+      continue;
+    }
+
     if (entry.key == "effect.category")
     {
       descriptor.category = entry.value.empty() ? "utility" : entry.value;
@@ -1457,7 +1463,7 @@ void RegisterWasmEffect()
 
   EffectTypeInfo info;
   info.type = EffectGuids::kWasmHost;
-  info.displayName = "WASM Host";
+  info.displayName = "Custom Effect";
     info.description = "Runs a stereo WASM effect that can self-describe guest parameters and optional resource slots.";
   info.category = "utility";
   info.requiresResource = true;

@@ -29,6 +29,7 @@ struct WasmGuestParameterDescriptor {
 struct WasmModuleDescriptor {
   std::vector<WasmMetadataEntry> entries;
   std::string displayName;
+  std::string version;
   std::string description;
   std::string category = "utility";
   std::string thumbnailDataUrl;

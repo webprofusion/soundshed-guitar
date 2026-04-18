@@ -7,11 +7,14 @@
 
 import { EffectTypeRegistry, type EffectTypeInfo } from "./presetV2.js";
 import { EffectGuids } from "./effectGuids.js";
+import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { uiState, setPresetDirty } from "./state.js";
 import { postMessage } from "./bridge.js";
 import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon } from "./iconAssets.js";
 import { getCompositeEffectEntries } from "./compositeEffects.js";
+import { getCustomEffectLibrary } from "./customEffects.js";
 import { getCustomLayout } from "./layoutRenderer.js";
+import type { ResourceRef } from "./types.js";
 
 // DOM Elements
 const fxSelectorPanel = document.getElementById("fx-selector-panel");
@@ -102,14 +105,31 @@ export type FxLibraryItem = EffectTypeInfo & {
   blendId?: string;
   blendCategory?: string;
   compositeId?: string;
+  customEffectId?: string;
+  moduleResourceType?: string;
+  moduleResourceId?: string;
+  defaultParams?: Record<string, number>;
   description?: string;
 };
+
+export interface SignalPathNodeOptions {
+  config?: Record<string, string>;
+  label?: string;
+  category?: string;
+  params?: Record<string, number>;
+  resources?: ResourceRef[];
+}
+
+function encodeDatasetJson(value: unknown): string {
+  return encodeURIComponent(JSON.stringify(value ?? {}));
+}
 
 export function getCatalogEffects(options?: { excludeTypes?: string[] }): EffectTypeInfo[] {
   const excludedTypes = new Set([EffectGuids.kMixer, ...(options?.excludeTypes ?? [])]);
   return EffectTypeRegistry.getAll().filter((effect) => {
     if (effect.catalogHidden) return false;
     if (effect.type === EffectGuids.kAmpNam || effect.type === EffectGuids.kAmpNamBlend) return false;
+    if (effect.type === EffectGuids.kWasmHost && !isFeatureEnabled(Features.CustomEffects)) return false;
     return !excludedTypes.has(effect.type);
   });
 }
@@ -127,6 +147,7 @@ export function getFxLibraryItems(options?: { excludeTypes?: string[] }): FxLibr
   return [
     ...getCatalogEffects(options),
     ...getBlendFxItems(),
+    ...getCustomEffectFxItems(),
     ...getCompositeFxItems(),
   ].filter((item) => !(options?.excludeTypes ?? []).includes(item.type));
 }
@@ -192,10 +213,12 @@ function renderCategories(): void {
 
   const allEffects = getCatalogEffects();
   const blendItems = getBlendFxItems();
+  const customEffectItems = getCustomEffectFxItems();
   const compositeItems = getCompositeFxItems();
   const orderedCategories = getOrderedFxCategories([
     ...allEffects,
     ...blendItems,
+    ...customEffectItems,
     ...compositeItems,
   ]);
 
@@ -203,8 +226,9 @@ function renderCategories(): void {
     const meta = CATEGORY_METADATA[categoryId] ?? { name: categoryId, color: "#606060" };
     const effects = allEffects.filter((e) => e.category === categoryId);
     const blends = blendItems.filter((b) => b.category === categoryId);
+    const customEffects = customEffectItems.filter((c) => c.category === categoryId);
     const composites = compositeItems.filter((c) => c.category === categoryId);
-    const totalCount = effects.length + blends.length + composites.length;
+    const totalCount = effects.length + blends.length + customEffects.length + composites.length;
     const activeClass = activeCategory === categoryId ? "active" : "";
 
     return `
@@ -239,35 +263,31 @@ export function renderEffectsList(): void {
   if (!fxSelectorEffectsList) return;
 
   const allEffects = getCatalogEffects();
+  const allCustomEffects = getCustomEffectFxItems();
   const activeColorCategory = CATEGORY_METADATA[activeCategory];
   const categoryColor = activeColorCategory?.color || "#808080";
+  const matchesSearch = (item: FxLibraryItem): boolean => [
+    item.displayName,
+    item.type,
+    item.category,
+    item.description ?? "",
+  ].join(" ").toLowerCase().includes(searchFilter);
   
   // Get effects for active category
   let effects = allEffects.filter((e) => e.category === activeCategory);
   let blends = getBlendFxItems().filter((b) => b.category === activeCategory);
+  let customEffects = allCustomEffects.filter((c) => c.category === activeCategory);
   let composites = getCompositeFxItems().filter((c) => c.category === activeCategory);
   
   // Apply search filter across all categories if searching
   if (searchFilter) {
-    effects = allEffects.filter((e) => 
-      e.displayName.toLowerCase().includes(searchFilter) ||
-      e.type.toLowerCase().includes(searchFilter) ||
-      e.category.toLowerCase().includes(searchFilter)
-    );
-    blends = getBlendFxItems().filter((b) =>
-      b.displayName.toLowerCase().includes(searchFilter) ||
-      b.type.toLowerCase().includes(searchFilter) ||
-      b.category.toLowerCase().includes(searchFilter)
-    );
-    composites = getCompositeFxItems().filter((c) =>
-      c.displayName.toLowerCase().includes(searchFilter) ||
-      c.type.toLowerCase().includes(searchFilter) ||
-      c.category.toLowerCase().includes(searchFilter) ||
-      c.description.toLowerCase().includes(searchFilter)
-    );
+    effects = allEffects.filter((e) => matchesSearch(e));
+    blends = getBlendFxItems().filter((b) => matchesSearch(b));
+    customEffects = allCustomEffects.filter((c) => matchesSearch(c));
+    composites = getCompositeFxItems().filter((c) => matchesSearch(c));
   }
 
-  if (effects.length === 0 && blends.length === 0 && composites.length === 0) {
+  if (effects.length === 0 && blends.length === 0 && customEffects.length === 0 && composites.length === 0) {
     fxSelectorEffectsList.innerHTML = `
       <div style="padding: 20px; text-align: center; color: #6a6a80; font-size: 12px;">
         ${searchFilter ? "No effects match your search" : "No effects in this category"}
@@ -287,17 +307,24 @@ export function renderEffectsList(): void {
     const color = searchFilter
       ? CATEGORY_METADATA[blend.category]?.color || "#808080"
       : categoryColor;
-    return renderFxItem(blend, color, blend.blendId, blend.blendCategory);
+    return renderFxItem(blend, color);
+  }).join("");
+
+  const customEffectsHtml = customEffects.map((customEffect) => {
+    const color = searchFilter
+      ? CATEGORY_METADATA[customEffect.category]?.color || "#808080"
+      : categoryColor;
+    return renderFxItem(customEffect, color);
   }).join("");
 
   const compositesHtml = composites.map((comp) => {
     const color = searchFilter
       ? CATEGORY_METADATA[comp.category]?.color || "#808080"
       : categoryColor;
-    return renderFxItem(comp, color, undefined, undefined, comp.compositeId);
+    return renderFxItem(comp, color);
   }).join("");
 
-  fxSelectorEffectsList.innerHTML = effectsHtml + blendsHtml + compositesHtml;
+  fxSelectorEffectsList.innerHTML = effectsHtml + blendsHtml + customEffectsHtml + compositesHtml;
 
   // Bind drag handlers to FX items
   bindFxItemDragHandlers();
@@ -306,32 +333,39 @@ export function renderEffectsList(): void {
 /**
  * Render a single FX item card.
  */
-function renderFxItem(effect: EffectTypeInfo, categoryColor: string, blendId?: string, blendCategory?: string, compositeId?: string): string {
-  const resourceBadge = effect.requiresResource 
+function renderFxItem(effect: FxLibraryItem, categoryColor: string): string {
+  const resourceBadge = effect.requiresResource && !effect.customEffectId
     ? `<span class="fx-item-badge">${getBadgeIcon("resource", `Requires ${effect.resourceType}`)}</span>` 
     : "";
-  const blendBadge = blendId
+  const blendBadge = effect.blendId
     ? `<span class="fx-item-badge">${getBadgeIcon("blend", "Custom blend")}</span>`
     : "";
-  const compositeBadge = compositeId
+  const compositeBadge = effect.compositeId
     ? `<span class="fx-item-badge" title="Composite channel strip">&#x1f4e6;</span>`
+    : "";
+  const customEffectBadge = effect.customEffectId
+    ? `<span class="fx-item-badge" title="Saved custom effect">Custom</span>`
     : "";
 
   return `
         <div class="fx-item" 
           data-effect-type="${effect.type}" 
-          data-blend-id="${blendId ?? ""}"
-          data-blend-category="${blendCategory ?? ""}"
-          data-composite-id="${compositeId ?? ""}"
+          data-blend-id="${effect.blendId ?? ""}"
+          data-blend-category="${effect.blendCategory ?? ""}"
+          data-composite-id="${effect.compositeId ?? ""}"
+          data-custom-effect-id="${effect.customEffectId ?? ""}"
+          data-custom-effect-resource-type="${effect.moduleResourceType ?? ""}"
+          data-custom-effect-resource-id="${effect.moduleResourceId ?? ""}"
+          data-custom-effect-default-params="${effect.customEffectId ? encodeDatasetJson(effect.defaultParams ?? {}) : ""}"
           data-effect-category="${effect.category}"
          draggable="true"
          style="--category-color: ${categoryColor}">
-      <div class="fx-item-icon">${(() => { const thumb = blendId ? (getCustomLayout(effect.type, blendId) ?? getCustomLayout(effect.type)) : getCustomLayout(effect.type); const url = thumb?.thumbnailDataUrl ?? effect.thumbnailDataUrl; return url ? `<img src="${url.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="fx-item-thumb" />` : getFxEffectIcon(effect.type); })()}</div>
+      <div class="fx-item-icon">${(() => { const thumb = effect.blendId ? (getCustomLayout(effect.type, effect.blendId) ?? getCustomLayout(effect.type)) : getCustomLayout(effect.type); const url = thumb?.thumbnailDataUrl ?? effect.thumbnailDataUrl; return url ? `<img src="${url.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="fx-item-thumb" />` : getFxEffectIcon(effect.type); })()}</div>
       <div class="fx-item-info">
         <div class="fx-item-name">${effect.displayName}</div>
         <div class="fx-item-type">${effect.category}</div>
       </div>
-      ${resourceBadge}${blendBadge}${compositeBadge}
+      ${resourceBadge}${blendBadge}${customEffectBadge}${compositeBadge}
     </div>
   `;
 }
@@ -350,12 +384,30 @@ function bindFxItemDragHandlers(): void {
       const effectType = el.dataset.effectType;
       const blendId = el.dataset.blendId;
       const compositeId = el.dataset.compositeId;
+      const customEffectId = el.dataset.customEffectId;
       if (effectType && e.dataTransfer) {
         e.dataTransfer.setData("application/x-fx-effect", effectType);
         if (blendId) {
           e.dataTransfer.setData("application/x-fx-blend", blendId);
           e.dataTransfer.setData("application/x-fx-blend-name", el.querySelector(".fx-item-name")?.textContent ?? "");
           e.dataTransfer.setData("application/x-fx-blend-category", el.dataset.blendCategory ?? "");
+        }
+        if (customEffectId) {
+          let defaultParams: Record<string, number> = {};
+          try {
+            defaultParams = JSON.parse(decodeURIComponent(el.dataset.customEffectDefaultParams ?? "%7B%7D")) as Record<string, number>;
+          } catch {
+            defaultParams = {};
+          }
+          e.dataTransfer.setData("application/x-fx-custom-effect", JSON.stringify({
+            customEffectId,
+            baseEffectType: effectType,
+            name: el.querySelector(".fx-item-name")?.textContent ?? "",
+            category: el.dataset.effectCategory ?? "utility",
+            moduleResourceType: el.dataset.customEffectResourceType ?? "",
+            moduleResourceId: el.dataset.customEffectResourceId ?? "",
+            defaultParams,
+          }));
         }
         if (compositeId) {
           e.dataTransfer.setData("application/x-fx-composite", compositeId);
@@ -403,6 +455,33 @@ function getBlendFxItems(): BlendFxItem[] {
   });
 }
 
+type CustomEffectFxItem = EffectTypeInfo & {
+  customEffectId: string;
+  moduleResourceType: string;
+  moduleResourceId: string;
+  defaultParams?: Record<string, number>;
+};
+
+function getCustomEffectFxItems(): CustomEffectFxItem[] {
+  if (!isFeatureEnabled(Features.CustomEffects)) {
+    return [];
+  }
+  const wasmInfo = EffectTypeRegistry.get(EffectGuids.kWasmHost);
+  return getCustomEffectLibrary().map((entry) => ({
+    type: EffectGuids.kWasmHost,
+    displayName: entry.name || "Custom Effect",
+    category: entry.category || "utility",
+    description: entry.description ?? "",
+    thumbnailDataUrl: entry.thumbnailDataUrl,
+    requiresResource: false,
+    parameters: wasmInfo?.parameters ?? [],
+    customEffectId: entry.id,
+    moduleResourceType: entry.moduleResourceType,
+    moduleResourceId: entry.moduleResourceId,
+    defaultParams: entry.defaultParams,
+  }));
+}
+
 type CompositeFxItem = EffectTypeInfo & { compositeId: string; description: string };
 
 function getCompositeFxItems(): CompositeFxItem[] {
@@ -428,7 +507,7 @@ export function refreshFxSelector(): void {
 export function sendAddSignalPathNode(
   effectType: string,
   insertAfter: string,
-  options?: { config?: Record<string, string>; label?: string; category?: string },
+  options?: SignalPathNodeOptions,
 ): void {
   postMessage({
     type: "addSignalPathNode",
@@ -437,6 +516,8 @@ export function sendAddSignalPathNode(
     config: options?.config,
     label: options?.label,
     category: options?.category,
+    params: options?.params,
+    resources: options?.resources,
   });
   setPresetDirty(true);
 }
@@ -457,7 +538,7 @@ export interface SignalPathEdgeRef {
 export function sendAddSignalPathNodeOnEdge(
   effectType: string,
   edge: SignalPathEdgeRef,
-  options?: { config?: Record<string, string>; label?: string; category?: string },
+  options?: SignalPathNodeOptions,
 ): void {
   postMessage({
     type: "addSignalPathNode",
@@ -466,6 +547,8 @@ export function sendAddSignalPathNodeOnEdge(
     config: options?.config,
     label: options?.label,
     category: options?.category,
+    params: options?.params,
+    resources: options?.resources,
   });
   setPresetDirty(true);
 }

@@ -189,6 +189,7 @@ export const uiState: UiState = {
   logs: [],
   resourceLibrary: {},
   blendLibrary: [],
+  customEffectLibrary: [],
   appSettings: {
     "diagnostics.signalLevelsEnabled": true,
     "audio.userInputCalibration.profiles": [],

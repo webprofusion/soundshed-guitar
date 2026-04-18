@@ -26,6 +26,7 @@ This proposal is designed to fit the current stack in this repo:
 - Generated modules should target the current AudioFX WASM ABI documented in [docs/wasm-module-authoring.md](../wasm-module-authoring.md).
 - Users will usually be non-technical and should describe sound, feel, references, and control simplicity rather than implementation language or runtime details.
 - The public product should not expose source language, model selection, provider choice, or other implementation-tech decisions.
+- The API contract must represent open-ended DSP intent, not a fixed archetype enum. Any template selection is an internal execution detail and must not define the design-session model.
 - Module generation is slow and multi-step enough that it should not run inside a normal synchronous Worker request.
 - The desktop app, not the API, should remain responsible for writing files into the user’s local library.
 - The existing `wasm_host` processor should remain the single underlying runtime implementation. User-facing `Custom Effect` entries should be library-backed variants of that same host, not new DSP processor types.
@@ -36,6 +37,7 @@ This proposal is designed to fit the current stack in this repo:
 
 - Sound-first UX: users ask for tone, movement, space, feel, and control simplicity.
 - Tech-hidden UX: the system chooses WAT, source language, model, and build path internally.
+- No fixed-archetype contract: the user and API talk about arbitrary DSP behavior, not a closed list of effect templates.
 - One runtime, many modules: every generated effect still runs through the standard `wasm_host` runtime.
 - Current-node-first workflow: the primary path starts from an existing `Custom Effect` node and ends by replacing its selected module.
 - Explicit generation: chat and design iteration do not automatically create unbounded background jobs.
@@ -43,6 +45,8 @@ This proposal is designed to fit the current stack in this repo:
 ## Recommendation
 
 Use the existing Cloudflare Worker as the control plane, then add an asynchronous generation pipeline behind it.
+
+The important boundary is this: the public API should capture an open-ended DSP brief and a normalized executable spec. It should not require the caller to choose, receive, or even know about a closed set of generation archetypes. A template runner can exist as a temporary backend, but only as one internal execution path among others.
 
 Recommended split:
 
@@ -75,6 +79,13 @@ What is missing is not a general backend foundation. The missing pieces are:
 - revisioned module artifacts
 - validation and packaging
 - a clean path from generated draft to saved library item
+
+What must not be missing is an abstraction boundary between:
+
+- the user-facing design/session model
+- the internal code-generation backend currently chosen to satisfy that design
+
+That boundary is what allows the system to grow from a narrow prototype backend into arbitrary DSP generation without breaking the API contract.
 
 ## High-Level Architecture
 
@@ -111,67 +122,69 @@ Cloudflare Worker API (Hono)
           - smoke execution in sandbox
 ```
 
-  ## User Experience Model
+## User Experience Model
 
-  ### User-Facing Name
+### User-Facing Name
 
-  The product should present this feature as `Custom Effect`, not `WASM Host`.
+The product should present this feature as `Custom Effect`, not `WASM Host`.
 
-  Recommended UX split:
+Recommended UX split:
 
-  - `Custom Effect`: the single user-facing effect type that wraps the standard `wasm_host` processor
-  - `My Custom Effects`: saved generated modules that appear as chooser entries and instantiate that same runtime with a specific module preselected
+- `Custom Effect`: the single user-facing effect type that wraps the standard `wasm_host` processor
+- `My Custom Effects`: saved generated modules that appear as chooser entries and instantiate that same runtime with a specific module preselected
 
-  ### Entry Points
+### Entry Points
 
-  There should be two main entry points:
+There should be two main entry points:
 
-  1. Add `Custom Effect` from the effect chooser.
-  2. Open an existing `Custom Effect` node and choose an action like `Design with AI` or `Replace Module`.
+1. Add `Custom Effect` from the effect chooser.
+2. Open an existing `Custom Effect` node and choose an action like `Design with AI` or `Replace Module`.
 
-  The first entry point creates an empty or starter `Custom Effect` node.
+The first entry point creates an empty or starter `Custom Effect` node.
 
-  The second entry point passes the current node context into the design session so the system can revise the currently selected module instead of starting from scratch.
+The second entry point passes the current node context into the design session so the system can revise the currently selected module instead of starting from scratch.
 
-  ### What The User Describes
+### What The User Describes
 
-  The user should describe things like:
+The user should describe things like:
 
-  - sonic goal
-  - references or inspiration
-  - amount of movement or intensity
-  - simple versus advanced controls
-  - whether they want subtle utility behavior or a more characterful effect
+- sonic goal
+- references or inspiration
+- amount of movement or intensity
+- simple versus advanced controls
+- whether they want subtle utility behavior or a more characterful effect
 
-  The user should not be asked to choose:
+The user should not be asked to choose:
 
-  - WAT versus Rust versus C
-  - model provider
-  - prompt template variant
-  - compile strategy
-  - validation mode
+- WAT versus Rust versus C
+- model provider
+- prompt template variant
+- compile strategy
+- validation mode
 
 ## Core Product Flow
 
-  ### 0. Entry From The Current Custom Effect UI
+### 0. Entry From The Current Custom Effect UI
 
-  The primary workflow should begin from the current `Custom Effect` node UI, not from a separate developer-oriented tool.
+The primary workflow should begin from the current `Custom Effect` node UI, not from a separate developer-oriented tool.
 
-  Typical flow:
+Typical flow:
 
-  1. user inserts `Custom Effect` from the chooser or selects an existing one
-  2. user opens `Design with AI`
-  3. the UI sends the current node context to the API
-  4. the API creates or resumes a design session
+1. user inserts `Custom Effect` from the chooser or selects an existing one
+2. user opens `Design with AI`
+3. the UI sends the current node context to the API
+4. the API creates or resumes a design session
 
-  Relevant node context can include:
+Relevant node context can include:
 
-  - active preset id
-  - node id
-  - currently selected module library id or asset id
-  - current descriptor metadata snapshot
-  - current parameter values
-  - any attached reference assets
+- active preset id
+- node id
+- currently selected module library id or asset id
+- current descriptor metadata snapshot
+- current parameter values
+- any attached reference assets
+
+See also: [Custom Effect Local Library Model](2026-04-17-custom-effect-local-library-model.md) for the concrete local storage and chooser-entry shape that this workflow should hydrate.
 
 ### 1. Design Session
 
@@ -189,6 +202,15 @@ The API creates a `module_generation_session` and stores:
 - unresolved design questions
 - an internal implementation strategy chosen by the system
 - current lifecycle state
+
+The structured design brief should be able to express arbitrary stream-processing intent, such as:
+
+- signal-flow goals such as serial, parallel, feedback, multiband, mid-side, or hybrid behavior
+- spectral or time-domain behavior such as filters, delay, reverb, pitch, dynamics, modulation, nonlinear drive, amp, or cab behavior
+- control-surface intent such as macro controls, advanced controls, hidden expert controls, or resource slots
+- execution constraints such as low latency, low CPU, deterministic behavior, resource-free operation, or optional external assets
+
+This is intentionally broader than a fixed effect taxonomy. The system may still choose a simpler backend temporarily, but the session model should remain capable of describing any effect that can be expressed against the WASM ABI.
 
 The system should not generate binary output immediately if the design is underspecified. It should first respond with:
 
@@ -224,12 +246,21 @@ Once the design is sufficiently specified, the client calls `generate`.
 The Worker enqueues a background job. The runner then:
 
 1. builds the final generation prompt using the current spec plus [docs/wasm-module-authoring.md](../wasm-module-authoring.md)
-2. chooses the internal model/provider and implementation target using policy rules rather than user input
+2. chooses the internal model/provider and implementation path using policy rules rather than user input
 3. produces source code and descriptor text
 4. compiles if needed, or emits WAT directly if that is the reliable target
 5. validates the generated module
 6. packages the artifacts into a revision bundle
 7. writes metadata and assets back to D1/R2
+
+Possible implementation paths can include:
+
+- general source generation against the full WASM ABI
+- composition from a reusable DSP codegen library
+- retrieval and adaptation of known-good source skeletons
+- temporary template fallback for narrow prototype coverage
+
+The key requirement is that these are runner internals. They must not leak upward and redefine the design-session schema as a closed archetype picker.
 
 Generation should only happen when the user explicitly asks for it. Normal chat turns should not automatically enqueue jobs.
 

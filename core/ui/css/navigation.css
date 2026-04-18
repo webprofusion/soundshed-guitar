@@ -79,22 +79,23 @@
   max-width: 100%;
 }
 
-.control-bar > .control-bar-group:first-of-type {
+.control-bar>.control-bar-group:first-of-type {
   grid-column: 1;
   justify-self: start;
 }
 
-.control-bar > .control-bar-group:last-of-type {
+.control-bar>.control-bar-group:last-of-type {
   grid-column: 3;
   justify-self: end;
 }
 
 /* Preset Group */
 .preset-group {
-  background: var(--overlay-light);
+  margin-left: auto;
+  margin-right: auto;
   padding: 6px 8px;
   border-radius: 10px;
-  border: 1px solid var(--overlay-medium);
+
   align-items: stretch;
   flex-direction: column;
   flex-wrap: nowrap;
@@ -103,10 +104,10 @@
   grid-row: 1;
   flex: 0 1 auto;
   width: 100%;
-  max-width: 100%;
+  max-width: 800px;
   min-width: 0;
   overflow: visible;
-    z-index: 30;
+  z-index: 30;
   align-self: start;
   justify-self: stretch;
 }
@@ -116,14 +117,14 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .control-bar > .control-bar-group:first-of-type,
-  .control-bar > .control-bar-group:last-of-type,
+  .control-bar>.control-bar-group:first-of-type,
+  .control-bar>.control-bar-group:last-of-type,
   .preset-group {
     grid-column: 1;
     justify-self: stretch;
   }
 
-  .control-bar > .control-bar-group:first-of-type {
+  .control-bar>.control-bar-group:first-of-type {
     grid-row: 1;
   }
 
@@ -131,7 +132,7 @@
     grid-row: 2;
   }
 
-  .control-bar > .control-bar-group:last-of-type {
+  .control-bar>.control-bar-group:last-of-type {
     grid-row: 3;
   }
 
@@ -555,13 +556,11 @@
 
 .theme-classic .control-bar {
   background:
-    repeating-linear-gradient(
-      90deg,
+    repeating-linear-gradient(90deg,
       rgba(250, 234, 198, 0.08) 0px,
       rgba(250, 234, 198, 0.08) 2px,
       rgba(112, 76, 45, 0.06) 2px,
-      rgba(112, 76, 45, 0.06) 4px
-    ),
+      rgba(112, 76, 45, 0.06) 4px),
     linear-gradient(180deg, color-mix(in srgb, var(--bg-tertiary), #fff 10%) 0%, var(--bg-tertiary) 100%);
   border-bottom: 1px solid color-mix(in srgb, var(--border-dark), #000 16%);
   box-shadow:

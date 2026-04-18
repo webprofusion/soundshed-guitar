@@ -455,6 +455,8 @@ set(GUITARFX_CORE_SOURCES
     src/presets/CompositePresetStorage.cpp
 
     # Resources
+    src/resources/CustomEffectLibrary.h
+    src/resources/CustomEffectLibrary.cpp
     src/resources/ResourceLibrary.h
     src/resources/ResourceLibrary.cpp
 

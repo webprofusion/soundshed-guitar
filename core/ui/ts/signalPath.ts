@@ -9,6 +9,7 @@ import type {
   ResourceRef,
   BlendModelMapping,
   BlendMode,
+  CustomEffectLibraryEntry,
 } from "./types.js";
 import { postMessage, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset } from "./bridge.js";
 import { idAccentColor } from "./utils.js";
@@ -25,6 +26,7 @@ import {
   sendAddSignalPathNodeOnEdge,
   type FxLibraryItem,
   type SignalPathEdgeRef,
+  type SignalPathNodeOptions,
 } from "./fxSelector.js";
 import { GenericKnob, enhanceRangeInput } from "./controls.js";
 import {
@@ -53,6 +55,8 @@ import {
   openBlendEditorWithDefinition,
   bindBlendEditorControls,
 } from "./signalPathBlend.js";
+import { getCustomEffectEntry, saveCurrentCustomEffect } from "./customEffects.js";
+import { openCustomEffectDesigner } from "./customEffectDesigner.js";
 import { createPresetScene, findPresetScene, normalizePresetScenes, removePresetScene, selectPresetScene } from "./presetScenes.js";
 export { initializeBlendEditorModal, openBlendEditorWithDefinition } from "./signalPathBlend.js";
 
@@ -137,11 +141,97 @@ function buildDefaultParamsForEffect(effectType: string): Record<string, number>
   );
 }
 
+type CustomEffectDragPayload = {
+  customEffectId: string;
+  baseEffectType: string;
+  name: string;
+  category: string;
+  moduleResourceType: string;
+  moduleResourceId: string;
+  defaultParams?: Record<string, number>;
+};
+
+function normalizeCustomEffectDefaultParams(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const result: Record<string, number> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([key, rawValue]) => {
+    if (typeof rawValue === "number") {
+      result[key] = rawValue;
+    }
+  });
+  return result;
+}
+
+function parseCustomEffectDragPayload(payloadRaw: string): CustomEffectDragPayload | null {
+  if (!payloadRaw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payloadRaw) as Partial<CustomEffectDragPayload>;
+    if (
+      typeof parsed.customEffectId !== "string" ||
+      typeof parsed.baseEffectType !== "string" ||
+      typeof parsed.moduleResourceType !== "string" ||
+      typeof parsed.moduleResourceId !== "string" ||
+      !parsed.customEffectId ||
+      !parsed.baseEffectType ||
+      !parsed.moduleResourceType ||
+      !parsed.moduleResourceId
+    ) {
+      return null;
+    }
+
+    return {
+      customEffectId: parsed.customEffectId,
+      baseEffectType: parsed.baseEffectType,
+      name: typeof parsed.name === "string" ? parsed.name : "Custom Effect",
+      category: typeof parsed.category === "string" ? parsed.category : "utility",
+      moduleResourceType: parsed.moduleResourceType,
+      moduleResourceId: parsed.moduleResourceId,
+      defaultParams: normalizeCustomEffectDefaultParams(parsed.defaultParams),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseCustomEffectDefaultParamsDataset(value: string | undefined): Record<string, number> {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    return normalizeCustomEffectDefaultParams(JSON.parse(decodeURIComponent(value)));
+  } catch {
+    return {};
+  }
+}
+
+function buildCustomEffectNodeOptions(payload: CustomEffectDragPayload): SignalPathNodeOptions {
+  const params = payload.defaultParams ?? {};
+  return {
+    config: { customEffectId: payload.customEffectId },
+    label: payload.name || undefined,
+    category: payload.category || undefined,
+    params: Object.keys(params).length ? params : undefined,
+    resources: [
+      {
+        resourceType: payload.moduleResourceType,
+        resourceId: payload.moduleResourceId,
+      },
+    ],
+  };
+}
+
 function applyOptimisticNodeReplacement(
   targetNode: GraphNode,
   newEffectType: string,
   preset: Preset,
-  options?: { config?: Record<string, string>; label?: string; category?: string },
+  options?: SignalPathNodeOptions,
 ): void {
   const typeInfo = EffectTypeRegistry.get(newEffectType);
   if (!typeInfo) {
@@ -152,8 +242,16 @@ function applyOptimisticNodeReplacement(
   targetNode.displayName = options?.label || typeInfo.displayName || newEffectType;
   targetNode.category = options?.category || typeInfo.category || targetNode.category;
   targetNode.params = buildDefaultParamsForEffect(newEffectType);
+  if (options?.params) {
+    targetNode.params = { ...targetNode.params, ...options.params };
+  }
   targetNode.config = options?.config ? { ...options.config } : {};
-  targetNode.resources = typeInfo.requiresResource ? [] : undefined;
+  targetNode.resources = options?.resources?.length
+    ? options.resources.map((resource) => ({
+        ...resource,
+        parameters: resource.parameters ? { ...resource.parameters } : undefined,
+      }))
+    : (typeInfo.requiresResource ? [] : undefined);
   (targetNode as unknown as { enabled?: boolean }).enabled = true;
   targetNode.bypassed = false;
 
@@ -381,6 +479,14 @@ function getNodeDisplayName(node: GraphNode): string {
     }
   }
 
+  const customEffectId = (node as unknown as { config?: Record<string, string> }).config?.customEffectId;
+  if (customEffectId) {
+    const customEffect = uiState.customEffectLibrary?.find((entry) => entry.id === customEffectId);
+    if (customEffect?.name) {
+      return customEffect.name;
+    }
+  }
+
   const resourceTitle = typeInfo?.requiresResource ? getNodeResourceSummary(node) : "";
   if (resourceTitle) return resourceTitle;
 
@@ -390,6 +496,103 @@ function getNodeDisplayName(node: GraphNode): string {
 
   if (explicit) return explicit;
   return typeInfo?.displayName || nodeType || "(Unknown)";
+}
+
+function getLinkedCustomEffectEntry(node: GraphNode): CustomEffectLibraryEntry | undefined {
+  const customEffectId = (node as unknown as { config?: Record<string, string> }).config?.customEffectId ?? "";
+  return customEffectId ? getCustomEffectEntry(customEffectId) : undefined;
+}
+
+function hasCustomEffectModuleSelection(node: GraphNode): boolean {
+  const resource = getNodeResourceAtIndex(node, 0);
+  return Boolean(resource.id || resource.filePath);
+}
+
+function buildCustomEffectActionStatus(node: GraphNode): string {
+  const linkedEntry = getLinkedCustomEffectEntry(node);
+  if (linkedEntry?.name) {
+    return `Linked to ${linkedEntry.name} in My Custom Effects. You can also prompt a new revision for this node.`;
+  }
+
+  if (hasCustomEffectModuleSelection(node)) {
+    return `Current module: ${getNodeResourceDisplayName(node, 0, "wasm") || "WASM module selected"}. Prompt a new module or save this one to My Custom Effects.`;
+  }
+
+  return "Describe a Custom Effect to generate a new module for this node, then save or apply it here.";
+}
+
+function buildCustomEffectActions(node: GraphNode): string {
+  if (EffectTypeRegistry.resolve(node.type) !== EffectGuids.kWasmHost) {
+    return "";
+  }
+
+  if (!isFeatureEnabled(Features.CustomEffects)) {
+    return "";
+  }
+
+  const hasModule = hasCustomEffectModuleSelection(node);
+  const linkedEntry = getLinkedCustomEffectEntry(node);
+  const saveLabel = linkedEntry ? "Update My Custom Effect" : "Save To My Custom Effects";
+
+  return `
+    <div class="node-resource-selector node-custom-effect-actions" data-node-id="${node.id}">
+      <label>Custom Effect Designer</label>
+      <div class="resource-controls">
+        <button type="button" class="primary-btn custom-effect-design-btn" data-node-id="${node.id}">Design With AI</button>
+        <button type="button" class="primary-btn custom-effect-save-btn" data-node-id="${node.id}" ${hasModule ? "" : "disabled"}>${saveLabel}</button>
+        <button type="button" class="secondary-btn custom-effect-use-btn" data-node-id="${node.id}" ${hasModule ? "" : "disabled"}>Use This Effect</button>
+      </div>
+      <div class="resource-path-info">${escapeHtml(buildCustomEffectActionStatus(node))}</div>
+    </div>
+  `;
+}
+
+function promptSaveCurrentCustomEffect(node: GraphNode, applyToNode: boolean): void {
+  if (!hasCustomEffectModuleSelection(node)) {
+    showNotification("Custom Effect save failed", "Select a WASM module first");
+    return;
+  }
+
+  const linkedEntry = getLinkedCustomEffectEntry(node);
+  const typeInfo = getNodeEffectInfo(node);
+
+  const suggestedName = linkedEntry?.name
+    || getNodeDisplayName(node)
+    || typeInfo?.displayName
+    || "Custom Effect";
+  const rawName = window.prompt("Custom Effect name", suggestedName);
+  if (rawName === null) {
+    return;
+  }
+
+  const name = rawName.trim();
+  if (!name) {
+    showNotification("Custom Effect save failed", "A name is required");
+    return;
+  }
+
+  const suggestedCategory = linkedEntry?.category
+    || getNodeCategory(node)
+    || typeInfo?.category
+    || "utility";
+  const rawCategory = window.prompt("Category", suggestedCategory);
+  if (rawCategory === null) {
+    return;
+  }
+
+  const descriptionDefault = linkedEntry?.description ?? typeInfo?.description ?? "";
+  const rawDescription = window.prompt("Description", descriptionDefault);
+  if (rawDescription === null) {
+    return;
+  }
+
+  saveCurrentCustomEffect(node.id, {
+    ...(linkedEntry?.id ? { id: linkedEntry.id } : {}),
+    name,
+    category: rawCategory.trim() || suggestedCategory,
+    description: rawDescription.trim(),
+    origin: linkedEntry?.origin ?? "imported",
+  }, applyToNode);
 }
 
 function getNodeCategory(node: GraphNode): string {
@@ -1088,7 +1291,7 @@ function sendAddEffectAtEdgeOrFallback(
   effectType: string,
   edge: EdgeRef | null,
   fallbackInsertAfter: string,
-  options?: { config?: Record<string, string>; label?: string; category?: string },
+  options?: SignalPathNodeOptions,
 ): void {
   if (edge) {
     sendAddSignalPathNodeOnEdge(effectType, edge, options);
@@ -1332,13 +1535,14 @@ function bindNodeClickHandlers(preset: Preset): void {
       // Check if dragging from FX library
       const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
       const fxBlendType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-blend");
+      const fxCustomEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-custom-effect");
       const fxResourceGroup = Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group");
       
-      if (nodeId && (nodeId !== draggedNodeId || fxEffectType || fxBlendType || fxResourceGroup)) {
+      if (nodeId && (nodeId !== draggedNodeId || fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup)) {
         dragOverNodeId = nodeId;
         el.classList.add("drag-over");
         if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxResourceGroup) ? "copy" : "move";
+          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) ? "copy" : "move";
         }
       }
     });
@@ -1362,6 +1566,7 @@ function bindNodeClickHandlers(preset: Preset): void {
       const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
       const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
       const fxBlendCategory = e.dataTransfer?.getData("application/x-fx-blend-category");
+      const customEffectPayloadRaw = e.dataTransfer?.getData("application/x-fx-custom-effect");
       const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
       
       if (resourceGroupPayload && targetNodeId && preset.graph) {
@@ -1372,6 +1577,15 @@ function bindNodeClickHandlers(preset: Preset): void {
         } else {
           nodeDragDropHandled = true;
           handleResourceGroupDrop(resourceGroupPayload, targetNodeId, false);
+        }
+      } else if (customEffectPayloadRaw && targetNodeId && preset.graph) {
+        const customEffectPayload = parseCustomEffectDragPayload(customEffectPayloadRaw);
+        const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
+        if (customEffectPayload && targetNode && !isProtectedSignalPathNode(targetNode)) {
+          const options = buildCustomEffectNodeOptions(customEffectPayload);
+          nodeDragDropHandled = true;
+          applyOptimisticNodeReplacement(targetNode, customEffectPayload.baseEffectType, preset, options);
+          sendReplaceSignalPathNode(targetNodeId, customEffectPayload.baseEffectType, options);
         }
       } else if ((fxEffectType || fxBlendId) && targetNodeId && preset.graph) {
         const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
@@ -1460,16 +1674,17 @@ function bindConnectorDropHandlers(preset: Preset): void {
       // Only accept drops from FX library
       const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
       const fxBlendType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-blend");
+      const fxCustomEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-custom-effect");
       const fxResourceGroup = Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group");
       const signalNodeId = e.dataTransfer?.getData("application/x-signal-node") || "";
       const isSignalNode = Boolean(signalNodeId);
       
-      if (fxEffectType || fxBlendType || fxResourceGroup || isSignalNode) {
+      if (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup || isSignalNode) {
         const connector = el.querySelector(".signal-connector") as HTMLElement | null;
         connector?.classList.add("drag-over");
         el.classList.add("drag-over");
         if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxResourceGroup) ? "copy" : "move";
+          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) ? "copy" : "move";
         }
       }
     });
@@ -1489,6 +1704,7 @@ function bindConnectorDropHandlers(preset: Preset): void {
       const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
       const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
       const fxBlendCategory = e.dataTransfer?.getData("application/x-fx-blend-category");
+      const customEffectPayloadRaw = e.dataTransfer?.getData("application/x-fx-custom-effect");
       const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
       const signalNodeId = e.dataTransfer?.getData("application/x-signal-node");
 
@@ -1496,6 +1712,17 @@ function bindConnectorDropHandlers(preset: Preset): void {
       if (resourceGroupPayload && preset.graph) {
         nodeDragDropHandled = true;
         handleResourceGroupDrop(resourceGroupPayload, null, false, edge);
+      } else if (customEffectPayloadRaw && preset.graph) {
+        const customEffectPayload = parseCustomEffectDragPayload(customEffectPayloadRaw);
+        if (customEffectPayload) {
+          nodeDragDropHandled = true;
+          sendAddEffectAtEdgeOrFallback(
+            customEffectPayload.baseEffectType,
+            edge,
+            "__input__",
+            buildCustomEffectNodeOptions(customEffectPayload),
+          );
+        }
       } else if ((fxEffectType || fxBlendId) && preset.graph) {
         nodeDragDropHandled = true;
         const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
@@ -1711,6 +1938,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   const hasAdvancedTab = advancedParamDefs.length > 0;
 
   const isEqNode = typeInfo?.category === "eq" || node.type.startsWith("eq_");
+  const customEffectActions = buildCustomEffectActions(node);
   const eqVisualizer = isEqNode ? `
     <div class="eq-visualizer" data-node-id="${node.id}">
       <div class="eq-visualizer-header">
@@ -2097,6 +2325,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   ` : "";
   const shellMainContent = customLayoutHtml ? `
     ${layoutIncludesResourceControls ? "" : resourceSelector}
+    ${customEffectActions}
     ${eqVisualizer}
     ${mixerInputControls}
     <div class="default-effect-section default-effect-section-controls default-effect-section-custom-layout">
@@ -2132,6 +2361,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       : defaultControlsHtml;
     return `
       ${layoutIncludesResourceControls ? "" : resourceSelector}
+      ${customEffectActions}
       ${eqVisualizer}
       ${mixerInputControls}
       <div class="default-effect-section default-effect-section-controls">
@@ -2182,6 +2412,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindNodeParamControls(node, preset);
   bindLayoutOverlayBypassToggles(node, preset);
   bindResourceControls(node, preset);
+  bindCustomEffectActionControls(node);
   bindBlendEditorControls(nodeParamsPanelElement, node);
   bindCloseButton();
   bindBypassButton(node, preset);
@@ -2780,6 +3011,23 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
   });
 }
 
+function bindCustomEffectActionControls(node: GraphNode): void {
+  const designButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".custom-effect-design-btn");
+  designButton?.addEventListener("click", () => {
+    void openCustomEffectDesigner(node);
+  });
+
+  const saveButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".custom-effect-save-btn");
+  saveButton?.addEventListener("click", () => {
+    promptSaveCurrentCustomEffect(node, false);
+  });
+
+  const useButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".custom-effect-use-btn");
+  useButton?.addEventListener("click", () => {
+    promptSaveCurrentCustomEffect(node, true);
+  });
+}
+
 function getNodeResourceIds(node: GraphNode): string[] {
   const anyNode = node as unknown as { resources?: unknown };
   if (!Array.isArray(anyNode.resources)) {
@@ -2955,7 +3203,7 @@ function sendSignalPathNodeDelete(nodeId: string): void {
 function sendReplaceSignalPathNode(
   nodeId: string,
   newEffectType: string,
-  options?: { config?: Record<string, string>; label?: string; category?: string },
+  options?: SignalPathNodeOptions,
 ): void {
   postMessage({
     type: "replaceSignalPathNode",
@@ -2964,6 +3212,8 @@ function sendReplaceSignalPathNode(
     config: options?.config,
     label: options?.label,
     category: options?.category,
+    params: options?.params,
+    resources: options?.resources,
   });
   setPresetDirty(true);
 }
@@ -3389,9 +3639,9 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
             ${categoryInfo?.name || categoryId}
           </div>
           ${effects.map((effect) => {
-            const thumb = effect.blendId
-              ? (getCustomLayout(effect.type, effect.blendId) ?? getCustomLayout(effect.type))?.thumbnailDataUrl
-              : getCustomLayout(effect.type)?.thumbnailDataUrl;
+              const thumb = effect.blendId
+                ? (getCustomLayout(effect.type, effect.blendId) ?? getCustomLayout(effect.type))?.thumbnailDataUrl
+                : (getCustomLayout(effect.type)?.thumbnailDataUrl ?? effect.thumbnailDataUrl);
             const icon = thumb
               ? `<img src="${thumb.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="effect-dropdown-thumb" />`
               : `<span class="effect-dropdown-icon">${effect.blendId ? getBadgeIcon("blend", "Custom blend") : getNodeIcon(effect.type)}</span>`;
@@ -3400,7 +3650,12 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
                 data-effect-type="${effect.type}"
                 data-blend-id="${escapeHtml(effect.blendId ?? "")}"
                 data-blend-name="${escapeHtml(effect.blendId ? effect.displayName : "")}"
-                data-blend-category="${escapeHtml(effect.blendCategory ?? "")}">
+                data-blend-category="${escapeHtml(effect.blendCategory ?? "") }"
+                data-effect-category="${escapeHtml(effect.category ?? "utility") }"
+                data-custom-effect-id="${escapeHtml(effect.customEffectId ?? "") }"
+                data-custom-effect-resource-type="${escapeHtml(effect.moduleResourceType ?? "") }"
+                data-custom-effect-resource-id="${escapeHtml(effect.moduleResourceId ?? "") }"
+                data-custom-effect-default-params="${escapeHtml(encodeURIComponent(JSON.stringify(effect.defaultParams ?? {})))}">
               ${icon}
               <span class="effect-dropdown-name">${escapeHtml(effect.displayName)}</span>
             </div>
@@ -3427,12 +3682,26 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
       const blendId = (item as HTMLElement).dataset.blendId;
       const blendName = (item as HTMLElement).dataset.blendName;
       const blendCategory = (item as HTMLElement).dataset.blendCategory;
+      const customEffectId = (item as HTMLElement).dataset.customEffectId;
       if (effectType) {
-        sendAddEffectAtEdgeOrFallback(effectType, edge, edge?.from ?? "__input__", {
-          config: blendId ? { blendId } : undefined,
-          label: blendName || undefined,
-          category: blendCategory || undefined,
-        });
+        if (customEffectId) {
+          const payload: CustomEffectDragPayload = {
+            customEffectId,
+            baseEffectType: effectType,
+            name: item.querySelector(".effect-dropdown-name")?.textContent ?? "Custom Effect",
+            category: (item as HTMLElement).dataset.effectCategory ?? "utility",
+            moduleResourceType: (item as HTMLElement).dataset.customEffectResourceType ?? "",
+            moduleResourceId: (item as HTMLElement).dataset.customEffectResourceId ?? "",
+            defaultParams: parseCustomEffectDefaultParamsDataset((item as HTMLElement).dataset.customEffectDefaultParams),
+          };
+          sendAddEffectAtEdgeOrFallback(effectType, edge, edge?.from ?? "__input__", buildCustomEffectNodeOptions(payload));
+        } else {
+          sendAddEffectAtEdgeOrFallback(effectType, edge, edge?.from ?? "__input__", {
+            config: blendId ? { blendId } : undefined,
+            label: blendName || undefined,
+            category: blendCategory || undefined,
+          });
+        }
         dropdown.remove();
       }
     });

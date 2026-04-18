@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "d1:migrate": "wrangler d1 execute soundshed_presets_dev --local --file ../docs/plans/cloudflare-presets-platform-mvp.sql",
     "d1:migrate-prod": "wrangler d1 execute soundshed-guitar-api-prod --remote --file ../docs/plans/cloudflare-presets-platform-mvp.sql",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "hono": "^4.7.2"
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260213.0",
     "typescript": "^5.8.2",
+    "vitest": "^4.1.4",
     "wrangler": "^4.1.0"
   }
 }

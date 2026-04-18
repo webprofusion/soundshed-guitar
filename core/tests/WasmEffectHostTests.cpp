@@ -327,6 +327,7 @@ ByteVector MakeGainModule()
 
   const ByteVector descriptorBlob = BuildDescriptorBlob({
       { "effect.name", "WASM Gain" },
+      { "effect.version", "1.2.3" },
       { "effect.category", "utility" },
       { "effect.description", "Simple gain module with self-described guest metadata." },
       { "effect.thumbnailBase64", "dGVzdA==" },
@@ -625,6 +626,7 @@ bool TestDescriptorInspection(const TempDir& tempDir)
   }
 
   if (descriptor->displayName != "WASM Gain"
+      || descriptor->version != "1.2.3"
       || descriptor->thumbnailDataUrl != "data:image/png;base64,dGVzdA=="
       || descriptor->parameters.size() != 1
       || descriptor->parameters.front().definition.id != "gain")

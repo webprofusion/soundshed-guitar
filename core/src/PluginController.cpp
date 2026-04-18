@@ -10,7 +10,6 @@
  *   When moving handler implementations here, the original code from
  *   GuitarFXPlugin.cpp should be used as the canonical source.
  */
-
 #include "PluginController.h"
 #include "MessageDispatcher.h"
 #include "controller/DemoPreviewService.h"
@@ -321,6 +320,11 @@ namespace
     std::filesystem::path ResolveFactoryArchiveStatePath(const guitarfx::FileSystem& fileSystem)
     {
         return fileSystem.ResolveSettingsDirectory() / "presets" / kFactoryArchiveStateFileName;
+    }
+
+    std::filesystem::path ResolveCustomEffectLibraryPath(const guitarfx::FileSystem& fileSystem)
+    {
+        return fileSystem.ResolveSettingsDirectory() / "custom-effects" / "indexes" / "custom-effects-index.json";
     }
 
     nlohmann::json LoadJsonFile(const std::filesystem::path& path, const nlohmann::json& fallback)
@@ -1111,6 +1115,7 @@ void PluginController::Initialize()
     ApplyUiSettingsFromAppSettings();
     LoadResourceLibraries();
     LoadBlendLibrary();
+    LoadCustomEffectLibrary();
     LoadFactoryPresetArchives();
     LoadCompositeLibrary();
     LoadLayoutLibrary();
@@ -3389,6 +3394,8 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     const std::string labelOverride = payload.value("label", "");
     const std::string categoryOverride = payload.value("category", "");
     const auto configPayload = payload.value("config", nlohmann::json::object());
+    const auto paramsPayload = payload.value("params", nlohmann::json::object());
+    const auto resourcesPayload = payload.value("resources", nlohmann::json::array());
 
     std::string edgeFrom, edgeTo;
     int edgeFromPort = 0, edgeToPort = 0;
@@ -3473,11 +3480,11 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
 
     // Create new node with default parameters
     GraphNode newNode;
-    newNode.id = effectType + "_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    newNode.type = effectType;
+    newNode.id = resolvedEffectType + "_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    newNode.type = resolvedEffectType;
     newNode.enabled = true;
 
-    const auto effectInfoOpt = EffectRegistry::Instance().GetTypeInfo(effectType);
+    const auto effectInfoOpt = EffectRegistry::Instance().GetTypeInfo(resolvedEffectType);
     if (effectInfoOpt)
     {
         newNode.category = effectInfoOpt->category;
@@ -3487,12 +3494,34 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     }
     else { newNode.category = "utility"; newNode.label = effectType; }
 
+    if (paramsPayload.is_object())
+    {
+        for (const auto& entry : paramsPayload.items())
+        {
+            if (entry.value().is_number())
+                newNode.params[entry.key()] = entry.value().get<double>();
+        }
+    }
+
     if (configPayload.is_object())
         for (const auto& entry : configPayload.items())
             if (entry.value().is_string()) newNode.config[entry.key()] = entry.value().get<std::string>();
 
+    if (resourcesPayload.is_array())
+    {
+        for (const auto& resourceJson : resourcesPayload)
+        {
+            if (!resourceJson.is_object())
+                continue;
+            const auto resource = DeserializeResourceRef(resourceJson);
+            if (resource.IsValid())
+                newNode.resources.push_back(resource);
+        }
+    }
+
     if (!labelOverride.empty()) newNode.label = labelOverride;
     if (!categoryOverride.empty()) newNode.category = categoryOverride;
+    RefreshWasmNodeDescriptor(newNode);
 
     const std::string nextNodeId = chosenEdgeIt->to;
     const int preservedToPort = chosenEdgeIt->toPort;
@@ -3606,6 +3635,8 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     const std::string labelOverride = payload.value("label", "");
     const std::string categoryOverride = payload.value("category", "");
     const auto configPayload = payload.value("config", nlohmann::json::object());
+    const auto paramsPayload = payload.value("params", nlohmann::json::object());
+    const auto resourcesPayload = payload.value("resources", nlohmann::json::array());
 
     if (nodeId.empty() || newEffectType.empty()) { ReportErrorToUI("Replace node failed", "Missing nodeId or newEffectType parameter"); return; }
 
@@ -3616,13 +3647,16 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     if (!node) { ReportErrorToUI("Replace node failed", "Node not found: " + nodeId); return; }
 
     const auto oldEffectInfoOpt = EffectRegistry::Instance().GetTypeInfo(node->type);
-    const auto newEffectInfoOpt = EffectRegistry::Instance().GetTypeInfo(newEffectType);
+    const std::string resolvedNewEffectType = EffectRegistry::Instance().Resolve(newEffectType);
+    const auto newEffectInfoOpt = EffectRegistry::Instance().GetTypeInfo(resolvedNewEffectType);
     if (!newEffectInfoOpt) { ReportErrorToUI("Replace node failed", "Unknown effect type: " + newEffectType); return; }
 
-    if (oldEffectInfoOpt && oldEffectInfoOpt->category != newEffectInfoOpt->category)
+    const std::string oldCategory = oldEffectInfoOpt ? oldEffectInfoOpt->category : node->category;
+    const std::string requestedCategory = !categoryOverride.empty() ? categoryOverride : newEffectInfoOpt->category;
+    if (!oldCategory.empty() && !requestedCategory.empty() && oldCategory != requestedCategory)
     { ReportErrorToUI("Replace node failed", "Cannot replace effect with different category"); return; }
 
-    node->type = newEffectType;
+    node->type = resolvedNewEffectType;
     node->label = newEffectInfoOpt->displayName;
     node->category = newEffectInfoOpt->category;
     node->params.clear();
@@ -3632,12 +3666,34 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     for (const auto& p : newEffectInfoOpt->parameters)
         node->params[p.id] = p.defaultValue;
 
+    if (paramsPayload.is_object())
+    {
+        for (const auto& entry : paramsPayload.items())
+        {
+            if (entry.value().is_number())
+                node->params[entry.key()] = entry.value().get<double>();
+        }
+    }
+
     if (configPayload.is_object())
         for (const auto& entry : configPayload.items())
             if (entry.value().is_string()) node->config[entry.key()] = entry.value().get<std::string>();
 
+    if (resourcesPayload.is_array())
+    {
+        for (const auto& resourceJson : resourcesPayload)
+        {
+            if (!resourceJson.is_object())
+                continue;
+            const auto resource = DeserializeResourceRef(resourceJson);
+            if (resource.IsValid())
+                node->resources.push_back(resource);
+        }
+    }
+
     if (!labelOverride.empty()) node->label = labelOverride;
     if (!categoryOverride.empty()) node->category = categoryOverride;
+    RefreshWasmNodeDescriptor(*node);
 
     if (IsCompositeEditMode()) BroadcastCompositeEditState();
     else if (mActivePreset) { SyncActivePresetSceneGraph(); ApplyPreset(*mActivePreset); BroadcastState(); }
@@ -3856,6 +3912,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     const std::string name = payload.value("name", "");
     const std::string description = payload.value("description", "");
     const std::string category = payload.value("category", "");
+    const std::string subfolder = payload.value("subfolder", "");
     const std::string providedHash = payload.value("hash", "");
     const nlohmann::json metadataPayload = payload.value("metadata", nlohmann::json::object());
 
@@ -3911,14 +3968,34 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             return std::nullopt;
         }
 
-        const auto targetDir = mFileSystem.ResolveSettingsDirectory() / "resources" / "content" / kLocalResourceStorageFolder;
+        auto targetDir = mFileSystem.ResolveSettingsDirectory() / "resources" / "content" / kLocalResourceStorageFolder;
+        if (!subfolder.empty())
+        {
+            std::filesystem::path sanitizedSubfolder;
+            for (const auto& part : std::filesystem::path(subfolder))
+            {
+                const std::string segment = util::SanitizePathSegment(part.string(), true);
+                if (segment.empty() || segment == "." || segment == "..")
+                    continue;
+                sanitizedSubfolder /= segment;
+            }
+            if (!sanitizedSubfolder.empty())
+                targetDir /= sanitizedSubfolder;
+        }
         [[maybe_unused]] const auto ensuredDir = mFileSystem.EnsureDirectory(targetDir);
+
+        const auto defaultExtensionForType = [&](const std::string& type) {
+            if (type == "ir") return std::string{".wav"};
+            if (type == "wasm") return std::string{".wasm"};
+            if (type == "nam") return std::string{".nam"};
+            return std::string{".bin"};
+        };
 
         std::string resolvedName = util::SanitizeFilename(fileName.empty() ? (resourceId.empty() ? name : resourceId) : fileName);
         if (resolvedName.empty())
-            resolvedName = resourceType == "ir" ? "resource.wav" : "resource.nam";
+            resolvedName = "resource" + defaultExtensionForType(resourceType);
         if (resolvedName.find('.') == std::string::npos)
-            resolvedName += resourceType == "ir" ? ".wav" : ".nam";
+            resolvedName += defaultExtensionForType(resourceType);
 
         resolvedPath = targetDir / resolvedName;
         if (!WriteFile(resolvedPath, decodedBytes))
@@ -4346,6 +4423,692 @@ void PluginController::HandleSaveBlendDefinitionRequest(const nlohmann::json& pa
     BroadcastState();
 }
 
+void PluginController::HandleSaveCustomEffectEntryRequest(const nlohmann::json& payload)
+{
+    const nlohmann::json entryJson = payload.value("entry", nlohmann::json::object());
+    if (!entryJson.is_object())
+    {
+        ReportErrorToUI("Custom Effect save failed", "Missing entry payload");
+        return;
+    }
+
+    std::string parseError;
+    auto entryOpt = DeserializeCustomEffectLibraryEntry(entryJson, &parseError);
+    if (!entryOpt)
+    {
+        ReportErrorToUI("Custom Effect save failed", parseError.empty() ? "Invalid entry" : parseError);
+        return;
+    }
+
+    auto entry = *entryOpt;
+    entry.baseEffectType = EffectRegistry::Instance().Resolve(entry.baseEffectType);
+    if (entry.baseEffectType != EffectGuids::kWasmHost)
+    {
+        ReportErrorToUI("Custom Effect save failed", "baseEffectType must resolve to wasm_host");
+        return;
+    }
+
+    if (!mResourceLibrary.HasResource(entry.moduleResourceType, entry.moduleResourceId))
+    {
+        ReportErrorToUI("Custom Effect save failed", "Referenced module resource was not found in the local library");
+        return;
+    }
+
+    const auto* existing = mCustomEffectLibrary.GetEntry(entry.id);
+    if (entry.category.empty())
+        entry.category = existing && !existing->category.empty() ? existing->category : "utility";
+    if (entry.createdAt.empty())
+        entry.createdAt = existing && !existing->createdAt.empty() ? existing->createdAt : BuildTimestampUtcIso();
+    if (entry.updatedAt.empty())
+        entry.updatedAt = BuildTimestampUtcIso();
+    if (entry.origin.empty() && existing && !existing->origin.empty())
+        entry.origin = existing->origin;
+
+    mCustomEffectLibrary.UpsertEntry(entry);
+    SaveCustomEffectLibrary();
+    BroadcastState();
+}
+
+void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json& payload)
+{
+    const std::string nodeId = payload.value("nodeId", "");
+    if (nodeId.empty())
+    {
+        ReportErrorToUI("Custom Effect save failed", "Missing node id");
+        return;
+    }
+
+    auto* targetGraph = ResolveEditTarget();
+    auto* node = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+    if (!node)
+    {
+        ReportErrorToUI("Custom Effect save failed", "Selected node was not found");
+        return;
+    }
+
+    const std::string resolvedType = EffectRegistry::Instance().Resolve(node->type);
+    if (resolvedType != EffectGuids::kWasmHost)
+    {
+        ReportErrorToUI("Custom Effect save failed", "Selected node is not a Custom Effect");
+        return;
+    }
+
+    const bool applyToNode = payload.value("applyToNode", false);
+    const nlohmann::json entryJson = payload.value("entry", nlohmann::json::object());
+    if (!entryJson.is_object())
+    {
+        ReportErrorToUI("Custom Effect save failed", "Missing entry payload");
+        return;
+    }
+
+    const std::string linkedEntryId = [&]() -> std::string {
+        if (const auto it = node->config.find("customEffectId"); it != node->config.end())
+            return it->second;
+        return {};
+    }();
+    const auto* linkedEntry = linkedEntryId.empty() ? nullptr : mCustomEffectLibrary.GetEntry(linkedEntryId);
+
+    const auto getOptionalString = [&](const char* key) -> std::optional<std::string> {
+        if (!entryJson.contains(key) || !entryJson[key].is_string())
+            return std::nullopt;
+        return entryJson[key].get<std::string>();
+    };
+
+    const std::optional<std::string> requestedNameOpt = getOptionalString("name");
+    const std::optional<std::string> requestedCategoryOpt = getOptionalString("category");
+    const std::optional<std::string> requestedDescriptionOpt = getOptionalString("description");
+    const std::optional<std::string> requestedIdOpt = getOptionalString("id");
+    const std::optional<std::string> requestedOriginOpt = getOptionalString("origin");
+    const std::optional<std::string> requestedThumbnailOpt = getOptionalString("thumbnailDataUrl");
+    const std::optional<std::string> requestedRevisionIdOpt = getOptionalString("latestRevisionId");
+
+    ResourceRef moduleRef;
+    if (!node->resources.empty())
+        moduleRef = node->resources.front();
+    if (moduleRef.resourceType.empty())
+        moduleRef.resourceType = "wasm";
+
+    if (moduleRef.resourceType != "wasm")
+    {
+        ReportErrorToUI("Custom Effect save failed", "The selected node is missing a WASM module resource");
+        return;
+    }
+
+    std::optional<LibraryResource> moduleResource;
+    if (!moduleRef.resourceId.empty())
+        moduleResource = mResourceLibrary.LookupResource(moduleRef.resourceType, moduleRef.resourceId);
+
+    if (!moduleResource && !moduleRef.filePath.empty())
+    {
+        nlohmann::json savePayload;
+        savePayload["resourceType"] = moduleRef.resourceType;
+        savePayload["filePath"] = moduleRef.filePath.string();
+        savePayload["name"] = requestedNameOpt && !requestedNameOpt->empty()
+            ? *requestedNameOpt
+            : (!std::filesystem::path(moduleRef.filePath).stem().string().empty()
+                ? std::filesystem::path(moduleRef.filePath).stem().string()
+                : "Custom Effect Module");
+        savePayload["category"] = "Local";
+        savePayload["metadata"] = nlohmann::json::object({{"provider", kLocalResourceProvider}});
+
+        std::string resourceSaveError;
+        moduleResource = SaveLocalLibraryResource(savePayload, resourceSaveError, true);
+        if (!moduleResource)
+        {
+            ReportErrorToUI("Custom Effect save failed", resourceSaveError.empty() ? "Failed to save local WASM module" : resourceSaveError);
+            return;
+        }
+    }
+
+    if (!moduleResource)
+    {
+        if (!moduleRef.embeddedId.empty())
+        {
+            ReportErrorToUI("Custom Effect save failed", "Embedded module resources are not supported by this save flow yet");
+        }
+        else
+        {
+            ReportErrorToUI("Custom Effect save failed", "Select a WASM module before saving this Custom Effect");
+        }
+        return;
+    }
+
+    GraphNode descriptorNode = *node;
+    if (descriptorNode.resources.empty())
+        descriptorNode.resources.resize(1);
+    descriptorNode.resources.front().resourceType = moduleResource->type;
+    descriptorNode.resources.front().resourceId = moduleResource->id;
+    descriptorNode.resources.front().filePath.clear();
+    descriptorNode.resources.front().embeddedId.clear();
+    RefreshWasmNodeDescriptor(descriptorNode);
+
+    std::optional<WasmModuleDescriptor> descriptor;
+    if (const auto descriptorIt = descriptorNode.config.find(WasmEffect::kDescriptorConfigKey);
+        descriptorIt != descriptorNode.config.end())
+    {
+        std::string parseError;
+        descriptor = WasmEffect::ParseDescriptorConfig(descriptorIt->second, &parseError);
+        if (!descriptor && !parseError.empty())
+            AppendSessionLog("WASM descriptor cache parse failed while saving current Custom Effect " + nodeId + ": " + parseError);
+    }
+
+    std::string entryName = requestedNameOpt.value_or("");
+    if (entryName.empty() && linkedEntry && !linkedEntry->name.empty())
+        entryName = linkedEntry->name;
+    if (entryName.empty() && descriptor && !descriptor->displayName.empty())
+        entryName = descriptor->displayName;
+    if (entryName.empty() && !node->label.empty())
+        entryName = node->label;
+    if (entryName.empty() && !moduleResource->name.empty())
+        entryName = moduleResource->name;
+    if (entryName.empty())
+        entryName = "Custom Effect";
+
+    std::string entryId = requestedIdOpt.value_or("");
+    if (entryId.empty())
+        entryId = linkedEntryId;
+    if (entryId.empty())
+    {
+        std::string baseId = util::SanitizePathSegment(entryName, true);
+        if (baseId.empty())
+            baseId = "custom-effect";
+        entryId = baseId;
+        std::size_t suffix = 2;
+        while (mCustomEffectLibrary.GetEntry(entryId) != nullptr)
+            entryId = baseId + "-" + std::to_string(suffix++);
+    }
+
+    std::string entryCategory = requestedCategoryOpt.value_or("");
+    if (entryCategory.empty() && linkedEntry && !linkedEntry->category.empty())
+        entryCategory = linkedEntry->category;
+    if (entryCategory.empty() && descriptor && !descriptor->category.empty())
+        entryCategory = descriptor->category;
+    if (entryCategory.empty() && !node->category.empty())
+        entryCategory = node->category;
+    if (entryCategory.empty())
+        entryCategory = "utility";
+
+    std::string entryDescription = requestedDescriptionOpt.has_value()
+        ? *requestedDescriptionOpt
+        : std::string{};
+    if (!requestedDescriptionOpt.has_value() && linkedEntry && !linkedEntry->description.empty())
+        entryDescription = linkedEntry->description;
+    if (!requestedDescriptionOpt.has_value() && entryDescription.empty() && descriptor && !descriptor->description.empty())
+        entryDescription = descriptor->description;
+
+    nlohmann::json descriptorSummary = linkedEntry && linkedEntry->descriptorSummary.is_object()
+        ? linkedEntry->descriptorSummary
+        : nlohmann::json::object();
+    if (descriptor)
+    {
+        descriptorSummary = nlohmann::json::object();
+        if (!descriptor->displayName.empty())
+            descriptorSummary["displayName"] = descriptor->displayName;
+        if (!descriptor->version.empty())
+            descriptorSummary["version"] = descriptor->version;
+        if (!descriptor->category.empty())
+            descriptorSummary["category"] = descriptor->category;
+        descriptorSummary["parameterCount"] = descriptor->parameters.size();
+        descriptorSummary["resourceCount"] = descriptor->exposedResources.size();
+    }
+
+    std::vector<std::string> entryTags = linkedEntry ? linkedEntry->tags : std::vector<std::string>{};
+    if (entryJson.contains("tags") && entryJson["tags"].is_array())
+    {
+        entryTags.clear();
+        for (const auto& tagValue : entryJson["tags"])
+        {
+            if (tagValue.is_string())
+                entryTags.push_back(tagValue.get<std::string>());
+        }
+    }
+
+    std::string entryOrigin = requestedOriginOpt.value_or("");
+    if (entryOrigin.empty() && linkedEntry && !linkedEntry->origin.empty())
+        entryOrigin = linkedEntry->origin;
+    if (entryOrigin.empty())
+        entryOrigin = "imported";
+
+    std::string latestRevisionId = requestedRevisionIdOpt.value_or("");
+    if (latestRevisionId.empty() && linkedEntry && !linkedEntry->latestRevisionId.empty())
+        latestRevisionId = linkedEntry->latestRevisionId;
+    if (latestRevisionId.empty())
+    {
+        if (const auto revisionIt = moduleResource->metadata.find("customEffectRevisionId");
+            revisionIt != moduleResource->metadata.end())
+        {
+            latestRevisionId = revisionIt->second;
+        }
+    }
+
+    std::string thumbnailDataUrl = requestedThumbnailOpt.value_or("");
+    if (thumbnailDataUrl.empty() && linkedEntry && !linkedEntry->thumbnailDataUrl.empty())
+        thumbnailDataUrl = linkedEntry->thumbnailDataUrl;
+    if (thumbnailDataUrl.empty() && descriptor && !descriptor->thumbnailDataUrl.empty())
+        thumbnailDataUrl = descriptor->thumbnailDataUrl;
+
+    CustomEffectLibraryEntry entry;
+    entry.id = entryId;
+    entry.name = entryName;
+    entry.category = entryCategory;
+    entry.description = entryDescription;
+    entry.baseEffectType = EffectGuids::kWasmHost;
+    entry.moduleResourceType = moduleResource->type;
+    entry.moduleResourceId = moduleResource->id;
+    entry.latestRevisionId = latestRevisionId;
+    entry.thumbnailDataUrl = thumbnailDataUrl;
+    entry.tags = std::move(entryTags);
+    entry.defaultParams = descriptorNode.params;
+    entry.descriptorSummary = std::move(descriptorSummary);
+    entry.origin = entryOrigin;
+    entry.createdAt = linkedEntry && !linkedEntry->createdAt.empty() ? linkedEntry->createdAt : BuildTimestampUtcIso();
+    entry.updatedAt = BuildTimestampUtcIso();
+
+    mCustomEffectLibrary.UpsertEntry(entry);
+    SaveCustomEffectLibrary();
+
+    if (applyToNode)
+    {
+        if (node->resources.empty())
+            node->resources.resize(1);
+        node->resources.front().resourceType = entry.moduleResourceType;
+        node->resources.front().resourceId = entry.moduleResourceId;
+        node->resources.front().filePath.clear();
+        node->resources.front().embeddedId.clear();
+        node->config["customEffectId"] = entry.id;
+        node->label = entry.name;
+        node->category = entry.category;
+        RefreshWasmNodeDescriptor(*node);
+
+        if (IsCompositeEditMode())
+        {
+            BroadcastCompositeEditState();
+        }
+        else if (mActivePreset)
+        {
+            SyncActivePresetSceneGraph();
+            ApplyPreset(*mActivePreset);
+        }
+    }
+
+    BroadcastState();
+    SendMessageToUI(nlohmann::json{
+        {"type", "customEffectSaved"},
+        {"id", entry.id},
+        {"name", entry.name},
+        {"applyToNode", applyToNode},
+        {"nodeId", nodeId},
+    }.dump());
+}
+
+void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::json& payload)
+{
+    const std::string nodeId = payload.value("nodeId", "");
+    if (nodeId.empty())
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", "Missing node id");
+        return;
+    }
+
+    auto* targetGraph = ResolveEditTarget();
+    auto* node = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+    if (!node)
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", "Selected node was not found");
+        return;
+    }
+
+    const std::string resolvedType = EffectRegistry::Instance().Resolve(node->type);
+    if (resolvedType != EffectGuids::kWasmHost)
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", "Selected node is not a Custom Effect");
+        return;
+    }
+
+    const nlohmann::json entryJson = payload.value("entry", nlohmann::json::object());
+    const nlohmann::json moduleJson = payload.value("module", nlohmann::json::object());
+    if (!entryJson.is_object() || !moduleJson.is_object())
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", "Missing entry or module payload");
+        return;
+    }
+
+    const std::string moduleData = moduleJson.value("data", "");
+    if (moduleData.empty())
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", "Generated module data is missing");
+        return;
+    }
+
+    const bool applyToNode = payload.value("applyToNode", false);
+    const auto getOptionalString = [&](const nlohmann::json& json, const char* key) -> std::optional<std::string> {
+        if (!json.contains(key) || !json[key].is_string())
+            return std::nullopt;
+        return json[key].get<std::string>();
+    };
+
+    const std::string linkedEntryId = [&]() -> std::string {
+        if (const auto it = node->config.find("customEffectId"); it != node->config.end())
+            return it->second;
+        return {};
+    }();
+    const auto* linkedEntry = linkedEntryId.empty() ? nullptr : mCustomEffectLibrary.GetEntry(linkedEntryId);
+
+    const std::optional<std::string> requestedIdOpt = getOptionalString(entryJson, "id");
+    const std::optional<std::string> requestedNameOpt = getOptionalString(entryJson, "name");
+    const std::optional<std::string> requestedCategoryOpt = getOptionalString(entryJson, "category");
+    const std::optional<std::string> requestedDescriptionOpt = getOptionalString(entryJson, "description");
+    const std::optional<std::string> requestedOriginOpt = getOptionalString(entryJson, "origin");
+    const std::optional<std::string> requestedThumbnailOpt = getOptionalString(entryJson, "thumbnailDataUrl");
+    const std::optional<std::string> requestedRevisionIdOpt = getOptionalString(entryJson, "latestRevisionId");
+    const std::string descriptorText = moduleJson.value("descriptorText", std::string{});
+    const std::string specText = moduleJson.value("specText", std::string{});
+    const nlohmann::json manifestJson = moduleJson.value("manifest", nlohmann::json::object());
+
+    nlohmann::json savePayload = nlohmann::json::object();
+    savePayload["resourceType"] = "wasm";
+    savePayload["data"] = moduleData;
+    savePayload["fileName"] = moduleJson.value("fileName", std::string{});
+    savePayload["resourceId"] = moduleJson.value("resourceId", std::string{});
+    savePayload["name"] = moduleJson.value("name", requestedNameOpt.value_or("Generated Custom Effect"));
+    savePayload["category"] = moduleJson.value("category", std::string{"Custom Effects"});
+    savePayload["subfolder"] = moduleJson.value("subfolder", std::string{});
+    savePayload["metadata"] = moduleJson.value("metadata", nlohmann::json::object());
+    if (!requestedRevisionIdOpt.value_or("").empty())
+        savePayload["metadata"]["customEffectRevisionId"] = *requestedRevisionIdOpt;
+    if (!payload.value("sessionId", std::string{}).empty())
+        savePayload["metadata"]["customEffectSessionId"] = payload.value("sessionId", std::string{});
+    savePayload["metadata"]["customEffectOrigin"] = requestedOriginOpt.value_or("generated");
+
+    std::string resourceSaveError;
+    auto moduleResource = SaveLocalLibraryResource(savePayload, resourceSaveError, true);
+    if (!moduleResource)
+    {
+        ReportErrorToUI("Generated Custom Effect import failed", resourceSaveError.empty() ? "Failed to save generated WASM module" : resourceSaveError);
+        return;
+    }
+
+    const auto writeTextArtifact = [&](const std::filesystem::path& targetPath, const std::string& content) {
+        const std::vector<std::uint8_t> bytes(content.begin(), content.end());
+        return WriteFile(targetPath, bytes);
+    };
+
+    const auto persistArtifactPath = [&](const char* metadataKey, const std::filesystem::path& path) {
+        moduleResource->metadata[metadataKey] = path.lexically_normal().generic_string();
+    };
+
+    const auto bundleDir = moduleResource->filePath.parent_path();
+    if (!bundleDir.empty())
+    {
+        if (!descriptorText.empty())
+        {
+            const auto descriptorPath = bundleDir / "descriptor.txt";
+            if (!writeTextArtifact(descriptorPath, descriptorText))
+            {
+                ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated descriptor artifact");
+                return;
+            }
+            persistArtifactPath("customEffectDescriptorPath", descriptorPath);
+        }
+
+        if (!specText.empty())
+        {
+            const auto specPath = bundleDir / "spec.txt";
+            if (!writeTextArtifact(specPath, specText))
+            {
+                ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated implementation spec artifact");
+                return;
+            }
+            persistArtifactPath("customEffectSpecPath", specPath);
+        }
+
+        if (manifestJson.is_object() && !manifestJson.empty())
+        {
+            const auto manifestPath = bundleDir / "manifest.json";
+            if (!writeTextArtifact(manifestPath, manifestJson.dump(2)))
+            {
+                ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated manifest artifact");
+                return;
+            }
+            persistArtifactPath("customEffectManifestPath", manifestPath);
+
+            const auto validationIt = manifestJson.find("validation");
+            if (validationIt != manifestJson.end() && validationIt->is_object())
+            {
+                const auto validationPath = bundleDir / "validation-report.json";
+                if (!writeTextArtifact(validationPath, validationIt->dump(2)))
+                {
+                    ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated validation artifact");
+                    return;
+                }
+                persistArtifactPath("customEffectValidationPath", validationPath);
+            }
+
+        }
+    }
+
+    mResourceLibrary.UpdateResource(moduleResource->type, moduleResource->id, *moduleResource);
+    AppendUserLibraryResource(*moduleResource);
+
+    GraphNode descriptorNode = *node;
+    if (descriptorNode.resources.empty())
+        descriptorNode.resources.resize(1);
+    descriptorNode.resources.front().resourceType = moduleResource->type;
+    descriptorNode.resources.front().resourceId = moduleResource->id;
+    descriptorNode.resources.front().filePath.clear();
+    descriptorNode.resources.front().embeddedId.clear();
+
+    std::map<std::string, double> requestedDefaultParams;
+    if (entryJson.contains("defaultParams") && entryJson["defaultParams"].is_object())
+    {
+        for (const auto& item : entryJson["defaultParams"].items())
+        {
+            if (item.value().is_number())
+                requestedDefaultParams[item.key()] = item.value().get<double>();
+        }
+    }
+    if (!requestedDefaultParams.empty())
+        descriptorNode.params = requestedDefaultParams;
+
+    RefreshWasmNodeDescriptor(descriptorNode);
+
+    std::optional<WasmModuleDescriptor> descriptor;
+    if (const auto descriptorIt = descriptorNode.config.find(WasmEffect::kDescriptorConfigKey);
+        descriptorIt != descriptorNode.config.end())
+    {
+        std::string parseError;
+        descriptor = WasmEffect::ParseDescriptorConfig(descriptorIt->second, &parseError);
+        if (!descriptor && !parseError.empty())
+            AppendSessionLog("WASM descriptor cache parse failed while importing generated Custom Effect " + nodeId + ": " + parseError);
+    }
+
+    std::string entryName = requestedNameOpt.value_or("");
+    if (entryName.empty() && linkedEntry && !linkedEntry->name.empty())
+        entryName = linkedEntry->name;
+    if (entryName.empty() && descriptor && !descriptor->displayName.empty())
+        entryName = descriptor->displayName;
+    if (entryName.empty() && !moduleResource->name.empty())
+        entryName = moduleResource->name;
+    if (entryName.empty())
+        entryName = "Custom Effect";
+
+    std::string entryId = requestedIdOpt.value_or("");
+    if (entryId.empty())
+        entryId = linkedEntryId;
+    if (entryId.empty())
+    {
+        std::string baseId = util::SanitizePathSegment(entryName, true);
+        if (baseId.empty())
+            baseId = "custom-effect";
+        entryId = baseId;
+        std::size_t suffix = 2;
+        while (mCustomEffectLibrary.GetEntry(entryId) != nullptr)
+            entryId = baseId + "-" + std::to_string(suffix++);
+    }
+
+    std::string entryCategory = requestedCategoryOpt.value_or("");
+    if (entryCategory.empty() && linkedEntry && !linkedEntry->category.empty())
+        entryCategory = linkedEntry->category;
+    if (entryCategory.empty() && descriptor && !descriptor->category.empty())
+        entryCategory = descriptor->category;
+    if (entryCategory.empty() && !node->category.empty())
+        entryCategory = node->category;
+    if (entryCategory.empty())
+        entryCategory = "utility";
+
+    std::string entryDescription = requestedDescriptionOpt.value_or("");
+    if (entryDescription.empty() && linkedEntry && !linkedEntry->description.empty())
+        entryDescription = linkedEntry->description;
+    if (entryDescription.empty() && descriptor && !descriptor->description.empty())
+        entryDescription = descriptor->description;
+
+    nlohmann::json descriptorSummary = entryJson.contains("descriptorSummary") && entryJson["descriptorSummary"].is_object()
+        ? entryJson["descriptorSummary"]
+        : nlohmann::json::object();
+    if (descriptorSummary.empty() && linkedEntry && linkedEntry->descriptorSummary.is_object())
+        descriptorSummary = linkedEntry->descriptorSummary;
+    if (descriptor)
+    {
+        descriptorSummary = nlohmann::json::object();
+        if (!descriptor->displayName.empty())
+            descriptorSummary["displayName"] = descriptor->displayName;
+        if (!descriptor->version.empty())
+            descriptorSummary["version"] = descriptor->version;
+        if (!descriptor->category.empty())
+            descriptorSummary["category"] = descriptor->category;
+        descriptorSummary["parameterCount"] = descriptor->parameters.size();
+        descriptorSummary["resourceCount"] = descriptor->exposedResources.size();
+    }
+
+    std::vector<std::string> entryTags = linkedEntry ? linkedEntry->tags : std::vector<std::string>{};
+    if (entryJson.contains("tags") && entryJson["tags"].is_array())
+    {
+        entryTags.clear();
+        for (const auto& tagValue : entryJson["tags"])
+        {
+            if (tagValue.is_string())
+                entryTags.push_back(tagValue.get<std::string>());
+        }
+    }
+
+    std::string entryOrigin = requestedOriginOpt.value_or("");
+    if (entryOrigin.empty() && linkedEntry && !linkedEntry->origin.empty())
+        entryOrigin = linkedEntry->origin;
+    if (entryOrigin.empty())
+        entryOrigin = "generated";
+
+    std::string latestRevisionId = requestedRevisionIdOpt.value_or("");
+    if (latestRevisionId.empty() && linkedEntry && !linkedEntry->latestRevisionId.empty())
+        latestRevisionId = linkedEntry->latestRevisionId;
+    if (latestRevisionId.empty())
+    {
+        if (const auto revisionIt = moduleResource->metadata.find("customEffectRevisionId");
+            revisionIt != moduleResource->metadata.end())
+        {
+            latestRevisionId = revisionIt->second;
+        }
+    }
+
+    std::string thumbnailDataUrl = requestedThumbnailOpt.value_or("");
+    if (thumbnailDataUrl.empty() && linkedEntry && !linkedEntry->thumbnailDataUrl.empty())
+        thumbnailDataUrl = linkedEntry->thumbnailDataUrl;
+    if (thumbnailDataUrl.empty() && descriptor && !descriptor->thumbnailDataUrl.empty())
+        thumbnailDataUrl = descriptor->thumbnailDataUrl;
+
+    CustomEffectLibraryEntry entry;
+    entry.id = entryId;
+    entry.name = entryName;
+    entry.category = entryCategory;
+    entry.description = entryDescription;
+    entry.baseEffectType = EffectGuids::kWasmHost;
+    entry.moduleResourceType = moduleResource->type;
+    entry.moduleResourceId = moduleResource->id;
+    entry.latestRevisionId = latestRevisionId;
+    entry.thumbnailDataUrl = thumbnailDataUrl;
+    entry.tags = std::move(entryTags);
+    entry.defaultParams = !requestedDefaultParams.empty() ? requestedDefaultParams : descriptorNode.params;
+    entry.descriptorSummary = std::move(descriptorSummary);
+    entry.origin = entryOrigin;
+    entry.createdAt = linkedEntry && !linkedEntry->createdAt.empty() ? linkedEntry->createdAt : BuildTimestampUtcIso();
+    entry.updatedAt = BuildTimestampUtcIso();
+
+    mCustomEffectLibrary.UpsertEntry(entry);
+    SaveCustomEffectLibrary();
+
+    if (applyToNode)
+    {
+        if (node->resources.empty())
+            node->resources.resize(1);
+        node->resources.front().resourceType = entry.moduleResourceType;
+        node->resources.front().resourceId = entry.moduleResourceId;
+        node->resources.front().filePath.clear();
+        node->resources.front().embeddedId.clear();
+        node->config["customEffectId"] = entry.id;
+        node->label = entry.name;
+        node->category = entry.category;
+        if (!entry.defaultParams.empty())
+            node->params = entry.defaultParams;
+        RefreshWasmNodeDescriptor(*node);
+
+        if (IsCompositeEditMode())
+        {
+            BroadcastCompositeEditState();
+        }
+        else if (mActivePreset)
+        {
+            SyncActivePresetSceneGraph();
+            ApplyPreset(*mActivePreset);
+        }
+    }
+
+    BroadcastState();
+    SendMessageToUI(nlohmann::json{
+        {"type", "customEffectSaved"},
+        {"id", entry.id},
+        {"name", entry.name},
+        {"applyToNode", applyToNode},
+        {"nodeId", nodeId},
+    }.dump());
+}
+
+void PluginController::HandleExportGeneratedCustomEffectBundleRequest(const nlohmann::json& payload)
+{
+    const std::string dataEncoded = payload.value("data", "");
+    const std::string suggestedName = payload.value("fileName", "custom-effect.custom-effect.zip");
+
+    if (dataEncoded.empty())
+    {
+        SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Missing export data"}}.dump());
+        return;
+    }
+
+    mHost.SaveFileAsync(BrowseFileType::ArchiveFile, "Download Custom Effect Bundle", suggestedName,
+        [this, dataEncoded](const BrowseFileResult& result)
+        {
+            if (!result.success)
+            {
+                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Export cancelled"}}.dump());
+                return;
+            }
+
+            const auto decodedBytes = util::DecodeBase64(dataEncoded);
+            if (decodedBytes.empty())
+            {
+                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Invalid export data"}}.dump());
+                return;
+            }
+
+            if (!WriteFile(result.path, decodedBytes))
+            {
+                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Failed to write file"}}.dump());
+                return;
+            }
+
+            SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportSaved"}, {"path", result.path.generic_string()}}.dump());
+            AppendSessionLog("Generated Custom Effect bundle exported: " + result.path.generic_string());
+        });
+}
+
 void PluginController::HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload)
 {
     const std::string id = payload.value("blendId", "");
@@ -4373,6 +5136,25 @@ void PluginController::HandleDeleteBlendDefinitionRequest(const nlohmann::json& 
 
     mBlendLibrary = std::move(updated);
     SaveBlendLibrary();
+    BroadcastState();
+}
+
+void PluginController::HandleDeleteCustomEffectEntryRequest(const nlohmann::json& payload)
+{
+    const std::string id = payload.value("id", "");
+    if (id.empty())
+    {
+        ReportErrorToUI("Custom Effect delete failed", "Missing entry id");
+        return;
+    }
+
+    if (!mCustomEffectLibrary.RemoveEntry(id))
+    {
+        ReportErrorToUI("Custom Effect delete failed", "Entry not found");
+        return;
+    }
+
+    SaveCustomEffectLibrary();
     BroadcastState();
 }
 
@@ -6430,6 +7212,14 @@ void PluginController::BroadcastState()
     // Blend library
     state["blendLibrary"] = mBlendLibrary;
 
+    // Saved custom effects library
+    {
+        nlohmann::json customEffects = nlohmann::json::array();
+        for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
+            customEffects.push_back(SerializeCustomEffectLibraryEntry(entry));
+        state["customEffectLibrary"] = std::move(customEffects);
+    }
+
     // Riff library
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
@@ -7601,6 +8391,11 @@ void PluginController::LoadBlendLibrary()
     }
 }
 
+void PluginController::LoadCustomEffectLibrary()
+{
+    mCustomEffectLibrary.LoadFromFile(ResolveCustomEffectLibraryPath(mFileSystem));
+}
+
 void PluginController::SaveBlendLibrary() const
 {
     const auto blendPath = mFileSystem.ResolveSettingsDirectory() / "blends" / "library.json";
@@ -7625,6 +8420,11 @@ void PluginController::SaveBlendLibrary() const
         }
     }
     catch (const std::exception&) {}
+}
+
+void PluginController::SaveCustomEffectLibrary() const
+{
+    mCustomEffectLibrary.SaveToFile(ResolveCustomEffectLibraryPath(mFileSystem));
 }
 
 void PluginController::LoadCompositeLibrary()
@@ -7728,6 +8528,7 @@ void PluginController::LoadLayoutLibrary()
             }
         }
     };
+
 
     // Build user layout library from the associations index.
     // Each layout lives in its own subfolder: layouts/content/<layoutId>/layout.json
@@ -8264,6 +9065,17 @@ void PluginController::SendCompositeLibraryToUI()
     for (const auto& def : mCompositeLibrary.GetAllDefinitions())
         defs.push_back(SerializeCompositeEffectDefinition(def));
     msg["definitions"] = defs;
+    SendMessageToUI(msg.dump());
+}
+
+void PluginController::SendCustomEffectLibraryToUI()
+{
+    nlohmann::json msg;
+    msg["type"] = "customEffectLibrary";
+    nlohmann::json entries = nlohmann::json::array();
+    for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
+        entries.push_back(SerializeCustomEffectLibraryEntry(entry));
+    msg["entries"] = std::move(entries);
     SendMessageToUI(msg.dump());
 }
 

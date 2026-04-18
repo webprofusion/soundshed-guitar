@@ -58,6 +58,36 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
         c.HandleDeleteBlendDefinitionRequest(msg);
         return true;
     }
+    if (type == "saveCustomEffectEntry")
+    {
+        c.HandleSaveCustomEffectEntryRequest(msg);
+        return true;
+    }
+    if (type == "saveCurrentCustomEffect")
+    {
+        c.HandleSaveCurrentCustomEffectRequest(msg);
+        return true;
+    }
+    if (type == "importGeneratedCustomEffect")
+    {
+        c.HandleImportGeneratedCustomEffectRequest(msg);
+        return true;
+    }
+    if (type == "exportGeneratedCustomEffectBundle")
+    {
+        c.HandleExportGeneratedCustomEffectBundleRequest(msg);
+        return true;
+    }
+    if (type == "deleteCustomEffectEntry")
+    {
+        c.HandleDeleteCustomEffectEntryRequest(msg);
+        return true;
+    }
+    if (type == "requestCustomEffectLibrary")
+    {
+        c.SendCustomEffectLibraryToUI();
+        return true;
+    }
     if (type == "saveBlendArchive")
     {
         c.HandleSaveBlendArchiveRequest(msg);

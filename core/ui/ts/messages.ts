@@ -25,6 +25,7 @@ import { layoutLookupKey } from "./layoutTypes.js";
 import { handleCompositeLibrary, handleCompositeDefinitionAdded, handleCompositeDefinitionRemoved } from "./compositeEffects.js";
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
 import { renderCompositeList, handleCompositeEditModeExited, handleCompositeEditStateUpdate } from "./compositeEditor.js";
+import { handleCustomEffectLibrary } from "./customEffects.js";
 import { renderLayoutList } from "./layoutManager.js";
 import { renderBlendList } from "./blendManager.js";
 import { handleCompositePresetList, handleCompositePresetSaved, handleCompositePresetLoaded } from "./multiPresetMixer.js";
@@ -188,6 +189,11 @@ export function handleIncomingMessage(message: string): void {
         uiState.blendLibrary = blendLibrary as import("./types.js").BlendLibrary;
         refreshFxSelector();
         renderBlendList();
+      }
+      const customEffectLibrary = (payload as { customEffectLibrary?: unknown[] }).customEffectLibrary;
+      if (Array.isArray(customEffectLibrary)) {
+        handleCustomEffectLibrary(customEffectLibrary as import("./types.js").CustomEffectLibrary);
+        refreshFxSelector();
       }
       const compositeLibrary = (payload as { compositeLibrary?: CompositeEffectDefinition[] }).compositeLibrary;
       if (Array.isArray(compositeLibrary)) {
@@ -949,6 +955,31 @@ export function handleIncomingMessage(message: string): void {
         handleCompositeLibrary(compPayload.definitions);
         refreshFxSelector();
       }
+      break;
+    }
+    case "customEffectLibrary": {
+      const customPayload = payload as { entries?: import("./types.js").CustomEffectLibrary };
+      if (Array.isArray(customPayload.entries)) {
+        handleCustomEffectLibrary(customPayload.entries);
+        refreshFxSelector();
+      }
+      break;
+    }
+    case "customEffectSaved": {
+      const customPayload = payload as { name?: string; applyToNode?: boolean };
+      const detail = customPayload.name ?? "Custom Effect";
+      appendLog(`custom effect saved ← ${detail}`);
+      showNotification(customPayload.applyToNode ? "Custom Effect applied" : "Custom Effect saved", detail);
+      break;
+    }
+    case "generatedCustomEffectBundleExportSaved": {
+      const exportPayload = payload as { path?: string };
+      showNotification("Custom Effect bundle exported", exportPayload.path ?? "");
+      break;
+    }
+    case "generatedCustomEffectBundleExportFailed": {
+      const exportPayload = payload as { message?: string };
+      showNotification("Custom Effect bundle export failed", exportPayload.message ?? "");
       break;
     }
     case "effectCatalog": {

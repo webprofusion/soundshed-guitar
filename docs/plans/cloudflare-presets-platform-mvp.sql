@@ -247,3 +247,46 @@ CREATE TABLE IF NOT EXISTS app_releases (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS module_generation_sessions (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'refining', 'ready', 'generated', 'error')),
+  title TEXT,
+  summary TEXT,
+  source_context_json TEXT NOT NULL DEFAULT '{}',
+  current_plan_json TEXT NOT NULL DEFAULT '{}',
+  latest_revision_id TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS module_generation_messages (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  plan_json TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES module_generation_sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS module_generation_revisions (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  archetype TEXT NOT NULL,
+  category TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  descriptor_text TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  wasm_base64 TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES module_generation_sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_module_generation_sessions_created ON module_generation_sessions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_module_generation_messages_session_created ON module_generation_messages(session_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_module_generation_revisions_session_created ON module_generation_revisions(session_id, created_at DESC);
+

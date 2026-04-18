@@ -8,6 +8,7 @@ export const Features = {
   RiffLibrary: "riffLibrary",
   ToneSharing: "toneSharing",
   Jam: "jam",
+  CustomEffects: "customEffects",
   MultiRig: "multiRig",
   CompositeEffects: "compositeEffects",
   BlendTools: "blendTools",
@@ -73,6 +74,14 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     defaultEnabled: true,
   },
   {
+    id: Features.CustomEffects,
+    key: "features.customEffects.enabled",
+    label: "Custom Effects",
+    description: "Enables the Custom Effect generator, saved custom-effect entries, and node-level designer actions.",
+    defaultEnabled: false,
+    legacyAdvanced: true,
+  },
+  {
     id: Features.MultiRig,
     key: "features.multiRig.enabled",
     label: "Multi-Rig Mixer",
@@ -133,7 +142,7 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
     id: "power",
     title: "Power Features",
     description: "These replace the old Advanced Options toggle and default to off unless you previously enabled it.",
-    featureIds: [Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives],
+    featureIds: [Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives],
   },
 ];
 

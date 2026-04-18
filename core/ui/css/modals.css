@@ -114,6 +114,304 @@
   white-space: pre-wrap;
 }
 
+.custom-effect-designer-content {
+  width: min(1120px, 96vw);
+  max-height: min(88vh, 960px);
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-effect-designer-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.custom-effect-designer-subtitle {
+  margin: 0;
+  font-size: 11px;
+  color: var(--modal-text-muted);
+}
+
+.custom-effect-designer-body {
+  padding: 0;
+}
+
+.custom-effect-designer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
+  min-height: 560px;
+  max-height: 72vh;
+}
+
+.custom-effect-designer-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--modal-border-medium);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), transparent 42%),
+    var(--modal-bg);
+}
+
+.custom-effect-designer-thread {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-effect-designer-bubble {
+  max-width: 82%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--modal-border-medium);
+  background: var(--modal-bg-raised);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.custom-effect-designer-bubble.is-user {
+  align-self: flex-end;
+  background: linear-gradient(180deg, rgba(216, 102, 42, 0.98) 0%, rgba(168, 70, 22, 0.98) 100%);
+  border-color: rgba(255, 194, 142, 0.32);
+  color: #fff7ee;
+}
+
+.custom-effect-designer-bubble-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  margin-bottom: 6px;
+}
+
+.custom-effect-designer-bubble-text {
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.custom-effect-designer-composer {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--modal-border-medium);
+  background: var(--modal-bg-raised);
+}
+
+.custom-effect-designer-composer label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--modal-text-secondary);
+}
+
+.custom-effect-designer-composer textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid var(--modal-input-border);
+  background: var(--modal-input-bg);
+  color: var(--modal-input-text);
+  padding: 12px 14px;
+  font: inherit;
+}
+
+.custom-effect-designer-composer textarea::placeholder {
+  color: var(--modal-input-placeholder);
+}
+
+.custom-effect-designer-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.custom-effect-designer-status {
+  min-height: 16px;
+  font-size: 11px;
+  color: var(--modal-text-muted);
+}
+
+.custom-effect-designer-composer-buttons,
+.custom-effect-designer-footer-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.custom-effect-designer-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--modal-border-medium);
+  background: transparent;
+  color: var(--modal-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.custom-effect-designer-btn:hover {
+  background: var(--modal-close-hover);
+}
+
+.custom-effect-designer-btn-primary {
+  background: linear-gradient(180deg, #d8662a 0%, #a84616 100%);
+  border-color: rgba(255, 196, 148, 0.4);
+  color: #fff7ee;
+}
+
+.custom-effect-designer-btn-primary:hover {
+  background: linear-gradient(180deg, #e6783c 0%, #b8521d 100%);
+}
+
+.custom-effect-designer-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.custom-effect-designer-sidebar {
+  overflow: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 244, 220, 0.08), transparent 48%),
+    var(--modal-bg);
+}
+
+.custom-effect-designer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--modal-border-medium);
+  background: var(--modal-bg-raised);
+}
+
+.custom-effect-designer-card h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--modal-text);
+}
+
+.custom-effect-designer-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.custom-effect-designer-plan-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--modal-text-secondary);
+}
+
+.custom-effect-designer-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--modal-border-medium);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--modal-text-muted);
+}
+
+.custom-effect-designer-param-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.custom-effect-designer-param-row,
+.custom-effect-designer-revision-meta > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--modal-text-secondary);
+}
+
+.custom-effect-designer-param-row strong,
+.custom-effect-designer-revision-meta strong {
+  color: var(--modal-text);
+}
+
+.custom-effect-designer-revision-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.custom-effect-designer-revision-meta span {
+  color: var(--modal-text-muted);
+}
+
+.custom-effect-designer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.custom-effect-designer-tag {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--modal-border-medium);
+  font-size: 10px;
+  color: var(--modal-text-secondary);
+}
+
+.custom-effect-designer-limitations p,
+.custom-effect-designer-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--modal-text-muted);
+}
+
+.custom-effect-designer-footer {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.custom-effect-designer-footer-note {
+  font-size: 11px;
+  color: var(--modal-text-muted);
+}
+
+@media (max-width: 960px) {
+  .custom-effect-designer-content {
+    width: min(96vw, 760px);
+  }
+
+  .custom-effect-designer-layout {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+
+  .custom-effect-designer-chat {
+    border-right: none;
+    border-bottom: 1px solid var(--modal-border-medium);
+  }
+
+  .custom-effect-designer-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* Tone3000 Details Modal */
 .tone3000-details-content {
   width: 720px;
