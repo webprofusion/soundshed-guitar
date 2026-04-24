@@ -64,6 +64,8 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `previewStarted` | `{id, title}` | Demo audio playback started |
 | `previewComplete` | `{id, title}` | Demo audio playback finished |
 | `previewStopped` | `{id?, title?}` | Demo audio playback stopped by user |
+| `demoAudioRenderSaved` | `{path}` | Rendered demo audio written to disk |
+| `demoAudioRenderFailed` | `{message}` | Demo audio render/save failed |
 | `tunerUpdate` | `{note, cents, frequency, ...}` | Tuner pitch detection update |
 | `tunerStarted` | `{}` | Tuner activated |
 | `tunerStopped` | `{}` | Tuner deactivated |
@@ -120,6 +122,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `tuner` | `{action}` | Start/stop/configure tuner |
 | `runSignalPathTest` | `{}` | Run signal path diagnostic |
 | `previewDemoAudio` | `{audio}` | Preview demo audio clip |
+| `renderDemoAudio` | `{audio? , takeId?, title?, suggestedName?}` | Render selected demo audio to a WAV file using the current preset |
 | `stopDemoAudio` | `{}` | Stop demo audio playback |
 | `importRemoteResource` | `{...}` | Import resource from remote |
 | `setSetting` | `{key, value}` | Persist and apply an app setting |

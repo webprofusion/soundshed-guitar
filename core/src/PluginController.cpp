@@ -811,6 +811,227 @@ namespace
         }
     }
 
+    struct OfflineRenderBuffer
+    {
+        std::string id;
+        std::string title;
+        double sampleRate = 0.0;
+        std::vector<std::vector<float>> channelSamples;
+    };
+
+    std::size_t FindTrailingAudibleFrameCount(const std::vector<float>& left,
+                                              const std::vector<float>& right,
+                                              float threshold,
+                                              std::size_t requiredQuietFrames)
+    {
+        const std::size_t frameCount = std::min(left.size(), right.size());
+        if (frameCount == 0)
+            return 0;
+
+        std::size_t quietFrames = 0;
+        for (std::size_t frame = frameCount; frame > 0; --frame)
+        {
+            const std::size_t index = frame - 1;
+            const float peak = std::max(std::abs(left[index]), std::abs(right[index]));
+            if (peak <= threshold)
+            {
+                ++quietFrames;
+                continue;
+            }
+
+            if (quietFrames >= requiredQuietFrames)
+                return frame;
+
+            return frame + quietFrames;
+        }
+
+        return 0;
+    }
+
+    void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer,
+                                                float threshold,
+                                                std::size_t requiredQuietFrames)
+    {
+        if (buffer.channelSamples.empty() || buffer.channelSamples.front().empty())
+            return;
+
+        auto& left = buffer.channelSamples[0];
+        auto& right = buffer.channelSamples.size() > 1 ? buffer.channelSamples[1] : buffer.channelSamples[0];
+        const std::size_t trimmedFrames = FindTrailingAudibleFrameCount(left, right, threshold, requiredQuietFrames);
+        if (trimmedFrames == 0 || trimmedFrames >= left.size())
+            return;
+
+        for (auto& channel : buffer.channelSamples)
+            channel.resize(trimmedFrames);
+    }
+
+    std::optional<OfflineRenderBuffer> PrepareOfflineRenderBuffer(const std::vector<std::uint8_t>& bytes,
+                                                                  double targetSampleRate,
+                                                                  const std::string& id,
+                                                                  const std::string& title,
+                                                                  std::string& error)
+    {
+        const auto wavData = guitarfx::util::DecodePcmWav(bytes);
+        if (!wavData)
+        {
+            error = "Unsupported WAV format";
+            return std::nullopt;
+        }
+
+        if (targetSampleRate <= 0.0)
+        {
+            error = "Target sample rate is invalid";
+            return std::nullopt;
+        }
+
+        auto resampled = guitarfx::util::ConvertToSampleRate(*wavData, targetSampleRate);
+        if (resampled.empty() || resampled.front().empty())
+        {
+            error = "Audio buffer is empty";
+            return std::nullopt;
+        }
+
+        std::size_t minFrames = resampled.front().size();
+        for (const auto& channel : resampled)
+        {
+            if (channel.empty())
+            {
+                error = "Audio buffer is empty";
+                return std::nullopt;
+            }
+            minFrames = std::min(minFrames, channel.size());
+        }
+
+        if (minFrames == 0)
+        {
+            error = "Audio buffer is empty";
+            return std::nullopt;
+        }
+
+        for (auto& channel : resampled)
+        {
+            if (channel.size() > minFrames)
+                channel.resize(minFrames);
+        }
+
+        OfflineRenderBuffer buffer;
+        buffer.id = id;
+        buffer.title = title;
+        buffer.sampleRate = targetSampleRate;
+        buffer.channelSamples = std::move(resampled);
+        const std::size_t requiredQuietFrames = std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(targetSampleRate * 0.05)));
+        TrimOfflineRenderBufferTrailingSilence(buffer, 3.0e-4f, requiredQuietFrames);
+        return buffer;
+    }
+
+    bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer,
+                                  std::mutex& dspMutex,
+                                  const OfflineRenderBuffer& source,
+                                  int blockSize,
+                                  double tempoBpm,
+                                  std::vector<float>& renderedLeft,
+                                  std::vector<float>& renderedRight)
+    {
+        if (source.channelSamples.empty() || source.channelSamples.front().empty())
+            return false;
+
+        const int safeBlockSize = std::max(32, blockSize);
+        const std::size_t totalFrames = source.channelSamples.front().size();
+        constexpr double kMaxTailSeconds = 8.0;
+        constexpr double kTailSilenceSeconds = 0.25;
+        constexpr float kTailSilencePeak = 7.5e-4f;
+
+        const int requiredSilentBlocks = std::max(2, static_cast<int>(std::ceil((source.sampleRate * kTailSilenceSeconds) / static_cast<double>(safeBlockSize))));
+        const int maxTailBlocks = std::max(requiredSilentBlocks, static_cast<int>(std::ceil((source.sampleRate * kMaxTailSeconds) / static_cast<double>(safeBlockSize))));
+
+        renderedLeft.clear();
+        renderedRight.clear();
+        renderedLeft.reserve(totalFrames + static_cast<std::size_t>(maxTailBlocks * safeBlockSize));
+        renderedRight.reserve(totalFrames + static_cast<std::size_t>(maxTailBlocks * safeBlockSize));
+
+        std::vector<float> inputLeft(static_cast<std::size_t>(safeBlockSize), 0.0f);
+        std::vector<float> inputRight(static_cast<std::size_t>(safeBlockSize), 0.0f);
+        std::vector<float> outputLeft(static_cast<std::size_t>(safeBlockSize), 0.0f);
+        std::vector<float> outputRight(static_cast<std::size_t>(safeBlockSize), 0.0f);
+        const bool hasRightChannel = source.channelSamples.size() > 1;
+
+        std::size_t frameOffset = 0;
+        int tailBlocks = 0;
+        int silentBlocks = 0;
+
+        std::lock_guard<std::mutex> lock(dspMutex);
+        mixer.Reset();
+
+        while (frameOffset < totalFrames || tailBlocks < maxTailBlocks)
+        {
+            const bool feedingInput = frameOffset < totalFrames;
+            const int framesThisBlock = feedingInput
+                ? std::min(safeBlockSize, static_cast<int>(totalFrames - frameOffset))
+                : safeBlockSize;
+
+            std::fill(inputLeft.begin(), inputLeft.end(), 0.0f);
+            std::fill(inputRight.begin(), inputRight.end(), 0.0f);
+            std::fill(outputLeft.begin(), outputLeft.end(), 0.0f);
+            std::fill(outputRight.begin(), outputRight.end(), 0.0f);
+
+            if (feedingInput)
+            {
+                std::copy_n(source.channelSamples[0].begin() + static_cast<std::ptrdiff_t>(frameOffset),
+                            framesThisBlock,
+                            inputLeft.begin());
+                if (hasRightChannel)
+                {
+                    std::copy_n(source.channelSamples[1].begin() + static_cast<std::ptrdiff_t>(frameOffset),
+                                framesThisBlock,
+                                inputRight.begin());
+                }
+                else
+                {
+                    std::copy_n(inputLeft.begin(), framesThisBlock, inputRight.begin());
+                }
+            }
+
+            float* inputPtrs[2] = { inputLeft.data(), inputRight.data() };
+            float* outputPtrs[2] = { outputLeft.data(), outputRight.data() };
+
+            mixer.SetTempo(tempoBpm);
+            mixer.Process(inputPtrs, outputPtrs, framesThisBlock);
+
+            renderedLeft.insert(renderedLeft.end(), outputLeft.begin(), outputLeft.begin() + framesThisBlock);
+            renderedRight.insert(renderedRight.end(), outputRight.begin(), outputRight.begin() + framesThisBlock);
+
+            if (feedingInput)
+            {
+                frameOffset += static_cast<std::size_t>(framesThisBlock);
+                continue;
+            }
+
+            ++tailBlocks;
+
+            float peak = 0.0f;
+            for (int i = 0; i < framesThisBlock; ++i)
+            {
+                peak = std::max(peak, std::abs(outputLeft[static_cast<std::size_t>(i)]));
+                peak = std::max(peak, std::abs(outputRight[static_cast<std::size_t>(i)]));
+            }
+
+            silentBlocks = (peak <= kTailSilencePeak) ? (silentBlocks + 1) : 0;
+            if (silentBlocks >= requiredSilentBlocks)
+                break;
+        }
+
+        const std::size_t requiredQuietFrames = std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(source.sampleRate * 0.05)));
+        const std::size_t trimmedFrames = FindTrailingAudibleFrameCount(renderedLeft, renderedRight, kTailSilencePeak, requiredQuietFrames);
+        if (trimmedFrames > 0 && trimmedFrames < renderedLeft.size())
+        {
+            renderedLeft.resize(trimmedFrames);
+            renderedRight.resize(trimmedFrames);
+        }
+
+        mixer.Reset();
+        return !renderedLeft.empty() && renderedLeft.size() == renderedRight.size();
+    }
+
     std::vector<std::uint8_t> EncodeStereo16BitWav(const std::vector<float>& left,
                                                    const std::vector<float>& right,
                                                    int sampleRate)
@@ -5954,6 +6175,169 @@ void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
 {
     if (mDemoPreview)
         mDemoPreview->StartPreview(payload);
+}
+
+void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payload)
+{
+    auto sendRenderFailure = [this](const std::string& message)
+    {
+        SendMessageToUI(nlohmann::json{
+            {"type", "demoAudioRenderFailed"},
+            {"message", message}
+        }.dump());
+    };
+
+    std::string suggestedName = util::SanitizeFilename(payload.value("suggestedName", std::string("demo-audio.wav")));
+    std::string lowerSuggested = suggestedName;
+    std::transform(lowerSuggested.begin(), lowerSuggested.end(), lowerSuggested.begin(), [](unsigned char ch)
+    {
+        return static_cast<char>(std::tolower(ch));
+    });
+    if (!lowerSuggested.ends_with(".wav"))
+        suggestedName += ".wav";
+
+    const nlohmann::json payloadCopy = payload;
+    mHost.SaveFileAsync(BrowseFileType::AudioFile, "Render Demo Audio", suggestedName,
+        [this, payloadCopy, sendRenderFailure](const BrowseFileResult& result)
+        {
+            if (!result.success)
+            {
+                sendRenderFailure("Save cancelled");
+                return;
+            }
+
+            if (mSignalTestActive.load(std::memory_order_acquire))
+            {
+                sendRenderFailure("Signal path test is currently running");
+                return;
+            }
+
+            const double targetSampleRate = mHost.GetSampleRate();
+            if (targetSampleRate <= 0.0)
+            {
+                sendRenderFailure("Audio device sample rate is unavailable");
+                return;
+            }
+
+            OfflineRenderBuffer source;
+            std::string error;
+            if (payloadCopy.contains("takeId") && payloadCopy["takeId"].is_string())
+            {
+                const std::string takeId = payloadCopy.value("takeId", std::string{});
+                const auto take = FindRiffTakeById(takeId);
+                if (!take)
+                {
+                    sendRenderFailure("Take not found");
+                    return;
+                }
+
+                const std::string filePath = take->value("filePath", std::string{});
+                if (filePath.empty() || !std::filesystem::exists(filePath))
+                {
+                    sendRenderFailure("Take WAV file is missing");
+                    return;
+                }
+
+                std::ifstream input(filePath, std::ios::binary);
+                if (!input)
+                {
+                    sendRenderFailure("Unable to open take WAV file");
+                    return;
+                }
+
+                std::vector<std::uint8_t> bytes(
+                    (std::istreambuf_iterator<char>(input)),
+                    std::istreambuf_iterator<char>());
+                if (bytes.empty())
+                {
+                    sendRenderFailure("Take WAV file is empty");
+                    return;
+                }
+
+                auto prepared = PrepareOfflineRenderBuffer(
+                    bytes,
+                    targetSampleRate,
+                    takeId,
+                    payloadCopy.value("title", take->value("title", std::string("Riff Take"))),
+                    error);
+                if (!prepared)
+                {
+                    sendRenderFailure(error.empty() ? "Unable to prepare riff take audio" : error);
+                    return;
+                }
+                source = std::move(*prepared);
+            }
+            else
+            {
+                const auto audioIter = payloadCopy.find("audio");
+                if (audioIter == payloadCopy.end() || !audioIter->is_object())
+                {
+                    sendRenderFailure("Audio payload is missing");
+                    return;
+                }
+
+                const std::string dataEncoded = audioIter->value("data", "");
+                if (dataEncoded.empty())
+                {
+                    sendRenderFailure("Audio payload did not include data");
+                    return;
+                }
+
+                const auto decodedBytes = util::DecodeBase64(dataEncoded);
+                if (decodedBytes.empty())
+                {
+                    sendRenderFailure("Unable to decode audio data");
+                    return;
+                }
+
+                auto prepared = PrepareOfflineRenderBuffer(
+                    decodedBytes,
+                    targetSampleRate,
+                    audioIter->value("id", std::string{}),
+                    payloadCopy.value("title", audioIter->value("title", std::string("Demo Audio"))),
+                    error);
+                if (!prepared)
+                {
+                    sendRenderFailure(error.empty() ? "Unable to prepare demo audio" : error);
+                    return;
+                }
+                source = std::move(*prepared);
+            }
+
+            if (mDemoPreview)
+                mDemoPreview->StopPreview();
+            {
+                std::lock_guard<std::mutex> lock(mDSPMutex);
+                DeactivateRiffGuidance(true);
+            }
+
+            std::vector<float> renderedLeft;
+            std::vector<float> renderedRight;
+            if (!RenderBufferThroughMixer(
+                    mPresetMixer,
+                    mDSPMutex,
+                    source,
+                    std::max(1, mHost.GetBlockSize()),
+                    GetEffectiveTempoBpm(),
+                    renderedLeft,
+                    renderedRight))
+            {
+                sendRenderFailure("Failed to render demo audio");
+                return;
+            }
+
+            if (!WriteStereo16BitWav(result.path, renderedLeft, renderedRight, static_cast<int>(std::llround(targetSampleRate))))
+            {
+                sendRenderFailure("Failed to write WAV file");
+                return;
+            }
+
+            SendMessageToUI(nlohmann::json{
+                {"type", "demoAudioRenderSaved"},
+                {"path", result.path.generic_string()}
+            }.dump());
+            AppendSessionLog("Demo audio rendered: " + result.path.generic_string());
+        });
 }
 
 void PluginController::HandleStopDemoRequest()

@@ -222,6 +222,7 @@ private:
     void HandleEnterCompositeEditModeRequest(const nlohmann::json& payload);
     void HandleExitCompositeEditModeRequest(const nlohmann::json& payload);
     void HandlePreviewDemoRequest(const nlohmann::json& payload);
+    void HandleRenderDemoAudioRequest(const nlohmann::json& payload);
     void HandleStopDemoRequest();
     void HandleGetRiffLibraryRequest();
     void HandleSetRiffLibraryPathRequest(const nlohmann::json& payload);

@@ -138,6 +138,11 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
         c.HandlePreviewDemoRequest(msg);
         return true;
     }
+    if (type == "renderDemoAudio")
+    {
+        c.HandleRenderDemoAudioRequest(msg);
+        return true;
+    }
     if (type == "stopDemoAudio")
     {
         c.HandleStopDemoRequest();

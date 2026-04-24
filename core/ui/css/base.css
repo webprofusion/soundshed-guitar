@@ -506,6 +506,44 @@ body:not(.is-standalone) .main-content .metronome-only {
   gap: 6px;
 }
 
+.footer-demo-actions-wrap {
+  position: relative;
+}
+
+.footer-demo-actions-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.footer-demo-actions-button:hover {
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  transform: translateY(-1px);
+}
+
+.footer-demo-actions-button[aria-expanded="true"] {
+  color: var(--text-dark-primary);
+  border-color: var(--color-accent);
+}
+
+.footer-demo-audio-actions-menu {
+  right: 0;
+  min-width: 148px;
+  z-index: 60;
+}
+
 .footer-play-btn {
   width: 28px;
   height: 28px;

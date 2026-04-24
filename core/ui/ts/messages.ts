@@ -3,7 +3,7 @@ import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, upd
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
-import { previewSelectedDemoAudio, onDemoAudioStarted, onDemoAudioStopped, refreshDemoAudioSelectors, syncDemoAudioSelectionFromPreview } from "./demoAudio.js";
+import { applyStoredDemoAudioSelection, previewSelectedDemoAudio, onDemoAudioStarted, onDemoAudioStopped, refreshDemoAudioSelectors, syncDemoAudioSelectionFromPreview } from "./demoAudio.js";
 import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerReferenceChanged, handleTunerLiveModeChanged } from "./tuner.js";
 import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
@@ -204,6 +204,7 @@ export function handleIncomingMessage(message: string): void {
       const appSettings = (payload as { appSettings?: Record<string, unknown> }).appSettings;
       if (appSettings) {
         uiState.appSettings = appSettings as import("./types.js").AppSettings;
+        applyStoredDemoAudioSelection();
         applyStoredInputChannel();
         applyToneSharingAppSettings(appSettings);
         applyJamAppSettings();
@@ -568,6 +569,18 @@ export function handleIncomingMessage(message: string): void {
       handleRiffPreviewPlayback("stop", (payload as { id?: string }).id ?? "");
       onDemoAudioStopped();
       showNotification("Demo playback stopped", (payload as { title?: string }).title ?? "Demo");
+      break;
+    }
+    case "demoAudioRenderSaved": {
+      const info = payload as { path?: string };
+      appendLog(`demo audio rendered ← ${info.path ?? "unknown"}`);
+      showNotification("Demo audio rendered", info.path ?? "");
+      break;
+    }
+    case "demoAudioRenderFailed": {
+      const info = payload as { message?: string };
+      appendLog(`demo audio render failed ← ${info.message ?? "unknown"}`);
+      showNotification("Demo audio render failed", info.message ?? "");
       break;
     }
     case "error": {

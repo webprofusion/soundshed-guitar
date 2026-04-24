@@ -163,6 +163,15 @@ export function previewRiffTake(takeId: string, enableGuidance = true): void {
   postMessage({ type: "previewRiffTake", takeId, enableGuidance });
 }
 
+export function renderDemoAudio(payload: {
+  audio?: Record<string, unknown>;
+  takeId?: string;
+  title?: string;
+  suggestedName?: string;
+}): void {
+  postMessage({ type: "renderDemoAudio", ...payload });
+}
+
 export function loadRiffTakeForEdit(takeId: string): void {
   postMessage({ type: "loadRiffTakeForEdit", takeId });
 }

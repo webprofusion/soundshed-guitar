@@ -1,12 +1,17 @@
-import { DEMO_AUDIO_SAMPLES, uiState } from "./state.js";
+import { DEMO_AUDIO_SAMPLES, getActivePresetForRender, uiState } from "./state.js";
 import { arrayBufferToBase64, parseWavMetadata, resolveDemoSamplePath } from "./utils.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
-import { postMessage } from "./bridge.js";
+import { postMessage, renderDemoAudio, setAppSetting } from "./bridge.js";
+import { sanitizeFilename } from "./archiveUtils.js";
 import type { DemoSample } from "./types.js";
 
 // Track whether demo audio is currently playing
 let demoAudioPlaying = false;
+let openDemoActionsButton: HTMLButtonElement | null = null;
+let openDemoActionsMenu: HTMLElement | null = null;
+
+const DEMO_AUDIO_SELECTED_ID_SETTING = "demoAudio.selectedId";
 
 type DemoAudioSource =
   | { id: string; title: string; kind: "builtin"; path: string }
@@ -79,13 +84,150 @@ function renderDemoAudioOptions(): string {
     .join("");
 }
 
+function persistDemoAudioSelection(selectedId: string | null): void {
+  uiState.appSettings[DEMO_AUDIO_SELECTED_ID_SETTING] = selectedId;
+  setAppSetting(DEMO_AUDIO_SELECTED_ID_SETTING, selectedId);
+}
+
+function getStoredDemoAudioSelectionId(): string | null {
+  const stored = uiState.appSettings?.[DEMO_AUDIO_SELECTED_ID_SETTING];
+  return typeof stored === "string" && stored.trim().length > 0 ? stored : null;
+}
+
 type DemoAudioBindConfig = {
   selectId: string;
   playId: string;
   repeatId: string;
   syncSelectId?: string;
   syncRepeatId?: string;
+  actionsButtonId?: string;
+  actionsMenuId?: string;
+  renderActionId?: string;
 };
+
+function closeDemoActionsMenu(refocusButton = false): void {
+  if (!openDemoActionsButton || !openDemoActionsMenu) {
+    openDemoActionsButton = null;
+    openDemoActionsMenu = null;
+    return;
+  }
+
+  openDemoActionsButton.setAttribute("aria-expanded", "false");
+  openDemoActionsMenu.classList.remove("open", "drop-up");
+  openDemoActionsMenu.setAttribute("aria-hidden", "true");
+
+  const buttonToFocus = refocusButton ? openDemoActionsButton : null;
+  openDemoActionsButton = null;
+  openDemoActionsMenu = null;
+
+  document.removeEventListener("click", handleDemoActionsDocumentClick);
+  document.removeEventListener("keydown", handleDemoActionsDocumentKeydown);
+
+  if (buttonToFocus) {
+    buttonToFocus.focus();
+  }
+}
+
+function handleDemoActionsDocumentClick(event: MouseEvent): void {
+  if (!openDemoActionsButton || !openDemoActionsMenu) {
+    return;
+  }
+
+  const target = event.target as Node | null;
+  if (!target) {
+    closeDemoActionsMenu();
+    return;
+  }
+
+  if (openDemoActionsButton.contains(target) || openDemoActionsMenu.contains(target)) {
+    return;
+  }
+
+  closeDemoActionsMenu();
+}
+
+function handleDemoActionsDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  if (!openDemoActionsMenu) {
+    return;
+  }
+
+  event.preventDefault();
+  closeDemoActionsMenu(true);
+}
+
+function openActionsMenu(button: HTMLButtonElement, menu: HTMLElement): void {
+  if (openDemoActionsMenu && openDemoActionsMenu !== menu) {
+    closeDemoActionsMenu();
+  }
+
+  const rect = button.getBoundingClientRect();
+  const menuHeight = menu.offsetHeight || 44;
+  const availableBelow = window.innerHeight - rect.bottom;
+  menu.classList.toggle("drop-up", availableBelow < menuHeight + 12 && rect.top > availableBelow);
+  menu.classList.add("open");
+  menu.setAttribute("aria-hidden", "false");
+  button.setAttribute("aria-expanded", "true");
+
+  openDemoActionsButton = button;
+  openDemoActionsMenu = menu;
+
+  document.addEventListener("click", handleDemoActionsDocumentClick);
+  document.addEventListener("keydown", handleDemoActionsDocumentKeydown);
+}
+
+function toggleActionsMenu(button: HTMLButtonElement, menu: HTMLElement): void {
+  if (openDemoActionsMenu === menu) {
+    closeDemoActionsMenu();
+    return;
+  }
+
+  openActionsMenu(button, menu);
+}
+
+function buildDemoRenderSuggestedName(sample: DemoAudioSource): string {
+  const sourceName = sample.title.replace(/^★\s*/, "").trim();
+  const presetName = getActivePresetForRender()?.name?.trim() || "current-preset";
+  return `${sanitizeFilename(presetName, "current-preset")}-${sanitizeFilename(sourceName || "demo-audio", "demo-audio")}.wav`;
+}
+
+async function buildBuiltinDemoAudioPayload(sample: Extract<DemoAudioSource, { kind: "builtin" }>): Promise<Record<string, unknown>> {
+  const demoSample = sample as DemoSample;
+  const resolvedPath = resolveDemoSamplePath(sample.path);
+  if (!resolvedPath) {
+    throw new Error("Demo audio path is not set");
+  }
+
+  appendLog(`preview start → ${resolvedPath}`);
+  const response = await fetch(resolvedPath);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  const base64 = arrayBufferToBase64(buffer);
+  const metadata = parseWavMetadata(buffer);
+
+  const audioPayload: Record<string, unknown> = {
+    id: demoSample.id,
+    title: demoSample.title,
+    path: demoSample.path,
+    size: buffer.byteLength,
+    contentType: "audio/wav",
+    data: base64,
+  };
+
+  if (metadata) {
+    audioPayload.sampleRate = metadata.sampleRate;
+    audioPayload.channels = metadata.channels;
+    audioPayload.bitsPerSample = metadata.bitsPerSample;
+  }
+
+  return audioPayload;
+}
 
 function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
   const selectElement = document.getElementById(config.selectId) as HTMLSelectElement | null;
@@ -94,6 +236,7 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
     selectElement.addEventListener("change", async (event) => {
       const value = (event.target as HTMLSelectElement).value;
       uiState.demoAudioSelectedId = value;
+      persistDemoAudioSelection(value);
       if (config.syncSelectId) {
         const syncSelect = document.getElementById(config.syncSelectId) as HTMLSelectElement | null;
         if (syncSelect) {
@@ -150,6 +293,29 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
       });
     }
   }
+
+  if (config.actionsButtonId && config.actionsMenuId && config.renderActionId) {
+    const actionsButton = document.getElementById(config.actionsButtonId) as HTMLButtonElement | null;
+    const actionsMenu = document.getElementById(config.actionsMenuId) as HTMLElement | null;
+    const renderAction = document.getElementById(config.renderActionId) as HTMLButtonElement | null;
+
+    if (actionsButton && actionsMenu && renderAction) {
+      actionsButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleActionsMenu(actionsButton, actionsMenu);
+      });
+
+      actionsMenu.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      renderAction.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        closeDemoActionsMenu();
+        await renderSelectedDemoAudio();
+      });
+    }
+  }
 }
 
 /**
@@ -178,6 +344,31 @@ export function renderFooterDemoAudioControls(): string {
           <path d="M17 18l3-3-3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
+      <div class="footer-demo-actions-wrap demo-actions-wrap">
+        <button
+          id="footer-demo-audio-actions-button"
+          class="footer-demo-actions-button"
+          type="button"
+          title="Demo audio actions"
+          aria-label="Demo audio actions"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="footer-demo-audio-actions-menu"
+        >
+          <span aria-hidden="true">...</span>
+        </button>
+        <div class="demo-audio-actions-menu footer-demo-audio-actions-menu" id="footer-demo-audio-actions-menu" role="menu" aria-hidden="true">
+          <button
+            id="footer-render-demo-audio"
+            class="demo-audio-action-item"
+            type="button"
+            role="menuitem"
+            title="Render the selected demo audio with the current preset"
+          >
+            Render WAV
+          </button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -193,6 +384,9 @@ export function bindFooterDemoAudioControls(): void {
     repeatId: "footer-demo-audio-repeat",
     syncSelectId: "demo-audio-select",
     syncRepeatId: "demo-audio-repeat-checkbox",
+    actionsButtonId: "footer-demo-audio-actions-button",
+    actionsMenuId: "footer-demo-audio-actions-menu",
+    renderActionId: "footer-render-demo-audio",
   });
 }
 
@@ -216,6 +410,31 @@ export function renderDemoAudioControls(): string {
           <span class="play-icon">▶</span>
           Play
         </button>
+        <div class="demo-actions-wrap">
+          <button
+            id="demo-audio-actions-button"
+            class="demo-actions-button"
+            type="button"
+            title="Demo audio actions"
+            aria-label="Demo audio actions"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="demo-audio-actions-menu"
+          >
+            <span aria-hidden="true">...</span>
+          </button>
+          <div class="demo-audio-actions-menu" id="demo-audio-actions-menu" role="menu" aria-hidden="true">
+            <button
+              id="render-demo-audio"
+              class="demo-audio-action-item"
+              type="button"
+              role="menuitem"
+              title="Render the selected demo audio with the current preset"
+            >
+              Render WAV
+            </button>
+          </div>
+        </div>
         <div class="toggle-control demo-repeat-control">
           <span class="toggle-label">REPEAT</span>
           <label class="toggle-switch">
@@ -235,7 +454,46 @@ export function bindDemoAudioControls(): void {
     repeatId: "demo-audio-repeat-checkbox",
     syncSelectId: "footer-demo-audio-select",
     syncRepeatId: "footer-demo-audio-repeat",
+    actionsButtonId: "demo-audio-actions-button",
+    actionsMenuId: "demo-audio-actions-menu",
+    renderActionId: "render-demo-audio",
   });
+}
+
+export async function renderSelectedDemoAudio(): Promise<void> {
+  const sample = getSelectedDemoAudio();
+  if (!sample) {
+    showNotification("No demo audio available");
+    return;
+  }
+
+  try {
+    const suggestedName = buildDemoRenderSuggestedName(sample);
+
+    if (sample.kind === "riff") {
+      renderDemoAudio({
+        takeId: sample.takeId,
+        title: sample.title.replace(/^★\s*/, ""),
+        suggestedName,
+      });
+      showNotification("Choose export location", sample.title.replace(/^★\s*/, ""));
+      appendLog(`render demo audio requested → ${sample.takeId}`);
+      return;
+    }
+
+    const audioPayload = await buildBuiltinDemoAudioPayload(sample);
+    renderDemoAudio({
+      audio: audioPayload,
+      title: sample.title,
+      suggestedName,
+    });
+    showNotification("Choose export location", sample.title);
+    appendLog(`render demo audio requested → ${sample.title}`);
+  } catch (error) {
+    console.error("Failed to render demo audio", error);
+    appendLog(`render error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
+    showNotification("Failed to render demo audio", error instanceof Error ? error.message : String(error));
+  }
 }
 
 export async function previewSelectedDemoAudio(): Promise<void> {
@@ -257,36 +515,7 @@ export async function previewSelectedDemoAudio(): Promise<void> {
       return;
     }
 
-    const demoSample = sample as DemoSample;
-    const resolvedPath = resolveDemoSamplePath(sample.path);
-    if (!resolvedPath) {
-      throw new Error("Demo audio path is not set");
-    }
-
-    appendLog(`preview start → ${resolvedPath}`);
-    const response = await fetch(resolvedPath);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const buffer = await response.arrayBuffer();
-    const base64 = arrayBufferToBase64(buffer);
-    const metadata = parseWavMetadata(buffer);
-
-    const audioPayload: Record<string, unknown> = {
-      id: demoSample.id,
-      title: demoSample.title,
-      path: demoSample.path,
-      size: buffer.byteLength,
-      contentType: "audio/wav",
-      data: base64,
-    };
-
-    if (metadata) {
-      audioPayload.sampleRate = metadata.sampleRate;
-      audioPayload.channels = metadata.channels;
-      audioPayload.bitsPerSample = metadata.bitsPerSample;
-    }
+    const audioPayload = await buildBuiltinDemoAudioPayload(sample);
 
     postMessage({
       type: "previewDemoAudio",
@@ -312,7 +541,6 @@ export function refreshDemoAudioSelectors(): void {
   const selectedId = uiState.demoAudioSelectedId && sources.some((entry) => entry.id === uiState.demoAudioSelectedId)
     ? uiState.demoAudioSelectedId
     : sources[0].id;
-  uiState.demoAudioSelectedId = selectedId;
 
   const mainSelect = document.getElementById("demo-audio-select") as HTMLSelectElement | null;
   if (mainSelect) {
@@ -334,6 +562,7 @@ export function syncDemoAudioSelectionFromPreview(previewId: string | null | und
   }
 
   uiState.demoAudioSelectedId = normalizedId;
+  persistDemoAudioSelection(normalizedId);
 
   const mainSelect = document.getElementById("demo-audio-select") as HTMLSelectElement | null;
   if (mainSelect) {
@@ -350,8 +579,19 @@ export function syncDemoAudioSelectionFromPreview(previewId: string | null | und
  * Stop the currently playing demo audio.
  */
 export function stopDemoAudio(): void {
+  closeDemoActionsMenu();
   postMessage({ type: "stopDemoAudio" });
   appendLog("stop demo audio requested");
+}
+
+export function applyStoredDemoAudioSelection(): void {
+  const storedSelection = getStoredDemoAudioSelectionId();
+  if (!storedSelection) {
+    return;
+  }
+
+  uiState.demoAudioSelectedId = storedSelection;
+  refreshDemoAudioSelectors();
 }
 
 /**

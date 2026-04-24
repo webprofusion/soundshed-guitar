@@ -18,6 +18,13 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <thread>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
+#endif
 
 namespace juce
 {
@@ -26,6 +33,17 @@ void JUCE_CALLTYPE juce_showStandaloneAudioSettingsDialog();
 
 namespace
 {
+#ifdef _WIN32
+struct ScopedComInitializer
+{
+    HRESULT hr;
+    ScopedComInitializer() : hr(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)) {}
+    ~ScopedComInitializer() { if (SUCCEEDED(hr)) CoUninitialize(); }
+    ScopedComInitializer(const ScopedComInitializer&) = delete;
+    ScopedComInitializer& operator=(const ScopedComInitializer&) = delete;
+};
+#endif
+
 #if JUCE_LINUX
 class HeadlessLv2ManifestEditor final : public juce::AudioProcessorEditor
 {
@@ -202,6 +220,15 @@ void PluginProcessorAdapter::BrowseFileAsync(
     const std::string& title,
     std::function<void(const guitarfx::BrowseFileResult&)> callback)
 {
+    if (!juce::MessageManager::getInstance()->isThisTheMessageThread())
+    {
+        juce::MessageManager::callAsync([this, type, title, callback = std::move(callback)]() mutable
+        {
+            BrowseFileAsync(type, title, std::move(callback));
+        });
+        return;
+    }
+
     juce::String filters;
     switch (type)
     {
@@ -243,6 +270,111 @@ void PluginProcessorAdapter::SaveFileAsync(
     const std::string& defaultName,
     std::function<void(const guitarfx::BrowseFileResult&)> callback)
 {
+#ifdef _WIN32
+    std::thread([type, title, defaultName, callback = std::move(callback)]() mutable
+    {
+        ScopedComInitializer com;
+        guitarfx::BrowseFileResult result;
+
+        Microsoft::WRL::ComPtr<IFileSaveDialog> dialog;
+        HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&dialog));
+        if (FAILED(hr))
+        {
+            if (callback) callback(result);
+            return;
+        }
+
+        auto normalizedDefaultName = defaultName;
+        std::transform(normalizedDefaultName.begin(), normalizedDefaultName.end(), normalizedDefaultName.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+        const auto hasSuffix = [&normalizedDefaultName](std::string_view suffix)
+        {
+            return normalizedDefaultName.size() >= suffix.size()
+                && normalizedDefaultName.compare(normalizedDefaultName.size() - suffix.size(), suffix.size(), suffix) == 0;
+        };
+
+        std::vector<COMDLG_FILTERSPEC> filters;
+        std::wstring defaultExtension;
+        switch (type)
+        {
+            case guitarfx::BrowseFileType::PresetFile:
+                filters = {{ L"JSON Files", L"*.json" }};
+                defaultExtension = L"json";
+                break;
+            case guitarfx::BrowseFileType::ArchiveFile:
+                if (hasSuffix(".soundshed.preset"))
+                {
+                    filters = {{ L"Preset Archive", L"*.soundshed.preset" }};
+                    defaultExtension = L"soundshed.preset";
+                }
+                else if (hasSuffix(".soundshed.presets"))
+                {
+                    filters = {{ L"Preset Archives", L"*.soundshed.presets" }};
+                    defaultExtension = L"soundshed.presets";
+                }
+                else if (hasSuffix(".zip"))
+                {
+                    filters = {{ L"ZIP Archives", L"*.zip" }};
+                    defaultExtension = L"zip";
+                }
+                else
+                {
+                    filters = {{ L"Preset Archive", L"*.soundshed.preset" }};
+                    defaultExtension = L"soundshed.preset";
+                }
+                break;
+            case guitarfx::BrowseFileType::AudioFile:
+                filters = {{ L"WAV Files", L"*.wav" }};
+                defaultExtension = L"wav";
+                break;
+            default:
+                filters = {{ L"All Files", L"*.*" }};
+                break;
+        }
+
+        dialog->SetFileTypes(static_cast<UINT>(filters.size()), filters.data());
+        if (!defaultExtension.empty())
+            dialog->SetDefaultExtension(defaultExtension.c_str());
+
+        std::wstring wtitle(title.begin(), title.end());
+        dialog->SetTitle(wtitle.c_str());
+
+        std::wstring wname(defaultName.begin(), defaultName.end());
+        dialog->SetFileName(wname.c_str());
+
+        hr = dialog->Show(nullptr);
+        if (SUCCEEDED(hr))
+        {
+            Microsoft::WRL::ComPtr<IShellItem> item;
+            hr = dialog->GetResult(&item);
+            if (SUCCEEDED(hr))
+            {
+                PWSTR filePath = nullptr;
+                hr = item->GetDisplayName(SIGDN_FILESYSPATH, &filePath);
+                if (SUCCEEDED(hr) && filePath)
+                {
+                    result.path = std::filesystem::path(filePath);
+                    result.success = true;
+                    CoTaskMemFree(filePath);
+                }
+            }
+        }
+
+        if (callback) callback(result);
+    }).detach();
+    return;
+#endif
+
+    if (!juce::MessageManager::getInstance()->isThisTheMessageThread())
+    {
+        juce::MessageManager::callAsync([this, type, title, defaultName, callback = std::move(callback)]() mutable
+        {
+            SaveFileAsync(type, title, defaultName, std::move(callback));
+        });
+        return;
+    }
+
     auto normalizedDefaultName = defaultName;
     std::transform(normalizedDefaultName.begin(), normalizedDefaultName.end(), normalizedDefaultName.begin(),
         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
