@@ -2,9 +2,10 @@ import { DEMO_AUDIO_SAMPLES, getActivePresetForRender, uiState } from "./state.j
 import { arrayBufferToBase64, parseWavMetadata, resolveDemoSamplePath } from "./utils.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
-import { postMessage, renderDemoAudio, setAppSetting } from "./bridge.js";
+import { postMessage, renderDemoAudio, requestCaptureDebugSnapshot, setAppSetting } from "./bridge.js";
 import { sanitizeFilename } from "./archiveUtils.js";
 import type { DemoSample } from "./types.js";
+import { Features, isFeatureEnabled } from "./featureFlags.js";
 
 // Track whether demo audio is currently playing
 let demoAudioPlaying = false;
@@ -327,6 +328,7 @@ export function renderFooterDemoAudioControls(): string {
     return "";
   }
   const options = renderDemoAudioOptions();
+  const debugCaptureHidden = isFeatureEnabled(Features.DebugStateCapture) ? "" : " hidden";
 
   return `
     <div class="footer-demo-controls">
@@ -369,6 +371,20 @@ export function renderFooterDemoAudioControls(): string {
           </button>
         </div>
       </div>
+      <button
+        id="footer-capture-debug-state-btn"
+        class="footer-debug-capture-btn"
+        type="button"
+        title="Capture the current UI and backend debug state"
+        aria-label="Capture debug state"
+        ${debugCaptureHidden}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 7.5h2l1.2-1.8a1 1 0 0 1 .83-.45h3.94a1 1 0 0 1 .83.45L18 7.5h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h1.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="13" r="3.25" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 3.75v2.5M12 19.75v.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
   `;
 }
@@ -388,6 +404,15 @@ export function bindFooterDemoAudioControls(): void {
     actionsMenuId: "footer-demo-audio-actions-menu",
     renderActionId: "footer-render-demo-audio",
   });
+
+  const captureButton = document.getElementById("footer-capture-debug-state-btn") as HTMLButtonElement | null;
+  if (captureButton && captureButton.dataset.bound !== "true") {
+    captureButton.dataset.bound = "true";
+    captureButton.addEventListener("click", () => {
+      requestCaptureDebugSnapshot("footer-button");
+      showNotification("Capturing debug state", "Snapshot will be written to the app logs folder.");
+    });
+  }
 }
 
 export function renderDemoAudioControls(): string {

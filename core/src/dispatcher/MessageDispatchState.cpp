@@ -15,6 +15,16 @@ bool MessageDispatcher::DispatchStateAndLists(PluginController& c,
         c.HandleStateRequest();
         return true;
     }
+    if (type == "captureDebugSnapshot")
+    {
+        c.HandleCaptureDebugSnapshotRequest(msg);
+        return true;
+    }
+    if (type == "debugReportUiState")
+    {
+        c.HandleDebugReportUiStateRequest(msg);
+        return true;
+    }
     if (type == "getAppInfo")
     {
         c.HandleGetAppInfoRequest();

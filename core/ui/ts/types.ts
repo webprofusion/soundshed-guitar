@@ -565,6 +565,10 @@ declare global {
     NAMBridge: { postMessage: (payload: unknown) => void };
     IPlugSendMsg?: (payload: unknown) => void;
     IPlugReceiveData?: (message: string) => void;
+    SoundshedDebug?: {
+      captureSnapshot: (reason?: string) => Record<string, unknown>;
+      getUiSnapshot: (reason?: string) => Record<string, unknown>;
+    };
     AUDIOFX_REMOTE_BASE_URL?: string;
     SOUNDSHED_BUILD_FLAGS?: {
       jamEnabled?: boolean;

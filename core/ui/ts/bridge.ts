@@ -209,6 +209,11 @@ export function requestAppInfo(): void {
   postMessage({ type: "getAppInfo" });
 }
 
+export function requestCaptureDebugSnapshot(source = "footer-button"): void {
+  postMessage({ type: "captureDebugSnapshot", source });
+  appendLog(`captureDebugSnapshot → ${source}`);
+}
+
 // ── Composite Presets (Multi-Rig) ─────────────────────────────────────────────
 
 export function saveCompositePreset(name: string, description?: string): void {

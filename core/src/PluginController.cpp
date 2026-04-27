@@ -131,6 +131,55 @@ namespace
     constexpr const char* kLegacyInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
     constexpr const char* kLegacyInterfaceCalibrationReferenceDbuSettingKey = "audio.interfaceCalibration.referenceDbu";
     constexpr const char* kSessionLogFileName = "logs/session-log.txt";
+    constexpr const char* kDebugSnapshotFileName = "logs/debug-state.json";
+
+    bool IsSensitiveDebugKey(std::string_view key)
+    {
+        if (key.empty())
+            return false;
+
+        std::string normalizedKey(key);
+        std::transform(normalizedKey.begin(), normalizedKey.end(), normalizedKey.begin(), [](unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        });
+
+        return normalizedKey.find("token") != std::string::npos
+            || normalizedKey.find("api_key") != std::string::npos
+            || normalizedKey.find("apikey") != std::string::npos
+            || normalizedKey.find("secret") != std::string::npos
+            || normalizedKey.find("password") != std::string::npos
+            || normalizedKey.find("authorization") != std::string::npos
+            || normalizedKey.find("cookie") != std::string::npos
+            || normalizedKey.find("credential") != std::string::npos;
+    }
+
+    void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey = {})
+    {
+        if (IsSensitiveDebugKey(currentKey))
+        {
+            value = "<redacted>";
+            return;
+        }
+
+        if (value.is_object())
+        {
+            for (auto it = value.begin(); it != value.end(); ++it)
+                ScrubSensitiveJson(it.value(), it.key());
+            return;
+        }
+
+        if (value.is_array())
+        {
+            for (auto& entry : value)
+                ScrubSensitiveJson(entry);
+        }
+    }
+
+    std::filesystem::path ResolveDebugSnapshotPath(const guitarfx::FileSystem& fileSystem)
+    {
+        return fileSystem.ResolveSettingsDirectory() / kDebugSnapshotFileName;
+    }
 
     double ToDbFS(double linear)
     {
@@ -1217,6 +1266,23 @@ static std::string GenerateGuidV4String()
     return part1 + "-" + part2 + "-" + part3 + "-" + part4 + "-" + part5;
 }
 
+static std::string HashStringForLog(std::string_view value)
+{
+    constexpr std::uint64_t kFNVOffsetBasis = 14695981039346656037ull;
+    constexpr std::uint64_t kFNVPrime = 1099511628211ull;
+
+    std::uint64_t hash = kFNVOffsetBasis;
+    for (const unsigned char byte : value)
+    {
+        hash ^= static_cast<std::uint64_t>(byte);
+        hash *= kFNVPrime;
+    }
+
+    std::ostringstream stream;
+    stream << "0x" << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return stream.str();
+}
+
 static void ScrubHostedPluginStateForUi(SignalGraph& graph)
 {
     for (auto& node : graph.nodes)
@@ -1271,6 +1337,50 @@ static bool PresetHasScrubbedHostedPluginState(const Preset& preset)
     }
 
     return false;
+}
+
+static void AppendHostedPluginGraphSummary(const SignalGraph& graph,
+                                           const std::string& scopeLabel,
+                                           std::vector<std::string>& entries)
+{
+    for (const auto& node : graph.nodes)
+    {
+        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+            continue;
+
+        const auto stateIt = node.config.find("pluginStateBase64");
+        const auto lengthIt = node.config.find("pluginStateBase64Length");
+        const std::string stateLength = stateIt != node.config.end()
+            ? std::to_string(stateIt->second.size())
+            : std::string{"0"};
+        const std::string stateHash = stateIt != node.config.end()
+            ? HashStringForLog(stateIt->second)
+            : std::string{"<none>"};
+        const std::string scrubbedLength = lengthIt != node.config.end()
+            ? lengthIt->second
+            : std::string{"0"};
+        entries.push_back(scopeLabel + "/" + node.id + ":state=" + stateLength + ",hash=" + stateHash + ",scrubbed=" + scrubbedLength);
+    }
+}
+
+static std::string SummarizeHostedPluginState(const Preset& preset)
+{
+    std::vector<std::string> entries;
+    AppendHostedPluginGraphSummary(preset.graph, "graph", entries);
+    for (const auto& scene : preset.scenes)
+        AppendHostedPluginGraphSummary(scene.graph, "scene:" + scene.id, entries);
+
+    if (entries.empty())
+        return "no hosted plugin nodes";
+
+    std::ostringstream summary;
+    for (size_t index = 0; index < entries.size(); ++index)
+    {
+        if (index > 0)
+            summary << "; ";
+        summary << entries[index];
+    }
+    return summary.str();
 }
 
 static std::string GenerateUserPresetId()
@@ -2781,6 +2891,73 @@ void PluginController::HandleStateRequest()
     mPendingStateBroadcast = true;
 }
 
+void PluginController::HandleCaptureDebugSnapshotRequest(const nlohmann::json& payload)
+{
+    const std::string source = payload.value("source", "manual");
+
+    if (!mUIReady)
+    {
+        HandleDebugReportUiStateRequest(nlohmann::json{
+            {"source", source + ":backend-only"},
+        });
+        return;
+    }
+
+    SendMessageToUI(nlohmann::json{
+        {"type", "captureDebugSnapshot"},
+        {"source", source},
+    }.dump());
+}
+
+void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& payload)
+{
+    try
+    {
+        const std::string source = payload.value("source", "ui-auto");
+        nlohmann::json snapshot = nlohmann::json::object();
+        snapshot["type"] = "debugSnapshot";
+        snapshot["capturedAt"] = FormatTimestamp();
+        snapshot["source"] = source;
+        snapshot["paths"] = {
+            {"sessionLog", (mFileSystem.ResolveSettingsDirectory() / kSessionLogFileName).generic_string()},
+            {"snapshot", ResolveDebugSnapshotPath(mFileSystem).generic_string()},
+        };
+        snapshot["session"] = {
+            {"activePresetId", mActivePresetId},
+            {"activeSceneId", GetResolvedActiveSceneId()},
+            {"uiReady", mUIReady},
+            {"pendingStateBroadcast", mPendingStateBroadcast},
+            {"activePresetIds", mPresetMixer.GetActivePresetIds()},
+        };
+
+        if (payload.contains("snapshot"))
+        {
+            snapshot["ui"] = payload["snapshot"];
+            ScrubSensitiveJson(snapshot["ui"]);
+        }
+
+        nlohmann::json backendState = nlohmann::json::parse(SerializeState());
+        ScrubSensitiveJson(backendState);
+        snapshot["backend"] = std::move(backendState);
+
+        if (mActivePreset)
+            snapshot["activePresetSummary"] = SummarizeHostedPluginState(*mActivePreset);
+
+        const auto snapshotPath = ResolveDebugSnapshotPath(mFileSystem);
+        SaveJsonFile(mFileSystem, snapshotPath, snapshot);
+
+        SendMessageToUI(nlohmann::json{
+            {"type", "debugSnapshotWritten"},
+            {"path", snapshotPath.generic_string()},
+            {"source", source},
+        }.dump());
+    }
+    catch (const std::exception& e)
+    {
+        AppendSessionLog("Debug snapshot write failed: " + std::string{e.what()});
+    }
+}
+
 void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 {
     try
@@ -2796,10 +2973,23 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
         preset = std::move(*presetOpt);
 
         const std::string requestedPresetId = payload.value("presetId", preset.id);
-        if (!requestedPresetId.empty() && PresetHasScrubbedHostedPluginState(preset))
+        const bool scrubbedHostedState = PresetHasScrubbedHostedPluginState(preset);
+        AppendSessionLog("Hosted plugin load request presetId="
+            + (requestedPresetId.empty() ? std::string{"<none>"} : requestedPresetId)
+            + ", scrubbed=" + std::string{scrubbedHostedState ? "true" : "false"}
+            + ", payload=" + SummarizeHostedPluginState(preset));
+        if (!requestedPresetId.empty() && scrubbedHostedState)
         {
             if (auto storedPreset = TryLoadStoredPresetById(requestedPresetId))
+            {
+                AppendSessionLog("Hosted plugin load rehydrated presetId=" + requestedPresetId
+                    + " from authoritative source: " + SummarizeHostedPluginState(*storedPreset));
                 preset = std::move(*storedPreset);
+            }
+            else
+            {
+                AppendSessionLog("Hosted plugin load could not rehydrate presetId=" + requestedPresetId);
+            }
         }
 
         NormalizePresetScenes(preset);
@@ -2809,6 +2999,10 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
             mActiveSceneId = GetDefaultPresetSceneId(preset);
 
         ApplyBlendDefinitions(preset);
+
+        AppendSessionLog("Hosted plugin load applying presetId="
+            + (requestedPresetId.empty() ? preset.id : requestedPresetId)
+            + ", final=" + SummarizeHostedPluginState(preset));
 
         mActivePresetId = requestedPresetId.empty() ? preset.id : requestedPresetId;
         ApplyPreset(preset); // SetGlobalChainConfig is called inside ApplyPreset under mDSPMutex
@@ -2884,6 +3078,8 @@ std::optional<Preset> PluginController::TryLoadStoredPresetById(const std::strin
         {
             Preset preset = *mActivePreset;
             CaptureRuntimePluginStates(preset, mActivePresetId.empty() ? resolvedPresetId : mActivePresetId);
+            AppendSessionLog("Hosted plugin rehydrate source=active presetId=" + resolvedPresetId
+                + ", state=" + SummarizeHostedPluginState(preset));
             return preset;
         }
     }
@@ -2898,19 +3094,31 @@ std::optional<Preset> PluginController::TryLoadStoredPresetById(const std::strin
     if (std::filesystem::exists(userPath))
     {
         if (auto presetOpt = PresetStorage::LoadFromFile(userPath))
+        {
+            AppendSessionLog("Hosted plugin rehydrate source=user-file presetId=" + resolvedPresetId
+                + ", path=" + userPath.generic_string() + ", state=" + SummarizeHostedPluginState(*presetOpt));
             return presetOpt;
+        }
     }
 
     const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
     if (std::filesystem::exists(factoryPath))
     {
         if (auto presetOpt = PresetStorage::LoadFromFile(factoryPath))
+        {
+            AppendSessionLog("Hosted plugin rehydrate source=factory-file presetId=" + resolvedPresetId
+                + ", path=" + factoryPath.generic_string() + ", state=" + SummarizeHostedPluginState(*presetOpt));
             return presetOpt;
+        }
     }
 
     const auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
     if (archiveIt != mFactoryArchivePresets.end())
+    {
+        AppendSessionLog("Hosted plugin rehydrate source=factory-archive presetId=" + resolvedPresetId
+            + ", state=" + SummarizeHostedPluginState(archiveIt->second));
         return archiveIt->second;
+    }
 
     return std::nullopt;
 }
@@ -3382,7 +3590,14 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
             mUserPresetsPath = mFileSystem.ResolvePresetDirectory() / "user";
         [[maybe_unused]] const auto ensuredUserPresetPath = mFileSystem.EnsureDirectory(mUserPresetsPath);
 
+        AppendSessionLog("Hosted plugin preset save begin presetId=" + newPreset.id
+            + ", sourcePresetId=" + (sourcePresetId.empty() ? std::string{"<none>"} : sourcePresetId)
+            + ", beforeCapture=" + SummarizeHostedPluginState(newPreset));
+
         CaptureRuntimePluginStates(newPreset, sourcePresetId.empty() ? mActivePresetId : sourcePresetId);
+
+        AppendSessionLog("Hosted plugin preset save captured presetId=" + newPreset.id
+            + ", afterCapture=" + SummarizeHostedPluginState(newPreset));
 
         const auto presetPath = mUserPresetsPath / (newPreset.id + ".json");
         if (!PresetStorage::SaveToFile(newPreset, presetPath))
@@ -3390,6 +3605,9 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
             ReportErrorToUI("Failed to save preset", "Could not write preset file");
             return;
         }
+
+        AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id
+            + ", path=" + presetPath.generic_string() + ", state=" + SummarizeHostedPluginState(newPreset));
 
         mActivePreset = newPreset;
         mActivePresetId = newPreset.id;
@@ -3543,13 +3761,19 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
 
     if (capture)
     {
+        AppendSessionLog("Hosted plugin capture requested presetId=" + presetId + ", nodeId=" + nodeId);
         key = "pluginStateBase64";
         value = mPresetMixer.GetNodeConfig(presetId, nodeId, key);
         if (value.empty())
         {
+            AppendSessionLog("Hosted plugin capture failed presetId=" + presetId + ", nodeId=" + nodeId + ": empty runtime state");
             ReportErrorToUI("Plugin state capture failed", "No hosted plugin state was available for node " + nodeId);
             return;
         }
+
+        AppendSessionLog("Hosted plugin capture succeeded presetId=" + presetId + ", nodeId=" + nodeId
+            + ", stateLength=" + std::to_string(value.size())
+            + ", stateHash=" + HashStringForLog(value));
     }
 
     mPresetMixer.SetNodeConfig(presetId, nodeId, key, value);
@@ -8046,11 +8270,20 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
             node.config.erase("pluginStateBase64Length");
 
             std::string state = captureRuntimeState(node.id);
+            std::string source = "runtime";
             if (state.empty())
+            {
                 state = findExistingState(node.id);
+                source = "existing";
+            }
             if (!state.empty())
             {
                 node.config["pluginStateBase64"] = state;
+                AppendSessionLog("Hosted plugin runtime state selected presetId="
+                    + (presetId.empty() ? std::string{"<none>"} : presetId)
+                    + ", nodeId=" + node.id + ", source=" + source
+                    + ", length=" + std::to_string(state.size())
+                    + ", hash=" + HashStringForLog(state));
             }
             else
             {

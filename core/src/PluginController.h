@@ -165,6 +165,8 @@ private:
     // ── Internal handler methods ───────────────────────────────────
     // These are called by MessageDispatcher and operate on controller state.
     void HandleStateRequest();
+    void HandleCaptureDebugSnapshotRequest(const nlohmann::json& payload);
+    void HandleDebugReportUiStateRequest(const nlohmann::json& payload);
     void HandlePresetLoadRequest(const nlohmann::json& payload);
     void HandleSetParameterRequest(const nlohmann::json& payload);
     void HandleSetGlobalChainParamRequest(const nlohmann::json& payload);

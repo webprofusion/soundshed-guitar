@@ -510,6 +510,31 @@ body:not(.is-standalone) .main-content .metronome-only {
   position: relative;
 }
 
+.footer-debug-capture-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.footer-debug-capture-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.footer-debug-capture-btn:hover {
+  color: var(--text-dark-primary);
+  background: var(--bg-dark-tertiary);
+  transform: translateY(-1px);
+}
+
 .footer-demo-actions-button {
   width: 28px;
   height: 28px;
@@ -737,6 +762,7 @@ body:not(.is-standalone) .main-content .metronome-only {
 
 .theme-classic .footer-play-btn,
 .theme-classic .footer-repeat-btn,
+.theme-classic .footer-debug-capture-btn,
 .theme-classic .footer-demo-select {
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-dark-secondary), #fff 8%) 0%, var(--bg-dark-secondary) 100%);
   border-color: color-mix(in srgb, var(--border-dark-medium), #000 8%);
@@ -744,7 +770,8 @@ body:not(.is-standalone) .main-content .metronome-only {
 }
 
 .theme-classic .footer-play-btn:hover,
-.theme-classic .footer-repeat-btn:hover {
+.theme-classic .footer-repeat-btn:hover,
+.theme-classic .footer-debug-capture-btn:hover {
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-dark-tertiary), #fff 10%) 0%, var(--bg-dark-tertiary) 100%);
   border-color: color-mix(in srgb, var(--border-dark-strong), #000 10%);
 }

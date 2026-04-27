@@ -15,6 +15,7 @@ export const Features = {
   EffectLayout: "effectLayouts",
   ResourceCleanup: "resourceCleanup",
   FactoryPresetArchives: "factoryPresetArchives",
+  DebugStateCapture: "debugStateCapture",
 } as const;
 
 export type FeatureId = typeof Features[keyof typeof Features];
@@ -129,6 +130,14 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     defaultEnabled: false,
     legacyAdvanced: true,
   },
+  {
+    id: Features.DebugStateCapture,
+    key: "features.debugStateCapture.enabled",
+    label: "Capture Debug State",
+    description: "Shows a footer action that writes the current UI and backend debug snapshot for agent inspection.",
+    defaultEnabled: false,
+    legacyAdvanced: true,
+  },
 ];
 
 export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
@@ -142,7 +151,7 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
     id: "power",
     title: "Power Features",
     description: "These replace the old Advanced Options toggle and default to off unless you previously enabled it.",
-    featureIds: [Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives],
+    featureIds: [Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives, Features.DebugStateCapture],
   },
 ];
 

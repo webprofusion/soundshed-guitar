@@ -378,8 +378,10 @@ function syncFeatureVisibility(): void {
   const jamExperienceEnabled = isJamExperienceEnabled();
   const resourceCleanupEnabled = isFeatureEnabled(Features.ResourceCleanup);
   const factoryPresetArchivesEnabled = isFeatureEnabled(Features.FactoryPresetArchives);
+  const debugStateCaptureEnabled = isFeatureEnabled(Features.DebugStateCapture);
   const libraryEnabled = isLibraryExperienceEnabled();
   const advancedLibraryEnabled = areAdvancedLibraryFeaturesEnabled();
+  const footerDebugCaptureButton = document.getElementById("footer-capture-debug-state-btn") as HTMLElement | null;
 
   setSectionVisibility(tone3000SettingsHeading, tone3000SettingsSection, tone3000Enabled);
   setSectionVisibility(libraryToolsHeading, libraryToolsSection, resourceLibraryEnabled);
@@ -403,6 +405,7 @@ function syncFeatureVisibility(): void {
   setElementVisibility(jamPlayerDock, jamEnabled);
   setElementVisibility(jamFloatingPlayerRoot, jamEnabled);
   setElementVisibility(footerRiffRecordButton, riffLibraryEnabled);
+  setElementVisibility(footerDebugCaptureButton, debugStateCaptureEnabled);
 
   if (factoryArchiveSettingsSection) {
     factoryArchiveSettingsSection.toggleAttribute("hidden", !factoryPresetArchivesEnabled);
