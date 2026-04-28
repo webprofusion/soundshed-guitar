@@ -76,17 +76,8 @@ CPMAddPackage(
 )
 
 if (WIN32)
-    set(_guitarfx_windows_target_arch "${CMAKE_GENERATOR_PLATFORM}")
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${MSVC_CXX_ARCHITECTURE_ID}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_VS_PLATFORM_NAME}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
-    string(TOLOWER "${_guitarfx_windows_target_arch}" _guitarfx_windows_target_arch)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../core/cmake/GuitarfxWindowsArch.cmake")
+    guitarfx_detect_windows_arch(_guitarfx_windows_target_arch)
 
     if(_guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
         CPMAddPackage(
@@ -103,6 +94,7 @@ endif()
 
 # Signalsmith headers are provided transitively by SoundshedGuitarCore.
 
+# The shared detector lowercases Visual Studio's canonical Win32 platform name for comparisons.
 if(WIN32 AND _guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
     set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
     message(STATUS "Windows x86 build detected; disabling WASM effects because Wasmtime does not provide a Windows x86 C API bundle.")

@@ -24,6 +24,7 @@ if not defined ARCH_IS_SUPPORTED (
     echo ERROR: Unsupported Windows architecture "%ARCH%". Expected one of: Win32, x64, ARM64.
     exit /b 1
 )
+:: Export the resolved platform for Inno Setup architecture/install path selection.
 set "GUITARFX_WINDOWS_ARCH=%ARCH%"
 if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
     set "CMAKE_GENERATOR=%GUITARFX_WINDOWS_CMAKE_GENERATOR%"
