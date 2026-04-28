@@ -3,7 +3,7 @@
 #define ProductName GetEnv('PRODUCT_NAME')
 #define Publisher GetEnv('COMPANY_NAME')
 #define TargetArch GetEnv('GUITARFX_WINDOWS_ARCH')
-; Default to x64 to match build_windows.bat when no explicit Windows architecture is provided.
+; build_windows.bat always exports the resolved architecture; keep x64 as a standalone packaging fallback.
 #if TargetArch == ""
   #define TargetArch "x64"
 #endif
