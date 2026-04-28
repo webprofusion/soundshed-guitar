@@ -1295,7 +1295,6 @@ static void ScrubHostedPluginStateForUi(SignalGraph& graph)
             continue;
 
         node.config["pluginStateBase64Length"] = std::to_string(stateIt->second.size());
-        node.config["pluginStateBase64Hash"] = HashStringForLog(stateIt->second);
         node.config.erase(stateIt);
     }
 }
@@ -3806,12 +3805,10 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
     {
         SendMessageToUI(nlohmann::json{
             {"type", "signalPathNodeConfigUpdated"},
-            {"presetId", presetId},
             {"nodeId", nodeId},
             {"key", key},
             {"captured", true},
-            {"valueLength", value.size()},
-            {"valueHash", HashStringForLog(value)}
+            {"valueLength", value.size()}
         }.dump());
     }
 }
@@ -8090,12 +8087,10 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
     {
         SendMessageToUI(nlohmann::json{
             {"type", "signalPathNodeConfigUpdated"},
-            {"presetId", presetId},
             {"nodeId", nodeId},
             {"key", key},
             {"captured", true},
             {"valueLength", value.size()},
-            {"valueHash", HashStringForLog(value)},
             {"silent", true}
         }.dump());
     }
@@ -8345,7 +8340,6 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
                 continue;
 
             node.config.erase("pluginStateBase64Length");
-            node.config.erase("pluginStateBase64Hash");
 
             std::string state = captureRuntimeState(node.id);
             std::string source = "runtime";
