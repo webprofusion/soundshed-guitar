@@ -20,13 +20,18 @@ if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
 ) else (
     set "CMAKE_GENERATOR=Visual Studio 18 2026"
 )
+set "CMAKE_EXTRA_ARGS="
+if /I "%ARCH%"=="Win32" (
+    set "CMAKE_EXTRA_ARGS=-DGUITARFX_CORE_ENABLE_WASM_EFFECTS=OFF"
+    echo       Note: disabling WASM effects for Win32 because Wasmtime does not provide an x86 Windows C API bundle.
+)
 
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
 
 echo [0/4] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
 echo       Architecture: %ARCH%
-cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
+cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%" %CMAKE_EXTRA_ARGS%
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail

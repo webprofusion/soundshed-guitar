@@ -14,6 +14,7 @@ on:
         options:
           - all
           - x64
+          - x86
           - arm64
       build_macos:
         description: Include macOS builds
@@ -245,6 +246,198 @@ jobs:
           r2-bucket: soundshed-guitar-builds
           source-dir: ${{ steps.rename-installer.outputs.path }}
           destination-dir: ./build-artifacts/windows/x64
+          keep-file-fresh: true
+
+  build-windows-x86:
+    name: Build Windows Installer (x86)
+    if: ${{ inputs.build_windows && (inputs.windows_targets == 'all' || inputs.windows_targets == 'x86') }}
+    runs-on: windows-latest
+    env:
+      WINDOWS_ARCH: x86
+      WINDOWS_CMAKE_ARCH: Win32
+      WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Install UI dependencies
+        working-directory: core/ui
+        run: npm ci
+
+      - name: Build UI bundle
+        working-directory: core/ui
+        run: npm run build
+
+      - name: Cache JUCE source
+        id: cache-juce-source
+        uses: actions/cache@v5
+        with:
+          path: juce/JUCE
+          key: ${{ runner.os }}-juce-source-v2
+
+      - name: Fetch JUCE source
+        shell: pwsh
+        run: |
+          if ("${{ steps.cache-juce-source.outputs.cache-hit }}" -eq "true") {
+            Write-Host "JUCE source restored from cache"
+          } elseif (Test-Path "juce/JUCE/CMakeLists.txt") {
+            Write-Host "JUCE source already present at juce/JUCE"
+          } else {
+            git clone --depth 1 https://github.com/juce-framework/JUCE.git juce/JUCE
+          }
+
+      - name: Install WebView2 NuGet package
+        shell: pwsh
+        run: |
+          $packageVersion = "1.0.3856.49"
+
+          if (-Not (Get-PackageSource -Name "nugetRepository" -ErrorAction SilentlyContinue)) {
+            Register-PackageSource -ProviderName NuGet -Name nugetRepository -Location "https://www.nuget.org/api/v2" -Trusted -Force
+          }
+
+          Install-Package Microsoft.Web.WebView2 -Scope CurrentUser -RequiredVersion $packageVersion -Source nugetRepository -Force
+
+          $candidateRoots = @(
+            (Join-Path $env:USERPROFILE "AppData/Local/PackageManagement/NuGet/Packages"),
+            (Join-Path $env:USERPROFILE ".nuget/packages")
+          )
+
+          $webViewPackageDir = $null
+          foreach ($root in $candidateRoots) {
+            if (-Not (Test-Path $root)) {
+              continue
+            }
+
+            $found = Get-ChildItem -Path $root -Directory -Filter "*Microsoft.Web.WebView2*" -ErrorAction SilentlyContinue |
+              Where-Object { Test-Path (Join-Path $_.FullName "build/native/include/WebView2.h") } |
+              Select-Object -First 1
+
+            if ($found) {
+              $webViewPackageDir = $found.FullName
+              break
+            }
+          }
+
+          if (-Not $webViewPackageDir) {
+            throw "WebView2 package directory was not found after installation."
+          }
+
+          $webViewPackageLocation = Split-Path -Path $webViewPackageDir -Parent
+          "WEBVIEW2_PACKAGE_LOCATION=$webViewPackageLocation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WEBVIEW2_ROOT_DIR=$webViewPackageDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using WebView2 package location: $webViewPackageLocation"
+          Write-Host "Using WebView2 root dir: $webViewPackageDir"
+
+      - name: Cache ASIO SDK
+        id: cache-asio-sdk
+        uses: actions/cache@v5
+        with:
+          path: .cache/asio-sdk
+          key: ${{ runner.os }}-asio-sdk-v2-${{ inputs.asio_sdk_url }}
+
+      - name: Fetch ASIO SDK
+        shell: pwsh
+        run: |
+          $downloadUrl = "${{ inputs.asio_sdk_url }}"
+          $zipPath = Join-Path $env:RUNNER_TEMP "asio-sdk.zip"
+          $extractDir = Join-Path $env:GITHUB_WORKSPACE ".cache/asio-sdk"
+
+          if ("${{ steps.cache-asio-sdk.outputs.cache-hit }}" -eq "true") {
+            Write-Host "ASIO SDK restored from cache"
+          } else {
+            if (Test-Path $extractDir) {
+              Remove-Item -Path $extractDir -Recurse -Force
+            }
+
+            New-Item -Path $extractDir -ItemType Directory -Force | Out-Null
+
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -MaximumRedirection 10
+
+            try {
+              Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+            } catch {
+              throw "Failed to extract ASIO SDK zip from '$downloadUrl'. Provide a direct .zip download URL from Steinberg."
+            }
+          }
+
+          $asioSdkDir = Get-ChildItem -Path $extractDir -Directory -Recurse |
+            Where-Object { $_.Name -eq "ASIOSDK" } |
+            Select-Object -First 1
+
+          if (-Not $asioSdkDir) {
+            throw "ASIOSDK folder not found in extracted archive from '$downloadUrl'."
+          }
+
+          "ASIO_SDK_DIR=$($asioSdkDir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Detected ASIO SDK at $($asioSdkDir.FullName)"
+
+      - name: Build Windows release installer
+        shell: cmd
+        env:
+          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
+          GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
+        run: build_windows.bat
+
+      - name: Export JUCE build env
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "juce/.env")) {
+            throw "Expected juce/.env after build, but it was not found."
+          }
+          Get-Content "juce/.env" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Rename installer artifact
+        id: rename-installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "juce/packaging/Output" -File -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-Not $installer) {
+            throw "Installer output not found in juce/packaging/Output."
+          }
+
+          $renamedName = "Soundshed Guitar-$env:VERSION-Windows-$env:WINDOWS_ARCH.exe"
+          $renamedPath = Join-Path $installer.DirectoryName $renamedName
+
+          if ($installer.FullName -ne $renamedPath) {
+            if (Test-Path $renamedPath) {
+              Remove-Item -Path $renamedPath -Force
+            }
+            Rename-Item -Path $installer.FullName -NewName $renamedName
+          }
+
+          "path=$renamedPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: Soundshed Guitar-Windows-${{ env.WINDOWS_ARCH }}
+          path: ${{ steps.rename-installer.outputs.path }}
+
+      - name: Upload artifacts to R2
+        if: ${{ inputs.upload_r2 }}
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          r2-bucket: soundshed-guitar-builds
+          source-dir: ${{ steps.rename-installer.outputs.path }}
+          destination-dir: ./build-artifacts/windows/x86
           keep-file-fresh: true
 
   build-windows-arm64:

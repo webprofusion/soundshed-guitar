@@ -76,10 +76,24 @@ CPMAddPackage(
 )
 
 if (WIN32)
+    set(_guitarfx_windows_target_arch "${CMAKE_GENERATOR_PLATFORM}")
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${MSVC_CXX_ARCHITECTURE_ID}")
+    endif()
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${CMAKE_VS_PLATFORM_NAME}")
+    endif()
+    if(NOT _guitarfx_windows_target_arch)
+        set(_guitarfx_windows_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    string(TOLOWER "${_guitarfx_windows_target_arch}" _guitarfx_windows_target_arch)
+
+    if(_guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
     CPMAddPackage(
         NAME intelipp_static_win_x64
         URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/2022.3.1.8
     )
+    endif()
 endif()
 
 include(PamplejuceIPP)
@@ -128,18 +142,6 @@ if(WIN32)
     set(GUITARFX_WEBVIEW2_STATIC_LINKING 1)
     set(GUITARFX_WEBVIEW2_LOADER_ARCH "x64")
     set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86_64-win")
-
-    set(_guitarfx_windows_target_arch "${CMAKE_GENERATOR_PLATFORM}")
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${MSVC_CXX_ARCHITECTURE_ID}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_VS_PLATFORM_NAME}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
-    string(TOLOWER "${_guitarfx_windows_target_arch}" _guitarfx_windows_target_arch)
 
     if(_guitarfx_windows_target_arch MATCHES "^(arm64ec)$")
         set(GUITARFX_WEBVIEW2_STATIC_LINKING 0)
