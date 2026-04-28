@@ -29,6 +29,7 @@ import {
   type SignalPathNodeOptions,
 } from "./fxSelector.js";
 import { GenericKnob, enhanceRangeInput } from "./controls.js";
+import { getUnsupportedPluginSelection, type PluginResourceSupportInfo } from "./pluginSupport.js";
 import {
   EqCurveInteraction,
   buildEqBandConfigsFromParams,
@@ -113,6 +114,7 @@ function updateEffectVisualization(node?: GraphNode): void {
     effectVisualizationElement.style.removeProperty("--effect-visual-bg");
     effectVisualizationElement.dataset.effectType = "";
     effectVisualizationElement.dataset.effectCategory = "";
+    updateUnsupportedPluginVisualizationNotice(null);
     return;
   }
 
@@ -123,6 +125,48 @@ function updateEffectVisualization(node?: GraphNode): void {
   effectVisualizationElement.style.setProperty("--effect-visual-bg", background);
   effectVisualizationElement.dataset.effectType = node.type;
   effectVisualizationElement.dataset.effectCategory = category;
+  updateUnsupportedPluginVisualizationNotice(getSelectedPluginResourceSupportInfo(node));
+}
+
+function updateUnsupportedPluginVisualizationNotice(resource: PluginResourceSupportInfo | null | undefined): void {
+  if (!effectVisualizationElement) {
+    return;
+  }
+
+  const unsupportedPlugin = getUnsupportedPluginSelection(resource);
+  let notice = effectVisualizationElement.querySelector<HTMLElement>(".effect-visualization-plugin-notice");
+  effectVisualizationElement.classList.toggle("has-plugin-warning", Boolean(unsupportedPlugin));
+
+  if (!unsupportedPlugin) {
+    notice?.remove();
+    return;
+  }
+
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.className = "effect-visualization-plugin-notice";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+
+    const title = document.createElement("div");
+    title.className = "effect-visualization-plugin-notice-title";
+    notice.appendChild(title);
+
+    const detail = document.createElement("div");
+    detail.className = "effect-visualization-plugin-notice-detail";
+    notice.appendChild(detail);
+
+    effectVisualizationElement.appendChild(notice);
+  }
+
+  const title = notice.querySelector<HTMLElement>(".effect-visualization-plugin-notice-title");
+  const detail = notice.querySelector<HTMLElement>(".effect-visualization-plugin-notice-detail");
+  if (title) {
+    title.textContent = "Selected Plugin Type Not Supported";
+  }
+  if (detail) {
+    detail.textContent = `${unsupportedPlugin.label} plugins cannot be hosted by this build.`;
+  }
 }
 
 function updateLastSelectedNode(node: GraphNode): void {
@@ -367,6 +411,27 @@ function getLibraryResourceName(resourceType: string | undefined, resourceId: st
   return match?.name?.trim() ?? "";
 }
 
+function getSelectedPluginResourceSupportInfo(node: GraphNode): PluginResourceSupportInfo | null {
+  const typeInfo = getNodeEffectInfo(node);
+  if (typeInfo?.resourceType !== "plugin") {
+    return null;
+  }
+
+  const current = getNodeResourceAtIndex(node, 0);
+  if (current.id) {
+    const resource = getLibraryResource("plugin", current.id);
+    if (resource) {
+      return resource;
+    }
+  }
+
+  if (current.filePath) {
+    return { filePath: current.filePath };
+  }
+
+  return null;
+}
+
 function getNodeResourceDisplayName(node: GraphNode, index = 0, overrideResourceType?: string): string {
   const typeInfo = getNodeEffectInfo(node);
   const resourceType = overrideResourceType || typeInfo?.resourceType;
@@ -543,26 +608,6 @@ function buildCustomEffectActions(node: GraphNode): string {
         <button type="button" class="secondary-btn custom-effect-use-btn" data-node-id="${node.id}" ${hasModule ? "" : "disabled"}>Use This Effect</button>
       </div>
       <div class="resource-path-info">${escapeHtml(buildCustomEffectActionStatus(node))}</div>
-    </div>
-  `;
-}
-
-function buildHostedPluginActions(node: GraphNode): string {
-  if (EffectTypeRegistry.resolve(node.type) !== EffectGuids.kPluginHost) {
-    return "";
-  }
-
-  const stateSize = Number(node.config?.pluginStateBase64Length ?? "") || node.config?.pluginStateBase64?.length || 0;
-  const stateLabel = stateSize > 0 ? `State captured (${Math.round(stateSize / 1024)} KB encoded)` : "No captured plugin state";
-
-  return `
-    <div class="node-resource-selector node-plugin-host-actions" data-node-id="${node.id}">
-      <label>Hosted Plugin</label>
-      <div class="resource-controls">
-        <button type="button" class="primary-btn plugin-host-open-btn" data-node-id="${node.id}">Open Plugin UI</button>
-        <button type="button" class="secondary-btn plugin-host-capture-state-btn" data-node-id="${node.id}">Capture State</button>
-      </div>
-      <div class="resource-path-info">${escapeHtml(stateLabel)}</div>
     </div>
   `;
 }
@@ -1959,7 +2004,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   const isEqNode = typeInfo?.category === "eq" || node.type.startsWith("eq_");
   const customEffectActions = buildCustomEffectActions(node);
-  const hostedPluginActions = buildHostedPluginActions(node);
   const eqVisualizer = isEqNode ? `
     <div class="eq-visualizer" data-node-id="${node.id}">
       <div class="eq-visualizer-header">
@@ -2118,6 +2162,9 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         const customOption = current.filePath
           ? `<option value="__custom__" selected>Custom: ${current.filePath.split("/").pop()}</option>`
           : "";
+        const hostedPluginOpenButton = resourceType === "plugin"
+          ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}">Open Plugin UI</button>`
+          : "";
 
         customLayoutResourceControls.push({
           resourceControlKey: `__resource__:${exposedResource.resourceId}:${resourceIndex}`,
@@ -2153,7 +2200,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                 >${escapeHtml(displayName)}</div>
               ` : `
                 <select
-                  class="resource-selector"
+                  class="resource-selector resource-dropdown"
                   data-node-id="${node.id}"
                   data-resource-type="${resourceType}"
                   data-resource-index="${resourceIndex}"
@@ -2175,6 +2222,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                   title="Browse for file..."
                 >${renderIcon("folder", "resource-browse-icon")}</button>
               ` : ""}
+              ${hostedPluginOpenButton}
             </div>
             ${current.filePath ? `<div class="resource-path-info" title="${current.filePath}">${current.filePath}</div>` : ""}
           </div>
@@ -2220,6 +2268,9 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         && !current.filePath
         && !getLibraryResource(resourceType, current.id);
       const missingClass = isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
+      const hostedPluginOpenButton = resourceType === "plugin"
+        ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}">Open Plugin UI</button>`
+        : "";
 
       customLayoutResourceControls.push({
         resourceControlKey: `__resource__:primary:${index}`,
@@ -2270,6 +2321,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
               data-accept="${browseAccept}"
               title="Browse for file..."
             >${renderIcon("folder", "resource-browse-icon")}</button>
+            ${hostedPluginOpenButton}
           </div>
           ${current.filePath ? `<div class="resource-path-info" title="${current.filePath}">${current.filePath}</div>` : ""}
         </div>
@@ -2300,7 +2352,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         const irSlotB = buildSelector(1, "IR B", true);
         resourceSelector = `${irSlotA}${irSlotB}`;
       } else {
-        resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : "Resource", false);
+        resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : resourceType === "plugin" ? "Plugin" : "Resource", false);
       }
     }
   }
@@ -2346,7 +2398,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   ` : "";
   const shellMainContent = customLayoutHtml ? `
     ${layoutIncludesResourceControls ? "" : resourceSelector}
-    ${hostedPluginActions}
     ${customEffectActions}
     ${eqVisualizer}
     ${mixerInputControls}
@@ -2383,7 +2434,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       : defaultControlsHtml;
     return `
       ${layoutIncludesResourceControls ? "" : resourceSelector}
-      ${hostedPluginActions}
       ${customEffectActions}
       ${eqVisualizer}
       ${mixerInputControls}
@@ -2956,6 +3006,13 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       const resourceType = dropdown.dataset.resourceType;
       const resourceId = dropdown.value;
       const resourceIndex = dropdown.dataset.resourceIndex ? parseInt(dropdown.dataset.resourceIndex, 10) : undefined;
+
+      if (resourceType === "plugin") {
+        const selectedResource = resourceId && resourceId !== "__custom__"
+          ? getLibraryResource("plugin", resourceId)
+          : null;
+        updateUnsupportedPluginVisualizationNotice(selectedResource);
+      }
       
       if (nodeId && resourceType && resourceId && resourceId !== "__custom__") {
         sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex);
@@ -3053,15 +3110,10 @@ function bindCustomEffectActionControls(node: GraphNode): void {
 }
 
 function bindHostedPluginActionControls(node: GraphNode): void {
-  const openButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".plugin-host-open-btn");
-  openButton?.addEventListener("click", () => {
+  const openButtons = nodeParamsPanelElement?.querySelectorAll<HTMLButtonElement>(".plugin-host-open-btn");
+  openButtons?.forEach((openButton) => openButton.addEventListener("click", () => {
     sendSignalPathNodeConfigUpdate(node.id, "showPluginEditor", "1", false);
-  });
-
-  const captureButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".plugin-host-capture-state-btn");
-  captureButton?.addEventListener("click", () => {
-    sendSignalPathNodeConfigUpdate(node.id, "pluginStateBase64", "__capture_plugin_state__", true, true);
-  });
+  }));
 }
 
 function getNodeResourceIds(node: GraphNode): string[] {

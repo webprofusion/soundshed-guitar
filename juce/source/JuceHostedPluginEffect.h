@@ -16,8 +16,7 @@ namespace guitarfx
 class JuceHostedPluginEffect final : public EffectProcessor,
                                      private juce::AudioProcessorListener,
                                      private juce::AudioProcessorParameter::Listener,
-                                     private juce::AsyncUpdater,
-                                     private juce::Timer
+                                     private juce::AsyncUpdater
 {
 public:
     JuceHostedPluginEffect();
@@ -77,7 +76,6 @@ private:
     void audioProcessorChanged(juce::AudioProcessor* processor,
                                const juce::AudioProcessorListener::ChangeDetails& details) override;
     void handleAsyncUpdate() override;
-    void timerCallback() override;
 
     juce::AudioPluginFormatManager mFormatManager;
     juce::AudioBuffer<float> mWorkBuffer;
