@@ -3,7 +3,7 @@
 #define ProductName GetEnv('PRODUCT_NAME')
 #define Publisher GetEnv('COMPANY_NAME')
 #define TargetArch GetEnv('GUITARFX_WINDOWS_ARCH')
-; build_windows.bat always exports the resolved architecture; keep x64 as a standalone packaging fallback.
+; build_windows.bat exports the resolved architecture; keep x64 as a fallback for standalone packaging outside that script.
 #if TargetArch == ""
   #define TargetArch "x64"
 #endif
@@ -11,6 +11,7 @@
   #define CommonFiles "{commoncf32}"
   #define ProgramFiles "{commonpf32}"
 #else
+  ; 64-bit targets (x64 and ARM64) use the native 64-bit Program Files and Common Files locations.
   #define CommonFiles "{commoncf64}"
   #define ProgramFiles "{commonpf64}"
 #endif

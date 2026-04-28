@@ -15,16 +15,19 @@ if defined GUITARFX_WINDOWS_ARCH (
 ) else (
     set "ARCH=x64"
 )
+set "ARCH_IS_SUPPORTED="
+if /I "%ARCH%"=="Win32" set "ARCH_IS_SUPPORTED=1"
+if /I "%ARCH%"=="x64" set "ARCH_IS_SUPPORTED=1"
+if /I "%ARCH%"=="ARM64" set "ARCH_IS_SUPPORTED=1"
+if not defined ARCH_IS_SUPPORTED (
+    echo ERROR: Unsupported Windows architecture "%ARCH%". Expected one of: Win32, x64, ARM64.
+    exit /b 1
+)
 set "GUITARFX_WINDOWS_ARCH=%ARCH%"
 if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
     set "CMAKE_GENERATOR=%GUITARFX_WINDOWS_CMAKE_GENERATOR%"
 ) else (
     set "CMAKE_GENERATOR=Visual Studio 18 2026"
-)
-set "CMAKE_EXTRA_ARGS="
-if /I "%ARCH%"=="Win32" (
-    set "CMAKE_EXTRA_ARGS=-DGUITARFX_CORE_ENABLE_WASM_EFFECTS=OFF"
-    echo       Note: disabling WASM effects for Win32 because Wasmtime does not provide an x86 Windows C API bundle.
 )
 
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
@@ -32,7 +35,7 @@ for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixT
 echo [0/4] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
 echo       Architecture: %ARCH%
-cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%" %CMAKE_EXTRA_ARGS%
+cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail
