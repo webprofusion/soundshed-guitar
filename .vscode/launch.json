@@ -1,7 +1,8 @@
 {
   "version": "0.2.0",
   "configurations": [
-  
+
+
 
 
 
@@ -51,6 +52,14 @@
       "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone",
       "environment": [],
       "console": "integratedTerminal",
+      "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release"
+    },
+    {
+      "name": "Run App (JUCE) Release (No Debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "& \"${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone/Soundshed Guitar.exe\"",
+      "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone",
       "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release"
     },
     {

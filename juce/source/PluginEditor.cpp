@@ -468,9 +468,7 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
         if (file.existsAsFile())
         {
             auto data = readFileToVector (file);
-            // Only log first-time requests (index + JS modules) to avoid flooding
-            if (urlToRetrieve == "index.html" || file.getFileExtension() == ".js")
-                writeStartupLog ("[getResource] HIT  " + file.getFullPathName());
+     
             return juce::WebBrowserComponent::Resource { std::move (data),
                                                          getMimeForExtension (file.getFileExtension().substring (1)) };
         }
