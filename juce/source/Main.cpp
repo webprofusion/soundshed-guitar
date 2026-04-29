@@ -1,8 +1,8 @@
 #include "PluginProcessorAdapter.h"
 #include <juce_audio_devices/juce_audio_devices.h>
-#include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
 //==============================================================================

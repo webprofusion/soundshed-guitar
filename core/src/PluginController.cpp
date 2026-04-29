@@ -17,7 +17,9 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/LevelTargets.h"
 #include "dsp/effects/BuiltinEffects.h"
+#if defined(GUITARFX_ENABLE_WASM_EFFECTS)
 #include "dsp/effects/WasmEffect.h"
+#endif
 #include "presets/CompositePresetStorage.h"
 #include "presets/CompositePresetTypes.h"
 #include "util/Base64.h"
@@ -5079,6 +5081,11 @@ void PluginController::HandleSaveBlendDefinitionRequest(const nlohmann::json& pa
 
 void PluginController::HandleSaveCustomEffectEntryRequest(const nlohmann::json& payload)
 {
+#if !defined(GUITARFX_ENABLE_WASM_EFFECTS)
+    (void)payload;
+    ReportErrorToUI("Custom Effect save failed", "Custom Effects are not supported in this build");
+    return;
+#else
     const nlohmann::json entryJson = payload.value("entry", nlohmann::json::object());
     if (!entryJson.is_object())
     {
@@ -5121,10 +5128,16 @@ void PluginController::HandleSaveCustomEffectEntryRequest(const nlohmann::json& 
     mCustomEffectLibrary.UpsertEntry(entry);
     SaveCustomEffectLibrary();
     BroadcastState();
+#endif
 }
 
 void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json& payload)
 {
+#if !defined(GUITARFX_ENABLE_WASM_EFFECTS)
+    (void)payload;
+    ReportErrorToUI("Custom Effect save failed", "Custom Effects are not supported in this build");
+    return;
+#else
     const std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty())
     {
@@ -5393,10 +5406,16 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         {"applyToNode", applyToNode},
         {"nodeId", nodeId},
     }.dump());
+#endif
 }
 
 void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::json& payload)
 {
+#if !defined(GUITARFX_ENABLE_WASM_EFFECTS)
+    (void)payload;
+    ReportErrorToUI("Generated Custom Effect import failed", "Custom Effects are not supported in this build");
+    return;
+#else
     const std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty())
     {
@@ -5723,6 +5742,7 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         {"applyToNode", applyToNode},
         {"nodeId", nodeId},
     }.dump());
+#endif
 }
 
 void PluginController::HandleExportGeneratedCustomEffectBundleRequest(const nlohmann::json& payload)
@@ -8702,6 +8722,10 @@ bool PluginController::UpdateResourceForNodeId(const std::string& nodeId,
 
 void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
 {
+#if !defined(GUITARFX_ENABLE_WASM_EFFECTS)
+    (void)node;
+    return;
+#else
     auto& registry = EffectRegistry::Instance();
     if (registry.Resolve(node.type) != EffectGuids::kWasmHost)
         return;
@@ -8800,6 +8824,7 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
                 node.params.erase(oldParam.definition.id);
         }
     }
+#endif
 }
 
 std::optional<std::filesystem::path> PluginController::ResolveResourceRef(const ResourceRef& ref) const

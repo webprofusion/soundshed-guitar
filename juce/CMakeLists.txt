@@ -261,6 +261,21 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 # Locally, you must run `git submodule update --init --recursive` once
 # and later `git submodule update --remote --merge` to keep it up to date
 # On Github Actions, this is done as a part of actions/checkout
+if(WIN32)
+    set(_guitarfx_juce_webview_source "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/modules/juce_gui_extra/native/juce_WebBrowserComponent_windows.cpp")
+    if(EXISTS "${_guitarfx_juce_webview_source}")
+        file(READ "${_guitarfx_juce_webview_source}" _guitarfx_juce_webview_contents)
+        string(REPLACE
+            "template <typename ArgType>\n    static std::optional<String> callMethodWithLpwstrResult (ArgType* args, HRESULT (ArgType::* method) (LPWSTR*))"
+            "template <typename ArgType, typename MethodType>\n    static std::optional<String> callMethodWithLpwstrResult (ArgType* args, MethodType method)"
+            _guitarfx_juce_webview_patched
+            "${_guitarfx_juce_webview_contents}")
+        if(NOT _guitarfx_juce_webview_contents STREQUAL _guitarfx_juce_webview_patched)
+            file(WRITE "${_guitarfx_juce_webview_source}" "${_guitarfx_juce_webview_patched}")
+            message(STATUS "Patched JUCE WebView2 LPWSTR helper for x86 COM method pointers")
+        endif()
+    endif()
+endif()
 add_subdirectory(JUCE)
 
 # Add CLAP format

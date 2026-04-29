@@ -62,7 +62,6 @@ jobs:
     runs-on: windows-latest
     env:
       WINDOWS_ARCH: x64
-      WINDOWS_CMAKE_ARCH: x64
       WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - name: Checkout
@@ -194,9 +193,8 @@ jobs:
       - name: Build Windows release installer
         shell: cmd
         env:
-          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
           GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
-        run: build_windows.bat
+        run: build_windows.bat %WINDOWS_ARCH%
 
       - name: Export JUCE build env
         shell: pwsh
@@ -254,8 +252,6 @@ jobs:
     runs-on: windows-latest
     env:
       WINDOWS_ARCH: x86
-      # Visual Studio uses Win32 for the 32-bit x86 CMake platform name.
-      WINDOWS_CMAKE_ARCH: Win32
       WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - name: Checkout
@@ -387,9 +383,8 @@ jobs:
       - name: Build Windows release installer
         shell: cmd
         env:
-          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
           GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
-        run: build_windows.bat
+        run: build_windows.bat %WINDOWS_ARCH%
 
       - name: Export JUCE build env
         shell: pwsh
@@ -447,7 +442,6 @@ jobs:
     runs-on: windows-latest
     env:
       WINDOWS_ARCH: arm64
-      WINDOWS_CMAKE_ARCH: ARM64
       WINDOWS_CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - name: Checkout
@@ -579,9 +573,8 @@ jobs:
       - name: Build Windows release installer
         shell: cmd
         env:
-          GUITARFX_WINDOWS_ARCH: ${{ env.WINDOWS_CMAKE_ARCH }}
           GUITARFX_WINDOWS_CMAKE_GENERATOR: ${{ env.WINDOWS_CMAKE_GENERATOR }}
-        run: build_windows.bat
+        run: build_windows.bat %WINDOWS_ARCH%
 
       - name: Export JUCE build env
         shell: pwsh

@@ -4,24 +4,53 @@ setlocal EnableExtensions EnableDelayedExpansion
 :: ---------------------------------------------------------------------------
 :: Full release build: JUCE Standalone + VST3, then installer
 :: Run from the workspace root.
+:: Usage: build_windows.bat [x86|x64|arm64]
 :: ---------------------------------------------------------------------------
 
 set "WORKSPACE_ROOT=%~dp0"
 set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds"
 set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
-if defined GUITARFX_WINDOWS_ARCH (
-    set "ARCH=%GUITARFX_WINDOWS_ARCH%"
-) else (
-    set "ARCH=x64"
+
+if not "%~2"=="" (
+    echo ERROR: Too many arguments.
+    echo Usage: %~nx0 [x86^|x64^|arm64]
+    exit /b 1
 )
+
+if not "%~1"=="" (
+    set "ARCH_INPUT=%~1"
+) else if defined GUITARFX_WINDOWS_ARCH (
+    set "ARCH_INPUT=%GUITARFX_WINDOWS_ARCH%"
+) else (
+    set "ARCH_INPUT=x64"
+)
+
 :: Canonical CMake Visual Studio platform names: Win32 (32-bit x86), x64, ARM64.
-set "ARCH_IS_SUPPORTED="
-if /I "%ARCH%"=="Win32" set "ARCH_IS_SUPPORTED=1"
-if /I "%ARCH%"=="x64" set "ARCH_IS_SUPPORTED=1"
-if /I "%ARCH%"=="ARM64" set "ARCH_IS_SUPPORTED=1"
-if not defined ARCH_IS_SUPPORTED (
-    echo ERROR: Unsupported Windows architecture "%ARCH%". Expected one of: Win32, x64, ARM64.
+set "ARCH="
+set "ARCH_LABEL="
+if /I "%ARCH_INPUT%"=="x86" (
+    set "ARCH=Win32"
+    set "ARCH_LABEL=x86"
+)
+if /I "%ARCH_INPUT%"=="Win32" (
+    set "ARCH=Win32"
+    set "ARCH_LABEL=x86"
+)
+if /I "%ARCH_INPUT%"=="x64" (
+    set "ARCH=x64"
+    set "ARCH_LABEL=x64"
+)
+if /I "%ARCH_INPUT%"=="arm64" (
+    set "ARCH=ARM64"
+    set "ARCH_LABEL=arm64"
+)
+if /I "%ARCH_INPUT%"=="ARM64" (
+    set "ARCH=ARM64"
+    set "ARCH_LABEL=arm64"
+)
+if not defined ARCH (
+    echo ERROR: Unsupported Windows architecture "%ARCH_INPUT%". Expected one of: x86, x64, arm64.
     exit /b 1
 )
 :: Export the resolved platform for Inno Setup architecture/install path selection.
@@ -36,8 +65,8 @@ for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixT
 
 echo [0/4] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
-echo       Architecture: %ARCH%
-cmake -G "%CMAKE_GENERATOR%" -A %ARCH% -S juce -B "%JUCE_BUILDS%"
+echo       Architecture: %ARCH_LABEL% ^(CMake platform: %ARCH%^)
+cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail

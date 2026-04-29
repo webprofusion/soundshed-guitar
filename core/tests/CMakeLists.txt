@@ -16,8 +16,11 @@ set(TEST_SOURCES
     StereoProcessingTests.cpp
     SynthSawEffectTests.cpp
     TestWavLoad.cpp
-    WasmEffectHostTests.cpp
 )
+
+if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
+    list(APPEND TEST_SOURCES WasmEffectHostTests.cpp)
+endif()
 
 option(GUITARFX_TEST_WITH_IPLUG2 "Build tests that require iPlug2 headers" OFF)
 if(GUITARFX_TEST_WITH_IPLUG2)
