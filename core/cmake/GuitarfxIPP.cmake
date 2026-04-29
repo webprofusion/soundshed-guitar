@@ -50,7 +50,7 @@ function(guitarfx_detect_ipp)
                 foreach(_ipp_windows_source_var IN LISTS _ipp_windows_source_vars)
                     # Some package source variables are architecture-specific, so skip unset names before reading their values.
                     if(DEFINED ${_ipp_windows_source_var})
-                        set(_ipp_windows_source_dir "${${_ipp_windows_source_var}}")
+                        set(_ipp_windows_source_dir "${${_ipp_windows_source_var}}") # Read the value of the named source variable.
                         if(IS_DIRECTORY "${_ipp_windows_source_dir}")
                             set(_ipp_root "${_ipp_windows_source_dir}")
                             break()

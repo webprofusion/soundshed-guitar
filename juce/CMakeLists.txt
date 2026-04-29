@@ -76,8 +76,8 @@ CPMAddPackage(
 )
 
 if (WIN32)
-    include("${CMAKE_CURRENT_SOURCE_DIR}/../core/cmake/GuitarfxIPPConfig.cmake")
-    include("${CMAKE_CURRENT_SOURCE_DIR}/../core/cmake/GuitarfxWindowsArch.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/../core/cmake/GuitarfxIPPConfig.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/../core/cmake/GuitarfxWindowsArch.cmake")
     guitarfx_detect_windows_arch(_guitarfx_windows_target_arch)
 
     if(_guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
