@@ -7,8 +7,8 @@ function(guitarfx_detect_windows_arch out_var)
             MSVC_CXX_ARCHITECTURE_ID
             CMAKE_VS_PLATFORM_NAME
             CMAKE_SYSTEM_PROCESSOR)
-        # The loop stores variable names; this dereferences each name to test its value.
-        set(_arch_candidate "${${_guitarfx_windows_arch_var_name}}") # Read the value of the named variable.
+        # The loop stores variable names as strings, so use a nested dereference to read each actual value.
+        set(_arch_candidate "${${_guitarfx_windows_arch_var_name}}")
         if(NOT _arch_candidate STREQUAL "")
             set(_guitarfx_windows_arch "${_arch_candidate}")
             break()
