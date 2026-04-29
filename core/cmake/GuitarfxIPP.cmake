@@ -48,7 +48,7 @@ function(guitarfx_detect_ipp)
             else()
                 set(_ipp_root "")
                 foreach(_ipp_windows_source_var IN LISTS _ipp_windows_source_vars)
-                    # DEFINED checks the variable name; the nested dereference reads that variable's value.
+                    # Some package source variables are architecture-specific, so skip unset names before reading their values.
                     if(DEFINED ${_ipp_windows_source_var})
                         set(_ipp_windows_source_dir "${${_ipp_windows_source_var}}")
                         if(IS_DIRECTORY "${_ipp_windows_source_dir}")
