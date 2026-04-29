@@ -34,6 +34,7 @@ function getMetronomeElements(): {
   bpmUpButton: HTMLButtonElement | null;
   bpmDownButton: HTMLButtonElement | null;
   footerMetronomeButton: HTMLButtonElement | null;
+  footerMetronomeToggleButton: HTMLButtonElement | null;
   footerTapButton: HTMLButtonElement | null;
   footerBpmButton: HTMLButtonElement | null;
   footerBpmPanel: HTMLElement | null;
@@ -58,6 +59,7 @@ function getMetronomeElements(): {
     bpmUpButton: panel?.querySelector<HTMLButtonElement>("#metronome-bpm-up") ?? null,
     bpmDownButton: panel?.querySelector<HTMLButtonElement>("#metronome-bpm-down") ?? null,
     footerMetronomeButton: document.getElementById("footer-metronome-btn") as HTMLButtonElement | null,
+    footerMetronomeToggleButton: document.getElementById("footer-metronome-toggle") as HTMLButtonElement | null,
     footerTapButton: document.getElementById("footer-tap-btn") as HTMLButtonElement | null,
     footerBpmButton: document.getElementById("footer-bpm-btn") as HTMLButtonElement | null,
     footerBpmPanel: footerPanel,
@@ -91,6 +93,7 @@ function syncMetronomeControls(): void {
     source,
     bpmUpButton,
     bpmDownButton,
+    footerMetronomeToggleButton,
     footerBpmButton,
     footerBpmInput,
     footerBpmSlider,
@@ -134,6 +137,18 @@ function syncMetronomeControls(): void {
       icon.textContent = state.enabled ? "■" : "▶";
     }
     toggleButton.disabled = !editable;
+  }
+
+  if (footerMetronomeToggleButton) {
+    const icon = footerMetronomeToggleButton.querySelector<HTMLElement>(".footer-metronome-play-icon");
+    if (icon) {
+      icon.textContent = state.enabled ? "■" : "▶";
+    }
+    footerMetronomeToggleButton.disabled = !editable;
+    footerMetronomeToggleButton.classList.toggle("is-active", state.enabled);
+    footerMetronomeToggleButton.setAttribute("aria-pressed", state.enabled ? "true" : "false");
+    footerMetronomeToggleButton.setAttribute("aria-label", state.enabled ? "Stop metronome" : "Start metronome");
+    footerMetronomeToggleButton.title = state.enabled ? "Stop metronome" : "Start metronome";
   }
 
   if (status) {
@@ -443,6 +458,7 @@ export function initializeMetronome(): void {
     bpmUpButton,
     bpmDownButton,
     footerMetronomeButton,
+    footerMetronomeToggleButton,
     footerTapButton,
     footerBpmButton,
     footerBpmPanel,
@@ -547,6 +563,13 @@ export function initializeMetronome(): void {
       } else {
         openMetronome();
       }
+    });
+  }
+
+  if (footerMetronomeToggleButton) {
+    footerMetronomeToggleButton.addEventListener("click", () => {
+      if (!isEditable()) return;
+      updateEnabled(!Boolean(uiState.metronome?.enabled));
     });
   }
 

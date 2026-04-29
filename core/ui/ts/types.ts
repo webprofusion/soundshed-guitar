@@ -237,7 +237,7 @@ export interface JamPlayerState {
 }
 
 export interface JamState {
-  activeSection: "backingTracks" | "riffs";
+  activeSection: "backingTracks" | "scales" | "riffs";
   activeTab: "search" | "favorites";
   query: string;
   results: JamVideoSummary[];

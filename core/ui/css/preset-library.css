@@ -59,7 +59,7 @@
   border-radius: 12px;
   padding: 12px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  z-index: 20;
+  z-index: var(--z-popover, 900);
   display: none;
 }
 

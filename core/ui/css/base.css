@@ -484,6 +484,42 @@ body:not(.is-standalone) .main-content .metronome-only {
   flex-shrink: 0;
 }
 
+.footer-metronome-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-secondary);
+  color: var(--text-dark-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.footer-metronome-play-btn:hover:not(:disabled) {
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-primary);
+  transform: translateY(-1px);
+}
+
+.footer-metronome-play-btn:disabled {
+  color: var(--text-dark-disabled);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.footer-metronome-play-btn.is-active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.footer-metronome-play-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
 .footer-btn:disabled,
 .footer-btn.footer-btn-disabled {
   color: var(--text-dark-disabled);
@@ -763,6 +799,7 @@ body:not(.is-standalone) .main-content .metronome-only {
 .theme-classic .footer-play-btn,
 .theme-classic .footer-repeat-btn,
 .theme-classic .footer-debug-capture-btn,
+.theme-classic .footer-metronome-play-btn,
 .theme-classic .footer-demo-select {
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-dark-secondary), #fff 8%) 0%, var(--bg-dark-secondary) 100%);
   border-color: color-mix(in srgb, var(--border-dark-medium), #000 8%);
@@ -771,12 +808,14 @@ body:not(.is-standalone) .main-content .metronome-only {
 
 .theme-classic .footer-play-btn:hover,
 .theme-classic .footer-repeat-btn:hover,
-.theme-classic .footer-debug-capture-btn:hover {
+.theme-classic .footer-debug-capture-btn:hover,
+.theme-classic .footer-metronome-play-btn:hover:not(:disabled) {
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-dark-tertiary), #fff 10%) 0%, var(--bg-dark-tertiary) 100%);
   border-color: color-mix(in srgb, var(--border-dark-strong), #000 10%);
 }
 
-.theme-classic .footer-repeat-btn.is-active {
+.theme-classic .footer-repeat-btn.is-active,
+.theme-classic .footer-metronome-play-btn.is-active {
   color: var(--color-accent);
   border-color: var(--color-accent);
   box-shadow:

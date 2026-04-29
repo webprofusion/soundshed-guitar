@@ -18,6 +18,13 @@ namespace
                || url.containsIgnoreCase ("youtu.be");
     }
 
+    bool isScalexUrl (const juce::String& url)
+    {
+         return url.equalsIgnoreCase ("https://scalex.soundshed.com")
+             || url.startsWithIgnoreCase ("https://scalex.soundshed.com/")
+             || url.startsWithIgnoreCase ("https://scalex.soundshed.com?");
+    }
+
     juce::WebBrowserComponent::Options::Backend getPreferredBrowserBackend()
     {
 #if JUCE_WINDOWS
@@ -156,9 +163,8 @@ bool SinglePageBrowser::pageAboutToLoad (const juce::String& newURL)
     if (newURL.startsWith ("data:"))
         return true;
 
-    // The Jam view uses a YouTube iframe. Allow those navigations to stay inside the
-    // embedded webview so the player can render and continue handling playback inline.
-    if (isYouTubeUrl (newURL))
+    // The Jam view embeds trusted tool/player pages that should remain inside the WebView.
+    if (isYouTubeUrl (newURL) || isScalexUrl (newURL))
         return true;
 
     if (newURL.startsWith ("https://") || newURL.startsWith ("http://"))

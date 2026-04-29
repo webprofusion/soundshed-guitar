@@ -32,6 +32,7 @@ const presetSearchElement = document.getElementById("preset-search") as HTMLInpu
 const presetSelector = document.getElementById("preset-selector");
 const presetSelectorStatus = document.getElementById("preset-selector-status") as HTMLElement | null;
 const presetLibraryPopover = document.getElementById("preset-library-popover");
+const presetControlBar = presetLibraryPopover?.closest<HTMLElement>(".control-bar") ?? null;
 const presetLibraryTabs = document.querySelector(".preset-library-tabs") as HTMLElement | null;
 const presetLibraryPresetsPanel = document.getElementById("preset-library-presets-panel") as HTMLElement | null;
 const presetLibraryMultiRigTab = document.getElementById("preset-lib-tab-multi-rig") as HTMLButtonElement | null;
@@ -49,6 +50,13 @@ const setlistEditorHeader = document.getElementById("setlist-editor-header");
 const setlistCollapsible = document.getElementById("setlist-collapsible");
 const setlistToggle = document.getElementById("setlist-toggle");
 const setlistPanel = document.getElementById("setlist-panel");
+
+function syncPresetHeaderPopoverLayer(): void {
+  const hasOpenPopover = Boolean(
+    presetLibraryPopover?.classList.contains("open") || presetExtraActionsMenu?.classList.contains("open"),
+  );
+  presetControlBar?.classList.toggle("has-open-popover", hasOpenPopover);
+}
 
 const PRESET_FOLDER_ALL_ID = "__all__";
 const PRESET_FOLDER_FAVORITES_ID = "__favorites__";
@@ -712,6 +720,7 @@ function openPresetLibraryPopover(): void {
   presetLibraryPopover.classList.add("open");
   presetLibraryPopover.setAttribute("aria-hidden", "false");
   presetChooserLabel?.setAttribute("aria-expanded", "true");
+  syncPresetHeaderPopoverLayer();
 }
 
 function closePresetLibraryPopover(): void {
@@ -721,6 +730,7 @@ function closePresetLibraryPopover(): void {
   presetLibraryPopover.classList.remove("open");
   presetLibraryPopover.setAttribute("aria-hidden", "true");
   presetChooserLabel?.setAttribute("aria-expanded", "false");
+  syncPresetHeaderPopoverLayer();
 }
 
 function togglePresetLibraryPopover(): void {
@@ -742,6 +752,7 @@ function openPresetExtraActionsMenu(): void {
   presetExtraActionsMenu.classList.add("open");
   presetExtraActionsMenu.setAttribute("aria-hidden", "false");
   presetExtraActionsBtn.setAttribute("aria-expanded", "true");
+  syncPresetHeaderPopoverLayer();
 }
 
 function closePresetExtraActionsMenu(): void {
@@ -751,6 +762,7 @@ function closePresetExtraActionsMenu(): void {
   presetExtraActionsMenu.classList.remove("open");
   presetExtraActionsMenu.setAttribute("aria-hidden", "true");
   presetExtraActionsBtn.setAttribute("aria-expanded", "false");
+  syncPresetHeaderPopoverLayer();
 }
 
 function togglePresetExtraActionsMenu(): void {

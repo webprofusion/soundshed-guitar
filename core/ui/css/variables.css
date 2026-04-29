@@ -355,6 +355,12 @@
   --button-text: #e0e0f0;
   --button-border: #4a4a58;
 
+  /* Layering */
+  --z-dropdown: 120;
+  --z-popover: 900;
+  --z-modal: 1000;
+  --z-modal-priority: 1100;
+
   /* Modal Surface Tokens */
   --modal-bg: linear-gradient(180deg, #18181e 0%, #101014 100%);
   --modal-bg-raised: linear-gradient(180deg, #28282f 0%, #1e1e25 100%);

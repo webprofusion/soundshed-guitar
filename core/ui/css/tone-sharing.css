@@ -190,7 +190,7 @@
 /* Pack view modal — Netflix-style hero */
 .tone-sharing-pack-view-modal {
   padding: 16px;
-  z-index: 1100;
+  z-index: var(--z-modal-priority, 1100);
   align-items: center;
   justify-content: center;
 }

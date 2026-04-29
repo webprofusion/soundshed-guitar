@@ -23,7 +23,7 @@ let initialized = false;
 let searchRequestId = 0;
 let initialSearchTriggered = false;
 
-type JamSectionId = "backingTracks" | "riffs";
+type JamSectionId = "backingTracks" | "scales" | "riffs";
 type BackingTracksTabId = "search" | "favorites";
 type LegacyJamState = JamState & { activeSection?: JamSectionId; activeTab?: BackingTracksTabId | "riffs" };
 
@@ -51,7 +51,7 @@ function ensureJamState(): JamState {
 
   const jam = uiState.jam as LegacyJamState;
   const legacyActiveTab = (uiState.jam as { activeTab?: BackingTracksTabId | "riffs" }).activeTab;
-  if (jam.activeSection !== "backingTracks" && jam.activeSection !== "riffs") {
+  if (jam.activeSection !== "backingTracks" && jam.activeSection !== "scales" && jam.activeSection !== "riffs") {
     jam.activeSection = legacyActiveTab === "riffs" ? "riffs" : "backingTracks";
   }
   if (jam.activeTab !== "search" && jam.activeTab !== "favorites") {
@@ -168,11 +168,18 @@ function isRiffLibraryFeatureEnabled(): boolean {
   return isFeatureEnabled(Features.RiffLibrary);
 }
 
+function isScalesFeatureEnabled(): boolean {
+  return true;
+}
+
 function resolveJamSection(preferredSection: JamSectionId): JamSectionId {
-  const orderedSections: JamSectionId[] = ["backingTracks", "riffs"];
+  const orderedSections: JamSectionId[] = ["backingTracks", "scales", "riffs"];
   const enabledSections = orderedSections.filter((sectionId) => {
     if (sectionId === "riffs") {
       return isRiffLibraryFeatureEnabled();
+    }
+    if (sectionId === "scales") {
+      return isScalesFeatureEnabled();
     }
     return isBackingTracksFeatureEnabled();
   });
@@ -215,6 +222,10 @@ function setActiveSection(section: JamSectionId): void {
 
   if (jam.activeSection === "riffs") {
     renderRiffLibraryPanel();
+    return;
+  }
+
+  if (jam.activeSection === "scales") {
     return;
   }
 
@@ -437,10 +448,12 @@ export function renderJamPanel(): void {
   const favoritesResultsHost = document.getElementById("jam-favorites-results");
   const searchInput = document.getElementById("jam-search-input") as HTMLInputElement | null;
   const backingTracksSectionButton = document.getElementById("jam-section-backing-tracks");
+  const scalesSectionButton = document.getElementById("jam-section-scales");
   const riffsSectionButton = document.getElementById("jam-section-riffs");
   const searchTab = document.getElementById("jam-backing-tab-search");
   const favoritesTab = document.getElementById("jam-backing-tab-favorites");
   const backingTracksPanel = document.getElementById("jam-section-panel-backing-tracks");
+  const scalesPanel = document.getElementById("jam-section-panel-scales");
   const riffsPanel = document.getElementById("jam-section-panel-riffs");
   const searchPanel = document.getElementById("jam-backing-tab-panel-search");
   const favoritesPanel = document.getElementById("jam-backing-tab-panel-favorites");
@@ -453,6 +466,7 @@ export function renderJamPanel(): void {
   jam.activeTab = resolvedTab;
 
   const backingTracksEnabled = isBackingTracksFeatureEnabled();
+  const scalesEnabled = isScalesFeatureEnabled();
   const riffLibraryEnabled = isRiffLibraryFeatureEnabled();
 
   if (searchInput && searchInput.value !== jam.query) {
@@ -460,17 +474,21 @@ export function renderJamPanel(): void {
   }
 
   backingTracksSectionButton?.toggleAttribute("hidden", !backingTracksEnabled);
+  scalesSectionButton?.toggleAttribute("hidden", !scalesEnabled);
   riffsSectionButton?.toggleAttribute("hidden", !riffLibraryEnabled);
   searchTab?.toggleAttribute("hidden", !backingTracksEnabled);
   favoritesTab?.toggleAttribute("hidden", !backingTracksEnabled);
 
   backingTracksSectionButton?.classList.toggle("active", resolvedSection === "backingTracks");
+  scalesSectionButton?.classList.toggle("active", resolvedSection === "scales");
   riffsSectionButton?.classList.toggle("active", resolvedSection === "riffs");
   searchTab?.classList.toggle("active", resolvedTab === "search");
   favoritesTab?.classList.toggle("active", resolvedTab === "favorites");
 
   backingTracksPanel?.classList.toggle("active", resolvedSection === "backingTracks" && backingTracksEnabled);
   backingTracksPanel?.toggleAttribute("hidden", resolvedSection !== "backingTracks" || !backingTracksEnabled);
+  scalesPanel?.classList.toggle("active", resolvedSection === "scales" && scalesEnabled);
+  scalesPanel?.toggleAttribute("hidden", resolvedSection !== "scales" || !scalesEnabled);
   riffsPanel?.classList.toggle("active", resolvedSection === "riffs" && riffLibraryEnabled);
   riffsPanel?.toggleAttribute("hidden", resolvedSection !== "riffs" || !riffLibraryEnabled);
   searchPanel?.classList.toggle("active", resolvedTab === "search" && backingTracksEnabled);
@@ -480,6 +498,10 @@ export function renderJamPanel(): void {
 
   if (resolvedSection === "riffs") {
     renderRiffLibraryPanel();
+    return;
+  }
+
+  if (resolvedSection === "scales") {
     return;
   }
 
@@ -641,6 +663,7 @@ function bindPanelActions(): void {
   const resultsHosts = [document.getElementById("jam-results"), document.getElementById("jam-favorites-results")];
 
   document.getElementById("jam-section-backing-tracks")?.addEventListener("click", () => setActiveSection("backingTracks"));
+  document.getElementById("jam-section-scales")?.addEventListener("click", () => setActiveSection("scales"));
   document.getElementById("jam-section-riffs")?.addEventListener("click", () => setActiveSection("riffs"));
   document.getElementById("jam-backing-tab-search")?.addEventListener("click", () => setBackingTracksTab("search"));
   document.getElementById("jam-backing-tab-favorites")?.addEventListener("click", () => setBackingTracksTab("favorites"));

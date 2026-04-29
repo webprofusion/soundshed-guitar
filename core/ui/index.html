@@ -521,6 +521,7 @@
           </div>
           <div class="jam-sections tab-bar">
             <button id="jam-section-backing-tracks" class="tab-btn active" type="button">Backing Tracks</button>
+            <button id="jam-section-scales" class="tab-btn" type="button">Scales</button>
             <button id="jam-section-riffs" class="tab-btn" type="button">Riff Library</button>
           </div>
           <div class="jam-section-panel active" id="jam-section-panel-backing-tracks">
@@ -538,6 +539,15 @@
             <div class="jam-tab-panel" id="jam-backing-tab-panel-favorites" hidden>
               <div class="jam-results" id="jam-favorites-results"></div>
             </div>
+          </div>
+          <div class="jam-section-panel jam-scales-panel" id="jam-section-panel-scales" hidden>
+            <iframe
+              class="jam-scales-frame"
+              src="https://scalex.soundshed.com"
+              title="Scales"
+              allow="clipboard-read; clipboard-write; fullscreen"
+              referrerpolicy="strict-origin-when-cross-origin">
+            </iframe>
           </div>
           <div class="jam-section-panel" id="jam-section-panel-riffs" hidden>
             <div class="jam-riff-panel">
@@ -1049,7 +1059,6 @@
       <span class="footer-divider">|</span>
       <button class="footer-btn footer-btn-disabled" disabled>MIDI</button>
       <span class="footer-divider">|</span>
-      <button class="footer-btn" id="footer-tap-btn">TAP</button>
       <button class="footer-btn metronome-only" id="footer-riff-record-btn">REC</button>
       <button class="bpm-display metronome-only" id="footer-bpm-btn" title="Set BPM">
         <span id="footer-bpm-value">120.0</span> BPM
@@ -1061,6 +1070,7 @@
         </label>
         <input type="range" id="footer-bpm-slider" min="30" max="300" step="1" />
       </div>
+      <button class="footer-btn" id="footer-tap-btn">TAP</button>
       <span class="footer-divider">|</span>
       <button
         class="footer-btn footer-metronome-btn metronome-only"
@@ -1075,6 +1085,16 @@
           <path d="M12 8.5v7" />
           <path d="M12 10.5l2.75-1.75" />
         </svg>
+      </button>
+      <button
+        class="footer-metronome-play-btn metronome-only"
+        id="footer-metronome-toggle"
+        type="button"
+        aria-label="Start metronome"
+        aria-pressed="false"
+        title="Start metronome"
+      >
+        <span class="footer-metronome-play-icon" aria-hidden="true">▶</span>
       </button>
       <span class="footer-divider">|</span>
       <div class="footer-right">
