@@ -1,16 +1,17 @@
 include_guard(GLOBAL)
 
 function(guitarfx_detect_windows_arch out_var)
-    set(_guitarfx_windows_arch "${CMAKE_GENERATOR_PLATFORM}")
-    if(NOT _guitarfx_windows_arch)
-        set(_guitarfx_windows_arch "${MSVC_CXX_ARCHITECTURE_ID}")
-    endif()
-    if(NOT _guitarfx_windows_arch)
-        set(_guitarfx_windows_arch "${CMAKE_VS_PLATFORM_NAME}")
-    endif()
-    if(NOT _guitarfx_windows_arch)
-        set(_guitarfx_windows_arch "${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
+    set(_guitarfx_windows_arch "")
+    foreach(_guitarfx_windows_arch_candidate
+            CMAKE_GENERATOR_PLATFORM
+            MSVC_CXX_ARCHITECTURE_ID
+            CMAKE_VS_PLATFORM_NAME
+            CMAKE_SYSTEM_PROCESSOR)
+        if(NOT "${${_guitarfx_windows_arch_candidate}}" STREQUAL "")
+            set(_guitarfx_windows_arch "${${_guitarfx_windows_arch_candidate}}")
+            break()
+        endif()
+    endforeach()
     string(TOLOWER "${_guitarfx_windows_arch}" _guitarfx_windows_arch)
     set(${out_var} "${_guitarfx_windows_arch}" PARENT_SCOPE)
 endfunction()

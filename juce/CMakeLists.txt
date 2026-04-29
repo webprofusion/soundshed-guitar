@@ -84,6 +84,11 @@ if (WIN32)
             NAME intelipp_static_win_x64
             URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/2022.3.1.8
         )
+    elseif(_guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
+        CPMAddPackage(
+            NAME intelipp_static_win_x86
+            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x86/2021.12.1.13
+        )
     endif()
 endif()
 
