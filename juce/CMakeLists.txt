@@ -76,10 +76,21 @@ CPMAddPackage(
 )
 
 if (WIN32)
-    CPMAddPackage(
-        NAME intelipp_static_win_x64
-        URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/2022.3.1.8
-    )
+    include("${CMAKE_CURRENT_LIST_DIR}/../core/cmake/GuitarfxIPPConfig.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/../core/cmake/GuitarfxWindowsArch.cmake")
+    guitarfx_detect_windows_arch(_guitarfx_windows_target_arch)
+
+    if(_guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
+        CPMAddPackage(
+            NAME intelipp_static_win_x64
+            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/${GUITARFX_IPP_WIN_X64_VERSION}
+        )
+    elseif(_guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
+        CPMAddPackage(
+            NAME intelipp_static_win_x86
+            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x86/${GUITARFX_IPP_WIN_X86_VERSION}
+        )
+    endif()
 endif()
 
 include(PamplejuceIPP)
@@ -88,6 +99,12 @@ if(GUITARFX_IPP_AVAILABLE)
 endif()
 
 # Signalsmith headers are provided transitively by SoundshedGuitarCore.
+
+# The shared detector lowercases Visual Studio's canonical Win32 platform name for comparisons.
+if(WIN32 AND _guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
+    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
+    message(STATUS "Windows x86 build detected; disabling WASM effects because Wasmtime does not provide a Windows x86 C API bundle.")
+endif()
 
 # Configures universal binaries and decides which version of macOS to support
 include(PamplejuceMacOS)
@@ -128,18 +145,6 @@ if(WIN32)
     set(GUITARFX_WEBVIEW2_STATIC_LINKING 1)
     set(GUITARFX_WEBVIEW2_LOADER_ARCH "x64")
     set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86_64-win")
-
-    set(_guitarfx_windows_target_arch "${CMAKE_GENERATOR_PLATFORM}")
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${MSVC_CXX_ARCHITECTURE_ID}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_VS_PLATFORM_NAME}")
-    endif()
-    if(NOT _guitarfx_windows_target_arch)
-        set(_guitarfx_windows_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
-    string(TOLOWER "${_guitarfx_windows_target_arch}" _guitarfx_windows_target_arch)
 
     if(_guitarfx_windows_target_arch MATCHES "^(arm64ec)$")
         set(GUITARFX_WEBVIEW2_STATIC_LINKING 0)

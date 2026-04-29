@@ -6,10 +6,12 @@ This guide walks you through installing Soundshed Guitar, setting up your audio 
 
 ## System requirements
 
-- **Windows 10/11 (64-bit)** — standalone app or VST3 plugin
+- **Windows 10/11 (32-bit x86 or 64-bit)** — standalone app or VST3 plugin
 - **macOS 11+** — standalone app, VST3, or AU plugin
 - An audio interface with a guitar input (recommended) or a USB guitar cable
 - Headphones or monitors
+
+The Windows x86 build excludes generic WASM effects because Wasmtime does not provide a Windows x86 C API bundle.
 
 ---
 

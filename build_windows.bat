@@ -15,6 +15,17 @@ if defined GUITARFX_WINDOWS_ARCH (
 ) else (
     set "ARCH=x64"
 )
+:: Canonical CMake Visual Studio platform names: Win32 (32-bit x86), x64, ARM64.
+set "ARCH_IS_SUPPORTED="
+if /I "%ARCH%"=="Win32" set "ARCH_IS_SUPPORTED=1"
+if /I "%ARCH%"=="x64" set "ARCH_IS_SUPPORTED=1"
+if /I "%ARCH%"=="ARM64" set "ARCH_IS_SUPPORTED=1"
+if not defined ARCH_IS_SUPPORTED (
+    echo ERROR: Unsupported Windows architecture "%ARCH%". Expected one of: Win32, x64, ARM64.
+    exit /b 1
+)
+:: Export the resolved platform for Inno Setup architecture/install path selection.
+set "GUITARFX_WINDOWS_ARCH=%ARCH%"
 if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
     set "CMAKE_GENERATOR=%GUITARFX_WINDOWS_CMAKE_GENERATOR%"
 ) else (

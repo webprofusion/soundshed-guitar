@@ -141,7 +141,7 @@ See: [User Stories](user-stories.md)
 
 | ID | Requirement | Details |
 |----|-------------|---------|
-| NFR-C-001 | Windows | Windows 10/11 (x64) |
+| NFR-C-001 | Windows | Windows 10/11 (x86, x64) |
 | NFR-C-002 | macOS | macOS 11+ (x64, ARM64) |
 | NFR-C-003 | Sample Rates | 44.1kHz, 48kHz, 88.2kHz, 96kHz |
 | NFR-C-004 | Buffer Sizes | 32-2048 samples |

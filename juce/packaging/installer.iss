@@ -2,6 +2,19 @@
 #define ProjectName GetEnv('PROJECT_NAME')
 #define ProductName GetEnv('PRODUCT_NAME')
 #define Publisher GetEnv('COMPANY_NAME')
+#define TargetArch GetEnv('GUITARFX_WINDOWS_ARCH')
+; build_windows.bat exports the resolved architecture; keep x64 as a fallback for standalone packaging outside that script.
+#if TargetArch == ""
+  #define TargetArch "x64"
+#endif
+#if TargetArch == "Win32"
+  #define CommonFiles "{commoncf32}"
+  #define ProgramFiles "{commonpf32}"
+#else
+  ; 64-bit targets (x64 and ARM64) use the native 64-bit Program Files and Common Files locations.
+  #define CommonFiles "{commoncf64}"
+  #define ProgramFiles "{commonpf64}"
+#endif
 #define Year GetDateTimeString("yyyy","","")
 #define WebView2RuntimeUrl "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 
@@ -17,14 +30,18 @@ Name: "vst3"; Description: "VST3 plugin"; Types: full custom
 ; Name: "clap"; Description: "CLAP plugin"; Types: full custom
 
 [Setup]
+#if TargetArch == "Win32"
+ArchitecturesAllowed=x86compatible
+#else
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
+#endif
 AppName={#ProductName}
 OutputBaseFilename={#ProductName}-{#Version}-Windows
 AppCopyright=Copyright (C) {#Year} {#Publisher}
 AppPublisher={#Publisher}
 AppVersion={#Version}
-DefaultDirName="{commoncf64}\VST3\{#ProductName}.vst3"
+DefaultDirName="{#CommonFiles}\VST3\{#ProductName}.vst3"
 DisableDirPage=yes
 
 ; MAKE SURE YOU READ/MODIFY THE EULA BEFORE USING IT
@@ -32,23 +49,23 @@ LicenseFile="resources\EULA"
 UninstallFilesDir="{commonappdata}\{#ProductName}\uninstall"
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{commonpf64}\{#Publisher}\{#ProductName}"
-Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}.vst3"
+Type: filesandordirs; Name: "{#ProgramFiles}\{#Publisher}\{#ProductName}"
+Type: filesandordirs; Name: "{#CommonFiles}\VST3\{#ProductName}.vst3"
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
-Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
-; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
+Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{#CommonFiles}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{#ProgramFiles}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
+; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{#CommonFiles}\CLAP\"; Flags: ignoreversion; Components: clap
 
 
 [Icons]
-Name: "{autoprograms}\{#ProductName}"; Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone
+Name: "{autoprograms}\{#ProductName}"; Filename: "{#ProgramFiles}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone
 Name: "{autoprograms}\Uninstall {#ProductName}"; Filename: "{uninstallexe}"
 
 ; This is optional, for preset or other plugin data
 [Run]
-Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; \
+Filename: "{#ProgramFiles}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; \
     Description: "Launch {#ProductName}"; \
     Flags: nowait postinstall skipifsilent; Components: standalone
 
