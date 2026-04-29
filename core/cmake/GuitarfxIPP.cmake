@@ -1,6 +1,9 @@
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/GuitarfxWindowsArch.cmake")
 
+set(GUITARFX_IPP_WIN_X64_VERSION "2022.3.1.8" CACHE STRING "Intel IPP static NuGet package version for Windows x64")
+set(GUITARFX_IPP_WIN_X86_VERSION "2021.12.1.13" CACHE STRING "Intel IPP static NuGet package version for Windows x86")
+
 function(guitarfx_detect_ipp)
     if(DEFINED GUITARFX_IPP_AVAILABLE)
         return()
@@ -23,14 +26,14 @@ function(guitarfx_detect_ipp)
         if(_guitarfx_windows_arch MATCHES "^(x64|amd64|x86_64)$")
             set(_ipp_windows_lib_arch "win-x64")
             set(_ipp_windows_package_id "intelipp.static.win-x64")
-            set(_ipp_windows_package_version "2022.3.1.8")
+            set(_ipp_windows_package_version "${GUITARFX_IPP_WIN_X64_VERSION}")
             list(APPEND _ipp_windows_source_vars
                 intelipp_static_win_x64_SOURCE_DIR
                 CPM_PACKAGE_intelipp_static_win_x64_SOURCE_DIR)
         elseif(_guitarfx_windows_arch MATCHES "^(win32|x86|i386)$")
             set(_ipp_windows_lib_arch "win-x86")
             set(_ipp_windows_package_id "intelipp.static.win-x86")
-            set(_ipp_windows_package_version "2021.12.1.13")
+            set(_ipp_windows_package_version "${GUITARFX_IPP_WIN_X86_VERSION}")
             list(APPEND _ipp_windows_source_vars
                 intelipp_static_win_x86_SOURCE_DIR
                 CPM_PACKAGE_intelipp_static_win_x86_SOURCE_DIR)
@@ -42,7 +45,7 @@ function(guitarfx_detect_ipp)
             else()
                 foreach(_ipp_windows_source_var IN LISTS _ipp_windows_source_vars)
                     set(_ipp_windows_source_dir "${${_ipp_windows_source_var}}")
-                    if(DEFINED ${_ipp_windows_source_var} AND IS_DIRECTORY "${_ipp_windows_source_dir}")
+                    if(IS_DIRECTORY "${_ipp_windows_source_dir}")
                         set(_ipp_root "${_ipp_windows_source_dir}")
                         break()
                     endif()

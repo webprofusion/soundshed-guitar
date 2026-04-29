@@ -76,18 +76,18 @@ CPMAddPackage(
 )
 
 if (WIN32)
-    include("${CMAKE_CURRENT_SOURCE_DIR}/../core/cmake/GuitarfxWindowsArch.cmake")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../core/cmake/GuitarfxIPP.cmake")
     guitarfx_detect_windows_arch(_guitarfx_windows_target_arch)
 
     if(_guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
         CPMAddPackage(
             NAME intelipp_static_win_x64
-            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/2022.3.1.8
+            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x64/${GUITARFX_IPP_WIN_X64_VERSION}
         )
     elseif(_guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
         CPMAddPackage(
             NAME intelipp_static_win_x86
-            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x86/2021.12.1.13
+            URL https://www.nuget.org/api/v2/package/intelipp.static.win-x86/${GUITARFX_IPP_WIN_X86_VERSION}
         )
     endif()
 endif()
