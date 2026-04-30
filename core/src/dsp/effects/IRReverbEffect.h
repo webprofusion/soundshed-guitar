@@ -35,6 +35,11 @@ namespace guitarfx
       mOutputBufferLR.resize(static_cast<std::size_t>(maxBlockSize));
       mOutputBufferRL.resize(static_cast<std::size_t>(maxBlockSize));
 
+      // CRITICAL: Clear filter state BEFORE updating filter coefficients to prevent transients
+      // when stale filter state is processed with new sample-rate-dependent coefficients.
+      mToneStateL = 0.0f;
+      mToneStateR = 0.0f;
+
       ApplyPendingQuality();
       UpdateToneFilter();
 

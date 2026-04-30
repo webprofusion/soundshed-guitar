@@ -30,12 +30,16 @@ namespace guitarfx
       mMaxBlockSize = maxBlockSize;
       mResourceTransitionSamplesTotal = std::max(1, static_cast<int>(std::round(mSampleRate * 0.03))); // 30 ms
 
-      UpdateAirCoefficients();
-      UpdateCabFilterCoefficients();
-      UpdateMicCoefficients();
+      // CRITICAL: Clear filter state BEFORE updating coefficients to prevent transients
+      // when stale filter state is processed with new sample-rate-dependent coefficients.
+      // This is essential when sample rate changes via ASIO preferences.
       ResetAirState();
       ResetCabFilterState();
       ResetMicPositionState();
+
+      UpdateAirCoefficients();
+      UpdateCabFilterCoefficients();
+      UpdateMicCoefficients();
 
       mInputBufferL.resize(static_cast<size_t>(maxBlockSize));
       mInputBufferR.resize(static_cast<size_t>(maxBlockSize));

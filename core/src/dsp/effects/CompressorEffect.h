@@ -23,6 +23,8 @@ namespace guitarfx
         return;
       mSampleRate = sampleRate;
       UpdateCoefficients();
+      // Clear state when sample rate changes to ensure clean initialization
+      Reset();
     }
 
     void Reset() override
@@ -224,6 +226,8 @@ namespace guitarfx
         return;
       mSampleRate = sampleRate;
       UpdateCoefficients();
+      // Clear state when sample rate changes to ensure clean initialization
+      Reset();
     }
 
     void Reset() override
