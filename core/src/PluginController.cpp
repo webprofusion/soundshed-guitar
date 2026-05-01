@@ -266,6 +266,36 @@ namespace
             || type == "fx_nam";
     }
 
+    const guitarfx::GraphNode* FindNodeByIdOrType(const guitarfx::SignalGraph& graph,
+                                                   const std::string& id,
+                                                   const std::string& type)
+    {
+        for (const auto& node : graph.nodes)
+        {
+            if (node.id == id)
+                return &node;
+        }
+        for (const auto& node : graph.nodes)
+        {
+            if (node.type == type)
+                return &node;
+        }
+        return nullptr;
+    }
+
+    int GetGlobalTransposeFromChainConfig(const guitarfx::GlobalSignalChainConfig& config)
+    {
+        const auto* transposeNode = FindNodeByIdOrType(config.preChainGraph, "global_transpose", guitarfx::EffectGuids::kTranspose);
+        if (!transposeNode || !transposeNode->enabled)
+            return 0;
+
+        const auto semitonesIt = transposeNode->params.find("semitones");
+        if (semitonesIt == transposeNode->params.end())
+            return 0;
+
+        return static_cast<int>(std::round(std::clamp(semitonesIt->second, -12.0, 12.0)));
+    }
+
     std::filesystem::path ResolveRiffTakePathForRuntime(const std::filesystem::path& storedPath,
                                                         const std::filesystem::path& libraryPath)
     {
@@ -2827,23 +2857,23 @@ void PluginController::ApplyParamChangeLocked(int paramIdx, double value)
     case kParamOutputTrim:   mPresetMixer.SetGlobalOutputGain(value); break;
     case kParamDrive:        mPresetMixer.SetAmpDrive(value); break;
     case kParamTone:         mPresetMixer.SetAmpTone(value); break;
-    case kParamGateEnabled:  mPresetMixer.SetGateEnabled(value > 0.5); break;
-    case kParamGateThreshold: mPresetMixer.SetGateThreshold(value); break;
-    case kParamDoublerEnabled: mPresetMixer.SetDoublerEnabled(value > 0.5); break;
-    case kParamDoublerDelay: mPresetMixer.SetDoublerDelay(value); break;
-    case kParamTranspose:    mPresetMixer.SetTranspose(static_cast<int>(value)); break;
+    case kParamGateEnabled:  mPresetMixer.SetGlobalGateEnabled(value > 0.5); break;
+    case kParamGateThreshold: mPresetMixer.SetGlobalGateThreshold(value); break;
+    case kParamDoublerEnabled: mPresetMixer.SetGlobalDoublerEnabled(value > 0.5); break;
+    case kParamDoublerDelay: mPresetMixer.SetGlobalDoublerDelay(value); break;
+    case kParamTranspose:    mPresetMixer.SetGlobalTranspose(static_cast<int>(value)); break;
     case kParamIRQuality:    mPresetMixer.SetIRQuality(value); break;
-    case kParamEQEnabled:    mPresetMixer.SetEQEnabled(value > 0.5); break;
-    case kParamEQLowGain:    mPresetMixer.SetEQBandGain(0, value); break;
-    case kParamEQLowFreq:    mPresetMixer.SetEQBandFrequency(0, value); break;
-    case kParamEQLowMidGain: mPresetMixer.SetEQBandGain(1, value); break;
-    case kParamEQLowMidFreq: mPresetMixer.SetEQBandFrequency(1, value); break;
-    case kParamEQLowMidQ:    mPresetMixer.SetEQBandQ(1, value); break;
-    case kParamEQHighMidGain: mPresetMixer.SetEQBandGain(2, value); break;
-    case kParamEQHighMidFreq: mPresetMixer.SetEQBandFrequency(2, value); break;
-    case kParamEQHighMidQ:   mPresetMixer.SetEQBandQ(2, value); break;
-    case kParamEQHighGain:   mPresetMixer.SetEQBandGain(3, value); break;
-    case kParamEQHighFreq:   mPresetMixer.SetEQBandFrequency(3, value); break;
+    case kParamEQEnabled:    mPresetMixer.SetGlobalEQEnabled(value > 0.5); break;
+    case kParamEQLowGain:    mPresetMixer.SetGlobalEQBandGain(0, value); break;
+    case kParamEQLowFreq:    mPresetMixer.SetGlobalEQBandFrequency(0, value); break;
+    case kParamEQLowMidGain: mPresetMixer.SetGlobalEQBandGain(1, value); break;
+    case kParamEQLowMidFreq: mPresetMixer.SetGlobalEQBandFrequency(1, value); break;
+    case kParamEQLowMidQ:    mPresetMixer.SetGlobalEQBandQ(1, value); break;
+    case kParamEQHighMidGain: mPresetMixer.SetGlobalEQBandGain(2, value); break;
+    case kParamEQHighMidFreq: mPresetMixer.SetGlobalEQBandFrequency(2, value); break;
+    case kParamEQHighMidQ:   mPresetMixer.SetGlobalEQBandQ(2, value); break;
+    case kParamEQHighGain:   mPresetMixer.SetGlobalEQBandGain(3, value); break;
+    case kParamEQHighFreq:   mPresetMixer.SetGlobalEQBandFrequency(3, value); break;
     default: break;
     }
 
@@ -3270,12 +3300,17 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
     else if (path == "gate.release") mPresetMixer.SetGlobalGateRelease(value.get<double>());
     else if (path == "transpose.enabled")
     {
-        mPresetMixer.SetGlobalTransposeEnabled(value.get<bool>());
+        const bool enabled = value.get<bool>();
+        mPresetMixer.SetGlobalTransposeEnabled(enabled);
+        if (!enabled)
+            mParamValues[kParamTranspose] = 0.0;
         UpdateHostLatency();
     }
     else if (path == "transpose.semitones")
     {
-        mPresetMixer.SetGlobalTranspose(value.get<int>());
+        const int semitones = std::clamp(value.get<int>(), -12, 12);
+        mPresetMixer.SetGlobalTranspose(semitones);
+        mParamValues[kParamTranspose] = static_cast<double>(semitones);
         UpdateHostLatency();
     }
     else if (path == "eq.enabled") mPresetMixer.SetGlobalEQEnabled(value.get<bool>());
@@ -3854,7 +3889,10 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
 
     node->params[paramKey] = value;
     SyncActivePresetSceneGraph();
-    mPresetMixer.SetNodeParam(presetId, nodeId, paramKey, value);
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.SetNodeParam(presetId, nodeId, paramKey, value);
+    }
     mActivePresetJson = mActivePreset ? PresetStorage::SerializeToJson(*mActivePreset) : "{}";
 }
 
@@ -3875,7 +3913,10 @@ void PluginController::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::j
 
     node->enabled = enabled;
     SyncActivePresetSceneGraph();
-    mPresetMixer.SetNodeEnabled(presetId, nodeId, enabled);
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.SetNodeEnabled(presetId, nodeId, enabled);
+    }
     mActivePresetJson = mActivePreset ? PresetStorage::SerializeToJson(*mActivePreset) : "{}";
     mPendingStateBroadcast = true;
 }
@@ -7999,6 +8040,7 @@ void PluginController::HandleSetNodeEnabledRequest(const nlohmann::json& payload
     std::string presetId = payload.value("presetId", fallbackId);
     std::string nodeId = payload.value("nodeId", "");
     bool enabled = payload.value("enabled", true);
+    std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.SetNodeEnabled(presetId, nodeId, enabled);
     UpdateHostLatency();
 }
@@ -8009,6 +8051,7 @@ void PluginController::HandleSetNodeParamRequest(const nlohmann::json& payload)
     std::string nodeId = payload.value("nodeId", "");
     std::string key = payload.value("key", "");
     double value = payload.value("value", 0.0);
+    std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.SetNodeParam(presetId, nodeId, key, value);
     UpdateHostLatency();
 }
@@ -8451,6 +8494,7 @@ void PluginController::ApplyPreset(const Preset& preset)
     normalizedPreset.globalSignalChain = chainConfig;
     mParamValues[kParamInputTrim] = inputGainDb;
     mParamValues[kParamOutputTrim] = outputGainDb;
+    mParamValues[kParamTranspose] = static_cast<double>(GetGlobalTransposeFromChainConfig(chainConfig));
 
     mActivePreset = normalizedPreset;
     mActivePresetJson = PresetStorage::SerializeToJson(normalizedPreset);

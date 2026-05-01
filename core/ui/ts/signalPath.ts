@@ -3343,11 +3343,13 @@ function bindCustomizeLayoutButton(node: GraphNode): void {
 }
 
 function sendSignalPathNodeParamUpdate(nodeId: string, paramKey: string, value: number): void {
+  const presetId = uiState.activePresetId ?? undefined;
   postMessage({
     type: "updateSignalPathNodeParam",
     nodeId,
     paramKey,
     value,
+    ...(presetId ? { presetId } : {}),
   });
   setPresetDirty(true);
 }

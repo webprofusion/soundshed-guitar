@@ -28,8 +28,8 @@ namespace guitarfx
       // Latency/quality toggle currently hard-coded to best latency.
       mStretch.presetCheaper(2, static_cast<float>(sampleRate), false);
       //      mStretch.presetDefault(2, static_cast<float>(sampleRate), true);
-      ApplyTranspose();
       mConfigured = true;
+      ApplyTranspose();
       Reset();
     }
 
