@@ -286,6 +286,68 @@ namespace guitarfx
       return truncated;
     }
 
+    static double Sinc(double x)
+    {
+      if (std::fabs(x) < 1e-9)
+        return 1.0;
+      const double px = 3.14159265358979323846 * x;
+      return std::sin(px) / px;
+    }
+
+    static double BlackmanWindow(double distance)
+    {
+      constexpr double kPi = 3.14159265358979323846;
+      constexpr int kHalfTaps = 64;
+      const double normalizedDistance = std::abs(distance) / static_cast<double>(kHalfTaps);
+      if (normalizedDistance >= 1.0)
+        return 0.0;
+
+      return 0.42 + 0.5 * std::cos(kPi * normalizedDistance)
+        + 0.08 * std::cos(2.0 * kPi * normalizedDistance);
+    }
+
+    static void ResampleImpulseForConvolution(std::vector<float> &samples, double sourceRate, double targetRate)
+    {
+      if (samples.empty() || sourceRate <= 0.0 || targetRate <= 0.0 || std::abs(sourceRate - targetRate) <= 1.0)
+        return;
+
+      constexpr int kHalfTaps = 64;
+      const double ratio = targetRate / sourceRate;
+      const double cutoff = std::min(ratio, 1.0);
+      const std::size_t newSize = static_cast<std::size_t>(std::ceil(static_cast<double>(samples.size()) * ratio));
+      if (newSize == 0)
+      {
+        samples.clear();
+        return;
+      }
+
+      std::vector<float> resampled(newSize, 0.0f);
+      const int sourceLength = static_cast<int>(samples.size());
+      const double coefficientScale = sourceRate / targetRate;
+
+      for (std::size_t outputIndex = 0; outputIndex < newSize; ++outputIndex)
+      {
+        const double sourcePosition = static_cast<double>(outputIndex) / ratio;
+        const int center = static_cast<int>(std::floor(sourcePosition));
+        double sum = 0.0;
+
+        for (int tapOffset = -kHalfTaps; tapOffset <= kHalfTaps; ++tapOffset)
+        {
+          const int sourceIndex = center + tapOffset;
+          if (sourceIndex < 0 || sourceIndex >= sourceLength)
+            continue;
+
+          const double distance = sourcePosition - static_cast<double>(sourceIndex);
+          const double tap = cutoff * Sinc(distance * cutoff) * BlackmanWindow(distance);
+          sum += static_cast<double>(samples[static_cast<std::size_t>(sourceIndex)]) * tap;
+        }
+
+        resampled[outputIndex] = static_cast<float>(sum * coefficientScale);
+      }
+
+      samples = std::move(resampled);
+    }
+
     std::size_t GetMinimumImpulseLength() const
     {
       if (mHasTrueStereo)
@@ -387,36 +449,40 @@ namespace guitarfx
         processedRL = TruncateAndFade(mImpulseRL, truncLength);
       }
 
-      if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
+      // Normalize by peak amplitude in source-rate domain, before resampling, so that the
+      // same normalization factor is applied regardless of playback sample rate.
+      // (Normalizing post-resample would counteract the coefficient-area scaling in
+      // ResampleImpulseForConvolution and cause louder reverb at higher sample rates.)
       {
-        irwav::ResampleSinc(processedLL, mIRSampleRate, mSampleRate);
-        irwav::ResampleSinc(processedRR, mIRSampleRate, mSampleRate);
+        float peak = 0.0f;
+        for (float s : processedLL) peak = std::max(peak, std::fabs(s));
+        for (float s : processedRR) peak = std::max(peak, std::fabs(s));
         if (mHasTrueStereo)
         {
-          irwav::ResampleSinc(processedLR, mIRSampleRate, mSampleRate);
-          irwav::ResampleSinc(processedRL, mIRSampleRate, mSampleRate);
+          for (float s : processedLR) peak = std::max(peak, std::fabs(s));
+          for (float s : processedRL) peak = std::max(peak, std::fabs(s));
+        }
+        if (peak > 1e-6f)
+        {
+          const float inv = 1.0f / peak;
+          for (float &s : processedLL) s *= inv;
+          for (float &s : processedRR) s *= inv;
+          if (mHasTrueStereo)
+          {
+            for (float &s : processedLR) s *= inv;
+            for (float &s : processedRL) s *= inv;
+          }
         }
       }
 
-      // Normalize by peak amplitude across all channels so that un-normalized reverb IRs
-      // (which may have large early-reflection amplitudes) don't saturate the convolver output.
-      float peak = 0.0f;
-      for (float s : processedLL) peak = std::max(peak, std::fabs(s));
-      for (float s : processedRR) peak = std::max(peak, std::fabs(s));
-      if (mHasTrueStereo)
+      if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
       {
-        for (float s : processedLR) peak = std::max(peak, std::fabs(s));
-        for (float s : processedRL) peak = std::max(peak, std::fabs(s));
-      }
-      if (peak > 1e-6f)
-      {
-        const float inv = 1.0f / peak;
-        for (float &s : processedLL) s *= inv;
-        for (float &s : processedRR) s *= inv;
+        ResampleImpulseForConvolution(processedLL, mIRSampleRate, mSampleRate);
+        ResampleImpulseForConvolution(processedRR, mIRSampleRate, mSampleRate);
         if (mHasTrueStereo)
         {
-          for (float &s : processedLR) s *= inv;
-          for (float &s : processedRL) s *= inv;
+          ResampleImpulseForConvolution(processedLR, mIRSampleRate, mSampleRate);
+          ResampleImpulseForConvolution(processedRL, mIRSampleRate, mSampleRate);
         }
       }
 
