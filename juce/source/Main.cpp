@@ -1,9 +1,58 @@
 #include "PluginProcessorAdapter.h"
+#include "PluginEditor.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+
+//==============================================================================
+namespace
+{
+    juce::String extractToneSharingDeepLinkQuery (juce::String commandLine)
+    {
+        auto normalized = juce::URL::removeEscapeChars (commandLine.unquoted().trim());
+
+        auto extractValue = [&normalized] (const juce::String& key) -> juce::String
+        {
+            const auto marker = key + "=";
+            const auto index = normalized.indexOfIgnoreCase (marker);
+            if (index < 0)
+                return {};
+
+            auto value = normalized.substring (index + marker.length());
+            const auto ampPos = value.indexOfChar ('&');
+            if (ampPos >= 0)
+                value = value.substring (0, ampPos);
+            const auto spacePos = value.indexOfChar (' ');
+            if (spacePos >= 0)
+                value = value.substring (0, spacePos);
+            const auto quotePos = value.indexOfChar ('\"');
+            if (quotePos >= 0)
+                value = value.substring (0, quotePos);
+            const auto hashPos = value.indexOfChar ('#');
+            if (hashPos >= 0)
+                value = value.substring (0, hashPos);
+
+            return value.trim();
+        };
+
+        const auto itemId = extractValue ("itemId");
+        const auto packId = extractValue ("packId");
+
+        juce::String sanitized;
+        if (itemId.isNotEmpty())
+            sanitized << "itemId=" << itemId;
+        if (packId.isNotEmpty())
+        {
+            if (sanitized.isNotEmpty())
+                sanitized << "&";
+            sanitized << "packId=" << packId;
+        }
+
+        return sanitized;
+    }
+}
 
 //==============================================================================
 class MainWindow : public juce::DocumentWindow
@@ -177,7 +226,7 @@ public:
 
     const juce::String getApplicationName() override { return PRODUCT_NAME_WITHOUT_VERSION; }
     const juce::String getApplicationVersion() override { return JucePlugin_VersionString; }
-    bool moreThanOneInstanceAllowed() override { return true; }
+    bool moreThanOneInstanceAllowed() override { return false; }
 
     void initialise (const juce::String&) override
     {
@@ -215,8 +264,19 @@ public:
         quit();
     }
 
-    void anotherInstanceStarted (const juce::String&) override
+    void anotherInstanceStarted (const juce::String& commandLine) override
     {
+        // Extract deep link from incoming command line and route to existing instance
+        const auto deepLink = extractToneSharingDeepLinkQuery (commandLine);
+        if (deepLink.isNotEmpty() && mMainWindow != nullptr)
+        {
+            if (auto* editor = dynamic_cast<PluginEditor*> (mMainWindow->getContentComponent()))
+            {
+                juce::MessageManager::callAsync ([editor, deepLink]() {
+                    editor->handleDeepLinkFromAnotherInstance (deepLink);
+                });
+            }
+        }
     }
 
 private:

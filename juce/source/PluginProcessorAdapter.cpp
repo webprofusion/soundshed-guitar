@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <vector>
 #include <thread>
 
 #ifdef _WIN32
@@ -162,6 +163,8 @@ void PluginProcessorAdapter::processBlock (juce::AudioBuffer<float>& buffer,
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
 {
+    ensureStandaloneProtocolHandlerRegistration();
+
 #if JUCE_LINUX
     // JUCE's LV2 manifest helper instantiates the editor in headless CI just to query
     // resize metadata. Avoid constructing the real WebView-based editor in that path.
@@ -536,6 +539,75 @@ bool PluginProcessorAdapter::IsHostPlaying() const
 bool PluginProcessorAdapter::IsStandalone() const
 {
     return wrapperType == wrapperType_Standalone;
+}
+
+void PluginProcessorAdapter::ensureStandaloneProtocolHandlerRegistration()
+{
+    if (mStandaloneProtocolRegistrationAttempted)
+        return;
+
+    mStandaloneProtocolRegistrationAttempted = true;
+
+    if (wrapperType != wrapperType_Standalone)
+        return;
+
+#if JUCE_WINDOWS
+    static constexpr const wchar_t* protocolRoot = L"Software\\Classes\\soundshed";
+
+    const auto setRegistryString = [] (const wchar_t* subKey, const wchar_t* valueName, const juce::String& value) {
+        HKEY key = nullptr;
+        const auto createResult = RegCreateKeyExW (HKEY_CURRENT_USER,
+                                                    subKey,
+                                                    0,
+                                                    nullptr,
+                                                    REG_OPTION_NON_VOLATILE,
+                                                    KEY_SET_VALUE,
+                                                    nullptr,
+                                                    &key,
+                                                    nullptr);
+        if (createResult != ERROR_SUCCESS || key == nullptr)
+            return false;
+
+        const auto scopedClose = [&key]() {
+            if (key != nullptr)
+                RegCloseKey (key);
+        };
+
+        const auto* raw = value.toWideCharPointer();
+        const auto bytes = static_cast<DWORD> ((value.length() + 1) * static_cast<int> (sizeof (wchar_t)));
+        const auto setResult = RegSetValueExW (key,
+                                               valueName,
+                                               0,
+                                               REG_SZ,
+                                               reinterpret_cast<const BYTE*> (raw),
+                                               bytes);
+        scopedClose();
+        return setResult == ERROR_SUCCESS;
+    };
+
+    const auto executablePath = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getFullPathName();
+    if (executablePath.isEmpty())
+        return;
+
+    const juce::String command = "\"" + executablePath + "\" \"%1\"";
+
+    const auto keyPaths = std::vector<std::tuple<const wchar_t*, const wchar_t*, juce::String>> {
+        { protocolRoot, nullptr, "URL:Soundshed Protocol" },
+        { protocolRoot, L"URL Protocol", "" },
+        { L"Software\\Classes\\soundshed\\DefaultIcon", nullptr, executablePath + ",0" },
+        { L"Software\\Classes\\soundshed\\shell\\open\\command", nullptr, command },
+    };
+
+    bool allSucceeded = true;
+    for (const auto& [subKey, valueName, value] : keyPaths)
+    {
+        if (!setRegistryString (subKey, valueName, value))
+            allSucceeded = false;
+    }
+
+    if (!allSucceeded)
+        juce::Logger::writeToLog ("[PluginProcessorAdapter] Failed to fully register soundshed:// URL protocol handler.");
+#endif
 }
 
 void PluginProcessorAdapter::setWebMessageCallback (

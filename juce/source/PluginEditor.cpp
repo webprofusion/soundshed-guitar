@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "UiBridge.h"
 
 namespace
@@ -104,40 +106,43 @@ namespace
 
     juce::String extractToneSharingDeepLinkQuery (juce::String commandLine)
     {
-        const auto marker = juce::String ("soundshed://tone-sharing?");
-        const auto markerIndex = commandLine.indexOfIgnoreCase (marker);
-        if (markerIndex < 0)
-            return {};
+        auto normalized = juce::URL::removeEscapeChars (commandLine.unquoted().trim());
 
-        auto query = commandLine.substring (markerIndex + marker.length());
+        auto extractValue = [&normalized] (const juce::String& key) -> juce::String
+        {
+            const auto marker = key + "=";
+            const auto index = normalized.indexOfIgnoreCase (marker);
+            if (index < 0)
+                return {};
 
-        // Strip wrapping quotes and trailing args.
-        query = query.unquoted().trim();
-        const auto firstSpace = query.indexOfChar (' ');
-        if (firstSpace >= 0)
-            query = query.substring (0, firstSpace);
+            auto value = normalized.substring (index + marker.length());
+            const auto ampPos = value.indexOfChar ('&');
+            if (ampPos >= 0)
+                value = value.substring (0, ampPos);
+            const auto spacePos = value.indexOfChar (' ');
+            if (spacePos >= 0)
+                value = value.substring (0, spacePos);
+            const auto quotePos = value.indexOfChar ('\"');
+            if (quotePos >= 0)
+                value = value.substring (0, quotePos);
+            const auto hashPos = value.indexOfChar ('#');
+            if (hashPos >= 0)
+                value = value.substring (0, hashPos);
 
-        const auto hashPos = query.indexOfChar ('#');
-        if (hashPos >= 0)
-            query = query.substring (0, hashPos);
+            return value.trim();
+        };
 
-        if (query.isEmpty())
-            return {};
-
-        // Keep only supported target keys.
-        juce::StringArray parts;
-        parts.addTokens (query, "&", "");
+        const auto itemId = extractValue ("itemId");
+        const auto packId = extractValue ("packId");
 
         juce::String sanitized;
-        for (const auto& part : parts)
+        if (itemId.isNotEmpty())
+            sanitized << "itemId=" << itemId;
+        if (packId.isNotEmpty())
         {
-            const auto trimmed = part.trim();
-            if (trimmed.startsWithIgnoreCase ("itemId=") || trimmed.startsWithIgnoreCase ("packId="))
-            {
-                if (sanitized.isNotEmpty())
-                    sanitized << "&";
-                sanitized << trimmed;
-            }
+            if (sanitized.isNotEmpty())
+                sanitized << "&";
+            sanitized << "packId=" << packId;
         }
 
         return sanitized;
@@ -617,4 +622,23 @@ void PluginEditor::resized()
 #if JUCE_LINUX
     linuxWebViewStatusLabel.setBounds (getLocalBounds().reduced (24));
 #endif
+}
+
+void PluginEditor::handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery)
+{
+    // Route incoming deep link to UI via postMessage
+    // The UI handler will navigate to the appropriate tone sharing item/pack
+    if (deepLinkQuery.isEmpty())
+        return;
+
+    nlohmann::json msg;
+    msg["type"] = "navigateToToneSharingDeepLink";
+    msg["deepLink"] = deepLinkQuery.toStdString();
+
+    const auto jsonStr = msg.dump();
+    processorRef.SendMessageToUI (jsonStr);
+
+    // Also bring the window to focus
+    if (auto* window = getTopLevelComponent())
+        window->toFront (true);
 }

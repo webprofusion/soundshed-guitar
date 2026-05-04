@@ -13,7 +13,7 @@ import { getRiffLibrary, postMessage } from "./bridge.js";
 import { handleHostedPluginResourceLoadFailed, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
-import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport } from "./toneSharingPanel.js";
+import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport, handleToneSharingDeepLink } from "./toneSharingPanel.js";
 import { applyJamAppSettings } from "./jam.js";
 import type { GlobalSignalChainConfig, Preset, PresetFolder, ResourceRef, Setlist, UiSettings, CompositePreset } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
@@ -1388,6 +1388,13 @@ export function handleIncomingMessage(message: string): void {
     case "compositePresetLoaded": {
       const loaded = payload as { id?: string; name?: string };
       handleCompositePresetLoaded(loaded.id ?? "", loaded.name ?? "");
+      break;
+    }
+    case "navigateToToneSharingDeepLink": {
+      const deepLink = payload as { deepLink?: string };
+      if (deepLink.deepLink) {
+        handleToneSharingDeepLink(deepLink.deepLink);
+      }
       break;
     }
     default:

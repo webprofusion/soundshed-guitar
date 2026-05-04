@@ -66,6 +66,15 @@ function renderSharePage(params: {
       a.secondary { margin-left: 0.6rem; color: #9ec2ff; }
       .muted { margin-top: 0.75rem; font-size: 0.9rem; color: #9eb0ca; }
     </style>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TX7CYQT5XB"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-TX7CYQT5XB');
+    </script>
   </head>
   <body>
     <main class="page">
@@ -74,8 +83,7 @@ function renderSharePage(params: {
         <h1>${escapedTitle}</h1>
         <p>${escapedDescription}</p>
         <a id="open-app" class="btn" href="${escapedProtocolUrl}">Open in Soundshed Guitar</a>
-        <a class="secondary" href="${escapedWebUrl}">Open Web App</a>
-        <div class="muted">If the app does not open automatically, the web app will open after a short delay.</div>
+        <a class="secondary" href="https://guitar.soundshed.com">Download Soundshed Guitar (Free)</a>
       </article>
     </main>
     <script>
@@ -130,6 +138,15 @@ function renderMissingSharePage(appUrl: string): Response {
     <title>Tone Sharing link unavailable | Soundshed Guitar</title>
     <meta name="description" content="This Tone Sharing link is unavailable." />
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TX7CYQT5XB"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-TX7CYQT5XB');
+    </script>
   </head>
   <body style="font-family: Arial, Helvetica, sans-serif; background:#0f1116; color:#f2f4f8; margin:0;">
     <main style="max-width:720px; margin:4rem auto; padding:0 1.25rem;">
@@ -153,7 +170,7 @@ export function appRoutes() {
     const itemId = c.req.param("itemId").trim();
     const canonicalUrl = toAbsoluteUrl(c.req.url, `/share/item/${encodeURIComponent(itemId)}`);
     const protocolUrl = `soundshed://tone-sharing?itemId=${encodeURIComponent(itemId)}`;
-    const webUrl = `https://guitar.soundshed.com/?itemId=${encodeURIComponent(itemId)}`;
+    const webUrl = `https://api-guitar.soundshed.com/share/item/${encodeURIComponent(itemId)}`;
 
     const row = await c.env.DB.prepare(
       `SELECT i.id, i.title, i.type, i.config_json, u.display_name
@@ -175,7 +192,7 @@ export function appRoutes() {
     const config = parseConfigJson(row.config_json);
     const description = typeof config.description === "string" && config.description.trim().length > 0
       ? config.description.trim()
-      : `${row.type} preset shared on Tone Sharing`;
+      : `${row.type} shared on Tone Sharing`;
     const creator = typeof row.display_name === "string" && row.display_name.trim().length > 0
       ? ` by ${row.display_name.trim()}`
       : "";
@@ -195,7 +212,7 @@ export function appRoutes() {
     const packId = c.req.param("packId").trim();
     const canonicalUrl = toAbsoluteUrl(c.req.url, `/share/pack/${encodeURIComponent(packId)}`);
     const protocolUrl = `soundshed://tone-sharing?packId=${encodeURIComponent(packId)}`;
-    const webUrl = `https://guitar.soundshed.com/?packId=${encodeURIComponent(packId)}`;
+    const webUrl = `https://api-guitar.soundshed.com/share/pack/${encodeURIComponent(packId)}`;
 
     const row = await c.env.DB.prepare(
       `SELECT p.id, p.title, p.config_json, u.display_name,

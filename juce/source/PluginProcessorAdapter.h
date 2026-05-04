@@ -87,6 +87,7 @@ public:
 
 private:
     [[nodiscard]] std::filesystem::path locateAssetsRoot() const;
+    void ensureStandaloneProtocolHandlerRegistration();
 
     // ── State ──────────────────────────────────────────────────────
     guitarfx::PluginController mController;
@@ -96,6 +97,7 @@ private:
 
     std::filesystem::path mAssetRoot;
     std::unique_ptr<juce::FileChooser> mFileChooser;
+    bool mStandaloneProtocolRegistrationAttempted = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessorAdapter)
 };

@@ -39,6 +39,9 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // Handle deep link from another instance of the app
+    void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery);
+
 private:
     void timerCallback() override;
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);

@@ -9,6 +9,7 @@ import { switchMainPanel } from "./navigation.js";
 import { activateEquipmentTab, activateLibraryTab } from "./settings.js";
 import { setTone3000Search } from "./tone3000Browser.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
+import { showNotification } from "./notifications.js";
 
 type ToneSharingUser = {
   id: string;
@@ -145,7 +146,6 @@ export type InstalledPackMetadata = {
 };
 
 const storageKeys = {
-  apiBase: "toneSharing.apiBase",
   sessionId: "toneSharing.sessionId",
   installedPacks: "toneSharing.installedPacks",
   publishConsent: "toneSharing.publishConsent"
@@ -202,6 +202,26 @@ type ToneSharingShareTarget = {
   id: string;
 };
 
+type BrowseCollectionState = {
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  items: ToneSharingItem[];
+  packs: ToneSharingPack[];
+};
+
+const browseCollections: BrowseCollectionState = {
+  page: 1,
+  pageSize: 36,
+  hasMore: false,
+  loadingMore: false,
+  items: [],
+  packs: [],
+};
+
+let activeSharedTarget: ToneSharingShareTarget | null = null;
+
 function element<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -251,8 +271,18 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
-async function copyToneSharingShareLink(target: ToneSharingShareTarget): Promise<void> {
-  await copyTextToClipboard(buildToneSharingShareLink(target));
+async function copyToneSharingShareLink(target: ToneSharingShareTarget): Promise<string> {
+  const link = buildToneSharingShareLink(target);
+  try {
+    await copyTextToClipboard(link);
+    return link;
+  } catch {
+    const promptResult = window.prompt("Copy this Tone Sharing link", link);
+    if (promptResult === null) {
+      throw new Error("Copy cancelled");
+    }
+    return link;
+  }
 }
 
 function isToneSharingAdmin(): boolean {
@@ -335,9 +365,8 @@ function normalizeSettingString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function persistToneSharingApiBase(value: string): void {
-  localStorage.setItem(storageKeys.apiBase, value);
-  setAppSetting(storageKeys.apiBase, value);
+function persistToneSharingApiBase(_value: string): void {
+  // API base is fixed; user-configured overrides are intentionally ignored.
 }
 
 function persistToneSharingSession(value: string): void {
@@ -800,7 +829,7 @@ function updateAuthButtonVisibility(): void {
 function normalizeBase(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
-    return "https://api.guitar.soundshed.com/v1";
+    return "https://api-guitar.soundshed.com/v1";
   }
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
@@ -1287,6 +1316,109 @@ async function renderFeedRows(rows: ToneSharingRow[]): Promise<void> {
   );
 
   feed.innerHTML = rowHtml.join("");
+  updateBrowseFooter();
+}
+
+function updateActiveSharedFilter(): void {
+  const container = element<HTMLElement>("tone-sharing-active-filter");
+  const label = element<HTMLElement>("tone-sharing-active-filter-label");
+  if (!container || !label) {
+    return;
+  }
+
+  if (!activeSharedTarget) {
+    container.classList.add("tone-sharing-active-filter--hidden");
+    label.textContent = "Filtered to a shared tone.";
+    return;
+  }
+
+  container.classList.remove("tone-sharing-active-filter--hidden");
+  label.textContent = activeSharedTarget.kind === "pack"
+    ? `Filtered to shared pack ${activeSharedTarget.id}`
+    : `Filtered to shared preset ${activeSharedTarget.id}`;
+}
+
+function updateBrowseFooter(): void {
+  const footer = element<HTMLElement>("tone-sharing-feed-footer");
+  const button = element<HTMLButtonElement>("tone-sharing-load-more");
+  const label = element<HTMLElement>("tone-sharing-feed-footer-label");
+  if (!footer || !button || !label) {
+    return;
+  }
+
+  const supportsPaging = activeSharedTarget === null && (browseMode === "items" || browseMode === "packs");
+  if (!supportsPaging) {
+    footer.classList.add("tone-sharing-feed-footer--hidden");
+    label.textContent = "";
+    button.disabled = false;
+    button.textContent = "Load More";
+    return;
+  }
+
+  footer.classList.remove("tone-sharing-feed-footer--hidden");
+  button.disabled = browseCollections.loadingMore || !browseCollections.hasMore;
+  button.textContent = browseCollections.loadingMore ? "Loading..." : "Load More";
+
+  const loadedCount = browseMode === "items" ? browseCollections.items.length : browseCollections.packs.length;
+  label.textContent = browseCollections.hasMore
+    ? `${loadedCount} loaded`
+    : loadedCount > 0
+      ? `${loadedCount} loaded, end of results`
+      : "";
+}
+
+function resetBrowseCollections(): void {
+  browseCollections.page = 1;
+  browseCollections.pageSize = 36;
+  browseCollections.hasMore = false;
+  browseCollections.loadingMore = false;
+  browseCollections.items = [];
+  browseCollections.packs = [];
+}
+
+async function renderStandardBrowseCollection(): Promise<void> {
+  if (browseMode === "items") {
+    await renderFeedRows([buildSingleRow("Latest Presets", browseCollections.items, "item")]);
+    return;
+  }
+
+  if (browseMode === "packs") {
+    await renderFeedRows([buildSingleRow("Latest Packs", browseCollections.packs, "pack")]);
+  }
+}
+
+async function loadStandardBrowsePage(page: number, append = false): Promise<void> {
+  const pageSize = browseCollections.pageSize;
+
+  if (browseMode === "items") {
+    const response = await apiFetch<{ page?: number; pageSize?: number; items: ToneSharingItem[] }>(`/items?page=${page}&pageSize=${pageSize}`);
+    browseCollections.page = response.page ?? page;
+    browseCollections.pageSize = response.pageSize ?? pageSize;
+    browseCollections.items = append ? [...browseCollections.items, ...response.items] : response.items.slice();
+    browseCollections.hasMore = response.items.length >= browseCollections.pageSize;
+    await renderStandardBrowseCollection();
+    return;
+  }
+
+  if (browseMode === "packs") {
+    const response = await apiFetch<{ page?: number; pageSize?: number; packs: ToneSharingPack[] }>(`/packs?page=${page}&pageSize=${pageSize}`);
+    browseCollections.page = response.page ?? page;
+    browseCollections.pageSize = response.pageSize ?? pageSize;
+    browseCollections.packs = append ? [...browseCollections.packs, ...response.packs] : response.packs.slice();
+    browseCollections.hasMore = response.packs.length >= browseCollections.pageSize;
+    await renderStandardBrowseCollection();
+  }
+}
+
+async function clearActiveSharedFilter(): Promise<void> {
+  if (!activeSharedTarget) {
+    return;
+  }
+
+  activeSharedTarget = null;
+  updateActiveSharedFilter();
+  clearPackDetail();
+  await loadBrowse();
 }
 
 function buildSingleRow(title: string, entries: Array<{ id: string; title: string; type?: string }>, kind: "item" | "pack"): ToneSharingRow {
@@ -1655,20 +1787,11 @@ async function openSharedTargetFromLocation(): Promise<void> {
     return;
   }
 
+  activeSharedTarget = target;
+  updateActiveSharedFilter();
   switchMainPanel("sharing");
   browseMode = target.kind === "pack" ? "packs" : "items";
-
-  if (target.kind === "item") {
-    const itemResult = await apiFetch<{ item: ToneSharingItem }>(`/items/${target.id}`);
-    await renderFeedRows([buildSingleRow("Shared Preset", [itemResult.item], "item")]);
-    setUploadStatus(`Opened shared preset: ${itemResult.item.title}`);
-    return;
-  }
-
-  const packResult = await apiFetch<{ pack: ToneSharingPack }>(`/packs/${target.id}`);
-  await renderFeedRows([buildSingleRow("Shared Pack", [packResult.pack], "pack")]);
-  await viewPack(target.id);
-  setUploadStatus(`Opened shared pack: ${packResult.pack.title}`);
+  await loadBrowse();
 }
 
 async function readPresetFromArchive(buffer: ArrayBuffer): Promise<Record<string, unknown>> {
@@ -2135,8 +2258,26 @@ async function loadBrowse(): Promise<void> {
   }
   clearPackDetail();
   feed.innerHTML = `<div class="tone-sharing-status">Loading...</div>`;
+  resetBrowseCollections();
+  updateActiveSharedFilter();
+  updateBrowseFooter();
 
   try {
+    if (activeSharedTarget) {
+      if (activeSharedTarget.kind === "item") {
+        const itemResult = await apiFetch<{ item: ToneSharingItem }>(`/items/${activeSharedTarget.id}`);
+        await renderFeedRows([buildSingleRow("Shared Preset", [itemResult.item], "item")]);
+        setUploadStatus(`Opened shared preset: ${itemResult.item.title}`);
+        return;
+      }
+
+      const packResult = await apiFetch<{ pack: ToneSharingPack }>(`/packs/${activeSharedTarget.id}`);
+      await renderFeedRows([buildSingleRow("Shared Pack", [packResult.pack], "pack")]);
+      await viewPack(activeSharedTarget.id);
+      setUploadStatus(`Opened shared pack: ${packResult.pack.title}`);
+      return;
+    }
+
     if (browseMode === "featured") {
       const home = await apiFetch<{ rows: ToneSharingRow[] }>("/home");
       await renderFeedRows(home.rows);
@@ -2144,14 +2285,12 @@ async function loadBrowse(): Promise<void> {
     }
 
     if (browseMode === "items") {
-      const items = await apiFetch<{ items: ToneSharingItem[] }>("/items?page=1&pageSize=36");
-      await renderFeedRows([buildSingleRow("Latest Presets", items.items, "item")]);
+      await loadStandardBrowsePage(1);
       return;
     }
 
     if (browseMode === "packs") {
-      const packs = await apiFetch<{ packs: ToneSharingPack[] }>("/packs?page=1&pageSize=36");
-      await renderFeedRows([buildSingleRow("Latest Packs", packs.packs, "pack")]);
+      await loadStandardBrowsePage(1);
       return;
     }
 
@@ -2472,22 +2611,36 @@ async function uploadAndPublishItem(): Promise<void> {
 
     await apiFetch(`/items/${item.item.id}/publish`, { method: "POST" });
 
+    let shareCopied = false;
+    try {
+      const link = await copyToneSharingShareLink({ kind: "item", id: item.item.id });
+      showNotification("Share link copied", link);
+      shareCopied = true;
+    } catch {
+      shareCopied = false;
+    }
+
     const addToNewPack = element<HTMLButtonElement>("tone-sharing-add-to-new-pack")?.classList.contains("active") ?? false;
     const assignPackId = element<HTMLSelectElement>("tone-sharing-pack-assign-select")?.value ?? "";
     setPublishItemBusy(false, "Uploading preset for approval...");
     closeToneSharingPublishPresetModal(true);
 
+    const shareNote = shareCopied
+      ? " Share link copied (it will open once approved)."
+      : " Open the item card and press Share to copy the public link once approved.";
+
     if (addToNewPack) {
       await openPackModal(undefined, item.item.id);
+      setUploadStatus(`Preset submitted for moderator approval.${shareNote}`);
     } else if (assignPackId) {
       try {
         await addItemToExistingPack(assignPackId, item.item.id);
-        setUploadStatus("Submitted for approval and added to pack.");
+        setUploadStatus(`Submitted for approval and added to pack.${shareNote}`);
       } catch (error) {
-        setUploadStatus(`Submitted for approval but pack update failed: ${(error as Error).message}`);
+        setUploadStatus(`Submitted for approval but pack update failed: ${(error as Error).message}.${shareNote}`);
       }
     } else {
-      setUploadStatus("Preset submitted for moderator approval.");
+      setUploadStatus(`Preset submitted for moderator approval.${shareNote}`);
     }
 
     await Promise.all([loadBrowse(), loadMine()]);
@@ -2743,8 +2896,9 @@ function bindBrowseActions(): void {
 
     if (button.dataset.action === "share") {
       try {
-        await copyToneSharingShareLink({ kind, id });
+        const link = await copyToneSharingShareLink({ kind, id });
         setUploadStatus("Share link copied to clipboard.");
+        showNotification("Share link copied", link);
       } catch (error) {
         setUploadStatus(`Share failed: ${(error as Error).message}`);
       }
@@ -2810,6 +2964,8 @@ function bindBrowseModeButtons(): void {
       continue;
     }
     button.addEventListener("click", async () => {
+      activeSharedTarget = null;
+      updateActiveSharedFilter();
       browseMode = entry.mode;
       setActive();
       clearPackDetail();
@@ -2826,18 +2982,10 @@ function bindBrowseModeButtons(): void {
 
 function restoreLocalState(): void {
   const appSettings = uiState.appSettings ?? {};
-  const persistedBase = normalizeSettingString(appSettings[storageKeys.apiBase]);
   const persistedSession = normalizeSettingString(appSettings[storageKeys.sessionId]);
   const persistedInstalled = appSettings[storageKeys.installedPacks];
-  const storedBase = localStorage.getItem(storageKeys.apiBase);
   const storedSession = localStorage.getItem(storageKeys.sessionId);
   const storedInstalled = localStorage.getItem(storageKeys.installedPacks);
-  if (persistedBase) {
-    state.apiBase = normalizeBase(persistedBase);
-  } else if (storedBase) {
-    state.apiBase = normalizeBase(storedBase);
-    setAppSetting(storageKeys.apiBase, state.apiBase);
-  }
   if (persistedSession) {
     state.sessionId = persistedSession;
   } else if (storedSession) {
@@ -2878,21 +3026,8 @@ export function applyToneSharingAppSettings(settings?: Record<string, unknown>):
   }
 
   let changed = false;
-  const persistedBase = normalizeSettingString(settings[storageKeys.apiBase]);
   const persistedSession = normalizeSettingString(settings[storageKeys.sessionId]);
   const persistedInstalled = settings[storageKeys.installedPacks];
-
-  if (persistedBase) {
-    const normalizedBase = normalizeBase(persistedBase);
-    if (normalizedBase !== state.apiBase) {
-      state.apiBase = normalizedBase;
-      const apiInput = element<HTMLInputElement>("tone-sharing-api-base");
-      if (apiInput) {
-        apiInput.value = normalizedBase;
-      }
-      changed = true;
-    }
-  }
 
   if (persistedSession !== state.sessionId) {
     state.sessionId = persistedSession;
@@ -2935,6 +3070,8 @@ function bindTopControls(): void {
   const apiInput = element<HTMLInputElement>("tone-sharing-api-base");
   if (refreshButton && apiInput) {
     refreshButton.addEventListener("click", async () => {
+      activeSharedTarget = null;
+      updateActiveSharedFilter();
       state.apiBase = normalizeBase(apiInput.value);
       persistToneSharingApiBase(state.apiBase);
       clearPackThumbnailObjectUrls();
@@ -2950,6 +3087,25 @@ function bindTopControls(): void {
 
   element<HTMLButtonElement>("tone-sharing-preview-clear")?.addEventListener("click", () => {
     void clearPreviewPreset();
+  });
+  element<HTMLButtonElement>("tone-sharing-clear-filter")?.addEventListener("click", () => {
+    void clearActiveSharedFilter();
+  });
+  element<HTMLButtonElement>("tone-sharing-load-more")?.addEventListener("click", () => {
+    if (browseCollections.loadingMore || !browseCollections.hasMore || activeSharedTarget !== null) {
+      return;
+    }
+
+    browseCollections.loadingMore = true;
+    updateBrowseFooter();
+    void loadStandardBrowsePage(browseCollections.page + 1, true)
+      .catch((error) => {
+        setUploadStatus(`Load more failed: ${(error as Error).message}`);
+      })
+      .finally(() => {
+        browseCollections.loadingMore = false;
+        updateBrowseFooter();
+      });
   });
   element<HTMLButtonElement>("tone-sharing-signin-modal-close")?.addEventListener("click", () => {
     closeSignInModal();
@@ -3016,8 +3172,9 @@ function bindTopControls(): void {
 
     if (button.dataset.packAction === "share-pack") {
       try {
-        await copyToneSharingShareLink({ kind: "pack", id: packId });
+        const link = await copyToneSharingShareLink({ kind: "pack", id: packId });
         setUploadStatus("Pack share link copied to clipboard.");
+        showNotification("Pack share link copied", link);
       } catch (error) {
         setUploadStatus(`Share failed: ${(error as Error).message}`);
       }
@@ -3105,6 +3262,30 @@ function bindTopControls(): void {
   });
 }
 
+export function handleToneSharingDeepLink(deepLinkQuery: string): void {
+  // Navigate to the Tone Sharing panel and show the specific item/pack so
+  // the user can preview, download, etc. rather than auto-importing.
+  const params = new URLSearchParams(deepLinkQuery);
+  const itemId = params.get("itemId");
+  const packId = params.get("packId");
+
+  if (!itemId && !packId) {
+    return;
+  }
+
+  void (async () => {
+    try {
+      activeSharedTarget = itemId ? { kind: "item", id: itemId } : { kind: "pack", id: packId ?? "" };
+      updateActiveSharedFilter();
+      switchMainPanel("sharing");
+      browseMode = itemId ? "items" : "packs";
+      await loadBrowse();
+    } catch (error) {
+      setUploadStatus(`Failed to load shared tone: ${(error as Error).message}`);
+    }
+  })();
+}
+
 export function initializeToneSharingPanel(): void {
   if (!element("panel-sharing")) {
     return;
@@ -3119,5 +3300,6 @@ export function initializeToneSharingPanel(): void {
   void (async () => {
     await loadAuthSession();
     await Promise.all([loadBrowse(), loadMine()]);
+    await openSharedTargetFromLocation();
   })();
 }

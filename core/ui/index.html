@@ -606,7 +606,15 @@
             <input id="tone-sharing-api-base" type="text" value="https://api-guitar.soundshed.com/v1" />
             <button id="tone-sharing-refresh" type="button">Refresh</button>
           </div>
+          <div class="tone-sharing-active-filter tone-sharing-active-filter--hidden" id="tone-sharing-active-filter">
+            <span id="tone-sharing-active-filter-label">Filtered to a shared tone.</span>
+            <button id="tone-sharing-clear-filter" type="button" class="tone-sharing-toolbar-btn">Clear Filter</button>
+          </div>
           <div class="tone-sharing-feed" id="tone-sharing-feed"></div>
+          <div class="tone-sharing-feed-footer tone-sharing-feed-footer--hidden" id="tone-sharing-feed-footer">
+            <button id="tone-sharing-load-more" type="button" class="tone-sharing-toolbar-btn">Load More</button>
+            <span id="tone-sharing-feed-footer-label" class="tone-sharing-status"></span>
+          </div>
         </div>
       </div>
 
