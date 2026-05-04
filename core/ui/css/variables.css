@@ -23,22 +23,22 @@
   --color-warning: #d63031;
   
   /* Background Colors */
-  --bg-primary: linear-gradient(180deg, #c8ccd4 0%, #a8adb8 100%);
-  --bg-secondary: linear-gradient(180deg, #d0d4dc 0%, #b8bcc8 100%);
-  --bg-tertiary: linear-gradient(180deg, #e0e4ec 0%, #c8ccd8 100%);
-  --bg-surface: linear-gradient(180deg, #e8ecf4 0%, #d8dce8 100%);
-  --bg-elevated: linear-gradient(180deg, #f0f4fc 0%, #e0e4ec 100%);
+  --bg-primary: #f0f2f5;
+  --bg-secondary: #f8f9fb;
+  --bg-tertiary: #f4f5f8;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
   
   /* Panel Backgrounds */
-  --bg-panel: linear-gradient(180deg, #e8eaef 0%, #d0d4dc 100%);
-  --bg-card: linear-gradient(180deg, #ffffff 0%, #f8f8fc 100%);
+  --bg-panel: #f5f6f9;
+  --bg-card: #ffffff;
   --bg-input: #ffffff;
   
   /* Dark Backgrounds */
-  --bg-dark-primary: linear-gradient(180deg, #2a2a30 0%, #1e1e24 100%);
-  --bg-dark-secondary: linear-gradient(180deg, #3a3a44 0%, #2e2e38 100%);
-  --bg-dark-tertiary: linear-gradient(180deg, #38384a 0%, #2e2e3a 100%);
-  --bg-dark-surface: #3a3a40;
+  --bg-dark-primary: #22222a;
+  --bg-dark-secondary: #1e1e26;
+  --bg-dark-tertiary: #1a1a22;
+  --bg-dark-surface: #2e2e38;
   
   /* Footer/Header Dark */
   --bg-footer: linear-gradient(180deg, #38383f 0%, #28282f 100%);
@@ -70,10 +70,10 @@
   --status-error-text: color-mix(in srgb, var(--color-error) 82%, white);
   
   /* Text Colors */
-  --text-primary: #3a3a40;
-  --text-secondary: #5a5a68;
+  --text-primary: #1c1c24;
+  --text-secondary: #4a4a58;
   --text-tertiary: #6a6a78;
-  --text-muted: #8888a0;
+  --text-muted: #9090a8;
   
   /* Dark Text Colors */
   --text-dark-primary: #e0e0f0;
@@ -84,11 +84,11 @@
   --text-dark-disabled: #6a6a80;
   
   /* Border Colors */
-  --border-light: #d0d4dc;
-  --border-medium: #c8ccd8;
-  --border-strong: #b8bcc8;
-  --border-dark: #a8acb8;
-  --border-darker: #9098a8;
+  --border-light: #e4e6ec;
+  --border-medium: #d8dae4;
+  --border-strong: #c8cad6;
+  --border-dark: #b8bac8;
+  --border-darker: #a8aabc;
   
   /* Dark Border Colors */
   --border-dark-light: #4a4a58;
@@ -96,9 +96,10 @@
   --border-dark-strong: #5a5a68;
   
   /* Knob & Control Colors */
-  --control-bg: linear-gradient(145deg, #f0f2f8, #d8dce4);
-  --control-border: #b8bcc8;
-  --control-indicator: #4a4a58;
+  --control-bg: #ffffff;
+  --control-knob-bg: #ffffff;
+  --control-border: #c8cad6;
+  --control-indicator: #5a5a6a;
 
   /* Blend Mapping Indicators */
   --blend-mapped-point: #6b6b7c;
@@ -107,12 +108,12 @@
   --blend-mapped-point-glow: rgba(232, 136, 80, 0.45);
   
   /* Amp Knob Colors */
-  --amp-knob-bg: linear-gradient(145deg, #f8f8fc, #e0e4ec);
-  --amp-knob-border: #c8ccd8;
+  --amp-knob-bg: #ffffff;
+  --amp-knob-border: #d0d2de;
   
   /* Dark Knob Colors */
-  --knob-dark-bg: linear-gradient(135deg, #505060, #38384a);
-  --knob-dark-border: #606078;
+  --knob-dark-bg: #3a3a48;
+  --knob-dark-border: #50505e;
   --knob-dark-indicator: #50b878;
   
   /* Toggle Colors */
@@ -121,10 +122,10 @@
   --toggle-active: var(--color-accent);
   
   /* Shadow Colors */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.15);
-  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.20);
   
   /* Inset Shadows */
   --shadow-inset-light: inset 0 1px 0 rgba(255, 255, 255, 0.5);
@@ -182,20 +183,20 @@
   --color-accent-dark: #b84818;
   
   /* Background Colors */
-  --bg-primary: linear-gradient(180deg, #f5f6f8 0%, #e8eaef 100%);
-  --bg-secondary: linear-gradient(180deg, #ffffff 0%, #f0f2f6 100%);
-  --bg-tertiary: linear-gradient(180deg, #fafbfc 0%, #f0f2f6 100%);
-  --bg-surface: linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
-  --bg-elevated: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  --bg-primary: #f2f3f6;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f7f8fa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
   
-  --bg-panel: linear-gradient(180deg, #f8f9fb 0%, #eef0f4 100%);
-  --bg-card: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+  --bg-panel: #f7f8fa;
+  --bg-card: #ffffff;
   --bg-input: #ffffff;
   
-  --bg-dark-primary: linear-gradient(180deg, #3a3a42 0%, #2e2e36 100%);
-  --bg-dark-secondary: linear-gradient(180deg, #4a4a54 0%, #3e3e48 100%);
-  --bg-dark-tertiary: linear-gradient(180deg, #48485a 0%, #3c3c4a 100%);
-  --bg-dark-surface: #4a4a50;
+  --bg-dark-primary: #2e2e38;
+  --bg-dark-secondary: #282832;
+  --bg-dark-tertiary: #242430;
+  --bg-dark-surface: #36363e;
   
   --bg-footer: linear-gradient(180deg, #48484f 0%, #38383f 100%);
   --bg-header-dark: #3a3a40;
@@ -205,17 +206,17 @@
   --bg-fx-categories: linear-gradient(180deg, #eef0f4 0%, #e0e4ec 100%);
   
   /* Text Colors */
-  --text-primary: #1a1a20;
-  --text-secondary: #3a3a48;
-  --text-tertiary: #5a5a68;
-  --text-muted: #7878a0;
+  --text-primary: #111118;
+  --text-secondary: #30303e;
+  --text-tertiary: #58586a;
+  --text-muted: #80809a;
   
   /* Borders */
-  --border-light: #e0e4ec;
-  --border-medium: #d8dce8;
-  --border-strong: #c8ccd8;
-  --border-dark: #b8bcc8;
-  --border-darker: #a8acb8;
+  --border-light: #e6e8ee;
+  --border-medium: #dadce6;
+  --border-strong: #ccceda;
+  --border-dark: #bcbece;
+  --border-darker: #aeb0c0;
 
   --bg-browser-shell: rgba(250, 252, 255, 0.54);
   --bg-browser-header: rgba(244, 247, 252, 0.68);
@@ -257,33 +258,33 @@
   --color-accent-dark: #e86838;
   
   /* Background Colors */
-  --bg-primary: linear-gradient(180deg, #1a1a20 0%, #121218 100%);
-  --bg-secondary: linear-gradient(180deg, #202028 0%, #18181f 100%);
-  --bg-tertiary: linear-gradient(180deg, #28282f 0%, #1e1e25 100%);
-  --bg-surface: linear-gradient(180deg, #2a2a32 0%, #20202a 100%);
-  --bg-elevated: linear-gradient(180deg, #303038 0%, #28282f 100%);
+  --bg-primary: #111116;
+  --bg-secondary: #18181e;
+  --bg-tertiary: #1e1e25;
+  --bg-surface: #20202a;
+  --bg-elevated: #26262e;
   
-  --bg-panel: linear-gradient(180deg, #2e2e36 0%, #26262e 100%);
-  --bg-card: linear-gradient(180deg, #2a2a32 0%, #22222a 100%);
-  --bg-input: #28282f;
+  --bg-panel: #1c1c23;
+  --bg-card: #22222a;
+  --bg-input: #1e1e26;
   
-  --bg-dark-primary: linear-gradient(180deg, #18181e 0%, #101014 100%);
-  --bg-dark-secondary: linear-gradient(180deg, #28282f 0%, #1e1e25 100%);
-  --bg-dark-tertiary: linear-gradient(180deg, #26262e 0%, #1c1c24 100%);
-  --bg-dark-surface: #28282f;
+  --bg-dark-primary: #111118;
+  --bg-dark-secondary: #18181e;
+  --bg-dark-tertiary: #1c1c22;
+  --bg-dark-surface: #20202a;
   
-  --bg-footer: linear-gradient(180deg, #1e1e25 0%, #14141a 100%);
-  --bg-header-dark: #18181e;
+  --bg-footer: #141419;
+  --bg-header-dark: #0e0e13;
   
-  --bg-fx-primary: linear-gradient(180deg, #151520 0%, #0a0a12 100%);
-  --bg-fx-secondary: linear-gradient(180deg, #1e1e2a 0%, #151520 100%);
-  --bg-fx-categories: linear-gradient(180deg, #0e0e18 0%, #060610 100%);
+  --bg-fx-primary: #0c0c14;
+  --bg-fx-secondary: #141420;
+  --bg-fx-categories: #090910;
   
   /* Text Colors */
-  --text-primary: #e8e8f0;
+  --text-primary: #ebebf4;
   --text-secondary: #c8c8d8;
-  --text-tertiary: #a8a8b8;
-  --text-muted: #888898;
+  --text-tertiary: #a0a0b4;
+  --text-muted: #707082;
   
   --text-dark-primary: #f0f0f8;
   --text-dark-secondary: #d0d0e0;
@@ -293,33 +294,34 @@
   --text-dark-disabled: #7a7a90;
   
   /* Borders */
-  --border-light: #3a3a48;
-  --border-medium: #32323e;
-  --border-strong: #28282f;
-  --border-dark: #20202a;
-  --border-darker: #18181f;
+  --border-light: #2c2c38;
+  --border-medium: #262630;
+  --border-strong: #1e1e28;
+  --border-dark: #181820;
+  --border-darker: #121218;
   
   --border-dark-light: #4a4a58;
   --border-dark-medium: #3a3a48;
   --border-dark-strong: #5a5a68;
   
   /* Controls */
-  --control-bg: linear-gradient(145deg, #3a3a42, #2e2e36);
-  --control-border: #48485a;
+  --control-bg: #2e2e3a;
+  --control-knob-bg: #2e2e3a;
+  --control-border: #46465a;
   --control-indicator: #d0d0e0;
   
-  --amp-knob-bg: linear-gradient(145deg, #404048, #34343c);
-  --amp-knob-border: #50505e;
+  --amp-knob-bg: #30303e;
+  --amp-knob-border: #48485a;
   
   /* Toggle */
   --toggle-bg: #50505e;
   --toggle-border: #40404e;
   
   /* Shadows */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.7);
   
   --shadow-inset-light: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --shadow-inset-dark: inset 0 -2px 0 rgba(0, 0, 0, 0.3);

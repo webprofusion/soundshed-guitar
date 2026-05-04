@@ -79,16 +79,14 @@
 .effect-visualization {
   height: 800px;
   padding: 16px;
+  background: var(--bg-dark-primary);
   background-image: var(--effect-visual-bg, none);
-  background-color: #1a1c28;
   background-size: cover;
   background-repeat: no-repeat;
-  /*background-position: center;*/
   border-radius: 14px;
-  /*border: 2px solid rgba(145, 156, 170, 0.6);*/
   position: relative;
   overflow: hidden;
-  box-shadow: inset 0 8px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   display: flex;
   align-items: start;
   justify-content: center;
@@ -198,7 +196,7 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 16px 20px;
-  background: linear-gradient(180deg, #e8eaef 0%, var(--bg-secondary) 100%);
+  background: var(--bg-secondary);
   border-radius: 8px;
   border: 1px solid var(--border-light);
 }
@@ -214,11 +212,9 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(145deg, var(--bg-primary), #e0e4ec);
-  border: 3px solid var(--border-lighter);
-  box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.15),
-    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  background: var(--amp-knob-bg);
+  border: 1.5px solid var(--amp-knob-border);
+  box-shadow: var(--shadow-sm);
   position: relative;
   cursor: pointer;
 }
@@ -227,9 +223,9 @@
   position: absolute;
   top: 8px;
   left: 50%;
-  width: 4px;
-  height: 14px;
-  background: #4a4a58;
+  width: 2px;
+  height: 12px;
+  background: var(--control-indicator);
   border-radius: 2px;
   transform: translateX(-50%);
   transform-origin: center 20px;

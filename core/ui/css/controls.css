@@ -19,21 +19,19 @@
 
 .knob-label, .amp-knob-label {
   font-size: 9px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-weight: 700;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .knob {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--control-knob-bg);
-  border: 2px solid var(--border-light);
-  box-shadow: 
-    0 2px 4px var(--overlay-dark),
-    inset 0 1px 0 rgba(255,255,255,0.5);
+  background: var(--control-knob-bg, var(--control-bg));
+  border: 1.5px solid var(--border-medium);
+  box-shadow: var(--shadow-sm);
   position: relative;
   cursor: pointer;
 }
@@ -90,9 +88,9 @@ input[type="range"]:focus-visible {
   position: absolute;
   top: 5px;
   left: 50%;
-  width: 3px;
-  height: 10px;
-  background: #4a4a58;
+  width: 2px;
+  height: 9px;
+  background: var(--control-indicator);
   border-radius: 2px;
   transform: translateX(-50%);
   transform-origin: center 15px;
@@ -171,11 +169,11 @@ input[type="range"]:focus-visible {
 }
 
 .control-stack-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   text-align: center;
 }
 
@@ -474,7 +472,7 @@ input[type="range"]:focus-visible {
   height: 24px;
   border: 1px solid var(--border-medium);
   border-radius: 4px;
-  background: linear-gradient(180deg, var(--bg-primary), #e8eaf0);
+  background: var(--bg-primary);
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;

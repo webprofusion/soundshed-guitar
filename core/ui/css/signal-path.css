@@ -4,12 +4,13 @@
 .signal-path-bar {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--border-medium);
+  border-bottom: 1px solid var(--border-light);
   padding: 0;
   gap: 0;
   min-height: 64px;
   flex-shrink: 0;
   position: relative;
+  background: var(--bg-secondary);
 }
 
 /* Composite Edit Mode Banner */
@@ -515,33 +516,24 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 12px;
+  padding: 8px 12px 10px;
   background: var(--bg-card);
-  border-radius: 8px;
-  border: 1px solid var(--border-medium);
-  min-width: 70px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  min-width: 72px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   position: relative;
 }
 
 .signal-node:hover {
-  border-color: var(--color-accent);
-  background: var(--bg-surface);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.signal-node.selected {
+.signal-node.selected, .signal-node:focus {
   border-color: var(--color-accent);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 0 9px 1px var(--color-accent);
   outline: none;
-}
-
-.signal-node:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
 }
 
 .signal-node.dragging {
@@ -554,9 +546,7 @@
 
 .signal-node.drag-over {
   border-color: var(--node-drag-over);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .signal-node.drag-over::before {
@@ -589,34 +579,31 @@
 }
 
 .signal-node.bypassed {
-  opacity: 0.5;
+  opacity: 0.45;
   border-style: dashed;
+  border-color: var(--border-medium);
 }
 
 .signal-node.bypassed .node-label::after {
-  content: " (OFF)";
-  color: var(--text-muted);
-  font-size: 8px;
+  content: none;
 }
 
 .signal-node.input-node {
-  border-color: var(--node-input);
+  border-color: color-mix(in srgb, var(--node-input) 60%, var(--border-light));
   background: var(--bg-card);
 }
 
 .signal-node.input-node:hover {
   border-color: var(--node-input-hover);
-  background: var(--bg-surface);
 }
 
 .signal-node.output-node {
-  border-color: var(--node-output);
+  border-color: color-mix(in srgb, var(--node-output) 60%, var(--border-light));
   background: var(--bg-card);
 }
 
 .signal-node.output-node:hover {
   border-color: var(--node-output-hover);
-  background: var(--bg-surface);
 }
 
 .node-icon {
@@ -637,11 +624,11 @@
 .node-label {
   font-size: 9px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   white-space: nowrap;
-  max-width: 80px;
+  max-width: 88px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -659,7 +646,7 @@
   font-weight: 700;
   color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -723,19 +710,19 @@
 
 .node-clip-indicator {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #5a5a6a;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  right: 5px;
+  bottom: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  border: none;
+  box-shadow: none;
 }
 
 .node-clip-indicator.clip-on {
   background: #ff5c5c;
-  box-shadow: 0 0 6px rgba(255, 92, 92, 0.75);
+  box-shadow: 0 0 4px rgba(255, 92, 92, 0.6);
 }
 
 .node-clip-indicator.clip-off {
@@ -793,37 +780,35 @@
 }
 
 .signal-connector {
-  width: 24px;
-  height: 2px;
-  background: #00a621;
+  width: 20px;
+  height: 1.5px;
+  background: var(--color-success);
   border-radius: 2px;
   flex-shrink: 0;
   position: relative;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
   cursor: pointer;
-  
 }
 
 .signal-connector::after {
   content: "";
   position: absolute;
-  right: -2px;
+  right: -3px;
   top: 50%;
   transform: translateY(-50%);
   border-left: 5px solid var(--text-secondary);
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
 }
 
 .signal-connector.drag-over {
-  height: 5px;
-  background: linear-gradient(90deg, #48e078, #78f0a8, #48e078);
-  box-shadow: 0 0 12px rgba(72, 224, 120, 0.6);
+  height: 3px;
+  background: var(--node-drag-over);
+  box-shadow: 0 0 8px rgba(72, 224, 120, 0.5);
 }
 
 .signal-connector.drag-over::after {
-  border-left-color: #48e078;
-  filter: drop-shadow(0 0 4px rgba(72, 224, 120, 0.8));
+  border-left-color: var(--node-drag-over);
 }
 
 .signal-graph-container {
