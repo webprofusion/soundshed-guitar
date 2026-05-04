@@ -79,6 +79,11 @@ namespace
     constexpr const char* kFactoryArchiveResourceProvider = "factory-archives";
     constexpr const char* kLocalResourceProvider = "local";
     constexpr const char* kLocalResourceStorageFolder = "local";
+    constexpr const char* kHostedPluginStableIdConfigKey = "pluginStableId";
+    constexpr const char* kHostedPluginIdentifierConfigKey = "pluginIdentifier";
+    constexpr const char* kHostedPluginNameConfigKey = "pluginName";
+    constexpr const char* kHostedPluginManufacturerConfigKey = "pluginManufacturer";
+    constexpr const char* kHostedPluginFormatConfigKey = "pluginFormat";
     constexpr const char* kFactoryArchiveStateFileName = "factory-archive-state.json";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
     constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
@@ -238,6 +243,68 @@ namespace
         const double samplesPerBar = samplesPerBeat * static_cast<double>(std::max(1, timeSigNum));
         return std::max(1, static_cast<int>(
             std::round(static_cast<double>(frameCount) / std::max(1.0, samplesPerBar))));
+    }
+
+    std::string NormalizeHostedPluginIdentityToken(std::string_view value)
+    {
+        std::string normalized;
+        normalized.reserve(value.size());
+
+        bool lastWasSeparator = false;
+        for (const char raw : value)
+        {
+            const unsigned char ch = static_cast<unsigned char>(raw);
+            if (std::isalnum(ch))
+            {
+                normalized.push_back(static_cast<char>(std::tolower(ch)));
+                lastWasSeparator = false;
+                continue;
+            }
+
+            if (!normalized.empty() && !lastWasSeparator)
+            {
+                normalized.push_back('-');
+                lastWasSeparator = true;
+            }
+        }
+
+        while (!normalized.empty() && normalized.back() == '-')
+            normalized.pop_back();
+
+        return normalized;
+    }
+
+    std::string BuildHostedPluginStableId(std::string_view manufacturer,
+                                          std::string_view pluginName)
+    {
+        const std::string normalizedManufacturer = NormalizeHostedPluginIdentityToken(manufacturer);
+        const std::string normalizedName = NormalizeHostedPluginIdentityToken(pluginName);
+        if (!normalizedManufacturer.empty() && !normalizedName.empty())
+            return normalizedManufacturer + "." + normalizedName;
+        if (!normalizedName.empty())
+            return normalizedName;
+        return normalizedManufacturer;
+    }
+
+    std::string InferPluginFormatFromPath(const std::filesystem::path& path)
+    {
+        std::string lower = path.string();
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        });
+
+        if (lower.find(".vst3") != std::string::npos)
+            return "vst3";
+        if (lower.find(".component") != std::string::npos || lower.find(".appex") != std::string::npos)
+            return "au";
+        if (lower.find(".lv2") != std::string::npos)
+            return "lv2";
+        if (lower.find(".clap") != std::string::npos)
+            return "clap";
+        if (lower.find(".aaxplugin") != std::string::npos)
+            return "aax";
+        return {};
     }
 
     bool HasUnsafeRelativeSegments(const std::filesystem::path& path)
@@ -4733,6 +4800,9 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     const std::string subfolder = payload.value("subfolder", "");
     const std::string providedHash = payload.value("hash", "");
     const nlohmann::json metadataPayload = payload.value("metadata", nlohmann::json::object());
+    const std::string payloadPluginName = payload.value("pluginName", "");
+    const std::string payloadPluginManufacturer = payload.value("pluginManufacturer", "");
+    const std::string payloadPluginStableId = payload.value("pluginStableId", "");
 
     if (resourceType.empty())
     {
@@ -4764,6 +4834,19 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             }
         }
         resource.metadata["provider"] = kLocalResourceProvider;
+    };
+
+    auto getMetadataString = [&](const std::string& key) -> std::string
+    {
+        if (!metadataPayload.is_object() || !metadataPayload.contains(key))
+            return {};
+
+        const auto& value = metadataPayload[key];
+        if (value.is_string())
+            return value.get<std::string>();
+        if (value.is_number() || value.is_boolean())
+            return value.dump();
+        return {};
     };
 
     if (hasFilePath)
@@ -4848,6 +4931,43 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             resourceId = existingByHash->id;
     }
 
+    std::string normalizedPluginStableId;
+    if (resourceType == "plugin")
+    {
+        std::string pluginName = payloadPluginName;
+        if (pluginName.empty())
+            pluginName = getMetadataString(kHostedPluginNameConfigKey);
+        if (pluginName.empty())
+            pluginName = resolvedPath.stem().string();
+
+        std::string pluginManufacturer = payloadPluginManufacturer;
+        if (pluginManufacturer.empty())
+            pluginManufacturer = getMetadataString(kHostedPluginManufacturerConfigKey);
+
+        std::string pluginStableId = payloadPluginStableId;
+        if (pluginStableId.empty())
+            pluginStableId = getMetadataString(kHostedPluginStableIdConfigKey);
+        if (pluginStableId.empty())
+            pluginStableId = BuildHostedPluginStableId(pluginManufacturer, pluginName);
+        normalizedPluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
+
+        if (resourceId.empty() && !normalizedPluginStableId.empty())
+        {
+            auto existingByStableId = std::find_if(allResources.begin(), allResources.end(),
+                [&](const LibraryResource& resource)
+                {
+                    if (resource.type != "plugin")
+                        return false;
+                    const auto it = resource.metadata.find(kHostedPluginStableIdConfigKey);
+                    if (it == resource.metadata.end())
+                        return false;
+                    return NormalizeHostedPluginIdentityToken(it->second) == normalizedPluginStableId;
+                });
+            if (existingByStableId != allResources.end())
+                resourceId = existingByStableId->id;
+        }
+    }
+
     if (resourceId.empty())
     {
         if (!allowCreate)
@@ -4855,10 +4975,19 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             error = "Resource not found";
             return std::nullopt;
         }
-        std::string baseId = std::string{kLocalResourceProvider} + ":" + util::SanitizePathSegment(resolvedPath.stem().string(), true);
+        std::string baseId;
+        if (resourceType == "plugin" && !normalizedPluginStableId.empty())
+        {
+            baseId = std::string{kLocalResourceProvider} + ":plugin:" + normalizedPluginStableId;
+        }
+        else
+        {
+            baseId = std::string{kLocalResourceProvider} + ":" + util::SanitizePathSegment(resolvedPath.stem().string(), true);
+        }
         if (baseId == std::string{kLocalResourceProvider} + ":")
             baseId += "resource";
-        if (!resolvedHash.empty())
+        const bool allowHashSuffix = !(resourceType == "plugin" && !normalizedPluginStableId.empty());
+        if (allowHashSuffix && !resolvedHash.empty())
             baseId += ":" + resolvedHash.substr(0, std::min<std::size_t>(12, resolvedHash.size()));
         resourceId = baseId;
         std::size_t suffix = 2;
@@ -4887,6 +5016,41 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     resource.hash = resolvedHash;
     upsertMetadata(resource);
     resource.metadata["sourceFileName"] = resolvedPath.filename().string();
+
+    if (resourceType == "plugin")
+    {
+        const std::string pluginName = payloadPluginName.empty()
+            ? (resource.metadata.contains(kHostedPluginNameConfigKey)
+                   ? resource.metadata[kHostedPluginNameConfigKey]
+                   : resolvedPath.stem().string())
+            : payloadPluginName;
+        if (!pluginName.empty())
+            resource.metadata[kHostedPluginNameConfigKey] = pluginName;
+
+        const std::string pluginManufacturer = payloadPluginManufacturer.empty()
+            ? (resource.metadata.contains(kHostedPluginManufacturerConfigKey)
+                   ? resource.metadata[kHostedPluginManufacturerConfigKey]
+                   : std::string{})
+            : payloadPluginManufacturer;
+        if (!pluginManufacturer.empty())
+            resource.metadata[kHostedPluginManufacturerConfigKey] = pluginManufacturer;
+
+        std::string pluginStableId = payloadPluginStableId.empty()
+            ? (resource.metadata.contains(kHostedPluginStableIdConfigKey)
+                   ? resource.metadata[kHostedPluginStableIdConfigKey]
+                   : BuildHostedPluginStableId(pluginManufacturer, pluginName))
+            : payloadPluginStableId;
+        pluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
+        if (!pluginStableId.empty())
+            resource.metadata[kHostedPluginStableIdConfigKey] = pluginStableId;
+
+        if (!resource.metadata.contains(kHostedPluginFormatConfigKey) || resource.metadata[kHostedPluginFormatConfigKey].empty())
+        {
+            const std::string inferredFormat = InferPluginFormatFromPath(resolvedPath);
+            if (!inferredFormat.empty())
+                resource.metadata[kHostedPluginFormatConfigKey] = inferredFormat;
+        }
+    }
 
     AppendUserLibraryResource(resource);
     return resource;
@@ -8415,6 +8579,8 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
     else
         node->config[key] = value;
 
+    PersistHostedPluginResourceMetadata(*node, key, value);
+
     SyncActivePresetSceneGraph();
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
     mMixerPresetJsonCache[presetId] = mActivePresetJson;
@@ -8465,6 +8631,8 @@ void PluginController::ApplyPreset(const Preset& preset)
         if (!node.params.count("autoLevelOutput"))
             node.params["autoLevelOutput"] = 1.0;
     }
+
+    TryRemapHostedPluginResources(normalizedPreset);
 
     EnsurePresetBoundaryGainNodes(normalizedPreset);
 
@@ -8526,6 +8694,165 @@ void PluginController::ApplyPreset(const Preset& preset)
         });
 
     mHost.NotifyStateChanged();
+}
+
+void PluginController::TryRemapHostedPluginResources(Preset& preset) const
+{
+    TryRemapHostedPluginResourcesInGraph(preset.graph);
+    for (auto& scene : preset.scenes)
+        TryRemapHostedPluginResourcesInGraph(scene.graph);
+}
+
+void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) const
+{
+    const auto pluginResources = mResourceLibrary.GetResourcesByType("plugin");
+    if (pluginResources.empty())
+        return;
+
+    for (auto& node : graph.nodes)
+    {
+        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+            continue;
+
+        auto resourceIt = std::find_if(node.resources.begin(), node.resources.end(), [](const ResourceRef& ref)
+        {
+            return ref.resourceType == "plugin" && ref.IsLibraryRef();
+        });
+
+        if (resourceIt == node.resources.end())
+            continue;
+        if (mResourceLibrary.HasResource("plugin", resourceIt->resourceId))
+            continue;
+
+        const auto stableConfigIt = node.config.find(kHostedPluginStableIdConfigKey);
+        const auto identifierConfigIt = node.config.find(kHostedPluginIdentifierConfigKey);
+        const auto nameConfigIt = node.config.find(kHostedPluginNameConfigKey);
+        const auto manufacturerConfigIt = node.config.find(kHostedPluginManufacturerConfigKey);
+        const auto formatConfigIt = node.config.find(kHostedPluginFormatConfigKey);
+
+        const std::string normalizedStableId =
+            stableConfigIt != node.config.end() ? NormalizeHostedPluginIdentityToken(stableConfigIt->second) : std::string{};
+        const std::string normalizedIdentifier =
+            identifierConfigIt != node.config.end() ? NormalizeHostedPluginIdentityToken(identifierConfigIt->second) : std::string{};
+        const std::string normalizedName =
+            nameConfigIt != node.config.end() ? NormalizeHostedPluginIdentityToken(nameConfigIt->second) : std::string{};
+        const std::string normalizedManufacturer =
+            manufacturerConfigIt != node.config.end() ? NormalizeHostedPluginIdentityToken(manufacturerConfigIt->second) : std::string{};
+        const std::string normalizedFormat =
+            formatConfigIt != node.config.end() ? NormalizeHostedPluginIdentityToken(formatConfigIt->second) : std::string{};
+
+        if (normalizedStableId.empty() && normalizedIdentifier.empty() && normalizedName.empty())
+            continue;
+
+        std::vector<const LibraryResource*> candidates;
+        candidates.reserve(pluginResources.size());
+
+        for (const auto& libraryResource : pluginResources)
+        {
+            const auto& metadata = libraryResource.metadata;
+            const std::string candidateStableId = NormalizeHostedPluginIdentityToken(
+                metadata.contains(kHostedPluginStableIdConfigKey) ? metadata.at(kHostedPluginStableIdConfigKey) : std::string{});
+            const std::string candidateIdentifier = NormalizeHostedPluginIdentityToken(
+                metadata.contains(kHostedPluginIdentifierConfigKey) ? metadata.at(kHostedPluginIdentifierConfigKey) : std::string{});
+            const std::string candidateName = NormalizeHostedPluginIdentityToken(
+                metadata.contains(kHostedPluginNameConfigKey) ? metadata.at(kHostedPluginNameConfigKey) : libraryResource.name);
+            const std::string candidateManufacturer = NormalizeHostedPluginIdentityToken(
+                metadata.contains(kHostedPluginManufacturerConfigKey) ? metadata.at(kHostedPluginManufacturerConfigKey) : std::string{});
+
+            bool match = false;
+            if (!normalizedStableId.empty() && !candidateStableId.empty() && normalizedStableId == candidateStableId)
+                match = true;
+            else if (!normalizedIdentifier.empty() && !candidateIdentifier.empty() && normalizedIdentifier == candidateIdentifier)
+                match = true;
+            else if (!normalizedName.empty() && normalizedName == candidateName)
+            {
+                if (normalizedManufacturer.empty() || candidateManufacturer.empty() || normalizedManufacturer == candidateManufacturer)
+                    match = true;
+            }
+
+            if (match)
+                candidates.push_back(&libraryResource);
+        }
+
+        if (candidates.empty())
+            continue;
+
+        const LibraryResource* selected = nullptr;
+        if (candidates.size() == 1)
+        {
+            selected = candidates.front();
+        }
+        else if (!normalizedFormat.empty())
+        {
+            for (const auto* candidate : candidates)
+            {
+                const auto formatIt = candidate->metadata.find(kHostedPluginFormatConfigKey);
+                if (formatIt != candidate->metadata.end()
+                    && NormalizeHostedPluginIdentityToken(formatIt->second) == normalizedFormat)
+                {
+                    selected = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!selected)
+            continue;
+
+        AppendSessionLog("Hosted plugin resource remapped nodeId=" + node.id
+            + ", missingId=" + resourceIt->resourceId
+            + ", resolvedId=" + selected->id);
+        resourceIt->resourceId = selected->id;
+        resourceIt->filePath.clear();
+    }
+}
+
+void PluginController::PersistHostedPluginResourceMetadata(const GraphNode& node,
+                                                           const std::string& key,
+                                                           const std::string& value)
+{
+    if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        return;
+
+    if (key != kHostedPluginStableIdConfigKey
+        && key != kHostedPluginIdentifierConfigKey
+        && key != kHostedPluginNameConfigKey
+        && key != kHostedPluginManufacturerConfigKey
+        && key != kHostedPluginFormatConfigKey)
+    {
+        return;
+    }
+
+    const auto resourceIt = std::find_if(node.resources.begin(), node.resources.end(), [](const ResourceRef& ref)
+    {
+        return ref.resourceType == "plugin" && ref.IsLibraryRef();
+    });
+    if (resourceIt == node.resources.end())
+        return;
+
+    auto resource = mResourceLibrary.LookupResource("plugin", resourceIt->resourceId);
+    if (!resource)
+        return;
+
+    auto updated = *resource;
+    const auto existingIt = updated.metadata.find(key);
+    if (value.empty())
+    {
+        if (existingIt == updated.metadata.end())
+            return;
+        updated.metadata.erase(existingIt);
+    }
+    else
+    {
+        if (existingIt != updated.metadata.end() && existingIt->second == value)
+            return;
+        updated.metadata[key] = value;
+    }
+
+    mResourceLibrary.UpdateResource("plugin", updated.id, updated);
+    const auto libraryFile = mFileSystem.ResolveSettingsDirectory() / "resources" / "indexes" / "resources-index.json";
+    [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryFile.parent_path());
+    mResourceLibrary.SaveToFile(libraryFile);
 }
 
 void PluginController::ApplyBlendDefinitions(Preset& preset)

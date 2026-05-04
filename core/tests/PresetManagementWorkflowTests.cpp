@@ -684,6 +684,99 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset()
     }
 }
 
+bool TestLoadPresetRemapsHostedPluginResourceByStableId()
+{
+    try
+    {
+        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-id-remap";
+        std::error_code ec;
+        fs::remove_all(sandbox, ec);
+        fs::create_directories(sandbox, ec);
+        SetSettingsEnvRoot(sandbox);
+
+        TestHost host(sandbox);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+
+        guitarfx::LibraryResource pluginResource;
+        pluginResource.type = "plugin";
+        pluginResource.id = "local:plugin:acme-ultra-chorus";
+        pluginResource.name = "Ultra Chorus";
+        pluginResource.category = "Local";
+        pluginResource.filePath = sandbox / "plugins" / "UltraChorus.vst3";
+        pluginResource.metadata["pluginStableId"] = "acme.ultra-chorus";
+        pluginResource.metadata["pluginFormat"] = "vst3";
+        controller.GetResourceLibrary().AddResource(pluginResource);
+
+        guitarfx::Preset preset;
+        preset.id = "user-hosted-plugin-id-remap";
+        preset.name = "Hosted Plugin ID Remap";
+        preset.version = 2;
+        preset.category = "Test";
+
+        guitarfx::GraphNode inputNode;
+        inputNode.id = "__input__";
+        inputNode.type = guitarfx::kNodeTypeInput;
+
+        guitarfx::GraphNode outputNode;
+        outputNode.id = "__output__";
+        outputNode.type = guitarfx::kNodeTypeOutput;
+
+        guitarfx::GraphNode pluginNode;
+        pluginNode.id = "plugin-host-node";
+        pluginNode.type = guitarfx::EffectGuids::kPluginHost;
+        pluginNode.category = "utility";
+        pluginNode.config["pluginStableId"] = "acme.ultra-chorus";
+        pluginNode.resources.push_back(guitarfx::ResourceRef{"plugin", "foreign-plugin-id", fs::path{}, ""});
+
+        preset.graph.nodes = {inputNode, pluginNode, outputNode};
+        preset.graph.edges = {
+            {"__input__", "plugin-host-node", 0, 0, 1.0},
+            {"plugin-host-node", "__output__", 0, 0, 1.0},
+        };
+        guitarfx::NormalizePresetScenes(preset);
+
+        nlohmann::json message;
+        message["type"] = "loadPreset";
+        message["presetId"] = preset.id;
+        message["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
+        controller.HandleUIMessage(message.dump());
+
+        const auto& active = controller.GetActivePreset();
+        if (!active)
+        {
+            std::cerr << "No active preset after hosted-plugin stable-id remap load\n";
+            return false;
+        }
+
+        const auto* remappedNode = active->graph.FindNode(pluginNode.id);
+        if (!remappedNode)
+        {
+            std::cerr << "Remapped hosted-plugin node missing from active preset\n";
+            return false;
+        }
+
+        if (remappedNode->resources.empty())
+        {
+            std::cerr << "Hosted-plugin node has no resources after remap load\n";
+            return false;
+        }
+
+        if (remappedNode->resources.front().resourceId != pluginResource.id)
+        {
+            std::cerr << "Hosted-plugin resource ID was not remapped by stable ID\n";
+            return false;
+        }
+
+        return true;
+    }
+    catch (const std::exception& ex)
+    {
+        std::cerr << "Exception in TestLoadPresetRemapsHostedPluginResourceByStableId: " << ex.what() << "\n";
+        return false;
+    }
+}
+
 bool TestLoadPresetRestoresUnifiedLevelState()
 {
     const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "level-load";
@@ -1446,6 +1539,7 @@ int main()
     run("Load preset via message", TestLoadPresetViaMessage());
     run("Load preset rehydrates scrubbed hosted plugin state", TestLoadPresetRehydratesScrubbedHostedPluginState());
     run("Load preset rehydrates scrubbed hosted plugin state from active preset", TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset());
+    run("Load preset remaps hosted plugin resource by stable id", TestLoadPresetRemapsHostedPluginResourceByStableId());
     run("Load preset restores unified level state", TestLoadPresetRestoresUnifiedLevelState());
     run("Load preset retires NAM input auto-leveling", TestLoadPresetRetiresNamInputAutoLeveling());
     run("Load app settings applies user input calibration", TestLoadAppSettingsAppliesUserInputCalibrationProfile());

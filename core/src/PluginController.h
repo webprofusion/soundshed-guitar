@@ -285,6 +285,11 @@ private:
                                         const std::string& nodeId,
                                         const std::string& key,
                                         const std::string& value);
+    void TryRemapHostedPluginResources(Preset& preset) const;
+    void TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) const;
+    void PersistHostedPluginResourceMetadata(const GraphNode& node,
+                                             const std::string& key,
+                                             const std::string& value);
     bool ReportHostedPluginResourceLoadFailure(const std::string& nodeId,
                                                const ResourceRef& ref,
                                                int resourceIndex = -1);

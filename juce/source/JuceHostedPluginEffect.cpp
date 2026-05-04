@@ -5,6 +5,7 @@
 #include "util/FileSystem.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -18,6 +19,11 @@ namespace guitarfx
     namespace
     {
         constexpr const char* kPluginStateBase64ConfigKey = "pluginStateBase64";
+        constexpr const char* kPluginStableIdConfigKey = "pluginStableId";
+        constexpr const char* kPluginIdentifierConfigKey = "pluginIdentifier";
+        constexpr const char* kPluginFormatConfigKey = "pluginFormat";
+        constexpr const char* kPluginNameConfigKey = "pluginName";
+        constexpr const char* kPluginManufacturerConfigKey = "pluginManufacturer";
         constexpr const char* kHostedPluginTraceLogFileName = "logs/session-log.txt";
         constexpr std::uint64_t kFNVOffsetBasis = 14695981039346656037ull;
         constexpr std::uint64_t kFNVPrime = 1099511628211ull;
@@ -77,6 +83,50 @@ namespace guitarfx
         std::string FromJuceString (const juce::String& value)
         {
             return value.toStdString();
+        }
+
+        std::string NormalizePluginIdentityToken (std::string_view value)
+        {
+            std::string normalized;
+            normalized.reserve (value.size());
+
+            bool lastWasSeparator = false;
+            for (const char raw : value)
+            {
+                const unsigned char ch = static_cast<unsigned char> (raw);
+                if (std::isalnum (ch))
+                {
+                    normalized.push_back (static_cast<char> (std::tolower (ch)));
+                    lastWasSeparator = false;
+                    continue;
+                }
+
+                if (!normalized.empty() && !lastWasSeparator)
+                {
+                    normalized.push_back ('-');
+                    lastWasSeparator = true;
+                }
+            }
+
+            while (!normalized.empty() && normalized.back() == '-')
+                normalized.pop_back();
+
+            return normalized;
+        }
+
+        std::string BuildPluginStableId (const juce::PluginDescription& description,
+            const std::filesystem::path& pluginPath)
+        {
+            const std::string normalizedManufacturer = NormalizePluginIdentityToken (FromJuceString (description.manufacturerName));
+            std::string normalizedName = NormalizePluginIdentityToken (FromJuceString (description.name));
+            if (normalizedName.empty())
+                normalizedName = NormalizePluginIdentityToken (pluginPath.stem().string());
+
+            if (!normalizedManufacturer.empty() && !normalizedName.empty())
+                return normalizedManufacturer + "." + normalizedName;
+            if (!normalizedName.empty())
+                return normalizedName;
+            return normalizedManufacturer;
         }
 
         void AppendHostedPluginTrace (const std::string& message)
@@ -667,6 +717,23 @@ namespace guitarfx
         mPlugin = std::move (instance);
         AttachHostedPluginListeners();
         mLastError.clear();
+
+        if (mRuntimeConfigChangedCallback)
+        {
+            const std::string pluginName = FromJuceString (mPluginDescription.name);
+            const std::string pluginManufacturer = FromJuceString (mPluginDescription.manufacturerName);
+            const std::string pluginStableId = BuildPluginStableId (mPluginDescription, mPluginPath);
+
+            mRuntimeConfigChangedCallback (kPluginFormatConfigKey, mPluginFormat);
+            mRuntimeConfigChangedCallback (kPluginIdentifierConfigKey, mPluginIdentifier);
+            if (!pluginName.empty())
+                mRuntimeConfigChangedCallback (kPluginNameConfigKey, pluginName);
+            if (!pluginManufacturer.empty())
+                mRuntimeConfigChangedCallback (kPluginManufacturerConfigKey, pluginManufacturer);
+            if (!pluginStableId.empty())
+                mRuntimeConfigChangedCallback (kPluginStableIdConfigKey, pluginStableId);
+        }
+
         AppendHostedPluginTrace ("LoadPluginFromPath instantiated name=" + FromJuceString (mPluginDescription.name)
                                  + ", format=" + mPluginFormat + ", identifier=" + mPluginIdentifier);
         if (!mPluginStateBase64.empty())
