@@ -107,6 +107,27 @@
   flex: 1 1 260px;
 }
 
+.preset-library-close-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-dark);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.preset-library-close-btn:hover {
+  background: var(--overlay-light);
+  color: var(--text-primary);
+}
+
 .preset-library-export-btn {
   display: inline-flex;
   align-items: center;

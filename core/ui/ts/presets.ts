@@ -32,6 +32,7 @@ const presetSearchElement = document.getElementById("preset-search") as HTMLInpu
 const presetSelector = document.getElementById("preset-selector");
 const presetSelectorStatus = document.getElementById("preset-selector-status") as HTMLElement | null;
 const presetLibraryPopover = document.getElementById("preset-library-popover");
+const presetLibraryCloseButton = document.getElementById("preset-library-close-btn") as HTMLButtonElement | null;
 const presetControlBar = presetLibraryPopover?.closest<HTMLElement>(".control-bar") ?? null;
 const presetLibraryTabs = document.querySelector(".preset-library-tabs") as HTMLElement | null;
 const presetLibraryPresetsPanel = document.getElementById("preset-library-presets-panel") as HTMLElement | null;
@@ -1919,6 +1920,13 @@ export function initializePresetControls(): void {
   if (presetLibraryPopover) {
     presetLibraryPopover.addEventListener("click", (event) => {
       event.stopPropagation();
+    });
+  }
+
+  if (presetLibraryCloseButton) {
+    presetLibraryCloseButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closePresetLibraryPopover();
     });
   }
 
