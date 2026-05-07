@@ -1026,7 +1026,7 @@ export function renderSignalPathBar(): void {
       <div class="signal-graph-container">
         <div class="signal-graph-row">
           <div class="signal-node input-node" data-node-id="__input__">
-            <div class="node-icon">🎤</div>
+            <div class="node-icon"><span class="fx-effect-icon" style="--icon-url: url('/images/icons/guitar.svg')" aria-hidden="true"></span></div>
             <div class="node-info">
               <div class="node-name">Input</div>
             </div>
@@ -1431,7 +1431,7 @@ function renderGraphSignalPath(preset: Preset): void {
     <div class="signal-graph-container">
       <div class="signal-graph-row">
         <div class="signal-node input-node" data-node-id="__input__">
-          <div class="node-icon">🎤</div>
+          <div class="node-icon"><span class="fx-effect-icon" style="--icon-url: url('/images/icons/guitar.svg')" aria-hidden="true"></span></div>
           <div class="node-info">
             <div class="node-name">Input</div>
           </div>
@@ -3865,8 +3865,9 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
     const effects = effectsByCategory.get(categoryId) ?? [];
     if (effects.length > 0) {
       const categoryInfo = CATEGORY_METADATA[categoryId];
+      const categoryColor = categoryInfo?.color || "var(--color-accent)";
       dropdownHtml += `
-        <div class="effect-dropdown-category">
+        <div class="effect-dropdown-category" style="--category-color: ${escapeHtml(categoryColor)}">
           <div class="effect-dropdown-category-name">
             ${categoryInfo?.name || categoryId}
           </div>
@@ -3887,7 +3888,8 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
                 data-custom-effect-id="${escapeHtml(effect.customEffectId ?? "") }"
                 data-custom-effect-resource-type="${escapeHtml(effect.moduleResourceType ?? "") }"
                 data-custom-effect-resource-id="${escapeHtml(effect.moduleResourceId ?? "") }"
-                data-custom-effect-default-params="${escapeHtml(encodeURIComponent(JSON.stringify(effect.defaultParams ?? {})))}">
+                data-custom-effect-default-params="${escapeHtml(encodeURIComponent(JSON.stringify(effect.defaultParams ?? {})))}"
+                style="--category-color: ${escapeHtml(categoryColor)}">
               ${icon}
               <span class="effect-dropdown-name">${escapeHtml(effect.displayName)}</span>
             </div>

@@ -1,4 +1,4 @@
-const ICON_BASE = "images/icons";
+const ICON_BASE = "/images/icons";
 import { EffectGuids, resolveEffectType } from "./effectGuids.js";
 
 export type IconKey =
@@ -30,7 +30,7 @@ export type IconKey =
 
 export function renderIcon(icon: IconKey, className: string, title?: string): string {
   const titleAttr = title ? ` title=\"${title}\"` : "";
-  return `<img class=\"${className}\" src=\"${ICON_BASE}/${icon}.svg\" alt=\"\" aria-hidden=\"true\"${titleAttr}>`;
+  return `<span class=\"${className}\" style=\"--icon-url: url('${ICON_BASE}/${icon}.svg')\" aria-hidden=\"true\"${titleAttr}></span>`;
 }
 
 const categoryIcons: Record<string, IconKey> = {

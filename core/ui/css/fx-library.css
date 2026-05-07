@@ -230,6 +230,7 @@
   height: 16px;
   display: inline-block;
   flex-shrink: 0;
+  color: var(--category-color, var(--text-secondary));
 }
 
 .fx-category-name {
@@ -303,7 +304,7 @@
 .fx-item-icon .fx-effect-icon {
   width: 18px;
   height: 18px;
-  display: block;
+  color: var(--category-color, var(--text-primary));
 }
 
 .fx-item-thumb {
@@ -350,7 +351,7 @@
 .fx-item-badge .fx-badge-icon {
   width: 14px;
   height: 14px;
-  display: block;
+  color: var(--text-muted);
 }
 
 .tone3000-status {

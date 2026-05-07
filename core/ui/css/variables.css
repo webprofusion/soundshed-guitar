@@ -100,6 +100,11 @@
   --control-knob-bg: #ffffff;
   --control-border: #c8cad6;
   --control-indicator: #5a5a6a;
+  --knob-ring-color: #2ec868;
+  --knob-ring-track: rgba(0,0,0,0.18);
+  --knob-body-highlight: rgba(255,255,255,0.5);
+  --knob-body-from: #e8eaef;
+  --knob-body-to: #c8cad4;
 
   /* Blend Mapping Indicators */
   --blend-mapped-point: #6b6b7c;
@@ -309,6 +314,11 @@
   --control-knob-bg: #2e2e3a;
   --control-border: #46465a;
   --control-indicator: #d0d0e0;
+  --knob-ring-color: #2ec868;
+  --knob-ring-track: rgba(255,255,255,0.07);
+  --knob-body-highlight: rgba(255,255,255,0.10);
+  --knob-body-from: #454558;
+  --knob-body-to: #18181e;
   
   --amp-knob-bg: #30303e;
   --amp-knob-border: #48485a;

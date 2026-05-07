@@ -1,4 +1,20 @@
 /* ===== Base Styles & Layout ===== */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+}
+
 * {
   box-sizing: border-box;
 }
@@ -16,10 +32,31 @@ html, body {
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont,  sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-optical-sizing: auto;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;
+}
+
+p {
+  padding:6px;
+}
+
+.fx-category-icon,
+.fx-effect-icon,
+.fx-badge-icon {
+  display: inline-block;
+  vertical-align: middle;
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon-url);
+  mask-image: var(--icon-url);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 body.theme-classic {

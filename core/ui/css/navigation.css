@@ -282,21 +282,24 @@
 }
 
 .preset-action-btn {
-  min-height: 26px;
-  border: 1px solid var(--border-dark-medium);
-  border-radius: 7px;
-  background: var(--bg-dark-secondary);
-  color: var(--text-secondary);
+  min-height: 28px;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  color: var(--text-dark-primary);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-  padding: 0 8px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  padding: 0 10px;
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .preset-action-btn svg {
@@ -306,24 +309,25 @@
 }
 
 .preset-action-btn:hover {
-  background: var(--bg-dark-tertiary);
-  border-color: var(--border-dark-light);
-  color: var(--text-primary);
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.18);
+  color: #ffffff;
 }
 
 .preset-action-btn:active {
   transform: translateY(1px);
+  box-shadow: none;
 }
 
 .preset-action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .preset-action-btn:disabled:hover {
-  background: var(--bg-dark-secondary);
-  border-color: var(--border-dark-medium);
-  color: var(--text-secondary);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.11);
+  color: var(--text-dark-primary);
 }
 
 .preset-action-btn-label {
@@ -446,25 +450,32 @@
   flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  gap: 6px;
-  padding: 3px 6px;
-  border-radius: 8px;
-  background: var(--bg-dark-secondary);
-  border: 1px solid var(--border-dark-medium);
+  gap: 0;
+  padding: 2px 8px 2px 4px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-dark-primary);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,0.55),
+    inset 0 1px 2px rgba(0,0,0,0.35),
+    0 1px 0 rgba(255,255,255,0.04);
 }
 
 .preset-selector.has-unsaved-changes {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent), transparent 30%);
+  border-color: color-mix(in srgb, var(--color-accent), transparent 55%);
 }
 
 .preset-selector-status {
   font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--text-dark-muted);
   white-space: nowrap;
-  padding: 3px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--border-dark-medium);
-  background: color-mix(in srgb, var(--bg-dark-tertiary), transparent 10%);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: none;
+  background: rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
 
@@ -477,13 +488,14 @@
 }
 
 .preset-chooser-label {
-  background: var(--bg-dark-tertiary);
+  background: transparent;
   color: var(--text-dark-primary);
-  border: 1px solid var(--border-dark-light);
-  border-radius: 7px;
-  padding: 5px 8px;
+  border: none;
+  border-radius: 0;
+  padding: 0 10px;
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.05em;
   cursor: pointer;
   flex: 1 1 auto;
   min-width: 0;
@@ -494,34 +506,49 @@
 }
 
 .preset-chooser-label:hover {
-  background: var(--bg-dark-secondary);
+  color: #ffffff;
+  background: transparent;
 }
 
 .preset-favorite {
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border-dark-medium);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-dark-tertiary), transparent 8%);
-  color: var(--color-preset-favorite);
+  width: 32px;
+  height: 100%;
+  border: none;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dark-secondary);
   font-size: 14px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.preset-favorite:hover {
+  opacity: 1;
+  color: var(--color-preset-favorite);
 }
 
 .preset-favorite.active {
-  text-shadow: 0 0 6px color-mix(in srgb, var(--color-preset-favorite), transparent 40%);
+  opacity: 1;
+  color: var(--color-preset-favorite);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--color-preset-favorite), transparent 30%);
 }
 
 .preset-nav-btn {
-  width: 26px;
-  height: 26px;
-  min-height: 26px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: rgba(255,255,255,0.05) !important;
+  color: var(--text-dark-secondary) !important;
   flex-shrink: 0;
+  font-size: 13px;
 }
 
 .preset-group .tone-sharing-preview-indicator {
@@ -531,18 +558,24 @@
 }
 
 .theme-light .preset-selector {
-  background: var(--bg-secondary);
-  border-color: var(--border-light);
+  background: var(--bg-input);
+  border-color: var(--border-medium);
+  box-shadow:
+    inset 0 1px 4px rgba(0,0,0,0.10),
+    inset 0 1px 1px rgba(0,0,0,0.06),
+    0 1px 0 rgba(255,255,255,0.85);
 }
 
 .theme-light .preset-action-btn {
   background: var(--bg-panel);
   border-color: var(--border-light);
   color: var(--text-secondary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .theme-light .preset-action-btn:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
+  border-color: var(--border-medium);
   color: var(--text-primary);
 }
 
@@ -565,23 +598,31 @@
 }
 
 .theme-light .preset-chooser-label {
-  background: var(--bg-panel);
+  background: transparent;
   color: var(--text-primary);
-  border-color: var(--border-light);
+  border: none;
 }
 
 .theme-light .preset-chooser-label:hover {
-  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  background: transparent;
 }
 
 .theme-light .preset-favorite {
-  background: var(--bg-panel);
-  border-color: var(--border-light);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.theme-light .preset-favorite:hover {
+  color: var(--color-preset-favorite);
 }
 
 .theme-light .preset-selector-status {
-  border-color: var(--border-light);
-  background: var(--bg-panel);
+  border: none;
+  background: rgba(0,0,0,0.06);
+  color: var(--text-muted);
 }
 
 .theme-light .preset-toolbar-separator {

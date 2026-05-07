@@ -379,6 +379,8 @@ export class GenericKnob {
     this.knobElement.setAttribute("aria-valuetext", this.displayFormat(value));
 
     const rotation = ((value - this.minValue) / (this.maxValue - this.minValue)) * 270 - 135;
+    const pct = (value - this.minValue) / (this.maxValue - this.minValue);
+    this.knobElement.style.setProperty("--knob-pct", pct.toString());
     const indicator = this.knobElement.querySelector(".knob-indicator") as HTMLElement | null;
     if (indicator) {
       indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;

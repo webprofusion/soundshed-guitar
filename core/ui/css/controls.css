@@ -26,19 +26,63 @@
 }
 
 .knob {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: var(--control-knob-bg, var(--control-bg));
-  border: 1.5px solid var(--border-medium);
-  box-shadow: var(--shadow-sm);
   position: relative;
   cursor: pointer;
+  /* Ring = conic-gradient from 7 o'clock (225°) spanning 270° */
+  background: conic-gradient(
+    from 225deg,
+    var(--knob-ring-color) 0deg,
+    var(--knob-ring-color) calc(var(--knob-pct, 0) * 270deg),
+    var(--knob-ring-track) calc(var(--knob-pct, 0) * 270deg),
+    var(--knob-ring-track) 270deg,
+    transparent 270deg
+  );
+  flex-shrink: 0;
+}
+
+/* 3D inner body — covers the ring center, leaving only the outer ring band */
+.knob::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--knob-body-from), #fff 3%) 0%,
+    var(--knob-body-from) 50%,
+    color-mix(in srgb, var(--knob-body-to), #000 8%) 100%
+  );
+  box-shadow:
+    0 0 0 2px var(--bg-secondary),
+    0 3px 7px rgba(0, 0, 0, 0.5),
+    0 1px 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 1px color-mix(in srgb, var(--knob-body-highlight), transparent 45%),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Neutral-position tick mark — fixed small mark at 6 o'clock of the ring */
+.knob::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 2px;
+  height: 3px;
+  background: var(--knob-ring-track);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .knob:focus-visible {
   outline: 2px solid var(--accent-primary, #50b878);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
 .knob-label,
@@ -86,14 +130,16 @@ input[type="range"]:focus-visible {
 
 .knob .knob-indicator {
   position: absolute;
-  top: 5px;
+  top: 6px;
   left: 50%;
   width: 2px;
-  height: 9px;
+  height: 7px;
   background: var(--control-indicator);
   border-radius: 2px;
   transform: translateX(-50%);
-  transform-origin: center 15px;
+  transform-origin: center 13px; /* pivot = 19px center - 6px top */
+  z-index: 2;
+  pointer-events: none;
 }
 
 .knob-mapped-points {
@@ -111,7 +157,7 @@ input[type="range"]:focus-visible {
   height: 4px;
   border-radius: 50%;
   background: var(--blend-mapped-point);
-  transform: translate(-50%, -50%) rotate(var(--mapped-angle, 0deg)) translateY(-18px);
+  transform: translate(-50%, -50%) rotate(var(--mapped-angle, 0deg)) translateY(-13px);
   opacity: 0.7;
 }
 
@@ -124,7 +170,7 @@ input[type="range"]:focus-visible {
 .knob-mapped-point.is-selected {
   background: var(--blend-mapped-point-active);
   opacity: 1;
-  transform: translate(-50%, -50%) rotate(var(--mapped-angle, 0deg)) translateY(-18px) scale(1.15);
+  transform: translate(-50%, -50%) rotate(var(--mapped-angle, 0deg)) translateY(-13px) scale(1.15);
 }
 
 .knob-value {
@@ -909,7 +955,7 @@ input[type="range"]:focus-visible {
   width: 14px;
   height: 5px;
   border-radius: 2px;
-  background: var(--vu-seg-off, rgba(255,255,255,0.08));
+  background: var(--vu-seg-off, rgb(139 138 138 / 18%)); 
   transition: background 60ms linear;
 }
 
