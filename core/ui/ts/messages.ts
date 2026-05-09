@@ -69,6 +69,64 @@ function normalizePresetResources(preset?: Preset | null): void {
 const DEBUG_SNAPSHOT_SKIP_TYPES = new Set(["dspPerformance", "signalLevelDiagnostics", "captureDebugSnapshot", "debugSnapshotWritten"]);
 let debugSnapshotTimer: number | null = null;
 
+const TELEMETRY_UI_FPS = 30;
+const TELEMETRY_UI_FRAME_MS = 1000 / TELEMETRY_UI_FPS;
+
+let telemetryUiRafId: number | null = null;
+let telemetryUiDelayTimer: number | null = null;
+let telemetryUiLastFlushMs = 0;
+let telemetryUiPendingDsp = false;
+let telemetryUiPendingSignalDiagnostics = false;
+
+function flushTelemetryUiUpdates(): void {
+  if (telemetryUiPendingDsp) {
+    updateDSPPerformancePlot();
+    telemetryUiPendingDsp = false;
+  }
+
+  if (telemetryUiPendingSignalDiagnostics) {
+    updateSignalDiagnosticsView();
+    handleUserInputCalibrationDiagnosticsUpdate();
+    updateSelectedNodePeakMeter();
+    refreshSavePresetModalPeakInfoIfOpen();
+    telemetryUiPendingSignalDiagnostics = false;
+  }
+}
+
+function scheduleTelemetryUiFlush(): void {
+  if (telemetryUiRafId !== null || telemetryUiDelayTimer !== null) {
+    return;
+  }
+
+  telemetryUiRafId = window.requestAnimationFrame((timestamp) => {
+    telemetryUiRafId = null;
+
+    const elapsedMs = timestamp - telemetryUiLastFlushMs;
+    if (elapsedMs < TELEMETRY_UI_FRAME_MS) {
+      const delayMs = Math.ceil(TELEMETRY_UI_FRAME_MS - elapsedMs);
+      telemetryUiDelayTimer = window.setTimeout(() => {
+        telemetryUiDelayTimer = null;
+        scheduleTelemetryUiFlush();
+      }, delayMs);
+      return;
+    }
+
+    telemetryUiLastFlushMs = timestamp;
+    flushTelemetryUiUpdates();
+  });
+}
+
+function queueTelemetryUiUpdate(kind: "dsp" | "signalDiagnostics"): void {
+
+  if (kind === "dsp") {
+    telemetryUiPendingDsp = true;
+  } else {
+    telemetryUiPendingSignalDiagnostics = true;
+  }
+
+  scheduleTelemetryUiFlush();
+}
+
 function isSensitiveDebugKey(key: string): boolean {
   const normalizedKey = key.toLowerCase();
   return normalizedKey.includes("token")
@@ -1073,8 +1131,7 @@ export function handleIncomingMessage(message: string): void {
           uiState.dspPerformanceHistory.shift();
         }
        
-        // Update plot if panel is visible
-        updateDSPPerformancePlot();
+        queueTelemetryUiUpdate("dsp");
       }
       break;
     }
@@ -1082,10 +1139,7 @@ export function handleIncomingMessage(message: string): void {
       const diagnostics = payload as unknown as import("./types.js").SignalLevelDiagnostics;
       if (diagnostics && diagnostics.input && diagnostics.output) {
         uiState.signalDiagnostics = diagnostics;
-        updateSignalDiagnosticsView();
-        handleUserInputCalibrationDiagnosticsUpdate();
-        updateSelectedNodePeakMeter();
-        refreshSavePresetModalPeakInfoIfOpen();
+        queueTelemetryUiUpdate("signalDiagnostics");
       }
       break;
     }
