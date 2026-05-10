@@ -107,16 +107,15 @@ const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
 };
 
 const EFFECT_VISUAL_EQUIPMENT_IMAGES: Record<string, string> = {
-  amp: "../images/equipment/amps/amp-04.png",
-  cab: "../images/equipment/cabs/cab-02.png",
-  neural: "../images/equipment/pedals/colourful-pedal2.png",
+  amp: "../images/equipment/amps/full-rig-1.jpg",
+  cab: "../images/equipment/cabs/cab-02.png"
 };
 
 const EFFECT_VISUAL_EQUIPMENT_IMAGES_BY_TYPE: Record<string, string> = {
-  [EffectGuids.kFxNam]: "../images/equipment/pedals/basic-pedal.png",
-  fx_nam: "../images/equipment/pedals/basic-pedal.png",
-  [EffectGuids.kWasmHost]: "../images/equipment/pedals/basic-pedal.png",
-  wasm_host: "../images/equipment/pedals/basic-pedal.png",
+  [EffectGuids.kFxNam]: "../images/equipment/pedals/colourful-pedal2.png",
+  fx_nam: "../images/equipment/pedals/colourful-pedal2.png",
+  [EffectGuids.kWasmHost]: "../images/equipment/colourful-pedal2.png",
+  wasm_host: "../images/equipment/pedals/colourful-pedal2.png",
 };
 
 function getEffectVisualizationEquipmentImage(node: GraphNode): string {

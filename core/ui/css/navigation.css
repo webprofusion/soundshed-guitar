@@ -771,6 +771,11 @@
   color: var(--text-secondary) !important;
 }
 
+.theme-dark .nav-tab.active {
+  color: var(--color-accent) !important;
+  border-bottom-color: var(--color-accent) !important;
+}
+
 .theme-dark .nav-settings-btn {
   border-color: var(--border-dark-light) !important;
   color: var(--text-muted) !important;
