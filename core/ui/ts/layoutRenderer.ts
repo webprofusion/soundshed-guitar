@@ -83,6 +83,8 @@ export function renderCustomLayout(
   paramDefs: ParameterDef[],
   resourceControls: LayoutResourceControlDef[] = []
 ): string {
+  const w = Math.round(layout.dimensions.width);
+  const h = Math.round(layout.dimensions.height);
   const backgrounds = renderBackgrounds(layout.backgrounds);
   const overlays = renderOverlays(node, layout.overlays ?? []);
   const controls = renderControls(node, layout.controls, paramDefs, resourceControls);
@@ -90,27 +92,31 @@ export function renderCustomLayout(
   const themeClass = layout.containerTheme ? ` theme-${layout.containerTheme}` : '';
 
   return `
-    <div 
-      class="custom-layout-container${themeClass}" 
-      style="
-        position: relative;
-        width: ${Math.round(layout.dimensions.width)}px;
-        height: ${Math.round(layout.dimensions.height)}px;
-        overflow: hidden;
-        border-radius: 8px;
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        flex-shrink: 0;
-      "
-    >
-      ${backgrounds}
-      ${overlays}
-      <div class="custom-layout-controls" style="position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0; pointer-events: none;">
-        ${controls}
-      </div>
-      <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
-        ${labels}
+    <div class="custom-layout-scale-outer" style="position: relative; width: 100%; overflow: hidden; height: ${h}px;">
+      <div 
+        class="custom-layout-container${themeClass}" 
+        data-design-w="${w}"
+        data-design-h="${h}"
+        style="
+          position: relative;
+          width: ${w}px;
+          height: ${h}px;
+          overflow: hidden;
+          border-radius: 8px;
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          transform-origin: top left;
+        "
+      >
+        ${backgrounds}
+        ${overlays}
+        <div class="custom-layout-controls" style="position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0; pointer-events: none;">
+          ${controls}
+        </div>
+        <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
+          ${labels}
+        </div>
       </div>
     </div>
   `;
@@ -230,6 +236,8 @@ export function renderCustomLayoutBackdrop(
   layout: EffectLayout,
   innerHtml: string
 ): string {
+  const w = Math.round(layout.dimensions.width);
+  const h = Math.round(layout.dimensions.height);
   const backgrounds = renderBackgrounds(layout.backgrounds);
   const overlays = renderOverlays(node, layout.overlays ?? []);
   const labels = renderTextLabels(layout.textLabels);
@@ -240,34 +248,39 @@ export function renderCustomLayoutBackdrop(
   const scaleX = layout.defaultControlsScale?.x ?? 1;
   const scaleY = layout.defaultControlsScale?.y ?? 1;
   const hasTransformOrOffset = offsetX !== 0 || offsetY !== 0 || scaleX !== 1 || scaleY !== 1;
-  // Always fix the wrapper width to the design canvas width so that flex-wrap break points
-  // inside the controls match the designer exactly, regardless of how wide the runtime panel is.
-  const wrapperWidth = `width: ${Math.round(layout.dimensions.width)}px;`;
+  // Fix the controls wrapper to the design canvas width so flex-wrap break points match
+  // the designer exactly. Uniform outer scaling (applied at runtime) handles fitting.
+  const wrapperWidth = `width: ${w}px;`;
   const wrapperStyle = hasTransformOrOffset
     ? `position: absolute; left: ${Math.round(offsetX)}px; top: ${Math.round(offsetY)}px; transform: scale(${scaleX}, ${scaleY}); transform-origin: top left; z-index: 2; ${wrapperWidth}`
     : `position: relative; z-index: 2; ${wrapperWidth}`;
 
   return `
-    <div
-      class="custom-layout-container custom-layout-backdrop${themeClass}"
-      style="
-        position: relative;
-        width: 100%;
-        height: ${Math.round(layout.dimensions.height)}px;
-        overflow: hidden;
-        border-radius: 8px;
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      "
-    >
-      ${backgrounds}
-      ${overlays}
-      <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
-        ${labels}
-      </div>
-      <div class="custom-layout-default-controls" style="${wrapperStyle}">
-        ${innerHtml}
+    <div class="custom-layout-scale-outer" style="position: relative; width: 100%; overflow: hidden; height: ${h}px;">
+      <div
+        class="custom-layout-container custom-layout-backdrop${themeClass}"
+        data-design-w="${w}"
+        data-design-h="${h}"
+        style="
+          position: relative;
+          width: ${w}px;
+          height: ${h}px;
+          overflow: hidden;
+          border-radius: 8px;
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          transform-origin: top left;
+        "
+      >
+        ${backgrounds}
+        ${overlays}
+        <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
+          ${labels}
+        </div>
+        <div class="custom-layout-default-controls" style="${wrapperStyle}">
+          ${innerHtml}
+        </div>
       </div>
     </div>
   `;

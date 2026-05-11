@@ -3256,18 +3256,21 @@
 }
 
 /* Custom Layout Container - rendered from layout editor */
+.custom-layout-scale-outer {
+  /* Outer wrapper that captures available width and provides the scale context.
+     JS (applyCustomLayoutScaling) sets height and applies transform to the inner
+     container so the entire layout scales uniformly as a single unit. */
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
 .custom-layout-container {
   margin: 0 !important;
   padding: 0 !important;
   box-sizing: border-box;
-  flex-shrink: 0;
   isolation: isolate;
-}
-
-.effect-visualization .node-params-panel .custom-layout-container {
-  align-self: center;
-  margin-left: auto !important;
-  margin-right: auto !important;
+  /* transform-origin: top left is set inline by renderCustomLayout */
 }
 
 .custom-layout-control {

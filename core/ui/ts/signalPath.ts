@@ -80,6 +80,7 @@ let lastSelectedNodeType: string | null = null;
 let lastSelectedNodeCategory: string | null = null;
 let lastRenderedPresetId: string | null = null;
 let overlayBypassClickCleanup: (() => void) | null = null;
+let layoutScaleObserverCleanups: (() => void)[] = [];
 let nodeDragStartPoint: { nodeId: string; x: number; y: number } | null = null;
 let lastNodeDragPoint: { x: number; y: number } | null = null;
 let nodeDragDropHandled = false;
@@ -108,14 +109,20 @@ const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
 
 const EFFECT_VISUAL_EQUIPMENT_IMAGES: Record<string, string> = {
   amp: "../images/equipment/amps/full-rig-1.jpg",
-  cab: "../images/equipment/cabs/cab-02.png"
+  cab: "../images/equipment/cabs/cab-02.png",
+  delay: "../images/equipment/fx/studio-rack-delay.png",
+  reverb: "../images/equipment/fx/studio-rack-reverb.png",
 };
 
 const EFFECT_VISUAL_EQUIPMENT_IMAGES_BY_TYPE: Record<string, string> = {
+  [EffectGuids.kPluginHost]:"../images/equipment/fx/studio-rack-multifx.png",
+  [EffectGuids.kDelayDigital]: "../images/equipment/fx/studio-rack-delay.png",
+  [EffectGuids.kDelayDoubler]: "../images/equipment/fx/studio-rack-delay.png",
   [EffectGuids.kFxNam]: "../images/equipment/pedals/colourful-pedal2.png",
   fx_nam: "../images/equipment/pedals/colourful-pedal2.png",
-  [EffectGuids.kWasmHost]: "../images/equipment/colourful-pedal2.png",
+  [EffectGuids.kWasmHost]: "../images/equipment/pedals/colourful-pedal2.png",
   wasm_host: "../images/equipment/pedals/colourful-pedal2.png",
+  
 };
 
 function getEffectVisualizationEquipmentImage(node: GraphNode): string {
@@ -2642,7 +2649,63 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindBypassButton(node, preset);
   bindCustomizeLayoutButton(node);
   bindParamTabs();
+  applyCustomLayoutScaling(nodeParamsPanelElement);
   updateSelectedNodePeakMeter();
+}
+
+/**
+ * Apply uniform CSS-transform scaling to custom layout containers so that
+ * background images and control placements always match the design canvas,
+ * regardless of the available panel width.
+ *
+ * When the panel is wider than the design, the layout is centred at its native
+ * size. When it is narrower, the entire layout (backgrounds + controls + labels)
+ * is scaled down proportionally as a single unit so nothing diverges.
+ *
+ * Uses ResizeObserver so the scale stays correct if the panel is resized.
+ */
+function applyCustomLayoutScaling(container: HTMLElement | null): void {
+  // Disconnect any previous observers from a prior render.
+  layoutScaleObserverCleanups.forEach((fn) => fn());
+  layoutScaleObserverCleanups = [];
+
+  if (!container) return;
+
+  const outers = container.querySelectorAll<HTMLElement>(".custom-layout-scale-outer");
+  outers.forEach((outer) => {
+    const inner = outer.querySelector<HTMLElement>(".custom-layout-container[data-design-w]");
+    if (!inner) return;
+
+    const designW = parseInt(inner.dataset.designW ?? "0", 10);
+    const designH = parseInt(inner.dataset.designH ?? "0", 10);
+    if (!designW || !designH) return;
+
+    const applyScale = () => {
+      const outerW = outer.offsetWidth;
+      if (!outerW) return;
+
+      if (outerW >= designW) {
+        // Enough space: render at native size, centred.
+        inner.style.transform = "";
+        inner.style.marginLeft = "auto";
+        inner.style.marginRight = "auto";
+        outer.style.height = `${designH}px`;
+      } else {
+        // Scale the whole layout down to fit, preserving all proportions.
+        const scale = outerW / designW;
+        inner.style.transform = `scale(${scale})`;
+        inner.style.marginLeft = "0";
+        inner.style.marginRight = "0";
+        outer.style.height = `${Math.round(designH * scale)}px`;
+      }
+    };
+
+    applyScale();
+
+    const ro = new ResizeObserver(applyScale);
+    ro.observe(outer);
+    layoutScaleObserverCleanups.push(() => ro.disconnect());
+  });
 }
 
 function bindLayoutOverlayBypassToggles(node: GraphNode, preset: Preset): void {

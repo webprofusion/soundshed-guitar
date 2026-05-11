@@ -15,8 +15,6 @@
 
 .visualization-panel {
   width: 100%;
-  max-width: 1400px;
-  border-radius: 16px;
   position: relative;
 }
 
