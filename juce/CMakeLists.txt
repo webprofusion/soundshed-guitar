@@ -109,6 +109,11 @@ endif()
 # Configures universal binaries and decides which version of macOS to support
 include(PamplejuceMacOS)
 
+if(APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";")
+    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
+    message(STATUS "Universal macOS build detected; disabling WASM effects because Wasmtime C API bundles are single-architecture.")
+endif()
+
 # Shared core library (framework-agnostic DSP, presets, resources, controller)
 set(GUITARFX_CORE_FETCH_DEPS ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core

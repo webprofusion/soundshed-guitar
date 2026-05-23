@@ -668,7 +668,7 @@ jobs:
           fi
 
       - name: Build macOS release package
-        run: bash ./build_macos.sh --pkg --dist-dir macos-dist-arm64
+        run: bash ./build_macos.sh --native --dist-dir macos-dist-arm64
 
       - name: Export JUCE build env
         run: |

@@ -4,8 +4,10 @@
 # Usage: ./build_macos.sh [options]
 #   --skip-ts       Skip the TypeScript/UI build step
 #   --skip-build    Skip CMake build step (only re-stage artifacts)
-#   --universal     Build universal binary (arm64 + x86_64)
-#   --pkg           After staging, assemble a distributable macOS installer .pkg
+#   --universal     Build universal binary (arm64 + x86_64) (default)
+#   --native        Build only for the host architecture
+#   --pkg           After staging, assemble a distributable macOS installer .pkg (default)
+#   --no-pkg        Skip macOS installer .pkg assembly
 #   --dist-dir <p>  Override the output staging directory (default: macos-dist)
 
 set -euo pipefail
@@ -17,8 +19,8 @@ cd "$SCRIPT_DIR"
 # ── Defaults ──────────────────────────────────────────────────────────────────
 SKIP_TS=false
 SKIP_BUILD=false
-UNIVERSAL=false
-BUILD_PKG=false
+UNIVERSAL=true
+BUILD_PKG=true
 DIST_DIR="${SCRIPT_DIR}/macos-dist"
 
 normalize_arch() {
@@ -50,7 +52,9 @@ while [[ $# -gt 0 ]]; do
         --skip-ts)    SKIP_TS=true ;;
         --skip-build) SKIP_BUILD=true ;;
         --universal)  UNIVERSAL=true ;;
+        --native)     UNIVERSAL=false ;;
         --pkg)        BUILD_PKG=true ;;
+        --no-pkg)     BUILD_PKG=false ;;
         --dist-dir)   DIST_DIR="$2"; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
