@@ -507,6 +507,13 @@ set_target_properties(SoundshedGuitarCore PROPERTIES
     POSITION_INDEPENDENT_CODE ON)
 guitarfx_disable_linux_gnu_unique(SoundshedGuitarCore)
 
+# SimdFFT currently uses SSE3 intrinsics in all build configurations.
+# Enable SSE3 explicitly on x86_64 so Debug builds compile consistently.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+    target_compile_options(SoundshedGuitarCore PRIVATE
+        $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-msse3>)
+endif()
+
 # Build UI bundle from core/ui with npm when available.
 # Uses a stamp file so the TS build only reruns when sources change.
 find_program(NPM_EXECUTABLE npm)

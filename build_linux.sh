@@ -3,6 +3,8 @@
 #
 # Usage: ./build_linux.sh [options]
 #   --arch <arch>      Target architecture: native, x64, arm64, or all (default: native)
+#   --jobs <n>         Parallel jobs for Standalone/VST3/CLAP builds (default: nproc or 1)
+#   --lv2-jobs <n>     Parallel jobs for LV2 build (default: 1)
 #   --skip-ts          Skip the TypeScript/UI build step
 #   --skip-configure   Skip the CMake configure step
 #   --skip-build       Skip CMake build step (only re-stage artifacts)
@@ -24,6 +26,17 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 
+# Prevent overlapping runs from racing on the same build directory.
+if command -v flock >/dev/null 2>&1; then
+    BUILD_LOCK_FILE="/tmp/soundshed-guitar-build_linux.lock"
+    exec 9>"${BUILD_LOCK_FILE}"
+    if ! flock -n 9; then
+        echo "Another build_linux.sh process is already running for this repository." >&2
+        echo "Wait for it to finish, or terminate it before starting a new build." >&2
+        exit 1
+    fi
+fi
+
 SKIP_TS=false
 SKIP_CONFIGURE=false
 SKIP_BUILD=false
@@ -33,6 +46,8 @@ ARCH_REQUEST="native"
 DIST_DIR_OVERRIDE=""
 BUILD_DIR_OVERRIDE=""
 TOOLCHAIN_FILE_OVERRIDE=""
+BUILD_JOBS="${GUITARFX_BUILD_JOBS:-}"
+LV2_BUILD_JOBS="${GUITARFX_LV2_BUILD_JOBS:-1}"
 PRODUCT="Soundshed Guitar"
 LINUX_STANDALONE_DIR_NAME="soundshed-guitar"
 LINUX_STANDALONE_EXECUTABLE_NAME="soundshed-guitar"
@@ -46,6 +61,8 @@ print_usage() {
         cat <<'EOF'
 Usage: ./build_linux.sh [options]
     --arch <arch>      Target architecture: native, x64, arm64, or all (default: native)
+    --jobs <n>         Parallel jobs for Standalone/VST3/CLAP builds (default: nproc or 1)
+    --lv2-jobs <n>     Parallel jobs for LV2 build (default: 1)
     --skip-ts          Skip the TypeScript/UI build step
     --skip-configure   Skip the CMake configure step
     --skip-build       Skip CMake build step (only re-stage artifacts)
@@ -182,9 +199,23 @@ ensure_cross_toolchain_ready() {
     fi
 }
 
+normalize_jobs() {
+    local value="${1:-}"
+    local name="${2:-jobs}"
+
+    if [[ -z "$value" || ! "$value" =~ ^[0-9]+$ || "$value" -lt 1 ]]; then
+        echo "${name} must be a positive integer (received: '${value}')." >&2
+        exit 1
+    fi
+
+    printf '%s\n' "$value"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --arch)           ARCH_REQUEST="$(normalize_arch "$2")"; shift ;;
+        --jobs)           BUILD_JOBS="$(normalize_jobs "$2" "--jobs")"; shift ;;
+        --lv2-jobs)       LV2_BUILD_JOBS="$(normalize_jobs "$2" "--lv2-jobs")"; shift ;;
         --skip-ts)        SKIP_TS=true ;;
         --skip-configure) SKIP_CONFIGURE=true ;;
         --skip-build)     SKIP_BUILD=true ;;
@@ -200,6 +231,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 HOST_ARCH="$(detect_host_arch)"
+
+if [[ -z "$BUILD_JOBS" ]]; then
+    if command -v nproc >/dev/null 2>&1; then
+        BUILD_JOBS="$(nproc)"
+    else
+        BUILD_JOBS="1"
+    fi
+fi
+
+BUILD_JOBS="$(normalize_jobs "$BUILD_JOBS" "build jobs")"
+LV2_BUILD_JOBS="$(normalize_jobs "$LV2_BUILD_JOBS" "lv2 build jobs")"
 
 choose_generator_args() {
     if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
@@ -363,6 +405,7 @@ build_for_arch() {
     echo "  Build dir: ${build_dir}"
     echo "  Dist dir: ${dist_dir}"
     echo "  LV2 plugin: ${BUILD_LV2}"
+    echo "  Build jobs: ${BUILD_JOBS} (LV2: ${LV2_BUILD_JOBS})"
     if [[ -n "$toolchain_file" ]]; then
         echo "  Toolchain: ${toolchain_file#"$SCRIPT_DIR/"}"
     else
@@ -406,20 +449,20 @@ build_for_arch() {
     if [[ "$SKIP_BUILD" == false ]]; then
         echo ""
         echo "▶ Building Standalone (${target_arch})…"
-        cmake --build "$build_dir" --target SoundshedGuitar_Standalone --parallel
+        cmake --build "$build_dir" --target SoundshedGuitar_Standalone --parallel "$BUILD_JOBS"
 
         echo ""
         echo "▶ Building VST3 (${target_arch})…"
-        cmake --build "$build_dir" --target SoundshedGuitar_VST3 --parallel
+        cmake --build "$build_dir" --target SoundshedGuitar_VST3 --parallel "$BUILD_JOBS"
 
         echo ""
         echo "▶ Building CLAP (${target_arch})…"
-        cmake --build "$build_dir" --target SoundshedGuitar_CLAP --parallel
+        cmake --build "$build_dir" --target SoundshedGuitar_CLAP --parallel "$BUILD_JOBS"
 
         if [[ "$BUILD_LV2" == true ]]; then
             echo ""
             echo "▶ Building LV2 (${target_arch})…"
-            cmake --build "$build_dir" --target SoundshedGuitar_LV2 --parallel
+            cmake --build "$build_dir" --target SoundshedGuitar_LV2 --parallel "$LV2_BUILD_JOBS"
         fi
 
         echo ""
@@ -478,8 +521,7 @@ build_for_arch() {
     echo "═══════════════════════════════════════════════════"
 
     if [[ "$BUILD_ZIP" == true ]]; then
-        local zip_basename="SoundshedGuitar-${VERSION}-Linux-${target_arch}"
-        local zip_path="${SCRIPT_DIR}/${zip_basename}.zip"
+        local zip_path="${SCRIPT_DIR}/SoundshedGuitar-${VERSION}-Linux-${target_arch}.zip"
 
         echo ""
         echo "▶ Creating zip archive for ${target_arch}…"
