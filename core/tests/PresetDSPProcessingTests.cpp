@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -20,7 +21,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include "IPlugConstants.h"
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
@@ -35,7 +35,7 @@
 #endif
 
 namespace fs = std::filesystem;
-using Sample = iplug::sample;
+using Sample = float;
 
 namespace
 {

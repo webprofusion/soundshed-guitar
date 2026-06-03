@@ -23,8 +23,8 @@ if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
     list(APPEND TEST_SOURCES WasmEffectHostTests.cpp)
 endif()
 
-option(GUITARFX_TEST_WITH_IPLUG2 "Build tests that require iPlug2 headers" OFF)
-if(GUITARFX_TEST_WITH_IPLUG2)
+option(GUITARFX_TEST_EXTENDED_DSP "Build extended DSP diagnostic tests" OFF)
+if(GUITARFX_TEST_EXTENDED_DSP)
     list(APPEND TEST_SOURCES
         NAMModelDiagnosticTests.cpp
         OfflineProcessingTest.cpp

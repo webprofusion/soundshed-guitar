@@ -180,7 +180,7 @@ Quality levels: 0=Economy, 1=Standard, 2=High, 3=Full
 **Resource**: Audio file (`.wav`)
 
 ### Plugin Host (`plugin_host`)
-JUCE-only utility effect that hosts an external plugin supported by JUCE's plugin hosting APIs. It is registered by the JUCE adapter, so core-only/iPlug2 builds do not expose this effect type.
+JUCE-only utility effect that hosts an external plugin supported by JUCE's plugin hosting APIs. It is registered by the JUCE adapter, so core-only builds do not expose this effect type.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|

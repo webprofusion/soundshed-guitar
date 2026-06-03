@@ -1,6 +1,6 @@
 # Soundshed Guitar
 
-Soundshed Guitar is an iPlug2-based guitar processing plugin combining Neural Amp Modeler (NAM) with a modern web-driven UI. Targets VST3, AU, and AAX formats with an extensible signal graph architecture.
+Soundshed Guitar is a JUCE-based guitar processing plugin combining Neural Amp Modeler (NAM) with a modern web-driven UI. Targets VST3, AU, and AAX formats with an extensible signal graph architecture.
 
 ## Features
 
@@ -43,14 +43,14 @@ For minimal context with high coverage, load these files:
 1. **Clone and configure**
    ```powershell
    git clone <repo-url>
-   cd soundshed-guitar\src
-   cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+   cd soundshed-guitar
+   cmake -S juce -B juce/builds -DCMAKE_BUILD_TYPE=RelWithDebInfo
    ```
-   CMake fetches dependencies (iPlug2, NeuralAmpModelerCore) via FetchContent.
+   CMake fetches core dependencies (for example NeuralAmpModelerCore) via FetchContent.
 
 2. **Build**
    ```powershell
-   cmake --build build --config RelWithDebInfo
+   cmake --build juce/builds --config RelWithDebInfo
    ```
 
 3. **Install**
@@ -67,14 +67,13 @@ For minimal context with high coverage, load these files:
 
 ## Branding
 
-Edit `src/config/GuitarFXConfig.h` to customize plugin name and manufacturer. Rebuild after changes.
+Edit `core/config/GuitarFXConfig.h` to customize plugin name and manufacturer. Rebuild after changes.
 
 ## Development
 
-- **UI source**: `src/resources/ui/ts/` (TypeScript)
-- **Build UI**: `cd src/resources/ui && npm run build`
-- **Tests**: Enable with `GUITARFX_ENABLE_TESTS=ON`, run via CTest
-- **Debug tools**: Enable with `GUITARFX_ENABLE_TOOLS=ON`
+- **UI source**: `core/ui/ts/` (TypeScript)
+- **Build UI**: `cd core/ui && npm run build`
+- **Core tests**: Enable with `GUITARFX_CORE_BUILD_TESTS=ON`, run via CTest
 
 ## JUCE Linux Release Build
 

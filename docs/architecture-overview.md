@@ -5,7 +5,7 @@
 - `core/src/MessageDispatcher.cpp` — Message routing across UI, mixer, preset, and settings domains
 - `core/src/UiBridge.cpp` — Native UI bridge plumbing
 - `core/src/dsp/MultiPresetMixer.cpp` — Shared mixer and global chain orchestration
-- `juce/` and `iplug2/` — Front-end builds that host the shared core engine
+- `juce/` — Active front-end host that integrates the shared core engine
 
 ## Overview
 
@@ -21,7 +21,7 @@ Soundshed Guitar is a modular audio application built around a shared core engin
 ├─────────────────────────────────────────┤
 │           Audio Engine Layer            │  SignalGraphExecutor, Effect Processors, NAM/IR
 ├─────────────────────────────────────────┤
-│           Platform Layer                │  JUCE / iPlug2 front ends and host integration
+│           Platform Layer                │  JUCE front-end and host integration
 └─────────────────────────────────────────┘
 ```
 
@@ -30,7 +30,7 @@ Front-end projects host the shared core engine and UI bridge.
 - Host lifecycle and audio callback integration
 - Parameter exposure and automation
 - Standalone application packaging and plugin targets
-- **Current repo structure**: shared engine in `core/`, front ends in `juce/` and `iplug2/`
+- **Current repo structure**: shared engine in `core/`, active front end in `juce/`
 
 ### Audio Engine Layer
 Real-time DSP processing with zero allocations in the audio callback.

@@ -2,8 +2,8 @@
 
 ## Overview
 
-Both **soundshed-guitar** (iPlug2) and **soundshed-guitar-juce** (JUCE) consume
-this shared core library via `add_subdirectory()`. The core library provides:
+The **JUCE** host project consumes this shared core library via
+`add_subdirectory()`. The core library provides:
 
 - **PluginController** — all business logic (DSP routing, preset management, UI messaging)
 - **MessageDispatcher** — unified WebView message routing (~50 message types)
@@ -16,35 +16,28 @@ this shared core library via `add_subdirectory()`. The core library provides:
 ## Architecture
 
 ```
-┌──────────────────┐     ┌──────────────────────┐
-│  iPlug2 Adapter  │     │    JUCE Adapter       │
-│  (GuitarFXPlugin │     │  (PluginProcessor     │
-│   Adapter.h/.cpp)│     │   Adapter.h/.cpp)     │
-└────────┬─────────┘     └──────────┬────────────┘
-         │  implements IPluginHost  │
-         └────────────┬─────────────┘
-                      │
-         ┌────────────▼────────────┐
-         │  SoundshedGuitarCore    │
-         │  (PluginController,     │
-         │   MessageDispatcher,    │
-         │   DSP engine, Presets,  │
-         │   Resources, Web UI)    │
-         └─────────────────────────┘
+┌──────────────────────┐
+│    JUCE Adapter      │
+│  (PluginProcessor    │
+│   Adapter.h/.cpp)    │
+└──────────┬───────────┘
+           │  implements IPluginHost
+           ▼
+┌─────────────────────────────┐
+│      SoundshedGuitarCore    │
+│  (PluginController,         │
+│   MessageDispatcher,        │
+│   DSP engine, Presets,      │
+│   Resources, Web UI)        │
+└─────────────────────────────┘
 ```
 
-## iPlug2 Integration (soundshed-guitar)
+## Legacy Host Integration Notes
 
-Already integrated. Key files:
+Legacy host-framework references may still appear in historical documents,
+but the active and supported integration path is JUCE.
 
-- `src/CMakeLists.txt` line 27: `add_subdirectory(../../soundshed-guitar-core)`
-- `src/src/CMakeLists.txt`: `GuitarFXCore` links `SoundshedGuitarCore` (transitive)
-- `src/src/GuitarFXPluginAdapter.h/.cpp`: Thin iPlug2 adapter
-- Platform targets (app, vst3, au, aax) compile `GuitarFXPluginAdapter.cpp`
-
-Build: `cmake --build build --target SoundshedGuitar_App --config Release`
-
-## JUCE Integration (soundshed-guitar-juce)
+## JUCE Integration
 
 Already integrated. Key files:
 

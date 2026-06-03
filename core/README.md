@@ -1,6 +1,6 @@
 # soundshed-guitar-core
 
-Framework-agnostic shared library for the Soundshed Guitar audio plugin, consumed by both the **iPlug2** and **JUCE** plugin projects.
+Framework-agnostic shared library for the Soundshed Guitar audio plugin, consumed by the **JUCE** plugin project.
 
 ## Architecture
 
@@ -24,19 +24,19 @@ Framework-agnostic shared library for the Soundshed Guitar audio plugin, consume
 │  Presets / Resources / Models / Network / Utils                │
 │  Web UI (TypeScript SPA, shared between both frameworks)       │
 └─────────────────────────────────────────────────────────────────┘
-          ▲                                    ▲
-          │                                    │
-  ┌───────┴────────┐                 ┌─────────┴──────────┐
-  │ iPlug2 Adapter │                 │   JUCE Adapter     │
-  │ (~300 lines)   │                 │   (~400 lines)     │
-  │                │                 │                    │
-  │ GuitarFXPlugin │                 │ PluginProcessor    │
-  │ Adapter.h/.cpp │                 │ Adapter.h/.cpp     │
-  │                │                 │                    │
-  │ Implements:    │                 │ Implements:        │
-  │ IPluginHost    │                 │ IPluginHost        │
-  │ iplug::Plugin  │                 │ AudioProcessor     │
-  └────────────────┘                 └────────────────────┘
+            ▲
+            │
+          ┌───────┴──────────┐
+          │   JUCE Adapter   │
+          │   (~400 lines)   │
+          │                  │
+          │ PluginProcessor  │
+          │ Adapter.h/.cpp   │
+          │                  │
+          │ Implements:      │
+          │ IPluginHost      │
+          │ AudioProcessor   │
+          └──────────────────┘
 ```
 
 ## Key Components

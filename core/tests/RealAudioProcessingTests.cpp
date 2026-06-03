@@ -22,7 +22,6 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
 #include "presets/PresetTypes.h"
-#include "IPlugConstants.h"
 
 #ifdef max
 #undef max

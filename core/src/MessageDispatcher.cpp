@@ -2,8 +2,7 @@
  * MessageDispatcher.cpp — Canonical message routing for all WebView messages.
  *
  * This is the single source of truth for all UI↔engine message types.
- * It merges ~50 message types from the iPlug2 version and ~30 from the
- * JUCE version into one unified dispatch table.
+ * It keeps host message routing unified in one dispatch table.
  */
 
 #include "MessageDispatcher.h"

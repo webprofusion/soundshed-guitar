@@ -450,7 +450,7 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     setResizeLimits (800, 600, 8192, 8192);
     setSize (1200, 900);
 
-    // Start periodic idle timer (~60 fps) to match iPlug2's OnIdle() cadence.
+    // Start periodic idle timer (~60 fps) for controller maintenance tasks.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.
     startTimerHz (60);
 }

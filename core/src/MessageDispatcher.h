@@ -4,12 +4,10 @@
  * MessageDispatcher — Routes incoming JSON messages from the WebView
  * to the appropriate PluginController handler.
  *
- * This replaces the duplicated if-else chains in:
- *   - GuitarFXPlugin::HandleUIMessage (iPlug2, ~380 lines)
- *   - PluginProcessor::handleWebMessage (JUCE, ~430 lines)
+ * This replaces duplicated host-side message routing logic.
  *
- * The canonical message set is the union of all message types from both
- * frameworks, ensuring full feature parity.
+ * The canonical message set is unified at the core layer to preserve
+ * feature parity across host adapters.
  */
 
 #include <string>

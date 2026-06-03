@@ -1,5 +1,5 @@
 # SoundshedGuitarCore — Shared framework-agnostic library
-# Consumed by both the iPlug2 and JUCE plugin projects via add_subdirectory().
+# Consumed by the JUCE host project via add_subdirectory().
 
 cmake_minimum_required(VERSION 3.22)
 
@@ -550,10 +550,10 @@ target_include_directories(SoundshedGuitarCore
     PUBLIC
         "${GUITARFX_CORE_ROOT}/src"
     PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/../iplug2/src/config"
+        "${GUITARFX_CORE_ROOT}/config"
 )
 
-# Framework-agnostic — no iPlug2 or JUCE includes here
+# Framework-agnostic core target includes only core headers
 target_compile_definitions(SoundshedGuitarCore
     PUBLIC
         NOMINMAX

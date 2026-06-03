@@ -2,13 +2,11 @@
  * PluginController.cpp — Framework-agnostic plugin orchestration.
  *
  * This file contains the shared business logic that was previously
- * duplicated between GuitarFXPlugin.cpp (iPlug2) and PluginProcessor.cpp (JUCE).
+ * duplicated across host-framework plugin entry points.
  *
  * Implementation strategy:
- *   The handler methods in this file are direct ports from GuitarFXPlugin.cpp
- *   with all framework-specific calls replaced by IPluginHost interface calls.
- *   When moving handler implementations here, the original code from
- *   GuitarFXPlugin.cpp should be used as the canonical source.
+ *   Handler methods here replace framework-specific code paths by routing
+ *   all host operations through the IPluginHost interface.
  */
 #include "PluginController.h"
 #include "MessageDispatcher.h"
@@ -9040,7 +9038,7 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
 bool PluginController::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
 {
     // In the shared core we don't have direct access to framework-level parameter
-    // objects (iPlug2 GetParam / JUCE AudioProcessorParameter).  All DSP parameter
+    // objects. All DSP parameter
     // routing goes through the PresetMixer which applies values during processing.
     // Framework adapters can intercept or supplement this if they also expose
     // host-automatable parameters.

@@ -16,86 +16,7 @@
 			"problemMatcher": "$tsc"
 		},
 		{
-			"label": "Build SoundshedGuitar Debug",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Debug",
-				"--target",
-				"SoundshedGuitar_App"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar App Release",
-			"dependsOn": [
-				"Build TypeScript"
-			],
-			"dependsOrder": "sequence",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Release",
-				"--target",
-				"SoundshedGuitar_App"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar App and VST Release",
-			"dependsOn": [
-				"Build TypeScript"
-			],
-			"dependsOrder": "sequence",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Release"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar Installer Release",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Release",
-				"--target",
-				"SoundshedGuitar_Installer"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build Release App+VST then Installer",
-			"dependsOn": [
-				"Build SoundshedGuitar App and VST Release",
-				"Build SoundshedGuitar Installer Release"
-			],
-			"dependsOrder": "sequence",
-			"group": "build",
-			"problemMatcher": []
-		},
-		{
-			"label": "Configure CMake",
+			"label": "Configure CMake (JUCE)",
 			"type": "shell",
 			"command": "cmake",
 			"args": [
@@ -104,48 +25,81 @@
 				"-A",
 				"x64",
 				"-S",
-				"${workspaceFolder}/iplug2/src",
+				"${workspaceFolder}/juce",
 				"-B",
-				"${workspaceFolder}/iplug2/src/build"
+				"${workspaceFolder}/juce/builds"
 			],
 			"group": "build",
 			"problemMatcher": []
 		},
 		{
-			"label": "Build SoundshedGuitar VST3 Debug",
+			"label": "Build SoundshedGuitar (JUCE) Debug",
 			"type": "shell",
 			"command": "cmake",
 			"args": [
 				"--build",
-				"${workspaceFolder}/iplug2/src/build",
+				"${workspaceFolder}/juce/builds",
 				"--config",
 				"Debug",
 				"--target",
-				"SoundshedGuitar_VST3"
+				"SoundshedGuitar_Standalone"
 			],
-			"group": "build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"problemMatcher": "$msCompile"
 		},
 		{
-			"label": "Build VST3DebugHost",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Debug",
-				"--target",
-				"VST3DebugHost"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build VST3 and DebugHost",
+			"label": "Build SoundshedGuitar (JUCE) Standalone Release",
 			"dependsOn": [
-				"Build SoundshedGuitar VST3 Debug",
-				"Build VST3DebugHost"
+				"Build TypeScript"
+			],
+			"dependsOrder": "sequence",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"${workspaceFolder}/juce/builds",
+				"--config",
+				"Release",
+				"--target",
+				"SoundshedGuitar_Standalone",
+				"--parallel"
+			],
+			"group": "build",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE) VST3 Release",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"${workspaceFolder}/juce/builds",
+				"--config",
+				"Release",
+				"--target",
+				"SoundshedGuitar_VST3",
+				"--parallel"
+			],
+			"group": "build",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Build SoundshedGuitar (JUCE) Standalone+VST3 Release",
+			"dependsOn": [
+				"Build SoundshedGuitar (JUCE) Standalone Release",
+				"Build SoundshedGuitar (JUCE) VST3 Release"
+			],
+			"dependsOrder": "sequence",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build All Release (JUCE)",
+			"dependsOn": [
+				"Build SoundshedGuitar (JUCE) Standalone+VST3 Release"
 			],
 			"dependsOrder": "sequence",
 			"group": "build",
@@ -194,67 +148,6 @@
 				"cwd": "${workspaceFolder}/core/build"
 			},
 			"group": "test",
-			"problemMatcher": []
-		},
-		{
-			"label": "Build SoundshedGuitar (JUCE) Debug",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/juce/builds",
-				"--config",
-				"Debug",
-				"--target",
-				"SoundshedGuitar_Standalone"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar (JUCE) Standalone Release",
-			"dependsOn": [
-				"Build TypeScript"
-			],
-			"dependsOrder": "sequence",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/juce/builds",
-				"--config",
-				"Release",
-				"--target",
-				"SoundshedGuitar_Standalone",
-				"--parallel"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar (JUCE) VST3 Release",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/juce/builds",
-				"--config",
-				"Release",
-				"--target",
-				"SoundshedGuitar_VST3",
-				"--parallel"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build SoundshedGuitar (JUCE) Standalone+VST3 Release",
-			"dependsOn": [
-				"Build SoundshedGuitar (JUCE) Standalone Release",
-				"Build SoundshedGuitar (JUCE) VST3 Release"
-			],
-			"dependsOrder": "sequence",
-			"group": "build",
 			"problemMatcher": []
 		},
 		{
@@ -326,33 +219,6 @@
 			"dependsOn": [
 				"Build SoundshedGuitar (JUCE Linux x64) Release + LV2",
 				"Build SoundshedGuitar (JUCE Linux arm64) Release + LV2"
-			],
-			"dependsOrder": "sequence",
-			"group": "build",
-			"problemMatcher": []
-		},
-		{
-			"label": "Build SoundshedGuitar (iPlug2) Standalone+VST3 Release",
-			"dependsOn": [
-				"Build TypeScript"
-			],
-			"dependsOrder": "sequence",
-			"type": "shell",
-			"command": "cmake",
-			"args": [
-				"--build",
-				"${workspaceFolder}/iplug2/src/build",
-				"--config",
-				"Release"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		},
-		{
-			"label": "Build All Release (JUCE + iPlug2)",
-			"dependsOn": [
-				"Build SoundshedGuitar (JUCE) Standalone+VST3 Release",
-				"Build SoundshedGuitar (iPlug2) Standalone+VST3 Release"
 			],
 			"dependsOrder": "sequence",
 			"group": "build",

@@ -895,7 +895,7 @@ function sendInputModeToPlugin(): void {
     inputChannel: currentInputChannel,
   });
   
-  // Use IPlugSendMsg if available (standard IPlug2 bridge)
+  // Use the legacy bridge function name when available.
   if (typeof (window as any).IPlugSendMsg === "function") {
     (window as any).IPlugSendMsg(message);
   }

@@ -7,9 +7,9 @@
  * composite library, and all shared plugin state. Communicates with the
  * framework-specific host through the IPluginHost interface.
  *
- * The framework adapter (iPlug2 GuitarFXPlugin / JUCE PluginProcessor) creates
- * one PluginController instance, implements IPluginHost, and delegates audio
- * processing and UI message handling to the controller.
+ * The framework adapter creates one PluginController instance, implements
+ * IPluginHost, and delegates audio processing and UI message handling to
+ * the controller.
  */
 
 #include "IPluginHost.h"
@@ -101,7 +101,7 @@ public:
     [[nodiscard]] IPluginHost& GetHost() { return mHost; }
 
     // ── Parameter bridging ─────────────────────────────────────────
-    /// Plugin parameter IDs (matches both iPlug2 and JUCE ParameterIndex enums).
+    /// Plugin parameter IDs (kept stable for host automation mapping).
     enum ParameterId
     {
         kParamInputTrim = 0,

@@ -4,7 +4,7 @@
 
 ---
 
-## 🎧 Core DSP & Audio Engine Updates
+### 🎧 Core DSP & Audio Engine Updates
 
 *   **Full Stereo Signal Path** (`79e039b`): Implemented a full stereo processing signal path, allowing for rich, immersive stereo audio across the entire effects chain.
 *   **Upgraded Resampling & Sample Rate Consistency** (`8078a07`, `1022820`, `4a0fa6c`):
@@ -28,7 +28,7 @@
 
 ---
 
-## 🔌 WASM & Hosted Plugin Integrations
+### 🔌 WASM & Hosted Plugin Integrations
 
 *   **WASM Effects Infrastructure** (`e9d3584`, `338202b`, `84891b8`, `8a92aed`):
     *   Implemented the first-draft **WASM effect host**, allowing custom-compiled WASM effects to run directly in the engine.
@@ -45,7 +45,7 @@
 
 ---
 
-## 🎨 User Interface & Experience (UI/UX)
+### 🎨 User Interface & Experience (UI/UX)
 
 *   **UI Modernization & Custom Layouts** (`49a571a`, `2c38fad`, `57c577a`, `8ae0491`, `5234a23`):
     *   Polished visual assets and updated modern icons for all effects.
@@ -68,7 +68,7 @@
 
 ---
 
-## ⚙️ Build System & Platform Support
+### ⚙️ Build System & Platform Support
 
 *   **Windows x86 (32-bit) Support** (`47ffeee`, `f9fbfe2`, `1ee7d96`, `d73754e`):
     *   Added full build and packaging pipeline support for 32-bit Windows systems.
@@ -84,3 +84,11 @@
     *   Conducted sweeping TypeScript cleans and architectural refactoring.
     *   Tidied up JUCE plugin wrapper files and unified DSP bypass/passthrough paths.
     *   Added logging adjustments for a "no-debug" clean launch.
+
+
+## 1.0.3 (March 27, 2026)
+- Fixed macOS standalone microphone permissions. In the standalone app, use Settings > Audio Preferences to set inputs.
+- Fixed macOS plugin window sizing and remembered standalone window state preferences.
+- Temporarily removed the Jam tab on macOS due to a WKWebView YouTube referrer issue.
+- Reorganized Settings > DSP performance.
+- Added keyboard focus and direct value entry for knobs, plus mouse wheel editing.

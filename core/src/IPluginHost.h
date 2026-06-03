@@ -2,7 +2,7 @@
 
 /**
  * IPluginHost — Abstract interface between the shared PluginController
- * and the framework-specific plugin host (iPlug2, JUCE, etc.).
+ * and the framework-specific plugin host.
  *
  * Framework adapters implement this interface to provide:
  *   - WebView message transport
@@ -12,7 +12,7 @@
  *   - DAW integration hooks
  *
  * The PluginController and MessageDispatcher call through this interface
- * so they never reference iPlug2 or JUCE types directly.
+ * so they never reference host-framework types directly.
  */
 
 #include <filesystem>

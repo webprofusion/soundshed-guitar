@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -21,7 +22,6 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
 #include "presets/PresetTypes.h"
-#include "IPlugConstants.h"
 
 // Force factory registration
 #include "NAM/wavenet.h"

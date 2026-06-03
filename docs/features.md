@@ -508,7 +508,7 @@ Engine is authoritative. If a `state` broadcast contains a different value than 
 
 ## 22. Plugin Formats & Platform
 
-**Key files:** `core/src/IPluginHost.h`, framework wrappers under `iplug2/` and `juce/`
+**Key files:** `core/src/IPluginHost.h`, active framework wrapper under `juce/`
 
 ### Supported Formats
 
