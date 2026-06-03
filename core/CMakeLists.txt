@@ -191,7 +191,8 @@ if(NOT DEFINED signalsmith_stretch_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     FetchContent_MakeAvailable(signalsmith_stretch)
 endif()
 
-if(NOT DEFINED stftpitchshift_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
+if((NOT DEFINED stftpitchshift_SOURCE_DIR OR NOT EXISTS "${stftpitchshift_SOURCE_DIR}/cpp/StftPitchShift/STFT.h")
+   AND GUITARFX_CORE_FETCH_DEPS)
     include(FetchContent)
     FetchContent_Declare(stftpitchshift
         GIT_REPOSITORY https://github.com/jurihock/stftPitchShift.git
@@ -294,7 +295,7 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
     set(NAM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(NeuralAmpModelerCore
         GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
-        GIT_TAG v0.4.0.rc3
+        GIT_TAG v0.5.3
         CMAKE_ARGS -DNAM_BUILD_TOOLS=OFF -DNAM_BUILD_TESTS=OFF)
     FetchContent_MakeAvailable(NeuralAmpModelerCore)
     FetchContent_GetProperties(NeuralAmpModelerCore SOURCE_DIR NAM_SOURCE_DIR BINARY_DIR NAM_BINARY_DIR)
@@ -319,7 +320,7 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
         endif()
         # Exclude all NAM tool executables from the default build on MSVC.
         # 'render' was added upstream after the original list was written.
-        foreach(_nam_tool benchmodel loadmodel render run_tests tools)
+        foreach(_nam_tool benchmodel bench_a2_fast loadmodel render run_tests tools)
             if(TARGET ${_nam_tool})
                 set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_ALL TRUE)
                 set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_DEFAULT_BUILD TRUE)
@@ -339,10 +340,27 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
                 file(COPY "${eigen_SOURCE_DIR}/Eigen" "${eigen_SOURCE_DIR}/unsupported" DESTINATION "${_nam_eigen_dest}")
             endif()
         endif()
+
+        # v0.5.x moved WaveNet model/config parser implementation into
+        # NAM/wavenet/*.cpp. Ensure these sources are part of the NAM target so
+        # get_dsp() can resolve WaveNet architectures at runtime.
+        set(_nam_wavenet_sources
+            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/model.cpp"
+            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/slimmable.cpp"
+            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/a2_fast.cpp")
+        foreach(_nam_target IN ITEMS NeuralAmpModelerCore nam)
+            if(TARGET ${_nam_target})
+                foreach(_nam_src IN LISTS _nam_wavenet_sources)
+                    if(EXISTS "${_nam_src}")
+                        target_sources(${_nam_target} PRIVATE "${_nam_src}")
+                    endif()
+                endforeach()
+            endif()
+        endforeach()
     endif()
 
-    if(NOT TARGET NeuralAmpModelerCore AND DEFINED NeuralAmpModelerCore_SOURCE_DIR)
-        file(GLOB NAM_SOURCES CONFIGURE_DEPENDS "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/*.cpp")
+    if(NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam AND DEFINED NeuralAmpModelerCore_SOURCE_DIR)
+        file(GLOB_RECURSE NAM_SOURCES CONFIGURE_DEPENDS "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/*.cpp")
         add_library(NeuralAmpModelerCore STATIC ${NAM_SOURCES})
         set_target_properties(NeuralAmpModelerCore PROPERTIES
             POSITION_INDEPENDENT_CODE ON)
@@ -608,7 +626,7 @@ elseif(DEFINED signalsmith_stretch_SOURCE_DIR)
     target_include_directories(SoundshedGuitarCore PUBLIC "${signalsmith_stretch_SOURCE_DIR}")
 endif()
 
-if(DEFINED stftpitchshift_SOURCE_DIR)
+if(DEFINED stftpitchshift_SOURCE_DIR AND EXISTS "${stftpitchshift_SOURCE_DIR}/cpp/StftPitchShift/STFT.h")
     target_include_directories(SoundshedGuitarCore PUBLIC "${stftpitchshift_SOURCE_DIR}/cpp")
 else()
     message(FATAL_ERROR "stftPitchShift sources are required for transpose_stft. Set stftpitchshift_SOURCE_DIR or enable GUITARFX_CORE_FETCH_DEPS.")

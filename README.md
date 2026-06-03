@@ -107,6 +107,13 @@ If you need to match CI dependencies on Ubuntu, install the JUCE Linux packages 
 sudo apt-get update
 sudo apt-get install libasound2-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev ninja-build
 ```
+## Windows
+Full rebuild:
+```
+Remove-Item -Recurse -Force juce/builds
+cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/builds 
+cmake --build juce/builds --config Release --target ALL_BUILD --parallel
+```
 
 ### Debug Tools
 

@@ -34,15 +34,12 @@ public:
 
 inline void RegisterOptimizedNAMFXEffect()
 {
-  // Ensure NAM factory registrations are not optimized out by the linker
-  ::nam::factory::ForceFactoryRegistration();
-
   EffectTypeInfo info;
   info.type = EffectGuids::kFxNam;
   info.aliases = {"fx_nam"};
   info.displayName = "Neural FX (NAM)";
   info.category = "amp";
-  info.description = "Neural FX Modeler (NAM) with SIMD-optimized processing";
+  info.description = "Neural FX Modeler (NAM)";
   info.requiresResource = true;
   info.resourceType = "nam";
   info.resourceFilterHint = {"pedal"};

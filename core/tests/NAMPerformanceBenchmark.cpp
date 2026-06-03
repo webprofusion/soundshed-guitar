@@ -37,18 +37,6 @@
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 
-// Force factory registration
-#include "NAM/wavenet.h"
-#include "NAM/lstm.h"
-#include "NAM/convnet.h"
-
-namespace
-{
-[[maybe_unused]] volatile auto force_wavenet = &nam::wavenet::Factory;
-[[maybe_unused]] volatile auto force_lstm = &nam::lstm::Factory;
-[[maybe_unused]] volatile auto force_convnet = &nam::convnet::Factory;
-} // namespace
-
 namespace fs = std::filesystem;
 
 namespace

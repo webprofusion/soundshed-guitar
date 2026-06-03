@@ -46,17 +46,6 @@
 #endif
 
 // Force factory registration
-#include "NAM/wavenet.h"
-#include "NAM/lstm.h"
-#include "NAM/convnet.h"
-
-namespace
-{
-[[maybe_unused]] volatile auto force_wavenet = &nam::wavenet::Factory;
-[[maybe_unused]] volatile auto force_lstm = &nam::lstm::Factory;
-[[maybe_unused]] volatile auto force_convnet = &nam::convnet::Factory;
-} // namespace
-
 namespace fs = std::filesystem;
 
 namespace
@@ -934,10 +923,25 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    // Use the first model for testing
-    const auto& firstModel = audioModelsJson[0];
-    const fs::path modelPath = resourcesDir / firstModel.value("filePath", "");
-    const std::string modelName = firstModel.value("title", "Unknown");
+    fs::path modelPath;
+    std::string modelName;
+
+    if (argc > 1)
+    {
+      modelPath = fs::path(argv[1]);
+      modelName = modelPath.filename().string();
+      if (!modelPath.is_absolute())
+      {
+        modelPath = resourcesDir / modelPath;
+      }
+    }
+    else
+    {
+      // Default to the first model when no explicit model path is provided.
+      const auto& firstModel = audioModelsJson[0];
+      modelPath = resourcesDir / firstModel.value("filePath", "");
+      modelName = firstModel.value("title", "Unknown");
+    }
 
     std::cout << "Using test model: " << modelName << "\n";
     std::cout << "Path: " << modelPath.string() << "\n";

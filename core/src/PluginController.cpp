@@ -3687,7 +3687,13 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
         return;
     }
 
-    if (UpdateResourceForNodeType(EffectGuids::kAmpNam, "nam", filePath))
+    const bool updatedNamResource =
+        UpdateResourceForNodeType(EffectGuids::kAmpNamOptimized, "nam", filePath)
+        || UpdateResourceForNodeType(EffectGuids::kAmpNamBlend, "nam", filePath)
+        || UpdateResourceForNodeType(EffectGuids::kFxNam, "nam", filePath)
+        || UpdateResourceForNodeType(EffectGuids::kAmpNam, "nam", filePath);
+
+    if (updatedNamResource)
     {
         mAppSettings["lastModelPath"] = filePath.parent_path().string();
         SaveAppSettings();
@@ -4169,7 +4175,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
 
         if (!IsCompositeEditMode()
-            && (target->type == EffectGuids::kAmpNam || target->type == EffectGuids::kAmpNamOptimized)
+            && IsNamEffectType(target->type)
             && !target->resources.empty()
             && target->resources.front().IsValid())
         {
@@ -4205,7 +4211,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             }
 
             if (!IsCompositeEditMode()
-                && (node->type == EffectGuids::kAmpNam || node->type == EffectGuids::kAmpNamOptimized)
+                && IsNamEffectType(node->type)
                 && !node->resources.empty()
                 && node->resources.front().IsValid())
             {

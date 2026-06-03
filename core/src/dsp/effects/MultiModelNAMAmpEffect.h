@@ -15,7 +15,6 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
-#include "dsp/simd/OptimizedNAM.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <algorithm>
@@ -27,15 +26,6 @@
 #include <optional>
 #include <string>
 #include <vector>
-
-// Forward declare factory registration helper to avoid linker dead-stripping
-namespace nam
-{
-  namespace factory
-  {
-    void ForceFactoryRegistration();
-  }
-}
 
 namespace guitarfx
 {
@@ -310,11 +300,8 @@ private:
     double parameterValue = 0.0;
     std::map<std::string, double> parameters;
 
-    std::unique_ptr<nam::OptimizedDSPWrapper> optimizedLeft;
-    std::unique_ptr<nam::OptimizedDSPWrapper> optimizedRight;
     std::unique_ptr<::nam::DSP> fallbackLeft;
     std::unique_ptr<::nam::DSP> fallbackRight;
-    bool usingOptimized = false;
     bool resamplingActive = false;
     double processingSampleRate = 44100.0;
     int maxProcessingBlockSize = 512;
@@ -417,26 +404,10 @@ private:
   {
     try
     {
-      instance.optimizedLeft = guitarfx::nam::LoadOptimizedModelWrapper(instance.path);
-      instance.optimizedRight = guitarfx::nam::LoadOptimizedModelWrapper(instance.path);
-      if (instance.optimizedLeft && instance.optimizedRight
-        && instance.optimizedLeft->IsValid() && instance.optimizedRight->IsValid())
-      {
-        instance.usingOptimized = true;
-        instance.inputLevel = instance.optimizedLeft->HasInputLevel()
-          ? std::optional<double>(instance.optimizedLeft->GetInputLevel()) : std::nullopt;
-        instance.outputLevel = instance.optimizedLeft->HasOutputLevel()
-          ? std::optional<double>(instance.optimizedLeft->GetOutputLevel()) : std::nullopt;
-        instance.loudness = instance.optimizedLeft->HasLoudness()
-          ? std::optional<double>(instance.optimizedLeft->GetLoudness()) : std::nullopt;
-        return true;
-      }
-
       instance.fallbackLeft = ::nam::get_dsp(instance.path);
       instance.fallbackRight = ::nam::get_dsp(instance.path);
       if (instance.fallbackLeft && instance.fallbackRight)
       {
-        instance.usingOptimized = false;
         instance.inputLevel = instance.fallbackLeft->HasInputLevel()
           ? std::optional<double>(instance.fallbackLeft->GetInputLevel()) : std::nullopt;
         instance.outputLevel = instance.fallbackLeft->HasOutputLevel()
@@ -482,12 +453,7 @@ private:
   {
     (void)sampleRate;
     (void)maxBlockSize;
-    if (instance.usingOptimized && instance.optimizedLeft && instance.optimizedRight)
-    {
-      instance.optimizedLeft->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
-      instance.optimizedRight->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
-    }
-    else if (instance.fallbackLeft && instance.fallbackRight)
+    if (instance.fallbackLeft && instance.fallbackRight)
     {
       instance.fallbackLeft->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
       instance.fallbackRight->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
@@ -496,25 +462,6 @@ private:
 
   void ProcessModel(ModelInstance& instance, float* input, float* output, int numSamples, int channel)
   {
-    if (instance.usingOptimized && instance.optimizedLeft && instance.optimizedRight)
-    {
-      auto* optimized = channel == 0 ? instance.optimizedLeft.get() : instance.optimizedRight.get();
-      if (instance.resamplingActive)
-      {
-        const int modelFrames = GetModelFrameCount(instance, numSamples);
-        auto& modelInput = channel == 0 ? instance.modelInputL : instance.modelInputR;
-        auto& modelOutput = channel == 0 ? instance.modelOutputL : instance.modelOutputR;
-        instance.inputResampler.ProcessFixedOutput(input, numSamples, modelInput.data(), modelFrames);
-        optimized->process(modelInput.data(), modelOutput.data(), modelFrames);
-        instance.outputResampler.ProcessFixedOutput(modelOutput.data(), modelFrames, output, numSamples);
-      }
-      else
-      {
-        optimized->process(input, output, numSamples);
-      }
-      return;
-    }
-
     if (instance.fallbackLeft && instance.fallbackRight)
     {
       auto& fallbackInput = channel == 0 ? instance.fallbackInputL : instance.fallbackInputR;
@@ -811,8 +758,6 @@ private:
 
   static double GetInstanceExpectedSampleRate(const ModelInstance& instance)
   {
-    if (instance.usingOptimized && instance.optimizedLeft)
-      return instance.optimizedLeft->GetExpectedSampleRate();
     if (instance.fallbackLeft)
       return instance.fallbackLeft->GetExpectedSampleRate();
     return -1.0;
@@ -833,9 +778,6 @@ private:
 
 inline void RegisterMultiModelNAMAmpEffect()
 {
-  // Ensure NAM factory registrations are not optimized out by the linker
-  ::nam::factory::ForceFactoryRegistration();
-
   EffectTypeInfo info;
   info.type = EffectGuids::kAmpNamBlend;
   info.aliases = {"amp_nam_blend"};

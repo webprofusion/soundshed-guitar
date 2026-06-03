@@ -48,6 +48,21 @@ namespace guitarfx
       return nullptr;
     }
 
+    std::string FindFirstNamNodeId(SignalGraphExecutor& executor)
+    {
+      for (const auto* effectType : {
+             EffectGuids::kAmpNamOptimized,
+             EffectGuids::kAmpNamBlend,
+             EffectGuids::kFxNam,
+             EffectGuids::kAmpNam})
+      {
+        const auto nodeId = executor.FindFirstNodeOfType(effectType);
+        if (!nodeId.empty())
+          return nodeId;
+      }
+      return {};
+    }
+
     // Note names for pitch detection
     constexpr std::array<const char *, 12> kNoteNames = {
         "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -618,7 +633,7 @@ namespace guitarfx
   {
     for (auto &inst : mInstances)
     {
-      const auto nodeId = inst.executor.FindFirstNodeOfType(EffectGuids::kAmpNam);
+      const auto nodeId = FindFirstNamNodeId(inst.executor);
       if (!nodeId.empty())
       {
         inst.executor.SetNodeParam(nodeId, "inputGain", value);
@@ -667,7 +682,7 @@ namespace guitarfx
   {
     for (auto &inst : mInstances)
     {
-      const auto nodeId = inst.executor.FindFirstNodeOfType(EffectGuids::kAmpNam);
+      const auto nodeId = FindFirstNamNodeId(inst.executor);
       if (!nodeId.empty())
       {
         inst.executor.SetNodeParam(nodeId, "tone", value);

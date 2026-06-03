@@ -133,5 +133,14 @@
     "description": "Orange AD200b - Full gain bass overdrive",
     "category": "Bass",
     "tags": ["orange", "bass", "overdrive", "gritty"]
+  },
+  {
+    "id": "nam-a2-boosted-6505-fullrig",
+    "hash": "a2boosted6505fullrig0000000000000000000000000000000000000000000000",
+    "filePath": "assets/amps/Guitar/A2/Boosted-6505+-A2-Chugs-FullRig.nam",
+    "title": "Boosted 6505+ A2 Chugs FullRig",
+    "description": "A2-format NAM full rig model for regression testing",
+    "category": "American",
+    "tags": ["a2", "high-gain", "full-rig", "test"]
   }
 ]

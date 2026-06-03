@@ -29,7 +29,6 @@
 #include "dsp/effects/SynthSawEffect.h"
 #include "dsp/effects/AutoArpEffect.h"
 #include "dsp/effects/LimiterEffect.h"
-#include "dsp/effects/NAMAmpEffect.h"
 #include "dsp/effects/OptimizedNAMAmpEffect.h"
 #include "dsp/effects/OptimizedNAMFXEffect.h"
 #include "dsp/effects/MultiModelNAMAmpEffect.h"
@@ -42,6 +41,14 @@
 #include "dsp/effects/WasmEffect.h"
 #endif
 
+namespace nam
+{
+  namespace factory
+  {
+    void ForceFactoryRegistration();
+  }
+}
+
 namespace guitarfx
 {
   /**
@@ -50,6 +57,8 @@ namespace guitarfx
    */
   inline void RegisterAllEffects()
   {
+    ::nam::factory::ForceFactoryRegistration();
+
     // Utility effects
     RegisterGainEffect();
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
@@ -94,9 +103,8 @@ namespace guitarfx
 
     // Amp models
     RegisterBuiltinAmpEffect();
-    RegisterNAMAmpEffect();
-    RegisterOptimizedNAMAmpEffect();  // SIMD-optimized version
-    RegisterOptimizedNAMFXEffect();   // FX variant with advanced tone controls
+    RegisterOptimizedNAMAmpEffect();   // NAM core-backed amp model
+    RegisterOptimizedNAMFXEffect();    // NAM core-backed FX variant
     RegisterMultiModelNAMAmpEffect();  // Multi-model blend
 
     // Cabinet simulation

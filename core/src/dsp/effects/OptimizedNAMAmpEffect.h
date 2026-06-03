@@ -1,16 +1,10 @@
 #pragma once
 
 /**
- * Optimized Neural Amp Modeler effect - uses SIMD-accelerated processing.
+ * Neural Amp Modeler effect variant used for the optimized NAM type IDs.
  *
- * This is a high-performance replacement for NAMAmpEffect that uses the
- * custom optimized NAM implementation instead of the upstream library.
- *
- * Key improvements:
- * - SIMD-vectorized activation functions (AVX/SSE)
- * - Fused gated activation kernels for WaveNet
- * - Reduced virtual dispatch overhead
- * - Falls back to original NAM library for unsupported architectures
+ * Processing relies on upstream NeuralAmpModelerCore DSP with standard
+ * compiler optimizations enabled by the build configuration.
  */
 
 #include "dsp/EffectProcessor.h"
@@ -19,7 +13,6 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
-#include "dsp/simd/OptimizedNAM.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <filesystem>
@@ -30,15 +23,6 @@
 #include <vector>
 #include <cmath>
 #include <variant>
-
-// Forward declare factory registration helper to avoid linker dead-stripping
-namespace nam
-{
-  namespace factory
-  {
-    void ForceFactoryRegistration();
-  }
-}
 
 namespace guitarfx
 {
@@ -116,10 +100,7 @@ struct AmpToneBiquad
 };
 
 /**
- * Optimized Neural Amp Modeler effect.
- *
- * Automatically uses SIMD-optimized processing for WaveNet and LSTM models,
- * falling back to the original NAM library for unsupported architectures.
+ * NAM core-backed amp effect with tone controls.
  */
 class OptimizedNAMAmpEffect : public EffectProcessor
 {
@@ -146,14 +127,6 @@ public:
 
   void Reset() override
   {
-    if (mOptimizedModelLeft)
-    {
-      mOptimizedModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
-    }
-    if (mOptimizedModelRight)
-    {
-      mOptimizedModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
-    }
     if (mFallbackModelLeft)
     {
       mFallbackModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
@@ -214,71 +187,38 @@ public:
       mInputBufferR[i] = inR * inputGainF;
     }
 
-    const bool hasOptimized = mOptimizedModelLeft && mOptimizedModelRight;
     const bool hasFallback = mFallbackModelLeft && mFallbackModelRight;
 
-    if ((hasOptimized || hasFallback) && mEnabled)
+    if (hasFallback && mEnabled)
     {
       const float wetMix = static_cast<float>(mMix);
       const float dryMix = 1.0f - wetMix;
 
-      if (hasOptimized)
+      ProcessFallbackModels(numSamples);
+
+      const float outputGainF = static_cast<float>(mOutputGain);
+      for (int i = 0; i < numSamples; ++i)
       {
-        ProcessOptimizedModels(numSamples);
+        float outL = mOutputBufferL[i];
+        outL = mBassFilter[0].Process(outL);
+        outL = mMidFilter[0].Process(outL);
+        outL = mTrebleFilter[0].Process(outL);
+        outL = mPresenceFilter[0].Process(outL);
+        outL *= outputGainF;
+        outL = mDryBufferL[i] * dryMix + outL * wetMix;
 
-        const float outputGainF = static_cast<float>(mOutputGain);
-        for (int i = 0; i < numSamples; ++i)
-        {
-          float outL = mOutputBufferL[i];
-          outL = mBassFilter[0].Process(outL);
-          outL = mMidFilter[0].Process(outL);
-          outL = mTrebleFilter[0].Process(outL);
-          outL = mPresenceFilter[0].Process(outL);
-          outL *= outputGainF;
-          outL = mDryBufferL[i] * dryMix + outL * wetMix;
+        float outR = mOutputBufferR[i];
+        outR = mBassFilter[1].Process(outR);
+        outR = mMidFilter[1].Process(outR);
+        outR = mTrebleFilter[1].Process(outR);
+        outR = mPresenceFilter[1].Process(outR);
+        outR *= outputGainF;
+        outR = mDryBufferR[i] * dryMix + outR * wetMix;
 
-          float outR = mOutputBufferR[i];
-          outR = mBassFilter[1].Process(outR);
-          outR = mMidFilter[1].Process(outR);
-          outR = mTrebleFilter[1].Process(outR);
-          outR = mPresenceFilter[1].Process(outR);
-          outR *= outputGainF;
-          outR = mDryBufferR[i] * dryMix + outR * wetMix;
-
-          if (outputs[0])
-            outputs[0][i] = outL;
-          if (outputs[1])
-            outputs[1][i] = outR;
-        }
-      }
-      else
-      {
-        ProcessFallbackModels(numSamples);
-
-        const float outputGainF = static_cast<float>(mOutputGain);
-        for (int i = 0; i < numSamples; ++i)
-        {
-          float outL = mOutputBufferL[i];
-          outL = mBassFilter[0].Process(outL);
-          outL = mMidFilter[0].Process(outL);
-          outL = mTrebleFilter[0].Process(outL);
-          outL = mPresenceFilter[0].Process(outL);
-          outL *= outputGainF;
-          outL = mDryBufferL[i] * dryMix + outL * wetMix;
-
-          float outR = mOutputBufferR[i];
-          outR = mBassFilter[1].Process(outR);
-          outR = mMidFilter[1].Process(outR);
-          outR = mTrebleFilter[1].Process(outR);
-          outR = mPresenceFilter[1].Process(outR);
-          outR *= outputGainF;
-          outR = mDryBufferR[i] * dryMix + outR * wetMix;
-
-          if (outputs[0])
-            outputs[0][i] = outL;
-          if (outputs[1])
-            outputs[1][i] = outR;
-        }
+        if (outputs[0])
+          outputs[0][i] = outL;
+        if (outputs[1])
+          outputs[1][i] = outR;
       }
     }
     else
@@ -377,12 +317,7 @@ public:
     }
     else if (key == "useOptimized")
     {
-      mPreferOptimized = ParseBool(value);
-      // Reload model with new preference if we have a path
-      if (!mModelPath.empty())
-      {
-        LoadResource(mModelPath);
-      }
+      (void)value;
     }
   }
 
@@ -424,8 +359,7 @@ public:
 
   [[nodiscard]] bool HasResource() const override
   {
-    return (mOptimizedModelLeft && mOptimizedModelRight)
-      || (mFallbackModelLeft && mFallbackModelRight);
+    return mFallbackModelLeft && mFallbackModelRight;
   }
 
   [[nodiscard]] std::filesystem::path GetResourcePath() const override
@@ -436,8 +370,7 @@ public:
   [[nodiscard]] std::string GetType() const override { return "amp_nam_optimized"; }
   [[nodiscard]] std::string GetCategory() const override { return "amp"; }
 
-  // Query whether using optimized implementation
-  [[nodiscard]] bool IsUsingOptimized() const { return mUsingOptimized; }
+  [[nodiscard]] bool IsUsingOptimized() const { return false; }
 
 private:
   static std::optional<double> ReadResourceMetadataDouble(const ResourceRef *ref, const std::string &key)
@@ -463,71 +396,29 @@ private:
   {
     try
     {
-      mOptimizedModelLeft.reset();
-      mOptimizedModelRight.reset();
       mFallbackModelLeft.reset();
       mFallbackModelRight.reset();
-
-      bool loaded = false;
-
-      if (mPreferOptimized)
-      {
-        auto optimizedLeft = nam::LoadOptimizedModelWrapper(resourcePath);
-        auto optimizedRight = nam::LoadOptimizedModelWrapper(resourcePath);
-        if (optimizedLeft && optimizedRight && optimizedLeft->IsValid() && optimizedRight->IsValid())
-        {
-          mOptimizedModelLeft = std::move(optimizedLeft);
-          mOptimizedModelRight = std::move(optimizedRight);
-          loaded = true;
-          mUsingOptimized = true;
-        }
-      }
-
-      if (!loaded)
-      {
-        auto modelLeft = ::nam::get_dsp(resourcePath);
-        auto modelRight = ::nam::get_dsp(resourcePath);
-        if (!modelLeft || !modelRight)
-          return false;
-
-        mFallbackModelLeft = std::move(modelLeft);
-        mFallbackModelRight = std::move(modelRight);
-        loaded = true;
-        mUsingOptimized = false;
-      }
-
-      if (!loaded)
+      auto modelLeft = ::nam::get_dsp(resourcePath);
+      auto modelRight = ::nam::get_dsp(resourcePath);
+      if (!modelLeft || !modelRight)
         return false;
+
+      mFallbackModelLeft = std::move(modelLeft);
+      mFallbackModelRight = std::move(modelRight);
 
       mModelPath = resourcePath;
       mResourceNormalizationGainDb = ReadResourceMetadataDouble(ref, "normalizationGainDb");
       ConfigureModelProcessing();
 
-      // Extract metadata
-      if (mOptimizedModelLeft)
-      {
-        mModelInputLevel = mOptimizedModelLeft->HasInputLevel()
-          ? std::optional<double>(mOptimizedModelLeft->GetInputLevel())
-          : std::nullopt;
-        mModelOutputLevel = mOptimizedModelLeft->HasOutputLevel()
-          ? std::optional<double>(mOptimizedModelLeft->GetOutputLevel())
-          : std::nullopt;
-        mModelLoudness = mOptimizedModelLeft->HasLoudness()
-          ? std::optional<double>(mOptimizedModelLeft->GetLoudness())
-          : std::nullopt;
-      }
-      else if (mFallbackModelLeft)
-      {
-        mModelInputLevel = mFallbackModelLeft->HasInputLevel()
-          ? std::optional<double>(mFallbackModelLeft->GetInputLevel())
-          : std::nullopt;
-        mModelOutputLevel = mFallbackModelLeft->HasOutputLevel()
-          ? std::optional<double>(mFallbackModelLeft->GetOutputLevel())
-          : std::nullopt;
-        mModelLoudness = mFallbackModelLeft->HasLoudness()
-          ? std::optional<double>(mFallbackModelLeft->GetLoudness())
-          : std::nullopt;
-      }
+      mModelInputLevel = mFallbackModelLeft->HasInputLevel()
+        ? std::optional<double>(mFallbackModelLeft->GetInputLevel())
+        : std::nullopt;
+      mModelOutputLevel = mFallbackModelLeft->HasOutputLevel()
+        ? std::optional<double>(mFallbackModelLeft->GetOutputLevel())
+        : std::nullopt;
+      mModelLoudness = mFallbackModelLeft->HasLoudness()
+        ? std::optional<double>(mFallbackModelLeft->GetLoudness())
+        : std::nullopt;
 
       RecalculateAutoGains();
       return true;
@@ -538,15 +429,10 @@ private:
     }
   }
 
-  // Model storage - one or the other will be used
-  std::unique_ptr<nam::OptimizedDSPWrapper> mOptimizedModelLeft;
-  std::unique_ptr<nam::OptimizedDSPWrapper> mOptimizedModelRight;
   std::unique_ptr<::nam::DSP> mFallbackModelLeft;
   std::unique_ptr<::nam::DSP> mFallbackModelRight;
 
   std::filesystem::path mModelPath;
-  bool mUsingOptimized = false;
-  bool mPreferOptimized = true;
   bool mResamplingActive = false;
   double mModelSampleRate = 44100.0;
   int mMaxModelBlockSize = 512;
@@ -649,14 +535,10 @@ private:
 
   [[nodiscard]] double ResolveModelSampleRate() const
   {
-    double expectedSR = -1.0;
-    if (mOptimizedModelLeft)
-      expectedSR = mOptimizedModelLeft->GetExpectedSampleRate();
-    else if (mFallbackModelLeft)
-      expectedSR = mFallbackModelLeft->GetExpectedSampleRate();
-    else
+    if (!mFallbackModelLeft)
       return mSampleRate;
 
+    const double expectedSR = mFallbackModelLeft->GetExpectedSampleRate();
     return ResolveNamModelProcessingSampleRate(expectedSR, mSampleRate);
   }
 
@@ -681,10 +563,6 @@ private:
     mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize);
     mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize);
 
-    if (mOptimizedModelLeft)
-      mOptimizedModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
-    if (mOptimizedModelRight)
-      mOptimizedModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
     if (mFallbackModelLeft)
       mFallbackModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
     if (mFallbackModelRight)
@@ -695,24 +573,6 @@ private:
   {
     int modelFrames = BlockSincResampler::ComputeOutputFrameCount(numSamples, mSampleRate, mModelSampleRate);
     return std::clamp(modelFrames, 1, mMaxModelBlockSize);
-  }
-
-  void ProcessOptimizedModels(int numSamples)
-  {
-    if (!mResamplingActive)
-    {
-      mOptimizedModelLeft->process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
-      mOptimizedModelRight->process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
-      return;
-    }
-
-    const int modelFrames = GetModelFrameCount(numSamples);
-    mInputResampler.ProcessFixedOutput(mInputBufferL.data(), numSamples, mModelInputBufferL.data(), modelFrames);
-    mInputResampler.ProcessFixedOutput(mInputBufferR.data(), numSamples, mModelInputBufferR.data(), modelFrames);
-    mOptimizedModelLeft->process(mModelInputBufferL.data(), mModelOutputBufferL.data(), modelFrames);
-    mOptimizedModelRight->process(mModelInputBufferR.data(), mModelOutputBufferR.data(), modelFrames);
-    mOutputResampler.ProcessFixedOutput(mModelOutputBufferL.data(), modelFrames, mOutputBufferL.data(), numSamples);
-    mOutputResampler.ProcessFixedOutput(mModelOutputBufferR.data(), modelFrames, mOutputBufferR.data(), numSamples);
   }
 
   void ProcessFallbackModels(int numSamples)
@@ -780,15 +640,12 @@ private:
 
 inline void RegisterOptimizedNAMAmpEffect()
 {
-  // Ensure NAM factory registrations are not optimized out by the linker
-  ::nam::factory::ForceFactoryRegistration();
-
   EffectTypeInfo info;
   info.type = EffectGuids::kAmpNamOptimized;
-  info.aliases = {"amp_nam_optimized"};
+  info.aliases = {"amp_nam_optimized", "amp_nam", EffectGuids::kAmpNam};
   info.displayName = "Neural Amp (NAM)";
   info.category = "amp";
-  info.description = "Neural Amp Modeler (NAM) with SIMD-optimized processing";
+  info.description = "Neural Amp Modeler (NAM)";
   info.requiresResource = true;
   info.resourceType = "nam";
   info.resourceFilterHint = {"amp", "full-rig"};
