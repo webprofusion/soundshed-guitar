@@ -13,6 +13,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <filesystem>
@@ -368,6 +369,13 @@ public:
       mAutoLevelOutput = ParseBool(value);
       RecalculateAutoGains();
     }
+    else if (key == "slimmableSize")
+    {
+      if (const auto parsed = ParseDouble(value); parsed.has_value())
+        SetGlobalNamSlimmableSize(*parsed);
+      ApplyGlobalNamSlimmableSize(mFallbackModelLeft.get());
+      ApplyGlobalNamSlimmableSize(mFallbackModelRight.get());
+    }
     else if (key == "useOptimized")
     {
       (void)value;
@@ -455,6 +463,9 @@ private:
       auto modelRight = ::nam::get_dsp(resourcePath);
       if (!modelLeft || !modelRight)
         return false;
+
+      ApplyGlobalNamSlimmableSize(modelLeft.get());
+      ApplyGlobalNamSlimmableSize(modelRight.get());
 
       mFallbackModelLeft = std::move(modelLeft);
       mFallbackModelRight = std::move(modelRight);

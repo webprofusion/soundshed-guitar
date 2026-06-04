@@ -16,6 +16,7 @@
 #include "dsp/LevelTargets.h"
 #include "dsp/BlockSincResampler.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
 #include "dsp/effects/WasmEffect.h"
 #endif
@@ -132,6 +133,8 @@ namespace
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
     constexpr const char* kNominalOperatingLevelSettingKey = "audio.dsp.nominalOperatingLevelDbfs";
     constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.outputProtectionCeilingDbfs";
+    constexpr const char* kNamSlimmableSizeSettingKey = "audio.nam.slimmableSize";
+    constexpr const char* kNamSlimmableNodeConfigKey = "slimmableSize";
     constexpr const char* kUserInputCalibrationProfilesSettingKey = "audio.userInputCalibration.profiles";
     constexpr const char* kUserInputCalibrationActiveProfileIdSettingKey = "audio.userInputCalibration.activeProfileId";
     constexpr const char* kLegacyInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
@@ -1722,6 +1725,7 @@ void PluginController::Initialize()
     ApplyMetronomeSettingsFromAppSettings();
     ApplyDiagnosticsSettingsFromAppSettings();
     ApplyDspLevelTargetSettingsFromAppSettings();
+    ApplyNamSlimmableSettingsFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();
     LoadResourceLibraries();
@@ -2477,6 +2481,37 @@ void PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
         SaveAppSettings();
 }
 
+void PluginController::ApplyNamSlimmableSettingsFromAppSettings()
+{
+    bool settingsChanged = false;
+
+    const auto it = mAppSettings.find(kNamSlimmableSizeSettingKey);
+    const double rawValue = (it != mAppSettings.end() && it->is_number())
+        ? it->get<double>()
+        : kNamSlimmableSizeDefault;
+
+    const double slimmableSize = SanitizeNamSlimmableSize(rawValue);
+    if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != slimmableSize)
+    {
+        mAppSettings[kNamSlimmableSizeSettingKey] = slimmableSize;
+        settingsChanged = true;
+    }
+
+    SetGlobalNamSlimmableSize(slimmableSize);
+    const std::string configValue = std::to_string(slimmableSize);
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNam, kNamSlimmableNodeConfigKey, configValue);
+        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNamOptimized, kNamSlimmableNodeConfigKey, configValue);
+        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNamBlend, kNamSlimmableNodeConfigKey, configValue);
+        mPresetMixer.SetNodeConfigForType(EffectGuids::kFxNam, kNamSlimmableNodeConfigKey, configValue);
+    }
+
+    if (settingsChanged)
+        SaveAppSettings();
+}
+
 void PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
 {
     bool settingsChanged = false;
@@ -2666,6 +2701,8 @@ void PluginController::DeserializeState(const std::string& json)
 
             for (auto it = incomingSettings->begin(); it != incomingSettings->end(); ++it)
                 mAppSettings[it.key()] = it.value();
+
+            ApplyNamSlimmableSettingsFromAppSettings();
         }
 
         if (state.contains("uiSettings") && state["uiSettings"].is_object())

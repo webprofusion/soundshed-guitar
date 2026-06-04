@@ -27,6 +27,7 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
             const bool affectsDspLevelTargets =
                 key == "audio.dsp.nominalOperatingLevelDbfs"
                 || key == "audio.dsp.outputProtectionCeilingDbfs";
+            const bool affectsNamSlimmable = key == "audio.nam.slimmableSize";
 
             if (key == "diagnostics.signalLevelsEnabled")
             {
@@ -45,6 +46,11 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                     c.ApplyDspLevelTargetSettingsFromAppSettings();
                     c.mPendingStateBroadcast = true;
                 }
+                if (affectsNamSlimmable)
+                {
+                    c.ApplyNamSlimmableSettingsFromAppSettings();
+                    c.mPendingStateBroadcast = true;
+                }
                 c.SaveAppSettings();
                 return true;
             }
@@ -54,6 +60,11 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
             if (affectsDspLevelTargets)
             {
                 c.ApplyDspLevelTargetSettingsFromAppSettings();
+                c.mPendingStateBroadcast = true;
+            }
+            if (affectsNamSlimmable)
+            {
+                c.ApplyNamSlimmableSettingsFromAppSettings();
                 c.mPendingStateBroadcast = true;
             }
             c.SaveAppSettings();

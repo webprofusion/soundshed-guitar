@@ -6,6 +6,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 #include "dsp/simd/SimdMath.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
@@ -194,6 +195,13 @@ namespace guitarfx
         mAutoLevelOutput = ParseBool(value);
         RecalculateAutoGains();
       }
+      else if (key == "slimmableSize")
+      {
+        if (const auto parsed = ParseDouble(value); parsed.has_value())
+          SetGlobalNamSlimmableSize(*parsed);
+        ApplyGlobalNamSlimmableSize(mModelLeft.get());
+        ApplyGlobalNamSlimmableSize(mModelRight.get());
+      }
     }
 
     [[nodiscard]] double GetParam(const std::string &key) const override
@@ -267,6 +275,9 @@ namespace guitarfx
           std::cerr << "[NAMAmpEffect] ERROR: Failed to parse NAM model file: " << resourcePath << "\n";
           return false;
         }
+
+        ApplyGlobalNamSlimmableSize(modelLeft.get());
+        ApplyGlobalNamSlimmableSize(modelRight.get());
 
         mModelLeft = std::move(modelLeft);
         mModelRight = std::move(modelRight);

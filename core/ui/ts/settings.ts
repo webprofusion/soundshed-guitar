@@ -40,12 +40,16 @@ const USER_INPUT_CALIBRATION_NONE_VALUE = "__none__";
 const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
+const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
 const DSP_NOMINAL_LEVEL_DEFAULT = -18.0;
 const DSP_NOMINAL_LEVEL_MIN = -30.0;
 const DSP_NOMINAL_LEVEL_MAX = -6.0;
 const DSP_PROTECTION_CEILING_DEFAULT = -1.0;
 const DSP_PROTECTION_CEILING_MIN = -6.0;
 const DSP_PROTECTION_CEILING_MAX = 0.0;
+const NAM_SLIMMABLE_SIZE_DEFAULT = 1.0;
+const NAM_SLIMMABLE_SIZE_MIN = 0.0;
+const NAM_SLIMMABLE_SIZE_MAX = 1.0;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.0;
 const ZOOM_DEFAULT = 1.0;
@@ -106,6 +110,7 @@ const featureGroupsContainer = document.getElementById("settings-feature-groups"
 const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
 const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") as HTMLInputElement | null;
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
+const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
 const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
 const factoryArchiveSettingsSection = document.getElementById("factory-archive-settings-section") as HTMLElement | null;
 const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
@@ -823,6 +828,14 @@ function initDspLevelTargetControls(): void {
     DSP_PROTECTION_CEILING_MAX,
     DSP_PROTECTION_CEILING_DEFAULT,
   );
+
+  bindImmediateNumericSetting(
+    namSlimmableSizeInput,
+    NAM_SLIMMABLE_SIZE_SETTING,
+    NAM_SLIMMABLE_SIZE_MIN,
+    NAM_SLIMMABLE_SIZE_MAX,
+    NAM_SLIMMABLE_SIZE_DEFAULT,
+  );
 }
 
 function updateResourceCleanupVisibility(enabled: boolean): void {
@@ -909,6 +922,15 @@ export function refreshSettingsView(): void {
       DSP_PROTECTION_CEILING_DEFAULT,
     );
     dspProtectionCeilingInput.value = protectionCeiling.toFixed(1);
+  }
+  if (namSlimmableSizeInput) {
+    const slimmableSize = sanitizeNumericSetting(
+      Number(getSettingValue(NAM_SLIMMABLE_SIZE_SETTING)),
+      NAM_SLIMMABLE_SIZE_MIN,
+      NAM_SLIMMABLE_SIZE_MAX,
+      NAM_SLIMMABLE_SIZE_DEFAULT,
+    );
+    namSlimmableSizeInput.value = slimmableSize.toFixed(2);
   }
   if (updateCheckToggle) {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);

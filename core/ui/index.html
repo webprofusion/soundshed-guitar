@@ -922,6 +922,18 @@
                 <span class="metric-value" id="dsp-latency-value">—</span>
               </div>
             </div>
+            <div class="performance-section">
+              <h3>NAM Processing Quality</h3>
+              <div class="nam-quality-control">
+                <label for="nam-slimmable-size-input">Adjust Quality</label>
+                <div class="nam-quality-slider-row">
+                  <span class="nam-quality-endpoint">Min</span>
+                  <input type="range" id="nam-slimmable-size-input" min="0" max="1" step="0.01" />
+                  <span class="nam-quality-endpoint">Max</span>
+                </div>
+              </div>
+              <div class="settings-hint">Adjust quality while watching DSP Load and Peak Load above. Lower quality reduces CPU use.</div>
+            </div>
             <div class="performance-details">
               <h3>Signal Diagnostics <span class="metric-value" id="signal-diagnostics-status">Enabled</span></h3>
               <div class="signal-diagnostics-summary">

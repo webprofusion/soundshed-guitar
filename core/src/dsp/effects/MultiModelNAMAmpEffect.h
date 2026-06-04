@@ -15,6 +15,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <algorithm>
@@ -281,6 +282,17 @@ public:
     {
       mSnapBlend = (value == "snap");
     }
+    else if (key == "slimmableSize")
+    {
+      if (const auto parsed = ParseDouble(value); parsed.has_value())
+        SetGlobalNamSlimmableSize(*parsed);
+
+      for (auto& model : mModels)
+      {
+        ApplyGlobalNamSlimmableSize(model.fallbackLeft.get());
+        ApplyGlobalNamSlimmableSize(model.fallbackRight.get());
+      }
+    }
   }
 
   [[nodiscard]] double GetParam(const std::string& key) const override
@@ -480,6 +492,9 @@ private:
       instance.fallbackRight = ::nam::get_dsp(instance.path);
       if (instance.fallbackLeft && instance.fallbackRight)
       {
+        ApplyGlobalNamSlimmableSize(instance.fallbackLeft.get());
+        ApplyGlobalNamSlimmableSize(instance.fallbackRight.get());
+
         instance.inputLevel = instance.fallbackLeft->HasInputLevel()
           ? std::optional<double>(instance.fallbackLeft->GetInputLevel()) : std::nullopt;
         instance.outputLevel = instance.fallbackLeft->HasOutputLevel()

@@ -160,6 +160,39 @@
   color: var(--text-primary);
 }
 
+.nam-quality-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nam-quality-control label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.nam-quality-slider-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.nam-quality-slider-row input[type="range"] {
+  width: 400px;
+  max-width: 300px;
+  accent-color: var(--color-primary);
+}
+
+.nam-quality-endpoint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .settings-section h3 {
   margin: 0 0 12px 0;
   font-size: 13px;
