@@ -876,9 +876,9 @@ export class ResourceBrowserModal {
       return;
     }
     
-    // Cancel existing preview
+    // Keep the currently previewed model active while the next preview downloads.
     if (this.previewState?.active) {
-      this.cancelPreview();
+      this.cancelPreview(false);
     }
     
     const session = uiState.tone3000Session;
@@ -951,7 +951,7 @@ export class ResourceBrowserModal {
     }
   }
   
-  private cancelPreview(): void {
+  private cancelPreview(restoreOriginal = true): void {
     if (!this.previewState?.active || !this.options) {
       return;
     }
@@ -961,6 +961,7 @@ export class ResourceBrowserModal {
       type: "cancelPreviewResource",
       nodeId: this.options.nodeId,
       resourceIndex: this.options.resourceIndex,
+      restoreOriginal,
     });
     
     this.previewState = null;
@@ -977,9 +978,9 @@ export class ResourceBrowserModal {
       return;
     }
     
-    // Cancel any active preview first
+    // Keep current preview active while import is in progress to avoid reverting audio.
     if (this.previewState?.active) {
-      this.cancelPreview();
+      this.cancelPreview(false);
     }
     
     const session = uiState.tone3000Session;
@@ -1180,9 +1181,9 @@ export class ResourceBrowserModal {
       return;
     }
     
-    // Cancel any Tone3000 preview first
+    // Commit current preview without restoring the original resource first.
     if (this.previewState?.active) {
-      this.cancelPreview();
+      this.cancelPreview(false);
     }
     
     // Mark that we're committing the selection (don't revert on close)

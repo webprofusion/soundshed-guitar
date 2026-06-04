@@ -5398,10 +5398,11 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
 
 void PluginController::HandleCancelPreviewResourceRequest(const nlohmann::json& payload)
 {
-    (void)payload;
     if (!mPreviewState.active) return;
 
-    if (!mPreviewState.nodeId.empty() && mPreviewState.originalResourceRef.has_value())
+    const bool restoreOriginal = payload.value("restoreOriginal", true);
+
+    if (restoreOriginal && !mPreviewState.nodeId.empty() && mPreviewState.originalResourceRef.has_value())
     {
         const auto& original = mPreviewState.originalResourceRef.value();
         nlohmann::json updatePayload;
