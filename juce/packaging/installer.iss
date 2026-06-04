@@ -27,7 +27,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 [Components]
 Name: "standalone"; Description: "Standalone application"; Types: full custom
 Name: "vst3"; Description: "VST3 plugin"; Types: full custom
-; Name: "clap"; Description: "CLAP plugin"; Types: full custom
+Name: "clap"; Description: "CLAP plugin"; Types: custom; Flags: checkablealone
 
 [Setup]
 #if TargetArch == "Win32"
@@ -51,12 +51,14 @@ UninstallFilesDir="{commonappdata}\{#ProductName}\uninstall"
 [UninstallDelete]
 Type: filesandordirs; Name: "{#ProgramFiles}\{#Publisher}\{#ProductName}"
 Type: filesandordirs; Name: "{#CommonFiles}\VST3\{#ProductName}.vst3"
+Type: filesandordirs; Name: "{#CommonFiles}\CLAP\{#ProductName}.clap"
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
 Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{#CommonFiles}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{#CommonFiles}\CLAP\"; Flags: ignoreversion; Components: clap
+Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\resources\*"; DestDir: "{#CommonFiles}\CLAP\resources\"; Excludes: node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: clap
 Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{#ProgramFiles}\{#Publisher}\{#ProductName}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
-; Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{#CommonFiles}\CLAP\"; Flags: ignoreversion; Components: clap
 
 
 [Icons]

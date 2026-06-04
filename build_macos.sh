@@ -179,6 +179,21 @@ copy_artifact "$SRC_AU"   "$AU_DST"
 copy_artifact "$SRC_CLAP" "$CLAP_DST"
 copy_artifact "$SRC_AAX"  "$AAX_DST"
 
+require_staged_artifact() {
+    local path="$1"
+    local label="$2"
+
+    if [[ ! -e "$path" ]]; then
+        echo "  ✗ Missing staged ${label}: ${path#"$SCRIPT_DIR/"}" >&2
+        echo "    Ensure the corresponding target was built successfully before packaging." >&2
+        exit 1
+    fi
+}
+
+require_staged_artifact "${APP_DST}/${PRODUCT}.app" "Standalone bundle"
+require_staged_artifact "${VST3_DST}/${PRODUCT}.vst3" "VST3 bundle"
+require_staged_artifact "${CLAP_DST}/${PRODUCT}.clap" "CLAP bundle"
+
 echo ""
 echo "═══════════════════════════════════════════════════"
 echo "  Distribution layout:"

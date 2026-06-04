@@ -63,7 +63,7 @@ if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
 
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
 
-echo [0/4] Configuring CMake...
+echo [0/5] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
 echo       Architecture: %ARCH_LABEL% ^(CMake platform: %ARCH%^)
 cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%"
@@ -75,7 +75,7 @@ echo CMake configure succeeded.
 echo.
 
 :: --- Build UI ---------------------------------------------------------------
-echo [1/4] Building UI (npm run build)...
+echo [1/5] Building UI (npm run build)...
 pushd "%UI_DIR%"
 call npm run build
 if !ERRORLEVEL! neq 0 (
@@ -88,7 +88,7 @@ echo UI build succeeded.
 echo.
 
 :: --- Build Standalone -------------------------------------------------------
-echo [2/4] Building Standalone (Release)...
+echo [2/5] Building Standalone (Release)...
 cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_Standalone --parallel
 if !ERRORLEVEL! neq 0 (
     echo ERROR: Standalone build failed.
@@ -98,7 +98,7 @@ echo Standalone build succeeded.
 echo.
 
 :: --- Build VST3 -------------------------------------------------------------
-echo [3/4] Building VST3 (Release)...
+echo [3/5] Building VST3 (Release)...
 cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_VST3 --parallel
 if !ERRORLEVEL! neq 0 (
     echo ERROR: VST3 build failed.
@@ -107,8 +107,18 @@ if !ERRORLEVEL! neq 0 (
 echo VST3 build succeeded.
 echo.
 
+:: --- Build CLAP -------------------------------------------------------------
+echo [4/5] Building CLAP (Release)...
+cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_CLAP --parallel
+if !ERRORLEVEL! neq 0 (
+    echo ERROR: CLAP build failed.
+    goto :fail
+)
+echo CLAP build succeeded.
+echo.
+
 :: --- Build Installer --------------------------------------------------------
-echo [4/4] Building installer...
+echo [5/5] Building installer...
 call "%INSTALLER_SCRIPT%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: Installer build failed.
