@@ -28,6 +28,7 @@ type ResourceBrowserOptions = {
   currentId?: string;
   nodeId?: string;
   resourceIndex?: number;
+  tone3000CategoryFilter?: "pedal" | "amp" | "full-rig";
   toneGroupId?: string | null;
   toneGroupTitle?: string | null;
   onSelect: (resourceId: string) => void;
@@ -359,6 +360,7 @@ export class ResourceBrowserModal {
   private updateCategoryOptions(): void {
     const resourceType = this.options?.resourceType ?? "nam";
     const resources = uiState.resourceLibrary[resourceType] ?? [];
+    const tone3000CategoryFilter = this.options?.tone3000CategoryFilter;
     
     // Collect unique categories
     const categories = new Set<string>();
@@ -372,13 +374,20 @@ export class ResourceBrowserModal {
     if (this.libraryCategory) {
       this.libraryCategory.innerHTML = `<option value="all">All Categories</option>` +
         sorted.map((cat) => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join("");
-      this.libraryCategory.value = "all";
+      this.libraryCategory.disabled = false;
+      if (resourceType === "nam" && tone3000CategoryFilter && sorted.includes(tone3000CategoryFilter)) {
+        this.libraryCategory.value = tone3000CategoryFilter;
+      } else {
+        this.libraryCategory.value = "all";
+      }
     }
     
     // Tone3000 category options based on resource type
     if (this.tone3000Category) {
       if (resourceType === "ir") {
         this.tone3000Category.innerHTML = `<option value="ir" selected>Cab IRs</option>`;
+        this.tone3000Category.value = "ir";
+        this.tone3000Category.disabled = true;
       } else {
         this.tone3000Category.innerHTML = `
           <option value="amp" selected>Amps</option>
@@ -386,6 +395,8 @@ export class ResourceBrowserModal {
           <option value="preamp">Preamps</option>
           <option value="full-rig">Full Rigs</option>
         `;
+        this.tone3000Category.value = tone3000CategoryFilter ?? "amp";
+        this.tone3000Category.disabled = false;
       }
     }
 
@@ -584,7 +595,9 @@ export class ResourceBrowserModal {
       }
       
       // Set gear filter based on category
-      const categoryValue = this.tone3000Category?.value ?? "amp";
+      const categoryValue = this.options?.resourceType === "ir"
+        ? "ir"
+        : (this.tone3000Category?.value ?? this.options?.tone3000CategoryFilter ?? "amp");
       if (categoryValue === "ir") {
         params.set("gear", "ir");
       } else if (categoryValue === "pedal") {
@@ -631,7 +644,7 @@ export class ResourceBrowserModal {
       this.updateTone3000Pagination(false);
     }
   }
-  
+
   private updateTone3000Pagination(loading: boolean): void {
     if (!this.tone3000Pagination || !this.tone3000PageLabel || !this.tone3000PrevBtn || !this.tone3000NextBtn) {
       return;
@@ -794,6 +807,17 @@ export class ResourceBrowserModal {
     const expandBtn = target.closest(".resource-browser-tone-expand") as HTMLButtonElement | null;
     if (expandBtn) {
       const toneId = expandBtn.dataset.toneId;
+      if (toneId) {
+        await this.toggleToneExpanded(toneId);
+      }
+      return;
+    }
+
+    // Expand/collapse when the user clicks anywhere on the tone row header.
+    const toneHeader = target.closest(".resource-browser-tone-header") as HTMLElement | null;
+    if (toneHeader) {
+      const toneContainer = toneHeader.closest(".resource-browser-tone") as HTMLElement | null;
+      const toneId = toneContainer?.dataset.toneId;
       if (toneId) {
         await this.toggleToneExpanded(toneId);
       }

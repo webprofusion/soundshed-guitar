@@ -609,6 +609,173 @@ function isNeuralModelNode(node: GraphNode): boolean {
     || resolvedType === EffectGuids.kFxNam;
 }
 
+function resolveResourceBrowserTone3000CategoryFilter(
+  node: GraphNode,
+  preset: Preset,
+): "pedal" | "amp" | "full-rig" | undefined {
+  const resolvedType = EffectTypeRegistry.resolve(node.type);
+
+  if (resolvedType === EffectGuids.kFxNam) {
+    return "pedal";
+  }
+
+  if (resolvedType === EffectGuids.kAmpNam || resolvedType === EffectGuids.kAmpNamOptimized) {
+    return hasCabIrInSameSignalPath(node.id, preset) ? "amp" : "full-rig";
+  }
+
+  return undefined;
+}
+
+function hasCabIrInSameSignalPath(nodeId: string, preset: Preset): boolean {
+  const graph = preset.graph;
+  if (!graph) {
+    return false;
+  }
+
+  const { nodeById, outgoing, incoming } = buildGraphMaps(graph);
+  if (!nodeById.has(nodeId)) {
+    return false;
+  }
+
+  const isCabNode = (candidateId: string): boolean => {
+    const candidate = nodeById.get(candidateId);
+    if (!candidate) {
+      return false;
+    }
+    return EffectTypeRegistry.resolve(candidate.type) === EffectGuids.kCabIr;
+  };
+
+  const search = (direction: "downstream" | "upstream"): boolean => {
+    const visited = new Set<string>([nodeId]);
+    const queue: string[] = [nodeId];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      const edges = direction === "downstream"
+        ? (outgoing.get(current) ?? [])
+        : (incoming.get(current) ?? []);
+      for (const edge of edges) {
+        const nextId = direction === "downstream" ? edge.to : edge.from;
+        if (!nextId || visited.has(nextId)) {
+          continue;
+        }
+        if (isCabNode(nextId)) {
+          return true;
+        }
+        visited.add(nextId);
+        queue.push(nextId);
+      }
+    }
+
+    return false;
+  };
+
+  return search("downstream") || search("upstream");
+}
+
+function shouldShowFullRigCabModelNote(node: GraphNode, preset: Preset): boolean {
+  if (EffectTypeRegistry.resolve(node.type) !== EffectGuids.kCabIr) {
+    return false;
+  }
+  return hasFullRigNamInSameSignalPath(node.id, preset);
+}
+
+function hasFullRigNamInSameSignalPath(nodeId: string, preset: Preset): boolean {
+  const graph = preset.graph;
+  if (!graph) {
+    return false;
+  }
+
+  const { nodeById, outgoing, incoming } = buildGraphMaps(graph);
+  if (!nodeById.has(nodeId)) {
+    return false;
+  }
+
+  const isFullRigNamNode = (candidateId: string): boolean => {
+    const candidate = nodeById.get(candidateId);
+    if (!candidate) {
+      return false;
+    }
+    return nodeUsesFullRigNamCategory(candidate);
+  };
+
+  const visited = new Set<string>([nodeId]);
+  const queue: string[] = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const neighbors = [
+      ...(outgoing.get(current) ?? []).map((edge) => edge.to),
+      ...(incoming.get(current) ?? []).map((edge) => edge.from),
+    ];
+    for (const nextId of neighbors) {
+      if (!nextId || visited.has(nextId)) {
+        continue;
+      }
+      if (isFullRigNamNode(nextId)) {
+        return true;
+      }
+      visited.add(nextId);
+      queue.push(nextId);
+    }
+  }
+
+  return false;
+}
+
+function nodeUsesFullRigNamCategory(node: GraphNode): boolean {
+  const resolvedType = EffectTypeRegistry.resolve(node.type);
+  const isNamEffect = resolvedType === EffectGuids.kAmpNam
+    || resolvedType === EffectGuids.kAmpNamOptimized
+    || resolvedType === EffectGuids.kFxNam
+    || resolvedType === EffectGuids.kAmpNamBlend;
+  if (!isNamEffect) {
+    return false;
+  }
+
+  const resources = Array.isArray((node as unknown as { resources?: unknown[] }).resources)
+    ? (node as unknown as { resources?: unknown[] }).resources ?? []
+    : [];
+  const resourceCount = Math.max(1, resources.length);
+  for (let index = 0; index < resourceCount; index += 1) {
+    const resource = getNodeResourceAtIndex(node, index);
+    if (!resource.id) {
+      continue;
+    }
+
+    const libraryResource = getLibraryResource("nam", resource.id);
+    const category = normalizeNamGearCategory(
+      String(libraryResource?.category ?? libraryResource?.metadata?.gear ?? ""),
+    );
+    if (category === "full-rig") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function normalizeNamGearCategory(raw: string): "pedal" | "preamp" | "amp" | "full-rig" | "cab" | "" {
+  const value = raw.trim().toLowerCase();
+  if (!value) {
+    return "";
+  }
+  if (value === "outboard") {
+    return "preamp";
+  }
+  if (value === "pedal" || value === "preamp" || value === "amp" || value === "full-rig" || value === "cab") {
+    return value;
+  }
+  return "";
+}
+
 function normalizeArchitectureBadge(raw: string): string {
   const normalized = raw.trim().toLowerCase();
   if (!normalized) {
@@ -2706,6 +2873,9 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   const shellBypassTitle = isNodeBypassed(node) ? "Enable effect" : "Bypass effect";
   const architectureBadge = getNodeArchitectureBadge(node);
   const shellBlendId = getBlendState(node)?.blend?.id || "";
+  const fullRigCabModelNote = shouldShowFullRigCabModelNote(node, preset)
+    ? `<div class="default-effect-shell-inline-note" role="status" aria-live="polite">Signal chain already includes a Cabinet Model (a "Full Rig").</div>`
+    : "";
   const shellLayoutButton = isFeatureEnabled(Features.EffectLayout) ? `
     <button
       class="effect-visualization-toolbar-btn node-customize-layout-btn"
@@ -2726,6 +2896,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     </aside>
   ` : "";
   const shellMainContent = customLayoutHtml ? `
+    ${fullRigCabModelNote}
     ${layoutIncludesResourceControls ? "" : resourceSelector}
     ${customEffectActions}
     ${eqVisualizer}
@@ -2762,6 +2933,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       ? renderCustomLayoutBackdrop(node, customLayout, defaultControlsHtml)
       : defaultControlsHtml;
     return `
+      ${fullRigCabModelNote}
       ${layoutIncludesResourceControls ? "" : resourceSelector}
       ${customEffectActions}
       ${eqVisualizer}
@@ -3427,11 +3599,15 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       }
 
       const current = getNodeResourceAtIndex(node, resourceIndex);
+      const tone3000CategoryFilter = resourceType === "nam"
+        ? resolveResourceBrowserTone3000CategoryFilter(node, preset)
+        : undefined;
       resourceBrowserModal.open({
         resourceType,
         currentId: current.id,
         nodeId,
         resourceIndex,
+        tone3000CategoryFilter,
         onSelect: (resourceId) => {
           sendNodeResourceUpdate(nodeId, resourceType, resourceId, "", resourceIndex, undefined, exposedResourceId);
           const label = getLibraryResourceName(resourceType, resourceId) || resourceId || "";

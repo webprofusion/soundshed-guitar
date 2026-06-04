@@ -2009,6 +2009,17 @@
   gap: 10px;
 }
 
+.default-effect-shell-inline-note {
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.42);
+  border-radius: 8px;
+  background: rgba(38, 28, 15, 0.72);
+  color: rgba(255, 245, 230, 0.92);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .default-effect-shell .plugin-host-load-error {
   display: grid;
   gap: 4px;
@@ -2286,6 +2297,12 @@
 }
 
 .theme-light .default-effect-shell .plugin-host-load-error {
+  background: rgba(255, 247, 232, 0.9);
+  border-color: rgba(180, 83, 9, 0.34);
+  color: #463015;
+}
+
+.theme-light .default-effect-shell-inline-note {
   background: rgba(255, 247, 232, 0.9);
   border-color: rgba(180, 83, 9, 0.34);
   color: #463015;
