@@ -8,6 +8,7 @@ export const Features = {
   RiffLibrary: "riffLibrary",
   ToneSharing: "toneSharing",
   Jam: "jam",
+  ExperimentalEffects: "experimentalEffects",
   CustomEffects: "customEffects",
   MultiRig: "multiRig",
   CompositeEffects: "compositeEffects",
@@ -73,6 +74,14 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     label: "Jam Panel",
     description: "Shows backing-track search and the floating jam player.",
     defaultEnabled: true,
+  },
+  {
+    id: Features.ExperimentalEffects,
+    key: "features.experimentalEffects.enabled",
+    label: "Experimental Effects",
+    description: "Shows experimental work-in-progress effects in the FX library. These effects may change or be removed over time.",
+    defaultEnabled: false,
+    legacyAdvanced: true,
   },
   {
     id: Features.CustomEffects,
@@ -151,7 +160,7 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
     id: "power",
     title: "Power Features",
     description: "These replace the old Advanced Options toggle and default to off unless you previously enabled it.",
-    featureIds: [Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives, Features.DebugStateCapture],
+    featureIds: [Features.ExperimentalEffects, Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives, Features.DebugStateCapture],
   },
 ];
 

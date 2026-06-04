@@ -58,6 +58,7 @@ export const EffectGuids = {
   kPitchShift:           "0c15f065-8335-4932-9d2f-366d436ec30a",
   kTranspose:            "9b89cc46-e05b-4f06-981e-1d74d1f628cf",
   kTransposeStft:        "66b3a43a-72eb-4c7a-9c47-50e9ab24b718",
+  kTransposeHybrid:      "1e14d6b1-16b3-49fe-9a43-60dbd7f8cc0f",
   kOctave:               "2e4d5380-5a79-412f-bfc0-bf84ef74d561",
 
   // Utility
@@ -110,6 +111,7 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   pitch_shift:           EffectGuids.kPitchShift,
   transpose:             EffectGuids.kTranspose,
   transpose_stft:        EffectGuids.kTransposeStft,
+  transpose_hybrid:      EffectGuids.kTransposeHybrid,
   octave:                EffectGuids.kOctave,
   gain:                  EffectGuids.kGain,
   wasm_host:             EffectGuids.kWasmHost,

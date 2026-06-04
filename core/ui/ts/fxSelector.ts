@@ -126,11 +126,14 @@ function encodeDatasetJson(value: unknown): string {
 
 export function getCatalogEffects(options?: { excludeTypes?: string[] }): EffectTypeInfo[] {
   const excludedTypes = new Set([EffectGuids.kMixer, ...(options?.excludeTypes ?? [])]);
+  const experimentalEffectTypes = new Set<string>([EffectGuids.kTransposeStft, EffectGuids.kTransposeHybrid]);
   return EffectTypeRegistry.getAll().filter((effect) => {
+    const resolvedType = EffectTypeRegistry.resolve(effect.type);
     if (effect.catalogHidden) return false;
-    if (effect.type === EffectGuids.kAmpNam || effect.type === EffectGuids.kAmpNamBlend) return false;
-    if (effect.type === EffectGuids.kWasmHost && !isFeatureEnabled(Features.CustomEffects)) return false;
-    return !excludedTypes.has(effect.type);
+    if (resolvedType === EffectGuids.kAmpNam || resolvedType === EffectGuids.kAmpNamBlend) return false;
+    if (resolvedType === EffectGuids.kWasmHost && !isFeatureEnabled(Features.CustomEffects)) return false;
+    if (experimentalEffectTypes.has(resolvedType) && !isFeatureEnabled(Features.ExperimentalEffects)) return false;
+    return !excludedTypes.has(resolvedType);
   });
 }
 
