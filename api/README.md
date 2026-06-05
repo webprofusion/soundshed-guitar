@@ -18,6 +18,12 @@ Set `ENVIRONMENT` to `development` for local and `production` in deployed enviro
 wrangler secret put SENDGRID_API_KEY
 ```
 
+Also set the Tone3000 proxy bearer secret for `/v1/resourcesearch/*` endpoints:
+
+```bash
+wrangler secret put TONE3000_API_BEARER_SECRET
+```
+
 4. Apply schema migration to local D1
 
 ```bash
@@ -66,6 +72,7 @@ npm run dev
 - `POST /v1/uploads/init`
 - `PUT /v1/uploads/:uploadId`
 - `POST /v1/uploads/complete`
+- `GET /v1/resourcesearch/health`
 
 ## Notes
 

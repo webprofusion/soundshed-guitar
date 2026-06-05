@@ -10,6 +10,7 @@ import { moduleSessionRoutes } from "./routes/module-sessions";
 import { packRoutes } from "./routes/packs";
 import { shareConsentRoutes } from "./routes/share-consent";
 import { corsProxyRoutes } from "./routes/corsproxy";
+import { tonesProxyRoutes } from "./routes/tones-proxy";
 import { toneAdvisorRoutes } from "./routes/tone-advisor";
 import { uploadRoutes } from "./routes/uploads";
 import { Env } from "./types/env";
@@ -42,6 +43,7 @@ app.route("/v1/share-consent", shareConsentRoutes());
 app.route("/v1/uploads", uploadRoutes());
 app.route("/v1", toneAdvisorRoutes());
 app.route("/v1", corsProxyRoutes());
+app.route("/v1/resourcesearch", tonesProxyRoutes());
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Route not found", 404));
 

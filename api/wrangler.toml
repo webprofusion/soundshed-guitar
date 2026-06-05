@@ -10,6 +10,7 @@ SESSION_TTL_SECONDS = "2592000"
 MAGIC_LINK_TTL_SECONDS = "900"
 SENDGRID_FROM_EMAIL = "no-reply@soundshed.com"
 SENDGRID_FROM_NAME = "Soundshed"
+TONE3000_API_BASE = "https://www.tone3000.com/api/v1"
 
 [[d1_databases]]
 binding = "DB"
