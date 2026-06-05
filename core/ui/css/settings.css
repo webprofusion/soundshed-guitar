@@ -480,6 +480,29 @@
   background: var(--bg-card);
 }
 
+.equipment-library-copy-path {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.equipment-library-copy-path:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.equipment-library-copy-path svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Attribution links in the resource library list */
 .equipment-library-item-meta a {
   color: var(--color-primary);

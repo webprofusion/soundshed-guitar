@@ -3,6 +3,7 @@ import { setAppSetting, postMessage } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { handleAppSettingUpdate } from "./tone3000.js";
+import { getTone3000ApiClientConfig } from "./tone3000Api.js";
 import { updateSignalDiagnosticsView, updateDSPPerformancePlot } from "./views.js";
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { getAudioFxLibrary, getIrLibrary } from "./dataLibraries.js";
@@ -18,6 +19,7 @@ import { initLayoutManager, renderLayoutList } from "./layoutManager.js";
 import { initBlendManager, renderBlendList } from "./blendManager.js";
 import { updateSelectedNodePeakMeter } from "./signalPath.js";
 import { updateUiSettings } from "./windowSettings.js";
+import { getApiBaseUrl } from "./toneSharingPanel.js";
 import {
   FEATURE_DEFINITIONS,
   FEATURE_FLAGS_CHANGED_EVENT,
@@ -32,6 +34,7 @@ import {
 } from "./featureFlags.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
+const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
 const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
 const USER_INPUT_CALIBRATION_PROFILES_SETTING = "audio.userInputCalibration.profiles";
 const USER_INPUT_CALIBRATION_ACTIVE_PROFILE_SETTING = "audio.userInputCalibration.activeProfileId";
@@ -114,6 +117,13 @@ const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input"
 const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
 const factoryArchiveSettingsSection = document.getElementById("factory-archive-settings-section") as HTMLElement | null;
 const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
+const tone3000UseSoundshedApiToggle = document.getElementById("tone3000-use-soundshed-api-toggle") as HTMLInputElement | null;
+const tone3000ApiKeyRow = document.getElementById("tone3000-api-key-row") as HTMLElement | null;
+const tone3000ProxyInfoHint = document.getElementById("tone3000-proxy-info-hint") as HTMLElement | null;
+const tone3000ApiModeStatus = document.getElementById("tone3000-api-mode-status") as HTMLElement | null;
+const tone3000ProxyHealthRow = document.getElementById("tone3000-proxy-health-row") as HTMLElement | null;
+const tone3000ProxyHealthCheckButton = document.getElementById("tone3000-proxy-health-check") as HTMLButtonElement | null;
+const tone3000ProxyHealthStatus = document.getElementById("tone3000-proxy-health-status") as HTMLElement | null;
 const advancedTabButton = document.querySelector('.library-tab-btn[data-library-tab="advanced"]') as HTMLElement | null;
 const tone3000TabButton = document.querySelector('.library-tab-btn[data-library-tab="tone3000"]') as HTMLElement | null;
 const resourceLibraryTabButton = document.querySelector('.library-tab-btn[data-library-tab="resources"]') as HTMLElement | null;
@@ -164,6 +174,8 @@ export function initSettingsPanel(): void {
   initFeatureToggles();
   initDspLevelTargetControls();
   initFactoryArchiveLoadingToggle();
+  initTone3000UseSoundshedApiToggle();
+  initTone3000ProxyHealthCheck();
   initUpdateCheckToggle();
   initEquipmentTabs();
   initLibraryFilters();
@@ -746,6 +758,91 @@ function applyAdvancedSubTab(tabId: string, subTabButtons: HTMLElement[], subTab
 
 const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
 
+function initTone3000UseSoundshedApiToggle(): void {
+  if (!tone3000UseSoundshedApiToggle || tone3000UseSoundshedApiToggle.dataset.bound === "true") return;
+  tone3000UseSoundshedApiToggle.dataset.bound = "true";
+  tone3000UseSoundshedApiToggle.addEventListener("change", () => {
+    const enabled = Boolean(tone3000UseSoundshedApiToggle.checked);
+    uiState.appSettings[TONE3000_USE_SOUNDSHED_API_SETTING] = enabled;
+    setAppSetting(TONE3000_USE_SOUNDSHED_API_SETTING, enabled);
+    void handleAppSettingUpdate(TONE3000_USE_SOUNDSHED_API_SETTING, enabled);
+    applyTone3000ModeVisibility(enabled);
+    updateTone3000ApiModeStatus();
+  });
+}
+
+function updateTone3000ApiModeStatus(): void {
+  if (!tone3000ApiModeStatus) {
+    return;
+  }
+
+  const config = getTone3000ApiClientConfig();
+  tone3000ApiModeStatus.textContent = config.usingProxy
+    ? "Connection mode: Soundshed API"
+    : "Connection mode: Direct Tone3000 API with user API Key";
+}
+
+function applyTone3000ModeVisibility(proxyEnabled: boolean): void {
+  tone3000ApiKeyRow?.toggleAttribute("hidden", proxyEnabled);
+  tone3000ProxyInfoHint?.toggleAttribute("hidden", !proxyEnabled);
+  tone3000ApiModeStatus?.toggleAttribute("hidden", !proxyEnabled);
+  tone3000ProxyHealthRow?.toggleAttribute("hidden", !proxyEnabled);
+  tone3000ProxyHealthStatus?.toggleAttribute("hidden", !proxyEnabled);
+}
+
+function updateTone3000ProxyHealthStatus(message: string): void {
+  if (!tone3000ProxyHealthStatus) {
+    return;
+  }
+  tone3000ProxyHealthStatus.textContent = message;
+}
+
+function initTone3000ProxyHealthCheck(): void {
+  if (!tone3000ProxyHealthCheckButton || tone3000ProxyHealthCheckButton.dataset.bound === "true") {
+    return;
+  }
+
+  tone3000ProxyHealthCheckButton.dataset.bound = "true";
+  tone3000ProxyHealthCheckButton.addEventListener("click", async () => {
+    if (!tone3000ProxyHealthCheckButton) {
+      return;
+    }
+
+    tone3000ProxyHealthCheckButton.disabled = true;
+    updateTone3000ProxyHealthStatus("API health: checking...");
+
+    try {
+      const apiBase = getApiBaseUrl().trim().replace(/\/+$/, "");
+      const response = await fetch(`${apiBase}/resourcesearch/health`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      let payload: unknown = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        const message = (payload && typeof payload === "object" && "error" in payload)
+          ? String((payload as { error?: { message?: unknown } }).error?.message ?? `HTTP ${response.status}`)
+          : `HTTP ${response.status}`;
+        updateTone3000ProxyHealthStatus(`API health: failed (${message})`);
+        return;
+      }
+
+      updateTone3000ProxyHealthStatus("API health: OK");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateTone3000ProxyHealthStatus(`API health: failed (${message})`);
+    } finally {
+      tone3000ProxyHealthCheckButton.disabled = false;
+    }
+  });
+}
+
 function initUpdateCheckToggle(): void {
   if (!updateCheckToggle || updateCheckToggle.dataset.bound === "true") return;
   updateCheckToggle.dataset.bound = "true";
@@ -891,6 +988,14 @@ export function initDiagnosticsToggle(): void {
 
 export function refreshSettingsView(): void {
   const stored = getSettingValue(API_KEY_SETTING);
+  const storedApiKey = typeof stored === "string" ? stored.trim() : "";
+  const storedProxyMode = getSettingValue(TONE3000_USE_SOUNDSHED_API_SETTING);
+  if (storedProxyMode === null && !storedApiKey) {
+    uiState.appSettings[TONE3000_USE_SOUNDSHED_API_SETTING] = true;
+    setAppSetting(TONE3000_USE_SOUNDSHED_API_SETTING, true);
+    void handleAppSettingUpdate(TONE3000_USE_SOUNDSHED_API_SETTING, true);
+  }
+
   if (apiKeyInput) {
     apiKeyInput.value = "";
     apiKeyInput.placeholder = stored ? "API key stored" : "Enter your Tone3000 API key";
@@ -935,6 +1040,17 @@ export function refreshSettingsView(): void {
   if (updateCheckToggle) {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);
     updateCheckToggle.checked = updateCheckEnabled === null ? true : Boolean(updateCheckEnabled);
+  }
+  if (tone3000UseSoundshedApiToggle) {
+    const useSoundshedApi = getSettingValue(TONE3000_USE_SOUNDSHED_API_SETTING);
+    tone3000UseSoundshedApiToggle.checked = Boolean(useSoundshedApi);
+    applyTone3000ModeVisibility(Boolean(useSoundshedApi));
+  }
+  updateTone3000ApiModeStatus();
+  if (getTone3000ApiClientConfig().usingProxy) {
+    updateTone3000ProxyHealthStatus("API health: not checked.");
+  } else {
+    updateTone3000ProxyHealthStatus("API health: disabled in direct mode.");
   }
   const showAudioPreferences = Boolean(uiState.environment?.standalone);
   openAudioPreferencesRow?.toggleAttribute("hidden", !showAudioPreferences);
@@ -1954,6 +2070,19 @@ function bindLibraryActions(): void {
       return;
     }
 
+    const copyPathButton = target.closest(".equipment-library-copy-path") as HTMLButtonElement | null;
+    if (copyPathButton) {
+      const resourceType = copyPathButton.dataset.resourceType ?? "";
+      const resourceId = copyPathButton.dataset.resourceId ?? "";
+      const item = getLibraryItems().find((entry) => entry.type === resourceType && entry.id === resourceId);
+      if (!item) {
+        showNotification("Copy path failed", "Resource not found in library.");
+        return;
+      }
+      void copyLibraryResourcePath(item);
+      return;
+    }
+
     const editButton = target.closest(".equipment-library-edit") as HTMLButtonElement | null;
     if (editButton) {
       const resourceType = editButton.dataset.resourceType ?? "";
@@ -2170,6 +2299,46 @@ async function replaceLibraryResourceFromInput(item: LibraryItem, input: HTMLInp
   showNotification("Resource updated", item.name || item.id);
 }
 
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "readonly");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard unavailable");
+  }
+}
+
+async function copyLibraryResourcePath(item: LibraryItem): Promise<void> {
+  const path = item.filePath.trim();
+  if (!path || inferResourceOrigin(item.filePath, item.metadata) !== "Local") {
+    showNotification("Copy path unavailable", "This resource does not have a local file path.");
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(path);
+    showNotification("Path copied", path);
+  } catch {
+    const promptResult = window.prompt("Copy local resource path", path);
+    if (promptResult === null) {
+      showNotification("Copy cancelled", "Local path was not copied.");
+      return;
+    }
+    showNotification("Path ready", "Local resource path is shown for manual copy.");
+  }
+}
+
 function renderListLibraryView(filtered: LibraryItem[], totalCount: number): void {
   if (!libraryResults) {
     return;
@@ -2264,6 +2433,9 @@ function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): st
   const editAction = originLabel !== "Built-in"
     ? `<button class="equipment-library-edit" data-resource-type="${escapeHtml(item.type)}" data-resource-id="${escapeHtml(item.id)}">Edit</button>`
     : "";
+  const copyPathAction = originLabel === "Local" && Boolean(item.filePath.trim())
+    ? `<button class="equipment-library-copy-path" data-resource-type="${escapeHtml(item.type)}" data-resource-id="${escapeHtml(item.id)}" title="Copy local file path" aria-label="Copy local file path"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
+    : "";
   const usedKey = `${item.type}:${item.id}`;
   const usedBadge = usedResources.has(usedKey)
     ? `<span class="equipment-library-used" title="Used by preset">${renderIcon("link", "equipment-library-used-icon")}</span>`
@@ -2284,6 +2456,7 @@ function renderLibraryItemRow(item: LibraryItem, usedResources: Set<string>): st
       </div>
       <div class="results-item-actions equipment-library-item-actions">
         ${editAction}
+        ${copyPathAction}
         ${browseAction}
       </div>
     </div>

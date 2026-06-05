@@ -1142,6 +1142,36 @@
   transition: all 0.2s;
 }
 
+.resource-browser-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.resource-browser-item-copy-path {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-browser);
+  background: var(--bg-browser-input);
+  color: var(--modal-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resource-browser-item-copy-path:hover {
+  background: var(--bg-browser-hover);
+  color: var(--modal-text);
+}
+
+.resource-browser-item-copy-path svg {
+  width: 14px;
+  height: 14px;
+}
+
 .resource-browser-item-select:hover {
   background: var(--color-primary);
   color: white;

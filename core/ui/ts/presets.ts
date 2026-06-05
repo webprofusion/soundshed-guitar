@@ -13,7 +13,7 @@ import { renderSignalPathBar } from "./signalPath.js";
 import { showConfirm } from "./dialogs.js";
 import { isToneSharingSignedIn, openToneSharingPublishPresetModal, openToneSharingSignInModal, registerInstalledToneSharingPack, syncToneSharingFavoriteForPreset, syncToneSharingRatingForPreset } from "./toneSharingPanel.js";
 import type { InstalledPackMetadata } from "./toneSharingPanel.js";
-import { downloadTone3000ResourceByReference, saveTone3000ApiKey } from "./tone3000.js";
+import { downloadTone3000ResourceByReference, isTone3000AuthReady, saveTone3000ApiKey } from "./tone3000.js";
 import { switchMainPanel } from "./navigation.js";
 import { activateLibraryTab } from "./settings.js";
 import { updateUiSettings } from "./windowSettings.js";
@@ -3212,7 +3212,7 @@ async function importTone3000ArchiveResources(
   idMap: Map<string, string>,
   importedResources: Array<{ type: string; id: string }>,
 ): Promise<void> {
-  if (!uiState.tone3000Session?.accessToken) {
+  if (!isTone3000AuthReady()) {
     const storedApiKey = typeof uiState.appSettings["tone3000.apiKey"] === "string"
       ? (uiState.appSettings["tone3000.apiKey"] as string).trim()
       : "";
@@ -3222,7 +3222,7 @@ async function importTone3000ArchiveResources(
       await saveTone3000ApiKey(storedApiKey);
     }
 
-    if (!uiState.tone3000Session?.accessToken) {
+    if (!isTone3000AuthReady()) {
       const granted = await promptForTone3000ApiKey(refs.length);
       if (!granted) {
         throw new Error("Tone3000 API key is required to import this shared preset");

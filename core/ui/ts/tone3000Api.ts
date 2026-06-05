@@ -1,8 +1,20 @@
 import type { Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
 import type { Tone3000Architecture } from "./tone3000ApiTypes.js";
+import { uiState } from "./state.js";
 
-export const TONE3000_API_BASE = "https://www.tone3000.com/api/v1";
-export const TONE3000_SESSION_URL = `${TONE3000_API_BASE}/auth/session`;
+export const TONE3000_OFFICIAL_API_BASE = "https://www.tone3000.com/api/v1";
+export const SOUNDSHED_TONE3000_PROXY_API_BASE = "https://api-guitar.soundshed.com/v1/resourcesearch";
+const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
+const TONE3000_API_MODE_SETTING = "tone3000.apiMode";
+const TONE3000_PROXY_API_BASE_SETTING = "tone3000.proxyApiBaseUrl";
+
+export type Tone3000ApiMode = "official" | "proxy";
+
+export type Tone3000ApiClientConfig = {
+  mode: Tone3000ApiMode;
+  baseUrl: string;
+  usingProxy: boolean;
+};
 
 export type Tone3000PaginatedLike = {
   page?: unknown;
@@ -20,6 +32,77 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return null;
   }
   return value as Record<string, unknown>;
+}
+
+function getStringSetting(key: string): string {
+  const value = uiState.appSettings?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getBooleanSetting(key: string): boolean {
+  const value = uiState.appSettings?.[key];
+  return value === true;
+}
+
+function withTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function toApiBaseUrl(candidate: string, fallback: string): string {
+  const trimmed = candidate.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  try {
+    const normalized = withTrailingSlash(trimmed);
+    return new URL(".", normalized).toString().replace(/\/$/, "");
+  } catch {
+    return fallback;
+  }
+}
+
+export function getTone3000ApiClientConfig(): Tone3000ApiClientConfig {
+  const useSoundshedProxy = getBooleanSetting(TONE3000_USE_SOUNDSHED_API_SETTING);
+  const proxyBaseOverride = toApiBaseUrl(getStringSetting(TONE3000_PROXY_API_BASE_SETTING), "");
+  if (useSoundshedProxy) {
+    return {
+      mode: "proxy",
+      baseUrl: proxyBaseOverride || SOUNDSHED_TONE3000_PROXY_API_BASE,
+      usingProxy: true,
+    };
+  }
+
+  const modeSetting = getStringSetting(TONE3000_API_MODE_SETTING).toLowerCase();
+  const mode: Tone3000ApiMode = modeSetting === "proxy" ? "proxy" : "official";
+
+  const proxyBase = proxyBaseOverride;
+  if (mode === "proxy" && proxyBase) {
+    return {
+      mode,
+      baseUrl: proxyBase,
+      usingProxy: true,
+    };
+  }
+
+  return {
+    mode,
+    baseUrl: TONE3000_OFFICIAL_API_BASE,
+    usingProxy: false,
+  };
+}
+
+function buildTone3000ApiUrl(path: string, params?: URLSearchParams): string {
+  const { baseUrl } = getTone3000ApiClientConfig();
+  const url = new URL(path, withTrailingSlash(baseUrl));
+  if (params) {
+    url.search = params.toString();
+  }
+  return url.toString();
+}
+
+export function getTone3000SessionUrl(): string {
+  return buildTone3000ApiUrl("auth/session");
 }
 
 export function extractTone3000Tones(payload: unknown): Tone3000Tone[] {
@@ -69,11 +152,11 @@ export function buildTone3000ModelsUrl(
   if (architecture) {
     params.set("architecture", architecture);
   }
-  return `${TONE3000_API_BASE}/models?${params.toString()}`;
+  return buildTone3000ApiUrl("models", params);
 }
 
 export function buildTone3000SearchUrl(params: URLSearchParams): string {
-  return `${TONE3000_API_BASE}/tones/search?${params.toString()}`;
+  return buildTone3000ApiUrl("tones/search", params);
 }
 
 export function parseTone3000Pagination(

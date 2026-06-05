@@ -9,7 +9,7 @@
 
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
-import { ensureTone3000Session, tone3000AuthenticatedFetch } from "./tone3000.js";
+import { ensureTone3000Session, isTone3000AuthReady, tone3000AuthenticatedFetch } from "./tone3000.js";
 import { showNotification } from "./notifications.js";
 import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
@@ -434,6 +434,56 @@ export class ResourceBrowserModal {
     }
     return "";
   }
+
+  private async copyTextToClipboard(value: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "readonly");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    if (!copied) {
+      throw new Error("Clipboard unavailable");
+    }
+  }
+
+  private async copyLocalLibraryPath(resourceId: string): Promise<void> {
+    if (!this.options) {
+      return;
+    }
+
+    const resource = (uiState.resourceLibrary[this.options.resourceType] ?? []).find((entry) => entry.id === resourceId);
+    if (!resource) {
+      showNotification("Copy path failed", "Resource not found.");
+      return;
+    }
+
+    const path = (resource.filePath ?? "").trim();
+    if (!path) {
+      showNotification("Copy path unavailable", "This resource does not have a local file path.");
+      return;
+    }
+
+    try {
+      await this.copyTextToClipboard(path);
+      showNotification("Path copied", path);
+    } catch {
+      const promptResult = window.prompt("Copy local resource path", path);
+      if (promptResult === null) {
+        showNotification("Copy cancelled", "Local path was not copied.");
+        return;
+      }
+      showNotification("Path ready", "Local resource path is shown for manual copy.");
+    }
+  }
   
   private renderLibraryList(): void {
     if (!this.libraryList || !this.options) {
@@ -493,6 +543,11 @@ export class ResourceBrowserModal {
         const architectureBadge = architecture
           ? `<span class="resource-browser-architecture-badge" title="Model architecture">${escapeHtml(architecture)}</span>`
           : "";
+        const localFilePath = (res.filePath ?? "").trim();
+        const canCopyLocalPath = Boolean(localFilePath);
+        const copyPathAction = canCopyLocalPath
+          ? `<button class="resource-browser-item-copy-path" type="button" data-resource-id="${escapeHtml(res.id)}" title="Copy local file path" aria-label="Copy local file path"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
+          : "";
         
         return `
           <div class="${selectedClass}" data-resource-id="${escapeHtml(res.id)}" data-source="library">
@@ -503,7 +558,10 @@ export class ResourceBrowserModal {
                 ${architectureBadge}${providerBadge}${authorBadge}${sourceLinkBadge}
               </div>
             </div>
-            <button class="resource-browser-item-select" type="button">${isSelected ? "✓ Selected" : "Select"}</button>
+            <div class="resource-browser-item-actions">
+              ${copyPathAction}
+              <button class="resource-browser-item-select" type="button">${isSelected ? "✓ Selected" : "Select"}</button>
+            </div>
           </div>
         `;
       })
@@ -513,6 +571,15 @@ export class ResourceBrowserModal {
   private handleLibraryClick(event: Event): void {
     const target = event.target as HTMLElement | null;
     if (!target) {
+      return;
+    }
+
+    const copyPathButton = target.closest(".resource-browser-item-copy-path") as HTMLButtonElement | null;
+    if (copyPathButton) {
+      const resourceId = copyPathButton.dataset.resourceId ?? "";
+      if (resourceId) {
+        void this.copyLocalLibraryPath(resourceId);
+      }
       return;
     }
     
@@ -571,8 +638,7 @@ export class ResourceBrowserModal {
     }
     
     await ensureTone3000Session();
-    const session = uiState.tone3000Session;
-    if (!session?.accessToken) {
+    if (!isTone3000AuthReady()) {
       this.tone3000List.innerHTML = `<div class="resource-browser-empty">Add a Tone3000 API key in Settings to browse.</div>`;
       this.updateTone3000Pagination(false);
       return;
@@ -880,8 +946,7 @@ export class ResourceBrowserModal {
   }
   
   private async fetchToneModels(tone: Tone3000Tone): Promise<Tone3000Model[]> {
-    const session = uiState.tone3000Session;
-    if (!session?.accessToken) {
+    if (!isTone3000AuthReady()) {
       throw new Error("No session");
     }
     
@@ -905,8 +970,7 @@ export class ResourceBrowserModal {
       this.cancelPreview(false);
     }
     
-    const session = uiState.tone3000Session;
-    if (!session?.accessToken) {
+    if (!isTone3000AuthReady()) {
       showNotification("Preview failed", "No Tone3000 session");
       return;
     }
@@ -1007,8 +1071,7 @@ export class ResourceBrowserModal {
       this.cancelPreview(false);
     }
     
-    const session = uiState.tone3000Session;
-    if (!session?.accessToken) {
+    if (!isTone3000AuthReady()) {
       showNotification("Import failed", "No Tone3000 session");
       return;
     }

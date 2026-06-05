@@ -2,7 +2,7 @@ import { uiState } from "./state.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { postMessage } from "./bridge.js";
-import { ensureTone3000Session, tone3000AuthenticatedFetch } from "./tone3000.js";
+import { ensureTone3000Session, isTone3000AuthReady, tone3000AuthenticatedFetch } from "./tone3000.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 import { openBlendEditorWithDefinition } from "./signalPath.js";
@@ -225,8 +225,7 @@ async function runSearch(page = 1): Promise<void> {
   currentPage = page;
   await ensureTone3000Session();
 
-  const session = uiState.tone3000Session;
-  if (!session?.accessToken) {
+  if (!isTone3000AuthReady()) {
     resultsEl.innerHTML = `<div class="tone3000-empty">Add a Tone3000 API key to browse models.</div>`;
     return;
   }
@@ -437,8 +436,7 @@ async function openToneDetails(tone: Tone3000Tone): Promise<void> {
   detailsModalEl.style.display = "flex";
 
   await ensureTone3000Session();
-  const session = uiState.tone3000Session;
-  if (!session?.accessToken) {
+  if (!isTone3000AuthReady()) {
     detailsModelsStatusEl.textContent = "Add a Tone3000 API key to load models.";
     return;
   }
@@ -608,8 +606,7 @@ async function fetchToneModels(tone: Tone3000Tone): Promise<Tone3000Model[]> {
 }
 
 async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): Promise<void> {
-  const session = uiState.tone3000Session;
-  if (!session?.accessToken) {
+  if (!isTone3000AuthReady()) {
     showNotification("Tone3000 session missing");
     return;
   }
@@ -723,8 +720,7 @@ async function importToneModelsList(
   models: Tone3000Model[],
   onProgress?: (completed: number, total: number, currentName?: string) => void,
 ): Promise<string[]> {
-  const session = uiState.tone3000Session;
-  if (!session?.accessToken) {
+  if (!isTone3000AuthReady()) {
     throw new Error("Tone3000 session missing");
   }
 

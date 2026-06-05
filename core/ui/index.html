@@ -665,8 +665,22 @@
             <div class="settings-section" id="settings-tone3000-section">
               <h3>Tone3000 API</h3>
               <div class="settings-row">
+                <label for="tone3000-use-soundshed-api-toggle">Use Soundshed Tone Search API</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="tone3000-use-soundshed-api-toggle" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint" id="tone3000-proxy-info-hint">Fetch Tone 3000 results via the Soundshed API.</div>
+              <div class="settings-hint" id="tone3000-api-mode-status">Connection mode: Direct Tone3000 API</div>
+              <div class="settings-row" id="tone3000-proxy-health-row">
+                <label for="tone3000-proxy-health-check">API Health</label>
+                <button id="tone3000-proxy-health-check" type="button" class="secondary">Check API Health</button>
+              </div>
+              <div class="settings-hint" id="tone3000-proxy-health-status">API health: not checked.</div>
+              <div class="settings-row" id="tone3000-api-key-row">
                 <label for="tone3000-api-key-input">API Key</label>
-                <input type="password" id="tone3000-api-key-input" placeholder="Enter your Tone3000 API key" />
+                <input type="password" id="tone3000-api-key-input" placeholder="Enter your Tone3000 API key (Settings > Legacy API Key)" />
                 <button id="tone3000-api-key-save">Save</button>
                 <button id="tone3000-api-key-clear" class="secondary">Clear</button>
               </div>
