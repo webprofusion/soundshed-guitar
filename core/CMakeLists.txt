@@ -71,14 +71,15 @@ function(guitarfx_apply_release_optimizations target_name)
         endif()
 
         if(_guitarfx_osx_arches MATCHES "x86_64")
-            if(_guitarfx_osx_arches MATCHES "arm64")
+            if(CMAKE_CONFIGURATION_TYPES)
                 target_compile_options(${target_name} PRIVATE
-                    $<$<CONFIG:Release>:SHELL:-Xarch_x86_64 -mavx2>
-                    $<$<CONFIG:RelWithDebInfo>:SHELL:-Xarch_x86_64 -mavx2>)
-            else()
-                target_compile_options(${target_name} PRIVATE
+                    $<$<CONFIG:Release>:-Xarch_x86_64>
                     $<$<CONFIG:Release>:-mavx2>
+                    $<$<CONFIG:RelWithDebInfo>:-Xarch_x86_64>
                     $<$<CONFIG:RelWithDebInfo>:-mavx2>)
+            elseif(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo)$")
+                target_compile_options(${target_name} PRIVATE
+                    "SHELL:-Xarch_x86_64 -mavx2")
             endif()
         endif()
     else()
@@ -527,8 +528,19 @@ set_target_properties(SoundshedGuitarCore PROPERTIES
 guitarfx_disable_linux_gnu_unique(SoundshedGuitarCore)
 
 # SimdFFT currently uses SSE3 intrinsics in all build configurations.
-# Enable SSE3 explicitly on x86_64 so Debug builds compile consistently.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+# Enable SSE3 explicitly for x86_64 slices so Debug builds compile consistently
+# without leaking x86-only flags into universal arm64 compilations on macOS.
+if(APPLE)
+    set(_guitarfx_core_sse_arches "${CMAKE_OSX_ARCHITECTURES}")
+    if(NOT _guitarfx_core_sse_arches)
+        set(_guitarfx_core_sse_arches "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+
+    if(_guitarfx_core_sse_arches MATCHES "x86_64")
+        target_compile_options(SoundshedGuitarCore PRIVATE
+            $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:SHELL:-Xarch_x86_64 -msse3>)
+    endif()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
     target_compile_options(SoundshedGuitarCore PRIVATE
         $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-msse3>)
 endif()
