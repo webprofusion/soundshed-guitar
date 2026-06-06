@@ -393,7 +393,8 @@ namespace guitarfx
     void ConfigureModelProcessing()
     {
       mModelSampleRate = ResolveModelSampleRate();
-      mResamplingActive = std::abs(mModelSampleRate - mSampleRate) > 1.0;
+      // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+      mResamplingActive = NeedsNamRuntimeResampling(mModelSampleRate, mSampleRate);
       mMaxModelBlockSize = mResamplingActive
         ? BlockSincResampler::ComputeMaxOutputFrameCount(mMaxBlockSize, mSampleRate, mModelSampleRate)
         : mMaxBlockSize;
@@ -404,8 +405,8 @@ namespace guitarfx
       mModelOutputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
       mModelOutputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
 
-      mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize);
-      mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize);
+      mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize, SampleRateConversionQuality::HighPerformance);
+      mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize, SampleRateConversionQuality::HighPerformance);
 
       if (mModelLeft)
         mModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);

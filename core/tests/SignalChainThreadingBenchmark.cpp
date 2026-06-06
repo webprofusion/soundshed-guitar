@@ -28,7 +28,7 @@ namespace
 {
 namespace fs = std::filesystem;
 
-constexpr double kSampleRate = 48000.0;
+constexpr double kDefaultSampleRate = 48000.0;
 constexpr int kBlockSize = 128;
 constexpr int kWarmupBlocks = 300;
 constexpr int kMeasureBlocks = 3000;
@@ -58,6 +58,7 @@ struct BenchmarkResult
 struct BenchmarkSettings
 {
     std::string profile = kProfileBaseline;
+    double sampleRate = kDefaultSampleRate;
     std::string csvPath;
 };
 
@@ -289,7 +290,7 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
     }
 
     mixer.SetMultiThreadedProcessingEnabled(multiThreaded);
-    mixer.Prepare(kSampleRate, kBlockSize);
+    mixer.Prepare(settings.sampleRate, kBlockSize);
 
     for (int i = 0; i < presetCount; ++i)
     {
@@ -384,6 +385,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
 {
     showHelp = false;
     settings.profile = kProfileBaseline;
+    settings.sampleRate = kDefaultSampleRate;
     settings.csvPath.clear();
 
     for (int i = 1; i < argc; ++i)
@@ -418,17 +420,44 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
             continue;
         }
 
+        if (arg == "--sample-rate")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value after --sample-rate\n";
+                return false;
+            }
+
+            try
+            {
+                settings.sampleRate = std::stod(argv[++i]);
+            }
+            catch (...)
+            {
+                std::cerr << "Invalid sample rate value\n";
+                return false;
+            }
+
+            if (settings.sampleRate <= 0.0)
+            {
+                std::cerr << "Sample rate must be > 0\n";
+                return false;
+            }
+            continue;
+        }
+
         if (arg == "-h" || arg == "--help")
         {
-            std::cout << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--csv <path>]\n";
+            std::cout << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--csv <path>]\n";
             std::cout << "  --profile <name>  Benchmark profile to run (default: baseline).\n";
+            std::cout << "  --sample-rate <hz>  Processing sample rate for benchmark run (default: 48000).\n";
             std::cout << "  --csv <path>  Write results table as CSV to the given file path.\n";
             showHelp = true;
             return false;
         }
 
         std::cerr << "Unknown argument: " << arg << '\n';
-        std::cerr << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--csv <path>]\n";
+        std::cerr << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--csv <path>]\n";
         return false;
     }
 
@@ -437,6 +466,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
 
 bool WriteCsv(const std::string& csvPath,
               const std::vector<BenchmarkResult>& rows,
+              double sampleRate,
               double onePresetSpeedup,
               double fourPresetSpeedup)
 {
@@ -451,7 +481,7 @@ bool WriteCsv(const std::string& csvPath,
     for (const auto& row : rows)
     {
         out << row.profile << ','
-            << static_cast<int>(kSampleRate) << ','
+            << static_cast<int>(std::lround(sampleRate)) << ','
             << kBlockSize << ','
             << kWarmupBlocks << ','
             << kMeasureBlocks << ','
@@ -489,7 +519,7 @@ int main(int argc, char* argv[])
         std::cout << "==============================================\n";
         std::cout << "Signal Chain Threading Benchmark\n";
         std::cout << "Profile=" << settings.profile << "\n";
-        std::cout << "SampleRate=" << kSampleRate << ", BlockSize=" << kBlockSize
+        std::cout << "SampleRate=" << settings.sampleRate << ", BlockSize=" << kBlockSize
                   << ", WarmupBlocks=" << kWarmupBlocks
                   << ", MeasureBlocks=" << kMeasureBlocks << "\n";
         std::cout << "==============================================\n\n";
@@ -538,7 +568,7 @@ int main(int argc, char* argv[])
 
         if (!settings.csvPath.empty())
         {
-            if (!WriteCsv(settings.csvPath, rows, onePresetSpeedup, fourPresetSpeedup))
+            if (!WriteCsv(settings.csvPath, rows, settings.sampleRate, onePresetSpeedup, fourPresetSpeedup))
             {
                 return 1;
             }

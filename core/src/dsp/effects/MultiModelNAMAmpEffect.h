@@ -515,7 +515,8 @@ private:
   void ResizeModelBuffers(ModelInstance& instance, int maxBlockSize)
   {
     instance.processingSampleRate = ResolveInstanceSampleRate(instance);
-    instance.resamplingActive = std::abs(instance.processingSampleRate - mSampleRate) > 1.0;
+    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+    instance.resamplingActive = NeedsNamRuntimeResampling(instance.processingSampleRate, mSampleRate);
     instance.maxProcessingBlockSize = instance.resamplingActive
       ? BlockSincResampler::ComputeMaxOutputFrameCount(maxBlockSize, mSampleRate, instance.processingSampleRate)
       : maxBlockSize;
@@ -532,8 +533,14 @@ private:
     instance.fallbackOutputL.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
     instance.fallbackOutputR.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
 
-    instance.inputResampler.Prepare(mSampleRate, instance.processingSampleRate, maxBlockSize);
-    instance.outputResampler.Prepare(instance.processingSampleRate, mSampleRate, instance.maxProcessingBlockSize);
+    instance.inputResampler.Prepare(mSampleRate,
+                    instance.processingSampleRate,
+                    maxBlockSize,
+                    SampleRateConversionQuality::HighPerformance);
+    instance.outputResampler.Prepare(instance.processingSampleRate,
+                     mSampleRate,
+                     instance.maxProcessingBlockSize,
+                     SampleRateConversionQuality::HighPerformance);
   }
 
   void ResetModel(ModelInstance& instance, double sampleRate, int maxBlockSize)

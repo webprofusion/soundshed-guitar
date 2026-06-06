@@ -9,6 +9,7 @@ namespace guitarfx
   enum class SampleRateConversionQuality
   {
     Linear,
+    HighPerformance,
     Highest
   };
 
@@ -74,6 +75,7 @@ namespace guitarfx
 
   private:
     static constexpr int kHalfTaps = 64;
+    static constexpr int kHighPerformanceHalfTaps = 12;
     static constexpr int kGuardFrames = 8;
     static constexpr double kPi = 3.14159265358979323846;
 
@@ -85,7 +87,14 @@ namespace guitarfx
 
     [[nodiscard]] static bool RatesMatch(double sourceRate, double targetRate)
     {
-      return std::abs(sourceRate - targetRate) < 1.0;
+      return std::abs(sourceRate - targetRate) < 1.0e-9;
+    }
+
+    [[nodiscard]] int GetHalfTapsForQuality() const
+    {
+      if (mQuality == SampleRateConversionQuality::HighPerformance)
+        return kHighPerformanceHalfTaps;
+      return kHalfTaps;
     }
 
     [[nodiscard]] static double Sinc(double value)
@@ -97,9 +106,9 @@ namespace guitarfx
       return std::sin(angle) / angle;
     }
 
-    [[nodiscard]] static double Blackman(double distance)
+    [[nodiscard]] static double Blackman(double distance, int halfTaps)
     {
-      const double normalizedDistance = std::abs(distance) / static_cast<double>(kHalfTaps);
+      const double normalizedDistance = std::abs(distance) / static_cast<double>(halfTaps);
       if (normalizedDistance >= 1.0)
         return 0.0;
 
@@ -140,6 +149,7 @@ namespace guitarfx
                     OutputSample *output,
                     int outputFrames) const
     {
+      const int halfTaps = GetHalfTapsForQuality();
       const double sourceStep = static_cast<double>(inputFrames) / static_cast<double>(outputFrames);
       const double cutoff = std::min(static_cast<double>(outputFrames) / static_cast<double>(inputFrames), 1.0);
 
@@ -150,11 +160,11 @@ namespace guitarfx
         double weightedSum = 0.0;
         double coefficientSum = 0.0;
 
-        for (int tapOffset = -kHalfTaps; tapOffset <= kHalfTaps; ++tapOffset)
+        for (int tapOffset = -halfTaps; tapOffset <= halfTaps; ++tapOffset)
         {
           const int sourceIndex = centerIndex + tapOffset;
           const double distance = sourcePosition - static_cast<double>(sourceIndex);
-          const double coefficient = cutoff * Sinc(distance * cutoff) * Blackman(distance);
+          const double coefficient = cutoff * Sinc(distance * cutoff) * Blackman(distance, halfTaps);
           weightedSum += ReadClampedSample(input, inputFrames, sourceIndex) * coefficient;
           coefficientSum += coefficient;
         }

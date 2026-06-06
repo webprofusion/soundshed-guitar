@@ -609,7 +609,8 @@ private:
   void ConfigureModelProcessing()
   {
     mModelSampleRate = ResolveModelSampleRate();
-    mResamplingActive = std::abs(mModelSampleRate - mSampleRate) > 1.0;
+    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+    mResamplingActive = NeedsNamRuntimeResampling(mModelSampleRate, mSampleRate);
     mMaxModelBlockSize = mResamplingActive
       ? BlockSincResampler::ComputeMaxOutputFrameCount(mMaxBlockSize, mSampleRate, mModelSampleRate)
       : mMaxBlockSize;
@@ -624,8 +625,8 @@ private:
     mFallbackOutputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
     mFallbackOutputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
 
-    mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize);
-    mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize);
+    mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize, SampleRateConversionQuality::HighPerformance);
+    mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize, SampleRateConversionQuality::HighPerformance);
 
     if (mFallbackModelLeft)
       mFallbackModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
