@@ -218,6 +218,7 @@ namespace guitarfx
       SignalGraphExecutor executor;
       std::vector<float> outL;
       std::vector<float> outR;
+      int complexityScore = 1;
 
       PresetInstance() = default;
       PresetInstance(PresetInstance &&) noexcept = default;

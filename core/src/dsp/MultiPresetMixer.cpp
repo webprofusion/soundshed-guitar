@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <string_view>
 
 namespace guitarfx
 {
@@ -134,6 +135,45 @@ namespace guitarfx
   #endif
 #endif
     }
+
+    int ScoreNodeTypeForParallelWork(std::string_view type)
+    {
+      // Heuristic weights for per-node CPU cost in realtime processing.
+      if (type == EffectGuids::kAmpNam || type == EffectGuids::kAmpNamOptimized || type == EffectGuids::kAmpNamBlend || type == EffectGuids::kFxNam)
+        return 14;
+      if (type == EffectGuids::kCabIr || type == EffectGuids::kReverbIr)
+        return 12;
+      if (type == EffectGuids::kReverbAdvanced || type == EffectGuids::kReverbAmbient || type == EffectGuids::kReverbRoom || type == EffectGuids::kReverbSpring)
+        return 6;
+      if (type == EffectGuids::kDelayDigital || type == EffectGuids::kDelayDoubler || type == EffectGuids::kEqParametric)
+        return 3;
+      if (type == EffectGuids::kGain)
+        return 1;
+      return 2;
+    }
+
+    int EstimateGraphComplexityScore(const std::vector<std::string>& nodeTypes)
+    {
+      int score = 0;
+      for (const auto& type : nodeTypes)
+        score += ScoreNodeTypeForParallelWork(type);
+      return std::max(1, score);
+    }
+
+    bool ShouldUseParallelPresetDispatch(bool multiThreadingEnabled,
+                                         int activeCount,
+                                         int totalWorkUnits,
+                                         bool workersAvailable)
+    {
+      if (!multiThreadingEnabled || !workersAvailable)
+        return false;
+      if (activeCount < 2)
+        return false;
+
+      // Avoid parallel fan-out for tiny blocks/light chains where scheduling cost dominates.
+      constexpr int kMinParallelWorkUnits = 9000;
+      return activeCount >= 3 || totalWorkUnits >= kMinParallelWorkUnits;
+    }
   } // namespace
   bool MultiPresetMixer::AddActivePreset(const Preset &preset, const std::string &presetId, const std::string &name)
   {
@@ -154,6 +194,7 @@ namespace guitarfx
     inst.executor.SetResourceLibrary(mResourceLibrary);
     inst.executor.SetGraph(normalizedPreset.graph);
     inst.executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
+    inst.complexityScore = EstimateGraphComplexityScore(inst.executor.GetNodeTypes());
 
     if (mPrepared)
     {
@@ -1087,9 +1128,22 @@ namespace guitarfx
       if (!inst.cfg.mute && (!anySolo || inst.cfg.solo))
         ++activeCount;
 
-    const bool useParallel = mMultiThreadedProcessingEnabled.load(std::memory_order_acquire)
-      && (activeCount >= 2)
-      && !mWorkerThreads.empty();
+    int totalWorkUnits = 0;
+    if (activeCount >= 2)
+    {
+      for (const auto &inst : mInstances)
+      {
+        if (inst.cfg.mute || (anySolo && !inst.cfg.solo))
+          continue;
+        totalWorkUnits += inst.complexityScore * numSamples;
+      }
+    }
+
+    const bool useParallel = ShouldUseParallelPresetDispatch(
+      mMultiThreadedProcessingEnabled.load(std::memory_order_acquire),
+      activeCount,
+      totalWorkUnits,
+      !mWorkerThreads.empty());
 
     if (useParallel)
     {
@@ -1121,7 +1175,7 @@ namespace guitarfx
         }
       }
 
-      // Publish tasks and wake workers.
+      // Publish tasks and wake only the workers we actually need.
       {
         std::lock_guard<std::mutex> lock(mParallelMutex);
         mParallelTaskHead.store(0, std::memory_order_relaxed);
@@ -1129,7 +1183,9 @@ namespace guitarfx
         mParallelTaskCount.store(wi, std::memory_order_relaxed);
         mParallelGeneration.fetch_add(1, std::memory_order_relaxed);
       }
-      mParallelCv.notify_all();
+      const int workersNeeded = std::min<int>(std::max(0, wi - 1), static_cast<int>(mWorkerThreads.size()));
+      for (int n = 0; n < workersNeeded; ++n)
+        mParallelCv.notify_one();
 
       // Audio thread steals tasks alongside workers.
       while (true)
