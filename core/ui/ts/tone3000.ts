@@ -2,7 +2,7 @@ import { uiState } from "./state.js";
 import { appendLog } from "./logging.js";
 import { setAppSetting } from "./bridge.js";
 import type { AppSettingValue, Tone3000Session } from "./types.js";
-import type { Tone3000ApiSession } from "./tone3000ApiTypes.js";
+import type { Tone3000ApiSession, Tone3000Architecture } from "./tone3000ApiTypes.js";
 import {
   buildTone3000ModelsUrl,
   extractTone3000Models,
@@ -16,6 +16,7 @@ const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
 const SESSION_REFRESH_LEAD_MS = 60_000;
 const SESSION_REFRESH_RETRY_MS = 60_000;
 const SESSION_HEARTBEAT_MS = 60_000;
+const DEFAULT_MODEL_RESOLUTION_ARCHITECTURE: Tone3000Architecture = "2";
 
 let sessionRequest: Promise<void> | null = null;
 let sessionRefreshTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
@@ -310,8 +311,11 @@ type Tone3000ArchiveReference = {
   modelUrl?: string;
 };
 
-async function fetchTone3000ModelsByToneId(toneId: string): Promise<Tone3000ModelLookup[]> {
-  const response = await tone3000AuthenticatedFetch(buildTone3000ModelsUrl(toneId));
+async function fetchTone3000ModelsByToneId(
+  toneId: string,
+  architecture: Tone3000Architecture | undefined = DEFAULT_MODEL_RESOLUTION_ARCHITECTURE,
+): Promise<Tone3000ModelLookup[]> {
+  const response = await tone3000AuthenticatedFetch(buildTone3000ModelsUrl(toneId, 1, 100, architecture));
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(`Tone3000 model lookup failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
@@ -364,8 +368,13 @@ export async function downloadTone3000ResourceByReference(reference: Tone3000Arc
     throw new Error("Tone3000 resource reference is missing toneId or modelId");
   }
 
-  const models = await fetchTone3000ModelsByToneId(toneId);
-  const model = models.find((entry) => String(entry.id ?? "") === modelId);
+  const defaultModels = await fetchTone3000ModelsByToneId(toneId, DEFAULT_MODEL_RESOLUTION_ARCHITECTURE);
+  let model = defaultModels.find((entry) => String(entry.id ?? "") === modelId);
+  if (!model) {
+    // Compatibility fallback: older/shared references can point to non-A2 models.
+    const allModels = await fetchTone3000ModelsByToneId(toneId, undefined);
+    model = allModels.find((entry) => String(entry.id ?? "") === modelId);
+  }
   const modelUrl = typeof model?.model_url === "string" ? model.model_url : "";
   if (!modelUrl) {
     throw new Error("Tone3000 resource is no longer available for this tone");

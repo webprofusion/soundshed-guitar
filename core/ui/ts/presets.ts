@@ -3212,6 +3212,71 @@ function buildInstalledPackEntryId(file: File, context: ArchiveImportContext): s
   return `${context.source}:${base}:${file.size}`;
 }
 
+function normalizeArchiveResourceKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^resources\//, "")
+    .replace(/[%20]+/g, " ")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+}
+
+function resolveArchiveResourceEntry(
+  resource: PresetArchiveResource,
+  fileMap: Map<string, JSZipObject>,
+  normalizedFileMap: Map<string, JSZipObject>,
+): JSZipObject | undefined {
+  const declaredName = (resource.fileName ?? "").trim();
+  if (!declaredName) {
+    return undefined;
+  }
+
+  const direct = fileMap.get(declaredName) ?? fileMap.get(declaredName.replace(/^resources\//, ""));
+  if (direct) {
+    return direct;
+  }
+
+  const normalized = normalizedFileMap.get(normalizeArchiveResourceKey(declaredName));
+  if (normalized) {
+    return normalized;
+  }
+
+  const hash = (resource.hash ?? "").trim().toLowerCase();
+  if (!hash) {
+    return undefined;
+  }
+
+  const extension = declaredName.includes(".") ? `.${declaredName.split(".").pop()?.toLowerCase() ?? ""}` : "";
+  for (const [name, entry] of fileMap.entries()) {
+    const lowerName = name.toLowerCase();
+    if (!lowerName.includes(hash)) {
+      continue;
+    }
+    if (extension && !lowerName.endsWith(extension)) {
+      continue;
+    }
+    return entry;
+  }
+
+  return undefined;
+}
+
+function buildImportResourceFileName(resource: PresetArchiveResource): string {
+  const maxFileNameLength = 120;
+  const declaredName = (resource.fileName ?? "").trim();
+  const dotIndex = declaredName.lastIndexOf(".");
+  const declaredExt = dotIndex > 0 && dotIndex < declaredName.length - 1
+    ? declaredName.slice(dotIndex).toLowerCase()
+    : "";
+  const ext = declaredExt || (resource.type === "ir" ? ".wav" : resource.type === "nam" ? ".nam" : ".bin");
+  const hashPrefix = sanitizeFilename((resource.hash ?? "").trim().toLowerCase(), "resource");
+  const baseSeed = sanitizeFilename(resource.name || resource.id || "resource", "resource");
+  const maxBaseLength = Math.max(16, maxFileNameLength - hashPrefix.length - ext.length - 1);
+  const trimmedBase = baseSeed.slice(0, maxBaseLength).replace(/[-_.]+$/, "") || "resource";
+  return `${hashPrefix}-${trimmedBase}${ext}`;
+}
+
 /**
  * Download tone3000 resources referenced in a preset archive using the user's
  * own authenticated session. Redistribution of tone3000 files is prohibited by
@@ -3363,10 +3428,12 @@ export async function importPresetArchive(
 
   const zipFiles = Object.values(zip.files) as JSZipObject[];
   const fileMap = new Map<string, JSZipObject>();
+  const normalizedFileMap = new Map<string, JSZipObject>();
   zipFiles.forEach((entry) => {
     if (!entry.dir) {
       const name = entry.name.replace(/^resources\//, "");
       fileMap.set(name, entry);
+      normalizedFileMap.set(normalizeArchiveResourceKey(name), entry);
     }
   });
 
@@ -3380,12 +3447,13 @@ export async function importPresetArchive(
       importedResources.push({ type: resource.type, id: existing.id });
       continue;
     }
-    const entry = fileMap.get(fileName);
+    const entry = resolveArchiveResourceEntry(resource, fileMap, normalizedFileMap);
     if (!entry) {
       continue;
     }
     const dataBuffer = await entry.async("arraybuffer");
     const data = arrayBufferToBase64(dataBuffer);
+    const importFileName = buildImportResourceFileName(resource);
     const newId = generateResourceId(fileName);
     idMap.set(resource.id, newId);
     importedResources.push({ type: resource.type, id: newId });
@@ -3399,7 +3467,7 @@ export async function importPresetArchive(
       description: "",
       category: resource.category ?? "",
       subfolder: "preset-imports",
-      fileName,
+      fileName: importFileName,
       hash: resource.hash ?? "",
       metadata: {
         ...(resource.metadata ?? {}),

@@ -2209,7 +2209,7 @@ async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
     itemId,
     creatorId: itemMeta?.creatorUserId ?? undefined,
     creatorHandle: resolveCreatorProfileHandle((itemMeta ?? {}) as unknown as Record<string, unknown>) ?? undefined,
-    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|zip)$/i, ""),
+    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|preset|zip)$/i, ""),
   }, {
     previewOnly: true,
     suppressNotifications: true,
@@ -2720,18 +2720,20 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
     itemMeta = null;
   }
 
-  // Import the preset (and its bundled resources) directly into the local
-  // library instead of triggering a browser file-save.  importPackWithConfirmation
-  // handles both single-preset and multi-preset archive formats and shows a
-  // confirmation dialog summarising what will be imported.
+  // Import the preset (and bundled resources) directly with the preset-archive
+  // pipeline so failures propagate to the caller with a clear status message.
   const importFile = new File([blob], fileName, { type: blob.type || "application/octet-stream" });
-  await importPackWithConfirmation(importFile, {
+  const importedPresets = await importPresetArchive(importFile, {
     source: "toneSharingApi",
     itemId: id,
     creatorId: itemMeta?.creatorUserId ?? undefined,
     creatorHandle: resolveCreatorProfileHandle((itemMeta ?? {}) as unknown as Record<string, unknown>) ?? undefined,
-    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|zip)$/i, ""),
+    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|preset|zip)$/i, ""),
   });
+
+  if (importedPresets.length === 0) {
+    throw new Error("Downloaded preset archive contained no importable presets");
+  }
 }
 
 async function deleteAsset(kind: "item" | "pack", id: string): Promise<void> {

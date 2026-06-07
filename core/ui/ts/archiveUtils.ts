@@ -16,6 +16,27 @@ export function sanitizeFilename(raw: string, fallback = "file"): string {
   return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
 }
 
+function splitFileName(raw: string): { stem: string; ext: string } {
+  const normalized = (raw ?? "").trim();
+  const dotIndex = normalized.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === normalized.length - 1) {
+    return { stem: normalized, ext: "" };
+  }
+  return {
+    stem: normalized.slice(0, dotIndex),
+    ext: normalized.slice(dotIndex).toLowerCase(),
+  };
+}
+
+function stripLeadingHashPrefixes(value: string, hashPrefix: string): string {
+  let result = value;
+  const marker = `${hashPrefix}-`;
+  while (result.toLowerCase().startsWith(marker)) {
+    result = result.slice(marker.length);
+  }
+  return result;
+}
+
 export function buildArchiveFileName(resource: LibraryResource, resourceType: string): string {
   const pathName = resource.filePath ? resource.filePath.split(/[\\/]/).pop() ?? "" : "";
   if (pathName) {
@@ -30,9 +51,18 @@ export function buildArchiveFileNameWithHash(
   resourceType: string,
   contentHash: string,
 ): string {
+  const maxArchiveFileNameLength = 120;
   const baseName = buildArchiveFileName(resource, resourceType);
+  const { stem: rawStem, ext: rawExt } = splitFileName(baseName);
   const hashPrefix = sanitizeFilename((contentHash || "").trim().toLowerCase(), "resource");
-  return `${hashPrefix}-${baseName}`;
+  const ext = rawExt || (resourceType === "ir" ? ".wav" : resourceType === "nam" ? ".nam" : ".bin");
+  const sanitizedStem = sanitizeFilename(rawStem, sanitizeFilename(resource.name || resource.id || "resource", "resource"));
+  const dedupedStem = stripLeadingHashPrefixes(sanitizedStem, hashPrefix) || "resource";
+
+  const maxStemLength = Math.max(16, maxArchiveFileNameLength - hashPrefix.length - ext.length - 1);
+  const trimmedStem = dedupedStem.slice(0, maxStemLength).replace(/[-_.]+$/, "") || "resource";
+
+  return `${hashPrefix}-${trimmedStem}${ext}`;
 }
 
 export function generateResourceId(seed: string): string {
