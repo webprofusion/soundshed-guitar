@@ -38,6 +38,24 @@ Note: the current schema file is treated as a fresh bootstrap (no in-place migra
 npm run dev
 ```
 
+## Shared Tone Download Harness
+
+Run an opt-in live harness that fetches the latest presets and verifies `/v1/items/:itemId/download` works end-to-end.
+
+PowerShell example:
+
+```powershell
+$env:SOUNDSHED_LIVE_HARNESS = "1"
+$env:SOUNDSHED_API_BASE_URL = "https://api-guitar.soundshed.com"
+$env:SOUNDSHED_PRESET_LIMIT = "10"
+npm run test:shared-tones-harness
+```
+
+Optional variables:
+
+- `SOUNDSHED_API_COOKIE`: Session cookie string if you want to probe authenticated-only items.
+- `SOUNDSHED_PRESET_LIMIT`: Number of latest presets to check (default `10`).
+
 ## Implemented endpoints
 
 - `GET /health`
