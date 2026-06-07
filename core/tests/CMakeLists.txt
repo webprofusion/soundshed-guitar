@@ -13,6 +13,7 @@ set(TEST_SOURCES
     PresetStorageTests.cpp
     ResourcePreviewWorkflowTests.cpp
     SampleRateConverterTests.cpp
+    SignalChainMutationStressTest.cpp
     SignalChainThreadingBenchmark.cpp
     SignalGraphExecutorTests.cpp
     StereoProcessingTests.cpp
@@ -97,7 +98,7 @@ foreach(test_source IN LISTS TEST_SOURCES)
     add_test(NAME ${test_name} COMMAND ${test_name})
 
     # Label slow benchmarks so they are excluded from default test runs
-    if(test_name STREQUAL "NAMPerformanceBenchmark" OR test_name STREQUAL "DSPPerformanceTests" OR test_name STREQUAL "SignalChainThreadingBenchmark")
+    if(test_name STREQUAL "NAMPerformanceBenchmark" OR test_name STREQUAL "DSPPerformanceTests" OR test_name STREQUAL "SignalChainThreadingBenchmark" OR test_name STREQUAL "SignalChainMutationStressTest")
         set_tests_properties(${test_name} PROPERTIES LABELS "benchmark")
     endif()
 endforeach()
