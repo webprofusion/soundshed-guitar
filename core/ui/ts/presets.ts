@@ -2682,6 +2682,31 @@ function hasAnyGraphNodes(preset: Preset | null | undefined): boolean {
   return getPresetGraphs(preset).some((graph) => Array.isArray(graph.nodes) && graph.nodes.length > 0);
 }
 
+function remapPresetArchiveGraphReferences(
+  preset: Preset,
+  resourceIdMap: Map<string, string>,
+  blendIdMap: Map<string, string>,
+): void {
+  getPresetGraphs(preset).forEach((graph) => {
+    graph.nodes?.forEach((node) => {
+      if (Array.isArray(node.resources)) {
+        node.resources.forEach((res) => {
+          const resourceId = res.resourceId ?? res.id;
+          if (resourceId) {
+            const mapped = resourceIdMap.get(resourceId) ?? resourceId;
+            res.resourceId = mapped;
+            res.id = mapped;
+          }
+        });
+      }
+
+      if (node.config?.blendId) {
+        node.config.blendId = blendIdMap.get(node.config.blendId) ?? node.config.blendId;
+      }
+    });
+  });
+}
+
 function collectPresetBlendIds(preset: Preset): string[] {
   const ids = new Set<string>();
   getPresetGraphs(preset).forEach((graph) => {
@@ -3536,23 +3561,7 @@ export async function importPresetArchive(
       };
     }
 
-    if (importedPreset.graph?.nodes) {
-      importedPreset.graph.nodes.forEach((node) => {
-        if (Array.isArray(node.resources)) {
-          node.resources.forEach((res) => {
-            const resourceId = res.resourceId ?? res.id;
-            if (resourceId) {
-              const mapped = idMap.get(resourceId) ?? resourceId;
-              res.resourceId = mapped;
-              res.id = mapped;
-            }
-          });
-        }
-        if (node.config?.blendId) {
-          node.config.blendId = blendIdMap.get(node.config.blendId) ?? node.config.blendId;
-        }
-      });
-    }
+    remapPresetArchiveGraphReferences(importedPreset, idMap, blendIdMap);
 
     if (importedPreset.audioFxModelId) {
       importedPreset.audioFxModelId = idMap.get(importedPreset.audioFxModelId) ?? importedPreset.audioFxModelId;
