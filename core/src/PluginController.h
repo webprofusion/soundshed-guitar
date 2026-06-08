@@ -145,6 +145,7 @@ public:
     void SetActivePresetSolo(const std::string& presetId, bool solo);
     void SetMasterGain(double value);
     void SetLimiterEnabled(bool enabled);
+    void SetMultiThreadedProcessingEnabled(bool enabled);
 
     // ── Signal path test ───────────────────────────────────────────
     struct SignalPathTestResult
@@ -181,6 +182,7 @@ private:
     void HandleOpenAudioPreferencesRequest();
     void HandleTunerRequest(const nlohmann::json& payload);
     void HandleSetInputModeRequest(const nlohmann::json& payload);
+    void HandleSetProcessingModeRequest(const nlohmann::json& payload);
     void HandleSetAmpCabStateRequest(const nlohmann::json& payload);
     void HandleSetAutoLevelRequest(const nlohmann::json& payload);
     void HandleDeleteLayoutRequest(const nlohmann::json& payload);
@@ -303,6 +305,7 @@ private:
     bool ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value);
     void ApplyDiagnosticsSettingsFromAppSettings();
     void ApplyDspLevelTargetSettingsFromAppSettings();
+    void ApplyProcessingModeSettingsFromAppSettings();
     void ApplyNamSlimmableSettingsFromAppSettings();
     void ApplyUserInputCalibrationSettingsFromAppSettings();
     void ApplyUiSettingsFromAppSettings();

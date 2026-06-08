@@ -10,6 +10,7 @@ type RowItem = {
   type: string | null;
   description?: string | null;
   tags?: string[] | null;
+  thumbnailUrl?: string | null;
   thumbnailAssetId?: string | null;
 };
 
@@ -56,12 +57,14 @@ export function discoveryRoutes() {
           };
         }
         const config = parsePackConfig(entry.pack_config_json);
+        const packId = entry.pack_id ?? "";
         return {
-          id: entry.pack_id ?? "",
+          id: packId,
           kind: "pack",
           title: entry.pack_title ?? "Untitled Pack",
           type: null,
-          thumbnailAssetId: config.thumbnailAssetId
+          thumbnailUrl: packId && config.thumbnailAssetId ? `/v1/packs/${packId}/thumbnail` : null,
+          thumbnailAssetId: config.thumbnailAssetId ? "legacy_available" : null,
         };
       });
 
@@ -125,7 +128,8 @@ export function discoveryRoutes() {
               kind: "pack" as const,
               title: pack.title,
               type: null,
-              thumbnailAssetId: config.thumbnailAssetId
+              thumbnailUrl: config.thumbnailAssetId ? `/v1/packs/${pack.id}/thumbnail` : null,
+              thumbnailAssetId: config.thumbnailAssetId ? "legacy_available" : null,
             };
           })
         });

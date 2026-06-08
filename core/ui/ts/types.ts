@@ -395,7 +395,7 @@ export interface SignalLevelNodeMetrics {
   presetId?: string;
   nodeId: string;
   nodeType: string;
-  stereoActive?: boolean;
+  channelCount?: number;
   levels: SignalLevelMetrics;
 }
 

@@ -90,7 +90,6 @@ export function tonesProxyRoutes() {
     return ok(c, {
       healthy: true,
       upstreamStatus: upstreamResponse.status,
-      upstreamBase: resolveUpstreamBase(c.env),
       checkedAt: new Date().toISOString(),
     });
   });

@@ -14,6 +14,7 @@
 #include "dsp/EffectGuids.h"
 #include "dsp/effects/NAMSampleRate.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
+#include "dsp/simd/OptimizedNAM.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
 #include <filesystem>
@@ -21,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 #include <cmath>
 #include <variant>
@@ -128,14 +130,8 @@ public:
 
   void Reset() override
   {
-    if (mFallbackModelLeft)
-    {
-      mFallbackModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
-    }
-    if (mFallbackModelRight)
-    {
-      mFallbackModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
-    }
+    ResetActiveModel(mModelLeft);
+    ResetActiveModel(mModelRight);
 
     std::fill(mInputBufferL.begin(), mInputBufferL.end(), 0.0f);
     std::fill(mInputBufferR.begin(), mInputBufferR.end(), 0.0f);
@@ -188,16 +184,50 @@ public:
       mInputBufferR[i] = inR * inputGainF;
     }
 
-    const bool hasFallback = mFallbackModelLeft && mFallbackModelRight;
+    const bool hasFallback = HasActiveModel(mModelLeft) && HasActiveModel(mModelRight);
 
     if (hasFallback && mEnabled)
     {
       const float wetMix = static_cast<float>(mMix);
       const float dryMix = 1.0f - wetMix;
+      const bool wetOnly = wetMix >= 0.9999f;
+      const bool toneNeutral = IsToneStackNeutral();
 
       ProcessFallbackModels(numSamples);
 
       const float outputGainF = static_cast<float>(mOutputGain);
+
+      if (toneNeutral && wetOnly && NearlyEqual(mOutputGain, 1.0))
+      {
+        for (int i = 0; i < numSamples; ++i)
+        {
+          if (outputs[0])
+            outputs[0][i] = mOutputBufferL[i];
+          if (outputs[1])
+            outputs[1][i] = mOutputBufferR[i];
+        }
+        return;
+      }
+
+      if (toneNeutral)
+      {
+        for (int i = 0; i < numSamples; ++i)
+        {
+          float outL = mOutputBufferL[i] * outputGainF;
+          float outR = mOutputBufferR[i] * outputGainF;
+          if (!wetOnly)
+          {
+            outL = mDryBufferL[i] * dryMix + outL * wetMix;
+            outR = mDryBufferR[i] * dryMix + outR * wetMix;
+          }
+          if (outputs[0])
+            outputs[0][i] = outL;
+          if (outputs[1])
+            outputs[1][i] = outR;
+        }
+        return;
+      }
+
       for (int i = 0; i < numSamples; ++i)
       {
         float outL = mOutputBufferL[i];
@@ -206,7 +236,8 @@ public:
         outL = mTrebleFilter[0].Process(outL);
         outL = mPresenceFilter[0].Process(outL);
         outL *= outputGainF;
-        outL = mDryBufferL[i] * dryMix + outL * wetMix;
+        if (!wetOnly)
+          outL = mDryBufferL[i] * dryMix + outL * wetMix;
 
         float outR = mOutputBufferR[i];
         outR = mBassFilter[1].Process(outR);
@@ -214,7 +245,8 @@ public:
         outR = mTrebleFilter[1].Process(outR);
         outR = mPresenceFilter[1].Process(outR);
         outR *= outputGainF;
-        outR = mDryBufferR[i] * dryMix + outR * wetMix;
+        if (!wetOnly)
+          outR = mDryBufferR[i] * dryMix + outR * wetMix;
 
         if (outputs[0])
           outputs[0][i] = outL;
@@ -260,15 +292,36 @@ public:
       mInputBufferL[i] = in * inputGainF;
     }
 
-    const bool hasFallback = static_cast<bool>(mFallbackModelLeft);
+    const bool hasFallback = HasActiveModel(mModelLeft);
     if (hasFallback && mEnabled)
     {
       const float wetMix = static_cast<float>(mMix);
       const float dryMix = 1.0f - wetMix;
+      const bool wetOnly = wetMix >= 0.9999f;
+      const bool toneNeutral = IsToneStackNeutral();
 
       ProcessFallbackModelMono(numSamples);
 
       const float outputGainF = static_cast<float>(mOutputGain);
+
+      if (toneNeutral && wetOnly && NearlyEqual(mOutputGain, 1.0))
+      {
+        std::copy_n(mOutputBufferL.data(), numSamples, output);
+        return;
+      }
+
+      if (toneNeutral)
+      {
+        for (int i = 0; i < numSamples; ++i)
+        {
+          float out = mOutputBufferL[i] * outputGainF;
+          if (!wetOnly)
+            out = mDryBufferL[i] * dryMix + out * wetMix;
+          output[i] = out;
+        }
+        return;
+      }
+
       for (int i = 0; i < numSamples; ++i)
       {
         float out = mOutputBufferL[i];
@@ -277,7 +330,9 @@ public:
         out = mTrebleFilter[0].Process(out);
         out = mPresenceFilter[0].Process(out);
         out *= outputGainF;
-        output[i] = mDryBufferL[i] * dryMix + out * wetMix;
+        if (!wetOnly)
+          out = mDryBufferL[i] * dryMix + out * wetMix;
+        output[i] = out;
       }
     }
     else
@@ -308,6 +363,11 @@ public:
     else if (key == "autoLevelInput")
     {
       mAutoLevelInput = value > 0.5;
+      RecalculateAutoGains();
+    }
+    else if (key == "useNamInputMetadata")
+    {
+      mUseNamInputMetadata = value > 0.5;
       RecalculateAutoGains();
     }
     else if (key == "autoLevelOutput")
@@ -364,6 +424,11 @@ public:
       mAutoLevelInput = ParseBool(value);
       RecalculateAutoGains();
     }
+    else if (key == "useNamInputMetadata")
+    {
+      mUseNamInputMetadata = ParseBool(value);
+      RecalculateAutoGains();
+    }
     else if (key == "autoLevelOutput")
     {
       mAutoLevelOutput = ParseBool(value);
@@ -373,8 +438,8 @@ public:
     {
       if (const auto parsed = ParseDouble(value); parsed.has_value())
         SetGlobalNamSlimmableSize(*parsed);
-      ApplyGlobalNamSlimmableSize(mFallbackModelLeft.get());
-      ApplyGlobalNamSlimmableSize(mFallbackModelRight.get());
+      ApplySlimmableToActiveModel(mModelLeft);
+      ApplySlimmableToActiveModel(mModelRight);
     }
     else if (key == "useOptimized")
     {
@@ -420,7 +485,7 @@ public:
 
   [[nodiscard]] bool HasResource() const override
   {
-    return mFallbackModelLeft && mFallbackModelRight;
+    return HasActiveModel(mModelLeft) && HasActiveModel(mModelRight);
   }
 
   [[nodiscard]] std::filesystem::path GetResourcePath() const override
@@ -431,7 +496,13 @@ public:
   [[nodiscard]] std::string GetType() const override { return "amp_nam_optimized"; }
   [[nodiscard]] std::string GetCategory() const override { return "amp"; }
 
-  [[nodiscard]] bool IsUsingOptimized() const { return false; }
+  [[nodiscard]] bool IsUsingOptimized() const
+  {
+    return std::holds_alternative<std::unique_ptr<nam::OptimizedDSPWrapper>>(mModelLeft)
+      && std::holds_alternative<std::unique_ptr<nam::OptimizedDSPWrapper>>(mModelRight)
+      && std::get<std::unique_ptr<nam::OptimizedDSPWrapper>>(mModelLeft)
+      && std::get<std::unique_ptr<nam::OptimizedDSPWrapper>>(mModelRight);
+  }
 
 private:
   static std::optional<double> ReadResourceMetadataDouble(const ResourceRef *ref, const std::string &key)
@@ -457,31 +528,41 @@ private:
   {
     try
     {
-      mFallbackModelLeft.reset();
-      mFallbackModelRight.reset();
-      auto modelLeft = ::nam::get_dsp(resourcePath);
-      auto modelRight = ::nam::get_dsp(resourcePath);
-      if (!modelLeft || !modelRight)
-        return false;
+      ClearActiveModels();
 
-      ApplyGlobalNamSlimmableSize(modelLeft.get());
-      ApplyGlobalNamSlimmableSize(modelRight.get());
+      auto optimizedLeft = nam::LoadOptimizedModelWrapper(resourcePath);
+      auto optimizedRight = nam::LoadOptimizedModelWrapper(resourcePath);
+      if (optimizedLeft && optimizedRight)
+      {
+        mModelLeft = std::move(optimizedLeft);
+        mModelRight = std::move(optimizedRight);
+      }
+      else
+      {
+        auto modelLeft = ::nam::get_dsp(resourcePath);
+        auto modelRight = ::nam::get_dsp(resourcePath);
+        if (!modelLeft || !modelRight)
+          return false;
 
-      mFallbackModelLeft = std::move(modelLeft);
-      mFallbackModelRight = std::move(modelRight);
+        ApplyGlobalNamSlimmableSize(modelLeft.get());
+        ApplyGlobalNamSlimmableSize(modelRight.get());
+
+        mModelLeft = std::move(modelLeft);
+        mModelRight = std::move(modelRight);
+      }
 
       mModelPath = resourcePath;
       mResourceNormalizationGainDb = ReadResourceMetadataDouble(ref, "normalizationGainDb");
       ConfigureModelProcessing();
 
-      mModelInputLevel = mFallbackModelLeft->HasInputLevel()
-        ? std::optional<double>(mFallbackModelLeft->GetInputLevel())
+      mModelInputLevel = ActiveModelHasInputLevel(mModelLeft)
+        ? std::optional<double>(ActiveModelGetInputLevel(mModelLeft))
         : std::nullopt;
-      mModelOutputLevel = mFallbackModelLeft->HasOutputLevel()
-        ? std::optional<double>(mFallbackModelLeft->GetOutputLevel())
+      mModelOutputLevel = ActiveModelHasOutputLevel(mModelLeft)
+        ? std::optional<double>(ActiveModelGetOutputLevel(mModelLeft))
         : std::nullopt;
-      mModelLoudness = mFallbackModelLeft->HasLoudness()
-        ? std::optional<double>(mFallbackModelLeft->GetLoudness())
+      mModelLoudness = ActiveModelHasLoudness(mModelLeft)
+        ? std::optional<double>(ActiveModelGetLoudness(mModelLeft))
         : std::nullopt;
 
       RecalculateAutoGains();
@@ -493,8 +574,12 @@ private:
     }
   }
 
-  std::unique_ptr<::nam::DSP> mFallbackModelLeft;
-  std::unique_ptr<::nam::DSP> mFallbackModelRight;
+  using FallbackModelPtr = std::unique_ptr<::nam::DSP>;
+  using OptimizedModelPtr = std::unique_ptr<nam::OptimizedDSPWrapper>;
+  using ActiveModel = std::variant<FallbackModelPtr, OptimizedModelPtr>;
+
+  ActiveModel mModelLeft;
+  ActiveModel mModelRight;
 
   std::filesystem::path mModelPath;
   bool mResamplingActive = false;
@@ -515,6 +600,8 @@ private:
   std::vector<NAM_SAMPLE> mFallbackInputBufferR;
   std::vector<NAM_SAMPLE> mFallbackOutputBufferL;
   std::vector<NAM_SAMPLE> mFallbackOutputBufferR;
+  std::vector<float> mOptimizedInputScratch;
+  std::vector<float> mOptimizedOutputScratch;
 
   BlockSincResampler mInputResampler;
   BlockSincResampler mOutputResampler;
@@ -528,6 +615,7 @@ private:
   double mMix = 1.0;
   bool mAutoLevelInput = false;
   bool mAutoLevelOutput = true;
+  bool mUseNamInputMetadata = false;
   std::optional<double> mModelInputLevel;
   std::optional<double> mModelOutputLevel;
   std::optional<double> mModelLoudness;
@@ -547,6 +635,19 @@ private:
   AmpToneBiquad mMidFilter[2];
   AmpToneBiquad mTrebleFilter[2];
   AmpToneBiquad mPresenceFilter[2];
+
+  [[nodiscard]] static bool NearlyEqual(double a, double b, double epsilon = 1.0e-6)
+  {
+    return std::abs(a - b) <= epsilon;
+  }
+
+  [[nodiscard]] bool IsToneStackNeutral() const
+  {
+    return NearlyEqual(mBassDb, 0.0)
+      && NearlyEqual(mMidDb, 0.0)
+      && NearlyEqual(mTrebleDb, 0.0)
+      && NearlyEqual(mPresenceDb, 0.0);
+  }
 
   void UpdateToneStack()
   {
@@ -571,6 +672,12 @@ private:
   {
     mAutoInputGain = 1.0;
     mAutoOutputGain = 1.0;
+
+    if (mAutoLevelInput && mUseNamInputMetadata && mModelInputLevel.has_value())
+    {
+      const double deltaDb = std::clamp(-*mModelInputLevel, -24.0, 24.0);
+      mAutoInputGain = std::pow(10.0, deltaDb / 20.0);
+    }
 
     if (mAutoLevelOutput)
     {
@@ -599,17 +706,18 @@ private:
 
   [[nodiscard]] double ResolveModelSampleRate() const
   {
-    if (!mFallbackModelLeft)
+    if (!HasActiveModel(mModelLeft))
       return mSampleRate;
 
-    const double expectedSR = mFallbackModelLeft->GetExpectedSampleRate();
+    const double expectedSR = ActiveModelGetExpectedSampleRate(mModelLeft);
     return ResolveNamModelProcessingSampleRate(expectedSR, mSampleRate);
   }
 
   void ConfigureModelProcessing()
   {
     mModelSampleRate = ResolveModelSampleRate();
-    mResamplingActive = std::abs(mModelSampleRate - mSampleRate) > 1.0;
+    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+    mResamplingActive = NeedsNamRuntimeResampling(mModelSampleRate, mSampleRate);
     mMaxModelBlockSize = mResamplingActive
       ? BlockSincResampler::ComputeMaxOutputFrameCount(mMaxBlockSize, mSampleRate, mModelSampleRate)
       : mMaxBlockSize;
@@ -623,14 +731,14 @@ private:
     mFallbackInputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
     mFallbackOutputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
     mFallbackOutputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
+    mOptimizedInputScratch.resize(static_cast<size_t>(mMaxModelBlockSize));
+    mOptimizedOutputScratch.resize(static_cast<size_t>(mMaxModelBlockSize));
 
-    mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize);
-    mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize);
+    mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize, SampleRateConversionQuality::HighPerformance);
+    mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize, SampleRateConversionQuality::HighPerformance);
 
-    if (mFallbackModelLeft)
-      mFallbackModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
-    if (mFallbackModelRight)
-      mFallbackModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
+    ResetActiveModel(mModelLeft);
+    ResetActiveModel(mModelRight);
   }
 
   [[nodiscard]] int GetModelFrameCount(int numSamples) const
@@ -661,13 +769,13 @@ private:
     NAM_SAMPLE* outputPtrL = mFallbackOutputBufferL.data();
     NAM_SAMPLE* inputPtrsL[1] = { inputPtrL };
     NAM_SAMPLE* outputPtrsL[1] = { outputPtrL };
-    mFallbackModelLeft->process(inputPtrsL, outputPtrsL, modelFrames);
+    ProcessActiveModel(mModelLeft, inputPtrL, outputPtrL, modelFrames);
 
     NAM_SAMPLE* inputPtrR = mFallbackInputBufferR.data();
     NAM_SAMPLE* outputPtrR = mFallbackOutputBufferR.data();
     NAM_SAMPLE* inputPtrsR[1] = { inputPtrR };
     NAM_SAMPLE* outputPtrsR[1] = { outputPtrR };
-    mFallbackModelRight->process(inputPtrsR, outputPtrsR, modelFrames);
+    ProcessActiveModel(mModelRight, inputPtrR, outputPtrR, modelFrames);
 
     if (mResamplingActive)
     {
@@ -704,7 +812,7 @@ private:
     NAM_SAMPLE* outputPtr = mFallbackOutputBufferL.data();
     NAM_SAMPLE* inputPtrs[1] = { inputPtr };
     NAM_SAMPLE* outputPtrs[1] = { outputPtr };
-    mFallbackModelLeft->process(inputPtrs, outputPtrs, modelFrames);
+    ProcessActiveModel(mModelLeft, inputPtr, outputPtr, modelFrames);
 
     if (mResamplingActive)
     {
@@ -735,6 +843,128 @@ private:
       return std::nullopt;
     }
   }
+
+  static bool HasActiveModel(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) { return static_cast<bool>(ptr); }, model);
+  }
+
+  void ClearActiveModels()
+  {
+    mModelLeft = FallbackModelPtr{};
+    mModelRight = FallbackModelPtr{};
+  }
+
+  static void ApplySlimmableToActiveModel(ActiveModel& model)
+  {
+    std::visit([](auto& ptr)
+    {
+      if constexpr (std::is_same_v<std::decay_t<decltype(ptr)>, FallbackModelPtr>)
+      {
+        ApplyGlobalNamSlimmableSize(ptr.get());
+      }
+    }, model);
+  }
+
+  void ResetActiveModel(ActiveModel& model)
+  {
+    std::visit([this](auto& ptr)
+    {
+      if (ptr)
+        ptr->Reset(mModelSampleRate, mMaxModelBlockSize);
+    }, model);
+  }
+
+  static double ActiveModelGetExpectedSampleRate(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> double
+    {
+      return ptr ? ptr->GetExpectedSampleRate() : -1.0;
+    }, model);
+  }
+
+  static bool ActiveModelHasInputLevel(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> bool
+    {
+      return ptr && ptr->HasInputLevel();
+    }, model);
+  }
+
+  static double ActiveModelGetInputLevel(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> double
+    {
+      return ptr ? ptr->GetInputLevel() : 0.0;
+    }, model);
+  }
+
+  static bool ActiveModelHasOutputLevel(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> bool
+    {
+      return ptr && ptr->HasOutputLevel();
+    }, model);
+  }
+
+  static double ActiveModelGetOutputLevel(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> double
+    {
+      return ptr ? ptr->GetOutputLevel() : 0.0;
+    }, model);
+  }
+
+  static bool ActiveModelHasLoudness(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> bool
+    {
+      return ptr && ptr->HasLoudness();
+    }, model);
+  }
+
+  static double ActiveModelGetLoudness(const ActiveModel& model)
+  {
+    return std::visit([](const auto& ptr) -> double
+    {
+      return ptr ? ptr->GetLoudness() : 0.0;
+    }, model);
+  }
+
+  void ProcessActiveModel(ActiveModel& model, NAM_SAMPLE* input, NAM_SAMPLE* output, int frames)
+  {
+    std::visit([this, input, output, frames](auto& ptr)
+    {
+      if (!ptr)
+        return;
+
+      if constexpr (std::is_same_v<std::decay_t<decltype(ptr)>, FallbackModelPtr>)
+      {
+        NAM_SAMPLE* inputPtrs[1] = { input };
+        NAM_SAMPLE* outputPtrs[1] = { output };
+        ptr->process(inputPtrs, outputPtrs, frames);
+      }
+      else
+      {
+        if (frames <= 0)
+          return;
+
+        const std::size_t frameCount = static_cast<std::size_t>(frames);
+        if (mOptimizedInputScratch.size() < frameCount)
+          mOptimizedInputScratch.resize(frameCount);
+        if (mOptimizedOutputScratch.size() < frameCount)
+          mOptimizedOutputScratch.resize(frameCount);
+
+        for (int i = 0; i < frames; ++i)
+          mOptimizedInputScratch[static_cast<std::size_t>(i)] = static_cast<float>(input[i]);
+
+        ptr->process(mOptimizedInputScratch.data(), mOptimizedOutputScratch.data(), frames);
+
+        for (int i = 0; i < frames; ++i)
+          output[i] = static_cast<NAM_SAMPLE>(mOptimizedOutputScratch[static_cast<std::size_t>(i)]);
+      }
+    }, model);
+  }
 };
 
 inline void RegisterOptimizedNAMAmpEffect()
@@ -750,6 +980,7 @@ inline void RegisterOptimizedNAMAmpEffect()
   info.resourceFilterHint = {"amp", "full-rig"};
   info.parameters = {
     {"inputGain",             "Input",              0.0,   -24.0, 24.0,  "dB",  "Level"},
+    {"useNamInputMetadata",   "Use NAM Input Metadata", 0.0, 0.0,   1.0,  "toggle", "Advanced", true},
     {"bass",                  "Bass",               0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"mid",                   "Mid",                0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"treble",                "Treble",             0.0,   -10.0, 10.0,  "dB",  "Tone"},

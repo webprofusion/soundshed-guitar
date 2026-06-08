@@ -118,6 +118,11 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
         c.HandleSetInputModeRequest(msg);
         return true;
     }
+    if (type == "setProcessingMode" || type == "setDspProcessingMode" || type == "setMultiThreadingEnabled")
+    {
+        c.HandleSetProcessingModeRequest(msg);
+        return true;
+    }
     if (type == "setAmpCabState")
     {
         c.HandleSetAmpCabStateRequest(msg);

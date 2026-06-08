@@ -947,6 +947,14 @@
                 </div>
               </div>
               <div class="settings-hint">Adjust quality while watching DSP Load and Peak Load above. Lower quality reduces CPU use.</div>
+              <div class="settings-row">
+                <label for="dsp-multi-threaded-toggle">Multi-threaded processing</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="dsp-multi-threaded-toggle" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint">Enable to use worker threads for parallel preset processing. Disable to force single-threaded DSP execution.</div>
             </div>
             <div class="performance-details">
               <h3>Signal Diagnostics <span class="metric-value" id="signal-diagnostics-status">Enabled</span></h3>

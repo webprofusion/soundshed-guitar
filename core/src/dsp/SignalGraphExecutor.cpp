@@ -1,6 +1,7 @@
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
+#include "dsp/EffectGuids.h"
 #include "dsp/effects/MixerEffect.h"
 #include "dsp/effects/CompositeEffectProcessor.h"
 #include "resources/ResourceLibrary.h"
@@ -126,8 +127,8 @@ namespace guitarfx
         return true;
       }
 
-      // Tight epsilon keeps this focused on true mono/dual-mono blocks.
-      constexpr float kEpsilon = 1.0e-8f;
+      // Treat near-identical channels as dual-mono so mono-capable effects can run once.
+      constexpr float kEpsilon = 1.0e-6f;
       for (int i = 0; i < numSamples; ++i)
       {
         if (std::abs(left[i] - right[i]) > kEpsilon)
@@ -149,10 +150,51 @@ namespace guitarfx
       return category == "mod" || category == "delay" || category == "reverb";
     }
 
+    int ScoreNodeTypeForParallelWork(const std::string &type)
+    {
+      if (type == EffectGuids::kAmpNam || type == EffectGuids::kAmpNamOptimized || type == EffectGuids::kAmpNamBlend || type == EffectGuids::kFxNam)
+        return 14;
+      if (type == EffectGuids::kCabIr || type == EffectGuids::kReverbIr)
+        return 12;
+      if (type == EffectGuids::kReverbAdvanced || type == EffectGuids::kReverbAmbient || type == EffectGuids::kReverbRoom || type == EffectGuids::kReverbSpring)
+        return 6;
+      if (type == EffectGuids::kDelayDigital || type == EffectGuids::kDelayDoubler || type == EffectGuids::kEqParametric)
+        return 3;
+
+      if (type == kNodeTypeInput || type == kNodeTypeOutput || type == kNodeTypeSplitter)
+        return 0;
+      if (type == kNodeTypeMixer)
+        return 1;
+      if (type == EffectGuids::kGain)
+        return 1;
+
+      return 2;
+    }
+
+    bool ShouldUseParallelLevel(int levelCount,
+                                int levelScore,
+                                int numSamples,
+                                bool executorParallelEnabled,
+                                bool workersAvailable)
+    {
+      if (!executorParallelEnabled || !workersAvailable)
+        return false;
+      if (levelCount < 2)
+        return false;
+
+      // Keep level parallelization for blocks/levels with enough expected CPU work.
+      constexpr int kMinLevelParallelWorkUnits = 1800;
+      const int totalWorkUnits = levelScore * numSamples;
+      return totalWorkUnits >= kMinLevelParallelWorkUnits;
+    }
+
   }
 
   SignalGraphExecutor::SignalGraphExecutor() = default;
-  SignalGraphExecutor::~SignalGraphExecutor() = default;
+  SignalGraphExecutor::~SignalGraphExecutor()
+  {
+    StopWorkers();
+  }
 
   SignalGraphExecutor::SignalGraphExecutor(SignalGraphExecutor &&other) noexcept
   {
@@ -166,11 +208,14 @@ namespace guitarfx
       return *this;
     }
 
+    StopWorkers();
+
     mGraph = std::move(other.mGraph);
     mResourceLibrary = other.mResourceLibrary;
     mNodeStates = std::move(other.mNodeStates);
     mExecutionOrder = std::move(other.mExecutionOrder);
     mIncomingEdgeCount = std::move(other.mIncomingEdgeCount);
+    mExecutionLevels = std::move(other.mExecutionLevels);
     mIncomingEdgesByNode = std::move(other.mIncomingEdgesByNode);
     mSampleRate = other.mSampleRate;
     mMaxBlockSize = other.mMaxBlockSize;
@@ -182,6 +227,7 @@ namespace guitarfx
     mTempLeftBuffer = std::move(other.mTempLeftBuffer);
     mTempRightBuffer = std::move(other.mTempRightBuffer);
     mSignalDiagnosticsEnabled.store(other.mSignalDiagnosticsEnabled.load(std::memory_order_acquire), std::memory_order_release);
+    mUseParallelLevels = other.mUseParallelLevels;
 
     return *this;
   }
@@ -193,6 +239,7 @@ namespace guitarfx
     mPrepared = false;
     mNodeStates.clear();
     mExecutionOrder.clear();
+    mExecutionLevelScores.clear();
     mIncomingEdgeCount.clear();
 
     // Add implicit input/output nodes if they're referenced in edges but not in nodes
@@ -252,6 +299,7 @@ namespace guitarfx
     }
 
     BuildExecutionOrder();
+    BuildExecutionLevels();
     CreateProcessors();
 
     if (mPrepared)
@@ -311,6 +359,74 @@ namespace guitarfx
 
     // Check if we processed all nodes (no cycles)
     mIsValid = (mExecutionOrder.size() == mGraph.nodes.size());
+  }
+
+  void SignalGraphExecutor::BuildExecutionLevels()
+  {
+    mExecutionLevels.clear();
+    mExecutionLevelScores.clear();
+    if (!mIsValid)
+      return;
+
+    std::map<std::string, int> inDegree;
+    std::map<std::string, std::vector<std::string>> adjacency;
+
+    for (const auto &node : mGraph.nodes)
+    {
+      inDegree[node.id] = 0;
+      adjacency[node.id] = {};
+    }
+
+    for (const auto &edge : mGraph.edges)
+    {
+      adjacency[edge.from].push_back(edge.to);
+      inDegree[edge.to]++;
+    }
+
+    std::vector<std::string> frontier;
+    frontier.reserve(mGraph.nodes.size());
+    for (const auto &[id, degree] : inDegree)
+    {
+      if (degree == 0)
+        frontier.push_back(id);
+    }
+
+    std::size_t processed = 0;
+    while (!frontier.empty())
+    {
+      mExecutionLevels.push_back(frontier);
+      int levelScore = 0;
+      for (const auto &nodeId : frontier)
+      {
+        const auto *node = mGraph.FindNode(nodeId);
+        if (node)
+          levelScore += ScoreNodeTypeForParallelWork(node->type);
+      }
+      mExecutionLevelScores.push_back(levelScore);
+      processed += frontier.size();
+
+      std::vector<std::string> next;
+      for (const auto &id : frontier)
+      {
+        for (const auto &neighbor : adjacency[id])
+        {
+          auto it = inDegree.find(neighbor);
+          if (it == inDegree.end())
+            continue;
+          it->second -= 1;
+          if (it->second == 0)
+            next.push_back(neighbor);
+        }
+      }
+
+      frontier = std::move(next);
+    }
+
+    if (processed != mGraph.nodes.size())
+    {
+      mExecutionLevels.clear();
+      mExecutionLevelScores.clear();
+    }
   }
 
   void SignalGraphExecutor::CreateProcessors()
@@ -445,6 +561,27 @@ namespace guitarfx
         state.processor->Prepare(sampleRate, maxBlockSize);
       }
     }
+
+    std::size_t maxLevelWidth = 0;
+    int maxLevelScore = 0;
+    for (std::size_t i = 0; i < mExecutionLevels.size(); ++i)
+    {
+      maxLevelWidth = std::max(maxLevelWidth, mExecutionLevels[i].size());
+      if (i < mExecutionLevelScores.size())
+        maxLevelScore = std::max(maxLevelScore, mExecutionLevelScores[i]);
+    }
+
+    const unsigned int hw = std::thread::hardware_concurrency();
+    const int hardwareWorkerBudget = static_cast<int>(hw > 1 ? hw - 1 : 0);
+    const int graphWorkerLimit = std::max(0, static_cast<int>(maxLevelWidth) - 1);
+    const int workerCount = std::min({hardwareWorkerBudget, graphWorkerLimit, kMaxParallelWorkers});
+    constexpr int kMinLevelParallelWorkUnits = 1800;
+    const bool graphHasMeaningfulParallelLevel = (maxLevelScore * maxBlockSize) >= kMinLevelParallelWorkUnits;
+    mUseParallelLevels = maxLevelWidth > 1 && workerCount > 0 && graphHasMeaningfulParallelLevel;
+    if (mUseParallelLevels)
+      StartWorkers(workerCount);
+    else
+      StopWorkers();
   }
 
   void SignalGraphExecutor::Reset()
@@ -557,191 +694,67 @@ namespace guitarfx
       }
     }
 
-    // Graph execution algorithm:
-    // 1. Route/accumulate edge inputs into each node buffer.
-    // 2. Run the node processor into temporary buffers.
-    // 3. Copy processed audio back for downstream nodes and diagnostics.
-    for (const auto &nodeId : mExecutionOrder)
+    std::mutex statsMutex;
+    for (std::size_t levelIndex = 0; levelIndex < mExecutionLevels.size(); ++levelIndex)
     {
-      auto *state = FindNodeState(nodeId);
-      if (!state)
-        continue;
+      const auto &level = mExecutionLevels[levelIndex];
+      const int levelCount = static_cast<int>(level.size());
+      const int levelScore = (levelIndex < mExecutionLevelScores.size()) ? mExecutionLevelScores[levelIndex] : 0;
+      const bool useParallelLevel = ShouldUseParallelLevel(
+        levelCount,
+        levelScore,
+        numSamples,
+        mUseParallelLevels && mParallelLevelsEnabled.load(std::memory_order_acquire),
+        !mWorkerThreads.empty());
 
-      // Use cached type from NodeState — avoids O(N) FindNode scan in hot path
-      const std::string &nodeType = state->type;
-
-      // Skip canonical input routing node (already fed from host input)
-      if (nodeType == kNodeTypeInput)
-        continue;
-
-      // Gather inputs from incoming edges using precomputed index list
-      const auto inEdgesIt = mIncomingEdgesByNode.find(nodeId);
-      const int incomingCount = (inEdgesIt != mIncomingEdgesByNode.end())
-        ? static_cast<int>(inEdgesIt->second.size()) : 0;
-      const bool isMixer = (nodeType == kNodeTypeMixer);
-      const bool shouldAccumulate = isMixer || (incomingCount > 1);
-      bool incomingStereoSignal = false;
-
-      // Get MixerEffect if this is a mixer node
-      MixerEffect *mixerEffect = nullptr;
-      if (isMixer && state->processor)
+      if (useParallelLevel)
       {
-        mixerEffect = dynamic_cast<MixerEffect *>(state->processor.get());
+        const int wi = std::min(levelCount, kMaxParallelWorkItems);
+        for (int i = 0; i < wi; ++i)
+        {
+          auto &item = mWorkItems[static_cast<size_t>(i)];
+          item.nodeId = &level[static_cast<size_t>(i)];
+          item.numSamples = numSamples;
+          item.stats = &localStats;
+          item.statsMutex = &statsMutex;
+          item.diagnosticsEnabled = diagnosticsEnabled;
+        }
+
+        {
+          std::lock_guard<std::mutex> lock(mParallelMutex);
+          mParallelTaskHead.store(0, std::memory_order_relaxed);
+          mParallelDoneCount.store(0, std::memory_order_relaxed);
+          mParallelTaskCount.store(wi, std::memory_order_relaxed);
+          mParallelGeneration.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        const int workersNeeded = std::min<int>(std::max(0, wi - 1), static_cast<int>(mWorkerThreads.size()));
+        for (int n = 0; n < workersNeeded; ++n)
+          mParallelCv.notify_one();
+
+        while (true)
+        {
+          const int idx = mParallelTaskHead.fetch_add(1, std::memory_order_acq_rel);
+          if (idx >= wi)
+            break;
+          ProcessNodeById(*mWorkItems[static_cast<size_t>(idx)].nodeId,
+                          numSamples,
+                          localStats,
+                          &statsMutex,
+                          diagnosticsEnabled);
+          mParallelDoneCount.fetch_add(1, std::memory_order_release);
+        }
+
+        while (mParallelDoneCount.load(std::memory_order_acquire) < wi)
+          std::this_thread::yield();
+
+        for (int i = wi; i < levelCount; ++i)
+          ProcessNodeById(level[static_cast<size_t>(i)], numSamples, localStats, nullptr, diagnosticsEnabled);
       }
-
-      if (inEdgesIt != mIncomingEdgesByNode.end())
+      else
       {
-        for (std::size_t edgeIdx : inEdgesIt->second)
-        {
-          const auto &edge = mGraph.edges[edgeIdx];
-          auto *sourceState = FindNodeState(edge.from);
-          if (sourceState && sourceState->hasInput)
-          {
-            const float edgeGain = static_cast<float>(edge.gain);
-            const int inputPort = edge.toPort;
-            incomingStereoSignal = incomingStereoSignal || sourceState->hasStereoSignal;
-
-            // Handle mixer with per-input processing
-            if (isMixer && mixerEffect)
-            {
-              // Check if this input is muted
-              if (mixerEffect->IsInputMuted(inputPort))
-              {
-                // Mark mixer as connected (outputs silence) so downstream
-                // nodes receive the zeroed buffer rather than leaving the
-                // host output buffer unwritten (which causes a repeating tone).
-                state->hasInput = true;
-                continue;
-              }
-
-              // Get per-input coefficients from MixerEffect
-              const float level = mixerEffect->GetInputLevel(inputPort);
-              const float panL = mixerEffect->GetInputPanL(inputPort);
-              const float panR = mixerEffect->GetInputPanR(inputPort);
-
-              // Apply level and pan
-              const float gainL = edgeGain * level * panL;
-              const float gainR = edgeGain * level * panR;
-
-              for (int i = 0; i < numSamples; ++i)
-              {
-                state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * gainL;
-                state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * gainR;
-              }
-              state->hasInput = true;
-            }
-            else if (shouldAccumulate)
-            {
-              // Non-mixer multi-input: simple accumulation
-              for (int i = 0; i < numSamples; ++i)
-              {
-                state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
-                state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
-              }
-            }
-            else
-            {
-              // Normal node: copy input (last edge wins for non-mixers)
-              for (int i = 0; i < numSamples; ++i)
-              {
-                state->bufferLeft[static_cast<size_t>(i)] = sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
-                state->bufferRight[static_cast<size_t>(i)] = sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
-              }
-            }
-            state->hasInput = true;
-          }
-        }
-      }
-
-      if (state->hasInput)
-      {
-        state->hasStereoSignal = incomingStereoSignal;
-      }
-
-      // Process the node
-      if (state->processor && state->hasInput)
-      {
-        const bool nodeCanMono = !incomingStereoSignal && state->processor->SupportsMonoProcessing() && !NodeMayProduceStereo(state->type, state->category);
-
-        if (nodeType == kNodeTypeSplitter || nodeType == kNodeTypeOutput)
-        {
-          if (nodeType == kNodeTypeOutput && !state->processor->IsEnabled())
-          {
-            std::fill(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, 0.0f);
-            std::fill(state->bufferRight.begin(), state->bufferRight.begin() + numSamples, 0.0f);
-            state->hasStereoSignal = false;
-          }
-          // These nodes just pass through (routing handled above)
-        }
-        else if (nodeType == kNodeTypeMixer)
-        {
-          // Mixer: apply master gain via Process()
-          if (state->processor->IsEnabled())
-          {
-            float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
-            float *outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
-            auto nodeStart = std::chrono::high_resolution_clock::now();
-            state->processor->Process(inPtrs, outPtrs, numSamples);
-            auto nodeEnd = std::chrono::high_resolution_clock::now();
-            const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-            localStats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-            localStats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-            std::copy(mTempLeftBuffer.begin(), mTempLeftBuffer.begin() + numSamples, state->bufferLeft.begin());
-            std::copy(mTempRightBuffer.begin(), mTempRightBuffer.begin() + numSamples, state->bufferRight.begin());
-            if (!incomingStereoSignal && !NodeMayProduceStereo(state->type, state->category))
-            {
-              std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
-              state->hasStereoSignal = false;
-            }
-            else
-            {
-              state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
-            }
-          }
-        }
-        else if (state->processor->IsEnabled() && nodeCanMono)
-        {
-          auto nodeStart = std::chrono::high_resolution_clock::now();
-          state->processor->ProcessMono(state->bufferLeft.data(), mTempLeftBuffer.data(), numSamples);
-          auto nodeEnd = std::chrono::high_resolution_clock::now();
-          const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-          localStats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          localStats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-
-          std::copy(mTempLeftBuffer.begin(), mTempLeftBuffer.begin() + numSamples, state->bufferLeft.begin());
-          std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
-          state->hasStereoSignal = false;
-        }
-        else if (state->processor->IsEnabled())
-        {
-          // Process effect
-          float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
-          float *outPtrs[2] = {mTempLeftBuffer.data(), mTempRightBuffer.data()};
-
-          auto nodeStart = std::chrono::high_resolution_clock::now();
-          state->processor->Process(inPtrs, outPtrs, numSamples);
-          auto nodeEnd = std::chrono::high_resolution_clock::now();
-          const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-          localStats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          localStats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-
-          // Copy back
-          std::copy(mTempLeftBuffer.begin(), mTempLeftBuffer.begin() + numSamples, state->bufferLeft.begin());
-          std::copy(mTempRightBuffer.begin(), mTempRightBuffer.begin() + numSamples, state->bufferRight.begin());
-          state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
-        }
-        else
-        {
-          state->hasStereoSignal = incomingStereoSignal;
-        }
-      }
-
-      if (diagnosticsEnabled && state->hasInput)
-      {
-        const auto stats = ComputeLevelStats(state->bufferLeft.data(), state->bufferRight.data(), numSamples);
-        state->peak.store(stats.peak, std::memory_order_relaxed);
-        state->rms.store(stats.rms, std::memory_order_relaxed);
-        state->clipCount.store(stats.clipCount, std::memory_order_relaxed);
+        for (const auto &nodeId : level)
+          ProcessNodeById(nodeId, numSamples, localStats, nullptr, diagnosticsEnabled);
       }
     }
 
@@ -797,6 +810,273 @@ namespace guitarfx
     if (lock.owns_lock())
     {
       mLastPerformanceStats = std::move(localStats);
+    }
+  }
+
+  void SignalGraphExecutor::ProcessNodeById(const std::string &nodeId,
+                                            int numSamples,
+                                            DSPPerformanceStats &stats,
+                                            std::mutex *statsMutex,
+                                            bool diagnosticsEnabled)
+  {
+    thread_local std::vector<float> tempLeft;
+    thread_local std::vector<float> tempRight;
+    if (static_cast<int>(tempLeft.size()) < numSamples)
+    {
+      tempLeft.resize(static_cast<size_t>(numSamples), 0.0f);
+      tempRight.resize(static_cast<size_t>(numSamples), 0.0f);
+    }
+
+    auto *state = FindNodeState(nodeId);
+    if (!state)
+      return;
+
+    const std::string &nodeType = state->type;
+    if (nodeType == kNodeTypeInput)
+      return;
+
+    const auto inEdgesIt = mIncomingEdgesByNode.find(nodeId);
+    const int incomingCount = (inEdgesIt != mIncomingEdgesByNode.end())
+      ? static_cast<int>(inEdgesIt->second.size()) : 0;
+    const bool isMixer = (nodeType == kNodeTypeMixer);
+    const bool shouldAccumulate = isMixer || (incomingCount > 1);
+    bool incomingStereoSignal = false;
+
+    MixerEffect *mixerEffect = nullptr;
+    if (isMixer && state->processor)
+      mixerEffect = dynamic_cast<MixerEffect *>(state->processor.get());
+
+    if (inEdgesIt != mIncomingEdgesByNode.end())
+    {
+      for (std::size_t edgeIdx : inEdgesIt->second)
+      {
+        const auto &edge = mGraph.edges[edgeIdx];
+        auto *sourceState = FindNodeState(edge.from);
+        if (sourceState && sourceState->hasInput)
+        {
+          const float edgeGain = static_cast<float>(edge.gain);
+          const int inputPort = edge.toPort;
+          incomingStereoSignal = incomingStereoSignal || sourceState->hasStereoSignal;
+
+          if (isMixer && mixerEffect)
+          {
+            if (mixerEffect->IsInputMuted(inputPort))
+            {
+              state->hasInput = true;
+              continue;
+            }
+
+            const float level = mixerEffect->GetInputLevel(inputPort);
+            const float panL = mixerEffect->GetInputPanL(inputPort);
+            const float panR = mixerEffect->GetInputPanR(inputPort);
+            const float gainL = edgeGain * level * panL;
+            const float gainR = edgeGain * level * panR;
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+              state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * gainL;
+              state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * gainR;
+            }
+            state->hasInput = true;
+          }
+          else if (shouldAccumulate)
+          {
+            for (int i = 0; i < numSamples; ++i)
+            {
+              state->bufferLeft[static_cast<size_t>(i)] += sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
+              state->bufferRight[static_cast<size_t>(i)] += sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
+            }
+          }
+          else
+          {
+            for (int i = 0; i < numSamples; ++i)
+            {
+              state->bufferLeft[static_cast<size_t>(i)] = sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
+              state->bufferRight[static_cast<size_t>(i)] = sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
+            }
+          }
+          state->hasInput = true;
+        }
+      }
+    }
+
+    if (state->hasInput)
+      state->hasStereoSignal = incomingStereoSignal;
+
+    if (state->processor && state->hasInput)
+    {
+      const bool nodeCanMono = state->processor->SupportsMonoProcessing()
+        && !NodeMayProduceStereo(state->type, state->category)
+        && !incomingStereoSignal;
+
+      if (nodeType == kNodeTypeSplitter || nodeType == kNodeTypeOutput)
+      {
+        if (nodeType == kNodeTypeOutput && !state->processor->IsEnabled())
+        {
+          std::fill(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, 0.0f);
+          std::fill(state->bufferRight.begin(), state->bufferRight.begin() + numSamples, 0.0f);
+          state->hasStereoSignal = false;
+        }
+      }
+      else if (nodeType == kNodeTypeMixer)
+      {
+        if (state->processor->IsEnabled())
+        {
+          float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
+          float *outPtrs[2] = {tempLeft.data(), tempRight.data()};
+          auto nodeStart = std::chrono::high_resolution_clock::now();
+          state->processor->Process(inPtrs, outPtrs, numSamples);
+          auto nodeEnd = std::chrono::high_resolution_clock::now();
+          const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
+          if (statsMutex)
+          {
+            std::lock_guard<std::mutex> lock(*statsMutex);
+            stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+            stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          }
+          else
+          {
+            stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+            stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          }
+          std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
+          std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
+          if (!incomingStereoSignal && !NodeMayProduceStereo(state->type, state->category))
+          {
+            std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
+            state->hasStereoSignal = false;
+          }
+          else
+          {
+            state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
+          }
+        }
+      }
+      else if (state->processor->IsEnabled() && nodeCanMono)
+      {
+        auto nodeStart = std::chrono::high_resolution_clock::now();
+        state->processor->ProcessMono(state->bufferLeft.data(), tempLeft.data(), numSamples);
+        auto nodeEnd = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
+        if (statsMutex)
+        {
+          std::lock_guard<std::mutex> lock(*statsMutex);
+          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+        }
+        else
+        {
+          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+        }
+        std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
+        std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
+        state->hasStereoSignal = false;
+      }
+      else if (state->processor->IsEnabled())
+      {
+        float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
+        float *outPtrs[2] = {tempLeft.data(), tempRight.data()};
+        auto nodeStart = std::chrono::high_resolution_clock::now();
+        state->processor->Process(inPtrs, outPtrs, numSamples);
+        auto nodeEnd = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
+        if (statsMutex)
+        {
+          std::lock_guard<std::mutex> lock(*statsMutex);
+          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+        }
+        else
+        {
+          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
+          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
+        }
+        std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
+        std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
+        state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
+      }
+      else
+      {
+        state->hasStereoSignal = incomingStereoSignal;
+      }
+    }
+
+    if (diagnosticsEnabled && state->hasInput)
+    {
+      const auto levelStats = ComputeLevelStats(state->bufferLeft.data(), state->bufferRight.data(), numSamples);
+      state->peak.store(levelStats.peak, std::memory_order_relaxed);
+      state->rms.store(levelStats.rms, std::memory_order_relaxed);
+      state->clipCount.store(levelStats.clipCount, std::memory_order_relaxed);
+    }
+  }
+
+  void SignalGraphExecutor::StartWorkers(int count)
+  {
+    StopWorkers();
+
+    {
+      std::lock_guard<std::mutex> lock(mParallelMutex);
+      mParallelQuit.store(false, std::memory_order_relaxed);
+      mParallelGeneration.store(0, std::memory_order_relaxed);
+    }
+
+    const int numWorkers = std::min(count, kMaxParallelWorkers);
+    mWorkerThreads.reserve(static_cast<size_t>(numWorkers));
+    for (int i = 0; i < numWorkers; ++i)
+      mWorkerThreads.emplace_back([this]() { WorkerLoop(); });
+  }
+
+  void SignalGraphExecutor::StopWorkers()
+  {
+    if (mWorkerThreads.empty())
+      return;
+
+    {
+      std::lock_guard<std::mutex> lock(mParallelMutex);
+      mParallelQuit.store(true, std::memory_order_relaxed);
+    }
+    mParallelCv.notify_all();
+    for (auto &thread : mWorkerThreads)
+    {
+      if (thread.joinable())
+        thread.join();
+    }
+    mWorkerThreads.clear();
+  }
+
+  void SignalGraphExecutor::WorkerLoop()
+  {
+    uint32_t lastGeneration = 0;
+    while (true)
+    {
+      {
+        std::unique_lock<std::mutex> lock(mParallelMutex);
+        mParallelCv.wait(lock, [&]()
+        {
+          return mParallelQuit.load(std::memory_order_relaxed)
+              || mParallelGeneration.load(std::memory_order_relaxed) != lastGeneration;
+        });
+      }
+
+      if (mParallelQuit.load(std::memory_order_acquire))
+        break;
+
+      lastGeneration = mParallelGeneration.load(std::memory_order_acquire);
+      const int total = mParallelTaskCount.load(std::memory_order_acquire);
+      while (true)
+      {
+        const int idx = mParallelTaskHead.fetch_add(1, std::memory_order_acq_rel);
+        if (idx >= total)
+          break;
+
+        const auto &item = mWorkItems[static_cast<size_t>(idx)];
+        if (item.nodeId && item.stats && item.statsMutex)
+        {
+          ProcessNodeById(*item.nodeId, item.numSamples, *item.stats, item.statsMutex, item.diagnosticsEnabled);
+        }
+        mParallelDoneCount.fetch_add(1, std::memory_order_release);
+      }
     }
   }
 
@@ -864,7 +1144,7 @@ namespace guitarfx
       entry.peak = state.peak.load(std::memory_order_relaxed);
       entry.rms = state.rms.load(std::memory_order_relaxed);
       entry.clipCount = state.clipCount.load(std::memory_order_relaxed);
-      entry.stereoActive = state.hasStereoSignal;
+      entry.channelCount = state.hasInput ? (state.hasStereoSignal ? 2 : 1) : 0;
       result.push_back(std::move(entry));
     }
 

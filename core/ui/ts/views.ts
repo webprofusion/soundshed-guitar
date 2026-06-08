@@ -1477,7 +1477,7 @@ export function updateSignalDiagnosticsView(): void {
     const makeNodeRow = (
       scope: string,
       label: string,
-      stereoActive: boolean | null,
+      channelCount: number | null,
       isCriticalPath: boolean,
       timeUs: number | null,
       latencySamples: number | null,
@@ -1488,8 +1488,10 @@ export function updateSignalDiagnosticsView(): void {
     ): string => {
       const clipClass = clipped ? "clip-on" : "clip-off";
       const clipText = clipped ? `Clipping (${clipCount})` : "OK";
-      const stereoClass = stereoActive == null ? "stereo-unknown" : (stereoActive ? "stereo-on" : "stereo-off");
-      const stereoText = stereoActive == null ? "n/a" : (stereoActive ? "Stereo" : "Mono");
+      const channelClass = channelCount == null || channelCount <= 0
+        ? "stereo-unknown"
+        : (channelCount > 1 ? "stereo-on" : "stereo-off");
+      const channelText = channelCount == null || channelCount <= 0 ? "n/a" : `${Math.round(channelCount)}ch`;
       const criticalBadge = isCriticalPath
         ? '<span class="critical-path-badge" title="Contributes to reported plugin latency">Critical</span>'
         : "";
@@ -1497,7 +1499,7 @@ export function updateSignalDiagnosticsView(): void {
         <div class="signal-diagnostics-item">
           <span class="signal-diagnostics-cell scope">${escapeHtml(scope)}</span>
           <span class="signal-diagnostics-cell node">${criticalBadge}${label}</span>
-          <span class="signal-diagnostics-cell stereo ${stereoClass}">${stereoText}</span>
+          <span class="signal-diagnostics-cell stereo ${channelClass}">${channelText}</span>
           <span class="signal-diagnostics-cell">${formatTimeShare(timeUs)}</span>
           <span class="signal-diagnostics-cell">${formatNodeLatencySamples(latencySamples, uiState.dspPerformance?.sampleRate)}</span>
           <span class="signal-diagnostics-cell">${formatDb(peakDbfs)} dBFS</span>
@@ -1562,7 +1564,7 @@ export function updateSignalDiagnosticsView(): void {
         const nodeLatencySamples = getSignalDiagnosticsNodeLatencySamples(node);
         const levels = node.levels ?? { peakDbfs: Number.NaN, headroomDb: Number.NaN, clipped: false, clipCount: 0 };
         const holdEntry = hold?.nodes[node.nodeId];
-        return makeNodeRow(node.scope, nodeLabel, node.stereoActive ?? null, isCriticalPath, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
+        return makeNodeRow(node.scope, nodeLabel, node.channelCount ?? null, isCriticalPath, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
       })
       .join("");
 
@@ -1572,7 +1574,7 @@ export function updateSignalDiagnosticsView(): void {
       <div class=\"signal-diagnostics-header\">
         <span class=\"signal-diagnostics-cell scope\">Scope</span>
         <span class=\"signal-diagnostics-cell node\">Node</span>
-        <span class=\"signal-diagnostics-cell\">Mode</span>
+        <span class="signal-diagnostics-cell">Ch</span>
         <span class="signal-diagnostics-cell">CPU</span>
         <span class="signal-diagnostics-cell">Latency</span>
         <span class=\"signal-diagnostics-cell\">Peak</span>

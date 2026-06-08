@@ -45,7 +45,6 @@ type AuthContext = { userId: string; email: string; role: string; sessionId: str
 type CreatorRow = {
   id: string;
   email: string;
-  role: string;
   display_name: string | null;
 };
 
@@ -67,7 +66,7 @@ type ModerateItemBody = {
 
 async function loadCreator(db: D1Database, creatorUserId: string): Promise<CreatorRow | null> {
   return db.prepare(
-    `SELECT u.id, u.email, u.role, u.display_name
+    `SELECT u.id, u.email, u.display_name
      FROM users u
      WHERE u.id = ?`
   ).bind(creatorUserId).first<CreatorRow>();
@@ -101,19 +100,26 @@ async function loadItemUserState(db: D1Database, itemId: string, userId: string)
   };
 }
 
-async function toItemResponse(db: D1Database, item: ItemRow, auth?: AuthContext) {
+async function toItemResponse(
+  db: D1Database,
+  item: ItemRow,
+  auth?: AuthContext,
+  options: { includeCreatorEmail?: boolean } = {}
+) {
   const config = parseItemConfig(item.config_json);
   const [creator, stats, userState] = await Promise.all([
     loadCreator(db, item.creator_user_id),
     loadItemStats(db, item.id),
     auth ? loadItemUserState(db, item.id, auth.userId) : Promise.resolve<ItemUserStateRow | null>(null),
   ]);
+  const isOwnerOrAdmin = Boolean(auth && (auth.userId === item.creator_user_id || auth.role === "admin"));
+
+  const includeCreatorEmail = options.includeCreatorEmail === true;
+
   return {
     id: item.id,
     creatorUserId: item.creator_user_id,
-    creatorEmail: creator?.email ?? null,
     creatorDisplayName: creator?.display_name ?? null,
-    creatorRole: creator?.role ?? null,
     type: item.type,
     title: item.title,
     description: config.description,
@@ -122,11 +128,6 @@ async function toItemResponse(db: D1Database, item: ItemRow, auth?: AuthContext)
     moderationStatus: item.moderation_status,
     appMinVersion: config.appMinVersion,
     appMaxVersion: config.appMaxVersion,
-    payloadAssetId: config.payloadAssetId,
-    privatePayloadAssetId: config.privatePayloadAssetId,
-    manifestAssetId: config.manifestAssetId,
-    thumbnailAssetId: config.thumbnailAssetId,
-    previewAssetId: config.previewAssetId,
     favoriteCount: stats.favoriteCount,
     ratingCount: stats.ratingCount,
     averageRating: stats.averageRating,
@@ -134,7 +135,14 @@ async function toItemResponse(db: D1Database, item: ItemRow, auth?: AuthContext)
     currentUserRating: userState?.rating == null ? null : Number(userState.rating),
     publishedAt: item.published_at,
     createdAt: item.created_at,
-    updatedAt: item.updated_at
+    updatedAt: item.updated_at,
+    // Compatibility fields retained for existing clients; sensitive values are owner/admin-only.
+    ...(includeCreatorEmail && isOwnerOrAdmin ? { creatorEmail: creator?.email ?? null } : {}),
+    payloadAssetId: isOwnerOrAdmin ? config.payloadAssetId : null,
+    privatePayloadAssetId: isOwnerOrAdmin ? config.privatePayloadAssetId : null,
+    manifestAssetId: isOwnerOrAdmin ? config.manifestAssetId : null,
+    thumbnailAssetId: isOwnerOrAdmin ? config.thumbnailAssetId : null,
+    previewAssetId: isOwnerOrAdmin ? config.previewAssetId : null,
   };
 }
 
@@ -197,7 +205,7 @@ export function itemRoutes() {
     return ok(c, {
       page,
       pageSize,
-      items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth)))
+      items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth, { includeCreatorEmail: false })))
     });
   });
 
@@ -230,7 +238,7 @@ export function itemRoutes() {
     sql += " ORDER BY updated_at DESC LIMIT 200";
 
     const rows = await c.env.DB.prepare(sql).bind(...params).all<ItemRow>();
-    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth))) });
+    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth, { includeCreatorEmail: false }))) });
   });
 
   app.get("/pending/list", requireAuth, async (c) => {
@@ -248,7 +256,7 @@ export function itemRoutes() {
        LIMIT 200`
     ).all<ItemRow>();
 
-    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth))) });
+    return ok(c, { items: await Promise.all(rows.results.map((item) => toItemResponse(c.env.DB, item, auth, { includeCreatorEmail: false }))) });
   });
 
   app.post("/", requireAuth, async (c) => {

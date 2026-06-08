@@ -45,6 +45,7 @@ inline void RegisterOptimizedNAMFXEffect()
   info.resourceFilterHint = {"pedal"};
   info.parameters = {
     {"inputGain",             "Input",               0.0,   -24.0, 24.0,  "dB",  "Level"},
+    {"useNamInputMetadata",   "Use Input Level Metadata", 0.0, 0.0,   1.0,  "toggle", "Advanced", true},
     {"outputGain",            "Output",               0.0,   -24.0, 24.0,  "dB",  "Level"},
     {"bass",                  "Bass",                 0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
     {"mid",                   "Mid",                  0.0,   -10.0, 10.0,  "dB",  "Tone",     true},

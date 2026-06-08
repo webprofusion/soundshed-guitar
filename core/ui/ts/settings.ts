@@ -43,6 +43,7 @@ const USER_INPUT_CALIBRATION_NONE_VALUE = "__none__";
 const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
+const DSP_MULTI_THREADED_SETTING = "audio.processing.multiThreaded";
 const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
 const DSP_NOMINAL_LEVEL_DEFAULT = -18.0;
 const DSP_NOMINAL_LEVEL_MIN = -30.0;
@@ -113,6 +114,7 @@ const featureGroupsContainer = document.getElementById("settings-feature-groups"
 const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
 const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") as HTMLInputElement | null;
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
+const dspMultiThreadedToggle = document.getElementById("dsp-multi-threaded-toggle") as HTMLInputElement | null;
 const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
 const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
 const factoryArchiveSettingsSection = document.getElementById("factory-archive-settings-section") as HTMLElement | null;
@@ -933,6 +935,15 @@ function initDspLevelTargetControls(): void {
     NAM_SLIMMABLE_SIZE_MAX,
     NAM_SLIMMABLE_SIZE_DEFAULT,
   );
+
+  if (dspMultiThreadedToggle && dspMultiThreadedToggle.dataset.bound !== "true") {
+    dspMultiThreadedToggle.dataset.bound = "true";
+    dspMultiThreadedToggle.addEventListener("change", () => {
+      const enabled = Boolean(dspMultiThreadedToggle.checked);
+      uiState.appSettings[DSP_MULTI_THREADED_SETTING] = enabled;
+      setAppSetting(DSP_MULTI_THREADED_SETTING, enabled);
+    });
+  }
 }
 
 function updateResourceCleanupVisibility(enabled: boolean): void {
@@ -1036,6 +1047,10 @@ export function refreshSettingsView(): void {
       NAM_SLIMMABLE_SIZE_DEFAULT,
     );
     namSlimmableSizeInput.value = slimmableSize.toFixed(2);
+  }
+  if (dspMultiThreadedToggle) {
+    const multiThreaded = getSettingValue(DSP_MULTI_THREADED_SETTING);
+    dspMultiThreadedToggle.checked = multiThreaded === null ? true : Boolean(multiThreaded);
   }
   if (updateCheckToggle) {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);

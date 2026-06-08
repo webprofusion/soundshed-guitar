@@ -156,6 +156,11 @@ namespace guitarfx
         mAutoLevelInput = value > 0.5;
         RecalculateAutoGains();
       }
+      else if (key == "useNamInputMetadata")
+      {
+        mUseNamInputMetadata = value > 0.5;
+        RecalculateAutoGains();
+      }
       else if (key == "autoLevelOutput")
       {
         mAutoLevelOutput = value > 0.5;
@@ -188,6 +193,11 @@ namespace guitarfx
       if (key == "autoLevelInput")
       {
         mAutoLevelInput = ParseBool(value);
+        RecalculateAutoGains();
+      }
+      else if (key == "useNamInputMetadata")
+      {
+        mUseNamInputMetadata = ParseBool(value);
         RecalculateAutoGains();
       }
       else if (key == "autoLevelOutput")
@@ -336,6 +346,7 @@ namespace guitarfx
     double mMix = 1.0;
     bool mAutoLevelInput = false;
     bool mAutoLevelOutput = true;
+    bool mUseNamInputMetadata = false;
     std::optional<double> mModelInputLevel;
     std::optional<double> mModelOutputLevel;
     std::optional<double> mModelLoudness;
@@ -355,6 +366,12 @@ namespace guitarfx
     {
       mAutoInputGain = 1.0;
       mAutoOutputGain = 1.0;
+
+      if (mAutoLevelInput && mUseNamInputMetadata && mModelInputLevel.has_value())
+      {
+        const double deltaDb = std::clamp(-*mModelInputLevel, -24.0, 24.0);
+        mAutoInputGain = std::pow(10.0, deltaDb / 20.0);
+      }
 
       if (mAutoLevelOutput)
       {
@@ -393,7 +410,8 @@ namespace guitarfx
     void ConfigureModelProcessing()
     {
       mModelSampleRate = ResolveModelSampleRate();
-      mResamplingActive = std::abs(mModelSampleRate - mSampleRate) > 1.0;
+      // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+      mResamplingActive = NeedsNamRuntimeResampling(mModelSampleRate, mSampleRate);
       mMaxModelBlockSize = mResamplingActive
         ? BlockSincResampler::ComputeMaxOutputFrameCount(mMaxBlockSize, mSampleRate, mModelSampleRate)
         : mMaxBlockSize;
@@ -404,8 +422,8 @@ namespace guitarfx
       mModelOutputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
       mModelOutputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
 
-      mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize);
-      mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize);
+      mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize, SampleRateConversionQuality::HighPerformance);
+      mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize, SampleRateConversionQuality::HighPerformance);
 
       if (mModelLeft)
         mModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
@@ -489,6 +507,7 @@ namespace guitarfx
       {"inputGain",             "Input",              0.0,   -24.0, 24.0,  "dB"},
       {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB"},
       {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
+      {"useNamInputMetadata",   "Use NAM Input Metadata", 0.0, 0.0, 1.0,  "toggle", "Advanced", true},
       {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "toggle", "Advanced", true}};
 
     EffectRegistry::Instance().Register(info.type, info, []()

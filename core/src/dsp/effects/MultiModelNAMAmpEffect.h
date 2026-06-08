@@ -245,6 +245,10 @@ public:
     {
       mAutoLevelInput = value > 0.5;
     }
+    else if (key == "useNamInputMetadata")
+    {
+      mUseNamInputMetadata = value > 0.5;
+    }
     else if (key == "autoLevelOutput")
     {
       mAutoLevelOutput = value > 0.5;
@@ -436,6 +440,7 @@ private:
   bool mHasModelParameters = false;
   bool mAutoLevelInput = false;
   bool mAutoLevelOutput = true;
+  bool mUseNamInputMetadata = false;
   bool mEnabled = true;
   std::string mParameterId;
   std::uint64_t mLevelTargetsRevision = 0;
@@ -515,7 +520,8 @@ private:
   void ResizeModelBuffers(ModelInstance& instance, int maxBlockSize)
   {
     instance.processingSampleRate = ResolveInstanceSampleRate(instance);
-    instance.resamplingActive = std::abs(instance.processingSampleRate - mSampleRate) > 1.0;
+    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
+    instance.resamplingActive = NeedsNamRuntimeResampling(instance.processingSampleRate, mSampleRate);
     instance.maxProcessingBlockSize = instance.resamplingActive
       ? BlockSincResampler::ComputeMaxOutputFrameCount(maxBlockSize, mSampleRate, instance.processingSampleRate)
       : maxBlockSize;
@@ -532,8 +538,14 @@ private:
     instance.fallbackOutputL.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
     instance.fallbackOutputR.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
 
-    instance.inputResampler.Prepare(mSampleRate, instance.processingSampleRate, maxBlockSize);
-    instance.outputResampler.Prepare(instance.processingSampleRate, mSampleRate, instance.maxProcessingBlockSize);
+    instance.inputResampler.Prepare(mSampleRate,
+                    instance.processingSampleRate,
+                    maxBlockSize,
+                    SampleRateConversionQuality::HighPerformance);
+    instance.outputResampler.Prepare(instance.processingSampleRate,
+                     mSampleRate,
+                     instance.maxProcessingBlockSize,
+                     SampleRateConversionQuality::HighPerformance);
   }
 
   void ResetModel(ModelInstance& instance, double sampleRate, int maxBlockSize)
@@ -809,6 +821,12 @@ private:
     const auto blendedNormalizationGainDb = BlendOptional(modelA->normalizationGainDb, modelB->normalizationGainDb,
       selection.weightLower, selection.weightUpper);
 
+    if (mAutoLevelInput && mUseNamInputMetadata && blendedInputLevel.has_value())
+    {
+      const double deltaDb = std::clamp(-*blendedInputLevel, -24.0, 24.0);
+      mAutoInputGain = std::pow(10.0, deltaDb / 20.0);
+    }
+
     if (mAutoLevelOutput)
     {
       if (blendedNormalizationGainDb.has_value())
@@ -876,6 +894,7 @@ inline void RegisterMultiModelNAMAmpEffect()
   info.parameters = {
     {"blend", "Blend", 0.0, 0.0, 1.0, "amount"},
     {"inputGain", "Input", 0.0, -24.0, 24.0, "dB"},
+    {"useNamInputMetadata", "Use NAM Input Metadata", 0.0, 0.0, 1.0, "toggle", "Advanced", true},
     {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
     {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true}
   };

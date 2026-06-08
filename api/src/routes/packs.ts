@@ -35,7 +35,6 @@ type AuthContext = { userId: string; email: string; role: string; sessionId: str
 type CreatorRow = {
   id: string;
   email: string;
-  role: string;
   display_name: string | null;
 };
 
@@ -46,29 +45,41 @@ type ModeratePackBody = {
 
 async function loadCreator(db: D1Database, creatorUserId: string): Promise<CreatorRow | null> {
   return db.prepare(
-    `SELECT u.id, u.email, u.role, u.display_name
+    `SELECT u.id, u.email, u.display_name
      FROM users u
      WHERE u.id = ?`
   ).bind(creatorUserId).first<CreatorRow>();
 }
 
-async function toPackResponse(db: D1Database, pack: PackRow) {
+async function toPackResponse(
+  db: D1Database,
+  pack: PackRow,
+  auth?: AuthContext,
+  options: { includeCreatorEmail?: boolean } = {}
+) {
   const config = parsePackConfig(pack.config_json);
   const creator = await loadCreator(db, pack.creator_user_id);
+  const isOwnerOrAdmin = Boolean(auth && (auth.userId === pack.creator_user_id || auth.role === "admin"));
+
+  // Compatibility marker for older clients that still infer thumbnails from thumbnailAssetId truthiness.
+  const legacyThumbnailAvailability = !isOwnerOrAdmin && config.thumbnailAssetId ? "legacy_available" : null;
+
+  const includeCreatorEmail = options.includeCreatorEmail === true;
+
   return {
     id: pack.id,
     creatorUserId: pack.creator_user_id,
-    creatorEmail: creator?.email ?? null,
     creatorDisplayName: creator?.display_name ?? null,
-    creatorRole: creator?.role ?? null,
     title: pack.title,
     description: config.description,
     moderationStatus: pack.moderation_status,
-    zipAssetId: config.zipAssetId,
-    thumbnailAssetId: config.thumbnailAssetId,
     publishedAt: pack.published_at,
     createdAt: pack.created_at,
-    updatedAt: pack.updated_at
+    updatedAt: pack.updated_at,
+    // Compatibility fields retained for existing clients; sensitive values are owner/admin-only.
+    ...(includeCreatorEmail && isOwnerOrAdmin ? { creatorEmail: creator?.email ?? null } : {}),
+    zipAssetId: isOwnerOrAdmin ? config.zipAssetId : null,
+    thumbnailAssetId: isOwnerOrAdmin ? config.thumbnailAssetId : legacyThumbnailAvailability,
   };
 }
 
@@ -91,6 +102,7 @@ export function packRoutes() {
   const app = new Hono<{ Bindings: Env; Variables: { auth?: { userId: string; email: string; role: string; sessionId: string } } }>();
 
   app.get("/", optionalAuth, async (c) => {
+    const auth = c.get("auth");
     const page = Math.max(1, Number.parseInt((c.req.query("page") ?? "1").trim(), 10) || 1);
     const pageSizeRaw = Number.parseInt((c.req.query("pageSize") ?? "24").trim(), 10) || 24;
     const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
@@ -118,7 +130,7 @@ export function packRoutes() {
     return ok(c, {
       page,
       pageSize,
-      packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack)))
+      packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack, auth, { includeCreatorEmail: false })))
     });
   });
 
@@ -146,7 +158,7 @@ export function packRoutes() {
     sql += " ORDER BY updated_at DESC LIMIT 200";
 
     const rows = await c.env.DB.prepare(sql).bind(...params).all<PackRow>();
-    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack))) });
+    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack, auth, { includeCreatorEmail: false }))) });
   });
 
   app.get("/pending/list", requireAuth, async (c) => {
@@ -164,7 +176,7 @@ export function packRoutes() {
        LIMIT 200`
     ).all<PackRow>();
 
-    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack))) });
+    return ok(c, { packs: await Promise.all(rows.results.map((pack) => toPackResponse(c.env.DB, pack, auth, { includeCreatorEmail: false }))) });
   });
 
   app.post("/", requireAuth, async (c) => {
@@ -205,7 +217,7 @@ export function packRoutes() {
       .bind(packId)
       .first<PackRow>();
 
-    return ok(c, { pack: created ? await toPackResponse(c.env.DB, created) : null }, 201);
+    return ok(c, { pack: created ? await toPackResponse(c.env.DB, created, auth) : null }, 201);
   });
 
   app.patch("/:packId", requireAuth, async (c) => {
@@ -268,7 +280,7 @@ export function packRoutes() {
       .bind(packId)
       .first<PackRow>();
 
-    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated) : null });
+    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated, auth) : null });
   });
 
   app.post("/:packId/items", requireAuth, async (c) => {
@@ -455,7 +467,7 @@ export function packRoutes() {
       .bind(packId)
       .first<PackRow>();
 
-    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated) : null });
+    return ok(c, { pack: updated ? await toPackResponse(c.env.DB, updated, auth) : null });
   });
 
   app.get("/:packId", optionalAuth, async (c) => {
@@ -496,7 +508,7 @@ export function packRoutes() {
 
     return ok(c, {
       pack: {
-        ...(await toPackResponse(c.env.DB, pack)),
+        ...(await toPackResponse(c.env.DB, pack, auth)),
         thumbnailUrl: packConfig.thumbnailAssetId ? `/v1/packs/${packId}/thumbnail` : null
       },
       items: packItems.results.map((entry) => ({

@@ -9,7 +9,8 @@
     "d1:migrate": "wrangler d1 execute soundshed_presets_dev --local --file ../docs/plans/cloudflare-presets-platform-mvp.sql",
     "d1:migrate-prod": "wrangler d1 execute soundshed-guitar-api-prod --remote --file ../docs/plans/cloudflare-presets-platform-mvp.sql",
     "check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:shared-tones-harness": "vitest run test/shared-tones-harness.test.ts"
   },
   "dependencies": {
     "hono": "^4.7.2"

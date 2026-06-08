@@ -8,6 +8,9 @@
 #include <chrono>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <array>
 
 namespace guitarfx
 {
@@ -38,7 +41,7 @@ namespace guitarfx
       double peak = 0.0;
       double rms = 0.0;
       int clipCount = 0;
-      bool stereoActive = false;
+      int channelCount = 0;
     };
 
     SignalGraphExecutor();
@@ -86,6 +89,10 @@ namespace guitarfx
     [[nodiscard]] bool IsSignalDiagnosticsEnabled() const { return mSignalDiagnosticsEnabled.load(std::memory_order_acquire); }
     [[nodiscard]] std::vector<NodeSignalLevel> GetNodeSignalLevels() const;
 
+    // Runtime control for intra-graph parallel processing.
+    void SetParallelLevelsEnabled(bool enabled) { mParallelLevelsEnabled.store(enabled, std::memory_order_release); }
+    [[nodiscard]] bool IsParallelLevelsEnabled() const { return mParallelLevelsEnabled.load(std::memory_order_acquire); }
+
     // Queries
     [[nodiscard]] bool IsValid() const { return mIsValid; }
     [[nodiscard]] std::vector<std::string> GetExecutionOrder() const { return mExecutionOrder; }
@@ -110,16 +117,27 @@ namespace guitarfx
     };
 
     void BuildExecutionOrder();
+    void BuildExecutionLevels();
     void CreateProcessors();
     void AllocateBuffers(int maxBlockSize);
     [[nodiscard]] NodeState *FindNodeState(const std::string &id);
     [[nodiscard]] const NodeState *FindNodeState(const std::string &id) const;
+    void ProcessNodeById(const std::string &nodeId,
+               int numSamples,
+               DSPPerformanceStats &stats,
+               std::mutex *statsMutex,
+               bool diagnosticsEnabled);
+    void StartWorkers(int count);
+    void StopWorkers();
+    void WorkerLoop();
 
     SignalGraph mGraph;
     ResourceLibrary *mResourceLibrary = nullptr;
 
     std::map<std::string, NodeState> mNodeStates;
     std::vector<std::string> mExecutionOrder;
+    std::vector<std::vector<std::string>> mExecutionLevels;
+    std::vector<int> mExecutionLevelScores;
     std::map<std::string, int> mIncomingEdgeCount;
     // Precomputed per-node incoming edge index lists (into mGraph.edges) for O(1) lookup in Process()
     std::map<std::string, std::vector<std::size_t>> mIncomingEdgesByNode;
@@ -135,6 +153,30 @@ namespace guitarfx
     mutable std::mutex mPerformanceStatsMutex;
 
     std::atomic<bool> mSignalDiagnosticsEnabled{true};
+    std::atomic<bool> mParallelLevelsEnabled{true};
+
+    // Parallel node processing within one graph level.
+    static constexpr int kMaxParallelWorkers = 7;
+    static constexpr int kMaxParallelWorkItems = 128;
+    struct ParallelWorkItem
+    {
+      const std::string *nodeId = nullptr;
+      int numSamples = 0;
+      DSPPerformanceStats *stats = nullptr;
+      std::mutex *statsMutex = nullptr;
+      bool diagnosticsEnabled = false;
+    };
+
+    std::array<ParallelWorkItem, kMaxParallelWorkItems> mWorkItems{};
+    std::atomic<int> mParallelTaskHead{0};
+    std::atomic<int> mParallelTaskCount{0};
+    std::atomic<int> mParallelDoneCount{0};
+    std::atomic<uint32_t> mParallelGeneration{0};
+    std::atomic<bool> mParallelQuit{false};
+    std::mutex mParallelMutex;
+    std::condition_variable mParallelCv;
+    std::vector<std::thread> mWorkerThreads;
+    bool mUseParallelLevels = false;
 
     // Temporary buffers for mixing
     std::vector<float> mTempLeftBuffer;

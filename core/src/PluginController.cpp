@@ -133,6 +133,7 @@ namespace
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
     constexpr const char* kNominalOperatingLevelSettingKey = "audio.dsp.nominalOperatingLevelDbfs";
     constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.outputProtectionCeilingDbfs";
+    constexpr const char* kMultiThreadedProcessingSettingKey = "audio.processing.multiThreaded";
     constexpr const char* kNamSlimmableSizeSettingKey = "audio.nam.slimmableSize";
     constexpr const char* kNamSlimmableNodeConfigKey = "slimmableSize";
     constexpr const char* kUserInputCalibrationProfilesSettingKey = "audio.userInputCalibration.profiles";
@@ -1725,6 +1726,7 @@ void PluginController::Initialize()
     ApplyMetronomeSettingsFromAppSettings();
     ApplyDiagnosticsSettingsFromAppSettings();
     ApplyDspLevelTargetSettingsFromAppSettings();
+    ApplyProcessingModeSettingsFromAppSettings();
     ApplyNamSlimmableSettingsFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();
@@ -2481,6 +2483,35 @@ void PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
         SaveAppSettings();
 }
 
+void PluginController::ApplyProcessingModeSettingsFromAppSettings()
+{
+    bool settingsChanged = false;
+
+    bool enabled = true;
+    const auto it = mAppSettings.find(kMultiThreadedProcessingSettingKey);
+    if (it != mAppSettings.end())
+    {
+        if (it->is_boolean())
+            enabled = it->get<bool>();
+        else if (!it->is_null())
+            settingsChanged = true;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.SetMultiThreadedProcessingEnabled(enabled);
+    }
+
+    if (it == mAppSettings.end() || !it->is_boolean() || it->get<bool>() != enabled)
+    {
+        mAppSettings[kMultiThreadedProcessingSettingKey] = enabled;
+        settingsChanged = true;
+    }
+
+    if (settingsChanged)
+        SaveAppSettings();
+}
+
 void PluginController::ApplyNamSlimmableSettingsFromAppSettings()
 {
     bool settingsChanged = false;
@@ -2659,6 +2690,7 @@ std::string PluginController::SerializeState() const
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
+    mixer["multiThreaded"] = mPresetMixer.IsMultiThreadedProcessingEnabled();
 
     nlohmann::json activePresetIds = nlohmann::json::array();
     nlohmann::json presetConfigs = nlohmann::json::object();
@@ -2749,6 +2781,8 @@ void PluginController::DeserializeState(const std::string& json)
                 mPresetMixer.SetMasterGain(mixer["masterGain"].get<double>());
             if (mixer.contains("limiterEnabled") && mixer["limiterEnabled"].is_boolean())
                 mPresetMixer.SetLimiterEnabled(mixer["limiterEnabled"].get<bool>());
+            if (mixer.contains("multiThreaded") && mixer["multiThreaded"].is_boolean())
+                mPresetMixer.SetMultiThreadedProcessingEnabled(mixer["multiThreaded"].get<bool>());
 
             // Reset active presets before restoring mixer state
             for (const auto& id : mPresetMixer.GetActivePresetIds())
@@ -3090,6 +3124,17 @@ void PluginController::SetMasterGain(double value)
 void PluginController::SetLimiterEnabled(bool enabled)
 {
     mPresetMixer.SetLimiterEnabled(enabled);
+}
+
+void PluginController::SetMultiThreadedProcessingEnabled(bool enabled)
+{
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.SetMultiThreadedProcessingEnabled(enabled);
+    }
+    mAppSettings[kMultiThreadedProcessingSettingKey] = enabled;
+    SaveAppSettings();
+    mPendingStateBroadcast = true;
 }
 
 bool PluginController::StartSignalPathTest(double frequencyHz, double durationSeconds)
@@ -3575,6 +3620,32 @@ void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
     message["type"] = "inputModeChanged";
     message["monoMode"] = mPresetMixer.IsMonoMode();
     message["inputChannel"] = mPresetMixer.GetInputChannel();
+    SendMessageToUI(message.dump());
+}
+
+void PluginController::HandleSetProcessingModeRequest(const nlohmann::json& payload)
+{
+    bool enabled = mPresetMixer.IsMultiThreadedProcessingEnabled();
+
+    if (payload.contains("multiThreaded") && payload["multiThreaded"].is_boolean())
+        enabled = payload["multiThreaded"].get<bool>();
+    else if (payload.contains("enabled") && payload["enabled"].is_boolean())
+        enabled = payload["enabled"].get<bool>();
+    else if (payload.contains("mode") && payload["mode"].is_string())
+    {
+        const std::string mode = payload["mode"].get<std::string>();
+        if (mode == "single" || mode == "singleThreaded")
+            enabled = false;
+        else if (mode == "multi" || mode == "multiThreaded")
+            enabled = true;
+    }
+
+    SetMultiThreadedProcessingEnabled(enabled);
+
+    nlohmann::json message;
+    message["type"] = "processingModeChanged";
+    message["multiThreaded"] = enabled;
+    message["mode"] = enabled ? "multiThreaded" : "singleThreaded";
     SendMessageToUI(message.dump());
 }
 
@@ -8365,6 +8436,7 @@ void PluginController::BroadcastState()
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
+    mixer["multiThreaded"] = mPresetMixer.IsMultiThreadedProcessingEnabled();
     mixer["activePresetIds"] = activePresetIds;
     nlohmann::json presetConfigs = nlohmann::json::object();
     for (const auto& id : mPresetMixer.GetActivePresetIds())
@@ -10935,7 +11007,7 @@ void PluginController::SendSignalDiagnosticsToUI()
         node["presetId"] = n.presetId;
         node["nodeId"] = n.nodeId;
         node["nodeType"] = n.nodeType;
-        node["stereoActive"] = n.stereoActive;
+        node["channelCount"] = n.channelCount;
         node["levels"] = buildLevelJson(n.levels);
         nodes.push_back(node);
     }

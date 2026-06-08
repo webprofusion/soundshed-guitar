@@ -241,9 +241,7 @@ export function uploadRoutes() {
       uploadId,
       kind,
       mimeType,
-      byteSize,
-      uploadUrl: `/v1/uploads/${uploadId}`,
-      r2Key
+      byteSize
     });
   });
 
@@ -292,7 +290,6 @@ export function uploadRoutes() {
 
     return ok(c, {
       uploadId,
-      r2Key,
       byteSize: body.byteLength
     });
   });
@@ -321,7 +318,6 @@ export function uploadRoutes() {
 
     return ok(c, {
       assetId: asset.id,
-      r2Key: asset.r2_key,
       byteSize: asset.byte_size
     });
   });

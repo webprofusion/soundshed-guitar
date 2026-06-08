@@ -22,6 +22,13 @@ endif()
 option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
 option(GUITARFX_CORE_ENABLE_WASM_EFFECTS "Build the generic WASM effect host" ON)
+option(GUITARFX_CORE_ENABLE_AVX2 "Enable AVX2 compile flags for x64 Release/RelWithDebInfo builds" ON)
+
+if(GUITARFX_CORE_ENABLE_AVX2)
+    message(STATUS "Core AVX2 release flags: ON (applies to x64/x86_64 targets only)")
+else()
+    message(STATUS "Core AVX2 release flags: OFF")
+endif()
 
 if(MSVC)
     include(CheckCXXCompilerFlag)
@@ -43,7 +50,7 @@ function(guitarfx_apply_release_optimizations target_name)
         endif()
         string(TOLOWER "${_guitarfx_windows_arch}" _guitarfx_windows_arch)
 
-        if(_guitarfx_windows_arch MATCHES "^(x64|amd64|x86_64)$" AND GUITARFX_MSVC_HAS_ARCH_AVX2)
+        if(GUITARFX_CORE_ENABLE_AVX2 AND _guitarfx_windows_arch MATCHES "^(x64|amd64|x86_64)$" AND GUITARFX_MSVC_HAS_ARCH_AVX2)
             target_compile_options(${target_name} PRIVATE
                 $<$<CONFIG:Release>:/arch:AVX2>
                 $<$<CONFIG:RelWithDebInfo>:/arch:AVX2>)
@@ -70,7 +77,7 @@ function(guitarfx_apply_release_optimizations target_name)
             set(_guitarfx_osx_arches "${CMAKE_SYSTEM_PROCESSOR}")
         endif()
 
-        if(_guitarfx_osx_arches MATCHES "x86_64")
+        if(GUITARFX_CORE_ENABLE_AVX2 AND _guitarfx_osx_arches MATCHES "x86_64")
             if(CMAKE_CONFIGURATION_TYPES)
                 target_compile_options(${target_name} PRIVATE
                     $<$<CONFIG:Release>:-Xarch_x86_64>
@@ -88,7 +95,7 @@ function(guitarfx_apply_release_optimizations target_name)
             $<$<CONFIG:RelWithDebInfo>:-O3>
             $<$<CONFIG:Release>:-ffast-math>
             $<$<CONFIG:RelWithDebInfo>:-ffast-math>)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+        if(GUITARFX_CORE_ENABLE_AVX2 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
             target_compile_options(${target_name} PRIVATE
                 $<$<CONFIG:Release>:-mavx2>
                 $<$<CONFIG:RelWithDebInfo>:-mavx2>)
@@ -100,6 +107,20 @@ function(guitarfx_disable_linux_gnu_unique target_name)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_options(${target_name} PRIVATE
             $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-fno-gnu-unique>)
+    endif()
+endfunction()
+
+function(guitarfx_enforce_nam_a2_fast target_name)
+    if(NOT TARGET ${target_name})
+        return()
+    endif()
+
+    get_target_property(_guitarfx_nam_imported ${target_name} IMPORTED)
+    if(_guitarfx_nam_imported)
+        set_property(TARGET ${target_name} APPEND PROPERTY
+            INTERFACE_COMPILE_DEFINITIONS NAM_ENABLE_A2_FAST=1)
+    else()
+        target_compile_definitions(${target_name} PUBLIC NAM_ENABLE_A2_FAST=1)
     endif()
 endfunction()
 
@@ -365,7 +386,7 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
         add_library(NeuralAmpModelerCore STATIC ${NAM_SOURCES})
         set_target_properties(NeuralAmpModelerCore PROPERTIES
             POSITION_INDEPENDENT_CODE ON)
-        target_compile_definitions(NeuralAmpModelerCore PUBLIC NAM_ENABLE_A2_FAST=1)
+        guitarfx_enforce_nam_a2_fast(NeuralAmpModelerCore)
         guitarfx_disable_linux_gnu_unique(NeuralAmpModelerCore)
         target_compile_features(NeuralAmpModelerCore PUBLIC cxx_std_17)
         guitarfx_apply_release_optimizations(NeuralAmpModelerCore)
@@ -381,6 +402,10 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
         endif()
     endif()
 endif()
+
+# Ensure fast A2 WaveNet path is always enabled for whichever NAM core target is present.
+guitarfx_enforce_nam_a2_fast(NeuralAmpModelerCore)
+guitarfx_enforce_nam_a2_fast(nam)
 
 # ---------------------------------------------------------------------------
 # Source files

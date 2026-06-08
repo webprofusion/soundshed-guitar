@@ -128,6 +128,65 @@ int main()
     }
   }
 
+  // Switching processing mode should not change output for the same input block
+  {
+    MultiPresetMixer mixer;
+    ResourceLibrary lib;
+    mixer.SetResourceLibrary(&lib);
+    mixer.Prepare(kTestSampleRate, kTestBlockSize);
+
+    auto pL = MakePassthroughPreset("threadL");
+    auto pR = MakePassthroughPreset("threadR");
+    if (!mixer.AddActivePreset(pL, "threadL", "ThreadLeft")
+        || !mixer.AddActivePreset(pR, "threadR", "ThreadRight"))
+    {
+      std::cerr << "Failed to add threading-mode presets" << std::endl;
+      allPassed = false;
+    }
+
+    mixer.SetPresetPan("threadL", -1.0);
+    mixer.SetPresetPan("threadR", +1.0);
+    mixer.SetPresetMix("threadL", 0.5);
+    mixer.SetPresetMix("threadR", 0.5);
+
+    std::vector<float> inL(static_cast<size_t>(kTestBlockSize), 0.25f);
+    std::vector<float> inR(static_cast<size_t>(kTestBlockSize), 0.25f);
+    std::vector<float> outMtL(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> outMtR(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> outStL(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> outStR(static_cast<size_t>(kTestBlockSize), 0.0f);
+
+    float *inputs[2] = {inL.data(), inR.data()};
+    float *outputsMt[2] = {outMtL.data(), outMtR.data()};
+    float *outputsSt[2] = {outStL.data(), outStR.data()};
+
+    mixer.SetMultiThreadedProcessingEnabled(true);
+    mixer.Process(inputs, outputsMt, kTestBlockSize);
+
+    mixer.SetMultiThreadedProcessingEnabled(false);
+    mixer.Process(inputs, outputsSt, kTestBlockSize);
+
+    for (int i = 0; i < kTestBlockSize; ++i)
+    {
+      if (std::fabs(outMtL[static_cast<size_t>(i)] - outStL[static_cast<size_t>(i)]) > 1e-6f
+          || std::fabs(outMtR[static_cast<size_t>(i)] - outStR[static_cast<size_t>(i)]) > 1e-6f)
+      {
+        std::cerr << "Processing mode output mismatch at sample " << i
+                  << ": MT(L=" << outMtL[static_cast<size_t>(i)]
+                  << ", R=" << outMtR[static_cast<size_t>(i)]
+                  << ") ST(L=" << outStL[static_cast<size_t>(i)]
+                  << ", R=" << outStR[static_cast<size_t>(i)] << ")" << std::endl;
+        allPassed = false;
+        break;
+      }
+    }
+
+    if (allPassed)
+    {
+      std::cout << "MultiPresetMixer processing mode switch test passed" << std::endl;
+    }
+  }
+
   // Multiple signal-path replacements should leave only the final nodes in the mixer DSP
   {
     MultiPresetMixer mixer;
