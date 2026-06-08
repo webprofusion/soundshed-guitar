@@ -262,25 +262,27 @@ endif()
 set(CMAKE_POLICY_DEFAULT_CMP0141        NEW      CACHE STRING "" FORCE)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 
-# JUCE is setup as a submodule in the /JUCE folder
-# Locally, you must run `git submodule update --init --recursive` once
-# and later `git submodule update --remote --merge` to keep it up to date
-# On Github Actions, this is done as a part of actions/checkout
-if(WIN32)
-    set(_guitarfx_juce_webview_source "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/modules/juce_gui_extra/native/juce_WebBrowserComponent_windows.cpp")
-    if(EXISTS "${_guitarfx_juce_webview_source}")
-        file(READ "${_guitarfx_juce_webview_source}" _guitarfx_juce_webview_contents)
-        string(REPLACE
-            "template <typename ArgType>\n    static std::optional<String> callMethodWithLpwstrResult (ArgType* args, HRESULT (ArgType::* method) (LPWSTR*))"
-            "template <typename ArgType, typename MethodType>\n    static std::optional<String> callMethodWithLpwstrResult (ArgType* args, MethodType method)"
-            _guitarfx_juce_webview_patched
-            "${_guitarfx_juce_webview_contents}")
-        if(NOT _guitarfx_juce_webview_contents STREQUAL _guitarfx_juce_webview_patched)
-            file(WRITE "${_guitarfx_juce_webview_source}" "${_guitarfx_juce_webview_patched}")
-            message(STATUS "Patched JUCE WebView2 LPWSTR helper for x86 COM method pointers")
-        endif()
-    endif()
+# JUCE is setup in the /JUCE folder and this build enforces a pinned JUCE version.
+# If your checkout drifts, configure will fail with an actionable message.
+set(GUITARFX_REQUIRED_JUCE_VERSION "8.0.13")
+set(_guitarfx_juce_core_header "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/modules/juce_core/juce_core.h")
+if(NOT EXISTS "${_guitarfx_juce_core_header}")
+    message(FATAL_ERROR "Missing JUCE checkout at ${_guitarfx_juce_core_header}. Ensure JUCE is available in juce/JUCE.")
 endif()
+file(READ "${_guitarfx_juce_core_header}" _guitarfx_juce_core_contents)
+string(REGEX MATCH "version:[ \t]*([0-9]+\\.[0-9]+\\.[0-9]+)" _guitarfx_juce_version_match "${_guitarfx_juce_core_contents}")
+if(NOT _guitarfx_juce_version_match)
+    message(FATAL_ERROR "Unable to detect JUCE version from ${_guitarfx_juce_core_header}")
+endif()
+set(_guitarfx_detected_juce_version "${CMAKE_MATCH_1}")
+if(NOT _guitarfx_detected_juce_version STREQUAL GUITARFX_REQUIRED_JUCE_VERSION)
+    message(FATAL_ERROR
+        "JUCE version mismatch: required ${GUITARFX_REQUIRED_JUCE_VERSION}, found ${_guitarfx_detected_juce_version}. "
+        "Please checkout tag ${GUITARFX_REQUIRED_JUCE_VERSION} in juce/JUCE.")
+endif()
+message(STATUS "Using pinned JUCE version ${_guitarfx_detected_juce_version}")
+
+# On Github Actions, JUCE checkout provisioning is handled by the workflow checkout step.
 add_subdirectory(JUCE)
 
 # Add CLAP format
@@ -373,9 +375,9 @@ target_compile_definitions(SharedCode
     JUCE_USE_CURL=0     # If you set this to 1, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_PLUGINHOST_VST3=1
-    $<$<PLATFORM_ID:Darwin>:JUCE_PLUGINHOST_AU=1>
-    $<$<PLATFORM_ID:Linux>:JUCE_PLUGINHOST_LV2=1>
-
+    JUCE_PLUGINHOST_AU=1
+    JUCE_PLUGINHOST_LV2=1
+    
     # Enable ASIO on Windows. JUCE 8.0.11+ uses bundled ASIO sources by default.
     JUCE_ASIO=${GUITARFX_JUCE_ASIO_ENABLED}
     JUCE_ASIO_USE_EXTERNAL_SDK=${GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK}
