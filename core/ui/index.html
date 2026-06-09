@@ -294,8 +294,6 @@
               </div>
               <input type="text" id="preset-search" placeholder="Search presets..." />
               <div class="preset-library-actions">
-                <input type="text" id="preset-folder-name" placeholder="New folder name" />
-                <button id="preset-folder-add" type="button">Create Folder</button>
                 <button id="preset-export-folder-btn" type="button" class="preset-library-export-btn" title="Export presets" aria-label="Export presets">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -317,7 +315,36 @@
             </div>
             <div class="preset-library-body" id="preset-library-presets-panel" role="tabpanel" aria-labelledby="preset-lib-tab-presets">
               <div class="preset-folder-tree" id="preset-folder-tree"></div>
-              <div class="preset-list" id="preset-list"></div>
+              <div class="preset-list-column">
+                <div class="preset-folder-toolbar" id="preset-folder-toolbar">
+                  <input type="text" id="preset-folder-name" placeholder="Folder name" />
+                  <button id="preset-folder-add" type="button" class="preset-folder-toolbar-btn" title="Create folder in current folder" aria-label="Create folder in current folder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <line x1="12" y1="10" x2="12" y2="16" />
+                      <line x1="9" y1="13" x2="15" y2="13" />
+                    </svg>
+                  </button>
+                  <button id="preset-folder-rename" type="button" class="preset-folder-toolbar-btn" title="Rename current folder" aria-label="Rename current folder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v3" />
+                      <path d="M14 20h7" />
+                      <path d="M16.5 6.5l3 3" />
+                      <path d="M13 17l6.5-6.5a2.12 2.12 0 0 0-3-3L10 14v3z" />
+                    </svg>
+                  </button>
+                  <button id="preset-folder-delete" type="button" class="preset-folder-toolbar-btn preset-folder-toolbar-btn-danger" title="Delete current folder" aria-label="Delete current folder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M8 6v-1a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1" />
+                      <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="preset-list" id="preset-list"></div>
+              </div>
             </div>
 
             <div class="preset-library-body preset-library-multi-rig-panel" id="preset-library-multi-rig-panel" role="tabpanel" aria-labelledby="preset-lib-tab-multi-rig" hidden>

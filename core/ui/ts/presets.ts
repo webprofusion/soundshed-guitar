@@ -45,7 +45,9 @@ const presetLibraryMultiRigTab = document.getElementById("preset-lib-tab-multi-r
 const presetLibraryPresetsTab = document.getElementById("preset-lib-tab-presets") as HTMLButtonElement | null;
 const presetLibraryMultiRigPanel = document.getElementById("preset-library-multi-rig-panel") as HTMLElement | null;
 const presetFolderNameInput = document.getElementById("preset-folder-name") as HTMLInputElement | null;
-const presetFolderAddButton = document.getElementById("preset-folder-add");
+const presetFolderAddButton = document.getElementById("preset-folder-add") as HTMLButtonElement | null;
+const presetFolderRenameButton = document.getElementById("preset-folder-rename") as HTMLButtonElement | null;
+const presetFolderDeleteButton = document.getElementById("preset-folder-delete") as HTMLButtonElement | null;
 const presetExportFolderButton = document.getElementById("preset-export-folder-btn") as HTMLButtonElement | null;
 const setlistNameInput = document.getElementById("setlist-name-input") as HTMLInputElement | null;
 const setlistBankInput = document.getElementById("setlist-bank-input") as HTMLInputElement | null;
@@ -1215,6 +1217,7 @@ function setActivePresetFolder(folderId: string): void {
   uiState.activePresetFolderId = folderId;
   persistPresetFolders();
   filterPresets(presetSearchElement?.value ?? "");
+  syncPresetFolderToolbarState();
 }
 
 function removePresetFromFolders(folders: PresetFolder[], presetId: string): void {
@@ -1416,6 +1419,66 @@ function createFolder(name: string, parentId?: string): boolean {
   return true;
 }
 
+function renameFolder(folderId: string, nextName: string): boolean {
+  const trimmed = nextName.trim();
+  if (!trimmed) {
+    showNotification("Folder name required", "Enter a folder name to rename.");
+    return false;
+  }
+
+  const folder = findFolderById(uiState.presetFolders ?? [], folderId);
+  if (!folder) {
+    showNotification("Folder not found", "Select a valid folder to rename.");
+    return false;
+  }
+
+  folder.name = trimmed;
+  persistPresetFolders();
+  filterPresets(presetSearchElement?.value ?? "");
+  showNotification("Folder renamed", trimmed);
+  return true;
+}
+
+function deleteFolderById(folderId: string): boolean {
+  const folders = uiState.presetFolders ?? [];
+  const result = findFolderWithParent(folders, folderId);
+  if (!result) {
+    showNotification("Folder not found", "Select a valid folder to delete.");
+    return false;
+  }
+
+  if (result.parent) {
+    result.parent.children = (result.parent.children ?? []).filter((child) => child.id !== folderId);
+  } else {
+    uiState.presetFolders = (uiState.presetFolders ?? []).filter((folder) => folder.id !== folderId);
+  }
+
+  setActivePresetFolder(PRESET_FOLDER_ALL_ID);
+  showNotification("Folder deleted", result.folder.name);
+  return true;
+}
+
+function getCurrentRealPresetFolder(): PresetFolder | null {
+  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  if (isVirtualPresetFolderId(activeFolderId)) {
+    return null;
+  }
+  return findFolderById(uiState.presetFolders ?? [], activeFolderId) ?? null;
+}
+
+function syncPresetFolderToolbarState(): void {
+  const activeFolder = getCurrentRealPresetFolder();
+  const disabled = !activeFolder;
+
+  if (presetFolderRenameButton) {
+    presetFolderRenameButton.disabled = disabled;
+  }
+
+  if (presetFolderDeleteButton) {
+    presetFolderDeleteButton.disabled = disabled;
+  }
+}
+
 function findFolderByNameInList(folders: PresetFolder[], name: string): PresetFolder | undefined {
   const normalized = normalizeFolderName(name);
   return folders.find((folder) => normalizeFolderName(folder.name) === normalized);
@@ -1515,6 +1578,8 @@ export function requestSignalPathTest(): void {
 }
 
 function renderPresetUI(preset: Preset | null): void {
+  syncPresetFolderToolbarState();
+
   const visiblePresets = uiState.activePresetFolderId === PRESET_FOLDER_RECENTS_ID
     ? uiState.filteredPresets
     : sortPresetsAlphabetically(uiState.filteredPresets);
@@ -1935,8 +2000,26 @@ export function initializePresetControls(): void {
     });
   }
 
-  document.addEventListener("click", () => {
+  document.addEventListener("click", (event) => {
+    const targetNode = event.target as Node | null;
+    const targetElement = event.target instanceof Element ? event.target : null;
+    if (!targetNode) {
+      return;
+    }
+
+    const insidePresetSelector = Boolean(presetSelector?.contains(targetNode));
+    const insidePresetPopover = Boolean(presetLibraryPopover?.contains(targetNode));
+    const insideExtraActions = Boolean(
+      presetExtraActionsBtn?.contains(targetNode) || presetExtraActionsMenu?.contains(targetNode),
+    );
+    const insideDialog = Boolean(targetElement?.closest("#dialog-modal"));
+
+    if (insidePresetSelector || insidePresetPopover || insideExtraActions || insideDialog) {
+      return;
+    }
+
     closePresetLibraryPopover();
+    closePresetExtraActionsMenu();
   });
 
   document.addEventListener("keydown", (event) => {
@@ -2030,9 +2113,10 @@ export function initializePresetControls(): void {
 
   if (presetFolderAddButton) {
     presetFolderAddButton.addEventListener("click", () => {
-      let name = presetFolderNameInput?.value ?? "";
+      const name = presetFolderNameInput?.value ?? "";
       if (!name.trim()) {
-        name = window.prompt("Folder name", "") ?? "";
+        showNotification("Folder name required", "Enter a folder name to create.");
+        return;
       }
       const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
       const parentId = isVirtualPresetFolderId(activeFolderId) ? PRESET_FOLDER_ALL_ID : activeFolderId;
@@ -2043,9 +2127,54 @@ export function initializePresetControls(): void {
     });
   }
 
+  if (presetFolderRenameButton) {
+    presetFolderRenameButton.addEventListener("click", async () => {
+      const activeFolder = getCurrentRealPresetFolder();
+      if (!activeFolder) {
+        showNotification("Select a folder", "Choose a real folder to rename.");
+        return;
+      }
+
+      const trimmed = (presetFolderNameInput?.value ?? "").trim();
+      if (!trimmed) {
+        showNotification("Folder name required", "Enter a folder name to rename.");
+        return;
+      }
+
+      const confirmed = await showConfirm(`Rename folder \"${activeFolder.name}\" to \"${trimmed}\"?`, "Rename folder");
+      if (!confirmed) {
+        return;
+      }
+
+      const renamed = renameFolder(activeFolder.id, trimmed);
+      if (renamed && presetFolderNameInput) {
+        presetFolderNameInput.value = "";
+      }
+    });
+  }
+
+  if (presetFolderDeleteButton) {
+    presetFolderDeleteButton.addEventListener("click", async () => {
+      const activeFolder = getCurrentRealPresetFolder();
+      if (!activeFolder) {
+        showNotification("Select a folder", "Choose a real folder to delete.");
+        return;
+      }
+
+      const confirmed = await showConfirm(`Delete folder \"${activeFolder.name}\" and all subfolders?`, "Delete folder");
+      if (!confirmed) {
+        return;
+      }
+
+      deleteFolderById(activeFolder.id);
+    });
+  }
+
   if (presetExportFolderButton) {
     presetExportFolderButton.addEventListener("click", () => void exportSelectedPresetCollectionArchive());
   }
+
+  syncPresetFolderToolbarState();
 }
 
 // Save preset modal helpers
