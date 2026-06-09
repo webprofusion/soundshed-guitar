@@ -17,9 +17,13 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Options — defaults assume the consumer provides these dependencies.
-# When building standalone (e.g. for tests) set GUITARFX_CORE_FETCH_DEPS=ON.
+# Standalone core builds fetch deps by default; JUCE overrides this explicitly.
 # ---------------------------------------------------------------------------
-option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
+if(PROJECT_IS_TOP_LEVEL)
+    option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" ON)
+else()
+    option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
+endif()
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
 option(GUITARFX_CORE_ENABLE_WASM_EFFECTS "Build the generic WASM effect host" ON)
 option(GUITARFX_CORE_ENABLE_AVX2 "Enable AVX2 compile flags for x64 Release/RelWithDebInfo builds" ON)
