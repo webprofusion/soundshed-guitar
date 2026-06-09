@@ -5,6 +5,7 @@
 #include "dsp/EffectGuids.h"
 #include "dsp/IRTypes.h"
 #include "dsp/IRWavLoader.h"
+#include "dsp/RealtimeParallel.h"
 #include "dsp/RealtimeConvolver.h"
 #include <algorithm>
 #include <atomic>
@@ -93,13 +94,34 @@ namespace guitarfx
         mInputBufferR[i] = inputs[1] ? inputs[1][i] : (inputs[0] ? inputs[0][i] : 0.0f);
       }
 
-      mConvolverLL.Process(mInputBufferL.data(), mOutputBufferLL.data(), numSamples);
-      mConvolverRR.Process(mInputBufferR.data(), mOutputBufferRR.data(), numSamples);
+      const bool allowParallel = rtparallel::ShouldParallelizeStereoWork(numSamples);
+      bool ranParallel = false;
+      if (allowParallel)
+      {
+        ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+          [&]() { mConvolverRR.Process(mInputBufferR.data(), mOutputBufferRR.data(), numSamples); },
+          [&]() { mConvolverLL.Process(mInputBufferL.data(), mOutputBufferLL.data(), numSamples); });
+      }
+      if (!ranParallel)
+      {
+        mConvolverLL.Process(mInputBufferL.data(), mOutputBufferLL.data(), numSamples);
+        mConvolverRR.Process(mInputBufferR.data(), mOutputBufferRR.data(), numSamples);
+      }
 
       if (mHasTrueStereo)
       {
-        mConvolverLR.Process(mInputBufferR.data(), mOutputBufferLR.data(), numSamples);
-        mConvolverRL.Process(mInputBufferL.data(), mOutputBufferRL.data(), numSamples);
+        bool ranTrueStereoParallel = false;
+        if (allowParallel)
+        {
+          ranTrueStereoParallel = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { mConvolverRL.Process(mInputBufferL.data(), mOutputBufferRL.data(), numSamples); },
+            [&]() { mConvolverLR.Process(mInputBufferR.data(), mOutputBufferLR.data(), numSamples); });
+        }
+        if (!ranTrueStereoParallel)
+        {
+          mConvolverLR.Process(mInputBufferR.data(), mOutputBufferLR.data(), numSamples);
+          mConvolverRL.Process(mInputBufferL.data(), mOutputBufferRL.data(), numSamples);
+        }
       }
 
       const double mix = mMix.load(std::memory_order_relaxed);

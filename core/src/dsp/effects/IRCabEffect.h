@@ -3,6 +3,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/RealtimeParallel.h"
 #include "dsp/RealtimeConvolver.h"
 #include "dsp/IRTypes.h"
 #include "dsp/IRWavLoader.h"
@@ -133,26 +134,67 @@ namespace guitarfx
       }
 
       // Process through convolvers
-      mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
-      mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+      const bool allowParallel = rtparallel::ShouldParallelizeStereoWork(numSamples);
+      bool ranParallel = false;
+      if (allowParallel)
+      {
+        ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+          [&]() { mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples); },
+          [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
+      }
+      if (!ranParallel)
+      {
+        mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
+        mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+      }
 
       const bool hasB = mConvolverBL.IsInitialized() && (!mIsStereoB || mConvolverBR.IsInitialized());
       if (hasB)
       {
-        mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
-        mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
+        bool ranBParallel = false;
+        if (allowParallel)
+        {
+          ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples); },
+            [&]() { mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples); });
+        }
+        if (!ranBParallel)
+        {
+          mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
+          mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
+        }
       }
 
       const bool transitionActive = mResourceTransitionSamplesRemaining > 0 && mPrevHasSlotA;
       if (transitionActive)
       {
-        mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
-        mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
+        bool ranPrevParallel = false;
+        if (allowParallel)
+        {
+          ranPrevParallel = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples); },
+            [&]() { mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples); });
+        }
+        if (!ranPrevParallel)
+        {
+          mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+          mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
+        }
 
         if (mPrevHasSlotB)
         {
-          mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
-          mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+          bool ranPrevBParallel = false;
+          if (allowParallel)
+          {
+            ranPrevBParallel = rtparallel::DualLaneExecutor::Instance().Run(
+              [&]() { mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples); },
+              [&]() { mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples); });
+          }
+          if (!ranPrevBParallel)
+          {
+            mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
+            mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+          }
         }
       }
 

@@ -5,6 +5,7 @@
 #include "dsp/LevelTargets.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/RealtimeParallel.h"
 #include "dsp/effects/NAMSampleRate.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #include "dsp/simd/SimdMath.h"
@@ -433,19 +434,39 @@ namespace guitarfx
 
     void ProcessModels(int numSamples)
     {
-      if (!mResamplingActive)
+      auto processLeft = [&](int frames)
       {
-        NAM_SAMPLE* inputPtrL = mInputBufferL.data();
-        NAM_SAMPLE* outputPtrL = mOutputBufferL.data();
+        NAM_SAMPLE* inputPtrL = mResamplingActive ? mModelInputBufferL.data() : mInputBufferL.data();
+        NAM_SAMPLE* outputPtrL = mResamplingActive ? mModelOutputBufferL.data() : mOutputBufferL.data();
         NAM_SAMPLE* inputPtrsL[1] = { inputPtrL };
         NAM_SAMPLE* outputPtrsL[1] = { outputPtrL };
-        mModelLeft->process(inputPtrsL, outputPtrsL, numSamples);
+        mModelLeft->process(inputPtrsL, outputPtrsL, frames);
+      };
 
-        NAM_SAMPLE* inputPtrR = mInputBufferR.data();
-        NAM_SAMPLE* outputPtrR = mOutputBufferR.data();
+      auto processRight = [&](int frames)
+      {
+        NAM_SAMPLE* inputPtrR = mResamplingActive ? mModelInputBufferR.data() : mInputBufferR.data();
+        NAM_SAMPLE* outputPtrR = mResamplingActive ? mModelOutputBufferR.data() : mOutputBufferR.data();
         NAM_SAMPLE* inputPtrsR[1] = { inputPtrR };
         NAM_SAMPLE* outputPtrsR[1] = { outputPtrR };
-        mModelRight->process(inputPtrsR, outputPtrsR, numSamples);
+        mModelRight->process(inputPtrsR, outputPtrsR, frames);
+      };
+
+      if (!mResamplingActive)
+      {
+        bool ranParallel = false;
+        if (rtparallel::ShouldParallelizeStereoWork(numSamples))
+        {
+          ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { processRight(numSamples); },
+            [&]() { processLeft(numSamples); });
+        }
+
+        if (!ranParallel)
+        {
+          processLeft(numSamples);
+          processRight(numSamples);
+        }
         return;
       }
 
@@ -455,17 +476,19 @@ namespace guitarfx
       mInputResampler.ProcessFixedOutput(mInputBufferL.data(), numSamples, mModelInputBufferL.data(), modelFrames);
       mInputResampler.ProcessFixedOutput(mInputBufferR.data(), numSamples, mModelInputBufferR.data(), modelFrames);
 
-      NAM_SAMPLE* inputPtrL = mModelInputBufferL.data();
-      NAM_SAMPLE* outputPtrL = mModelOutputBufferL.data();
-      NAM_SAMPLE* inputPtrsL[1] = { inputPtrL };
-      NAM_SAMPLE* outputPtrsL[1] = { outputPtrL };
-      mModelLeft->process(inputPtrsL, outputPtrsL, modelFrames);
+      bool ranParallel = false;
+      if (rtparallel::ShouldParallelizeStereoWork(modelFrames))
+      {
+        ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+          [&]() { processRight(modelFrames); },
+          [&]() { processLeft(modelFrames); });
+      }
 
-      NAM_SAMPLE* inputPtrR = mModelInputBufferR.data();
-      NAM_SAMPLE* outputPtrR = mModelOutputBufferR.data();
-      NAM_SAMPLE* inputPtrsR[1] = { inputPtrR };
-      NAM_SAMPLE* outputPtrsR[1] = { outputPtrR };
-      mModelRight->process(inputPtrsR, outputPtrsR, modelFrames);
+      if (!ranParallel)
+      {
+        processLeft(modelFrames);
+        processRight(modelFrames);
+      }
 
       mOutputResampler.ProcessFixedOutput(mModelOutputBufferL.data(), modelFrames, mOutputBufferL.data(), numSamples);
       mOutputResampler.ProcessFixedOutput(mModelOutputBufferR.data(), modelFrames, mOutputBufferR.data(), numSamples);

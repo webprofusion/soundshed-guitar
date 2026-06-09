@@ -12,6 +12,7 @@
 #include "dsp/LevelTargets.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/RealtimeParallel.h"
 #include "dsp/effects/NAMSampleRate.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #include "dsp/simd/OptimizedNAM.h"
@@ -765,17 +766,33 @@ private:
       }
     }
 
-    NAM_SAMPLE* inputPtrL = mFallbackInputBufferL.data();
-    NAM_SAMPLE* outputPtrL = mFallbackOutputBufferL.data();
-    NAM_SAMPLE* inputPtrsL[1] = { inputPtrL };
-    NAM_SAMPLE* outputPtrsL[1] = { outputPtrL };
-    ProcessActiveModel(mModelLeft, inputPtrL, outputPtrL, modelFrames);
+    auto processLeft = [&]()
+    {
+      NAM_SAMPLE* inputPtrL = mFallbackInputBufferL.data();
+      NAM_SAMPLE* outputPtrL = mFallbackOutputBufferL.data();
+      ProcessActiveModel(mModelLeft, inputPtrL, outputPtrL, modelFrames);
+    };
 
-    NAM_SAMPLE* inputPtrR = mFallbackInputBufferR.data();
-    NAM_SAMPLE* outputPtrR = mFallbackOutputBufferR.data();
-    NAM_SAMPLE* inputPtrsR[1] = { inputPtrR };
-    NAM_SAMPLE* outputPtrsR[1] = { outputPtrR };
-    ProcessActiveModel(mModelRight, inputPtrR, outputPtrR, modelFrames);
+    auto processRight = [&]()
+    {
+      NAM_SAMPLE* inputPtrR = mFallbackInputBufferR.data();
+      NAM_SAMPLE* outputPtrR = mFallbackOutputBufferR.data();
+      ProcessActiveModel(mModelRight, inputPtrR, outputPtrR, modelFrames);
+    };
+
+    bool ranParallel = false;
+    if (rtparallel::ShouldParallelizeStereoWork(modelFrames))
+    {
+      ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+        [&]() { processRight(); },
+        [&]() { processLeft(); });
+    }
+
+    if (!ranParallel)
+    {
+      processLeft();
+      processRight();
+    }
 
     if (mResamplingActive)
     {
