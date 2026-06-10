@@ -2,6 +2,8 @@
 
 Soundshed Guitar is a JUCE-based guitar processing plugin combining Neural Amp Modeler (NAM) with a modern web-driven UI. Targets VST3, AU, and AAX formats with an extensible signal graph architecture.
 
+![Screenshot](https://guitar.soundshed.com/img/site/amp.png)
+
 ## Features
 
 - Neural Amp Modeler DSP for amp/pedal captures
@@ -139,4 +141,4 @@ Testing plugin builds with external resources can be done with pluginval against
 
 ## License
 
-MIT. Third-party components retain their upstream licenses.
+AGPL-3.0. Third-party components retain their upstream licenses.
