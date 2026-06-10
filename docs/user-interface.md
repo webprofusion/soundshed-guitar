@@ -167,7 +167,11 @@ Sent via `state` message on startup and major changes:
 
 ### Sending Messages (UI → Engine)
 ```typescript
-window.NAMBridge.postMessage("setParameter", { id: "amp1_drive", value: 0.72 });
+window.NAMBridge.postMessage({
+  type: "setParameter",
+  name: "amp1_drive",
+  value: 0.72,
+});
 ```
 
 ### Receiving Messages (Engine → UI)

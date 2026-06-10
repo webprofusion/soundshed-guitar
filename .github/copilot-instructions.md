@@ -8,21 +8,22 @@
 - Under what conditions does this work?
 
 ## Project Map
-- C++ core: src/src/ (DSP, presets, plugin entry)
-- UI: src/resources/ui/ts/ (WebView TypeScript)
-- Build: CMake + FetchContent; targets for App, VST3, tests
-- Docs: docs/ (architecture, data models, UI, API)
+- C++ core: core/src/ (DSP, presets, controller/dispatcher, resource loading)
+- UI: core/ui/ts/ (WebView TypeScript SPA)
+- Host integration: juce/ (JUCE standalone/VST3/AU plugin adapter and WebView host)
+- Build: CMake + FetchContent; core tests in core/build, JUCE targets in juce/builds
+- Docs: docs/ (architecture, data models, UI, network integrations)
 
 ## DSP Graph Essentials
-- Graph runner: SignalGraphExecutor with nodes of type amp_nam, cab_ir, eq_parametric, delay_digital, reverb_room, dynamics_gate, etc.
-- Effects live in src/src/dsp/effects/; new effects implement EffectProcessor and register via EffectRegistry.
+- Graph runner: core/src/dsp/SignalGraphExecutor.h with nodes of type amp_nam, cab_ir, eq_parametric, delay_digital, reverb_room, dynamics_gate, etc.
+- Effects live in core/src/dsp/effects/; new effects implement EffectProcessor and register via EffectRegistry.
 - Validate parameter ranges and resource presence; fail fast with clear errors instead of silent defaults.
 - Full spec: docs/signal-chain.md, docs/fx-library.md
 
 ## UI ↔ Plugin Messaging
-- Messaging via OnMessageFromWebView / SendMessageToUI.
+- Messaging flows through core/src/MessageDispatcher.cpp and PluginController::HandleUIMessage().
 - Common payloads: state, presetLoaded, loadPreset, setParameter, browseModel, addSignalPathNode, removeSignalPathNode.
-- UI handler: src/resources/ui/ts/messages.ts; plugin handler: HandleUIMessage in src/src/GuitarFXPlugin.cpp.
+- UI bridge lives in core/ui/ts/bridge.ts and core/ui/ts/messages.ts; native host glue is in juce/source/PluginProcessorAdapter.cpp and juce/source/PluginEditor.cpp.
 - Keep messages backward compatible; guard against missing fields and unknown message types.
 - Full spec: docs/user-interface.md
 
@@ -32,34 +33,36 @@
 - Full spec: docs/fx-library.md, docs/data-models.md
 
 ## Build Quickstart
-- Configure (once, from src/):
-	powershell: cmake -G "Visual Studio 18 2026" -A x64 -S . -B build
-- Build (tasks available in VS Code):
-	Debug App: cmake --build build --config Debug --target SoundshedGuitar_App
-	Debug VST3: cmake --build build --config Debug --target SoundshedGuitar_VST3
-	Release App: cmake --build build --config Release --target SoundshedGuitar_App
-- UI bundle: cd src/resources/ui && npm run build
+- Configure the shared core (for tests and core-only work):
+	powershell: cmake -S core -B core/build
+- Configure the JUCE host (Standalone/VST3/AU):
+	powershell: cmake -S juce -B juce/builds -G "Visual Studio 18 2026" -A x64
+- Build the host targets:
+	Debug Standalone: cmake --build juce/builds --config Debug --target SoundshedGuitar_Standalone
+	Debug VST3: cmake --build juce/builds --config Debug --target SoundshedGuitar_VST3
+	Release Standalone: cmake --build juce/builds --config Release --target SoundshedGuitar_Standalone
+- UI bundle: cd core/ui && npm run build
 
 ## Testing
-- From src/build (Debug only):
-	powershell: ctest --build-config Debug --output-on-failure
-- Key suites: PresetDSPLoadingTests.cpp (model/IR loading), PresetDSPProcessingTests.cpp (processing), IRConvolutionTests.cpp (convolution correctness).
+- From core/build (Debug only):
+	powershell: ctest -C Debug --output-on-failure
+- Key suites are defined in core/tests/CMakeLists.txt; common targets include PresetDSPLoadingTests, PresetManagementWorkflowTests, ResourcePreviewWorkflowTests, and SignalGraphExecutorTests.
 
 ## Coding Conventions
 - Namespace guitarfx::; require C++20.
-- Parameter IDs: ParameterId enum in GuitarFXPlugin.h.
-- UI state centralized in src/resources/ui/ts/state.ts; keep one source of truth.
+- Parameter IDs are handled in the plugin/controller path; keep them aligned with the current UI message contract in core/ui/ts/messages.ts.
+- UI state is centralized in core/ui/ts/state.ts; keep one source of truth.
 - JSON serialization uses nlohmann::json; maintain stable field names and defaults.
 - Keep DSP real-time safe: avoid allocations and locks in audio thread; prefer preallocation and lock-free patterns.
 
 ## Key Files
-- Plugin entry: src/src/GuitarFXPlugin.cpp
-- Effect base: src/src/dsp/EffectProcessor.h
-- Registry: src/src/dsp/EffectRegistry.h
-- Preset types: src/src/presets/PresetTypes.h
-- Graph executor: src/src/dsp/SignalGraphExecutor.h
-- Config/branding: src/config/GuitarFXConfig.h
-- UI entry: src/resources/ui/ts/main.ts
+- Controller + message routing: core/src/PluginController.cpp, core/src/MessageDispatcher.cpp
+- Effect base + registry: core/src/dsp/EffectProcessor.h, core/src/dsp/EffectRegistry.h
+- Preset types: core/src/presets/PresetTypes.h
+- Graph executor: core/src/dsp/SignalGraphExecutor.h
+- Config/branding: core/config/GuitarFXConfig.h
+- UI entry: core/ui/ts/main.ts
+- JUCE host glue: juce/source/PluginProcessorAdapter.cpp, juce/source/PluginEditor.cpp
 
 ## Documentation
 - Architecture: docs/architecture-overview.md
@@ -67,7 +70,7 @@
 - Effects/resources: docs/fx-library.md
 - Presets/storage: docs/data-models.md
 - UI/messaging: docs/user-interface.md
-- Network/API: docs/network-api.md
+- Network / remote integrations: docs/network-api.md
 - Theming: docs/theme-system.md
 - PRD: docs/prd/PRD.md
 

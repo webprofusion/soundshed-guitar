@@ -44,7 +44,7 @@ Coordinates state and business logic.
 - **PluginController**: Main orchestration point for presets, settings, messaging, and host state
 - **MessageDispatcher**: Routes JSON UI messages by domain
 - **Resource Library**: NAM/IR catalog with content-addressed deduplication
-- **API integration**: Cloud-backed discovery/sharing lives in the separate `api/` worker project
+- **API integration**: Remote discovery and sharing are implemented in the UI client modules `core/ui/ts/tone3000Api.ts`, `core/ui/ts/tone3000Browser.ts`, and `core/ui/ts/toneSharingPanel.ts`, which talk to the Tone3000 and Soundshed endpoints.
 
 ### User Interface Layer
 Web-based SPA in a native WebView container.

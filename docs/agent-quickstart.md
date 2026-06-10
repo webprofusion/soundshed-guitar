@@ -33,7 +33,7 @@ If you only load a few files, use these:
 ### Add or Change a UI Message
 
 1. Update types and handler in core/ui/ts/messages.ts.
-2. Update the relevant dispatcher/controller path in core/src/dispatcher/ and core/src/PluginController.cpp.
+2. Update the relevant dispatcher/controller path in core/src/MessageDispatcher.cpp and core/src/PluginController.cpp.
 3. Keep messages backward compatible and validate payloads.
 4. Update docs/user-interface.md for the protocol contract.
 
