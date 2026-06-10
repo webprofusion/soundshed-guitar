@@ -3304,6 +3304,17 @@ type ArchiveImportContext = {
   titleHint?: string;
 };
 
+export function resolveImportedPresetName(
+  preset: Pick<Preset, "name">,
+  context: ArchiveImportContext,
+): string {
+  const apiTitle = context.titleHint?.trim();
+  if (context.source === "toneSharingApi" && context.itemId && apiTitle) {
+    return apiTitle;
+  }
+  return preset.name?.trim() || "Imported Preset";
+}
+
 type ArchiveImportOptions = {
   previewOnly?: boolean;
   suppressNotifications?: boolean;
@@ -3669,7 +3680,7 @@ export async function importPresetArchive(
     const archiveOrigin = getToneSharingOriginMetadata(importedPreset);
     importedPreset.id = generateResourceId(sourcePresetId);
     presetIdMap.set(sourcePresetId, importedPreset.id);
-    importedPreset.name = importedPreset.name || "Imported Preset";
+    importedPreset.name = resolveImportedPresetName(importedPreset, context) || "Imported Preset";
     const contextOrigin = context.source === "toneSharingApi" && context.itemId
       ? createToneSharingOrigin(context.itemId, sourcePresetId, {
           packId: context.packId,

@@ -1863,6 +1863,7 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
     const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
     if (!isZip) {
       const preset = await readPresetFromArchive(buffer);
+      preset.name = item.title || preset.name || "Imported Preset";
       preset.toneSharingOrigin = {
         source: "toneSharingApi",
         itemId: item.itemId,
@@ -1884,6 +1885,7 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
     if (presetEntry) {
       const parsed = JSON.parse(await presetEntry.async("text")) as ItemArchive;
       if (parsed.preset) {
+        parsed.preset.name = item.title || parsed.preset.name || "Imported Preset";
         parsed.preset.toneSharingOrigin = {
           source: "toneSharingApi",
           itemId: item.itemId,
@@ -1929,6 +1931,7 @@ async function buildPackArchiveFromDetails(details: ToneSharingPackDetails): Pro
       const parsed = JSON.parse(await presetsEntry.async("text")) as ItemCollectionArchive;
       mergedPresets.push(...(parsed.presets ?? []).map((preset) => ({
         ...preset,
+        name: item.title || preset.name || "Imported Preset",
         toneSharingOrigin: {
           source: "toneSharingApi",
           itemId: item.itemId,
@@ -2705,7 +2708,7 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
       packId: id,
       creatorId: packMeta?.creatorUserId ?? undefined,
       creatorHandle: resolveCreatorProfileHandle((packMeta ?? {}) as unknown as Record<string, unknown>) ?? undefined,
-      titleHint: importFileName.replace(/\.zip$/i, ""),
+      titleHint: packMeta?.title ?? importFileName.replace(/\.zip$/i, ""),
     });
     return;
   }
@@ -2728,7 +2731,7 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
     itemId: id,
     creatorId: itemMeta?.creatorUserId ?? undefined,
     creatorHandle: resolveCreatorProfileHandle((itemMeta ?? {}) as unknown as Record<string, unknown>) ?? undefined,
-    titleHint: fileName.replace(/\.(soundshed\.preset|soundshed\.presets|preset|zip)$/i, ""),
+    titleHint: itemMeta?.title ?? fileName.replace(/\.(soundshed\.preset|soundshed\.presets|preset|zip)$/i, ""),
   });
 
   if (importedPresets.length === 0) {
