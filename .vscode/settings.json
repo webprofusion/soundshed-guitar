@@ -1,4 +1,3 @@
 {
-    "cmake.sourceDirectory": "C:/Work/GIT/soundshed-guitar/core",
-    "specstory.cloudSync.enabled": "never"
+    "cmake.sourceDirectory": "${workspaceFolder}/soundshed-guitar/core"
 }

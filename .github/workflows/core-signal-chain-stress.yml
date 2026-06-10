@@ -1,0 +1,84 @@
+name: Core Signal Chain Stress
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - core/**
+      - .github/workflows/core-signal-chain-stress.yml
+  push:
+    branches:
+      - main
+    paths:
+      - core/**
+      - .github/workflows/core-signal-chain-stress.yml
+
+permissions:
+  contents: read
+
+jobs:
+  stress-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure core CMake
+        run: cmake -S core -B core/build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build stress test target
+        run: cmake --build core/build --config Debug --target SignalChainMutationStressTest
+
+      - name: Run deep stress matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          New-Item -ItemType Directory -Path "stress-artifacts" -Force | Out-Null
+          $exePath = Join-Path $PWD "core/build/tests/Debug/SignalChainMutationStressTest.exe"
+          if (-Not (Test-Path $exePath)) {
+            throw "Stress test executable not found: $exePath"
+          }
+
+          $failures = @()
+
+          function Invoke-StressRun {
+            param(
+              [string]$Mode,
+              [int]$Steps,
+              [int]$MaxPresets,
+              [string]$TraceName
+            )
+
+            $tracePath = Join-Path $PWD ("stress-artifacts/" + $TraceName)
+            $seed = [string](Get-Random -Minimum 1 -Maximum 2147483647)
+
+            $env:GUITARFX_STRESS_MODE = $Mode
+            $env:GUITARFX_STRESS_STEPS = [string]$Steps
+            $env:GUITARFX_STRESS_MAX_PRESETS = [string]$MaxPresets
+            $env:GUITARFX_STRESS_TRACE_PATH = $tracePath
+            $env:GUITARFX_STRESS_SEED = $seed
+
+            Write-Host "Running mode=$Mode steps=$Steps maxPresets=$MaxPresets seed=$seed"
+            & $exePath
+            if ($LASTEXITCODE -ne 0) {
+              $script:failures += "mode=$Mode steps=$Steps seed=$seed trace=$tracePath"
+            }
+          }
+
+          Invoke-StressRun -Mode "baseline" -Steps 20000 -MaxPresets 12 -TraceName "baseline-trace.log"
+          Invoke-StressRun -Mode "resource-rebind" -Steps 12000 -MaxPresets 12 -TraceName "resource-rebind-trace.log"
+
+          if ($failures.Count -gt 0) {
+            Write-Error ("Stress failures:`n" + ($failures -join "`n"))
+            exit 1
+          }
+
+      - name: Upload stress traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: core-signal-chain-stress-traces
+          path: stress-artifacts/*.log
+          if-no-files-found: warn
