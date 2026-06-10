@@ -855,6 +855,7 @@ export function syncControlsFromState(): void {
 let currentMonoMode = true;
 let currentInputChannel = 0;
 const INPUT_CHANNEL_SETTING = "inputChannel.mono";
+const MONO_MODE_SETTING = "inputChannel.monoMode";
 
 function normalizeInputChannel(value: unknown): number | null {
   const numeric = typeof value === "string" ? Number(value) : value;
@@ -868,24 +869,38 @@ function getStoredInputChannel(): number | null {
   return normalizeInputChannel(uiState.appSettings?.[INPUT_CHANNEL_SETTING]);
 }
 
+function getStoredMonoMode(): boolean | null {
+  const raw = uiState.appSettings?.[MONO_MODE_SETTING];
+  if (typeof raw === "boolean") return raw;
+  return null;
+}
+
 function persistInputChannel(channel: number): void {
   uiState.appSettings[INPUT_CHANNEL_SETTING] = channel;
   setAppSetting(INPUT_CHANNEL_SETTING, channel);
 }
 
+function persistMonoMode(mono: boolean): void {
+  uiState.appSettings[MONO_MODE_SETTING] = mono;
+  setAppSetting(MONO_MODE_SETTING, mono);
+}
+
 export function applyStoredInputChannel(): void {
+  const storedMono = getStoredMonoMode();
+  if (storedMono !== null) {
+    currentMonoMode = storedMono;
+  }
+
   const stored = getStoredInputChannel();
-  if (stored === null) return;
-
-  currentInputChannel = stored;
-  const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
-  if (inputChannelSelect) {
-    inputChannelSelect.value = stored.toString();
+  if (stored !== null) {
+    currentInputChannel = stored;
+    const inputChannelSelect = document.getElementById("input-channel-select") as HTMLSelectElement | null;
+    if (inputChannelSelect) {
+      inputChannelSelect.value = stored.toString();
+    }
   }
 
-  if (currentMonoMode) {
-    sendInputModeToPlugin();
-  }
+  sendInputModeToPlugin();
 }
 
 function sendInputModeToPlugin(): void {
@@ -931,6 +946,7 @@ export function initializeInputModeControls(): void {
   if (stereoToggle) {
     stereoToggle.addEventListener("change", () => {
       currentMonoMode = !stereoToggle.checked;
+      persistMonoMode(currentMonoMode);
       updateChannelSelectorVisibility();
       if (currentMonoMode) {
         const stored = getStoredInputChannel();
@@ -956,12 +972,14 @@ export function initializeInputModeControls(): void {
     });
   }
 
+  // Restore persisted state before updating UI
+  applyStoredInputChannel();
+
   if (stereoToggle) {
     stereoToggle.checked = !currentMonoMode;
   }
   // Set initial state
   updateChannelSelectorVisibility();
-  applyStoredInputChannel();
   sendInputModeToPlugin();
 }
 
