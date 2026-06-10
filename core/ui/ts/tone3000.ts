@@ -313,7 +313,7 @@ type Tone3000ArchiveReference = {
 
 async function fetchTone3000ModelsByToneId(
   toneId: string,
-  architecture: Tone3000Architecture | undefined = DEFAULT_MODEL_RESOLUTION_ARCHITECTURE,
+  architecture?: Tone3000Architecture,
 ): Promise<Tone3000ModelLookup[]> {
   const response = await tone3000AuthenticatedFetch(buildTone3000ModelsUrl(toneId, 1, 100, architecture));
   if (!response.ok) {
@@ -368,12 +368,14 @@ export async function downloadTone3000ResourceByReference(reference: Tone3000Arc
     throw new Error("Tone3000 resource reference is missing toneId or modelId");
   }
 
-  const defaultModels = await fetchTone3000ModelsByToneId(toneId, DEFAULT_MODEL_RESOLUTION_ARCHITECTURE);
-  let model = defaultModels.find((entry) => String(entry.id ?? "") === modelId);
+  // Resolve known model ids without an architecture filter first so A1/other
+  // legacy model variants are still discoverable from shared references.
+  const allModels = await fetchTone3000ModelsByToneId(toneId);
+  let model = allModels.find((entry) => String(entry.id ?? "") === modelId);
   if (!model) {
-    // Compatibility fallback: older/shared references can point to non-A2 models.
-    const allModels = await fetchTone3000ModelsByToneId(toneId, undefined);
-    model = allModels.find((entry) => String(entry.id ?? "") === modelId);
+    // Compatibility fallback for environments that still prefer the A2 view.
+    const defaultModels = await fetchTone3000ModelsByToneId(toneId, DEFAULT_MODEL_RESOLUTION_ARCHITECTURE);
+    model = defaultModels.find((entry) => String(entry.id ?? "") === modelId);
   }
   const modelUrl = typeof model?.model_url === "string" ? model.model_url : "";
   if (!modelUrl) {
