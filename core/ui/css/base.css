@@ -139,7 +139,8 @@ body.theme-classic {
 
 /* Standalone-only UI blocks */
 body:not(.is-standalone) .icon-bar .metronome-only,
-body:not(.is-standalone) .main-content .metronome-only {
+body:not(.is-standalone) .main-content .metronome-only,
+body:not(.is-standalone) .input-mode-control {
   display: none;
 }
 

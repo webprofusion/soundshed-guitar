@@ -1726,6 +1726,10 @@ void PluginController::Initialize()
 
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
 
+    // When hosted in a DAW the host controls the input configuration; disable
+    // app-side mono folding/channel selection so the input is used as provided.
+    mPresetMixer.SetHostControlledInput(!mHost.IsStandalone());
+
     LoadAppSettings();
     ApplyMetronomeSettingsFromAppSettings();
     ApplyDiagnosticsSettingsFromAppSettings();
@@ -3614,15 +3618,24 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
 
 void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
 {
-    if (payload.contains("monoMode"))
-        mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
-    else if (payload.contains("mono"))
-        mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
+    // In hosted-plugin mode the DAW owns the input configuration; ignore
+    // UI overrides and report the effective (host-controlled) state.
+    if (mHost.IsStandalone())
+    {
+        if (payload.contains("monoMode"))
+            mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
+        else if (payload.contains("mono"))
+            mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
 
-    if (payload.contains("inputChannel"))
-        mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
-    else if (payload.contains("channel"))
-        mPresetMixer.SetInputChannel(payload["channel"].get<int>());
+        if (payload.contains("inputChannel"))
+            mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
+        else if (payload.contains("channel"))
+            mPresetMixer.SetInputChannel(payload["channel"].get<int>());
+    }
+    else
+    {
+        AppendSessionLog("Ignoring setInputMode request: input is host-controlled in plugin mode");
+    }
 
     nlohmann::json message;
     message["type"] = "inputModeChanged";

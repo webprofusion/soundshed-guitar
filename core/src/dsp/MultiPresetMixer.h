@@ -118,10 +118,20 @@ namespace guitarfx
     void SetUserInputCalibrationGainDb(double dB);
     [[nodiscard]] double GetUserInputCalibrationGainDb() const { return mUserInputCalibrationGainDb; }
 
-    void SetMonoMode(bool mono) { mMonoMode = mono; }
+    void SetMonoMode(bool mono) { mMonoMode = mHostControlledInput ? false : mono; }
     void SetInputChannel(int channel) { mInputChannel = std::clamp(channel, 0, 1); }
     [[nodiscard]] bool IsMonoMode() const { return mMonoMode; }
     [[nodiscard]] int GetInputChannel() const { return mInputChannel; }
+
+    // When hosted in a DAW the host owns the input configuration: mono
+    // folding/channel selection is disabled and the input is used as provided.
+    void SetHostControlledInput(bool hostControlled)
+    {
+      mHostControlledInput = hostControlled;
+      if (hostControlled)
+        mMonoMode = false;
+    }
+    [[nodiscard]] bool IsHostControlledInput() const { return mHostControlledInput; }
 
     // Signal chain parameter routing (apply to all presets)
     void SetInputTrim(double dB);
@@ -256,6 +266,7 @@ namespace guitarfx
     float mUserInputCalibrationGainLinear = 1.0f;
     bool mMonoMode = false;
     int mInputChannel = 0; // 0=left, 1=right (for mono mode)
+    bool mHostControlledInput = false; // true when a DAW host owns the input config
 
     // Auto-level gain state
     float mInputAutoLevelGain = 1.0f;

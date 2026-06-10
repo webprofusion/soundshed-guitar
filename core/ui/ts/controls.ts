@@ -857,6 +857,10 @@ let currentInputChannel = 0;
 const INPUT_CHANNEL_SETTING = "inputChannel.mono";
 const MONO_MODE_SETTING = "inputChannel.monoMode";
 
+function isStandaloneUi(): boolean {
+  return Boolean(uiState.environment?.standalone || document.body.classList.contains("is-standalone"));
+}
+
 function normalizeInputChannel(value: unknown): number | null {
   const numeric = typeof value === "string" ? Number(value) : value;
   if (numeric === 0 || numeric === 1) {
@@ -900,10 +904,15 @@ export function applyStoredInputChannel(): void {
     }
   }
 
-  sendInputModeToPlugin();
+  if (isStandaloneUi()) {
+    sendInputModeToPlugin();
+  }
 }
 
 function sendInputModeToPlugin(): void {
+  if (!isStandaloneUi()) {
+    return;
+  }
   const message = JSON.stringify({
     type: "setInputMode",
     monoMode: currentMonoMode,

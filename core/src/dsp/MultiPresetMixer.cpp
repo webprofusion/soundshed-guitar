@@ -234,6 +234,7 @@ namespace guitarfx
     mUserInputCalibrationGainLinear = other.mUserInputCalibrationGainLinear;
     mMonoMode = other.mMonoMode;
     mInputChannel = other.mInputChannel;
+    mHostControlledInput = other.mHostControlledInput;
     mInputAutoLevelGain = other.mInputAutoLevelGain;
     mOutputAutoLevelGain = other.mOutputAutoLevelGain;
     mTempInL = std::move(other.mTempInL);
@@ -424,7 +425,7 @@ namespace guitarfx
     // Apply input/output settings
     mAutoLevelInput = config.autoLevelInput;
     mAutoLevelOutput = config.autoLevelOutput;
-    mMonoMode = config.monoMode;
+    mMonoMode = mHostControlledInput ? false : config.monoMode;
     mInputChannel = config.inputChannel;
     mLimiterEnabled = config.limiterEnabled;
 
