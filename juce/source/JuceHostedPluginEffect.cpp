@@ -574,7 +574,7 @@ namespace guitarfx
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         mPrepared = true;
-        mWorkBuffer.setSize (2, maxBlockSize, false, false, true);
+        UpdateWorkBufferForPlugin();
         AppendHostedPluginTrace ("Prepare sampleRate=" + std::to_string (sampleRate)
                                  + ", blockSize=" + std::to_string (maxBlockSize)
                                  + ", pluginLoaded=" + std::string { mPlugin ? "true" : "false" }
@@ -602,6 +602,16 @@ namespace guitarfx
             return;
 
         if (!mPlugin || !mPrepared || numSamples > mWorkBuffer.getNumSamples())
+        {
+            Passthrough (inputs, outputs, numSamples);
+            return;
+        }
+
+        // The work buffer must cover every channel of the plugin's bus layout.
+        // Hosts (e.g. JUCE's LV2 wrapper) connect any port beyond the buffer's
+        // channel count to nullptr, which multi-bus plugins will read/write.
+        if (mWorkBuffer.getNumChannels() < std::max (mPlugin->getTotalNumInputChannels(),
+                                                     mPlugin->getTotalNumOutputChannels()))
         {
             Passthrough (inputs, outputs, numSamples);
             return;
@@ -905,7 +915,6 @@ namespace guitarfx
     {
         const juce::AudioChannelSet stereo = juce::AudioChannelSet::stereo();
         const juce::AudioChannelSet mono = juce::AudioChannelSet::mono();
-        const juce::AudioChannelSet disabled = juce::AudioChannelSet::disabled();
 
         const bool hasMainInput = plugin.getBusCount (true) > 0;
         const bool hasMainOutput = plugin.getBusCount (false) > 0;
@@ -926,17 +935,50 @@ namespace guitarfx
         if (plugin.checkBusesLayoutSupported (monoLayout) && plugin.setBusesLayout (monoLayout))
             return true;
 
-        auto current = plugin.getBusesLayout();
-        if (current.outputBuses.size() > 0 && current.outputBuses.getReference (0).size() > 0)
+        // Multi-bus plugins: enable ALL buses at their declared default channel
+        // sets. Leaving optional buses disabled is unsafe for LV2 plugins whose
+        // ports are merely "connectionOptional" but whose DSP does not actually
+        // tolerate nullptr connections (e.g. KV Element FX with 17 stereo
+        // groups): JUCE connects ports of disabled buses to nullptr.
         {
-            for (int i = 1; i < current.inputBuses.size(); ++i)
-                current.inputBuses.getReference (i) = disabled;
-            for (int i = 1; i < current.outputBuses.size(); ++i)
-                current.outputBuses.getReference (i) = disabled;
-            return plugin.checkBusesLayoutSupported (current) && plugin.setBusesLayout (current);
+            juce::AudioProcessor::BusesLayout fullLayout;
+            bool valid = true;
+            for (int i = 0; i < plugin.getBusCount (true) && valid; ++i)
+            {
+                if (auto* bus = plugin.getBus (true, i))
+                    fullLayout.inputBuses.add (bus->getDefaultLayout());
+                else
+                    valid = false;
+            }
+            for (int i = 0; i < plugin.getBusCount (false) && valid; ++i)
+            {
+                if (auto* bus = plugin.getBus (false, i))
+                    fullLayout.outputBuses.add (bus->getDefaultLayout());
+                else
+                    valid = false;
+            }
+
+            if (valid && fullLayout.outputBuses.size() > 0)
+            {
+                // Prefer a stereo main bus alongside the fully enabled aux buses.
+                auto mainStereo = fullLayout;
+                if (mainStereo.inputBuses.size() > 0)
+                    mainStereo.inputBuses.getReference (0) = stereo;
+                mainStereo.outputBuses.getReference (0) = stereo;
+                if (plugin.checkBusesLayoutSupported (mainStereo) && plugin.setBusesLayout (mainStereo))
+                    return true;
+
+                if (plugin.checkBusesLayoutSupported (fullLayout) && plugin.setBusesLayout (fullLayout))
+                    return true;
+            }
         }
 
-        return false;
+        // Fall back to the plugin's existing layout untouched, as long as it has
+        // a usable main output. The work buffer is sized to the full channel
+        // count, so extra buses are fed silence and ignored on output.
+        const auto current = plugin.getBusesLayout();
+        return current.outputBuses.size() > 0
+               && current.outputBuses.getReference (0).size() > 0;
     }
 
     void JuceHostedPluginEffect::PrepareLoadedPlugin()
@@ -954,17 +996,36 @@ namespace guitarfx
             const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             mPlugin->setRateAndBufferSizeDetails (mSampleRate, mMaxBlockSize);
             mPlugin->prepareToPlay (mSampleRate, mMaxBlockSize);
+            UpdateWorkBufferForPlugin();
         }
         ApplyPendingPluginState();
+    }
+
+    void JuceHostedPluginEffect::UpdateWorkBufferForPlugin()
+    {
+        if (mMaxBlockSize <= 0)
+            return;
+
+        // Allocate one channel per plugin channel (like AudioProcessorGraph does
+        // for its nodes). Multi-bus plugins (e.g. KV Element with 17 stereo
+        // groups) crash if ports beyond the buffer channel count are left
+        // connected to nullptr.
+        const int pluginChannels = mPlugin
+            ? std::max (mPlugin->getTotalNumInputChannels(), mPlugin->getTotalNumOutputChannels())
+            : 0;
+        const int channels = std::max (2, pluginChannels);
+        if (mWorkBuffer.getNumChannels() != channels || mWorkBuffer.getNumSamples() < mMaxBlockSize)
+            mWorkBuffer.setSize (channels, mMaxBlockSize, false, true, true);
     }
 
     void JuceHostedPluginEffect::CopyInputToWorkBuffer (float** inputs, int numSamples)
     {
         const float inputGain = DbToLinear (mInputGainDb);
-        for (int ch = 0; ch < 2; ++ch)
+        const int totalChannels = mWorkBuffer.getNumChannels();
+        for (int ch = 0; ch < totalChannels; ++ch)
         {
             auto* dest = mWorkBuffer.getWritePointer (ch);
-            const float* source = inputs[ch];
+            const float* source = ch < 2 ? inputs[ch] : nullptr;
             if (source)
             {
                 for (int i = 0; i < numSamples; ++i)

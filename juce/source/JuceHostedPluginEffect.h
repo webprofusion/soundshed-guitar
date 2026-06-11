@@ -46,6 +46,8 @@ namespace guitarfx
 
 #if defined(GUITARFX_ENABLE_PLUGIN_HOST_TEST_API)
         [[nodiscard]] juce::AudioPluginInstance* GetHostedPluginForTesting() const { return mPlugin.get(); }
+        [[nodiscard]] bool IsPluginEditorOpenForTesting() const { return mEditorWindow != nullptr; }
+        bool ClosePluginEditorForTesting() { return ClosePluginEditor(); }
 #endif
 
     private:
@@ -53,6 +55,7 @@ namespace guitarfx
         bool LoadPluginFromPath (const std::filesystem::path& path);
         bool ConfigurePluginBuses (juce::AudioPluginInstance& plugin) const;
         void PrepareLoadedPlugin();
+        void UpdateWorkBufferForPlugin();
         void CopyInputToWorkBuffer (float** inputs, int numSamples);
         void CopyWorkBufferToOutputs (float** inputs, float** outputs, int numSamples);
         void Passthrough (float** inputs, float** outputs, int numSamples) const;
