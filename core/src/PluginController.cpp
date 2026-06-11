@@ -310,6 +310,9 @@ namespace
             return "clap";
         if (lower.find(".aaxplugin") != std::string::npos)
             return "aax";
+        // Note: ".vst3" is matched above, so a bare ".vst" here means VST2.
+        if (lower.find(".dll") != std::string::npos || lower.find(".vst") != std::string::npos)
+            return "vst2";
         return {};
     }
 
@@ -4383,6 +4386,7 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
     BrowseFileType fileType = BrowseFileType::Any;
     if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
     else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
+    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
 
     mHost.BrowseFileAsync(fileType, "Select Resource",
         [this, nodeId, resourceType, resourceIndex, exposedResourceId](const BrowseFileResult& result)
@@ -5327,6 +5331,7 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
     BrowseFileType fileType = BrowseFileType::Any;
     if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
     else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
+    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
     mHost.BrowseFileAsync(fileType, "Select Local Resource",
         [this, payload, resourceType, resourceId](const BrowseFileResult& result)
         {

@@ -81,6 +81,12 @@ namespace guitarfx
         juce::AudioPluginFormatManager mFormatManager;
         juce::AudioBuffer<float> mWorkBuffer;
         juce::MidiBuffer mMidiBuffer;
+        // Guards the hosted plugin against concurrent access: the audio thread
+        // try-locks (falling back to passthrough), while the message thread holds
+        // the lock during editor create/destroy, prepareToPlay, state restore and
+        // instance swap. JUCE's LV2 host in particular rebuilds plugin internals
+        // during editor/view lifecycle, which crashes if run() executes concurrently.
+        juce::SpinLock mPluginProcessLock;
         std::unique_ptr<juce::AudioPluginInstance> mPlugin;
         std::unique_ptr<juce::DocumentWindow> mEditorWindow;
         juce::PluginDescription mPluginDescription;

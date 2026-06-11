@@ -129,6 +129,101 @@ namespace guitarfx
             return normalizedManufacturer;
         }
 
+        std::string ToLowerAscii (std::string value)
+        {
+            std::transform (value.begin(), value.end(), value.begin(),
+                [] (unsigned char ch) { return static_cast<char> (std::tolower (ch)); });
+            return value;
+        }
+
+        // Map stored format hints ("vst3", "au", "AudioUnit", ...) onto the names JUCE
+        // format objects report, so resource-metadata hints never block scanning.
+        juce::String NormalizePluginFormatHint (const std::string& hint)
+        {
+            const std::string lower = ToLowerAscii (hint);
+            if (lower.empty())
+                return {};
+            if (lower == "vst3")
+                return "VST3";
+            if (lower == "au" || lower == "audiounit" || lower == "audio unit" || lower == "component")
+                return "AudioUnit";
+            if (lower == "lv2")
+                return "LV2";
+            if (lower == "vst" || lower == "vst2")
+                return "VST";
+            return juce::String (hint);
+        }
+
+        // LV2 plugins are identified by their bundle directory (a folder ending in
+        // ".lv2"). On Windows the file dialog can only select files, so users pick a
+        // file inside the bundle (the .dll or manifest.ttl); map such paths back to
+        // the bundle directory, which is what JUCE's LV2 host expects.
+        std::filesystem::path ResolveLv2BundleDirectory (const std::filesystem::path& path)
+        {
+            for (auto current = path;;)
+            {
+                const std::string name = ToLowerAscii (current.filename().string());
+                if (name.size() > 4 && name.compare (name.size() - 4, 4, ".lv2") == 0)
+                    return current;
+
+                auto parent = current.parent_path();
+                if (parent.empty() || parent == current)
+                    break;
+                current = std::move (parent);
+            }
+            return path;
+        }
+
+        std::string GetSupportedPluginFormatsDescription()
+        {
+#if JUCE_MAC
+            return "VST3 (.vst3), Audio Unit (.component) and LV2 (.lv2)";
+#else
+            return "VST3 (.vst3) and LV2 (.lv2)";
+#endif
+        }
+
+        // Returns a friendly, user-facing reason why this path can never load,
+        // or an empty string when the path looks like a supported plugin type.
+        std::string DescribeUnsupportedPluginFile (const std::filesystem::path& path)
+        {
+            const std::string fullPath = ToLowerAscii (path.string());
+            const std::string extension = ToLowerAscii (path.extension().string());
+
+            const auto pathContains = [&fullPath] (const char* token) {
+                return fullPath.find (token) != std::string::npos;
+            };
+
+            if (pathContains (".vst3") || pathContains (".lv2"))
+                return {};
+
+            if (pathContains (".component") || pathContains (".appex"))
+            {
+#if JUCE_MAC
+                return {};
+#else
+                return "Audio Unit plugins are only supported on macOS. Please select the VST3 version of this plugin instead.";
+#endif
+            }
+
+            if (extension == ".dll" || extension == ".vst")
+                return "This looks like a VST2 plugin, which is not supported. Please install and select the VST3 version of this plugin instead.";
+
+            if (extension == ".clap")
+                return "CLAP plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+            if (extension == ".aaxplugin")
+                return "AAX (Pro Tools) plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+#if JUCE_LINUX
+            if (extension == ".so")
+                return {};
+#endif
+
+            return "Unrecognized plugin file type '" + (extension.empty() ? std::string { "(none)" } : extension)
+                   + "'. Supported plugin formats on this platform: " + GetSupportedPluginFormatsDescription() + ".";
+        }
+
         void AppendHostedPluginTrace (const std::string& message)
         {
             FileSystem fileSystem;
@@ -492,6 +587,10 @@ namespace guitarfx
         mMidiBuffer.clear();
         if (mPlugin)
         {
+            const juce::SpinLock::ScopedTryLockType lock (mPluginProcessLock);
+            if (!lock.isLocked())
+                return;
+
             AppendHostedPluginTrace ("Reset plugin=" + FromJuceString (mPlugin->getName()));
             mPlugin->reset();
         }
@@ -503,6 +602,16 @@ namespace guitarfx
             return;
 
         if (!mPlugin || !mPrepared || numSamples > mWorkBuffer.getNumSamples())
+        {
+            Passthrough (inputs, outputs, numSamples);
+            return;
+        }
+
+        // Never block the audio thread: when the message thread is mutating the
+        // hosted plugin (editor open/close, prepare, state restore, swap), pass
+        // the signal through instead of racing the plugin's process call.
+        const juce::SpinLock::ScopedTryLockType processLock (mPluginProcessLock);
+        if (!processLock.isLocked())
         {
             Passthrough (inputs, outputs, numSamples);
             return;
@@ -619,6 +728,8 @@ namespace guitarfx
         if (!paths.empty())
             return LoadPluginFromPath (paths.front());
 
+        SetError ("No plugin file was provided. Use Browse to select a plugin. Supported formats: "
+                  + GetSupportedPluginFormatsDescription() + ".");
         return false;
     }
 
@@ -629,16 +740,34 @@ namespace guitarfx
 
     bool JuceHostedPluginEffect::LoadPluginFromPath (const std::filesystem::path& path)
     {
+        // JUCE plugin scanning and instantiation must run on the message thread
+        // (AU and VST3 enforce this on macOS). Hop across when a message loop exists.
+        if (auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
+            messageManager != nullptr && !messageManager->isThisTheMessageThread())
+        {
+            if (const auto loaded = juce::MessageManager::callSync ([this, &path] { return LoadPluginFromPath (path); }))
+                return *loaded;
+
+            SetError ("Plugin loading could not be scheduled on the UI thread. Please try again.");
+            return false;
+        }
+
         EnsureFormatsAdded();
-        AppendHostedPluginTrace ("LoadPluginFromPath begin path=" + ToDisplayPath (path)
+
+        // Heal stored paths that point inside an LV2 bundle (e.g. the inner .dll
+        // selected through the Windows files-only dialog).
+        const std::filesystem::path resolvedPath = ResolveLv2BundleDirectory (path);
+
+        AppendHostedPluginTrace ("LoadPluginFromPath begin path=" + ToDisplayPath (resolvedPath)
                                  + ", pendingStateLength=" + std::to_string (mPluginStateBase64.size())
                                  + ", sampleRate=" + std::to_string (mSampleRate)
                                  + ", blockSize=" + std::to_string (mMaxBlockSize));
 
-        const juce::File pluginFile (ToJucePath (path));
+        const juce::File pluginFile (ToJucePath (resolvedPath));
         if (!pluginFile.exists())
         {
-            SetError ("Plugin file does not exist: " + ToDisplayPath (path));
+            SetError ("Plugin file was not found: " + ToDisplayPath (resolvedPath)
+                      + ". The plugin may have been moved or uninstalled.");
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;
@@ -646,23 +775,38 @@ namespace guitarfx
 
         juce::OwnedArray<juce::PluginDescription> descriptions;
         const auto fileOrIdentifier = pluginFile.getFullPathName();
+        const juce::String formatHint = NormalizePluginFormatHint (mPluginFormat);
 
-        for (int i = 0; i < mFormatManager.getNumFormats(); ++i)
+        const auto scanWithFormats = [this, &descriptions, &fileOrIdentifier] (const juce::String& restrictToFormat)
         {
-            auto* format = mFormatManager.getFormat (i);
-            if (!format)
-                continue;
+            for (int i = 0; i < mFormatManager.getNumFormats(); ++i)
+            {
+                auto* format = mFormatManager.getFormat (i);
+                if (!format)
+                    continue;
 
-            if (!mPluginFormat.empty() && !format->getName().equalsIgnoreCase (juce::String (mPluginFormat)))
-                continue;
+                if (restrictToFormat.isNotEmpty() && !format->getName().equalsIgnoreCase (restrictToFormat))
+                    continue;
 
-            if (format->fileMightContainThisPluginType (fileOrIdentifier) || !mPluginFormat.empty())
-                format->findAllTypesForFile (descriptions, fileOrIdentifier);
-        }
+                if (format->fileMightContainThisPluginType (fileOrIdentifier) || restrictToFormat.isNotEmpty())
+                    format->findAllTypesForFile (descriptions, fileOrIdentifier);
+            }
+        };
+
+        scanWithFormats (formatHint);
+
+        // A stale or mismatched format hint must not block loading; rescan with every format.
+        if (descriptions.isEmpty() && formatHint.isNotEmpty())
+            scanWithFormats ({});
 
         if (descriptions.isEmpty())
         {
-            SetError ("No JUCE-supported plugin types were found in: " + ToDisplayPath (path));
+            std::string message = DescribeUnsupportedPluginFile (resolvedPath);
+            if (message.empty())
+                message = "No loadable plugin was found at: " + ToDisplayPath (resolvedPath)
+                          + ". Check that it is a 64-bit plugin built for this platform. Supported formats: "
+                          + GetSupportedPluginFormatsDescription() + ".";
+            SetError (message);
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;
@@ -693,7 +837,15 @@ namespace guitarfx
         auto instance = mFormatManager.createPluginInstance (*selected, mSampleRate, mMaxBlockSize, error);
         if (!instance)
         {
-            SetError (error.isNotEmpty() ? FromJuceString (error) : "JUCE failed to instantiate plugin");
+            const std::string pluginName = FromJuceString (selected->name.isNotEmpty()
+                                                               ? selected->name
+                                                               : pluginFile.getFileNameWithoutExtension());
+            std::string message = "Failed to open plugin '" + pluginName + "'";
+            if (error.isNotEmpty())
+                message += ": " + FromJuceString (error);
+            else
+                message += ". The plugin may be incompatible with this host or built for a different architecture.";
+            SetError (message);
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;
@@ -701,7 +853,8 @@ namespace guitarfx
 
         if (!ConfigurePluginBuses (*instance))
         {
-            SetError ("Plugin does not support a mono or stereo main bus layout");
+            SetError ("Plugin '" + FromJuceString (instance->getName())
+                      + "' does not support a mono or stereo layout, so it cannot be used in the signal chain.");
             instance->releaseResources();
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
@@ -709,12 +862,15 @@ namespace guitarfx
         }
 
         mPluginDescription = *selected;
-        mPluginPath = path;
+        mPluginPath = resolvedPath;
         mPluginFormat = FromJuceString (selected->pluginFormatName);
         mPluginIdentifier = FromJuceString (selected->createIdentifierString());
         ClosePluginEditor();
         ReleaseHostedPlugin();
-        mPlugin = std::move (instance);
+        {
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
+            mPlugin = std::move (instance);
+        }
         AttachHostedPluginListeners();
         mLastError.clear();
 
@@ -792,8 +948,13 @@ namespace guitarfx
                                  + ", sampleRate=" + std::to_string (mSampleRate)
                                  + ", blockSize=" + std::to_string (mMaxBlockSize)
                                  + ", pendingStateLength=" + std::to_string (mPluginStateBase64.size()));
-        mPlugin->setRateAndBufferSizeDetails (mSampleRate, mMaxBlockSize);
-        mPlugin->prepareToPlay (mSampleRate, mMaxBlockSize);
+        {
+            // JUCE's LV2 host destroys and recreates the plugin view/instance
+            // internals inside prepareToPlay; keep the audio thread out.
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
+            mPlugin->setRateAndBufferSizeDetails (mSampleRate, mMaxBlockSize);
+            mPlugin->prepareToPlay (mSampleRate, mMaxBlockSize);
+        }
         ApplyPendingPluginState();
     }
 
@@ -875,6 +1036,7 @@ namespace guitarfx
                 return "plugin missing";
 
             ++mAutoCaptureSuppressionDepth;
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             return ApplyHostedPluginStateSnapshot (*mPlugin, snapshot);
         };
 
@@ -1000,6 +1162,7 @@ namespace guitarfx
 
         if (mPlugin)
         {
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             mPlugin->releaseResources();
             mPlugin.reset();
         }
@@ -1078,6 +1241,11 @@ namespace guitarfx
                 return;
             }
 
+            // Plugin editor/view creation can touch state shared with the audio
+            // thread (LV2 view creation in particular); suspend processing
+            // (passthrough) for the duration.
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
+
             auto* editor = mPlugin->hasEditor()
                                ? mPlugin->createEditorIfNeeded()
                                : static_cast<juce::AudioProcessorEditor*> (new juce::GenericAudioProcessorEditor (*mPlugin));
@@ -1109,11 +1277,13 @@ namespace guitarfx
 
         if (juce::MessageManager::getInstance()->isThisTheMessageThread())
         {
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             mEditorWindow.reset();
             return true;
         }
 
         if (auto closed = juce::MessageManager::callSync ([this]() {
+                const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
                 mEditorWindow.reset();
                 return true;
             }))

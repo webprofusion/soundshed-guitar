@@ -260,6 +260,21 @@ void PluginProcessorAdapter::BrowseFileAsync (
         case guitarfx::BrowseFileType::ArchiveFile:
             filters = "*.soundshed.preset;*.soundshed.presets;*.zip";
             break;
+        case guitarfx::BrowseFileType::PluginFile:
+#if JUCE_MAC
+            // Plugin bundles are directories, but macOS treats packages as files.
+            filters = "*.vst3;*.component;*.lv2";
+#elif JUCE_WINDOWS
+            // The Windows dialog cannot select directories, so LV2 bundles are picked
+            // via a file inside them (the .dll or manifest.ttl); the result is mapped
+            // back to the bundle directory below. Legacy VST2 extensions are included
+            // so selecting one reaches the loader, which reports a friendly
+            // "VST2 not supported" message.
+            filters = "*.vst3;*.lv2;*.dll;*.vst;*.ttl";
+#else
+            filters = "*.vst3;*.lv2;*.so";
+#endif
+            break;
         case guitarfx::BrowseFileType::Any:
             filters = "*.*";
             break;
@@ -271,15 +286,47 @@ void PluginProcessorAdapter::BrowseFileAsync (
     mFileChooser = std::make_unique<juce::FileChooser> (
         juce::String (title), juce::File(), filters);
 
-    const auto flags = juce::FileBrowserComponent::openMode
-                       | juce::FileBrowserComponent::canSelectFiles;
+    auto flags = juce::FileBrowserComponent::openMode
+                 | juce::FileBrowserComponent::canSelectFiles;
 
-    mFileChooser->launchAsync (flags, [this, callback] (const juce::FileChooser& chooser) {
+#if ! JUCE_WINDOWS
+    // Plugin bundles (.vst3 on Linux, .component on macOS, .lv2 everywhere) are
+    // directories; allow selecting them. On Windows the native dialog switches to a
+    // folders-only picker when directories are selectable, so keep files-only there
+    // (Windows VST3 bundle folders contain an inner .vst3 file that can be chosen).
+    if (type == guitarfx::BrowseFileType::PluginFile)
+        flags |= juce::FileBrowserComponent::canSelectDirectories;
+#endif
+
+    mFileChooser->launchAsync (flags, [this, type, callback] (const juce::FileChooser& chooser) {
         guitarfx::BrowseFileResult result;
-        const auto file = chooser.getResult();
+        auto file = chooser.getResult();
         mFileChooser.reset();
 
-        if (file.existsAsFile())
+        const bool acceptDirectories = type == guitarfx::BrowseFileType::PluginFile;
+
+        // LV2 plugins are identified by their bundle directory (a folder ending in
+        // ".lv2"). When a file inside a bundle was selected (the only option on
+        // Windows, where the dialog cannot pick directories), store the bundle
+        // directory instead so JUCE's LV2 host can resolve it.
+        if (type == guitarfx::BrowseFileType::PluginFile && file.exists())
+        {
+            for (auto dir = file;;)
+            {
+                if (dir.getFileName().endsWithIgnoreCase (".lv2"))
+                {
+                    file = dir;
+                    break;
+                }
+
+                auto parent = dir.getParentDirectory();
+                if (parent == dir)
+                    break;
+                dir = parent;
+            }
+        }
+
+        if (file.existsAsFile() || (acceptDirectories && file.isDirectory()))
         {
             result.success = true;
             result.path = std::filesystem::path (file.getFullPathName().toStdString());

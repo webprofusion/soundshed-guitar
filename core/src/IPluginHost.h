@@ -32,6 +32,7 @@ enum class BrowseFileType
     ImageFile,
     AudioFile,
     ArchiveFile,
+    PluginFile,
     Any
 };
 
