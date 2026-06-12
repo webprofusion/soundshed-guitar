@@ -116,6 +116,46 @@ namespace guitarfx
             return normalized;
         }
 
+        bool ContainsCaseInsensitive (std::string_view text, std::string_view token)
+        {
+            if (token.empty() || text.size() < token.size())
+                return false;
+
+            auto toLowerAscii = [] (unsigned char ch) {
+                return static_cast<char> (std::tolower (ch));
+            };
+
+            for (std::size_t i = 0; i <= text.size() - token.size(); ++i)
+            {
+                bool matches = true;
+                for (std::size_t j = 0; j < token.size(); ++j)
+                {
+                    if (toLowerAscii (static_cast<unsigned char> (text[i + j]))
+                        != toLowerAscii (static_cast<unsigned char> (token[j])))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches)
+                    return true;
+            }
+
+            return false;
+        }
+
+        bool IsBlockedSelfHostedPluginCandidate (const juce::PluginDescription& description,
+                                                 const std::filesystem::path& resolvedPath)
+        {
+            const std::string pluginName = FromJuceString (description.name);
+            const std::string pluginIdentifier = FromJuceString (description.createIdentifierString());
+            const std::string pluginFileOrId = FromJuceString (description.fileOrIdentifier);
+            const std::string pluginFormat = FromJuceString (description.pluginFormatName);
+            const std::string pathText = ToDisplayPath (resolvedPath);
+
+            return ContainsCaseInsensitive (pluginName, "soundshed");
+        }
+
         std::string BuildPluginStableId (const juce::PluginDescription& description,
             const std::filesystem::path& pluginPath)
         {
@@ -842,6 +882,15 @@ namespace guitarfx
         if (!selected)
         {
             SetError ("Plugin scan returned no selectable plugin descriptions");
+            ReleaseHostedPlugin();
+            ClearLoadedPluginMetadata();
+            return false;
+        }
+
+        if (IsBlockedSelfHostedPluginCandidate (*selected, resolvedPath))
+        {
+            SetError ("Soundshed Guitar cannot be loaded inside the hosted plugin slot."
+                      " Please choose a different plugin.");
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;

@@ -587,6 +587,43 @@ function renderHostedPluginWarningIntoOpenPanel(nodeId: string, resourceIndex: n
 function clearInlineHostedPluginLoadError(source: Element): void {
   source.closest(".node-resource-selector")?.querySelector(".plugin-host-load-error")?.remove();
 }
+function containsCaseInsensitive(text: string | undefined, token: string): boolean {
+  return Boolean(text && token && text.toLowerCase().includes(token.toLowerCase()));
+}
+
+function isBlockedHostedPluginLibraryEntry(resourceId: string): boolean {
+  const resource = getLibraryResource("plugin", resourceId);
+  if (!resource) {
+    return false;
+  }
+
+  return containsCaseInsensitive(resource.name, "soundshed")
+    || containsCaseInsensitive(resource.filePath, "soundshed")
+    || containsCaseInsensitive(resource.id, "soundshed")
+    || containsCaseInsensitive(resource.metadata?.pluginName, "soundshed")
+    || containsCaseInsensitive(resource.metadata?.pluginIdentifier, "soundshed")
+    || containsCaseInsensitive(resource.metadata?.pluginStableId, "soundshed");
+}
+
+function getHostedPluginFavoriteIds(resources?: LibraryResource[]): Set<string> {
+  const raw = uiState.appSettings?.[HOSTED_PLUGIN_FAVORITES_SETTING];
+  if (!Array.isArray(raw)) {
+    return new Set<string>();
+  }
+
+  const values = raw
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  if (!resources) {
+    return new Set(values);
+  }
+
+  const validIds = new Set(resources.map((resource) => resource.id));
+  return new Set(values.filter((value) => validIds.has(value)));
+}
+
 
 function getHostedPluginPendingLoad(nodeId: string, resourceIndex: number): HostedPluginPendingLoad | null {
   const pending = hostedPluginPendingLoads.get(nodeId);
