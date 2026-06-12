@@ -155,3 +155,10 @@ Refer to the upstream LICENSE files and package manifests for the exact license 
 ## License
 
 AGPL-3.0. Third-party components retain their upstream licenses.
+
+## Copyright
+
+Soundshed and Soundshed Guitar are copyright Webprofusion Pty Ltd via soundshed.com and permission to re-use the Soundshed/Soundshed Guitar brand is not granted.
+All services/APIs used by the app are excusively for use by our own software unless permission to use has been granted in writing to your project.
+All content resources (NAM, IR etc) are copyright their respective creators. 
+For DMCA requests etc contact guitar at soundshed.com.
