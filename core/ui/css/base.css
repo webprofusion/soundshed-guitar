@@ -831,6 +831,34 @@ body:not(.is-standalone) .input-mode-control {
   font-size: 10px;
 }
 
+/* Floating notification toast — floats above the footer, auto-dismissed */
+.notification-toast {
+  position: fixed;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 200;
+  background: var(--bg-elevated, #2a2a2a);
+  color: var(--text-dark-primary, #ddd);
+  font-size: 11px;
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .theme-classic .footer-bar {
   background:
     repeating-linear-gradient(
