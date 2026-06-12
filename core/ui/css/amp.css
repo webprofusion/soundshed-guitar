@@ -20,7 +20,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-  padding: 16px;
+  padding: 0;
 }
 
 .effect-visualization-header {

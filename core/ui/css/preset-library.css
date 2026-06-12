@@ -167,6 +167,13 @@
 #preset-folder-name {
   flex: 1 1 220px;
   min-width: 140px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
 }
 
 .preset-folder-toolbar-btn {
