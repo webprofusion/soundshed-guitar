@@ -11,7 +11,7 @@ import type {
   BlendMode,
   CustomEffectLibraryEntry,
 } from "./types.js";
-import { postMessage, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset } from "./bridge.js";
+import { postMessage, setAppSetting, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset } from "./bridge.js";
 import { requestResourceData } from "./archiveUtils.js";
 import { escapeHtml, idAccentColor, base64ToArrayBuffer } from "./utils.js";
 import { showNotification } from "./notifications.js";
@@ -105,6 +105,8 @@ type HostedPluginPendingLoad = {
 const hostedPluginPendingLoads = new Map<string, HostedPluginPendingLoad>();
 /** Safety valve: never keep a loading indicator around longer than this. */
 const HOSTED_PLUGIN_PENDING_LOAD_MAX_AGE_MS = 120000;
+const HOSTED_PLUGIN_FAVORITES_SETTING = "plugins.hostFavorites";
+const HOSTED_PLUGIN_NAME_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 
 const NODE_BYPASS_DRAG_DISTANCE_PX = 36;
 const NODE_BYPASS_DRAG_DIRECTION_RATIO = 1.2;
@@ -587,6 +589,7 @@ function renderHostedPluginWarningIntoOpenPanel(nodeId: string, resourceIndex: n
 function clearInlineHostedPluginLoadError(source: Element): void {
   source.closest(".node-resource-selector")?.querySelector(".plugin-host-load-error")?.remove();
 }
+
 function containsCaseInsensitive(text: string | undefined, token: string): boolean {
   return Boolean(text && token && text.toLowerCase().includes(token.toLowerCase()));
 }
@@ -624,6 +627,33 @@ function getHostedPluginFavoriteIds(resources?: LibraryResource[]): Set<string> 
   return new Set(values.filter((value) => validIds.has(value)));
 }
 
+function persistHostedPluginFavoriteIds(favoriteIds: Set<string>): void {
+  const payload = Array.from(favoriteIds).sort((a, b) => HOSTED_PLUGIN_NAME_COLLATOR.compare(a, b));
+  uiState.appSettings[HOSTED_PLUGIN_FAVORITES_SETTING] = payload;
+  setAppSetting(HOSTED_PLUGIN_FAVORITES_SETTING, payload);
+}
+
+function toggleHostedPluginFavorite(resourceId: string): void {
+  const favorites = getHostedPluginFavoriteIds();
+  if (favorites.has(resourceId)) {
+    favorites.delete(resourceId);
+  } else {
+    favorites.add(resourceId);
+  }
+  persistHostedPluginFavoriteIds(favorites);
+}
+
+function sortHostedPluginResources(resources: LibraryResource[]): LibraryResource[] {
+  const favorites = getHostedPluginFavoriteIds(resources);
+  return [...resources].sort((a, b) => {
+    const aFavorite = favorites.has(a.id);
+    const bFavorite = favorites.has(b.id);
+    if (aFavorite !== bFavorite) {
+      return aFavorite ? -1 : 1;
+    }
+    return HOSTED_PLUGIN_NAME_COLLATOR.compare(a.name, b.name);
+  });
+}
 
 function getHostedPluginPendingLoad(nodeId: string, resourceIndex: number): HostedPluginPendingLoad | null {
   const pending = hostedPluginPendingLoads.get(nodeId);
@@ -710,23 +740,28 @@ function buildHostedPluginLoadingIndicatorHtml(node: GraphNode, resourceIndex: n
 
 function buildHostedPluginListHtml(node: GraphNode, resourceIndex: number, exposedResourceId?: string): string {
   const resources = uiState.resourceLibrary["plugin"] || [];
+  const sortedResources = sortHostedPluginResources(resources);
+  const favoriteIds = getHostedPluginFavoriteIds(resources);
   const current = getNodeResourceAtIndex(node, resourceIndex);
   const isLoading = Boolean(getHostedPluginPendingLoad(node.id, resourceIndex));
   const exposedAttr = exposedResourceId ? ` data-exposed-resource-id="${escapeHtml(exposedResourceId)}"` : "";
 
-  const rows = resources.map((res: LibraryResource) => {
+  const rows = sortedResources.map((res: LibraryResource) => {
     const isSelected = current.id === res.id && !current.filePath;
+    const isFavorite = favoriteIds.has(res.id);
     const format = inferPluginFormat(res);
     const formatLabel = format ? format.toUpperCase() : "";
     const path = res.filePath || "";
+    const favoriteTitle = isFavorite ? "Remove from favorites" : "Add to favorites";
     return `
       <div
-        class="plugin-host-item${isSelected ? " is-selected" : ""}"
+        class="plugin-host-item${isSelected ? " is-selected" : ""}${isFavorite ? " is-favorite" : ""}"
         data-node-id="${node.id}"
         data-resource-id="${escapeHtml(res.id)}"
         data-resource-index="${resourceIndex}"
         ${exposedAttr}
         role="button"
+        aria-selected="${isSelected ? "true" : "false"}"
         tabindex="0"
         title="${escapeHtml(path || res.name)}"
       >
@@ -737,15 +772,27 @@ function buildHostedPluginListHtml(node: GraphNode, resourceIndex: number, expos
           </div>
           ${path ? `<div class="plugin-host-item-path">${escapeHtml(path)}</div>` : ""}
         </div>
-        <button
-          type="button"
-          class="plugin-host-remove-btn"
-          data-node-id="${node.id}"
-          data-resource-id="${escapeHtml(res.id)}"
-          data-resource-name="${escapeHtml(res.name)}"
-          title="Remove plugin from library"
-          aria-label="Remove ${escapeHtml(res.name)} from library"
-        >${renderIcon("close", "plugin-host-remove-icon")}</button>
+        <div class="plugin-host-item-actions">
+          <button
+            type="button"
+            class="plugin-host-favorite-btn${isFavorite ? " is-favorite" : ""}"
+            data-node-id="${node.id}"
+            data-resource-id="${escapeHtml(res.id)}"
+            data-resource-name="${escapeHtml(res.name)}"
+            title="${favoriteTitle}"
+            aria-label="${favoriteTitle}: ${escapeHtml(res.name)}"
+            aria-pressed="${isFavorite ? "true" : "false"}"
+          >${renderIcon("star", "plugin-host-favorite-icon")}</button>
+          <button
+            type="button"
+            class="plugin-host-remove-btn"
+            data-node-id="${node.id}"
+            data-resource-id="${escapeHtml(res.id)}"
+            data-resource-name="${escapeHtml(res.name)}"
+            title="Remove plugin from library"
+            aria-label="Remove ${escapeHtml(res.name)} from library"
+          >${renderIcon("close", "plugin-host-remove-icon")}</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -775,6 +822,9 @@ function buildHostedPluginListHtml(node: GraphNode, resourceIndex: number, expos
       data-node-id="${node.id}"
       data-resource-type="plugin"
       data-resource-index="${resourceIndex}"
+      role="listbox"
+      aria-label="Hosted plugins"
+      tabindex="0"
       ${exposedAttr}
     >
       ${rows}${customRow}${emptyRow}
@@ -2852,7 +2902,10 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           ? `<option value="__custom__" selected>Custom: ${current.filePath.split("/").pop()}</option>`
           : "";
         const hostedPluginOpenButton = resourceType === "plugin"
-          ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}" ${hasCurrentSelection ? "" : "disabled"}>Open Selected PLugin</button>`
+          ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}" ${hasCurrentSelection ? "" : "disabled"}>Open Plugin</button>`
+          : "";
+        const hostedPluginSelectionLabel = resourceType === "plugin"
+          ? `<div class="plugin-host-selected-name" title="${escapeHtml(hasCurrentSelection ? getNodeResourceDisplayName(node, resourceIndex, "plugin") : "No plugin selected")}">${escapeHtml(hasCurrentSelection ? getNodeResourceDisplayName(node, resourceIndex, "plugin") : "No plugin selected")}</div>`
           : "";
         const hostedPluginLoadError = resourceType === "plugin"
           ? buildHostedPluginLoadErrorHtml(node, resourceIndex)
@@ -2935,18 +2988,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                 >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
               ` : ""}
               ${hostedPluginOpenButton}
-              ${isPluginPicker ? `
-                <button
-                  class="resource-clear-btn plugin-resource-clear-btn"
-                  data-node-id="${node.id}"
-                  data-resource-type="${resourceType}"
-                  data-resource-index="${resourceIndex}"
-                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
-                  data-empty-label="${escapeHtml(emptyDisplayName)}"
-                  title="Remove selected plugin"
-                  ${hasCurrentSelection ? "" : "disabled"}
-                >Remove</button>
-              ` : ""}
+              ${hostedPluginSelectionLabel}
               ${isPluginPicker ? buildHostedPluginLoadingIndicatorHtml(node, resourceIndex) : ""}
             </div>
             ${isPluginPicker ? buildHostedPluginListHtml(node, resourceIndex, exposedResource.resourceId) : ""}
@@ -2999,7 +3041,10 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
         && !getLibraryResource(resourceType, current.id);
       const missingClass = isMissing ? "resource-picker-label is-missing" : "resource-picker-label";
       const hostedPluginOpenButton = resourceType === "plugin"
-        ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}" ${hasCurrentSelection ? "" : "disabled"}>Open Selected PLugin</button>`
+        ? `<button type="button" class="resource-picker-btn plugin-host-open-btn" data-node-id="${node.id}" ${hasCurrentSelection ? "" : "disabled"}>Open Plugin</button>`
+        : "";
+      const hostedPluginSelectionLabel = resourceType === "plugin"
+        ? `<div class="plugin-host-selected-name" title="${escapeHtml(hasCurrentSelection ? getNodeResourceDisplayName(node, index, "plugin") : "No plugin selected")}">${escapeHtml(hasCurrentSelection ? getNodeResourceDisplayName(node, index, "plugin") : "No plugin selected")}</div>`
         : "";
       const hostedPluginLoadError = resourceType === "plugin"
         ? buildHostedPluginLoadErrorHtml(node, index)
@@ -3075,17 +3120,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
               >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
             ` : ""}
             ${hostedPluginOpenButton}
-            ${isPluginPicker ? `
-              <button
-                class="resource-clear-btn plugin-resource-clear-btn"
-                data-node-id="${node.id}"
-                data-resource-type="${resourceType}"
-                ${indexAttr}
-                data-empty-label="${escapeHtml(emptyDisplayName)}"
-                title="Remove selected plugin"
-                ${hasCurrentSelection ? "" : "disabled"}
-              >Remove</button>
-            ` : ""}
+            ${hostedPluginSelectionLabel}
             ${isPluginPicker ? buildHostedPluginLoadingIndicatorHtml(node, index) : ""}
           </div>
           ${isPluginPicker ? buildHostedPluginListHtml(node, index) : ""}
@@ -3869,7 +3904,7 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
           resourceIndex,
           undefined,
           undefined,
-          resourceType === "plugin",
+          false,
         );
       }
     });
@@ -4100,6 +4135,64 @@ function bindHostedPluginListControls(node: GraphNode): void {
     const selectedItem = list.querySelector<HTMLElement>(".plugin-host-item.is-selected");
     selectedItem?.scrollIntoView({ block: "nearest" });
 
+    const getItems = (): HTMLElement[] => Array.from(
+      list.querySelectorAll<HTMLElement>(".plugin-host-item[data-resource-id]"),
+    );
+
+    const focusPluginListItem = (item: HTMLElement | null): void => {
+      if (!item) {
+        return;
+      }
+      item.focus();
+      item.scrollIntoView({ block: "nearest" });
+    };
+
+    const focusItemByOffset = (origin: HTMLElement | null, offset: number): void => {
+      const items = getItems();
+      if (!items.length) {
+        return;
+      }
+
+      const currentIndex = origin ? items.indexOf(origin) : -1;
+      const nextIndex = currentIndex < 0
+        ? (offset > 0 ? 0 : items.length - 1)
+        : Math.max(0, Math.min(items.length - 1, currentIndex + offset));
+      focusPluginListItem(items[nextIndex]);
+    };
+
+    const focusBoundaryItem = (first: boolean): void => {
+      const items = getItems();
+      if (!items.length) {
+        return;
+      }
+      focusPluginListItem(first ? items[0] : items[items.length - 1]);
+    };
+
+    list.addEventListener("keydown", (event) => {
+      if (list.classList.contains("is-loading")) {
+        return;
+      }
+
+      const key = event.key;
+      if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Home" && key !== "End") {
+        return;
+      }
+
+      const activeElement = document.activeElement as HTMLElement | null;
+      const activeItem = activeElement?.closest<HTMLElement>(".plugin-host-item[data-resource-id]") ?? null;
+      event.preventDefault();
+
+      if (key === "ArrowDown") {
+        focusItemByOffset(activeItem, 1);
+      } else if (key === "ArrowUp") {
+        focusItemByOffset(activeItem, -1);
+      } else if (key === "Home") {
+        focusBoundaryItem(true);
+      } else if (key === "End") {
+        focusBoundaryItem(false);
+      }
+    });
+
     list.querySelectorAll<HTMLElement>(".plugin-host-item[data-resource-id]").forEach((item) => {
       item.addEventListener("click", () => {
         if (list.classList.contains("is-loading")) {
@@ -4107,6 +4200,22 @@ function bindHostedPluginListControls(node: GraphNode): void {
         }
         const resourceId = item.dataset.resourceId;
         if (!resourceId || item.classList.contains("is-selected")) {
+          return;
+        }
+
+        if (isBlockedHostedPluginLibraryEntry(resourceId)) {
+          showNotification(
+            "Blocked plugin",
+            "Soundshed plugins cannot be loaded in the hosted plugin slot. Remove this entry if it is invalid.",
+          );
+          renderHostedPluginWarningIntoOpenPanel(
+            nodeId,
+            resourceIndex,
+            buildHostedPluginWarningMarkup(
+              "Blocked Plugin",
+              "Soundshed plugins cannot be loaded in the hosted plugin slot.",
+            ),
+          );
           return;
         }
 
@@ -4127,9 +4236,35 @@ function bindHostedPluginListControls(node: GraphNode): void {
         });
         item.scrollIntoView({ block: "nearest" });
         markHostedPluginLoadPending(nodeId, resourceIndex);
-        sendNodeResourceUpdate(nodeId, "plugin", resourceId, "", resourceIndex, undefined, exposedResourceId, true);
+        sendNodeResourceUpdate(nodeId, "plugin", resourceId, "", resourceIndex, undefined, exposedResourceId, false);
       });
       item.addEventListener("keydown", (event) => {
+        const target = event.target as HTMLElement | null;
+        if (target && target !== item && target.closest("button")) {
+          return;
+        }
+
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          focusItemByOffset(item, 1);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          focusItemByOffset(item, -1);
+          return;
+        }
+        if (event.key === "Home") {
+          event.preventDefault();
+          focusBoundaryItem(true);
+          return;
+        }
+        if (event.key === "End") {
+          event.preventDefault();
+          focusBoundaryItem(false);
+          return;
+        }
+
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           item.click();
@@ -4170,6 +4305,18 @@ function bindHostedPluginListControls(node: GraphNode): void {
             resources: [{ type: "plugin", id: resourceId }],
           });
         })();
+      });
+    });
+
+    list.querySelectorAll<HTMLButtonElement>(".plugin-host-favorite-btn").forEach((favoriteBtn) => {
+      favoriteBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const resourceId = favoriteBtn.dataset.resourceId;
+        if (!resourceId) {
+          return;
+        }
+        toggleHostedPluginFavorite(resourceId);
+        refreshSelectedNodeParams();
       });
     });
   });

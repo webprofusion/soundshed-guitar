@@ -47,7 +47,9 @@ p {
 .fx-effect-icon,
 .fx-badge-icon,
 .resource-browse-icon,
-.resource-clear-icon {
+.resource-clear-icon,
+.plugin-host-favorite-icon,
+.plugin-host-remove-icon {
   display: inline-block;
   vertical-align: middle;
   background-color: currentColor;
