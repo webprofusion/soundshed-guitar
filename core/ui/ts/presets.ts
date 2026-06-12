@@ -3778,6 +3778,16 @@ export async function importPresetArchive(
     }
 
     if (!previewOnly) {
+      postMessage({
+        type: "savePreset",
+        presetId: importedPreset.id,
+        name: importedPreset.name,
+        category: importedPreset.category,
+        description: importedPreset.description,
+        includeGlobalSignalChain: false,
+        preset: importedPreset,
+      });
+
       cachePresetInMemory(importedPreset);
       uiState.presets = [importedPreset, ...uiState.presets.filter((preset) => preset.id !== importedPreset.id)];
       uiState.presetCache.set(importedPreset.id, importedPreset);

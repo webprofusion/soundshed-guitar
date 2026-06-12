@@ -156,7 +156,6 @@ type InstalledPackDeletionPlan = {
   missingPresetIds: string[];
   removableResourceEntries: InstalledPackResourceRef[];
   preservedResourceEntries: InstalledPackResourceRef[];
-  retainedPack: boolean;
 };
 
 export type InstalledPackMetadata = {
@@ -758,8 +757,6 @@ function normalizeInstalledPackMetadata(raw: unknown): InstalledPackMetadata | n
 }
 
 function persistInstalledPacks(): void {
-  const serialized = JSON.stringify(state.installedPacks);
-  localStorage.setItem(storageKeys.installedPacks, serialized);
   setAppSetting(storageKeys.installedPacks, state.installedPacks);
 }
 
@@ -3558,17 +3555,13 @@ function buildInstalledPackDeletionPlan(pack: InstalledPackMetadata): InstalledP
   for (const presetId of uniquePackPresetIds) {
     const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((entry) => entry.id === presetId) ?? null;
     if (!preset) {
+      // Preset not in UI state — still queue for disk deletion.
       missingPresetIds.push(presetId);
+      removablePresetIds.push(presetId);
       continue;
     }
 
-    const expectedSignature = pack.presetSignatures?.[presetId] ?? "";
-    const currentSignature = buildPresetContentSignature(preset);
-    if (!expectedSignature || expectedSignature !== currentSignature) {
-      preservedPresetIds.push(presetId);
-      continue;
-    }
-
+    // All pack presets are removable; the user confirms deletion explicitly.
     removablePresetIds.push(presetId);
     const resourceKeys = collectPresetResourceKeys(preset);
     resourceKeys.forEach((key) => removablePresetResourceKeys.add(key));
@@ -3597,7 +3590,6 @@ function buildInstalledPackDeletionPlan(pack: InstalledPackMetadata): InstalledP
     missingPresetIds,
     removableResourceEntries,
     preservedResourceEntries,
-    retainedPack: preservedPresetIds.length > 0,
   };
 }
 
@@ -3680,43 +3672,14 @@ async function deleteInstalledPackById(id: string, planned?: InstalledPackDeleti
     });
   }
 
-  let retainedPack = plan.retainedPack;
-  if (retainedPack) {
-    const nextPresetSignatures = Object.fromEntries(
-      plan.preservedPresetIds
-        .map((presetId) => [presetId, pack.presetSignatures?.[presetId] ?? ""] as const)
-        .filter(([, signature]) => typeof signature === "string" && signature.length > 0)
-    );
-    const availablePresetIds = new Set(uiState.presets.map((preset) => preset.id));
-    const nextPresetIds = plan.preservedPresetIds.filter((presetId) => availablePresetIds.has(presetId));
-    retainedPack = nextPresetIds.length > 0;
-    const nextPack: InstalledPackMetadata = {
-      ...pack,
-      presetIds: nextPresetIds,
-      presetSignatures: nextPresetSignatures,
-      resources: plan.preservedResourceEntries,
-    };
-    if (retainedPack) {
-      state.installedPacks = state.installedPacks.map((entry) => (entry.id === id ? nextPack : entry));
-    } else {
-      state.installedPacks = state.installedPacks.filter((entry) => entry.id !== id);
-    }
-  } else {
-    state.installedPacks = state.installedPacks.filter((entry) => entry.id !== id);
-  }
-  const normalizedInstalledChanged = reconcileInstalledPacksWithPresetLibrary();
-  if (normalizedInstalledChanged) {
-    retainedPack = state.installedPacks.some((entry) => entry.id === id);
-  }
-  if (!retainedPack && pack.archivePath) {
+  state.installedPacks = state.installedPacks.filter((entry) => entry.id !== id);
+  reconcileInstalledPacksWithPresetLibrary();
+  if (pack.archivePath) {
     postMessage({ type: "deleteImportedToneSharingPack", path: pack.archivePath });
   }
   persistInstalledPacks();
   await renderInstalledPacks();
-  return {
-    ...plan,
-    retainedPack,
-  };
+  return plan;
 }
 
 function bindBrowseActions(): void {
@@ -3747,14 +3710,13 @@ function bindBrowseActions(): void {
       const resourceCount = pack?.resources.length ?? 0;
       const archiveLine = pack?.archiveFileName ? `\nArchive: ${pack.archiveFileName}` : "";
       const summaryLines = plan
-        ? `\nUnmodified presets to remove: ${plan.removablePresetIds.length}`
-          + `\nPresets kept (modified or unverifiable): ${plan.preservedPresetIds.length}`
-          + `\nPresets already missing: ${plan.missingPresetIds.length}`
+        ? `\nPresets to remove: ${plan.removablePresetIds.length}`
+          + (plan.missingPresetIds.length > 0 ? ` (${plan.missingPresetIds.length} already missing from library)` : "")
           + `\nLinked resources to remove: ${plan.removableResourceEntries.length}`
-          + `\nResources kept (still referenced): ${plan.preservedResourceEntries.length}`
+          + (plan.preservedResourceEntries.length > 0 ? `\nResources kept (used by other presets): ${plan.preservedResourceEntries.length}` : "")
         : "";
       const confirmed = await showConfirm(
-        `Delete installed pack \"${title}\"?\nPresets in pack: ${presetCount}\nResources in pack: ${resourceCount}${summaryLines}${archiveLine}\n\nOnly unmodified presets and resources no longer used by other presets will be removed.`,
+        `Delete installed pack \"${title}\"?\nPresets in pack: ${presetCount}\nResources in pack: ${resourceCount}${summaryLines}${archiveLine}\n\nAll presets from this pack will be removed. Resources still in use by other presets will be kept.`,
         "Delete Installed Pack",
       );
       if (!confirmed) {
@@ -3764,8 +3726,7 @@ function bindBrowseActions(): void {
       try {
         setUploadStatus("Deleting installed pack...");
         const result = await deleteInstalledPackById(id, plan ?? undefined);
-        const statusPrefix = result.retainedPack ? "Installed pack partially removed." : "Installed pack deleted.";
-        setUploadStatus(`${statusPrefix} Removed ${result.removablePresetIds.length} preset(s) and ${result.removableResourceEntries.length} resource(s); kept ${result.preservedPresetIds.length} preset(s).`);
+        setUploadStatus(`Installed pack deleted. Removed ${result.removablePresetIds.length} preset(s) and ${result.removableResourceEntries.length} resource(s).`);
       } catch (error) {
         setUploadStatus(`Delete failed: ${(error as Error).message}`);
       }
@@ -3921,7 +3882,6 @@ function restoreLocalState(): void {
   const persistedSession = normalizeSettingString(appSettings[storageKeys.sessionId]);
   const persistedInstalled = appSettings[storageKeys.installedPacks];
   const storedSession = localStorage.getItem(storageKeys.sessionId);
-  const storedInstalled = localStorage.getItem(storageKeys.installedPacks);
   if (persistedSession) {
     state.sessionId = persistedSession;
   } else if (storedSession) {
@@ -3940,14 +3900,8 @@ function restoreLocalState(): void {
 
   if (Array.isArray(persistedInstalled)) {
     state.installedPacks = parseInstalled(persistedInstalled);
-  } else if (storedInstalled) {
-    try {
-      const parsed = JSON.parse(storedInstalled) as unknown;
-      state.installedPacks = parseInstalled(parsed);
-      setAppSetting(storageKeys.installedPacks, state.installedPacks);
-    } catch {
-      state.installedPacks = [];
-    }
+  } else {
+    state.installedPacks = [];
   }
   if (reconcileInstalledPacksWithPresetLibrary()) {
     persistInstalledPacks();
