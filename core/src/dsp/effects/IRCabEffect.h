@@ -205,7 +205,7 @@ namespace guitarfx
       const double blend = hasB ? std::clamp(mIRBlend, 0.0, 1.0) : 0.0;
       const double slotAGain = (1.0 - blend) * mSlotAGain * (mSlotAPolarityInverted ? -1.0 : 1.0);
       const double slotBGain = blend * mSlotBGain * (mSlotBPolarityInverted ? -1.0 : 1.0);
-      const double autoCompGain = ComputeAutoCompGain(hasB, slotAGain, slotBGain);
+      const double autoCompGain = ComputeBlendCompGain(hasB, blend);
 
       for (int i = 0; i < numSamples; ++i)
       {
@@ -309,6 +309,24 @@ namespace guitarfx
         mSlotBPolarityInverted = value > 0.5;
       else if (key == "autoGainComp")
         mAutoGainCompEnabled = value > 0.5;
+      else if (key == "normalizeIR")
+      {
+        const bool newVal = value > 0.5;
+        if (newVal != mNormalizeIR)
+        {
+          if (!mImpulseL.empty())
+            CapturePreviousConvolvers(); // capture with old normalization first
+          mNormalizeIR = newVal;
+          if (!mImpulseL.empty())
+          {
+            InitializeConvolverA();
+            if (!mImpulseBL.empty())
+              InitializeConvolverB();
+            if (HasResource())
+              BeginResourceTransition();
+          }
+        }
+      }
       else if (key == "outputGain")
         mOutputGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
       else if (key == "enabled")
@@ -375,6 +393,8 @@ namespace guitarfx
         return mSlotBPolarityInverted ? 1.0 : 0.0;
       if (key == "autoGainComp")
         return mAutoGainCompEnabled ? 1.0 : 0.0;
+      if (key == "normalizeIR")
+        return mNormalizeIR ? 1.0 : 0.0;
       if (key == "outputGain")
         return 20.0 * std::log10(mOutputGain);
       if (key == "enabled")
@@ -786,8 +806,7 @@ namespace guitarfx
                                         bool isStereo,
                                         double impulseSampleRate,
                                         RealtimeConvolver &convolverL,
-                                        RealtimeConvolver &convolverR,
-                                        double *outEnergy = nullptr)
+                                        RealtimeConvolver &convolverR)
     {
       if (impulseL.empty() || mMaxBlockSize == 0)
         return false;
@@ -805,17 +824,21 @@ namespace guitarfx
         processedL.resize(length);
         processedR.resize(length);
 
-        if (outEnergy)
-        {
-          *outEnergy = ComputeSignalEnergyStereo(processedL, processedR);
-        }
-
         if (std::abs(sourceRate - mSampleRate) > 1.0)
         {
           // Cabinet IR samples are FIR coefficients, so resampling needs to
           // preserve coefficient area rather than audio-waveform peak level.
           ResampleImpulseForConvolution(processedL, sourceRate, mSampleRate);
           ResampleImpulseForConvolution(processedR, sourceRate, mSampleRate);
+        }
+
+        if (mNormalizeIR)
+        {
+          // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
+          // Uses combined L+R L2 norm so stereo and mono IRs normalize consistently.
+          const float normGain = ComputeL2NormGain(processedL, processedR);
+          for (auto &s : processedL) s *= normGain;
+          for (auto &s : processedR) s *= normGain;
         }
 
         if (!convolverL.SetImpulse(processedL, mMaxBlockSize) ||
@@ -834,16 +857,18 @@ namespace guitarfx
       if (processedIR.empty())
         return false;
 
-      if (outEnergy)
-      {
-        *outEnergy = ComputeSignalEnergy(processedIR);
-      }
-
       if (std::abs(sourceRate - mSampleRate) > 1.0)
       {
         // Cabinet IR samples are FIR coefficients, so resampling needs to
         // preserve coefficient area rather than audio-waveform peak level.
         ResampleImpulseForConvolution(processedIR, sourceRate, mSampleRate);
+      }
+
+      if (mNormalizeIR)
+      {
+        // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
+        const float normGain = ComputeL2NormGain(processedIR);
+        for (auto &s : processedIR) s *= normGain;
       }
 
       if (!convolverL.SetImpulse(processedIR, mMaxBlockSize) ||
@@ -897,8 +922,7 @@ namespace guitarfx
           mIsStereo,
           mIRSampleRate,
           mConvolverL,
-          mConvolverR,
-          &mIRSlotEnergyA);
+          mConvolverR);
     }
 
     bool InitializeConvolverB()
@@ -909,8 +933,25 @@ namespace guitarfx
           mIsStereoB,
           mIRSampleRateB,
           mConvolverBL,
-          mConvolverBR,
-          &mIRSlotEnergyB);
+          mConvolverBR);
+    }
+
+    // Returns the gain to apply to IR samples so that convolution is unity-gain for a broadband
+    // signal. Computed as 1/||h||_2 where ||h||_2 = sqrt(sum(h[n]^2)).
+    // For stereo, the average L+R L2 norm is used so stereo and mono IRs normalise equivalently.
+    static float ComputeL2NormGain(const std::vector<float> &samplesL,
+                                   const std::vector<float> &samplesR = {})
+    {
+      double sumSq = 0.0;
+      for (const float s : samplesL)
+        sumSq += static_cast<double>(s) * s;
+      if (!samplesR.empty())
+      {
+        for (const float s : samplesR)
+          sumSq += static_cast<double>(s) * s;
+        sumSq *= 0.5; // average channels so stereo == mono for the same impulse response
+      }
+      return sumSq > 1e-12 ? static_cast<float>(1.0 / std::sqrt(sumSq)) : 1.0f;
     }
 
     static double ComputeSignalEnergy(const std::vector<float> &samples)
@@ -950,27 +991,19 @@ namespace guitarfx
       return std::max(1e-8, mean);
     }
 
-    double ComputeAutoCompGain(bool hasB, double slotAGain, double slotBGain) const
+    double ComputeBlendCompGain(bool hasB, double blend) const
     {
       if (!mAutoGainCompEnabled)
-      {
         return 1.0;
-      }
 
-      const double energyA = std::max(1e-8, mIRSlotEnergyA);
-      const double gainASq = slotAGain * slotAGain;
-      double blendedEnergy = gainASq * energyA;
-
-      if (hasB)
-      {
-        const double energyB = std::max(1e-8, mIRSlotEnergyB);
-        const double gainBSq = slotBGain * slotBGain;
-        blendedEnergy += gainBSq * energyB;
-      }
-
-      const double safeEnergy = std::max(1e-8, blendedEnergy);
-      const double gain = 1.0 / std::sqrt(safeEnergy);
-      return std::clamp(gain, 0.25, 4.0);
+      // With L2-normalised IRs every slot has unit energy in the convolver.
+      // The blend position (irBlend) linearly interpolates between A and B, so
+      // the combined energy is blendA² + blendB².  Normalising by its sqrt keeps
+      // output level constant as the user sweeps the blend knob.
+      const double blendA = 1.0 - blend;
+      const double blendB = blend;
+      const double energy = blendA * blendA + (hasB ? blendB * blendB : 0.0);
+      return 1.0 / std::sqrt(std::max(1e-8, energy));
     }
 
     void ApplyPendingQuality()
@@ -1270,9 +1303,8 @@ namespace guitarfx
     bool mEnabled = true;
     IRQuality mQuality = IRQuality::Standard;
     std::atomic<int> mPendingQuality{-1};
-    bool mAutoGainCompEnabled = false;
-    double mIRSlotEnergyA = 1.0;
-    double mIRSlotEnergyB = 1.0;
+    bool mNormalizeIR = true;
+    bool mAutoGainCompEnabled = true;
     bool mHasLoadedResource = false;
     bool mPrevHasSlotA = false;
     bool mPrevHasSlotB = false;
@@ -1332,7 +1364,6 @@ namespace guitarfx
         {"outputGain",    "Output",         0.0,  -24.0, 24.0,    "dB",     "Level"},
         {"lowCutHz",      "Low Cut",        20.0, 20.0,  1000.0,  "Hz",     "Tone"},
         {"highCutHz",     "High Cut",    20000.0, 1000.0,20000.0, "Hz",     "Tone"},
-        {"autoGainComp",  "Auto Gain",      0.0,  0.0,   1.0,     "toggle", "Level", true},
         {"air",           "Air",            0.0,  0.0,   1.0,     "amount", "Tone"},
         {"airMode",       "Air Mode",       0.0,  0.0,   2.0,     "enum",   "Tone",  true, 1.0, {"Shelf", "Presence", "Both"}},
         {"micEmulation",  "Mic Emulation",  0.0,  0.0,   1.0,     "toggle", "Tone",      true},

@@ -841,6 +841,7 @@ namespace guitarfx
     const bool isMixer = (nodeType == kNodeTypeMixer);
     const bool shouldAccumulate = isMixer || (incomingCount > 1);
     bool incomingStereoSignal = false;
+    bool mixerHasNonCenterPan = false;
 
     MixerEffect *mixerEffect = nullptr;
     if (isMixer && state->processor)
@@ -871,6 +872,11 @@ namespace guitarfx
             const float panR = mixerEffect->GetInputPanR(inputPort);
             const float gainL = edgeGain * level * panL;
             const float gainR = edgeGain * level * panR;
+
+            // Track whether any active input is panned off-centre; if so the
+            // mixer output is genuinely stereo even when the input is mono.
+            if (std::abs(gainL - gainR) > 1.0e-5f)
+              mixerHasNonCenterPan = true;
 
             for (int i = 0; i < numSamples; ++i)
             {
@@ -941,14 +947,14 @@ namespace guitarfx
           }
           std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
           std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
-          if (!incomingStereoSignal && !NodeMayProduceStereo(state->type, state->category))
+          if (!incomingStereoSignal && !mixerHasNonCenterPan && !NodeMayProduceStereo(state->type, state->category))
           {
             std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
             state->hasStereoSignal = false;
           }
           else
           {
-            state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
+            state->hasStereoSignal = incomingStereoSignal || mixerHasNonCenterPan || NodeMayProduceStereo(state->type, state->category);
           }
         }
       }

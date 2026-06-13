@@ -4371,24 +4371,39 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         ResourceRef& slot = target->resources[static_cast<size_t>(resourceIndex)];
         if (!ref.resourceType.empty())
             slot.resourceType = ref.resourceType;
-        if (!ref.resourceId.empty())
+
+        // A clear is signalled by empty resourceId + empty filePath with no parameterValue update.
+        // (Contrast with a blend-value-only update which also sends empty IDs but includes parameterValue.)
+        const bool isClearOperation = ref.resourceId.empty() && ref.filePath.empty() && !ref.parameterValue.has_value();
+        if (isClearOperation)
         {
-            slot.resourceId = ref.resourceId;
-            slot.filePath.clear();
-        }
-        if (!ref.filePath.empty())
-        {
-            slot.filePath = ref.filePath;
             slot.resourceId.clear();
+            slot.filePath.clear();
+            slot.embeddedId.clear();
+            slot.parameters.clear();
+            slot.parameterValue.reset();
         }
-        if (!ref.embeddedId.empty())
-            slot.embeddedId = ref.embeddedId;
-        if (!ref.parameterId.empty())
-            slot.parameterId = ref.parameterId;
-        if (ref.parameterValue.has_value())
-            slot.parameterValue = ref.parameterValue;
-        if (!ref.parameters.empty())
-            slot.parameters = ref.parameters;
+        else
+        {
+            if (!ref.resourceId.empty())
+            {
+                slot.resourceId = ref.resourceId;
+                slot.filePath.clear();
+            }
+            if (!ref.filePath.empty())
+            {
+                slot.filePath = ref.filePath;
+                slot.resourceId.clear();
+            }
+            if (!ref.embeddedId.empty())
+                slot.embeddedId = ref.embeddedId;
+            if (!ref.parameterId.empty())
+                slot.parameterId = ref.parameterId;
+            if (ref.parameterValue.has_value())
+                slot.parameterValue = ref.parameterValue;
+            if (!ref.parameters.empty())
+                slot.parameters = ref.parameters;
+        }
         const ResourceRef selectedRef = slot;
 
         RefreshWasmNodeDescriptor(*target);

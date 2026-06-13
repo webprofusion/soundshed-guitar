@@ -636,10 +636,11 @@ namespace
     return true;
   }
 
-  // Test 2: Simple gain IR [0.5] should halve all samples
+  // Test 2: IR [0.5] - with L2 normalisation the gain is unity, identical to [1.0]
+  // (disable normaliseIR to verify the raw convolution gain is still applied correctly)
   bool TestGainIR()
   {
-    std::cout << "Test: Gain IR [0.5]... ";
+    std::cout << "Test: Gain IR [0.5] (normaliseIR off)... ";
 
     std::vector<float> impulse = { 0.5f };
     std::vector<double> input = { 1.0, 2.0, -1.0, 0.5 };
@@ -647,6 +648,7 @@ namespace
 
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test raw convolution gain
     std::vector<double> testSamples = input;
     tester.Convolve(testSamples);
 
@@ -664,11 +666,11 @@ namespace
     return true;
   }
 
-  // Test 3: Two-tap IR [0.5, 0.5] - averaging filter
+  // Test 3: Two-tap IR [0.5, 0.5] - averaging filter (normaliseIR off to check raw math)
   // output[n] = 0.5 * input[n] + 0.5 * input[n-1]
   bool TestTwoTapAverageIR()
   {
-    std::cout << "Test: Two-tap averaging IR [0.5, 0.5]... ";
+    std::cout << "Test: Two-tap averaging IR [0.5, 0.5] (normaliseIR off)... ";
 
     std::vector<float> impulse = { 0.5f, 0.5f };
     std::vector<double> input = { 1.0, 0.0, 1.0, 0.0, 1.0 };
@@ -683,6 +685,7 @@ namespace
 
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test raw convolution math
     std::vector<double> testSamples = input;
     tester.Convolve(testSamples);
 
@@ -753,6 +756,7 @@ namespace
 
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test raw convolution math
     std::vector<double> testSamples = input;
     tester.Convolve(testSamples);
 
@@ -785,6 +789,7 @@ namespace
     // Get graph result
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test raw convolution vs reference
     std::vector<double> dspOutput = input;
     tester.Convolve(dspOutput);
 
@@ -860,6 +865,7 @@ namespace
     // Get graph result
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test raw convolution vs reference
     std::vector<double> result = input;
     tester.Convolve(result);
 
@@ -914,6 +920,7 @@ namespace
 
     IRConvolutionTester tester;
     tester.SetImpulse(impulse);
+    tester.SetCabParam("normalizeIR", 0.0); // test stereo channel independence with raw IR
 
     // Process different data on each channel
     std::vector<double> channelL = { 1.0, 0.0, 0.0 };
@@ -1324,6 +1331,7 @@ namespace
     {
       IRConvolutionTester tester;
       tester.SetDualImpulse({ 1.0f }, { 0.5f }, 0.0);
+      tester.SetCabParam("normalizeIR", 0.0); // verify raw blend routing without normalisation
 
       std::vector<double> samplesA = { 1.0, 0.5, -0.25, 0.125 };
       tester.Convolve(samplesA);
@@ -1338,6 +1346,7 @@ namespace
       }
 
       tester.SetDualImpulse({ 1.0f }, { 0.5f }, 1.0);
+      tester.SetCabParam("normalizeIR", 0.0); // keep normalisation off for this endpoint too
       std::vector<double> samplesB = { 1.0, 0.5, -0.25, 0.125 };
       tester.Convolve(samplesB);
       for (std::size_t i = 0; i < samplesB.size(); ++i)
@@ -1360,35 +1369,36 @@ namespace
     }
   }
 
-  bool TestAutoGainCompBoostsLowEnergyIR()
+  bool TestL2NormEqualizesIRLevels()
   {
-    std::cout << "Test: Auto gain compensation boosts low-energy IR... ";
+    std::cout << "Test: L2 normalisation equalises different-amplitude IRs... ";
 
     try
     {
       std::vector<double> input(2048);
       for (std::size_t i = 0; i < input.size(); ++i)
-      {
         input[i] = 0.5 * std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate);
-      }
 
-      IRConvolutionTester tester;
-      tester.SetDualImpulse({ 1.0f }, { 0.1f }, 1.0);
-      tester.SetCabParam("mix", 1.0);
-      tester.SetCabParam("autoGainComp", 0.0);
+      // High-amplitude IR: peak 1.0
+      IRConvolutionTester testerA;
+      testerA.SetImpulse({ 1.0f });
+      testerA.SetCabParam("mix", 1.0);
+      auto signalA = input;
+      testerA.Convolve(signalA);
+      const double rmsA = ComputeRms(signalA);
 
-      auto off = input;
-      tester.Convolve(off);
-      const double rmsOff = ComputeRms(off);
+      // Low-amplitude IR: peak 0.1 — L2 normalisation should yield the same output level
+      IRConvolutionTester testerB;
+      testerB.SetImpulse({ 0.1f });
+      testerB.SetCabParam("mix", 1.0);
+      auto signalB = input;
+      testerB.Convolve(signalB);
+      const double rmsB = ComputeRms(signalB);
 
-      tester.SetCabParam("autoGainComp", 1.0);
-      auto on = input;
-      tester.Convolve(on);
-      const double rmsOn = ComputeRms(on);
-
-      if (!(rmsOn > rmsOff * 2.5))
+      const double ratio = rmsA > 0 ? rmsB / rmsA : 0.0;
+      if (ratio < 0.95 || ratio > 1.05)
       {
-        std::cout << "FAILED (rmsOff=" << rmsOff << ", rmsOn=" << rmsOn << ")\n";
+        std::cout << "FAILED (rmsA=" << rmsA << ", rmsB=" << rmsB << ", ratio=" << ratio << ")\n";
         return false;
       }
 
@@ -2028,7 +2038,7 @@ int main()
   runTest(TestImpulseToStepResponse);
   runTest(TestFrequencyResponseStability);
   runTest(TestDualIRBlendEndpoints);
-  runTest(TestAutoGainCompBoostsLowEnergyIR);
+  runTest(TestL2NormEqualizesIRLevels);
   runTest(TestHighCutAttenuatesHighFrequency);
   runTest(TestCabIR192kHzLevelMatches48kHz);
   runTest(TestDemoRenderCabIRRateEquivalence);
