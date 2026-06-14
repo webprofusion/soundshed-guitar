@@ -104,9 +104,34 @@ namespace guitarfx
       }
 
       const bool rightReady = !mIsStereo || mConvolverR.IsInitialized();
-      if (!mEnabled || mMix <= 0.0 || !mConvolverL.IsInitialized() || !rightReady)
+      const bool convolverReady = mConvolverL.IsInitialized() && rightReady;
+
+      // Full bypass (disabled or mix=0): pass dry signal through unchanged.
+      if (!mEnabled || mMix <= 0.0)
       {
-        // Bypass: copy input to output, falling back L→R if R is null
+        if (outputs[0])
+        {
+          if (inputs[0])
+            std::copy_n(inputs[0], numSamples, outputs[0]);
+          else
+            std::fill_n(outputs[0], numSamples, 0.0f);
+        }
+        if (outputs[1])
+        {
+          if (inputs[1])
+            std::copy_n(inputs[1], numSamples, outputs[1]);
+          else if (inputs[0])
+            std::copy_n(inputs[0], numSamples, outputs[1]);
+          else
+            std::fill_n(outputs[1], numSamples, 0.0f);
+        }
+        return;
+      }
+
+      // No IR loaded: pass the dry signal through unchanged (full bypass).
+      // The effect is intentionally transparent when no cabinet IR has been selected.
+      if (!convolverReady)
+      {
         if (outputs[0])
         {
           if (inputs[0])
@@ -135,101 +160,199 @@ namespace guitarfx
 
       // Process through convolvers
       const bool allowParallel = rtparallel::ShouldParallelizeStereoWork(numSamples);
-      bool ranParallel = false;
-      if (allowParallel)
-      {
-        ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
-          [&]() { mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples); },
-          [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
-      }
-      if (!ranParallel)
-      {
-        mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
-        mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
-      }
-
       const bool hasB = mConvolverBL.IsInitialized() && (!mIsStereoB || mConvolverBR.IsInitialized());
-      if (hasB)
+      // L/R split: slot A takes left input, slot B takes right input (requires both slots loaded).
+      const bool useLRSplit = mLRSplitEnabled && hasB;
+
+      if (useLRSplit)
       {
-        bool ranBParallel = false;
+        // Run slot A (left) and slot B (right) in parallel
+        bool ran = false;
+        if (allowParallel)
+          ran = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { mConvolverBL.Process(mInputBufferR.data(), mOutputBufferBL.data(), numSamples); },
+            [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
+        if (!ran)
+        {
+          mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
+          mConvolverBL.Process(mInputBufferR.data(), mOutputBufferBL.data(), numSamples);
+        }
+      }
+      else
+      {
+        bool ranParallel = false;
         if (allowParallel)
         {
-          ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
-            [&]() { mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples); },
-            [&]() { mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples); });
+          ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
+            [&]() { mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples); },
+            [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
         }
-        if (!ranBParallel)
+        if (!ranParallel)
         {
-          mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
-          mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
+          mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
+          mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+        }
+
+        if (hasB)
+        {
+          bool ranBParallel = false;
+          if (allowParallel)
+          {
+            ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
+              [&]() { mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples); },
+              [&]() { mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples); });
+          }
+          if (!ranBParallel)
+          {
+            mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
+            mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
+          }
         }
       }
 
       const bool transitionActive = mResourceTransitionSamplesRemaining > 0 && mPrevHasSlotA;
       if (transitionActive)
       {
-        bool ranPrevParallel = false;
-        if (allowParallel)
+        if (useLRSplit)
         {
-          ranPrevParallel = rtparallel::DualLaneExecutor::Instance().Run(
-            [&]() { mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples); },
-            [&]() { mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples); });
+          // Mirror the live split routing for the fade-out of the previous state.
+          bool ran = false;
+          if (allowParallel)
+            ran = rtparallel::DualLaneExecutor::Instance().Run(
+              [&]() { if (mPrevHasSlotB) mPrevConvolverBL.Process(mInputBufferR.data(), mPrevOutputBufferBL.data(), numSamples); },
+              [&]() { mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples); });
+          if (!ran)
+          {
+            mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+            if (mPrevHasSlotB)
+              mPrevConvolverBL.Process(mInputBufferR.data(), mPrevOutputBufferBL.data(), numSamples);
+          }
         }
-        if (!ranPrevParallel)
+        else
         {
-          mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
-          mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
-        }
-
-        if (mPrevHasSlotB)
-        {
-          bool ranPrevBParallel = false;
+          bool ranPrevParallel = false;
           if (allowParallel)
           {
-            ranPrevBParallel = rtparallel::DualLaneExecutor::Instance().Run(
-              [&]() { mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples); },
-              [&]() { mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples); });
+            ranPrevParallel = rtparallel::DualLaneExecutor::Instance().Run(
+              [&]() { mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples); },
+              [&]() { mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples); });
           }
-          if (!ranPrevBParallel)
+          if (!ranPrevParallel)
           {
-            mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
-            mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+            mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+            mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
+          }
+
+          if (mPrevHasSlotB)
+          {
+            bool ranPrevBParallel = false;
+            if (allowParallel)
+            {
+              ranPrevBParallel = rtparallel::DualLaneExecutor::Instance().Run(
+                [&]() { mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples); },
+                [&]() { mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples); });
+            }
+            if (!ranPrevBParallel)
+            {
+              mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
+              mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+            }
           }
         }
       }
 
       // Apply wet/dry mix and output gain
-      float wetGain = static_cast<float>(mMix * mOutputGain);
-      float dryGain = static_cast<float>((1.0 - mMix));
+      const float wetGain = static_cast<float>(mMix * mOutputGain);
+      const float dryGain = static_cast<float>(1.0 - mMix);
+      const bool wetOnly = mMix >= 0.9999;
 
-      const double blend = hasB ? std::clamp(mIRBlend, 0.0, 1.0) : 0.0;
-      const double slotAGain = (1.0 - blend) * mSlotAGain * (mSlotAPolarityInverted ? -1.0 : 1.0);
-      const double slotBGain = blend * mSlotBGain * (mSlotBPolarityInverted ? -1.0 : 1.0);
-      const double autoCompGain = ComputeBlendCompGain(hasB, blend);
+      // In L/R split mode each slot handles one channel at full gain; normal mode uses blend.
+      double blend, slotAGain, slotBGain, autoCompGain;
+      if (useLRSplit)
+      {
+        blend        = 0.0;
+        slotAGain    = mSlotAGain * (mSlotAPolarityInverted ? -1.0 : 1.0);
+        slotBGain    = mSlotBGain * (mSlotBPolarityInverted ? -1.0 : 1.0);
+        autoCompGain = 1.0;
+      }
+      else
+      {
+        blend        = hasB ? std::clamp(mIRBlend, 0.0, 1.0) : 0.0;
+        slotAGain    = (1.0 - blend) * mSlotAGain * (mSlotAPolarityInverted ? -1.0 : 1.0);
+        slotBGain    = blend * mSlotBGain * (mSlotBPolarityInverted ? -1.0 : 1.0);
+        autoCompGain = ComputeBlendCompGain(hasB, blend);
+      }
+
+      // Equal-power pan gains (sqrt(2)-normalised so centre pan = unity gain).
+      // hasPan* avoids mono-sum overhead when pan is at default centre.
+      static constexpr double kSqrt2 = 1.41421356237309504880;
+      const bool hasPanA = std::abs(mSlotAPan) > 1e-6;
+      double slotAPanL = 1.0, slotAPanR = 1.0;
+      if (hasPanA)
+      {
+        const double angle = (mSlotAPan + 1.0) * kPi / 4.0;
+        slotAPanL = kSqrt2 * std::cos(angle);
+        slotAPanR = kSqrt2 * std::sin(angle);
+      }
+      const bool hasPanB = hasB && std::abs(mSlotBPan) > 1e-6;
+      double slotBPanL = 1.0, slotBPanR = 1.0;
+      if (hasPanB)
+      {
+        const double angle = (mSlotBPan + 1.0) * kPi / 4.0;
+        slotBPanL = kSqrt2 * std::cos(angle);
+        slotBPanR = kSqrt2 * std::sin(angle);
+      }
 
       for (int i = 0; i < numSamples; ++i)
       {
-        double slotAL = mOutputBufferL[i] * slotAGain;
-        double slotAR = mOutputBufferR[i] * slotAGain;
-        if (mMicEmulationEnabled)
+        double wetL, wetR;
+        if (useLRSplit)
         {
-          slotAL = ProcessMicPositionSlotA(slotAL, 0);
-          slotAR = ProcessMicPositionSlotA(slotAR, 1);
-        }
-        double wetL = slotAL;
-        double wetR = slotAR;
-
-        if (hasB)
-        {
-          double slotBL = mOutputBufferBL[i] * slotBGain;
-          double slotBR = mOutputBufferBR[i] * slotBGain;
+          // Slot A → left channel; slot B → right channel.
+          wetL = mOutputBufferL[i] * slotAGain;
+          wetR = mOutputBufferBL[i] * slotBGain;
           if (mMicEmulationEnabled)
           {
-            slotBL = ProcessMicPositionSlotB(slotBL, 0);
-            slotBR = ProcessMicPositionSlotB(slotBR, 1);
+            wetL = ProcessMicPositionSlotA(wetL, 0);
+            wetR = ProcessMicPositionSlotB(wetR, 1);
           }
-          wetL += slotBL;
-          wetR += slotBR;
+        }
+        else
+        {
+          double slotAL = mOutputBufferL[i] * slotAGain;
+          double slotAR = mOutputBufferR[i] * slotAGain;
+          if (mMicEmulationEnabled)
+          {
+            slotAL = ProcessMicPositionSlotA(slotAL, 0);
+            slotAR = ProcessMicPositionSlotA(slotAR, 1);
+          }
+          if (hasPanA)
+          {
+            const double monoA = (slotAL + slotAR) * 0.5;
+            slotAL = monoA * slotAPanL;
+            slotAR = monoA * slotAPanR;
+          }
+          wetL = slotAL;
+          wetR = slotAR;
+
+          if (hasB)
+          {
+            double slotBL = mOutputBufferBL[i] * slotBGain;
+            double slotBR = mOutputBufferBR[i] * slotBGain;
+            if (mMicEmulationEnabled)
+            {
+              slotBL = ProcessMicPositionSlotB(slotBL, 0);
+              slotBR = ProcessMicPositionSlotB(slotBR, 1);
+            }
+            if (hasPanB)
+            {
+              const double monoB = (slotBL + slotBR) * 0.5;
+              slotBL = monoB * slotBPanL;
+              slotBR = monoB * slotBPanR;
+            }
+            wetL += slotBL;
+            wetR += slotBR;
+          }
         }
 
         if (transitionActive)
@@ -238,12 +361,21 @@ namespace guitarfx
           const double newWeight = static_cast<double>(progressed) / static_cast<double>(std::max(1, mResourceTransitionSamplesTotal));
           const double oldWeight = 1.0 - std::clamp(newWeight, 0.0, 1.0);
 
-          double prevWetL = mPrevOutputBufferL[i] * slotAGain;
-          double prevWetR = mPrevOutputBufferR[i] * slotAGain;
-          if (mPrevHasSlotB)
+          double prevWetL, prevWetR;
+          if (useLRSplit)
           {
-            prevWetL += mPrevOutputBufferBL[i] * slotBGain;
-            prevWetR += mPrevOutputBufferBR[i] * slotBGain;
+            prevWetL = mPrevOutputBufferL[i] * slotAGain;
+            prevWetR = mPrevHasSlotB ? mPrevOutputBufferBL[i] * slotBGain : 0.0;
+          }
+          else
+          {
+            prevWetL = mPrevOutputBufferL[i] * slotAGain;
+            prevWetR = mPrevOutputBufferR[i] * slotAGain;
+            if (mPrevHasSlotB)
+            {
+              prevWetL += mPrevOutputBufferBL[i] * slotBGain;
+              prevWetR += mPrevOutputBufferBR[i] * slotBGain;
+            }
           }
 
           wetL = prevWetL * oldWeight + wetL * (1.0 - oldWeight);
@@ -273,13 +405,26 @@ namespace guitarfx
           wetR = ProcessAirSample(wetR, 1);
         }
 
-        float dryL = inputs[0] ? inputs[0][i] : 0.0f;
-        float dryR = inputs[1] ? inputs[1][i] : dryL;
-
         if (outputs[0])
-          outputs[0][i] = static_cast<float>(wetL) * wetGain + dryL * dryGain;
+        {
+          if (wetOnly)
+            outputs[0][i] = static_cast<float>(wetL) * wetGain;
+          else
+          {
+            const float dryL = inputs[0] ? inputs[0][i] : 0.0f;
+            outputs[0][i] = static_cast<float>(wetL) * wetGain + dryL * dryGain;
+          }
+        }
         if (outputs[1])
-          outputs[1][i] = static_cast<float>(wetR) * wetGain + dryR * dryGain;
+        {
+          if (wetOnly)
+            outputs[1][i] = static_cast<float>(wetR) * wetGain;
+          else
+          {
+            const float dryR = inputs[1] ? inputs[1][i] : (inputs[0] ? inputs[0][i] : 0.0f);
+            outputs[1][i] = static_cast<float>(wetR) * wetGain + dryR * dryGain;
+          }
+        }
       }
     }
 
@@ -303,6 +448,12 @@ namespace guitarfx
         mSlotAGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
       else if (key == "slotBGain")
         mSlotBGain = std::pow(10.0, std::clamp(value, -24.0, 24.0) / 20.0);
+      else if (key == "slotAPan")
+        mSlotAPan = std::clamp(value, -1.0, 1.0);
+      else if (key == "slotBPan")
+        mSlotBPan = std::clamp(value, -1.0, 1.0);
+      else if (key == "lrSplit")
+        mLRSplitEnabled = value > 0.5;
       else if (key == "slotAPolarity")
         mSlotAPolarityInverted = value > 0.5;
       else if (key == "slotBPolarity")
@@ -371,6 +522,12 @@ namespace guitarfx
         return 20.0 * std::log10(std::max(mSlotAGain, 1e-9));
       if (key == "slotBGain")
         return 20.0 * std::log10(std::max(mSlotBGain, 1e-9));
+      if (key == "slotAPan")
+        return mSlotAPan;
+      if (key == "slotBPan")
+        return mSlotBPan;
+      if (key == "lrSplit")
+        return mLRSplitEnabled ? 1.0 : 0.0;
       if (key == "slotAPolarity")
         return mSlotAPolarityInverted ? 1.0 : 0.0;
       if (key == "slotBPolarity")
@@ -438,70 +595,84 @@ namespace guitarfx
     bool LoadResources(const std::vector<ResourceRef> &refs,
                        const std::vector<std::filesystem::path> &paths) override
     {
-      if (paths.empty())
+      // Determine which path goes to slot A (index 0) and slot B (index 1).
+      // The executor stamps each ref with a "resourceSlotIndex" metadata key so we
+      // can route correctly even when slot A is empty but slot B is not.
+      // Fall back to positional order for legacy presets that lack the metadata.
+      int slotAIdx = -1;
+      int slotBIdx = -1;
+      bool hasSlotMetadata = false;
+      for (std::size_t i = 0; i < refs.size() && i < paths.size(); ++i)
       {
-        std::cerr << "[IRCabEffect] ERROR: LoadResources called with empty paths\n";
-        return false;
+        const auto it = refs[i].metadata.find("resourceSlotIndex");
+        if (it != refs[i].metadata.end())
+        {
+          hasSlotMetadata = true;
+          const int slotIndex = std::stoi(it->second);
+          if (slotIndex == 0) slotAIdx = static_cast<int>(i);
+          else if (slotIndex == 1) slotBIdx = static_cast<int>(i);
+        }
       }
-
-      if (!std::filesystem::exists(paths.front()))
+      if (!hasSlotMetadata)
       {
-        std::cerr << "[IRCabEffect] ERROR: IR file not found: " << paths.front() << "\n";
-        return false;
+        if (!paths.empty()) slotAIdx = 0;
+        if (paths.size() >= 2) slotBIdx = 1;
       }
 
       CapturePreviousConvolvers();
 
-      if (!LoadWavFile(paths.front()))
+      // --- Slot A ---
+      bool loadedA = false;
+      if (slotAIdx >= 0)
       {
-        std::cerr << "[IRCabEffect] ERROR: Failed to load IR A: " << paths.front() << "\n";
-        return false;
+        if (!std::filesystem::exists(paths[slotAIdx]))
+          std::cerr << "[IRCabEffect] ERROR: IR A file not found: " << paths[slotAIdx] << "\n";
+        else if (LoadWavFile(paths[slotAIdx]))
+        {
+          mIRPath = paths[slotAIdx];
+          ApplyPendingQuality();
+          loadedA = InitializeConvolverA();
+          if (!loadedA)
+            std::cerr << "[IRCabEffect] ERROR: Failed to initialize convolver A for: " << paths[slotAIdx] << "\n";
+        }
+        else
+          std::cerr << "[IRCabEffect] ERROR: Failed to load IR A: " << paths[slotAIdx] << "\n";
+      }
+      if (!loadedA)
+      {
+        mImpulseL.clear();
+        mImpulseR.clear();
+        mIRPath.clear();
+        mConvolverL.Reset();
+        mConvolverR.Reset();
       }
 
-      mIRPath = paths.front();
-      ApplyPendingQuality();
-      if (!InitializeConvolverA())
-      {
-        std::cerr << "[IRCabEffect] ERROR: Failed to initialize convolver A for: " << paths.front() << "\n";
-        return false;
-      }
-
+      // --- Slot B ---
       mImpulseBL.clear();
       mImpulseBR.clear();
       mIRPathB.clear();
       mConvolverBL.Reset();
       mConvolverBR.Reset();
-      if (paths.size() >= 2)
+      bool loadedB = false;
+      if (slotBIdx >= 0)
       {
-        if (!std::filesystem::exists(paths[1]))
+        if (!std::filesystem::exists(paths[slotBIdx]))
+          std::cerr << "[IRCabEffect] WARNING: IR B file not found: " << paths[slotBIdx] << "\n";
+        else if (LoadWavFileInto(paths[slotBIdx], mImpulseBL, mImpulseBR, mIRSampleRateB, mIsStereoB))
         {
-          std::cerr << "[IRCabEffect] WARNING: IR file B not found: " << paths[1] << "\n";
-        }
-        else if (LoadWavFileInto(paths[1], mImpulseBL, mImpulseBR, mIRSampleRateB, mIsStereoB))
-        {
-          mIRPathB = paths[1];
-          if (refs.size() > 1)
-          {
-            const auto &ref = refs[1];
-            if (ref.parameterValue.has_value())
-            {
-              mIRBlend = std::clamp(*ref.parameterValue, 0.0, 1.0);
-            }
-          }
-          if (!InitializeConvolverB())
-          {
-            std::cerr << "[IRCabEffect] WARNING: Failed to initialize convolver B for: " << paths[1] << "\n";
-          }
+          mIRPathB = paths[slotBIdx];
+          if (slotBIdx < static_cast<int>(refs.size()) && refs[slotBIdx].parameterValue.has_value())
+            mIRBlend = std::clamp(*refs[slotBIdx].parameterValue, 0.0, 1.0);
+          loadedB = InitializeConvolverB();
+          if (!loadedB)
+            std::cerr << "[IRCabEffect] WARNING: Failed to initialize convolver B for: " << paths[slotBIdx] << "\n";
         }
         else
-        {
-          std::cerr << "[IRCabEffect] WARNING: Failed to load IR B: " << paths[1] << "\n";
-        }
+          std::cerr << "[IRCabEffect] WARNING: Failed to load IR B: " << paths[slotBIdx] << "\n";
       }
 
       BeginResourceTransition();
-
-      return true;
+      return loadedA || loadedB;
     }
 
     void BeginResourceTransition()
@@ -523,7 +694,9 @@ namespace guitarfx
 
     [[nodiscard]] bool HasResource() const override
     {
-      return mConvolverL.IsInitialized() && (!mIsStereo || mConvolverR.IsInitialized());
+      const bool slotAReady = mConvolverL.IsInitialized() && (!mIsStereo || mConvolverR.IsInitialized());
+      const bool slotBReady = mConvolverBL.IsInitialized();
+      return slotAReady || slotBReady;
     }
     [[nodiscard]] std::filesystem::path GetResourcePath() const override { return mIRPath; }
 
@@ -535,6 +708,13 @@ namespace guitarfx
 
     [[nodiscard]] std::string GetType() const override { return "cab_ir"; }
     [[nodiscard]] std::string GetCategory() const override { return "cab"; }
+
+    [[nodiscard]] bool ProducesStereoOutput() const override
+    {
+      // Pan on either slot or L/R split mode produces distinct L and R output.
+      return std::abs(mSlotAPan) > 1e-6 || std::abs(mSlotBPan) > 1e-6
+          || (mLRSplitEnabled && mConvolverBL.IsInitialized());
+    }
 
   private:
     static constexpr double kPi = 3.14159265358979323846;
@@ -1281,6 +1461,9 @@ namespace guitarfx
     double mHighCutHz = 20000.0;
     double mSlotAGain = 1.0;
     double mSlotBGain = 1.0;
+    double mSlotAPan = 0.0; // -1.0 = full left, 0.0 = centre, 1.0 = full right
+    double mSlotBPan = 0.0;
+    bool mLRSplitEnabled = false; // when true, stereo input is split: L→IR A, R→IR B
     bool mSlotAPolarityInverted = false;
     bool mSlotBPolarityInverted = false;
     double mOutputGain = 1.0;
@@ -1341,7 +1524,33 @@ namespace guitarfx
     info.category = "cab";
     info.description = "Impulse response cabinet simulation";
     info.requiresResource = true;
-    info.resourceType = "ir"; // .wav IR files
+    info.resourceType = "ir"; // .wav IR files — retained for legacy resource resolution and file-browse routing
+
+    // Declare two explicit resource slots so the UI renders separate, labelled
+    // pickers for IR A and IR B rather than a single anonymous IR picker.
+    // nodeId is empty because this is not a composite effect (the slots live on
+    // this node itself).  resourceIndex 0/1 maps to node.resources[0/1] and to
+    // the "resourceSlotIndex" metadata the executor stamps on each resolved ref.
+    {
+      ExposedResource slotA;
+      slotA.resourceId    = "irA";
+      slotA.displayName   = "IR A";
+      slotA.nodeId        = "";
+      slotA.resourceType  = "ir";
+      slotA.resourceIndex = 0;
+      slotA.allowBrowseFile = true;
+
+      ExposedResource slotB;
+      slotB.resourceId    = "irB";
+      slotB.displayName   = "IR B";
+      slotB.nodeId        = "";
+      slotB.resourceType  = "ir";
+      slotB.resourceIndex = 1;
+      slotB.allowBrowseFile = true;
+
+      info.exposedResources = {slotA, slotB};
+    }
+
     info.parameters = {
         {"mix",           "Mix",            1.0,  0.0,   1.0,     "amount", "Level"},
         {"irBlend",       "IR Blend",       0.0,  0.0,   1.0,     "blend", "Tone"},
@@ -1351,12 +1560,15 @@ namespace guitarfx
         {"air",           "Air",            0.0,  0.0,   1.0,     "amount", "Tone"},
         {"airMode",       "Air Mode",       0.0,  0.0,   2.0,     "enum",   "Tone",  true, 1.0, {"Shelf", "Presence", "Both"}},
         {"micEmulation",  "Mic Emulation",  0.0,  0.0,   1.0,     "toggle", "Tone",      true},
+        {"lrSplit",       "L/R Split",      0.0,  0.0,   1.0,     "toggle", "IR A",  true},
         {"slotAGain",     "IR A Level",     0.0,  -24.0, 24.0,    "dB",     "IR A",  true},
+        {"slotAPan",      "IR A Pan",       0.0,  -1.0,  1.0,     "amount", "IR A",  true},
         {"slotAPolarity", "IR A Invert",    0.0,  0.0,   1.0,     "toggle", "IR A",  true},
         {"micRadialA",    "Mic A Radial",   0.0,  0.0,   1.0,     "amount", "IR A",  true},
         {"micProximityA", "Mic A Proximity",0.0,  0.0,   1.0,     "amount", "IR A",  true},
         {"slotBPolarity", "IR B Invert",    0.0,  0.0,   1.0,     "toggle", "IR B",  true},
         {"slotBGain",     "IR B Level",     0.0,  -24.0, 24.0,    "dB",     "IR B",  true},
+        {"slotBPan",      "IR B Pan",       0.0,  -1.0,  1.0,     "amount", "IR B",  true},
         {"micRadialB",    "Mic B Radial",   0.0,  0.0,   1.0,     "amount", "IR B",  true},
         {"micProximityB", "Mic B Proximity",0.0,  0.0,   1.0,     "amount", "IR B",  true},
         {"quality",       "Quality",        1.0,  0.0,   3.0,     "enum",    "Tone",      true, 1.0, {"Economy","Standard","High","Full"}}}; // 0=Economy, 1=Standard, 2=High, 3=Full

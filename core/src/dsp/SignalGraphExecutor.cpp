@@ -523,6 +523,12 @@ namespace guitarfx
           {
             state.processor->LoadResources(resolvedRefs, resolvedPaths);
           }
+          else if (state.processor->HasResource())
+          {
+            // All defined resource slots have been cleared; notify the processor so it
+            // can unload the previously-loaded resource rather than leaving stale state.
+            state.processor->LoadResources({}, {});
+          }
         }
       }
 
@@ -913,6 +919,7 @@ namespace guitarfx
     {
       const bool nodeCanMono = state->processor->SupportsMonoProcessing()
         && !NodeMayProduceStereo(state->type, state->category)
+        && !state->processor->ProducesStereoOutput()
         && !incomingStereoSignal;
 
       if (nodeType == kNodeTypeSplitter || nodeType == kNodeTypeOutput)
@@ -1000,7 +1007,7 @@ namespace guitarfx
         }
         std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
         std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
-        state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category);
+        state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category) || state->processor->ProducesStereoOutput();
       }
       else
       {

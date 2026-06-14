@@ -33,6 +33,11 @@ namespace guitarfx
     // Optional mono processing fast path. Effects should override both methods
     // when they can process a single channel without running stereo code.
     [[nodiscard]] virtual bool SupportsMonoProcessing() const { return false; }
+
+    // Returns true when this effect instance will produce distinct L and R output
+    // from a mono (identical L=R) input — e.g. due to pan, stereo widening, etc.
+    // The executor uses this to prevent downstream nodes collapsing the stereo field.
+    [[nodiscard]] virtual bool ProducesStereoOutput() const { return false; }
     virtual void ProcessMono(float *input, float *output, int numSamples)
     {
       if (!output || numSamples <= 0)
