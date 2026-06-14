@@ -331,6 +331,12 @@ public:
       return mBlend;
     if (key == "enabled")
       return mEnabled ? 1.0 : 0.0;
+    if (key == "autoLevelOutput")
+      return mAutoLevelOutput ? 1.0 : 0.0;
+    if (key == "clampAutoGain")
+      return mClampAutoGain ? 1.0 : 0.0;
+    if (key == "useNamInputMetadata")
+      return mUseNamInputMetadata ? 1.0 : 0.0;
     const auto it = mTargetParams.find(key);
     if (it != mTargetParams.end())
       return it->second;
@@ -456,7 +462,7 @@ private:
   bool mHasModelParameters = false;
   bool mAutoLevelInput = false;
   bool mAutoLevelOutput = true;
-  bool mUseNamInputMetadata = false;
+  bool mUseNamInputMetadata = true;
   bool mEnabled = true;
   bool mClampAutoGain = true;
   std::string mParameterId;
@@ -926,9 +932,7 @@ inline void RegisterMultiModelNAMAmpEffect()
     {"blend", "Blend", 0.0, 0.0, 1.0, "amount"},
     {"inputGain", "Input", 0.0, -24.0, 24.0, "dB"},
     {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
-    {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true},
-    {"autoLevelOutput", "Auto Level Output", 1.0, 0.0, 1.0, "toggle", "Advanced", true},
-    {"clampAutoGain", "Clamp Auto Gain", 1.0, 0.0, 1.0, "toggle", "Advanced", true}
+    {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

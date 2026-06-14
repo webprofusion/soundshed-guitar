@@ -8994,8 +8994,9 @@ void PluginController::ApplyPreset(const Preset& preset)
         node.config.erase("modelHash");
         ClearNamCalibrationParams(node);
         node.params["autoLevelInput"] = 0.0;
-        if (!node.params.count("autoLevelOutput"))
-            node.params["autoLevelOutput"] = 1.0;
+        node.params["autoLevelOutput"] = 1.0;
+        node.params["clampAutoGain"] = 1.0;
+        node.params["useNamInputMetadata"] = 1.0;
     }
 
     TryRemapHostedPluginResources(normalizedPreset);
@@ -9776,7 +9777,9 @@ void PluginController::ResetNamNodeLevelState(const std::string& nodeId)
     node->config.erase("modelHash");
     ClearNamCalibrationParams(*node);
     node->params["autoLevelInput"] = 0.0;
-    if (!node->params.count("autoLevelOutput")) node->params["autoLevelOutput"] = 1.0;
+    node->params["autoLevelOutput"] = 1.0;
+    node->params["clampAutoGain"] = 1.0;
+    node->params["useNamInputMetadata"] = 1.0;
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
     mPendingStateBroadcast = true;
 
@@ -9787,6 +9790,8 @@ void PluginController::ResetNamNodeLevelState(const std::string& nodeId)
         mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "calibrationOutputLevel", clearValue);
         mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "autoLevelInput", 0.0);
         mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "autoLevelOutput", 1.0);
+        mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "clampAutoGain", 1.0);
+        mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "useNamInputMetadata", 1.0);
     }
 }
 

@@ -468,6 +468,12 @@ public:
       return mPresenceDb;
     if (key == "enabled")
       return mEnabled ? 1.0 : 0.0;
+    if (key == "autoLevelOutput")
+      return mAutoLevelOutput ? 1.0 : 0.0;
+    if (key == "clampAutoGain")
+      return mClampAutoGain ? 1.0 : 0.0;
+    if (key == "useNamInputMetadata")
+      return mUseNamInputMetadata ? 1.0 : 0.0;
     return 0.0;
   }
 
@@ -604,7 +610,7 @@ private:
   double mMix = 1.0;
   bool mAutoLevelInput = false;
   bool mAutoLevelOutput = true;
-  bool mUseNamInputMetadata = false;
+  bool mUseNamInputMetadata = true;
   bool mClampAutoGain = true;
   std::optional<double> mModelInputLevel;
   std::optional<double> mModelOutputLevel;
@@ -874,9 +880,7 @@ inline void RegisterOptimizedNAMAmpEffect()
     {"treble",                "Treble",             0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"presence",              "Presence",           0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB",  "Level"},
-    {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
-    {"autoLevelOutput",       "Auto Level Output",  1.0,    0.0,   1.0,  "toggle", "Advanced", true},
-    {"clampAutoGain",         "Clamp Auto Gain",    1.0,    0.0,   1.0,  "toggle", "Advanced", true}
+    {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()
