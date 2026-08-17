@@ -284,36 +284,61 @@ std::vector<juce::String> PluginProcessorAdapter::getAutomationParameterIds() co
 void PluginProcessorAdapter::registerAutomationParameters()
 {
     // Register one JUCE parameter per automation slot.
-    // Default slots are always present; custom slots that don't exist yet
-    // are reserved with placeholder IDs so DAW project state stays stable
-    // when the user adds custom slots later.
+    //
+    // Parameter *order* is load-bearing. AutomationSlotParameter derives from
+    // juce::AudioProcessorParameter rather than AudioProcessorParameterWithID, so
+    // JUCE derives the VST3 ParamID from the parameter index (see
+    // LegacyAudioParameter::getParamID). Any change to the ordering silently
+    // rebinds automation in DAW projects that were saved with the old layout.
+    //
+    // The layout is therefore append-only:
+    //   [0]                        the original default slots, in their shipped order
+    //   [..]                       custom slots, padded with reserved placeholders
+    //                              up to kMaxCustomSlots
+    //   [after the reserved block] default slots added after the layout shipped
+    //
+    // Default slots added later go *after* the reserved block rather than at the
+    // end of the defaults, because inserting them there would push every custom
+    // slot down and break existing projects.
     const auto slotIds = mController.GetAutomationSlotIds();
 
-    int paramIndex = 0;
+    std::vector<std::string> defaultSlotIds;
+    std::vector<std::string> customSlotIds;
     for (const auto& slotId : slotIds)
     {
+        if (slotId.rfind("default.", 0) == 0)
+            defaultSlotIds.push_back(slotId);
+        else
+            customSlotIds.push_back(slotId);
+    }
+
+    int paramIndex = 0;
+    const auto addSlotParameter = [&](const juce::String& id, const juce::String& label) {
+        addParameter(new AutomationSlotParameter(*this, paramIndex, id, label));
+        ++paramIndex;
+    };
+    const auto addSlot = [&](const std::string& slotId) {
         const auto* slot = mController.GetAutomationSlots().FindSlot(slotId);
-        juce::String label = slot ? juce::String(slot->label) : juce::String(slotId);
+        addSlotParameter(juce::String(slotId),
+                         slot ? juce::String(slot->label) : juce::String(slotId));
+    };
 
-        addParameter(new AutomationSlotParameter(*this, paramIndex,
-                     juce::String(slotId), label));
-        ++paramIndex;
-    }
+    const int stableDefaultCount = std::min(guitarfx::kLayoutStableDefaultSlots,
+                                            static_cast<int>(defaultSlotIds.size()));
 
-    // Reserve placeholder parameters for unused custom slots so DAW project
-    // state remains stable when the user adds custom slots later.
-    const int reservedCustomSlots = guitarfx::kMaxCustomSlots;
-    const int existingCustomCount = static_cast<int>(slotIds.size()) -
-        static_cast<int>(std::count_if(slotIds.begin(), slotIds.end(),
-            [](const std::string& id) { return id.find("default.") == 0; }));
+    for (int i = 0; i < stableDefaultCount; ++i)
+        addSlot(defaultSlotIds[static_cast<std::size_t>(i)]);
 
-    for (int i = existingCustomCount; i < reservedCustomSlots; ++i)
-    {
-        juce::String placeholderId = "custom._reserved_" + juce::String(i);
-        addParameter(new AutomationSlotParameter(*this, paramIndex,
-                     placeholderId, "Reserved " + juce::String(i)));
-        ++paramIndex;
-    }
+    for (const auto& slotId : customSlotIds)
+        addSlot(slotId);
+
+    // Reserve placeholders for unused custom slots so adding a custom slot later
+    // doesn't shift anything either.
+    for (int i = static_cast<int>(customSlotIds.size()); i < guitarfx::kMaxCustomSlots; ++i)
+        addSlotParameter("custom._reserved_" + juce::String(i), "Reserved " + juce::String(i));
+
+    for (std::size_t i = static_cast<std::size_t>(stableDefaultCount); i < defaultSlotIds.size(); ++i)
+        addSlot(defaultSlotIds[i]);
 }
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()

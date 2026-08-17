@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -136,6 +137,21 @@ inline constexpr DefaultSlotDef kDefaultSlots[] = {
 
 /// Maximum number of custom slots (reserved in the DAW parameter layout).
 inline constexpr int kMaxCustomSlots = 16;
+
+/// Number of entries at the front of kDefaultSlots that belong to the DAW
+/// parameter layout as originally shipped.
+///
+/// Never change this value, and only ever append to kDefaultSlots. The VST3
+/// ParamID of a slot is derived from its parameter index, so anything inserted
+/// before the custom-slot block rebinds automation in existing DAW projects.
+/// Entries past this index are registered after the reserved custom slots
+/// instead — see PluginProcessorAdapter::registerAutomationParameters.
+inline constexpr int kLayoutStableDefaultSlots = 13;
+
+static_assert(std::size(kDefaultSlots) >= static_cast<std::size_t>(kLayoutStableDefaultSlots),
+              "kDefaultSlots must not shrink below the shipped DAW parameter layout: "
+              "removing an entry shifts every custom slot and rebinds automation in "
+              "existing DAW projects.");
 
 /// Number of setlist preset slots per bank (also the number of DAW parameters).
 inline constexpr int kSetlistPresetsPerBank = 8;
