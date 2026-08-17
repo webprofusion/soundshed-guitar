@@ -30,6 +30,8 @@ const presetChooserLabel = document.getElementById("preset-chooser-label") as HT
 const presetFavoriteToggle = document.getElementById("preset-favorite");
 const prevPresetBtn = document.getElementById("prev-preset");
 const nextPresetBtn = document.getElementById("next-preset");
+const presetUndoBtn = document.getElementById("preset-undo") as HTMLButtonElement | null;
+const presetRedoBtn = document.getElementById("preset-redo") as HTMLButtonElement | null;
 const randomPresetBtn = document.getElementById("preset-random-btn");
 const presetPublishBtn = document.getElementById("preset-publish-btn") as HTMLButtonElement | null;
 const presetExtraActionsBtn = document.getElementById("preset-extra-actions-btn") as HTMLButtonElement | null;
@@ -2079,11 +2081,80 @@ export async function applyPresetFromLibrary(presetId: string): Promise<void> {
       preset: presetPayload,
       ...(sceneId ? { sceneId } : {}),
     });
+    recordPresetInHistory(presetPayload.id);
   } catch (error) {
     uiState.presetLoadingId = null;
     console.error("Failed to apply preset", error);
     showNotification("Failed to apply preset", error instanceof Error ? error.message : "Unknown error");
   }
+}
+
+// ── Preset navigation history ────────────────────────────────────────────────
+// Tracks which presets were loaded, so the user can step back to the one they
+// were just on after auditioning something else. Only preset IDs are held, so a
+// deep history costs nothing; the cap keeps it to a useful working window rather
+// than a full session log. This is navigation history, not an edit undo stack —
+// it does not restore unsaved parameter tweaks.
+
+const presetHistory: string[] = [];
+let presetHistoryIndex = -1;
+let replayingPresetHistory = false;
+const MAX_PRESET_HISTORY = 10;
+
+function recordPresetInHistory(presetId: string): void {
+  // Undo/redo re-apply presets through the same path; those must move the cursor,
+  // not rewrite the history they are walking.
+  if (replayingPresetHistory) {
+    return;
+  }
+  if (presetHistory[presetHistoryIndex] === presetId) {
+    return;
+  }
+
+  // Branching from a past entry drops the forward steps that are no longer reachable.
+  presetHistory.length = presetHistoryIndex + 1;
+  presetHistory.push(presetId);
+  if (presetHistory.length > MAX_PRESET_HISTORY) {
+    presetHistory.shift(); // oldest falls off; cursor still points at the newest
+  } else {
+    presetHistoryIndex++;
+  }
+  updatePresetHistoryButtons();
+}
+
+function updatePresetHistoryButtons(): void {
+  if (presetUndoBtn) {
+    presetUndoBtn.disabled = presetHistoryIndex <= 0;
+  }
+  if (presetRedoBtn) {
+    presetRedoBtn.disabled = presetHistoryIndex >= presetHistory.length - 1;
+  }
+}
+
+async function stepPresetHistory(offset: -1 | 1): Promise<void> {
+  const targetIndex = presetHistoryIndex + offset;
+  if (targetIndex < 0 || targetIndex >= presetHistory.length) {
+    return;
+  }
+  const targetId = presetHistory[targetIndex];
+  if (!targetId) {
+    return;
+  }
+
+  replayingPresetHistory = true;
+  try {
+    await applyPresetFromLibrary(targetId);
+  } finally {
+    replayingPresetHistory = false;
+  }
+
+  // Only advance the cursor once the load actually succeeded — applyPresetFromLibrary
+  // swallows failures and can also be cancelled by the unsaved-changes prompt.
+  if (uiState.activePresetId === targetId) {
+    presetHistoryIndex = targetIndex;
+  }
+  updatePresetHistoryButtons();
+  updatePresetDropdownSelection();
 }
 
 export function cachePresetInMemory(preset: Preset): void {
@@ -2146,6 +2217,7 @@ export async function initializePresets(): Promise<void> {
   postMessage({ type: "getPresetFavorites" });
   postMessage({ type: "getPresetRatings" });
   postMessage({ type: "getSetlists" });
+  postMessage({ type: "getEffectPresets" });
 
   ensurePresetFolders(false);  // Don't persist — backend response will arrive with saved data
   ensureSetlists();
@@ -2304,6 +2376,14 @@ export function initializePresetControls(): void {
       await selectNextPreset();
     });
   }
+
+  presetUndoBtn?.addEventListener("click", () => {
+    void stepPresetHistory(-1);
+  });
+
+  presetRedoBtn?.addEventListener("click", () => {
+    void stepPresetHistory(1);
+  });
 
   if (randomPresetBtn) {
     randomPresetBtn.addEventListener("click", async () => {

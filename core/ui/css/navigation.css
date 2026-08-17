@@ -734,6 +734,14 @@
   font-size: 13px;
 }
 
+/* Preset history (back/forward through recently loaded presets). Disabled at the
+   ends of the history rather than hidden, so the row's layout stays stable. */
+.preset-history-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
 .preset-group .tone-sharing-preview-indicator {
   flex: 1 1 100%;
   width: 100%;
