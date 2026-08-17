@@ -6,7 +6,7 @@
  *  - MIDI Log: real-time diagnostic log of incoming MIDI events
  */
 
-import { postMessage } from "./bridge.js";
+import { postMessage, setAppSetting } from "./bridge.js";
 import { uiState } from "./state.js";
 import type { AutomationSlot, AutomationRegistryEntry } from "./types.js";
 import { EffectTypeRegistry } from "./presetV2.js";
@@ -19,6 +19,32 @@ let editingSlotId: string | null = null;
 let midiLogEnabled = false;
 const midiLogEntries: { time: string; type: string; data: string }[] = [];
 const MAX_LOG_ENTRIES = 500;
+
+/** `event.key` for the spacebar. */
+const SPACEBAR_KEY = " ";
+const CAPTURE_SPACEBAR_SETTING = "automation.captureSpacebar";
+
+/**
+ * Keys are compared case-insensitively for printable characters, and verbatim
+ * for named keys ("ArrowUp", "Escape", …) where case is meaningful.
+ */
+function normalizeMappedKey(key: string): string {
+  return key.length === 1 ? key.toLowerCase() : key;
+}
+
+/**
+ * Whether a Space mapping is allowed to fire. Off by default: Space is the
+ * transport key in every DAW, and a plugin update that silently stopped play/stop
+ * from working would be far worse than a mapping the user has to switch on.
+ */
+export function isSpacebarCaptureEnabled(): boolean {
+  return uiState.appSettings?.[CAPTURE_SPACEBAR_SETTING] === true;
+}
+
+function setSpacebarCaptureEnabled(enabled: boolean): void {
+  uiState.appSettings[CAPTURE_SPACEBAR_SETTING] = enabled;
+  setAppSetting(CAPTURE_SPACEBAR_SETTING, enabled);
+}
 
 export interface AutomationState {
   slots: AutomationSlot[];
@@ -94,6 +120,10 @@ function openMidiModal(): void {
   // Sync backend MIDI-log forwarding with the current toggle state.
   postMessage({ type: "setMidiLogEnabled", enabled: midiLogEnabled });
   requestAutomationState();
+  const spacebarToggle = document.getElementById("automation-capture-spacebar") as HTMLInputElement | null;
+  if (spacebarToggle) {
+    spacebarToggle.checked = isSpacebarCaptureEnabled();
+  }
   renderKeyboardPanel();
   // Steal focus so keyboard events aren't consumed by buttons/inputs
   if (document.activeElement instanceof HTMLElement) {
@@ -143,6 +173,14 @@ function wireTabs(): void {
       midiLogEnabled = (logToggle as HTMLInputElement).checked;
       postMessage({ type: "setMidiLogEnabled", enabled: midiLogEnabled });
       renderMidiLog();
+    });
+  }
+
+  const spacebarToggle = document.getElementById("automation-capture-spacebar") as HTMLInputElement | null;
+  if (spacebarToggle) {
+    spacebarToggle.addEventListener("change", () => {
+      setSpacebarCaptureEnabled(spacebarToggle.checked);
+      renderKeyboardPanel(); // refresh the "mapped to Space but inert" hint
     });
   }
 
@@ -483,6 +521,11 @@ function escapeHtml(s: string): string {
 
 // ── Keyboard mapping tab ───────────────────────────────────────────────────
 
+/** Space would otherwise render as an invisible blank in the mapping list. */
+function describeMappedKey(key: string): string {
+  return key === SPACEBAR_KEY ? "Space" : key;
+}
+
 function renderKeyboardPanel(): void {
   const container = document.getElementById("keyboard-slots-list");
   if (!container) return;
@@ -493,7 +536,14 @@ function renderKeyboardPanel(): void {
     return;
   }
 
-  let html = "";
+  // A Space mapping does nothing while capture is off, and the failure is silent.
+  // Say so rather than letting the user conclude the mapping is broken.
+  const hasInertSpaceMapping = !isSpacebarCaptureEnabled()
+    && state.slots.some((slot) => slot.keyMap?.some((k) => normalizeMappedKey(k.key) === SPACEBAR_KEY));
+
+  let html = hasInertSpaceMapping
+    ? `<p class="midi-help">A slot is mapped to Space, which is currently passed through to the host. Enable "Capture spacebar" above for it to fire.</p>`
+    : "";
 
   for (const slot of state.slots) {
     const isKeyLearn = pendingKeyLearnSlotId === slot.slotId;
@@ -502,7 +552,7 @@ function renderKeyboardPanel(): void {
     if (slot.keyMap && slot.keyMap.length > 0) {
       keyText = slot.keyMap.map((k) => {
         const mode = k.mode === 0 ? "trig" : `=${k.value.toFixed(2)}`;
-        return `${k.key}(${mode})`;
+        return `${describeMappedKey(k.key)}(${mode})`;
       }).join(", ");
     }
 
@@ -583,19 +633,21 @@ function renderMidiLog(): void {
   output.innerHTML = html;
 }
 
-// ── Keyboard handling (global, active when modal is open) ─────────────────
+// ── Keyboard handling ─────────────────────────────────────────────────────
+// Mapped keys fire wherever the UI has focus. Key *learn* is confined to the
+// MIDI panel, since that is the only place a keystroke should be swallowed to
+// assign it rather than acted on.
 
 document.addEventListener("keydown", (event: KeyboardEvent) => {
   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   if (isTextEntryElement(active)) return;
 
-  // Only handle when the MIDI modal is open
   const modal = document.getElementById("midi-modal");
-  if (!modal || modal.style.display !== "flex") return;
+  const isMidiPanelOpen = modal?.style.display === "flex";
 
   // Keyboard learn capture — intercept the next key and assign it to the slot
-  if (pendingKeyLearnSlotId) {
-    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (isMidiPanelOpen && pendingKeyLearnSlotId) {
+    const key = normalizeMappedKey(event.key);
     const state = uiState.automation;
     if (!state) return;
     const slot = state.slots.find((s) => s.slotId === pendingKeyLearnSlotId);
@@ -606,7 +658,10 @@ document.addEventListener("keydown", (event: KeyboardEvent) => {
 
     // Build new keyMap array: replace any existing mapping for this key, add new entry.
     // Default to Trigger mode (mode=0) for trigger addresses, SetValue (mode=1) for continuous.
-    const isTrigger = slot.address.includes("bankUp") || slot.address.includes("bankDown") || /setlist\.preset\d+$/.test(slot.address);
+    const isTrigger = slot.address.includes("bankUp")
+      || slot.address.includes("bankDown")
+      || /setlist\.preset\d+$/.test(slot.address)
+      || /scene\.select\d+$/.test(slot.address);
     const mode = isTrigger ? 0 : 1;
     const value = isTrigger ? 1.0 : 0.5;
     const newKeyMap = (slot.keyMap ?? []).filter((k) => k.key !== key);
@@ -621,12 +676,17 @@ document.addEventListener("keydown", (event: KeyboardEvent) => {
   const state = uiState.automation;
   if (!state) return;
 
+  const pressedKey = normalizeMappedKey(event.key);
+
+  // Space is the transport key in every DAW, so claiming it is opt-in. Left off,
+  // a Space mapping stays configured but inert and the keystroke is passed on
+  // untouched rather than being swallowed here.
+  if (pressedKey === SPACEBAR_KEY && !isSpacebarCaptureEnabled()) return;
+
   for (const slot of state.slots) {
     if (!slot.keyMap) continue;
     for (const km of slot.keyMap) {
-      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-      const mappedKey = km.key.length === 1 ? km.key.toLowerCase() : km.key;
-      if (key !== mappedKey) continue;
+      if (pressedKey !== normalizeMappedKey(km.key)) continue;
 
       if (km.mode === 0 && event.repeat) continue;
 
