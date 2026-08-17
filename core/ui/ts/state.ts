@@ -180,6 +180,7 @@ export const uiState: UiState = {
   presetFavorites: new Set<string>(),
   presetRatings: {},
   setlists: [],
+  effectPresets: {},
   activeSetlistId: null,
   setlistCursorIndex: 0,
   presetArchiveSession: null,

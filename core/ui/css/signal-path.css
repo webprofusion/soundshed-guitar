@@ -2905,6 +2905,87 @@ body.signal-path-resizing * {
   cursor: pointer;
 }
 
+/* Per-effect user presets (saved parameter snapshots for one effect type). */
+.effect-preset-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.effect-preset-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.effect-preset-bar .effect-preset-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 280px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.effect-preset-bar .effect-preset-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.effect-preset-bar .effect-preset-save,
+.effect-preset-bar .effect-preset-delete {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.effect-preset-bar .effect-preset-save:hover,
+.effect-preset-bar .effect-preset-delete:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.effect-preset-bar .effect-preset-select:disabled,
+.effect-preset-bar .effect-preset-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.effect-preset-bar .effect-preset-select:focus-visible,
+.effect-preset-bar .effect-preset-save:focus-visible,
+.effect-preset-bar .effect-preset-delete:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .graphic-eq-reset-btn {
   flex: 0 0 auto;
   padding: 6px 12px;

@@ -324,6 +324,10 @@ private:
     void HandleGetPresetRatingsRequest();
     void HandleSetPresetRatingsRequest(const nlohmann::json& payload);
     void HandleGetSetlistsRequest();
+    void HandleGetEffectPresetsRequest();
+    void HandleSaveEffectPresetRequest(const nlohmann::json& payload);
+    void HandleDeleteEffectPresetRequest(const nlohmann::json& payload);
+    void BroadcastEffectPresets();
     void HandleSetSetlistsRequest(const nlohmann::json& payload);
 
     // Automation & MIDI mapping (handler methods — called by MessageDispatcher)

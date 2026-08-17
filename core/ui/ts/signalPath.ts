@@ -10,6 +10,7 @@ import type {
   BlendModelMapping,
   BlendMode,
   CustomEffectLibraryEntry,
+  StoredEffectPreset,
 } from "./types.js";
 import { postMessage, setAppSetting, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset, focusMixerPreset } from "./bridge.js";
 import { requestResourceData } from "./archiveUtils.js";
@@ -4857,8 +4858,24 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     `;
   })();
 
+  // User presets only. Factory presets keep their existing per-effect surfaces
+  // (e.g. Graphic EQ's Profile dropdown), so this bar never duplicates them.
+  const userPresets = getUserEffectPresets(node.type);
+  const effectPresetBarHtml = paramDefs.length > 0 ? `
+    <div class="effect-preset-bar" data-effect-type="${escapeHtml(node.type)}">
+      <label class="effect-preset-label" for="effect-preset-select">My presets</label>
+      <select class="effect-preset-select" id="effect-preset-select" title="Load one of your saved settings for this effect"${userPresets.length === 0 ? " disabled" : ""}>
+        <option value="">${userPresets.length === 0 ? "None saved yet" : "Select…"}</option>
+        ${userPresets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.name)}</option>`).join("")}
+      </select>
+      <input class="effect-preset-name" type="text" placeholder="New preset name" aria-label="Name for the saved effect preset" />
+      <button class="effect-preset-save" type="button" title="Save the current settings of this effect">Save</button>
+      <button class="effect-preset-delete" type="button" title="Delete the selected saved setting" disabled>Delete</button>
+    </div>
+  ` : "";
+
   nodeParamsPanelElement.innerHTML = `
-    
+
     <div class="node-params-body">
       <section class="default-effect-shell${isNeuralModel ? " neural-model-effect" : ""}${isNodeBypassed(node) ? " is-bypassed" : ""}${hasCustomLayoutPresentation ? " has-custom-layout" : ""}">
         <div class="default-effect-shell-header">
@@ -4906,6 +4923,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           </div>
         </div>
       </section>
+      ${effectPresetBarHtml}
     </div>
   `;
 
@@ -4918,6 +4936,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   // Bind controls
   bindNodeParamControls(node, preset);
+  bindEffectPresetBar(node, preset);
   bindGraphicEqControls(node, preset);
   bindLayoutOverlayBypassToggles(node, preset);
   bindResourceControls(node, preset);
@@ -5604,6 +5623,90 @@ export function applySpatialPositionUpdate(
     itdUs: num(match.itdUs, 0),
     ildDb: num(match.ildDb, 0),
     moving: match.moving === true,
+  });
+}
+
+// ─── Per-effect user presets ─────────────────────────────────────────────────
+// Saved parameter snapshots scoped to an effect type, persisted by the backend in
+// effect-presets.json and mirrored into uiState. Factory presets are unaffected:
+// they live in the effect registry and keep their existing per-effect surfaces.
+
+function getUserEffectPresets(effectType: string): StoredEffectPreset[] {
+  return uiState.effectPresets?.[effectType] ?? [];
+}
+
+function applyUserEffectPreset(node: GraphNode, preset: Preset, parameters: Record<string, number>): void {
+  // Only apply keys the effect actually declares: a snapshot saved before a
+  // parameter was renamed or removed must not inject dead keys into the node.
+  const known = new Set((getNodeEffectInfo(node)?.parameters ?? []).map((def) => def.key));
+  for (const [key, value] of Object.entries(parameters)) {
+    if (!known.has(key) || typeof value !== "number" || !Number.isFinite(value)) {
+      continue;
+    }
+    node.params[key] = value;
+    sendSignalPathNodeParamUpdate(node.id, key, value);
+  }
+  // Re-render so knobs, toggles and the EQ/spatial visualisations reflect the load.
+  showNodeParamsPanel(node, preset);
+}
+
+function bindEffectPresetBar(node: GraphNode, preset: Preset): void {
+  const bar = nodeParamsPanelElement?.querySelector(".effect-preset-bar");
+  if (!bar) return;
+
+  const selectEl = bar.querySelector<HTMLSelectElement>(".effect-preset-select");
+  const nameEl = bar.querySelector<HTMLInputElement>(".effect-preset-name");
+  const saveBtn = bar.querySelector<HTMLButtonElement>(".effect-preset-save");
+  const deleteBtn = bar.querySelector<HTMLButtonElement>(".effect-preset-delete");
+  if (!selectEl || !nameEl || !saveBtn || !deleteBtn) return;
+
+  const effectType = node.type;
+
+  selectEl.addEventListener("change", () => {
+    deleteBtn.disabled = !selectEl.value;
+    const entry = getUserEffectPresets(effectType).find((candidate) => candidate.id === selectEl.value);
+    if (entry) {
+      applyUserEffectPreset(node, preset, entry.parameters);
+    }
+  });
+
+  const saveCurrentSettings = async (): Promise<void> => {
+    const name = nameEl.value.trim();
+    if (!name) {
+      nameEl.focus();
+      showNotification("Name required", "Enter a name for this effect preset.");
+      return;
+    }
+
+    if (getUserEffectPresets(effectType).some((candidate) => candidate.name === name)) {
+      const confirmed = await showConfirm(`Replace the saved settings named "${name}"?`, "Overwrite preset");
+      if (!confirmed) return;
+    }
+
+    // The backend owns the store and re-broadcasts, which re-renders this panel.
+    postMessage({ type: "saveEffectPreset", effectType, name, parameters: { ...node.params } });
+    showNotification("Effect preset saved", name);
+  };
+
+  saveBtn.addEventListener("click", () => {
+    void saveCurrentSettings();
+  });
+
+  nameEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveCurrentSettings();
+    }
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    const entry = getUserEffectPresets(effectType).find((candidate) => candidate.id === selectEl.value);
+    if (!entry) return;
+    const confirmed = await showConfirm(`Delete the saved settings named "${entry.name}"?`, "Delete preset");
+    if (!confirmed) return;
+
+    postMessage({ type: "deleteEffectPreset", effectType, presetId: entry.id });
+    showNotification("Effect preset deleted", entry.name);
   });
 }
 

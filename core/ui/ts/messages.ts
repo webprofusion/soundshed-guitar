@@ -17,7 +17,7 @@ import { applyAutomationState, handleMidiLogEntry, handleMidiLearnCapture } from
 import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport, handleToneSharingDeepLink } from "./toneSharingPanel.js";
 import { applyJamAppSettings } from "./jam.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
-import type { CompositePreset, GlobalSignalChainConfig, InputAnalyzerTelemetry, LibraryResource, Preset, PresetFolder, ResourceRef, Setlist, SignalDiagnosticsAnalyzerFrame, SignalDiagnosticsFrame, SignalDiagnosticsRoster, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, UiSettings } from "./types.js";
+import type { CompositePreset, GlobalSignalChainConfig, InputAnalyzerTelemetry, LibraryResource, Preset, PresetFolder, ResourceRef, Setlist, SignalDiagnosticsAnalyzerFrame, SignalDiagnosticsFrame, SignalDiagnosticsRoster, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, StoredEffectPreset, UiSettings } from "./types.js";
 import { SIGNAL_DIAGNOSTICS_TUPLE_LENGTH } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
 import { migratePresetNodeTypes, setNodeParam } from "./presetV2.js";
@@ -1462,6 +1462,14 @@ export function handleIncomingMessage(message: string): void {
       const setlistsPayload = payload as { setlists?: Setlist[]; activeSetlistId?: string | null };
       applySetlistsFromBackend(setlistsPayload.setlists ?? [], setlistsPayload.activeSetlistId ?? null);
       refreshPerformancePads();
+      break;
+    }
+    case "effectPresets": {
+      const effectPresetsPayload = payload as { byEffectType?: Record<string, StoredEffectPreset[]> };
+      uiState.effectPresets = effectPresetsPayload.byEffectType ?? {};
+      // The backend re-broadcasts after each save/delete, so an open params panel
+      // needs to pick up the new list.
+      refreshSelectedNodeParams();
       break;
     }
     case "setlistCursorChanged": {

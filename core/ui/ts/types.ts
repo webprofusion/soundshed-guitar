@@ -95,6 +95,18 @@ export interface SetlistSlot {
   presetId: string;
 }
 
+/**
+ * A user-saved parameter snapshot for one effect type. The factory equivalent is
+ * EffectPresetDefinition on EffectTypeInfo (source: "factory"); these are the
+ * "custom" half of the same idea, persisted in UI storage so they are available
+ * to every preset rather than baked into one.
+ */
+export interface StoredEffectPreset {
+  id: string;
+  name: string;
+  parameters: Record<string, number>;
+}
+
 export interface Setlist {
   id: string;
   name: string;
@@ -618,6 +630,8 @@ export interface UiState {
   setlists?: Setlist[];
   activeSetlistId?: string | null;
   setlistCursorIndex?: number;
+  /** User-saved per-effect parameter snapshots, keyed by effect type. */
+  effectPresets?: Record<string, StoredEffectPreset[]>;
   presetArchiveSession?: PresetArchiveSessionState | null;
   parameters: ParametersState;
   signalTest: SignalTestResult | null;

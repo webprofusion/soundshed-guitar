@@ -106,6 +106,21 @@ bool MessageDispatcher::DispatchStateAndLists(PluginController& c,
         c.ApplySetlistPresetByIndex(cursorIndex);
         return true;
     }
+    if (type == "getEffectPresets")
+    {
+        c.HandleGetEffectPresetsRequest();
+        return true;
+    }
+    if (type == "saveEffectPreset")
+    {
+        c.HandleSaveEffectPresetRequest(msg);
+        return true;
+    }
+    if (type == "deleteEffectPreset")
+    {
+        c.HandleDeleteEffectPresetRequest(msg);
+        return true;
+    }
     if (type == "getTheme")
     {
         c.HandleGetThemeRequest();
