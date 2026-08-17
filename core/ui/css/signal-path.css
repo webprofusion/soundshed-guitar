@@ -2905,6 +2905,30 @@ body.signal-path-resizing * {
   cursor: pointer;
 }
 
+.graphic-eq-reset-btn {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.graphic-eq-reset-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.graphic-eq-reset-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .graphic-eq-bands {
   position: relative;
   z-index: 1;

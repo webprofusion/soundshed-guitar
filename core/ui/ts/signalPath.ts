@@ -4159,6 +4159,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
             ${(getNodeEffectInfo(node)?.presets ?? []).map((preset, index) => `<option value="${escapeHtml(preset.id)}" ${preset.parameters.preset === (node.params.preset ?? 0) || (index === 0 && node.params.preset === undefined) ? "selected" : ""}>${escapeHtml(preset.name)}</option>`).join("")}
           </select>
         </label>
+        <button type="button" class="graphic-eq-reset-btn" title="Reset all band gains to 0 dB">Reset</button>
       </div>
       <div class="graphic-eq-bands">
         ${GRAPHIC_EQ_FREQUENCIES.map((defaultFreq, index) => {
@@ -5635,6 +5636,19 @@ function bindGraphicEqControls(node: GraphNode, preset: Preset): void {  if (Eff
       }
       applyParams(orderedParameters, true);
     }
+  });
+
+  // Reset flattens the curve: every band gain back to 0 dB. The selected profile's
+  // band count, frequencies and Q values are deliberately left alone — this resets
+  // the curve the user drew, not the profile they chose.
+  const resetButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".graphic-eq-reset-btn");
+  resetButton?.addEventListener("click", () => {
+    const bandCount = node.params.bandCount ?? GRAPHIC_EQ_FREQUENCIES.length;
+    const flatParams: Record<string, number> = {};
+    for (let band = 1; band <= bandCount; band++) {
+      flatParams[`band${band}Gain`] = 0;
+    }
+    applyParams(flatParams, true);
   });
 
   nodeParamsPanelElement?.querySelectorAll<HTMLInputElement>(".graphic-eq-gain, .graphic-eq-gain-value-input, .graphic-eq-frequency").forEach((input) => {

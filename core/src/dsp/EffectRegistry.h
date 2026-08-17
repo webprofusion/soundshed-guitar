@@ -43,6 +43,11 @@ namespace guitarfx
     std::string id;
     std::string displayName;
     bool isFactory = true;
+    /// Applied to freshly added nodes of this effect type. When no preset is
+    /// marked, the first factory preset is used. Lets an effect ship a neutral
+    /// starting point without reordering its preset list, which would remap the
+    /// enum indices that existing saved presets already reference.
+    bool isDefault = false;
     std::map<std::string, double> parameters;
     std::vector<std::string> parameterOrder;
   };

@@ -301,6 +301,13 @@ namespace guitarfx
          1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
     };
+    // A freshly added Graphic EQ starts flat, so inserting one is audibly neutral
+    // until the user moves a fader. "General Purpose · 5 Band" is the flat profile;
+    // marking it default avoids reordering the list, which would remap the "preset"
+    // enum indices that already-saved presets reference.
+    for (auto& preset : info.presets)
+      preset.isDefault = (preset.id == "general-5");
+
     std::vector<std::string> profileLabels;
     profileLabels.reserve(info.presets.size());
     for (const auto& preset : info.presets)

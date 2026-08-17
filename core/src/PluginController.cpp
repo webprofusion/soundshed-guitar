@@ -6231,10 +6231,19 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
         newNode.label = effectInfoOpt->displayName;
         for (const auto& p : effectInfoOpt->parameters)
             newNode.params[p.id] = p.defaultValue;
-        const auto factoryPreset = std::find_if(
+        // Prefer the preset the effect nominates as its starting point; fall back
+        // to the first factory preset for effects that don't mark one.
+        auto factoryPreset = std::find_if(
             effectInfoOpt->presets.begin(),
             effectInfoOpt->presets.end(),
-            [](const EffectPresetDefinition& preset) { return preset.isFactory; });
+            [](const EffectPresetDefinition& preset) { return preset.isFactory && preset.isDefault; });
+        if (factoryPreset == effectInfoOpt->presets.end())
+        {
+            factoryPreset = std::find_if(
+                effectInfoOpt->presets.begin(),
+                effectInfoOpt->presets.end(),
+                [](const EffectPresetDefinition& preset) { return preset.isFactory; });
+        }
         if (factoryPreset != effectInfoOpt->presets.end())
         {
             for (const auto& [key, value] : factoryPreset->parameters)
