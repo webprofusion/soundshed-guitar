@@ -4860,9 +4860,15 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   // User presets only. Factory presets keep their existing per-effect surfaces
   // (e.g. Graphic EQ's Profile dropdown), so this bar never duplicates them.
-  const userPresets = getUserEffectPresets(node.type);
-  const effectPresetBarHtml = paramDefs.length > 0 ? `
-    <div class="effect-preset-bar" data-effect-type="${escapeHtml(node.type)}">
+  //
+  // Gate on the parameters the registry declares, not on paramDefs: effects that
+  // render their own controls (Graphic EQ) blank paramDefs for presentation and
+  // would otherwise be denied a preset bar despite having plenty to save.
+  const hasSavableParams = (typeInfo?.parameters?.length ?? 0) > 0;
+  const presetEffectType = effectPresetStorageKey(node);
+  const userPresets = getUserEffectPresets(node);
+  const effectPresetBarHtml = hasSavableParams ? `
+    <div class="effect-preset-bar" data-effect-type="${escapeHtml(presetEffectType)}">
       <label class="effect-preset-label" for="effect-preset-select">My presets</label>
       <select class="effect-preset-select" id="effect-preset-select" title="Load one of your saved settings for this effect"${userPresets.length === 0 ? " disabled" : ""}>
         <option value="">${userPresets.length === 0 ? "None saved yet" : "Select…"}</option>
@@ -5631,8 +5637,17 @@ export function applySpatialPositionUpdate(
 // effect-presets.json and mirrored into uiState. Factory presets are unaffected:
 // they live in the effect registry and keep their existing per-effect surfaces.
 
-function getUserEffectPresets(effectType: string): StoredEffectPreset[] {
-  return uiState.effectPresets?.[effectType] ?? [];
+/**
+ * Storage key for a node's user presets. Resolved to the canonical effect type so
+ * a node still carrying a legacy alias (e.g. "eq_graphic") shares one bucket with
+ * nodes using the GUID, instead of quietly splitting the user's saved presets.
+ */
+function effectPresetStorageKey(node: GraphNode): string {
+  return EffectTypeRegistry.resolve(node.type) || node.type;
+}
+
+function getUserEffectPresets(node: GraphNode): StoredEffectPreset[] {
+  return uiState.effectPresets?.[effectPresetStorageKey(node)] ?? [];
 }
 
 function applyUserEffectPreset(node: GraphNode, preset: Preset, parameters: Record<string, number>): void {
@@ -5660,11 +5675,11 @@ function bindEffectPresetBar(node: GraphNode, preset: Preset): void {
   const deleteBtn = bar.querySelector<HTMLButtonElement>(".effect-preset-delete");
   if (!selectEl || !nameEl || !saveBtn || !deleteBtn) return;
 
-  const effectType = node.type;
+  const effectType = effectPresetStorageKey(node);
 
   selectEl.addEventListener("change", () => {
     deleteBtn.disabled = !selectEl.value;
-    const entry = getUserEffectPresets(effectType).find((candidate) => candidate.id === selectEl.value);
+    const entry = getUserEffectPresets(node).find((candidate) => candidate.id === selectEl.value);
     if (entry) {
       applyUserEffectPreset(node, preset, entry.parameters);
     }
@@ -5678,7 +5693,7 @@ function bindEffectPresetBar(node: GraphNode, preset: Preset): void {
       return;
     }
 
-    if (getUserEffectPresets(effectType).some((candidate) => candidate.name === name)) {
+    if (getUserEffectPresets(node).some((candidate) => candidate.name === name)) {
       const confirmed = await showConfirm(`Replace the saved settings named "${name}"?`, "Overwrite preset");
       if (!confirmed) return;
     }
@@ -5700,7 +5715,7 @@ function bindEffectPresetBar(node: GraphNode, preset: Preset): void {
   });
 
   deleteBtn.addEventListener("click", async () => {
-    const entry = getUserEffectPresets(effectType).find((candidate) => candidate.id === selectEl.value);
+    const entry = getUserEffectPresets(node).find((candidate) => candidate.id === selectEl.value);
     if (!entry) return;
     const confirmed = await showConfirm(`Delete the saved settings named "${entry.name}"?`, "Delete preset");
     if (!confirmed) return;

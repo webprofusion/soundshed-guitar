@@ -272,25 +272,29 @@ namespace guitarfx
     info.aliases = {"eq_graphic"};
     info.displayName = "Graphic Equalizer";
     info.category = "eq";
-    info.description = "Profile-owned 5 and 10 band graphic equalizer for Bass, Guitar, and General Purpose";
+    info.description = "Graphic equalizer with flat 5 and 10 band layouts for Bass, Guitar, and General Purpose";
     info.requiresResource = false;
+    // Every profile is flat. A profile chooses the *band layout* — how many bands
+    // and at which centre frequencies and Q — and nothing else, so switching
+    // profiles never imposes a voicing. Curves belong to the user's own saved
+    // effect presets, which sit alongside this dropdown.
     info.presets = {
       MakeGraphicEQFactoryPreset("bass-5", "Bass · 5 Band", 0, 5,
         {55, 120, 300, 900, 3500, 5000, 7000, 9000, 12000, 16000},
         {0.8, 1.0, 1.1, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0},
-        {3, 2, -1, 1, 1, 0, 0, 0, 0, 0}),
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       MakeGraphicEQFactoryPreset("bass-10", "Bass · 10 Band", 1, 10,
         {45, 65, 90, 120, 150, 250, 500, 900, 2000, 5000},
         {2.0, 2.0, 2.0, 2.0, 2.0, 1.2, 1.1, 1.0, 0.9, 0.8},
-        {2, 2, 1, 1, 0, -1, 0, 1, 1, 1}),
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       MakeGraphicEQFactoryPreset("guitar-5", "Guitar · 5 Band", 2, 5,
         {80, 250, 800, 5000, 10000, 12000, 14000, 16000, 18000, 19000},
         {1.0, 1.1, 1.0, 0.9, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0},
-        {3, -2, 2, 1, -2, 0, 0, 0, 0, 0}),
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       MakeGraphicEQFactoryPreset("guitar-10", "Guitar · 10 Band", 3, 10,
         {70, 85, 100, 250, 400, 800, 1000, 3000, 5000, 10000},
         {1.0, 2.0, 1.4, 1.1, 1.1, 1.0, 1.0, 0.9, 0.9, 0.8},
-        {-3, 3, 2, -3, -3, 2, -1, 4, 3, -2}),
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       MakeGraphicEQFactoryPreset("general-5", "General Purpose · 5 Band", 4, 5,
         {60, 250, 1000, 4000, 10000, 12000, 14000, 16000, 18000, 19000},
         {0.9, 1.0, 1.0, 0.9, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0},
@@ -301,10 +305,10 @@ namespace guitarfx
          1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
     };
-    // A freshly added Graphic EQ starts flat, so inserting one is audibly neutral
-    // until the user moves a fader. "General Purpose · 5 Band" is the flat profile;
-    // marking it default avoids reordering the list, which would remap the "preset"
-    // enum indices that already-saved presets reference.
+    // All profiles are flat, so a new Graphic EQ is audibly neutral whichever it
+    // starts on; this only picks which band layout it starts with. Marking rather
+    // than reordering avoids remapping the "preset" enum indices that already-saved
+    // presets reference.
     for (auto& preset : info.presets)
       preset.isDefault = (preset.id == "general-5");
 

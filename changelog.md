@@ -8,6 +8,10 @@
 
 ### Reliability
 * UI storage files (setlists, automation, preset folders/favourites/ratings) are now written atomically, so a crash or power loss mid-write can no longer truncate them.
+### DSP & MIDI
+* Added MIDI/automation slots for direct scene selection (Scene 1–4), so a footswitch can jump straight to a scene. Works with the plugin window closed.
+* Graphic EQ profiles are now purely band layouts: every profile is flat, differing only in how many bands it has and where they sit. Selecting a profile no longer imposes a voicing, and a newly added Graphic EQ starts flat. Save your own curves as effect presets instead.
+* Graphic EQ gained a Reset button that returns every band to 0 dB without changing the selected profile.
 
 ## 1.5.0 (July 25, 2026)
 
