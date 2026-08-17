@@ -42,7 +42,9 @@ public:
                             const std::function<int()>& getSetlistLength,
                             const std::function<int()>& getSetlistBankBase,
                             const std::function<void(int)>& selectSetlistBank,
-                            const std::function<int()>& getSetlistBankNumber);
+                            const std::function<int()>& getSetlistBankNumber,
+                            const std::function<void(int)>& selectSceneByIndex,
+                            const std::function<int()>& getActiveSceneIndex);
 
     /// Load custom slots + default overrides from automation.json JSON.
     void LoadFromJson(const nlohmann::json& json);
@@ -141,6 +143,10 @@ private:
     std::function<int()> mGetSetlistBankBase;
     std::function<void(int)> mSelectSetlistBank;
     std::function<int()> mGetSetlistBankNumber;
+
+    // Callbacks for scene selection within the active preset
+    std::function<void(int)> mSelectSceneByIndex;
+    std::function<int()> mGetActiveSceneIndex;
 
     // MIDI learn state
     std::optional<std::string> mMidiLearnSlotId;

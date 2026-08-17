@@ -101,7 +101,9 @@ void AutomationSlotTable::InitializeRegistry(MultiPresetMixer& mixer,
                                              const std::function<int()>& getSetlistLength,
                                              const std::function<int()>& getSetlistBankBase,
                                              const std::function<void(int)>& selectSetlistBank,
-                                             const std::function<int()>& getSetlistBankNumber)
+                                             const std::function<int()>& getSetlistBankNumber,
+                                             const std::function<void(int)>& selectSceneByIndex,
+                                             const std::function<int()>& getActiveSceneIndex)
 {
     mMixer = &mixer;
     mGetSetlistCursor = getSetlistCursor;
@@ -112,6 +114,8 @@ void AutomationSlotTable::InitializeRegistry(MultiPresetMixer& mixer,
     mGetSetlistBankBase = getSetlistBankBase;
     mSelectSetlistBank = selectSetlistBank;
     mGetSetlistBankNumber = getSetlistBankNumber;
+    mSelectSceneByIndex = selectSceneByIndex;
+    mGetActiveSceneIndex = getActiveSceneIndex;
 
     // global.inputTrim
     {
@@ -209,6 +213,30 @@ void AutomationSlotTable::InitializeRegistry(MultiPresetMixer& mixer,
         e.apply = [this](double v, bool) {
             if (mSelectSetlistBank)
                 mSelectSetlistBank(static_cast<int>(std::round(v)));
+        };
+        mRegistry.Register(e);
+    }
+
+    // scene.select1..N — one trigger parameter per scene of the *active* preset.
+    // Selection is handled entirely in the controller so a footswitch still
+    // switches scenes when the plugin editor is closed and no UI exists.
+    for (int i = 1; i <= kSceneSelectSlots; ++i)
+    {
+        ParamRegistryEntry e;
+        e.address = "scene.select" + std::to_string(i);
+        e.label = "Scene " + std::to_string(i);
+        e.unit = "";
+        e.minValue = 0.0;
+        e.maxValue = 1.0;
+        e.isTrigger = true;
+        const int sceneOffset = i; // captured by value
+        e.get = [this, sceneOffset]() -> double {
+            if (!mGetActiveSceneIndex) return 0.0;
+            return mGetActiveSceneIndex() == (sceneOffset - 1) ? 1.0 : 0.0;
+        };
+        e.apply = [this, sceneOffset](double, bool) {
+            if (mSelectSceneByIndex)
+                mSelectSceneByIndex(sceneOffset - 1);
         };
         mRegistry.Register(e);
     }

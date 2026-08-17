@@ -2359,7 +2359,9 @@ void PluginController::Initialize()
         [this]() { return GetSetlistLength(); },
         [this]() { return GetSetlistBankBase(); },
         [this](int bankNumber) { SelectSetlistBank(bankNumber); },
-        [this]() { return GetSetlistBankNumber(); });
+        [this]() { return GetSetlistBankNumber(); },
+        [this](int index) { SelectSceneByIndex(index); },
+        [this]() { return GetActiveSceneIndex(); });
 
     // Wire node-param-applied callback so the UI can reflect automation-driven changes.
     mAutomationSlots.SetOnNodeParamApplied(
@@ -4097,6 +4099,7 @@ void PluginController::OnIdle()
         std::optional<int> pendingIndex;
         std::optional<int> pendingBankDelta;
         std::optional<int> pendingBankSelect;
+        std::optional<int> pendingSceneIndex;
         {
             std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
             pendingIndex = mPendingSetlistPresetIndex;
@@ -4105,6 +4108,8 @@ void PluginController::OnIdle()
             mPendingSetlistBankDelta.reset();
             pendingBankSelect = mPendingSetlistBankSelect;
             mPendingSetlistBankSelect.reset();
+            pendingSceneIndex = mPendingSceneIndex;
+            mPendingSceneIndex.reset();
         }
         if (pendingIndex.has_value())
             ApplySetlistPresetByIndexDirect(*pendingIndex);
@@ -4112,6 +4117,8 @@ void PluginController::OnIdle()
             SetlistBankChangeDirect(*pendingBankDelta);
         if (pendingBankSelect.has_value())
             SelectSetlistBankDirect(*pendingBankSelect);
+        if (pendingSceneIndex.has_value())
+            SelectSceneByIndexDirect(*pendingSceneIndex);
     }
 
     // Signal test result
@@ -11112,6 +11119,74 @@ void PluginController::SetlistBankUp(int steps)
         std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
         mPendingSetlistBankDelta = mPendingSetlistBankDelta.value_or(0) + steps;
     }
+}
+
+int PluginController::GetActiveSceneIndex() const
+{
+    if (!mActivePreset)
+        return -1;
+
+    const std::string activeSceneId = GetResolvedActiveSceneId();
+    for (std::size_t i = 0; i < mActivePreset->scenes.size(); ++i)
+    {
+        if (mActivePreset->scenes[i].id == activeSceneId)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+void PluginController::SelectSceneByIndex(int index)
+{
+    // Same threading contract as ApplySetlistPresetByIndex: reachable from the
+    // audio thread via automation/MIDI apply (already holding mDSPMutex) or from
+    // the UI thread. SelectSceneByIndexDirect ends up in ApplyPreset, which takes
+    // mDSPMutex itself, so defer to OnIdle when the lock is already held.
+    if (mDSPMutex.try_lock())
+    {
+        mDSPMutex.unlock();
+        SelectSceneByIndexDirect(index);
+    }
+    else
+    {
+        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
+        mPendingSceneIndex = index;
+    }
+}
+
+void PluginController::SelectSceneByIndexDirect(int index)
+{
+    if (!mActivePreset)
+        return;
+
+    NormalizePresetScenes(*mActivePreset);
+
+    // Out-of-range is a no-op rather than a clamp: a footswitch mapped to scene 4
+    // should do nothing on a two-scene preset, not silently jump to scene 2.
+    if (index < 0 || index >= static_cast<int>(mActivePreset->scenes.size()))
+        return;
+
+    const std::string targetSceneId = mActivePreset->scenes[static_cast<std::size_t>(index)].id;
+    if (targetSceneId == GetResolvedActiveSceneId())
+        return;
+
+    if (!SetPresetActiveScene(*mActivePreset, targetSceneId, &mActiveSceneId))
+        return;
+
+    SyncActivePresetSceneGraph();
+    ApplyPreset(*mActivePreset);
+
+    // Report the switch on the same "presetLoaded" channel a UI-driven scene change
+    // uses, so an open editor tracks the change and a closed one simply misses a
+    // message it was never going to receive.
+    nlohmann::json loaded;
+    loaded["type"] = "presetLoaded";
+    loaded["preset"] = SerializePresetForUi(*mActivePreset);
+    nlohmann::json activeIds = nlohmann::json::array();
+    for (const auto& id : mPresetMixer.GetActivePresetIds())
+        activeIds.push_back(id);
+    loaded["activePresetIds"] = activeIds;
+    loaded["sceneId"] = GetResolvedActiveSceneId();
+    SendMessageToUI(loaded.dump());
 }
 
 void PluginController::SetlistBankDown(int steps)

@@ -128,6 +128,10 @@ inline constexpr DefaultSlotDef kDefaultSlots[] = {
     {"default.bankSelect",    "setlist.bankSelect", "Select Bank"},
     {"default.inputLevel",    "global.inputTrim", "Input Level"},
     {"default.outputLevel",   "global.outputTrim", "Output Level"},
+    {"default.scene1",        "scene.select1", "Scene 1"},
+    {"default.scene2",        "scene.select2", "Scene 2"},
+    {"default.scene3",        "scene.select3", "Scene 3"},
+    {"default.scene4",        "scene.select4", "Scene 4"},
 };
 
 /// Maximum number of custom slots (reserved in the DAW parameter layout).
@@ -135,5 +139,8 @@ inline constexpr int kMaxCustomSlots = 16;
 
 /// Number of setlist preset slots per bank (also the number of DAW parameters).
 inline constexpr int kSetlistPresetsPerBank = 8;
+
+/// Number of directly selectable scene slots exposed to MIDI/automation.
+inline constexpr int kSceneSelectSlots = 4;
 
 } // namespace guitarfx

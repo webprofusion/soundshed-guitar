@@ -118,6 +118,12 @@ public:
     void SetlistBankUp(int steps);
     void SetlistBankDown(int steps);
     void SelectSetlistBank(int bankNumber);
+    /// Select a scene of the active preset by 0-based index. Safe to call from the
+    /// audio thread (defers to OnIdle when the DSP lock is already held). Handled
+    /// entirely controller-side so MIDI scene changes work with the editor closed.
+    void SelectSceneByIndex(int index);
+    /// 0-based index of the active preset's current scene, or -1 when unavailable.
+    [[nodiscard]] int GetActiveSceneIndex() const;
     [[nodiscard]] int GetSetlistLength() const;
     [[nodiscard]] int GetSetlistBankBase() const;
     [[nodiscard]] int GetSetlistBankNumber() const;
@@ -499,6 +505,7 @@ private:
     void ApplySetlistPresetByIndexDirect(int index);
     void SetlistBankChangeDirect(int delta);
     void SelectSetlistBankDirect(int bankNumber);
+    void SelectSceneByIndexDirect(int index);
 
     // ── State ──────────────────────────────────────────────────────
     IPluginHost& mHost;
@@ -577,6 +584,7 @@ private:
     std::optional<int> mPendingSetlistPresetIndex;
     std::optional<int> mPendingSetlistBankDelta;
     std::optional<int> mPendingSetlistBankSelect;
+    std::optional<int> mPendingSceneIndex;
 
     // ── MIDI event queueing ─────────────────────────────────────────
     // Audio-thread-only queue of MIDI events awaiting application under the DSP

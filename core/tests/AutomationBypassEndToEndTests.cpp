@@ -88,7 +88,9 @@ int main()
         []() { return 0; },
         []() { return 0; },
         [](int) {},
-        []() { return 0; });
+        []() { return 0; },
+        [](int) {},
+        []() { return -1; });
     table.SetMixer(&mixer);
     table.SetEffectRegistry(&EffectRegistry::Instance());
 
