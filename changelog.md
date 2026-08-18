@@ -15,7 +15,7 @@
 * Keyboard shortcuts mapped to automation slots now work whether or not the MIDI & Automation panel is open. Previously they only fired while that panel was visible, which made them unusable in practice.
 * The spacebar is never captured by keyboard mappings and always passes through to the host, so DAW transport keeps working while the plugin window has focus.
 * Added MIDI/automation slots for direct scene selection (Scene 1–4), so a footswitch can jump straight to a scene. Works with the plugin window closed.
-* Graphic EQ profiles are now purely band layouts: every profile is flat, differing only in how many bands it has and where they sit. Selecting a profile no longer imposes a voicing, and a newly added Graphic EQ starts flat. Save your own curves as effect presets instead.
+* Graphic EQ's Profile dropdown has been replaced by the effect Presets button. The profiles are now flat band layouts listed under Factory, differing only in how many bands they have and where they sit, so choosing one no longer imposes a voicing. A newly added Graphic EQ starts flat, and your own curves are saved alongside them as effect presets.
 * Graphic EQ gained a Reset button that returns every band to 0 dB without changing the selected profile.
 
 ## 1.5.0 (July 25, 2026)

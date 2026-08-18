@@ -4155,11 +4155,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     <section class="graphic-eq-controls" data-node-id="${node.id}">
       <canvas class="graphic-eq-curve-canvas" aria-hidden="true"></canvas>
       <div class="graphic-eq-toolbar">
-        <label>Profile
-          <select class="graphic-eq-profile" data-node-id="${node.id}">
-            ${(getNodeEffectInfo(node)?.presets ?? []).map((preset, index) => `<option value="${escapeHtml(preset.id)}" ${preset.parameters.preset === (node.params.preset ?? 0) || (index === 0 && node.params.preset === undefined) ? "selected" : ""}>${escapeHtml(preset.name)}</option>`).join("")}
-          </select>
-        </label>
         <button type="button" class="graphic-eq-reset-btn" title="Reset all band gains to 0 dB">Reset</button>
       </div>
       <div class="graphic-eq-bands">
@@ -5908,21 +5903,6 @@ function bindGraphicEqControls(node: GraphNode, preset: Preset): void {  if (Eff
       updateEqVisualization(node);
     }
   };
-
-  const profile = nodeParamsPanelElement?.querySelector<HTMLSelectElement>(".graphic-eq-profile");
-  profile?.addEventListener("change", () => {
-    const preset = getNodeEffectInfo(node)?.presets?.find((candidate) => candidate.id === profile.value);
-    if (preset) {
-      const orderedParameters: Record<string, number> = {};
-      for (const key of preset.parameterOrder ?? []) {
-        if (key in preset.parameters) orderedParameters[key] = preset.parameters[key];
-      }
-      for (const [key, value] of Object.entries(preset.parameters)) {
-        if (!(key in orderedParameters)) orderedParameters[key] = value;
-      }
-      applyParams(orderedParameters, true);
-    }
-  });
 
   // Reset flattens the curve: every band gain back to 0 dB. The selected profile's
   // band count, frequencies and Q values are deliberately left alone — this resets
