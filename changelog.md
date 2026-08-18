@@ -5,6 +5,9 @@
 ### DSP & Plugin Hosting
 * Fixed hosted plugins being fed stale audio when the host delivers a block smaller than the declared maximum (e.g. ASIO buffer sizes below 256). The plugin now sees exactly the frames the host provided instead of processing the previous block's tail.
 * Hosted plugins are now explicitly resumed after `prepareToPlay`, so plugins that gate processing on `isSuspended()` no longer load silently without affecting the audio.
+### Presets & Workflow
+* Effects now have a Presets button in their header, opening a dialog that lists the effect's factory presets alongside your own saved settings. Save the current settings of any effect under a name and load them onto any other preset.
+* Added back/forward buttons beside the preset selector to step through recently loaded presets (up to 10), for quick A/B comparison between tones.
 
 ### Reliability
 * UI storage files (setlists, automation, preset folders/favourites/ratings) are now written atomically, so a crash or power loss mid-write can no longer truncate them.

@@ -4858,27 +4858,13 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     `;
   })();
 
-  // User presets only. Factory presets keep their existing per-effect surfaces
-  // (e.g. Graphic EQ's Profile dropdown), so this bar never duplicates them.
-  //
   // Gate on the parameters the registry declares, not on paramDefs: effects that
   // render their own controls (Graphic EQ) blank paramDefs for presentation and
-  // would otherwise be denied a preset bar despite having plenty to save.
+  // would otherwise be denied presets despite having plenty to save.
   const hasSavableParams = (typeInfo?.parameters?.length ?? 0) > 0;
-  const presetEffectType = effectPresetStorageKey(node);
-  const userPresets = getUserEffectPresets(node);
-  const effectPresetBarHtml = hasSavableParams ? `
-    <div class="effect-preset-bar" data-effect-type="${escapeHtml(presetEffectType)}">
-      <label class="effect-preset-label" for="effect-preset-select">My presets</label>
-      <select class="effect-preset-select" id="effect-preset-select" title="Load one of your saved settings for this effect"${userPresets.length === 0 ? " disabled" : ""}>
-        <option value="">${userPresets.length === 0 ? "None saved yet" : "Select…"}</option>
-        ${userPresets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.name)}</option>`).join("")}
-      </select>
-      <input class="effect-preset-name" type="text" placeholder="New preset name" aria-label="Name for the saved effect preset" />
-      <button class="effect-preset-save" type="button" title="Save the current settings of this effect">Save</button>
-      <button class="effect-preset-delete" type="button" title="Delete the selected saved setting" disabled>Delete</button>
-    </div>
-  ` : "";
+  const effectPresetsButton = hasSavableParams
+    ? `<button class="default-effect-shell-chip default-effect-shell-chip-presets" type="button" data-effect-presets-open title="Factory and saved presets for this effect" aria-label="Effect presets" aria-haspopup="dialog">Presets</button>`
+    : "";
 
   nodeParamsPanelElement.innerHTML = `
 
@@ -4906,6 +4892,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
             </div>
           </div>
           <div class="default-effect-shell-meta" aria-label="Module status">
+            ${effectPresetsButton}
             ${architectureBadge ? `<span class="default-effect-shell-chip default-effect-shell-chip-architecture" title="Loaded model architecture">${architectureBadge}</span>` : ""}
             ${calibrationMetadataChip}
             <button class="default-effect-shell-chip default-effect-shell-chip-dsp dsp-badge-toggle${selectedNodeDspStatusVisible ? " is-active" : ""}" type="button" aria-expanded="${selectedNodeDspStatusVisible}" title="${selectedNodeDspStatusVisible ? "Hide DSP status" : "Show DSP status"}" aria-label="Toggle DSP status">DSP</button>
@@ -4929,7 +4916,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           </div>
         </div>
       </section>
-      ${effectPresetBarHtml}
     </div>
   `;
 
@@ -4942,7 +4928,7 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   // Bind controls
   bindNodeParamControls(node, preset);
-  bindEffectPresetBar(node, preset);
+  bindEffectPresetsButton(node);
   bindGraphicEqControls(node, preset);
   bindLayoutOverlayBypassToggles(node, preset);
   bindResourceControls(node, preset);
@@ -5650,11 +5636,29 @@ function getUserEffectPresets(node: GraphNode): StoredEffectPreset[] {
   return uiState.effectPresets?.[effectPresetStorageKey(node)] ?? [];
 }
 
-function applyUserEffectPreset(node: GraphNode, preset: Preset, parameters: Record<string, number>): void {
-  // Only apply keys the effect actually declares: a snapshot saved before a
-  // parameter was renamed or removed must not inject dead keys into the node.
+/**
+ * Apply a preset's parameters to a node.
+ *
+ * `order` comes from a factory preset's parameterOrder and matters where one
+ * parameter constrains another — Graphic EQ's bandCount has to land before the
+ * per-band values it bounds. Keys the effect no longer declares are skipped, so
+ * a snapshot saved before a parameter was renamed cannot inject dead keys.
+ */
+function applyEffectPresetParams(
+  node: GraphNode,
+  preset: Preset,
+  parameters: Record<string, number>,
+  order?: string[],
+): void {
   const known = new Set((getNodeEffectInfo(node)?.parameters ?? []).map((def) => def.key));
-  for (const [key, value] of Object.entries(parameters)) {
+  const explicitOrder = order ?? [];
+  const ordered = [
+    ...explicitOrder.filter((key) => key in parameters),
+    ...Object.keys(parameters).filter((key) => !explicitOrder.includes(key)),
+  ];
+
+  for (const key of ordered) {
+    const value = parameters[key];
     if (!known.has(key) || typeof value !== "number" || !Number.isFinite(value)) {
       continue;
     }
@@ -5665,64 +5669,182 @@ function applyUserEffectPreset(node: GraphNode, preset: Preset, parameters: Reco
   showNodeParamsPanel(node, preset);
 }
 
-function bindEffectPresetBar(node: GraphNode, preset: Preset): void {
-  const bar = nodeParamsPanelElement?.querySelector(".effect-preset-bar");
-  if (!bar) return;
+// --- Effect presets modal --------------------------------------------------
+// Opened from the "Presets" chip in the effect header. Lists the effect's factory
+// presets (from the registry) alongside the user's own saved snapshots, and saves
+// the node's current settings as a new one.
 
-  const selectEl = bar.querySelector<HTMLSelectElement>(".effect-preset-select");
-  const nameEl = bar.querySelector<HTMLInputElement>(".effect-preset-name");
-  const saveBtn = bar.querySelector<HTMLButtonElement>(".effect-preset-save");
-  const deleteBtn = bar.querySelector<HTMLButtonElement>(".effect-preset-delete");
-  if (!selectEl || !nameEl || !saveBtn || !deleteBtn) return;
+let effectPresetsModalNodeId: string | null = null;
 
-  const effectType = effectPresetStorageKey(node);
+/** Resolve the node the modal is open for, fresh from the active preset. */
+function getEffectPresetsModalTarget(): { node: GraphNode; preset: Preset } | null {
+  if (!effectPresetsModalNodeId) return null;
+  const preset = getActivePresetForRender() ?? undefined;
+  const node = preset?.graph?.nodes.find((candidate) => candidate.id === effectPresetsModalNodeId);
+  return preset && node ? { node, preset } : null;
+}
 
-  selectEl.addEventListener("change", () => {
-    deleteBtn.disabled = !selectEl.value;
-    const entry = getUserEffectPresets(node).find((candidate) => candidate.id === selectEl.value);
-    if (entry) {
-      applyUserEffectPreset(node, preset, entry.parameters);
+function closeEffectPresetsModal(): void {
+  const modal = document.getElementById("effect-presets-modal");
+  if (modal) modal.style.display = "none";
+  effectPresetsModalNodeId = null;
+}
+
+function openEffectPresetsModal(node: GraphNode): void {
+  const modal = document.getElementById("effect-presets-modal");
+  if (!modal) return;
+  effectPresetsModalNodeId = node.id;
+  renderEffectPresetsModal();
+  modal.style.display = "flex";
+  (document.getElementById("effect-presets-name") as HTMLInputElement | null)?.focus();
+}
+
+/** Re-render in place; called when the backend re-broadcasts the preset store. */
+export function refreshEffectPresetsModal(): void {
+  const modal = document.getElementById("effect-presets-modal");
+  if (!modal || modal.style.display === "none") return;
+  renderEffectPresetsModal();
+}
+
+function renderEffectPresetsModal(): void {
+  const listsEl = document.getElementById("effect-presets-lists");
+  if (!listsEl) return;
+
+  const target = getEffectPresetsModalTarget();
+  if (!target) {
+    // The node went away (preset switched, node deleted) while the modal was open.
+    closeEffectPresetsModal();
+    return;
+  }
+
+  const { node } = target;
+  const subtitleEl = document.getElementById("effect-presets-subtitle");
+  if (subtitleEl) subtitleEl.textContent = getNodeDisplayName(node);
+
+  const factoryPresets = getNodeEffectInfo(node)?.presets ?? [];
+  const userPresets = getUserEffectPresets(node);
+
+  const row = (id: string, name: string, kind: "factory" | "user"): string => `
+    <li class="effect-presets-item">
+      <span class="effect-presets-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      <span class="effect-presets-item-actions">
+        <button class="btn btn-secondary btn-small" type="button" data-effect-preset-load="${escapeHtml(id)}" data-effect-preset-kind="${kind}">Load</button>
+        ${kind === "user" ? `<button class="btn btn-secondary btn-small effect-presets-delete" type="button" data-effect-preset-delete="${escapeHtml(id)}">Delete</button>` : ""}
+      </span>
+    </li>`;
+
+  listsEl.innerHTML = `
+    <section class="effect-presets-section">
+      <h4>Factory</h4>
+      ${factoryPresets.length
+        ? `<ul class="effect-presets-list">${factoryPresets.map((entry) => row(entry.id, entry.name, "factory")).join("")}</ul>`
+        : `<p class="effect-presets-empty">No factory presets for this effect.</p>`}
+    </section>
+    <section class="effect-presets-section">
+      <h4>My presets</h4>
+      ${userPresets.length
+        ? `<ul class="effect-presets-list">${userPresets.map((entry) => row(entry.id, entry.name, "user")).join("")}</ul>`
+        : `<p class="effect-presets-empty">Nothing saved yet — use the field below.</p>`}
+    </section>
+  `;
+}
+
+async function saveCurrentEffectPreset(): Promise<void> {
+  const target = getEffectPresetsModalTarget();
+  const nameInput = document.getElementById("effect-presets-name") as HTMLInputElement | null;
+  if (!target || !nameInput) return;
+
+  const name = nameInput.value.trim();
+  if (!name) {
+    nameInput.focus();
+    showNotification("Name required", "Enter a name for this effect preset.");
+    return;
+  }
+
+  if (getUserEffectPresets(target.node).some((candidate) => candidate.name === name)) {
+    const confirmed = await showConfirm(`Replace the saved settings named "${name}"?`, "Overwrite preset");
+    if (!confirmed) return;
+  }
+
+  // The backend owns the store and re-broadcasts, which re-renders this modal.
+  postMessage({
+    type: "saveEffectPreset",
+    effectType: effectPresetStorageKey(target.node),
+    name,
+    parameters: { ...target.node.params },
+  });
+  nameInput.value = "";
+  showNotification("Effect preset saved", name);
+}
+
+/** Wired once; the modal contents are re-rendered per node. */
+export function initializeEffectPresetsModal(): void {
+  const modal = document.getElementById("effect-presets-modal");
+  if (!modal || modal.dataset.bound === "true") return;
+  modal.dataset.bound = "true";
+
+  document.getElementById("effect-presets-close")?.addEventListener("click", closeEffectPresetsModal);
+  modal.addEventListener("mousedown", (event) => {
+    if (event.target === modal) closeEffectPresetsModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && modal.style.display === "flex") closeEffectPresetsModal();
+  });
+
+  document.getElementById("effect-presets-save")?.addEventListener("click", () => {
+    void saveCurrentEffectPreset();
+  });
+  document.getElementById("effect-presets-name")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveCurrentEffectPreset();
     }
   });
 
-  const saveCurrentSettings = async (): Promise<void> => {
-    const name = nameEl.value.trim();
-    if (!name) {
-      nameEl.focus();
-      showNotification("Name required", "Enter a name for this effect preset.");
+  // Delegated: rows are rebuilt on every render.
+  document.getElementById("effect-presets-lists")?.addEventListener("click", (event) => {
+    const el = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-effect-preset-load], [data-effect-preset-delete]");
+    if (!el) return;
+    const target = getEffectPresetsModalTarget();
+    if (!target) return;
+
+    const loadId = el.dataset.effectPresetLoad;
+    if (loadId) {
+      if (el.dataset.effectPresetKind === "factory") {
+        const entry = (getNodeEffectInfo(target.node)?.presets ?? []).find((candidate) => candidate.id === loadId);
+        if (entry) applyEffectPresetParams(target.node, target.preset, entry.parameters, entry.parameterOrder);
+      } else {
+        const entry = getUserEffectPresets(target.node).find((candidate) => candidate.id === loadId);
+        if (entry) applyEffectPresetParams(target.node, target.preset, entry.parameters);
+      }
       return;
     }
 
-    if (getUserEffectPresets(node).some((candidate) => candidate.name === name)) {
-      const confirmed = await showConfirm(`Replace the saved settings named "${name}"?`, "Overwrite preset");
-      if (!confirmed) return;
-    }
-
-    // The backend owns the store and re-broadcasts, which re-renders this panel.
-    postMessage({ type: "saveEffectPreset", effectType, name, parameters: { ...node.params } });
-    showNotification("Effect preset saved", name);
-  };
-
-  saveBtn.addEventListener("click", () => {
-    void saveCurrentSettings();
-  });
-
-  nameEl.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      void saveCurrentSettings();
-    }
-  });
-
-  deleteBtn.addEventListener("click", async () => {
-    const entry = getUserEffectPresets(node).find((candidate) => candidate.id === selectEl.value);
+    const deleteId = el.dataset.effectPresetDelete;
+    if (!deleteId) return;
+    const entry = getUserEffectPresets(target.node).find((candidate) => candidate.id === deleteId);
     if (!entry) return;
-    const confirmed = await showConfirm(`Delete the saved settings named "${entry.name}"?`, "Delete preset");
-    if (!confirmed) return;
-
-    postMessage({ type: "deleteEffectPreset", effectType, presetId: entry.id });
-    showNotification("Effect preset deleted", entry.name);
+    void (async () => {
+      const confirmed = await showConfirm(`Delete the saved settings named "${entry.name}"?`, "Delete preset");
+      if (!confirmed) return;
+      postMessage({
+        type: "deleteEffectPreset",
+        effectType: effectPresetStorageKey(target.node),
+        presetId: entry.id,
+      });
+      showNotification("Effect preset deleted", entry.name);
+    })();
   });
+}
+
+function bindEffectPresetsButton(node: GraphNode): void {
+  nodeParamsPanelElement
+    ?.querySelector<HTMLButtonElement>("[data-effect-presets-open]")
+    ?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openEffectPresetsModal(node);
+    });
 }
 
 function bindGraphicEqControls(node: GraphNode, preset: Preset): void {  if (EffectTypeRegistry.resolve(node.type) !== EffectGuids.kEqGraphic) {

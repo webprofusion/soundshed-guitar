@@ -10,7 +10,7 @@ import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.j
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
 import { getRiffLibrary, postMessage } from "./bridge.js";
-import { applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
+import { refreshEffectPresetsModal, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
 import { applyAutomationState, handleMidiLogEntry, handleMidiLearnCapture } from "./automationPanel.js";
@@ -1467,9 +1467,10 @@ export function handleIncomingMessage(message: string): void {
     case "effectPresets": {
       const effectPresetsPayload = payload as { byEffectType?: Record<string, StoredEffectPreset[]> };
       uiState.effectPresets = effectPresetsPayload.byEffectType ?? {};
-      // The backend re-broadcasts after each save/delete, so an open params panel
-      // needs to pick up the new list.
+      // The backend re-broadcasts after each save/delete, so both the params panel
+      // and an open presets modal need to pick up the new list.
       refreshSelectedNodeParams();
+      refreshEffectPresetsModal();
       break;
     }
     case "setlistCursorChanged": {
