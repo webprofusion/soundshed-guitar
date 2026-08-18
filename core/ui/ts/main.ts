@@ -22,7 +22,7 @@ import { initDiagnosticsToggle, initThemeSelect, initZoomControls, initUserInput
 import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
 import { initializeAutomationPanel } from "./automationPanel.js";
-import { initializeBlendEditorModal, initializeEffectPresetsModal, initSignalPathResize, renderSignalPathBar, createNamIrGlobalFileDropHandler } from "./signalPath.js";
+import { initializeBlendEditorModal, initSignalPathResize, renderSignalPathBar, createNamIrGlobalFileDropHandler } from "./signalPath.js";
 import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
@@ -205,7 +205,6 @@ async function bootstrap(): Promise<void> {
   initializeAmpCabPowerControls();
   initializePresetControls();
   initializeDialogModals();
-  initializeEffectPresetsModal();
   initializeSavePresetModal();
   initializeSaveAsButton();
   initializePresetActionButtons();
