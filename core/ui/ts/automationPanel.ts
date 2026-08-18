@@ -6,7 +6,7 @@
  *  - MIDI Log: real-time diagnostic log of incoming MIDI events
  */
 
-import { postMessage, setAppSetting } from "./bridge.js";
+import { postMessage } from "./bridge.js";
 import { uiState } from "./state.js";
 import type { AutomationSlot, AutomationRegistryEntry } from "./types.js";
 import { EffectTypeRegistry } from "./presetV2.js";
@@ -20,9 +20,11 @@ let midiLogEnabled = false;
 const midiLogEntries: { time: string; type: string; data: string }[] = [];
 const MAX_LOG_ENTRIES = 500;
 
-/** `event.key` for the spacebar. */
+/**
+ * `event.key` for the spacebar. Space is never claimed as a mapping: it is the
+ * transport key in every DAW, and the plugin has no business swallowing it.
+ */
 const SPACEBAR_KEY = " ";
-const CAPTURE_SPACEBAR_SETTING = "automation.captureSpacebar";
 
 /**
  * Keys are compared case-insensitively for printable characters, and verbatim
@@ -30,20 +32,6 @@ const CAPTURE_SPACEBAR_SETTING = "automation.captureSpacebar";
  */
 function normalizeMappedKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
-}
-
-/**
- * Whether a Space mapping is allowed to fire. Off by default: Space is the
- * transport key in every DAW, and a plugin update that silently stopped play/stop
- * from working would be far worse than a mapping the user has to switch on.
- */
-export function isSpacebarCaptureEnabled(): boolean {
-  return uiState.appSettings?.[CAPTURE_SPACEBAR_SETTING] === true;
-}
-
-function setSpacebarCaptureEnabled(enabled: boolean): void {
-  uiState.appSettings[CAPTURE_SPACEBAR_SETTING] = enabled;
-  setAppSetting(CAPTURE_SPACEBAR_SETTING, enabled);
 }
 
 export interface AutomationState {
@@ -120,10 +108,6 @@ function openMidiModal(): void {
   // Sync backend MIDI-log forwarding with the current toggle state.
   postMessage({ type: "setMidiLogEnabled", enabled: midiLogEnabled });
   requestAutomationState();
-  const spacebarToggle = document.getElementById("automation-capture-spacebar") as HTMLInputElement | null;
-  if (spacebarToggle) {
-    spacebarToggle.checked = isSpacebarCaptureEnabled();
-  }
   renderKeyboardPanel();
   // Steal focus so keyboard events aren't consumed by buttons/inputs
   if (document.activeElement instanceof HTMLElement) {
@@ -173,14 +157,6 @@ function wireTabs(): void {
       midiLogEnabled = (logToggle as HTMLInputElement).checked;
       postMessage({ type: "setMidiLogEnabled", enabled: midiLogEnabled });
       renderMidiLog();
-    });
-  }
-
-  const spacebarToggle = document.getElementById("automation-capture-spacebar") as HTMLInputElement | null;
-  if (spacebarToggle) {
-    spacebarToggle.addEventListener("change", () => {
-      setSpacebarCaptureEnabled(spacebarToggle.checked);
-      renderKeyboardPanel(); // refresh the "mapped to Space but inert" hint
     });
   }
 
@@ -536,13 +512,13 @@ function renderKeyboardPanel(): void {
     return;
   }
 
-  // A Space mapping does nothing while capture is off, and the failure is silent.
-  // Say so rather than letting the user conclude the mapping is broken.
-  const hasInertSpaceMapping = !isSpacebarCaptureEnabled()
-    && state.slots.some((slot) => slot.keyMap?.some((k) => normalizeMappedKey(k.key) === SPACEBAR_KEY));
+  // Space can no longer be mapped, but an older build could have stored one.
+  // Such a mapping never fires, so flag it rather than leaving it silently dead.
+  const hasStaleSpaceMapping = state.slots.some(
+    (slot) => slot.keyMap?.some((k) => normalizeMappedKey(k.key) === SPACEBAR_KEY));
 
-  let html = hasInertSpaceMapping
-    ? `<p class="midi-help">A slot is mapped to Space, which is currently passed through to the host. Enable "Capture spacebar" above for it to fire.</p>`
+  let html = hasStaleSpaceMapping
+    ? `<p class="midi-help">A slot is mapped to Space. The spacebar is reserved for your DAW's transport, so that mapping never fires — use Clear to remove it.</p>`
     : "";
 
   for (const slot of state.slots) {
@@ -648,6 +624,15 @@ document.addEventListener("keydown", (event: KeyboardEvent) => {
   // Keyboard learn capture — intercept the next key and assign it to the slot
   if (isMidiPanelOpen && pendingKeyLearnSlotId) {
     const key = normalizeMappedKey(event.key);
+
+    // Refuse Space outright rather than storing a mapping that could never fire.
+    // Swallow the keystroke so it doesn't also scroll or re-trigger the button
+    // that started the learn, and leave learn armed for a usable key.
+    if (key === SPACEBAR_KEY) {
+      event.preventDefault();
+      return;
+    }
+
     const state = uiState.automation;
     if (!state) return;
     const slot = state.slots.find((s) => s.slotId === pendingKeyLearnSlotId);
@@ -678,10 +663,8 @@ document.addEventListener("keydown", (event: KeyboardEvent) => {
 
   const pressedKey = normalizeMappedKey(event.key);
 
-  // Space is the transport key in every DAW, so claiming it is opt-in. Left off,
-  // a Space mapping stays configured but inert and the keystroke is passed on
-  // untouched rather than being swallowed here.
-  if (pressedKey === SPACEBAR_KEY && !isSpacebarCaptureEnabled()) return;
+  // Space always passes through to the host, untouched.
+  if (pressedKey === SPACEBAR_KEY) return;
 
   for (const slot of state.slots) {
     if (!slot.keyMap) continue;

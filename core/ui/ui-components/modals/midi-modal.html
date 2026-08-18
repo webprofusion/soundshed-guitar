@@ -28,14 +28,9 @@
         <p class="midi-help">
           Map computer keyboard keys to automation slots. Click "Learn" then press a key.
           Trigger mode fires on key press; SetValue sets a specific level.
-          Mapped keys work whether or not this panel is open.
+          Mapped keys work whether or not this panel is open. The spacebar cannot be
+          mapped — it is left for your DAW's transport.
         </p>
-        <div class="midi-log-controls">
-          <label class="midi-log-toggle" title="Off by default so the spacebar reaches your DAW's transport. Turn on to let a Space mapping fire instead.">
-            <input type="checkbox" id="automation-capture-spacebar" />
-            <span>Capture spacebar (otherwise it passes through to the host)</span>
-          </label>
-        </div>
         <div id="keyboard-slots-list" class="automation-slots-list">
           <p>Loading automation…</p>
         </div>
