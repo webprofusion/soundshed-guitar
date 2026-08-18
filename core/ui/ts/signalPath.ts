@@ -5775,17 +5775,22 @@ function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): void {
         .map((entry) => `<option value="${escapeHtml(kind)}:${escapeHtml(entry.id)}">${escapeHtml(entry.name)}</option>`)
         .join("");
 
+    // With nothing to choose from, the flyout collapses to just the save row —
+    // an empty dropdown and a permanently disabled Delete are only clutter.
+    const hasAnyPresets = factoryPresets.length > 0 || userPresets.length > 0;
+
     popover.innerHTML = `
+      ${hasAnyPresets ? `
       <select class="effect-presets-picker" aria-label="Load a preset for this effect">
         <option value="">Select a preset…</option>
         ${factoryPresets.length ? `<optgroup label="Factory">${options(factoryPresets, "factory")}</optgroup>` : ""}
         ${userPresets.length ? `<optgroup label="My presets">${options(userPresets, "user")}</optgroup>` : ""}
-      </select>
+      </select>` : ""}
       <div class="effect-presets-popover-row">
-        <input class="effect-presets-popover-name" type="text" placeholder="Save as…" aria-label="Name for the saved effect preset" />
+        <input class="effect-presets-popover-name" type="text" placeholder="Save current as…" aria-label="Name for the saved effect preset" />
         <button class="effect-presets-popover-save" type="button">Save</button>
       </div>
-      <button class="effect-presets-popover-delete" type="button" disabled>Delete selected</button>
+      ${userPresets.length ? `<button class="effect-presets-popover-delete" type="button" disabled>Delete selected</button>` : ""}
     `;
     bind();
     position();
@@ -5796,12 +5801,12 @@ function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): void {
     const nameInput = popover.querySelector<HTMLInputElement>(".effect-presets-popover-name");
     const saveBtn = popover.querySelector<HTMLButtonElement>(".effect-presets-popover-save");
     const deleteBtn = popover.querySelector<HTMLButtonElement>(".effect-presets-popover-delete");
-    if (!picker || !nameInput || !saveBtn || !deleteBtn) return;
+    if (!nameInput || !saveBtn) return;
 
-    picker.addEventListener("change", () => {
+    picker?.addEventListener("change", () => {
       const selection = parseEffectPresetOptionValue(picker.value);
       // Only the user's own presets can be deleted; factory ones are read-only.
-      deleteBtn.disabled = selection?.kind !== "user";
+      if (deleteBtn) deleteBtn.disabled = selection?.kind !== "user";
 
       const target = resolveTarget();
       if (!target || !selection) return;
@@ -5847,8 +5852,8 @@ function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): void {
       }
     });
 
-    deleteBtn.addEventListener("click", () => {
-      const selection = parseEffectPresetOptionValue(picker.value);
+    deleteBtn?.addEventListener("click", () => {
+      const selection = parseEffectPresetOptionValue(picker?.value ?? "");
       const target = resolveTarget();
       if (!target || selection?.kind !== "user") return;
       const entry = getUserEffectPresets(target.node).find((c) => c.id === selection.id);
