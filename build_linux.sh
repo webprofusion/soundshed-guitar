@@ -8,8 +8,8 @@
 #   --skip-ts          Skip the TypeScript/UI build step
 #   --skip-configure   Skip the CMake configure step
 #   --skip-build       Skip CMake build step (only re-stage artifacts)
-#   --lv2              Also build and stage the LV2 plugin bundle
-#   --zip              After staging, create a .zip archive of the distribution
+#   --no-lv2           Also build and stage the LV2 plugin bundle
+#   --no-zip           After staging, create a .zip archive of the distribution
 #   --dist-dir <p>     Override the output staging directory (default: linux-dist-<arch>)
 #   --build-dir <p>    Override the CMake build directory (default: juce/builds-linux-<arch>)
 #   --toolchain-file <p>
@@ -67,8 +67,8 @@ Usage: ./build_linux.sh [options]
     --skip-ts          Skip the TypeScript/UI build step
     --skip-configure   Skip the CMake configure step
     --skip-build       Skip CMake build step (only re-stage artifacts)
-    --lv2              Also build and stage the LV2 plugin bundle
-    --zip              After staging, create a .zip archive of the distribution
+    --no-lv2           Skip building and staging the LV2 plugin bundle
+    --no-zip           Skip creation of a .zip archive of the distribution
     --dist-dir <p>     Override the output staging directory (default: linux-dist-<arch>)
     --build-dir <p>    Override the CMake build directory (default: juce/builds-linux-<arch>)
     --toolchain-file <p>
@@ -220,8 +220,8 @@ while [[ $# -gt 0 ]]; do
         --skip-ts)        SKIP_TS=true ;;
         --skip-configure) SKIP_CONFIGURE=true ;;
         --skip-build)     SKIP_BUILD=true ;;
-        --lv2)            BUILD_LV2=true ;;
-        --zip)            BUILD_ZIP=true ;;
+        --no-lv2)         BUILD_LV2=false ;;
+        --no-zip)         BUILD_ZIP=false ;;
         --dist-dir)       DIST_DIR_OVERRIDE="$2"; shift ;;
         --build-dir)      BUILD_DIR_OVERRIDE="$2"; shift ;;
         --toolchain-file) TOOLCHAIN_FILE_OVERRIDE="$2"; shift ;;
