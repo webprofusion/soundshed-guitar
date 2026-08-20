@@ -9,13 +9,13 @@
  */
 
 #include "dsp/EffectProcessor.h"
-#include "dsp/BlockSincResampler.h"
 #include "dsp/LevelTargets.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/NamModelCache.h"
 #include "dsp/RealtimeParallel.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMOversampling.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
@@ -160,20 +160,18 @@ public:
   void Reset() override
   {
     if (mModelLeft)
-      mModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
+      mOversamplingLeft.Reset(*mModelLeft);
     if (mModelRight)
-      mModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
+      mOversamplingRight.Reset(*mModelRight);
 
     std::fill(mInputBufferL.begin(), mInputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mInputBufferR.begin(), mInputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mOutputBufferL.begin(), mOutputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mOutputBufferR.begin(), mOutputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
-    std::fill(mModelInputBufferL.begin(), mModelInputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
-    std::fill(mModelInputBufferR.begin(), mModelInputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
-    std::fill(mModelOutputBufferL.begin(), mModelOutputBufferL.end(), static_cast<NAM_SAMPLE>(0.0));
-    std::fill(mModelOutputBufferR.begin(), mModelOutputBufferR.end(), static_cast<NAM_SAMPLE>(0.0));
     std::fill(mDryBufferL.begin(), mDryBufferL.end(), 0.0f);
     std::fill(mDryBufferR.begin(), mDryBufferR.end(), 0.0f);
+    mDryDelayLeft.Reset();
+    mDryDelayRight.Reset();
 
     for (int ch = 0; ch < 2; ++ch)
     {
@@ -221,6 +219,8 @@ public:
       const bool applyPostDcBlocker = gEnableNamPostDcBlocker;
 
       ProcessModels(numSamples);
+      mDryDelayLeft.Process(mDryBufferL.data(), numSamples);
+      mDryDelayRight.Process(mDryBufferR.data(), numSamples);
 
       const float outputGainF = static_cast<float>(mOutputGain);
 
@@ -315,6 +315,11 @@ public:
 
   [[nodiscard]] bool SupportsMonoProcessing() const override { return true; }
 
+  [[nodiscard]] int GetLatencySamples() const override
+  {
+    return std::max(mOversamplingLeft.GetLatencySamples(), mOversamplingRight.GetLatencySamples());
+  }
+
   void ProcessMono(float *input, float *output, int numSamples) override
   {
     EnsureLevelTargetsCurrent();
@@ -346,6 +351,7 @@ public:
       const bool applyPostDcBlocker = gEnableNamPostDcBlocker;
 
       ProcessModelMono(numSamples);
+      mDryDelayLeft.Process(mDryBufferL.data(), numSamples);
 
       const float outputGainF = static_cast<float>(mOutputGain);
 
@@ -449,6 +455,26 @@ public:
       mPresenceDb = std::clamp(value, -10.0, 10.0);
       UpdateToneStack();
     }
+    else if (key == "oversampling")
+    {
+      const int index = std::clamp(static_cast<int>(std::llround(value)), 0, kNamOversamplingMaxIndex);
+      if (index != mOversamplingIndex)
+      {
+        mOversamplingIndex = index;
+        mModelsNeedReset = true;
+        ConfigureModelProcessing();
+      }
+    }
+    else if (key == "antiAliasPhase")
+    {
+      const int index = std::clamp(static_cast<int>(std::llround(value)), 0, 2);
+      if (index != mAntiAliasPhaseIndex)
+      {
+        mAntiAliasPhaseIndex = index;
+        mModelsNeedReset = true;
+        ConfigureModelProcessing();
+      }
+    }
     else if (key == "enabled")
     {
       mEnabled = value > 0.5;
@@ -487,6 +513,10 @@ public:
       return mTrebleDb;
     if (key == "presence")
       return mPresenceDb;
+    if (key == "oversampling")
+      return static_cast<double>(mOversamplingIndex);
+    if (key == "antiAliasPhase")
+      return static_cast<double>(mAntiAliasPhaseIndex);
     if (key == "enabled")
       return mEnabled ? 1.0 : 0.0;
     if (key == "useCalibration")
@@ -596,7 +626,7 @@ private:
   std::unique_ptr<::nam::DSP> mModelRight;
 
   std::filesystem::path mModelPath;
-  bool mResamplingActive = false;
+  double mBaseModelSampleRate = 44100.0;
   double mModelSampleRate = 44100.0;
   int mMaxModelBlockSize = 512;
 
@@ -613,17 +643,16 @@ private:
   std::vector<NAM_SAMPLE> mInputBufferR;
   std::vector<NAM_SAMPLE> mOutputBufferL;
   std::vector<NAM_SAMPLE> mOutputBufferR;
-  // Model-domain buffers, used only when runtime resampling is active.
-  std::vector<NAM_SAMPLE> mModelInputBufferL;
-  std::vector<NAM_SAMPLE> mModelInputBufferR;
-  std::vector<NAM_SAMPLE> mModelOutputBufferL;
-  std::vector<NAM_SAMPLE> mModelOutputBufferR;
   // Dry signal kept as float for the tone/mix stage.
   std::vector<float> mDryBufferL;
   std::vector<float> mDryBufferR;
 
-  BlockSincResampler mInputResampler;
-  BlockSincResampler mOutputResampler;
+  NamOversamplingProcessor mOversamplingLeft;
+  NamOversamplingProcessor mOversamplingRight;
+  NamDryDelay mDryDelayLeft;
+  NamDryDelay mDryDelayRight;
+  int mOversamplingIndex = 0;
+  int mAntiAliasPhaseIndex = 0;
 
   double mUserInputGain = 1.0;
   double mUserOutputGain = 1.0;
@@ -739,21 +768,14 @@ private:
 
   void ConfigureModelProcessing()
   {
-    mModelSampleRate = ResolveModelSampleRate();
-    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
-    mResamplingActive = NeedsNamRuntimeResampling(mModelSampleRate, mSampleRate);
-    mMaxModelBlockSize = mResamplingActive
-      ? BlockSincResampler::ComputeMaxOutputFrameCount(mMaxBlockSize, mSampleRate, mModelSampleRate)
-      : mMaxBlockSize;
-    mMaxModelBlockSize = std::max(1, mMaxModelBlockSize);
+    mBaseModelSampleRate = ResolveModelSampleRate();
+    const int factor = NamOversamplingFactorFromIndex(mOversamplingIndex);
+    mModelSampleRate = ResolveNamOversampledRenderingRate(mBaseModelSampleRate, mSampleRate, factor);
+    mMaxModelBlockSize = std::max(
+      1,
+      static_cast<int>(std::ceil(
+        static_cast<double>(mMaxBlockSize) * mModelSampleRate / std::max(mSampleRate, 1.0))) + 1);
 
-    mModelInputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
-    mModelInputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
-    mModelOutputBufferL.resize(static_cast<size_t>(mMaxModelBlockSize));
-    mModelOutputBufferR.resize(static_cast<size_t>(mMaxModelBlockSize));
-
-    mInputResampler.Prepare(mSampleRate, mModelSampleRate, mMaxBlockSize, SampleRateConversionQuality::HighPerformance);
-    mOutputResampler.Prepare(mModelSampleRate, mSampleRate, mMaxModelBlockSize, SampleRateConversionQuality::HighPerformance);
     mPostDcBlocker[0].SetHighPass(kNamPostDcBlockerFrequencyHz, kNamPostDcBlockerQ, mSampleRate);
     mPostDcBlocker[1].SetHighPass(kNamPostDcBlockerFrequencyHz, kNamPostDcBlockerQ, mSampleRate);
 
@@ -787,107 +809,83 @@ private:
     {
       auto right = std::async(std::launch::async, [this]()
       {
-        mModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
+        mOversamplingRight.Prepare(
+          *mModelRight,
+          mSampleRate,
+          mBaseModelSampleRate,
+          mMaxBlockSize,
+          NamOversamplingFactorFromIndex(mOversamplingIndex),
+          NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex));
       });
-      mModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
+      mOversamplingLeft.Prepare(
+        *mModelLeft,
+        mSampleRate,
+        mBaseModelSampleRate,
+        mMaxBlockSize,
+        NamOversamplingFactorFromIndex(mOversamplingIndex),
+        NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex));
       right.get();
     }
     else if (mModelLeft)
     {
-      mModelLeft->Reset(mModelSampleRate, mMaxModelBlockSize);
+      mOversamplingLeft.Prepare(
+        *mModelLeft,
+        mSampleRate,
+        mBaseModelSampleRate,
+        mMaxBlockSize,
+        NamOversamplingFactorFromIndex(mOversamplingIndex),
+        NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex));
     }
     else if (mModelRight)
     {
-      mModelRight->Reset(mModelSampleRate, mMaxModelBlockSize);
+      mOversamplingRight.Prepare(
+        *mModelRight,
+        mSampleRate,
+        mBaseModelSampleRate,
+        mMaxBlockSize,
+        NamOversamplingFactorFromIndex(mOversamplingIndex),
+        NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex));
     }
+
+    const int latency = GetLatencySamples();
+    mDryDelayLeft.Prepare(latency, mMaxBlockSize);
+    mDryDelayRight.Prepare(latency, mMaxBlockSize);
 
     mResetModelSampleRate = mModelSampleRate;
     mResetModelBlockSize = mMaxModelBlockSize;
     mModelsNeedReset = false;
   }
 
-  [[nodiscard]] int GetModelFrameCount(int numSamples) const
-  {
-    int modelFrames = BlockSincResampler::ComputeOutputFrameCount(numSamples, mSampleRate, mModelSampleRate);
-    return std::clamp(modelFrames, 1, mMaxModelBlockSize);
-  }
-
   void ProcessModels(int numSamples)
   {
-    auto processLeft = [&](int frames)
-    {
-      NAM_SAMPLE* in = mResamplingActive ? mModelInputBufferL.data() : mInputBufferL.data();
-      NAM_SAMPLE* out = mResamplingActive ? mModelOutputBufferL.data() : mOutputBufferL.data();
-      NAM_SAMPLE* inputPtrs[1] = { in };
-      NAM_SAMPLE* outputPtrs[1] = { out };
-      mModelLeft->process(inputPtrs, outputPtrs, frames);
-    };
-
-    auto processRight = [&](int frames)
-    {
-      NAM_SAMPLE* in = mResamplingActive ? mModelInputBufferR.data() : mInputBufferR.data();
-      NAM_SAMPLE* out = mResamplingActive ? mModelOutputBufferR.data() : mOutputBufferR.data();
-      NAM_SAMPLE* inputPtrs[1] = { in };
-      NAM_SAMPLE* outputPtrs[1] = { out };
-      mModelRight->process(inputPtrs, outputPtrs, frames);
-    };
-
-    if (!mResamplingActive)
-    {
-      bool ranParallel = false;
-      if (rtparallel::ShouldParallelizeStereoWork(numSamples))
-      {
-        ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
-          [&]() { processRight(numSamples); },
-          [&]() { processLeft(numSamples); });
-      }
-      if (!ranParallel)
-      {
-        processLeft(numSamples);
-        processRight(numSamples);
-      }
-      return;
-    }
-
-    const int modelFrames = GetModelFrameCount(numSamples);
-    mInputResampler.ProcessFixedOutput(mInputBufferL.data(), numSamples, mModelInputBufferL.data(), modelFrames);
-    mInputResampler.ProcessFixedOutput(mInputBufferR.data(), numSamples, mModelInputBufferR.data(), modelFrames);
-
     bool ranParallel = false;
-    if (rtparallel::ShouldParallelizeStereoWork(modelFrames))
+    if (rtparallel::ShouldParallelizeStereoWork(numSamples))
     {
       ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
-        [&]() { processRight(modelFrames); },
-        [&]() { processLeft(modelFrames); });
+        [&]()
+        {
+          mOversamplingRight.Process(
+            *mModelRight, mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+        },
+        [&]()
+        {
+          mOversamplingLeft.Process(
+            *mModelLeft, mInputBufferL.data(), mOutputBufferL.data(), numSamples);
+        });
     }
     if (!ranParallel)
     {
-      processLeft(modelFrames);
-      processRight(modelFrames);
+      mOversamplingLeft.Process(
+        *mModelLeft, mInputBufferL.data(), mOutputBufferL.data(), numSamples);
+      mOversamplingRight.Process(
+        *mModelRight, mInputBufferR.data(), mOutputBufferR.data(), numSamples);
     }
-
-    mOutputResampler.ProcessFixedOutput(mModelOutputBufferL.data(), modelFrames, mOutputBufferL.data(), numSamples);
-    mOutputResampler.ProcessFixedOutput(mModelOutputBufferR.data(), modelFrames, mOutputBufferR.data(), numSamples);
   }
 
   void ProcessModelMono(int numSamples)
   {
-    if (!mResamplingActive)
-    {
-      NAM_SAMPLE* inputPtrs[1] = { mInputBufferL.data() };
-      NAM_SAMPLE* outputPtrs[1] = { mOutputBufferL.data() };
-      mModelLeft->process(inputPtrs, outputPtrs, numSamples);
-      return;
-    }
-
-    const int modelFrames = GetModelFrameCount(numSamples);
-    mInputResampler.ProcessFixedOutput(mInputBufferL.data(), numSamples, mModelInputBufferL.data(), modelFrames);
-
-    NAM_SAMPLE* inputPtrs[1] = { mModelInputBufferL.data() };
-    NAM_SAMPLE* outputPtrs[1] = { mModelOutputBufferL.data() };
-    mModelLeft->process(inputPtrs, outputPtrs, modelFrames);
-
-    mOutputResampler.ProcessFixedOutput(mModelOutputBufferL.data(), modelFrames, mOutputBufferL.data(), numSamples);
+    mOversamplingLeft.Process(
+      *mModelLeft, mInputBufferL.data(), mOutputBufferL.data(), numSamples);
   }
 
   static bool ParseBool(const std::string& value)
@@ -930,7 +928,11 @@ inline void RegisterOptimizedNAMAmpEffect()
     {"presence",              "Presence",           0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB",  "Level"},
     {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
-    {"useCalibration",        "Use Calibration",    1.0,    0.0,   1.0,  "toggle", "Advanced", true}
+    {"useCalibration",        "Use Calibration",    1.0,    0.0,   1.0,  "toggle", "Advanced", true},
+    {"oversampling",          "Oversampling",        0.0,    0.0,   5.0,  "enum", "Advanced", true, 1.0,
+      {"Off", "2x", "4x", "8x", "16x", "32x"}},
+    {"antiAliasPhase",        "AA Filter",           0.0,    0.0,   2.0,  "enum", "Advanced", true, 1.0,
+      {"Minimum Phase", "Linear Short", "Linear Long"}}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()
