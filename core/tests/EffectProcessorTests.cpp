@@ -1030,10 +1030,21 @@ bool TestGraphicEQProfilesAndStability()
       && effect->GetParam("bandCount") == 10.0
       && effect->GetParam("band1Freq") == 45.0
       && effect->GetParam("band1Q") == 2.0;
+    // A profile picks the band layout (count, centre frequencies, Q) and nothing
+    // else — every factory profile is flat, so it never imposes a voicing.
+    const auto allBandsFlat = [&]() {
+      for (int band = 1; band <= guitarfx::GraphicEQEffect::kMaxBands; ++band)
+      {
+        if (effect->GetParam("band" + std::to_string(band) + "Gain") != 0.0)
+          return false;
+      }
+      return true;
+    };
     guitarProfileApplied = applyPreset("guitar-10")
       && effect->GetParam("bandCount") == 10.0
       && effect->GetParam("band8Freq") == 3000.0
-      && effect->GetParam("band8Gain") == 4.0;
+      && effect->GetParam("band8Q") == 0.9
+      && allBandsFlat();
     const double configuredBandCount = effect->GetParam("bandCount");
     const double configuredBandFrequency = effect->GetParam("band1Freq");
     effect->SetParam("preset", 0.0);
@@ -1045,7 +1056,7 @@ bool TestGraphicEQProfilesAndStability()
   std::cout << "  Frequencies stay below Nyquist:              " << (clampedFrequency ? "PASS" : "FAIL") << "\n";
   std::cout << "  Frequencies remain in a valid range:          " << (validFrequencyRange ? "PASS" : "FAIL") << "\n";
   std::cout << "  Profile configuration is applied:             " << (profileConfigApplied ? "PASS" : "FAIL") << "\n";
-  std::cout << "  Guitar guide profile is applied:              " << (guitarProfileApplied ? "PASS" : "FAIL") << "\n";
+  std::cout << "  Guitar profile applies a flat layout:         " << (guitarProfileApplied ? "PASS" : "FAIL") << "\n";
   std::cout << "  Profile selection does not overwrite edits:   " << (profileSelectionIsMetadataOnly ? "PASS" : "FAIL") << "\n";
   std::cout << "  Six instrument profiles are registered:       " << (profilesAvailable ? "PASS" : "FAIL") << "\n";
   std::cout << "  Output remains finite under extremes:        " << (finite ? "PASS" : "FAIL") << "\n";
