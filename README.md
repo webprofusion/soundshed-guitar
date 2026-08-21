@@ -152,7 +152,8 @@ This repository depends on or vendors the following third-party libraries and SD
 - nlohmann/json, Signalsmith Audio linear/stretch, stftPitchShift, miniz, and the Wasmtime C API in the core CMake dependency setup
 - jszip, TypeScript, and Vitest in `core/ui/`
 
-Refer to the upstream LICENSE files and package manifests for the exact license terms of each dependency.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), the upstream LICENSE files,
+and package manifests for the exact license terms of each dependency.
 
 ## License
 
