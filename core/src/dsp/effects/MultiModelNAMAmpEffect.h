@@ -10,13 +10,13 @@
  */
 
 #include "dsp/EffectProcessor.h"
-#include "dsp/BlockSincResampler.h"
 #include "dsp/LevelTargets.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/NamModelCache.h"
 #include "dsp/RealtimeParallel.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMOversampling.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
@@ -40,6 +40,7 @@ public:
   {
     mSampleRate = sampleRate;
     mMaxBlockSize = maxBlockSize;
+    mPrepared = true;
 
     mInputBufferL.resize(static_cast<size_t>(maxBlockSize));
     mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
@@ -49,8 +50,9 @@ public:
     for (auto& model : mModels)
     {
       ResizeModelBuffers(model, maxBlockSize);
-      ResetModel(model, sampleRate, maxBlockSize);
     }
+
+    UpdateLatencyAlignment();
   }
 
   void Reset() override
@@ -64,6 +66,8 @@ public:
     std::fill(mInputBufferR.begin(), mInputBufferR.end(), 0.0f);
     std::fill(mDryBufferL.begin(), mDryBufferL.end(), 0.0f);
     std::fill(mDryBufferR.begin(), mDryBufferR.end(), 0.0f);
+    mDryDelayLeft.Reset();
+    mDryDelayRight.Reset();
   }
 
   void Process(float** inputs, float** outputs, int numSamples) override
@@ -119,10 +123,13 @@ public:
       mInputBufferR[i] *= inputGain;
     }
 
+    mDryDelayLeft.Process(mDryBufferL.data(), numSamples);
+    mDryDelayRight.Process(mDryBufferR.data(), numSamples);
+
     if (selection.upperIndex == selection.lowerIndex)
     {
       auto& model = mModels[selection.lowerIndex];
-      if (!model.resamplingActive && rtparallel::ShouldParallelizeStereoWork(numSamples))
+      if (rtparallel::ShouldParallelizeStereoWork(numSamples))
       {
         const bool ran = rtparallel::DualLaneExecutor::Instance().Run(
           [&]() { ProcessModel(model, mInputBufferR.data(), model.outputBufferR.data(), numSamples, 1); },
@@ -212,6 +219,8 @@ public:
       mInputBufferL[i] *= inputGain;
     }
 
+    mDryDelayLeft.Process(mDryBufferL.data(), numSamples);
+
     if (selection.upperIndex == selection.lowerIndex)
     {
       auto &model = mModels[selection.lowerIndex];
@@ -270,6 +279,24 @@ public:
     {
       mEnabled = value > 0.5;
     }
+    else if (key == "oversampling")
+    {
+      const int index = std::clamp(static_cast<int>(std::lround(value)), 0, kNamOversamplingMaxIndex);
+      if (index != mOversamplingIndex)
+      {
+        mOversamplingIndex = index;
+        ReconfigureModelProcessing();
+      }
+    }
+    else if (key == "antiAliasPhase")
+    {
+      const int index = std::clamp(static_cast<int>(std::lround(value)), 0, 2);
+      if (index != mAntiAliasPhaseIndex)
+      {
+        mAntiAliasPhaseIndex = index;
+        ReconfigureModelProcessing();
+      }
+    }
     else if (!key.empty())
     {
       mTargetParams[key] = value;
@@ -318,6 +345,10 @@ public:
       return mEnabled ? 1.0 : 0.0;
     if (key == "useCalibration")
       return mUseCalibration ? 1.0 : 0.0;
+    if (key == "oversampling")
+      return static_cast<double>(mOversamplingIndex);
+    if (key == "antiAliasPhase")
+      return static_cast<double>(mAntiAliasPhaseIndex);
     const auto it = mTargetParams.find(key);
     if (it != mTargetParams.end())
       return it->second;
@@ -329,6 +360,7 @@ public:
   {
     mModels.clear();
     mHasModelParameters = false;
+    UpdateLatencyAlignment();
     if (refs.empty() || paths.empty())
       return false;
 
@@ -365,7 +397,6 @@ public:
       }
 
       ResizeModelBuffers(instance, mMaxBlockSize);
-      ResetModel(instance, mSampleRate, mMaxBlockSize);
 
       mModels.push_back(std::move(instance));
     }
@@ -377,6 +408,7 @@ public:
       return a.parameterValue < b.parameterValue;
     });
 
+    UpdateLatencyAlignment();
     UpdateAutoGains(SelectBlendModels());
     return true;
   }
@@ -385,6 +417,7 @@ public:
 
   [[nodiscard]] std::string GetType() const override { return "amp_nam_blend"; }
   [[nodiscard]] std::string GetCategory() const override { return "amp"; }
+  [[nodiscard]] int GetLatencySamples() const override { return mLatencySamples; }
 
 private:
   struct ModelInstance
@@ -396,9 +429,6 @@ private:
 
     std::unique_ptr<::nam::DSP> fallbackLeft;
     std::unique_ptr<::nam::DSP> fallbackRight;
-    bool resamplingActive = false;
-    double processingSampleRate = 44100.0;
-    int maxProcessingBlockSize = 512;
 
     std::vector<float> outputBufferL;
     std::vector<float> outputBufferR;
@@ -407,8 +437,10 @@ private:
     std::vector<NAM_SAMPLE> fallbackOutputL;
     std::vector<NAM_SAMPLE> fallbackOutputR;
 
-    BlockSincResampler inputResampler;
-    BlockSincResampler outputResampler;
+    NamOversamplingProcessor oversamplingLeft;
+    NamOversamplingProcessor oversamplingRight;
+    NamDryDelay wetDelayLeft;
+    NamDryDelay wetDelayRight;
 
     std::optional<double> inputLevel;
     std::optional<double> outputLevel;
@@ -440,8 +472,14 @@ private:
   bool mHasModelParameters = false;
   bool mUseCalibration = true;
   bool mEnabled = true;
+  bool mPrepared = false;
   std::string mParameterId;
   std::uint64_t mLevelTargetsRevision = 0;
+  int mOversamplingIndex = 0;
+  int mAntiAliasPhaseIndex = 0;
+  int mLatencySamples = 0;
+  NamDryDelay mDryDelayLeft;
+  NamDryDelay mDryDelayRight;
 
   std::optional<double> mCalibrationInputLevel;
 
@@ -513,29 +551,24 @@ private:
 
   void ResizeModelBuffers(ModelInstance& instance, int maxBlockSize)
   {
-    instance.processingSampleRate = ResolveInstanceSampleRate(instance);
-    // Match NeuralAmpModelerPlugin behavior: resample on any SR mismatch.
-    instance.resamplingActive = NeedsNamRuntimeResampling(instance.processingSampleRate, mSampleRate);
-    instance.maxProcessingBlockSize = instance.resamplingActive
-      ? BlockSincResampler::ComputeMaxOutputFrameCount(maxBlockSize, mSampleRate, instance.processingSampleRate)
-      : maxBlockSize;
-    instance.maxProcessingBlockSize = std::max(1, instance.maxProcessingBlockSize);
+    const int hostBlockSize = std::max(1, maxBlockSize);
+    instance.outputBufferL.resize(static_cast<size_t>(hostBlockSize));
+    instance.outputBufferR.resize(static_cast<size_t>(hostBlockSize));
+    instance.fallbackInputL.resize(static_cast<size_t>(hostBlockSize));
+    instance.fallbackInputR.resize(static_cast<size_t>(hostBlockSize));
+    instance.fallbackOutputL.resize(static_cast<size_t>(hostBlockSize));
+    instance.fallbackOutputR.resize(static_cast<size_t>(hostBlockSize));
 
-    instance.outputBufferL.resize(static_cast<size_t>(maxBlockSize));
-    instance.outputBufferR.resize(static_cast<size_t>(maxBlockSize));
-    instance.fallbackInputL.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
-    instance.fallbackInputR.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
-    instance.fallbackOutputL.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
-    instance.fallbackOutputR.resize(static_cast<size_t>(instance.maxProcessingBlockSize));
+    if (!mPrepared || !instance.fallbackLeft || !instance.fallbackRight)
+      return;
 
-    instance.inputResampler.Prepare(mSampleRate,
-                    instance.processingSampleRate,
-                    maxBlockSize,
-                    SampleRateConversionQuality::HighPerformance);
-    instance.outputResampler.Prepare(instance.processingSampleRate,
-                     mSampleRate,
-                     instance.maxProcessingBlockSize,
-                     SampleRateConversionQuality::HighPerformance);
+    const double modelSampleRate = ResolveInstanceSampleRate(instance);
+    const int factor = NamOversamplingFactorFromIndex(mOversamplingIndex);
+    const auto filterPhase = NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex);
+    instance.oversamplingLeft.Prepare(
+      *instance.fallbackLeft, mSampleRate, modelSampleRate, hostBlockSize, factor, filterPhase);
+    instance.oversamplingRight.Prepare(
+      *instance.fallbackRight, mSampleRate, modelSampleRate, hostBlockSize, factor, filterPhase);
   }
 
   void ResetModel(ModelInstance& instance, double sampleRate, int maxBlockSize)
@@ -544,8 +577,10 @@ private:
     (void)maxBlockSize;
     if (instance.fallbackLeft && instance.fallbackRight)
     {
-      instance.fallbackLeft->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
-      instance.fallbackRight->Reset(instance.processingSampleRate, instance.maxProcessingBlockSize);
+      instance.oversamplingLeft.Reset(*instance.fallbackLeft);
+      instance.oversamplingRight.Reset(*instance.fallbackRight);
+      instance.wetDelayLeft.Reset();
+      instance.wetDelayRight.Reset();
     }
   }
 
@@ -556,35 +591,18 @@ private:
       auto& fallbackInput = channel == 0 ? instance.fallbackInputL : instance.fallbackInputR;
       auto& fallbackOutput = channel == 0 ? instance.fallbackOutputL : instance.fallbackOutputR;
       auto* fallback = channel == 0 ? instance.fallbackLeft.get() : instance.fallbackRight.get();
-      int modelFrames = numSamples;
-      if (instance.resamplingActive)
+      auto& oversampling = channel == 0 ? instance.oversamplingLeft : instance.oversamplingRight;
+      auto& wetDelay = channel == 0 ? instance.wetDelayLeft : instance.wetDelayRight;
+      for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
       {
-        modelFrames = GetModelFrameCount(instance, numSamples);
-        instance.inputResampler.ProcessFixedOutput(input, numSamples, fallbackInput.data(), modelFrames);
+        fallbackInput[sampleIndex] = static_cast<NAM_SAMPLE>(input[sampleIndex]);
       }
-      else
+      oversampling.Process(*fallback, fallbackInput.data(), fallbackOutput.data(), numSamples);
+      for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
       {
-        for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
-        {
-          fallbackInput[sampleIndex] = static_cast<NAM_SAMPLE>(input[sampleIndex]);
-        }
+        output[sampleIndex] = static_cast<float>(fallbackOutput[sampleIndex]);
       }
-      NAM_SAMPLE* inputPtr = fallbackInput.data();
-      NAM_SAMPLE* outputPtr = fallbackOutput.data();
-      NAM_SAMPLE* inputPtrs[1] = { inputPtr };
-      NAM_SAMPLE* outputPtrs[1] = { outputPtr };
-      fallback->process(inputPtrs, outputPtrs, modelFrames);
-      if (instance.resamplingActive)
-      {
-        instance.outputResampler.ProcessFixedOutput(fallbackOutput.data(), modelFrames, output, numSamples);
-      }
-      else
-      {
-        for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
-        {
-          output[sampleIndex] = static_cast<float>(fallbackOutput[sampleIndex]);
-        }
-      }
+      wetDelay.Process(output, numSamples);
       return;
     }
 
@@ -857,10 +875,36 @@ private:
     return ResolveNamModelProcessingSampleRate(expectedSR, mSampleRate);
   }
 
-  int GetModelFrameCount(const ModelInstance& instance, int numSamples) const
+  void ReconfigureModelProcessing()
   {
-    int modelFrames = BlockSincResampler::ComputeOutputFrameCount(numSamples, mSampleRate, instance.processingSampleRate);
-    return std::clamp(modelFrames, 1, instance.maxProcessingBlockSize);
+    if (!mPrepared)
+      return;
+
+    for (auto& model : mModels)
+      ResizeModelBuffers(model, mMaxBlockSize);
+
+    UpdateLatencyAlignment();
+  }
+
+  void UpdateLatencyAlignment()
+  {
+    mLatencySamples = 0;
+    for (const auto& model : mModels)
+    {
+      mLatencySamples = std::max(mLatencySamples, model.oversamplingLeft.GetLatencySamples());
+      mLatencySamples = std::max(mLatencySamples, model.oversamplingRight.GetLatencySamples());
+    }
+
+    for (auto& model : mModels)
+    {
+      model.wetDelayLeft.Prepare(
+        mLatencySamples - model.oversamplingLeft.GetLatencySamples(), mMaxBlockSize);
+      model.wetDelayRight.Prepare(
+        mLatencySamples - model.oversamplingRight.GetLatencySamples(), mMaxBlockSize);
+    }
+
+    mDryDelayLeft.Prepare(mLatencySamples, mMaxBlockSize);
+    mDryDelayRight.Prepare(mLatencySamples, mMaxBlockSize);
   }
 };
 
@@ -879,7 +923,11 @@ inline void RegisterMultiModelNAMAmpEffect()
     {"inputGain", "Input", 0.0, -24.0, 24.0, "dB"},
     {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
     {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true},
-    {"useCalibration", "Use Calibration", 1.0, 0.0, 1.0, "toggle", "Advanced", true}
+    {"useCalibration", "Use Calibration", 1.0, 0.0, 1.0, "toggle", "Advanced", true},
+    {"oversampling", "Oversampling", 0.0, 0.0, 5.0, "enum", "Advanced", true, 1.0,
+      {"Off", "2x", "4x", "8x", "16x", "32x"}},
+    {"antiAliasPhase", "AA Filter", 0.0, 0.0, 2.0, "enum", "Advanced", true, 1.0,
+      {"Minimum Phase", "Linear Short", "Linear Long"}}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

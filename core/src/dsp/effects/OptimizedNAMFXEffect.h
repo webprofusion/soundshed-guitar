@@ -51,7 +51,11 @@ inline void RegisterOptimizedNAMFXEffect()
     {"presence",              "Presence",            0.0,   -10.0, 10.0,  "dB",  "Tone",     true},
     {"outputGain",            "Output",              0.0,   -24.0, 24.0,  "dB",  "Level"},
     {"mix",                   "Mix",                 1.0,    0.0,   1.0,  "amount", "Advanced", true},
-    {"useCalibration",        "Use Calibration",     1.0,    0.0,   1.0,  "toggle", "Advanced", true}
+    {"useCalibration",        "Use Calibration",     1.0,    0.0,   1.0,  "toggle", "Advanced", true},
+    {"oversampling",          "Oversampling",         0.0,    0.0,   5.0,  "enum", "Advanced", true, 1.0,
+      {"Off", "2x", "4x", "8x", "16x", "32x"}},
+    {"antiAliasPhase",        "AA Filter",            0.0,    0.0,   2.0,  "enum", "Advanced", true, 1.0,
+      {"Minimum Phase", "Linear Short", "Linear Long"}}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

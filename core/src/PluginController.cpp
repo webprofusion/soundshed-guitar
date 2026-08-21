@@ -78,7 +78,7 @@ namespace
     };
 
     constexpr const char* kJamYouTubeApiKeySettingKey = "jam.youtubeApiKey";
-    constexpr const char* kBundledJamYouTubeApiKey = "AIzaSyDs_H5FswLGwL0kjnBhd_EDV5eRM9D64sc";
+    constexpr const char* kBundledJamYouTubeApiKey = "";
     constexpr const char* kFactoryArchiveResourceProvider = "factory-archives";
     constexpr const char* kLocalResourceProvider = "local";
     constexpr const char* kLocalResourceStorageFolder = "local";
@@ -5755,7 +5755,7 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
     }
     // Some parameters (e.g. the convolution low-latency toggle) change a node's
     // processing latency. Re-report total plugin latency so the host updates PDC.
-    if (paramKey == "lowLatency")
+    if (paramKey == "lowLatency" || paramKey == "oversampling" || paramKey == "antiAliasPhase")
         UpdateHostLatency();
     mActivePresetJson = mActivePreset ? PresetStorage::SerializeToJson(*mActivePreset) : "{}";
 }

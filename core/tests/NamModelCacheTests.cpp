@@ -21,6 +21,8 @@
 
 #include "NAM/dsp.h"
 #include "NAM/get_dsp.h"
+#include "dsp/effects/NAMOversampling.h"
+#include "dsp/effects/NAMSampleRate.h"
 
 namespace fs = std::filesystem;
 namespace cache = guitarfx::nammodelcache;
@@ -211,6 +213,52 @@ namespace
     cache::SetBudgetBytes(originalBudget);
     Check(cache::GetBudgetBytes() == originalBudget, "budget restores");
   }
+
+  void TestOversampledRendering(const fs::path &modelPath)
+  {
+    std::cout << "\n[time-scaled oversampled rendering]\n";
+    auto model = cache::GetModel(modelPath);
+    Check(model != nullptr, "model loads for oversampling");
+    if (!model)
+      return;
+
+    constexpr double fallbackSampleRate = 48000.0;
+    constexpr int blockSize = 64;
+    const double modelSampleRate = guitarfx::ResolveNamModelProcessingSampleRate(
+      model->GetExpectedSampleRate(), fallbackSampleRate);
+    const double hostSampleRate = modelSampleRate;
+
+    guitarfx::NamOversamplingProcessor oversampling;
+    oversampling.Prepare(
+      *model,
+      hostSampleRate,
+      modelSampleRate,
+      blockSize,
+      2,
+      dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR);
+
+    Check(oversampling.GetTimeScale() >= 2, "2x request applies a time-scaled NAM rendering rate");
+    Check(oversampling.GetRenderingSampleRate() > modelSampleRate, "rendering rate exceeds the model rate");
+
+    std::vector<NAM_SAMPLE> input(blockSize);
+    std::vector<NAM_SAMPLE> output(blockSize);
+    bool finite = true;
+    int sampleIndex = 0;
+    for (int block = 0; block < 4; ++block)
+    {
+      for (int i = 0; i < blockSize; ++i, ++sampleIndex)
+      {
+        input[static_cast<std::size_t>(i)] = static_cast<NAM_SAMPLE>(
+          0.1 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * sampleIndex / hostSampleRate));
+      }
+      oversampling.Process(*model, input.data(), output.data(), blockSize);
+      finite = finite && std::all_of(output.begin(), output.end(), [](NAM_SAMPLE sample)
+      {
+        return std::isfinite(static_cast<double>(sample));
+      });
+    }
+    Check(finite, "oversampled real-model output remains finite");
+  }
 } // namespace
 
 int main()
@@ -228,6 +276,7 @@ int main()
   TestEditedFileInvalidates(modelPath);
   TestMissingFileIsHandled();
   TestBudgetEvicts(modelPath);
+  TestOversampledRendering(modelPath);
 
   if (gAllPassed)
     std::cout << "\nNamModelCacheTests passed" << std::endl;

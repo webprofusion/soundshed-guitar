@@ -353,38 +353,30 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
     set(NAM_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
     set(NAM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(NeuralAmpModelerCore
-        GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
-        GIT_TAG v0.5.4
-        CMAKE_ARGS -DNAM_BUILD_TOOLS=OFF -DNAM_BUILD_TESTS=OFF)
-    FetchContent_MakeAvailable(NeuralAmpModelerCore)
+        # Pin the exact NAM-Oversampler core revision.  This adds time-scaled
+        # temporal convolutions (SetTimeScale) while retaining the NAM API used
+        # by Soundshed Guitar.
+        GIT_REPOSITORY https://github.com/DLC86/NeuralAmpModelerCore.git
+        GIT_TAG bea723b300e2dfe54f417c9e9f9d7f68b4a8f30d)
+
+    # This fork's top-level project always adds its command-line tools.  Only
+    # populate the source here; the existing fallback below builds the NAM
+    # library without pulling those executables into plugin builds.
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+    FetchContent_GetProperties(NeuralAmpModelerCore)
+    if(NOT neuralampmodelercore_POPULATED)
+        FetchContent_Populate(NeuralAmpModelerCore)
+    endif()
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
+
     FetchContent_GetProperties(NeuralAmpModelerCore SOURCE_DIR NAM_SOURCE_DIR BINARY_DIR NAM_BINARY_DIR)
     if(NOT DEFINED NeuralAmpModelerCore_SOURCE_DIR)
         set(NeuralAmpModelerCore_SOURCE_DIR "${NAM_SOURCE_DIR}" CACHE PATH "" FORCE)
-    endif()
-
-    if(MSVC)
-        # neuralampmodelercore/tools/CMakeLists.txt sets -Wno-error on NAM sources as a
-        # GCC/Clang workaround for an Eigen warning. That flag is invalid on MSVC (D8021).
-        # Clear it from the tools directory scope (requires CMake >= 3.18).
-        if(DEFINED NeuralAmpModelerCore_SOURCE_DIR)
-            foreach(_src
-                    "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/dsp.cpp"
-                    "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/conv1d.cpp")
-                if(EXISTS "${_src}")
-                    set_source_files_properties("${_src}"
-                        DIRECTORY "${NeuralAmpModelerCore_SOURCE_DIR}/tools"
-                        PROPERTIES COMPILE_FLAGS "")
-                endif()
-            endforeach()
-        endif()
-        # Exclude all NAM tool executables from the default build on MSVC.
-        # 'render' was added upstream after the original list was written.
-        foreach(_nam_tool benchmodel bench_a2_fast loadmodel render run_tests tools)
-            if(TARGET ${_nam_tool})
-                set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_ALL TRUE)
-                set_property(TARGET ${_nam_tool} PROPERTY EXCLUDE_FROM_DEFAULT_BUILD TRUE)
-            endif()
-        endforeach()
     endif()
 
     if(DEFINED NeuralAmpModelerCore_SOURCE_DIR)
@@ -405,23 +397,6 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
                 message(FATAL_ERROR "Eigen 5.0.1 is required by NeuralAmpModelerCore but could not be located.")
             endif()
         endif()
-
-        # v0.5.x moved WaveNet model/config parser implementation into
-        # NAM/wavenet/*.cpp. Ensure these sources are part of the NAM target so
-        # get_dsp() can resolve WaveNet architectures at runtime.
-        set(_nam_wavenet_sources
-            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/model.cpp"
-            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/slimmable.cpp"
-            "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/wavenet/a2_fast.cpp")
-        foreach(_nam_target IN ITEMS NeuralAmpModelerCore nam)
-            if(TARGET ${_nam_target})
-                foreach(_nam_src IN LISTS _nam_wavenet_sources)
-                    if(EXISTS "${_nam_src}")
-                        target_sources(${_nam_target} PRIVATE "${_nam_src}")
-                    endif()
-                endforeach()
-            endif()
-        endforeach()
     endif()
 
     if(NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam AND DEFINED NeuralAmpModelerCore_SOURCE_DIR)
@@ -443,6 +418,29 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
             target_include_directories(NeuralAmpModelerCore PUBLIC
                 "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann")
         endif()
+    endif()
+endif()
+
+# Stateful anti-aliasing resampler used by NAM-Oversampler.  Populate it as a
+# header-only source dependency rather than adding its standalone tools project.
+if(GUITARFX_CORE_FETCH_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(nam_oversampler_audio_dsp_tools
+        GIT_REPOSITORY https://github.com/DLC86/AudioDSPTools.git
+        GIT_TAG 63bdfc9db16cb45da8f1dcb3af4c572286753dde)
+
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_GetProperties(nam_oversampler_audio_dsp_tools)
+    if(NOT nam_oversampler_audio_dsp_tools_POPULATED)
+        FetchContent_Populate(nam_oversampler_audio_dsp_tools)
+    endif()
+
+    if(POLICY CMP0169)
+        cmake_policy(POP)
     endif()
 endif()
 
@@ -705,6 +703,11 @@ if(DEFINED NeuralAmpModelerCore_SOURCE_DIR)
             "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann"
         )
     endif()
+endif()
+
+if(DEFINED nam_oversampler_audio_dsp_tools_SOURCE_DIR)
+    target_include_directories(SoundshedGuitarCore PUBLIC
+        "${nam_oversampler_audio_dsp_tools_SOURCE_DIR}")
 endif()
 
 # Signalsmith headers

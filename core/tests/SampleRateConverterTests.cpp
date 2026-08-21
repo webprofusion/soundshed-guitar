@@ -1,15 +1,70 @@
 #include "dsp/BlockSincResampler.h"
-#include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMOversampling.h"
 #include "dsp/effects/NAMSampleRate.h"
 
+#include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <new>
 #include <vector>
 
 namespace
 {
+  std::atomic<std::size_t> gAllocationCount {0};
+}
+
+void* operator new(std::size_t size)
+{
+  gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+  if (void* pointer = std::malloc(std::max<std::size_t>(size, 1)))
+    return pointer;
+  throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size)
+{
+  return ::operator new(size);
+}
+
+void operator delete(void* pointer) noexcept { std::free(pointer); }
+void operator delete[](void* pointer) noexcept { std::free(pointer); }
+void operator delete(void* pointer, std::size_t) noexcept { std::free(pointer); }
+void operator delete[](void* pointer, std::size_t) noexcept { std::free(pointer); }
+
+namespace
+{
   constexpr double kPi = 3.14159265358979323846;
+
+  class TrackingNamDSP final : public ::nam::DSP
+  {
+  public:
+    TrackingNamDSP() : ::nam::DSP(1, 1, 48000.0) {}
+
+    void Reset(double sampleRate, int maxBufferSize) override
+    {
+      resetSampleRate = sampleRate;
+      resetBlockSize = maxBufferSize;
+      ++resetCount;
+    }
+
+    void SetTimeScale(int scale) override { timeScale = scale; }
+
+    void process(NAM_SAMPLE** input, NAM_SAMPLE** output, int numFrames) override
+    {
+      ++processCount;
+      processedFrames += numFrames;
+      std::copy_n(input[0], numFrames, output[0]);
+    }
+
+    double resetSampleRate = 0.0;
+    int resetBlockSize = 0;
+    int resetCount = 0;
+    int timeScale = 0;
+    int processCount = 0;
+    int processedFrames = 0;
+  };
 
   void GenerateSine(std::vector<float>& buffer, double frequency, double sampleRate)
   {
@@ -110,6 +165,115 @@ namespace
     return guitarfx::ResolveNamModelProcessingSampleRate(44100.0, 96000.0) == 44100.0
       && guitarfx::ResolveNamModelProcessingSampleRate(-1.0, 96000.0) == guitarfx::kDefaultNamModelSampleRate;
   }
+
+  bool TestNamOversamplingConfiguration()
+  {
+    return guitarfx::NamOversamplingFactorFromIndex(0.0) == 1
+      && guitarfx::NamOversamplingFactorFromIndex(1.0) == 2
+      && guitarfx::NamOversamplingFactorFromIndex(5.0) == 32
+      && guitarfx::NamOversamplingFactorFromIndex(99.0) == 32
+      && guitarfx::NamOversamplingIndexFromFactor(1) == 0
+      && guitarfx::NamOversamplingIndexFromFactor(8) == 3
+      && guitarfx::ResolveNamOversampledRenderingRate(48000.0, 48000.0, 1) == 48000.0
+      && guitarfx::ResolveNamOversampledRenderingRate(48000.0, 48000.0, 4) == 192000.0
+      && guitarfx::ResolveNamOversampledRenderingRate(48000.0, 44100.0, 2) == 96000.0;
+  }
+
+  bool TestNamDryDelay()
+  {
+    guitarfx::NamDryDelay delay;
+    delay.Prepare(3, 8);
+
+    std::vector<float> firstBlock {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+    delay.Process(firstBlock.data(), static_cast<int>(firstBlock.size()));
+    const std::vector<float> expectedFirst {0.0f, 0.0f, 0.0f, 1.0f, 2.0f};
+    if (firstBlock != expectedFirst)
+      return false;
+
+    std::vector<float> secondBlock {6.0f, 7.0f};
+    delay.Process(secondBlock.data(), static_cast<int>(secondBlock.size()));
+    const std::vector<float> expectedSecond {3.0f, 4.0f};
+    if (secondBlock != expectedSecond)
+      return false;
+
+    delay.Reset();
+    std::vector<float> resetBlock {8.0f, 9.0f, 10.0f};
+    delay.Process(resetBlock.data(), static_cast<int>(resetBlock.size()));
+    return resetBlock == std::vector<float>({0.0f, 0.0f, 0.0f});
+  }
+
+  bool TestNamOversamplingProcessor()
+  {
+    constexpr int blockSize = 64;
+    TrackingNamDSP model;
+    guitarfx::NamOversamplingProcessor processor;
+    processor.Prepare(
+      model,
+      48000.0,
+      48000.0,
+      blockSize,
+      4,
+      dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR);
+
+    if (model.timeScale != 4 || model.resetSampleRate != 192000.0 || model.resetBlockSize != 257
+        || processor.GetRenderingSampleRate() != 192000.0 || processor.GetTimeScale() != 4)
+    {
+      return false;
+    }
+
+    std::vector<NAM_SAMPLE> input(blockSize);
+    std::vector<NAM_SAMPLE> output(blockSize, static_cast<NAM_SAMPLE>(0.0));
+    for (int sampleIndex = 0; sampleIndex < blockSize; ++sampleIndex)
+      input[static_cast<std::size_t>(sampleIndex)] = static_cast<NAM_SAMPLE>(sampleIndex) / blockSize;
+
+    const std::size_t allocationsBeforeProcess = gAllocationCount.load(std::memory_order_relaxed);
+    processor.Process(model, input.data(), output.data(), blockSize);
+    const std::size_t allocationsAfterProcess = gAllocationCount.load(std::memory_order_relaxed);
+    if (allocationsAfterProcess != allocationsBeforeProcess)
+      return false;
+    if (model.processCount <= 0 || model.processedFrames < blockSize)
+      return false;
+    for (const NAM_SAMPLE sample : output)
+    {
+      if (!std::isfinite(static_cast<double>(sample)))
+        return false;
+    }
+
+    processor.Reset(model);
+    if (model.resetCount != 2 || model.timeScale != 4)
+      return false;
+
+    TrackingNamDSP linearModel;
+    guitarfx::NamOversamplingProcessor linearProcessor;
+    linearProcessor.Prepare(
+      linearModel,
+      48000.0,
+      48000.0,
+      blockSize,
+      2,
+      dsp::EAntiAliasFilterPhase::LinearCascadedFIRShort);
+    if (linearProcessor.GetLatencySamples() <= 0)
+      return false;
+
+    std::fill(output.begin(), output.end(), static_cast<NAM_SAMPLE>(0.0));
+    const std::size_t allocationsBeforeLinear = gAllocationCount.load(std::memory_order_relaxed);
+    linearProcessor.Process(linearModel, input.data(), output.data(), blockSize);
+    if (gAllocationCount.load(std::memory_order_relaxed) != allocationsBeforeLinear)
+      return false;
+
+    TrackingNamDSP fractionalModel;
+    guitarfx::NamOversamplingProcessor fractionalProcessor;
+    fractionalProcessor.Prepare(
+      fractionalModel,
+      48000.0,
+      44100.0,
+      blockSize,
+      1,
+      dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR);
+    const std::size_t allocationsBeforeFractional = gAllocationCount.load(std::memory_order_relaxed);
+    fractionalProcessor.Process(fractionalModel, input.data(), output.data(), blockSize);
+    return gAllocationCount.load(std::memory_order_relaxed) == allocationsBeforeFractional;
+  }
 }
 
 int main()
@@ -118,6 +282,9 @@ int main()
   const bool fixedOutputOk = TestFixedOutputCount();
   const bool optimizedNamSampleRateParsingOk = TestOptimizedNamSampleRateParsing();
   const bool namDefaultProcessingRateOk = TestNamDefaultProcessingRate();
+  const bool namOversamplingConfigurationOk = TestNamOversamplingConfiguration();
+  const bool namDryDelayOk = TestNamDryDelay();
+  const bool namOversamplingProcessorOk = TestNamOversamplingProcessor();
 
   if (!roundTripOk)
     std::cerr << "Sample-rate converter round-trip quality test failed\n";
@@ -127,6 +294,13 @@ int main()
     std::cerr << "Optimized NAM sample-rate metadata parsing test failed\n";
   if (!namDefaultProcessingRateOk)
     std::cerr << "NAM default processing-rate test failed\n";
+  if (!namOversamplingConfigurationOk)
+    std::cerr << "NAM oversampling configuration test failed\n";
+  if (!namDryDelayOk)
+    std::cerr << "NAM dry-delay alignment test failed\n";
+  if (!namOversamplingProcessorOk)
+    std::cerr << "NAM oversampling processor test failed\n";
 
-  return (roundTripOk && fixedOutputOk && optimizedNamSampleRateParsingOk && namDefaultProcessingRateOk) ? 0 : 1;
+  return (roundTripOk && fixedOutputOk && optimizedNamSampleRateParsingOk && namDefaultProcessingRateOk
+          && namOversamplingConfigurationOk && namDryDelayOk && namOversamplingProcessorOk) ? 0 : 1;
 }

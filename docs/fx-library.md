@@ -164,14 +164,28 @@ class EffectProcessor {
 ## Built-in Effect Types
 
 ### NAM Amp (`amp_nam`)
-Neural amp model processing.
+Neural amp model processing. The optimized NAM amp, NAM FX, and NAM Blend
+variants share the oversampling controls below.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `inputGain` | -24..+24 | 0.0 | dB |
 | `outputGain` | -24..+24 | 0.0 | dB |
+| `oversampling` | Off, 2x, 4x, 8x, 16x, 32x | Off | enum |
+| `antiAliasPhase` | Minimum Phase, Linear Short, Linear Long | Minimum Phase | enum |
 
 **Resource**: NAM model file (`.nam`)
+
+Oversampling uses the NAM-Oversampler processing model: the host signal is
+resampled to an integer multiple of the model's native rate, the NAM core's
+temporal convolutions are time-scaled by the same multiple, and the result is
+resampled back to the host rate. This preserves the model's physical receptive
+field instead of shortening its dilations at higher rendering rates.
+
+Minimum Phase is the low-latency real-time default. The linear-phase options
+trade more latency for phase-linear anti-alias filtering; their latency is
+reported to the host and the dry/blended paths are delayed to remain aligned.
+Existing presets remain at Off unless they explicitly set `oversampling`.
 
 ### IR Cabinet (`cab_ir`)
 Impulse response convolution for cabinet simulation.

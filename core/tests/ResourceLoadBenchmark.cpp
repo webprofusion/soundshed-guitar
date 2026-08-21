@@ -111,7 +111,7 @@ namespace
     // Warm the OS file cache so we measure parse cost, not first-touch disk IO.
     { auto warm = ::nam::get_dsp(path); (void)warm; }
 
-    std::vector<double> fromFile, fromFileNoPrewarm, fromData, dataCopy;
+    std::vector<double> fromFile, fromData, dataCopy;
     ::nam::dspData cached;
     { auto probe = ::nam::get_dsp(path, cached); (void)probe; }
 
@@ -123,13 +123,6 @@ namespace
         fromFile.push_back(MsSince(t));
         if (!model)
           std::cout << "  (null model)\n";
-      }
-      {
-        ::nam::DspLoadOptions options;
-        options.prewarm = false;
-        const auto t = Clock::now();
-        auto model = ::nam::get_dsp(path, options);
-        fromFileNoPrewarm.push_back(MsSince(t));
       }
       {
         // What a dspData cache hit would cost: copy the cached struct (the cache
@@ -162,7 +155,6 @@ namespace
     const double data = Median(fromData);
     PrintRow("Reset(48k, 512)  [prewarm]", Median(resetMs));
     PrintRow("get_dsp(path)  [current, per model]", file);
-    PrintRow("get_dsp(path)  prewarm=false", Median(fromFileNoPrewarm));
     PrintRow("get_dsp(dspData)  [cache hit]", data);
     PrintRow("  of which: dspData struct copy", Median(dataCopy));
     PrintRow("current cost for one node (2x path)", file * 2.0);

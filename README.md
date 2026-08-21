@@ -10,7 +10,7 @@ Requirements: x64 CPU with AVX2 support (circa late 2015+; use `build_windows.ba
 
 ## Features
 
-- Neural Amp Modeler DSP for amp/pedal captures
+- Neural Amp Modeler DSP for amp/pedal captures, with optional 2x–32x time-scaled oversampling
 - Flexible signal graph with arbitrary effect ordering and parallel paths
 - Preset management with category support and content-addressed resource deduplication
 - Remote preset search/download for community sharing
@@ -148,11 +148,12 @@ This repository depends on or vendors the following third-party libraries and SD
 
 - JUCE and the CLAP JUCE extensions in `juce/`
 - Microsoft WebView2 for the Windows WebView host path
-- NeuralAmpModelerCore and Eigen used by the NAM DSP stack in `core/`
+- NeuralAmpModelerCore, NAM-Oversampler AudioDSPTools, and Eigen used by the NAM DSP stack in `core/`
 - nlohmann/json, Signalsmith Audio linear/stretch, stftPitchShift, miniz, and the Wasmtime C API in the core CMake dependency setup
 - jszip, TypeScript, and Vitest in `core/ui/`
 
-Refer to the upstream LICENSE files and package manifests for the exact license terms of each dependency.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), the upstream LICENSE files,
+and package manifests for the exact license terms of each dependency.
 
 ## License
 
