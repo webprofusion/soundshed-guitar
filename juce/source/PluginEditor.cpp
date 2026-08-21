@@ -541,7 +541,7 @@ void PluginEditor::timerCallback()
         }
 
         if (elapsedMs > loadTimeoutMs)
-            showLinuxWebViewDependencyMessage ("Timed out while waiting for the embedded WebView to finish loading.");
+            showLinuxWebViewDependencyMessage ("Timed out while waiting for the embedded WebView to finish loading. May need system webview update, e.e.: sudo apt install libwebkit2gtk-4.1-dev");
     }
 #endif
 }
