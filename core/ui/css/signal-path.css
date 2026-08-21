@@ -666,6 +666,15 @@ body.signal-path-resizing * {
   z-index: 100;
 }
 
+.signal-node-drag-preview {
+  position: fixed !important;
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%) scale(1.04);
+  z-index: 1000;
+}
+
 .signal-node.drag-over {
   border-color: var(--node-drag-over);
   box-shadow: var(--shadow-md);
@@ -3731,8 +3740,8 @@ body.signal-path-resizing * {
   border: 2px solid #3a3a44;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  max-height: 500px;
-  max-width: 300px;
+  max-height: min(500px, calc(100vh - 16px));
+  max-width: min(300px, calc(100vw - 16px));
   overflow-y: auto;
   z-index: 1000;
   animation: dropdownFadeIn 0.15s ease-out;

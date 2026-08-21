@@ -3473,7 +3473,6 @@ function renderNodeElement(node: GraphNode, options?: RenderNodeElementOptions):
   return `
     <div class="signal-node ${categoryClass} ${bypassedClass} ${selectedClass} ${missingClass}${thumbClass}" 
          data-node-id="${node.id}" 
-         draggable="true" 
          tabindex="0"${nodeTitleAttr}${nodeAriaLabel}>
       ${thumbAvatar}
       ${deleteButton}
@@ -3631,12 +3630,154 @@ function bindNodeClickHandlers(preset: Preset): void {
   // Bind + button click handlers
   bindAddButtonHandlers();
 
+  type PointerDragTarget =
+    | { kind: "node"; element: HTMLElement; nodeId: string }
+    | { kind: "beforeNode"; element: HTMLElement; edge: EdgeRef }
+    | { kind: "edge"; element: HTMLElement; edge: EdgeRef };
+  type NodePointerDrag = {
+    pointerId: number;
+    nodeId: string;
+    source: HTMLElement;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    active: boolean;
+    target: PointerDragTarget | null;
+    preview: HTMLElement | null;
+  };
+
+  let pointerDrag: NodePointerDrag | null = null;
+  let suppressNextNodeClickId: string | null = null;
+
+  const getUiZoom = (): number => {
+    const zoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
+    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  };
+
+  const positionPointerDragPreview = (preview: HTMLElement, event: PointerEvent): void => {
+    const uiZoom = getUiZoom();
+    preview.style.left = `${Math.round(event.clientX / uiZoom)}px`;
+    preview.style.top = `${Math.round(event.clientY / uiZoom)}px`;
+  };
+
+  const createPointerDragPreview = (drag: NodePointerDrag, event: PointerEvent): HTMLElement => {
+    const rect = drag.source.getBoundingClientRect();
+    const uiZoom = getUiZoom();
+    const preview = drag.source.cloneNode(true) as HTMLElement;
+    preview.classList.remove("dragging", "drag-over", "selected");
+    preview.classList.add("signal-node-drag-preview");
+    preview.style.width = `${rect.width / uiZoom}px`;
+    preview.style.height = `${rect.height / uiZoom}px`;
+    document.body.appendChild(preview);
+    positionPointerDragPreview(preview, event);
+    return preview;
+  };
+
+  const clearPointerDragTarget = (target: PointerDragTarget | null): void => {
+    if (!target) return;
+    target.element.classList.remove("drag-over");
+    if (target.kind === "edge") {
+      target.element.querySelector(".signal-connector")?.classList.remove("drag-over");
+    }
+  };
+
+  const updatePointerDragTarget = (event: PointerEvent): void => {
+    if (!pointerDrag) return;
+
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const connector = hit?.closest<HTMLElement>(".signal-connector-wrapper");
+    const nodeElement = hit?.closest<HTMLElement>(".signal-node[data-node-id]");
+    let target: PointerDragTarget | null = null;
+
+    if (connector) {
+      const edge = parseEdgeFromDataset(connector);
+      if (edge && edge.from !== pointerDrag.nodeId && edge.to !== pointerDrag.nodeId) {
+        target = { kind: "edge", element: connector, edge };
+      }
+    } else if (nodeElement) {
+      const nodeId = nodeElement.dataset.nodeId ?? "";
+      const node = getGraphNode(nodeId);
+      if (node && nodeId !== pointerDrag.nodeId
+          && node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer) {
+        const targetIsLeftOfSource = nodeElement.getBoundingClientRect().left
+          < pointerDrag.source.getBoundingClientRect().left;
+        const incomingEdges = (preset.graph?.edges ?? [])
+          .map(normalizeEdge)
+          .filter((edge) => edge.to === nodeId);
+
+        // Reordering onto a node normally inserts after it. For a leftward move,
+        // use its single incoming edge so the dragged node takes the target's slot.
+        if (targetIsLeftOfSource && incomingEdges.length === 1) {
+          target = { kind: "beforeNode", element: nodeElement, edge: incomingEdges[0] };
+        } else {
+          target = { kind: "node", element: nodeElement, nodeId };
+        }
+      }
+    }
+
+    if (pointerDrag.target?.element === target?.element) return;
+    clearPointerDragTarget(pointerDrag.target);
+    pointerDrag.target = target;
+    if (!target) return;
+
+    target.element.classList.add("drag-over");
+    if (target.kind === "edge") {
+      target.element.querySelector(".signal-connector")?.classList.add("drag-over");
+    }
+  };
+
+  const finishPointerDrag = (event: PointerEvent, cancelled = false): void => {
+    const drag = pointerDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    clearPointerDragTarget(drag.target);
+    drag.source.classList.remove("dragging");
+    drag.preview?.remove();
+    if (drag.source.hasPointerCapture(event.pointerId)) {
+      drag.source.releasePointerCapture(event.pointerId);
+    }
+    pointerDrag = null;
+    if (!drag.active || cancelled) return;
+
+    suppressNextNodeClickId = drag.nodeId;
+    window.setTimeout(() => {
+      if (suppressNextNodeClickId === drag.nodeId) suppressNextNodeClickId = null;
+    }, 0);
+
+    if (drag.target?.kind === "edge") {
+      sendMoveSignalPathNodeToEdge(drag.nodeId, drag.target.edge);
+      return;
+    }
+    if (drag.target?.kind === "beforeNode") {
+      sendMoveSignalPathNodeToEdge(drag.nodeId, drag.target.edge);
+      return;
+    }
+    if (drag.target?.kind === "node") {
+      sendSignalPathNodeReorder(drag.nodeId, drag.target.nodeId);
+      return;
+    }
+
+    const node = getGraphNode(drag.nodeId);
+    const deltaX = drag.lastX - drag.startX;
+    const deltaY = drag.lastY - drag.startY;
+    if (node
+        && Math.abs(deltaY) >= NODE_BYPASS_DRAG_DISTANCE_PX
+        && Math.abs(deltaY) > Math.abs(deltaX) * NODE_BYPASS_DRAG_DIRECTION_RATIO) {
+      toggleSignalPathNodeBypass(node, preset);
+    }
+  };
+
   nodeElements.forEach((element) => {
     const el = element as HTMLElement;
     
     // Click handler - select node
     el.addEventListener("click", () => {
       const nodeId = el.dataset.nodeId;
+      if (nodeId && suppressNextNodeClickId === nodeId) {
+        suppressNextNodeClickId = null;
+        return;
+      }
       if (nodeId && preset.graph) {
         const node = preset.graph.nodes.find((n) => n.id === nodeId);
         if (node) {
@@ -3674,6 +3815,60 @@ function bindNodeClickHandlers(preset: Preset): void {
         expand: true,
         clearSearch: true,
       });
+    });
+
+    el.addEventListener("pointerdown", (event: PointerEvent) => {
+      if (!event.isPrimary || event.button !== 0
+          || (event.target instanceof Element && event.target.closest("button, input, select, textarea"))) {
+        return;
+      }
+
+      const nodeId = el.dataset.nodeId ?? "";
+      const node = getGraphNode(nodeId);
+      if (!node || node.type === EffectGuids.kSplitter || node.type === EffectGuids.kMixer) {
+        return;
+      }
+
+      pointerDrag = {
+        pointerId: event.pointerId,
+        nodeId,
+        source: el,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        active: false,
+        target: null,
+        preview: null,
+      };
+      el.setPointerCapture(event.pointerId);
+    });
+
+    el.addEventListener("pointermove", (event: PointerEvent) => {
+      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+
+      pointerDrag.lastX = event.clientX;
+      pointerDrag.lastY = event.clientY;
+      if (!pointerDrag.active) {
+        const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
+        if (distance < 6) return;
+        pointerDrag.active = true;
+        pointerDrag.source.classList.add("dragging");
+        pointerDrag.preview = createPointerDragPreview(pointerDrag, event);
+      }
+
+      event.preventDefault();
+      if (pointerDrag.preview) {
+        positionPointerDragPreview(pointerDrag.preview, event);
+      }
+      updatePointerDragTarget(event);
+    });
+
+    el.addEventListener("pointerup", (event: PointerEvent) => {
+      finishPointerDrag(event);
+    });
+    el.addEventListener("pointercancel", (event: PointerEvent) => {
+      finishPointerDrag(event, true);
     });
     
     // Drag start
@@ -3860,22 +4055,19 @@ function bindConnectorDropHandlers(preset: Preset): void {
     // Drag over
     el.addEventListener("dragover", (e: DragEvent) => {
       e.preventDefault();
-      updateNodeDragPoint(e);
       
       // Only accept drops from FX library
       const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
       const fxBlendType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-blend");
       const fxCustomEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-custom-effect");
       const fxResourceGroup = Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group");
-      const signalNodeId = e.dataTransfer?.getData("application/x-signal-node") || "";
-      const isSignalNode = Boolean(signalNodeId);
       
-      if (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup || isSignalNode) {
+      if (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) {
         const connector = el.querySelector(".signal-connector") as HTMLElement | null;
         connector?.classList.add("drag-over");
         el.classList.add("drag-over");
         if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) ? "copy" : "move";
+          e.dataTransfer.dropEffect = "copy";
         }
       }
     });
@@ -3890,14 +4082,12 @@ function bindConnectorDropHandlers(preset: Preset): void {
     // Drop
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
-      updateNodeDragPoint(e);
       const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
       const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
       const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
       const fxBlendCategory = e.dataTransfer?.getData("application/x-fx-blend-category");
       const customEffectPayloadRaw = e.dataTransfer?.getData("application/x-fx-custom-effect");
       const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
-      const signalNodeId = e.dataTransfer?.getData("application/x-signal-node");
 
       const edge = parseEdgeFromDataset(el);
       if (resourceGroupPayload && preset.graph) {
@@ -3922,12 +4112,6 @@ function bindConnectorDropHandlers(preset: Preset): void {
           label: fxBlendName || undefined,
           category: fxBlendCategory || undefined,
         });
-      } else if (signalNodeId && edge && preset.graph) {
-        const node = preset.graph.nodes.find((n) => n.id === signalNodeId);
-        if (node && node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer) {
-          nodeDragDropHandled = true;
-          sendMoveSignalPathNodeToEdge(signalNodeId, edge);
-        }
       }
       
       const connector = el.querySelector(".signal-connector") as HTMLElement | null;
@@ -7528,10 +7712,41 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   dropdown.innerHTML = dropdownHtml;
   document.body.appendChild(dropdown);
 
-  // Position dropdown near the button
-  const buttonRect = buttonElement.getBoundingClientRect();
-  dropdown.style.left = `${buttonRect.left}px`;
-  dropdown.style.top = `${buttonRect.bottom + 5}px`;
+  const positionDropdown = (): void => {
+    const buttonRect = buttonElement.getBoundingClientRect();
+    const margin = 8;
+    const appliedZoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
+    const uiZoom = Number.isFinite(appliedZoom) && appliedZoom > 0 ? appliedZoom : 1;
+    const viewportWidth = window.innerWidth / uiZoom;
+    const viewportHeight = window.innerHeight / uiZoom;
+
+    dropdown.style.maxWidth = `${Math.min(300, viewportWidth - margin * 2)}px`;
+    dropdown.style.maxHeight = `${Math.min(500, viewportHeight - margin * 2)}px`;
+    const dropdownWidth = dropdown.offsetWidth;
+    const dropdownHeight = dropdown.offsetHeight;
+    const left = Math.max(
+      margin,
+      Math.min(buttonRect.left / uiZoom, viewportWidth - dropdownWidth - margin),
+    );
+    let top = buttonRect.bottom / uiZoom + 5;
+
+    if (top + dropdownHeight > viewportHeight - margin) {
+      top = Math.max(margin, buttonRect.top / uiZoom - dropdownHeight - 5);
+    }
+
+    dropdown.style.left = `${Math.round(left)}px`;
+    dropdown.style.top = `${Math.round(top)}px`;
+  };
+
+  const closeDropdown = (): void => {
+    window.removeEventListener("resize", positionDropdown);
+    window.removeEventListener("scroll", positionDropdown, true);
+    dropdown.remove();
+  };
+
+  positionDropdown();
+  window.addEventListener("resize", positionDropdown);
+  window.addEventListener("scroll", positionDropdown, true);
 
   // Bind effect selection
   const effectItems = dropdown.querySelectorAll(".effect-dropdown-item");
@@ -7561,7 +7776,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
             category: blendCategory || undefined,
           });
         }
-        dropdown.remove();
+        closeDropdown();
       }
     });
   });
@@ -7570,7 +7785,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   setTimeout(() => {
     const closeHandler = (e: MouseEvent) => {
       if (!dropdown.contains(e.target as Node)) {
-        dropdown.remove();
+        closeDropdown();
         document.removeEventListener("click", closeHandler);
       }
     };
