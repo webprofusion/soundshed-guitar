@@ -51,8 +51,8 @@ namespace
     const char* getMimeForExtension (const juce::String& extension)
     {
         static const std::unordered_map<juce::String, const char*> mimeMap = {
-            { "htm", "text/html" },
-            { "html", "text/html" },
+            { "htm", "text/html; charset=utf-8" },
+            { "html", "text/html; charset=utf-8" },
             { "txt", "text/plain" },
             { "jpg", "image/jpeg" },
             { "jpeg", "image/jpeg" },
@@ -85,6 +85,19 @@ namespace
 
         stream.read (result.data(), static_cast<int> (result.size()));
         return result;
+    }
+
+    void prependUtf8Bom (std::vector<std::byte>& data)
+    {
+        constexpr std::byte bom[] { std::byte { 0xef }, std::byte { 0xbb }, std::byte { 0xbf } };
+
+        if (data.size() >= 3
+            && data[0] == bom[0]
+            && data[1] == bom[1]
+            && data[2] == bom[2])
+            return;
+
+        data.insert (data.begin(), bom, bom + 3);
     }
 
     bool isSafeResourcePath (const juce::String& path)
@@ -562,9 +575,14 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
         if (file.existsAsFile())
         {
             auto data = readFileToVector (file);
+            const auto mimeType = getMimeForExtension (file.getFileExtension().substring (1));
+
+            // WebKitGTK ignores the charset header for custom juce:// resources.
+            if (juce::String (mimeType).startsWith ("text/html"))
+                prependUtf8Bom (data);
 
             return juce::WebBrowserComponent::Resource { std::move (data),
-                getMimeForExtension (file.getFileExtension().substring (1)) };
+                mimeType };
         }
 
         writeStartupLog ("[getResource] MISS " + resourceRoot.getChildFile ("ui").getChildFile (urlToRetrieve).getFullPathName());
@@ -588,7 +606,8 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
 
         std::vector<std::byte> bytes (fallbackHtml.getNumBytesAsUTF8());
         std::memcpy (bytes.data(), fallbackHtml.toRawUTF8(), bytes.size());
-        return juce::WebBrowserComponent::Resource { std::move (bytes), "text/html" };
+        prependUtf8Bom (bytes);
+        return juce::WebBrowserComponent::Resource { std::move (bytes), "text/html; charset=utf-8" };
     }
 
     return std::nullopt;
