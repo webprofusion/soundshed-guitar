@@ -125,6 +125,21 @@ export type FxLibraryItem = EffectTypeInfo & {
   description?: string;
 };
 
+export type FxPointerDragPayload = {
+  effectType: string;
+  blendId?: string;
+  blendName?: string;
+  blendCategory?: string;
+  customEffect?: {
+    customEffectId: string;
+    name: string;
+    category: string;
+    moduleResourceType: string;
+    moduleResourceId: string;
+    defaultParams: Record<string, number>;
+  };
+};
+
 export interface SignalPathNodeOptions {
   config?: Record<string, string>;
   label?: string;
@@ -390,8 +405,7 @@ function renderFxItem(effect: FxLibraryItem, categoryColor: string): string {
           data-custom-effect-resource-id="${effect.moduleResourceId ?? ""}"
           data-custom-effect-default-params="${effect.customEffectId ? encodeDatasetJson(effect.defaultParams ?? {}) : ""}"
           data-effect-category="${effect.category}"
-         draggable="true"
-         style="--category-color: ${categoryColor}">
+          style="--category-color: ${categoryColor}">
       <div class="fx-item-icon">${(() => { const thumb = effect.blendId ? (getCustomLayout(effect.type, effect.blendId) ?? getCustomLayout(effect.type)) : getCustomLayout(effect.type); const url = thumb?.thumbnailDataUrl ?? effect.thumbnailDataUrl; return url ? `<img src="${url.replace(/"/g, '&quot;')}" alt="" aria-hidden="true" class="fx-item-thumb" />` : getFxEffectIcon(effect.type); })()}</div>
       <div class="fx-item-info">
         <div class="fx-item-name">${effect.displayName}</div>
@@ -459,6 +473,50 @@ function bindFxItemDragHandlers(): void {
     const el = target?.closest(".fx-item") as HTMLElement | null;
     el?.classList.remove("dragging");
     document.body.classList.remove("fx-dragging");
+  });
+
+  fxSelectorEffectsList.addEventListener("pointerdown", (event: PointerEvent) => {
+    if (!event.isPrimary || event.button !== 0) return;
+
+    const target = event.target as HTMLElement | null;
+    const el = target?.closest(".fx-item") as HTMLElement | null;
+    const effectType = el?.dataset.effectType;
+    if (!el || !effectType) return;
+
+    let customEffect: FxPointerDragPayload["customEffect"];
+    const customEffectId = el.dataset.customEffectId;
+    if (customEffectId) {
+      let defaultParams: Record<string, number> = {};
+      try {
+        defaultParams = JSON.parse(decodeURIComponent(el.dataset.customEffectDefaultParams ?? "%7B%7D")) as Record<string, number>;
+      } catch {
+        defaultParams = {};
+      }
+      customEffect = {
+        customEffectId,
+        name: el.querySelector(".fx-item-name")?.textContent ?? "Custom Effect",
+        category: el.dataset.effectCategory ?? "utility",
+        moduleResourceType: el.dataset.customEffectResourceType ?? "",
+        moduleResourceId: el.dataset.customEffectResourceId ?? "",
+        defaultParams,
+      };
+    }
+
+    document.dispatchEvent(new CustomEvent("fx-pointer-drag-start", {
+      detail: {
+        source: el,
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        payload: {
+          effectType,
+          blendId: el.dataset.blendId || undefined,
+          blendName: el.querySelector(".fx-item-name")?.textContent ?? undefined,
+          blendCategory: el.dataset.blendCategory || undefined,
+          customEffect,
+        } satisfies FxPointerDragPayload,
+      },
+    }));
   });
 
   dragDelegationBound = true;

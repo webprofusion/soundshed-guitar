@@ -27,9 +27,10 @@ import {
   focusFxSelectorCategory,
   getFxLibraryItems,
   getOrderedFxCategories,
-  sendAddSignalPathNode,
-  sendAddSignalPathNodeOnEdge,
-  type FxLibraryItem,
+    sendAddSignalPathNode,
+    sendAddSignalPathNodeOnEdge,
+    type FxPointerDragPayload,
+    type FxLibraryItem,
   type SignalPathEdgeRef,
   type SignalPathNodeOptions,
 } from "./fxSelector.js";
@@ -921,6 +922,163 @@ function buildCustomEffectNodeOptions(payload: CustomEffectDragPayload): SignalP
     ],
   };
 }
+
+type FxPointerDragTarget =
+  | { kind: "node"; element: HTMLElement; node: GraphNode; preset: Preset }
+  | { kind: "edge"; element: HTMLElement; edge: EdgeRef };
+type FxPointerDrag = {
+  source: HTMLElement;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  payload: FxPointerDragPayload;
+  active: boolean;
+  preview: HTMLElement | null;
+  target: FxPointerDragTarget | null;
+};
+
+let fxPointerDrag: FxPointerDrag | null = null;
+
+function getUiZoomForPointerDrag(): number {
+  const zoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
+function clearFxPointerDragTarget(target: FxPointerDragTarget | null): void {
+  if (!target) return;
+  target.element.classList.remove("drag-over");
+  if (target.kind === "edge") {
+    target.element.querySelector(".signal-connector")?.classList.remove("drag-over");
+  }
+}
+
+function positionFxPointerDragPreview(preview: HTMLElement, event: PointerEvent): void {
+  const zoom = getUiZoomForPointerDrag();
+  preview.style.left = `${Math.round(event.clientX / zoom)}px`;
+  preview.style.top = `${Math.round(event.clientY / zoom)}px`;
+}
+
+function createFxPointerDragPreview(drag: FxPointerDrag, event: PointerEvent): HTMLElement {
+  const rect = drag.source.getBoundingClientRect();
+  const zoom = getUiZoomForPointerDrag();
+  const preview = drag.source.cloneNode(true) as HTMLElement;
+  preview.classList.remove("dragging");
+  preview.classList.add("fx-item-drag-preview");
+  preview.style.width = `${rect.width / zoom}px`;
+  document.body.appendChild(preview);
+  positionFxPointerDragPreview(preview, event);
+  return preview;
+}
+
+function updateFxPointerDragTarget(event: PointerEvent): void {
+  if (!fxPointerDrag) return;
+
+  const hit = document.elementFromPoint(event.clientX, event.clientY);
+  const nodeElement = hit?.closest<HTMLElement>(".signal-node[data-node-id]");
+  const connector = hit?.closest<HTMLElement>(".signal-connector-wrapper");
+  let target: FxPointerDragTarget | null = null;
+
+  if (nodeElement && signalPathNodesElement?.contains(nodeElement)) {
+    const preset = getSignalPathPreset();
+    const nodeId = nodeElement.dataset.nodeId ?? "";
+    const node = preset?.graph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (node && preset && !isProtectedSignalPathNode(node)) {
+      target = { kind: "node", element: nodeElement, node, preset };
+    }
+  } else if (connector && signalPathNodesElement?.contains(connector)) {
+    const edge = parseEdgeFromDataset(connector);
+    if (edge) target = { kind: "edge", element: connector, edge };
+  }
+
+  if (fxPointerDrag.target?.element === target?.element) return;
+  clearFxPointerDragTarget(fxPointerDrag.target);
+  fxPointerDrag.target = target;
+  if (!target) return;
+
+  target.element.classList.add("drag-over");
+  if (target.kind === "edge") {
+    target.element.querySelector(".signal-connector")?.classList.add("drag-over");
+  }
+}
+
+function finishFxPointerDrag(event: PointerEvent, cancelled = false): void {
+  const drag = fxPointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+
+  clearFxPointerDragTarget(drag.target);
+  drag.source.classList.remove("dragging");
+  document.body.classList.remove("fx-dragging");
+  drag.preview?.remove();
+  if (drag.source.hasPointerCapture(event.pointerId)) {
+    drag.source.releasePointerCapture(event.pointerId);
+  }
+  fxPointerDrag = null;
+  if (!drag.active || cancelled || !drag.target) return;
+
+  const customEffect = drag.payload.customEffect;
+  const options = customEffect
+    ? buildCustomEffectNodeOptions({ ...customEffect, baseEffectType: drag.payload.effectType })
+    : {
+        config: drag.payload.blendId ? { blendId: drag.payload.blendId } : undefined,
+        label: drag.payload.blendName,
+        category: drag.payload.blendCategory,
+      };
+
+  if (drag.target.kind === "node") {
+    applyOptimisticNodeReplacement(drag.target.node, drag.payload.effectType, drag.target.preset, options);
+    sendReplaceSignalPathNode(drag.target.node.id, drag.payload.effectType, options);
+    return;
+  }
+
+  sendAddEffectAtEdgeOrFallback(drag.payload.effectType, drag.target.edge, "__input__", options);
+}
+
+document.addEventListener("fx-pointer-drag-start", (event: Event) => {
+  const detail = (event as CustomEvent<{
+    source: HTMLElement;
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    payload: FxPointerDragPayload;
+  }>).detail;
+  if (!detail?.source || !detail.payload.effectType) return;
+
+  fxPointerDrag = {
+    source: detail.source,
+    pointerId: detail.pointerId,
+    startX: detail.clientX,
+    startY: detail.clientY,
+    payload: detail.payload,
+    active: false,
+    preview: null,
+    target: null,
+  };
+  detail.source.setPointerCapture(detail.pointerId);
+});
+
+document.addEventListener("pointermove", (event: PointerEvent) => {
+  if (!fxPointerDrag || fxPointerDrag.pointerId !== event.pointerId) return;
+
+  if (!fxPointerDrag.active) {
+    const distance = Math.hypot(event.clientX - fxPointerDrag.startX, event.clientY - fxPointerDrag.startY);
+    if (distance < 6) return;
+    fxPointerDrag.active = true;
+    fxPointerDrag.source.classList.add("dragging");
+    document.body.classList.add("fx-dragging");
+    fxPointerDrag.preview = createFxPointerDragPreview(fxPointerDrag, event);
+  }
+
+  event.preventDefault();
+  if (fxPointerDrag.preview) positionFxPointerDragPreview(fxPointerDrag.preview, event);
+  updateFxPointerDragTarget(event);
+}, true);
+
+document.addEventListener("pointerup", (event: PointerEvent) => {
+  finishFxPointerDrag(event);
+}, true);
+document.addEventListener("pointercancel", (event: PointerEvent) => {
+  finishFxPointerDrag(event, true);
+}, true);
 
 function applyOptimisticNodeReplacement(
   targetNode: GraphNode,
