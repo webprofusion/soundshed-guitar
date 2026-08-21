@@ -1,7 +1,20 @@
 #pragma once
 
 #include "NAM/dsp.h"
+
+// ResamplingContainer pulls in WDL, which includes <windows.h> on Win32. That
+// defines UpdateResource as UpdateResourceA, which then mangles unrelated member
+// calls such as ResourceLibrary::UpdateResource in every translation unit that
+// includes this header. NOMINMAX is already set for the core target; drop the
+// remaining macros that collide with our own API names.
 #include "dsp/ResamplingContainer/ResamplingContainer.h"
+
+#ifdef UpdateResource
+#undef UpdateResource
+#endif
+#ifdef RemoveResource
+#undef RemoveResource
+#endif
 
 #include <algorithm>
 #include <cstddef>
