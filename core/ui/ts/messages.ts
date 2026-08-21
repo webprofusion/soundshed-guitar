@@ -9,6 +9,7 @@ import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
+import { applyLocalAudioFileLoaded, applyLocalAudioPlaybackEnded, applyLocalAudioTransportState } from "./localAudioPlayer.js";
 import { getRiffLibrary, postMessage } from "./bridge.js";
 import { refreshEffectPresetsFlyout, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
@@ -972,6 +973,20 @@ export function handleIncomingMessage(message: string): void {
         getRiffLibrary();
       }
       refreshDemoAudioSelectors();
+      break;
+    }
+    case "localAudioFileLoaded": {
+      const info = payload as { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] };
+      applyLocalAudioFileLoaded(info);
+      break;
+    }
+    case "localAudioTransportState": {
+      const info = payload as { state?: string; positionSec?: number };
+      applyLocalAudioTransportState(info);
+      break;
+    }
+    case "localAudioPlaybackEnded": {
+      applyLocalAudioPlaybackEnded();
       break;
     }
     case "resourceCleanupResult": {

@@ -47,6 +47,7 @@ namespace guitarfx
 {
 
 class DemoPreviewService;
+class LocalAudioPlayerService;
 
 /**
  * Shared plugin controller — all business logic lives here.
@@ -304,6 +305,17 @@ private:
     void HandleMarkRiffUsedRequest(const nlohmann::json& payload);
     void HandlePreviewRiffTakeRequest(const nlohmann::json& payload);
     void HandlePreviewCapturedRiffRequest(const nlohmann::json& payload);
+
+    // Local audio player (Jam panel backing-track player)
+    void HandleBrowseLocalAudioFileRequest();
+    void HandleLoadLocalAudioFileRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioTransportRequest(const nlohmann::json& payload);
+    void HandleSeekLocalAudioFileRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioSpeedRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioPitchRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioGainRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioLoopRegionRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioLoopingRequest(const nlohmann::json& payload);
 
     // Composite presets (Multi-Rig)
     void HandleSaveCompositePresetRequest(const nlohmann::json& payload);
@@ -705,6 +717,7 @@ private:
     std::string mMetronomeBeatPattern; // e.g. "HLLL"
 
     std::unique_ptr<DemoPreviewService> mDemoPreview;
+    std::unique_ptr<LocalAudioPlayerService> mLocalAudioPlayer;
 
     struct RiffCaptureConfig
     {
@@ -769,6 +782,7 @@ private:
     int mDSPPerformanceUpdateCounter = 0;
     int mSignalDiagnosticsUpdateCounter = 0;
     int mSpatialPositionUpdateCounter = 0;
+    int mLocalAudioPlayerUpdateCounter = 0;
     bool mSpatialPositionsWereSent = false;
     bool mPendingSignalDiagnosticsUpdate = false;
     std::chrono::steady_clock::time_point mLastSignalDiagnosticsUpdateSentAt{};

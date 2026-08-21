@@ -259,7 +259,7 @@ export interface JamPlayerState {
 }
 
 export interface JamState {
-  activeSection: "backingTracks" | "scales" | "riffs";
+  activeSection: "backingTracks" | "scales" | "riffs" | "player";
   activeTab: "search" | "favorites";
   query: string;
   results: JamVideoSummary[];
@@ -593,6 +593,35 @@ export interface RiffLibrary {
   riffs: RiffEntry[];
 }
 
+export interface LocalAudioLoopRegion {
+  id: string;
+  name: string;
+  startSec: number;
+  endSec: number;
+}
+
+/**
+ * UI-owned Local Audio Player (Jam panel) state. `loops` and `activeLoopId` are
+ * pure client-side bookkeeping — the engine has no concept of a loop library,
+ * it only ever knows the currently-active region's bounds and whether looping
+ * is on (see setLocalAudioLoopRegion/setLocalAudioLooping in bridge.ts).
+ */
+export interface LocalAudioPlayerState {
+  filePath: string;
+  title: string;
+  durationSec: number;
+  positionSec: number;
+  waveformPeaksL: number[];
+  waveformPeaksR: number[];
+  loops: LocalAudioLoopRegion[];
+  activeLoopId: string | null;
+  looping: boolean;
+  playing: boolean;
+  speed: number;
+  pitchSemitones: number;
+  gain: number;
+}
+
 export interface RiffCaptureState {
   active: boolean;
   complete: boolean;
@@ -656,6 +685,7 @@ export interface UiState {
   metronome?: MetronomeState;
   riffLibrary?: RiffLibrary;
   riffCapture?: RiffCaptureState;
+  localAudioPlayer?: LocalAudioPlayerState;
   missingNodeResources?: Array<{ nodeId: string; resourceType?: string; resourceId?: string; filePath?: string }>;
   layoutLibrary?: LayoutLibrary;
   compositeLibrary?: CompositeEffectDefinition[];

@@ -456,7 +456,9 @@ void PluginProcessorAdapter::BrowseFileAsync (
             filters = "*.png;*.jpg;*.jpeg;*.svg";
             break;
         case guitarfx::BrowseFileType::AudioFile:
-            filters = "*.wav;*.mp3;*.flac;*.ogg";
+            // FLAC/OGG are accepted here but our decoder only supports WAV/AIFF/MP3;
+            // picking one reports "unsupported format" the same way DemoPreviewService does.
+            filters = "*.wav;*.mp3;*.flac;*.ogg;*.aiff;*.aif";
             break;
         case guitarfx::BrowseFileType::ArchiveFile:
             filters = "*.soundshed.preset;*.soundshed.presets;*.zip";

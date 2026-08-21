@@ -389,6 +389,288 @@
   overflow: hidden;
 }
 
+/* ===== Local Audio Player ===== */
+
+.local-audio-player-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.local-audio-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.local-audio-file-info {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(210, 225, 255, 0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.local-audio-drop-zone {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(104, 142, 255, 0.32);
+  border-radius: 10px;
+  font-size: 11px;
+  color: rgba(210, 225, 255, 0.6);
+  text-align: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.local-audio-drop-zone.is-drag-over {
+  background: rgba(104, 142, 255, 0.1);
+  border-color: rgba(125, 182, 255, 0.72);
+  color: rgba(240, 246, 255, 0.9);
+}
+
+.local-audio-waveform-wrap {
+  position: relative;
+  margin-top: 4px;
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.local-audio-waveform {
+  display: block;
+  width: 100%;
+  height: 120px;
+  cursor: pointer;
+}
+
+/* Applied only after a mousedown has been held past a short threshold —
+   see CURSOR_HOLD_MS in localAudioPlayer.ts — so a plain click/seek never
+   flashes the resize cursor, only a real, deliberate handle/range drag. */
+.local-audio-waveform.is-resizing {
+  cursor: ew-resize;
+}
+
+.local-audio-add-loop-btn {
+  position: absolute;
+  top: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 186, 255, 0.5);
+  background: linear-gradient(140deg, #1e75d9, #1aa3d8);
+  color: #f5fbff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(11, 59, 112, 0.34);
+}
+
+.local-audio-loop-naming {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(104, 142, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(18, 25, 42, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.local-audio-loop-naming-range {
+  font-size: 11px;
+  color: rgba(210, 225, 255, 0.7);
+}
+
+.local-audio-loop-name-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(112, 151, 255, 0.34);
+  background: linear-gradient(180deg, rgba(16, 22, 38, 0.94), rgba(8, 12, 22, 0.96));
+  color: rgba(240, 246, 255, 0.94);
+}
+
+.local-audio-loop-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.local-audio-loop-template-btn {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(104, 142, 255, 0.28);
+  background: rgba(104, 142, 255, 0.08);
+  color: rgba(210, 225, 255, 0.85);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.local-audio-loop-template-btn:hover {
+  background: rgba(104, 142, 255, 0.18);
+}
+
+.local-audio-loop-naming-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.local-audio-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.local-audio-loop-list-col,
+.local-audio-transport-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.local-audio-loop-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.local-audio-loop-list {
+  overflow-y: auto;
+}
+
+.local-audio-loop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(104, 142, 255, 0.14);
+  background: rgba(18, 25, 42, 0.4);
+  margin-bottom: 6px;
+}
+
+.local-audio-loop-row.is-active {
+  border-color: rgba(255, 204, 102, 0.55);
+  background: rgba(255, 204, 102, 0.08);
+}
+
+.local-audio-loop-select-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 204, 102, 0.9);
+  cursor: pointer;
+}
+
+.local-audio-loop-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.local-audio-loop-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.local-audio-loop-range {
+  font-size: 11px;
+  color: rgba(210, 225, 255, 0.6);
+  flex: 0 0 auto;
+}
+
+.local-audio-loop-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(112, 151, 255, 0.4);
+  background: rgba(8, 12, 22, 0.9);
+  color: rgba(240, 246, 255, 0.94);
+  font-size: 12px;
+}
+
+.local-audio-loop-row-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+}
+
+.local-audio-loop-rename-btn,
+.local-audio-loop-delete-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.local-audio-transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.local-audio-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(127, 186, 255, 0.36);
+  background: linear-gradient(140deg, #1e75d9, #1aa3d8);
+  color: #f5fbff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.local-audio-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.local-audio-loop-status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(255, 204, 102, 0.95);
+  margin-left: 6px;
+}
+
+.local-audio-slider-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.local-audio-slider-value {
+  font-size: 11px;
+  text-align: right;
+  color: rgba(210, 225, 255, 0.75);
+}
+
 @media (max-width: 760px) {
   .jam-player-dock,
   .jam-player-dock.is-active {
@@ -405,5 +687,9 @@
 
   .jam-thumb-button {
     width: 100%;
+  }
+
+  .local-audio-body {
+    grid-template-columns: 1fr;
   }
 }

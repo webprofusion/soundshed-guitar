@@ -7,6 +7,7 @@
                 <button id="jam-backing-tab-favorites" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Favourites</button>
                 <button id="jam-section-scales" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Scales</button>
                 <button id="jam-section-riffs" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Riff Library</button>
+                <button id="jam-section-player" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Audio Player</button>
               </div>
               <p class="tone-sharing-share-hint">Find a backing track, pin favourites, and keep a floating YouTube player open while using the rest of the app.</p>
             </aside>
@@ -60,6 +61,70 @@
                     <h3>Saved Riffs</h3>
                     <div class="results equipment-library-results" id="riff-library-list">
                       <!-- Riff entries rendered by JS -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="jam-section-panel" id="jam-section-panel-player" hidden>
+                <div class="local-audio-player-panel">
+                  <div class="settings-section local-audio-header">
+                    <div class="local-audio-titlebar">
+                      <h3>Audio Player</h3>
+                      <button id="local-audio-browse-btn" type="button">Browse File...</button>
+                    </div>
+                    <div class="local-audio-file-info" id="local-audio-file-info">No file loaded</div>
+                    <div class="local-audio-drop-zone" id="local-audio-drop-zone">Drop a WAV, AIFF, or MP3 backing track here, or use Browse File…</div>
+                  </div>
+
+                  <div class="settings-section local-audio-waveform-section">
+                    <div class="local-audio-waveform-wrap">
+                      <canvas id="local-audio-waveform" class="local-audio-waveform" tabindex="0"></canvas>
+                      <button id="local-audio-add-loop-btn" class="local-audio-add-loop-btn" type="button" hidden>+ Add Loop</button>
+                    </div>
+                    <div class="local-audio-loop-naming" id="local-audio-loop-naming" hidden>
+                      <div class="local-audio-loop-naming-range" id="local-audio-loop-naming-range"></div>
+                      <input type="text" id="local-audio-loop-name-input" class="local-audio-loop-name-input" placeholder="Loop name (e.g. tricky bridge lick)" />
+                      <div class="local-audio-loop-templates" id="local-audio-loop-templates"></div>
+                      <div class="local-audio-loop-naming-actions">
+                        <button id="local-audio-loop-name-save" type="button">Save Loop</button>
+                        <button id="local-audio-loop-name-cancel" type="button" class="secondary">Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="local-audio-body">
+                    <div class="settings-section local-audio-loop-list-col">
+                      <div class="local-audio-loop-list-header">
+                        <h3>Loops</h3>
+                        <button id="local-audio-new-loop-btn" type="button" class="secondary">+ New Loop</button>
+                      </div>
+                      <div class="results equipment-library-results local-audio-loop-list" id="local-audio-loop-list">
+                        <!-- Loop entries rendered by JS -->
+                      </div>
+                    </div>
+
+                    <div class="settings-section local-audio-transport-col">
+                      <div class="local-audio-transport-buttons">
+                        <button id="local-audio-play-pause" type="button" class="local-audio-icon-btn" disabled>▶</button>
+                        <button id="local-audio-stop" type="button" class="local-audio-icon-btn" disabled>■</button>
+                        <span class="local-audio-loop-status" id="local-audio-loop-status" hidden></span>
+                      </div>
+                      <div class="settings-row local-audio-slider-row">
+                        <label for="local-audio-volume">Volume</label>
+                        <input type="range" id="local-audio-volume" min="0" max="1.5" step="0.01" value="1" />
+                        <span class="local-audio-slider-value" id="local-audio-volume-value">100%</span>
+                      </div>
+                      <div class="settings-row local-audio-slider-row">
+                        <label for="local-audio-speed">Speed</label>
+                        <input type="range" id="local-audio-speed" min="0.25" max="2" step="0.01" value="1" />
+                        <span class="local-audio-slider-value" id="local-audio-speed-value">100%</span>
+                      </div>
+                      <div class="settings-row local-audio-slider-row">
+                        <label for="local-audio-pitch">Pitch</label>
+                        <input type="range" id="local-audio-pitch" min="-12" max="12" step="1" value="0" />
+                        <span class="local-audio-slider-value" id="local-audio-pitch-value">0 st</span>
+                      </div>
+                      <div class="settings-hint">Speed and pitch are independent — changing one never affects the other.</div>
                     </div>
                   </div>
                 </div>

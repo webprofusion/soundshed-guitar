@@ -10,6 +10,7 @@ set(TEST_SOURCES
     GaplessSwitchingTests.cpp
     IRConvolutionTests.cpp
     IRReverbQualityTests.cpp
+    LocalAudioPlayerCrossfadeTests.cpp
     MultiPresetMixerTests.cpp
     NamCalibrationProbe.cpp
     NamModelCacheTests.cpp

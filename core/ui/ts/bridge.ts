@@ -259,3 +259,52 @@ export function removeCompositePreset(id: string): void {
   postMessage({ type: "removeCompositePreset", id });
   appendLog(`removeCompositePreset → ${id}`);
 }
+
+// ── Local Audio Player (Jam panel) ────────────────────────────────────────────
+// The engine has no concept of a loop library — only the currently-active
+// loop's bounds and whether looping is on. Loop add/rename/delete/select are
+// pure UI state (see localAudioPlayer.ts) and never round-trip through these.
+
+export function browseLocalAudioFile(): void {
+  postMessage({ type: "browseLocalAudioFile" });
+  appendLog("browseLocalAudioFile");
+}
+
+export function loadLocalAudioFile(path: string): void {
+  postMessage({ type: "loadLocalAudioFile", path });
+  appendLog(`loadLocalAudioFile → ${path}`);
+}
+
+export function setLocalAudioTransport(action: "play" | "pause" | "stop"): void {
+  postMessage({ type: "setLocalAudioTransport", action });
+  appendLog(`setLocalAudioTransport → ${action}`);
+}
+
+export function seekLocalAudioFile(seconds: number): void {
+  postMessage({ type: "seekLocalAudioFile", seconds });
+}
+
+export function setLocalAudioSpeed(ratio: number): void {
+  postMessage({ type: "setLocalAudioSpeed", ratio });
+}
+
+export function setLocalAudioPitch(semitones: number): void {
+  postMessage({ type: "setLocalAudioPitch", semitones });
+}
+
+export function setLocalAudioGain(gain: number): void {
+  postMessage({ type: "setLocalAudioGain", gain });
+}
+
+/** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
+export function setLocalAudioLoopRegion(region: { startSec: number; endSec: number } | null): void {
+  if (region) {
+    postMessage({ type: "setLocalAudioLoopRegion", startSec: region.startSec, endSec: region.endSec });
+  } else {
+    postMessage({ type: "setLocalAudioLoopRegion" });
+  }
+}
+
+export function setLocalAudioLooping(enabled: boolean): void {
+  postMessage({ type: "setLocalAudioLooping", enabled });
+}

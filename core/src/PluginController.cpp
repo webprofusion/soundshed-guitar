@@ -11,6 +11,7 @@
 #include "PluginController.h"
 #include "MessageDispatcher.h"
 #include "controller/DemoPreviewService.h"
+#include "controller/LocalAudioPlayerService.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/LevelTargets.h"
@@ -104,6 +105,11 @@ namespace
     /// How often the spatialiser's live source position is pushed to the UI. Fast
     /// enough that a moving puck looks continuous, slow enough to be negligible.
     constexpr int kSpatialPositionRateHz = 20;
+
+    /// How often the local audio (backing-track) player's transport state
+    /// (position/state) is pushed to the UI. A progress readout doesn't need
+    /// more than this.
+    constexpr int kLocalAudioPlayerRateHz = 12;
 
     // ── Metronome constants ─────────────────────────────────────────
 
@@ -2281,6 +2287,11 @@ PluginController::PluginController(IPluginHost& host)
         mSignalTestActive,
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
         [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mLocalAudioPlayer = std::make_unique<LocalAudioPlayerService>(
+        mHost,
+        mDSPMutex,
+        [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
+        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
 }
 
 PluginController::~PluginController()
@@ -2443,6 +2454,9 @@ void PluginController::Prepare(double sampleRate, int blockSize)
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.Prepare(sampleRate, blockSize);
+
+    if (mLocalAudioPlayer)
+        mLocalAudioPlayer->Prepare(sampleRate, blockSize);
 
     // Report initial latency to the host (e.g. IR cab partition size may be
     // known only after Prepare sets the sample rate).
@@ -2709,6 +2723,13 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
 
     // Add metronome click on top of processed audio (standalone only)
     RenderMetronome(outputs, numSamples);
+
+    // Mix in the local backing-track player, post-chain (like the
+    // metronome) — it is not the guitar signal and must never be routed
+    // through the amp/cab chain. Audio-thread-safe: pops from a lock-free
+    // ring only, never blocks.
+    if (mLocalAudioPlayer)
+        mLocalAudioPlayer->RenderPostChain(outputs, numSamples);
 
     // Collect signal test output
     if (mSignalTestState.samplesRemaining > 0 || mSignalTestResultPending.load(std::memory_order_relaxed))
@@ -4211,6 +4232,16 @@ void PluginController::OnIdle()
 
     if (mDemoPreview)
         mDemoPreview->OnIdle();
+
+    if (mLocalAudioPlayer)
+    {
+        mLocalAudioPlayerUpdateCounter++;
+        if (mLocalAudioPlayerUpdateCounter >= 60 / kLocalAudioPlayerRateHz)
+        {
+            mLocalAudioPlayerUpdateCounter = 0;
+            mLocalAudioPlayer->OnIdle();
+        }
+    }
 }
 
 void PluginController::OnWebContentLoaded()
@@ -10696,6 +10727,101 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
         }
         mDemoPreview->StartPreview(preview);
     }
+}
+
+// ── Local audio player (Jam panel backing-track player) ────────────
+
+void PluginController::HandleBrowseLocalAudioFileRequest()
+{
+    mHost.BrowseFileAsync(BrowseFileType::AudioFile, "Select Backing Track",
+        [this](const BrowseFileResult& result)
+        {
+            if (!result.success)
+                return;
+            nlohmann::json payload;
+            payload["path"] = util::PathToUtf8(result.path);
+            HandleLoadLocalAudioFileRequest(payload);
+        });
+}
+
+void PluginController::HandleLoadLocalAudioFileRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const std::string path = payload.value("path", "");
+    if (path.empty())
+    {
+        ReportErrorToUI("Unable to load audio file", "No file path provided");
+        return;
+    }
+    mLocalAudioPlayer->LoadFile(path);
+}
+
+void PluginController::HandleSetLocalAudioTransportRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const std::string action = payload.value("action", "");
+    if (action == "play")
+        mLocalAudioPlayer->Play();
+    else if (action == "pause")
+        mLocalAudioPlayer->Pause();
+    else if (action == "stop")
+        mLocalAudioPlayer->Stop();
+}
+
+void PluginController::HandleSeekLocalAudioFileRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const double seconds = payload.value("seconds", 0.0);
+    mLocalAudioPlayer->SeekSeconds(seconds);
+}
+
+void PluginController::HandleSetLocalAudioSpeedRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const double ratio = payload.contains("ratio") ? payload["ratio"].get<double>() : payload.value("value", 1.0);
+    mLocalAudioPlayer->SetSpeed(ratio);
+}
+
+void PluginController::HandleSetLocalAudioPitchRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const double semitones = payload.contains("semitones") ? payload["semitones"].get<double>() : payload.value("value", 0.0);
+    mLocalAudioPlayer->SetPitchSemitones(semitones);
+}
+
+void PluginController::HandleSetLocalAudioGainRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const double gain = payload.contains("gain") ? payload["gain"].get<double>() : payload.value("value", 1.0);
+    mLocalAudioPlayer->SetGain(gain);
+}
+
+void PluginController::HandleSetLocalAudioLoopRegionRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    if (payload.is_null() || !payload.contains("startSec") || !payload.contains("endSec"))
+    {
+        mLocalAudioPlayer->ClearLoopRegion();
+        return;
+    }
+    const double startSec = payload.value("startSec", 0.0);
+    const double endSec = payload.value("endSec", 0.0);
+    mLocalAudioPlayer->SetLoopRegion(startSec, endSec);
+}
+
+void PluginController::HandleSetLocalAudioLoopingRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const bool enabled = payload.value("enabled", false);
+    mLocalAudioPlayer->SetLoopingEnabled(enabled);
 }
 
 // ── Additional message handlers (from JUCE version) ────────────────

@@ -470,8 +470,11 @@ set(GUITARFX_CORE_SOURCES
     src/dispatcher/MessageDispatchMixer.cpp
     src/dispatcher/MessageDispatchLibraryComposite.cpp
     src/dispatcher/MessageDispatchAutomation.cpp
+    src/dispatcher/MessageDispatchAudioPlayer.cpp
     src/controller/DemoPreviewService.h
     src/controller/DemoPreviewService.cpp
+    src/controller/LocalAudioPlayerService.h
+    src/controller/LocalAudioPlayerService.cpp
 
     # DSP core
     src/dsp/EffectProcessor.h
@@ -565,6 +568,7 @@ set(GUITARFX_CORE_SOURCES
     src/util/Wav.cpp
     src/util/AudioDecoder.h
     src/util/AudioDecoder.cpp
+    src/util/SpscRingBuffer.h
 
     # Automation
     src/automation/AutomationTypes.h
