@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 #include <vector>
 #include <thread>
 
@@ -48,6 +49,59 @@ namespace
         ScopedComInitializer (const ScopedComInitializer&) = delete;
         ScopedComInitializer& operator= (const ScopedComInitializer&) = delete;
     };
+#endif
+
+#if JUCE_MAC
+    /**
+     * One-time migration of the standalone's user data out of the old App Sandbox
+     * container.
+     *
+     * While core/macos.standalone.entitlements enabled com.apple.security.app-sandbox,
+     * macOS redirected the standalone's "~/Library" into
+     * ~/Library/Containers/com.soundshed.guitar/Data/Library. Now that the sandbox is
+     * off, the same juce::File::userApplicationDataDirectory lookup resolves to the
+     * real ~/Library, so an existing install would otherwise start up with no
+     * settings, presets, resource library or riff library.
+     *
+     * The container tree is copied across the first time we see it, and never
+     * deleted, so this stays reversible by hand. If the destination already holds
+     * data we leave both trees alone rather than guess at a merge: the plugin
+     * builds were never sandboxed, so anyone who ran the VST3/AU already has a
+     * populated ~/Library/Soundshed Guitar that must not be clobbered.
+     */
+    void migrateDataOutOfSandboxContainerOnce (const juce::File& destination)
+    {
+        static std::once_flag onceFlag;
+        std::call_once (onceFlag, [&destination]
+        {
+            // Bundle ID is BUNDLE_ID in juce/CMakeLists.txt.
+            const auto container = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+                                       .getChildFile ("Library/Containers/com.soundshed.guitar/Data/Library")
+                                       .getChildFile (destination.getFileName());
+
+            if (container == destination || ! container.isDirectory())
+                return;
+
+            // ignoreHiddenFiles so a stray .DS_Store does not count as "has data"
+            // and block the migration.
+            if (destination.isDirectory()
+                && destination.getNumberOfChildFiles (juce::File::findFilesAndDirectories
+                                                      | juce::File::ignoreHiddenFiles) > 0)
+            {
+                std::cerr << "[PluginProcessorAdapter] Sandbox container data at "
+                          << container.getFullPathName() << " left in place: "
+                          << destination.getFullPathName() << " already holds data.\n";
+                return;
+            }
+
+            if (container.copyDirectoryTo (destination))
+                std::cerr << "[PluginProcessorAdapter] Migrated user data out of the sandbox container: "
+                          << container.getFullPathName() << " -> " << destination.getFullPathName() << "\n";
+            else
+                std::cerr << "[PluginProcessorAdapter] ERROR: failed to migrate user data from "
+                          << container.getFullPathName() << " to " << destination.getFullPathName() << "\n";
+        });
+    }
 #endif
 
 #if JUCE_LINUX
@@ -716,11 +770,16 @@ void PluginProcessorAdapter::RunOnMainThread (std::function<void()> fn)
 
 std::filesystem::path PluginProcessorAdapter::GetUserDataPath() const
 {
-    return std::filesystem::path (
-        juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-            .getChildFile ("Soundshed Guitar")
-            .getFullPathName()
-            .toStdString());
+    const auto dataDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                             .getChildFile ("Soundshed Guitar");
+
+#if JUCE_MAC
+    // Runs at most once per process; every consumer of the user data path funnels
+    // through here, so the migration cannot be missed by call ordering.
+    migrateDataOutOfSandboxContainerOnce (dataDir);
+#endif
+
+    return std::filesystem::path (dataDir.getFullPathName().toStdString());
 }
 
 std::filesystem::path PluginProcessorAdapter::GetBundledAssetsPath() const

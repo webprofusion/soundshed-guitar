@@ -1,24 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Activates the App Sandbox for the standalone application binary -->
-    <key>com.apple.security.app-sandbox</key>
-    <true/>
+    <!-- The App Sandbox is deliberately NOT enabled.
+         Soundshed Guitar ships with a Developer ID signature and notarization
+         (see .github/workflows/build-macos.yml), which requires the Hardened
+         Runtime but not the sandbox.
 
-    <!-- Essential for audio inputs: lets the standalone app access physical microphones/audio interfaces -->
+         Under the sandbox a folder the user picks is reachable only for the
+         lifetime of the process that showed the open panel. No entitlement
+         makes that access persist; the only mechanism is a security-scoped
+         bookmark, which we do not create (JUCE's FileChooser discards the
+         NSURL, and JUCE's URL::Bookmark support is iOS-only). That left every
+         stored path dead on relaunch: saved resource folders
+         (resources.folderBrowser.roots), user resource filePaths, and
+         riffLibrary.path.
+
+         Re-adding com.apple.security.app-sandbox (e.g. for a Mac App Store
+         build) requires implementing app-scoped bookmarks first:
+         com.apple.security.files.bookmarks.app-scope, bookmark creation at pick
+         time, a blob persisted next to each path, and resolve +
+         startAccessingSecurityScopedResource at launch. -->
+
+    <!-- Microphone / audio interface input. Valid under the Hardened Runtime.
+         The NSMicrophoneUsageDescription string comes from
+         MICROPHONE_PERMISSION_TEXT in juce/CMakeLists.txt. -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
 
-    <!-- Permits your app to use physical USB and MIDI ports for controllers -->
+    <!-- Physical USB and MIDI ports for controllers. -->
     <key>com.apple.security.device.usb</key>
     <true/>
 
-    <!-- Allows user-directed file reading and writing via standard file open/save dialog sheets -->
+    <!-- User-directed file reading and writing via open/save panels. Inert
+         without the sandbox; kept so the intent stays recorded. -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
 
-    <!-- Required for outgoing web connections (e.g., license registration, update checks) -->
+    <!-- Outgoing web connections (e.g. license registration, update checks). -->
     <key>com.apple.security.network.client</key>
     <true/>
 </dict>
