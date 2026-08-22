@@ -10,7 +10,7 @@ Requirements: x64 CPU with AVX2 support (circa late 2015+; use `build_windows.ba
 
 ## Features
 
-- Neural Amp Modeler DSP for amp/pedal captures, with optional 2x–32x time-scaled oversampling
+- Neural Amp Modeler DSP for amp/pedal captures, with optional global 2x–32x time-scaled oversampling
 - Flexible signal graph with arbitrary effect ordering and parallel paths
 - Preset management with category support and content-addressed resource deduplication
 - Remote preset search/download for community sharing

@@ -17,6 +17,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cmath>
 #include <memory>
@@ -25,6 +26,9 @@
 namespace guitarfx
 {
   inline constexpr int kNamOversamplingMaxIndex = 5;
+  inline constexpr int kNamAntiAliasPhaseMaxIndex = 2;
+  inline constexpr int kNamOversamplingIndexDefault = 0;
+  inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
 
   [[nodiscard]] inline int NamOversamplingFactorFromIndex(double value)
   {
@@ -44,9 +48,68 @@ namespace guitarfx
     return index;
   }
 
+  [[nodiscard]] inline int SanitizeNamOversamplingIndex(double value)
+  {
+    if (!std::isfinite(value))
+      return kNamOversamplingIndexDefault;
+    return std::clamp(static_cast<int>(std::llround(value)), 0, kNamOversamplingMaxIndex);
+  }
+
+  [[nodiscard]] inline int SanitizeNamAntiAliasPhaseIndex(double value)
+  {
+    if (!std::isfinite(value))
+      return kNamAntiAliasPhaseIndexDefault;
+    return std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex);
+  }
+
+  // Oversampling and its anti-alias filter phase are global DSP-performance
+  // settings, not per-node preset parameters: every NAM node in every chain
+  // renders at the same quality tier. Effects read these at Prepare/load time,
+  // and PluginController pushes live changes to existing nodes as node config.
+  inline std::atomic<int>& NamOversamplingIndexStorage()
+  {
+    static std::atomic<int> index{kNamOversamplingIndexDefault};
+    return index;
+  }
+
+  inline std::atomic<int>& NamAntiAliasPhaseIndexStorage()
+  {
+    static std::atomic<int> index{kNamAntiAliasPhaseIndexDefault};
+    return index;
+  }
+
+  [[nodiscard]] inline int GetGlobalNamOversamplingIndex()
+  {
+    return NamOversamplingIndexStorage().load(std::memory_order_acquire);
+  }
+
+  [[nodiscard]] inline int GetGlobalNamAntiAliasPhaseIndex()
+  {
+    return NamAntiAliasPhaseIndexStorage().load(std::memory_order_acquire);
+  }
+
+  /** Returns true when the stored value actually changed. */
+  inline bool SetGlobalNamOversamplingIndex(double value)
+  {
+    const int sanitized = SanitizeNamOversamplingIndex(value);
+    return NamOversamplingIndexStorage().exchange(sanitized, std::memory_order_acq_rel) != sanitized;
+  }
+
+  /** Returns true when the stored value actually changed. */
+  inline bool SetGlobalNamAntiAliasPhaseIndex(double value)
+  {
+    const int sanitized = SanitizeNamAntiAliasPhaseIndex(value);
+    return NamAntiAliasPhaseIndexStorage().exchange(sanitized, std::memory_order_acq_rel) != sanitized;
+  }
+
+  [[nodiscard]] inline int GetGlobalNamOversamplingFactor()
+  {
+    return NamOversamplingFactorFromIndex(GetGlobalNamOversamplingIndex());
+  }
+
   [[nodiscard]] inline dsp::EAntiAliasFilterPhase NamAntiAliasPhaseFromIndex(double value)
   {
-    switch (std::clamp(static_cast<int>(std::llround(value)), 0, 2))
+    switch (std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex))
     {
       case 1:
         return dsp::EAntiAliasFilterPhase::LinearCascadedFIRShort;
@@ -55,6 +118,11 @@ namespace guitarfx
       default:
         return dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR;
     }
+  }
+
+  [[nodiscard]] inline dsp::EAntiAliasFilterPhase GetGlobalNamAntiAliasPhase()
+  {
+    return NamAntiAliasPhaseFromIndex(GetGlobalNamAntiAliasPhaseIndex());
   }
 
   [[nodiscard]] inline double ResolveNamOversampledRenderingRate(double modelSampleRate,

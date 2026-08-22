@@ -400,6 +400,7 @@ private:
     void ApplyGlobalFxSettingsFromAppSettings();
     void PersistGlobalFxSettingsToAppSettings();
     void ApplyNamSlimmableSettingsFromAppSettings();
+    void ApplyNamOversamplingSettingsFromAppSettings();
     void ApplyNamInterfaceCalibrationFromAppSettings();
     void ApplyUserInputCalibrationSettingsFromAppSettings();
     void ApplyUiSettingsFromAppSettings();

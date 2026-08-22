@@ -179,6 +179,47 @@ namespace
       && guitarfx::ResolveNamOversampledRenderingRate(48000.0, 44100.0, 2) == 96000.0;
   }
 
+  /// Oversampling is a global DSP-performance setting rather than a preset
+  /// parameter: out-of-range or non-finite values must fall back to the
+  /// defaults, and every NAM node reads the same stored indices.
+  bool TestNamGlobalOversamplingSettings()
+  {
+    const int restoreOversampling = guitarfx::GetGlobalNamOversamplingIndex();
+    const int restorePhase = guitarfx::GetGlobalNamAntiAliasPhaseIndex();
+
+    if (guitarfx::SanitizeNamOversamplingIndex(-4.0) != 0
+        || guitarfx::SanitizeNamOversamplingIndex(99.0) != guitarfx::kNamOversamplingMaxIndex
+        || guitarfx::SanitizeNamOversamplingIndex(std::numeric_limits<double>::quiet_NaN())
+             != guitarfx::kNamOversamplingIndexDefault
+        || guitarfx::SanitizeNamAntiAliasPhaseIndex(7.0) != guitarfx::kNamAntiAliasPhaseMaxIndex
+        || guitarfx::SanitizeNamAntiAliasPhaseIndex(std::numeric_limits<double>::infinity())
+             != guitarfx::kNamAntiAliasPhaseIndexDefault)
+    {
+      return false;
+    }
+
+    bool ok = true;
+
+    // The setters report whether the stored value actually moved.
+    ok = ok && guitarfx::SetGlobalNamOversamplingIndex(2.0);
+    ok = ok && !guitarfx::SetGlobalNamOversamplingIndex(2.0);
+    ok = ok && guitarfx::GetGlobalNamOversamplingIndex() == 2;
+    ok = ok && guitarfx::GetGlobalNamOversamplingFactor() == 4;
+
+    // Out-of-range writes clamp rather than being rejected.
+    ok = ok && guitarfx::SetGlobalNamOversamplingIndex(999.0);
+    ok = ok && guitarfx::GetGlobalNamOversamplingIndex() == guitarfx::kNamOversamplingMaxIndex;
+
+    ok = ok && guitarfx::SetGlobalNamAntiAliasPhaseIndex(2.0);
+    ok = ok && guitarfx::GetGlobalNamAntiAliasPhase() == dsp::EAntiAliasFilterPhase::LinearCascadedFIRLong;
+    ok = ok && guitarfx::SetGlobalNamAntiAliasPhaseIndex(0.0);
+    ok = ok && guitarfx::GetGlobalNamAntiAliasPhase() == dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR;
+
+    guitarfx::SetGlobalNamOversamplingIndex(restoreOversampling);
+    guitarfx::SetGlobalNamAntiAliasPhaseIndex(restorePhase);
+    return ok;
+  }
+
   bool TestNamDryDelay()
   {
     guitarfx::NamDryDelay delay;
@@ -283,6 +324,7 @@ int main()
   const bool optimizedNamSampleRateParsingOk = TestOptimizedNamSampleRateParsing();
   const bool namDefaultProcessingRateOk = TestNamDefaultProcessingRate();
   const bool namOversamplingConfigurationOk = TestNamOversamplingConfiguration();
+  const bool namGlobalOversamplingOk = TestNamGlobalOversamplingSettings();
   const bool namDryDelayOk = TestNamDryDelay();
   const bool namOversamplingProcessorOk = TestNamOversamplingProcessor();
 
@@ -296,11 +338,13 @@ int main()
     std::cerr << "NAM default processing-rate test failed\n";
   if (!namOversamplingConfigurationOk)
     std::cerr << "NAM oversampling configuration test failed\n";
+  if (!namGlobalOversamplingOk)
+    std::cerr << "NAM global oversampling settings test failed\n";
   if (!namDryDelayOk)
     std::cerr << "NAM dry-delay alignment test failed\n";
   if (!namOversamplingProcessorOk)
     std::cerr << "NAM oversampling processor test failed\n";
 
   return (roundTripOk && fixedOutputOk && optimizedNamSampleRateParsingOk && namDefaultProcessingRateOk
-          && namOversamplingConfigurationOk && namDryDelayOk && namOversamplingProcessorOk) ? 0 : 1;
+          && namOversamplingConfigurationOk && namGlobalOversamplingOk && namDryDelayOk && namOversamplingProcessorOk) ? 0 : 1;
 }

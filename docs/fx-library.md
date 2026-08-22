@@ -164,17 +164,34 @@ class EffectProcessor {
 ## Built-in Effect Types
 
 ### NAM Amp (`amp_nam`)
-Neural amp model processing. The optimized NAM amp, NAM FX, and NAM Blend
-variants share the oversampling controls below.
+Neural amp model processing.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `inputGain` | -24..+24 | 0.0 | dB |
 | `outputGain` | -24..+24 | 0.0 | dB |
-| `oversampling` | Off, 2x, 4x, 8x, 16x, 32x | Off | enum |
-| `antiAliasPhase` | Minimum Phase, Linear Short, Linear Long | Minimum Phase | enum |
 
 **Resource**: NAM model file (`.nam`)
+
+#### NAM oversampling (global setting)
+
+Oversampling is **not** a preset parameter. It is a global quality setting under
+Settings -> DSP Performance -> NAM Processing Quality, alongside the slimmable
+model size, and it applies to every NAM node (`amp_nam`, the optimized NAM amp,
+NAM FX, and NAM Blend) in every preset and mixer slot.
+
+| App setting | Range | Default |
+|-------------|-------|---------|
+| `audio.nam.oversampling` | index 0-5: Off, 2x, 4x, 8x, 16x, 32x | `0` (Off) |
+| `audio.nam.antiAliasPhase` | index 0-2: Minimum Phase, Linear Short, Linear Long | `0` (Minimum Phase) |
+
+`PluginController::ApplyNamOversamplingSettingsFromAppSettings()` sanitizes both
+values, stores them in the process-wide globals in `NAMOversampling.h`, and
+pushes them to live nodes as `oversampling` / `antiAliasPhase` node config —
+the same mechanism used for `slimmableSize`. Nodes created later read the
+globals when their models are prepared. Because both settings change the
+resampler's reported latency, applying them also re-reports plugin latency to
+the host.
 
 Oversampling uses the NAM-Oversampler processing model: the host signal is
 resampled to an integer multiple of the model's native rate, the NAM core's
@@ -185,7 +202,12 @@ field instead of shortening its dilations at higher rendering rates.
 Minimum Phase is the low-latency real-time default. The linear-phase options
 trade more latency for phase-linear anti-alias filtering; their latency is
 reported to the host and the dry/blended paths are delayed to remain aligned.
-Existing presets remain at Off unless they explicitly set `oversampling`.
+
+With oversampling Off, `NamOversamplingProcessor` still resamples whenever the
+host rate differs from the model's native rate — the same mismatch the old
+`BlockSincResampler` path handled — so `antiAliasPhase` is not inert at Off for
+a 44.1 kHz host driving a 48 kHz model. When the host and model rates match,
+Off allocates no resampler at all and calls `model.process()` directly.
 
 ### IR Cabinet (`cab_ir`)
 Impulse response convolution for cabinet simulation.

@@ -153,6 +153,10 @@ namespace
     constexpr const char* kGlobalFxSettingsKey = "globalFx.settings";
     constexpr const char* kNamSlimmableSizeSettingKey = "audio.nam.slimmableSize";
     constexpr const char* kNamSlimmableNodeConfigKey = "slimmableSize";
+    constexpr const char* kNamOversamplingSettingKey = "audio.nam.oversampling";
+    constexpr const char* kNamAntiAliasPhaseSettingKey = "audio.nam.antiAliasPhase";
+    constexpr const char* kNamOversamplingNodeConfigKey = "oversampling";
+    constexpr const char* kNamAntiAliasPhaseNodeConfigKey = "antiAliasPhase";
     constexpr const char* kNamInterfaceCalibrationLevelDbuSettingKey = "audio.nam.interfaceCalibrationLevelDbu";
     constexpr double kNamInterfaceCalibrationLevelDbuDefault = 12.0;
     constexpr double kNamInterfaceCalibrationLevelDbuMin = 0.0;
@@ -2329,6 +2333,7 @@ void PluginController::Initialize()
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
     ApplyNamSlimmableSettingsFromAppSettings();
+    ApplyNamOversamplingSettingsFromAppSettings();
     ApplyNamInterfaceCalibrationFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();
@@ -3312,6 +3317,61 @@ void PluginController::ApplyNamSlimmableSettingsFromAppSettings()
         SaveAppSettings();
 }
 
+void PluginController::ApplyNamOversamplingSettingsFromAppSettings()
+{
+    // Oversampling and its anti-alias filter phase are global quality settings
+    // rather than preset parameters, so they are applied to every NAM node type
+    // the same way the slimmable size is.
+    bool settingsChanged = false;
+
+    const auto readIndex = [&](const char* settingKey, auto sanitize, int fallback) {
+        const auto it = mAppSettings.find(settingKey);
+        const int sanitized = (it != mAppSettings.end() && it->is_number())
+            ? sanitize(it->get<double>())
+            : fallback;
+        if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != sanitized)
+        {
+            mAppSettings[settingKey] = sanitized;
+            settingsChanged = true;
+        }
+        return sanitized;
+    };
+
+    const int oversamplingIndex = readIndex(
+        kNamOversamplingSettingKey,
+        [](double raw) { return SanitizeNamOversamplingIndex(raw); },
+        kNamOversamplingIndexDefault);
+    const int antiAliasPhaseIndex = readIndex(
+        kNamAntiAliasPhaseSettingKey,
+        [](double raw) { return SanitizeNamAntiAliasPhaseIndex(raw); },
+        kNamAntiAliasPhaseIndexDefault);
+
+    SetGlobalNamOversamplingIndex(oversamplingIndex);
+    SetGlobalNamAntiAliasPhaseIndex(antiAliasPhaseIndex);
+
+    const std::string oversamplingValue = std::to_string(oversamplingIndex);
+    const std::string antiAliasPhaseValue = std::to_string(antiAliasPhaseIndex);
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        for (const char* nodeType : {EffectGuids::kAmpNam,
+                                     EffectGuids::kAmpNamOptimized,
+                                     EffectGuids::kAmpNamBlend,
+                                     EffectGuids::kFxNam})
+        {
+            mPresetMixer.SetNodeConfigForType(nodeType, kNamOversamplingNodeConfigKey, oversamplingValue);
+            mPresetMixer.SetNodeConfigForType(nodeType, kNamAntiAliasPhaseNodeConfigKey, antiAliasPhaseValue);
+        }
+    }
+
+    // Both settings change the resampler's reported latency, so the host needs
+    // fresh PDC after every change.
+    UpdateHostLatency();
+
+    if (settingsChanged)
+        SaveAppSettings();
+}
+
 void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
 {
     // Respect the global auto-input-calibration toggle (default: enabled).
@@ -3825,6 +3885,7 @@ void PluginController::DeserializeState(const std::string& json)
                 mAppSettings[it.key()] = it.value();
 
             ApplyNamSlimmableSettingsFromAppSettings();
+            ApplyNamOversamplingSettingsFromAppSettings();
             ApplyNamInterfaceCalibrationFromAppSettings();
         }
 
@@ -4233,6 +4294,7 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
     ApplyNamSlimmableSettingsFromAppSettings();
+    ApplyNamOversamplingSettingsFromAppSettings();
     ApplyNamInterfaceCalibrationFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();
@@ -5755,7 +5817,7 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
     }
     // Some parameters (e.g. the convolution low-latency toggle) change a node's
     // processing latency. Re-report total plugin latency so the host updates PDC.
-    if (paramKey == "lowLatency" || paramKey == "oversampling" || paramKey == "antiAliasPhase")
+    if (paramKey == "lowLatency")
         UpdateHostLatency();
     mActivePresetJson = mActivePreset ? PresetStorage::SerializeToJson(*mActivePreset) : "{}";
 }

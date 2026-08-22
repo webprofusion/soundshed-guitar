@@ -279,24 +279,6 @@ public:
     {
       mEnabled = value > 0.5;
     }
-    else if (key == "oversampling")
-    {
-      const int index = std::clamp(static_cast<int>(std::lround(value)), 0, kNamOversamplingMaxIndex);
-      if (index != mOversamplingIndex)
-      {
-        mOversamplingIndex = index;
-        ReconfigureModelProcessing();
-      }
-    }
-    else if (key == "antiAliasPhase")
-    {
-      const int index = std::clamp(static_cast<int>(std::lround(value)), 0, 2);
-      if (index != mAntiAliasPhaseIndex)
-      {
-        mAntiAliasPhaseIndex = index;
-        ReconfigureModelProcessing();
-      }
-    }
     else if (!key.empty())
     {
       mTargetParams[key] = value;
@@ -329,6 +311,26 @@ public:
         ApplyGlobalNamSlimmableSize(model.fallbackRight.get());
       }
     }
+    else if (key == "oversampling" || key == "antiAliasPhase")
+    {
+      // Global DSP-performance settings, pushed to every live NAM node. Both
+      // change the rendering rate or the AA filter, so a node whose models are
+      // not already on the requested tier has to re-prepare them.
+      const auto parsed = ParseDouble(value);
+      if (!parsed.has_value())
+        return;
+
+      if (key == "oversampling")
+        SetGlobalNamOversamplingIndex(*parsed);
+      else
+        SetGlobalNamAntiAliasPhaseIndex(*parsed);
+
+      if (mOversamplingIndex == GetGlobalNamOversamplingIndex()
+          && mAntiAliasPhaseIndex == GetGlobalNamAntiAliasPhaseIndex())
+        return;
+
+      ReconfigureModelProcessing();
+    }
   }
 
   [[nodiscard]] double GetParam(const std::string& key) const override
@@ -345,10 +347,6 @@ public:
       return mEnabled ? 1.0 : 0.0;
     if (key == "useCalibration")
       return mUseCalibration ? 1.0 : 0.0;
-    if (key == "oversampling")
-      return static_cast<double>(mOversamplingIndex);
-    if (key == "antiAliasPhase")
-      return static_cast<double>(mAntiAliasPhaseIndex);
     const auto it = mTargetParams.find(key);
     if (it != mTargetParams.end())
       return it->second;
@@ -475,8 +473,10 @@ private:
   bool mPrepared = false;
   std::string mParameterId;
   std::uint64_t mLevelTargetsRevision = 0;
-  int mOversamplingIndex = 0;
-  int mAntiAliasPhaseIndex = 0;
+  // Snapshot of the global oversampling settings these models are currently
+  // prepared for. Refreshed by ResizeModelBuffers().
+  int mOversamplingIndex = kNamOversamplingIndexDefault;
+  int mAntiAliasPhaseIndex = kNamAntiAliasPhaseIndexDefault;
   int mLatencySamples = 0;
   NamDryDelay mDryDelayLeft;
   NamDryDelay mDryDelayRight;
@@ -562,6 +562,8 @@ private:
     if (!mPrepared || !instance.fallbackLeft || !instance.fallbackRight)
       return;
 
+    mOversamplingIndex = GetGlobalNamOversamplingIndex();
+    mAntiAliasPhaseIndex = GetGlobalNamAntiAliasPhaseIndex();
     const double modelSampleRate = ResolveInstanceSampleRate(instance);
     const int factor = NamOversamplingFactorFromIndex(mOversamplingIndex);
     const auto filterPhase = NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex);
@@ -923,11 +925,7 @@ inline void RegisterMultiModelNAMAmpEffect()
     {"inputGain", "Input", 0.0, -24.0, 24.0, "dB"},
     {"outputGain", "Output", 0.0, -24.0, 24.0, "dB"},
     {"mix", "Mix", 1.0, 0.0, 1.0, "amount", "Advanced", true},
-    {"useCalibration", "Use Calibration", 1.0, 0.0, 1.0, "toggle", "Advanced", true},
-    {"oversampling", "Oversampling", 0.0, 0.0, 5.0, "enum", "Advanced", true, 1.0,
-      {"Off", "2x", "4x", "8x", "16x", "32x"}},
-    {"antiAliasPhase", "AA Filter", 0.0, 0.0, 2.0, "enum", "Advanced", true, 1.0,
-      {"Minimum Phase", "Linear Short", "Linear Long"}}
+    {"useCalibration", "Use Calibration", 1.0, 0.0, 1.0, "toggle", "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

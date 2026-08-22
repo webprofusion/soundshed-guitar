@@ -29,6 +29,8 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                 || key == "audio.dsp.outputProtectionCeilingDbfs";
             const bool affectsProcessingMode = key == "audio.processing.multiThreaded";
             const bool affectsNamSlimmable = key == "audio.nam.slimmableSize";
+            const bool affectsNamOversampling = key == "audio.nam.oversampling"
+                || key == "audio.nam.antiAliasPhase";
             const bool affectsNamInterfaceCalibration = key == "audio.nam.interfaceCalibrationLevelDbu"
                 || key == "audio.nam.autoInputCalibration";
 
@@ -56,6 +58,9 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                 }
                 if (affectsNamSlimmable)
                     c.ApplyNamSlimmableSettingsFromAppSettings();
+
+                if (affectsNamOversampling)
+                    c.ApplyNamOversamplingSettingsFromAppSettings();
                 if (affectsNamInterfaceCalibration)
                     c.ApplyNamInterfaceCalibrationFromAppSettings();
                 c.SaveAppSettings();
@@ -76,6 +81,9 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
             }
             if (affectsNamSlimmable)
                 c.ApplyNamSlimmableSettingsFromAppSettings();
+
+            if (affectsNamOversampling)
+                c.ApplyNamOversamplingSettingsFromAppSettings();
             if (affectsNamInterfaceCalibration)
                 c.ApplyNamInterfaceCalibrationFromAppSettings();
             c.SaveAppSettings();
