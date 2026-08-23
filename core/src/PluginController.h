@@ -24,6 +24,8 @@
 #include "presets/PresetTypesJson.h"
 #include "resources/CustomEffectLibrary.h"
 #include "resources/ResourceLibrary.h"
+#include "storage/JsonStore.h"
+#include "storage/StorageMigration.h"
 #include "util/FileSystem.h"
 
 #include <nlohmann/json.hpp>
@@ -444,8 +446,9 @@ private:
     void ApplyInputModeSettingsFromAppSettings();
     void ApplyGlobalFxSettingsFromAppSettings();
     void PersistGlobalFxSettingsToAppSettings();
-    void ApplyNamSlimmableSettingsFromAppSettings();
-    void ApplyNamOversamplingSettingsFromAppSettings();
+    void ApplyNamQualitySettings();
+    void PushNamQualityToDsp();
+    void RestoreInstanceOwnedSettings();
     void ApplyNamInterfaceCalibrationFromAppSettings();
     void ApplyUserInputCalibrationSettingsFromAppSettings();
     void ApplyUiSettingsFromAppSettings();
@@ -453,7 +456,6 @@ private:
     [[nodiscard]] bool IsPresetArchiveSessionActive() const;
     [[nodiscard]] std::filesystem::path GetEffectiveUserPresetDirectory() const;
     [[nodiscard]] std::filesystem::path GetEffectiveSettingsDirectory() const;
-    [[nodiscard]] std::filesystem::path ResolveResourceLibraryIndexPath() const;
     void RefreshPresetLibraryViews();
     void ClearActivePresetMixerState();
     void StartPresetArchiveSession(const std::string& archiveFileName,
@@ -531,14 +533,39 @@ private:
     // Kept out of the startup LoadLayoutLibrary payload so app load stays lightweight.
     [[nodiscard]] nlohmann::json BuildLayoutImages();
     void SaveLayoutToFile(const std::string& effectType, const nlohmann::json& layoutJson);
-    [[nodiscard]] std::filesystem::path ResolveUiStoragePath(const std::string& filename) const;
     [[nodiscard]] nlohmann::json LoadUiStorageJson(const std::string& filename, const nlohmann::json& fallback) const;
     void SaveUiStorageJson(const std::string& filename, const nlohmann::json& payload) const;
+    /// Legacy UI-storage filename → document id ("setlists.json" → "setlists").
+    [[nodiscard]] static std::string UiStorageDocumentId(const std::string& filename);
+
+    // ── Document store ─────────────────────────────────────────────
+    /**
+     * The document store, opened (and migrated) on first use.
+     *
+     * Initialize() opens it eagerly so the migration log lands at startup, but
+     * everything goes through here: a code path that touches storage before
+     * Initialize() must not silently drop the write.
+     */
+    [[nodiscard]] storage::JsonStore& Store() const;
+    [[nodiscard]] std::filesystem::path ResolveDocumentStorePath() const;
+    /// Directory that resource file paths are stored relative to.
+    [[nodiscard]] std::filesystem::path ResolveResourcesRoot() const;
+
+    // User-preset access. These route to the store normally, and to the
+    // throwaway sandbox directory while a preset-archive session is active —
+    // session presets shadow the real library and must never enter it.
+    [[nodiscard]] std::optional<Preset> LoadUserPreset(const std::string& presetId) const;
+    [[nodiscard]] std::vector<Preset> LoadAllUserPresets() const;
+    [[nodiscard]] bool UserPresetExists(const std::string& presetId) const;
+    bool SaveUserPreset(const Preset& preset);
+    bool DeleteUserPreset(const std::string& presetId);
+    /// Opens the store and runs the one-time legacy import. A failure here is
+    /// logged, not fatal: the store stays closed and every read returns empty.
+    void OpenDocumentStore() const;
     void TouchSharedSyncState(const std::vector<std::string>& domains) const;
     void ReloadSharedSyncSourcesFromDisk();
     void PollSharedSyncState();
     [[nodiscard]] std::filesystem::path ResolveRiffLibraryPath() const;
-    [[nodiscard]] std::filesystem::path ResolveRiffLibraryIndexPath() const;
     [[nodiscard]] nlohmann::json LoadRiffLibraryIndex() const;
     bool SaveRiffLibraryIndex(const nlohmann::json& payload) const;
     [[nodiscard]] std::string BuildRiffTakeId() const;
@@ -563,6 +590,21 @@ private:
     // DSP engine
     MultiPresetMixer mPresetMixer;
     mutable std::mutex mDSPMutex;
+
+    /**
+     * Every app-owned document — settings, presets, resource metadata, blends,
+     * layouts — lives here. Content files (.nam/.wav/.wasm) stay on disk and the
+     * store holds only their paths and metadata.
+     *
+     * Mutable so const accessors can read: sqlite needs a non-const handle even
+     * for a SELECT, and the store serializes itself internally.
+     */
+    mutable storage::JsonStore mStore;
+    /// Guards the lazy open. Store() is reached from the message thread and from
+    /// background workers (folder scans), so this has to be a real
+    /// once-primitive rather than a bool — and a failed open must not be retried
+    /// on every subsequent access.
+    mutable std::once_flag mStoreOpenOnce;
 
     // Resources and libraries
     ResourceLibrary mResourceLibrary;
@@ -654,6 +696,33 @@ private:
 
     // App settings
     nlohmann::json mAppSettings = nlohmann::json::object();
+    /**
+     * What the store held for `setting` rows the last time this instance loaded
+     * or saved them.
+     *
+     * SaveAppSettings() diffs against this instead of rewriting every key, so a
+     * setting another instance changed since our last load is left alone rather
+     * than overwritten with our stale copy. Mutable because SaveAppSettings() is
+     * const.
+     */
+    mutable nlohmann::json mAppSettingsBaseline = nlohmann::json::object();
+
+    /**
+     * The user's NAM quality tier, owned by *this* plugin instance.
+     *
+     * Persisted in host state (SerializeState) rather than app.json when running as a
+     * plugin, so two instances in one DAW project can sit at different tiers. app.json
+     * only seeds a brand-new instance. In standalone it stays app.json-backed.
+     *
+     * This always holds what the user chose. The offline-render boost is applied on top
+     * by EffectiveNamQuality() and never written back here.
+     */
+    NamQualityConfig mNamQuality;
+
+    /// True while the host renders offline (bounce/freeze/export). Boosts the tier the
+    /// DSP actually runs at without touching mNamQuality — see SetOfflineRendering().
+    bool mOfflineRendering = false;
+
     nlohmann::json mUiSettings = nlohmann::json::object();
     nlohmann::json mUiViewState = nlohmann::json::object();
     bool mUserInputCalibrationTrainingActive = false;

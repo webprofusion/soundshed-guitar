@@ -1,6 +1,7 @@
 #pragma once
 
 #include "presets/CompositePresetTypes.h"
+#include "storage/JsonStore.h"
 
 #include <filesystem>
 #include <optional>
@@ -36,6 +37,13 @@ namespace guitarfx
 
     static bool DeleteById(const std::string& id,
                            const std::filesystem::path& dir);
+
+    // Store-backed persistence: one row per composite, keyed by composite id.
+    [[nodiscard]] static bool SaveToStore(storage::JsonStore& store, const CompositePreset& cp);
+    [[nodiscard]] static std::optional<CompositePreset> LoadFromStore(const storage::JsonStore& store,
+                                                                      const std::string& id);
+    [[nodiscard]] static std::vector<CompositePreset> ListAllFromStore(const storage::JsonStore& store);
+    static bool DeleteFromStore(storage::JsonStore& store, const std::string& id);
   };
 
 } // namespace guitarfx

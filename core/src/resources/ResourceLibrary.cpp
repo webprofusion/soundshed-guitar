@@ -15,6 +15,111 @@ namespace guitarfx
       const auto it = relativePath.begin();
       return it != relativePath.end() && *it == "..";
     }
+
+    /// Paths are stored relative to the profile's `resources` directory so a
+    /// profile can be moved or copied between machines. Anything that cannot be
+    /// expressed relative to it (a resource the user pointed at elsewhere on
+    /// disk) is stored absolute.
+    nlohmann::json ResourceToJson(const LibraryResource& resource, const std::filesystem::path& resourcesRoot)
+    {
+      nlohmann::json item;
+      item["type"] = resource.type;
+      item["id"] = resource.id;
+      item["name"] = resource.name;
+      item["category"] = resource.category;
+      item["description"] = resource.description;
+
+      if (!resource.filePath.empty())
+      {
+        std::error_code relEc;
+        const auto relativeToResources = std::filesystem::relative(resource.filePath, resourcesRoot, relEc);
+        if (!relEc && !relativeToResources.empty() && relativeToResources != std::filesystem::path(".")
+            && !IsRelativeOutside(relativeToResources))
+          item["filePath"] = util::PathToUtf8(relativeToResources);
+        else
+          item["filePath"] = util::PathToUtf8(resource.filePath);
+      }
+      else
+      {
+        item["filePath"] = "";
+      }
+
+      item["hash"] = resource.hash;
+      item["tags"] = resource.tags;
+      if (!resource.metadata.empty())
+        item["metadata"] = resource.metadata;
+
+      return item;
+    }
+
+    /// Inverse of ResourceToJson. `relativeBases` are tried in order when the
+    /// stored path is relative; the last one is used even if nothing exists, so
+    /// a resource whose file is temporarily missing still resolves to a sensible
+    /// path for the error message.
+    std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
+                                                    const std::vector<std::filesystem::path>& relativeBases)
+    {
+      if (!item.is_object())
+        return std::nullopt;
+
+      LibraryResource resource;
+      resource.type = item.value("type", "");
+      resource.id = item.value("id", "");
+      if (resource.type.empty() || resource.id.empty())
+        return std::nullopt;
+
+      resource.name = item.value("name", "");
+      resource.category = item.value("category", "");
+      resource.description = item.value("description", "");
+      resource.hash = item.value("hash", "");
+
+      const std::string rawPath = item.value("filePath", "");
+      if (!rawPath.empty())
+      {
+        std::filesystem::path resolvedPath(rawPath);
+        if (resolvedPath.is_relative() && !relativeBases.empty())
+        {
+          std::filesystem::path candidate = relativeBases.back() / resolvedPath;
+          for (const auto& base : relativeBases)
+          {
+            const auto attempt = base / resolvedPath;
+            std::error_code existsEc;
+            if (std::filesystem::exists(attempt, existsEc))
+            {
+              candidate = attempt;
+              break;
+            }
+          }
+          resolvedPath = candidate;
+        }
+        resource.filePath = resolvedPath;
+      }
+
+      if (item.contains("tags") && item["tags"].is_array())
+      {
+        for (const auto& tag : item["tags"])
+        {
+          if (tag.is_string())
+            resource.tags.push_back(tag.get<std::string>());
+        }
+      }
+
+      if (item.contains("metadata") && item["metadata"].is_object())
+      {
+        for (const auto& entry : item["metadata"].items())
+        {
+          const auto& value = entry.value();
+          if (value.is_string())
+            resource.metadata[entry.key()] = value.get<std::string>();
+          else if (value.is_number())
+            resource.metadata[entry.key()] = value.dump();
+          else if (value.is_boolean())
+            resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+        }
+      }
+
+      return resource;
+    }
   }
 
   ResourceLibrary::ResourceLibrary() = default;
@@ -246,6 +351,67 @@ namespace guitarfx
     }
   }
 
+  std::string ResourceLibrary::MakeStoreId(const std::string& type, const std::string& id)
+  {
+    return MakeKey(type, id);
+  }
+
+  void ResourceLibrary::LoadFromStore(storage::JsonStore& store, const std::filesystem::path& resourcesRoot)
+  {
+    mResources.clear();
+
+    // Rows imported from a legacy index carry that index's own convention, and
+    // older builds wrote paths relative to resources/indexes/ rather than to
+    // resources/. Both bases are tried here for the same reason LoadFromFile
+    // tries both — dropping the older one silently unresolves those resources
+    // the first time an old profile is upgraded.
+    const std::vector<std::filesystem::path> relativeBases{resourcesRoot / "indexes", resourcesRoot};
+
+    for (const auto& item : store.List(storage::ItemType::kResource))
+    {
+      const auto parsed = item.Parse();
+      if (!parsed)
+        continue;
+
+      if (auto resource = ResourceFromJson(*parsed, relativeBases))
+        AddResource(*resource);
+    }
+  }
+
+  bool ResourceLibrary::SaveToStore(storage::JsonStore& store, const std::filesystem::path& resourcesRoot) const
+  {
+    std::vector<storage::StoreItem> items;
+    items.reserve(mResources.size());
+
+    for (const auto& [key, resource] : mResources)
+    {
+      storage::StoreItem item;
+      item.type = storage::ItemType::kResource;
+      item.id = MakeStoreId(resource.type, resource.id);
+      item.json = ResourceToJson(resource, resourcesRoot).dump();
+      items.push_back(std::move(item));
+    }
+
+    return store.ReplaceAll(storage::ItemType::kResource, items);
+  }
+
+  bool ResourceLibrary::PutInStore(storage::JsonStore& store,
+                                   const LibraryResource& resource,
+                                   const std::filesystem::path& resourcesRoot)
+  {
+    if (resource.type.empty() || resource.id.empty())
+      return false;
+
+    return store.Put(storage::ItemType::kResource,
+                     MakeStoreId(resource.type, resource.id),
+                     ResourceToJson(resource, resourcesRoot));
+  }
+
+  bool ResourceLibrary::RemoveFromStore(storage::JsonStore& store, const std::string& type, const std::string& id)
+  {
+    return store.Remove(storage::ItemType::kResource, MakeStoreId(type, id));
+  }
+
   void ResourceLibrary::SaveToFile(const std::filesystem::path& path) const
   {
     nlohmann::json json = nlohmann::json::array();
@@ -256,39 +422,7 @@ namespace guitarfx
     std::filesystem::create_directories(indexDir, dirEc);
 
     for (const auto& [key, resource] : mResources)
-    {
-      nlohmann::json item;
-      item["type"] = resource.type;
-      item["id"] = resource.id;
-      item["name"] = resource.name;
-      item["category"] = resource.category;
-      item["description"] = resource.description;
-      if (!resource.filePath.empty())
-      {
-        std::error_code relEc;
-        const auto relativeToResources = std::filesystem::relative(resource.filePath, resourcesRoot, relEc);
-        if (!relEc && !relativeToResources.empty() && relativeToResources != std::filesystem::path(".")
-            && !IsRelativeOutside(relativeToResources))
-        {
-          item["filePath"] = util::PathToUtf8(relativeToResources);
-        }
-        else
-        {
-          item["filePath"] = util::PathToUtf8(resource.filePath);
-        }
-      }
-      else
-      {
-        item["filePath"] = "";
-      }
-      item["hash"] = resource.hash;
-      item["tags"] = resource.tags;
-      if (!resource.metadata.empty())
-      {
-        item["metadata"] = resource.metadata;
-      }
-      json.push_back(item);
-    }
+      json.push_back(ResourceToJson(resource, resourcesRoot));
 
     std::ofstream file(path);
     if (file.is_open())
@@ -315,77 +449,15 @@ namespace guitarfx
         return;
       }
 
+      // Historically some indexes stored paths relative to the index directory
+      // rather than the resources root, so both are tried.
+      const std::vector<std::filesystem::path> relativeBases{path.parent_path(),
+                                                             path.parent_path().parent_path()};
+
       for (const auto& item : json)
       {
-        LibraryResource resource;
-        resource.type = item.value("type", "");
-        resource.id = item.value("id", "");
-        resource.name = item.value("name", "");
-        resource.category = item.value("category", "");
-        resource.description = item.value("description", "");
-        {
-          const std::string rawPath = item.value("filePath", "");
-          if (!rawPath.empty())
-          {
-            std::filesystem::path resolvedPath(rawPath);
-            if (resolvedPath.is_relative())
-            {
-              const auto indexRelativePath = path.parent_path() / resolvedPath;
-              const auto resourcesRelativePath = path.parent_path().parent_path() / resolvedPath;
-
-              std::error_code indexExistsEc;
-              if (std::filesystem::exists(indexRelativePath, indexExistsEc))
-              {
-                resolvedPath = indexRelativePath;
-              }
-              else
-              {
-                std::error_code resourcesExistsEc;
-                if (std::filesystem::exists(resourcesRelativePath, resourcesExistsEc))
-                  resolvedPath = resourcesRelativePath;
-                else if (!IsRelativeOutside(resolvedPath))
-                  resolvedPath = resourcesRelativePath;
-                else
-                  resolvedPath = indexRelativePath;
-              }
-            }
-            resource.filePath = resolvedPath;
-          }
-        }
-        resource.hash = item.value("hash", "");
-
-        if (item.contains("tags") && item["tags"].is_array())
-        {
-          for (const auto& tag : item["tags"])
-          {
-            resource.tags.push_back(tag.get<std::string>());
-          }
-        }
-
-        if (item.contains("metadata") && item["metadata"].is_object())
-        {
-          for (const auto& entry : item["metadata"].items())
-          {
-            const auto& value = entry.value();
-            if (value.is_string())
-            {
-              resource.metadata[entry.key()] = value.get<std::string>();
-            }
-            else if (value.is_number())
-            {
-              resource.metadata[entry.key()] = value.dump();
-            }
-            else if (value.is_boolean())
-            {
-              resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
-            }
-          }
-        }
-
-        if (!resource.type.empty() && !resource.id.empty())
-        {
-          AddResource(resource);
-        }
+        if (auto resource = ResourceFromJson(item, relativeBases))
+          AddResource(*resource);
       }
     }
     catch (const std::exception&)

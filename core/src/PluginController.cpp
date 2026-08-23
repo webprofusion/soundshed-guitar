@@ -88,7 +88,6 @@ namespace
     constexpr const char* kHostedPluginManufacturerConfigKey = "pluginManufacturer";
     constexpr const char* kHostedPluginFormatConfigKey = "pluginFormat";
     constexpr const char* kHostedPluginLastErrorCodeConfigKey = "lastErrorCode";
-    constexpr const char* kFactoryArchiveStateFileName = "factory-archive-state.json";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
     constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
     constexpr const char* kPresetArchiveSessionRootFolder = "sessions/preset-archive";
@@ -145,7 +144,7 @@ namespace
     constexpr double kTwoPi = 6.28318530717958647692;
     constexpr const char* kRiffLibraryPathSettingKey = "riffLibrary.path";
     constexpr const char* kRiffLibraryDefaultFolder = "riff-library";
-    constexpr const char* kRiffLibraryIndexFile = "riff-library-index.json";
+    constexpr const char* kRiffLibraryDocumentId = "riff-library";
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
     constexpr const char* kNominalOperatingLevelSettingKey = "audio.dsp.nominalOperatingLevelDbfs";
     constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.outputProtectionCeilingDbfs";
@@ -168,7 +167,8 @@ namespace
     constexpr const char* kLegacyInterfaceCalibrationReferenceDbuSettingKey = "audio.interfaceCalibration.referenceDbu";
     constexpr const char* kSessionLogFileName = "logs/session-log.txt";
     constexpr const char* kDebugSnapshotFileName = "logs/debug-state.json";
-    constexpr const char* kSharedSyncStateFileName = "settings/shared-sync-state.json";
+    constexpr const char* kSharedSyncStateDocumentId = "shared-sync-state";
+    constexpr const char* kFactoryArchiveStateDocumentId = "factory-archive-state";
     constexpr auto kSharedSyncPollInterval = std::chrono::milliseconds(2000);
 
     bool IsSensitiveDebugKey(std::string_view key)
@@ -217,11 +217,6 @@ namespace
     std::filesystem::path ResolveDebugSnapshotPath(const guitarfx::FileSystem& fileSystem)
     {
         return fileSystem.ResolveSettingsDirectory() / kDebugSnapshotFileName;
-    }
-
-    std::filesystem::path ResolveSharedSyncStatePath(const guitarfx::FileSystem& fileSystem)
-    {
-        return fileSystem.ResolveSettingsDirectory() / kSharedSyncStateFileName;
     }
 
     double ToDbFS(double linear)
@@ -985,37 +980,6 @@ namespace
         return info;
     }
 
-    std::filesystem::path ResolvePresetFoldersPath(const guitarfx::FileSystem& fileSystem)
-    {
-        return fileSystem.ResolveSettingsDirectory() / "presets" / "preset-folders.json";
-    }
-
-    std::filesystem::path ResolveFactoryArchiveStatePath(const guitarfx::FileSystem& fileSystem)
-    {
-        return fileSystem.ResolveSettingsDirectory() / "presets" / kFactoryArchiveStateFileName;
-    }
-
-    std::filesystem::path ResolveCustomEffectLibraryPath(const guitarfx::FileSystem& fileSystem)
-    {
-        return fileSystem.ResolveSettingsDirectory() / "custom-effects" / "indexes" / "custom-effects-index.json";
-    }
-
-    nlohmann::json LoadJsonFile(const std::filesystem::path& path, const nlohmann::json& fallback)
-    {
-        if (path.empty() || !std::filesystem::exists(path))
-            return fallback;
-
-        try
-        {
-            std::ifstream input(path);
-            if (input.is_open())
-                return nlohmann::json::parse(input);
-        }
-        catch (const std::exception&) {}
-
-        return fallback;
-    }
-
     void SaveJsonFile(const guitarfx::FileSystem& fileSystem,
                       const std::filesystem::path& path,
                       const nlohmann::json& payload)
@@ -1127,13 +1091,14 @@ namespace
         return folderId.rfind(expectedPrefix, 0) == 0;
     }
 
-    void UpdateFactoryPresetFolders(const guitarfx::FileSystem& fileSystem,
+    void UpdateFactoryPresetFolders(guitarfx::storage::JsonStore& store,
                                     const std::string& archiveKey,
                                     const nlohmann::json& archivePresetFolders,
                                     const std::unordered_map<std::string, std::string>& presetIdMapping,
                                     const std::vector<std::string>&)
     {
-        auto payload = LoadJsonFile(ResolvePresetFoldersPath(fileSystem), nlohmann::json::object());
+        auto payload = store.Get(guitarfx::storage::ItemType::kDocument, "preset-folders")
+                         .value_or(nlohmann::json::object());
         if (!payload.is_object())
             payload = nlohmann::json::object();
 
@@ -1159,7 +1124,7 @@ namespace
 
         payload["folders"] = std::move(filteredFolders);
 
-        SaveJsonFile(fileSystem, ResolvePresetFoldersPath(fileSystem), payload);
+        store.Put(guitarfx::storage::ItemType::kDocument, "preset-folders", payload);
     }
 
     nlohmann::json BuildPresetArchiveSessionFolders(const std::string& archiveKey,
@@ -2300,10 +2265,18 @@ PluginController::~PluginController()
     // our members are destroyed (workers call SendMessageToUI through mHost and
     // read mFolderScanGeneration, so they must not outlive us).
     mFolderScanGeneration.fetch_add(1, std::memory_order_relaxed);
-    std::unique_lock<std::mutex> lock(mFolderScanDoneMutex);
-    mFolderScanDoneCv.wait(lock, [this]() {
-        return mActiveFolderScans.load(std::memory_order_relaxed) == 0;
-    });
+    {
+        std::unique_lock<std::mutex> lock(mFolderScanDoneMutex);
+        mFolderScanDoneCv.wait(lock, [this]() {
+            return mActiveFolderScans.load(std::memory_order_relaxed) == 0;
+        });
+    }
+
+    // Close after the workers are done, since they can still write through it.
+    // This checkpoints the WAL so the -wal file does not grow across sessions.
+    // Deliberately not Store(): a controller torn down without ever touching
+    // storage should not open a database just to close it again.
+    mStore.Close();
 }
 
 void PluginController::Initialize()
@@ -2319,6 +2292,11 @@ void PluginController::Initialize()
     [[maybe_unused]] const auto ensuredUserPresets = mFileSystem.EnsureDirectory(mUserPresetsPath);
     [[maybe_unused]] const auto ensuredResources = mFileSystem.EnsureDirectory(mFileSystem.ResolveSettingsDirectory() / "resources");
 
+    // Eagerly, so the migration log lands at startup rather than on first use.
+    // Goes through Store() so the once-flag is consumed here and a later access
+    // does not try to open again.
+    (void)Store();
+
     mPresetMixer.SetResourceLibrary(&mResourceLibrary);
 
     // When hosted in a DAW the host controls the input configuration; disable
@@ -2332,8 +2310,7 @@ void PluginController::Initialize()
     ApplyProcessingModeSettingsFromAppSettings();
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
-    ApplyNamSlimmableSettingsFromAppSettings();
-    ApplyNamOversamplingSettingsFromAppSettings();
+    ApplyNamQualitySettings();
     ApplyNamInterfaceCalibrationFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();
@@ -3604,11 +3581,6 @@ std::filesystem::path PluginController::GetEffectiveSettingsDirectory() const
     return mFileSystem.ResolveSettingsDirectory();
 }
 
-std::filesystem::path PluginController::ResolveResourceLibraryIndexPath() const
-{
-    return GetEffectiveSettingsDirectory() / "resources" / "indexes" / "resources-index.json";
-}
-
 void PluginController::RefreshPresetLibraryViews()
 {
     HandleGetPresetListRequest();
@@ -3939,9 +3911,28 @@ void PluginController::DeserializeState(const std::string& json)
             for (auto it = incomingSettings->begin(); it != incomingSettings->end(); ++it)
                 mAppSettings[it.key()] = it.value();
 
-            ApplyNamSlimmableSettingsFromAppSettings();
-            ApplyNamOversamplingSettingsFromAppSettings();
+            ApplyNamQualitySettings();
             ApplyNamInterfaceCalibrationFromAppSettings();
+        }
+
+        // Applied after the appSettings merge so the instance's own saved tier wins over
+        // whatever app.json seeded at Initialize(). Older states without this block fall
+        // back to the appSettings values handled above.
+        if (state.contains("namQuality") && state["namQuality"].is_object())
+        {
+            const auto& quality = state["namQuality"];
+            const auto readNumber = [&quality](const char* field, double fallback) {
+                const auto it = quality.find(field);
+                return (it != quality.end() && it->is_number()) ? it->get<double>() : fallback;
+            };
+
+            mAppSettings[kNamSlimmableSizeSettingKey] =
+                SanitizeNamSlimmableSize(readNumber("slimmableSize", kNamSlimmableSizeDefault));
+            mAppSettings[kNamOversamplingSettingKey] =
+                SanitizeNamOversamplingIndex(readNumber("oversampling", kNamOversamplingIndexDefault));
+            mAppSettings[kNamAntiAliasPhaseSettingKey] =
+                SanitizeNamAntiAliasPhaseIndex(readNumber("antiAliasPhase", kNamAntiAliasPhaseIndexDefault));
+            ApplyNamQualitySettings();
         }
 
         if (state.contains("uiSettings") && state["uiSettings"].is_object())
@@ -4402,8 +4393,8 @@ void PluginController::PollSharedSyncState()
 
     mNextSharedSyncPollAt = now + kSharedSyncPollInterval;
 
-    const auto path = ResolveSharedSyncStatePath(mFileSystem);
-    const auto payload = LoadJsonFile(path, nlohmann::json::object());
+    const auto payload = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId)
+                           .value_or(nlohmann::json::object());
     if (!payload.is_object())
         return;
 
@@ -4532,15 +4523,10 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
         return AddActivePreset(*mActivePreset, resolvedPresetId, mActivePreset->name);
     }
 
-    // Try loading from user presets directory
-    if (!mUserPresetsPath.empty())
+    // Try the user's presets in the store
+    if (auto presetOpt = LoadUserPreset(resolvedPresetId))
     {
-        auto userPath = mUserPresetsPath / (resolvedPresetId + ".json");
-        auto presetOpt = PresetStorage::LoadFromFile(userPath);
-        if (presetOpt)
-        {
-            return AddActivePreset(*presetOpt, resolvedPresetId, presetOpt->name);
-        }
+        return AddActivePreset(*presetOpt, resolvedPresetId, presetOpt->name);
     }
 
     // Try loading from factory presets directory
@@ -4776,9 +4762,9 @@ void PluginController::HandleStateRequest()
 
 void PluginController::HandleGetSharedSyncStateRequest()
 {
-    // Only act if the shared sync state file has a new version since we last responded.
-    const auto syncPath = ResolveSharedSyncStatePath(mFileSystem);
-    const auto filePayload = LoadJsonFile(syncPath, nlohmann::json::object());
+    // Only act if the shared sync state has a new version since we last responded.
+    const auto filePayload = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId)
+                               .value_or(nlohmann::json::object());
     std::uint64_t currentVersion = 0;
     if (filePayload.is_object())
     {
@@ -5081,16 +5067,11 @@ std::optional<Preset> PluginController::TryLoadStoredPresetById(const std::strin
     if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
         return std::nullopt;
 
-    const auto presetDirectory = GetEffectiveUserPresetDirectory();
-    const auto userPath = presetDirectory / (resolvedPresetId + ".json");
-    if (!presetDirectory.empty() && std::filesystem::exists(userPath))
+    if (auto presetOpt = LoadUserPreset(resolvedPresetId))
     {
-        if (auto presetOpt = PresetStorage::LoadFromFile(userPath))
-        {
-            AppendSessionLog("Hosted plugin rehydrate source=user-file presetId=" + resolvedPresetId
-                + ", path=" + userPath.generic_string() + ", state=" + SummarizeHostedPluginState(*presetOpt));
-            return presetOpt;
-        }
+        AppendSessionLog("Hosted plugin rehydrate source=user-store presetId=" + resolvedPresetId
+            + ", state=" + SummarizeHostedPluginState(*presetOpt));
+        return presetOpt;
     }
 
     if (IsPresetArchiveSessionActive())
@@ -5679,9 +5660,6 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         if (!SetPresetActiveScene(newPreset, requestedSceneId, &mActiveSceneId))
             mActiveSceneId = GetDefaultPresetSceneId(newPreset);
 
-        const auto presetDirectory = GetEffectiveUserPresetDirectory();
-        [[maybe_unused]] const auto ensuredUserPresetPath = mFileSystem.EnsureDirectory(presetDirectory);
-
         AppendSessionLog("Hosted plugin preset save begin presetId=" + newPreset.id
             + ", sourcePresetId=" + (sourcePresetId.empty() ? std::string{"<none>"} : sourcePresetId)
             + ", beforeCapture=" + SummarizeHostedPluginState(newPreset));
@@ -5691,15 +5669,14 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         AppendSessionLog("Hosted plugin preset save captured presetId=" + newPreset.id
             + ", afterCapture=" + SummarizeHostedPluginState(newPreset));
 
-        const auto presetPath = presetDirectory / (newPreset.id + ".json");
-        if (!PresetStorage::SaveToFile(newPreset, presetPath))
+        if (!SaveUserPreset(newPreset))
         {
-            ReportErrorToUI("Failed to save preset", "Could not write preset file");
+            ReportErrorToUI("Failed to save preset", "Could not write the preset to the library");
             return;
         }
 
         AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id
-            + ", path=" + presetPath.generic_string() + ", state=" + SummarizeHostedPluginState(newPreset));
+            + ", state=" + SummarizeHostedPluginState(newPreset));
 
         mActivePreset = newPreset;
         mActivePresetId = newPreset.id;
@@ -5728,25 +5705,20 @@ void PluginController::HandleDeletePresetRequest(const nlohmann::json& payload)
     if (presetId.empty())
         return;
 
-    const auto presetDirectory = GetEffectiveUserPresetDirectory();
-    const auto presetPath = presetDirectory / (presetId + ".json");
-    if (!std::filesystem::exists(presetPath))
+    if (!UserPresetExists(presetId))
     {
         ReportErrorToUI("Preset not found", presetId);
         return;
     }
 
-    std::error_code ec;
-    std::filesystem::remove(presetPath, ec);
-    if (ec)
+    if (!DeleteUserPreset(presetId))
     {
         ReportErrorToUI("Failed to delete preset", presetId);
+        return;
     }
-    else
-    {
-        InvalidateResourceUsageIndex();
-        TouchSharedSyncState({"presetLibrary"});
-    }
+
+    InvalidateResourceUsageIndex();
+    TouchSharedSyncState({"presetLibrary"});
 }
 
 void PluginController::HandleStartPresetArchiveSessionRequest(const nlohmann::json& payload)
@@ -5814,15 +5786,9 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
         return;
     }
 
-    if (mUserPresetsPath.empty())
-        mUserPresetsPath = mFileSystem.ResolvePresetDirectory() / "user";
-
-    const auto userPath = mUserPresetsPath / (resolvedPresetId + ".json");
     const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
 
-    std::optional<Preset> presetOpt;
-    if (std::filesystem::exists(userPath))
-        presetOpt = PresetStorage::LoadFromFile(userPath);
+    std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
     if (!presetOpt && std::filesystem::exists(factoryPath))
         presetOpt = PresetStorage::LoadFromFile(factoryPath);
     if (!presetOpt)
@@ -7411,12 +7377,8 @@ void PluginController::EnsureResourceUsageDiskIndex() const
     };
 
     // User presets first so they win ties.
-    if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
-    {
-        const auto userPresets = PresetStorage::LoadAllFromDirectory(mUserPresetsPath);
-        for (const auto& preset : userPresets)
-            indexPreset(preset);
-    }
+    for (const auto& preset : LoadAllUserPresets())
+        indexPreset(preset);
 
     // Factory presets next.
     {
@@ -8965,8 +8927,7 @@ void PluginController::HandleDeleteCustomEffectEntryRequest(const nlohmann::json
 
 void PluginController::SendCompositePresetListToUI()
 {
-    const auto dir = mResourceRoot / CompositePresetStorage::kSubdir;
-    const auto presets = CompositePresetStorage::ListAll(dir);
+    const auto presets = CompositePresetStorage::ListAllFromStore(Store());
     nlohmann::json msg;
     msg["type"] = "compositePresetList";
     nlohmann::json arr = nlohmann::json::array();
@@ -9051,10 +9012,9 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
     if (cp.createdAt.empty()) cp.createdAt = ts;
     cp.modifiedAt = ts;
 
-    const auto dir = mResourceRoot / CompositePresetStorage::kSubdir;
-    if (!CompositePresetStorage::SaveToFile(cp, dir))
+    if (!CompositePresetStorage::SaveToStore(Store(), cp))
     {
-        ReportErrorToUI("Save Multi-Rig failed", "Could not write file");
+        ReportErrorToUI("Save Multi-Rig failed", "Could not write the Multi-Rig to the library");
         return;
     }
 
@@ -9068,8 +9028,7 @@ void PluginController::HandleLoadCompositePresetRequest(const nlohmann::json& pa
     const std::string id = payload.value("id", "");
     if (id.empty()) { ReportErrorToUI("Load Multi-Rig failed", "Missing preset id"); return; }
 
-    const auto dir = mResourceRoot / CompositePresetStorage::kSubdir;
-    const auto cpOpt = CompositePresetStorage::LoadById(id, dir);
+    const auto cpOpt = CompositePresetStorage::LoadFromStore(Store(), id);
     if (!cpOpt) { ReportErrorToUI("Load Multi-Rig failed", "Preset not found: " + id); return; }
 
     const auto& cp = *cpOpt;
@@ -9107,8 +9066,7 @@ void PluginController::HandleRemoveCompositePresetRequest(const nlohmann::json& 
     const std::string id = payload.value("id", "");
     if (id.empty()) { ReportErrorToUI("Remove Multi-Rig failed", "Missing preset id"); return; }
 
-    const auto dir = mResourceRoot / CompositePresetStorage::kSubdir;
-    const bool removed = CompositePresetStorage::DeleteById(id, dir);
+    const bool removed = CompositePresetStorage::DeleteFromStore(Store(), id);
     if (!removed) { ReportErrorToUI("Remove Multi-Rig failed", "Preset not found: " + id); return; }
 
     SendCompositePresetListToUI();
@@ -9272,19 +9230,22 @@ void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
     }
 
     const std::string lookupKey = blendId.empty() ? effectType : (effectType + "::" + blendId);
-    const auto layoutDir = ResolveLayoutDir(mFileSystem, layoutId);
 
+    Store().Remove(storage::ItemType::kLayout, layoutId);
+
+    // The document is in the store now, but the image sidecars are still files.
+    const auto layoutDir = ResolveLayoutDir(mFileSystem, layoutId);
     std::error_code ec;
     if (std::filesystem::exists(layoutDir, ec))
     {
         std::filesystem::remove_all(layoutDir, ec);
         if (ec)
         {
-            ReportErrorToUI("Delete layout failed", "Unable to remove layout directory");
+            ReportErrorToUI("Delete layout failed", "Unable to remove the layout's image folder");
             return;
         }
-        AppendSessionLog("Layout deleted: " + layoutDir.generic_string());
     }
+    AppendSessionLog("Layout deleted: " + layoutId);
 
     // Update associations mapping
     nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
@@ -9601,8 +9562,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     };
 
     if (mActivePreset) addUsedPreset(*mActivePreset);
-    if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
-        for (const auto& p : PresetStorage::LoadAllFromDirectory(mUserPresetsPath)) addUsedPreset(p);
+    for (const auto& p : LoadAllUserPresets()) addUsedPreset(p);
 
     if (mBlendLibrary.is_array())
         for (const auto& blend : mBlendLibrary)
@@ -12069,11 +12029,7 @@ void PluginController::DiscardFailedHostedPluginResourceSelection(const std::str
                 && providerIt->second == kLocalResourceProvider;
             mResourceLibrary.RemoveResource("plugin", ref.resourceId);
             if (isLocalResource)
-            {
-                const auto libraryFile = ResolveResourceLibraryIndexPath();
-                [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryFile.parent_path());
-                mResourceLibrary.SaveToFile(libraryFile);
-            }
+                ResourceLibrary::RemoveFromStore(Store(), "plugin", ref.resourceId);
         }
     }
 
@@ -12477,9 +12433,7 @@ void PluginController::PersistHostedPluginResourceMetadata(const GraphNode& node
     }
 
     mResourceLibrary.UpdateResource("plugin", updated.id, updated);
-    const auto libraryFile = ResolveResourceLibraryIndexPath();
-    [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryFile.parent_path());
-    mResourceLibrary.SaveToFile(libraryFile);
+    ResourceLibrary::PutInStore(Store(), updated, ResolveResourcesRoot());
 }
 
 void PluginController::ApplyBlendDefinitions(Preset& preset)
@@ -12988,22 +12942,80 @@ std::optional<std::filesystem::path> PluginController::ResolveResourceRef(const 
     return std::nullopt;
 }
 
+std::filesystem::path PluginController::ResolveResourcesRoot() const
+{
+    // Also the real profile: stored resource paths are relative to it, and a
+    // session-relative base would make every persisted path wrong once the
+    // session ended. Session-only resources are held in memory and never reach
+    // the store, so they do not need a session-relative base.
+    return mFileSystem.ResolveSettingsDirectory() / "resources";
+}
+
+std::optional<Preset> PluginController::LoadUserPreset(const std::string& presetId) const
+{
+    // A preset-archive session is a sandbox: its presets live in a throwaway
+    // directory and completely shadow the real library for the duration, so they
+    // are read from files and never enter the store.
+    if (IsPresetArchiveSessionActive())
+        return PresetStorage::LoadFromFile(GetEffectiveUserPresetDirectory() / (presetId + ".json"));
+
+    return PresetStorage::LoadFromStore(Store(), presetId);
+}
+
+std::vector<Preset> PluginController::LoadAllUserPresets() const
+{
+    if (IsPresetArchiveSessionActive())
+        return PresetStorage::LoadAllFromDirectory(GetEffectiveUserPresetDirectory());
+
+    return PresetStorage::LoadAllFromStore(Store());
+}
+
+bool PluginController::SaveUserPreset(const Preset& preset)
+{
+    if (IsPresetArchiveSessionActive())
+    {
+        const auto sessionDir = GetEffectiveUserPresetDirectory();
+        [[maybe_unused]] const auto ensuredSessionDir = mFileSystem.EnsureDirectory(sessionDir);
+        return PresetStorage::SaveToFile(preset, sessionDir / (preset.id + ".json"));
+    }
+
+    return PresetStorage::SaveToStore(Store(), preset);
+}
+
+bool PluginController::DeleteUserPreset(const std::string& presetId)
+{
+    if (IsPresetArchiveSessionActive())
+    {
+        std::error_code ec;
+        return std::filesystem::remove(GetEffectiveUserPresetDirectory() / (presetId + ".json"), ec) && !ec;
+    }
+
+    return PresetStorage::RemoveFromStore(Store(), presetId);
+}
+
+bool PluginController::UserPresetExists(const std::string& presetId) const
+{
+    if (IsPresetArchiveSessionActive())
+    {
+        std::error_code ec;
+        return std::filesystem::exists(GetEffectiveUserPresetDirectory() / (presetId + ".json"), ec);
+    }
+
+    return PresetStorage::ExistsInStore(Store(), presetId);
+}
+
 void PluginController::AppendUserLibraryResource(const LibraryResource& resource)
 {
     mResourceLibrary.AddResource(resource);
-
-    const auto libraryFile = ResolveResourceLibraryIndexPath();
-    [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryFile.parent_path());
-    mResourceLibrary.SaveToFile(libraryFile);
+    // One row, not a rewrite of the whole index. A bulk import is now N cheap
+    // upserts rather than N full-file writes.
+    ResourceLibrary::PutInStore(Store(), resource, ResolveResourcesRoot());
 }
 
 void PluginController::RemoveUserLibraryResource(const std::string& type, const std::string& id)
 {
     mResourceLibrary.RemoveResource(type, id);
-
-    const auto libraryFile = ResolveResourceLibraryIndexPath();
-    [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryFile.parent_path());
-    mResourceLibrary.SaveToFile(libraryFile);
+    ResourceLibrary::RemoveFromStore(Store(), type, id);
 }
 
 void PluginController::EnsureBasicGraph()
@@ -13086,21 +13098,7 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
     if (domains.empty())
         return;
 
-    const auto syncPath = ResolveSharedSyncStatePath(mFileSystem);
-    if (syncPath.empty())
-        return;
-
-    std::uint64_t nextVersion = 1;
-    nlohmann::json previous = LoadJsonFile(syncPath, nlohmann::json::object());
-    if (previous.is_object())
-    {
-        const auto versionIt = previous.find("version");
-        if (versionIt != previous.end() && versionIt->is_number_unsigned())
-            nextVersion = versionIt->get<std::uint64_t>() + 1;
-    }
-
     nlohmann::json payload = nlohmann::json::object();
-    payload["version"] = nextVersion;
     payload["updatedAt"] = BuildUtcIsoTimestamp();
     payload["domains"] = nlohmann::json::array();
     for (const auto& domain : domains)
@@ -13114,80 +13112,101 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
     if (instanceIdIt != mAppSettings.end() && instanceIdIt->is_string())
         payload["writerInstanceId"] = instanceIdIt->get<std::string>();
 
-    try
-    {
-        [[maybe_unused]] const auto ensuredSyncParent = mFileSystem.EnsureDirectory(syncPath.parent_path());
-
-        const auto tempPath = syncPath.parent_path() / (syncPath.filename().string() + ".tmp");
+    // The counter has to be read and written under the same lock. Reading it
+    // outside the transaction lets two instances see the same version and both
+    // write version+1, so one instance's notification is lost and every other
+    // instance keeps showing stale data until the next unrelated change.
+    std::uint64_t nextVersion = 1;
+    const bool wrote = Store().Transact([&]() {
+        nextVersion = 1;
+        if (const auto previous = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId))
         {
-            std::ofstream ofs(tempPath);
-            if (!ofs.is_open())
-                return;
-            ofs << payload.dump(2);
+            const auto versionIt = previous->find("version");
+            if (versionIt != previous->end() && versionIt->is_number_unsigned())
+                nextVersion = versionIt->get<std::uint64_t>() + 1;
         }
 
-        std::error_code ec;
-        std::filesystem::rename(tempPath, syncPath, ec);
-        if (ec)
-        {
-            std::filesystem::copy_file(tempPath, syncPath,
-                                       std::filesystem::copy_options::overwrite_existing, ec);
-            std::filesystem::remove(tempPath, ec);
-        }
-        if (ec)
-            return;
+        payload["version"] = nextVersion;
+        return Store().Put(storage::ItemType::kDocument, kSharedSyncStateDocumentId, payload);
+    });
 
-        mSharedSyncVersionSeen = nextVersion;
-        mSharedSyncVersionSeenInitialized = true;
-    }
-    catch (const std::exception& e)
+    if (!wrote)
     {
-        std::cerr << "[Plugin] TouchSharedSyncState failed: " << e.what() << std::endl;
+        std::cerr << "[Plugin] TouchSharedSyncState failed" << std::endl;
+        return;
     }
+
+    mSharedSyncVersionSeen = nextVersion;
+    mSharedSyncVersionSeenInitialized = true;
 }
 
 void PluginController::SaveAppSettings() const
 {
-    const auto settingsPath = mFileSystem.ResolveSettingsFile();
-    if (settingsPath.empty()) return;
+    if (!mAppSettings.is_object())
+        return;
 
-    bool wrote = false;
-    try
+    // Write only what *this* instance changed, against the snapshot it last
+    // loaded or saved.
+    //
+    // Rewriting every key (which is what a ReplaceAll here would do) puts back
+    // the exact clobber the per-key schema exists to avoid: mAppSettings is one
+    // instance's view of the settings, so pushing all of it would overwrite a
+    // key another instance changed since we loaded, with our stale copy. The
+    // 2s shared-sync poll would eventually pull the loser's value back, but the
+    // user sees their setting revert in the meantime.
+    //
+    // Diffing against the baseline also tells deletion apart from absence: a key
+    // that is gone from mAppSettings but present in the baseline was removed
+    // here and must be removed from the store; a key in neither was never ours
+    // and is left alone.
+    if (!mAppSettingsBaseline.is_object())
+        mAppSettingsBaseline = nlohmann::json::object();
+    const nlohmann::json& baseline = mAppSettingsBaseline;
+
+    std::vector<std::pair<std::string, std::string>> upserts;
+    std::vector<std::string> removals;
+
+    for (const auto& [key, value] : mAppSettings.items())
     {
-        [[maybe_unused]] const auto ensuredSettingsParent = mFileSystem.EnsureDirectory(settingsPath.parent_path());
-
-        // Write to a temp file first, then atomically rename over the real file.
-        // This prevents a partial write (crash, exception, lock) from truncating
-        // app.json and losing the instanceId or other persistent settings.
-        const auto tempPath = settingsPath.parent_path() / (settingsPath.filename().string() + ".tmp");
-        {
-            std::ofstream ofs(tempPath);
-            if (!ofs.is_open())
-            {
-                std::cerr << "[Plugin] SaveAppSettings: could not open temp file " << tempPath.string() << std::endl;
-                return;
-            }
-            ofs << mAppSettings.dump(2);
-        }
-
-        std::error_code ec;
-        std::filesystem::rename(tempPath, settingsPath, ec);
-        if (ec)
-        {
-            // rename failed (e.g. cross-device) – fall back to copy+delete
-            std::filesystem::copy_file(tempPath, settingsPath,
-                                       std::filesystem::copy_options::overwrite_existing, ec);
-            std::filesystem::remove(tempPath, ec);
-        }
-        wrote = !ec;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[Plugin] SaveAppSettings failed: " << e.what() << std::endl;
+        if (key.empty())
+            continue;
+        const auto previous = baseline.find(key);
+        if (previous == baseline.end() || *previous != value)
+            upserts.emplace_back(key, value.dump());
     }
 
-    if (wrote)
-        TouchSharedSyncState({"appSettings"});
+    for (const auto& [key, value] : baseline.items())
+    {
+        if (!key.empty() && !mAppSettings.contains(key))
+            removals.push_back(key);
+    }
+
+    if (upserts.empty() && removals.empty())
+        return;
+
+    storage::JsonStore& store = Store();
+    const bool wrote = store.Transact([&]() {
+        for (const auto& [key, json] : upserts)
+        {
+            if (!store.PutRaw(storage::ItemType::kSetting, key, json))
+                return false;
+        }
+        for (const auto& key : removals)
+        {
+            if (!store.Remove(storage::ItemType::kSetting, key))
+                return false;
+        }
+        return true;
+    });
+
+    if (!wrote)
+    {
+        std::cerr << "[Plugin] SaveAppSettings failed" << std::endl;
+        return;
+    }
+
+    mAppSettingsBaseline = mAppSettings;
+    TouchSharedSyncState({"appSettings"});
 }
 
 bool PluginController::CleanupLegacyAppSettingsOnLoad()
@@ -13233,14 +13252,6 @@ bool PluginController::CleanupLegacyAppSettingsOnLoad()
 
 void PluginController::LoadAppSettings()
 {
-    const auto settingsPath = mFileSystem.ResolveSettingsFile();
-
-    if (settingsPath.empty())
-    {
-        std::cerr << "[Plugin] Settings file path is empty" << std::endl;
-        return;
-    }
-
     const auto applyBundledDefaults = [this]()
     {
         if (!mAppSettings.is_object())
@@ -13250,40 +13261,23 @@ void PluginController::LoadAppSettings()
             mAppSettings[kJamYouTubeApiKeySettingKey] = std::string{kBundledJamYouTubeApiKey};
     };
 
-    if (!std::filesystem::exists(settingsPath))
+    mAppSettings = nlohmann::json::object();
+    for (const auto& item : Store().List(storage::ItemType::kSetting))
     {
-        std::cout << "[Plugin] No settings file found at " << settingsPath.string()
-                  << ", using defaults" << std::endl;
-        mAppSettings = nlohmann::json::object();
-        applyBundledDefaults();
-        return;
+        if (auto parsed = item.Parse())
+            mAppSettings[item.id] = std::move(*parsed);
     }
 
-    try
-    {
-        std::ifstream ifs(settingsPath);
-        if (ifs.is_open())
-        {
-            mAppSettings = nlohmann::json::parse(ifs);
-            std::cout << "[Plugin] Loaded app settings from " << settingsPath.string() << std::endl;
-        }
-        applyBundledDefaults();
+    // The baseline is what the store held, before the bundled defaults are
+    // layered on. A default that matches what is already stored must not be
+    // rewritten, and a default for a key nobody has ever set should be written
+    // once — both fall out of diffing against the store's own contents.
+    mAppSettingsBaseline = mAppSettings;
 
-        if (CleanupLegacyAppSettingsOnLoad())
-            SaveAppSettings();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[Plugin] Failed to parse settings: " << e.what() << std::endl;
-        // Back up the corrupt file so the instanceId and other data are not silently lost.
-        std::error_code ec;
-        const auto backupPath = settingsPath.parent_path() / (settingsPath.filename().string() + ".corrupt");
-        std::filesystem::copy_file(settingsPath, backupPath,
-                                   std::filesystem::copy_options::overwrite_existing, ec);
-        std::cerr << "[Plugin] Corrupt settings backed up to " << backupPath.string() << std::endl;
-        mAppSettings = nlohmann::json::object();
-        applyBundledDefaults();
-    }
+    applyBundledDefaults();
+
+    if (CleanupLegacyAppSettingsOnLoad())
+        SaveAppSettings();
 }
 
 void PluginController::LoadLastSessionState()
@@ -13322,12 +13316,7 @@ void PluginController::LoadLastSessionState()
                 : lastPresetId;
 
             // Try user presets first, then factory
-            std::optional<Preset> presetOpt;
-            if (!mUserPresetsPath.empty())
-            {
-                auto userPath = mUserPresetsPath / (resolvedPresetId + ".json");
-                presetOpt = PresetStorage::LoadFromFile(userPath);
-            }
+            std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
             if (!presetOpt)
             {
                 auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
@@ -13379,13 +13368,7 @@ std::optional<Preset> PluginController::LoadPresetById(const std::string& preset
     if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
         return std::nullopt;
 
-    std::optional<Preset> presetOpt;
-    const auto presetDirectory = GetEffectiveUserPresetDirectory();
-    if (!presetDirectory.empty())
-    {
-        const auto userPath = presetDirectory / (resolvedPresetId + ".json");
-        presetOpt = PresetStorage::LoadFromFile(userPath);
-    }
+    std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
     if (IsPresetArchiveSessionActive())
         return presetOpt;
     if (!presetOpt)
@@ -13415,19 +13398,12 @@ std::optional<std::string> PluginController::FindPresetIdByTitle(const std::stri
         return NormalizePresetTitle(preset.name) == normalizedTitle;
     };
 
-    const auto presetDirectory = GetEffectiveUserPresetDirectory();
-    if (!presetDirectory.empty() && std::filesystem::exists(presetDirectory))
+    for (const auto& preset : LoadAllUserPresets())
     {
-        for (const auto& entry : std::filesystem::directory_iterator(presetDirectory))
-        {
-            if (entry.path().extension() != ".json")
-                continue;
-            const auto presetOpt = PresetStorage::LoadFromFile(entry.path());
-            if (presetOpt && !factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(presetOpt->id))
-                continue;
-            if (presetOpt && matchesTitle(*presetOpt))
-                return presetOpt->id;
-        }
+        if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+            continue;
+        if (matchesTitle(preset))
+            return preset.id;
     }
 
     if (IsPresetArchiveSessionActive())
@@ -13488,24 +13464,17 @@ bool PluginController::TryLoadConfiguredDefaultPreset()
 
 void PluginController::LoadResourceLibraries()
 {
-    const auto libraryFile = ResolveResourceLibraryIndexPath();
-    mResourceLibrary.Clear();
-    if (!std::filesystem::exists(libraryFile))
-    {
-        std::cout << "[Plugin] Resource library file not found: " << libraryFile.string() << std::endl;
-        return;
-    }
-
-    mResourceLibrary.LoadFromFile(libraryFile);
+    mResourceLibrary.LoadFromStore(Store(), ResolveResourcesRoot());
     CleanupResourceLibraryCategoriesOnStartup();
-    std::cout << "[Plugin] Loaded resource library from " << libraryFile.string() << std::endl;
+    std::cout << "[Plugin] Loaded " << mResourceLibrary.GetAllResources().size()
+              << " resources from " << ResolveDocumentStorePath().string() << std::endl;
 }
 
 void PluginController::CleanupResourceLibraryCategoriesOnStartup()
 {
-    const auto libraryFile = ResolveResourceLibraryIndexPath();
+    const auto resourcesRoot = ResolveResourcesRoot();
     auto allResources = mResourceLibrary.GetAllResources();
-    std::size_t updatedCount = 0;
+    std::vector<LibraryResource> changed;
 
     for (auto& resource : allResources)
     {
@@ -13522,13 +13491,23 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
 
         resource.category = resolvedCategory;
         mResourceLibrary.UpdateResource(resource.type, resource.id, resource);
-        ++updatedCount;
+        changed.push_back(resource);
     }
 
-    if (updatedCount > 0)
+    if (!changed.empty())
     {
-        mResourceLibrary.SaveToFile(libraryFile);
-        AppendSessionLog("Normalized resource categories at startup: " + std::to_string(updatedCount));
+        // One transaction for the whole normalization pass: either every row is
+        // reclassified or none is, so a crash here cannot leave the library
+        // half-categorized.
+        Store().Transact([&]() {
+            for (const auto& resource : changed)
+            {
+                if (!ResourceLibrary::PutInStore(Store(), resource, resourcesRoot))
+                    return false;
+            }
+            return true;
+        });
+        AppendSessionLog("Normalized resource categories at startup: " + std::to_string(changed.size()));
     }
 }
 
@@ -13540,7 +13519,8 @@ void PluginController::LoadFactoryPresetArchives()
     mTrackedFactoryArchivePresetIds.clear();
     mFactoryArchivePresetAliases.clear();
 
-    auto factoryArchiveState = LoadJsonFile(ResolveFactoryArchiveStatePath(mFileSystem), nlohmann::json::object());
+    auto factoryArchiveState = Store().Get(storage::ItemType::kDocument, kFactoryArchiveStateDocumentId)
+                                   .value_or(nlohmann::json::object());
     if (!factoryArchiveState.is_object())
         factoryArchiveState = nlohmann::json::object();
     factoryArchiveState["schemaVersion"] = kFactoryArchiveStateSchemaVersion;
@@ -13595,14 +13575,8 @@ void PluginController::LoadFactoryPresetArchives()
     [[maybe_unused]] const auto ensuredExtractedRoot = mFileSystem.EnsureDirectory(extractedRoot);
 
     std::unordered_set<std::string> occupiedPresetIds;
-    if (!mUserPresetsPath.empty() && std::filesystem::exists(mUserPresetsPath))
-    {
-        for (const auto& entry : std::filesystem::directory_iterator(mUserPresetsPath))
-        {
-            if (entry.path().extension() == ".json")
-                occupiedPresetIds.insert(entry.path().stem().string());
-        }
-    }
+    for (const auto& presetId : Store().ListIds(storage::ItemType::kPreset))
+        occupiedPresetIds.insert(presetId);
     for (const auto& entry : std::filesystem::directory_iterator(factoryDir))
     {
         if (entry.path().extension() == ".json")
@@ -13788,17 +13762,16 @@ void PluginController::LoadFactoryPresetArchives()
             preset.id = uniquePresetId;
             preset.category = "Factory";
 
-            const auto presetPath = mUserPresetsPath / (preset.id + ".json");
-            if ((archiveChanged || !std::filesystem::exists(presetPath))
-                && !PresetStorage::SaveToFile(preset, presetPath))
+            if ((archiveChanged || !PresetStorage::ExistsInStore(Store(), preset.id))
+                && !PresetStorage::SaveToStore(Store(), preset))
             {
-                AppendSessionLog("Factory preset archive preset write failed: " + presetPath.string());
+                AppendSessionLog("Factory preset archive preset write failed: " + preset.id);
             }
 
             mFactoryArchivePresets[preset.id] = std::move(preset);
         }
 
-        UpdateFactoryPresetFolders(mFileSystem,
+        UpdateFactoryPresetFolders(Store(),
                        archiveKey,
                        parsed.presetFolders,
                        presetIdMapping,
@@ -13815,67 +13788,56 @@ void PluginController::LoadFactoryPresetArchives()
         }
     }
 
-    SaveJsonFile(mFileSystem, ResolveFactoryArchiveStatePath(mFileSystem), factoryArchiveState);
+    Store().Put(storage::ItemType::kDocument, kFactoryArchiveStateDocumentId, factoryArchiveState);
     InvalidateResourceUsageIndex();
 }
 
 void PluginController::LoadBlendLibrary()
 {
-    const auto blendPath = mFileSystem.ResolveSettingsDirectory() / "blends" / "library.json";
-    if (std::filesystem::exists(blendPath))
+    mBlendLibrary = nlohmann::json::array();
+
+    for (const auto& item : Store().List(storage::ItemType::kBlend))
     {
-        try
-        {
-            std::ifstream ifs(blendPath);
-            if (ifs.is_open())
-                mBlendLibrary = nlohmann::json::parse(ifs);
-        }
-        catch (const std::exception&)
-        {
-            mBlendLibrary = nlohmann::json::array();
-        }
+        if (auto parsed = item.Parse())
+            mBlendLibrary.push_back(std::move(*parsed));
     }
 }
 
 void PluginController::LoadCustomEffectLibrary()
 {
-    mCustomEffectLibrary.LoadFromFile(ResolveCustomEffectLibraryPath(mFileSystem));
+    mCustomEffectLibrary.LoadFromStore(Store());
 }
 
 void PluginController::SaveBlendLibrary() const
 {
-    const auto blendPath = mFileSystem.ResolveSettingsDirectory() / "blends" / "library.json";
-    bool wrote = false;
-    try
+    // Factory-archive blends re-register themselves from the archive on every
+    // launch, so they are deliberately not persisted here.
+    std::vector<storage::StoreItem> items;
+    if (mBlendLibrary.is_array())
     {
-        [[maybe_unused]] const auto ensuredBlendParent = mFileSystem.EnsureDirectory(blendPath.parent_path());
-        std::ofstream ofs(blendPath);
-        if (ofs.is_open())
+        for (const auto& blend : mBlendLibrary)
         {
-            nlohmann::json persisted = nlohmann::json::array();
-            if (mBlendLibrary.is_array())
-            {
-                for (const auto& blend : mBlendLibrary)
-                {
-                    const std::string id = blend.value("id", "");
-                    if (!id.empty() && mFactoryArchiveBlendIds.contains(id))
-                        continue;
-                    persisted.push_back(blend);
-                }
-            }
-            ofs << persisted.dump(2);
-            wrote = true;
+            const std::string id = blend.value("id", "");
+            if (id.empty() || mFactoryArchiveBlendIds.contains(id))
+                continue;
+
+            storage::StoreItem item;
+            item.type = storage::ItemType::kBlend;
+            item.id = id;
+            item.json = blend.dump();
+            items.push_back(std::move(item));
         }
     }
-    catch (const std::exception&) {}
 
-    if (wrote)
+    if (Store().ReplaceAll(storage::ItemType::kBlend, items))
         TouchSharedSyncState({"blends"});
+    else
+        AppendSessionLog("Failed to save the blend library");
 }
 
 void PluginController::SaveCustomEffectLibrary() const
 {
-    mCustomEffectLibrary.SaveToFile(ResolveCustomEffectLibraryPath(mFileSystem));
+    mCustomEffectLibrary.SaveToStore(Store());
     TouchSharedSyncState({"customEffects"});
 }
 
@@ -13954,32 +13916,21 @@ void PluginController::LoadLayoutLibrary()
                 if (!id.is_string())
                     continue;
                 const std::string layoutId = id.get<std::string>();
-                const auto filePath = ResolveLayoutFilePath(mFileSystem, layoutId);
-                if (!std::filesystem::exists(filePath))
+                auto layoutJson = Store().Get(storage::ItemType::kLayout, layoutId);
+                if (!layoutJson || !layoutJson->is_object())
                     continue;
 
-                try
-                {
-                    std::ifstream input(filePath);
-                    if (!input) continue;
-                    nlohmann::json layoutJson;
-                    input >> layoutJson;
-                    if (!layoutJson.is_object()) continue;
+                // Ensure layoutId is embedded for UI round-trip.
+                (*layoutJson)["layoutId"] = layoutId;
 
-                    // Ensure layoutId is embedded for UI round-trip.
-                    layoutJson["layoutId"] = layoutId;
-
-                    nlohmann::json layoutEntry;
-                    layoutEntry["layout"] = layoutJson;
-                    layoutEntry["isDefault"] = (layoutId == defaultLayoutId);
-                    layoutEntry["layoutId"] = layoutId;
-                    layoutEntry["filePath"] = filePath.generic_string();
-                    entries.push_back(layoutEntry);
-                }
-                catch (const std::exception& e)
-                {
-                    AppendSessionLog("Failed to parse layout file " + filePath.generic_string() + ": " + e.what());
-                }
+                nlohmann::json layoutEntry;
+                layoutEntry["layout"] = std::move(*layoutJson);
+                layoutEntry["isDefault"] = (layoutId == defaultLayoutId);
+                layoutEntry["layoutId"] = layoutId;
+                // Sidecar images still live on disk next to where the layout
+                // document used to be; the designer resolves them from here.
+                layoutEntry["filePath"] = ResolveLayoutFilePath(mFileSystem, layoutId).generic_string();
+                entries.push_back(layoutEntry);
             }
 
             if (!entries.empty())
@@ -14281,93 +14232,166 @@ void PluginController::HandleRequestLayoutImagesRequest()
 
 void PluginController::SaveLayoutToFile(const std::string& layoutId, const nlohmann::json& layoutJson)
 {
+    // The layout document goes to the store; its image sidecars stay in
+    // layouts/content/<id>/images/, so the directory is still created.
     const auto layoutDir = ResolveLayoutDir(mFileSystem, layoutId);
     [[maybe_unused]] const auto ensuredDir = mFileSystem.EnsureDirectory(layoutDir);
 
-    const auto layoutFile = layoutDir / "layout.json";
-    std::ofstream output(layoutFile);
-    if (output)
-    {
-        output << layoutJson.dump(2);
-        output.close();
-        AppendSessionLog("Layout file saved: " + layoutFile.generic_string());
-    }
+    if (Store().Put(storage::ItemType::kLayout, layoutId, layoutJson))
+        AppendSessionLog("Layout saved: " + layoutId);
     else
+        AppendSessionLog("Failed to save layout: " + layoutId);
+}
+
+std::filesystem::path PluginController::ResolveDocumentStorePath() const
+{
+    // Deliberately the real profile, not GetEffectiveSettingsDirectory(): while
+    // a preset-archive session is active that points at a throwaway directory
+    // which is deleted when the session ends. The session shadows presets and
+    // folders on purpose, but the database itself must never move.
+    return mFileSystem.ResolveSettingsDirectory() / "soundshed.db";
+}
+
+storage::JsonStore& PluginController::Store() const
+{
+    // call_once, not a bool: concurrent first-touches from the message thread
+    // and a folder-scan worker would otherwise race, and two Open() calls on one
+    // handle would leave the loser thinking the store is unavailable.
+    std::call_once(mStoreOpenOnce, [this]() { OpenDocumentStore(); });
+
+    return mStore;
+}
+
+void PluginController::OpenDocumentStore() const
+{
+    // Resolve the host's user-data path first, and discard it.
+    //
+    // On macOS this is what triggers migrateDataOutOfSandboxContainerOnce(),
+    // which copies a pre-sandbox-removal profile out of
+    // ~/Library/Containers/... into ~/Library/Soundshed Guitar. That copy is
+    // skipped if the destination already contains anything, and opening the
+    // store creates <destination>/data/v1/ — so opening first would strand the
+    // user's entire library in the container, silently and permanently.
+    //
+    // Initialize() happens to call this before anything else today; this makes
+    // it a guarantee rather than an ordering coincidence, which matters now that
+    // the store opens lazily on first touch.
+    (void)mHost.GetUserDataPath();
+
+    const auto dbPath = ResolveDocumentStorePath();
+
+    std::string error;
+    auto status = mStore.OpenChecked(dbPath, error);
+
+    if (status == storage::JsonStore::OpenStatus::Damaged)
     {
-        AppendSessionLog("Failed to write layout file: " + layoutFile.generic_string());
+        // A damaged file is the one failure worth recovering from here, and
+        // leaving it in place is not a recovery: the migration stamp lives
+        // *inside* the database, so a store that refuses to open means an empty
+        // library on every subsequent launch, forever, with nothing but a log
+        // line to explain it.
+        //
+        // Moving it aside makes the next Open() create a fresh database with no
+        // stamp, which re-runs the legacy import and puts the user back to their
+        // pre-upgrade library. The damaged file is kept, not deleted, so anything
+        // salvageable can still be recovered from it by hand.
+        const auto quarantinePath =
+            dbPath.parent_path()
+            / (dbPath.filename().string() + ".damaged-" + std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                                                              std::chrono::system_clock::now().time_since_epoch())
+                                                              .count()));
+
+        std::error_code renameEc;
+        std::filesystem::rename(dbPath, quarantinePath, renameEc);
+        if (renameEc)
+        {
+            AppendSessionLog("The document store at " + dbPath.string() + " is damaged and could not be moved aside: "
+                + renameEc.message());
+            std::cerr << "[Plugin] Damaged document store could not be quarantined: " << renameEc.message() << std::endl;
+            return;
+        }
+
+        // The -wal and -shm sidecars belong to the quarantined file; leaving
+        // them would let sqlite try to replay them into the new database.
+        for (const char* suffix : {"-wal", "-shm"})
+        {
+            std::error_code sidecarEc;
+            std::filesystem::remove(dbPath.parent_path() / (dbPath.filename().string() + suffix), sidecarEc);
+        }
+
+        AppendSessionLog("The document store at " + dbPath.string() + " was damaged (" + error
+            + "). It has been moved to " + quarantinePath.string()
+            + " and the library will be rebuilt from the legacy files.");
+        std::cerr << "[Plugin] Damaged document store quarantined as " << quarantinePath.string() << std::endl;
+
+        error.clear();
+        status = mStore.OpenChecked(dbPath, error);
+    }
+
+    if (status != storage::JsonStore::OpenStatus::Ok)
+    {
+        // Everything downstream degrades to empty-and-read-only rather than
+        // crashing, and the legacy tree is still on disk untouched, so the user
+        // loses this session's changes but never their library.
+        AppendSessionLog("Could not open the document store at " + dbPath.string() + ": " + error);
+        std::cerr << "[Plugin] Document store unavailable: " << error << std::endl;
+        return;
+    }
+
+    // Both paths are recomputed rather than read from members: the store can be
+    // opened lazily before Initialize() has filled those in, and importing with
+    // an empty preset directory would stamp the schema version having silently
+    // skipped every preset.
+    const auto report = storage::MigrateLegacyJsonTree(mStore,
+                                                       mFileSystem.ResolveSettingsDirectory(),
+                                                       mFileSystem.ResolvePresetDirectory() / "user");
+    if (report.ran)
+    {
+        std::string summary = "Imported the legacy JSON tree into " + dbPath.string() + ": "
+            + std::to_string(report.itemsImported) + " items";
+        for (const auto& note : report.notes)
+            summary += "\n  " + note;
+        for (const auto& failure : report.failures)
+            summary += "\n  ! " + failure;
+        AppendSessionLog(summary);
+        std::cout << "[Plugin] " << summary << std::endl;
     }
 }
 
-std::filesystem::path PluginController::ResolveUiStoragePath(const std::string& filename) const
+std::string PluginController::UiStorageDocumentId(const std::string& filename)
 {
-    const auto settingsDir = GetEffectiveSettingsDirectory();
-
-    if (filename == "preset-folders.json" || filename == "preset-ratings.json")
-    {
-        const auto dir = settingsDir / "presets";
-        [[maybe_unused]] const auto ensuredPresetDir = mFileSystem.EnsureDirectory(dir);
-        return dir / filename;
-    }
-
-    const auto dir = settingsDir / "settings" / "ui";
-    [[maybe_unused]] const auto ensuredUiDir = mFileSystem.EnsureDirectory(dir);
-    return dir / filename;
+    // The legacy filename is the document id, minus the extension. Keeping the
+    // mapping mechanical means callers keep passing the names they always did
+    // and the migration lands documents under exactly these ids.
+    const auto dot = filename.rfind(".json");
+    return dot == std::string::npos ? filename : filename.substr(0, dot);
 }
 
 nlohmann::json PluginController::LoadUiStorageJson(const std::string& filename, const nlohmann::json& fallback) const
 {
-    const auto path = ResolveUiStoragePath(filename);
-    if (path.empty() || !std::filesystem::exists(path))
-        return fallback;
-
-    try
-    {
-        std::ifstream ifs(path);
-        if (ifs.is_open())
-            return nlohmann::json::parse(ifs);
-    }
-    catch (const std::exception&) {}
+    // These are envelope documents — a collection plus the state that surrounds
+    // it (activeFolderId, bankSize, cursorIndex). They are small and always
+    // rewritten whole, so they live as one row each rather than being split into
+    // per-item rows the way presets and resources are.
+    //
+    // A stored JSON `null` is treated as absent: Get() returns it as a value
+    // rather than nullopt, and handing a null to callers that expect the shape
+    // of `fallback` pushes the failure somewhere harder to read.
+    if (auto stored = Store().Get(storage::ItemType::kDocument, UiStorageDocumentId(filename));
+        stored && !stored->is_null())
+        return *stored;
 
     return fallback;
 }
 
 void PluginController::SaveUiStorageJson(const std::string& filename, const nlohmann::json& payload) const
 {
-    const auto path = ResolveUiStoragePath(filename);
-    if (path.empty())
-        return;
-
-    bool wrote = false;
-    try
-    {
-        [[maybe_unused]] const auto ensuredUiStorageParent = mFileSystem.EnsureDirectory(path.parent_path());
-
-        // Write to a temp file first, then atomically rename over the real file,
-        // matching SaveAppSettings. A partial write here would corrupt setlists.json,
-        // automation.json or the preset metadata files and lose the user's data.
-        const auto tempPath = path.parent_path() / (path.filename().string() + ".tmp");
-        {
-            std::ofstream ofs(tempPath);
-            if (!ofs.is_open())
-                return;
-            ofs << payload.dump(2);
-        }
-
-        std::error_code ec;
-        std::filesystem::rename(tempPath, path, ec);
-        if (ec)
-        {
-            // rename failed (e.g. cross-device) – fall back to copy+delete
-            std::filesystem::copy_file(tempPath, path,
-                                       std::filesystem::copy_options::overwrite_existing, ec);
-            std::filesystem::remove(tempPath, ec);
-        }
-        wrote = !ec;
-    }
-    catch (const std::exception&) {}
-
+    const bool wrote = Store().Put(storage::ItemType::kDocument, UiStorageDocumentId(filename), payload);
     if (!wrote)
+    {
+        AppendSessionLog("Failed to save UI storage document: " + UiStorageDocumentId(filename));
         return;
+    }
 
     std::vector<std::string> domains;
     if (filename == "automation.json")
@@ -14396,35 +14420,19 @@ std::filesystem::path PluginController::ResolveRiffLibraryPath() const
     return mFileSystem.ResolveSettingsDirectory() / kRiffLibraryDefaultFolder;
 }
 
-std::filesystem::path PluginController::ResolveRiffLibraryIndexPath() const
-{
-    return ResolveRiffLibraryPath() / kRiffLibraryIndexFile;
-}
-
 nlohmann::json PluginController::LoadRiffLibraryIndex() const
 {
-    nlohmann::json index = nlohmann::json::object();
     const auto path = ResolveRiffLibraryPath();
-    const auto indexPath = ResolveRiffLibraryIndexPath();
 
-    try
-    {
-        std::filesystem::create_directories(path);
-        if (std::filesystem::exists(indexPath))
-        {
-            std::ifstream input(indexPath);
-            if (input)
-            {
-                index = nlohmann::json::parse(input, nullptr, false);
-                if (index.is_discarded() || !index.is_object())
-                    index = nlohmann::json::object();
-            }
-        }
-    }
-    catch (...)
-    {
+    // The riff audio files stay on disk under the (user-configurable) riff
+    // library folder; only the index moves into the store.
+    std::error_code dirEc;
+    std::filesystem::create_directories(path, dirEc);
+
+    nlohmann::json index = Store().Get(storage::ItemType::kDocument, kRiffLibraryDocumentId)
+                             .value_or(nlohmann::json::object());
+    if (!index.is_object())
         index = nlohmann::json::object();
-    }
 
     index["path"] = util::PathToUtf8(path);
     if (!index.contains("riffs") || !index["riffs"].is_array())
@@ -14460,7 +14468,6 @@ nlohmann::json PluginController::LoadRiffLibraryIndex() const
 
 bool PluginController::SaveRiffLibraryIndex(const nlohmann::json& payload) const
 {
-    const auto indexPath = ResolveRiffLibraryIndexPath();
     const auto libraryPath = ResolveRiffLibraryPath();
     nlohmann::json normalizedPayload = payload;
 
@@ -14484,22 +14491,11 @@ bool PluginController::SaveRiffLibraryIndex(const nlohmann::json& payload) const
         }
     }
 
-    try
-    {
-        std::filesystem::create_directories(indexPath.parent_path());
-        std::ofstream output(indexPath);
-        if (!output)
-            return false;
-        output << normalizedPayload.dump(2);
-        const bool ok = static_cast<bool>(output);
-        if (ok)
-            TouchSharedSyncState({"riffLibrary"});
-        return ok;
-    }
-    catch (...)
-    {
+    if (!Store().Put(storage::ItemType::kDocument, kRiffLibraryDocumentId, normalizedPayload))
         return false;
-    }
+
+    TouchSharedSyncState({"riffLibrary"});
+    return true;
 }
 
 std::string PluginController::BuildRiffTakeId() const
@@ -14757,8 +14753,10 @@ void PluginController::SendPresetListToUI()
     const bool factoryArchiveLoadingEnabled = IsFactoryPresetArchiveLoadingEnabled();
     const bool archiveSessionActive = IsPresetArchiveSessionActive();
 
+    // Only factory presets are still scanned from disk; user presets come from
+    // the store below (or, during an archive session, from the session sandbox
+    // that LoadAllUserPresets() redirects to).
     auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
-    auto userPath = GetEffectiveUserPresetDirectory();
 
     auto scanDir = [&](const std::filesystem::path& dir, const std::string& source)
     {
@@ -14788,7 +14786,19 @@ void PluginController::SendPresetListToUI()
 
     if (!archiveSessionActive)
         scanDir(factoryPath, "factory");
-    scanDir(userPath, "user");
+
+    // User presets come from the store; only factory presets still ship as files.
+    for (const auto& preset : LoadAllUserPresets())
+    {
+        if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+            continue;
+        nlohmann::json p;
+        p["id"] = preset.id;
+        p["name"] = preset.name;
+        p["category"] = preset.category;
+        p["source"] = mFactoryArchivePresetIds.contains(preset.id) ? "factory" : "user";
+        presets.push_back(p);
+    }
 
     std::unordered_set<std::string> seenPresetIds;
     for (const auto& preset : presets)

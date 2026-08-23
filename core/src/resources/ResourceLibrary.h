@@ -1,5 +1,7 @@
 #pragma once
 
+#include "storage/JsonStore.h"
+
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -63,6 +65,31 @@ namespace guitarfx
     [[nodiscard]] std::optional<std::filesystem::path> ResolveResource(const ResourceRef& ref) const;
 
     // Persistence
+    //
+    // The library is backed by the document store: one row per resource, keyed
+    // "<type>:<id>" — the same key used in memory. Individual mutations write a
+    // single row, so a bulk import is N cheap upserts in one transaction rather
+    // than N rewrites of one large file.
+    //
+    // `resourcesRoot` is the directory that file paths are stored relative to
+    // (the profile's `resources` folder), so a profile stays portable.
+
+    /// Replaces the in-memory contents with everything in the store.
+    void LoadFromStore(storage::JsonStore& store, const std::filesystem::path& resourcesRoot);
+    /// Writes the whole library, replacing whatever the store held. Atomic.
+    bool SaveToStore(storage::JsonStore& store, const std::filesystem::path& resourcesRoot) const;
+    /// Writes one resource. Prefer this over SaveToStore for single edits.
+    static bool PutInStore(storage::JsonStore& store,
+                           const LibraryResource& resource,
+                           const std::filesystem::path& resourcesRoot);
+    static bool RemoveFromStore(storage::JsonStore& store, const std::string& type, const std::string& id);
+
+    /// Store key for a resource: "<type>:<id>", matching the in-memory key.
+    [[nodiscard]] static std::string MakeStoreId(const std::string& type, const std::string& id);
+
+    // Legacy file persistence. Retained because the preset-generator tool and
+    // the pack/archive formats still speak the on-disk index shape; the running
+    // app no longer reads or writes it.
     void LoadFromDirectory(const std::filesystem::path& directory);
     void SaveToFile(const std::filesystem::path& path) const;
     void LoadFromFile(const std::filesystem::path& path);

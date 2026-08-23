@@ -21,6 +21,62 @@ namespace fs = std::filesystem;
 
 namespace
 {
+/// Reads persisted state back out of a sandbox's document store. Persistence
+/// moved from a JSON file tree into SQLite, so assertions that used to reopen
+/// app.json or a preset file go through here instead. The controller under test
+/// must be destroyed (or at least done writing) first.
+class StoreReader
+{
+public:
+    explicit StoreReader(const fs::path& sandbox)
+    {
+        std::string error;
+        mOpen = mStore.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error);
+        if (!mOpen)
+            std::cerr << "StoreReader could not open the store: " << error << "\n";
+    }
+
+    [[nodiscard]] bool Ok() const { return mOpen; }
+
+    /// app.json's contents, reassembled from the one-row-per-key layout.
+    [[nodiscard]] nlohmann::json AppSettings()
+    {
+        nlohmann::json settings = nlohmann::json::object();
+        for (const auto& item : mStore.List(guitarfx::storage::ItemType::kSetting))
+        {
+            if (auto parsed = item.Parse())
+                settings[item.id] = std::move(*parsed);
+        }
+        return settings;
+    }
+
+    [[nodiscard]] std::optional<guitarfx::Preset> Preset(const std::string& id)
+    {
+        return guitarfx::PresetStorage::LoadFromStore(mStore, id);
+    }
+
+    [[nodiscard]] bool HasPreset(const std::string& id)
+    {
+        return guitarfx::PresetStorage::ExistsInStore(mStore, id);
+    }
+
+    [[nodiscard]] nlohmann::json Document(const std::string& id)
+    {
+        return mStore.Get(guitarfx::storage::ItemType::kDocument, id).value_or(nlohmann::json::object());
+    }
+
+    /// Writes a preset directly, for tests that need to simulate an edit made
+    /// outside the controller.
+    [[nodiscard]] bool SavePreset(const guitarfx::Preset& preset)
+    {
+        return guitarfx::PresetStorage::SaveToStore(mStore, preset);
+    }
+
+private:
+    guitarfx::storage::JsonStore mStore;
+    bool mOpen = false;
+};
+
 class TestHost final : public guitarfx::IPluginHost
 {
 public:
@@ -342,20 +398,14 @@ bool TestRiffLibraryPathNormalization()
         normalize["path"] = libraryRoot.string();
         controller.HandleUIMessage(normalize.dump());
 
-        nlohmann::json storedIndex;
-        {
-            std::ifstream input(indexPath);
-            if (!input)
-            {
-                std::cerr << "Failed to open riff index after save\n";
-                return false;
-            }
-            storedIndex = nlohmann::json::parse(input, nullptr, false);
-        }
+        StoreReader reader(sandbox);
+        if (!reader.Ok())
+            return false;
+        const nlohmann::json storedIndex = reader.Document("riff-library");
 
-        if (storedIndex.is_discarded() || !storedIndex.is_object())
+        if (!storedIndex.is_object() || storedIndex.empty())
         {
-            std::cerr << "Riff index is invalid after save\n";
+            std::cerr << "Riff index is missing or invalid after save\n";
             return false;
         }
 
@@ -935,13 +985,15 @@ bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
         controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "limiter.enabled"}, {"value", true}}.dump());
     }
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
-    std::ifstream settingsInput(settingsPath);
-    const auto persisted = nlohmann::json::parse(settingsInput, nullptr, false);
-    if (persisted.is_discarded() || !persisted.contains("globalFx.settings"))
     {
-        std::cerr << "Standalone global FX settings were not written to app settings\n";
-        return false;
+        StoreReader reader(sandbox);
+        if (!reader.Ok())
+            return false;
+        if (!reader.AppSettings().contains("globalFx.settings"))
+        {
+            std::cerr << "Standalone global FX settings were not written to app settings\n";
+            return false;
+        }
     }
 
     TestHost reloadedHost(sandbox, {}, true);
@@ -1179,13 +1231,10 @@ bool TestLoadAppSettingsAppliesUserInputCalibrationProfile()
         return false;
     }
 
-    std::ifstream input(settingsPath);
-    const auto persisted = nlohmann::json::parse(input, nullptr, false);
-    if (persisted.is_discarded())
-    {
-        std::cerr << "Failed to reload migrated app settings JSON\n";
+    StoreReader migratedReader(sandbox);
+    if (!migratedReader.Ok())
         return false;
-    }
+    const auto persisted = migratedReader.AppSettings();
 
     if (persisted.contains("audio.interfaceCalibration.enabled")
         || persisted.contains("audio.interfaceCalibration.referenceDbu"))
@@ -1269,13 +1318,10 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
         return false;
     }
 
-    std::ifstream input(settingsPath);
-    const auto persisted = nlohmann::json::parse(input, nullptr, false);
-    if (persisted.is_discarded())
-    {
-        std::cerr << "Failed to reload cleaned app settings JSON\n";
+    StoreReader cleanedReader(sandbox);
+    if (!cleanedReader.Ok())
         return false;
-    }
+    const auto persisted = cleanedReader.AppSettings();
 
     for (const auto* key : removedKeys)
     {
@@ -1342,13 +1388,10 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
         return false;
     }
 
-    std::ifstream duringTrainingInput(settingsPath);
-    const auto duringTrainingPersisted = nlohmann::json::parse(duringTrainingInput, nullptr, false);
-    if (duringTrainingPersisted.is_discarded())
-    {
-        std::cerr << "Failed to reload app settings during training bypass test\n";
+    StoreReader trainingReader(sandbox);
+    if (!trainingReader.Ok())
         return false;
-    }
+    const auto duringTrainingPersisted = trainingReader.AppSettings();
 
     if (duringTrainingPersisted.value("audio.userInputCalibration.activeProfileId", std::string{}) != "guitar-x")
     {
@@ -1400,8 +1443,8 @@ bool TestSavePresetDoesNotPersistGlobalFxSettings()
         {"presetId", saveId}
     }.dump());
 
-    const fs::path savedPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user" / (saveId + ".json");
-    const auto fromFile = guitarfx::PresetStorage::LoadFromFile(savedPath);
+    StoreReader levelReader(sandbox);
+    const auto fromFile = levelReader.Ok() ? levelReader.Preset(saveId) : std::nullopt;
     if (!fromFile)
     {
         std::cerr << "Failed to load saved preset for unified level test\n";
@@ -1477,17 +1520,22 @@ bool TestSaveGetDeletePresetWorkflow()
     save["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
     controller.HandleUIMessage(save.dump());
 
-    const fs::path savedPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user" / (saveId + ".json");
-    if (!fs::exists(savedPath))
     {
-        std::cerr << "Saved preset file missing: " << savedPath.string() << "\n";
-        return false;
+        StoreReader reader(sandbox);
+        if (!reader.Ok())
+            return false;
+        if (!reader.HasPreset(saveId))
+        {
+            std::cerr << "Saved preset missing from the store: " << saveId << "\n";
+            return false;
+        }
     }
 
-    const auto fromFile = guitarfx::PresetStorage::LoadFromFile(savedPath);
-    if (!fromFile || fromFile->id != saveId || fromFile->name != "Saved Preset")
+    StoreReader savedReader(sandbox);
+    const auto fromStore = savedReader.Ok() ? savedReader.Preset(saveId) : std::nullopt;
+    if (!fromStore || fromStore->id != saveId || fromStore->name != "Saved Preset")
     {
-        std::cerr << "Saved preset file contents mismatch\n";
+        std::cerr << "Saved preset contents mismatch\n";
         return false;
     }
 
@@ -1521,10 +1569,15 @@ bool TestSaveGetDeletePresetWorkflow()
     remove["presetId"] = saveId;
     controller.HandleUIMessage(remove.dump());
 
-    if (fs::exists(savedPath))
     {
-        std::cerr << "Preset file still exists after deletePreset\n";
-        return false;
+        StoreReader reader(sandbox);
+        if (!reader.Ok())
+            return false;
+        if (reader.HasPreset(saveId))
+        {
+            std::cerr << "Preset still in the store after deletePreset\n";
+            return false;
+        }
     }
 
     return true;
@@ -1554,12 +1607,13 @@ bool TestSaveAsCreatesNewPresetId()
     saveSource["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(sourcePreset));
     controller.HandleUIMessage(saveSource.dump());
 
-    const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
-    const fs::path sourcePath = presetDir / (sourceId + ".json");
-    if (!fs::exists(sourcePath))
     {
-        std::cerr << "Source preset file missing before save as: " << sourcePath.string() << "\n";
-        return false;
+        StoreReader reader(sandbox);
+        if (!reader.Ok() || !reader.HasPreset(sourceId))
+        {
+            std::cerr << "Source preset missing from the store before save as: " << sourceId << "\n";
+            return false;
+        }
     }
 
     auto saveAsPreset = sourcePreset;
@@ -1592,21 +1646,24 @@ bool TestSaveAsCreatesNewPresetId()
         return false;
     }
 
-    const fs::path savedPath = presetDir / (savedId + ".json");
-    if (!fs::exists(savedPath))
+    StoreReader afterSaveAs(sandbox);
+    if (!afterSaveAs.Ok())
+        return false;
+
+    if (!afterSaveAs.HasPreset(savedId))
     {
-        std::cerr << "Save As preset file missing: " << savedPath.string() << "\n";
+        std::cerr << "Save As preset missing from the store: " << savedId << "\n";
         return false;
     }
 
-    const auto reloadedSource = guitarfx::PresetStorage::LoadFromFile(sourcePath);
+    const auto reloadedSource = afterSaveAs.Preset(sourceId);
     if (!reloadedSource || reloadedSource->id != sourceId || reloadedSource->name != "Source Preset")
     {
         std::cerr << "Source preset was modified by save as\n";
         return false;
     }
 
-    const auto reloadedCopy = guitarfx::PresetStorage::LoadFromFile(savedPath);
+    const auto reloadedCopy = afterSaveAs.Preset(savedId);
     if (!reloadedCopy || reloadedCopy->id != savedId || reloadedCopy->name != "Copied Preset")
     {
         std::cerr << "Saved copy contents mismatch after save as\n";
@@ -1884,25 +1941,22 @@ bool TestFactoryPresetArchiveStartupImport()
         return false;
     }
 
-    const fs::path persistedPresetPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user" / "bundle__factory-archive-preset.json";
-    const auto persistedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    StoreReader archiveReader(sandbox);
+    if (!archiveReader.Ok())
+        return false;
+
+    const auto persistedPreset = archiveReader.Preset("bundle__factory-archive-preset");
     if (!persistedPreset || persistedPreset->category != "Factory")
     {
         std::cerr << "Archive-backed factory preset was not persisted as a Factory preset\n";
         return false;
     }
 
-    const fs::path presetFoldersPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "preset-folders.json";
-    if (!fs::exists(presetFoldersPath))
+    const nlohmann::json presetFoldersJson = archiveReader.Document("preset-folders");
+    if (presetFoldersJson.empty())
     {
-        std::cerr << "Factory preset folders file was not created\n";
+        std::cerr << "Factory preset folders document was not created\n";
         return false;
-    }
-
-    nlohmann::json presetFoldersJson;
-    {
-        std::ifstream input(presetFoldersPath);
-        input >> presetFoldersJson;
     }
 
     bool foundArchiveFolder = false;
@@ -1931,15 +1985,17 @@ bool TestFactoryPresetArchiveStartupImport()
 
     auto locallyModifiedPreset = *persistedPreset;
     locallyModifiedPreset.name = "Local Factory Override";
-    if (!guitarfx::PresetStorage::SaveToFile(locallyModifiedPreset, persistedPresetPath))
+    if (!archiveReader.SavePreset(locallyModifiedPreset))
     {
         std::cerr << "Unable to modify persisted factory preset for hash check\n";
         return false;
     }
 
-    guitarfx::PluginController unchangedController(host);
-    unchangedController.Initialize();
-    const auto unchangedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    {
+        guitarfx::PluginController unchangedController(host);
+        unchangedController.Initialize();
+    }
+    const auto unchangedPreset = archiveReader.Preset("bundle__factory-archive-preset");
     if (!unchangedPreset || unchangedPreset->name != "Local Factory Override")
     {
         std::cerr << "Unchanged factory archive should not have been re-imported\n";
@@ -1960,9 +2016,11 @@ bool TestFactoryPresetArchiveStartupImport()
         output.write(reinterpret_cast<const char*>(updatedArchiveBytes.data()), static_cast<std::streamsize>(updatedArchiveBytes.size()));
     }
 
-    guitarfx::PluginController updatedController(host);
-    updatedController.Initialize();
-    const auto reimportedPreset = guitarfx::PresetStorage::LoadFromFile(persistedPresetPath);
+    {
+        guitarfx::PluginController updatedController(host);
+        updatedController.Initialize();
+    }
+    const auto reimportedPreset = archiveReader.Preset("bundle__factory-archive-preset");
     if (!reimportedPreset || reimportedPreset->name != "Archive Factory Preset Updated")
     {
         std::cerr << "Changed factory archive was not re-imported\n";

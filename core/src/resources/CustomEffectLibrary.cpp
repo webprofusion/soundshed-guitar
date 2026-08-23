@@ -176,4 +176,39 @@ namespace guitarfx
       file << json.dump(2);
   }
 
+  void CustomEffectLibrary::LoadFromStore(storage::JsonStore& store)
+  {
+    Clear();
+
+    for (const auto& item : store.List(storage::ItemType::kCustomEffect))
+    {
+      const auto parsed = item.Parse();
+      if (!parsed)
+        continue;
+
+      if (auto entry = DeserializeCustomEffectLibraryEntry(*parsed))
+        mEntries.push_back(std::move(*entry));
+    }
+  }
+
+  bool CustomEffectLibrary::SaveToStore(storage::JsonStore& store) const
+  {
+    std::vector<storage::StoreItem> items;
+    items.reserve(mEntries.size());
+
+    for (const auto& entry : mEntries)
+    {
+      if (entry.id.empty())
+        continue;
+
+      storage::StoreItem item;
+      item.type = storage::ItemType::kCustomEffect;
+      item.id = entry.id;
+      item.json = SerializeCustomEffectLibraryEntry(entry).dump();
+      items.push_back(std::move(item));
+    }
+
+    return store.ReplaceAll(storage::ItemType::kCustomEffect, items);
+  }
+
 } // namespace guitarfx

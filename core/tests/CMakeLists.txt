@@ -18,11 +18,14 @@ set(TEST_SOURCES
     PresetDSPLoadingTests.cpp
     PresetManagementWorkflowTests.cpp
     PresetStorageTests.cpp
+    JsonStoreConcurrencyTests.cpp
+    JsonStoreTests.cpp
     ResourceLibraryDeleteWorkflowTests.cpp
     ResourcePreviewWorkflowTests.cpp
     RealtimeConvolverTests.cpp
     ResourceLoadBenchmark.cpp
     SampleRateConverterTests.cpp
+    StorageMigrationTests.cpp
     SignalChainMutationStressTest.cpp
     SignalChainThreadingBenchmark.cpp
     SignalGraphExecutorTests.cpp
