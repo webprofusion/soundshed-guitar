@@ -10,7 +10,6 @@ import {
   setLocalAudioSpeed,
   setLocalAudioTransport,
 } from "./bridge.js";
-import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
@@ -50,9 +49,14 @@ const HANDLE_HIT_PX = 10;
 // down for a drag. 150ms is long enough that a plain click/release never
 // flashes it, short enough that a real drag still feels immediate.
 const CURSOR_HOLD_MS = 150;
+// How long the "Undo" affordance stays available after deleting a loop
+// before the delete becomes permanent. Tune to taste — there's no dialog
+// asking "are you sure?" any more, this window IS the confirmation.
+const DELETE_UNDO_WINDOW_MS = 10_000;
 
 type RatioRange = { startRatio: number; endRatio: number };
 type SecondsRange = { startSec: number; endSec: number };
+type PendingDeletedLoop = { loop: LocalAudioLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
 // "pending": mouse is down but hasn't moved past the click/drag threshold
 // yet, so it might still resolve to a plain seek-click on mouseup.
 type DragMode = "handle" | "create" | "pending" | null;
@@ -65,8 +69,15 @@ let dragAnchorRatio = 0;
 let pointerDownClientX = 0;
 let pointerDownClientY = 0;
 let pointerDownRatio = 0;
-let renamingLoopId: string | null = null;
-let pendingNamingRange: SecondsRange | null = null;
+// The loop currently showing inline-editable name/start/end fields in the
+// list — covers both "just created, name it now" and "click the pencil on
+// an existing row." There is no separate naming dialog/popover.
+let editingLoopId: string | null = null;
+// A just-deleted loop, kept around (out of player.loops but not forgotten)
+// until DELETE_UNDO_WINDOW_MS elapses or another delete/undo/file-load
+// supersedes it — only one pending delete is tracked at a time, matching
+// common toast/snackbar UX (a second delete finalizes the first).
+let pendingDeletedLoop: PendingDeletedLoop | null = null;
 
 let loopRegionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let cursorHoldTimer: ReturnType<typeof setTimeout> | null = null;
@@ -266,8 +277,8 @@ export function applyLocalAudioFileLoaded(data: { path?: string; title?: string;
   player.activeLoopId = null;
 
   candidateRange = null;
-  renamingLoopId = null;
-  pendingNamingRange = null;
+  editingLoopId = null;
+  finalizePendingDelete(); // restoring into a different file's context wouldn't make sense
   playheadBaseSec = 0;
   playheadBaseMs = performance.now();
   playheadSpeed = player.speed;
@@ -630,41 +641,18 @@ function renderTransportControls(): void {
   renderFileInfo();
 }
 
-function renderLoopNamingPopover(): void {
-  const popover = document.getElementById("local-audio-loop-naming");
-  const rangeLabel = document.getElementById("local-audio-loop-naming-range");
-  const templatesHost = document.getElementById("local-audio-loop-templates");
-  if (!popover) {
+/** Populates the shared <datalist> once with the song-section templates —
+ * every name/rename input references it via list=, so typing or picking a
+ * suggestion works the same whether you're naming a brand new loop or
+ * renaming an existing one. */
+function ensureLoopNameTemplatesDatalist(): void {
+  const datalist = document.getElementById("local-audio-loop-name-templates");
+  if (!datalist || datalist.childElementCount > 0) {
     return;
   }
-  const open = Boolean(pendingNamingRange);
-  popover.hidden = !open;
-  if (!open || !pendingNamingRange) {
-    return;
-  }
-  if (rangeLabel) {
-    rangeLabel.textContent = `${formatClockTime(pendingNamingRange.startSec)} – ${formatClockTime(pendingNamingRange.endSec)}`;
-  }
-  if (templatesHost && templatesHost.childElementCount === 0) {
-    templatesHost.innerHTML = LOOP_NAME_TEMPLATES
-      .map((template) => `<button type="button" class="local-audio-loop-template-btn" data-template="${escapeHtml(template)}">${escapeHtml(template)}</button>`)
-      .join("");
-  }
-}
-
-function openLoopNamingPopover(range: SecondsRange): void {
-  pendingNamingRange = range;
-  renderLoopNamingPopover();
-  const nameInput = document.getElementById("local-audio-loop-name-input") as HTMLInputElement | null;
-  if (nameInput) {
-    nameInput.value = "";
-    nameInput.focus();
-  }
-}
-
-function closeLoopNamingPopover(): void {
-  pendingNamingRange = null;
-  renderLoopNamingPopover();
+  datalist.innerHTML = LOOP_NAME_TEMPLATES
+    .map((template) => `<option value="${escapeHtml(template)}"></option>`)
+    .join("");
 }
 
 function renderLoopList(): void {
@@ -673,28 +661,50 @@ function renderLoopList(): void {
     return;
   }
   const player = ensureLocalAudioPlayerState();
+
+  // No confirmation dialog on delete — this banner (shown until the undo
+  // window elapses, another delete supersedes it, or undo is clicked) IS
+  // the confirmation, just reversible instead of blocking.
+  const undoBannerHtml = pendingDeletedLoop
+    ? `
+        <div class="local-audio-loop-undo-banner">
+          <span>Deleted "${escapeHtml(pendingDeletedLoop.loop.name)}".</span>
+          <button type="button" class="local-audio-loop-undo-btn">Undo</button>
+        </div>
+      `
+    : "";
+
   if (!player.loops.length) {
-    list.innerHTML = "<div class=\"equipment-library-empty\">No loops saved for this file yet.</div>";
+    list.innerHTML = `${undoBannerHtml}<div class="equipment-library-empty">No loops saved for this file yet.</div>`;
     return;
   }
 
-  list.innerHTML = player.loops
+  const maxSec = player.durationSec.toFixed(2);
+
+  list.innerHTML = undoBannerHtml + player.loops
     .map((loop) => {
       const isActive = loop.id === player.activeLoopId;
-      const isRenaming = loop.id === renamingLoopId;
-      const rangeText = `${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}`;
-      const nameHtml = isRenaming
-        ? `<input type="text" class="local-audio-loop-rename-input" data-loop-id="${loop.id}" value="${escapeHtml(loop.name)}" />`
-        : `<span class="local-audio-loop-name">${escapeHtml(loop.name)}</span>`;
+      const isEditing = loop.id === editingLoopId;
+      const rowMainHtml = isEditing
+        ? `
+            <input type="text" class="local-audio-loop-editable local-audio-loop-name-input" data-loop-id="${loop.id}" data-field="name" list="local-audio-loop-name-templates" placeholder="Loop name" value="${escapeHtml(loop.name)}" />
+            <input type="number" class="local-audio-loop-editable local-audio-loop-time-input" data-loop-id="${loop.id}" data-field="start" min="0" max="${maxSec}" step="0.01" value="${loop.startSec.toFixed(2)}" aria-label="Start time in seconds" />
+            <span class="local-audio-loop-time-sep">–</span>
+            <input type="number" class="local-audio-loop-editable local-audio-loop-time-input" data-loop-id="${loop.id}" data-field="end" min="0" max="${maxSec}" step="0.01" value="${loop.endSec.toFixed(2)}" aria-label="End time in seconds" />
+            <span class="local-audio-loop-time-unit">s</span>
+          `
+        : `
+            <span class="local-audio-loop-name">${escapeHtml(loop.name)}</span>
+            <span class="local-audio-loop-range">${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}</span>
+          `;
       return `
-        <div class="local-audio-loop-row${isActive ? " is-active" : ""}" data-loop-id="${loop.id}">
+        <div class="local-audio-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${loop.id}">
           <button type="button" class="local-audio-loop-select-btn" data-loop-id="${loop.id}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
           <div class="local-audio-loop-row-main" data-loop-id="${loop.id}">
-            ${nameHtml}
-            <span class="local-audio-loop-range">${rangeText}</span>
+            ${rowMainHtml}
           </div>
           <div class="local-audio-loop-row-actions">
-            <button type="button" class="local-audio-loop-rename-btn" data-loop-id="${loop.id}" title="Rename" aria-label="Rename loop">✎</button>
+            ${isEditing ? "" : `<button type="button" class="local-audio-loop-rename-btn" data-loop-id="${loop.id}" title="Edit name/time" aria-label="Edit loop name and time">✎</button>`}
             <button type="button" class="local-audio-loop-delete-btn" data-loop-id="${loop.id}" title="Delete" aria-label="Delete loop">✕</button>
           </div>
         </div>
@@ -702,10 +712,10 @@ function renderLoopList(): void {
     })
     .join("");
 
-  if (renamingLoopId) {
-    const input = list.querySelector<HTMLInputElement>(`.local-audio-loop-rename-input[data-loop-id="${renamingLoopId}"]`);
-    input?.focus();
-    input?.select();
+  if (editingLoopId) {
+    const nameInput = list.querySelector<HTMLInputElement>(`.local-audio-loop-name-input[data-loop-id="${editingLoopId}"]`);
+    nameInput?.focus();
+    nameInput?.select();
   }
 }
 
@@ -732,7 +742,7 @@ function selectLoop(loopId: string): void {
   player.activeLoopId = loopId;
   player.looping = true;
   candidateRange = null;
-  closeLoopNamingPopover();
+  editingLoopId = null;
   selectedHandle = "start";
   seekLocalAudioFile(loop.startSec);
   setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
@@ -741,78 +751,176 @@ function selectLoop(loopId: string): void {
   renderLocalAudioPlayerPanel();
 }
 
+/** Finalizes whatever delete is currently pending (if any) — the undo
+ * window is over, nothing more to do since the loop was already removed
+ * from player.loops at delete time. Called when a new delete supersedes an
+ * old one, when undo is invoked, when a new file loads, and when the
+ * window's own timer elapses. */
+function finalizePendingDelete(): void {
+  if (!pendingDeletedLoop) {
+    return;
+  }
+  clearTimeout(pendingDeletedLoop.timer);
+  pendingDeletedLoop = null;
+}
+
+function undoDeleteLoop(): void {
+  if (!pendingDeletedLoop) {
+    return;
+  }
+  const { loop, index } = pendingDeletedLoop;
+  clearTimeout(pendingDeletedLoop.timer);
+  pendingDeletedLoop = null;
+
+  const player = ensureLocalAudioPlayerState();
+  const insertAt = Math.min(index, player.loops.length);
+  player.loops = [...player.loops.slice(0, insertAt), loop, ...player.loops.slice(insertAt)];
+  persistLoopsForCurrentFile();
+  appendLog(`local audio loop delete undone → ${loop.name}`);
+  renderLocalAudioPlayerPanel();
+}
+
+/** Deletes immediately — no confirmation dialog — and instead leaves the
+ * loop restorable via an inline "Undo" affordance for DELETE_UNDO_WINDOW_MS.
+ * The delete is real (removed from player.loops, engine loop region cleared
+ * if it was active) the instant this runs; undo re-inserts it rather than
+ * "cancelling" anything in flight. */
 function deleteLoop(loopId: string): void {
+  const player = ensureLocalAudioPlayerState();
+  const index = player.loops.findIndex((entry) => entry.id === loopId);
+  if (index === -1) {
+    return;
+  }
+  const loop = player.loops[index];
+
+  finalizePendingDelete(); // only one undo slot at a time
+
+  player.loops = player.loops.filter((entry) => entry.id !== loopId);
+  if (player.activeLoopId === loopId) {
+    player.activeLoopId = null;
+    player.looping = false;
+    setLocalAudioLoopRegion(null);
+    setLocalAudioLooping(false);
+  }
+  if (editingLoopId === loopId) {
+    editingLoopId = null;
+  }
+  persistLoopsForCurrentFile();
+  appendLog(`local audio loop deleted → ${loop.name} (undo available for ${Math.round(DELETE_UNDO_WINDOW_MS / 1000)}s)`);
+
+  pendingDeletedLoop = {
+    loop,
+    index,
+    timer: setTimeout(() => {
+      pendingDeletedLoop = null;
+      renderLoopList();
+    }, DELETE_UNDO_WINDOW_MS),
+  };
+
+  renderLocalAudioPlayerPanel();
+}
+
+/** Commits the name field only — does not touch editingLoopId, since the
+ * user may still be tabbing on to the start/end fields in the same row
+ * (see the focusout handler in bindLoopListActions for when editing mode
+ * actually ends). Does not re-render the list, to avoid destroying the
+ * user's in-progress Tab navigation between this row's fields. */
+function commitEditLoopName(loopId: string, rawName: string): void {
+  const player = ensureLocalAudioPlayerState();
+  const loop = player.loops.find((entry) => entry.id === loopId);
+  const name = rawName.trim();
+  if (loop && name && name !== loop.name) {
+    loop.name = name;
+    persistLoopsForCurrentFile();
+    if (player.activeLoopId === loopId) {
+      renderTransportControls(); // updates the "Looping <name>" status label
+    }
+  }
+}
+
+/** Commits one time field (start or end). Clamped to stay a valid,
+ * non-inverted, at-least-MIN_LOOP_SPAN_SEC region. Live-updates the engine
+ * and the waveform highlight immediately if this loop is active; does not
+ * re-render the list itself, for the same Tab-navigation reason as above. */
+function commitEditLoopTime(loopId: string, field: "start" | "end", rawValue: string): void {
   const player = ensureLocalAudioPlayerState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   if (!loop) {
     return;
   }
-  void showConfirm(`Delete loop "${loop.name}"?`, "Delete loop").then((confirmed) => {
-    if (!confirmed) {
-      return;
-    }
-    player.loops = player.loops.filter((entry) => entry.id !== loopId);
-    if (player.activeLoopId === loopId) {
-      player.activeLoopId = null;
-      player.looping = false;
-      setLocalAudioLoopRegion(null);
-      setLocalAudioLooping(false);
-    }
-    persistLoopsForCurrentFile();
-    appendLog(`local audio loop deleted → ${loop.name}`);
-    renderLocalAudioPlayerPanel();
-  });
+  const parsed = parseFloat(rawValue);
+  if (!isFinite(parsed)) {
+    return; // leave the loop's data untouched; the input still shows what the user typed
+  }
+  const clamped = Math.max(0, Math.min(player.durationSec, parsed));
+  if (field === "start") {
+    loop.startSec = Math.min(clamped, Math.max(0, loop.endSec - MIN_LOOP_SPAN_SEC));
+  } else {
+    loop.endSec = Math.max(clamped, Math.min(player.durationSec, loop.startSec + MIN_LOOP_SPAN_SEC));
+  }
+  persistLoopsForCurrentFile();
+  if (player.activeLoopId === loopId) {
+    setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+  }
+  renderWaveform();
+  renderAddLoopAffordance();
 }
 
-function commitRenameLoop(loopId: string, rawName: string): void {
-  const player = ensureLocalAudioPlayerState();
-  const loop = player.loops.find((entry) => entry.id === loopId);
-  const name = rawName.trim();
-  if (loop && name) {
-    loop.name = name;
-    persistLoopsForCurrentFile();
+/** Ends editing mode for whichever loop is currently being edited (if any)
+ * and re-renders the list to show its final committed values. Safe to call
+ * even when nothing is being edited. */
+function finishEditingLoop(): void {
+  if (!editingLoopId) {
+    return;
   }
-  renamingLoopId = null;
+  editingLoopId = null;
   renderLoopList();
 }
 
-function saveNewLoop(name: string): void {
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    showNotification("Loop name is required");
-    return;
+function suggestDefaultLoopName(existingLoops: readonly LocalAudioLoopRegion[]): string {
+  const existingNames = existingLoops.map((loop) => loop.name);
+  let n = existingLoops.length + 1;
+  let candidate = `New Loop ${n}`;
+  while (existingNames.includes(candidate)) {
+    n += 1;
+    candidate = `New Loop ${n}`;
   }
-  if (!pendingNamingRange) {
-    return;
-  }
+  return candidate;
+}
+
+/** Creates a loop from a start/end range, adds it straight to the list
+ * (auto-selected + looping, per the plan's "select implies loop" model),
+ * and immediately opens it for inline name/time editing — there is no
+ * separate naming dialog. */
+function createLoopFromRange(range: SecondsRange): void {
   const player = ensureLocalAudioPlayerState();
   const newLoop: LocalAudioLoopRegion = {
     id: generateLoopId(),
-    name: trimmedName,
-    startSec: pendingNamingRange.startSec,
-    endSec: pendingNamingRange.endSec,
+    name: suggestDefaultLoopName(player.loops),
+    startSec: range.startSec,
+    endSec: range.endSec,
   };
   player.loops = [...player.loops, newLoop];
   player.activeLoopId = newLoop.id;
   player.looping = true;
+  editingLoopId = newLoop.id;
   candidateRange = null;
   persistLoopsForCurrentFile();
-  closeLoopNamingPopover();
   seekLocalAudioFile(newLoop.startSec);
   setLocalAudioLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
   setLocalAudioLooping(true);
-  appendLog(`local audio loop created → ${trimmedName} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
+  appendLog(`local audio loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
   renderLocalAudioPlayerPanel();
 }
 
-function openNamingForNewLoop(): void {
+function addNewLoop(): void {
   const player = ensureLocalAudioPlayerState();
   if (player.durationSec <= 0) {
     showNotification("Load an audio file first");
     return;
   }
   if (candidateRange) {
-    openLoopNamingPopover({
+    createLoopFromRange({
       startSec: candidateRange.startRatio * player.durationSec,
       endSec: candidateRange.endRatio * player.durationSec,
     });
@@ -822,14 +930,7 @@ function openNamingForNewLoop(): void {
   const start = getInterpolatedPositionSec();
   const end = Math.min(player.durationSec, start + DEFAULT_NEW_LOOP_LENGTH_SEC);
   const clampedStart = end - start < MIN_LOOP_SPAN_SEC ? Math.max(0, end - MIN_LOOP_SPAN_SEC) : start;
-  player.activeLoopId = null;
-  candidateRange = {
-    startRatio: clampedStart / player.durationSec,
-    endRatio: end / player.durationSec,
-  };
-  renderWaveform();
-  renderAddLoopAffordance();
-  openLoopNamingPopover({ startSec: clampedStart, endSec: end });
+  createLoopFromRange({ startSec: clampedStart, endSec: end });
 }
 
 function bindWaveformInteractions(): void {
@@ -911,7 +1012,7 @@ function bindWaveformInteractions(): void {
       }
       dragMode = "create";
       candidateRange = { startRatio: dragAnchorRatio, endRatio: dragAnchorRatio };
-      closeLoopNamingPopover();
+      finishEditingLoop();
     }
 
     const pointerRatio = getCanvasRatioFromPointer(event, canvas);
@@ -1078,6 +1179,22 @@ function bindTransportControls(): void {
   }
 }
 
+/** Commits whichever editable field (name/start/end) `input` represents.
+ * Shared by the Enter-key handler and the focusout handler below so the two
+ * can't drift out of sync on which field maps to which commit function. */
+function commitEditableField(input: HTMLInputElement): void {
+  const loopId = input.dataset.loopId ?? "";
+  const field = input.dataset.field;
+  if (!loopId || !field) {
+    return;
+  }
+  if (field === "name") {
+    commitEditLoopName(loopId, input.value);
+  } else if (field === "start" || field === "end") {
+    commitEditLoopTime(loopId, field, input.value);
+  }
+}
+
 function bindLoopListActions(): void {
   const list = document.getElementById("local-audio-loop-list");
   if (list && list.dataset.bound !== "true") {
@@ -1085,6 +1202,10 @@ function bindLoopListActions(): void {
     list.addEventListener("click", (event) => {
       const target = event.target as HTMLElement | null;
       if (!target) {
+        return;
+      }
+      if (target.closest(".local-audio-loop-undo-btn")) {
+        undoDeleteLoop();
         return;
       }
       const selectBtn = target.closest<HTMLButtonElement>(".local-audio-loop-select-btn");
@@ -1097,7 +1218,7 @@ function bindLoopListActions(): void {
       }
       const renameBtn = target.closest<HTMLButtonElement>(".local-audio-loop-rename-btn");
       if (renameBtn) {
-        renamingLoopId = renameBtn.dataset.loopId ?? null;
+        editingLoopId = renameBtn.dataset.loopId ?? null;
         renderLoopList();
         return;
       }
@@ -1110,33 +1231,65 @@ function bindLoopListActions(): void {
         return;
       }
       const rowMain = target.closest<HTMLElement>(".local-audio-loop-row-main");
-      if (rowMain && !target.closest(".local-audio-loop-rename-input")) {
+      if (rowMain && !target.closest(".local-audio-loop-editable")) {
         const loopId = rowMain.dataset.loopId ?? "";
-        if (loopId && loopId !== renamingLoopId) {
+        if (loopId && loopId !== editingLoopId) {
           selectLoop(loopId);
         }
       }
     });
 
+    // Picking a bare template name from the datalist (or typing one exactly)
+    // auto-suffixes a number, the same "Verse" -> "Verse 1" behavior the old
+    // template-button row had — just triggered by the native suggestion
+    // dropdown instead of a separate row of buttons.
+    list.addEventListener("input", (event) => {
+      const target = event.target as HTMLElement | null;
+      const nameInput = target?.closest<HTMLInputElement>(".local-audio-loop-name-input");
+      if (!nameInput || !LOOP_NAME_TEMPLATES.includes(nameInput.value)) {
+        return;
+      }
+      const player = ensureLocalAudioPlayerState();
+      const otherNames = player.loops
+        .filter((loop) => loop.id !== nameInput.dataset.loopId)
+        .map((loop) => loop.name);
+      nameInput.value = suggestLoopTemplateName(nameInput.value, otherNames);
+    });
+
     list.addEventListener("keydown", (event) => {
       const target = event.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".local-audio-loop-rename-input");
+      const input = target?.closest<HTMLInputElement>(".local-audio-loop-editable");
       if (!input) {
         return;
       }
       if (event.key === "Enter") {
-        commitRenameLoop(input.dataset.loopId ?? "", input.value);
+        // Enter doesn't move focus anywhere, so the focusout it triggers
+        // (via blur below) will correctly see no relatedTarget and end
+        // editing — matches "Enter finishes editing this loop."
+        input.blur();
       } else if (event.key === "Escape") {
-        renamingLoopId = null;
-        renderLoopList();
+        finishEditingLoop();
       }
     });
 
     list.addEventListener("focusout", (event) => {
-      const target = event.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".local-audio-loop-rename-input");
-      if (input) {
-        commitRenameLoop(input.dataset.loopId ?? "", input.value);
+      const focusEvent = event as FocusEvent;
+      const target = focusEvent.target as HTMLElement | null;
+      const input = target?.closest<HTMLInputElement>(".local-audio-loop-editable");
+      if (!input) {
+        return;
+      }
+      commitEditableField(input);
+
+      // Only end editing mode (and re-render) once focus actually leaves
+      // this loop's row — e.g. Tab moving from the name field to the start-
+      // time field must NOT re-render mid-tab, or the Tab destination would
+      // vanish before the browser gets to focus it.
+      const row = input.closest(".local-audio-loop-row");
+      const nextFocus = focusEvent.relatedTarget;
+      const staysInRow = row && nextFocus instanceof Node && row.contains(nextFocus);
+      if (!staysInRow) {
+        finishEditingLoop();
       }
     });
   }
@@ -1144,65 +1297,13 @@ function bindLoopListActions(): void {
   const newLoopBtn = document.getElementById("local-audio-new-loop-btn") as HTMLButtonElement | null;
   if (newLoopBtn && newLoopBtn.dataset.bound !== "true") {
     newLoopBtn.dataset.bound = "true";
-    newLoopBtn.addEventListener("click", () => openNamingForNewLoop());
+    newLoopBtn.addEventListener("click", () => addNewLoop());
   }
 
   const addLoopBtn = document.getElementById("local-audio-add-loop-btn") as HTMLButtonElement | null;
   if (addLoopBtn && addLoopBtn.dataset.bound !== "true") {
     addLoopBtn.dataset.bound = "true";
-    addLoopBtn.addEventListener("click", () => openNamingForNewLoop());
-  }
-}
-
-function bindLoopNamingPopover(): void {
-  const templatesHost = document.getElementById("local-audio-loop-templates");
-  const nameInput = document.getElementById("local-audio-loop-name-input") as HTMLInputElement | null;
-  const saveBtn = document.getElementById("local-audio-loop-name-save") as HTMLButtonElement | null;
-  const cancelBtn = document.getElementById("local-audio-loop-name-cancel") as HTMLButtonElement | null;
-
-  if (templatesHost && templatesHost.dataset.bound !== "true") {
-    templatesHost.dataset.bound = "true";
-    templatesHost.addEventListener("click", (event) => {
-      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(".local-audio-loop-template-btn");
-      const template = button?.dataset.template;
-      if (!template || !nameInput) {
-        return;
-      }
-      const player = ensureLocalAudioPlayerState();
-      nameInput.value = suggestLoopTemplateName(template, player.loops.map((loop) => loop.name));
-      nameInput.focus();
-    });
-  }
-
-  if (nameInput && nameInput.dataset.bound !== "true") {
-    nameInput.dataset.bound = "true";
-    nameInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        saveNewLoop(nameInput.value);
-      } else if (event.key === "Escape") {
-        candidateRange = null;
-        closeLoopNamingPopover();
-        renderWaveform();
-        renderAddLoopAffordance();
-      }
-    });
-  }
-
-  if (saveBtn && saveBtn.dataset.bound !== "true") {
-    saveBtn.dataset.bound = "true";
-    saveBtn.addEventListener("click", () => {
-      saveNewLoop(nameInput?.value ?? "");
-    });
-  }
-
-  if (cancelBtn && cancelBtn.dataset.bound !== "true") {
-    cancelBtn.dataset.bound = "true";
-    cancelBtn.addEventListener("click", () => {
-      candidateRange = null;
-      closeLoopNamingPopover();
-      renderWaveform();
-      renderAddLoopAffordance();
-    });
+    addLoopBtn.addEventListener("click", () => addNewLoop());
   }
 }
 
@@ -1246,17 +1347,16 @@ function bindAllActions(): void {
   bindWaveformInteractions();
   bindTransportControls();
   bindLoopListActions();
-  bindLoopNamingPopover();
   bindDropZone();
 }
 
 export function renderLocalAudioPlayerPanel(): void {
+  ensureLoopNameTemplatesDatalist();
   renderFileInfo();
   renderTransportControls();
   renderWaveform();
   renderAddLoopAffordance();
   renderLoopList();
-  renderLoopNamingPopover();
   bindAllActions();
 }
 

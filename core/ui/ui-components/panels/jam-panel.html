@@ -81,15 +81,10 @@
                       <canvas id="local-audio-waveform" class="local-audio-waveform" tabindex="0"></canvas>
                       <button id="local-audio-add-loop-btn" class="local-audio-add-loop-btn" type="button" hidden>+ Add Loop</button>
                     </div>
-                    <div class="local-audio-loop-naming" id="local-audio-loop-naming" hidden>
-                      <div class="local-audio-loop-naming-range" id="local-audio-loop-naming-range"></div>
-                      <input type="text" id="local-audio-loop-name-input" class="local-audio-loop-name-input" placeholder="Loop name (e.g. tricky bridge lick)" />
-                      <div class="local-audio-loop-templates" id="local-audio-loop-templates"></div>
-                      <div class="local-audio-loop-naming-actions">
-                        <button id="local-audio-loop-name-save" type="button">Save Loop</button>
-                        <button id="local-audio-loop-name-cancel" type="button" class="secondary">Cancel</button>
-                      </div>
-                    </div>
+                    <!-- Song-section quick-pick suggestions for loop names, shared by every
+                         name/rename field in the loop list below via list=. Populated once
+                         in JS from LOOP_NAME_TEMPLATES. -->
+                    <datalist id="local-audio-loop-name-templates"></datalist>
                   </div>
 
                   <div class="local-audio-body">
