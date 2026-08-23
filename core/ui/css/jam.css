@@ -663,15 +663,34 @@
 
 .local-audio-slider-row {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 48px;
+  grid-template-columns: 56px minmax(0, 1fr) 60px;
   align-items: center;
   gap: 10px;
 }
 
+/* A resting hover keeps the normal pointer; only a genuine drag shows the
+   left-right cursor — matches the same "not on mere hover" affordance as
+   the waveform's own resize cursor. */
+.local-audio-fader-slider {
+  cursor: pointer;
+}
+
 .local-audio-slider-value {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(112, 151, 255, 0.34);
+  background: rgba(8, 12, 22, 0.9);
+  color: rgba(240, 246, 255, 0.94);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
   text-align: right;
-  color: rgba(210, 225, 255, 0.75);
+}
+
+.local-audio-slider-value:focus {
+  outline: none;
+  border-color: rgba(112, 151, 255, 0.7);
 }
 
 @media (max-width: 760px) {

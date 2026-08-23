@@ -620,6 +620,7 @@ export interface LocalAudioPlayerState {
   speed: number;
   pitchSemitones: number;
   gain: number;
+  balance: number; // -1 (full left) .. 0 (center) .. 1 (full right)
 }
 
 export interface RiffCaptureState {

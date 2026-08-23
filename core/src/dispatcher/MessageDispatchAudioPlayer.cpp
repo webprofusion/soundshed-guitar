@@ -43,6 +43,11 @@ bool MessageDispatcher::DispatchAudioPlayer(PluginController& c,
         c.HandleSetLocalAudioGainRequest(msg);
         return true;
     }
+    if (type == "setLocalAudioBalance")
+    {
+        c.HandleSetLocalAudioBalanceRequest(msg);
+        return true;
+    }
     if (type == "setLocalAudioLoopRegion")
     {
         c.HandleSetLocalAudioLoopRegionRequest(msg);

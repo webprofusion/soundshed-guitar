@@ -314,6 +314,7 @@ private:
     void HandleSetLocalAudioSpeedRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioPitchRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioGainRequest(const nlohmann::json& payload);
+    void HandleSetLocalAudioBalanceRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioLoopRegionRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioLoopingRequest(const nlohmann::json& payload);
 

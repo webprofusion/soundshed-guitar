@@ -296,6 +296,10 @@ export function setLocalAudioGain(gain: number): void {
   postMessage({ type: "setLocalAudioGain", gain });
 }
 
+export function setLocalAudioBalance(balance: number): void {
+  postMessage({ type: "setLocalAudioBalance", balance });
+}
+
 /** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
 export function setLocalAudioLoopRegion(region: { startSec: number; endSec: number } | null): void {
   if (region) {

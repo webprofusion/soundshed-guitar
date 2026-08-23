@@ -3,6 +3,7 @@ import {
   loadLocalAudioFile,
   seekLocalAudioFile,
   setAppSetting,
+  setLocalAudioBalance,
   setLocalAudioGain,
   setLocalAudioLoopRegion,
   setLocalAudioLooping,
@@ -135,6 +136,7 @@ function ensureLocalAudioPlayerState(): LocalAudioPlayerState {
       speed: 1,
       pitchSemitones: 0,
       gain: 1,
+      balance: 0,
     };
   }
   return uiState.localAudioPlayer;
@@ -376,6 +378,237 @@ function flushPitchSend(semitones: number): void {
   setLocalAudioPitch(semitones);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// Unified faders (Volume/Balance/Speed/Pitch): one shared implementation
+// instead of four near-duplicated sliders, so they all look, feel, and
+// reset the same way.
+//
+// Every fader's default value sits at the exact visual center regardless
+// of how asymmetric its real min/max range is (e.g. Volume's 0-150% with
+// a 100% default, or Speed's 25%-200% with a 100% default) — the
+// underlying <input type=range> always uses a normalized 0..FADER_SLIDER_STEPS
+// domain split into two independently-scaled linear halves (min..default,
+// default..max), converted to/from the real value on every read/write. A
+// plain <input type=range> can't express that piecewise mapping itself, so
+// this conversion layer is what makes "100%" (or "0 st", or center balance)
+// always land in the middle of the track, and what makes double-clicking
+// anywhere on the slider a well-defined "reset to default" regardless of
+// the range's shape.
+// ════════════════════════════════════════════════════════════════════
+
+const FADER_SLIDER_STEPS = 1000;
+
+type FaderId = "volume" | "balance" | "speed" | "pitch";
+
+type FaderSpec = {
+  id: FaderId;
+  min: number;
+  max: number;
+  default: number;
+  format: (value: number) => string;
+  parse: (text: string) => number | null;
+  getValue: (player: LocalAudioPlayerState) => number;
+  setValue: (player: LocalAudioPlayerState, value: number) => void;
+  /** immediate=true on release/reset/typed-entry; false for in-progress drag
+   * ticks, letting speed/pitch debounce (they flush the render-ahead ring)
+   * while volume/balance (pure audio-thread mix, no flush) can ignore the
+   * flag and always send right away. */
+  send: (value: number, immediate: boolean) => void;
+  /** Extra side effects beyond the field write itself — currently only
+   * Speed needs this, to keep the client-side playhead dead-reckoning in
+   * sync with the newly-dragged rate. */
+  onChange?: (value: number) => void;
+};
+
+function faderValueToSliderPos(spec: FaderSpec, value: number): number {
+  const half = FADER_SLIDER_STEPS / 2;
+  if (value <= spec.default) {
+    if (spec.default === spec.min) {
+      return half;
+    }
+    const t = (value - spec.min) / (spec.default - spec.min);
+    return Math.round(t * half);
+  }
+  if (spec.max === spec.default) {
+    return half;
+  }
+  const t = (value - spec.default) / (spec.max - spec.default);
+  return Math.round(half + t * half);
+}
+
+function faderSliderPosToValue(spec: FaderSpec, pos: number): number {
+  const half = FADER_SLIDER_STEPS / 2;
+  if (pos <= half) {
+    return spec.min + (pos / half) * (spec.default - spec.min);
+  }
+  return spec.default + ((pos - half) / half) * (spec.max - spec.default);
+}
+
+/** Extracts a leading signed number from free-typed text (tolerating a
+ * trailing unit like "%" or "st"); returns null if nothing parseable. */
+function parseLeadingNumber(text: string): number | null {
+  const match = text.trim().match(/^[+-]?\d*\.?\d+/);
+  if (!match) {
+    return null;
+  }
+  const n = parseFloat(match[0]);
+  return isFinite(n) ? n : null;
+}
+
+function parsePercentText(text: string): number | null {
+  const n = parseLeadingNumber(text);
+  return n === null ? null : n / 100;
+}
+
+function formatPitchText(value: number): string {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)} st`;
+}
+
+function formatBalanceText(value: number): string {
+  const pct = Math.round(value * 100);
+  if (pct === 0) {
+    return "C";
+  }
+  return pct < 0 ? `L${Math.abs(pct)}` : `R${pct}`;
+}
+
+function parseBalanceText(text: string): number | null {
+  const trimmed = text.trim();
+  if (/^c(enter)?$/i.test(trimmed)) {
+    return 0;
+  }
+  const sided = /^([lr])\s*(\d+(?:\.\d+)?)$/i.exec(trimmed);
+  if (sided) {
+    const magnitude = parseFloat(sided[2]) / 100;
+    return sided[1].toLowerCase() === "l" ? -magnitude : magnitude;
+  }
+  const n = parseLeadingNumber(trimmed);
+  if (n === null) {
+    return null;
+  }
+  // Accept both "35"/"-35" (percent-style) and "0.35"/"-0.35" (raw fraction).
+  return Math.abs(n) > 1 ? n / 100 : n;
+}
+
+const FADER_SPECS: Record<FaderId, FaderSpec> = {
+  volume: {
+    id: "volume",
+    min: 0,
+    max: 1.5,
+    default: 1,
+    format: (v) => `${Math.round(v * 100)}%`,
+    parse: parsePercentText,
+    getValue: (p) => p.gain,
+    setValue: (p, v) => { p.gain = v; },
+    send: (v) => setLocalAudioGain(v),
+  },
+  balance: {
+    id: "balance",
+    min: -1,
+    max: 1,
+    default: 0,
+    format: formatBalanceText,
+    parse: parseBalanceText,
+    getValue: (p) => p.balance,
+    setValue: (p, v) => { p.balance = v; },
+    send: (v) => setLocalAudioBalance(v),
+  },
+  speed: {
+    id: "speed",
+    min: 0.25,
+    max: 2,
+    default: 1,
+    format: (v) => `${Math.round(v * 100)}%`,
+    parse: parsePercentText,
+    getValue: (p) => p.speed,
+    setValue: (p, v) => { p.speed = v; },
+    send: (v, immediate) => (immediate ? flushSpeedSend(v) : scheduleSpeedSend(v)),
+    onChange: (v) => {
+      playheadSpeed = v;
+      playheadBaseSec = getInterpolatedPositionSec();
+      playheadBaseMs = performance.now();
+    },
+  },
+  pitch: {
+    id: "pitch",
+    min: -12,
+    max: 12,
+    default: 0,
+    format: formatPitchText,
+    parse: parseLeadingNumber,
+    getValue: (p) => p.pitchSemitones,
+    setValue: (p, v) => { p.pitchSemitones = v; },
+    send: (v, immediate) => (immediate ? flushPitchSend(v) : schedulePitchSend(v)),
+  },
+};
+
+function renderFader(spec: FaderSpec, player: LocalAudioPlayerState): void {
+  const slider = document.getElementById(`local-audio-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`local-audio-${spec.id}-value`) as HTMLInputElement | null;
+  const value = spec.getValue(player);
+  if (slider && document.activeElement !== slider) {
+    slider.value = String(faderValueToSliderPos(spec, value));
+  }
+  if (valueInput && document.activeElement !== valueInput) {
+    valueInput.value = spec.format(value);
+  }
+}
+
+function bindFader(spec: FaderSpec): void {
+  const slider = document.getElementById(`local-audio-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`local-audio-${spec.id}-value`) as HTMLInputElement | null;
+
+  const applyValue = (value: number, immediate: boolean) => {
+    const player = ensureLocalAudioPlayerState();
+    const clamped = Math.max(spec.min, Math.min(spec.max, value));
+    spec.setValue(player, clamped);
+    spec.onChange?.(clamped);
+    renderTransportControls();
+    spec.send(clamped, immediate);
+  };
+
+  if (slider && slider.dataset.bound !== "true") {
+    slider.dataset.bound = "true";
+    slider.addEventListener("input", () => {
+      const pos = parseFloat(slider.value);
+      if (isFinite(pos)) {
+        applyValue(faderSliderPosToValue(spec, pos), false);
+      }
+    });
+    // Fires once on release (mouseup/keyup) — always commit the final
+    // value immediately even if speed/pitch were mid-debounce.
+    slider.addEventListener("change", () => {
+      const pos = parseFloat(slider.value);
+      if (isFinite(pos)) {
+        applyValue(faderSliderPosToValue(spec, pos), true);
+      }
+    });
+    slider.addEventListener("dblclick", () => applyValue(spec.default, true));
+  }
+
+  if (valueInput && valueInput.dataset.bound !== "true") {
+    valueInput.dataset.bound = "true";
+    const commit = () => {
+      const parsed = spec.parse(valueInput.value);
+      if (parsed === null) {
+        renderTransportControls(); // invalid text — revert to the last real value
+        return;
+      }
+      applyValue(parsed, true);
+    };
+    valueInput.addEventListener("focus", () => valueInput.select());
+    valueInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        valueInput.blur();
+      } else if (event.key === "Escape") {
+        renderTransportControls();
+        valueInput.blur();
+      }
+    });
+    valueInput.addEventListener("focusout", commit);
+  }
+}
+
 function flushActiveLoopRegionSend(loop: LocalAudioLoopRegion): void {
   if (loopRegionDebounceTimer !== null) {
     clearTimeout(loopRegionDebounceTimer);
@@ -595,12 +828,6 @@ function renderTransportControls(): void {
   const playPauseBtn = document.getElementById("local-audio-play-pause") as HTMLButtonElement | null;
   const stopBtn = document.getElementById("local-audio-stop") as HTMLButtonElement | null;
   const loopStatus = document.getElementById("local-audio-loop-status");
-  const volumeSlider = document.getElementById("local-audio-volume") as HTMLInputElement | null;
-  const volumeValue = document.getElementById("local-audio-volume-value");
-  const speedSlider = document.getElementById("local-audio-speed") as HTMLInputElement | null;
-  const speedValue = document.getElementById("local-audio-speed-value");
-  const pitchSlider = document.getElementById("local-audio-pitch") as HTMLInputElement | null;
-  const pitchValue = document.getElementById("local-audio-pitch-value");
 
   if (playPauseBtn) {
     playPauseBtn.disabled = !hasAudio;
@@ -618,25 +845,8 @@ function renderTransportControls(): void {
       loopStatus.textContent = `Looping "${activeLoop.name}"`;
     }
   }
-  if (volumeSlider && document.activeElement !== volumeSlider) {
-    volumeSlider.value = String(player.gain);
-  }
-  if (volumeValue) {
-    volumeValue.textContent = `${Math.round(player.gain * 100)}%`;
-  }
-  if (speedSlider && document.activeElement !== speedSlider) {
-    speedSlider.value = String(player.speed);
-  }
-  if (speedValue) {
-    speedValue.textContent = `${Math.round(player.speed * 100)}%`;
-  }
-  if (pitchSlider && document.activeElement !== pitchSlider) {
-    pitchSlider.value = String(player.pitchSemitones);
-  }
-  if (pitchValue) {
-    const semis = player.pitchSemitones;
-    pitchValue.textContent = `${semis > 0 ? "+" : ""}${semis} st`;
-  }
+
+  Object.values(FADER_SPECS).forEach((spec) => renderFader(spec, player));
 
   renderFileInfo();
 }
@@ -1092,9 +1302,6 @@ function bindTransportControls(): void {
   const browseBtn = document.getElementById("local-audio-browse-btn") as HTMLButtonElement | null;
   const playPauseBtn = document.getElementById("local-audio-play-pause") as HTMLButtonElement | null;
   const stopBtn = document.getElementById("local-audio-stop") as HTMLButtonElement | null;
-  const volumeSlider = document.getElementById("local-audio-volume") as HTMLInputElement | null;
-  const speedSlider = document.getElementById("local-audio-speed") as HTMLInputElement | null;
-  const pitchSlider = document.getElementById("local-audio-pitch") as HTMLInputElement | null;
 
   if (browseBtn && browseBtn.dataset.bound !== "true") {
     browseBtn.dataset.bound = "true";
@@ -1121,62 +1328,7 @@ function bindTransportControls(): void {
     });
   }
 
-  if (volumeSlider && volumeSlider.dataset.bound !== "true") {
-    volumeSlider.dataset.bound = "true";
-    volumeSlider.addEventListener("input", () => {
-      const gain = parseFloat(volumeSlider.value);
-      if (!isFinite(gain)) {
-        return;
-      }
-      const player = ensureLocalAudioPlayerState();
-      player.gain = gain;
-      renderTransportControls();
-      setLocalAudioGain(gain);
-    });
-  }
-
-  if (speedSlider && speedSlider.dataset.bound !== "true") {
-    speedSlider.dataset.bound = "true";
-    speedSlider.addEventListener("input", () => {
-      const ratio = parseFloat(speedSlider.value);
-      if (!isFinite(ratio)) {
-        return;
-      }
-      const player = ensureLocalAudioPlayerState();
-      player.speed = ratio;
-      playheadSpeed = ratio;
-      playheadBaseSec = getInterpolatedPositionSec();
-      playheadBaseMs = performance.now();
-      renderTransportControls();
-      scheduleSpeedSend(ratio);
-    });
-    speedSlider.addEventListener("change", () => {
-      const ratio = parseFloat(speedSlider.value);
-      if (isFinite(ratio)) {
-        flushSpeedSend(ratio);
-      }
-    });
-  }
-
-  if (pitchSlider && pitchSlider.dataset.bound !== "true") {
-    pitchSlider.dataset.bound = "true";
-    pitchSlider.addEventListener("input", () => {
-      const semis = parseFloat(pitchSlider.value);
-      if (!isFinite(semis)) {
-        return;
-      }
-      const player = ensureLocalAudioPlayerState();
-      player.pitchSemitones = semis;
-      renderTransportControls();
-      schedulePitchSend(semis);
-    });
-    pitchSlider.addEventListener("change", () => {
-      const semis = parseFloat(pitchSlider.value);
-      if (isFinite(semis)) {
-        flushPitchSend(semis);
-      }
-    });
-  }
+  Object.values(FADER_SPECS).forEach(bindFader);
 }
 
 /** Commits whichever editable field (name/start/end) `input` represents.

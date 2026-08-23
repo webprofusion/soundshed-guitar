@@ -10802,6 +10802,14 @@ void PluginController::HandleSetLocalAudioGainRequest(const nlohmann::json& payl
     mLocalAudioPlayer->SetGain(gain);
 }
 
+void PluginController::HandleSetLocalAudioBalanceRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const double balance = payload.contains("balance") ? payload["balance"].get<double>() : payload.value("value", 0.0);
+    mLocalAudioPlayer->SetBalance(balance);
+}
+
 void PluginController::HandleSetLocalAudioLoopRegionRequest(const nlohmann::json& payload)
 {
     if (!mLocalAudioPlayer)

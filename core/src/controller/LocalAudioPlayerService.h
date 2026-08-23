@@ -83,6 +83,7 @@ public:
     void SetSpeed(double ratio);              // clamped to [0.25, 2.0]
     void SetPitchSemitones(double semitones); // clamped to [-12, 12]
     void SetGain(double linearGain);          // applied on the audio thread — instant, no flush needed
+    void SetBalance(double balance);          // clamped to [-1 (full left), 1 (full right)]; instant, no flush needed
 
     // The active loop region. No bounds set = loop the whole track. These
     // only change which bounds a *future* wrap respects; they do not move
@@ -197,6 +198,7 @@ private:
     std::atomic<double> mSpeed{1.0};
     std::atomic<double> mPitchSemitones{0.0};
     std::atomic<double> mGain{1.0};
+    std::atomic<double> mBalance{0.0}; // -1 = full left, 0 = center, +1 = full right
     std::atomic<bool> mLoopingEnabled{false};
     std::shared_ptr<ActiveLoopBounds> mActiveLoop; // null = whole track; atomic load/store
 

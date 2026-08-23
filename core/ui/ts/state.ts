@@ -298,6 +298,7 @@ export const uiState: UiState = {
     speed: 1,
     pitchSemitones: 0,
     gain: 1,
+    balance: 0,
   },
   compositeEditMode: false,
   compositeEditDefinition: null,

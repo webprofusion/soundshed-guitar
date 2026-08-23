@@ -284,6 +284,12 @@ void LocalAudioPlayerService::SetGain(double linearGain)
     mGain.store(std::max(0.0, linearGain), std::memory_order_relaxed);
 }
 
+void LocalAudioPlayerService::SetBalance(double balance)
+{
+    // Same rationale as SetGain: applied directly at mix time, no flush.
+    mBalance.store(std::clamp(balance, -1.0, 1.0), std::memory_order_relaxed);
+}
+
 void LocalAudioPlayerService::SetLoopRegion(double startSec, double endSec)
 {
     auto buffer = std::atomic_load_explicit(&mBuffer, std::memory_order_acquire);
@@ -343,10 +349,16 @@ void LocalAudioPlayerService::RenderPostChain(float** outputs, int numSamples)
 
     const std::size_t popped = mOutputRing->Pop(mPopScratch.data(), static_cast<std::size_t>(numSamples));
     const float gain = static_cast<float>(mGain.load(std::memory_order_relaxed));
+    const double balance = mBalance.load(std::memory_order_relaxed);
+    // A "balance" control, not a full pan law: the favored channel always
+    // stays at unity gain and only the other channel is attenuated, matching
+    // a standard stereo-mixer balance knob rather than mono-source panning.
+    const float gainL = gain * static_cast<float>(balance <= 0.0 ? 1.0 : 1.0 - balance);
+    const float gainR = gain * static_cast<float>(balance >= 0.0 ? 1.0 : 1.0 + balance);
     for (std::size_t i = 0; i < popped; ++i)
     {
-        outputs[0][i] += mPopScratch[i].l * gain;
-        outputs[1][i] += mPopScratch[i].r * gain;
+        outputs[0][i] += mPopScratch[i].l * gainL;
+        outputs[1][i] += mPopScratch[i].r * gainR;
     }
     // Underrun (popped < numSamples): per the priority principle, the
     // shortfall is left as silence rather than blocking or computing
