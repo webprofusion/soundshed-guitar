@@ -91,9 +91,9 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `compositeDefinitionRemoved` | `{...}` | Composite effect removed |
 | `compositeEditState` | `{...}` | Composite edit mode state |
 | `compositeEditModeExited` | `{}` | Exited composite edit mode |
-| `localAudioFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Local Audio Player: backing-track file decoded and ready |
-| `localAudioTransportState` | `{state, positionSec}` | Local Audio Player: playback state/position, pushed periodically while loaded |
-| `localAudioPlaybackEnded` | `{}` | Local Audio Player: playback reached the end of the file (non-looping) |
+| `earPracticePlayerFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Ear Practice Player: backing-track file decoded and ready |
+| `earPracticePlayerTransportState` | `{state, positionSec}` | Ear Practice Player: playback state/position, pushed periodically while loaded |
+| `earPracticePlayerPlaybackEnded` | `{}` | Ear Practice Player: playback reached the end of the file (non-looping) |
 
 ### UI → Engine Messages
 
@@ -141,15 +141,15 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `getEffectCatalog` | `{}` | Request effect catalog |
 | `getPresetList` | `{}` | Request preset list from disk |
 | `openAudioPreferences` | `{}` | Open audio device settings |
-| `browseLocalAudioFile` | `{}` | Local Audio Player: open native file browser for a backing track |
-| `loadLocalAudioFile` | `{path}` | Local Audio Player: load a backing track by native path |
-| `setLocalAudioTransport` | `{action}` | Local Audio Player: `"play"`, `"pause"`, or `"stop"` |
-| `seekLocalAudioFile` | `{seconds}` | Local Audio Player: seek to a position |
-| `setLocalAudioSpeed` | `{ratio}` | Local Audio Player: time-stretch ratio, clamped `[0.25, 2.0]` |
-| `setLocalAudioPitch` | `{semitones}` | Local Audio Player: pitch shift, clamped `[-12, 12]` semitones |
-| `setLocalAudioGain` | `{gain}` | Local Audio Player: linear output gain |
-| `setLocalAudioLoopRegion` | `{startSec, endSec}` or `{}` | Local Audio Player: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
-| `setLocalAudioLooping` | `{enabled}` | Local Audio Player: enable/disable looping of the active region |
+| `browseEarPracticePlayerFile` | `{}` | Ear Practice Player: open native file browser for a backing track |
+| `loadEarPracticePlayerFile` | `{path}` | Ear Practice Player: load a backing track by native path |
+| `setEarPracticePlayerTransport` | `{action}` | Ear Practice Player: `"play"`, `"pause"`, or `"stop"` |
+| `seekEarPracticePlayerFile` | `{seconds}` | Ear Practice Player: seek to a position |
+| `setEarPracticePlayerSpeed` | `{ratio}` | Ear Practice Player: time-stretch ratio, clamped `[0.25, 2.0]` |
+| `setEarPracticePlayerPitch` | `{semitones}` | Ear Practice Player: pitch shift, clamped `[-12, 12]` semitones |
+| `setEarPracticePlayerGain` | `{gain}` | Ear Practice Player: linear output gain |
+| `setEarPracticePlayerLoopRegion` | `{startSec, endSec}` or `{}` | Ear Practice Player: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
+| `setEarPracticePlayerLooping` | `{enabled}` | Ear Practice Player: enable/disable looping of the active region |
 
 ## State Object
 
@@ -465,7 +465,7 @@ in app settings under `ui.neuralAmp3dView.enabled`.
 
 ## Jam Panel Notes
 
-### Local Audio Player (`core/ui/ts/localAudioPlayer.ts`)
+### Ear Practice Audio Player (`core/ui/ts/earPracticePlayer.ts`)
 
 A fourth Jam-panel section (alongside backing-track search, Scales, and the Riff
 Library) that loads a local audio file — a WAV, AIFF, or MP3 backing track — and
@@ -474,11 +474,11 @@ guitar signal path, with its own tempo (speed) and pitch controls and a set of
 named loop regions for drilling difficult passages.
 
 - **Engine has no loop library.** The engine only ever knows the *currently-active*
-  loop's bounds and an on/off flag (`setLocalAudioLoopRegion`/`setLocalAudioLooping`).
+  loop's bounds and an on/off flag (`setEarPracticePlayerLoopRegion`/`setEarPracticePlayerLooping`).
   The full named-loop list — add, rename, delete, and the section-name templates — is
   100% client-side state, persisted via `setAppSetting` under
-  `localAudioPlayer.loops`, keyed by a fingerprint of the loaded file (`path` +
-  `durationSec`, the only stable identifiers `localAudioFileLoaded` provides) so
+  `earPracticePlayer.loops`, keyed by a fingerprint of the loaded file (`path` +
+  `durationSec`, the only stable identifiers `earPracticePlayerFileLoaded` provides) so
   loops reappear when the same file is reopened. No message round-trips through the
   engine for loop CRUD.
 - **List, not overlay bands.** Because loops can legitimately overlap (a short lick
@@ -489,10 +489,10 @@ named loop regions for drilling difficult passages.
   the same canvas drag-handle interaction as the riff-take trim editor in
   `riffLibrary.ts`.
 - **Selecting = activating.** Clicking a loop row seeks to its start, sends
-  `setLocalAudioLoopRegion`, and shows its handles on the waveform for fine-tuning;
+  `setEarPracticePlayerLoopRegion`, and shows its handles on the waveform for fine-tuning;
   dragging a handle live-updates the loop's bounds locally and re-sends the region
   (debounced) if it is the active loop. Clicking the already-active loop's row
-  deactivates it (`setLocalAudioLoopRegion` with bounds omitted).
+  deactivates it (`setEarPracticePlayerLoopRegion` with bounds omitted).
 - **Naming.** Dragging a fresh range on the waveform (with no loop selected) shows a
   "+ Add Loop" affordance that opens an inline naming control: free text, plus a
   quick-pick row of common song-section templates (`LOOP_NAME_TEMPLATES` — Intro,
@@ -502,10 +502,10 @@ named loop regions for drilling difficult passages.
   whole song structure can be laid down in a few clicks.
 - **Transport.** Play/pause/stop, a speed slider (25%–200%), a pitch slider (±12
   semitones), a loop on/off toggle, and a volume slider all send their own bridge
-  message per change (`setLocalAudioSpeed`/`setLocalAudioPitch`/`setLocalAudioGain`/
-  `setLocalAudioLooping`); playback state itself is authoritative from the engine
-  (`localAudioTransportState`), not assumed optimistically in the UI.
-- Gated behind `Features.LocalAudioPlayer` (`features.localAudioPlayer.enabled`,
+  message per change (`setEarPracticePlayerSpeed`/`setEarPracticePlayerPitch`/`setEarPracticePlayerGain`/
+  `setEarPracticePlayerLooping`); playback state itself is authoritative from the engine
+  (`earPracticePlayerTransportState`), not assumed optimistically in the UI.
+- Gated behind `Features.EarPracticePlayer` (`features.earPracticePlayer.enabled`,
   default on), included in `JAM_PANEL_FEATURE_IDS` so the Jam panel experience as a
   whole still shows if only this section is enabled.
 

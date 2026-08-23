@@ -593,7 +593,7 @@ export interface RiffLibrary {
   riffs: RiffEntry[];
 }
 
-export interface LocalAudioLoopRegion {
+export interface EarPracticePlayerLoopRegion {
   id: string;
   name: string;
   startSec: number;
@@ -601,19 +601,19 @@ export interface LocalAudioLoopRegion {
 }
 
 /**
- * UI-owned Local Audio Player (Jam panel) state. `loops` and `activeLoopId` are
+ * UI-owned Ear Practice Player (Jam panel) state. `loops` and `activeLoopId` are
  * pure client-side bookkeeping — the engine has no concept of a loop library,
  * it only ever knows the currently-active region's bounds and whether looping
- * is on (see setLocalAudioLoopRegion/setLocalAudioLooping in bridge.ts).
+ * is on (see setEarPracticePlayerLoopRegion/setEarPracticePlayerLooping in bridge.ts).
  */
-export interface LocalAudioPlayerState {
+export interface EarPracticePlayerState {
   filePath: string;
   title: string;
   durationSec: number;
   positionSec: number;
   waveformPeaksL: number[];
   waveformPeaksR: number[];
-  loops: LocalAudioLoopRegion[];
+  loops: EarPracticePlayerLoopRegion[];
   activeLoopId: string | null;
   looping: boolean;
   playing: boolean;
@@ -686,7 +686,7 @@ export interface UiState {
   metronome?: MetronomeState;
   riffLibrary?: RiffLibrary;
   riffCapture?: RiffCaptureState;
-  localAudioPlayer?: LocalAudioPlayerState;
+  earPracticePlayer?: EarPracticePlayerState;
   missingNodeResources?: Array<{ nodeId: string; resourceType?: string; resourceId?: string; filePath?: string }>;
   layoutLibrary?: LayoutLibrary;
   compositeLibrary?: CompositeEffectDefinition[];

@@ -1,22 +1,22 @@
 import {
-  browseLocalAudioFile,
-  loadLocalAudioFile,
-  loadLocalAudioFileData,
-  seekLocalAudioFile,
+  browseEarPracticePlayerFile,
+  loadEarPracticePlayerFile,
+  loadEarPracticePlayerFileData,
+  seekEarPracticePlayerFile,
   setAppSetting,
-  setLocalAudioBalance,
-  setLocalAudioGain,
-  setLocalAudioLoopRegion,
-  setLocalAudioLooping,
-  setLocalAudioPitch,
-  setLocalAudioSpeed,
-  setLocalAudioTransport,
+  setEarPracticePlayerBalance,
+  setEarPracticePlayerGain,
+  setEarPracticePlayerLoopRegion,
+  setEarPracticePlayerLooping,
+  setEarPracticePlayerPitch,
+  setEarPracticePlayerSpeed,
+  setEarPracticePlayerTransport,
 } from "./bridge.js";
 import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
-import type { LocalAudioLoopRegion, LocalAudioPlayerState } from "./types.js";
+import type { EarPracticePlayerLoopRegion, EarPracticePlayerState } from "./types.js";
 import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 
 /** Small, static, non-user-editable set of common song-section names for the loop-naming quick-pick row. */
@@ -32,7 +32,7 @@ export const LOOP_NAME_TEMPLATES: readonly string[] = [
   "Breakdown",
 ];
 
-const LOCAL_AUDIO_LOOPS_SETTING = "localAudioPlayer.loops";
+const LOCAL_AUDIO_LOOPS_SETTING = "earPracticePlayer.loops";
 const MIN_LOOP_SPAN_SEC = 0.25;
 const LOOP_REGION_SEND_DEBOUNCE_MS = 80;
 const SPEED_PITCH_SEND_DEBOUNCE_MS = 80;
@@ -59,7 +59,7 @@ const DELETE_UNDO_WINDOW_MS = 10_000;
 
 type RatioRange = { startRatio: number; endRatio: number };
 type SecondsRange = { startSec: number; endSec: number };
-type PendingDeletedLoop = { loop: LocalAudioLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
+type PendingDeletedLoop = { loop: EarPracticePlayerLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
 // "pending": mouse is down but hasn't moved past the click/drag threshold
 // yet, so it might still resolve to a plain seek-click on mouseup.
 type DragMode = "handle" | "create" | "pending" | null;
@@ -96,7 +96,7 @@ let playheadSpeed = 1;
  * Builds a template-derived loop name with an auto-incrementing numeric suffix, e.g.
  * "Verse" -> "Verse 1" the first time it's picked on a track, "Verse 2" the next time,
  * regardless of whether the previous suggestion was actually kept. Pure/testable in
- * isolation from the DOM — see tests/localAudioLoopNaming.test.ts.
+ * isolation from the DOM — see tests/earPracticePlayerLoopNaming.test.ts.
  */
 export function suggestLoopTemplateName(baseName: string, existingNames: readonly string[]): string {
   const trimmedBase = baseName.trim();
@@ -122,9 +122,9 @@ function generateLoopId(): string {
   return `loop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function ensureLocalAudioPlayerState(): LocalAudioPlayerState {
-  if (!uiState.localAudioPlayer) {
-    uiState.localAudioPlayer = {
+function ensureEarPracticePlayerState(): EarPracticePlayerState {
+  if (!uiState.earPracticePlayer) {
+    uiState.earPracticePlayer = {
       filePath: "",
       title: "",
       durationSec: 0,
@@ -141,11 +141,11 @@ function ensureLocalAudioPlayerState(): LocalAudioPlayerState {
       balance: 0,
     };
   }
-  return uiState.localAudioPlayer;
+  return uiState.earPracticePlayer;
 }
 
-function getActiveLoop(): LocalAudioLoopRegion | null {
-  const player = ensureLocalAudioPlayerState();
+function getActiveLoop(): EarPracticePlayerLoopRegion | null {
+  const player = ensureEarPracticePlayerState();
   if (!player.activeLoopId) {
     return null;
   }
@@ -156,7 +156,7 @@ function getFileFingerprint(filePath: string, durationSec: number): string {
   return `${filePath.trim().toLowerCase()}|${durationSec.toFixed(2)}`;
 }
 
-function isPersistedLoop(value: unknown): value is LocalAudioLoopRegion {
+function isPersistedLoop(value: unknown): value is EarPracticePlayerLoopRegion {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -167,7 +167,7 @@ function isPersistedLoop(value: unknown): value is LocalAudioLoopRegion {
     && typeof record.endSec === "number";
 }
 
-function loadLoopsForFingerprint(fingerprint: string): LocalAudioLoopRegion[] {
+function loadLoopsForFingerprint(fingerprint: string): EarPracticePlayerLoopRegion[] {
   if (!fingerprint) {
     return [];
   }
@@ -183,14 +183,14 @@ function loadLoopsForFingerprint(fingerprint: string): LocalAudioLoopRegion[] {
 }
 
 function persistLoopsForCurrentFile(): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const fingerprint = getFileFingerprint(player.filePath, player.durationSec);
   if (!fingerprint) {
     return;
   }
   const stored = uiState.appSettings?.[LOCAL_AUDIO_LOOPS_SETTING];
-  const map: Record<string, LocalAudioLoopRegion[]> = (stored && typeof stored === "object" && !Array.isArray(stored))
-    ? { ...(stored as unknown as Record<string, LocalAudioLoopRegion[]>) }
+  const map: Record<string, EarPracticePlayerLoopRegion[]> = (stored && typeof stored === "object" && !Array.isArray(stored))
+    ? { ...(stored as unknown as Record<string, EarPracticePlayerLoopRegion[]>) }
     : {};
   if (player.loops.length > 0) {
     map[fingerprint] = player.loops.map((loop) => ({ ...loop }));
@@ -238,7 +238,7 @@ function startPlayheadAnim(): void {
     return;
   }
   const step = () => {
-    const player = ensureLocalAudioPlayerState();
+    const player = ensureEarPracticePlayerState();
     if (!player.playing) {
       playheadAnimFrame = null;
       return;
@@ -250,7 +250,7 @@ function startPlayheadAnim(): void {
 }
 
 function getInterpolatedPositionSec(): number {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   if (!player.playing) {
     return player.positionSec;
   }
@@ -263,9 +263,9 @@ function toNumberArray(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((entry): entry is number => typeof entry === "number") : [];
 }
 
-/** Called on the `localAudioFileLoaded` engine message. */
-export function applyLocalAudioFileLoaded(data: { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] }): void {
-  const player = ensureLocalAudioPlayerState();
+/** Called on the `earPracticePlayerFileLoaded` engine message. */
+export function applyEarPracticePlayerFileLoaded(data: { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] }): void {
+  const player = ensureEarPracticePlayerState();
   const filePath = typeof data.path === "string" ? data.path : "";
   const durationSec = typeof data.durationSec === "number" && isFinite(data.durationSec) ? Math.max(0, data.durationSec) : 0;
   const fallbackTitle = filePath ? (filePath.split(/[\\/]/).pop() ?? filePath) : "";
@@ -298,13 +298,13 @@ export function applyLocalAudioFileLoaded(data: { path?: string; title?: string;
   playheadSpeed = player.speed;
   stopPlayheadAnim();
 
-  appendLog(`local audio file loaded ← ${player.title} (${durationSec.toFixed(1)}s)`);
-  renderLocalAudioPlayerPanel();
+  appendLog(`ear practice player file loaded ← ${player.title} (${durationSec.toFixed(1)}s)`);
+  renderEarPracticePlayerPanel();
 }
 
-/** Called on the `localAudioTransportState` engine message. */
-export function applyLocalAudioTransportState(data: { state?: string; positionSec?: number }): void {
-  const player = ensureLocalAudioPlayerState();
+/** Called on the `earPracticePlayerTransportState` engine message. */
+export function applyEarPracticePlayerTransportState(data: { state?: string; positionSec?: number }): void {
+  const player = ensureEarPracticePlayerState();
   const playing = data.state === "playing";
   player.playing = playing;
   if (typeof data.positionSec === "number" && isFinite(data.positionSec)) {
@@ -324,30 +324,30 @@ export function applyLocalAudioTransportState(data: { state?: string; positionSe
   renderWaveform();
 }
 
-/** Called on the `localAudioPlaybackEnded` engine message. */
-export function applyLocalAudioPlaybackEnded(): void {
-  const player = ensureLocalAudioPlayerState();
+/** Called on the `earPracticePlayerPlaybackEnded` engine message. */
+export function applyEarPracticePlayerPlaybackEnded(): void {
+  const player = ensureEarPracticePlayerState();
   player.playing = false;
   player.positionSec = 0;
   playheadBaseSec = 0;
   playheadBaseMs = performance.now();
   stopPlayheadAnim();
-  appendLog("local audio playback ended");
+  appendLog("ear practice player playback ended");
   renderTransportControls();
   renderWaveform();
 }
 
-function scheduleActiveLoopRegionSend(loop: LocalAudioLoopRegion): void {
+function scheduleActiveLoopRegionSend(loop: EarPracticePlayerLoopRegion): void {
   if (loopRegionDebounceTimer !== null) {
     clearTimeout(loopRegionDebounceTimer);
   }
   loopRegionDebounceTimer = setTimeout(() => {
     loopRegionDebounceTimer = null;
-    setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+    setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
   }, LOOP_REGION_SEND_DEBOUNCE_MS);
 }
 
-/** Debounces setLocalAudioSpeed/setLocalAudioPitch sends while a slider is
+/** Debounces setEarPracticePlayerSpeed/setEarPracticePlayerPitch sends while a slider is
  * being dragged. Each of those calls flushes the native render-ahead ring
  * buffer (it must, to apply the new value promptly) — sending on every
  * `input` event during a drag would flush repeatedly and cause audible
@@ -360,7 +360,7 @@ function scheduleSpeedSend(ratio: number): void {
   }
   speedSendDebounceTimer = setTimeout(() => {
     speedSendDebounceTimer = null;
-    setLocalAudioSpeed(ratio);
+    setEarPracticePlayerSpeed(ratio);
   }, SPEED_PITCH_SEND_DEBOUNCE_MS);
 }
 
@@ -369,7 +369,7 @@ function flushSpeedSend(ratio: number): void {
     clearTimeout(speedSendDebounceTimer);
     speedSendDebounceTimer = null;
   }
-  setLocalAudioSpeed(ratio);
+  setEarPracticePlayerSpeed(ratio);
 }
 
 function schedulePitchSend(semitones: number): void {
@@ -378,7 +378,7 @@ function schedulePitchSend(semitones: number): void {
   }
   pitchSendDebounceTimer = setTimeout(() => {
     pitchSendDebounceTimer = null;
-    setLocalAudioPitch(semitones);
+    setEarPracticePlayerPitch(semitones);
   }, SPEED_PITCH_SEND_DEBOUNCE_MS);
 }
 
@@ -387,7 +387,7 @@ function flushPitchSend(semitones: number): void {
     clearTimeout(pitchSendDebounceTimer);
     pitchSendDebounceTimer = null;
   }
-  setLocalAudioPitch(semitones);
+  setEarPracticePlayerPitch(semitones);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -419,8 +419,8 @@ type FaderSpec = {
   default: number;
   format: (value: number) => string;
   parse: (text: string) => number | null;
-  getValue: (player: LocalAudioPlayerState) => number;
-  setValue: (player: LocalAudioPlayerState, value: number) => void;
+  getValue: (player: EarPracticePlayerState) => number;
+  setValue: (player: EarPracticePlayerState, value: number) => void;
   /** immediate=true on release/reset/typed-entry; false for in-progress drag
    * ticks, letting speed/pitch debounce (they flush the render-ahead ring)
    * while volume/balance (pure audio-thread mix, no flush) can ignore the
@@ -512,7 +512,7 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parsePercentText,
     getValue: (p) => p.gain,
     setValue: (p, v) => { p.gain = v; },
-    send: (v) => setLocalAudioGain(v),
+    send: (v) => setEarPracticePlayerGain(v),
   },
   balance: {
     id: "balance",
@@ -523,7 +523,7 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parseBalanceText,
     getValue: (p) => p.balance,
     setValue: (p, v) => { p.balance = v; },
-    send: (v) => setLocalAudioBalance(v),
+    send: (v) => setEarPracticePlayerBalance(v),
   },
   speed: {
     id: "speed",
@@ -555,10 +555,10 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
 };
 
 /** Used when loading a new file "resets the project" (see
- * applyLocalAudioFileLoaded) — pushes every fader back to its default,
+ * applyEarPracticePlayerFileLoaded) — pushes every fader back to its default,
  * both in local state and to the native engine, mirroring exactly what a
  * double-click reset does for a single fader. */
-function resetAllFadersToDefault(player: LocalAudioPlayerState): void {
+function resetAllFadersToDefault(player: EarPracticePlayerState): void {
   Object.values(FADER_SPECS).forEach((spec) => {
     spec.setValue(player, spec.default);
     spec.onChange?.(spec.default);
@@ -566,9 +566,9 @@ function resetAllFadersToDefault(player: LocalAudioPlayerState): void {
   });
 }
 
-function renderFader(spec: FaderSpec, player: LocalAudioPlayerState): void {
-  const slider = document.getElementById(`local-audio-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`local-audio-${spec.id}-value`) as HTMLInputElement | null;
+function renderFader(spec: FaderSpec, player: EarPracticePlayerState): void {
+  const slider = document.getElementById(`ear-practice-player-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`ear-practice-player-${spec.id}-value`) as HTMLInputElement | null;
   const value = spec.getValue(player);
   if (slider && document.activeElement !== slider) {
     slider.value = String(faderValueToSliderPos(spec, value));
@@ -579,11 +579,11 @@ function renderFader(spec: FaderSpec, player: LocalAudioPlayerState): void {
 }
 
 function bindFader(spec: FaderSpec): void {
-  const slider = document.getElementById(`local-audio-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`local-audio-${spec.id}-value`) as HTMLInputElement | null;
+  const slider = document.getElementById(`ear-practice-player-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`ear-practice-player-${spec.id}-value`) as HTMLInputElement | null;
 
   const applyValue = (value: number, immediate: boolean) => {
-    const player = ensureLocalAudioPlayerState();
+    const player = ensureEarPracticePlayerState();
     const clamped = Math.max(spec.min, Math.min(spec.max, value));
     spec.setValue(player, clamped);
     spec.onChange?.(clamped);
@@ -642,19 +642,19 @@ function bindFader(spec: FaderSpec): void {
   }
 }
 
-function flushActiveLoopRegionSend(loop: LocalAudioLoopRegion): void {
+function flushActiveLoopRegionSend(loop: EarPracticePlayerLoopRegion): void {
   if (loopRegionDebounceTimer !== null) {
     clearTimeout(loopRegionDebounceTimer);
     loopRegionDebounceTimer = null;
   }
-  setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+  setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
 }
 
 /** Applies a ratio-space range change to whichever thing is currently being edited:
  * the active loop's bounds (dragged/nudged, live-updates engine + local state, debounced),
  * or the pending candidate selection for a not-yet-saved loop. */
 function applyRangeChange(startRatio: number, endRatio: number): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const clamped = clampRatioRange(startRatio, endRatio, player.durationSec);
   const activeLoop = getActiveLoop();
   if (activeLoop) {
@@ -677,7 +677,7 @@ function getCanvasRatioFromPointer(event: MouseEvent, canvas: HTMLCanvasElement)
 }
 
 function nudgeSelectedHandle(direction: -1 | 1, coarse = false): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const activeLoop = getActiveLoop();
   const current = activeLoop
     ? { startRatio: activeLoop.startSec / Math.max(0.001, player.durationSec), endRatio: activeLoop.endSec / Math.max(0.001, player.durationSec) }
@@ -694,11 +694,11 @@ function nudgeSelectedHandle(direction: -1 | 1, coarse = false): void {
 }
 
 function renderWaveform(): void {
-  const canvas = document.getElementById("local-audio-waveform") as HTMLCanvasElement | null;
+  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
   if (!canvas) {
     return;
   }
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const peaksL = player.waveformPeaksL;
   const peaksR = player.waveformPeaksR;
   const hasAudio = peaksL.length > 0 && peaksR.length > 0 && player.durationSec > 0;
@@ -822,8 +822,8 @@ function renderWaveform(): void {
 }
 
 function renderAddLoopAffordance(): void {
-  const btn = document.getElementById("local-audio-add-loop-btn") as HTMLButtonElement | null;
-  const canvas = document.getElementById("local-audio-waveform") as HTMLCanvasElement | null;
+  const btn = document.getElementById("ear-practice-player-add-loop-btn") as HTMLButtonElement | null;
+  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
   if (!btn || !canvas) {
     return;
   }
@@ -838,12 +838,12 @@ function renderAddLoopAffordance(): void {
 }
 
 function renderFileInfo(): void {
-  const info = document.getElementById("local-audio-file-info");
-  const browseBtn = document.getElementById("local-audio-browse-btn") as HTMLButtonElement | null;
+  const info = document.getElementById("ear-practice-player-file-info");
+  const browseBtn = document.getElementById("ear-practice-player-browse-btn") as HTMLButtonElement | null;
   if (!info) {
     return;
   }
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   if (!player.filePath || player.durationSec <= 0) {
     info.textContent = "No file loaded";
   } else {
@@ -857,12 +857,12 @@ function renderFileInfo(): void {
 }
 
 function renderTransportControls(): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const hasAudio = player.durationSec > 0;
 
-  const playPauseBtn = document.getElementById("local-audio-play-pause") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("local-audio-stop") as HTMLButtonElement | null;
-  const loopStatus = document.getElementById("local-audio-loop-status");
+  const playPauseBtn = document.getElementById("ear-practice-player-play-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("ear-practice-player-stop") as HTMLButtonElement | null;
+  const loopStatus = document.getElementById("ear-practice-player-loop-status");
 
   if (playPauseBtn) {
     playPauseBtn.disabled = !hasAudio;
@@ -891,7 +891,7 @@ function renderTransportControls(): void {
  * suggestion works the same whether you're naming a brand new loop or
  * renaming an existing one. */
 function ensureLoopNameTemplatesDatalist(): void {
-  const datalist = document.getElementById("local-audio-loop-name-templates");
+  const datalist = document.getElementById("ear-practice-player-loop-name-templates");
   if (!datalist || datalist.childElementCount > 0) {
     return;
   }
@@ -901,20 +901,20 @@ function ensureLoopNameTemplatesDatalist(): void {
 }
 
 function renderLoopList(): void {
-  const list = document.getElementById("local-audio-loop-list");
+  const list = document.getElementById("ear-practice-player-loop-list");
   if (!list) {
     return;
   }
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
 
   // No confirmation dialog on delete — this banner (shown until the undo
   // window elapses, another delete supersedes it, or undo is clicked) IS
   // the confirmation, just reversible instead of blocking.
   const undoBannerHtml = pendingDeletedLoop
     ? `
-        <div class="local-audio-loop-undo-banner">
+        <div class="ear-practice-player-loop-undo-banner">
           <span>Deleted "${escapeHtml(pendingDeletedLoop.loop.name)}".</span>
-          <button type="button" class="local-audio-loop-undo-btn">Undo</button>
+          <button type="button" class="ear-practice-player-loop-undo-btn">Undo</button>
         </div>
       `
     : "";
@@ -932,25 +932,25 @@ function renderLoopList(): void {
       const isEditing = loop.id === editingLoopId;
       const rowMainHtml = isEditing
         ? `
-            <input type="text" class="local-audio-loop-editable local-audio-loop-name-input" data-loop-id="${loop.id}" data-field="name" list="local-audio-loop-name-templates" placeholder="Loop name" value="${escapeHtml(loop.name)}" />
-            <input type="number" class="local-audio-loop-editable local-audio-loop-time-input" data-loop-id="${loop.id}" data-field="start" min="0" max="${maxSec}" step="0.01" value="${loop.startSec.toFixed(2)}" aria-label="Start time in seconds" />
-            <span class="local-audio-loop-time-sep">–</span>
-            <input type="number" class="local-audio-loop-editable local-audio-loop-time-input" data-loop-id="${loop.id}" data-field="end" min="0" max="${maxSec}" step="0.01" value="${loop.endSec.toFixed(2)}" aria-label="End time in seconds" />
-            <span class="local-audio-loop-time-unit">s</span>
+            <input type="text" class="ear-practice-player-loop-editable ear-practice-player-loop-name-input" data-loop-id="${loop.id}" data-field="name" list="ear-practice-player-loop-name-templates" placeholder="Loop name" value="${escapeHtml(loop.name)}" />
+            <input type="number" class="ear-practice-player-loop-editable ear-practice-player-loop-time-input" data-loop-id="${loop.id}" data-field="start" min="0" max="${maxSec}" step="0.01" value="${loop.startSec.toFixed(2)}" aria-label="Start time in seconds" />
+            <span class="ear-practice-player-loop-time-sep">–</span>
+            <input type="number" class="ear-practice-player-loop-editable ear-practice-player-loop-time-input" data-loop-id="${loop.id}" data-field="end" min="0" max="${maxSec}" step="0.01" value="${loop.endSec.toFixed(2)}" aria-label="End time in seconds" />
+            <span class="ear-practice-player-loop-time-unit">s</span>
           `
         : `
-            <span class="local-audio-loop-name">${escapeHtml(loop.name)}</span>
-            <span class="local-audio-loop-range">${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}</span>
+            <span class="ear-practice-player-loop-name">${escapeHtml(loop.name)}</span>
+            <span class="ear-practice-player-loop-range">${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}</span>
           `;
       return `
-        <div class="local-audio-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${loop.id}">
-          <button type="button" class="local-audio-loop-select-btn" data-loop-id="${loop.id}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
-          <div class="local-audio-loop-row-main" data-loop-id="${loop.id}">
+        <div class="ear-practice-player-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${loop.id}">
+          <button type="button" class="ear-practice-player-loop-select-btn" data-loop-id="${loop.id}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
+          <div class="ear-practice-player-loop-row-main" data-loop-id="${loop.id}">
             ${rowMainHtml}
           </div>
-          <div class="local-audio-loop-row-actions">
-            ${isEditing ? "" : `<button type="button" class="local-audio-loop-rename-btn" data-loop-id="${loop.id}" title="Edit name/time" aria-label="Edit loop name and time">✎</button>`}
-            <button type="button" class="local-audio-loop-delete-btn" data-loop-id="${loop.id}" title="Delete" aria-label="Delete loop">✕</button>
+          <div class="ear-practice-player-loop-row-actions">
+            ${isEditing ? "" : `<button type="button" class="ear-practice-player-loop-rename-btn" data-loop-id="${loop.id}" title="Edit name/time" aria-label="Edit loop name and time">✎</button>`}
+            <button type="button" class="ear-practice-player-loop-delete-btn" data-loop-id="${loop.id}" title="Delete" aria-label="Delete loop">✕</button>
           </div>
         </div>
       `;
@@ -958,14 +958,14 @@ function renderLoopList(): void {
     .join("");
 
   if (editingLoopId) {
-    const nameInput = list.querySelector<HTMLInputElement>(`.local-audio-loop-name-input[data-loop-id="${editingLoopId}"]`);
+    const nameInput = list.querySelector<HTMLInputElement>(`.ear-practice-player-loop-name-input[data-loop-id="${editingLoopId}"]`);
     nameInput?.focus();
     nameInput?.select();
   }
 }
 
 function selectLoop(loopId: string): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   if (!loop) {
     return;
@@ -977,10 +977,10 @@ function selectLoop(loopId: string): void {
     // since looping is implied entirely by whether a loop is selected.
     player.activeLoopId = null;
     player.looping = false;
-    setLocalAudioLoopRegion(null);
-    setLocalAudioLooping(false);
-    appendLog(`local audio loop deactivated → ${loop.name}`);
-    renderLocalAudioPlayerPanel();
+    setEarPracticePlayerLoopRegion(null);
+    setEarPracticePlayerLooping(false);
+    appendLog(`ear practice player loop deactivated → ${loop.name}`);
+    renderEarPracticePlayerPanel();
     return;
   }
 
@@ -989,11 +989,11 @@ function selectLoop(loopId: string): void {
   candidateRange = null;
   editingLoopId = null;
   selectedHandle = "start";
-  seekLocalAudioFile(loop.startSec);
-  setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
-  setLocalAudioLooping(true);
-  appendLog(`local audio loop selected → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
-  renderLocalAudioPlayerPanel();
+  seekEarPracticePlayerFile(loop.startSec);
+  setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+  setEarPracticePlayerLooping(true);
+  appendLog(`ear practice player loop selected → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
+  renderEarPracticePlayerPanel();
 }
 
 /** Finalizes whatever delete is currently pending (if any) — the undo
@@ -1017,12 +1017,12 @@ function undoDeleteLoop(): void {
   clearTimeout(pendingDeletedLoop.timer);
   pendingDeletedLoop = null;
 
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const insertAt = Math.min(index, player.loops.length);
   player.loops = [...player.loops.slice(0, insertAt), loop, ...player.loops.slice(insertAt)];
   persistLoopsForCurrentFile();
-  appendLog(`local audio loop delete undone → ${loop.name}`);
-  renderLocalAudioPlayerPanel();
+  appendLog(`ear practice player loop delete undone → ${loop.name}`);
+  renderEarPracticePlayerPanel();
 }
 
 /** Deletes immediately — no confirmation dialog — and instead leaves the
@@ -1031,7 +1031,7 @@ function undoDeleteLoop(): void {
  * if it was active) the instant this runs; undo re-inserts it rather than
  * "cancelling" anything in flight. */
 function deleteLoop(loopId: string): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const index = player.loops.findIndex((entry) => entry.id === loopId);
   if (index === -1) {
     return;
@@ -1044,14 +1044,14 @@ function deleteLoop(loopId: string): void {
   if (player.activeLoopId === loopId) {
     player.activeLoopId = null;
     player.looping = false;
-    setLocalAudioLoopRegion(null);
-    setLocalAudioLooping(false);
+    setEarPracticePlayerLoopRegion(null);
+    setEarPracticePlayerLooping(false);
   }
   if (editingLoopId === loopId) {
     editingLoopId = null;
   }
   persistLoopsForCurrentFile();
-  appendLog(`local audio loop deleted → ${loop.name} (undo available for ${Math.round(DELETE_UNDO_WINDOW_MS / 1000)}s)`);
+  appendLog(`ear practice player loop deleted → ${loop.name} (undo available for ${Math.round(DELETE_UNDO_WINDOW_MS / 1000)}s)`);
 
   pendingDeletedLoop = {
     loop,
@@ -1062,7 +1062,7 @@ function deleteLoop(loopId: string): void {
     }, DELETE_UNDO_WINDOW_MS),
   };
 
-  renderLocalAudioPlayerPanel();
+  renderEarPracticePlayerPanel();
 }
 
 /** Commits the name field only — does not touch editingLoopId, since the
@@ -1071,7 +1071,7 @@ function deleteLoop(loopId: string): void {
  * actually ends). Does not re-render the list, to avoid destroying the
  * user's in-progress Tab navigation between this row's fields. */
 function commitEditLoopName(loopId: string, rawName: string): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   const name = rawName.trim();
   if (loop && name && name !== loop.name) {
@@ -1088,7 +1088,7 @@ function commitEditLoopName(loopId: string, rawName: string): void {
  * and the waveform highlight immediately if this loop is active; does not
  * re-render the list itself, for the same Tab-navigation reason as above. */
 function commitEditLoopTime(loopId: string, field: "start" | "end", rawValue: string): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   if (!loop) {
     return;
@@ -1105,7 +1105,7 @@ function commitEditLoopTime(loopId: string, field: "start" | "end", rawValue: st
   }
   persistLoopsForCurrentFile();
   if (player.activeLoopId === loopId) {
-    setLocalAudioLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+    setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
   }
   renderWaveform();
   renderAddLoopAffordance();
@@ -1122,7 +1122,7 @@ function finishEditingLoop(): void {
   renderLoopList();
 }
 
-function suggestDefaultLoopName(existingLoops: readonly LocalAudioLoopRegion[]): string {
+function suggestDefaultLoopName(existingLoops: readonly EarPracticePlayerLoopRegion[]): string {
   const existingNames = existingLoops.map((loop) => loop.name);
   let n = existingLoops.length + 1;
   let candidate = `New Loop ${n}`;
@@ -1138,8 +1138,8 @@ function suggestDefaultLoopName(existingLoops: readonly LocalAudioLoopRegion[]):
  * and immediately opens it for inline name/time editing — there is no
  * separate naming dialog. */
 function createLoopFromRange(range: SecondsRange): void {
-  const player = ensureLocalAudioPlayerState();
-  const newLoop: LocalAudioLoopRegion = {
+  const player = ensureEarPracticePlayerState();
+  const newLoop: EarPracticePlayerLoopRegion = {
     id: generateLoopId(),
     name: suggestDefaultLoopName(player.loops),
     startSec: range.startSec,
@@ -1151,15 +1151,15 @@ function createLoopFromRange(range: SecondsRange): void {
   editingLoopId = newLoop.id;
   candidateRange = null;
   persistLoopsForCurrentFile();
-  seekLocalAudioFile(newLoop.startSec);
-  setLocalAudioLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
-  setLocalAudioLooping(true);
-  appendLog(`local audio loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
-  renderLocalAudioPlayerPanel();
+  seekEarPracticePlayerFile(newLoop.startSec);
+  setEarPracticePlayerLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
+  setEarPracticePlayerLooping(true);
+  appendLog(`ear practice player loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
+  renderEarPracticePlayerPanel();
 }
 
 function addNewLoop(): void {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   if (player.durationSec <= 0) {
     showNotification("Load an audio file first");
     return;
@@ -1179,14 +1179,14 @@ function addNewLoop(): void {
 }
 
 function bindWaveformInteractions(): void {
-  const canvas = document.getElementById("local-audio-waveform") as HTMLCanvasElement | null;
+  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
   if (!canvas || canvas.dataset.bound === "true") {
     return;
   }
   canvas.dataset.bound = "true";
 
   canvas.addEventListener("mousedown", (event) => {
-    const player = ensureLocalAudioPlayerState();
+    const player = ensureEarPracticePlayerState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1244,7 +1244,7 @@ function bindWaveformInteractions(): void {
     if (!dragMode) {
       return;
     }
-    const player = ensureLocalAudioPlayerState();
+    const player = ensureEarPracticePlayerState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1294,9 +1294,9 @@ function bindWaveformInteractions(): void {
 
     if (dragMode === "pending") {
       // Never moved past the click/drag threshold: a plain seek click.
-      const player = ensureLocalAudioPlayerState();
+      const player = ensureEarPracticePlayerState();
       if (player.durationSec > 0) {
-        seekLocalAudioFile(pointerDownRatio * player.durationSec);
+        seekEarPracticePlayerFile(pointerDownRatio * player.durationSec);
       }
     } else if (dragMode === "handle") {
       const activeLoop = getActiveLoop();
@@ -1311,7 +1311,7 @@ function bindWaveformInteractions(): void {
   });
 
   canvas.addEventListener("keydown", (event) => {
-    const player = ensureLocalAudioPlayerState();
+    const player = ensureEarPracticePlayerState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1334,16 +1334,16 @@ function bindWaveformInteractions(): void {
 }
 
 function bindTransportControls(): void {
-  const browseBtn = document.getElementById("local-audio-browse-btn") as HTMLButtonElement | null;
-  const playPauseBtn = document.getElementById("local-audio-play-pause") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("local-audio-stop") as HTMLButtonElement | null;
+  const browseBtn = document.getElementById("ear-practice-player-browse-btn") as HTMLButtonElement | null;
+  const playPauseBtn = document.getElementById("ear-practice-player-play-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("ear-practice-player-stop") as HTMLButtonElement | null;
 
   if (browseBtn && browseBtn.dataset.bound !== "true") {
     browseBtn.dataset.bound = "true";
     browseBtn.addEventListener("click", () => {
       void confirmResetIfNeeded().then((proceed) => {
         if (proceed) {
-          browseLocalAudioFile();
+          browseEarPracticePlayerFile();
         }
       });
     });
@@ -1352,18 +1352,18 @@ function bindTransportControls(): void {
   if (playPauseBtn && playPauseBtn.dataset.bound !== "true") {
     playPauseBtn.dataset.bound = "true";
     playPauseBtn.addEventListener("click", () => {
-      const player = ensureLocalAudioPlayerState();
+      const player = ensureEarPracticePlayerState();
       if (player.durationSec <= 0) {
         return;
       }
-      setLocalAudioTransport(player.playing ? "pause" : "play");
+      setEarPracticePlayerTransport(player.playing ? "pause" : "play");
     });
   }
 
   if (stopBtn && stopBtn.dataset.bound !== "true") {
     stopBtn.dataset.bound = "true";
     stopBtn.addEventListener("click", () => {
-      setLocalAudioTransport("stop");
+      setEarPracticePlayerTransport("stop");
     });
   }
 
@@ -1387,7 +1387,7 @@ function commitEditableField(input: HTMLInputElement): void {
 }
 
 function bindLoopListActions(): void {
-  const list = document.getElementById("local-audio-loop-list");
+  const list = document.getElementById("ear-practice-player-loop-list");
   if (list && list.dataset.bound !== "true") {
     list.dataset.bound = "true";
     list.addEventListener("click", (event) => {
@@ -1395,11 +1395,11 @@ function bindLoopListActions(): void {
       if (!target) {
         return;
       }
-      if (target.closest(".local-audio-loop-undo-btn")) {
+      if (target.closest(".ear-practice-player-loop-undo-btn")) {
         undoDeleteLoop();
         return;
       }
-      const selectBtn = target.closest<HTMLButtonElement>(".local-audio-loop-select-btn");
+      const selectBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-select-btn");
       if (selectBtn) {
         const loopId = selectBtn.dataset.loopId ?? "";
         if (loopId) {
@@ -1407,13 +1407,13 @@ function bindLoopListActions(): void {
         }
         return;
       }
-      const renameBtn = target.closest<HTMLButtonElement>(".local-audio-loop-rename-btn");
+      const renameBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-rename-btn");
       if (renameBtn) {
         editingLoopId = renameBtn.dataset.loopId ?? null;
         renderLoopList();
         return;
       }
-      const deleteBtn = target.closest<HTMLButtonElement>(".local-audio-loop-delete-btn");
+      const deleteBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-delete-btn");
       if (deleteBtn) {
         const loopId = deleteBtn.dataset.loopId ?? "";
         if (loopId) {
@@ -1421,8 +1421,8 @@ function bindLoopListActions(): void {
         }
         return;
       }
-      const rowMain = target.closest<HTMLElement>(".local-audio-loop-row-main");
-      if (rowMain && !target.closest(".local-audio-loop-editable")) {
+      const rowMain = target.closest<HTMLElement>(".ear-practice-player-loop-row-main");
+      if (rowMain && !target.closest(".ear-practice-player-loop-editable")) {
         const loopId = rowMain.dataset.loopId ?? "";
         if (loopId && loopId !== editingLoopId) {
           selectLoop(loopId);
@@ -1436,11 +1436,11 @@ function bindLoopListActions(): void {
     // dropdown instead of a separate row of buttons.
     list.addEventListener("input", (event) => {
       const target = event.target as HTMLElement | null;
-      const nameInput = target?.closest<HTMLInputElement>(".local-audio-loop-name-input");
+      const nameInput = target?.closest<HTMLInputElement>(".ear-practice-player-loop-name-input");
       if (!nameInput || !LOOP_NAME_TEMPLATES.includes(nameInput.value)) {
         return;
       }
-      const player = ensureLocalAudioPlayerState();
+      const player = ensureEarPracticePlayerState();
       const otherNames = player.loops
         .filter((loop) => loop.id !== nameInput.dataset.loopId)
         .map((loop) => loop.name);
@@ -1449,7 +1449,7 @@ function bindLoopListActions(): void {
 
     list.addEventListener("keydown", (event) => {
       const target = event.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".local-audio-loop-editable");
+      const input = target?.closest<HTMLInputElement>(".ear-practice-player-loop-editable");
       if (!input) {
         return;
       }
@@ -1466,7 +1466,7 @@ function bindLoopListActions(): void {
     list.addEventListener("focusout", (event) => {
       const focusEvent = event as FocusEvent;
       const target = focusEvent.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".local-audio-loop-editable");
+      const input = target?.closest<HTMLInputElement>(".ear-practice-player-loop-editable");
       if (!input) {
         return;
       }
@@ -1476,7 +1476,7 @@ function bindLoopListActions(): void {
       // this loop's row — e.g. Tab moving from the name field to the start-
       // time field must NOT re-render mid-tab, or the Tab destination would
       // vanish before the browser gets to focus it.
-      const row = input.closest(".local-audio-loop-row");
+      const row = input.closest(".ear-practice-player-loop-row");
       const nextFocus = focusEvent.relatedTarget;
       const staysInRow = row && nextFocus instanceof Node && row.contains(nextFocus);
       if (!staysInRow) {
@@ -1485,13 +1485,13 @@ function bindLoopListActions(): void {
     });
   }
 
-  const newLoopBtn = document.getElementById("local-audio-new-loop-btn") as HTMLButtonElement | null;
+  const newLoopBtn = document.getElementById("ear-practice-player-new-loop-btn") as HTMLButtonElement | null;
   if (newLoopBtn && newLoopBtn.dataset.bound !== "true") {
     newLoopBtn.dataset.bound = "true";
     newLoopBtn.addEventListener("click", () => addNewLoop());
   }
 
-  const addLoopBtn = document.getElementById("local-audio-add-loop-btn") as HTMLButtonElement | null;
+  const addLoopBtn = document.getElementById("ear-practice-player-add-loop-btn") as HTMLButtonElement | null;
   if (addLoopBtn && addLoopBtn.dataset.bound !== "true") {
     addLoopBtn.dataset.bound = "true";
     addLoopBtn.addEventListener("click", () => addNewLoop());
@@ -1517,7 +1517,7 @@ function hasSupportedAudioExtension(fileName: string): boolean {
 }
 
 /** Loading a new file resets Volume/Balance/Speed/Pitch back to their
- * defaults (see applyLocalAudioFileLoaded) — ask first, unless there's
+ * defaults (see applyEarPracticePlayerFileLoaded) — ask first, unless there's
  * nothing currently loaded to lose. Shared by both load entry points
  * (Browse File and drag-and-drop) so neither can bypass the other's gate.
  *
@@ -1526,7 +1526,7 @@ function hasSupportedAudioExtension(fileName: string): boolean {
  * without re-importing), this reset step becomes unnecessary for a project
  * *switch* — it only still applies to importing a brand-new, unsaved file. */
 async function confirmResetIfNeeded(): Promise<boolean> {
-  const player = ensureLocalAudioPlayerState();
+  const player = ensureEarPracticePlayerState();
   if (!player.filePath) {
     return true;
   }
@@ -1537,7 +1537,7 @@ async function confirmResetIfNeeded(): Promise<boolean> {
 }
 
 function bindDropZone(): void {
-  const dropZone = document.getElementById("local-audio-waveform-wrap");
+  const dropZone = document.getElementById("ear-practice-player-waveform-wrap");
   if (!dropZone || dropZone.dataset.bound === "true") {
     return;
   }
@@ -1569,16 +1569,16 @@ function bindDropZone(): void {
 
       const path = readDroppedFilePath(file);
       if (path) {
-        loadLocalAudioFile(path);
-        appendLog(`local audio load requested (drop, path) → ${path}`);
+        loadEarPracticePlayerFile(path);
+        appendLog(`ear practice player load requested (drop, path) → ${path}`);
         return;
       }
 
       void file
         .arrayBuffer()
         .then((buffer) => {
-          loadLocalAudioFileData(file.name, arrayBufferToBase64(buffer));
-          appendLog(`local audio load requested (drop, data) → ${file.name}`);
+          loadEarPracticePlayerFileData(file.name, arrayBufferToBase64(buffer));
+          appendLog(`ear practice player load requested (drop, data) → ${file.name}`);
         })
         .catch((error) => {
           showNotification("Unable to read dropped file", error instanceof Error ? error.message : String(error));
@@ -1594,7 +1594,7 @@ function bindAllActions(): void {
   bindDropZone();
 }
 
-export function renderLocalAudioPlayerPanel(): void {
+export function renderEarPracticePlayerPanel(): void {
   ensureLoopNameTemplatesDatalist();
   renderFileInfo();
   renderTransportControls();
@@ -1604,7 +1604,7 @@ export function renderLocalAudioPlayerPanel(): void {
   bindAllActions();
 }
 
-export function initializeLocalAudioPlayerPanel(): void {
+export function initializeEarPracticePlayerPanel(): void {
   bindAllActions();
-  renderLocalAudioPlayerPanel();
+  renderEarPracticePlayerPanel();
 }

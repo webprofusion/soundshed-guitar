@@ -9,7 +9,7 @@ import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
-import { applyLocalAudioFileLoaded, applyLocalAudioPlaybackEnded, applyLocalAudioTransportState } from "./localAudioPlayer.js";
+import { applyEarPracticePlayerFileLoaded, applyEarPracticePlayerPlaybackEnded, applyEarPracticePlayerTransportState } from "./earPracticePlayer.js";
 import { getRiffLibrary, postMessage } from "./bridge.js";
 import { refreshEffectPresetsFlyout, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
@@ -975,18 +975,18 @@ export function handleIncomingMessage(message: string): void {
       refreshDemoAudioSelectors();
       break;
     }
-    case "localAudioFileLoaded": {
+    case "earPracticePlayerFileLoaded": {
       const info = payload as { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] };
-      applyLocalAudioFileLoaded(info);
+      applyEarPracticePlayerFileLoaded(info);
       break;
     }
-    case "localAudioTransportState": {
+    case "earPracticePlayerTransportState": {
       const info = payload as { state?: string; positionSec?: number };
-      applyLocalAudioTransportState(info);
+      applyEarPracticePlayerTransportState(info);
       break;
     }
-    case "localAudioPlaybackEnded": {
-      applyLocalAudioPlaybackEnded();
+    case "earPracticePlayerPlaybackEnded": {
+      applyEarPracticePlayerPlaybackEnded();
       break;
     }
     case "resourceCleanupResult": {

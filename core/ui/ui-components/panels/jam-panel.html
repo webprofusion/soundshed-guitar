@@ -7,7 +7,7 @@
                 <button id="jam-backing-tab-favorites" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Favourites</button>
                 <button id="jam-section-scales" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Scales</button>
                 <button id="jam-section-riffs" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Riff Library</button>
-                <button id="jam-section-player" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Audio Player</button>
+                <button id="jam-section-player" class="tone-sharing-nav-btn tab-btn tab-btn-vertical" type="button">Ear Practice Audio Player</button>
               </div>
               <p class="tone-sharing-share-hint">Find a backing track, pin favourites, and keep a floating YouTube player open while using the rest of the app.</p>
             </aside>
@@ -66,72 +66,72 @@
                 </div>
               </div>
               <div class="jam-section-panel" id="jam-section-panel-player" hidden>
-                <div class="local-audio-player-panel">
-                  <div class="settings-section local-audio-header">
-                    <div class="local-audio-titlebar">
-                      <h3>Audio Player</h3>
+                <div class="ear-practice-player-panel">
+                  <div class="settings-section ear-practice-player-header">
+                    <div class="ear-practice-player-titlebar">
+                      <h3>Ear Practice Audio Player</h3>
                     </div>
                   </div>
 
                   <!-- The waveform card is also the drop target for opening a
-                       file — see bindDropZone() in localAudioPlayer.ts, bound
-                       to #local-audio-waveform-wrap. File info and Browse File
+                       file — see bindDropZone() in earPracticePlayer.ts, bound
+                       to #ear-practice-player-waveform-wrap. File info and Browse File
                        are overlay controls anchored to the wrap's corners so
                        they never sit on top of the drawn waveform trace. -->
-                  <div class="settings-section local-audio-waveform-section">
-                    <div class="local-audio-waveform-wrap" id="local-audio-waveform-wrap">
-                      <canvas id="local-audio-waveform" class="local-audio-waveform" tabindex="0"></canvas>
-                      <div class="local-audio-file-info" id="local-audio-file-info">No file loaded</div>
-                      <button id="local-audio-browse-btn" class="local-audio-browse-btn" type="button">Browse File...</button>
-                      <button id="local-audio-add-loop-btn" class="local-audio-add-loop-btn" type="button" hidden>+ Add Loop</button>
+                  <div class="settings-section ear-practice-player-waveform-section">
+                    <div class="ear-practice-player-waveform-wrap" id="ear-practice-player-waveform-wrap">
+                      <canvas id="ear-practice-player-waveform" class="ear-practice-player-waveform" tabindex="0"></canvas>
+                      <div class="ear-practice-player-file-info" id="ear-practice-player-file-info">No file loaded</div>
+                      <button id="ear-practice-player-browse-btn" class="ear-practice-player-browse-btn" type="button">Browse File...</button>
+                      <button id="ear-practice-player-add-loop-btn" class="ear-practice-player-add-loop-btn" type="button" hidden>+ Add Loop</button>
                     </div>
                     <!-- Song-section quick-pick suggestions for loop names, shared by every
                          name/rename field in the loop list below via list=. Populated once
                          in JS from LOOP_NAME_TEMPLATES. -->
-                    <datalist id="local-audio-loop-name-templates"></datalist>
+                    <datalist id="ear-practice-player-loop-name-templates"></datalist>
                   </div>
 
-                  <div class="local-audio-body">
-                    <div class="settings-section local-audio-loop-list-col">
-                      <div class="local-audio-loop-list-header">
+                  <div class="ear-practice-player-body">
+                    <div class="settings-section ear-practice-player-loop-list-col">
+                      <div class="ear-practice-player-loop-list-header">
                         <h3>Loops</h3>
-                        <button id="local-audio-new-loop-btn" type="button" class="secondary">+ New Loop</button>
+                        <button id="ear-practice-player-new-loop-btn" type="button" class="secondary">+ New Loop</button>
                       </div>
-                      <div class="results equipment-library-results local-audio-loop-list" id="local-audio-loop-list">
+                      <div class="results equipment-library-results ear-practice-player-loop-list" id="ear-practice-player-loop-list">
                         <!-- Loop entries rendered by JS -->
                       </div>
                     </div>
 
-                    <div class="settings-section local-audio-transport-col">
-                      <div class="local-audio-transport-buttons">
-                        <button id="local-audio-play-pause" type="button" class="local-audio-icon-btn" disabled>▶</button>
-                        <button id="local-audio-stop" type="button" class="local-audio-icon-btn" disabled>■</button>
-                        <span class="local-audio-loop-status" id="local-audio-loop-status" hidden></span>
+                    <div class="settings-section ear-practice-player-transport-col">
+                      <div class="ear-practice-player-transport-buttons">
+                        <button id="ear-practice-player-play-pause" type="button" class="ear-practice-player-icon-btn" disabled>▶</button>
+                        <button id="ear-practice-player-stop" type="button" class="ear-practice-player-icon-btn" disabled>■</button>
+                        <span class="ear-practice-player-loop-status" id="ear-practice-player-loop-status" hidden></span>
                       </div>
                       <!-- All four faders share one normalized 0-1000 slider domain
-                           (see FADER_SPECS/faderValueToSliderPos in localAudioPlayer.ts) so
+                           (see FADER_SPECS/faderValueToSliderPos in earPracticePlayer.ts) so
                            each control's default value always lands dead center, regardless
                            of how asymmetric its real min/max range is. Double-click a slider
                            to reset it; the adjoining text field accepts a typed exact value. -->
-                      <div class="settings-row local-audio-slider-row">
-                        <label for="local-audio-volume">Volume</label>
-                        <input type="range" id="local-audio-volume" class="local-audio-fader-slider" min="0" max="1000" step="1" value="500" />
-                        <input type="text" id="local-audio-volume-value" class="local-audio-slider-value" value="100%" inputmode="decimal" />
+                      <div class="settings-row ear-practice-player-slider-row">
+                        <label for="ear-practice-player-volume">Volume</label>
+                        <input type="range" id="ear-practice-player-volume" class="ear-practice-player-fader-slider" min="0" max="1000" step="1" value="500" />
+                        <input type="text" id="ear-practice-player-volume-value" class="ear-practice-player-slider-value" value="100%" inputmode="decimal" />
                       </div>
-                      <div class="settings-row local-audio-slider-row">
-                        <label for="local-audio-balance">Balance</label>
-                        <input type="range" id="local-audio-balance" class="local-audio-fader-slider" min="0" max="1000" step="1" value="500" />
-                        <input type="text" id="local-audio-balance-value" class="local-audio-slider-value" value="C" />
+                      <div class="settings-row ear-practice-player-slider-row">
+                        <label for="ear-practice-player-balance">Balance</label>
+                        <input type="range" id="ear-practice-player-balance" class="ear-practice-player-fader-slider" min="0" max="1000" step="1" value="500" />
+                        <input type="text" id="ear-practice-player-balance-value" class="ear-practice-player-slider-value" value="C" />
                       </div>
-                      <div class="settings-row local-audio-slider-row">
-                        <label for="local-audio-speed">Speed</label>
-                        <input type="range" id="local-audio-speed" class="local-audio-fader-slider" min="0" max="1000" step="1" value="500" />
-                        <input type="text" id="local-audio-speed-value" class="local-audio-slider-value" value="100%" inputmode="decimal" />
+                      <div class="settings-row ear-practice-player-slider-row">
+                        <label for="ear-practice-player-speed">Speed</label>
+                        <input type="range" id="ear-practice-player-speed" class="ear-practice-player-fader-slider" min="0" max="1000" step="1" value="500" />
+                        <input type="text" id="ear-practice-player-speed-value" class="ear-practice-player-slider-value" value="100%" inputmode="decimal" />
                       </div>
-                      <div class="settings-row local-audio-slider-row">
-                        <label for="local-audio-pitch">Pitch</label>
-                        <input type="range" id="local-audio-pitch" class="local-audio-fader-slider" min="0" max="1000" step="1" value="500" />
-                        <input type="text" id="local-audio-pitch-value" class="local-audio-slider-value" value="0.0 st" inputmode="decimal" />
+                      <div class="settings-row ear-practice-player-slider-row">
+                        <label for="ear-practice-player-pitch">Pitch</label>
+                        <input type="range" id="ear-practice-player-pitch" class="ear-practice-player-fader-slider" min="0" max="1000" step="1" value="500" />
+                        <input type="text" id="ear-practice-player-pitch-value" class="ear-practice-player-slider-value" value="0.0 st" inputmode="decimal" />
                       </div>
                       <div class="settings-hint">Speed and pitch are independent — changing one never affects the other.</div>
                     </div>

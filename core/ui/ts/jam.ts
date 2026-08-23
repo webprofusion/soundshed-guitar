@@ -8,7 +8,7 @@ import { getApiBaseUrl } from "./toneSharingPanel.js";
 import { isJamEnabled } from "./buildFlags.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
 import { renderRiffLibraryPanel } from "./riffLibrary.js";
-import { renderLocalAudioPlayerPanel } from "./localAudioPlayer.js";
+import { renderEarPracticePlayerPanel } from "./earPracticePlayer.js";
 import { getXMarkSvg } from "./iconAssets.js";
 
 const API_KEY_SETTING = "jam.youtubeApiKey";
@@ -239,8 +239,8 @@ function isRiffLibraryFeatureEnabled(): boolean {
   return isFeatureEnabled(Features.RiffLibrary);
 }
 
-function isLocalAudioPlayerFeatureEnabled(): boolean {
-  return isFeatureEnabled(Features.LocalAudioPlayer);
+function isEarPracticePlayerFeatureEnabled(): boolean {
+  return isFeatureEnabled(Features.EarPracticePlayer);
 }
 
 function isScalesFeatureEnabled(): boolean {
@@ -257,7 +257,7 @@ function resolveJamSection(preferredSection: JamSectionId): JamSectionId {
       return isScalesFeatureEnabled();
     }
     if (sectionId === "player") {
-      return isLocalAudioPlayerFeatureEnabled();
+      return isEarPracticePlayerFeatureEnabled();
     }
     return isBackingTracksFeatureEnabled();
   });
@@ -304,7 +304,7 @@ function setActiveSection(section: JamSectionId): void {
   }
 
   if (jam.activeSection === "player") {
-    renderLocalAudioPlayerPanel();
+    renderEarPracticePlayerPanel();
     return;
   }
 
@@ -575,7 +575,7 @@ export function renderJamPanel(): void {
   const backingTracksEnabled = isBackingTracksFeatureEnabled();
   const scalesEnabled = isScalesFeatureEnabled();
   const riffLibraryEnabled = isRiffLibraryFeatureEnabled();
-  const localAudioPlayerEnabled = isLocalAudioPlayerFeatureEnabled();
+  const earPracticePlayerEnabled = isEarPracticePlayerFeatureEnabled();
 
   if (searchInput && searchInput.value !== jam.query) {
     searchInput.value = jam.query;
@@ -583,7 +583,7 @@ export function renderJamPanel(): void {
 
   scalesSectionButton?.toggleAttribute("hidden", !scalesEnabled);
   riffsSectionButton?.toggleAttribute("hidden", !riffLibraryEnabled);
-  playerSectionButton?.toggleAttribute("hidden", !localAudioPlayerEnabled);
+  playerSectionButton?.toggleAttribute("hidden", !earPracticePlayerEnabled);
   searchTab?.toggleAttribute("hidden", !backingTracksEnabled);
   favoritesTab?.toggleAttribute("hidden", !backingTracksEnabled);
 
@@ -599,8 +599,8 @@ export function renderJamPanel(): void {
   scalesPanel?.toggleAttribute("hidden", resolvedSection !== "scales" || !scalesEnabled);
   riffsPanel?.classList.toggle("active", resolvedSection === "riffs" && riffLibraryEnabled);
   riffsPanel?.toggleAttribute("hidden", resolvedSection !== "riffs" || !riffLibraryEnabled);
-  playerPanel?.classList.toggle("active", resolvedSection === "player" && localAudioPlayerEnabled);
-  playerPanel?.toggleAttribute("hidden", resolvedSection !== "player" || !localAudioPlayerEnabled);
+  playerPanel?.classList.toggle("active", resolvedSection === "player" && earPracticePlayerEnabled);
+  playerPanel?.toggleAttribute("hidden", resolvedSection !== "player" || !earPracticePlayerEnabled);
   searchPanel?.classList.toggle("active", resolvedTab === "search" && backingTracksEnabled);
   searchPanel?.toggleAttribute("hidden", resolvedTab !== "search" || !backingTracksEnabled);
   favoritesPanel?.classList.toggle("active", resolvedTab === "favorites" && backingTracksEnabled);
@@ -612,7 +612,7 @@ export function renderJamPanel(): void {
   }
 
   if (resolvedSection === "player") {
-    renderLocalAudioPlayerPanel();
+    renderEarPracticePlayerPanel();
     return;
   }
 

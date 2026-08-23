@@ -1,4 +1,4 @@
-#include "controller/LocalAudioPlayerService.h"
+#include "controller/EarPracticePlayerService.h"
 
 #include "util/AudioDecoder.h"
 #include "util/FileIO.h"
@@ -70,7 +70,7 @@ constexpr double kHalfPi = 1.5707963267948966;
 
 } // namespace
 
-LocalAudioPlayerService::LocalAudioPlayerService(IPluginHost& host,
+EarPracticePlayerService::EarPracticePlayerService(IPluginHost& host,
                                                  std::mutex& dspMutex,
                                                  std::function<void(const std::string&, const std::string&)> reportError,
                                                  std::function<void(const std::string&)> sendMessage)
@@ -81,12 +81,12 @@ LocalAudioPlayerService::LocalAudioPlayerService(IPluginHost& host,
 {
 }
 
-LocalAudioPlayerService::~LocalAudioPlayerService()
+EarPracticePlayerService::~EarPracticePlayerService()
 {
     Shutdown();
 }
 
-void LocalAudioPlayerService::Prepare(double sampleRate, int maxBlockSize)
+void EarPracticePlayerService::Prepare(double sampleRate, int maxBlockSize)
 {
     mSampleRate.store(sampleRate, std::memory_order_release);
     mMaxBlockSize = std::max(maxBlockSize, 0);
@@ -120,7 +120,7 @@ void LocalAudioPlayerService::Prepare(double sampleRate, int maxBlockSize)
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::Shutdown()
+void EarPracticePlayerService::Shutdown()
 {
     mRenderThreadQuit.store(true, std::memory_order_release);
     mRenderWake.notify_all();
@@ -129,7 +129,7 @@ void LocalAudioPlayerService::Shutdown()
     mRenderThreadRunning.store(false, std::memory_order_release);
 }
 
-void LocalAudioPlayerService::LoadFile(const std::string& path)
+void EarPracticePlayerService::LoadFile(const std::string& path)
 {
     const auto bytes = util::ReadFileBytes(util::PathFromUtf8(path));
     if (bytes.empty())
@@ -141,7 +141,7 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
     LoadDecodedBytes(bytes, path);
 }
 
-void LocalAudioPlayerService::LoadFileFromBytes(const std::vector<std::uint8_t>& bytes,
+void EarPracticePlayerService::LoadFileFromBytes(const std::vector<std::uint8_t>& bytes,
                                                 const std::string& displayName)
 {
     if (bytes.empty())
@@ -153,7 +153,7 @@ void LocalAudioPlayerService::LoadFileFromBytes(const std::vector<std::uint8_t>&
     LoadDecodedBytes(bytes, displayName);
 }
 
-void LocalAudioPlayerService::LoadDecodedBytes(const std::vector<std::uint8_t>& bytes,
+void EarPracticePlayerService::LoadDecodedBytes(const std::vector<std::uint8_t>& bytes,
                                                const std::string& displayPath)
 {
     const auto decoded = util::DecodeAudioBytes(bytes);
@@ -234,7 +234,7 @@ void LocalAudioPlayerService::LoadDecodedBytes(const std::vector<std::uint8_t>& 
         : 0.0;
 
     nlohmann::json msg;
-    msg["type"] = "localAudioFileLoaded";
+    msg["type"] = "earPracticePlayerFileLoaded";
     msg["path"] = displayPath;
     msg["title"] = buffer->title;
     msg["durationSec"] = durationSec;
@@ -245,7 +245,7 @@ void LocalAudioPlayerService::LoadDecodedBytes(const std::vector<std::uint8_t>& 
     SendTransportStateToUI();
 }
 
-void LocalAudioPlayerService::Play()
+void EarPracticePlayerService::Play()
 {
     if (!std::atomic_load_explicit(&mBuffer, std::memory_order_acquire))
         return;
@@ -254,14 +254,14 @@ void LocalAudioPlayerService::Play()
     SendTransportStateToUI();
 }
 
-void LocalAudioPlayerService::Pause()
+void EarPracticePlayerService::Pause()
 {
     mState.store(static_cast<int>(PlaybackState::Paused), std::memory_order_release);
     mRenderWake.notify_all();
     SendTransportStateToUI();
 }
 
-void LocalAudioPlayerService::Stop()
+void EarPracticePlayerService::Stop()
 {
     mState.store(static_cast<int>(PlaybackState::Stopped), std::memory_order_release);
     mPendingSeekSeconds.store(0.0, std::memory_order_relaxed);
@@ -271,7 +271,7 @@ void LocalAudioPlayerService::Stop()
     SendTransportStateToUI();
 }
 
-void LocalAudioPlayerService::SeekSeconds(double seconds)
+void EarPracticePlayerService::SeekSeconds(double seconds)
 {
     mPendingSeekSeconds.store(std::max(0.0, seconds), std::memory_order_relaxed);
     mSeekPending.store(true, std::memory_order_release);
@@ -279,21 +279,21 @@ void LocalAudioPlayerService::SeekSeconds(double seconds)
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::SetSpeed(double ratio)
+void EarPracticePlayerService::SetSpeed(double ratio)
 {
     mSpeed.store(std::clamp(ratio, kMinSpeed, kMaxSpeed), std::memory_order_relaxed);
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::SetPitchSemitones(double semitones)
+void EarPracticePlayerService::SetPitchSemitones(double semitones)
 {
     mPitchSemitones.store(std::clamp(semitones, kMinPitchSemitones, kMaxPitchSemitones), std::memory_order_relaxed);
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::SetGain(double linearGain)
+void EarPracticePlayerService::SetGain(double linearGain)
 {
     // Deliberately does NOT bump mParamGeneration / flush the ring: gain is
     // applied at mix time on the audio thread (RenderPostChain), so a
@@ -302,13 +302,13 @@ void LocalAudioPlayerService::SetGain(double linearGain)
     mGain.store(std::max(0.0, linearGain), std::memory_order_relaxed);
 }
 
-void LocalAudioPlayerService::SetBalance(double balance)
+void EarPracticePlayerService::SetBalance(double balance)
 {
     // Same rationale as SetGain: applied directly at mix time, no flush.
     mBalance.store(std::clamp(balance, -1.0, 1.0), std::memory_order_relaxed);
 }
 
-void LocalAudioPlayerService::SetLoopRegion(double startSec, double endSec)
+void EarPracticePlayerService::SetLoopRegion(double startSec, double endSec)
 {
     auto buffer = std::atomic_load_explicit(&mBuffer, std::memory_order_acquire);
     const double sr = mSampleRate.load(std::memory_order_relaxed);
@@ -329,21 +329,21 @@ void LocalAudioPlayerService::SetLoopRegion(double startSec, double endSec)
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::ClearLoopRegion()
+void EarPracticePlayerService::ClearLoopRegion()
 {
     std::atomic_store_explicit(&mActiveLoop, std::shared_ptr<ActiveLoopBounds>{}, std::memory_order_release);
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 }
 
-void LocalAudioPlayerService::SetLoopingEnabled(bool enabled)
+void EarPracticePlayerService::SetLoopingEnabled(bool enabled)
 {
     mLoopingEnabled.store(enabled, std::memory_order_release);
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 }
 
-bool LocalAudioPlayerService::IsLoaded() const
+bool EarPracticePlayerService::IsLoaded() const
 {
     return std::atomic_load_explicit(&mBuffer, std::memory_order_acquire) != nullptr;
 }
@@ -352,7 +352,7 @@ bool LocalAudioPlayerService::IsLoaded() const
 // Audio thread
 // ════════════════════════════════════════════════════════════════════
 
-void LocalAudioPlayerService::RenderPostChain(float** outputs, int numSamples)
+void EarPracticePlayerService::RenderPostChain(float** outputs, int numSamples)
 {
     if (!outputs || !outputs[0] || !outputs[1] || numSamples <= 0)
         return;
@@ -392,18 +392,18 @@ void LocalAudioPlayerService::RenderPostChain(float** outputs, int numSamples)
 // Message thread — idle polling
 // ════════════════════════════════════════════════════════════════════
 
-void LocalAudioPlayerService::OnIdle()
+void EarPracticePlayerService::OnIdle()
 {
     if (mPlaybackEndedPending.exchange(false, std::memory_order_acq_rel))
     {
         nlohmann::json msg;
-        msg["type"] = "localAudioPlaybackEnded";
+        msg["type"] = "earPracticePlayerPlaybackEnded";
         mSendMessage(msg.dump());
     }
     SendTransportStateToUI();
 }
 
-void LocalAudioPlayerService::SendTransportStateToUI()
+void EarPracticePlayerService::SendTransportStateToUI()
 {
     auto buffer = std::atomic_load_explicit(&mBuffer, std::memory_order_acquire);
     const int state = mState.load(std::memory_order_acquire);
@@ -463,7 +463,7 @@ void LocalAudioPlayerService::SendTransportStateToUI()
     const int clampedState = std::clamp(state, 0, 2);
 
     nlohmann::json msg;
-    msg["type"] = "localAudioTransportState";
+    msg["type"] = "earPracticePlayerTransportState";
     msg["state"] = kStateNames[clampedState];
     msg["positionSec"] = positionSec;
     mSendMessage(msg.dump());
@@ -473,7 +473,7 @@ void LocalAudioPlayerService::SendTransportStateToUI()
 // Background render thread
 // ════════════════════════════════════════════════════════════════════
 
-void LocalAudioPlayerService::ApplyPitchToStretch(double semitones)
+void EarPracticePlayerService::ApplyPitchToStretch(double semitones)
 {
     const double sr = mSampleRate.load(std::memory_order_relaxed);
     if (sr <= 0.0)
@@ -482,7 +482,7 @@ void LocalAudioPlayerService::ApplyPitchToStretch(double semitones)
     mStretch.setTransposeSemitones(static_cast<float>(semitones), tonalityLimit);
 }
 
-void LocalAudioPlayerService::EnsureRenderScratchCapacity(int numInFrames, int numOutFrames)
+void EarPracticePlayerService::EnsureRenderScratchCapacity(int numInFrames, int numOutFrames)
 {
     if (static_cast<int>(mSourceScratchL.size()) < numInFrames)
     {
@@ -496,7 +496,7 @@ void LocalAudioPlayerService::EnsureRenderScratchCapacity(int numInFrames, int n
     }
 }
 
-void LocalAudioPlayerService::EnsureFadeCarryCapacity(std::size_t frames)
+void EarPracticePlayerService::EnsureFadeCarryCapacity(std::size_t frames)
 {
     if (mFadeCarryL.size() < frames)
     {
@@ -505,7 +505,7 @@ void LocalAudioPlayerService::EnsureFadeCarryCapacity(std::size_t frames)
     }
 }
 
-void LocalAudioPlayerService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buffer,
+void EarPracticePlayerService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buffer,
                                              std::size_t fromFrame, std::size_t toFrame)
 {
     mFadeCarryCount = 0;
@@ -543,7 +543,7 @@ void LocalAudioPlayerService::BeginCrossfade(const std::shared_ptr<TrackBuffer>&
     mFadeCarryPos = 0;
 }
 
-std::size_t LocalAudioPlayerService::DrainFadeCarry(float* outL, float* outR, std::size_t maxCount)
+std::size_t EarPracticePlayerService::DrainFadeCarry(float* outL, float* outR, std::size_t maxCount)
 {
     if (mFadeCarryPos >= mFadeCarryCount)
         return 0;
@@ -563,7 +563,7 @@ std::size_t LocalAudioPlayerService::DrainFadeCarry(float* outL, float* outR, st
     return n;
 }
 
-int LocalAudioPlayerService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer,
+int EarPracticePlayerService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer,
                                               float* outL, float* outR,
                                               std::size_t& cursor, int numFrames)
 {
@@ -625,7 +625,7 @@ int LocalAudioPlayerService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>
     return written;
 }
 
-void LocalAudioPlayerService::RenderChunk(const std::shared_ptr<TrackBuffer>& buffer, std::size_t& cursor)
+void EarPracticePlayerService::RenderChunk(const std::shared_ptr<TrackBuffer>& buffer, std::size_t& cursor)
 {
     const double speed = std::clamp(mSpeed.load(std::memory_order_relaxed), kMinSpeed, kMaxSpeed);
     const int roomFrames = static_cast<int>(std::min<std::size_t>(mOutputRing->AvailableToWrite(),
@@ -670,7 +670,7 @@ void LocalAudioPlayerService::RenderChunk(const std::shared_ptr<TrackBuffer>& bu
     }
 }
 
-void LocalAudioPlayerService::RenderThreadLoop()
+void EarPracticePlayerService::RenderThreadLoop()
 {
     std::shared_ptr<TrackBuffer> lastSeenBuffer;
     std::size_t localCursor = 0;
@@ -757,7 +757,7 @@ void LocalAudioPlayerService::RenderThreadLoop()
         // Only actually produce audio while playing. Rendering ahead while
         // Stopped/Paused would let a track/loop-region shorter than the
         // ring's ~1.5s lookahead hit "exhausted" before the user ever
-        // pressed Play — firing a spurious localAudioPlaybackEnded and then
+        // pressed Play — firing a spurious earPracticePlayerPlaybackEnded and then
         // wrapping the cursor back to 0 to keep filling, which would make a
         // short clip audibly repeat itself the first time it's actually
         // played. Resync work above (seek/loop/pitch/speed) still applies

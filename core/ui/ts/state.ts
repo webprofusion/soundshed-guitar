@@ -286,7 +286,7 @@ export const uiState: UiState = {
     hasAudio: false,
     waveformPeaks: [],
   },
-  localAudioPlayer: {
+  earPracticePlayer: {
     filePath: "",
     title: "",
     durationSec: 0,

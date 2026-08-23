@@ -260,63 +260,63 @@ export function removeCompositePreset(id: string): void {
   appendLog(`removeCompositePreset → ${id}`);
 }
 
-// ── Local Audio Player (Jam panel) ────────────────────────────────────────────
+// ── Ear Practice Player (Jam panel) ────────────────────────────────────────────
 // The engine has no concept of a loop library — only the currently-active
 // loop's bounds and whether looping is on. Loop add/rename/delete/select are
-// pure UI state (see localAudioPlayer.ts) and never round-trip through these.
+// pure UI state (see earPracticePlayer.ts) and never round-trip through these.
 
-export function browseLocalAudioFile(): void {
-  postMessage({ type: "browseLocalAudioFile" });
-  appendLog("browseLocalAudioFile");
+export function browseEarPracticePlayerFile(): void {
+  postMessage({ type: "browseEarPracticePlayerFile" });
+  appendLog("browseEarPracticePlayerFile");
 }
 
-export function loadLocalAudioFile(path: string): void {
-  postMessage({ type: "loadLocalAudioFile", path });
-  appendLog(`loadLocalAudioFile → ${path}`);
+export function loadEarPracticePlayerFile(path: string): void {
+  postMessage({ type: "loadEarPracticePlayerFile", path });
+  appendLog(`loadEarPracticePlayerFile → ${path}`);
 }
 
 /** For a file dropped on the waveform: WebView2 never exposes a dropped
  * File's real path (that's Electron-only), so the caller reads its bytes
  * via file.arrayBuffer() and sends them here as base64 instead. */
-export function loadLocalAudioFileData(fileName: string, dataBase64: string): void {
-  postMessage({ type: "loadLocalAudioFileData", fileName, data: dataBase64 });
-  appendLog(`loadLocalAudioFileData → ${fileName} (${dataBase64.length} b64 chars)`);
+export function loadEarPracticePlayerFileData(fileName: string, dataBase64: string): void {
+  postMessage({ type: "loadEarPracticePlayerFileData", fileName, data: dataBase64 });
+  appendLog(`loadEarPracticePlayerFileData → ${fileName} (${dataBase64.length} b64 chars)`);
 }
 
-export function setLocalAudioTransport(action: "play" | "pause" | "stop"): void {
-  postMessage({ type: "setLocalAudioTransport", action });
-  appendLog(`setLocalAudioTransport → ${action}`);
+export function setEarPracticePlayerTransport(action: "play" | "pause" | "stop"): void {
+  postMessage({ type: "setEarPracticePlayerTransport", action });
+  appendLog(`setEarPracticePlayerTransport → ${action}`);
 }
 
-export function seekLocalAudioFile(seconds: number): void {
-  postMessage({ type: "seekLocalAudioFile", seconds });
+export function seekEarPracticePlayerFile(seconds: number): void {
+  postMessage({ type: "seekEarPracticePlayerFile", seconds });
 }
 
-export function setLocalAudioSpeed(ratio: number): void {
-  postMessage({ type: "setLocalAudioSpeed", ratio });
+export function setEarPracticePlayerSpeed(ratio: number): void {
+  postMessage({ type: "setEarPracticePlayerSpeed", ratio });
 }
 
-export function setLocalAudioPitch(semitones: number): void {
-  postMessage({ type: "setLocalAudioPitch", semitones });
+export function setEarPracticePlayerPitch(semitones: number): void {
+  postMessage({ type: "setEarPracticePlayerPitch", semitones });
 }
 
-export function setLocalAudioGain(gain: number): void {
-  postMessage({ type: "setLocalAudioGain", gain });
+export function setEarPracticePlayerGain(gain: number): void {
+  postMessage({ type: "setEarPracticePlayerGain", gain });
 }
 
-export function setLocalAudioBalance(balance: number): void {
-  postMessage({ type: "setLocalAudioBalance", balance });
+export function setEarPracticePlayerBalance(balance: number): void {
+  postMessage({ type: "setEarPracticePlayerBalance", balance });
 }
 
 /** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
-export function setLocalAudioLoopRegion(region: { startSec: number; endSec: number } | null): void {
+export function setEarPracticePlayerLoopRegion(region: { startSec: number; endSec: number } | null): void {
   if (region) {
-    postMessage({ type: "setLocalAudioLoopRegion", startSec: region.startSec, endSec: region.endSec });
+    postMessage({ type: "setEarPracticePlayerLoopRegion", startSec: region.startSec, endSec: region.endSec });
   } else {
-    postMessage({ type: "setLocalAudioLoopRegion" });
+    postMessage({ type: "setEarPracticePlayerLoopRegion" });
   }
 }
 
-export function setLocalAudioLooping(enabled: boolean): void {
-  postMessage({ type: "setLocalAudioLooping", enabled });
+export function setEarPracticePlayerLooping(enabled: boolean): void {
+  postMessage({ type: "setEarPracticePlayerLooping", enabled });
 }

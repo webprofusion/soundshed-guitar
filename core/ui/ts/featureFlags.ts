@@ -9,7 +9,7 @@ export const Features = {
   ToneSharing: "toneSharing",
   AiToneSearch: "aiToneSearch",
   Jam: "jam",
-  LocalAudioPlayer: "localAudioPlayer",
+  EarPracticePlayer: "earPracticePlayer",
   ExperimentalEffects: "experimentalEffects",
   CustomEffects: "customEffects",
   MultiRig: "multiRig",
@@ -86,9 +86,9 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     defaultEnabled: true,
   },
   {
-    id: Features.LocalAudioPlayer,
-    key: "features.localAudioPlayer.enabled",
-    label: "Local Audio Player",
+    id: Features.EarPracticePlayer,
+    key: "features.earPracticePlayer.enabled",
+    label: "Ear Practice Audio Player",
     description: "Shows the Jam panel's local backing-track player with tempo/pitch control and named loop sections.",
     defaultEnabled: true,
   },
@@ -179,7 +179,7 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
     id: "core",
     title: "Core Features",
     description: "These are the default features enabled in the app which you can optionally switch off.",
-    featureIds: [Features.Tone3000, Features.ResourceLibrary, Features.RiffLibrary, Features.ToneSharing, Features.Jam, Features.LocalAudioPlayer],
+    featureIds: [Features.Tone3000, Features.ResourceLibrary, Features.RiffLibrary, Features.ToneSharing, Features.Jam, Features.EarPracticePlayer],
   },
   {
     id: "power",
@@ -192,7 +192,7 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
 const FEATURE_MAP = new Map<FeatureId, FeatureDefinition>(FEATURE_DEFINITIONS.map((feature) => [feature.id, feature]));
 const ADVANCED_LIBRARY_FEATURE_IDS: FeatureId[] = [Features.CompositeEffects, Features.BlendTools, Features.EffectLayout];
 const LIBRARY_TAB_FEATURES: FeatureId[] = [Features.Tone3000, Features.ResourceLibrary, ...ADVANCED_LIBRARY_FEATURE_IDS];
-const JAM_PANEL_FEATURE_IDS: FeatureId[] = [Features.Jam, Features.RiffLibrary, Features.LocalAudioPlayer];
+const JAM_PANEL_FEATURE_IDS: FeatureId[] = [Features.Jam, Features.RiffLibrary, Features.EarPracticePlayer];
 
 function getFeatureDefinition(featureId: FeatureId): FeatureDefinition {
   const definition = FEATURE_MAP.get(featureId);

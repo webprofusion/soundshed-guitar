@@ -1,6 +1,6 @@
 #pragma once
 
-// LocalAudioPlayerService — plays a local backing-track audio file, mixed
+// EarPracticePlayerService — plays a local backing-track audio file, mixed
 // into the main output bus so a guitarist can jam along with it.
 //
 // Mirrors DemoPreviewService's structure (full-buffer-preload playback,
@@ -48,17 +48,17 @@
 namespace guitarfx
 {
 
-class LocalAudioPlayerService
+class EarPracticePlayerService
 {
 public:
-    LocalAudioPlayerService(IPluginHost& host,
+    EarPracticePlayerService(IPluginHost& host,
                             std::mutex& dspMutex,
                             std::function<void(const std::string&, const std::string&)> reportError,
                             std::function<void(const std::string&)> sendMessage);
-    ~LocalAudioPlayerService();
+    ~EarPracticePlayerService();
 
-    LocalAudioPlayerService(const LocalAudioPlayerService&) = delete;
-    LocalAudioPlayerService& operator=(const LocalAudioPlayerService&) = delete;
+    EarPracticePlayerService(const EarPracticePlayerService&) = delete;
+    EarPracticePlayerService& operator=(const EarPracticePlayerService&) = delete;
 
     /// Starts the background render thread (once) and creates the ring
     /// buffer (once, sized generously so it never needs to be resized while
@@ -111,18 +111,18 @@ public:
     void RenderPostChain(float** outputs, int numSamples);
 
     /// Message thread, called from the OnIdle() hub at a divided-down rate
-    /// (~10-15 Hz). Sends localAudioTransportState / localAudioPlaybackEnded.
+    /// (~10-15 Hz). Sends earPracticePlayerTransportState / earPracticePlayerPlaybackEnded.
     void OnIdle();
 
     [[nodiscard]] bool IsLoaded() const;
 
 private:
-    // Grants the unit test (LocalAudioPlayerCrossfadeTests.cpp) direct access
+    // Grants the unit test (EarPracticePlayerCrossfadeTests.cpp) direct access
     // to ReadSourceWindow()/BeginCrossfade() and the private TrackBuffer type
     // so the loop-wrap/seek crossfade logic can be exercised synchronously
     // with a synthetic buffer, without needing real file I/O or the
     // background render thread running.
-    friend struct LocalAudioPlayerServiceTestAccess;
+    friend struct EarPracticePlayerServiceTestAccess;
 
     struct StereoFrame
     {

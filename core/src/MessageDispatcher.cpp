@@ -33,7 +33,7 @@ void MessageDispatcher::Dispatch(PluginController& c, const std::string& jsonMes
     if (DispatchMixerAndMonitoring(c, msg, type)) return;
     if (DispatchLibraryAndComposite(c, msg, type)) return;
     if (DispatchAutomation(c, msg, type)) return;
-    if (DispatchAudioPlayer(c, msg, type)) return;
+    if (DispatchEarPracticePlayer(c, msg, type)) return;
 
     // Unknown message type — silently ignored
 }
