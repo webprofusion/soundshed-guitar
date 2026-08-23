@@ -7528,10 +7528,41 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   dropdown.innerHTML = dropdownHtml;
   document.body.appendChild(dropdown);
 
-  // Position dropdown near the button
-  const buttonRect = buttonElement.getBoundingClientRect();
-  dropdown.style.left = `${buttonRect.left}px`;
-  dropdown.style.top = `${buttonRect.bottom + 5}px`;
+  const positionDropdown = (): void => {
+    const buttonRect = buttonElement.getBoundingClientRect();
+    const margin = 8;
+    const appliedZoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
+    const uiZoom = Number.isFinite(appliedZoom) && appliedZoom > 0 ? appliedZoom : 1;
+    const viewportWidth = window.innerWidth / uiZoom;
+    const viewportHeight = window.innerHeight / uiZoom;
+
+    dropdown.style.maxWidth = `${Math.min(300, viewportWidth - margin * 2)}px`;
+    dropdown.style.maxHeight = `${Math.min(500, viewportHeight - margin * 2)}px`;
+    const dropdownWidth = dropdown.offsetWidth;
+    const dropdownHeight = dropdown.offsetHeight;
+    const left = Math.max(
+      margin,
+      Math.min(buttonRect.left / uiZoom, viewportWidth - dropdownWidth - margin),
+    );
+    let top = buttonRect.bottom / uiZoom + 5;
+
+    if (top + dropdownHeight > viewportHeight - margin) {
+      top = Math.max(margin, buttonRect.top / uiZoom - dropdownHeight - 5);
+    }
+
+    dropdown.style.left = `${Math.round(left)}px`;
+    dropdown.style.top = `${Math.round(top)}px`;
+  };
+
+  const closeDropdown = (): void => {
+    window.removeEventListener("resize", positionDropdown);
+    window.removeEventListener("scroll", positionDropdown, true);
+    dropdown.remove();
+  };
+
+  positionDropdown();
+  window.addEventListener("resize", positionDropdown);
+  window.addEventListener("scroll", positionDropdown, true);
 
   // Bind effect selection
   const effectItems = dropdown.querySelectorAll(".effect-dropdown-item");
@@ -7561,7 +7592,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
             category: blendCategory || undefined,
           });
         }
-        dropdown.remove();
+        closeDropdown();
       }
     });
   });
@@ -7570,7 +7601,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   setTimeout(() => {
     const closeHandler = (e: MouseEvent) => {
       if (!dropdown.contains(e.target as Node)) {
-        dropdown.remove();
+        closeDropdown();
         document.removeEventListener("click", closeHandler);
       }
     };
