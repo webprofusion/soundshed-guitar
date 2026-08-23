@@ -1,6 +1,7 @@
 import {
   browseLocalAudioFile,
   loadLocalAudioFile,
+  loadLocalAudioFileData,
   seekLocalAudioFile,
   setAppSetting,
   setLocalAudioBalance,
@@ -11,11 +12,12 @@ import {
   setLocalAudioSpeed,
   setLocalAudioTransport,
 } from "./bridge.js";
+import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
 import type { LocalAudioLoopRegion, LocalAudioPlayerState } from "./types.js";
-import { escapeHtml } from "./utils.js";
+import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 
 /** Small, static, non-user-editable set of common song-section names for the loop-naming quick-pick row. */
 export const LOOP_NAME_TEMPLATES: readonly string[] = [
@@ -277,6 +279,16 @@ export function applyLocalAudioFileLoaded(data: { path?: string; title?: string;
   player.waveformPeaksR = toNumberArray(data.waveformPeaksR);
   player.loops = loadLoopsForFingerprint(getFileFingerprint(filePath, durationSec));
   player.activeLoopId = null;
+
+  // Loading a new file resets the whole "project" — the loop list already
+  // naturally follows the new file's own fingerprint (above), but Volume/
+  // Balance/Speed/Pitch are otherwise global controls that would otherwise
+  // silently carry a previous track's tweaks into a fresh one. The caller
+  // (Browse/Drop) already confirmed this with the user via
+  // confirmResetIfNeeded() before requesting the load, so this always runs
+  // unconditionally here — including harmlessly on the very first load,
+  // when every fader is already at its default.
+  resetAllFadersToDefault(player);
 
   candidateRange = null;
   editingLoopId = null;
@@ -542,6 +554,18 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
   },
 };
 
+/** Used when loading a new file "resets the project" (see
+ * applyLocalAudioFileLoaded) — pushes every fader back to its default,
+ * both in local state and to the native engine, mirroring exactly what a
+ * double-click reset does for a single fader. */
+function resetAllFadersToDefault(player: LocalAudioPlayerState): void {
+  Object.values(FADER_SPECS).forEach((spec) => {
+    spec.setValue(player, spec.default);
+    spec.onChange?.(spec.default);
+    spec.send(spec.default, true);
+  });
+}
+
 function renderFader(spec: FaderSpec, player: LocalAudioPlayerState): void {
   const slider = document.getElementById(`local-audio-${spec.id}`) as HTMLInputElement | null;
   const valueInput = document.getElementById(`local-audio-${spec.id}-value`) as HTMLInputElement | null;
@@ -583,7 +607,16 @@ function bindFader(spec: FaderSpec): void {
         applyValue(faderSliderPosToValue(spec, pos), true);
       }
     });
-    slider.addEventListener("dblclick", () => applyValue(spec.default, true));
+    slider.addEventListener("dblclick", () => {
+      applyValue(spec.default, true);
+      // The two clicks that make up a dblclick each jump the native thumb
+      // to the click position first (and focus the slider) before this
+      // handler runs — renderFader() then skips redrawing it because it
+      // deliberately never overwrites the focused element mid-drag. Force
+      // the visual thumb back to center explicitly so it doesn't end up
+      // stuck at the click position while the value/text already reset.
+      slider.value = String(faderValueToSliderPos(spec, spec.default));
+    });
   }
 
   if (valueInput && valueInput.dataset.bound !== "true") {
@@ -697,7 +730,9 @@ function renderWaveform(): void {
   if (!hasAudio) {
     ctx.fillStyle = "rgba(255,255,255,0.55)";
     ctx.font = "12px sans-serif";
-    ctx.fillText("No file loaded", 10, Math.floor(height / 2) - 8);
+    ctx.textAlign = "center";
+    ctx.fillText("Drop a WAV, AIFF, or MP3 file here, or use Browse File...", width / 2, Math.floor(height / 2));
+    ctx.textAlign = "left";
     return;
   }
 
@@ -1306,7 +1341,11 @@ function bindTransportControls(): void {
   if (browseBtn && browseBtn.dataset.bound !== "true") {
     browseBtn.dataset.bound = "true";
     browseBtn.addEventListener("click", () => {
-      browseLocalAudioFile();
+      void confirmResetIfNeeded().then((proceed) => {
+        if (proceed) {
+          browseLocalAudioFile();
+        }
+      });
     });
   }
 
@@ -1459,13 +1498,46 @@ function bindLoopListActions(): void {
   }
 }
 
+// WebView2 is standard Chromium — a dropped File's real filesystem path is
+// never available to JS (that's an Electron-only extension), so this is
+// only ever populated in environments where it happens to exist; the drop
+// handler below falls back to reading bytes directly, which is what
+// actually works here. See the "Dropped-file paths" note in
+// .github/copilot-instructions.md.
 function readDroppedFilePath(file: File): string | null {
   const withPath = file as File & { path?: string };
   return typeof withPath.path === "string" && withPath.path ? withPath.path : null;
 }
 
+const SUPPORTED_AUDIO_DROP_EXTENSIONS = [".wav", ".aiff", ".aif", ".mp3"];
+
+function hasSupportedAudioExtension(fileName: string): boolean {
+  const lower = fileName.trim().toLowerCase();
+  return SUPPORTED_AUDIO_DROP_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/** Loading a new file resets Volume/Balance/Speed/Pitch back to their
+ * defaults (see applyLocalAudioFileLoaded) — ask first, unless there's
+ * nothing currently loaded to lose. Shared by both load entry points
+ * (Browse File and drag-and-drop) so neither can bypass the other's gate.
+ *
+ * TODO(project save/load): once the player supports saving/loading named
+ * "projects" (a project = a file + its loops + fader settings, switchable
+ * without re-importing), this reset step becomes unnecessary for a project
+ * *switch* — it only still applies to importing a brand-new, unsaved file. */
+async function confirmResetIfNeeded(): Promise<boolean> {
+  const player = ensureLocalAudioPlayerState();
+  if (!player.filePath) {
+    return true;
+  }
+  return showConfirm(
+    "Loading a new file will reset the current project — Volume, Balance, Speed, and Pitch will return to their defaults. Continue?",
+    "Load New File"
+  );
+}
+
 function bindDropZone(): void {
-  const dropZone = document.getElementById("local-audio-drop-zone");
+  const dropZone = document.getElementById("local-audio-waveform-wrap");
   if (!dropZone || dropZone.dataset.bound === "true") {
     return;
   }
@@ -1485,13 +1557,33 @@ function bindDropZone(): void {
     if (!file) {
       return;
     }
-    const path = readDroppedFilePath(file);
-    if (!path) {
-      showNotification("Drag-and-drop isn't supported for this file", "Use Browse File... instead");
+    if (!hasSupportedAudioExtension(file.name)) {
+      showNotification("Unsupported file", "Drop a WAV, AIFF, or MP3 file");
       return;
     }
-    loadLocalAudioFile(path);
-    appendLog(`local audio load requested (drop) → ${path}`);
+
+    void confirmResetIfNeeded().then((proceed) => {
+      if (!proceed) {
+        return;
+      }
+
+      const path = readDroppedFilePath(file);
+      if (path) {
+        loadLocalAudioFile(path);
+        appendLog(`local audio load requested (drop, path) → ${path}`);
+        return;
+      }
+
+      void file
+        .arrayBuffer()
+        .then((buffer) => {
+          loadLocalAudioFileData(file.name, arrayBufferToBase64(buffer));
+          appendLog(`local audio load requested (drop, data) → ${file.name}`);
+        })
+        .catch((error) => {
+          showNotification("Unable to read dropped file", error instanceof Error ? error.message : String(error));
+        });
+    });
   });
 }
 

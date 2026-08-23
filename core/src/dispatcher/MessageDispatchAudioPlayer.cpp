@@ -18,6 +18,11 @@ bool MessageDispatcher::DispatchAudioPlayer(PluginController& c,
         c.HandleLoadLocalAudioFileRequest(msg);
         return true;
     }
+    if (type == "loadLocalAudioFileData")
+    {
+        c.HandleLoadLocalAudioFileDataRequest(msg);
+        return true;
+    }
     if (type == "setLocalAudioTransport")
     {
         c.HandleSetLocalAudioTransportRequest(msg);

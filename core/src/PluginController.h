@@ -356,6 +356,7 @@ private:
     // Local audio player (Jam panel backing-track player)
     void HandleBrowseLocalAudioFileRequest();
     void HandleLoadLocalAudioFileRequest(const nlohmann::json& payload);
+    void HandleLoadLocalAudioFileDataRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioTransportRequest(const nlohmann::json& payload);
     void HandleSeekLocalAudioFileRequest(const nlohmann::json& payload);
     void HandleSetLocalAudioSpeedRequest(const nlohmann::json& payload);

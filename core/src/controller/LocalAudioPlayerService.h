@@ -76,6 +76,16 @@ public:
     /// DemoPreviewService/riff preview send inline). Message-thread only.
     void LoadFile(const std::string& path);
 
+    /// Loads audio already sitting in memory — used for a WebView2 file
+    /// drop, whose real filesystem path is never available to the browser
+    /// (standard Chromium doesn't expose File.path; see the "Dropped-file
+    /// paths" note in .github/copilot-instructions.md). Shares all
+    /// decode/resample/mix-buffer logic with LoadFile() via
+    /// LoadDecodedBytes(); the resulting track's displayed "path" is just
+    /// displayName since there is no real path to record. Message-thread
+    /// only.
+    void LoadFileFromBytes(const std::vector<std::uint8_t>& bytes, const std::string& displayName);
+
     void Play();
     void Pause();
     void Stop();
@@ -182,6 +192,13 @@ private:
     void ApplyPitchToStretch(double semitones);
 
     void SendTransportStateToUI(); // message thread
+
+    /// Shared tail of LoadFile()/LoadFileFromBytes(): decode, resample to
+    /// the host rate, trim channels to a common length, build peaks, swap
+    /// in the new TrackBuffer, reset playback/loop state, and notify the UI.
+    /// `displayPath` becomes TrackBuffer::path and the "path" field sent to
+    /// the UI — a real path for LoadFile(), just a display name for a drop.
+    void LoadDecodedBytes(const std::vector<std::uint8_t>& bytes, const std::string& displayPath);
 
     IPluginHost& mHost;
     std::mutex& mDSPMutex;

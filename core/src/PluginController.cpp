@@ -10846,6 +10846,30 @@ void PluginController::HandleLoadLocalAudioFileRequest(const nlohmann::json& pay
     mLocalAudioPlayer->LoadFile(path);
 }
 
+// WebView2 is standard Chromium — a dropped File's real filesystem path is
+// never available to JS (that's an Electron-only extension), so a file
+// dropped on the waveform is sent here as base64 bytes instead of a path
+// (see the "Dropped-file paths" note in .github/copilot-instructions.md).
+void PluginController::HandleLoadLocalAudioFileDataRequest(const nlohmann::json& payload)
+{
+    if (!mLocalAudioPlayer)
+        return;
+    const std::string fileName = payload.value("fileName", "");
+    const std::string dataEncoded = payload.value("data", "");
+    if (dataEncoded.empty())
+    {
+        ReportErrorToUI("Unable to load audio file", "Dropped file payload did not include data");
+        return;
+    }
+    const auto decodedBytes = util::DecodeBase64(dataEncoded);
+    if (decodedBytes.empty())
+    {
+        ReportErrorToUI("Unable to load audio file", "Unable to decode dropped file data");
+        return;
+    }
+    mLocalAudioPlayer->LoadFileFromBytes(decodedBytes, fileName.empty() ? "Dropped file" : fileName);
+}
+
 void PluginController::HandleSetLocalAudioTransportRequest(const nlohmann::json& payload)
 {
     if (!mLocalAudioPlayer)

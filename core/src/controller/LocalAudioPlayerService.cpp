@@ -138,11 +138,29 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
         return;
     }
 
+    LoadDecodedBytes(bytes, path);
+}
+
+void LocalAudioPlayerService::LoadFileFromBytes(const std::vector<std::uint8_t>& bytes,
+                                                const std::string& displayName)
+{
+    if (bytes.empty())
+    {
+        mReportError("Unable to load audio file", "Dropped file was empty: " + displayName);
+        return;
+    }
+
+    LoadDecodedBytes(bytes, displayName);
+}
+
+void LocalAudioPlayerService::LoadDecodedBytes(const std::vector<std::uint8_t>& bytes,
+                                               const std::string& displayPath)
+{
     const auto decoded = util::DecodeAudioBytes(bytes);
     if (!decoded)
     {
         mReportError("Unable to load audio file",
-                    "Unsupported audio format (expected WAV, AIFF, or MP3): " + path);
+                    "Unsupported audio format (expected WAV, AIFF, or MP3): " + displayPath);
         return;
     }
 
@@ -157,7 +175,7 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
     auto resampled = util::ConvertToSampleRate(*decoded, targetSampleRate);
     if (resampled.empty() || resampled.front().empty())
     {
-        mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + path);
+        mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + displayPath);
         return;
     }
 
@@ -166,14 +184,14 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
     {
         if (channel.empty())
         {
-            mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + path);
+            mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + displayPath);
             return;
         }
         minFrames = std::min(minFrames, channel.size());
     }
     if (minFrames == 0)
     {
-        mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + path);
+        mReportError("Unable to load audio file", "Decoded audio buffer is empty: " + displayPath);
         return;
     }
     for (auto& channel : resampled)
@@ -190,8 +208,8 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
     const auto peaksJsonR = BuildChannelPeaks(resampled.size() > 1 ? resampled[1] : resampled[0], 256);
 
     auto buffer = std::make_shared<TrackBuffer>();
-    buffer->path = path;
-    buffer->title = util::PathFromUtf8(path).filename().string();
+    buffer->path = displayPath;
+    buffer->title = util::PathFromUtf8(displayPath).filename().string();
     buffer->sampleRate = targetSampleRate;
     buffer->channels = static_cast<int>(resampled.size());
     buffer->totalFrames = minFrames;
@@ -217,7 +235,7 @@ void LocalAudioPlayerService::LoadFile(const std::string& path)
 
     nlohmann::json msg;
     msg["type"] = "localAudioFileLoaded";
-    msg["path"] = path;
+    msg["path"] = displayPath;
     msg["title"] = buffer->title;
     msg["durationSec"] = durationSec;
     msg["waveformPeaksL"] = peaksJsonL;

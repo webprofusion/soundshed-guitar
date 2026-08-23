@@ -408,30 +408,21 @@
   gap: 12px;
 }
 
+/* File info and Browse File are corner overlays on the waveform card
+   itself (not a separate strip above it) — pointer-events stay off on the
+   label so it never intercepts waveform clicks/drags underneath it. */
 .local-audio-file-info {
-  margin-top: 6px;
-  font-size: 12px;
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  max-width: calc(100% - 130px);
+  font-size: 11px;
   color: rgba(210, 225, 255, 0.78);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.local-audio-drop-zone {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px dashed rgba(104, 142, 255, 0.32);
-  border-radius: 10px;
-  font-size: 11px;
-  color: rgba(210, 225, 255, 0.6);
-  text-align: center;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.local-audio-drop-zone.is-drag-over {
-  background: rgba(104, 142, 255, 0.1);
-  border-color: rgba(125, 182, 255, 0.72);
-  color: rgba(240, 246, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
 }
 
 .local-audio-waveform-wrap {
@@ -441,12 +432,18 @@
   border-radius: 8px;
   background: var(--bg-input);
   overflow: hidden;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.local-audio-waveform-wrap.is-drag-over {
+  background: rgba(104, 142, 255, 0.1);
+  border-color: rgba(125, 182, 255, 0.72);
 }
 
 .local-audio-waveform {
   display: block;
   width: 100%;
-  height: 120px;
+  height: 200px;
   cursor: pointer;
 }
 
@@ -455,6 +452,27 @@
    flashes the resize cursor, only a real, deliberate handle/range drag. */
 .local-audio-waveform.is-resizing {
   cursor: ew-resize;
+}
+
+.local-audio-browse-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-medium);
+  background: rgba(20, 24, 34, 0.72);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.local-audio-browse-btn:hover {
+  background: rgba(38, 45, 64, 0.9);
+  transform: translateY(-1px);
 }
 
 .local-audio-add-loop-btn {
@@ -492,6 +510,30 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* Neither this button nor Browse File sit inside a `.settings-row`, so they
+   don't pick up that selector's themed look by default — style them to
+   match it explicitly instead of falling back to the native button chrome. */
+.local-audio-loop-list-header button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.local-audio-loop-list-header button.secondary {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.local-audio-loop-list-header button:hover {
+  transform: translateY(-1px);
 }
 
 .local-audio-loop-list {

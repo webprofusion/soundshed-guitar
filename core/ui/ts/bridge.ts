@@ -275,6 +275,14 @@ export function loadLocalAudioFile(path: string): void {
   appendLog(`loadLocalAudioFile → ${path}`);
 }
 
+/** For a file dropped on the waveform: WebView2 never exposes a dropped
+ * File's real path (that's Electron-only), so the caller reads its bytes
+ * via file.arrayBuffer() and sends them here as base64 instead. */
+export function loadLocalAudioFileData(fileName: string, dataBase64: string): void {
+  postMessage({ type: "loadLocalAudioFileData", fileName, data: dataBase64 });
+  appendLog(`loadLocalAudioFileData → ${fileName} (${dataBase64.length} b64 chars)`);
+}
+
 export function setLocalAudioTransport(action: "play" | "pause" | "stop"): void {
   postMessage({ type: "setLocalAudioTransport", action });
   appendLog(`setLocalAudioTransport → ${action}`);
