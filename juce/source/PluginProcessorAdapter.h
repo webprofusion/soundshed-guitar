@@ -67,6 +67,10 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    /// The host flips this around an offline bounce/freeze/export. Forwarded to the
+    /// controller so NAM renders at full quality when there is no realtime deadline.
+    void setNonRealtime (bool isNonRealtime) noexcept override;
+
     // ── IPluginHost implementation ─────────────────────────────────
     void SendMessageToUI (const std::string& jsonMessage) override;
     void BrowseFileAsync (guitarfx::BrowseFileType type,

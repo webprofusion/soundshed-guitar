@@ -16,6 +16,8 @@
 #include "automation/AutomationSlotTable.h"
 #include "dsp/MultiPresetMixer.h"
 #include "dsp/effects/CompositeEffectProcessor.h"
+#include "dsp/effects/NAMOversampling.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 #include "models/ModelHasher.h"
 #include "presets/PresetTypes.h"
 #include "presets/PresetStorage.h"
@@ -103,6 +105,49 @@ public:
     [[nodiscard]] ResourceLibrary& GetResourceLibrary() { return mResourceLibrary; }
     [[nodiscard]] const std::optional<Preset>& GetActivePreset() const { return mActivePreset; }
     [[nodiscard]] const nlohmann::json& GetAppSettings() const { return mAppSettings; }
+
+    /**
+     * Tell the controller whether the host is rendering offline (bounce/freeze/export)
+     * rather than in real time. Called from the host adapter's setNonRealtime().
+     *
+     * Offline there is no CPU budget to protect, so NAM runs at full quality regardless
+     * of the user's real-time tier: slimmable size goes to maximum and oversampling is
+     * lifted to at least 2x. The user's stored settings are not modified — only what the
+     * DSP is currently running at — so switching back to real time restores their tier.
+     */
+    void SetOfflineRendering(bool offline);
+    [[nodiscard]] bool IsOfflineRendering() const { return mOfflineRendering; }
+
+    /// NAM quality tier owned by this plugin instance.
+    struct NamQualityConfig
+    {
+        double slimmableSize = kNamSlimmableSizeDefault;
+        int oversamplingIndex = kNamOversamplingIndexDefault;
+        int antiAliasPhaseIndex = kNamAntiAliasPhaseIndexDefault;
+    };
+
+    /// Minimum oversampling index used while rendering offline (index 1 == 2x).
+    static constexpr int kOfflineMinimumOversamplingIndex = 1;
+
+    /**
+     * The offline-render quality policy: full slimmable size and at least 2x
+     * oversampling. Both are floors, so a user already above them keeps their choice,
+     * and the anti-alias filter is left alone — the host compensates its latency either
+     * way, and changing it would alter the rendered phase response.
+     */
+    [[nodiscard]] static NamQualityConfig ApplyOfflineRenderBoost(NamQualityConfig quality);
+
+    /// The tier the DSP is currently running at: the user's settings in real time, or
+    /// the offline-render boost while bouncing.
+    [[nodiscard]] NamQualityConfig EffectiveNamQuality() const;
+
+    /// True for the NAM quality keys (slimmable size, oversampling, anti-alias phase).
+    [[nodiscard]] static bool IsNamQualitySettingKey(const std::string& key);
+
+    /// True when `key` belongs to this instance rather than the shared app.json — that is,
+    /// a NAM quality key while hosted as a plugin. Instance-owned keys are persisted in
+    /// host state, are never written to disk, and survive a shared-settings reload.
+    [[nodiscard]] bool IsInstanceOwnedSettingKey(const std::string& key) const;
     [[nodiscard]] IPluginHost& GetHost() { return mHost; }
 
     // ── Automation (public API for host adapters) ───────────────────

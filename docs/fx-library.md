@@ -173,25 +173,52 @@ Neural amp model processing.
 
 **Resource**: NAM model file (`.nam`)
 
-#### NAM oversampling (global setting)
+#### NAM quality (per-instance setting)
 
-Oversampling is **not** a preset parameter. It is a global quality setting under
-Settings -> DSP Performance -> NAM Processing Quality, alongside the slimmable
-model size, and it applies to every NAM node (`amp_nam`, the optimized NAM amp,
-NAM FX, and NAM Blend) in every preset and mixer slot.
+NAM quality is **not** a preset parameter. It lives under Settings -> DSP
+Performance -> NAM Processing Quality and applies to every NAM node (`amp_nam`,
+the optimized NAM amp, NAM FX, and NAM Blend) in every preset and mixer slot of
+**one plugin instance**.
 
 | App setting | Range | Default |
 |-------------|-------|---------|
+| `audio.nam.slimmableSize` | 0.0-1.0 | `1.0` |
 | `audio.nam.oversampling` | index 0-5: Off, 2x, 4x, 8x, 16x, 32x | `0` (Off) |
 | `audio.nam.antiAliasPhase` | index 0-2: Minimum Phase, Linear Short, Linear Long | `0` (Minimum Phase) |
 
-`PluginController::ApplyNamOversamplingSettingsFromAppSettings()` sanitizes both
-values, stores them in the process-wide globals in `NAMOversampling.h`, and
-pushes them to live nodes as `oversampling` / `antiAliasPhase` node config —
-the same mechanism used for `slimmableSize`. Nodes created later read the
-globals when their models are prepared. Because both settings change the
-resampler's reported latency, applying them also re-reports plugin latency to
-the host.
+**Ownership.** A DAW loads every plugin instance into one process, so these
+settings are deliberately *not* stored in process-wide globals — two instances in
+one project can sit at different tiers.
+
+- **Plugin**: the values belong to the instance. They are saved in host state
+  (`SerializeState`, `state["namQuality"]`) and restored with the project.
+  `app.json` only seeds a brand-new instance; instances never write to it, and
+  `ReloadSharedSyncSourcesFromDisk()` re-asserts the instance's own values so the
+  cross-instance settings sync cannot overwrite them.
+- **Standalone**: unchanged — `app.json` owns them.
+
+**Offline rendering.** A DAW flips `AudioProcessor::setNonRealtime()` around a
+bounce, freeze, or export; `PluginProcessorAdapter` forwards that to
+`PluginController::SetOfflineRendering()`. With no realtime deadline to protect,
+`ApplyOfflineRenderBoost()` renders at full quality: slimmable size goes to
+maximum and oversampling is lifted to at least 2x. Both are *floors* — a user
+already running 8x keeps 8x — and the anti-alias phase is left alone, since the
+host compensates its latency either way and changing it would alter the rendered
+phase response. The user's stored settings are never modified, so returning to
+real time restores their live tier. Note that the boost can change reported
+plugin latency (Off has no resampler at matched rates; 2x does), which is why
+`SetOfflineRendering()` re-reports latency to the host.
+
+**Delivery.** `PluginController::ApplyNamQualitySettings()` sanitizes the values
+and pushes them through `MultiPresetMixer::SetNodeTypeConfigDefault()` for the
+four NAM node types. `SignalGraphExecutor` keeps these as *node-type config
+defaults*: they are applied to existing nodes immediately and re-applied in
+`CreateProcessors()` to nodes built later, so a preset switch or a new mixer slot
+inherits the instance's tier. A node's own `config` entry still wins. Defaults
+are forwarded into `CompositeEffectProcessor`'s inner executor as well, so NAM
+nodes nested inside a composite are covered. Because oversampling and the AA
+filter both change the resampler's reported latency, applying them also
+re-reports plugin latency to the host.
 
 Oversampling uses the NAM-Oversampler processing model: the host signal is
 resampled to an integer multiple of the model's native rate, the NAM core's

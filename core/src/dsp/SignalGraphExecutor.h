@@ -96,6 +96,25 @@ namespace guitarfx
     void SetNodeParam(const std::string &nodeId, const std::string &key, double value);
     void SetNodeConfig(const std::string &nodeId, const std::string &key, const std::string &value);
     void SetNodeConfigForType(const std::string &type, const std::string &key, const std::string &value);
+
+    /**
+     * Record a config value that every node of `type` should adopt, including nodes
+     * built later by CreateProcessors(). Existing nodes are updated immediately.
+     *
+     * This is how per-instance settings that are not preset parameters (NAM quality:
+     * oversampling, antiAliasPhase, slimmableSize) reach their nodes. It replaces the
+     * process-wide globals those settings used to live in, which forced one value on
+     * every plugin instance sharing a DAW's process. A node's own `config` entry still
+     * wins, since CreateProcessors() applies these defaults first.
+     */
+    void SetNodeTypeConfigDefault(const std::string &type, const std::string &key, const std::string &value);
+
+    /// Type defaults recorded so far, for seeding a nested or newly created executor.
+    [[nodiscard]] const std::map<std::string, std::map<std::string, std::string>> &
+    GetNodeTypeConfigDefaults() const { return mNodeTypeConfigDefaults; }
+
+    /// Copy another executor's type defaults wholesale (does not touch existing nodes).
+    void SeedNodeTypeConfigDefaults(const std::map<std::string, std::map<std::string, std::string>> &defaults);
     bool LoadNodeResource(const std::string &nodeId, const ResourceRef &ref);
     [[nodiscard]] std::string GetNodeConfig(const std::string &nodeId, const std::string &key) const;
     [[nodiscard]] EffectProcessor *GetNodeProcessor(const std::string &nodeId);
@@ -173,6 +192,8 @@ namespace guitarfx
     ResourceLibrary *mResourceLibrary = nullptr;
 
     std::map<std::string, NodeState> mNodeStates;
+    // Config applied to every node of a given type at creation — see SetNodeTypeConfigDefault().
+    std::map<std::string, std::map<std::string, std::string>> mNodeTypeConfigDefaults;
     std::vector<std::string> mExecutionOrder;
     std::vector<std::vector<std::string>> mExecutionLevels;
     std::vector<int> mExecutionLevelScores;

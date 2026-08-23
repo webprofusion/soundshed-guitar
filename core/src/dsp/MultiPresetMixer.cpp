@@ -193,6 +193,7 @@ namespace guitarfx
     EnsurePresetBoundaryGainNodes(normalizedPreset);
 
     inst->executor.SetResourceLibrary(mResourceLibrary);
+    inst->executor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     inst->executor.SetGraph(normalizedPreset.graph);
     inst->executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
     inst->executor.SetNamInputModeMono(mMonoMode);
@@ -364,6 +365,7 @@ namespace guitarfx
     EnsurePresetBoundaryGainNodes(normalizedPreset);
 
     inst->executor.SetResourceLibrary(mResourceLibrary);
+    inst->executor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     inst->executor.SetGraph(normalizedPreset.graph); // CreateProcessors + LoadResources here
     inst->executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
     inst->executor.SetNamInputModeMono(mMonoMode);
@@ -402,6 +404,7 @@ namespace guitarfx
     EnsurePresetBoundaryGainNodes(normalizedPreset);
 
     inst->executor.SetResourceLibrary(mResourceLibrary);
+    inst->executor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     inst->executor.SetGraph(normalizedPreset.graph);
     inst->executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
     inst->executor.SetNamInputModeMono(mMonoMode);
@@ -566,6 +569,7 @@ namespace guitarfx
     mPostChainExecutor.Reset();
 
     mPreChainExecutor.SetResourceLibrary(mResourceLibrary);
+    mPreChainExecutor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     auto preGraph = mGlobalChainConfig.BuildPreChainGraph();
     if (preGraph.nodes.empty() && preGraph.edges.empty())
     {
@@ -578,6 +582,7 @@ namespace guitarfx
     mPreChainExecutor.Prepare(mSampleRate, mMaxBlockSize);
 
     mPostChainExecutor.SetResourceLibrary(mResourceLibrary);
+    mPostChainExecutor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     auto postGraph = mGlobalChainConfig.BuildPostChainGraph();
     if (postGraph.nodes.empty() && postGraph.edges.empty())
     {
@@ -1082,6 +1087,17 @@ namespace guitarfx
 
     mPreChainExecutor.SetNodeConfigForType(type, key, value);
     mPostChainExecutor.SetNodeConfigForType(type, key, value);
+  }
+
+  void MultiPresetMixer::SetNodeTypeConfigDefault(const std::string &type, const std::string &key, const std::string &value)
+  {
+    mNodeTypeConfigDefaults[type][key] = value;
+
+    for (auto &inst : mInstances)
+      inst->executor.SetNodeTypeConfigDefault(type, key, value);
+
+    mPreChainExecutor.SetNodeTypeConfigDefault(type, key, value);
+    mPostChainExecutor.SetNodeTypeConfigDefault(type, key, value);
   }
 
   std::optional<std::pair<std::string, std::string>>

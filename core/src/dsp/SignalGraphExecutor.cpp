@@ -517,12 +517,16 @@ namespace guitarfx
       }
 
       // If this is a composite effect, pass the resource library to its inner executor
-      if (state.processor && mResourceLibrary)
+      if (state.processor)
       {
         auto *composite = dynamic_cast<CompositeEffectProcessor *>(state.processor.get());
         if (composite)
         {
-          composite->SetResourceLibrary(mResourceLibrary);
+          if (mResourceLibrary)
+            composite->SetResourceLibrary(mResourceLibrary);
+          // Nodes inside the composite need the same per-instance type defaults
+          // (NAM quality) as top-level nodes.
+          composite->SeedInnerNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
         }
       }
 
@@ -534,6 +538,16 @@ namespace guitarfx
         for (const auto &[key, value] : node.params)
         {
           state.processor->SetParam(key, value);
+        }
+
+        // Per-instance type defaults first, so a node's own config still wins.
+        if (const auto typeDefaults = mNodeTypeConfigDefaults.find(node.type);
+            typeDefaults != mNodeTypeConfigDefaults.end())
+        {
+          for (const auto &[key, value] : typeDefaults->second)
+          {
+            state.processor->SetConfig(key, value);
+          }
         }
 
         for (const auto &[key, value] : node.config)
@@ -1437,9 +1451,41 @@ namespace guitarfx
   {
     for (auto &[id, state] : mNodeStates)
     {
-      if (state.type == type && state.processor)
+      if (!state.processor)
+        continue;
+
+      if (state.type == type)
       {
         state.processor->SetConfig(key, value);
+      }
+      else if (auto *composite = dynamic_cast<CompositeEffectProcessor *>(state.processor.get()))
+      {
+        // A composite wraps its own graph, so nodes of `type` can live inside it.
+        // CompositeEffectProcessor::SetConfig does not forward, so reach the inner
+        // executor directly.
+        composite->SetInnerNodeTypeConfigDefault(type, key, value);
+      }
+    }
+  }
+
+  void SignalGraphExecutor::SetNodeTypeConfigDefault(const std::string &type, const std::string &key, const std::string &value)
+  {
+    mNodeTypeConfigDefaults[type][key] = value;
+    SetNodeConfigForType(type, key, value);
+  }
+
+  void SignalGraphExecutor::SeedNodeTypeConfigDefaults(
+      const std::map<std::string, std::map<std::string, std::string>> &defaults)
+  {
+    // Records for future nodes *and* applies to any that already exist. A composite
+    // builds its inner graph in its constructor, so by the time the parent seeds it the
+    // inner nodes are already there and would otherwise never see these values.
+    for (const auto &[type, entries] : defaults)
+    {
+      for (const auto &[key, value] : entries)
+      {
+        mNodeTypeConfigDefaults[type][key] = value;
+        SetNodeConfigForType(type, key, value);
       }
     }
   }

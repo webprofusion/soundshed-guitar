@@ -13,6 +13,7 @@ set(TEST_SOURCES
     MultiPresetMixerTests.cpp
     NamCalibrationProbe.cpp
     NamModelCacheTests.cpp
+    NamQualityPolicyTests.cpp
     NAMPerformanceBenchmark.cpp
     PresetDSPLoadingTests.cpp
     PresetManagementWorkflowTests.cpp

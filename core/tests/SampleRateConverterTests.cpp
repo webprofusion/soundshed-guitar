@@ -1,6 +1,7 @@
 #include "dsp/BlockSincResampler.h"
 #include "dsp/effects/NAMOversampling.h"
 #include "dsp/effects/NAMSampleRate.h"
+#include "dsp/effects/NAMSlimmableSettings.h"
 
 #include <atomic>
 #include <cmath>
@@ -179,45 +180,57 @@ namespace
       && guitarfx::ResolveNamOversampledRenderingRate(48000.0, 44100.0, 2) == 96000.0;
   }
 
-  /// Oversampling is a global DSP-performance setting rather than a preset
-  /// parameter: out-of-range or non-finite values must fall back to the
-  /// defaults, and every NAM node reads the same stored indices.
-  bool TestNamGlobalOversamplingSettings()
+  /// Sanitizing is shared by every NAM node: out-of-range or non-finite values must
+  /// fall back to the documented defaults rather than reaching the resampler.
+  bool TestNamQualitySanitizing()
   {
-    const int restoreOversampling = guitarfx::GetGlobalNamOversamplingIndex();
-    const int restorePhase = guitarfx::GetGlobalNamAntiAliasPhaseIndex();
+    return guitarfx::SanitizeNamOversamplingIndex(-4.0) == 0
+      && guitarfx::SanitizeNamOversamplingIndex(99.0) == guitarfx::kNamOversamplingMaxIndex
+      && guitarfx::SanitizeNamOversamplingIndex(std::numeric_limits<double>::quiet_NaN())
+           == guitarfx::kNamOversamplingIndexDefault
+      && guitarfx::SanitizeNamAntiAliasPhaseIndex(7.0) == guitarfx::kNamAntiAliasPhaseMaxIndex
+      && guitarfx::SanitizeNamAntiAliasPhaseIndex(std::numeric_limits<double>::infinity())
+           == guitarfx::kNamAntiAliasPhaseIndexDefault
+      && guitarfx::SanitizeNamSlimmableSize(-1.0) == guitarfx::kNamSlimmableSizeMin
+      && guitarfx::SanitizeNamSlimmableSize(5.0) == guitarfx::kNamSlimmableSizeMax
+      && guitarfx::SanitizeNamSlimmableSize(std::numeric_limits<double>::quiet_NaN())
+           == guitarfx::kNamSlimmableSizeDefault;
+  }
 
-    if (guitarfx::SanitizeNamOversamplingIndex(-4.0) != 0
-        || guitarfx::SanitizeNamOversamplingIndex(99.0) != guitarfx::kNamOversamplingMaxIndex
-        || guitarfx::SanitizeNamOversamplingIndex(std::numeric_limits<double>::quiet_NaN())
-             != guitarfx::kNamOversamplingIndexDefault
-        || guitarfx::SanitizeNamAntiAliasPhaseIndex(7.0) != guitarfx::kNamAntiAliasPhaseMaxIndex
-        || guitarfx::SanitizeNamAntiAliasPhaseIndex(std::numeric_limits<double>::infinity())
-             != guitarfx::kNamAntiAliasPhaseIndexDefault)
-    {
+  /// Oversampling settings are owned per node, not by a process-wide global: two
+  /// processors configured differently must stay independent. This is what lets two
+  /// plugin instances in one DAW project run at different quality tiers.
+  bool TestNamOversamplingIsPerProcessor()
+  {
+    constexpr int blockSize = 64;
+    constexpr double hostRate = 48000.0;
+
+    TrackingNamDSP modelOff;
+    TrackingNamDSP modelUp;
+    guitarfx::NamOversamplingProcessor processorOff;
+    guitarfx::NamOversamplingProcessor processorUp;
+
+    processorOff.Prepare(modelOff, hostRate, hostRate, blockSize,
+                         guitarfx::NamOversamplingFactorFromIndex(0),
+                         guitarfx::NamAntiAliasPhaseFromIndex(0));
+    processorUp.Prepare(modelUp, hostRate, hostRate, blockSize,
+                        guitarfx::NamOversamplingFactorFromIndex(2),
+                        guitarfx::NamAntiAliasPhaseFromIndex(2));
+
+    // Preparing the second processor must not disturb the first.
+    if (processorOff.GetTimeScale() != 1 || processorOff.IsResamplingActive())
       return false;
-    }
+    if (processorUp.GetTimeScale() != 4 || !processorUp.IsResamplingActive())
+      return false;
 
-    bool ok = true;
+    // Linear-phase reports latency; the untouched off-tier processor still reports none.
+    if (processorUp.GetLatencySamples() <= 0 || processorOff.GetLatencySamples() != 0)
+      return false;
 
-    // The setters report whether the stored value actually moved.
-    ok = ok && guitarfx::SetGlobalNamOversamplingIndex(2.0);
-    ok = ok && !guitarfx::SetGlobalNamOversamplingIndex(2.0);
-    ok = ok && guitarfx::GetGlobalNamOversamplingIndex() == 2;
-    ok = ok && guitarfx::GetGlobalNamOversamplingFactor() == 4;
-
-    // Out-of-range writes clamp rather than being rejected.
-    ok = ok && guitarfx::SetGlobalNamOversamplingIndex(999.0);
-    ok = ok && guitarfx::GetGlobalNamOversamplingIndex() == guitarfx::kNamOversamplingMaxIndex;
-
-    ok = ok && guitarfx::SetGlobalNamAntiAliasPhaseIndex(2.0);
-    ok = ok && guitarfx::GetGlobalNamAntiAliasPhase() == dsp::EAntiAliasFilterPhase::LinearCascadedFIRLong;
-    ok = ok && guitarfx::SetGlobalNamAntiAliasPhaseIndex(0.0);
-    ok = ok && guitarfx::GetGlobalNamAntiAliasPhase() == dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR;
-
-    guitarfx::SetGlobalNamOversamplingIndex(restoreOversampling);
-    guitarfx::SetGlobalNamAntiAliasPhaseIndex(restorePhase);
-    return ok;
+    // And the models really were configured to different rendering rates.
+    return modelOff.timeScale == 1
+      && modelUp.timeScale == 4
+      && processorUp.GetRenderingSampleRate() > processorOff.GetRenderingSampleRate();
   }
 
   bool TestNamDryDelay()
@@ -324,7 +337,8 @@ int main()
   const bool optimizedNamSampleRateParsingOk = TestOptimizedNamSampleRateParsing();
   const bool namDefaultProcessingRateOk = TestNamDefaultProcessingRate();
   const bool namOversamplingConfigurationOk = TestNamOversamplingConfiguration();
-  const bool namGlobalOversamplingOk = TestNamGlobalOversamplingSettings();
+  const bool namQualitySanitizingOk = TestNamQualitySanitizing();
+  const bool namPerProcessorOk = TestNamOversamplingIsPerProcessor();
   const bool namDryDelayOk = TestNamDryDelay();
   const bool namOversamplingProcessorOk = TestNamOversamplingProcessor();
 
@@ -338,13 +352,15 @@ int main()
     std::cerr << "NAM default processing-rate test failed\n";
   if (!namOversamplingConfigurationOk)
     std::cerr << "NAM oversampling configuration test failed\n";
-  if (!namGlobalOversamplingOk)
-    std::cerr << "NAM global oversampling settings test failed\n";
+  if (!namQualitySanitizingOk)
+    std::cerr << "NAM quality sanitizing test failed\n";
+  if (!namPerProcessorOk)
+    std::cerr << "NAM per-processor oversampling independence test failed\n";
   if (!namDryDelayOk)
     std::cerr << "NAM dry-delay alignment test failed\n";
   if (!namOversamplingProcessorOk)
     std::cerr << "NAM oversampling processor test failed\n";
 
   return (roundTripOk && fixedOutputOk && optimizedNamSampleRateParsingOk && namDefaultProcessingRateOk
-          && namOversamplingConfigurationOk && namGlobalOversamplingOk && namDryDelayOk && namOversamplingProcessorOk) ? 0 : 1;
+          && namOversamplingConfigurationOk && namQualitySanitizingOk && namPerProcessorOk && namDryDelayOk && namOversamplingProcessorOk) ? 0 : 1;
 }

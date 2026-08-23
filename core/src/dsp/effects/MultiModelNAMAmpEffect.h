@@ -303,32 +303,35 @@ public:
     else if (key == "slimmableSize")
     {
       if (const auto parsed = ParseDouble(value); parsed.has_value())
-        SetGlobalNamSlimmableSize(*parsed);
+        mSlimmableSize = SanitizeNamSlimmableSize(*parsed);
 
       for (auto& model : mModels)
       {
-        ApplyGlobalNamSlimmableSize(model.fallbackLeft.get());
-        ApplyGlobalNamSlimmableSize(model.fallbackRight.get());
+        ApplyNamSlimmableSize(model.fallbackLeft.get(), mSlimmableSize);
+        ApplyNamSlimmableSize(model.fallbackRight.get(), mSlimmableSize);
       }
     }
     else if (key == "oversampling" || key == "antiAliasPhase")
     {
-      // Global DSP-performance settings, pushed to every live NAM node. Both
-      // change the rendering rate or the AA filter, so a node whose models are
-      // not already on the requested tier has to re-prepare them.
+      // Per-instance quality settings delivered as node config. Both change the
+      // rendering rate or the AA filter, so models already prepared for a
+      // different tier have to be re-prepared.
       const auto parsed = ParseDouble(value);
       if (!parsed.has_value())
         return;
 
-      if (key == "oversampling")
-        SetGlobalNamOversamplingIndex(*parsed);
-      else
-        SetGlobalNamAntiAliasPhaseIndex(*parsed);
+      const int requestedOversampling = key == "oversampling"
+        ? SanitizeNamOversamplingIndex(*parsed)
+        : mOversamplingIndex;
+      const int requestedPhase = key == "antiAliasPhase"
+        ? SanitizeNamAntiAliasPhaseIndex(*parsed)
+        : mAntiAliasPhaseIndex;
 
-      if (mOversamplingIndex == GetGlobalNamOversamplingIndex()
-          && mAntiAliasPhaseIndex == GetGlobalNamAntiAliasPhaseIndex())
+      if (requestedOversampling == mOversamplingIndex && requestedPhase == mAntiAliasPhaseIndex)
         return;
 
+      mOversamplingIndex = requestedOversampling;
+      mAntiAliasPhaseIndex = requestedPhase;
       ReconfigureModelProcessing();
     }
   }
@@ -473,10 +476,13 @@ private:
   bool mPrepared = false;
   std::string mParameterId;
   std::uint64_t mLevelTargetsRevision = 0;
-  // Snapshot of the global oversampling settings these models are currently
-  // prepared for. Refreshed by ResizeModelBuffers().
+  // Per-node quality settings, delivered as node config by PluginController and
+  // seeded on newly built nodes from SignalGraphExecutor's type defaults. These
+  // are deliberately not process-global: separate plugin instances in one DAW
+  // project each run at their own tier.
   int mOversamplingIndex = kNamOversamplingIndexDefault;
   int mAntiAliasPhaseIndex = kNamAntiAliasPhaseIndexDefault;
+  double mSlimmableSize = kNamSlimmableSizeDefault;
   int mLatencySamples = 0;
   NamDryDelay mDryDelayLeft;
   NamDryDelay mDryDelayRight;
@@ -531,8 +537,8 @@ private:
       instance.fallbackRight = nammodelcache::GetModel(instance.path);
       if (instance.fallbackLeft && instance.fallbackRight)
       {
-        ApplyGlobalNamSlimmableSize(instance.fallbackLeft.get());
-        ApplyGlobalNamSlimmableSize(instance.fallbackRight.get());
+        ApplyNamSlimmableSize(instance.fallbackLeft.get(), mSlimmableSize);
+        ApplyNamSlimmableSize(instance.fallbackRight.get(), mSlimmableSize);
 
         instance.inputLevel = instance.fallbackLeft->HasInputLevel()
           ? std::optional<double>(instance.fallbackLeft->GetInputLevel()) : std::nullopt;
@@ -562,8 +568,6 @@ private:
     if (!mPrepared || !instance.fallbackLeft || !instance.fallbackRight)
       return;
 
-    mOversamplingIndex = GetGlobalNamOversamplingIndex();
-    mAntiAliasPhaseIndex = GetGlobalNamAntiAliasPhaseIndex();
     const double modelSampleRate = ResolveInstanceSampleRate(instance);
     const int factor = NamOversamplingFactorFromIndex(mOversamplingIndex);
     const auto filterPhase = NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex);

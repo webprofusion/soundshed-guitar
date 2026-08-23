@@ -3286,47 +3286,33 @@ void PluginController::PersistGlobalFxSettingsToAppSettings()
     SaveAppSettings();
 }
 
-void PluginController::ApplyNamSlimmableSettingsFromAppSettings()
+bool PluginController::IsNamQualitySettingKey(const std::string& key)
 {
-    bool settingsChanged = false;
-
-    const auto it = mAppSettings.find(kNamSlimmableSizeSettingKey);
-    const double rawValue = (it != mAppSettings.end() && it->is_number())
-        ? it->get<double>()
-        : kNamSlimmableSizeDefault;
-
-    const double slimmableSize = SanitizeNamSlimmableSize(rawValue);
-    if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != slimmableSize)
-    {
-        mAppSettings[kNamSlimmableSizeSettingKey] = slimmableSize;
-        settingsChanged = true;
-    }
-
-    SetGlobalNamSlimmableSize(slimmableSize);
-    const std::string configValue = std::to_string(slimmableSize);
-
-    {
-        std::lock_guard<std::mutex> lock(mDSPMutex);
-        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNam, kNamSlimmableNodeConfigKey, configValue);
-        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNamOptimized, kNamSlimmableNodeConfigKey, configValue);
-        mPresetMixer.SetNodeConfigForType(EffectGuids::kAmpNamBlend, kNamSlimmableNodeConfigKey, configValue);
-        mPresetMixer.SetNodeConfigForType(EffectGuids::kFxNam, kNamSlimmableNodeConfigKey, configValue);
-    }
-
-    if (settingsChanged)
-        SaveAppSettings();
+    return key == kNamSlimmableSizeSettingKey
+        || key == kNamOversamplingSettingKey
+        || key == kNamAntiAliasPhaseSettingKey;
 }
 
-void PluginController::ApplyNamOversamplingSettingsFromAppSettings()
+bool PluginController::IsInstanceOwnedSettingKey(const std::string& key) const
 {
-    // Oversampling and its anti-alias filter phase are global quality settings
-    // rather than preset parameters, so they are applied to every NAM node type
-    // the same way the slimmable size is.
+    return IsNamQualitySettingKey(key) && !mHost.IsStandalone();
+}
+
+void PluginController::ApplyNamQualitySettings()
+{
+    // NAM quality (slimmable size, oversampling, anti-alias phase) is per plugin
+    // instance, not process-wide: a DAW loads every instance into one process, so
+    // shared state would force a single quality tier on the whole project. The values
+    // are pushed down as node-type config defaults so nodes built later — including
+    // nodes nested inside composites — inherit this instance's tier.
+    //
+    // In plugin mode these keys are instance-owned: app.json only seeds a brand-new
+    // instance, and this never writes back to it. Standalone keeps app.json ownership.
     bool settingsChanged = false;
 
-    const auto readIndex = [&](const char* settingKey, auto sanitize, int fallback) {
+    const auto readSetting = [&](const char* settingKey, auto sanitize, auto fallback) {
         const auto it = mAppSettings.find(settingKey);
-        const int sanitized = (it != mAppSettings.end() && it->is_number())
+        const auto sanitized = (it != mAppSettings.end() && it->is_number())
             ? sanitize(it->get<double>())
             : fallback;
         if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != sanitized)
@@ -3337,39 +3323,99 @@ void PluginController::ApplyNamOversamplingSettingsFromAppSettings()
         return sanitized;
     };
 
-    const int oversamplingIndex = readIndex(
+    mNamQuality.slimmableSize = readSetting(
+        kNamSlimmableSizeSettingKey,
+        [](double raw) { return SanitizeNamSlimmableSize(raw); },
+        kNamSlimmableSizeDefault);
+    mNamQuality.oversamplingIndex = readSetting(
         kNamOversamplingSettingKey,
         [](double raw) { return SanitizeNamOversamplingIndex(raw); },
         kNamOversamplingIndexDefault);
-    const int antiAliasPhaseIndex = readIndex(
+    mNamQuality.antiAliasPhaseIndex = readSetting(
         kNamAntiAliasPhaseSettingKey,
         [](double raw) { return SanitizeNamAntiAliasPhaseIndex(raw); },
         kNamAntiAliasPhaseIndexDefault);
 
-    SetGlobalNamOversamplingIndex(oversamplingIndex);
-    SetGlobalNamAntiAliasPhaseIndex(antiAliasPhaseIndex);
+    PushNamQualityToDsp();
 
-    const std::string oversamplingValue = std::to_string(oversamplingIndex);
-    const std::string antiAliasPhaseValue = std::to_string(antiAliasPhaseIndex);
-
-    {
-        std::lock_guard<std::mutex> lock(mDSPMutex);
-        for (const char* nodeType : {EffectGuids::kAmpNam,
-                                     EffectGuids::kAmpNamOptimized,
-                                     EffectGuids::kAmpNamBlend,
-                                     EffectGuids::kFxNam})
-        {
-            mPresetMixer.SetNodeConfigForType(nodeType, kNamOversamplingNodeConfigKey, oversamplingValue);
-            mPresetMixer.SetNodeConfigForType(nodeType, kNamAntiAliasPhaseNodeConfigKey, antiAliasPhaseValue);
-        }
-    }
-
-    // Both settings change the resampler's reported latency, so the host needs
-    // fresh PDC after every change.
+    // Oversampling and the AA filter both change the resampler's reported latency.
     UpdateHostLatency();
 
-    if (settingsChanged)
-        SaveAppSettings();
+    // Only the standalone app owns these on disk. A plugin instance persists them in
+    // its host state (SerializeState) instead, so writing app.json here would leak one
+    // instance's choice to every other instance via the shared-sync poll.
+    if (mHost.IsStandalone())
+    {
+        if (settingsChanged)
+            SaveAppSettings();
+    }
+    else
+    {
+        // Tell the host its saved state is stale so the project keeps this tier.
+        mHost.NotifyStateChanged();
+    }
+}
+
+PluginController::NamQualityConfig PluginController::ApplyOfflineRenderBoost(NamQualityConfig quality)
+{
+    // An offline bounce has no realtime deadline, so spend the CPU on quality: full
+    // slimmable size, and at least 2x oversampling. Both are floors, not overrides — a
+    // user already running higher keeps their choice.
+    quality.slimmableSize = kNamSlimmableSizeMax;
+    quality.oversamplingIndex = std::max(quality.oversamplingIndex, kOfflineMinimumOversamplingIndex);
+    return quality;
+}
+
+PluginController::NamQualityConfig PluginController::EffectiveNamQuality() const
+{
+    return mOfflineRendering ? ApplyOfflineRenderBoost(mNamQuality) : mNamQuality;
+}
+
+void PluginController::SetOfflineRendering(bool offline)
+{
+    if (mOfflineRendering == offline)
+        return;
+
+    mOfflineRendering = offline;
+
+    // Re-push at the new effective tier. The host calls this around a bounce, off the
+    // audio thread, and follows it with prepareToPlay — but push now so a host that
+    // does not re-prepare still renders at the right quality.
+    PushNamQualityToDsp();
+    UpdateHostLatency();
+}
+
+void PluginController::PushNamQualityToDsp()
+{
+    const NamQualityConfig effective = EffectiveNamQuality();
+    const std::string slimmableValue = std::to_string(effective.slimmableSize);
+    const std::string oversamplingValue = std::to_string(effective.oversamplingIndex);
+    const std::string antiAliasPhaseValue = std::to_string(effective.antiAliasPhaseIndex);
+
+    std::lock_guard<std::mutex> lock(mDSPMutex);
+    for (const char* nodeType : {EffectGuids::kAmpNam,
+                                 EffectGuids::kAmpNamOptimized,
+                                 EffectGuids::kAmpNamBlend,
+                                 EffectGuids::kFxNam})
+    {
+        mPresetMixer.SetNodeTypeConfigDefault(nodeType, kNamSlimmableNodeConfigKey, slimmableValue);
+        mPresetMixer.SetNodeTypeConfigDefault(nodeType, kNamOversamplingNodeConfigKey, oversamplingValue);
+        mPresetMixer.SetNodeTypeConfigDefault(nodeType, kNamAntiAliasPhaseNodeConfigKey, antiAliasPhaseValue);
+    }
+}
+
+/// Re-assert this instance's NAM quality over whatever a shared-settings reload wrote
+/// into mAppSettings. Plugin instances own these keys; the shared app.json does not.
+void PluginController::RestoreInstanceOwnedSettings()
+{
+    if (mHost.IsStandalone())
+        return;
+
+    mAppSettings[kNamSlimmableSizeSettingKey] = mNamQuality.slimmableSize;
+    mAppSettings[kNamOversamplingSettingKey] = mNamQuality.oversamplingIndex;
+    mAppSettings[kNamAntiAliasPhaseSettingKey] = mNamQuality.antiAliasPhaseIndex;
+    PushNamQualityToDsp();
+    UpdateHostLatency();
 }
 
 void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
@@ -3822,6 +3868,15 @@ std::string PluginController::SerializeState() const
     state["uiSettings"] = mUiSettings;
     state["uiViewState"] = mUiViewState;
     state["globalSignalChain"] = mPresetMixer.GetGlobalChainConfig();
+
+    // NAM quality is per instance, so it rides in host state rather than app.json.
+    // Emitted as its own block (not just inside appSettings) so it stays legible and
+    // is restored explicitly, after the appSettings merge, on the way back in.
+    state["namQuality"] = {
+        {"slimmableSize", mNamQuality.slimmableSize},
+        {"oversampling", mNamQuality.oversamplingIndex},
+        {"antiAliasPhase", mNamQuality.antiAliasPhaseIndex}
+    };
 
     nlohmann::json params = nlohmann::json::array();
     for (const auto value : mParamValues)
@@ -4286,6 +4341,11 @@ void PluginController::OnWebContentLoaded()
 
 void PluginController::ReloadSharedSyncSourcesFromDisk()
 {
+    // LoadAppSettings() replaces mAppSettings wholesale from the shared file, which would
+    // otherwise drag this instance's NAM quality back to whatever another instance (or the
+    // standalone app) last wrote. Keep this instance's own tier across the reload.
+    const NamQualityConfig ownedQuality = mNamQuality;
+
     LoadAppSettings();
     ApplyMetronomeSettingsFromAppSettings();
     ApplyDiagnosticsSettingsFromAppSettings();
@@ -4293,8 +4353,15 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     ApplyProcessingModeSettingsFromAppSettings();
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
-    ApplyNamSlimmableSettingsFromAppSettings();
-    ApplyNamOversamplingSettingsFromAppSettings();
+    if (mHost.IsStandalone())
+    {
+        ApplyNamQualitySettings();
+    }
+    else
+    {
+        mNamQuality = ownedQuality;
+        RestoreInstanceOwnedSettings();
+    }
     ApplyNamInterfaceCalibrationFromAppSettings();
     ApplyUserInputCalibrationSettingsFromAppSettings();
     ApplyUiSettingsFromAppSettings();

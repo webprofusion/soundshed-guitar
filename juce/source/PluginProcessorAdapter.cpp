@@ -461,6 +461,22 @@ void PluginProcessorAdapter::setStateInformation (const void* data, int sizeInBy
     mController.DeserializeState (controllerState);
 }
 
+void PluginProcessorAdapter::setNonRealtime (bool isNonRealtime) noexcept
+{
+    juce::AudioProcessor::setNonRealtime (isNonRealtime);
+
+    // JUCE declares this noexcept, and re-tiering takes the DSP lock and re-reports
+    // latency. Never let an exception escape into std::terminate over a quality switch.
+    try
+    {
+        mController.SetOfflineRendering (isNonRealtime);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Plugin] setNonRealtime failed: " << e.what() << std::endl;
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // IPluginHost implementation
 // ════════════════════════════════════════════════════════════════════════

@@ -17,7 +17,6 @@
 #endif
 
 #include <algorithm>
-#include <atomic>
 #include <cstddef>
 #include <cmath>
 #include <memory>
@@ -62,51 +61,11 @@ namespace guitarfx
     return std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex);
   }
 
-  // Oversampling and its anti-alias filter phase are global DSP-performance
-  // settings, not per-node preset parameters: every NAM node in every chain
-  // renders at the same quality tier. Effects read these at Prepare/load time,
-  // and PluginController pushes live changes to existing nodes as node config.
-  inline std::atomic<int>& NamOversamplingIndexStorage()
-  {
-    static std::atomic<int> index{kNamOversamplingIndexDefault};
-    return index;
-  }
-
-  inline std::atomic<int>& NamAntiAliasPhaseIndexStorage()
-  {
-    static std::atomic<int> index{kNamAntiAliasPhaseIndexDefault};
-    return index;
-  }
-
-  [[nodiscard]] inline int GetGlobalNamOversamplingIndex()
-  {
-    return NamOversamplingIndexStorage().load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] inline int GetGlobalNamAntiAliasPhaseIndex()
-  {
-    return NamAntiAliasPhaseIndexStorage().load(std::memory_order_acquire);
-  }
-
-  /** Returns true when the stored value actually changed. */
-  inline bool SetGlobalNamOversamplingIndex(double value)
-  {
-    const int sanitized = SanitizeNamOversamplingIndex(value);
-    return NamOversamplingIndexStorage().exchange(sanitized, std::memory_order_acq_rel) != sanitized;
-  }
-
-  /** Returns true when the stored value actually changed. */
-  inline bool SetGlobalNamAntiAliasPhaseIndex(double value)
-  {
-    const int sanitized = SanitizeNamAntiAliasPhaseIndex(value);
-    return NamAntiAliasPhaseIndexStorage().exchange(sanitized, std::memory_order_acq_rel) != sanitized;
-  }
-
-  [[nodiscard]] inline int GetGlobalNamOversamplingFactor()
-  {
-    return NamOversamplingFactorFromIndex(GetGlobalNamOversamplingIndex());
-  }
-
+  // Oversampling and its anti-alias filter phase are owned per NAM node, not by a
+  // process-wide global: a DAW loads every plugin instance into one process, so a
+  // shared static would force one quality tier on every instance in the project.
+  // PluginController pushes each instance's values down as node config, and
+  // SignalGraphExecutor keeps them as type defaults so nodes built later inherit them.
   [[nodiscard]] inline dsp::EAntiAliasFilterPhase NamAntiAliasPhaseFromIndex(double value)
   {
     switch (std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex))
@@ -120,10 +79,6 @@ namespace guitarfx
     }
   }
 
-  [[nodiscard]] inline dsp::EAntiAliasFilterPhase GetGlobalNamAntiAliasPhase()
-  {
-    return NamAntiAliasPhaseFromIndex(GetGlobalNamAntiAliasPhaseIndex());
-  }
 
   [[nodiscard]] inline double ResolveNamOversampledRenderingRate(double modelSampleRate,
                                                                   double hostSampleRate,
