@@ -30,6 +30,27 @@
               </div>
               <div class="settings-hint">Adjust quality while watching DSP Load and Peak Load above. Lower quality reduces CPU use.</div>
               <div class="settings-row">
+                <label for="nam-oversampling-select">Oversampling</label>
+                <select id="nam-oversampling-select" class="themed-select">
+                  <option value="0">Off</option>
+                  <option value="1">2x</option>
+                  <option value="2">4x</option>
+                  <option value="3">8x</option>
+                  <option value="4">16x</option>
+                  <option value="5">32x</option>
+                </select>
+              </div>
+              <div class="settings-hint">Renders NAM models at a multiple of their native rate to reduce aliasing on high-gain models. Each step roughly multiplies NAM CPU cost, and applies to every NAM node in every preset.</div>
+              <div class="settings-row">
+                <label for="nam-anti-alias-phase-select">AA Filter</label>
+                <select id="nam-anti-alias-phase-select" class="themed-select">
+                  <option value="0">Minimum Phase</option>
+                  <option value="1">Linear Short</option>
+                  <option value="2">Linear Long</option>
+                </select>
+              </div>
+              <div class="settings-hint">Anti-alias filter for the NAM resampler. Minimum Phase is the low-latency real-time default; the linear options are phase-linear but add latency. This also applies when oversampling is Off if your sample rate differs from the model's native rate.</div>
+              <div class="settings-row">
                 <label for="dsp-multi-threaded-toggle">Multi-threaded processing</label>
                 <label class="toggle-switch">
                   <input type="checkbox" id="dsp-multi-threaded-toggle" checked />

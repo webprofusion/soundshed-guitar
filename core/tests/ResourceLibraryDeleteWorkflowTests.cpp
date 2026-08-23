@@ -103,39 +103,22 @@ std::optional<nlohmann::json> FindLastMessageOfType(const std::vector<std::strin
     return std::nullopt;
 }
 
-fs::path FindFileRecursively(const fs::path& root, const std::string& fileName)
+/// The resource index lives in the document store now, so "is this resource
+/// persisted?" is a store lookup rather than a scan of resources-index.json.
+/// Opens its own connection each call — WAL allows a second reader alongside
+/// the controller's handle.
+bool LibraryIndexContains(const fs::path& sandbox, const std::string& resourceType, const std::string& resourceId)
 {
-    std::error_code ec;
-    for (const auto& entry : fs::recursive_directory_iterator(root, ec))
+    guitarfx::storage::JsonStore store;
+    std::string error;
+    if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
     {
-        if (ec)
-            break;
-        if (entry.is_regular_file() && entry.path().filename() == fileName)
-            return entry.path();
+        std::cerr << "Could not open the document store: " << error << "\n";
+        return false;
     }
-    return {};
-}
 
-nlohmann::json LoadJsonArray(const fs::path& path)
-{
-    std::ifstream file(path);
-    if (!file.is_open())
-        return nlohmann::json::array();
-
-    nlohmann::json parsed;
-    file >> parsed;
-    return parsed.is_array() ? parsed : nlohmann::json::array();
-}
-
-bool LibraryIndexContains(const fs::path& indexPath, const std::string& resourceType, const std::string& resourceId)
-{
-    const auto entries = LoadJsonArray(indexPath);
-    for (const auto& entry : entries)
-    {
-        if (entry.value("type", "") == resourceType && entry.value("id", "") == resourceId)
-            return true;
-    }
-    return false;
+    return store.Has(guitarfx::storage::ItemType::kResource,
+                     guitarfx::ResourceLibrary::MakeStoreId(resourceType, resourceId));
 }
 
 guitarfx::Preset BuildSingleNodeResourcePreset(const std::string& nodeId,
@@ -253,8 +236,8 @@ bool TestDeleteStoredResourceRemovesFileAndIndex()
         return false;
     }
 
-    const fs::path indexPath = FindFileRecursively(sandbox, "resources-index.json");
-    if (indexPath.empty() || !fs::exists(saved->filePath) || !LibraryIndexContains(indexPath, saved->type, saved->id))
+
+    if (!fs::exists(saved->filePath) || !LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "Stored resource was not persisted before delete\n";
         return false;
@@ -272,7 +255,7 @@ bool TestDeleteStoredResourceRemovesFileAndIndex()
         return false;
     }
 
-    if (LibraryIndexContains(indexPath, saved->type, saved->id))
+    if (LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "Stored resource still present in library index after delete\n";
         return false;
@@ -310,8 +293,8 @@ bool TestDeleteExternalResourceKeepsFileButRemovesIndex()
         return false;
     }
 
-    const fs::path indexPath = FindFileRecursively(sandbox, "resources-index.json");
-    if (indexPath.empty() || !LibraryIndexContains(indexPath, saved->type, saved->id))
+
+    if (!LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "External resource was not added to library index before delete\n";
         return false;
@@ -329,7 +312,7 @@ bool TestDeleteExternalResourceKeepsFileButRemovesIndex()
         return false;
     }
 
-    if (LibraryIndexContains(indexPath, saved->type, saved->id))
+    if (LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "External resource still present in library index after delete\n";
         return false;
@@ -362,8 +345,8 @@ bool TestDeleteInUseResourceIsRefused()
         return false;
     }
 
-    const fs::path indexPath = FindFileRecursively(sandbox, "resources-index.json");
-    if (indexPath.empty() || !LibraryIndexContains(indexPath, saved->type, saved->id))
+
+    if (!LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "In-use resource was not added to library index before delete\n";
         return false;
@@ -395,7 +378,7 @@ bool TestDeleteInUseResourceIsRefused()
         return false;
     }
 
-    if (!LibraryIndexContains(indexPath, saved->type, saved->id))
+    if (!LibraryIndexContains(sandbox, saved->type, saved->id))
     {
         std::cerr << "In-use resource should remain in library index after refused delete\n";
         return false;

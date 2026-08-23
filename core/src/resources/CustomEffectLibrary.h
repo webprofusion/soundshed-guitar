@@ -1,5 +1,7 @@
 #pragma once
 
+
+#include "storage/JsonStore.h"
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -44,6 +46,11 @@ namespace guitarfx
     [[nodiscard]] const CustomEffectLibraryEntry* GetEntry(const std::string& id) const;
     [[nodiscard]] const std::vector<CustomEffectLibraryEntry>& GetAllEntries() const { return mEntries; }
 
+    // Store-backed persistence: one row per entry, keyed by entry id.
+    void LoadFromStore(storage::JsonStore& store);
+    bool SaveToStore(storage::JsonStore& store) const;
+
+    // Legacy file persistence, retained for import/export and the migration.
     void LoadFromFile(const std::filesystem::path& path);
     void SaveToFile(const std::filesystem::path& path) const;
 

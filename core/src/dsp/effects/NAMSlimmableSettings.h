@@ -4,7 +4,6 @@
 #include "NAM/slimmable.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 
 namespace guitarfx
@@ -21,23 +20,11 @@ inline double SanitizeNamSlimmableSize(double value)
   return std::clamp(value, kNamSlimmableSizeMin, kNamSlimmableSizeMax);
 }
 
-inline std::atomic<double>& NamSlimmableSizeStorage()
-{
-  static std::atomic<double> size{kNamSlimmableSizeDefault};
-  return size;
-}
-
-inline double GetGlobalNamSlimmableSize()
-{
-  return NamSlimmableSizeStorage().load(std::memory_order_acquire);
-}
-
-inline void SetGlobalNamSlimmableSize(double value)
-{
-  NamSlimmableSizeStorage().store(SanitizeNamSlimmableSize(value), std::memory_order_release);
-}
-
-inline bool ApplyGlobalNamSlimmableSize(::nam::DSP* dsp)
+// Slimmable size is owned per NAM node rather than by a process-wide global. A DAW
+// loads every plugin instance into one process, so shared static storage would force
+// one quality tier across every instance in the project. Each effect keeps its own
+// value, delivered as node config by PluginController.
+inline bool ApplyNamSlimmableSize(::nam::DSP* dsp, double size)
 {
   if (!dsp)
     return false;
@@ -46,7 +33,7 @@ inline bool ApplyGlobalNamSlimmableSize(::nam::DSP* dsp)
   if (!slimmable)
     return false;
 
-  slimmable->SetSlimmableSize(GetGlobalNamSlimmableSize());
+  slimmable->SetSlimmableSize(SanitizeNamSlimmableSize(size));
   return true;
 }
 

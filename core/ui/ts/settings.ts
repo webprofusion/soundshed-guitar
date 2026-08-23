@@ -45,6 +45,8 @@ const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
 const DSP_MULTI_THREADED_SETTING = "audio.processing.multiThreaded";
 const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
+const NAM_OVERSAMPLING_SETTING = "audio.nam.oversampling";
+const NAM_ANTI_ALIAS_PHASE_SETTING = "audio.nam.antiAliasPhase";
 const NAM_INTERFACE_CALIBRATION_LEVEL_SETTING = "audio.nam.interfaceCalibrationLevelDbu";
 const NAM_AUTO_INPUT_CALIBRATION_SETTING = "audio.nam.autoInputCalibration";
 const DSP_NOMINAL_LEVEL_DEFAULT = -18.0;
@@ -56,6 +58,14 @@ const DSP_PROTECTION_CEILING_MAX = 0.0;
 const NAM_SLIMMABLE_SIZE_DEFAULT = 1.0;
 const NAM_SLIMMABLE_SIZE_MIN = 0.0;
 const NAM_SLIMMABLE_SIZE_MAX = 1.0;
+// Index into the Off/2x/4x/8x/16x/32x and Minimum Phase/Linear Short/Linear Long
+// option lists; the DSP side clamps to the same ranges.
+const NAM_OVERSAMPLING_DEFAULT = 0;
+const NAM_OVERSAMPLING_MIN = 0;
+const NAM_OVERSAMPLING_MAX = 5;
+const NAM_ANTI_ALIAS_PHASE_DEFAULT = 0;
+const NAM_ANTI_ALIAS_PHASE_MIN = 0;
+const NAM_ANTI_ALIAS_PHASE_MAX = 2;
 const NAM_INTERFACE_CALIBRATION_LEVEL_DEFAULT = 12.0;
 const NAM_INTERFACE_CALIBRATION_LEVEL_MIN = 0.0;
 const NAM_INTERFACE_CALIBRATION_LEVEL_MAX = 24.0;
@@ -123,6 +133,8 @@ const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") 
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
 const dspMultiThreadedToggle = document.getElementById("dsp-multi-threaded-toggle") as HTMLInputElement | null;
 const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
+const namOversamplingSelect = document.getElementById("nam-oversampling-select") as HTMLSelectElement | null;
+const namAntiAliasPhaseSelect = document.getElementById("nam-anti-alias-phase-select") as HTMLSelectElement | null;
 const namInterfaceCalibrationLevelInput = document.getElementById("nam-interface-calibration-level-input") as HTMLInputElement | null;
 const namAutoInputCalibrationToggle = document.getElementById("nam-auto-input-calibration-toggle") as HTMLInputElement | null;
 const factoryArchiveLoadingRow = document.getElementById("factory-archive-loading-row") as HTMLElement | null;
@@ -961,6 +973,42 @@ function bindImmediateNumericSetting(
   input.addEventListener("blur", () => applyValue(true));
 }
 
+/// Binds a <select> whose option values are integer indices into an enum. The
+/// stored setting is the index itself, matching what the DSP side expects.
+function bindIndexSelectSetting(
+  select: HTMLSelectElement | null,
+  key: string,
+  min: number,
+  max: number,
+  fallback: number,
+): void {
+  if (!select || select.dataset.bound === "true") return;
+  select.dataset.bound = "true";
+
+  select.addEventListener("change", () => {
+    const sanitized = Math.round(
+      sanitizeNumericSetting(Number.parseInt(select.value, 10), min, max, fallback),
+    );
+    uiState.appSettings[key] = sanitized;
+    setAppSetting(key, sanitized);
+    select.value = String(sanitized);
+  });
+}
+
+function restoreIndexSelectSetting(
+  select: HTMLSelectElement | null,
+  key: string,
+  min: number,
+  max: number,
+  fallback: number,
+): void {
+  if (!select) return;
+  const sanitized = Math.round(
+    sanitizeNumericSetting(Number(getSettingValue(key)), min, max, fallback),
+  );
+  select.value = String(sanitized);
+}
+
 function initDspLevelTargetControls(): void {
   if (dspLevelTargetsInitialized) {
     return;
@@ -989,6 +1037,22 @@ function initDspLevelTargetControls(): void {
     NAM_SLIMMABLE_SIZE_MIN,
     NAM_SLIMMABLE_SIZE_MAX,
     NAM_SLIMMABLE_SIZE_DEFAULT,
+  );
+
+  bindIndexSelectSetting(
+    namOversamplingSelect,
+    NAM_OVERSAMPLING_SETTING,
+    NAM_OVERSAMPLING_MIN,
+    NAM_OVERSAMPLING_MAX,
+    NAM_OVERSAMPLING_DEFAULT,
+  );
+
+  bindIndexSelectSetting(
+    namAntiAliasPhaseSelect,
+    NAM_ANTI_ALIAS_PHASE_SETTING,
+    NAM_ANTI_ALIAS_PHASE_MIN,
+    NAM_ANTI_ALIAS_PHASE_MAX,
+    NAM_ANTI_ALIAS_PHASE_DEFAULT,
   );
 
   bindImmediateNumericSetting(
@@ -1120,6 +1184,20 @@ export function refreshSettingsView(): void {
     );
     namSlimmableSizeInput.value = slimmableSize.toFixed(2);
   }
+  restoreIndexSelectSetting(
+    namOversamplingSelect,
+    NAM_OVERSAMPLING_SETTING,
+    NAM_OVERSAMPLING_MIN,
+    NAM_OVERSAMPLING_MAX,
+    NAM_OVERSAMPLING_DEFAULT,
+  );
+  restoreIndexSelectSetting(
+    namAntiAliasPhaseSelect,
+    NAM_ANTI_ALIAS_PHASE_SETTING,
+    NAM_ANTI_ALIAS_PHASE_MIN,
+    NAM_ANTI_ALIAS_PHASE_MAX,
+    NAM_ANTI_ALIAS_PHASE_DEFAULT,
+  );
   if (namInterfaceCalibrationLevelInput) {
     const storedCal = getSettingValue(NAM_INTERFACE_CALIBRATION_LEVEL_SETTING);
     const calLevel = storedCal !== null

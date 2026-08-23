@@ -673,6 +673,50 @@ namespace guitarfx
     }
   }
 
+  bool PresetStorage::SaveToStore(storage::JsonStore& store, const Preset& preset)
+  {
+    if (preset.id.empty())
+      return false;
+
+    // Reuse the same serializer the file format uses, so a preset written to
+    // the store and one exported to a file are byte-identical documents.
+    return store.PutRaw(storage::ItemType::kPreset, preset.id, SerializeToJson(preset));
+  }
+
+  std::optional<Preset> PresetStorage::LoadFromStore(const storage::JsonStore& store, const std::string& id)
+  {
+    const auto raw = store.GetRaw(storage::ItemType::kPreset, id);
+    if (!raw)
+      return std::nullopt;
+
+    return DeserializeFromJson(*raw);
+  }
+
+  std::vector<Preset> PresetStorage::LoadAllFromStore(const storage::JsonStore& store)
+  {
+    std::vector<Preset> presets;
+    const auto items = store.List(storage::ItemType::kPreset);
+    presets.reserve(items.size());
+
+    for (const auto& item : items)
+    {
+      if (auto preset = DeserializeFromJson(item.json))
+        presets.push_back(std::move(*preset));
+    }
+
+    return presets;
+  }
+
+  bool PresetStorage::RemoveFromStore(storage::JsonStore& store, const std::string& id)
+  {
+    return store.Remove(storage::ItemType::kPreset, id);
+  }
+
+  bool PresetStorage::ExistsInStore(const storage::JsonStore& store, const std::string& id)
+  {
+    return store.Has(storage::ItemType::kPreset, id);
+  }
+
   std::vector<Preset> PresetStorage::LoadAllFromDirectory(const std::filesystem::path& directory)
   {
     std::vector<Preset> presets;

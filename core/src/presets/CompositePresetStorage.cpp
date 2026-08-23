@@ -128,4 +128,42 @@ bool CompositePresetStorage::DeleteById(const std::string& id,
     }
 }
 
+bool CompositePresetStorage::SaveToStore(storage::JsonStore& store, const CompositePreset& cp)
+{
+    if (cp.id.empty())
+        return false;
+
+    return store.PutRaw(storage::ItemType::kCompositePreset, cp.id, SerializeToJson(cp));
+}
+
+std::optional<CompositePreset> CompositePresetStorage::LoadFromStore(const storage::JsonStore& store,
+                                                                     const std::string& id)
+{
+    const auto raw = store.GetRaw(storage::ItemType::kCompositePreset, id);
+    if (!raw)
+        return std::nullopt;
+
+    return DeserializeFromJson(*raw);
+}
+
+std::vector<CompositePreset> CompositePresetStorage::ListAllFromStore(const storage::JsonStore& store)
+{
+    std::vector<CompositePreset> result;
+    const auto items = store.List(storage::ItemType::kCompositePreset);
+    result.reserve(items.size());
+
+    for (const auto& item : items)
+    {
+        if (auto cp = DeserializeFromJson(item.json))
+            result.push_back(std::move(*cp));
+    }
+
+    return result;
+}
+
+bool CompositePresetStorage::DeleteFromStore(storage::JsonStore& store, const std::string& id)
+{
+    return store.Remove(storage::ItemType::kCompositePreset, id);
+}
+
 } // namespace guitarfx

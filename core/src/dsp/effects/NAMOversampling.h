@@ -25,6 +25,9 @@
 namespace guitarfx
 {
   inline constexpr int kNamOversamplingMaxIndex = 5;
+  inline constexpr int kNamAntiAliasPhaseMaxIndex = 2;
+  inline constexpr int kNamOversamplingIndexDefault = 0;
+  inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
 
   [[nodiscard]] inline int NamOversamplingFactorFromIndex(double value)
   {
@@ -44,9 +47,28 @@ namespace guitarfx
     return index;
   }
 
+  [[nodiscard]] inline int SanitizeNamOversamplingIndex(double value)
+  {
+    if (!std::isfinite(value))
+      return kNamOversamplingIndexDefault;
+    return std::clamp(static_cast<int>(std::llround(value)), 0, kNamOversamplingMaxIndex);
+  }
+
+  [[nodiscard]] inline int SanitizeNamAntiAliasPhaseIndex(double value)
+  {
+    if (!std::isfinite(value))
+      return kNamAntiAliasPhaseIndexDefault;
+    return std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex);
+  }
+
+  // Oversampling and its anti-alias filter phase are owned per NAM node, not by a
+  // process-wide global: a DAW loads every plugin instance into one process, so a
+  // shared static would force one quality tier on every instance in the project.
+  // PluginController pushes each instance's values down as node config, and
+  // SignalGraphExecutor keeps them as type defaults so nodes built later inherit them.
   [[nodiscard]] inline dsp::EAntiAliasFilterPhase NamAntiAliasPhaseFromIndex(double value)
   {
-    switch (std::clamp(static_cast<int>(std::llround(value)), 0, 2))
+    switch (std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex))
     {
       case 1:
         return dsp::EAntiAliasFilterPhase::LinearCascadedFIRShort;
@@ -56,6 +78,7 @@ namespace guitarfx
         return dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR;
     }
   }
+
 
   [[nodiscard]] inline double ResolveNamOversampledRenderingRate(double modelSampleRate,
                                                                   double hostSampleRate,

@@ -14,6 +14,10 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/effects/BuiltinEffects.h"
 #include "dsp/effects/IRCabEffect.h"
+#include "dsp/effects/CompositeEffectProcessor.h"
+#include <map>
+#include <memory>
+#include <algorithm>
 #include "resources/ResourceLibrary.h"
 
 namespace
@@ -270,6 +274,181 @@ bool RunGraph(const guitarfx::SignalGraph& g, std::vector<float>& outL, std::vec
 
   const Analysis analysis = Analyze(outL, outR);
   return !analysis.hasNaN && !analysis.hasInf && !analysis.allZero;
+}
+
+
+// ── Per-instance node-type config defaults ───────────────────────────────────
+//
+// NAM quality (oversampling, antiAliasPhase, slimmableSize) used to live in process-wide
+// globals, which forced one tier on every plugin instance sharing a DAW's process. It is
+// now delivered as node-type config defaults, so these tests pin the two properties that
+// replacement depends on: a node built *after* the default is set still receives it, and
+// the value reaches nodes nested inside a composite.
+
+constexpr const char* kConfigProbeType = "test_config_probe";
+
+/// Records every SetConfig call so a test can read back what a node actually received.
+class ConfigProbeEffect : public guitarfx::EffectProcessor
+{
+public:
+  void Prepare(double, int) override {}
+  void Reset() override {}
+  void Process(float** inputs, float** outputs, int numSamples) override
+  {
+    for (int ch = 0; ch < 2; ++ch)
+    {
+      if (outputs[ch] && inputs[ch])
+        std::copy_n(inputs[ch], numSamples, outputs[ch]);
+      else if (outputs[ch])
+        std::fill_n(outputs[ch], numSamples, 0.0f);
+    }
+  }
+
+  void SetParam(const std::string&, double) override {}
+  void SetConfig(const std::string& key, const std::string& value) override { mConfig[key] = value; }
+  [[nodiscard]] double GetParam(const std::string&) const override { return 0.0; }
+  [[nodiscard]] std::string GetConfig(const std::string& key) const override
+  {
+    const auto it = mConfig.find(key);
+    return it != mConfig.end() ? it->second : std::string{};
+  }
+
+  [[nodiscard]] std::string GetType() const override { return kConfigProbeType; }
+  [[nodiscard]] std::string GetCategory() const override { return "utility"; }
+
+private:
+  std::map<std::string, std::string> mConfig;
+};
+
+void RegisterConfigProbeEffect()
+{
+  using namespace guitarfx;
+  static bool registered = false;
+  if (registered)
+    return;
+  registered = true;
+
+  EffectTypeInfo info;
+  info.type = kConfigProbeType;
+  info.displayName = "Config Probe";
+  info.category = "utility";
+  EffectRegistry::Instance().Register(info.type, info, []() {
+    return std::make_unique<ConfigProbeEffect>();
+  });
+}
+
+guitarfx::SignalGraph MakeProbeGraph(const std::map<std::string, std::string>& nodeConfig = {})
+{
+  guitarfx::SignalGraph g;
+  guitarfx::GraphNode in;
+  in.id = "in";
+  in.type = "input";
+  guitarfx::GraphNode probe;
+  probe.id = "probe";
+  probe.type = kConfigProbeType;
+  probe.config = nodeConfig;
+  guitarfx::GraphNode out;
+  out.id = "out";
+  out.type = "output";
+  g.nodes = {in, probe, out};
+  g.edges = {{"in", "probe"}, {"probe", "out"}};
+  return g;
+}
+
+/// A default recorded before the graph is built must land on the node anyway — this is
+/// what replaced the process-wide global for nodes created after a settings change.
+bool TestNodeTypeConfigDefaultAppliesToLaterNodes()
+{
+  using namespace guitarfx;
+  RegisterAllEffects();
+  RegisterConfigProbeEffect();
+
+  SignalGraphExecutor exec;
+  exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "3");
+  exec.SetGraph(MakeProbeGraph());
+  exec.Prepare(kSR, kBlock);
+
+  if (exec.GetNodeConfig("probe", "oversampling") != "3")
+    return false;
+
+  // A later change reaches the live node too.
+  exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "1");
+  if (exec.GetNodeConfig("probe", "oversampling") != "1")
+    return false;
+
+  // ...and is remembered for a graph rebuilt afterwards.
+  exec.SetGraph(MakeProbeGraph());
+  exec.Prepare(kSR, kBlock);
+  return exec.GetNodeConfig("probe", "oversampling") == "1";
+}
+
+/// A node's own config still wins: the type default is only a fallback.
+bool TestNodeConfigOverridesTypeDefault()
+{
+  using namespace guitarfx;
+  RegisterAllEffects();
+  RegisterConfigProbeEffect();
+
+  SignalGraphExecutor exec;
+  exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "3");
+  exec.SetGraph(MakeProbeGraph({{"oversampling", "5"}}));
+  exec.Prepare(kSR, kBlock);
+
+  return exec.GetNodeConfig("probe", "oversampling") == "5";
+}
+
+/// Composites wrap their own graph and CompositeEffectProcessor::SetConfig does not
+/// forward, so nodes inside one need the explicit inner path. Without this the quality
+/// settings would silently skip every NAM node nested in a composite.
+bool TestNodeTypeConfigDefaultReachesCompositeInterior()
+{
+  using namespace guitarfx;
+  RegisterAllEffects();
+  RegisterConfigProbeEffect();
+
+  CompositeEffectDefinition def;
+  def.id = "test-composite-config";
+  def.name = "Test Composite";
+  def.category = "utility";
+  def.innerGraph = MakeProbeGraph();
+
+  EffectTypeInfo info;
+  info.type = def.id;
+  info.displayName = def.name;
+  info.category = def.category;
+  EffectRegistry::Instance().Register(info.type, info, [def]() {
+    return std::make_unique<CompositeEffectProcessor>(def);
+  });
+
+  SignalGraph outer;
+  GraphNode in;
+  in.id = "in";
+  in.type = "input";
+  GraphNode composite;
+  composite.id = "composite";
+  composite.type = def.id;
+  GraphNode out;
+  out.id = "out";
+  out.type = "output";
+  outer.nodes = {in, composite, out};
+  outer.edges = {{"in", "composite"}, {"composite", "out"}};
+
+  // Seeded before the graph exists — must reach the composite's inner node.
+  SignalGraphExecutor exec;
+  exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "4");
+  exec.SetGraph(outer);
+  exec.Prepare(kSR, kBlock);
+
+  auto* processor = exec.GetNodeProcessor("composite");
+  auto* wrapped = dynamic_cast<CompositeEffectProcessor*>(processor);
+  if (!wrapped)
+    return false;
+  if (wrapped->GetInnerExecutor().GetNodeConfig("probe", "oversampling") != "4")
+    return false;
+
+  // A change after the graph is live must also reach inside.
+  exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "2");
+  return wrapped->GetInnerExecutor().GetNodeConfig("probe", "oversampling") == "2";
 }
 
 } // namespace
@@ -772,6 +951,31 @@ int main()
     std::cout << "Disabled-node latency: reported=" << latencySamples
               << (ok ? "  PASS" : "  FAIL")
               << " (expected 0)\n";
+    if (ok) ++passed; else ++failed;
+  }
+
+
+  // Case 11: Node-type config default reaches a node created after it was set
+  {
+    const bool ok = TestNodeTypeConfigDefaultAppliesToLaterNodes();
+    std::cout << "Node-type config default (later nodes):"
+              << (ok ? "  PASS" : "  FAIL") << "\n";
+    if (ok) ++passed; else ++failed;
+  }
+
+  // Case 12: A node's own config still beats the type default
+  {
+    const bool ok = TestNodeConfigOverridesTypeDefault();
+    std::cout << "Node config overrides type default:"
+              << (ok ? "  PASS" : "  FAIL") << "\n";
+    if (ok) ++passed; else ++failed;
+  }
+
+  // Case 13: Type default reaches nodes nested inside a composite
+  {
+    const bool ok = TestNodeTypeConfigDefaultReachesCompositeInterior();
+    std::cout << "Node-type config default (inside composite):"
+              << (ok ? "  PASS" : "  FAIL") << "\n";
     if (ok) ++passed; else ++failed;
   }
 

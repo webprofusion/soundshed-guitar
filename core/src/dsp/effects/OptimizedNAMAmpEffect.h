@@ -455,26 +455,6 @@ public:
       mPresenceDb = std::clamp(value, -10.0, 10.0);
       UpdateToneStack();
     }
-    else if (key == "oversampling")
-    {
-      const int index = std::clamp(static_cast<int>(std::llround(value)), 0, kNamOversamplingMaxIndex);
-      if (index != mOversamplingIndex)
-      {
-        mOversamplingIndex = index;
-        mModelsNeedReset = true;
-        ConfigureModelProcessing();
-      }
-    }
-    else if (key == "antiAliasPhase")
-    {
-      const int index = std::clamp(static_cast<int>(std::llround(value)), 0, 2);
-      if (index != mAntiAliasPhaseIndex)
-      {
-        mAntiAliasPhaseIndex = index;
-        mModelsNeedReset = true;
-        ConfigureModelProcessing();
-      }
-    }
     else if (key == "enabled")
     {
       mEnabled = value > 0.5;
@@ -491,9 +471,33 @@ public:
     else if (key == "slimmableSize")
     {
       if (const auto parsed = ParseDouble(value); parsed.has_value())
-        SetGlobalNamSlimmableSize(*parsed);
-      ApplyGlobalNamSlimmableSize(mModelLeft.get());
-      ApplyGlobalNamSlimmableSize(mModelRight.get());
+        mSlimmableSize = SanitizeNamSlimmableSize(*parsed);
+      ApplyNamSlimmableSize(mModelLeft.get(), mSlimmableSize);
+      ApplyNamSlimmableSize(mModelRight.get(), mSlimmableSize);
+    }
+    else if (key == "oversampling" || key == "antiAliasPhase")
+    {
+      // Per-instance quality settings delivered as node config. Both change the
+      // rendering rate or the AA filter, so models already prepared for a
+      // different tier have to be re-prepared.
+      const auto parsed = ParseDouble(value);
+      if (!parsed.has_value())
+        return;
+
+      const int requestedOversampling = key == "oversampling"
+        ? SanitizeNamOversamplingIndex(*parsed)
+        : mOversamplingIndex;
+      const int requestedPhase = key == "antiAliasPhase"
+        ? SanitizeNamAntiAliasPhaseIndex(*parsed)
+        : mAntiAliasPhaseIndex;
+
+      if (requestedOversampling == mOversamplingIndex && requestedPhase == mAntiAliasPhaseIndex)
+        return;
+
+      mOversamplingIndex = requestedOversampling;
+      mAntiAliasPhaseIndex = requestedPhase;
+      mModelsNeedReset = true;
+      ConfigureModelProcessing();
     }
   }
 
@@ -513,10 +517,6 @@ public:
       return mTrebleDb;
     if (key == "presence")
       return mPresenceDb;
-    if (key == "oversampling")
-      return static_cast<double>(mOversamplingIndex);
-    if (key == "antiAliasPhase")
-      return static_cast<double>(mAntiAliasPhaseIndex);
     if (key == "enabled")
       return mEnabled ? 1.0 : 0.0;
     if (key == "useCalibration")
@@ -593,8 +593,8 @@ private:
         return false;
       }
 
-      ApplyGlobalNamSlimmableSize(modelLeft.get());
-      ApplyGlobalNamSlimmableSize(modelRight.get());
+      ApplyNamSlimmableSize(modelLeft.get(), mSlimmableSize);
+      ApplyNamSlimmableSize(modelRight.get(), mSlimmableSize);
 
       mModelLeft = std::move(modelLeft);
       mModelRight = std::move(modelRight);
@@ -651,8 +651,13 @@ private:
   NamOversamplingProcessor mOversamplingRight;
   NamDryDelay mDryDelayLeft;
   NamDryDelay mDryDelayRight;
-  int mOversamplingIndex = 0;
-  int mAntiAliasPhaseIndex = 0;
+  // Per-node quality settings, delivered as node config by PluginController and
+  // seeded on newly built nodes from SignalGraphExecutor's type defaults. These
+  // are deliberately not process-global: separate plugin instances in one DAW
+  // project each run at their own tier.
+  int mOversamplingIndex = kNamOversamplingIndexDefault;
+  int mAntiAliasPhaseIndex = kNamAntiAliasPhaseIndexDefault;
+  double mSlimmableSize = kNamSlimmableSizeDefault;
 
   double mUserInputGain = 1.0;
   double mUserOutputGain = 1.0;
@@ -928,11 +933,7 @@ inline void RegisterOptimizedNAMAmpEffect()
     {"presence",              "Presence",           0.0,   -10.0, 10.0,  "dB",  "Tone"},
     {"outputGain",            "Output",             0.0,   -24.0, 24.0,  "dB",  "Level"},
     {"mix",                   "Mix",                1.0,    0.0,   1.0,  "amount", "Advanced", true},
-    {"useCalibration",        "Use Calibration",    1.0,    0.0,   1.0,  "toggle", "Advanced", true},
-    {"oversampling",          "Oversampling",        0.0,    0.0,   5.0,  "enum", "Advanced", true, 1.0,
-      {"Off", "2x", "4x", "8x", "16x", "32x"}},
-    {"antiAliasPhase",        "AA Filter",           0.0,    0.0,   2.0,  "enum", "Advanced", true, 1.0,
-      {"Minimum Phase", "Linear Short", "Linear Long"}}
+    {"useCalibration",        "Use Calibration",    1.0,    0.0,   1.0,  "toggle", "Advanced", true}
   };
 
   EffectRegistry::Instance().Register(info.type, info, []()

@@ -260,6 +260,55 @@ if(NOT TARGET guitarfx_miniz)
         "${guitarfx_miniz_src_SOURCE_DIR}")
 endif()
 
+# SQLite — backing store for all app-owned JSON documents (settings, presets,
+# resource index, blends, layouts, riffs). Content files (.nam/.wav/.wasm) stay
+# on disk; only their metadata lives here. Official amalgamation, pinned by hash.
+if(NOT TARGET guitarfx_sqlite)
+    include(FetchContent)
+    FetchContent_Declare(guitarfx_sqlite_src
+        URL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip
+        URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
+
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_GetProperties(guitarfx_sqlite_src)
+    if(NOT guitarfx_sqlite_src_POPULATED)
+        FetchContent_Populate(guitarfx_sqlite_src)
+    endif()
+
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
+
+    add_library(guitarfx_sqlite STATIC "${guitarfx_sqlite_src_SOURCE_DIR}/sqlite3.c")
+    set_target_properties(guitarfx_sqlite PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(guitarfx_sqlite PUBLIC "${guitarfx_sqlite_src_SOURCE_DIR}")
+
+    # Trim the build to what the store actually uses. JSON1 and FTS/RTREE are
+    # left at their defaults (JSON1 is built in and we rely on json_extract for
+    # ad-hoc queries without ever adding columns); the rest is dead weight in a
+    # plugin binary.
+    target_compile_definitions(guitarfx_sqlite PUBLIC
+        SQLITE_THREADSAFE=1              # serialized: several plugin instances per process
+        SQLITE_DEFAULT_MEMSTATUS=0
+        SQLITE_DQS=0                     # reject double-quoted string literals
+        SQLITE_LIKE_DOESNT_MATCH_BLOBS
+        SQLITE_MAX_EXPR_DEPTH=0
+        SQLITE_OMIT_DEPRECATED
+        SQLITE_OMIT_SHARED_CACHE
+        SQLITE_OMIT_LOAD_EXTENSION
+        SQLITE_OMIT_AUTOINIT
+        SQLITE_USE_ALLOCA)
+
+    if(MSVC)
+        target_compile_options(guitarfx_sqlite PRIVATE /wd4996 /wd4244 /wd4267)
+    endif()
+endif()
+
 # minimp3 — single-header MP3 decoder used by AudioDecoder for riff/demo audio import
 if(NOT TARGET guitarfx_minimp3)
     include(FetchContent)
@@ -550,6 +599,12 @@ set(GUITARFX_CORE_SOURCES
     src/resources/ResourceLibrary.h
     src/resources/ResourceLibrary.cpp
 
+    # Storage
+    src/storage/JsonStore.h
+    src/storage/JsonStore.cpp
+    src/storage/StorageMigration.h
+    src/storage/StorageMigration.cpp
+
     # Models
     src/models/ModelHasher.h
     src/models/ModelHasher.cpp
@@ -684,6 +739,7 @@ target_link_libraries(SoundshedGuitarCore
     PRIVATE
         guitarfx_miniz
         guitarfx_minimp3
+        guitarfx_sqlite
 )
 
 if(TARGET guitarfx_wasmtime)

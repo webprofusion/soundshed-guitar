@@ -197,6 +197,8 @@ export const uiState: UiState = {
   appSettings: {
     "diagnostics.signalLevelsEnabled": true,
     "audio.nam.slimmableSize": 1.0,
+    "audio.nam.oversampling": 0,
+    "audio.nam.antiAliasPhase": 0,
     "audio.userInputCalibration.profiles": [],
     "audio.userInputCalibration.activeProfileId": null,
     "metronome.clickConfig": [

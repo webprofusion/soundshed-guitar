@@ -28,7 +28,11 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                 key == "audio.dsp.nominalOperatingLevelDbfs"
                 || key == "audio.dsp.outputProtectionCeilingDbfs";
             const bool affectsProcessingMode = key == "audio.processing.multiThreaded";
-            const bool affectsNamSlimmable = key == "audio.nam.slimmableSize";
+            const bool affectsNamQuality = PluginController::IsNamQualitySettingKey(key);
+            // Hosted as a plugin, NAM quality belongs to this instance alone, so it must
+            // not reach app.json — otherwise the shared-sync poll would push one
+            // instance's tier onto every other instance. Standalone still persists.
+            const bool instanceOwned = c.IsInstanceOwnedSettingKey(key);
             const bool affectsNamInterfaceCalibration = key == "audio.nam.interfaceCalibrationLevelDbu"
                 || key == "audio.nam.autoInputCalibration";
 
@@ -54,11 +58,12 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                     c.ApplyProcessingModeSettingsFromAppSettings();
                     c.mPendingStateBroadcast = true;
                 }
-                if (affectsNamSlimmable)
-                    c.ApplyNamSlimmableSettingsFromAppSettings();
+                if (affectsNamQuality)
+                    c.ApplyNamQualitySettings();
                 if (affectsNamInterfaceCalibration)
                     c.ApplyNamInterfaceCalibrationFromAppSettings();
-                c.SaveAppSettings();
+                if (!instanceOwned)
+                    c.SaveAppSettings();
                 return true;
             }
             c.mAppSettings[key] = msg["value"];
@@ -74,11 +79,12 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
                 c.ApplyProcessingModeSettingsFromAppSettings();
                 c.mPendingStateBroadcast = true;
             }
-            if (affectsNamSlimmable)
-                c.ApplyNamSlimmableSettingsFromAppSettings();
+            if (affectsNamQuality)
+                c.ApplyNamQualitySettings();
             if (affectsNamInterfaceCalibration)
                 c.ApplyNamInterfaceCalibrationFromAppSettings();
-            c.SaveAppSettings();
+            if (!instanceOwned)
+                c.SaveAppSettings();
         }
         return true;
     }

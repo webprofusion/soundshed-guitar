@@ -6,6 +6,7 @@
 #include "presets/PresetTypes.h"
 
 #include <memory>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -67,6 +68,23 @@ namespace guitarfx
 
     /// Get the inner executor for diagnostics.
     [[nodiscard]] const SignalGraphExecutor &GetInnerExecutor() const { return mInnerExecutor; }
+
+    /// Forward a per-instance node-type config default into the wrapped graph.
+    /// SetConfig() does not route into inner nodes, so settings that apply to a node
+    /// *type* (NAM quality) need this explicit path to reach nodes inside a composite.
+    void SetInnerNodeTypeConfigDefault(const std::string &type,
+                                       const std::string &key,
+                                       const std::string &value)
+    {
+      mInnerExecutor.SetNodeTypeConfigDefault(type, key, value);
+    }
+
+    /// Seed the wrapped graph with a whole set of type defaults, before it is built.
+    void SeedInnerNodeTypeConfigDefaults(
+        const std::map<std::string, std::map<std::string, std::string>> &defaults)
+    {
+      mInnerExecutor.SeedNodeTypeConfigDefaults(defaults);
+    }
 
   private:
     /// Build the exposed parameter lookup map.

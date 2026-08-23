@@ -239,6 +239,15 @@ namespace guitarfx
     void SetNodeParam(const std::string &presetId, const std::string &nodeId, const std::string &key, double value);
     void SetNodeConfig(const std::string &presetId, const std::string &nodeId, const std::string &key, const std::string &value);
     void SetNodeConfigForType(const std::string &type, const std::string &key, const std::string &value);
+
+    /**
+     * Record a config value adopted by every node of `type` across every preset slot and
+     * the global pre/post chains, including slots and nodes created later.
+     *
+     * Carries this instance's NAM quality settings (oversampling, antiAliasPhase,
+     * slimmableSize), which are per plugin instance rather than process-wide.
+     */
+    void SetNodeTypeConfigDefault(const std::string &type, const std::string &key, const std::string &value);
     [[nodiscard]] std::string GetNodeConfig(const std::string &presetId, const std::string &nodeId, const std::string &key) const;
     [[nodiscard]] EffectProcessor *GetNodeProcessor(const std::string &presetId, const std::string &nodeId);
     [[nodiscard]] const EffectProcessor *GetNodeProcessor(const std::string &presetId, const std::string &nodeId) const;
@@ -401,6 +410,9 @@ namespace guitarfx
     void TunerWorkerLoop();
 
     ResourceLibrary *mResourceLibrary = nullptr;
+    // Per-instance node-type config (NAM quality), replayed onto every executor this
+    // mixer builds — see SetNodeTypeConfigDefault().
+    std::map<std::string, std::map<std::string, std::string>> mNodeTypeConfigDefaults;
     // Held by pointer so the audio thread can drop a finished fade-out with a pointer move:
     // moving a PresetInstance by value moves its SignalGraphExecutor, whose move-assignment
     // joins worker threads — not something that can happen on the realtime path.
