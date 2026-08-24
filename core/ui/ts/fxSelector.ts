@@ -417,63 +417,16 @@ function renderFxItem(effect: FxLibraryItem, categoryColor: string): string {
 }
 
 /**
- * Bind drag event handlers to all FX items.
+ * Announce a press on an FX library item so the signal path can drag it.
+ *
+ * Dragging is pointer-driven rather than HTML5 drag-and-drop: WebKitGTK never
+ * delivers the `drop` event to our targets, so native dragging could not add
+ * effects on Linux at all (issue #27). The signal path owns the graph, so it
+ * owns what a drop means — this module only reports where the drag started and
+ * which effect it carries.
  */
 function bindFxItemDragHandlers(): void {
   if (!fxSelectorEffectsList || dragDelegationBound) return;
-
-  fxSelectorEffectsList.addEventListener("dragstart", (event: Event) => {
-    const dragEvent = event as DragEvent;
-    const target = dragEvent.target as HTMLElement | null;
-    const el = target?.closest(".fx-item") as HTMLElement | null;
-    if (!el || !dragEvent.dataTransfer) return;
-
-    const effectType = el.dataset.effectType;
-    const blendId = el.dataset.blendId;
-    const compositeId = el.dataset.compositeId;
-    const customEffectId = el.dataset.customEffectId;
-    if (!effectType) return;
-
-    dragEvent.dataTransfer.setData("application/x-fx-effect", effectType);
-    if (blendId) {
-      dragEvent.dataTransfer.setData("application/x-fx-blend", blendId);
-      dragEvent.dataTransfer.setData("application/x-fx-blend-name", el.querySelector(".fx-item-name")?.textContent ?? "");
-      dragEvent.dataTransfer.setData("application/x-fx-blend-category", el.dataset.blendCategory ?? "");
-    }
-    if (customEffectId) {
-      let defaultParams: Record<string, number> = {};
-      try {
-        defaultParams = JSON.parse(decodeURIComponent(el.dataset.customEffectDefaultParams ?? "%7B%7D")) as Record<string, number>;
-      } catch {
-        defaultParams = {};
-      }
-      dragEvent.dataTransfer.setData("application/x-fx-custom-effect", JSON.stringify({
-        customEffectId,
-        baseEffectType: effectType,
-        name: el.querySelector(".fx-item-name")?.textContent ?? "",
-        category: el.dataset.effectCategory ?? "utility",
-        moduleResourceType: el.dataset.customEffectResourceType ?? "",
-        moduleResourceId: el.dataset.customEffectResourceId ?? "",
-        defaultParams,
-      }));
-    }
-    if (compositeId) {
-      dragEvent.dataTransfer.setData("application/x-fx-composite", compositeId);
-      dragEvent.dataTransfer.setData("application/x-fx-composite-name", el.querySelector(".fx-item-name")?.textContent ?? "");
-    }
-
-    dragEvent.dataTransfer.effectAllowed = "copy";
-    el.classList.add("dragging");
-    document.body.classList.add("fx-dragging");
-  });
-
-  fxSelectorEffectsList.addEventListener("dragend", (event: Event) => {
-    const dragEvent = event as DragEvent;
-    const target = dragEvent.target as HTMLElement | null;
-    const el = target?.closest(".fx-item") as HTMLElement | null;
-    el?.classList.remove("dragging");
-    document.body.classList.remove("fx-dragging");
-  });
 
   fxSelectorEffectsList.addEventListener("pointerdown", (event: PointerEvent) => {
     if (!event.isPrimary || event.button !== 0) return;
@@ -505,9 +458,7 @@ function bindFxItemDragHandlers(): void {
     document.dispatchEvent(new CustomEvent("fx-pointer-drag-start", {
       detail: {
         source: el,
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        pointerEvent: event,
         payload: {
           effectType,
           blendId: el.dataset.blendId || undefined,

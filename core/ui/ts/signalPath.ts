@@ -27,13 +27,15 @@ import {
   focusFxSelectorCategory,
   getFxLibraryItems,
   getOrderedFxCategories,
-    sendAddSignalPathNode,
-    sendAddSignalPathNodeOnEdge,
-    type FxPointerDragPayload,
-    type FxLibraryItem,
+  sendAddSignalPathNode,
+  sendAddSignalPathNodeOnEdge,
+  type FxPointerDragPayload,
+  type FxLibraryItem,
   type SignalPathEdgeRef,
   type SignalPathNodeOptions,
 } from "./fxSelector.js";
+import { beginPointerDrag, getUiZoom, type PointerDragGesture } from "./pointerDrag.js";
+import { resolveNodeDropAction, type NodeDropTarget } from "./signalPathDropTargets.js";
 import { GenericKnob, enhanceRangeInput } from "./controls.js";
 import { getUnsupportedPluginSelection, inferPluginFormat, type PluginResourceSupportInfo } from "./pluginSupport.js";
 import {
@@ -108,13 +110,21 @@ let mixTabActive = false;
 let signalPathEqInteraction: EqCurveInteraction | null = null;
 let signalPathSpatialInteraction: SpatialPannerInteraction | null = null;
 let signalPathSpatialNodeId: string | null = null;
+/**
+ * Tooltip for the plugin folder-browse button.
+ *
+ * VST3 and LV2 plugins are *directories* on Linux (and LV2 everywhere), but no
+ * native file dialog reliably lets a folder be picked while a file filter is
+ * active — GTK navigates into the folder instead. This second button opens a
+ * folders-only picker as the escape hatch; either route resolves to the same
+ * bundle path, so users never have to know which one their platform needs.
+ */
+const PLUGIN_FOLDER_BROWSE_TITLE = "Browse for a plugin folder (.vst3 / .lv2 bundle)...";
+
 /** Knob instances for the current node params panel, keyed by param key. */
 const nodeParamKnobs = new Map<string, GenericKnob>();
 const effectVisualizationElement = document.getElementById("effect-visualization");
 
-// Drag-drop state
-let draggedNodeId: string | null = null;
-let dragOverNodeId: string | null = null;
 let selectedNodeId: string | null = null;
 let lastSelectedNodeType: string | null = null;
 let lastSelectedNodeCategory: string | null = null;
@@ -130,9 +140,6 @@ const unavailableNamArchitectureResourceIds = new Set<string>();
 let lastRenderedPresetId: string | null = null;
 let overlayBypassClickCleanup: (() => void) | null = null;
 let layoutScaleObserverCleanups: (() => void)[] = [];
-let nodeDragStartPoint: { nodeId: string; x: number; y: number } | null = null;
-let lastNodeDragPoint: { x: number; y: number } | null = null;
-let nodeDragDropHandled = false;
 let effectVisualizationDropCleanup: (() => void) | null = null;
 type HostedPluginLoadFailure = {
   selectionKey: string;
@@ -155,9 +162,6 @@ const HOSTED_PLUGIN_FAVORITES_SETTING = "plugins.hostFavorites";
 const HOSTED_PLUGIN_NAME_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 const analyzerSpectrogramHistoryByNode = new Map<string, number[][]>();
 const ANALYZER_SPECTROGRAM_HISTORY_FRAMES = 160;
-
-const NODE_BYPASS_DRAG_DISTANCE_PX = 36;
-const NODE_BYPASS_DRAG_DIRECTION_RATIO = 1.2;
 
 const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
   amp: "linear-gradient(145deg, rgba(44, 62, 94, 0.92) 0%, rgba(15, 20, 32, 0.96) 100%)",
@@ -861,40 +865,6 @@ function normalizeCustomEffectDefaultParams(value: unknown): Record<string, numb
   return result;
 }
 
-function parseCustomEffectDragPayload(payloadRaw: string): CustomEffectDragPayload | null {
-  if (!payloadRaw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(payloadRaw) as Partial<CustomEffectDragPayload>;
-    if (
-      typeof parsed.customEffectId !== "string" ||
-      typeof parsed.baseEffectType !== "string" ||
-      typeof parsed.moduleResourceType !== "string" ||
-      typeof parsed.moduleResourceId !== "string" ||
-      !parsed.customEffectId ||
-      !parsed.baseEffectType ||
-      !parsed.moduleResourceType ||
-      !parsed.moduleResourceId
-    ) {
-      return null;
-    }
-
-    return {
-      customEffectId: parsed.customEffectId,
-      baseEffectType: parsed.baseEffectType,
-      name: typeof parsed.name === "string" ? parsed.name : "Custom Effect",
-      category: typeof parsed.category === "string" ? parsed.category : "utility",
-      moduleResourceType: parsed.moduleResourceType,
-      moduleResourceId: parsed.moduleResourceId,
-      defaultParams: normalizeCustomEffectDefaultParams(parsed.defaultParams),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function parseCustomEffectDefaultParamsDataset(value: string | undefined): Record<string, number> {
   if (!value) {
     return {};
@@ -923,162 +893,191 @@ function buildCustomEffectNodeOptions(payload: CustomEffectDragPayload): SignalP
   };
 }
 
-type FxPointerDragTarget =
-  | { kind: "node"; element: HTMLElement; node: GraphNode; preset: Preset }
-  | { kind: "edge"; element: HTMLElement; edge: EdgeRef };
-type FxPointerDrag = {
-  source: HTMLElement;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  payload: FxPointerDragPayload;
-  active: boolean;
-  preview: HTMLElement | null;
-  target: FxPointerDragTarget | null;
-};
+/**
+ * A drop target for an FX library item: replace a node, or insert on a
+ * connection between two nodes.
+ */
+type FxDropTarget =
+  | { element: HTMLElement; kind: "node"; node: GraphNode; preset: Preset }
+  | { element: HTMLElement; kind: "edge"; edge: EdgeRef };
 
-let fxPointerDrag: FxPointerDrag | null = null;
-
-function getUiZoomForPointerDrag(): number {
-  const zoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
-  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-}
-
-function clearFxPointerDragTarget(target: FxPointerDragTarget | null): void {
-  if (!target) return;
-  target.element.classList.remove("drag-over");
-  if (target.kind === "edge") {
-    target.element.querySelector(".signal-connector")?.classList.remove("drag-over");
+function setSignalPathDropHighlight(element: HTMLElement, kind: "node" | "edge", highlighted: boolean): void {
+  element.classList.toggle("drag-over", highlighted);
+  if (kind === "edge") {
+    element.querySelector(".signal-connector")?.classList.toggle("drag-over", highlighted);
   }
 }
 
-function positionFxPointerDragPreview(preview: HTMLElement, event: PointerEvent): void {
-  const zoom = getUiZoomForPointerDrag();
-  preview.style.left = `${Math.round(event.clientX / zoom)}px`;
-  preview.style.top = `${Math.round(event.clientY / zoom)}px`;
-}
-
-function createFxPointerDragPreview(drag: FxPointerDrag, event: PointerEvent): HTMLElement {
-  const rect = drag.source.getBoundingClientRect();
-  const zoom = getUiZoomForPointerDrag();
-  const preview = drag.source.cloneNode(true) as HTMLElement;
-  preview.classList.remove("dragging");
-  preview.classList.add("fx-item-drag-preview");
-  preview.style.width = `${rect.width / zoom}px`;
-  document.body.appendChild(preview);
-  positionFxPointerDragPreview(preview, event);
-  return preview;
-}
-
-function updateFxPointerDragTarget(event: PointerEvent): void {
-  if (!fxPointerDrag) return;
-
+/**
+ * Hit-test the signal path under the pointer. Only elements inside the signal
+ * path count, so a node rendered elsewhere (a preset preview, say) is ignored.
+ */
+function resolveSignalPathDropElements(event: PointerEvent): {
+  nodeElement: HTMLElement | null;
+  connector: HTMLElement | null;
+} {
   const hit = document.elementFromPoint(event.clientX, event.clientY);
-  const nodeElement = hit?.closest<HTMLElement>(".signal-node[data-node-id]");
-  const connector = hit?.closest<HTMLElement>(".signal-connector-wrapper");
-  let target: FxPointerDragTarget | null = null;
+  const nodeElement = hit?.closest<HTMLElement>(".signal-node[data-node-id]") ?? null;
+  const connector = hit?.closest<HTMLElement>(".signal-connector-wrapper") ?? null;
+  const inSignalPath = (element: HTMLElement | null): HTMLElement | null =>
+    element && signalPathNodesElement?.contains(element) ? element : null;
+  return { nodeElement: inSignalPath(nodeElement), connector: inSignalPath(connector) };
+}
 
-  if (nodeElement && signalPathNodesElement?.contains(nodeElement)) {
+function resolveFxDropTarget(event: PointerEvent): FxDropTarget | null {
+  const { nodeElement, connector } = resolveSignalPathDropElements(event);
+
+  if (nodeElement) {
     const preset = getSignalPathPreset();
     const nodeId = nodeElement.dataset.nodeId ?? "";
     const node = preset?.graph?.nodes.find((candidate) => candidate.id === nodeId);
     if (node && preset && !isProtectedSignalPathNode(node)) {
-      target = { kind: "node", element: nodeElement, node, preset };
+      return { element: nodeElement, kind: "node", node, preset };
     }
-  } else if (connector && signalPathNodesElement?.contains(connector)) {
+    return null;
+  }
+
+  if (connector) {
     const edge = parseEdgeFromDataset(connector);
-    if (edge) target = { kind: "edge", element: connector, edge };
+    if (edge) return { element: connector, kind: "edge", edge };
   }
-
-  if (fxPointerDrag.target?.element === target?.element) return;
-  clearFxPointerDragTarget(fxPointerDrag.target);
-  fxPointerDrag.target = target;
-  if (!target) return;
-
-  target.element.classList.add("drag-over");
-  if (target.kind === "edge") {
-    target.element.querySelector(".signal-connector")?.classList.add("drag-over");
-  }
+  return null;
 }
 
-function finishFxPointerDrag(event: PointerEvent, cancelled = false): void {
-  const drag = fxPointerDrag;
-  if (!drag || drag.pointerId !== event.pointerId) return;
+function applyFxDrop(target: FxDropTarget | null, payload: FxPointerDragPayload): void {
+  if (!target) return;
 
-  clearFxPointerDragTarget(drag.target);
-  drag.source.classList.remove("dragging");
-  document.body.classList.remove("fx-dragging");
-  drag.preview?.remove();
-  if (drag.source.hasPointerCapture(event.pointerId)) {
-    drag.source.releasePointerCapture(event.pointerId);
-  }
-  fxPointerDrag = null;
-  if (!drag.active || cancelled || !drag.target) return;
-
-  const customEffect = drag.payload.customEffect;
+  const customEffect = payload.customEffect;
   const options = customEffect
-    ? buildCustomEffectNodeOptions({ ...customEffect, baseEffectType: drag.payload.effectType })
+    ? buildCustomEffectNodeOptions({ ...customEffect, baseEffectType: payload.effectType })
     : {
-        config: drag.payload.blendId ? { blendId: drag.payload.blendId } : undefined,
-        label: drag.payload.blendName,
-        category: drag.payload.blendCategory,
-      };
+      config: payload.blendId ? { blendId: payload.blendId } : undefined,
+      label: payload.blendName,
+      category: payload.blendCategory,
+    };
 
-  if (drag.target.kind === "node") {
-    applyOptimisticNodeReplacement(drag.target.node, drag.payload.effectType, drag.target.preset, options);
-    sendReplaceSignalPathNode(drag.target.node.id, drag.payload.effectType, options);
+  if (target.kind === "node") {
+    applyOptimisticNodeReplacement(target.node, payload.effectType, target.preset, options);
+    sendReplaceSignalPathNode(target.node.id, payload.effectType, options);
     return;
   }
 
-  sendAddEffectAtEdgeOrFallback(drag.payload.effectType, drag.target.edge, "__input__", options);
+  sendAddEffectAtEdgeOrFallback(payload.effectType, target.edge, "__input__", options);
 }
 
+/**
+ * The FX selector owns its markup but not the graph, so it announces a press on
+ * a library item and the signal path decides what dropping it means.
+ */
 document.addEventListener("fx-pointer-drag-start", (event: Event) => {
   const detail = (event as CustomEvent<{
     source: HTMLElement;
-    pointerId: number;
-    clientX: number;
-    clientY: number;
+    pointerEvent: PointerEvent;
     payload: FxPointerDragPayload;
   }>).detail;
-  if (!detail?.source || !detail.payload.effectType) return;
+  if (!detail?.source || !detail.payload?.effectType) return;
 
-  fxPointerDrag = {
+  beginPointerDrag<FxDropTarget>(detail.pointerEvent, {
     source: detail.source,
-    pointerId: detail.pointerId,
-    startX: detail.clientX,
-    startY: detail.clientY,
-    payload: detail.payload,
-    active: false,
-    preview: null,
-    target: null,
-  };
-  detail.source.setPointerCapture(detail.pointerId);
+    sourceSelector: ".fx-item",
+    previewClass: "fx-item-drag-preview",
+    bodyClass: "fx-dragging",
+    resolveTarget: resolveFxDropTarget,
+    setTargetHighlight: (target, highlighted) =>
+      setSignalPathDropHighlight(target.element, target.kind, highlighted),
+    onDrop: (target) => applyFxDrop(target, detail.payload),
+  });
 });
 
-document.addEventListener("pointermove", (event: PointerEvent) => {
-  if (!fxPointerDrag || fxPointerDrag.pointerId !== event.pointerId) return;
+/**
+ * A drop target for reordering an existing chain node. `drop` carries the graph
+ * facts; `element` is only used for the hover highlight.
+ */
+type NodeDragTarget = { element: HTMLElement; drop: NodeDropTarget<EdgeRef> };
 
-  if (!fxPointerDrag.active) {
-    const distance = Math.hypot(event.clientX - fxPointerDrag.startX, event.clientY - fxPointerDrag.startY);
-    if (distance < 6) return;
-    fxPointerDrag.active = true;
-    fxPointerDrag.source.classList.add("dragging");
-    document.body.classList.add("fx-dragging");
-    fxPointerDrag.preview = createFxPointerDragPreview(fxPointerDrag, event);
+function resolveNodeDragTarget(
+  event: PointerEvent,
+  draggedNodeId: string,
+  sourceLeft: number,
+): NodeDragTarget | null {
+  const { nodeElement, connector } = resolveSignalPathDropElements(event);
+
+  if (nodeElement) {
+    const preset = getSignalPathPreset();
+    const nodeId = nodeElement.dataset.nodeId ?? "";
+    const node = preset?.graph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || nodeId === draggedNodeId || isProtectedSignalPathNode(node)) return null;
+    return {
+      element: nodeElement,
+      drop: {
+        kind: "node",
+        nodeId,
+        isLeftOfDragged: nodeElement.getBoundingClientRect().left < sourceLeft,
+        incomingEdges: (preset?.graph?.edges ?? []).map(normalizeEdge).filter((edge) => edge.to === nodeId),
+      },
+    };
   }
 
-  event.preventDefault();
-  if (fxPointerDrag.preview) positionFxPointerDragPreview(fxPointerDrag.preview, event);
-  updateFxPointerDragTarget(event);
-}, true);
+  if (connector) {
+    const edge = parseEdgeFromDataset(connector);
+    if (edge) return { element: connector, drop: { kind: "edge", edge } };
+  }
+  return null;
+}
 
-document.addEventListener("pointerup", (event: PointerEvent) => {
-  finishFxPointerDrag(event);
-}, true);
-document.addEventListener("pointercancel", (event: PointerEvent) => {
-  finishFxPointerDrag(event, true);
-}, true);
+function applyNodeDrop(
+  draggedNodeId: string,
+  target: NodeDropTarget<EdgeRef> | null,
+  gesture: PointerDragGesture,
+): void {
+  const action = resolveNodeDropAction({ draggedNodeId, target, gesture });
+  switch (action.kind) {
+    case "reorderToEdge":
+      sendMoveSignalPathNodeToEdge(action.nodeId, action.edge);
+      return;
+    case "reorderAfterNode":
+      sendSignalPathNodeReorder(action.nodeId, action.targetNodeId);
+      return;
+    case "toggleBypass": {
+      const preset = getSignalPathPreset();
+      const node = preset?.graph?.nodes.find((candidate) => candidate.id === action.nodeId);
+      if (preset && node) toggleSignalPathNodeBypass(node, preset);
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+/**
+ * Start dragging a chain node. Splitter and mixer tiles anchor a parallel
+ * branch and cannot be moved, and presses that land on a control inside the
+ * node belong to that control.
+ */
+function beginNodePointerDrag(event: PointerEvent, source: HTMLElement): void {
+  if (event.target instanceof Element && event.target.closest("button, input, select, textarea")) {
+    return;
+  }
+
+  const nodeId = source.dataset.nodeId ?? "";
+  const node = getSignalPathPreset()?.graph?.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node || isProtectedSignalPathNode(node)) return;
+
+  // Captured up front: a re-render mid-drag detaches the source, and a detached
+  // element reports a zero rect.
+  const sourceLeft = source.getBoundingClientRect().left;
+
+  beginPointerDrag<NodeDragTarget>(event, {
+    source,
+    sourceSelector: ".signal-node",
+    previewClass: "signal-node-drag-preview",
+    matchPreviewHeight: true,
+    resolveTarget: (moveEvent) => resolveNodeDragTarget(moveEvent, nodeId, sourceLeft),
+    setTargetHighlight: (target, highlighted) =>
+      setSignalPathDropHighlight(target.element, target.drop.kind, highlighted),
+    onDrop: (target, gesture) => applyNodeDrop(nodeId, target?.drop ?? null, gesture),
+  });
+}
 
 function applyOptimisticNodeReplacement(
   targetNode: GraphNode,
@@ -2566,30 +2565,6 @@ document.addEventListener("resource-browser:navigation-cache-updated", () => {
   refreshSelectedNodeParams();
 });
 
-function updateNodeDragPoint(event: DragEvent): void {
-  if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-    lastNodeDragPoint = { x: event.clientX, y: event.clientY };
-  }
-}
-
-function shouldToggleNodeBypassFromDrag(event: DragEvent): boolean {
-  if (!nodeDragStartPoint || nodeDragDropHandled || !draggedNodeId) {
-    return false;
-  }
-
-  const endX = Number.isFinite(event.clientX) && event.clientX !== 0 ? event.clientX : lastNodeDragPoint?.x;
-  const endY = Number.isFinite(event.clientY) && event.clientY !== 0 ? event.clientY : lastNodeDragPoint?.y;
-
-  if (typeof endX !== "number" || typeof endY !== "number") {
-    return false;
-  }
-
-  const deltaX = endX - nodeDragStartPoint.x;
-  const deltaY = endY - nodeDragStartPoint.y;
-  return Math.abs(deltaY) >= NODE_BYPASS_DRAG_DISTANCE_PX
-    && Math.abs(deltaY) > Math.abs(deltaX) * NODE_BYPASS_DRAG_DIRECTION_RATIO;
-}
-
 function getNodeResourceAtIndex(node: GraphNode, index = 0): { id: string; filePath: string; parameterValue?: number } {
   const anyNode = node as unknown as {
     resources?: unknown;
@@ -3788,154 +3763,12 @@ function bindNodeClickHandlers(preset: Preset): void {
   // Bind + button click handlers
   bindAddButtonHandlers();
 
-  type PointerDragTarget =
-    | { kind: "node"; element: HTMLElement; nodeId: string }
-    | { kind: "beforeNode"; element: HTMLElement; edge: EdgeRef }
-    | { kind: "edge"; element: HTMLElement; edge: EdgeRef };
-  type NodePointerDrag = {
-    pointerId: number;
-    nodeId: string;
-    source: HTMLElement;
-    startX: number;
-    startY: number;
-    lastX: number;
-    lastY: number;
-    active: boolean;
-    target: PointerDragTarget | null;
-    preview: HTMLElement | null;
-  };
-
-  let pointerDrag: NodePointerDrag | null = null;
-  let suppressNextNodeClickId: string | null = null;
-
-  const getUiZoom = (): number => {
-    const zoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
-    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  };
-
-  const positionPointerDragPreview = (preview: HTMLElement, event: PointerEvent): void => {
-    const uiZoom = getUiZoom();
-    preview.style.left = `${Math.round(event.clientX / uiZoom)}px`;
-    preview.style.top = `${Math.round(event.clientY / uiZoom)}px`;
-  };
-
-  const createPointerDragPreview = (drag: NodePointerDrag, event: PointerEvent): HTMLElement => {
-    const rect = drag.source.getBoundingClientRect();
-    const uiZoom = getUiZoom();
-    const preview = drag.source.cloneNode(true) as HTMLElement;
-    preview.classList.remove("dragging", "drag-over", "selected");
-    preview.classList.add("signal-node-drag-preview");
-    preview.style.width = `${rect.width / uiZoom}px`;
-    preview.style.height = `${rect.height / uiZoom}px`;
-    document.body.appendChild(preview);
-    positionPointerDragPreview(preview, event);
-    return preview;
-  };
-
-  const clearPointerDragTarget = (target: PointerDragTarget | null): void => {
-    if (!target) return;
-    target.element.classList.remove("drag-over");
-    if (target.kind === "edge") {
-      target.element.querySelector(".signal-connector")?.classList.remove("drag-over");
-    }
-  };
-
-  const updatePointerDragTarget = (event: PointerEvent): void => {
-    if (!pointerDrag) return;
-
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    const connector = hit?.closest<HTMLElement>(".signal-connector-wrapper");
-    const nodeElement = hit?.closest<HTMLElement>(".signal-node[data-node-id]");
-    let target: PointerDragTarget | null = null;
-
-    if (connector) {
-      const edge = parseEdgeFromDataset(connector);
-      if (edge && edge.from !== pointerDrag.nodeId && edge.to !== pointerDrag.nodeId) {
-        target = { kind: "edge", element: connector, edge };
-      }
-    } else if (nodeElement) {
-      const nodeId = nodeElement.dataset.nodeId ?? "";
-      const node = getGraphNode(nodeId);
-      if (node && nodeId !== pointerDrag.nodeId
-          && node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer) {
-        const targetIsLeftOfSource = nodeElement.getBoundingClientRect().left
-          < pointerDrag.source.getBoundingClientRect().left;
-        const incomingEdges = (preset.graph?.edges ?? [])
-          .map(normalizeEdge)
-          .filter((edge) => edge.to === nodeId);
-
-        // Reordering onto a node normally inserts after it. For a leftward move,
-        // use its single incoming edge so the dragged node takes the target's slot.
-        if (targetIsLeftOfSource && incomingEdges.length === 1) {
-          target = { kind: "beforeNode", element: nodeElement, edge: incomingEdges[0] };
-        } else {
-          target = { kind: "node", element: nodeElement, nodeId };
-        }
-      }
-    }
-
-    if (pointerDrag.target?.element === target?.element) return;
-    clearPointerDragTarget(pointerDrag.target);
-    pointerDrag.target = target;
-    if (!target) return;
-
-    target.element.classList.add("drag-over");
-    if (target.kind === "edge") {
-      target.element.querySelector(".signal-connector")?.classList.add("drag-over");
-    }
-  };
-
-  const finishPointerDrag = (event: PointerEvent, cancelled = false): void => {
-    const drag = pointerDrag;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    clearPointerDragTarget(drag.target);
-    drag.source.classList.remove("dragging");
-    drag.preview?.remove();
-    if (drag.source.hasPointerCapture(event.pointerId)) {
-      drag.source.releasePointerCapture(event.pointerId);
-    }
-    pointerDrag = null;
-    if (!drag.active || cancelled) return;
-
-    suppressNextNodeClickId = drag.nodeId;
-    window.setTimeout(() => {
-      if (suppressNextNodeClickId === drag.nodeId) suppressNextNodeClickId = null;
-    }, 0);
-
-    if (drag.target?.kind === "edge") {
-      sendMoveSignalPathNodeToEdge(drag.nodeId, drag.target.edge);
-      return;
-    }
-    if (drag.target?.kind === "beforeNode") {
-      sendMoveSignalPathNodeToEdge(drag.nodeId, drag.target.edge);
-      return;
-    }
-    if (drag.target?.kind === "node") {
-      sendSignalPathNodeReorder(drag.nodeId, drag.target.nodeId);
-      return;
-    }
-
-    const node = getGraphNode(drag.nodeId);
-    const deltaX = drag.lastX - drag.startX;
-    const deltaY = drag.lastY - drag.startY;
-    if (node
-        && Math.abs(deltaY) >= NODE_BYPASS_DRAG_DISTANCE_PX
-        && Math.abs(deltaY) > Math.abs(deltaX) * NODE_BYPASS_DRAG_DIRECTION_RATIO) {
-      toggleSignalPathNodeBypass(node, preset);
-    }
-  };
-
   nodeElements.forEach((element) => {
     const el = element as HTMLElement;
     
     // Click handler - select node
     el.addEventListener("click", () => {
       const nodeId = el.dataset.nodeId;
-      if (nodeId && suppressNextNodeClickId === nodeId) {
-        suppressNextNodeClickId = null;
-        return;
-      }
       if (nodeId && preset.graph) {
         const node = preset.graph.nodes.find((n) => n.id === nodeId);
         if (node) {
@@ -3975,211 +3808,61 @@ function bindNodeClickHandlers(preset: Preset): void {
       });
     });
 
+    // Reordering, and the vertical flick that toggles bypass.
     el.addEventListener("pointerdown", (event: PointerEvent) => {
-      if (!event.isPrimary || event.button !== 0
-          || (event.target instanceof Element && event.target.closest("button, input, select, textarea"))) {
-        return;
-      }
-
-      const nodeId = el.dataset.nodeId ?? "";
-      const node = getGraphNode(nodeId);
-      if (!node || node.type === EffectGuids.kSplitter || node.type === EffectGuids.kMixer) {
-        return;
-      }
-
-      pointerDrag = {
-        pointerId: event.pointerId,
-        nodeId,
-        source: el,
-        startX: event.clientX,
-        startY: event.clientY,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        active: false,
-        target: null,
-        preview: null,
-      };
-      el.setPointerCapture(event.pointerId);
+      beginNodePointerDrag(event, el);
     });
 
-    el.addEventListener("pointermove", (event: PointerEvent) => {
-      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-
-      pointerDrag.lastX = event.clientX;
-      pointerDrag.lastY = event.clientY;
-      if (!pointerDrag.active) {
-        const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
-        if (distance < 6) return;
-        pointerDrag.active = true;
-        pointerDrag.source.classList.add("dragging");
-        pointerDrag.preview = createPointerDragPreview(pointerDrag, event);
-      }
-
-      event.preventDefault();
-      if (pointerDrag.preview) {
-        positionPointerDragPreview(pointerDrag.preview, event);
-      }
-      updatePointerDragTarget(event);
-    });
-
-    el.addEventListener("pointerup", (event: PointerEvent) => {
-      finishPointerDrag(event);
-    });
-    el.addEventListener("pointercancel", (event: PointerEvent) => {
-      finishPointerDrag(event, true);
-    });
-    
-    // Drag start
-    el.addEventListener("dragstart", (e: DragEvent) => {
-      const nodeId = el.dataset.nodeId;
-      if (nodeId) {
-        draggedNodeId = nodeId;
-        nodeDragStartPoint = { nodeId, x: e.clientX, y: e.clientY };
-        lastNodeDragPoint = { x: e.clientX, y: e.clientY };
-        nodeDragDropHandled = false;
-        el.classList.add("dragging");
-        e.dataTransfer?.setData("text/plain", nodeId);
-        e.dataTransfer?.setData("application/x-signal-node", nodeId);
-        if (e.dataTransfer) {
-          e.dataTransfer.effectAllowed = "move";
-        }
-      }
-    });
-    
-    // Drag over
+    // Native drag-and-drop still handles the two drags that do not originate
+    // from a pointer press inside the signal path: files from the OS, and
+    // resource groups from the equipment library.
     el.addEventListener("dragover", (e: DragEvent) => {
       e.preventDefault();
-      updateNodeDragPoint(e);
       const nodeId = el.dataset.nodeId;
-      
-      // Check if dragging from FX library
-      const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
-      const fxBlendType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-blend");
-      const fxCustomEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-custom-effect");
-      const fxResourceGroup = Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group");
-      
-      if (nodeId && (nodeId !== draggedNodeId || fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup)) {
-        dragOverNodeId = nodeId;
+      if (!nodeId) return;
+
+      const types = Array.from(e.dataTransfer?.types ?? []);
+      if (types.includes("application/x-resource-group")) {
         el.classList.add("drag-over");
-        if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) ? "copy" : "move";
-        }
-      } else if (nodeId && Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
-        // Accept file drops for NAM/IR nodes
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+        return;
+      }
+
+      if (types.includes("Files")) {
         const node = preset.graph?.nodes.find((n) => n.id === nodeId);
         if (node && isNamOrCabIrNode(node)) {
-          dragOverNodeId = nodeId;
           el.classList.add("drag-over");
-          if (e.dataTransfer) {
-            e.dataTransfer.dropEffect = "copy";
-          }
+          if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
         }
       }
     });
-    
-    // Drag leave
+
     el.addEventListener("dragleave", () => {
       el.classList.remove("drag-over");
-      if (el.dataset.nodeId === dragOverNodeId) {
-        dragOverNodeId = null;
-      }
     });
-    
-    // Drop
+
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
-      updateNodeDragPoint(e);
-      const targetNodeId = el.dataset.nodeId;
-      
-      // Check if dropping from FX library
-      const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
-      const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
-      const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
-      const fxBlendCategory = e.dataTransfer?.getData("application/x-fx-blend-category");
-      const customEffectPayloadRaw = e.dataTransfer?.getData("application/x-fx-custom-effect");
-      const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
-      
-      if (resourceGroupPayload && targetNodeId && preset.graph) {
-        const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
-        if (targetNode && targetNode.type === EffectGuids.kAmpNamBlend) {
-          nodeDragDropHandled = true;
-          handleResourceGroupDrop(resourceGroupPayload, targetNodeId, true);
-        } else {
-          nodeDragDropHandled = true;
-          handleResourceGroupDrop(resourceGroupPayload, targetNodeId, false);
-        }
-      } else if (customEffectPayloadRaw && targetNodeId && preset.graph) {
-        const customEffectPayload = parseCustomEffectDragPayload(customEffectPayloadRaw);
-        const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
-        if (customEffectPayload && targetNode && !isProtectedSignalPathNode(targetNode)) {
-          const options = buildCustomEffectNodeOptions(customEffectPayload);
-          nodeDragDropHandled = true;
-          applyOptimisticNodeReplacement(targetNode, customEffectPayload.baseEffectType, preset, options);
-          sendReplaceSignalPathNode(targetNodeId, customEffectPayload.baseEffectType, options);
-        }
-      } else if ((fxEffectType || fxBlendId) && targetNodeId && preset.graph) {
-        const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
-        const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
-
-        if (targetNode && !isProtectedSignalPathNode(targetNode)) {
-          nodeDragDropHandled = true;
-          applyOptimisticNodeReplacement(targetNode, resolvedType, preset, {
-            config: fxBlendId ? { blendId: fxBlendId } : undefined,
-            label: fxBlendName || undefined,
-            category: fxBlendCategory || undefined,
-          });
-          sendReplaceSignalPathNode(targetNodeId, resolvedType, {
-            config: fxBlendId ? { blendId: fxBlendId } : undefined,
-            label: fxBlendName || undefined,
-            category: fxBlendCategory || undefined,
-          });
-        }
-      } else if (draggedNodeId && targetNodeId && draggedNodeId !== targetNodeId) {
-        // Reordering existing nodes
-        const draggedNode = getGraphNode(draggedNodeId);
-        const targetNode = getGraphNode(targetNodeId);
-        const blockedTypes = new Set<string>([EffectGuids.kSplitter, EffectGuids.kMixer]);
-        if (draggedNode && targetNode && !blockedTypes.has(draggedNode.type) && !blockedTypes.has(targetNode.type)) {
-          nodeDragDropHandled = true;
-          sendSignalPathNodeReorder(draggedNodeId, targetNodeId);
-        }
-      } else if (targetNodeId && preset.graph) {
-        // File drop on NAM/IR node
-        const files = Array.from(e.dataTransfer?.files ?? []);
-        if (files.length > 0) {
-          const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
-          if (targetNode && isNamOrCabIrNode(targetNode)) {
-            const file = files[0];
-            const resourceType = inferResourceTypeFromFile(file);
-            if (resourceType && nodeAcceptsResourceType(targetNode, resourceType)) {
-              nodeDragDropHandled = true;
-              void handleNamIrFileDrop(file, targetNodeId);
-            }
-          }
-        }
-      }
-      
       el.classList.remove("drag-over");
-    });
-    
-    // Drag end
-    el.addEventListener("dragend", (e: DragEvent) => {
-      const nodeId = el.dataset.nodeId;
-      const node = nodeId ? getGraphNode(nodeId) : undefined;
+      const targetNodeId = el.dataset.nodeId;
+      if (!targetNodeId || !preset.graph) return;
 
-      el.classList.remove("dragging");
-      if (node && shouldToggleNodeBypassFromDrag(e)) {
-        toggleSignalPathNodeBypass(node, preset);
+      const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
+      if (resourceGroupPayload) {
+        const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
+        handleResourceGroupDrop(resourceGroupPayload, targetNodeId, targetNode?.type === EffectGuids.kAmpNamBlend);
+        return;
       }
-      draggedNodeId = null;
-      dragOverNodeId = null;
-      nodeDragStartPoint = null;
-      lastNodeDragPoint = null;
-      nodeDragDropHandled = false;
-      // Clean up any remaining drag-over states
-      nodeElements.forEach((n) => n.classList.remove("drag-over"));
+
+      const file = Array.from(e.dataTransfer?.files ?? [])[0];
+      if (!file) return;
+      const targetNode = preset.graph.nodes.find((n) => n.id === targetNodeId);
+      const resourceType = inferResourceTypeFromFile(file);
+      if (targetNode && isNamOrCabIrNode(targetNode) && resourceType && nodeAcceptsResourceType(targetNode, resourceType)) {
+        void handleNamIrFileDrop(file, targetNodeId);
+      }
     });
-    
+
     // Keyboard handler - Delete/Backspace to remove
     el.addEventListener("keydown", (e: KeyboardEvent) => {
       const nodeId = el.dataset.nodeId;
@@ -4209,72 +3892,32 @@ function bindConnectorDropHandlers(preset: Preset): void {
 
   wrapperElements.forEach((element) => {
     const el = element as HTMLElement;
-    
-    // Drag over
+
+    // FX library items are dragged with pointer events (see beginPointerDrag);
+    // the only native drag that lands here comes from the equipment library.
+    const setHighlight = (highlighted: boolean): void => {
+      el.classList.toggle("drag-over", highlighted);
+      el.querySelector(".signal-connector")?.classList.toggle("drag-over", highlighted);
+    };
+
     el.addEventListener("dragover", (e: DragEvent) => {
       e.preventDefault();
-      
-      // Only accept drops from FX library
-      const fxEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-effect");
-      const fxBlendType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-blend");
-      const fxCustomEffectType = Array.from(e.dataTransfer?.types ?? []).includes("application/x-fx-custom-effect");
-      const fxResourceGroup = Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group");
-      
-      if (fxEffectType || fxBlendType || fxCustomEffectType || fxResourceGroup) {
-        const connector = el.querySelector(".signal-connector") as HTMLElement | null;
-        connector?.classList.add("drag-over");
-        el.classList.add("drag-over");
-        if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = "copy";
-        }
-      }
+      if (!Array.from(e.dataTransfer?.types ?? []).includes("application/x-resource-group")) return;
+      setHighlight(true);
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
     });
-    
-    // Drag leave
+
     el.addEventListener("dragleave", () => {
-      const connector = el.querySelector(".signal-connector") as HTMLElement | null;
-      connector?.classList.remove("drag-over");
-      el.classList.remove("drag-over");
+      setHighlight(false);
     });
-    
-    // Drop
+
     el.addEventListener("drop", (e: DragEvent) => {
       e.preventDefault();
-      const fxEffectType = e.dataTransfer?.getData("application/x-fx-effect");
-      const fxBlendId = e.dataTransfer?.getData("application/x-fx-blend");
-      const fxBlendName = e.dataTransfer?.getData("application/x-fx-blend-name");
-      const fxBlendCategory = e.dataTransfer?.getData("application/x-fx-blend-category");
-      const customEffectPayloadRaw = e.dataTransfer?.getData("application/x-fx-custom-effect");
+      setHighlight(false);
       const resourceGroupPayload = e.dataTransfer?.getData("application/x-resource-group");
-
-      const edge = parseEdgeFromDataset(el);
       if (resourceGroupPayload && preset.graph) {
-        nodeDragDropHandled = true;
-        handleResourceGroupDrop(resourceGroupPayload, null, false, edge);
-      } else if (customEffectPayloadRaw && preset.graph) {
-        const customEffectPayload = parseCustomEffectDragPayload(customEffectPayloadRaw);
-        if (customEffectPayload) {
-          nodeDragDropHandled = true;
-          sendAddEffectAtEdgeOrFallback(
-            customEffectPayload.baseEffectType,
-            edge,
-            "__input__",
-            buildCustomEffectNodeOptions(customEffectPayload),
-          );
-        }
-      } else if ((fxEffectType || fxBlendId) && preset.graph) {
-        nodeDragDropHandled = true;
-        const resolvedType = fxEffectType || EffectGuids.kAmpNamBlend;
-        sendAddEffectAtEdgeOrFallback(resolvedType, edge, "__input__", {
-          config: fxBlendId ? { blendId: fxBlendId } : undefined,
-          label: fxBlendName || undefined,
-          category: fxBlendCategory || undefined,
-        });
+        handleResourceGroupDrop(resourceGroupPayload, null, false, parseEdgeFromDataset(el));
       }
-      
-      const connector = el.querySelector(".signal-connector") as HTMLElement | null;
-      connector?.classList.remove("drag-over");
-      el.classList.remove("drag-over");
     });
   });
 }
@@ -4797,6 +4440,17 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                   title="Browse for file..."
                 >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
               ` : ""}
+              ${canBrowseFile && !isLibraryPicker && isPluginPicker ? `
+                <button
+                  class="resource-browse-btn"
+                  data-node-id="${node.id}"
+                  data-resource-type="${resourceType}"
+                  data-resource-index="${resourceIndex}"
+                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
+                  data-browse-mode="folder"
+                  title="${PLUGIN_FOLDER_BROWSE_TITLE}"
+                >${renderIcon("folder", "resource-browse-icon")}</button>
+              ` : ""}
               ${hostedPluginOpenButton}
               ${hostedPluginSelectionLabel}
               ${isPluginPicker ? buildHostedPluginLoadingIndicatorHtml(node, resourceIndex) : ""}
@@ -4986,6 +4640,16 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                 data-accept="${browseAccept}"
                 title="Browse for file..."
               >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
+            ` : ""}
+            ${!isLibraryPicker && isPluginPicker ? `
+              <button
+                class="resource-browse-btn"
+                data-node-id="${node.id}"
+                data-resource-type="${resourceType}"
+                ${indexAttr}
+                data-browse-mode="folder"
+                title="${PLUGIN_FOLDER_BROWSE_TITLE}"
+              >${renderIcon("folder", "resource-browse-icon")}</button>
             ` : ""}
             ${hostedPluginOpenButton}
             ${hostedPluginSelectionLabel}
@@ -6655,7 +6319,10 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       const resourceType = browseBtn.dataset.resourceType;
       const resourceIndex = browseBtn.dataset.resourceIndex ? parseInt(browseBtn.dataset.resourceIndex, 10) : undefined;
       const exposedResourceId = browseBtn.dataset.exposedResourceId;
-      
+      // Plugin pickers render a second button that opens a folders-only dialog;
+      // everything else about the flow is identical.
+      const browseMode = browseBtn.dataset.browseMode;
+
       if (resourceType === "plugin") {
         if (nodeId) {
           hostedPluginLoadFailures.delete(nodeId);
@@ -6671,6 +6338,7 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
           resourceIndex,
           exposedResourceId,
           resourceType === "plugin",
+          browseMode,
         );
       }
     });
@@ -7229,6 +6897,7 @@ function sendBrowseNodeResource(
   resourceIndex?: number,
   exposedResourceId?: string,
   openPluginEditorAfterLoad?: boolean,
+  browseMode?: string,
 ): void {
   postMessage({
     type: "browseNodeResource",
@@ -7237,6 +6906,7 @@ function sendBrowseNodeResource(
     resourceIndex,
     exposedResourceId,
     openPluginEditorAfterLoad,
+    browseMode,
   });
 }
 
@@ -7873,8 +7543,7 @@ function showEffectSelectionDropdown(buttonElement: HTMLElement, edge: EdgeRef |
   const positionDropdown = (): void => {
     const buttonRect = buttonElement.getBoundingClientRect();
     const margin = 8;
-    const appliedZoom = Number.parseFloat(window.getComputedStyle(document.body).zoom);
-    const uiZoom = Number.isFinite(appliedZoom) && appliedZoom > 0 ? appliedZoom : 1;
+    const uiZoom = getUiZoom();
     const viewportWidth = window.innerWidth / uiZoom;
     const viewportHeight = window.innerHeight / uiZoom;
 

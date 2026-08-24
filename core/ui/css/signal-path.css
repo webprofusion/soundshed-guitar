@@ -594,6 +594,10 @@ body.signal-path-resizing * {
   min-width: 72px;
   min-height:72px;
   cursor: pointer;
+  /* Nodes are dragged with pointer events, and the browser cancels the gesture
+     the moment it decides the touch was a scroll. The chain still scrolls by
+     dragging the strip between nodes. */
+  touch-action: none;
   /* Size properties animate on density switch; interaction colours animate on hover/focus. */
   transition:
     border-color 0.15s ease,
