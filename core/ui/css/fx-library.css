@@ -248,6 +248,15 @@
   transform: scale(0.95);
 }
 
+.fx-item-drag-preview {
+  position: fixed !important;
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%) scale(1.04);
+  z-index: 1000;
+}
+
 .fx-item-icon {
   width: 36px;
   height: 26px;
