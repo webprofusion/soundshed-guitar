@@ -422,6 +422,40 @@ private:
     int mLastReportedLatency = -1; ///< Guards against redundant host latency notifications
     void ApplyBlendDefinitions(Preset& preset);
     void CaptureRuntimePluginStates(Preset& preset, const std::string& presetId) const;
+    /**
+     * Fold live hosted plugin state back into the focused preset's working copy.
+     *
+     * Every graph edit tears down and rebuilds all processors, and a rebuilt hosted plugin
+     * is restored from node.config — so anything the live plugin knows that node.config
+     * does not is lost. Auto-capture usually keeps the two in step, but it depends on the
+     * plugin telling us it changed, and plenty of plugins mutate non-parameter state
+     * (internal preset browsers, sample/IR loaders) without ever notifying the host.
+     *
+     * Call this before any operation that rebuilds or replaces the working copy so the
+     * rebuild starts from what is actually loaded rather than from the last notification.
+     * Cheap: it only touches hosted plugin nodes, and no-ops when nothing changed.
+     */
+    void CaptureLiveHostedPluginStateIntoActivePreset();
+    /**
+     * Fold live hosted plugin state for a mixer slot that is not the editing focus into a
+     * copy of its preset.
+     *
+     * Non-focused slots have no live Preset object — their working copy is the JSON in
+     * mMixerPresetJsonCache — so the focused-preset paths cannot reach them.
+     */
+    void CaptureMixerSlotHostedPluginState(Preset& preset, const std::string& presetId) const;
+    /// Apply one runtime config change to a non-focused mixer slot's cached working copy.
+    void ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId,
+                                            const std::string& nodeId,
+                                            const std::string& key,
+                                            const std::string& value);
+    /// Drop hosted plugin state that belongs to a plugin the node no longer hosts.
+    /// Returns true when a stale chunk was removed.
+    static bool ClearStaleHostedPluginState(GraphNode& node, const std::string& previousIdentity);
+    /// Restores the hosted plugin state carried in standalone host state onto the preset
+    /// that startup already loaded from the store. See the definition for why standalone
+    /// takes this narrow path instead of the full DeserializeState restore.
+    void RestoreStandaloneHostedPluginState(const std::string& json);
     std::optional<Preset> TryLoadStoredPresetById(const std::string& presetId);
     bool ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value);
     /**

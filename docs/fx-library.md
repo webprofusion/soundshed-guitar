@@ -262,6 +262,23 @@ JUCE-only utility effect that hosts an external plugin supported by JUCE's plugi
 
 **Plugin UI/state**: The node parameter panel can open the hosted plugin's native editor. Plugin state is stored on the graph node as standard base64-encoded `config.pluginStateBase64`; the JUCE adapter captures the live hosted-plugin state before preset save and also exposes a manual capture action in the node panel. Older presets saved with JUCE's `MemoryBlock::toBase64Encoding()` format are still accepted when restoring state.
 
+**State recall rules** (see `docs/data-models.md` for where each copy lives):
+
+- Auto-capture depends on the plugin notifying the host, and many plugins change
+  non-parameter state silently. Anything that rebuilds the graph therefore folds the live
+  state back into the working copy first (`CaptureLiveHostedPluginStateIntoActivePreset`).
+- State is per scene. Only the active scene is loaded into the DSP, so a save writes live
+  state to that scene and leaves the other scenes' stored chunks alone.
+- An empty capture is never authoritative — it is ignored rather than allowed to erase a
+  stored chunk.
+- Pointing a node at a different plugin drops the previous plugin's chunk and identity keys;
+  a chunk is only ever carried across a rebuild when the plugin identity still matches.
+- Every mixer slot persists its own state, not just the one holding the editing focus.
+- In a DAW, all of this rides in the project via `SerializeState`. In standalone, the store's
+  preset stays authoritative for the graph, and only the plugin chunks are recovered from the
+  previous session (`RestoreStandaloneHostedPluginState`) — so unsaved *graph* edits are still
+  discarded, while the opaque plugin state, which has no other home, survives a restart.
+
 **Runtime notes**: The current signal graph routes stereo audio only. Hosted plugins may accept or produce MIDI at the JUCE level, but MIDI events are not yet routed between graph nodes.
 
 ### Noise Gate (`dynamics_gate`)

@@ -228,6 +228,13 @@ Rules that keep this honest:
   drags this one's tier and editor layout with it.
 - Global FX (gate, EQ, doubler, transpose, trims) are **not** settings — they live in
   `GlobalSignalChainConfig` on the mixer, per instance, and are never read from a preset.
+- Hosted plugin state is the one part of host state standalone *does* restore. Everything
+  else in a standalone snapshot is ignored (the store is authoritative), but a plugin's
+  opaque chunk exists nowhere else once the app closes, so
+  `RestoreStandaloneHostedPluginState()` grafts just those chunks onto the preset startup
+  loaded from the store — matched by scene id, node id and plugin identity, and only when
+  the snapshot's `presetId` still matches the resolved `lastPresetId`. Unsaved graph edits
+  stay discarded. See `docs/fx-library.md` for the full set of recall rules.
 
 ## Preset Manager Operations
 

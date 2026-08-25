@@ -89,6 +89,8 @@ namespace
     constexpr const char* kHostedPluginManufacturerConfigKey = "pluginManufacturer";
     constexpr const char* kHostedPluginFormatConfigKey = "pluginFormat";
     constexpr const char* kHostedPluginLastErrorCodeConfigKey = "lastErrorCode";
+    constexpr const char* kHostedPluginStateConfigKey = "pluginStateBase64";
+    constexpr const char* kHostedPluginStateLengthConfigKey = "pluginStateBase64Length";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
     constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
     constexpr const char* kPresetArchiveSessionRootFolder = "sessions/preset-archive";
@@ -2032,18 +2034,93 @@ static std::string HashStringForLog(std::string_view value)
     return stream.str();
 }
 
+static bool IsHostedPluginNode(const GraphNode& node)
+{
+    return EffectRegistry::Instance().Resolve(node.type) == EffectGuids::kPluginHost;
+}
+
+/**
+ * Which plugin *resource* a node points at.
+ *
+ * Swap detection uses this rather than the config identity keys below: those are published
+ * by the plugin once it has loaded, so at the moment the user picks a different plugin they
+ * still describe the previous one and would report "no change".
+ */
+static std::string HostedPluginResourceKey(const GraphNode& node)
+{
+    for (const auto& resource : node.resources)
+    {
+        if (resource.resourceType != "plugin")
+            continue;
+        if (!resource.resourceId.empty())
+            return "res:" + resource.resourceId;
+        if (!resource.filePath.empty())
+            return "path:" + util::PathToUtf8(resource.filePath);
+    }
+
+    return {};
+}
+
+/**
+ * Identity of the plugin a node is configured to host.
+ *
+ * A state chunk is only meaningful to the plugin it came from. Comparing this key before
+ * carrying state across a rebuild, a scene, or a session restore is what stops one
+ * plugin's chunk being handed to another.
+ *
+ * Returns an empty string for nodes whose plugin has never been resolved — callers treat
+ * "unknown identity" as "do not carry state across", except where both sides are unknown.
+ */
+static std::string HostedPluginIdentityKey(const GraphNode& node)
+{
+    const auto read = [&node](const char* key) -> std::string {
+        const auto it = node.config.find(key);
+        return it != node.config.end() ? it->second : std::string{};
+    };
+
+    // Stable id first: it survives a plugin being reinstalled at a different path.
+    if (auto stableId = read(kHostedPluginStableIdConfigKey); !stableId.empty())
+        return "stable:" + stableId;
+    if (auto identifier = read(kHostedPluginIdentifierConfigKey); !identifier.empty())
+        return "id:" + identifier;
+
+    // Nothing authoritative — fall back to the resource, which is all an as-yet-unloaded
+    // node has to go on.
+    return HostedPluginResourceKey(node);
+}
+
+/// True when a state chunk stored against `from` may be applied to `to`.
+static bool HostedPluginIdentityMatches(const GraphNode& from, const GraphNode& to)
+{
+    const auto fromKey = HostedPluginIdentityKey(from);
+    const auto toKey = HostedPluginIdentityKey(to);
+
+    // Both unknown: the node has never resolved a plugin on either side, so there is no
+    // evidence of a swap and the state is the best guess available.
+    if (fromKey.empty() && toKey.empty())
+        return true;
+
+    return fromKey == toKey;
+}
+
+static std::string GetHostedPluginNodeState(const GraphNode& node)
+{
+    const auto it = node.config.find(kHostedPluginStateConfigKey);
+    return it != node.config.end() ? it->second : std::string{};
+}
+
 static void ScrubHostedPluginStateForUi(SignalGraph& graph)
 {
     for (auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         if (stateIt == node.config.end())
             continue;
 
-        node.config["pluginStateBase64Length"] = std::to_string(stateIt->second.size());
+        node.config[kHostedPluginStateLengthConfigKey] = std::to_string(stateIt->second.size());
         node.config.erase(stateIt);
     }
 }
@@ -2062,11 +2139,11 @@ static bool GraphHasScrubbedHostedPluginState(const SignalGraph& graph)
 {
     for (const auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
-        const auto lengthIt = node.config.find("pluginStateBase64Length");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
+        const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
         if (lengthIt != node.config.end() && (stateIt == node.config.end() || stateIt->second.empty()))
             return true;
     }
@@ -2094,11 +2171,11 @@ static void AppendHostedPluginGraphSummary(const SignalGraph& graph,
 {
     for (const auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
-        const auto lengthIt = node.config.find("pluginStateBase64Length");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
+        const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
         const std::string stateLength = stateIt != node.config.end()
             ? std::to_string(stateIt->second.size())
             : std::string{"0"};
@@ -3821,6 +3898,11 @@ std::string PluginController::SerializeState() const
 
     nlohmann::json activePresetIds = nlohmann::json::array();
     nlohmann::json presetConfigs = nlohmann::json::object();
+    // Full preset data for the non-focused slots. Restoring them by id alone (the original
+    // behaviour, still the fallback) reloads them from the machine's preset library, which
+    // throws away every project-local edit — hosted plugin state included — and fails
+    // outright when the project is opened on a machine that does not have the preset.
+    nlohmann::json presetData = nlohmann::json::object();
     for (const auto& id : mPresetMixer.GetActivePresetIds())
     {
         activePresetIds.push_back(id);
@@ -3834,9 +3916,32 @@ std::string PluginController::SerializeState() const
                 {"solo", cfg->solo}
             };
         }
+
+        // The focused slot already rides in state["preset"] with its runtime state folded in.
+        if (mActivePreset && id == mActivePresetId)
+            continue;
+
+        const auto cachedIt = mMixerPresetJsonCache.find(id);
+        if (cachedIt == mMixerPresetJsonCache.end())
+            continue;
+
+        if (auto slotPreset = PresetStorage::DeserializeFromJson(cachedIt->second))
+        {
+            CaptureMixerSlotHostedPluginState(*slotPreset, id);
+            try
+            {
+                presetData[id] = nlohmann::json::parse(PresetStorage::SerializeToJson(*slotPreset));
+            }
+            catch (const std::exception&)
+            {
+                // A slot that will not round-trip is skipped rather than poisoning the whole
+                // state blob; it falls back to restore-by-id on the way back in.
+            }
+        }
     }
     mixer["activePresetIds"] = std::move(activePresetIds);
     mixer["presets"] = std::move(presetConfigs);
+    mixer["presetData"] = std::move(presetData);
     state["mixer"] = std::move(mixer);
 
     state["automation"] = mAutomationSlots.SaveToJson();
@@ -3848,8 +3953,12 @@ void PluginController::DeserializeState(const std::string& json)
 {
     if (mHost.IsStandalone())
     {
-        // Standalone startup should restore from app settings + preset files
-        // (LoadLastSessionState), not host-serialized transient preset state.
+        // Standalone startup restores from app settings + preset files
+        // (LoadLastSessionState), not from host-serialized transient state — a stale
+        // snapshot must never republish machine-wide settings or revive an old graph.
+        //
+        // Hosted plugin state is the one exception, and it is handled separately below.
+        RestoreStandaloneHostedPluginState(json);
         return;
     }
 
@@ -3979,6 +4088,11 @@ void PluginController::DeserializeState(const std::string& json)
                 }
             }
             const auto presets = mixer.contains("presets") ? mixer["presets"] : nlohmann::json::object();
+            // Written since full slot data was added to host state; absent in older projects,
+            // which fall through to the restore-by-id path below exactly as before.
+            const auto presetData = mixer.contains("presetData") && mixer["presetData"].is_object()
+                ? mixer["presetData"]
+                : nlohmann::json::object();
             if (activeIds.empty() && presets.is_object())
             {
                 for (const auto& [id, _] : presets.items())
@@ -3995,7 +4109,26 @@ void PluginController::DeserializeState(const std::string& json)
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
                     if (added)
+                    {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
+                        mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*mActivePreset);
+                    }
+                }
+                // The project's own copy of this slot wins over the machine's preset library:
+                // it is the one carrying the project's edits and its hosted plugin state.
+                if (!added && presetData.contains(id))
+                {
+                    if (auto slotPreset = PresetStorage::DeserializeFromJson(presetData[id].dump()))
+                    {
+                        added = mPresetMixer.AddActivePreset(*slotPreset, id, name);
+                        if (added)
+                        {
+                            AttachRuntimeConfigCallbacks(id, *slotPreset);
+                            mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*slotPreset);
+                            AppendSessionLog("Mixer slot restored from host state id=" + id
+                                + ", state=" + SummarizeHostedPluginState(*slotPreset));
+                        }
+                    }
                 }
                 if (!added)
                 {
@@ -4005,7 +4138,10 @@ void PluginController::DeserializeState(const std::string& json)
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
                     if (added)
+                    {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
+                        mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*mActivePreset);
+                    }
                 }
 
                 if (presetEntry.is_object())
@@ -4518,6 +4654,10 @@ void PluginController::FocusMixerPreset(const std::string& presetId)
     if (presetId.empty() || presetId == mActivePresetId)
         return;
 
+    // Bank the outgoing slot's live plugin state into its cache entry before the editing
+    // focus moves; once it moves, this slot's runtime notifications land elsewhere.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const auto it = mMixerPresetJsonCache.find(presetId);
     if (it == mMixerPresetJsonCache.end())
     {
@@ -4814,6 +4954,10 @@ void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& pay
 
 void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 {
+    // A UI scene switch arrives here as a load of the same preset with a different sceneId,
+    // so the outgoing scene's live plugin state has to be banked before anything else runs.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     try
     {
         Preset preset;
@@ -5568,9 +5712,43 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id
             + ", state=" + SummarizeHostedPluginState(newPreset));
 
+        // "Save as" mints a new preset id, but the running mixer slot is still keyed by the
+        // old one and nothing re-applies the preset here. Left alone, the two drift apart:
+        // runtime capture callbacks arrive tagged with the slot id and get dropped for not
+        // matching mActivePresetId, while manual capture looks up the new id and finds no
+        // instance at all. Re-key the slot instead of rebuilding it — a rebuild would tear
+        // down every hosted plugin (and close its editor) as a side effect of saving.
+        const std::string previousSlotId = mActivePresetId;
+        if (!previousSlotId.empty() && previousSlotId != newPreset.id)
+        {
+            bool renamed = false;
+            {
+                std::lock_guard<std::mutex> lock(mDSPMutex);
+                renamed = mPresetMixer.RenameActivePreset(previousSlotId, newPreset.id, newPreset.name);
+                if (renamed)
+                {
+                    // The callbacks captured the old slot id by value, so they have to be
+                    // re-bound or every capture would keep reporting the retired id.
+                    AttachRuntimeConfigCallbacks(newPreset.id, newPreset);
+                }
+            }
+
+            if (renamed)
+            {
+                mMixerPresetJsonCache.erase(previousSlotId);
+                AppendSessionLog("Mixer slot re-keyed after save from " + previousSlotId + " to " + newPreset.id);
+            }
+            else
+            {
+                AppendSessionLog("Mixer slot re-key skipped after save from " + previousSlotId
+                    + " to " + newPreset.id + " (slot not active or id already in use)");
+            }
+        }
+
         mActivePreset = newPreset;
         mActivePresetId = newPreset.id;
         mActivePresetJson = PresetStorage::SerializeToJson(newPreset);
+        mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
         mPendingStateBroadcast = true;
         if (!IsPresetArchiveSessionActive())
             SaveAppSettings();
@@ -5787,8 +5965,14 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
     if (capture)
     {
         AppendSessionLog("Hosted plugin capture requested presetId=" + presetId + ", nodeId=" + nodeId);
-        key = "pluginStateBase64";
+        key = kHostedPluginStateConfigKey;
         value = mPresetMixer.GetNodeConfig(presetId, nodeId, key);
+        if (value.empty() && !mActivePresetId.empty() && mActivePresetId != presetId)
+        {
+            // The UI can address the focused preset by an id the mixer slot does not answer
+            // to yet. Prefer an answer over a spurious "capture failed".
+            value = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, key);
+        }
         if (value.empty())
         {
             AppendSessionLog("Hosted plugin capture failed presetId=" + presetId + ", nodeId=" + nodeId + ": empty runtime state");
@@ -5850,6 +6034,10 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
     const bool openPluginEditorAfterLoad = payload.value("openPluginEditorAfterLoad", false);
+
+    // Swapping any node's resource rebuilds the whole chain, so unrelated hosted plugins
+    // in it are torn down and restored from config.
+    CaptureLiveHostedPluginStateIntoActivePreset();
 
     int resourceIndex = payload.value("resourceIndex", -1);
     const std::string exposedResourceId = payload.value("exposedResourceId", "");
@@ -5926,6 +6114,9 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         auto* target = targetGraph->FindNode(nodeId);
         if (!target) return;
 
+        // Noted before the slot is touched so a plugin swap can be detected below.
+        const std::string previousPluginResourceKey = HostedPluginResourceKey(*target);
+
         if (static_cast<size_t>(resourceIndex) >= target->resources.size())
             target->resources.resize(static_cast<size_t>(resourceIndex) + 1);
 
@@ -5967,6 +6158,11 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
         const ResourceRef selectedRef = slot;
 
+        if (ClearStaleHostedPluginState(*target, previousPluginResourceKey))
+        {
+            AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+        }
+
         RefreshWasmNodeDescriptor(*target);
         bool appliedPreset = false;
 
@@ -6005,9 +6201,17 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         auto* node = fpGraph ? fpGraph->FindNode(nodeId) : nullptr;
         if (node && !node->resources.empty())
         {
+            const std::string previousPluginResourceKey = HostedPluginResourceKey(*node);
+
             node->resources.clear();
             node->resources.push_back(ref);
             const ResourceRef selectedRef = ref;
+
+            if (ClearStaleHostedPluginState(*node, previousPluginResourceKey))
+            {
+                AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+            }
+
             RefreshWasmNodeDescriptor(*node);
             bool appliedPreset = false;
 
@@ -6116,6 +6320,9 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
 
 void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    // Adding a node rebuilds every processor in the chain, hosted plugins included.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string effectType = payload.value("effectType", "");
     const std::string insertAfter = payload.value("insertAfter", "");
     const std::string labelOverride = payload.value("label", "");
@@ -6292,6 +6499,8 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
 
 void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     SignalGraph* targetGraph = ResolveEditTarget();
     if (!targetGraph) { ReportErrorToUI("Split failed", "No active preset or composite"); return; }
 
@@ -6334,6 +6543,8 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
 
 void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     SignalGraph* targetGraph = ResolveEditTarget();
     if (!targetGraph) { ReportErrorToUI("Collapse split failed", "No active preset or composite"); return; }
 
@@ -6375,6 +6586,8 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
 
 void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     const std::string newEffectType = payload.value("newEffectType", "");
     const std::string labelOverride = payload.value("label", "");
@@ -6446,6 +6659,8 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
 
 void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     const std::string targetNodeId = payload.value("targetNodeId", "");
 
@@ -6557,6 +6772,8 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
 
 void PluginController::HandleDeleteSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
 
@@ -11248,6 +11465,10 @@ void PluginController::SelectSceneByIndexDirect(int index)
     if (!mActivePreset)
         return;
 
+    // Must run while the outgoing scene is still the active one, so its live plugin state
+    // is written back to that scene rather than leaking into the one being switched to.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     NormalizePresetScenes(*mActivePreset);
 
     // Out-of-range is a no-op rather than a clamp: a footswitch mapped to scene 4
@@ -11965,10 +12186,20 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
                                                       const std::string& key,
                                                       const std::string& value)
 {
-    if (presetId.empty() || nodeId.empty() || key.empty() || !mActivePreset || IsCompositeEditMode())
+    if (presetId.empty() || nodeId.empty() || key.empty())
         return;
 
+    // A slot that is not the editing focus has no live Preset object; its working copy is
+    // the cached JSON. Dropping these updates (as this used to) meant that in a
+    // multi-preset mix every hosted plugin except the focused one silently stopped
+    // persisting — its edits existed only inside the running plugin.
     if (!mActivePresetId.empty() && presetId != mActivePresetId)
+    {
+        ApplyRuntimeNodeConfigToMixerCache(presetId, nodeId, key, value);
+        return;
+    }
+
+    if (!mActivePreset || IsCompositeEditMode())
         return;
 
     auto* targetGraph = ResolveEditTarget();
@@ -12410,94 +12641,367 @@ void PluginController::ApplyBlendDefinitions(Preset& preset)
 
 void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::string& presetId) const
 {
-    const auto findExistingState = [&](const std::string& nodeId) -> std::string
+    // Only one scene is ever loaded into the DSP, so live runtime state belongs to that
+    // scene and to the top-level graph that mirrors it — nowhere else. Stamping it into
+    // every scene (as this used to) collapsed a multi-scene preset down to whichever
+    // scene happened to be active at save time.
+    const std::string liveSceneId = GetResolvedActiveSceneId();
+
+    // Authoritative fallback for scenes that are not live, and for the live scene when the
+    // runtime cannot answer. Scoped to the *matching* scene: reaching across scenes for
+    // "the first non-empty value" is the same collapse by another route.
+    const auto findStoredState = [&](const std::string& sceneId, const GraphNode& node) -> std::string
     {
         if (!mActivePreset)
             return {};
 
-        const auto findInGraph = [&](const SignalGraph& graph) -> std::string
+        const SignalGraph* graph = nullptr;
+        if (sceneId.empty())
         {
-            if (const auto* existingNode = graph.FindNode(nodeId))
-            {
-                const auto it = existingNode->config.find("pluginStateBase64");
-                if (it != existingNode->config.end())
-                    return it->second;
-            }
-            return {};
-        };
-
-        if (const auto state = findInGraph(mActivePreset->graph); !state.empty())
-            return state;
-        for (const auto& scene : mActivePreset->scenes)
-        {
-            if (const auto state = findInGraph(scene.graph); !state.empty())
-                return state;
+            graph = &mActivePreset->graph;
         }
-        return {};
+        else if (const auto* scene = FindPresetScene(*mActivePreset, sceneId))
+        {
+            graph = &scene->graph;
+        }
+
+        if (!graph)
+            return {};
+
+        const auto* storedNode = graph->FindNode(node.id);
+        if (!storedNode || !HostedPluginIdentityMatches(*storedNode, node))
+            return {};
+
+        return GetHostedPluginNodeState(*storedNode);
     };
 
     const auto captureRuntimeState = [&](const std::string& nodeId) -> std::string
     {
         if (!presetId.empty())
         {
-            if (const auto state = mPresetMixer.GetNodeConfig(presetId, nodeId, "pluginStateBase64"); !state.empty())
+            if (auto state = mPresetMixer.GetNodeConfig(presetId, nodeId, kHostedPluginStateConfigKey); !state.empty())
                 return state;
         }
 
+        // The caller may be saving the focused preset under a different slot id (a
+        // save-as in flight, or a preset that has not been re-applied yet).
         if (!mActivePresetId.empty() && mActivePresetId != presetId)
         {
-            if (const auto state = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, "pluginStateBase64"); !state.empty())
-                return state;
-        }
-
-        for (const auto& activeId : mPresetMixer.GetActivePresetIds())
-        {
-            if (activeId == presetId || activeId == mActivePresetId)
-                continue;
-
-            if (const auto state = mPresetMixer.GetNodeConfig(activeId, nodeId, "pluginStateBase64"); !state.empty())
+            if (auto state = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, kHostedPluginStateConfigKey); !state.empty())
                 return state;
         }
 
         return {};
     };
 
-    const auto captureGraph = [&](SignalGraph& graph)
+    // sceneId is empty for the top-level graph, which mirrors the live scene.
+    const auto captureGraph = [&](SignalGraph& graph, const std::string& sceneId)
     {
+        const bool isLiveGraph = sceneId.empty() || sceneId == liveSceneId;
+
         for (auto& node : graph.nodes)
         {
-            if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+            if (!IsHostedPluginNode(node))
                 continue;
 
-            node.config.erase("pluginStateBase64Length");
+            // The UI-facing scrub marker must never reach persisted data.
+            node.config.erase(kHostedPluginStateLengthConfigKey);
 
-            std::string state = captureRuntimeState(node.id);
-            std::string source = "runtime";
+            std::string state;
+            std::string source;
+
+            if (isLiveGraph)
+            {
+                state = captureRuntimeState(node.id);
+                source = "runtime";
+            }
+
             if (state.empty())
             {
-                state = findExistingState(node.id);
-                source = "existing";
+                state = findStoredState(sceneId, node);
+                source = "stored";
             }
+
+            // Last resort: whatever the incoming preset already carried. Covers a brand-new
+            // scene that has no counterpart in the working copy yet.
+            if (state.empty())
+            {
+                state = GetHostedPluginNodeState(node);
+                source = "payload";
+            }
+
             if (!state.empty())
             {
-                node.config["pluginStateBase64"] = state;
+                node.config[kHostedPluginStateConfigKey] = state;
                 AppendSessionLog("Hosted plugin runtime state selected presetId="
                     + (presetId.empty() ? std::string{"<none>"} : presetId)
+                    + ", scene=" + (sceneId.empty() ? std::string{"<graph>"} : sceneId)
+                    + ", live=" + std::string{isLiveGraph ? "true" : "false"}
                     + ", nodeId=" + node.id + ", source=" + source
                     + ", length=" + std::to_string(state.size())
                     + ", hash=" + HashStringForLog(state));
             }
             else
             {
-                node.config.erase("pluginStateBase64");
-                AppendSessionLog("Hosted plugin state capture unavailable for node " + node.id + " while saving preset " + preset.id);
+                // Nothing anywhere has state for this node: normalise the key away rather
+                // than persisting an empty string. This can only erase a value that was
+                // already empty, so a live plugin's state is never dropped here.
+                node.config.erase(kHostedPluginStateConfigKey);
+                AppendSessionLog("Hosted plugin state capture unavailable for node " + node.id
+                    + ", scene=" + (sceneId.empty() ? std::string{"<graph>"} : sceneId)
+                    + " while saving preset " + preset.id);
             }
         }
     };
 
-    captureGraph(preset.graph);
+    captureGraph(preset.graph, {});
     for (auto& scene : preset.scenes)
-        captureGraph(scene.graph);
+        captureGraph(scene.graph, scene.id);
+}
+
+void PluginController::RestoreStandaloneHostedPluginState(const std::string& json)
+{
+    // Standalone saves its full state on exit (StandalonePluginHolder::savePluginState) and
+    // hands it straight back on the next launch, but DeserializeState deliberately ignores
+    // all of it — so hosted plugin state that was never written to a preset file was being
+    // captured, serialised, stored, and then thrown away. In a DAW the same state survives
+    // in the project; standalone users simply lost it.
+    //
+    // Rather than restoring the whole snapshot, this grafts only the plugin state chunks
+    // onto the preset startup already loaded from the store. The store stays authoritative
+    // for the graph, so unsaved *graph* edits are still discarded — a user who did not save
+    // does not get their edits resurrected. Only the opaque plugin chunk, which has nowhere
+    // else to live and cannot be reconstructed, is carried across.
+    if (!mActivePreset || mActivePresetId.empty())
+        return;
+
+    try
+    {
+        const auto state = nlohmann::json::parse(json);
+        if (!state.contains("preset") || !state["preset"].is_object())
+            return;
+
+        // Only continue a session still pointing at the preset the store resolved at
+        // startup. If they disagree, something else moved the last preset on (another
+        // instance, a settings sync) and the snapshot is stale.
+        const std::string sessionPresetId = state.value("presetId", std::string{});
+        if (sessionPresetId.empty() || sessionPresetId != mActivePresetId)
+            return;
+
+        auto sessionPreset = PresetStorage::DeserializeFromJson(state["preset"].dump());
+        if (!sessionPreset)
+            return;
+
+        NormalizePresetScenes(*sessionPreset);
+        NormalizePresetScenes(*mActivePreset);
+
+        int grafted = 0;
+        const auto graftGraph = [&](SignalGraph& target, const SignalGraph* source)
+        {
+            if (!source)
+                return;
+
+            for (auto& node : target.nodes)
+            {
+                if (!IsHostedPluginNode(node))
+                    continue;
+
+                const auto* sessionNode = source->FindNode(node.id);
+                if (!sessionNode)
+                    continue;
+
+                const auto sessionState = GetHostedPluginNodeState(*sessionNode);
+                if (sessionState.empty() || sessionState == GetHostedPluginNodeState(node))
+                    continue;
+
+                // The stored preset may have been saved against a different plugin since.
+                if (!HostedPluginIdentityMatches(*sessionNode, node))
+                    continue;
+
+                node.config[kHostedPluginStateConfigKey] = sessionState;
+                node.config.erase(kHostedPluginStateLengthConfigKey);
+                ++grafted;
+            }
+        };
+
+        graftGraph(mActivePreset->graph, &sessionPreset->graph);
+        for (auto& scene : mActivePreset->scenes)
+        {
+            const auto* sessionScene = FindPresetScene(*sessionPreset, scene.id);
+            graftGraph(scene.graph, sessionScene ? &sessionScene->graph : nullptr);
+        }
+
+        if (grafted == 0)
+            return;
+
+        AppendSessionLog("Standalone session restored hosted plugin state presetId=" + mActivePresetId
+            + ", nodes=" + std::to_string(grafted)
+            + ", state=" + SummarizeHostedPluginState(*mActivePreset));
+
+        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        ApplyPreset(*mActivePreset);
+        mPendingStateBroadcast = true;
+    }
+    catch (const std::exception&)
+    {
+        // Malformed session state is not worth failing startup over; the store's preset
+        // is already loaded and usable.
+    }
+}
+
+void PluginController::CaptureLiveHostedPluginStateIntoActivePreset()
+{
+    if (!mActivePreset || mActivePresetId.empty() || IsCompositeEditMode())
+        return;
+
+    bool changed = false;
+
+    // Reads the live processor for this exact node in this exact running slot, so the value
+    // belongs to the node it is written back to by construction — no identity check needed.
+    const auto foldGraph = [&](SignalGraph& graph)
+    {
+        for (auto& node : graph.nodes)
+        {
+            if (!IsHostedPluginNode(node))
+                continue;
+
+            auto state = mPresetMixer.GetNodeConfig(mActivePresetId, node.id, kHostedPluginStateConfigKey);
+            if (state.empty() || GetHostedPluginNodeState(node) == state)
+                continue;
+
+            node.config[kHostedPluginStateConfigKey] = std::move(state);
+            node.config.erase(kHostedPluginStateLengthConfigKey);
+            changed = true;
+        }
+    };
+
+    // The top-level graph mirrors the live scene; both carry the node the DSP is running.
+    foldGraph(mActivePreset->graph);
+    if (auto* liveScene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
+        foldGraph(liveScene->graph);
+
+    if (!changed)
+        return;
+
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+    mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
+    AppendSessionLog("Hosted plugin live state folded into working copy presetId=" + mActivePresetId
+        + ", state=" + SummarizeHostedPluginState(*mActivePreset));
+    mHost.NotifyStateChanged();
+}
+
+void PluginController::CaptureMixerSlotHostedPluginState(Preset& preset, const std::string& presetId) const
+{
+    if (presetId.empty())
+        return;
+
+    // A mixer slot runs exactly one graph: the preset's top-level `graph`. Unfocused slots
+    // do not track which scene that graph came from, so the default scene — the one
+    // FocusMixerPreset() will materialise when the user switches to this slot — is kept in
+    // step with it. Other scenes keep whatever they already hold.
+    const std::string defaultSceneId = GetDefaultPresetSceneId(preset);
+
+    for (auto& node : preset.graph.nodes)
+    {
+        if (!IsHostedPluginNode(node))
+            continue;
+
+        auto state = mPresetMixer.GetNodeConfig(presetId, node.id, kHostedPluginStateConfigKey);
+        if (state.empty())
+            continue;
+
+        node.config[kHostedPluginStateConfigKey] = state;
+        node.config.erase(kHostedPluginStateLengthConfigKey);
+
+        if (auto* scene = FindPresetScene(preset, defaultSceneId))
+        {
+            if (auto* sceneNode = scene->graph.FindNode(node.id);
+                sceneNode && HostedPluginIdentityMatches(node, *sceneNode))
+            {
+                sceneNode->config[kHostedPluginStateConfigKey] = std::move(state);
+                sceneNode->config.erase(kHostedPluginStateLengthConfigKey);
+            }
+        }
+    }
+}
+
+void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId,
+                                                          const std::string& nodeId,
+                                                          const std::string& key,
+                                                          const std::string& value)
+{
+    const auto cachedIt = mMixerPresetJsonCache.find(presetId);
+    if (cachedIt == mMixerPresetJsonCache.end())
+        return;
+
+    auto presetOpt = PresetStorage::DeserializeFromJson(cachedIt->second);
+    if (!presetOpt)
+        return;
+
+    bool changed = false;
+    const auto patchGraph = [&](SignalGraph& graph)
+    {
+        auto* node = graph.FindNode(nodeId);
+        if (!node)
+            return;
+
+        const auto existingIt = node->config.find(key);
+        if (value.empty())
+        {
+            if (existingIt == node->config.end())
+                return;
+            node->config.erase(existingIt);
+        }
+        else
+        {
+            if (existingIt != node->config.end() && existingIt->second == value)
+                return;
+            node->config[key] = value;
+        }
+
+        changed = true;
+    };
+
+    // See CaptureMixerSlotHostedPluginState for why the default scene tracks `graph`.
+    patchGraph(presetOpt->graph);
+    if (auto* scene = FindPresetScene(*presetOpt, GetDefaultPresetSceneId(*presetOpt)))
+        patchGraph(scene->graph);
+
+    if (!changed)
+        return;
+
+    cachedIt->second = PresetStorage::SerializeToJson(*presetOpt);
+    mPendingStateBroadcast = true;
+    mHost.NotifyStateChanged();
+}
+
+bool PluginController::ClearStaleHostedPluginState(GraphNode& node, const std::string& previousIdentity)
+{
+    if (!IsHostedPluginNode(node))
+        return false;
+
+    // Resource-keyed, not config-keyed: the config identity keys are written by the plugin
+    // after it loads, so right after a swap they still name the outgoing plugin.
+    if (HostedPluginResourceKey(node) == previousIdentity)
+        return false;
+
+    const bool hadState = node.config.count(kHostedPluginStateConfigKey) > 0
+        || node.config.count(kHostedPluginStateLengthConfigKey) > 0;
+    if (!hadState)
+        return false;
+
+    // The node now points at a different plugin. Its predecessor's state chunk is foreign
+    // data: at best the new plugin rejects it, at worst it half-applies it. Drop it, along
+    // with the identity keys the previous plugin published — the new load republishes its
+    // own via the runtime config callback.
+    node.config.erase(kHostedPluginStateConfigKey);
+    node.config.erase(kHostedPluginStateLengthConfigKey);
+    node.config.erase(kHostedPluginStableIdConfigKey);
+    node.config.erase(kHostedPluginIdentifierConfigKey);
+    node.config.erase(kHostedPluginNameConfigKey);
+    node.config.erase(kHostedPluginManufacturerConfigKey);
+    node.config.erase(kHostedPluginFormatConfigKey);
+    return true;
 }
 
 bool PluginController::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
@@ -12644,6 +13148,8 @@ bool PluginController::UpdateResourceForNodeType(const std::string& nodeType,
 {
     if (!mActivePreset) return false;
 
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     for (auto& node : mActivePreset->graph.nodes)
     {
         if (node.type == nodeType)
@@ -12694,10 +13200,26 @@ bool PluginController::UpdateResourceForNodeId(const std::string& nodeId,
     auto* node = graph->FindNode(nodeId);
     if (!node) return false;
 
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
+    // Re-resolve: folding live state above can reserialise the working copy, and on the
+    // composite-edit path ResolveEditTarget() is unaffected — but taking the pointer again
+    // keeps this correct regardless of what the fold touched.
+    graph = ResolveEditTarget();
+    node = graph ? graph->FindNode(nodeId) : nullptr;
+    if (!node) return false;
+
+    const std::string previousPluginResourceKey = HostedPluginResourceKey(*node);
+
     if (node->resources.empty())
         node->resources.push_back(ref);
     else
         node->resources[0] = ref;
+
+    if (ClearStaleHostedPluginState(*node, previousPluginResourceKey))
+    {
+        AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+    }
 
     if (applyPreset && mActivePreset)
     {
