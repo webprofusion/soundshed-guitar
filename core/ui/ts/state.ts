@@ -195,7 +195,6 @@ export const uiState: UiState = {
   blendLibrary: [],
   customEffectLibrary: [],
   appSettings: {
-    "diagnostics.signalLevelsEnabled": true,
     "audio.nam.slimmableSize": 1.0,
     "audio.nam.oversampling": 0,
     "audio.nam.antiAliasPhase": 0,

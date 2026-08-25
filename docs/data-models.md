@@ -198,6 +198,37 @@ For portable preset sharing.
         └── sha256/
 ```
 
+## Settings Ownership (standalone vs plugin instance)
+
+The standalone app and every hosted plugin instance share **one** settings store — the
+path comes from the OS user-data directory with no variation by wrapper type — and a 2s
+`PollSharedSyncState()` poll fans changes out between them. Each setting therefore has to
+declare who owns it. There are three classes.
+
+| Class | Persisted in | Examples |
+|-------|--------------|----------|
+| **Shared** | the store, by whoever changes it | interface + user input calibration, DSP level targets, API keys, feature toggles, theme |
+| **Instance-owned** | host state (the DAW project); the store only *seeds* a brand-new instance | NAM quality tier, UI layout (`uiSettings`/`uiZoom`/`uiBounds`) |
+| **Standalone-only** | the store, and never written by a plugin instance | `lastPresetId`, metronome, input mode, global FX chain |
+
+Rules that keep this honest:
+
+- `IsInstanceOwnedSettingKey()` is the single definition of instance ownership, and
+  `SaveAppSettings()` filters on it in **both** directions. Suppressing a save at the call
+  site is not enough — the value is already in `mAppSettings`, so the next save of any
+  unrelated key would diff it as changed and publish it anyway.
+- Restoring host state never writes to the store. `DeserializeState()` runs under a scope
+  that blocks saves and rebases `mAppSettingsBaseline` on the way out; without it,
+  reopening an old project republishes its whole settings snapshot over settings the user
+  has changed since.
+- Merging is not applying. Anything merged from host state must also be pushed to the DSP,
+  or the instance runs on what `Initialize()` read from the store while the UI reports the
+  project's values back.
+- A shared-sync reload must re-assert instance-owned values, or another instance's change
+  drags this one's tier and editor layout with it.
+- Global FX (gate, EQ, doubler, transpose, trims) are **not** settings — they live in
+  `GlobalSignalChainConfig` on the mixer, per instance, and are never read from a preset.
+
 ## Preset Manager Operations
 
 | Operation | Description |

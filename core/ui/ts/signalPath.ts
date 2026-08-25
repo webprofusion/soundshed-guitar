@@ -1525,12 +1525,18 @@ export function handleHostedPluginResourceLoadCompleted(payload: {
 export function handleNodeResourceBrowseCancelled(payload: {
   nodeId?: string;
   resourceType?: string;
+  message?: string;
 }): void {
   if (payload.resourceType !== "plugin") {
     return;
   }
   if (payload.nodeId) {
     clearHostedPluginLoadPending(payload.nodeId);
+  }
+  // A message means the host refused what was picked, rather than the user
+  // cancelling. Without this the dialog just closes and nothing happens.
+  if (payload.message) {
+    showNotification("Plugin not loaded", payload.message);
   }
 }
 

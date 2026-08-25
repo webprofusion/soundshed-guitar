@@ -442,7 +442,7 @@ Application configuration panel.
 - **Features tab**: Exposes per-feature toggles for core workflows and power-user tools.
 - **Update check**: Software version checking and notification (`core/ui/ts/updateCheck.ts`).
 - **Window state persistence**: Width, height stored in `settings/ui/window-state.json`.
-- **App settings file**: `settings/app.json` (schemaVersion, theme, lastPresetId, feature flags).
+- **App settings file**: `settings/app.json` (schemaVersion, theme, lastPresetId, feature flags). Shared by the standalone app and every plugin instance — see "Settings Ownership" in `docs/data-models.md` for which settings are shared, which belong to a single plugin instance, and which the standalone app alone writes.
 
 ---
 
@@ -489,7 +489,7 @@ Bidirectional JSON messages over the WebView bridge:
 
 **Key engine→UI messages**: `state`, `presetLoaded`, `presetSaved`, `presetList`, `error`, `tunerUpdate`, `dspPerformance`, `sldRoster`/`sld`, `globalChain`, `effectCatalog`, `compositeLibrary`, `metronomeState`, `previewStarted`, `previewComplete`, `resourceImported`, `layoutLibraryLoaded`.
 
-**Key UI→engine messages**: `uiReady`, `requestState`, `setParameter`, `loadPreset`, `savePreset`, `addSignalPathNode`, `deleteSignalPathNode`, `replaceSignalPathNode`, `reorderSignalPathNode`, `updateSignalPathNodeParam`, `updateSignalPathNodeBypass`, `updateNodeResource`, `addActivePreset`, `setPresetMix`, `setPresetMute`, `setPresetSolo`, `setMasterGain`, `tuner`, `setMetronome`, `runSignalPathTest`, `previewDemoAudio`, `importRemoteResource`, `saveCompositeDefinition`, `getEffectCatalog`, `getPresetList`, `openAudioPreferences`.
+**Key UI→engine messages**: `uiReady`, `requestState`, `setGlobalChainParam`, `setParameter`, `loadPreset`, `savePreset`, `addSignalPathNode`, `deleteSignalPathNode`, `replaceSignalPathNode`, `reorderSignalPathNode`, `updateSignalPathNodeParam`, `updateSignalPathNodeBypass`, `updateNodeResource`, `addActivePreset`, `setPresetMix`, `setPresetMute`, `setPresetSolo`, `setMasterGain`, `tuner`, `setMetronome`, `runSignalPathTest`, `previewDemoAudio`, `importRemoteResource`, `saveCompositeDefinition`, `getEffectCatalog`, `getPresetList`, `openAudioPreferences`.
 
 ### Message Dispatching (C++)
 
