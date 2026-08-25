@@ -110,16 +110,6 @@ let mixTabActive = false;
 let signalPathEqInteraction: EqCurveInteraction | null = null;
 let signalPathSpatialInteraction: SpatialPannerInteraction | null = null;
 let signalPathSpatialNodeId: string | null = null;
-/**
- * Tooltip for the plugin folder-browse button.
- *
- * VST3 and LV2 plugins are *directories* on Linux (and LV2 everywhere), but no
- * native file dialog reliably lets a folder be picked while a file filter is
- * active — GTK navigates into the folder instead. This second button opens a
- * folders-only picker as the escape hatch; either route resolves to the same
- * bundle path, so users never have to know which one their platform needs.
- */
-const PLUGIN_FOLDER_BROWSE_TITLE = "Browse for a plugin folder (.vst3 / .lv2 bundle)...";
 
 /** Knob instances for the current node params panel, keyed by param key. */
 const nodeParamKnobs = new Map<string, GenericKnob>();
@@ -1525,18 +1515,12 @@ export function handleHostedPluginResourceLoadCompleted(payload: {
 export function handleNodeResourceBrowseCancelled(payload: {
   nodeId?: string;
   resourceType?: string;
-  message?: string;
 }): void {
   if (payload.resourceType !== "plugin") {
     return;
   }
   if (payload.nodeId) {
     clearHostedPluginLoadPending(payload.nodeId);
-  }
-  // A message means the host refused what was picked, rather than the user
-  // cancelling. Without this the dialog just closes and nothing happens.
-  if (payload.message) {
-    showNotification("Plugin not loaded", payload.message);
   }
 }
 
@@ -4446,17 +4430,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                   title="Browse for file..."
                 >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
               ` : ""}
-              ${canBrowseFile && !isLibraryPicker && isPluginPicker ? `
-                <button
-                  class="resource-browse-btn"
-                  data-node-id="${node.id}"
-                  data-resource-type="${resourceType}"
-                  data-resource-index="${resourceIndex}"
-                  data-exposed-resource-id="${escapeHtml(exposedResource.resourceId)}"
-                  data-browse-mode="folder"
-                  title="${PLUGIN_FOLDER_BROWSE_TITLE}"
-                >${renderIcon("folder", "resource-browse-icon")}</button>
-              ` : ""}
               ${hostedPluginOpenButton}
               ${hostedPluginSelectionLabel}
               ${isPluginPicker ? buildHostedPluginLoadingIndicatorHtml(node, resourceIndex) : ""}
@@ -4646,16 +4619,6 @@ function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
                 data-accept="${browseAccept}"
                 title="Browse for file..."
               >${renderIcon(isPluginPicker ? "plus" : "folder", "resource-browse-icon")}</button>
-            ` : ""}
-            ${!isLibraryPicker && isPluginPicker ? `
-              <button
-                class="resource-browse-btn"
-                data-node-id="${node.id}"
-                data-resource-type="${resourceType}"
-                ${indexAttr}
-                data-browse-mode="folder"
-                title="${PLUGIN_FOLDER_BROWSE_TITLE}"
-              >${renderIcon("folder", "resource-browse-icon")}</button>
             ` : ""}
             ${hostedPluginOpenButton}
             ${hostedPluginSelectionLabel}
@@ -6325,9 +6288,6 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
       const resourceType = browseBtn.dataset.resourceType;
       const resourceIndex = browseBtn.dataset.resourceIndex ? parseInt(browseBtn.dataset.resourceIndex, 10) : undefined;
       const exposedResourceId = browseBtn.dataset.exposedResourceId;
-      // Plugin pickers render a second button that opens a folders-only dialog;
-      // everything else about the flow is identical.
-      const browseMode = browseBtn.dataset.browseMode;
 
       if (resourceType === "plugin") {
         if (nodeId) {
@@ -6344,7 +6304,6 @@ function bindResourceControls(node: GraphNode, preset: Preset): void {
           resourceIndex,
           exposedResourceId,
           resourceType === "plugin",
-          browseMode,
         );
       }
     });
@@ -6903,7 +6862,6 @@ function sendBrowseNodeResource(
   resourceIndex?: number,
   exposedResourceId?: string,
   openPluginEditorAfterLoad?: boolean,
-  browseMode?: string,
 ): void {
   postMessage({
     type: "browseNodeResource",
@@ -6912,7 +6870,6 @@ function sendBrowseNodeResource(
     resourceIndex,
     exposedResourceId,
     openPluginEditorAfterLoad,
-    browseMode,
   });
 }
 

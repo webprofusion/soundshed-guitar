@@ -2,6 +2,7 @@
 
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
+#include "resources/PluginPathUtils.h"
 #include "util/FileSystem.h"
 
 #include <algorithm>
@@ -13,6 +14,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 namespace guitarfx
 {
@@ -197,68 +199,68 @@ namespace guitarfx
             return juce::String (hint);
         }
 
-        // LV2 plugins are identified by their bundle directory (a folder ending in
-        // ".lv2"). On Windows the file dialog can only select files, so users pick a
-        // file inside the bundle (the .dll or manifest.ttl); map such paths back to
-        // the bundle directory, which is what JUCE's LV2 host expects.
-        std::filesystem::path ResolveLv2BundleDirectory (const std::filesystem::path& path)
-        {
-            for (auto current = path;;)
-            {
-                const std::string name = ToLowerAscii (current.filename().string());
-                if (name.size() > 4 && name.compare (name.size() - 4, 4, ".lv2") == 0)
-                    return current;
-
-                auto parent = current.parent_path();
-                if (parent.empty() || parent == current)
-                    break;
-                current = std::move (parent);
-            }
-            return path;
-        }
-
         std::string GetSupportedPluginFormatsDescription()
         {
+            using pluginpath::PluginFormat;
+            using pluginpath::PluginFormatDisplayName;
+
+            std::string description { PluginFormatDisplayName (PluginFormat::VST3) };
 #if JUCE_MAC
-            return "VST3 (.vst3), Audio Unit (.component) and LV2 (.lv2)";
-#else
-            return "VST3 (.vst3) and LV2 (.lv2)";
+            description += ", ";
+            description += PluginFormatDisplayName (PluginFormat::AudioUnit);
 #endif
+            description += " and ";
+            description += PluginFormatDisplayName (PluginFormat::LV2);
+            return description;
         }
 
-        // Returns a friendly, user-facing reason why this path can never load,
-        // or an empty string when the path looks like a supported plugin type.
+        // The single owner of "why can't this load?" wording. The browse dialog
+        // deliberately does not second-guess a selection — it hands whatever the user
+        // picked to the loader, and every rejection is explained from here.
+        //
+        // Returns an empty string when the path looks like a supported plugin type.
         std::string DescribeUnsupportedPluginFile (const std::filesystem::path& path)
         {
-            const std::string fullPath = ToLowerAscii (path.string());
-            const std::string extension = ToLowerAscii (path.extension().string());
-
-            const auto pathContains = [&fullPath] (const char* token) {
-                return fullPath.find (token) != std::string::npos;
-            };
-
-            if (pathContains (".vst3") || pathContains (".lv2"))
-                return {};
-
-            if (pathContains (".component") || pathContains (".appex"))
+            // A plugin is a file or a bundle directory. A plain folder is neither.
+            std::error_code ec;
+            if (std::filesystem::is_directory (path, ec) && !ec
+                && !pluginpath::HasPluginBundleSuffix (path))
             {
-#if JUCE_MAC
-                return {};
-#else
-                return "Audio Unit plugins are only supported on macOS. Please select the VST3 version of this plugin instead.";
-#endif
+                return "'" + ToDisplayPath (path) + "' is a folder, not a plugin. Select the plugin"
+                       " itself, or a file inside its bundle. Supported formats: "
+                       + GetSupportedPluginFormatsDescription() + ".";
             }
 
-            if (extension == ".dll" || extension == ".vst")
-                return "This looks like a VST2 plugin, which is not supported. Please install and select the VST3 version of this plugin instead.";
+            switch (pluginpath::PluginFormatFromPath (path))
+            {
+                case pluginpath::PluginFormat::VST3:
+                case pluginpath::PluginFormat::LV2:
+                    return {};
 
-            if (extension == ".clap")
-                return "CLAP plugins are not supported. Please select the VST3 version of this plugin instead.";
+                case pluginpath::PluginFormat::AudioUnit:
+#if JUCE_MAC
+                    return {};
+#else
+                    return "Audio Unit plugins are only supported on macOS. Please select the VST3 version of this plugin instead.";
+#endif
 
-            if (extension == ".aaxplugin")
-                return "AAX (Pro Tools) plugins are not supported. Please select the VST3 version of this plugin instead.";
+                case pluginpath::PluginFormat::VST2:
+                    return "This looks like a VST2 plugin, which is not supported. Please install and select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::CLAP:
+                    return "CLAP plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::AAX:
+                    return "AAX (Pro Tools) plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::Unknown:
+                    break;
+            }
+
+            const std::string extension = ToLowerAscii (path.extension().string());
 
 #if JUCE_LINUX
+            // A bare .so outside any bundle can still be an LV2 binary; let the scanner decide.
             if (extension == ".so")
                 return {};
 #endif
@@ -901,9 +903,12 @@ namespace guitarfx
 
         EnsureFormatsAdded();
 
-        // Heal stored paths that point inside an LV2 bundle (e.g. the inner .dll
-        // selected through the Windows files-only dialog).
-        const std::filesystem::path resolvedPath = ResolveLv2BundleDirectory (path);
+        // Heal stored paths that point inside a plugin bundle (e.g. the inner .so
+        // of a Linux VST3, or the .dll / manifest.ttl of an LV2 bundle picked
+        // through the Windows files-only dialog). Applied on every load, not just
+        // on fresh picks, so paths arriving from presets, synced libraries or a
+        // hand-edited entry are normalized identically.
+        const std::filesystem::path resolvedPath = pluginpath::ResolvePluginBundlePath (path);
 
         AppendHostedPluginTrace ("LoadPluginFromPath begin path=" + ToDisplayPath (resolvedPath)
                                  + ", pendingStateLength=" + std::to_string (mPluginStateBase64.size())
@@ -916,6 +921,17 @@ namespace guitarfx
             SetError ("Plugin file was not found: " + ToDisplayPath (resolvedPath)
                       + ". The plugin may have been moved or uninstalled.",
                       "file-not-found");
+            ReleaseHostedPlugin();
+            ClearLoadedPluginMetadata();
+            return false;
+        }
+
+        // A plain folder cannot be scanned at all, so reject it up front rather than
+        // letting the scanner fail with a much vaguer message. Every other kind of
+        // bad selection reaches the scanner first and is reported below.
+        if (pluginFile.isDirectory() && !pluginpath::HasPluginBundleSuffix (resolvedPath))
+        {
+            SetError (DescribeUnsupportedPluginFile (resolvedPath), "not-a-plugin-target");
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;

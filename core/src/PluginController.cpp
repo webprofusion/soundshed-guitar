@@ -23,6 +23,7 @@
 #endif
 #include "presets/CompositePresetStorage.h"
 #include "presets/CompositePresetTypes.h"
+#include "resources/PluginPathUtils.h"
 #include "util/AudioDecoder.h"
 #include "util/Base64.h"
 #include "util/FileIO.h"
@@ -309,28 +310,35 @@ namespace
         return normalizedManufacturer;
     }
 
+    /// Maps a resource type onto a native dialog category.
+    guitarfx::BrowseFileType ResolveBrowseFileType(const std::string& resourceType)
+    {
+        using guitarfx::BrowseFileType;
+        if (resourceType == "nam") return BrowseFileType::NAMModel;
+        if (resourceType == "ir") return BrowseFileType::IRFile;
+        if (resourceType == "plugin") return BrowseFileType::PluginFile;
+        return BrowseFileType::Any;
+    }
+
+    /// Content hashes are only meaningful for regular files.
+    ///
+    /// A plugin bundle is a *directory*, and hashing one yields either an empty
+    /// string or the bare FNV offset basis (whether opening a directory succeeds
+    /// is platform-dependent) — never anything content-derived. So every bundle
+    /// would share a single hash, and that is not harmless: ResourceLibrary falls
+    /// back to hash equality when a resource's file is missing, which would
+    /// silently resolve a moved plugin to an unrelated one. Leave the hash empty
+    /// for directories instead; plugins de-duplicate on their stable id.
+    bool ShouldHashResourceFile(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_regular_file(path, ec) && !ec;
+    }
+
     std::string InferPluginFormatFromPath(const std::filesystem::path& path)
     {
-        std::string lower = path.string();
-        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch)
-        {
-            return static_cast<char>(std::tolower(ch));
-        });
-
-        if (lower.find(".vst3") != std::string::npos)
-            return "vst3";
-        if (lower.find(".component") != std::string::npos || lower.find(".appex") != std::string::npos)
-            return "au";
-        if (lower.find(".lv2") != std::string::npos)
-            return "lv2";
-        if (lower.find(".clap") != std::string::npos)
-            return "clap";
-        if (lower.find(".aaxplugin") != std::string::npos)
-            return "aax";
-        // Note: ".vst3" is matched above, so a bare ".vst" here means VST2.
-        if (lower.find(".dll") != std::string::npos || lower.find(".vst") != std::string::npos)
-            return "vst2";
-        return {};
+        return std::string{guitarfx::pluginpath::PluginFormatId(
+            guitarfx::pluginpath::PluginFormatFromPath(path))};
     }
 
     bool HasUnsafeRelativeSegments(const std::filesystem::path& path)
@@ -6068,12 +6076,7 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
     const std::string category = payload.value("category", "");
     const bool openPluginEditorAfterLoad = payload.value("openPluginEditorAfterLoad", false);
 
-    BrowseFileType fileType = BrowseFileType::Any;
-    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
-    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
-    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
-
-    mHost.BrowseFileAsync(fileType, "Select Resource",
+    mHost.BrowseFileAsync(ResolveBrowseFileType(resourceType), "Select Resource",
         [this, nodeId, resourceType, resourceIndex, exposedResourceId, category, openPluginEditorAfterLoad](const BrowseFileResult& result)
         {
             if (result.success)
@@ -6760,12 +6763,18 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     if (hasFilePath)
     {
         resolvedPath = util::PathFromUtf8(filePathValue);
+        // Normalize plugin paths to the bundle root before anything is keyed off
+        // them. Dialog results already arrive normalized, but paths can also come
+        // from a preset, a synced library or a hand-edited entry, and path-based
+        // de-duplication below only works if every route agrees.
+        if (resourceType == "plugin")
+            resolvedPath = guitarfx::pluginpath::ResolvePluginBundlePath(resolvedPath);
         if (!std::filesystem::exists(resolvedPath))
         {
             error = "Selected file does not exist";
             return std::nullopt;
         }
-        if (resolvedHash.empty())
+        if (resolvedHash.empty() && ShouldHashResourceFile(resolvedPath))
             resolvedHash = mHasher.HashFile(resolvedPath);
     }
     else
@@ -7382,13 +7391,17 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         if (!filePathValue.empty())
         {
             std::filesystem::path updatedPath(filePathValue);
+            // Same normalization as SaveLocalLibraryResource: a plugin is stored
+            // under its bundle root whichever route the path arrived by.
+            if (resourceType == "plugin")
+                updatedPath = guitarfx::pluginpath::ResolvePluginBundlePath(updatedPath);
             if (!std::filesystem::exists(updatedPath))
             {
                 ReportErrorToUI("Resource update failed", "Selected file does not exist");
                 return;
             }
             updated.filePath = updatedPath;
-            updated.hash = mHasher.HashFile(updatedPath);
+            updated.hash = ShouldHashResourceFile(updatedPath) ? mHasher.HashFile(updatedPath) : std::string{};
             updated.metadata["sourceFileName"] = updatedPath.filename().string();
         }
     }
@@ -7463,11 +7476,7 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
     if (resourceType.empty() || resourceId.empty())
         return;
 
-    BrowseFileType fileType = BrowseFileType::Any;
-    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
-    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
-    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
-    mHost.BrowseFileAsync(fileType, "Select Local Resource",
+    mHost.BrowseFileAsync(ResolveBrowseFileType(resourceType), "Select Local Resource",
         [this, payload, resourceType, resourceId](const BrowseFileResult& result)
         {
             if (!result.success)

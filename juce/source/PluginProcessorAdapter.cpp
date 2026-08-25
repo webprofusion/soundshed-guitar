@@ -11,6 +11,8 @@
 #include "PluginEditor.h" // existing editor, unchanged
 #include "UiBridge.h"
 
+#include "resources/PluginPathUtils.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -532,19 +534,17 @@ void PluginProcessorAdapter::BrowseFileAsync (
             filters = "*.soundshed.preset;*.soundshed.presets;*.zip";
             break;
         case guitarfx::BrowseFileType::PluginFile:
-#if JUCE_MAC
-            // Plugin bundles are directories, but macOS treats packages as files.
-            filters = "*.vst3;*.component;*.lv2";
-#elif JUCE_WINDOWS
-            // The Windows dialog cannot select directories, so LV2 bundles are picked
-            // via a file inside them (the .dll or manifest.ttl); the result is mapped
-            // back to the bundle directory below. Legacy VST2 extensions are included
-            // so selecting one reaches the loader, which reports a friendly
-            // "VST2 not supported" message.
-            filters = "*.vst3;*.lv2;*.dll;*.vst;*.ttl";
-#else
-            filters = "*.vst3;*.lv2;*.so";
-#endif
+            // Bundle *payloads* are offered alongside the bundles themselves, because
+            // no native dialog reliably lets a folder be selected while a file filter
+            // is active. Whichever the user picks, ResolvePluginBundlePath normalizes
+            // it to the bundle root, so every route stores the same path.
+            //
+            // Legacy VST2 is listed deliberately even though it cannot be loaded:
+            // hiding it only turns "VST2 is not supported, use the VST3 version" into
+            // "my plugin isn't in the list". Selecting one reaches the loader, which
+            // explains the problem — see DescribeUnsupportedPluginFile. CLAP and AAX
+            // cannot be hosted at all, so PluginBrowseFilters leaves those out.
+            filters = guitarfx::pluginpath::PluginBrowseFilters();
             break;
         case guitarfx::BrowseFileType::Any:
             filters = "*.*";
@@ -567,9 +567,10 @@ void PluginProcessorAdapter::BrowseFileAsync (
 
 #if ! JUCE_WINDOWS
     // Plugin bundles (.vst3 on Linux, .component on macOS, .lv2 everywhere) are
-    // directories; allow selecting them. On Windows the native dialog switches to a
-    // folders-only picker when directories are selectable, so keep files-only there
-    // (Windows VST3 bundle folders contain an inner .vst3 file that can be chosen).
+    // directories; allow selecting them where the platform permits it. On Windows the
+    // native dialog switches to a folders-only picker when directories are selectable,
+    // so keep files-only there. Either way this is only a convenience — picking a
+    // payload file inside the bundle always works too.
     if (type == guitarfx::BrowseFileType::PluginFile)
         flags |= juce::FileBrowserComponent::canSelectDirectories;
 #endif
@@ -579,30 +580,11 @@ void PluginProcessorAdapter::BrowseFileAsync (
         auto file = chooser.getResult();
         mFileChooser.reset();
 
+        // The dialog reports what was picked and nothing more. Normalizing a selection
+        // to its bundle root, and judging whether it can load, belong to the layers
+        // that own those questions: the resource library and the plugin loader.
         const bool acceptDirectories = type == guitarfx::BrowseFileType::PluginFile
                                        || type == guitarfx::BrowseFileType::Folder;
-
-        // LV2 plugins are identified by their bundle directory (a folder ending in
-        // ".lv2"). When a file inside a bundle was selected (the only option on
-        // Windows, where the dialog cannot pick directories), store the bundle
-        // directory instead so JUCE's LV2 host can resolve it.
-        if (type == guitarfx::BrowseFileType::PluginFile && file.exists())
-        {
-            for (auto dir = file;;)
-            {
-                if (dir.getFileName().endsWithIgnoreCase (".lv2"))
-                {
-                    file = dir;
-                    break;
-                }
-
-                auto parent = dir.getParentDirectory();
-                if (parent == dir)
-                    break;
-                dir = parent;
-            }
-        }
-
         if (file.existsAsFile() || (acceptDirectories && file.isDirectory()))
         {
             result.success = true;
