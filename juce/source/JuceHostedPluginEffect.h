@@ -52,6 +52,11 @@ namespace guitarfx
         [[nodiscard]] juce::AudioPluginInstance* GetHostedPluginForTesting() const { return mPlugin.get(); }
         [[nodiscard]] bool IsPluginEditorOpenForTesting() const { return mEditorWindow != nullptr; }
         bool ClosePluginEditorForTesting() { return ClosePluginEditor(); }
+        // Installs a plugin instance directly, bypassing scanning, and wires up the same
+        // listeners a real load would. Lets the state-plumbing tests (capture guards,
+        // gesture coalescing) run against a stub instead of a real plugin binary.
+        void InstallHostedPluginForTesting (std::unique_ptr<juce::AudioPluginInstance> plugin);
+        [[nodiscard]] std::string GetPendingPluginStateForTesting() const { return mPluginStateBase64; }
 #endif
 
     private:
@@ -111,6 +116,11 @@ namespace guitarfx
         double mInputGainDb = 0.0;
         double mOutputGainDb = 0.0;
         std::atomic<int> mAutoCaptureSuppressionDepth { 0 };
+        // Depth of in-progress parameter gestures (knob drags). While non-zero, per-value
+        // change notifications are ignored: a drag fires one for every tick, and each
+        // capture is a full getStateInformation() on the message thread. The matching
+        // gesture-end notification performs the single capture that covers the whole drag.
+        std::atomic<int> mActiveGestureDepth { 0 };
         std::atomic<bool> mForceAutoCaptureNotification { false };
         bool mFormatsAdded = false;
         bool mPrepared = false;

@@ -24,6 +24,7 @@
 #endif
 #include "presets/CompositePresetStorage.h"
 #include "presets/CompositePresetTypes.h"
+#include "resources/PluginPathUtils.h"
 #include "util/AudioDecoder.h"
 #include "util/Base64.h"
 #include "util/FileIO.h"
@@ -89,6 +90,8 @@ namespace
     constexpr const char* kHostedPluginManufacturerConfigKey = "pluginManufacturer";
     constexpr const char* kHostedPluginFormatConfigKey = "pluginFormat";
     constexpr const char* kHostedPluginLastErrorCodeConfigKey = "lastErrorCode";
+    constexpr const char* kHostedPluginStateConfigKey = "pluginStateBase64";
+    constexpr const char* kHostedPluginStateLengthConfigKey = "pluginStateBase64Length";
     constexpr int kFactoryArchiveStateSchemaVersion = 1;
     constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
     constexpr const char* kPresetArchiveSessionRootFolder = "sessions/preset-archive";
@@ -154,7 +157,6 @@ namespace
     constexpr const char* kSignalDiagnosticsSettingKey = "diagnostics.signalLevelsEnabled";
     constexpr const char* kNominalOperatingLevelSettingKey = "audio.dsp.nominalOperatingLevelDbfs";
     constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.outputProtectionCeilingDbfs";
-    constexpr const char* kMultiThreadedProcessingSettingKey = "audio.processing.multiThreaded";
     constexpr const char* kGlobalFxSettingsKey = "globalFx.settings";
     constexpr const char* kNamSlimmableSizeSettingKey = "audio.nam.slimmableSize";
     constexpr const char* kNamSlimmableNodeConfigKey = "slimmableSize";
@@ -316,28 +318,35 @@ namespace
         return normalizedManufacturer;
     }
 
+    /// Maps a resource type onto a native dialog category.
+    guitarfx::BrowseFileType ResolveBrowseFileType(const std::string& resourceType)
+    {
+        using guitarfx::BrowseFileType;
+        if (resourceType == "nam") return BrowseFileType::NAMModel;
+        if (resourceType == "ir") return BrowseFileType::IRFile;
+        if (resourceType == "plugin") return BrowseFileType::PluginFile;
+        return BrowseFileType::Any;
+    }
+
+    /// Content hashes are only meaningful for regular files.
+    ///
+    /// A plugin bundle is a *directory*, and hashing one yields either an empty
+    /// string or the bare FNV offset basis (whether opening a directory succeeds
+    /// is platform-dependent) — never anything content-derived. So every bundle
+    /// would share a single hash, and that is not harmless: ResourceLibrary falls
+    /// back to hash equality when a resource's file is missing, which would
+    /// silently resolve a moved plugin to an unrelated one. Leave the hash empty
+    /// for directories instead; plugins de-duplicate on their stable id.
+    bool ShouldHashResourceFile(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_regular_file(path, ec) && !ec;
+    }
+
     std::string InferPluginFormatFromPath(const std::filesystem::path& path)
     {
-        std::string lower = path.string();
-        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch)
-        {
-            return static_cast<char>(std::tolower(ch));
-        });
-
-        if (lower.find(".vst3") != std::string::npos)
-            return "vst3";
-        if (lower.find(".component") != std::string::npos || lower.find(".appex") != std::string::npos)
-            return "au";
-        if (lower.find(".lv2") != std::string::npos)
-            return "lv2";
-        if (lower.find(".clap") != std::string::npos)
-            return "clap";
-        if (lower.find(".aaxplugin") != std::string::npos)
-            return "aax";
-        // Note: ".vst3" is matched above, so a bare ".vst" here means VST2.
-        if (lower.find(".dll") != std::string::npos || lower.find(".vst") != std::string::npos)
-            return "vst2";
-        return {};
+        return std::string{guitarfx::pluginpath::PluginFormatId(
+            guitarfx::pluginpath::PluginFormatFromPath(path))};
     }
 
     bool HasUnsafeRelativeSegments(const std::filesystem::path& path)
@@ -433,37 +442,6 @@ namespace
             {"preChainGraph", guitarfx::SerializeSignalGraph(config.preChainGraph)},
             {"postChainGraph", guitarfx::SerializeSignalGraph(config.postChainGraph)}
         };
-    }
-
-    bool IsPersistedGlobalFxParam(int paramIdx)
-    {
-        // Global FX parameters that are persisted to app settings (standalone) or host state (plugin).
-        // Limiter is intentionally excluded—it is mixer state, not part of the pre/post FX chain.
-        // Note: Global FX are NEVER persisted in presets; they are per-instance state only.
-        switch (paramIdx)
-        {
-        case guitarfx::PluginController::kParamInputTrim:
-        case guitarfx::PluginController::kParamOutputTrim:
-        case guitarfx::PluginController::kParamGateEnabled:
-        case guitarfx::PluginController::kParamGateThreshold:
-        case guitarfx::PluginController::kParamDoublerEnabled:
-        case guitarfx::PluginController::kParamDoublerDelay:
-        case guitarfx::PluginController::kParamTranspose:
-        case guitarfx::PluginController::kParamEQEnabled:
-        case guitarfx::PluginController::kParamEQLowGain:
-        case guitarfx::PluginController::kParamEQLowFreq:
-        case guitarfx::PluginController::kParamEQLowMidGain:
-        case guitarfx::PluginController::kParamEQLowMidFreq:
-        case guitarfx::PluginController::kParamEQLowMidQ:
-        case guitarfx::PluginController::kParamEQHighMidGain:
-        case guitarfx::PluginController::kParamEQHighMidFreq:
-        case guitarfx::PluginController::kParamEQHighMidQ:
-        case guitarfx::PluginController::kParamEQHighGain:
-        case guitarfx::PluginController::kParamEQHighFreq:
-            return true;
-        default:
-            return false;
-        }
     }
 
     std::filesystem::path ResolveRiffTakePathForRuntime(const std::filesystem::path& storedPath,
@@ -2062,18 +2040,93 @@ static std::string HashStringForLog(std::string_view value)
     return stream.str();
 }
 
+static bool IsHostedPluginNode(const GraphNode& node)
+{
+    return EffectRegistry::Instance().Resolve(node.type) == EffectGuids::kPluginHost;
+}
+
+/**
+ * Which plugin *resource* a node points at.
+ *
+ * Swap detection uses this rather than the config identity keys below: those are published
+ * by the plugin once it has loaded, so at the moment the user picks a different plugin they
+ * still describe the previous one and would report "no change".
+ */
+static std::string HostedPluginResourceKey(const GraphNode& node)
+{
+    for (const auto& resource : node.resources)
+    {
+        if (resource.resourceType != "plugin")
+            continue;
+        if (!resource.resourceId.empty())
+            return "res:" + resource.resourceId;
+        if (!resource.filePath.empty())
+            return "path:" + util::PathToUtf8(resource.filePath);
+    }
+
+    return {};
+}
+
+/**
+ * Identity of the plugin a node is configured to host.
+ *
+ * A state chunk is only meaningful to the plugin it came from. Comparing this key before
+ * carrying state across a rebuild, a scene, or a session restore is what stops one
+ * plugin's chunk being handed to another.
+ *
+ * Returns an empty string for nodes whose plugin has never been resolved — callers treat
+ * "unknown identity" as "do not carry state across", except where both sides are unknown.
+ */
+static std::string HostedPluginIdentityKey(const GraphNode& node)
+{
+    const auto read = [&node](const char* key) -> std::string {
+        const auto it = node.config.find(key);
+        return it != node.config.end() ? it->second : std::string{};
+    };
+
+    // Stable id first: it survives a plugin being reinstalled at a different path.
+    if (auto stableId = read(kHostedPluginStableIdConfigKey); !stableId.empty())
+        return "stable:" + stableId;
+    if (auto identifier = read(kHostedPluginIdentifierConfigKey); !identifier.empty())
+        return "id:" + identifier;
+
+    // Nothing authoritative — fall back to the resource, which is all an as-yet-unloaded
+    // node has to go on.
+    return HostedPluginResourceKey(node);
+}
+
+/// True when a state chunk stored against `from` may be applied to `to`.
+static bool HostedPluginIdentityMatches(const GraphNode& from, const GraphNode& to)
+{
+    const auto fromKey = HostedPluginIdentityKey(from);
+    const auto toKey = HostedPluginIdentityKey(to);
+
+    // Both unknown: the node has never resolved a plugin on either side, so there is no
+    // evidence of a swap and the state is the best guess available.
+    if (fromKey.empty() && toKey.empty())
+        return true;
+
+    return fromKey == toKey;
+}
+
+static std::string GetHostedPluginNodeState(const GraphNode& node)
+{
+    const auto it = node.config.find(kHostedPluginStateConfigKey);
+    return it != node.config.end() ? it->second : std::string{};
+}
+
 static void ScrubHostedPluginStateForUi(SignalGraph& graph)
 {
     for (auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         if (stateIt == node.config.end())
             continue;
 
-        node.config["pluginStateBase64Length"] = std::to_string(stateIt->second.size());
+        node.config[kHostedPluginStateLengthConfigKey] = std::to_string(stateIt->second.size());
         node.config.erase(stateIt);
     }
 }
@@ -2092,11 +2145,11 @@ static bool GraphHasScrubbedHostedPluginState(const SignalGraph& graph)
 {
     for (const auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
-        const auto lengthIt = node.config.find("pluginStateBase64Length");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
+        const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
         if (lengthIt != node.config.end() && (stateIt == node.config.end() || stateIt->second.empty()))
             return true;
     }
@@ -2124,11 +2177,11 @@ static void AppendHostedPluginGraphSummary(const SignalGraph& graph,
 {
     for (const auto& node : graph.nodes)
     {
-        if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+        if (!IsHostedPluginNode(node))
             continue;
 
-        const auto stateIt = node.config.find("pluginStateBase64");
-        const auto lengthIt = node.config.find("pluginStateBase64Length");
+        const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
+        const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
         const std::string stateLength = stateIt != node.config.end()
             ? std::to_string(stateIt->second.size())
             : std::string{"0"};
@@ -2245,7 +2298,6 @@ static std::filesystem::path ResolveLayoutFilePath(const FileSystem& fileSystem,
 PluginController::PluginController(IPluginHost& host)
     : mHost(host)
 {
-    mParamValues.fill(0.0);
     mPendingMidiApply.reserve(kMaxPendingMidiApply);
     mPendingMidiLog.reserve(kMaxPendingMidiLog);
     RegisterAllEffects();
@@ -2315,16 +2367,8 @@ void PluginController::Initialize()
     mPresetMixer.SetHostControlledInput(!mHost.IsStandalone());
 
     LoadAppSettings();
-    ApplyMetronomeSettingsFromAppSettings();
-    ApplyDiagnosticsSettingsFromAppSettings();
-    ApplyDspLevelTargetSettingsFromAppSettings();
-    ApplyProcessingModeSettingsFromAppSettings();
-    ApplyInputModeSettingsFromAppSettings();
-    ApplyGlobalFxSettingsFromAppSettings();
-    ApplyNamQualitySettings();
-    ApplyNamInterfaceCalibrationFromAppSettings();
-    ApplyUserInputCalibrationSettingsFromAppSettings();
-    ApplyUiSettingsFromAppSettings();
+    if (ApplySettingsToRuntime(SettingsApplyMode::kApplyAll))
+        SaveAppSettings();
     if (!IsPresetArchiveSessionActive())
         LoadResourceLibraries();
     if (!IsPresetArchiveSessionActive())
@@ -3133,15 +3177,7 @@ void PluginController::RefreshMetronomeClickSamples(double sampleRate)
     std::atomic_store_explicit(&mMetronomeClickSamples, std::move(samples), std::memory_order_release);
 }
 
-void PluginController::ApplyDiagnosticsSettingsFromAppSettings()
-{
-    const bool enabled = true;
-    mAppSettings[kSignalDiagnosticsSettingKey] = enabled;
-    mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
-    mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
-}
-
-void PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
+bool PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
 {
     bool settingsChanged = false;
 
@@ -3178,37 +3214,7 @@ void PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
     updateStoredSetting(kNominalOperatingLevelSettingKey, nominalLevelDbfs);
     updateStoredSetting(kOutputProtectionCeilingSettingKey, protectionCeilingDbfs);
 
-    if (settingsChanged)
-        SaveAppSettings();
-}
-
-void PluginController::ApplyProcessingModeSettingsFromAppSettings()
-{
-    bool settingsChanged = false;
-
-    bool enabled = true;
-    const auto it = mAppSettings.find(kMultiThreadedProcessingSettingKey);
-    if (it != mAppSettings.end())
-    {
-        if (it->is_boolean())
-            enabled = it->get<bool>();
-        else if (!it->is_null())
-            settingsChanged = true;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(mDSPMutex);
-        mPresetMixer.SetMultiThreadedProcessingEnabled(enabled);
-    }
-
-    if (it == mAppSettings.end() || !it->is_boolean() || it->get<bool>() != enabled)
-    {
-        mAppSettings[kMultiThreadedProcessingSettingKey] = enabled;
-        settingsChanged = true;
-    }
-
-    if (settingsChanged)
-        SaveAppSettings();
+    return settingsChanged;
 }
 
 void PluginController::ApplyInputModeSettingsFromAppSettings()
@@ -3261,9 +3267,6 @@ void PluginController::ApplyGlobalFxSettingsFromAppSettings()
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
             mPresetMixer.CommitGlobalChainSwap();
-            mParamValues[kParamInputTrim] = config.inputGain;
-            mParamValues[kParamOutputTrim] = config.outputGain;
-            mParamValues[kParamTranspose] = static_cast<double>(GetGlobalTransposeFromChainConfig(config));
         }
         UpdateHostLatency();
     }
@@ -3291,12 +3294,23 @@ bool PluginController::IsNamQualitySettingKey(const std::string& key)
         || key == kNamAntiAliasPhaseSettingKey;
 }
 
-bool PluginController::IsInstanceOwnedSettingKey(const std::string& key) const
+bool PluginController::IsUiLayoutSettingKey(const std::string& key)
 {
-    return IsNamQualitySettingKey(key) && !mHost.IsStandalone();
+    // Zoom, window size and the signal-path split all live inside the uiSettings blob;
+    // uiZoom/uiBounds are its legacy flattened aliases.
+    return key == "uiSettings" || key == "uiZoom" || key == "uiBounds";
 }
 
-void PluginController::ApplyNamQualitySettings()
+bool PluginController::IsInstanceOwnedSettingKey(const std::string& key) const
+{
+    // Hosted as a plugin, layout belongs to the editor window the DAW sized and placed,
+    // so it rides in host state with the project rather than following the standalone
+    // app around. The shared store still seeds a brand-new instance, exactly as it does
+    // for NAM quality — after that this instance owns it.
+    return (IsNamQualitySettingKey(key) || IsUiLayoutSettingKey(key)) && !mHost.IsStandalone();
+}
+
+bool PluginController::ApplyNamQualitySettings()
 {
     // NAM quality (slimmable size, oversampling, anti-alias phase) is per plugin
     // instance, not process-wide: a DAW loads every instance into one process, so
@@ -3339,19 +3353,16 @@ void PluginController::ApplyNamQualitySettings()
     // Oversampling and the AA filter both change the resampler's reported latency.
     UpdateHostLatency();
 
-    // Only the standalone app owns these on disk. A plugin instance persists them in
-    // its host state (SerializeState) instead, so writing app.json here would leak one
-    // instance's choice to every other instance via the shared-sync poll.
-    if (mHost.IsStandalone())
-    {
-        if (settingsChanged)
-            SaveAppSettings();
-    }
-    else
+    // Only the standalone app owns these on disk. A plugin instance persists them in its
+    // host state (SerializeState) instead; SaveAppSettings() filters the keys out there,
+    // so reporting the change up is safe in both modes.
+    if (!mHost.IsStandalone())
     {
         // Tell the host its saved state is stale so the project keeps this tier.
         mHost.NotifyStateChanged();
     }
+
+    return settingsChanged;
 }
 
 PluginController::NamQualityConfig PluginController::ApplyOfflineRenderBoost(NamQualityConfig quality)
@@ -3409,11 +3420,48 @@ void PluginController::RestoreInstanceOwnedSettings()
     if (mHost.IsStandalone())
         return;
 
+    // The live values survive LoadAppSettings() — it only replaces mAppSettings — so this
+    // reads them straight back out of the members rather than needing the caller to snapshot
+    // anything. It is the counterpart to the Apply* helpers, which would otherwise pull the
+    // shared store's values over this instance's.
     mAppSettings[kNamSlimmableSizeSettingKey] = mNamQuality.slimmableSize;
     mAppSettings[kNamOversamplingSettingKey] = mNamQuality.oversamplingIndex;
     mAppSettings[kNamAntiAliasPhaseSettingKey] = mNamQuality.antiAliasPhaseIndex;
     PushNamQualityToDsp();
     UpdateHostLatency();
+
+    mAppSettings["uiSettings"] = mUiSettings;
+}
+
+bool PluginController::ApplySettingsToRuntime(SettingsApplyMode mode)
+{
+    // The single place that decides what "apply the settings" means. Startup, a host-state
+    // restore and a shared-settings reload all go through here: when they each kept their
+    // own hand-maintained list, they drifted, and a setting missing from one of them was
+    // merged but never pushed to the DSP.
+    //
+    // The standalone-only helpers self-guard, so a hosted instance runs the same list and
+    // simply no-ops through them. The one real axis is whether this instance's own values
+    // are re-derived from the store or re-asserted over it.
+    const bool preserveInstanceOwned = mode == SettingsApplyMode::kPreserveInstanceOwned
+        && !mHost.IsStandalone();
+
+    bool settingsChanged = false;
+
+    ApplyMetronomeSettingsFromAppSettings();
+    settingsChanged |= ApplyDspLevelTargetSettingsFromAppSettings();
+    ApplyInputModeSettingsFromAppSettings();
+    ApplyGlobalFxSettingsFromAppSettings();
+    if (preserveInstanceOwned)
+        RestoreInstanceOwnedSettings();
+    else
+        settingsChanged |= ApplyNamQualitySettings();
+    ApplyNamInterfaceCalibrationFromAppSettings();
+    settingsChanged |= ApplyUserInputCalibrationSettingsFromAppSettings();
+    if (!preserveInstanceOwned)
+        ApplyUiSettingsFromAppSettings();
+
+    return settingsChanged;
 }
 
 void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
@@ -3464,7 +3512,7 @@ void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
     }
 }
 
-void PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
+bool PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
 {
     bool settingsChanged = false;
 
@@ -3541,8 +3589,7 @@ void PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
 
     mPresetMixer.SetUserInputCalibrationGainDb(gainDb);
 
-    if (settingsChanged)
-        SaveAppSettings();
+    return settingsChanged;
 }
 
 void PluginController::ApplyUiSettingsFromAppSettings()
@@ -3556,23 +3603,14 @@ void PluginController::ApplyUiSettingsFromAppSettings()
         return;
     }
 
-    bool hasLegacy = false;
+    // Fall back to the legacy flattened aliases for stores written before uiSettings existed.
     nlohmann::json legacy = nlohmann::json::object();
-    const auto zoomIt = mAppSettings.find("uiZoom");
-    if (zoomIt != mAppSettings.end())
-    {
+    if (const auto zoomIt = mAppSettings.find("uiZoom"); zoomIt != mAppSettings.end())
         legacy["zoom"] = *zoomIt;
-        hasLegacy = true;
-    }
-    const auto boundsIt = mAppSettings.find("uiBounds");
-    if (boundsIt != mAppSettings.end())
-    {
+    if (const auto boundsIt = mAppSettings.find("uiBounds"); boundsIt != mAppSettings.end())
         legacy["bounds"] = *boundsIt;
-        hasLegacy = true;
-    }
-
-    if (hasLegacy)
-        mUiSettings = legacy;
+    if (!legacy.empty())
+        mUiSettings = std::move(legacy);
 }
 
 bool PluginController::IsFactoryPresetArchiveLoadingEnabled() const
@@ -3871,18 +3909,21 @@ std::string PluginController::SerializeState() const
         {"antiAliasPhase", mNamQuality.antiAliasPhaseIndex}
     };
 
-    nlohmann::json params = nlohmann::json::array();
-    for (const auto value : mParamValues)
-        params.push_back(value);
-    state["parameters"] = params;
+    // No "parameters" block: global FX live in globalSignalChain, which is the single
+    // source of truth. States written before that consolidation still carry the key and
+    // are simply ignored on the way back in.
 
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
-    mixer["multiThreaded"] = mPresetMixer.IsMultiThreadedProcessingEnabled();
 
     nlohmann::json activePresetIds = nlohmann::json::array();
     nlohmann::json presetConfigs = nlohmann::json::object();
+    // Full preset data for the non-focused slots. Restoring them by id alone (the original
+    // behaviour, still the fallback) reloads them from the machine's preset library, which
+    // throws away every project-local edit — hosted plugin state included — and fails
+    // outright when the project is opened on a machine that does not have the preset.
+    nlohmann::json presetData = nlohmann::json::object();
     for (const auto& id : mPresetMixer.GetActivePresetIds())
     {
         activePresetIds.push_back(id);
@@ -3896,9 +3937,32 @@ std::string PluginController::SerializeState() const
                 {"solo", cfg->solo}
             };
         }
+
+        // The focused slot already rides in state["preset"] with its runtime state folded in.
+        if (mActivePreset && id == mActivePresetId)
+            continue;
+
+        const auto cachedIt = mMixerPresetJsonCache.find(id);
+        if (cachedIt == mMixerPresetJsonCache.end())
+            continue;
+
+        if (auto slotPreset = PresetStorage::DeserializeFromJson(cachedIt->second))
+        {
+            CaptureMixerSlotHostedPluginState(*slotPreset, id);
+            try
+            {
+                presetData[id] = nlohmann::json::parse(PresetStorage::SerializeToJson(*slotPreset));
+            }
+            catch (const std::exception&)
+            {
+                // A slot that will not round-trip is skipped rather than poisoning the whole
+                // state blob; it falls back to restore-by-id on the way back in.
+            }
+        }
     }
     mixer["activePresetIds"] = std::move(activePresetIds);
     mixer["presets"] = std::move(presetConfigs);
+    mixer["presetData"] = std::move(presetData);
     state["mixer"] = std::move(mixer);
 
     state["automation"] = mAutomationSlots.SaveToJson();
@@ -3910,10 +3974,38 @@ void PluginController::DeserializeState(const std::string& json)
 {
     if (mHost.IsStandalone())
     {
-        // Standalone startup should restore from app settings + preset files
-        // (LoadLastSessionState), not host-serialized transient preset state.
+        // Standalone startup restores from app settings + preset files
+        // (LoadLastSessionState), not from host-serialized transient state — a stale
+        // snapshot must never republish machine-wide settings or revive an old graph.
+        //
+        // Hosted plugin state is the one exception, and it is handled separately below.
+        RestoreStandaloneHostedPluginState(json);
         return;
     }
+
+    // Everything restored below belongs to the DAW project, not to the machine-wide
+    // store. Without this, reopening an old project republishes its whole settings
+    // snapshot over settings the user has changed since — the merge lands in
+    // mAppSettings while mAppSettingsBaseline still describes the store, so the next
+    // save of anything at all diffs the project's values as this instance's edits.
+    //
+    // The scope blocks writes for the duration and rebases the baseline on the way
+    // out, including on the exception path, so a partial restore cannot leave project
+    // values queued for publication either.
+    struct HostStateRestoreScope
+    {
+        PluginController& controller;
+        explicit HostStateRestoreScope(PluginController& c) : controller(c)
+        {
+            controller.mRestoringHostState = true;
+        }
+        ~HostStateRestoreScope()
+        {
+            controller.mRestoringHostState = false;
+            controller.AdoptAppSettingsAsBaseline();
+        }
+    };
+    const HostStateRestoreScope restoreScope{*this};
 
     try
     {
@@ -3932,8 +4024,12 @@ void PluginController::DeserializeState(const std::string& json)
             for (auto it = incomingSettings->begin(); it != incomingSettings->end(); ++it)
                 mAppSettings[it.key()] = it.value();
 
-            ApplyNamQualitySettings();
-            ApplyNamInterfaceCalibrationFromAppSettings();
+            // Merging is not applying. These values have to reach the DSP, or the
+            // instance runs on whatever Initialize() read from the shared store while
+            // the UI reports the project's values back — the two silently disagree.
+            // The return value is discarded on purpose: nothing restored from host state
+            // is this instance's to publish (see HostStateRestoreScope above).
+            (void)ApplySettingsToRuntime(SettingsApplyMode::kApplyAll);
         }
 
         // Applied after the appSettings merge so the instance's own saved tier wins over
@@ -3986,17 +4082,10 @@ void PluginController::DeserializeState(const std::string& json)
             }
         }
 
-        if (state.contains("parameters") && state["parameters"].is_array())
-        {
-            int idx = 0;
-            for (const auto& value : state["parameters"])
-            {
-                if (idx >= kParamCount) break;
-                if (value.is_number())
-                    OnParamChange(idx, value.get<double>());
-                idx++;
-            }
-        }
+        // A "parameters" array from an older state is deliberately not replayed. It was a
+        // flat mirror of the global FX values, and only ever tracked a few of them — the
+        // rest read back as 0, which switched those effects off over the chain restored
+        // just above. globalSignalChain carries all of it.
 
         if (state.contains("mixer") && state["mixer"].is_object())
         {
@@ -4005,8 +4094,6 @@ void PluginController::DeserializeState(const std::string& json)
                 mPresetMixer.SetMasterGain(mixer["masterGain"].get<double>());
             if (mixer.contains("limiterEnabled") && mixer["limiterEnabled"].is_boolean())
                 mPresetMixer.SetLimiterEnabled(mixer["limiterEnabled"].get<bool>());
-            if (mixer.contains("multiThreaded") && mixer["multiThreaded"].is_boolean())
-                mPresetMixer.SetMultiThreadedProcessingEnabled(mixer["multiThreaded"].get<bool>());
 
             // Reset active presets before restoring mixer state
             for (const auto& id : mPresetMixer.GetActivePresetIds())
@@ -4022,6 +4109,11 @@ void PluginController::DeserializeState(const std::string& json)
                 }
             }
             const auto presets = mixer.contains("presets") ? mixer["presets"] : nlohmann::json::object();
+            // Written since full slot data was added to host state; absent in older projects,
+            // which fall through to the restore-by-id path below exactly as before.
+            const auto presetData = mixer.contains("presetData") && mixer["presetData"].is_object()
+                ? mixer["presetData"]
+                : nlohmann::json::object();
             if (activeIds.empty() && presets.is_object())
             {
                 for (const auto& [id, _] : presets.items())
@@ -4038,7 +4130,26 @@ void PluginController::DeserializeState(const std::string& json)
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
                     if (added)
+                    {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
+                        mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*mActivePreset);
+                    }
+                }
+                // The project's own copy of this slot wins over the machine's preset library:
+                // it is the one carrying the project's edits and its hosted plugin state.
+                if (!added && presetData.contains(id))
+                {
+                    if (auto slotPreset = PresetStorage::DeserializeFromJson(presetData[id].dump()))
+                    {
+                        added = mPresetMixer.AddActivePreset(*slotPreset, id, name);
+                        if (added)
+                        {
+                            AttachRuntimeConfigCallbacks(id, *slotPreset);
+                            mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*slotPreset);
+                            AppendSessionLog("Mixer slot restored from host state id=" + id
+                                + ", state=" + SummarizeHostedPluginState(*slotPreset));
+                        }
+                    }
                 }
                 if (!added)
                 {
@@ -4048,7 +4159,10 @@ void PluginController::DeserializeState(const std::string& json)
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
                     if (added)
+                    {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
+                        mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*mActivePreset);
+                    }
                 }
 
                 if (presetEntry.is_object())
@@ -4363,30 +4477,13 @@ void PluginController::OnWebContentLoaded()
 
 void PluginController::ReloadSharedSyncSourcesFromDisk()
 {
-    // LoadAppSettings() replaces mAppSettings wholesale from the shared file, which would
-    // otherwise drag this instance's NAM quality back to whatever another instance (or the
-    // standalone app) last wrote. Keep this instance's own tier across the reload.
-    const NamQualityConfig ownedQuality = mNamQuality;
-
+    // LoadAppSettings() replaces mAppSettings wholesale from the shared store, which would
+    // otherwise drag this instance's NAM quality and editor layout back to whatever another
+    // instance (or the standalone app) last wrote. kPreserveInstanceOwned re-asserts them
+    // instead; the live values are members, so nothing needs snapshotting first.
     LoadAppSettings();
-    ApplyMetronomeSettingsFromAppSettings();
-    ApplyDiagnosticsSettingsFromAppSettings();
-    ApplyDspLevelTargetSettingsFromAppSettings();
-    ApplyProcessingModeSettingsFromAppSettings();
-    ApplyInputModeSettingsFromAppSettings();
-    ApplyGlobalFxSettingsFromAppSettings();
-    if (mHost.IsStandalone())
-    {
-        ApplyNamQualitySettings();
-    }
-    else
-    {
-        mNamQuality = ownedQuality;
-        RestoreInstanceOwnedSettings();
-    }
-    ApplyNamInterfaceCalibrationFromAppSettings();
-    ApplyUserInputCalibrationSettingsFromAppSettings();
-    ApplyUiSettingsFromAppSettings();
+    if (ApplySettingsToRuntime(SettingsApplyMode::kPreserveInstanceOwned))
+        SaveAppSettings();
 
     LoadResourceLibraries();
     LoadBlendLibrary();
@@ -4459,65 +4556,6 @@ void PluginController::PollSharedSyncState()
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Parameter bridging
-// ════════════════════════════════════════════════════════════════════
-
-void PluginController::OnParamChange(int paramIdx, double value)
-{
-    {
-        std::lock_guard<std::mutex> lock(mDSPMutex);
-        ApplyParamChangeLocked(paramIdx, value);
-    }
-
-    if (IsPersistedGlobalFxParam(paramIdx))
-        PersistGlobalFxSettingsToAppSettings();
-}
-
-void PluginController::ApplyParamChangeLocked(int paramIdx, double value)
-{
-    if (paramIdx < 0 || paramIdx >= kParamCount)
-        return;
-
-    mParamValues[static_cast<size_t>(paramIdx)] = value;
-    const bool latencyMayHaveChanged = (paramIdx == kParamTranspose);
-
-    // Route to mixer
-    switch (paramIdx)
-    {
-    case kParamInputTrim:    mPresetMixer.SetGlobalInputGain(value); break;
-    case kParamOutputTrim:   mPresetMixer.SetGlobalOutputGain(value); break;
-    case kParamDrive:        mPresetMixer.SetAmpDrive(value); break;
-    case kParamTone:         mPresetMixer.SetAmpTone(value); break;
-    case kParamGateEnabled:  mPresetMixer.SetGlobalGateEnabled(value > 0.5); break;
-    case kParamGateThreshold: mPresetMixer.SetGlobalGateThreshold(value); break;
-    case kParamDoublerEnabled: mPresetMixer.SetGlobalDoublerEnabled(value > 0.5); break;
-    case kParamDoublerDelay: mPresetMixer.SetGlobalDoublerDelay(value); break;
-    case kParamTranspose:    mPresetMixer.SetGlobalTranspose(static_cast<int>(value)); break;
-    case kParamIRQuality:    mPresetMixer.SetIRQuality(value); break;
-    case kParamEQEnabled:    mPresetMixer.SetGlobalEQEnabled(value > 0.5); break;
-    case kParamEQLowGain:    mPresetMixer.SetGlobalEQBandGain(0, value); break;
-    case kParamEQLowFreq:    mPresetMixer.SetGlobalEQBandFrequency(0, value); break;
-    case kParamEQLowMidGain: mPresetMixer.SetGlobalEQBandGain(1, value); break;
-    case kParamEQLowMidFreq: mPresetMixer.SetGlobalEQBandFrequency(1, value); break;
-    case kParamEQLowMidQ:    mPresetMixer.SetGlobalEQBandQ(1, value); break;
-    case kParamEQHighMidGain: mPresetMixer.SetGlobalEQBandGain(2, value); break;
-    case kParamEQHighMidFreq: mPresetMixer.SetGlobalEQBandFrequency(2, value); break;
-    case kParamEQHighMidQ:   mPresetMixer.SetGlobalEQBandQ(2, value); break;
-    case kParamEQHighGain:   mPresetMixer.SetGlobalEQBandGain(3, value); break;
-    case kParamEQHighFreq:   mPresetMixer.SetGlobalEQBandFrequency(3, value); break;
-    default: break;
-    }
-
-    if (latencyMayHaveChanged)
-        UpdateHostLatency();
-}
-
-double PluginController::GetParamValue(int paramIdx) const
-{
-    if (paramIdx < 0 || paramIdx >= kParamCount)
-        return 0.0;
-    return mParamValues[static_cast<size_t>(paramIdx)];
-}
 
 // ════════════════════════════════════════════════════════════════════
 // Multi-preset mixer controls
@@ -4622,7 +4660,10 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
         SendMessageToUI(loaded.dump());
     }
 
-    if (!IsPresetArchiveSessionActive())
+    // Only the standalone app owns the machine-wide "last preset". A hosted instance
+    // still reads it to seed a brand-new instance, but its own preset choice belongs to
+    // the DAW project (host state), not to every other instance and the app.
+    if (mHost.IsStandalone() && !IsPresetArchiveSessionActive())
     {
         mAppSettings["lastPresetId"] = mActivePresetId;
         SaveAppSettings();
@@ -4643,6 +4684,10 @@ void PluginController::FocusMixerPreset(const std::string& presetId)
 {
     if (presetId.empty() || presetId == mActivePresetId)
         return;
+
+    // Bank the outgoing slot's live plugin state into its cache entry before the editing
+    // focus moves; once it moves, this slot's runtime notifications land elsewhere.
+    CaptureLiveHostedPluginStateIntoActivePreset();
 
     const auto it = mMixerPresetJsonCache.find(presetId);
     if (it == mMixerPresetJsonCache.end())
@@ -4713,17 +4758,6 @@ void PluginController::SetMasterGain(double value)
 void PluginController::SetLimiterEnabled(bool enabled)
 {
     mPresetMixer.SetLimiterEnabled(enabled);
-}
-
-void PluginController::SetMultiThreadedProcessingEnabled(bool enabled)
-{
-    {
-        std::lock_guard<std::mutex> lock(mDSPMutex);
-        mPresetMixer.SetMultiThreadedProcessingEnabled(enabled);
-    }
-    mAppSettings[kMultiThreadedProcessingSettingKey] = enabled;
-    SaveAppSettings();
-    mPendingStateBroadcast = true;
 }
 
 bool PluginController::StartSignalPathTest(double frequencyHz, double durationSeconds)
@@ -4951,6 +4985,10 @@ void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& pay
 
 void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 {
+    // A UI scene switch arrives here as a load of the same preset with a different sceneId,
+    // so the outgoing scene's live plugin state has to be banked before anything else runs.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     try
     {
         Preset preset;
@@ -5031,7 +5069,7 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
             SendMessageToUI(loaded.dump());
         }
 
-        if (!IsPresetArchiveSessionActive())
+        if (mHost.IsStandalone() && !IsPresetArchiveSessionActive())
         {
             mAppSettings["lastPresetId"] = mActivePresetId;
             SaveAppSettings();
@@ -5045,31 +5083,73 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 
 void PluginController::HandleSetParameterRequest(const nlohmann::json& payload)
 {
-    std::string paramName = payload.value("name", "");
-    double value = payload.value("value", 0.0);
-
-    // Map parameter name to index
-    // The host adapter should call OnParamChange to sync DAW-visible parameters.
-    // For now, route named parameters directly:
-    static const std::unordered_map<std::string, int> paramMap = {
-        {"inputTrim", kParamInputTrim}, {"outputTrim", kParamOutputTrim},
-        {"drive", kParamDrive}, {"tone", kParamTone},
-        {"gateEnabled", kParamGateEnabled}, {"gateThreshold", kParamGateThreshold},
-        {"mix", kParamMix},
-        {"doublerEnabled", kParamDoublerEnabled}, {"doublerDelay", kParamDoublerDelay},
-        {"transpose", kParamTranspose}, {"irQuality", kParamIRQuality},
-        {"eqEnabled", kParamEQEnabled},
-        {"eqLowGain", kParamEQLowGain}, {"eqLowFreq", kParamEQLowFreq},
-        {"eqLowMidGain", kParamEQLowMidGain}, {"eqLowMidFreq", kParamEQLowMidFreq},
-        {"eqLowMidQ", kParamEQLowMidQ},
-        {"eqHighMidGain", kParamEQHighMidGain}, {"eqHighMidFreq", kParamEQHighMidFreq},
-        {"eqHighMidQ", kParamEQHighMidQ},
-        {"eqHighGain", kParamEQHighGain}, {"eqHighFreq", kParamEQHighFreq},
+    // Named alias for the global-chain paths, kept because "setParameter" is the
+    // documented UI/scripting entry point. It carries a flat name and a number, so
+    // translate to a path and hand off — HandleSetGlobalChainParamRequest owns the
+    // routing and the persistence, and there is no second copy of the values to
+    // drift out of sync.
+    //
+    // Both spellings are accepted: the protocol documents camelCase, older UI code
+    // used snake_case, and a name that silently matched neither is what made the
+    // legacy path dead in the first place.
+    struct GlobalParamAlias
+    {
+        const char* path;
+        bool isBoolean;
+        bool isInteger;
     };
 
-    auto it = paramMap.find(paramName);
-    if (it != paramMap.end())
-        OnParamChange(it->second, value);
+    static const std::unordered_map<std::string, GlobalParamAlias> kAliases = {
+        {"inputTrim",      {"input.gain",         false, false}},
+        {"input_trim",     {"input.gain",         false, false}},
+        {"outputTrim",     {"output.gain",        false, false}},
+        {"output_trim",    {"output.gain",        false, false}},
+        {"gateEnabled",    {"gate.enabled",       true,  false}},
+        {"gate_enabled",   {"gate.enabled",       true,  false}},
+        {"gateThreshold",  {"gate.threshold",     false, false}},
+        {"gate_threshold", {"gate.threshold",     false, false}},
+        {"transpose",      {"transpose.semitones", false, true}},
+        {"doublerEnabled", {"doubler.enabled",    true,  false}},
+        {"doublerDelay",   {"doubler.delay",      false, false}},
+        {"eqEnabled",      {"eq.enabled",         true,  false}},
+        {"eqLowGain",      {"eq.lowGain",         false, false}},
+        {"eqLowFreq",      {"eq.lowFreq",         false, false}},
+        {"eqLowMidGain",   {"eq.lowMidGain",      false, false}},
+        {"eqLowMidFreq",   {"eq.lowMidFreq",      false, false}},
+        {"eqLowMidQ",      {"eq.lowMidQ",         false, false}},
+        {"eqHighMidGain",  {"eq.highMidGain",     false, false}},
+        {"eqHighMidFreq",  {"eq.highMidFreq",     false, false}},
+        {"eqHighMidQ",     {"eq.highMidQ",        false, false}},
+        {"eqHighGain",     {"eq.highGain",        false, false}},
+        {"eqHighFreq",     {"eq.highFreq",        false, false}},
+    };
+
+    const auto name = payload.value("name", std::string{});
+    const auto it = kAliases.find(name);
+    if (it == kAliases.end())
+    {
+        AppendSessionLog("Ignoring setParameter for unknown parameter: " + name);
+        return;
+    }
+
+    if (!payload.contains("value") || !payload["value"].is_number())
+    {
+        AppendSessionLog("Ignoring setParameter without a numeric value: " + name);
+        return;
+    }
+
+    const double raw = payload["value"].get<double>();
+
+    nlohmann::json forwarded;
+    forwarded["path"] = it->second.path;
+    if (it->second.isBoolean)
+        forwarded["value"] = raw > 0.5;
+    else if (it->second.isInteger)
+        forwarded["value"] = static_cast<int>(std::llround(raw));
+    else
+        forwarded["value"] = raw;
+
+    HandleSetGlobalChainParamRequest(forwarded);
 }
 
 
@@ -5145,18 +5225,13 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
         else if (path == "gate.release") { mPresetMixer.SetGlobalGateRelease(value.get<double>()); persistGlobalFx = true; }
         else if (path == "transpose.enabled")
         {
-            const bool enabled = value.get<bool>();
-            mPresetMixer.SetGlobalTransposeEnabled(enabled);
-            if (!enabled)
-                mParamValues[kParamTranspose] = 0.0;
+            mPresetMixer.SetGlobalTransposeEnabled(value.get<bool>());
             UpdateHostLatency();
             persistGlobalFx = true;
         }
         else if (path == "transpose.semitones")
         {
-            const int semitones = std::clamp(value.get<int>(), -12, 12);
-            mPresetMixer.SetGlobalTranspose(semitones);
-            mParamValues[kParamTranspose] = static_cast<double>(semitones);
+            mPresetMixer.SetGlobalTranspose(std::clamp(value.get<int>(), -12, 12));
             UpdateHostLatency();
             persistGlobalFx = true;
         }
@@ -5165,20 +5240,8 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
         else if (path == "doubler.delay") { mPresetMixer.SetGlobalDoublerDelay(value.get<double>()); persistGlobalFx = true; }
         else if (path == "doubler.mix") { mPresetMixer.SetGlobalDoublerMix(value.get<double>()); persistGlobalFx = true; }
         else if (path == "doubler.detune") { mPresetMixer.SetGlobalDoublerDetune(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "input.gain")
-        {
-            const double gainDb = value.get<double>();
-            mPresetMixer.SetGlobalInputGain(gainDb);
-            mParamValues[kParamInputTrim] = gainDb;
-            persistGlobalFx = true;
-        }
-        else if (path == "output.gain")
-        {
-            const double gainDb = value.get<double>();
-            mPresetMixer.SetGlobalOutputGain(gainDb);
-            mParamValues[kParamOutputTrim] = gainDb;
-            persistGlobalFx = true;
-        }
+        else if (path == "input.gain") { mPresetMixer.SetGlobalInputGain(value.get<double>()); persistGlobalFx = true; }
+        else if (path == "output.gain") { mPresetMixer.SetGlobalOutputGain(value.get<double>()); persistGlobalFx = true; }
         else if (path == "limiter.enabled") mPresetMixer.SetLimiterEnabled(value.get<bool>());
         else if (path == "eq.lowGain") { mPresetMixer.SetGlobalEQBandGain(0, value.get<double>()); persistGlobalFx = true; }
         else if (path == "eq.lowFreq") { mPresetMixer.SetGlobalEQBandFrequency(0, value.get<double>()); persistGlobalFx = true; }
@@ -5363,32 +5426,6 @@ void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
     SendMessageToUI(message.dump());
 }
 
-void PluginController::HandleSetProcessingModeRequest(const nlohmann::json& payload)
-{
-    bool enabled = mPresetMixer.IsMultiThreadedProcessingEnabled();
-
-    if (payload.contains("multiThreaded") && payload["multiThreaded"].is_boolean())
-        enabled = payload["multiThreaded"].get<bool>();
-    else if (payload.contains("enabled") && payload["enabled"].is_boolean())
-        enabled = payload["enabled"].get<bool>();
-    else if (payload.contains("mode") && payload["mode"].is_string())
-    {
-        const std::string mode = payload["mode"].get<std::string>();
-        if (mode == "single" || mode == "singleThreaded")
-            enabled = false;
-        else if (mode == "multi" || mode == "multiThreaded")
-            enabled = true;
-    }
-
-    SetMultiThreadedProcessingEnabled(enabled);
-
-    nlohmann::json message;
-    message["type"] = "processingModeChanged";
-    message["multiThreaded"] = enabled;
-    message["mode"] = enabled ? "multiThreaded" : "singleThreaded";
-    SendMessageToUI(message.dump());
-}
-
 void PluginController::HandleSetAmpCabStateRequest(const nlohmann::json& payload)
 {
     bool ampEnabled = true;
@@ -5414,9 +5451,6 @@ void PluginController::HandleSetAutoLevelRequest(const nlohmann::json& payload)
     // force the legacy path off.
     mPresetMixer.SetAutoLevelInput(false);
     mPresetMixer.SetAutoLevelOutput(false);
-    mAppSettings["autoLevelInput"] = false;
-    mAppSettings["autoLevelOutput"] = false;
-    SaveAppSettings();
 
     nlohmann::json message;
     message["type"] = "autoLevelChanged";
@@ -5655,7 +5689,7 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
 
         newPreset.global.inputTrim = currentChain.inputGain;
         newPreset.global.outputTrim = currentChain.outputGain;
-        newPreset.global.transpose = static_cast<int>(mParamValues[kParamTranspose]);
+        newPreset.global.transpose = GetGlobalTransposeFromChainConfig(currentChain);
         newPreset.global.autoLevelInput = false;
         newPreset.global.autoLevelOutput = false;
 
@@ -5709,9 +5743,43 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id
             + ", state=" + SummarizeHostedPluginState(newPreset));
 
+        // "Save as" mints a new preset id, but the running mixer slot is still keyed by the
+        // old one and nothing re-applies the preset here. Left alone, the two drift apart:
+        // runtime capture callbacks arrive tagged with the slot id and get dropped for not
+        // matching mActivePresetId, while manual capture looks up the new id and finds no
+        // instance at all. Re-key the slot instead of rebuilding it — a rebuild would tear
+        // down every hosted plugin (and close its editor) as a side effect of saving.
+        const std::string previousSlotId = mActivePresetId;
+        if (!previousSlotId.empty() && previousSlotId != newPreset.id)
+        {
+            bool renamed = false;
+            {
+                std::lock_guard<std::mutex> lock(mDSPMutex);
+                renamed = mPresetMixer.RenameActivePreset(previousSlotId, newPreset.id, newPreset.name);
+                if (renamed)
+                {
+                    // The callbacks captured the old slot id by value, so they have to be
+                    // re-bound or every capture would keep reporting the retired id.
+                    AttachRuntimeConfigCallbacks(newPreset.id, newPreset);
+                }
+            }
+
+            if (renamed)
+            {
+                mMixerPresetJsonCache.erase(previousSlotId);
+                AppendSessionLog("Mixer slot re-keyed after save from " + previousSlotId + " to " + newPreset.id);
+            }
+            else
+            {
+                AppendSessionLog("Mixer slot re-key skipped after save from " + previousSlotId
+                    + " to " + newPreset.id + " (slot not active or id already in use)");
+            }
+        }
+
         mActivePreset = newPreset;
         mActivePresetId = newPreset.id;
         mActivePresetJson = PresetStorage::SerializeToJson(newPreset);
+        mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
         mPendingStateBroadcast = true;
         if (!IsPresetArchiveSessionActive())
             SaveAppSettings();
@@ -5928,8 +5996,14 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
     if (capture)
     {
         AppendSessionLog("Hosted plugin capture requested presetId=" + presetId + ", nodeId=" + nodeId);
-        key = "pluginStateBase64";
+        key = kHostedPluginStateConfigKey;
         value = mPresetMixer.GetNodeConfig(presetId, nodeId, key);
+        if (value.empty() && !mActivePresetId.empty() && mActivePresetId != presetId)
+        {
+            // The UI can address the focused preset by an id the mixer slot does not answer
+            // to yet. Prefer an answer over a spurious "capture failed".
+            value = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, key);
+        }
         if (value.empty())
         {
             AppendSessionLog("Hosted plugin capture failed presetId=" + presetId + ", nodeId=" + nodeId + ": empty runtime state");
@@ -5991,6 +6065,10 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
     const bool openPluginEditorAfterLoad = payload.value("openPluginEditorAfterLoad", false);
+
+    // Swapping any node's resource rebuilds the whole chain, so unrelated hosted plugins
+    // in it are torn down and restored from config.
+    CaptureLiveHostedPluginStateIntoActivePreset();
 
     int resourceIndex = payload.value("resourceIndex", -1);
     const std::string exposedResourceId = payload.value("exposedResourceId", "");
@@ -6067,6 +6145,9 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         auto* target = targetGraph->FindNode(nodeId);
         if (!target) return;
 
+        // Noted before the slot is touched so a plugin swap can be detected below.
+        const std::string previousPluginResourceKey = HostedPluginResourceKey(*target);
+
         if (static_cast<size_t>(resourceIndex) >= target->resources.size())
             target->resources.resize(static_cast<size_t>(resourceIndex) + 1);
 
@@ -6108,6 +6189,11 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
         const ResourceRef selectedRef = slot;
 
+        if (ClearStaleHostedPluginState(*target, previousPluginResourceKey))
+        {
+            AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+        }
+
         RefreshWasmNodeDescriptor(*target);
         bool appliedPreset = false;
 
@@ -6146,9 +6232,17 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         auto* node = fpGraph ? fpGraph->FindNode(nodeId) : nullptr;
         if (node && !node->resources.empty())
         {
+            const std::string previousPluginResourceKey = HostedPluginResourceKey(*node);
+
             node->resources.clear();
             node->resources.push_back(ref);
             const ResourceRef selectedRef = ref;
+
+            if (ClearStaleHostedPluginState(*node, previousPluginResourceKey))
+            {
+                AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+            }
+
             RefreshWasmNodeDescriptor(*node);
             bool appliedPreset = false;
 
@@ -6217,12 +6311,7 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
     const std::string category = payload.value("category", "");
     const bool openPluginEditorAfterLoad = payload.value("openPluginEditorAfterLoad", false);
 
-    BrowseFileType fileType = BrowseFileType::Any;
-    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
-    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
-    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
-
-    mHost.BrowseFileAsync(fileType, "Select Resource",
+    mHost.BrowseFileAsync(ResolveBrowseFileType(resourceType), "Select Resource",
         [this, nodeId, resourceType, resourceIndex, exposedResourceId, category, openPluginEditorAfterLoad](const BrowseFileResult& result)
         {
             if (result.success)
@@ -6262,6 +6351,9 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
 
 void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    // Adding a node rebuilds every processor in the chain, hosted plugins included.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string effectType = payload.value("effectType", "");
     const std::string insertAfter = payload.value("insertAfter", "");
     const std::string labelOverride = payload.value("label", "");
@@ -6438,6 +6530,8 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
 
 void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     SignalGraph* targetGraph = ResolveEditTarget();
     if (!targetGraph) { ReportErrorToUI("Split failed", "No active preset or composite"); return; }
 
@@ -6480,6 +6574,8 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
 
 void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     SignalGraph* targetGraph = ResolveEditTarget();
     if (!targetGraph) { ReportErrorToUI("Collapse split failed", "No active preset or composite"); return; }
 
@@ -6521,6 +6617,8 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
 
 void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     const std::string newEffectType = payload.value("newEffectType", "");
     const std::string labelOverride = payload.value("label", "");
@@ -6592,6 +6690,8 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
 
 void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     const std::string targetNodeId = payload.value("targetNodeId", "");
 
@@ -6703,6 +6803,8 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
 
 void PluginController::HandleDeleteSignalPathNodeRequest(const nlohmann::json& payload)
 {
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     const std::string nodeId = payload.value("nodeId", "");
     if (nodeId.empty()) return;
 
@@ -6909,12 +7011,18 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     if (hasFilePath)
     {
         resolvedPath = util::PathFromUtf8(filePathValue);
+        // Normalize plugin paths to the bundle root before anything is keyed off
+        // them. Dialog results already arrive normalized, but paths can also come
+        // from a preset, a synced library or a hand-edited entry, and path-based
+        // de-duplication below only works if every route agrees.
+        if (resourceType == "plugin")
+            resolvedPath = guitarfx::pluginpath::ResolvePluginBundlePath(resolvedPath);
         if (!std::filesystem::exists(resolvedPath))
         {
             error = "Selected file does not exist";
             return std::nullopt;
         }
-        if (resolvedHash.empty())
+        if (resolvedHash.empty() && ShouldHashResourceFile(resolvedPath))
             resolvedHash = mHasher.HashFile(resolvedPath);
     }
     else
@@ -7531,13 +7639,17 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         if (!filePathValue.empty())
         {
             std::filesystem::path updatedPath(filePathValue);
+            // Same normalization as SaveLocalLibraryResource: a plugin is stored
+            // under its bundle root whichever route the path arrived by.
+            if (resourceType == "plugin")
+                updatedPath = guitarfx::pluginpath::ResolvePluginBundlePath(updatedPath);
             if (!std::filesystem::exists(updatedPath))
             {
                 ReportErrorToUI("Resource update failed", "Selected file does not exist");
                 return;
             }
             updated.filePath = updatedPath;
-            updated.hash = mHasher.HashFile(updatedPath);
+            updated.hash = ShouldHashResourceFile(updatedPath) ? mHasher.HashFile(updatedPath) : std::string{};
             updated.metadata["sourceFileName"] = updatedPath.filename().string();
         }
     }
@@ -7612,11 +7724,7 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
     if (resourceType.empty() || resourceId.empty())
         return;
 
-    BrowseFileType fileType = BrowseFileType::Any;
-    if (resourceType == "nam") fileType = BrowseFileType::NAMModel;
-    else if (resourceType == "ir") fileType = BrowseFileType::IRFile;
-    else if (resourceType == "plugin") fileType = BrowseFileType::PluginFile;
-    mHost.BrowseFileAsync(fileType, "Select Local Resource",
+    mHost.BrowseFileAsync(ResolveBrowseFileType(resourceType), "Select Local Resource",
         [this, payload, resourceType, resourceId](const BrowseFileResult& result)
         {
             if (!result.success)
@@ -10962,13 +11070,11 @@ void PluginController::HandleGetPerformanceStatsRequest()
 
 void PluginController::HandleSetSignalDiagnosticsEnabledRequest(const nlohmann::json& payload)
 {
+    // Signal diagnostics are always on; there is no preference to store. The message is
+    // kept because it is still the UI's way of asking for a fresh node roster.
     (void)payload;
-    const bool enabled = true;
-    mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
-    mPresetMixer.SetSignalDiagnosticsEnabled(enabled);
+    mPresetMixer.SetSignalDiagnosticsEnabled(true);
     mSignalDiagnosticsRosterDirty = true;
-    mAppSettings[kSignalDiagnosticsSettingKey] = enabled;
-    SaveAppSettings();
 }
 
 void PluginController::HandleGetEffectCatalogRequest()
@@ -11517,6 +11623,10 @@ void PluginController::SelectSceneByIndexDirect(int index)
     if (!mActivePreset)
         return;
 
+    // Must run while the outgoing scene is still the active one, so its live plugin state
+    // is written back to that scene rather than leaking into the one being switched to.
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     NormalizePresetScenes(*mActivePreset);
 
     // Out-of-range is a no-op rather than a clamp: a footswitch mapped to scene 4
@@ -11811,9 +11921,6 @@ void PluginController::HandleSetGlobalChainRequest(const nlohmann::json& payload
         {
             std::lock_guard<std::mutex> dspLock(mDSPMutex);
             mPresetMixer.CommitGlobalChainSwap();
-            mParamValues[kParamInputTrim] = config.inputGain;
-            mParamValues[kParamOutputTrim] = config.outputGain;
-            mParamValues[kParamTranspose] = static_cast<double>(GetGlobalTransposeFromChainConfig(config));
         }
         PersistGlobalFxSettingsToAppSettings();
     }
@@ -11974,7 +12081,6 @@ void PluginController::BroadcastState(StateScope scope)
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
-    mixer["multiThreaded"] = mPresetMixer.IsMultiThreadedProcessingEnabled();
     mixer["activePresetIds"] = activePresetIds;
     nlohmann::json presetConfigs = nlohmann::json::object();
     for (const auto& id : mPresetMixer.GetActivePresetIds())
@@ -12238,10 +12344,20 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
                                                       const std::string& key,
                                                       const std::string& value)
 {
-    if (presetId.empty() || nodeId.empty() || key.empty() || !mActivePreset || IsCompositeEditMode())
+    if (presetId.empty() || nodeId.empty() || key.empty())
         return;
 
+    // A slot that is not the editing focus has no live Preset object; its working copy is
+    // the cached JSON. Dropping these updates (as this used to) meant that in a
+    // multi-preset mix every hosted plugin except the focused one silently stopped
+    // persisting — its edits existed only inside the running plugin.
     if (!mActivePresetId.empty() && presetId != mActivePresetId)
+    {
+        ApplyRuntimeNodeConfigToMixerCache(presetId, nodeId, key, value);
+        return;
+    }
+
+    if (!mActivePreset || IsCompositeEditMode())
         return;
 
     auto* targetGraph = ResolveEditTarget();
@@ -12383,9 +12499,6 @@ void PluginController::ApplyPreset(const Preset& preset)
         std::lock_guard<std::mutex> lock(mDSPMutex);
 
         mActiveSceneId = resolvedSceneId;
-        mParamValues[kParamInputTrim] = inputGainDb;
-        mParamValues[kParamOutputTrim] = outputGainDb;
-        mParamValues[kParamTranspose] = static_cast<double>(GetGlobalTransposeFromChainConfig(chainConfig));
 
         // Install the global chains staged above. Construction already happened off the
         // lock; this is a pointer-level swap plus the scalar input/output settings.
@@ -12686,94 +12799,367 @@ void PluginController::ApplyBlendDefinitions(Preset& preset)
 
 void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::string& presetId) const
 {
-    const auto findExistingState = [&](const std::string& nodeId) -> std::string
+    // Only one scene is ever loaded into the DSP, so live runtime state belongs to that
+    // scene and to the top-level graph that mirrors it — nowhere else. Stamping it into
+    // every scene (as this used to) collapsed a multi-scene preset down to whichever
+    // scene happened to be active at save time.
+    const std::string liveSceneId = GetResolvedActiveSceneId();
+
+    // Authoritative fallback for scenes that are not live, and for the live scene when the
+    // runtime cannot answer. Scoped to the *matching* scene: reaching across scenes for
+    // "the first non-empty value" is the same collapse by another route.
+    const auto findStoredState = [&](const std::string& sceneId, const GraphNode& node) -> std::string
     {
         if (!mActivePreset)
             return {};
 
-        const auto findInGraph = [&](const SignalGraph& graph) -> std::string
+        const SignalGraph* graph = nullptr;
+        if (sceneId.empty())
         {
-            if (const auto* existingNode = graph.FindNode(nodeId))
-            {
-                const auto it = existingNode->config.find("pluginStateBase64");
-                if (it != existingNode->config.end())
-                    return it->second;
-            }
-            return {};
-        };
-
-        if (const auto state = findInGraph(mActivePreset->graph); !state.empty())
-            return state;
-        for (const auto& scene : mActivePreset->scenes)
-        {
-            if (const auto state = findInGraph(scene.graph); !state.empty())
-                return state;
+            graph = &mActivePreset->graph;
         }
-        return {};
+        else if (const auto* scene = FindPresetScene(*mActivePreset, sceneId))
+        {
+            graph = &scene->graph;
+        }
+
+        if (!graph)
+            return {};
+
+        const auto* storedNode = graph->FindNode(node.id);
+        if (!storedNode || !HostedPluginIdentityMatches(*storedNode, node))
+            return {};
+
+        return GetHostedPluginNodeState(*storedNode);
     };
 
     const auto captureRuntimeState = [&](const std::string& nodeId) -> std::string
     {
         if (!presetId.empty())
         {
-            if (const auto state = mPresetMixer.GetNodeConfig(presetId, nodeId, "pluginStateBase64"); !state.empty())
+            if (auto state = mPresetMixer.GetNodeConfig(presetId, nodeId, kHostedPluginStateConfigKey); !state.empty())
                 return state;
         }
 
+        // The caller may be saving the focused preset under a different slot id (a
+        // save-as in flight, or a preset that has not been re-applied yet).
         if (!mActivePresetId.empty() && mActivePresetId != presetId)
         {
-            if (const auto state = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, "pluginStateBase64"); !state.empty())
-                return state;
-        }
-
-        for (const auto& activeId : mPresetMixer.GetActivePresetIds())
-        {
-            if (activeId == presetId || activeId == mActivePresetId)
-                continue;
-
-            if (const auto state = mPresetMixer.GetNodeConfig(activeId, nodeId, "pluginStateBase64"); !state.empty())
+            if (auto state = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, kHostedPluginStateConfigKey); !state.empty())
                 return state;
         }
 
         return {};
     };
 
-    const auto captureGraph = [&](SignalGraph& graph)
+    // sceneId is empty for the top-level graph, which mirrors the live scene.
+    const auto captureGraph = [&](SignalGraph& graph, const std::string& sceneId)
     {
+        const bool isLiveGraph = sceneId.empty() || sceneId == liveSceneId;
+
         for (auto& node : graph.nodes)
         {
-            if (EffectRegistry::Instance().Resolve(node.type) != EffectGuids::kPluginHost)
+            if (!IsHostedPluginNode(node))
                 continue;
 
-            node.config.erase("pluginStateBase64Length");
+            // The UI-facing scrub marker must never reach persisted data.
+            node.config.erase(kHostedPluginStateLengthConfigKey);
 
-            std::string state = captureRuntimeState(node.id);
-            std::string source = "runtime";
+            std::string state;
+            std::string source;
+
+            if (isLiveGraph)
+            {
+                state = captureRuntimeState(node.id);
+                source = "runtime";
+            }
+
             if (state.empty())
             {
-                state = findExistingState(node.id);
-                source = "existing";
+                state = findStoredState(sceneId, node);
+                source = "stored";
             }
+
+            // Last resort: whatever the incoming preset already carried. Covers a brand-new
+            // scene that has no counterpart in the working copy yet.
+            if (state.empty())
+            {
+                state = GetHostedPluginNodeState(node);
+                source = "payload";
+            }
+
             if (!state.empty())
             {
-                node.config["pluginStateBase64"] = state;
+                node.config[kHostedPluginStateConfigKey] = state;
                 AppendSessionLog("Hosted plugin runtime state selected presetId="
                     + (presetId.empty() ? std::string{"<none>"} : presetId)
+                    + ", scene=" + (sceneId.empty() ? std::string{"<graph>"} : sceneId)
+                    + ", live=" + std::string{isLiveGraph ? "true" : "false"}
                     + ", nodeId=" + node.id + ", source=" + source
                     + ", length=" + std::to_string(state.size())
                     + ", hash=" + HashStringForLog(state));
             }
             else
             {
-                node.config.erase("pluginStateBase64");
-                AppendSessionLog("Hosted plugin state capture unavailable for node " + node.id + " while saving preset " + preset.id);
+                // Nothing anywhere has state for this node: normalise the key away rather
+                // than persisting an empty string. This can only erase a value that was
+                // already empty, so a live plugin's state is never dropped here.
+                node.config.erase(kHostedPluginStateConfigKey);
+                AppendSessionLog("Hosted plugin state capture unavailable for node " + node.id
+                    + ", scene=" + (sceneId.empty() ? std::string{"<graph>"} : sceneId)
+                    + " while saving preset " + preset.id);
             }
         }
     };
 
-    captureGraph(preset.graph);
+    captureGraph(preset.graph, {});
     for (auto& scene : preset.scenes)
-        captureGraph(scene.graph);
+        captureGraph(scene.graph, scene.id);
+}
+
+void PluginController::RestoreStandaloneHostedPluginState(const std::string& json)
+{
+    // Standalone saves its full state on exit (StandalonePluginHolder::savePluginState) and
+    // hands it straight back on the next launch, but DeserializeState deliberately ignores
+    // all of it — so hosted plugin state that was never written to a preset file was being
+    // captured, serialised, stored, and then thrown away. In a DAW the same state survives
+    // in the project; standalone users simply lost it.
+    //
+    // Rather than restoring the whole snapshot, this grafts only the plugin state chunks
+    // onto the preset startup already loaded from the store. The store stays authoritative
+    // for the graph, so unsaved *graph* edits are still discarded — a user who did not save
+    // does not get their edits resurrected. Only the opaque plugin chunk, which has nowhere
+    // else to live and cannot be reconstructed, is carried across.
+    if (!mActivePreset || mActivePresetId.empty())
+        return;
+
+    try
+    {
+        const auto state = nlohmann::json::parse(json);
+        if (!state.contains("preset") || !state["preset"].is_object())
+            return;
+
+        // Only continue a session still pointing at the preset the store resolved at
+        // startup. If they disagree, something else moved the last preset on (another
+        // instance, a settings sync) and the snapshot is stale.
+        const std::string sessionPresetId = state.value("presetId", std::string{});
+        if (sessionPresetId.empty() || sessionPresetId != mActivePresetId)
+            return;
+
+        auto sessionPreset = PresetStorage::DeserializeFromJson(state["preset"].dump());
+        if (!sessionPreset)
+            return;
+
+        NormalizePresetScenes(*sessionPreset);
+        NormalizePresetScenes(*mActivePreset);
+
+        int grafted = 0;
+        const auto graftGraph = [&](SignalGraph& target, const SignalGraph* source)
+        {
+            if (!source)
+                return;
+
+            for (auto& node : target.nodes)
+            {
+                if (!IsHostedPluginNode(node))
+                    continue;
+
+                const auto* sessionNode = source->FindNode(node.id);
+                if (!sessionNode)
+                    continue;
+
+                const auto sessionState = GetHostedPluginNodeState(*sessionNode);
+                if (sessionState.empty() || sessionState == GetHostedPluginNodeState(node))
+                    continue;
+
+                // The stored preset may have been saved against a different plugin since.
+                if (!HostedPluginIdentityMatches(*sessionNode, node))
+                    continue;
+
+                node.config[kHostedPluginStateConfigKey] = sessionState;
+                node.config.erase(kHostedPluginStateLengthConfigKey);
+                ++grafted;
+            }
+        };
+
+        graftGraph(mActivePreset->graph, &sessionPreset->graph);
+        for (auto& scene : mActivePreset->scenes)
+        {
+            const auto* sessionScene = FindPresetScene(*sessionPreset, scene.id);
+            graftGraph(scene.graph, sessionScene ? &sessionScene->graph : nullptr);
+        }
+
+        if (grafted == 0)
+            return;
+
+        AppendSessionLog("Standalone session restored hosted plugin state presetId=" + mActivePresetId
+            + ", nodes=" + std::to_string(grafted)
+            + ", state=" + SummarizeHostedPluginState(*mActivePreset));
+
+        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        ApplyPreset(*mActivePreset);
+        mPendingStateBroadcast = true;
+    }
+    catch (const std::exception&)
+    {
+        // Malformed session state is not worth failing startup over; the store's preset
+        // is already loaded and usable.
+    }
+}
+
+void PluginController::CaptureLiveHostedPluginStateIntoActivePreset()
+{
+    if (!mActivePreset || mActivePresetId.empty() || IsCompositeEditMode())
+        return;
+
+    bool changed = false;
+
+    // Reads the live processor for this exact node in this exact running slot, so the value
+    // belongs to the node it is written back to by construction — no identity check needed.
+    const auto foldGraph = [&](SignalGraph& graph)
+    {
+        for (auto& node : graph.nodes)
+        {
+            if (!IsHostedPluginNode(node))
+                continue;
+
+            auto state = mPresetMixer.GetNodeConfig(mActivePresetId, node.id, kHostedPluginStateConfigKey);
+            if (state.empty() || GetHostedPluginNodeState(node) == state)
+                continue;
+
+            node.config[kHostedPluginStateConfigKey] = std::move(state);
+            node.config.erase(kHostedPluginStateLengthConfigKey);
+            changed = true;
+        }
+    };
+
+    // The top-level graph mirrors the live scene; both carry the node the DSP is running.
+    foldGraph(mActivePreset->graph);
+    if (auto* liveScene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
+        foldGraph(liveScene->graph);
+
+    if (!changed)
+        return;
+
+    mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+    mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
+    AppendSessionLog("Hosted plugin live state folded into working copy presetId=" + mActivePresetId
+        + ", state=" + SummarizeHostedPluginState(*mActivePreset));
+    mHost.NotifyStateChanged();
+}
+
+void PluginController::CaptureMixerSlotHostedPluginState(Preset& preset, const std::string& presetId) const
+{
+    if (presetId.empty())
+        return;
+
+    // A mixer slot runs exactly one graph: the preset's top-level `graph`. Unfocused slots
+    // do not track which scene that graph came from, so the default scene — the one
+    // FocusMixerPreset() will materialise when the user switches to this slot — is kept in
+    // step with it. Other scenes keep whatever they already hold.
+    const std::string defaultSceneId = GetDefaultPresetSceneId(preset);
+
+    for (auto& node : preset.graph.nodes)
+    {
+        if (!IsHostedPluginNode(node))
+            continue;
+
+        auto state = mPresetMixer.GetNodeConfig(presetId, node.id, kHostedPluginStateConfigKey);
+        if (state.empty())
+            continue;
+
+        node.config[kHostedPluginStateConfigKey] = state;
+        node.config.erase(kHostedPluginStateLengthConfigKey);
+
+        if (auto* scene = FindPresetScene(preset, defaultSceneId))
+        {
+            if (auto* sceneNode = scene->graph.FindNode(node.id);
+                sceneNode && HostedPluginIdentityMatches(node, *sceneNode))
+            {
+                sceneNode->config[kHostedPluginStateConfigKey] = std::move(state);
+                sceneNode->config.erase(kHostedPluginStateLengthConfigKey);
+            }
+        }
+    }
+}
+
+void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId,
+                                                          const std::string& nodeId,
+                                                          const std::string& key,
+                                                          const std::string& value)
+{
+    const auto cachedIt = mMixerPresetJsonCache.find(presetId);
+    if (cachedIt == mMixerPresetJsonCache.end())
+        return;
+
+    auto presetOpt = PresetStorage::DeserializeFromJson(cachedIt->second);
+    if (!presetOpt)
+        return;
+
+    bool changed = false;
+    const auto patchGraph = [&](SignalGraph& graph)
+    {
+        auto* node = graph.FindNode(nodeId);
+        if (!node)
+            return;
+
+        const auto existingIt = node->config.find(key);
+        if (value.empty())
+        {
+            if (existingIt == node->config.end())
+                return;
+            node->config.erase(existingIt);
+        }
+        else
+        {
+            if (existingIt != node->config.end() && existingIt->second == value)
+                return;
+            node->config[key] = value;
+        }
+
+        changed = true;
+    };
+
+    // See CaptureMixerSlotHostedPluginState for why the default scene tracks `graph`.
+    patchGraph(presetOpt->graph);
+    if (auto* scene = FindPresetScene(*presetOpt, GetDefaultPresetSceneId(*presetOpt)))
+        patchGraph(scene->graph);
+
+    if (!changed)
+        return;
+
+    cachedIt->second = PresetStorage::SerializeToJson(*presetOpt);
+    mPendingStateBroadcast = true;
+    mHost.NotifyStateChanged();
+}
+
+bool PluginController::ClearStaleHostedPluginState(GraphNode& node, const std::string& previousIdentity)
+{
+    if (!IsHostedPluginNode(node))
+        return false;
+
+    // Resource-keyed, not config-keyed: the config identity keys are written by the plugin
+    // after it loads, so right after a swap they still name the outgoing plugin.
+    if (HostedPluginResourceKey(node) == previousIdentity)
+        return false;
+
+    const bool hadState = node.config.count(kHostedPluginStateConfigKey) > 0
+        || node.config.count(kHostedPluginStateLengthConfigKey) > 0;
+    if (!hadState)
+        return false;
+
+    // The node now points at a different plugin. Its predecessor's state chunk is foreign
+    // data: at best the new plugin rejects it, at worst it half-applies it. Drop it, along
+    // with the identity keys the previous plugin published — the new load republishes its
+    // own via the runtime config callback.
+    node.config.erase(kHostedPluginStateConfigKey);
+    node.config.erase(kHostedPluginStateLengthConfigKey);
+    node.config.erase(kHostedPluginStableIdConfigKey);
+    node.config.erase(kHostedPluginIdentifierConfigKey);
+    node.config.erase(kHostedPluginNameConfigKey);
+    node.config.erase(kHostedPluginManufacturerConfigKey);
+    node.config.erase(kHostedPluginFormatConfigKey);
+    return true;
 }
 
 bool PluginController::ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value)
@@ -12920,6 +13306,8 @@ bool PluginController::UpdateResourceForNodeType(const std::string& nodeType,
 {
     if (!mActivePreset) return false;
 
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
     for (auto& node : mActivePreset->graph.nodes)
     {
         if (node.type == nodeType)
@@ -12970,10 +13358,26 @@ bool PluginController::UpdateResourceForNodeId(const std::string& nodeId,
     auto* node = graph->FindNode(nodeId);
     if (!node) return false;
 
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
+    // Re-resolve: folding live state above can reserialise the working copy, and on the
+    // composite-edit path ResolveEditTarget() is unaffected — but taking the pointer again
+    // keeps this correct regardless of what the fold touched.
+    graph = ResolveEditTarget();
+    node = graph ? graph->FindNode(nodeId) : nullptr;
+    if (!node) return false;
+
+    const std::string previousPluginResourceKey = HostedPluginResourceKey(*node);
+
     if (node->resources.empty())
         node->resources.push_back(ref);
     else
         node->resources[0] = ref;
+
+    if (ClearStaleHostedPluginState(*node, previousPluginResourceKey))
+    {
+        AppendSessionLog("Hosted plugin resource changed, dropped stale plugin state nodeId=" + nodeId);
+    }
 
     if (applyPreset && mActivePreset)
     {
@@ -13303,6 +13707,17 @@ void PluginController::SaveAppSettings() const
     if (!mAppSettings.is_object())
         return;
 
+    // Restoring host state must not write to the shared store — see HostStateRestoreScope
+    // in DeserializeState().
+    //
+    // No path reachable from a restore still persists: the Apply* helpers now only report
+    // that sanitising changed something, and the handlers that do save are standalone-only.
+    // This stays as the invariant rather than the mechanism, because that "no path still
+    // persists" claim is an audit over four separate guards, and an audit going stale is
+    // exactly how a stale project came to republish its settings in the first place.
+    if (mRestoringHostState)
+        return;
+
     // Write only what *this* instance changed, against the snapshot it last
     // loaded or saved.
     //
@@ -13317,6 +13732,12 @@ void PluginController::SaveAppSettings() const
     // that is gone from mAppSettings but present in the baseline was removed
     // here and must be removed from the store; a key in neither was never ours
     // and is left alone.
+    //
+    // Instance-owned keys are skipped in both directions. They live in mAppSettings
+    // because the rest of the controller reads its settings from there, but this
+    // instance has no authority over them in the shared store: suppressing the save
+    // at the call site is not enough, because the very next save of an unrelated key
+    // would diff them as changed and push them out anyway.
     if (!mAppSettingsBaseline.is_object())
         mAppSettingsBaseline = nlohmann::json::object();
     const nlohmann::json& baseline = mAppSettingsBaseline;
@@ -13326,7 +13747,7 @@ void PluginController::SaveAppSettings() const
 
     for (const auto& [key, value] : mAppSettings.items())
     {
-        if (key.empty())
+        if (key.empty() || IsInstanceOwnedSettingKey(key))
             continue;
         const auto previous = baseline.find(key);
         if (previous == baseline.end() || *previous != value)
@@ -13335,7 +13756,7 @@ void PluginController::SaveAppSettings() const
 
     for (const auto& [key, value] : baseline.items())
     {
-        if (!key.empty() && !mAppSettings.contains(key))
+        if (!key.empty() && !IsInstanceOwnedSettingKey(key) && !mAppSettings.contains(key))
             removals.push_back(key);
     }
 
@@ -13363,8 +13784,36 @@ void PluginController::SaveAppSettings() const
         return;
     }
 
-    mAppSettingsBaseline = mAppSettings;
+    AdoptAppSettingsAsBaseline();
     TouchSharedSyncState({"appSettings"});
+}
+
+void PluginController::AdoptAppSettingsAsBaseline() const
+{
+    // Declare the current live view to be "already published", so nothing in it is
+    // pending a write. Instance-owned keys keep whatever the store last reported
+    // instead, because this instance never writes them and must not start claiming
+    // its own value is what the store holds.
+    if (!mAppSettings.is_object())
+        return;
+
+    nlohmann::json next = nlohmann::json::object();
+    for (const auto& [key, value] : mAppSettings.items())
+    {
+        if (!key.empty() && !IsInstanceOwnedSettingKey(key))
+            next[key] = value;
+    }
+
+    if (mAppSettingsBaseline.is_object())
+    {
+        for (const auto& [key, value] : mAppSettingsBaseline.items())
+        {
+            if (!key.empty() && IsInstanceOwnedSettingKey(key))
+                next[key] = value;
+        }
+    }
+
+    mAppSettingsBaseline = std::move(next);
 }
 
 bool PluginController::CleanupLegacyAppSettingsOnLoad()
@@ -13389,6 +13838,13 @@ bool PluginController::CleanupLegacyAppSettingsOnLoad()
     eraseKeyIfPresent("toneSharing.apiBase");
     eraseKeyIfPresent("ui.experimentalFeaturesEnabled");
     eraseKeyIfPresent("audio.processing.namMonoOnly");
+    // Multi-threaded preset processing is unconditional now; the preference is retired.
+    eraseKeyIfPresent("audio.processing.multiThreaded");
+    // Signal diagnostics are always on, so the stored flag was only ever `true`.
+    eraseKeyIfPresent("diagnostics.signalLevelsEnabled");
+    // Mixer-wide auto-levelling is retired; these were only ever written as `false`.
+    eraseKeyIfPresent("autoLevelInput");
+    eraseKeyIfPresent("autoLevelOutput");
     eraseKeyIfPresent("app.lastUpdateCheck");
 
     // Legacy global chain app setting was superseded by globalFx.settings.

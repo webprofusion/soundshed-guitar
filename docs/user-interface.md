@@ -101,7 +101,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 |------|---------|-------------|
 | `uiReady` | `{}` | WebView loaded and ready |
 | `requestState` | `{}` | Request full state sync |
-| `setParameter` | `{name, value}` | Update parameter value |
+| `setParameter` | `{name, value}` | Set one global FX value by flat name; alias for `setGlobalChainParam` |
 | `loadPreset` | `{preset, sceneId?}` | Load preset with full object and optionally select a scene |
 | `savePreset` | `{name, category, description}` | Save current state as preset to disk |
 | `loadModel` | `{filePath}` | Load NAM model by path |
@@ -211,9 +211,9 @@ Rules for anyone touching this:
 ### Sending Messages (UI → Engine)
 ```typescript
 window.NAMBridge.postMessage({
-  type: "setParameter",
-  name: "amp1_drive",
-  value: 0.72,
+  type: "setGlobalChainParam",
+  path: "gate.threshold",
+  value: -52.0,
 });
 ```
 
@@ -236,15 +236,18 @@ window.IPlugReceiveData = function(jsonString) {
 
 ### Parameter Updates
 ```
-UI changes parameter:
+UI changes a global FX value:
 1. User adjusts control
 2. UI updates local state immediately (optimistic)
-3. UI sends setParameter message (debounced 50ms)
-4. Engine updates parameter
+3. UI sends setGlobalChainParam message (debounced 50ms)
+4. Engine writes it into the global chain config — the single source of truth
 5. Engine includes update in next state broadcast
 
-Engine changes parameter (automation):
-1. DAW writes automation value
+UI changes a node parameter:
+1. UI sends updateSignalPathNodeParam with {nodeId, paramKey, value}
+
+Engine changes a value (automation):
+1. DAW writes an automation slot value
 2. Engine includes in state broadcast
 3. UI updates display
 ```

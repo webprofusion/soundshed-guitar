@@ -594,6 +594,10 @@ body.signal-path-resizing * {
   min-width: 72px;
   min-height:72px;
   cursor: pointer;
+  /* Nodes are dragged with pointer events, and the browser cancels the gesture
+     the moment it decides the touch was a scroll. The chain still scrolls by
+     dragging the strip between nodes. */
+  touch-action: none;
   /* Size properties animate on density switch; interaction colours animate on hover/focus. */
   transition:
     border-color 0.15s ease,
@@ -664,6 +668,15 @@ body.signal-path-resizing * {
   border-color: var(--color-accent);
   box-shadow: var(--shadow-xl);
   z-index: 100;
+}
+
+.signal-node-drag-preview {
+  position: fixed !important;
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%) scale(1.04);
+  z-index: 1000;
 }
 
 .signal-node.drag-over {

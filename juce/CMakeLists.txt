@@ -548,6 +548,48 @@ if(WIN32)
     add_test(NAME HostedPluginGrapheneStateTests COMMAND HostedPluginGrapheneStateTests)
     set_tests_properties(HostedPluginGrapheneStateTests PROPERTIES SKIP_RETURN_CODE 77)
 
+    # Unlike the Graphene tests, this one drives a stub AudioPluginInstance, so it runs on
+    # any machine and is never skipped.
+    add_executable(HostedPluginStateCaptureTests
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/HostedPluginStateCaptureTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.h"
+    )
+
+    target_include_directories(HostedPluginStateCaptureTests
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/source"
+    )
+
+    target_compile_definitions(HostedPluginStateCaptureTests
+        PRIVATE
+            JUCE_PLUGINHOST_VST3=1
+            JUCE_VST3_CAN_REPLACE_VST2=0
+            GUITARFX_ENABLE_PLUGIN_HOST_TEST_API=1
+    )
+
+    target_link_libraries(HostedPluginStateCaptureTests
+        PRIVATE
+            SoundshedGuitarCore
+            nlohmann_json::nlohmann_json
+            juce_audio_utils
+            juce_audio_processors
+            juce_dsp
+            juce_gui_basics
+            juce_gui_extra
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags
+            juce::juce_recommended_warning_flags
+    )
+
+    set_target_properties(HostedPluginStateCaptureTests PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+        FOLDER "GuitarFX/Tests"
+    )
+
+    add_test(NAME HostedPluginStateCaptureTests COMMAND HostedPluginStateCaptureTests)
+
     add_executable(HostedPluginBatchScanTests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/HostedPluginBatchScanTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.cpp"

@@ -249,12 +249,16 @@ A composite appears as a single expandable node in the signal path view. The nod
 
 ### Parameter Updates
 
-Composite node parameters use the standard `setParameter` message with the exposed param ID:
+Composite node parameters are updated with `updateSignalPathNodeParam`, addressed by the
+exposed param key:
 ```typescript
-postMessage("setParameter", { nodeId: "composite1", key: "drive", value: 5.0 });
+postMessage("updateSignalPathNodeParam", { nodeId: "composite1", paramKey: "drive", value: 5.0 });
 ```
 
 The engine routes through the `ExposedParameter` mapping to the inner node.
+
+`setParameter` does *not* address node params — it is a flat-name alias for the global
+FX chain only (see docs/user-interface.md).
 
 ## Creating a Composite Effect (User Flow)
 

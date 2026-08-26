@@ -38,12 +38,15 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
+    void setScaleFactor (float newScale) override;
+    void parentHierarchyChanged() override;
 
     // Handle deep link from another instance of the app
     void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery);
 
 private:
     void timerCallback() override;
+    void applyHostScaleWorkaround();
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     juce::String getResourceRootUrl() const;
 
@@ -56,6 +59,10 @@ private:
     PluginProcessorAdapter& processorRef;
 
     juce::File resourceRoot;
+
+    // Set once a host has pushed its DPI scale at us via setScaleFactor(). Of the formats we
+    // build, only the CLAP wrapper does that - see applyHostScaleWorkaround() for why it matters.
+    bool hostSuppliedScaleFactor = false;
 
     SinglePageBrowser webView;
 

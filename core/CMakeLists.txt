@@ -598,6 +598,8 @@ set(GUITARFX_CORE_SOURCES
     src/resources/CustomEffectLibrary.cpp
     src/resources/ResourceLibrary.h
     src/resources/ResourceLibrary.cpp
+    src/resources/PluginPathUtils.h
+    src/resources/PluginPathUtils.cpp
 
     # Storage
     src/storage/JsonStore.h

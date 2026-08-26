@@ -12,6 +12,7 @@
 #include "IPluginHost.h"
 #include "PluginController.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/LevelTargets.h"
 #include "dsp/effects/NAMSampleRate.h"
 #include "presets/PresetStorage.h"
 #include "presets/PresetTypes.h"
@@ -570,6 +571,453 @@ bool TestPluginStateRestoresActiveScene()
     return true;
 }
 
+bool TestPluginStateRestoresGlobalGate()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "plugin-global-gate-state";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    // Hosted plugin instance (standalone = false): global FX ride in host state.
+    TestHost host(sandbox);
+    guitarfx::PluginController source(host);
+    source.Initialize();
+
+    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
+    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -52.0}}.dump());
+    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.enabled"}, {"value", true}}.dump());
+
+    const auto savedState = nlohmann::json::parse(source.SerializeState());
+
+    guitarfx::PluginController restored(host);
+    restored.Initialize();
+    restored.DeserializeState(savedState.dump());
+
+    const auto chain = restored.GetMixer().GetGlobalChainConfig();
+    const auto* gate = chain.preChainGraph.FindNode("global_gate");
+    if (!gate)
+    {
+        std::cerr << "Restored plugin state has no global gate node\n";
+        return false;
+    }
+    if (!gate->enabled)
+    {
+        std::cerr << "Global gate was enabled before save but is disabled after reopening the plugin\n";
+        return false;
+    }
+    const auto thresholdIt = gate->params.find("threshold");
+    if (thresholdIt == gate->params.end() || std::abs(thresholdIt->second - (-52.0)) > 1e-9)
+    {
+        std::cerr << "Global gate threshold was not restored from plugin state\n";
+        return false;
+    }
+
+    const auto* eq = chain.postChainGraph.FindNode("global_eq");
+    if (!eq || !eq->enabled)
+    {
+        std::cerr << "Global EQ enable was not restored from plugin state\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestSetParameterMessageRoutesToGlobalChain()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "set-parameter-alias";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox);
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    // "setParameter" is the documented flat-name entry point. It carries a number for
+    // every parameter, including the boolean and integer ones, and must land on the
+    // same global chain state that setGlobalChainParam writes.
+    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "gateEnabled"}, {"value", 1}}.dump());
+    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "gateThreshold"}, {"value", -47.5}}.dump());
+    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "transpose"}, {"value", -5}}.dump());
+    // snake_case spelling: what the older UI sliders emitted.
+    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "output_trim"}, {"value", -2.5}}.dump());
+    // Unknown names must be ignored rather than throwing or writing anything.
+    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "notAParameter"}, {"value", 1}}.dump());
+
+    const auto chain = controller.GetMixer().GetGlobalChainConfig();
+
+    const auto* gate = chain.preChainGraph.FindNode("global_gate");
+    if (!gate || !gate->enabled)
+    {
+        std::cerr << "setParameter gateEnabled did not enable the global gate\n";
+        return false;
+    }
+
+    const auto thresholdIt = gate->params.find("threshold");
+    if (thresholdIt == gate->params.end() || std::abs(thresholdIt->second - (-47.5)) > 1e-9)
+    {
+        std::cerr << "setParameter gateThreshold did not reach the global gate\n";
+        return false;
+    }
+
+    const auto* transpose = chain.preChainGraph.FindNode("global_transpose");
+    const auto semitonesIt = transpose ? transpose->params.find("semitones") : decltype(transpose->params.end()){};
+    if (!transpose || semitonesIt == transpose->params.end()
+        || std::abs(semitonesIt->second - (-5.0)) > 1e-9)
+    {
+        std::cerr << "setParameter transpose did not reach the global transpose node\n";
+        return false;
+    }
+
+    if (std::abs(chain.outputGain - (-2.5)) > 1e-9)
+    {
+        std::cerr << "setParameter output_trim (snake_case) did not reach the global output gain\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestPluginInstanceNamQualityNeverReachesSharedStore()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "instance-owned-nam-quality";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox); // standalone = false: NAM quality is instance-owned here.
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    double storedBefore = 0.0;
+    {
+        StoreReader reader(sandbox);
+        if (!reader.Ok())
+            return false;
+        storedBefore = reader.AppSettings().value("audio.nam.oversampling", 0.0);
+    }
+
+    // Instance-owned: this instance's tier, never the machine's.
+    controller.HandleUIMessage(nlohmann::json{
+        {"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
+
+    // A shared setting changed afterwards must still be persisted — and must not drag
+    // the instance-owned key out to the store along with it.
+    controller.HandleUIMessage(nlohmann::json{
+        {"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
+
+    StoreReader reader(sandbox);
+    if (!reader.Ok())
+        return false;
+    const auto stored = reader.AppSettings();
+
+    if (stored.value("app.updateCheckEnabled", true) != false)
+    {
+        std::cerr << "A shared setting changed after an instance-owned one was not persisted\n";
+        return false;
+    }
+
+    if (std::abs(stored.value("audio.nam.oversampling", 0.0) - storedBefore) > 1e-9)
+    {
+        std::cerr << "Instance-owned NAM quality leaked into the shared store via an unrelated save\n";
+        return false;
+    }
+
+    // The instance itself still runs at the tier the user picked.
+    if (controller.GetAppSettings().value("audio.nam.oversampling", 0.0) != 3.0)
+    {
+        std::cerr << "Instance-owned NAM quality was not retained by the instance\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestHostStateRestoreDoesNotRepublishProjectSettings()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "host-state-no-republish";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox);
+
+    // The user's current, machine-wide choice.
+    {
+        guitarfx::PluginController seed(host);
+        seed.Initialize();
+        seed.HandleUIMessage(nlohmann::json{
+            {"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -24.0}}.dump());
+    }
+
+    // A DAW project saved back when the setting was something else.
+    nlohmann::json staleProject;
+    staleProject["appSettings"] = nlohmann::json{{"audio.dsp.nominalOperatingLevelDbfs", -12.0}};
+
+    guitarfx::PluginController restored(host);
+    restored.Initialize();
+    restored.DeserializeState(staleProject.dump());
+
+    // Any later save at all is enough to publish the merged snapshot, if it was left
+    // looking like this instance's own edits.
+    restored.HandleUIMessage(nlohmann::json{
+        {"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
+
+    StoreReader reader(sandbox);
+    if (!reader.Ok())
+        return false;
+    const auto stored = reader.AppSettings();
+
+    if (std::abs(stored.value("audio.dsp.nominalOperatingLevelDbfs", 0.0) - (-24.0)) > 1e-9)
+    {
+        std::cerr << "Reopening a stale project republished its settings over the shared store\n";
+        return false;
+    }
+
+    if (stored.value("app.updateCheckEnabled", true) != false)
+    {
+        std::cerr << "A genuine setting change after a host-state restore was not persisted\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestHostStateRestoreAppliesMergedSettings()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "host-state-applies-settings";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox);
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    nlohmann::json state;
+    state["appSettings"] = nlohmann::json{
+        {"audio.dsp.nominalOperatingLevelDbfs", -12.0},
+        {"audio.userInputCalibration.activeProfileId", "profile-a"},
+        {"audio.userInputCalibration.profiles", nlohmann::json::array({
+            nlohmann::json{{"id", "profile-a"}, {"name", "Profile A"}, {"gainDb", 4.5}}
+        })},
+    };
+
+    controller.DeserializeState(state.dump());
+
+    if (std::abs(guitarfx::GetNominalOperatingLevelDbfs() - (-12.0)) > 1e-9)
+    {
+        std::cerr << "Restored DSP level target was merged into settings but never applied\n";
+        return false;
+    }
+
+    if (std::abs(controller.GetMixer().GetUserInputCalibrationGainDb() - 4.5) > 1e-9)
+    {
+        std::cerr << "Restored user input calibration was merged into settings but never applied\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestPluginInstanceDoesNotOwnLastPresetId()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "last-preset-ownership";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    auto appPreset = BuildPassthroughPreset("p-app", "App Preset");
+    auto daw = BuildPassthroughPreset("p-daw", "DAW Preset");
+    {
+        StoreReader writer(sandbox);
+        if (!writer.Ok() || !writer.SavePreset(appPreset) || !writer.SavePreset(daw))
+            return false;
+    }
+
+    // Standalone owns the machine-wide "last preset".
+    {
+        TestHost appHost(sandbox, {}, /*standalone=*/true);
+        guitarfx::PluginController app(appHost);
+        app.Initialize();
+        app.HandleUIMessage(nlohmann::json{
+            {"type", "loadPreset"},
+            {"preset", nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(appPreset))},
+            {"presetId", appPreset.id}}.dump());
+    }
+
+    {
+        StoreReader reader(sandbox);
+        if (reader.AppSettings().value("lastPresetId", std::string{}) != "p-app")
+        {
+            std::cerr << "Standalone should record the last preset it loaded\n";
+            return false;
+        }
+    }
+
+    // A hosted instance seeds from it...
+    TestHost host(sandbox);
+    guitarfx::PluginController plugin(host);
+    plugin.Initialize();
+    if (!plugin.GetActivePreset() || plugin.GetActivePreset()->id != "p-app")
+    {
+        std::cerr << "A new plugin instance should seed from the shared last preset\n";
+        return false;
+    }
+
+    // ...but loading a preset inside the DAW is the project's business, not the machine's.
+    plugin.HandleUIMessage(nlohmann::json{
+        {"type", "loadPreset"},
+        {"preset", nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(daw))},
+        {"presetId", daw.id}}.dump());
+
+    StoreReader reader(sandbox);
+    if (reader.AppSettings().value("lastPresetId", std::string{}) != "p-app")
+    {
+        std::cerr << "A plugin instance overwrote the shared last preset with its own choice\n";
+        return false;
+    }
+
+    // The instance itself still switched, and carries it in host state.
+    const auto hostState = nlohmann::json::parse(plugin.SerializeState());
+    if (hostState.value("presetId", std::string{}) != "p-daw")
+    {
+        std::cerr << "Plugin instance did not carry its own preset choice in host state\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestUiLayoutIsNotSharedBetweenPluginAndStandalone()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "ui-layout-ownership";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    // The standalone app owns the machine-wide layout.
+    {
+        TestHost appHost(sandbox, {}, /*standalone=*/true);
+        guitarfx::PluginController app(appHost);
+        app.Initialize();
+        app.HandleUIMessage(nlohmann::json{
+            {"type", "uiSettingsChanged"},
+            {"settings", nlohmann::json{{"zoom", 1.0}, {"signalPathHeight", 300}}}}.dump());
+    }
+
+    {
+        StoreReader reader(sandbox);
+        const auto stored = reader.AppSettings();
+        if (std::abs(stored["uiSettings"].value("zoom", 0.0) - 1.0) > 1e-9)
+        {
+            std::cerr << "Standalone should persist UI layout to the shared store\n";
+            return false;
+        }
+    }
+
+    TestHost host(sandbox);
+    guitarfx::PluginController plugin(host);
+    plugin.Initialize();
+
+    // A new instance is seeded from the shared layout...
+    if (std::abs(plugin.GetAppSettings()["uiSettings"].value("zoom", 0.0) - 1.0) > 1e-9)
+    {
+        std::cerr << "A new plugin instance should seed its layout from the shared store\n";
+        return false;
+    }
+
+    // ...but resizing the editor in a DAW is the project's business.
+    plugin.HandleUIMessage(nlohmann::json{
+        {"type", "uiSettingsChanged"},
+        {"settings", nlohmann::json{{"zoom", 1.75}, {"signalPathHeight", 640}}}}.dump());
+
+    StoreReader reader(sandbox);
+    const auto stored = reader.AppSettings();
+    if (std::abs(stored["uiSettings"].value("zoom", 0.0) - 1.0) > 1e-9
+        || stored["uiSettings"].value("signalPathHeight", 0) != 300)
+    {
+        std::cerr << "A plugin instance's editor layout leaked into the shared store\n";
+        return false;
+    }
+
+    // The instance keeps its own layout, and persists it in host state.
+    const auto hostState = nlohmann::json::parse(plugin.SerializeState());
+    if (std::abs(hostState["uiSettings"].value("zoom", 0.0) - 1.75) > 1e-9)
+    {
+        std::cerr << "Plugin instance did not carry its editor layout in host state\n";
+        return false;
+    }
+
+    // A shared-settings reload from another instance must not resize this editor.
+    plugin.HandleUIMessage(nlohmann::json{{"type", "getSharedSyncState"}}.dump());
+    const auto afterReload = nlohmann::json::parse(plugin.SerializeState());
+    if (std::abs(afterReload["uiSettings"].value("zoom", 0.0) - 1.75) > 1e-9)
+    {
+        std::cerr << "A shared-settings reload clobbered the plugin instance's editor layout\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "shared-reload-apply";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox);
+    guitarfx::PluginController plugin(host);
+    plugin.Initialize();
+
+    // This instance picks its own NAM tier. Instance-owned: nobody else may move it.
+    plugin.HandleUIMessage(nlohmann::json{
+        {"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
+
+    // Another instance changes a genuinely shared setting.
+    {
+        TestHost otherHost(sandbox, {}, /*standalone=*/true);
+        guitarfx::PluginController other(otherHost);
+        other.Initialize();
+        other.HandleUIMessage(nlohmann::json{
+            {"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -27.0}}.dump());
+    }
+
+    // The level target lives in process-global storage, which the other controller above
+    // already wrote on its way past. Knock it off that value first, or this asserts what
+    // that controller did rather than what the reload does.
+    guitarfx::SetNominalOperatingLevelDbfs(guitarfx::kDefaultNominalOperatingLevelDbfs);
+
+    plugin.HandleUIMessage(nlohmann::json{{"type", "getSharedSyncState"}}.dump());
+
+    // The shared change has to reach the DSP, not just mAppSettings — a reload that only
+    // merged would leave the engine on the old target while the UI showed the new one.
+    if (std::abs(guitarfx::GetNominalOperatingLevelDbfs() - (-27.0)) > 1e-9)
+    {
+        std::cerr << "Shared-sync reload merged a shared setting but never applied it\n";
+        return false;
+    }
+
+    // ...and must not drag this instance's own tier along with it.
+    if (plugin.GetAppSettings().value("audio.nam.oversampling", 0.0) != 3.0)
+    {
+        std::cerr << "Shared-sync reload clobbered this instance's NAM tier\n";
+        return false;
+    }
+
+    return true;
+}
+
 bool TestLoadPresetRehydratesScrubbedHostedPluginState()
 {
     try
@@ -940,10 +1388,12 @@ bool TestLoadPresetPreservesInstanceGlobalFxState()
         return false;
     }
 
-    if (std::abs(controller.GetParamValue(guitarfx::PluginController::kParamInputTrim) - (-3.25)) > 1e-9
-        || std::abs(controller.GetParamValue(guitarfx::PluginController::kParamOutputTrim) - (-1.5)) > 1e-9)
+    // Re-read the chain rather than a shadow copy: it is the only record of these values.
+    const auto rechecked = controller.GetMixer().GetGlobalChainConfig();
+    if (std::abs(rechecked.inputGain - (-3.25)) > 1e-9
+        || std::abs(rechecked.outputGain - (-1.5)) > 1e-9)
     {
-        std::cerr << "Controller parameter values were not synced to preserved global FX state\n";
+        std::cerr << "Global chain config did not retain the preserved input/output levels\n";
         return false;
     }
 
@@ -2572,6 +3022,14 @@ int main()
 
     run("Load preset via message", TestLoadPresetViaMessage());
     run("Plugin state restores active scene", TestPluginStateRestoresActiveScene());
+    run("Plugin state restores global gate", TestPluginStateRestoresGlobalGate());
+    run("setParameter routes to global chain", TestSetParameterMessageRoutesToGlobalChain());
+    run("Instance-owned NAM quality never reaches shared store", TestPluginInstanceNamQualityNeverReachesSharedStore());
+    run("Host state restore does not republish project settings", TestHostStateRestoreDoesNotRepublishProjectSettings());
+    run("Host state restore applies merged settings", TestHostStateRestoreAppliesMergedSettings());
+    run("Plugin instance does not own lastPresetId", TestPluginInstanceDoesNotOwnLastPresetId());
+    run("UI layout is not shared between plugin and standalone", TestUiLayoutIsNotSharedBetweenPluginAndStandalone());
+    run("Shared-sync reload applies shared settings and keeps instance-owned", TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned());
     run("Load preset rehydrates scrubbed hosted plugin state", TestLoadPresetRehydratesScrubbedHostedPluginState());
     run("Load preset rehydrates scrubbed hosted plugin state from active preset", TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset());
     run("Load preset remaps hosted plugin resource by stable id", TestLoadPresetRemapsHostedPluginResourceByStableId());

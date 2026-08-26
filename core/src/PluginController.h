@@ -53,6 +53,17 @@ namespace guitarfx
 class DemoPreviewService;
 class EarPracticePlayerService;
 
+/// How ApplySettingsToRuntime() treats settings a plugin instance owns rather than shares.
+enum class SettingsApplyMode
+{
+    /// Derive everything from mAppSettings. Startup, and restoring host state.
+    kApplyAll,
+    /// Re-assert this instance's own NAM quality and editor layout over what was just
+    /// reloaded from the shared store. Degrades to kApplyAll in the standalone app,
+    /// which owns those keys itself.
+    kPreserveInstanceOwned
+};
+
 /**
  * Shared plugin controller — all business logic lives here.
  *
@@ -147,6 +158,10 @@ public:
     /// True for the NAM quality keys (slimmable size, oversampling, anti-alias phase).
     [[nodiscard]] static bool IsNamQualitySettingKey(const std::string& key);
 
+    /// True for the UI layout keys (zoom, window bounds, signal-path split) and their
+    /// legacy flattened aliases.
+    [[nodiscard]] static bool IsUiLayoutSettingKey(const std::string& key);
+
     /// True when `key` belongs to this instance rather than the shared app.json — that is,
     /// a NAM quality key while hosted as a plugin. Instance-owned keys are persisted in
     /// host state, are never written to disk, and survive a shared-settings reload.
@@ -190,39 +205,10 @@ public:
     [[nodiscard]] float GetAutomationSlotValue(const std::string& slotId) const;
 
     // ── Parameter bridging ─────────────────────────────────────────
-    /// Plugin parameter IDs (kept stable for host automation mapping).
-    enum ParameterId
-    {
-        kParamInputTrim = 0,
-        kParamOutputTrim,
-        kParamDrive,
-        kParamTone,
-        kParamGateEnabled,
-        kParamGateThreshold,
-        kParamMix,
-        kParamDoublerEnabled,
-        kParamDoublerDelay,
-        kParamTranspose,
-        kParamIRQuality,
-        kParamEQEnabled,
-        kParamEQLowGain,
-        kParamEQLowFreq,
-        kParamEQLowMidGain,
-        kParamEQLowMidFreq,
-        kParamEQLowMidQ,
-        kParamEQHighMidGain,
-        kParamEQHighMidFreq,
-        kParamEQHighMidQ,
-        kParamEQHighGain,
-        kParamEQHighFreq,
-        kParamCount
-    };
-
-    /// Called when a DAW-automatable parameter changes (from host or UI).
-    void OnParamChange(int paramIdx, double value);
-
-    /// Get the current value of a parameter.
-    [[nodiscard]] double GetParamValue(int paramIdx) const;
+    // Global FX have no flat parameter mirror: GlobalSignalChainConfig on the mixer is
+    // the single source of truth, read back via GetMixer().GetGlobalChainConfig().
+    // DAW-visible parameters are the automation slots above, registered by the host
+    // adapter — they were never bound to the retired ParameterId enum.
 
     // ── Multi-preset mixer controls ────────────────────────────────
     bool AddActivePreset(const Preset& preset, const std::string& presetId, const std::string& name);
@@ -239,7 +225,6 @@ public:
     void SetActivePresetSolo(const std::string& presetId, bool solo);
     void SetMasterGain(double value);
     void SetLimiterEnabled(bool enabled);
-    void SetMultiThreadedProcessingEnabled(bool enabled);
     /// Switches the editing focus (mActivePreset) to an already-active mixer slot without
     /// touching the running DSP instances, so signal-chain edits target the correct preset.
     void FocusMixerPreset(const std::string& presetId);
@@ -285,7 +270,6 @@ private:
     void HandleOpenAudioPreferencesRequest();
     void HandleTunerRequest(const nlohmann::json& payload);
     void HandleSetInputModeRequest(const nlohmann::json& payload);
-    void HandleSetProcessingModeRequest(const nlohmann::json& payload);
     void HandleSetAmpCabStateRequest(const nlohmann::json& payload);
     void HandleSetAutoLevelRequest(const nlohmann::json& payload);
     void HandleDeleteLayoutRequest(const nlohmann::json& payload);
@@ -452,19 +436,66 @@ private:
     int mLastReportedLatency = -1; ///< Guards against redundant host latency notifications
     void ApplyBlendDefinitions(Preset& preset);
     void CaptureRuntimePluginStates(Preset& preset, const std::string& presetId) const;
+    /**
+     * Fold live hosted plugin state back into the focused preset's working copy.
+     *
+     * Every graph edit tears down and rebuilds all processors, and a rebuilt hosted plugin
+     * is restored from node.config — so anything the live plugin knows that node.config
+     * does not is lost. Auto-capture usually keeps the two in step, but it depends on the
+     * plugin telling us it changed, and plenty of plugins mutate non-parameter state
+     * (internal preset browsers, sample/IR loaders) without ever notifying the host.
+     *
+     * Call this before any operation that rebuilds or replaces the working copy so the
+     * rebuild starts from what is actually loaded rather than from the last notification.
+     * Cheap: it only touches hosted plugin nodes, and no-ops when nothing changed.
+     */
+    void CaptureLiveHostedPluginStateIntoActivePreset();
+    /**
+     * Fold live hosted plugin state for a mixer slot that is not the editing focus into a
+     * copy of its preset.
+     *
+     * Non-focused slots have no live Preset object — their working copy is the JSON in
+     * mMixerPresetJsonCache — so the focused-preset paths cannot reach them.
+     */
+    void CaptureMixerSlotHostedPluginState(Preset& preset, const std::string& presetId) const;
+    /// Apply one runtime config change to a non-focused mixer slot's cached working copy.
+    void ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId,
+                                            const std::string& nodeId,
+                                            const std::string& key,
+                                            const std::string& value);
+    /// Drop hosted plugin state that belongs to a plugin the node no longer hosts.
+    /// Returns true when a stale chunk was removed.
+    static bool ClearStaleHostedPluginState(GraphNode& node, const std::string& previousIdentity);
+    /// Restores the hosted plugin state carried in standalone host state onto the preset
+    /// that startup already loaded from the store. See the definition for why standalone
+    /// takes this narrow path instead of the full DeserializeState restore.
+    void RestoreStandaloneHostedPluginState(const std::string& json);
     std::optional<Preset> TryLoadStoredPresetById(const std::string& presetId);
     bool ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value);
-    void ApplyDiagnosticsSettingsFromAppSettings();
-    void ApplyDspLevelTargetSettingsFromAppSettings();
-    void ApplyProcessingModeSettingsFromAppSettings();
+    /**
+     * Push mAppSettings into the running DSP and UI state.
+     *
+     * The one definition of "apply the settings", shared by startup, host-state restore
+     * and shared-settings reload — keeping three hand-maintained lists in step is what
+     * previously let restored values be merged but never applied.
+     *
+     * The individual helpers below sanitise mAppSettings but never persist; the `bool`
+     * returned here is true when sanitising changed something, so the caller can save
+     * once for the whole batch (or decline to, as a host-state restore does).
+     */
+    [[nodiscard]] bool ApplySettingsToRuntime(SettingsApplyMode mode);
+
     void ApplyInputModeSettingsFromAppSettings();
     void ApplyGlobalFxSettingsFromAppSettings();
     void PersistGlobalFxSettingsToAppSettings();
-    void ApplyNamQualitySettings();
+    /// Return true when sanitising changed mAppSettings, and never persist — see above.
+    /// Advisory: a caller that saves unconditionally anyway can ignore it.
+    bool ApplyDspLevelTargetSettingsFromAppSettings();
+    bool ApplyNamQualitySettings();
+    bool ApplyUserInputCalibrationSettingsFromAppSettings();
     void PushNamQualityToDsp();
     void RestoreInstanceOwnedSettings();
     void ApplyNamInterfaceCalibrationFromAppSettings();
-    void ApplyUserInputCalibrationSettingsFromAppSettings();
     void ApplyUiSettingsFromAppSettings();
     [[nodiscard]] bool IsFactoryPresetArchiveLoadingEnabled() const;
     [[nodiscard]] bool IsPresetArchiveSessionActive() const;
@@ -528,6 +559,9 @@ private:
 
     // Settings persistence
     void SaveAppSettings() const;
+    /// Record the current mAppSettings as already-published, so nothing in it is pending
+    /// a write to the shared store. Instance-owned keys keep their prior baseline value.
+    void AdoptAppSettingsAsBaseline() const;
     bool CleanupLegacyAppSettingsOnLoad();
     void LoadAppSettings();
     void LoadLastSessionState();
@@ -591,7 +625,6 @@ private:
     bool WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const;
 
     void AppendSessionLog(const std::string& message) const;
-    void ApplyParamChangeLocked(int paramIdx, double value);
     void ProcessAudioLocked(float** inputs, float** outputs, int numSamples);
     void ApplySetlistPresetByIndexDirect(int index);
     void SetlistBankChangeDirect(int delta);
@@ -711,15 +744,24 @@ private:
     // App settings
     nlohmann::json mAppSettings = nlohmann::json::object();
     /**
-     * What the store held for `setting` rows the last time this instance loaded
-     * or saved them.
+     * The settings this instance is *not* responsible for publishing — normally what
+     * the store held the last time this instance loaded or saved them.
      *
      * SaveAppSettings() diffs against this instead of rewriting every key, so a
      * setting another instance changed since our last load is left alone rather
      * than overwritten with our stale copy. Mutable because SaveAppSettings() is
      * const.
+     *
+     * Values restored from host state are folded in here too (see
+     * AdoptAppSettingsAsBaseline): they are the DAW project's, so this instance must
+     * not push them to the shared store, and the cleanest way to say that is to
+     * record them as already-published.
      */
     mutable nlohmann::json mAppSettingsBaseline = nlohmann::json::object();
+
+    /// True while DeserializeState() is restoring host state, during which
+    /// SaveAppSettings() is a no-op. Set only by its scope guard.
+    bool mRestoringHostState = false;
 
     /**
      * The user's NAM quality tier, owned by *this* plugin instance.
@@ -742,8 +784,6 @@ private:
     bool mUserInputCalibrationTrainingActive = false;
     double mNamInterfaceCalibrationLevelDbu = std::numeric_limits<double>::quiet_NaN();
 
-    // Parameter values (shadow of host parameters)
-    std::array<double, kParamCount> mParamValues{};
 
     // Signal path test
     struct SignalTestRuntimeState

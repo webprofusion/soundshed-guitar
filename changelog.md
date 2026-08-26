@@ -2,21 +2,64 @@
 
 ## Unreleased
 
-### DSP & Plugin Hosting
+### Effects & DSP
+* Added a new **3D Spatial** effect that places your signal as a point source anywhere around you — left/right, front/behind, above/below and near/far — with a draggable radar and elevation display in the effect panel. Includes seven motion modes (Orbit, Arc, Figure 8, Spiral, Drift, Pendulum), optional tempo sync, a Doppler mode, a Speakers listening mode for playback that isn't on headphones, and 11 factory presets. Designed for headphones; on speakers the left/right and distance cues still work.
+* Added configurable NAM processing quality under Settings → DSP Performance: oversampling (Off, 2x–32x) and anti-alias filter phase, applied to every NAM amp, NAM FX and NAM Blend node. In a DAW these belong to the individual plugin instance and are saved with the project, so two instances can run at different quality tiers.
+* Offline bounces, freezes and exports now automatically render NAM at higher quality (full model size, at least 2x oversampling) without changing the settings you play with live.
 * Fixed hosted plugins being fed stale audio when the host delivers a block smaller than the declared maximum (e.g. ASIO buffer sizes below 256). The plugin now sees exactly the frames the host provided instead of processing the previous block's tail.
 * Hosted plugins are now explicitly resumed after `prepareToPlay`, so plugins that gate processing on `isSuspended()` no longer load silently without affecting the audio.
+* Fixed clicks and stale output from hosts that deliver larger audio blocks than they declare — oversized blocks are now split in the mixer and IR Reverb.
+* IR Reverb now caches resampled impulse responses and ignores redundant quality changes, so changing settings no longer causes audio dropouts.
+* IR normalization gain is now sample-rate compensated, so IR levels stay consistent whatever rate the host runs at.
+* Graphic EQ's Profile dropdown has been replaced by the effect Presets button. The profiles are now flat band layouts listed under Factory, differing only in how many bands they have and where they sit, so choosing one no longer imposes a voicing. A newly added Graphic EQ starts flat, and your own curves are saved alongside them as effect presets.
+* Graphic EQ gained a Reset button that returns every band to 0 dB without changing the selected profile.
+* The tuner now runs on a background thread, taking its work off the audio thread.
+
 ### Presets & Workflow
 * Effects now have a Presets button in their header, opening a small flyout with a single list of factory presets followed by your own saved settings. Save the current settings of any effect under a name and load them onto any other preset.
 * Added back/forward buttons beside the preset selector to step through recently loaded presets (up to 10), for quick A/B comparison between tones.
+* Preset switching is now genuinely gapless: the outgoing preset crossfades into the incoming one over ~21 ms instead of being cut dead, and switching cost dropped from ~32 ms to ~11 ms through a NAM model cache and building signal graphs off the audio lock.
+* Selecting a setlist slot (from the pads, a footswitch or MIDI) now reliably swaps the active preset rather than stacking another one on top of it, and the swap is performed once by the engine instead of twice.
+* Multi-Rig mixes can now be saved and recalled as library entries of their own, with a Multi-Rig tab in the preset library (requires the Multi-Rig Mixer power feature).
+* Preset tags are now shared between the save and publish dialogs, and `bass` was added to the tag list (credit: diego).
+* Scene selection is now restored correctly when reopening the plugin editor.
 
-### Reliability
-* UI storage files (setlists, automation, preset folders/favourites/ratings) are now written atomically, so a crash or power loss mid-write can no longer truncate them.
-### DSP & MIDI
+### Library & Resources
+* NAM models and IR files can be dragged from your file manager straight onto the app to import them, or dropped onto a NAM or IR Cab effect to load them into that node.
+* The resource browser now remembers a separate folder location and navigation list for each effect role, so browsing IR cabs doesn't lose your place in the NAM models.
+* Next/previous resource stepping now also walks Tone3000 search results, downloading and importing each model only when you reach it.
+* Tone3000 tone artwork is shown in the effect visualisation in place of the generic category image, and stored with the imported resource. Existing imports are backfilled as tone listings are fetched.
+* Fixed a crash when accessing files whose names contain non-ASCII characters such as an en dash.
+* Fixed loading of resources referenced by their normalized path.
+
+### Effect Layouts
+* The layout button on an effect now opens a picker where you choose between the standard controls and any custom layout, and remember that choice as a rule scoped to every use of the effect, to amps/FX matching a keyword, or to a single preset. A master *Use Effect Layouts* switch turns the whole system off without discarding your rules, and layouts can be created, edited and named from the same popover. (Requires the Effect Layout Editor power feature.)
+
+### MIDI & Automation
 * Keyboard shortcuts mapped to automation slots now work whether or not the MIDI & Automation panel is open. Previously they only fired while that panel was visible, which made them unusable in practice.
 * The spacebar is never captured by keyboard mappings and always passes through to the host, so DAW transport keeps working while the plugin window has focus.
 * Added MIDI/automation slots for direct scene selection (Scene 1–4), so a footswitch can jump straight to a scene. Works with the plugin window closed.
-* Graphic EQ's Profile dropdown has been replaced by the effect Presets button. The profiles are now flat band layouts listed under Factory, differing only in how many bands they have and where they sit, so choosing one no longer imposes a voicing. A newly added Graphic EQ starts flat, and your own curves are saved alongside them as effect presets.
-* Graphic EQ gained a Reset button that returns every band to 0 dB without changing the selected profile.
+* Existing DAW automation lanes no longer rebind to a different parameter after upgrading — the plugin's parameter layout is now append-only, so adding the new scene slots leaves earlier custom slots where they were.
+* The plugin now declares that it accepts MIDI input, so hosts offer MIDI routing to it (credit: diego).
+* MIDI channels are now consistently displayed as 1–16 (or "any") throughout the UI.
+
+### Settings & Storage
+* Settings, presets and library data are now kept in a single SQLite store, which multiple plugin instances and the standalone app can read and write at the same time without stepping on each other. Existing files are imported once on first launch and left in place untouched.
+* UI storage files (setlists, automation, preset folders/favourites/ratings) are now written atomically, so a crash or power loss mid-write can no longer truncate them.
+* Clarified which settings belong where: NAM quality and editor size/zoom now belong to a plugin instance and are saved with the DAW project, shared preferences still sync between instances, and standalone-only settings (last preset, metronome, input mode, global FX) are no longer overwritten by a plugin instance.
+
+### Performance
+* A preset or scene change now sends the UI a small state update instead of the entire app state including the resource library, which was around fifty times larger.
+* DSP performance and signal-level telemetry are suppressed while the UI is hidden, and the signal-level messages themselves are far more compact.
+
+### Platform & Reliability
+* Linux: fixed signal-chain node reordering and drag-and-drop from the FX Library panel, and improved leftward reordering (#27).
+* Linux: the standalone app now explains what to install when the WebKit WebView is missing instead of failing to start (#21).
+* macOS: the app is no longer sandboxed, so imported file resources are still available after a restart.
+* Fixed the effect dropdown being positioned incorrectly at non-default UI zoom levels (#33).
+* Fixed text encoding for the plugin UI so non-ASCII characters display correctly (#13).
+* Hosted plugin loading now resolves bundle paths consistently across VST3, Audio Unit, LV2 and CLAP on every platform, so picking a file from inside a plugin bundle loads the plugin you intended.
+* Improved signal chain drag/drop compatibility checks, and fixed a node reordering case that could break the graph.
 
 ## 1.5.0 (July 25, 2026)
 

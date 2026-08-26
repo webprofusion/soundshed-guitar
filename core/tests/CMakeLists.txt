@@ -8,6 +8,7 @@ set(TEST_SOURCES
     DSPPerformanceTests.cpp
     EffectProcessorTests.cpp
     GaplessSwitchingTests.cpp
+    HostedPluginStateWorkflowTests.cpp
     IRConvolutionTests.cpp
     IRReverbQualityTests.cpp
     EarPracticePlayerCrossfadeTests.cpp
@@ -16,6 +17,7 @@ set(TEST_SOURCES
     NamModelCacheTests.cpp
     NamQualityPolicyTests.cpp
     NAMPerformanceBenchmark.cpp
+    PluginPathUtilsTests.cpp
     PresetDSPLoadingTests.cpp
     PresetManagementWorkflowTests.cpp
     PresetStorageTests.cpp

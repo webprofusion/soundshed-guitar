@@ -226,6 +226,9 @@
   border: 1px solid var(--border-light);
   border-radius: 6px;
   cursor: grab;
+  /* Drags leave the panel sideways towards the chain, so keep vertical touch
+     scrolling of the library list working. */
+  touch-action: pan-y;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--category-color, var(--color-accent)) 14%, transparent);
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
   flex: 0 0 calc(33.333% - 6px);
@@ -246,6 +249,15 @@
 .fx-item.dragging {
   opacity: 0.6;
   transform: scale(0.95);
+}
+
+.fx-item-drag-preview {
+  position: fixed !important;
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%) scale(1.04);
+  z-index: 1000;
 }
 
 .fx-item-icon {
