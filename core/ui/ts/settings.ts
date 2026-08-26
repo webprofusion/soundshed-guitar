@@ -35,7 +35,6 @@ import {
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
-const DIAGNOSTICS_SETTING = "diagnostics.signalLevelsEnabled";
 const USER_INPUT_CALIBRATION_PROFILES_SETTING = "audio.userInputCalibration.profiles";
 const USER_INPUT_CALIBRATION_ACTIVE_PROFILE_SETTING = "audio.userInputCalibration.activeProfileId";
 const USER_INPUT_CALIBRATION_TARGET_PEAK_DBFS = -12.0;
@@ -43,7 +42,6 @@ const USER_INPUT_CALIBRATION_NONE_VALUE = "__none__";
 const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
-const DSP_MULTI_THREADED_SETTING = "audio.processing.multiThreaded";
 const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
 const NAM_OVERSAMPLING_SETTING = "audio.nam.oversampling";
 const NAM_ANTI_ALIAS_PHASE_SETTING = "audio.nam.antiAliasPhase";
@@ -131,7 +129,6 @@ const featureGroupsContainer = document.getElementById("settings-feature-groups"
 const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
 const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") as HTMLInputElement | null;
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
-const dspMultiThreadedToggle = document.getElementById("dsp-multi-threaded-toggle") as HTMLInputElement | null;
 const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
 const namOversamplingSelect = document.getElementById("nam-oversampling-select") as HTMLSelectElement | null;
 const namAntiAliasPhaseSelect = document.getElementById("nam-anti-alias-phase-select") as HTMLSelectElement | null;
@@ -212,13 +209,6 @@ export function initSettingsPanel(): void {
 
   refreshSettingsView();
   initTone3000Browser();
-}
-
-function forceDiagnosticsEnabled(): void {
-  if (uiState.appSettings[DIAGNOSTICS_SETTING] !== true) {
-    uiState.appSettings[DIAGNOSTICS_SETTING] = true;
-    setAppSetting(DIAGNOSTICS_SETTING, true);
-  }
 }
 
 function updateSettingsViewState(update: { equipmentTab?: string; libraryTab?: string; advancedTab?: string }): void {
@@ -1072,14 +1062,6 @@ function initDspLevelTargetControls(): void {
     });
   }
 
-  if (dspMultiThreadedToggle && dspMultiThreadedToggle.dataset.bound !== "true") {
-    dspMultiThreadedToggle.dataset.bound = "true";
-    dspMultiThreadedToggle.addEventListener("change", () => {
-      const enabled = Boolean(dspMultiThreadedToggle.checked);
-      uiState.appSettings[DSP_MULTI_THREADED_SETTING] = enabled;
-      setAppSetting(DSP_MULTI_THREADED_SETTING, enabled);
-    });
-  }
 }
 
 function updateResourceCleanupVisibility(enabled: boolean): void {
@@ -1095,7 +1077,6 @@ function updateResourceCleanupVisibility(enabled: boolean): void {
 }
 
 export function initDiagnosticsToggle(): void {
-  forceDiagnosticsEnabled();
 
   const applyBtn = document.getElementById("apply-designed-peak-btn") as HTMLButtonElement | null;
   if (applyBtn && applyBtn.dataset.bound !== "true") {
@@ -1147,7 +1128,6 @@ export function refreshSettingsView(): void {
     apiKeyInput.value = "";
     apiKeyInput.placeholder = stored ? "API key stored" : "Enter your Tone3000 API key";
   }
-  forceDiagnosticsEnabled();
   refreshUserInputCalibrationView();
   if (themeSelect) {
     themeSelect.value = themeSwitcher.getCurrentTheme();
@@ -1213,10 +1193,6 @@ export function refreshSettingsView(): void {
   if (namAutoInputCalibrationToggle) {
     const stored = getSettingValue(NAM_AUTO_INPUT_CALIBRATION_SETTING);
     namAutoInputCalibrationToggle.checked = stored === null ? true : Boolean(stored);
-  }
-  if (dspMultiThreadedToggle) {
-    const multiThreaded = getSettingValue(DSP_MULTI_THREADED_SETTING);
-    dspMultiThreadedToggle.checked = multiThreaded === null ? true : Boolean(multiThreaded);
   }
   if (updateCheckToggle) {
     const updateCheckEnabled = getSettingValue(UPDATE_CHECK_ENABLED_SETTING);

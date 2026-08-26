@@ -26,10 +26,14 @@
  *
  * Example — drag a knob (real Input events, not JS-dispatched) then read its value:
  *   node cdp-tool.mjs "$WS" --drag 511,831,60 --eval "document.querySelector('.node-param-knob').dataset.value" --screenshot after.png
+ *
+ * Example — drag between two points (signal-chain node reordering, and anything
+ * else pointer-driven; --drag only moves vertically):
+ *   node cdp-tool.mjs "$WS" --drag-to 420,300,700,300 --screenshot after.png
  */
 
 function parseArgs(argv) {
-  const out = { wsUrl: argv[0], evalExpr: null, screenshotPath: null, drag: null };
+  const out = { wsUrl: argv[0], evalExpr: null, screenshotPath: null, drag: null, dragTo: null };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "--eval") out.evalExpr = argv[++i];
     else if (argv[i] === "--screenshot") out.screenshotPath = argv[++i];
@@ -37,13 +41,17 @@ function parseArgs(argv) {
       const [x, y, dy] = argv[++i].split(",").map(Number);
       out.drag = { x, y, dy };
     }
+    else if (argv[i] === "--drag-to") {
+      const [x1, y1, x2, y2] = argv[++i].split(",").map(Number);
+      out.dragTo = { x1, y1, x2, y2 };
+    }
   }
   return out;
 }
 
-const { wsUrl, evalExpr, screenshotPath, drag } = parseArgs(process.argv.slice(2));
+const { wsUrl, evalExpr, screenshotPath, drag, dragTo } = parseArgs(process.argv.slice(2));
 if (!wsUrl) {
-  console.error("Usage: node cdp-tool.mjs <wsUrl> [--drag x,y,dyPixels] [--eval \"<js>\"] [--screenshot out.png]");
+  console.error("Usage: node cdp-tool.mjs <wsUrl> [--drag x,y,dyPixels] [--drag-to x1,y1,x2,y2] [--eval \"<js>\"] [--screenshot out.png]");
   process.exit(1);
 }
 
@@ -85,6 +93,27 @@ async function dispatchDrag({ x, y, dy }) {
   await send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y: y - dy, button: "left", clickCount: 1, buttons: 0 });
 }
 
+/**
+ * Press, move in steps, release. Pointer-driven UI (signal-chain reordering)
+ * needs the intermediate moves: a press followed by a single jump to the far
+ * end never crosses the drag threshold in a way the page can track.
+ */
+async function dispatchDragTo({ x1, y1, x2, y2 }) {
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x1, y: y1, buttons: 0 });
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: x1, y: y1, button: "left", clickCount: 1, buttons: 1 });
+  const steps = 16;
+  for (let i = 1; i <= steps; i++) {
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: x1 + ((x2 - x1) * i) / steps,
+      y: y1 + ((y2 - y1) * i) / steps,
+      button: "left",
+      buttons: 1,
+    });
+  }
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x2, y: y2, button: "left", clickCount: 1, buttons: 0 });
+}
+
 ws.addEventListener("open", async () => {
   try {
     await send("Page.enable");
@@ -92,6 +121,10 @@ ws.addEventListener("open", async () => {
 
     if (drag) {
       await dispatchDrag(drag);
+    }
+
+    if (dragTo) {
+      await dispatchDragTo(dragTo);
     }
 
     if (evalExpr) {

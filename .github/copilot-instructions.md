@@ -56,6 +56,7 @@
 - UI state is centralized in core/ui/ts/state.ts; keep one source of truth.
 - JSON serialization uses nlohmann::json; maintain stable field names and defaults.
 - Keep DSP real-time safe: avoid allocations and locks in audio thread; prefer preallocation and lock-free patterns.
+- In-app dragging is pointer-driven via core/ui/ts/pointerDrag.ts — do not add `draggable="true"` for it. WebKitGTK (the Linux WebView) never delivers the HTML5 `drop` event to our targets. Native drag-and-drop is only for drags that start outside the WebView, i.e. files from the OS.
 
 ## Key Files
 - Controller + message routing: core/src/PluginController.cpp, core/src/MessageDispatcher.cpp

@@ -694,6 +694,60 @@ void PluginEditor::resized()
 #endif
 }
 
+void PluginEditor::setScaleFactor (float newScale)
+{
+    hostSuppliedScaleFactor = true;
+    juce::AudioProcessorEditor::setScaleFactor (newScale);
+    applyHostScaleWorkaround();
+}
+
+void PluginEditor::parentHierarchyChanged()
+{
+    // The peer is created when the wrapper calls addToDesktop(), which happens after the host
+    // has already pushed its scale factor at us, so re-apply the workaround against the new peer.
+    applyHostScaleWorkaround();
+}
+
+// Works around double DPI scaling under CLAP on Windows.
+//
+// CLAP's win32 window API is defined in *physical* pixels, and the clap-juce-extensions wrapper
+// is written on that basis: it applies the host's DPI scale as a JUCE editor transform via
+// setScaleFactor(), then reports the resulting JUCE bounds straight back to the host from
+// guiGetSize()/guiRequestResize(). That is only correct while JUCE logical units and physical
+// pixels are the same thing.
+//
+// They are not. The wrapper attaches us with addToDesktop(0, hostHwnd), and a per-monitor
+// DPI-aware HWNDComponentPeer inherits its platform scale from the parent window, so the peer is
+// already scaling by the monitor DPI. The host scale then lands on top as a transform and the UI
+// renders at scale squared - 2.25x on a 150% display - while the host sizes its window for only
+// one factor, so the UI is both oversized and clipped.
+//
+// JUCE's own VST3 wrapper sidesteps this by routing the host scale through
+// ComponentPeer::setCustomPlatformScaleFactor(), which replaces the platform scale instead of
+// compounding with it. We can't reach that path from CLAP, so do the equivalent from this side:
+// pin the peer to 1.0 so JUCE units are physical pixels again, which is the contract the wrapper
+// assumes, and let the host-supplied transform be the only scale in play.
+//
+// Only Windows is affected. On macOS the wrapper never calls setScaleFactor(), and X11 peers
+// report a platform scale of 1.0 already, so the host scale is the only one applied there too.
+void PluginEditor::applyHostScaleWorkaround()
+{
+#if JUCE_WINDOWS && JUCE_WIN_PER_MONITOR_DPI_AWARE
+    if (! hostSuppliedScaleFactor)
+        return;
+
+    auto* peer = getPeer();
+    if (peer == nullptr || peer->getCustomPlatformScaleFactor().has_value())
+        return;
+
+    writeStartupLog ("[PluginEditor] pinning peer platform scale to 1.0 (was "
+                     + juce::String (peer->getPlatformScaleFactor(), 3)
+                     + "); host scale factor is applied as an editor transform");
+
+    peer->setCustomPlatformScaleFactor (1.0);
+#endif
+}
+
 void PluginEditor::handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery)
 {
     // Route incoming deep link to UI via postMessage

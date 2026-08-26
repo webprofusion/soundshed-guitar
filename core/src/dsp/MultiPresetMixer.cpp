@@ -351,6 +351,37 @@ namespace guitarfx
     }
   }
 
+  bool MultiPresetMixer::RenameActivePreset(const std::string &oldId, const std::string &newId, const std::string &name)
+  {
+    if (oldId.empty() || newId.empty())
+      return false;
+
+    if (oldId == newId)
+    {
+      if (auto *inst = FindInstance(newId))
+      {
+        inst->cfg.name = name;
+        return true;
+      }
+      return false;
+    }
+
+    // Refuse rather than produce two slots answering to the same id: FindInstance returns
+    // the first match, so a duplicate would silently route half the updates to the wrong
+    // chain. Retiring instances are excluded from both lookups, so an outgoing instance
+    // still carrying oldId does not block the rename.
+    if (FindInstance(newId) != nullptr)
+      return false;
+
+    auto *inst = FindInstance(oldId);
+    if (inst == nullptr)
+      return false;
+
+    inst->cfg.id = newId;
+    inst->cfg.name = name;
+    return true;
+  }
+
   void MultiPresetMixer::PreparePresetSwap(const Preset &preset, const std::string &id, const std::string &name)
   {
     // Build the new PresetInstance off the DSP lock. This includes effect processor

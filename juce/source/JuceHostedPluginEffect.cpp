@@ -2,6 +2,7 @@
 
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
+#include "resources/PluginPathUtils.h"
 #include "util/FileSystem.h"
 
 #include <algorithm>
@@ -13,6 +14,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 namespace guitarfx
 {
@@ -57,6 +59,36 @@ namespace guitarfx
         };
 
         std::string SummarizePluginSnapshot (juce::AudioPluginInstance& plugin);
+
+        /**
+         * Holds off auto-capture for the duration of a scope.
+         *
+         * Required around every region that holds mPluginProcessLock while calling into the
+         * hosted plugin. Plugins notify the host from inside prepareToPlay, reset and editor
+         * lifecycle, and a notification reaches CapturePluginStateBase64, which takes that
+         * same lock — juce::SpinLock is not recursive, so the re-entry would spin forever.
+         * Captures raised during those regions are also worthless: the state is mid-change,
+         * and the operation that owns the region restores or re-reads it on the way out.
+         */
+        class AutoCaptureSuppressionScope
+        {
+        public:
+            explicit AutoCaptureSuppressionScope (std::atomic<int>& depth) : mDepth (depth)
+            {
+                mDepth.fetch_add (1, std::memory_order_acq_rel);
+            }
+
+            ~AutoCaptureSuppressionScope()
+            {
+                mDepth.fetch_sub (1, std::memory_order_acq_rel);
+            }
+
+            AutoCaptureSuppressionScope (const AutoCaptureSuppressionScope&) = delete;
+            AutoCaptureSuppressionScope& operator= (const AutoCaptureSuppressionScope&) = delete;
+
+        private:
+            std::atomic<int>& mDepth;
+        };
 
         double Clamp (double value, double minimum, double maximum)
         {
@@ -197,68 +229,68 @@ namespace guitarfx
             return juce::String (hint);
         }
 
-        // LV2 plugins are identified by their bundle directory (a folder ending in
-        // ".lv2"). On Windows the file dialog can only select files, so users pick a
-        // file inside the bundle (the .dll or manifest.ttl); map such paths back to
-        // the bundle directory, which is what JUCE's LV2 host expects.
-        std::filesystem::path ResolveLv2BundleDirectory (const std::filesystem::path& path)
-        {
-            for (auto current = path;;)
-            {
-                const std::string name = ToLowerAscii (current.filename().string());
-                if (name.size() > 4 && name.compare (name.size() - 4, 4, ".lv2") == 0)
-                    return current;
-
-                auto parent = current.parent_path();
-                if (parent.empty() || parent == current)
-                    break;
-                current = std::move (parent);
-            }
-            return path;
-        }
-
         std::string GetSupportedPluginFormatsDescription()
         {
+            using pluginpath::PluginFormat;
+            using pluginpath::PluginFormatDisplayName;
+
+            std::string description { PluginFormatDisplayName (PluginFormat::VST3) };
 #if JUCE_MAC
-            return "VST3 (.vst3), Audio Unit (.component) and LV2 (.lv2)";
-#else
-            return "VST3 (.vst3) and LV2 (.lv2)";
+            description += ", ";
+            description += PluginFormatDisplayName (PluginFormat::AudioUnit);
 #endif
+            description += " and ";
+            description += PluginFormatDisplayName (PluginFormat::LV2);
+            return description;
         }
 
-        // Returns a friendly, user-facing reason why this path can never load,
-        // or an empty string when the path looks like a supported plugin type.
+        // The single owner of "why can't this load?" wording. The browse dialog
+        // deliberately does not second-guess a selection — it hands whatever the user
+        // picked to the loader, and every rejection is explained from here.
+        //
+        // Returns an empty string when the path looks like a supported plugin type.
         std::string DescribeUnsupportedPluginFile (const std::filesystem::path& path)
         {
-            const std::string fullPath = ToLowerAscii (path.string());
-            const std::string extension = ToLowerAscii (path.extension().string());
-
-            const auto pathContains = [&fullPath] (const char* token) {
-                return fullPath.find (token) != std::string::npos;
-            };
-
-            if (pathContains (".vst3") || pathContains (".lv2"))
-                return {};
-
-            if (pathContains (".component") || pathContains (".appex"))
+            // A plugin is a file or a bundle directory. A plain folder is neither.
+            std::error_code ec;
+            if (std::filesystem::is_directory (path, ec) && !ec
+                && !pluginpath::HasPluginBundleSuffix (path))
             {
-#if JUCE_MAC
-                return {};
-#else
-                return "Audio Unit plugins are only supported on macOS. Please select the VST3 version of this plugin instead.";
-#endif
+                return "'" + ToDisplayPath (path) + "' is a folder, not a plugin. Select the plugin"
+                       " itself, or a file inside its bundle. Supported formats: "
+                       + GetSupportedPluginFormatsDescription() + ".";
             }
 
-            if (extension == ".dll" || extension == ".vst")
-                return "This looks like a VST2 plugin, which is not supported. Please install and select the VST3 version of this plugin instead.";
+            switch (pluginpath::PluginFormatFromPath (path))
+            {
+                case pluginpath::PluginFormat::VST3:
+                case pluginpath::PluginFormat::LV2:
+                    return {};
 
-            if (extension == ".clap")
-                return "CLAP plugins are not supported. Please select the VST3 version of this plugin instead.";
+                case pluginpath::PluginFormat::AudioUnit:
+#if JUCE_MAC
+                    return {};
+#else
+                    return "Audio Unit plugins are only supported on macOS. Please select the VST3 version of this plugin instead.";
+#endif
 
-            if (extension == ".aaxplugin")
-                return "AAX (Pro Tools) plugins are not supported. Please select the VST3 version of this plugin instead.";
+                case pluginpath::PluginFormat::VST2:
+                    return "This looks like a VST2 plugin, which is not supported. Please install and select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::CLAP:
+                    return "CLAP plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::AAX:
+                    return "AAX (Pro Tools) plugins are not supported. Please select the VST3 version of this plugin instead.";
+
+                case pluginpath::PluginFormat::Unknown:
+                    break;
+            }
+
+            const std::string extension = ToLowerAscii (path.extension().string());
 
 #if JUCE_LINUX
+            // A bare .so outside any bundle can still be an LV2 binary; let the scanner decide.
             if (extension == ".so")
                 return {};
 #endif
@@ -708,6 +740,7 @@ namespace guitarfx
         mMidiBuffer.clear();
         if (mPlugin)
         {
+            const AutoCaptureSuppressionScope suppressCapture (mAutoCaptureSuppressionDepth);
             const juce::SpinLock::ScopedTryLockType lock (mPluginProcessLock);
             if (!lock.isLocked())
                 return;
@@ -901,9 +934,12 @@ namespace guitarfx
 
         EnsureFormatsAdded();
 
-        // Heal stored paths that point inside an LV2 bundle (e.g. the inner .dll
-        // selected through the Windows files-only dialog).
-        const std::filesystem::path resolvedPath = ResolveLv2BundleDirectory (path);
+        // Heal stored paths that point inside a plugin bundle (e.g. the inner .so
+        // of a Linux VST3, or the .dll / manifest.ttl of an LV2 bundle picked
+        // through the Windows files-only dialog). Applied on every load, not just
+        // on fresh picks, so paths arriving from presets, synced libraries or a
+        // hand-edited entry are normalized identically.
+        const std::filesystem::path resolvedPath = pluginpath::ResolvePluginBundlePath (path);
 
         AppendHostedPluginTrace ("LoadPluginFromPath begin path=" + ToDisplayPath (resolvedPath)
                                  + ", pendingStateLength=" + std::to_string (mPluginStateBase64.size())
@@ -916,6 +952,17 @@ namespace guitarfx
             SetError ("Plugin file was not found: " + ToDisplayPath (resolvedPath)
                       + ". The plugin may have been moved or uninstalled.",
                       "file-not-found");
+            ReleaseHostedPlugin();
+            ClearLoadedPluginMetadata();
+            return false;
+        }
+
+        // A plain folder cannot be scanned at all, so reject it up front rather than
+        // letting the scanner fail with a much vaguer message. Every other kind of
+        // bad selection reaches the scanner first and is reported below.
+        if (pluginFile.isDirectory() && !pluginpath::HasPluginBundleSuffix (resolvedPath))
+        {
+            SetError (DescribeUnsupportedPluginFile (resolvedPath), "not-a-plugin-target");
             ReleaseHostedPlugin();
             ClearLoadedPluginMetadata();
             return false;
@@ -1191,7 +1238,11 @@ namespace guitarfx
                                  + ", pendingStateLength=" + std::to_string (mPluginStateBase64.size()));
         {
             // JUCE's LV2 host destroys and recreates the plugin view/instance
-            // internals inside prepareToPlay; keep the audio thread out.
+            // internals inside prepareToPlay; keep the audio thread out. Plugins also
+            // notify the host from inside prepareToPlay, so capture has to stay out too —
+            // see AutoCaptureSuppressionScope. ApplyPendingPluginState() below restores the
+            // intended state anyway, so nothing is lost by ignoring those notifications.
+            const AutoCaptureSuppressionScope suppressCapture (mAutoCaptureSuppressionDepth);
             const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             mPlugin->setRateAndBufferSizeDetails (mSampleRate, mMaxBlockSize);
             mPlugin->prepareToPlay (mSampleRate, mMaxBlockSize);
@@ -1353,6 +1404,11 @@ namespace guitarfx
             if (!mPlugin)
                 return mPluginStateBase64;
 
+            // getStateInformation() must not race processBlock(). Every other message-thread
+            // path that reaches into the hosted plugin (state restore, prepare, editor
+            // lifecycle) takes this lock; capture was the one that did not, leaving plugins
+            // free to serialise internals the audio thread was concurrently mutating.
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             const auto snapshot = CaptureHostedPluginStateSnapshot (*mPlugin);
             return EncodeHostedPluginStateBase64 (snapshot);
         };
@@ -1367,7 +1423,11 @@ namespace guitarfx
             return *captured;
         }
 
-        return {};
+        // The message thread could not run the capture (shutting down, or the caller is
+        // holding something it needs). Returning "" here would let an empty value travel
+        // out as if the plugin genuinely had no state; hand back the last known-good
+        // value so the caller persists that instead.
+        return mPluginStateBase64;
     }
 
     void JuceHostedPluginEffect::AttachHostedPluginListeners()
@@ -1416,6 +1476,8 @@ namespace guitarfx
         cancelPendingUpdate();
         mForceAutoCaptureNotification.store (false, std::memory_order_release);
         mAutoCaptureSuppressionDepth.store (0, std::memory_order_release);
+        // A plugin torn down mid-drag never delivers its gesture-end notification.
+        mActiveGestureDepth.store (0, std::memory_order_release);
 
         DetachHostedPluginParameterListeners();
 
@@ -1431,6 +1493,19 @@ namespace guitarfx
             mPlugin.reset();
         }
     }
+
+#if defined(GUITARFX_ENABLE_PLUGIN_HOST_TEST_API)
+    void JuceHostedPluginEffect::InstallHostedPluginForTesting (std::unique_ptr<juce::AudioPluginInstance> plugin)
+    {
+        ClosePluginEditor();
+        ReleaseHostedPlugin();
+        {
+            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
+            mPlugin = std::move (plugin);
+        }
+        AttachHostedPluginListeners();
+    }
+#endif
 
     void JuceHostedPluginEffect::ClearLoadedPluginMetadata()
     {
@@ -1467,6 +1542,18 @@ namespace guitarfx
 
     void JuceHostedPluginEffect::PublishCapturedPluginState (const std::string& capturedState, bool forceNotify)
     {
+        // An empty capture is never authoritative. It means the encode found nothing worth
+        // storing (empty chunk, single program, no automatable parameters) or the capture
+        // could not run at all — not that the user cleared the plugin. Publishing it would
+        // propagate an empty value that the controller turns into an erase of
+        // node.config["pluginStateBase64"], destroying state that is still perfectly valid.
+        if (capturedState.empty() && !mPluginStateBase64.empty())
+        {
+            AppendHostedPluginTrace ("PublishCapturedPluginState ignoring empty capture, retaining length="
+                                     + std::to_string (mPluginStateBase64.size()));
+            return;
+        }
+
         const bool changed = capturedState != mPluginStateBase64;
         if (!changed && !forceNotify)
             return;
@@ -1511,9 +1598,16 @@ namespace guitarfx
                     return;
                 }
 
+                // Taken before the process lock: the baseline capture reaches into the
+                // plugin under that same lock, and it is not recursive.
+                EnsurePluginStateBaseline();
+
                 // Plugin editor/view creation can touch state shared with the audio
                 // thread (LV2 view creation in particular); suspend processing
-                // (passthrough) for the duration.
+                // (passthrough) for the duration. Auto-capture is suppressed alongside it:
+                // a plugin that notifies while its editor is being built would otherwise
+                // re-enter the capture path, which takes this same non-recursive lock.
+                const AutoCaptureSuppressionScope suppressCapture (mAutoCaptureSuppressionDepth);
                 const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
 
                 auto* editor = mPlugin->hasEditor()
@@ -1528,7 +1622,6 @@ namespace guitarfx
                 const auto title = mPluginDescription.name.isNotEmpty()
                                        ? mPluginDescription.name
                                        : mPlugin->getName();
-                EnsurePluginStateBaseline();
                 mEditorWindow = std::make_unique<HostedPluginEditorWindow> (title, editor, [this]() {
                     if (sActiveHostedPluginEditorOwner == this)
                         sActiveHostedPluginEditorOwner = nullptr;
@@ -1566,8 +1659,13 @@ namespace guitarfx
             return true;
         }
 
+        // Editor teardown routinely makes plugins notify the host; capture must stay out
+        // while the process lock is held — see AutoCaptureSuppressionScope. The editor's
+        // own close callback captures once the window is gone, which is the point at which
+        // the state is settled anyway.
         if (juce::MessageManager::getInstance()->isThisTheMessageThread())
         {
+            const AutoCaptureSuppressionScope suppressCapture (mAutoCaptureSuppressionDepth);
             const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
             mEditorWindow.reset();
             if (sActiveHostedPluginEditorOwner == this)
@@ -1576,6 +1674,7 @@ namespace guitarfx
         }
 
         if (auto closed = juce::MessageManager::callSync ([this]() {
+                const AutoCaptureSuppressionScope suppressCapture (mAutoCaptureSuppressionDepth);
                 const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
                 mEditorWindow.reset();
                 if (sActiveHostedPluginEditorOwner == this)
@@ -1603,13 +1702,31 @@ namespace guitarfx
         if (!mPlugin || mAutoCaptureSuppressionDepth.load (std::memory_order_acquire) > 0)
             return;
 
+        if (mActiveGestureDepth.load (std::memory_order_acquire) > 0)
+            return;
+
         ScheduleAutoCapture (false);
     }
 
     void JuceHostedPluginEffect::parameterGestureChanged (int,
         bool gestureIsStarting)
     {
-        if (gestureIsStarting || !mPlugin || mAutoCaptureSuppressionDepth.load (std::memory_order_acquire) > 0)
+        if (gestureIsStarting)
+        {
+            mActiveGestureDepth.fetch_add (1, std::memory_order_acq_rel);
+            return;
+        }
+
+        // Never let the depth go negative: a plugin that ends a gesture it never began
+        // would otherwise suppress every subsequent capture for the life of the instance.
+        int depth = mActiveGestureDepth.load (std::memory_order_acquire);
+        while (depth > 0
+               && !mActiveGestureDepth.compare_exchange_weak (depth, depth - 1,
+                      std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+        }
+
+        if (!mPlugin || mAutoCaptureSuppressionDepth.load (std::memory_order_acquire) > 0)
             return;
 
         ScheduleAutoCapture (false);
@@ -1620,6 +1737,9 @@ namespace guitarfx
         float)
     {
         if (processor != mPlugin.get() || mAutoCaptureSuppressionDepth.load (std::memory_order_acquire) > 0)
+            return;
+
+        if (mActiveGestureDepth.load (std::memory_order_acquire) > 0)
             return;
 
         ScheduleAutoCapture (false);
