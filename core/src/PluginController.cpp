@@ -3862,6 +3862,54 @@ void PluginController::EndPresetArchiveSession(bool notifyUi)
 // State serialization
 // ════════════════════════════════════════════════════════════════════
 
+namespace
+{
+    // Sizes an editor window can plausibly have been left at. Anything outside this is a
+    // layout artefact rather than a size a user dragged to.
+    bool IsPlausibleEditorWindowSize(int width, int height)
+    {
+        constexpr int kMinRememberedEditorDimension = 200;
+        constexpr int kMaxRememberedEditorDimension = 16384;
+
+        return width >= kMinRememberedEditorDimension && height >= kMinRememberedEditorDimension
+            && width <= kMaxRememberedEditorDimension && height <= kMaxRememberedEditorDimension;
+    }
+}
+
+void PluginController::SetEditorWindowSize(int width, int height)
+{
+    // Staged, not committed. A range check alone is not enough to tell a real resize from
+    // a layout artefact: hosts resize the editor on the way to closing its window, and a
+    // degenerate rect comes back through the editor's constrainer as its *minimum* size,
+    // which looks entirely plausible but is not a size anyone chose. Committing that is
+    // how a remembered size turns into a tiny window on the next open.
+    //
+    // So a reported size only becomes the remembered one once it is still in effect an
+    // idle tick later (see OnIdle). The editor drives the idle callback and stops driving
+    // it when it is destroyed, so a size that exists only while the window is being torn
+    // down is never committed.
+    if (!IsPlausibleEditorWindowSize(width, height))
+        return;
+
+    if (mEditorWindowSize.width == width && mEditorWindowSize.height == height)
+    {
+        mPendingEditorWindowSize.reset();
+        return;
+    }
+
+    // Repeated reports of the same pending size must not keep restarting the settle, or a
+    // host that re-reports its size every frame would never let anything commit.
+    if (mPendingEditorWindowSize.has_value()
+        && mPendingEditorWindowSize->width == width
+        && mPendingEditorWindowSize->height == height)
+    {
+        return;
+    }
+
+    mPendingEditorWindowSize = EditorWindowSize{width, height};
+    mEditorWindowSizeChangedSinceIdle = true;
+}
+
 std::string PluginController::SerializeState() const
 {
     nlohmann::json state = nlohmann::json::object();
@@ -3878,6 +3926,17 @@ std::string PluginController::SerializeState() const
     state["uiSettings"] = mUiSettings;
     state["uiViewState"] = mUiViewState;
     state["globalSignalChain"] = mPresetMixer.GetGlobalChainConfig();
+
+    // The editor window size the user last left this instance at. Only emitted once the
+    // editor has actually reported a size, so a project saved with the editor never
+    // opened does not pin a default over whatever the wrapper would pick.
+    if (mEditorWindowSize.IsValid())
+    {
+        state["editorWindow"] = {
+            {"width", mEditorWindowSize.width},
+            {"height", mEditorWindowSize.height}
+        };
+    }
 
     // NAM quality is per instance, so it rides in host state rather than app.json.
     // Emitted as its own block (not just inside appSettings) so it stays legible and
@@ -4038,6 +4097,27 @@ void PluginController::DeserializeState(const std::string& json)
 
         if (state.contains("uiViewState") && state["uiViewState"].is_object())
             mUiViewState = state["uiViewState"];
+
+        if (state.contains("editorWindow") && state["editorWindow"].is_object())
+        {
+            const auto& editorWindow = state["editorWindow"];
+            const auto readDimension = [&editorWindow](const char* field) {
+                const auto it = editorWindow.find(field);
+                return (it != editorWindow.end() && it->is_number()) ? it->get<int>() : 0;
+            };
+
+            // Committed straight away rather than staged: this is the project's own value,
+            // not something an editor is currently reporting, and the editor has to be
+            // able to read it back the moment it is created. Same sanity check as a live
+            // resize, so a hand-edited or corrupt project cannot pin an absurd size.
+            const auto width = readDimension("width");
+            const auto height = readDimension("height");
+            if (IsPlausibleEditorWindowSize(width, height))
+            {
+                mEditorWindowSize = EditorWindowSize{width, height};
+                mPendingEditorWindowSize.reset();
+            }
+        }
 
         if (state.contains("globalSignalChain") && state["globalSignalChain"].is_object())
         {
@@ -4202,6 +4282,27 @@ void PluginController::HandleUIMessage(const std::string& jsonMessage)
 void PluginController::OnIdle()
 {
     PollSharedSyncState();
+
+    // Has the editor's reported size settled? Commit it as the remembered size and tell
+    // the host its saved state is stale so the project keeps it. Deferred by one idle tick
+    // so a drag costs one notification rather than one per frame — and, more importantly,
+    // so a size that only ever existed while the window was being torn down is dropped
+    // rather than remembered (see SetEditorWindowSize).
+    if (mPendingEditorWindowSize.has_value())
+    {
+        if (mEditorWindowSizeChangedSinceIdle)
+        {
+            mEditorWindowSizeChangedSinceIdle = false;
+        }
+        else
+        {
+            mEditorWindowSize = *mPendingEditorWindowSize;
+            mPendingEditorWindowSize.reset();
+
+            if (!mHost.IsStandalone())
+                mHost.NotifyStateChanged();
+        }
+    }
 
     // MIDI learn capture polling
     if (mAutomationSlots.IsMidiLearnArmed())

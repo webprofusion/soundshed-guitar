@@ -226,6 +226,14 @@ Rules that keep this honest:
   project's values back.
 - A shared-sync reload must re-assert instance-owned values, or another instance's change
   drags this one's tier and editor layout with it.
+- The editor **window size** rides in host state too, but it is not a setting: the editor
+  reports its bounds to `SetEditorWindowSize()` and they are written as
+  `state["editorWindow"]`, so a DAW reopens each instance at the size the user left it.
+  `uiSettings["bounds"]` is *not* that value — the web UI captures it from
+  `window.outerWidth`/`screenX`, which are the WebView's CSS pixels and stop agreeing with
+  the wrapper's logical units under DPI scaling (and a WebView cannot resize the native
+  window it sits in). Window *position* is the host's: no plugin wrapper API lets us ask
+  for a placement. Standalone ignores all of this and keeps its own `window-state.json`.
 - Global FX (gate, EQ, doubler, transpose, trims) are **not** settings — they live in
   `GlobalSignalChainConfig` on the mixer, per instance, and are never read from a preset.
 - Hosted plugin state is the one part of host state standalone *does* restore. Everything

@@ -138,6 +138,12 @@ public:
         return mStandalone;
     }
 
+    void NotifyStateChanged() override
+    {
+        ++stateChangedCount;
+    }
+
+    int stateChangedCount = 0;
     std::vector<std::string> sentMessages;
 
 private:
@@ -889,6 +895,115 @@ bool TestPluginInstanceDoesNotOwnLastPresetId()
     if (hostState.value("presetId", std::string{}) != "p-daw")
     {
         std::cerr << "Plugin instance did not carry its own preset choice in host state\n";
+        return false;
+    }
+
+    return true;
+}
+
+// The DAW hands a plugin instance its editor size back when the project - or just the
+// editor window - is reopened, so a resize has to survive a host state round trip. The
+// sizes a host reports while it tears the window down must not, or the next open comes
+// back at the editor's minimum size instead of the one the user chose.
+bool TestPluginStateRemembersEditorWindowSize()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "editor-window-size";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox);
+    guitarfx::PluginController source(host);
+    source.Initialize();
+
+    // The editor drives OnIdle, so an editor that is open and settled is two idle ticks.
+    const auto settle = [&source] {
+        source.OnIdle();
+        source.OnIdle();
+    };
+
+    // A brand-new instance has no remembered size; the wrapper opens at its default.
+    if (source.GetEditorWindowSize().IsValid())
+    {
+        std::cerr << "A new plugin instance should not claim a remembered editor size\n";
+        return false;
+    }
+
+    const int changesBefore = host.stateChangedCount;
+
+    source.SetEditorWindowSize(1536, 1024);
+
+    // Not committed on the spot: the host has to be given a chance to take it back.
+    if (source.GetEditorWindowSize().IsValid())
+    {
+        std::cerr << "An editor size was committed before it had settled\n";
+        return false;
+    }
+    source.OnIdle();
+    if (host.stateChangedCount != changesBefore)
+    {
+        std::cerr << "Editor resize notified the host before the drag had settled\n";
+        return false;
+    }
+
+    source.OnIdle();
+    if (source.GetEditorWindowSize().width != 1536 || source.GetEditorWindowSize().height != 1024)
+    {
+        std::cerr << "A settled editor resize was never remembered\n";
+        return false;
+    }
+    if (host.stateChangedCount != changesBefore + 1)
+    {
+        std::cerr << "Editor resize never told the host its saved state was stale\n";
+        return false;
+    }
+    settle();
+    if (host.stateChangedCount != changesBefore + 1)
+    {
+        std::cerr << "A settled editor size kept notifying the host\n";
+        return false;
+    }
+
+    // Out-of-range layout passes are dropped outright.
+    source.SetEditorWindowSize(0, 0);
+    source.SetEditorWindowSize(-1, 900);
+    source.SetEditorWindowSize(200000, 200000);
+    settle();
+    if (source.GetEditorWindowSize().width != 1536 || source.GetEditorWindowSize().height != 1024)
+    {
+        std::cerr << "An out-of-range layout pass overwrote the remembered editor size\n";
+        return false;
+    }
+
+    // The regression: closing the window makes the host resize the editor, and the
+    // editor's own constrainer clamps a degenerate rect up to its minimum size, which is
+    // in range and looks entirely plausible. The editor is destroyed immediately after, so
+    // it never idles again - and a size that never settles must never be remembered.
+    source.SetEditorWindowSize(640, 400);
+    if (source.GetEditorWindowSize().width != 1536 || source.GetEditorWindowSize().height != 1024)
+    {
+        std::cerr << "A teardown resize replaced the size the user chose\n";
+        return false;
+    }
+
+    const auto savedState = nlohmann::json::parse(source.SerializeState());
+    if (savedState["editorWindow"].value("width", 0) != 1536
+        || savedState["editorWindow"].value("height", 0) != 1024)
+    {
+        std::cerr << "Host state did not carry the editor window size\n";
+        return false;
+    }
+
+    guitarfx::PluginController restored(host);
+    restored.Initialize();
+    restored.DeserializeState(savedState.dump());
+
+    // Readable the moment the editor is constructed, without waiting for an idle tick.
+    const auto restoredSize = restored.GetEditorWindowSize();
+    if (restoredSize.width != 1536 || restoredSize.height != 1024)
+    {
+        std::cerr << "Reopening the project did not restore the editor window size\n";
         return false;
     }
 
@@ -3029,6 +3144,7 @@ int main()
     run("Host state restore applies merged settings", TestHostStateRestoreAppliesMergedSettings());
     run("Plugin instance does not own lastPresetId", TestPluginInstanceDoesNotOwnLastPresetId());
     run("UI layout is not shared between plugin and standalone", TestUiLayoutIsNotSharedBetweenPluginAndStandalone());
+    run("Plugin state remembers editor window size", TestPluginStateRemembersEditorWindowSize());
     run("Shared-sync reload applies shared settings and keeps instance-owned", TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned());
     run("Load preset rehydrates scrubbed hosted plugin state", TestLoadPresetRehydratesScrubbedHostedPluginState());
     run("Load preset rehydrates scrubbed hosted plugin state from active preset", TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset());

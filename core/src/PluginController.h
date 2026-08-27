@@ -119,6 +119,36 @@ public:
     [[nodiscard]] const std::optional<Preset>& GetActivePreset() const { return mActivePreset; }
     [[nodiscard]] const nlohmann::json& GetAppSettings() const { return mAppSettings; }
 
+    // ── Editor window size ─────────────────────────────────────────
+    /// The size, in the wrapper's own logical units, that this instance's editor window
+    /// was last left at. Zero in either field means "never sized".
+    struct EditorWindowSize
+    {
+        int width = 0;
+        int height = 0;
+
+        [[nodiscard]] bool IsValid() const { return width > 0 && height > 0; }
+    };
+
+    /**
+     * Editor size for *this* instance, persisted in host state so a DAW hands it back
+     * when the project — or just the editor window — is reopened.
+     *
+     * Deliberately not the same thing as uiSettings["bounds"], which the web UI captures
+     * from window.outerWidth/screenX. Those are the WebView's own CSS pixels, which stop
+     * agreeing with the wrapper's logical units as soon as DPI scaling is in play (see
+     * PluginEditor::applyHostScaleWorkaround), and a WebView cannot resize the native
+     * window it sits in anyway. The editor reports its real bounds here instead.
+     *
+     * Position is not stored: the DAW owns where a plugin window sits on screen, and no
+     * plugin wrapper API lets us ask for a placement.
+     */
+    [[nodiscard]] EditorWindowSize GetEditorWindowSize() const { return mEditorWindowSize; }
+
+    /// Record the editor's current size. Non-positive or absurd values are ignored, so a
+    /// transient zero-sized layout pass cannot wipe the remembered size.
+    void SetEditorWindowSize(int width, int height);
+
     /**
      * Tell the controller whether the host is rendering offline (bounce/freeze/export)
      * rather than in real time. Called from the host adapter's setNonRealtime().
@@ -767,6 +797,16 @@ private:
 
     nlohmann::json mUiSettings = nlohmann::json::object();
     nlohmann::json mUiViewState = nlohmann::json::object();
+
+    /// Size of this instance's editor window — see GetEditorWindowSize(). Written by the
+    /// editor as the user drags it, read back when the editor is next created.
+    EditorWindowSize mEditorWindowSize;
+    /// The size the editor has most recently reported, not yet accepted as the remembered
+    /// one. OnIdle promotes it once it has survived a tick without changing; a size that
+    /// only existed while the window was being torn down never gets that far, because the
+    /// editor stops driving OnIdle when it is destroyed. See SetEditorWindowSize().
+    std::optional<EditorWindowSize> mPendingEditorWindowSize;
+    bool mEditorWindowSizeChangedSinceIdle = false;
     bool mUserInputCalibrationTrainingActive = false;
     double mNamInterfaceCalibrationLevelDbu = std::numeric_limits<double>::quiet_NaN();
 

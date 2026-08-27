@@ -47,6 +47,7 @@
 * Settings, presets and library data are now kept in a single SQLite store, which multiple plugin instances and the standalone app can read and write at the same time without stepping on each other. Existing files are imported once on first launch and left in place untouched.
 * UI storage files (setlists, automation, preset folders/favourites/ratings) are now written atomically, so a crash or power loss mid-write can no longer truncate them.
 * Clarified which settings belong where: NAM quality and editor size/zoom now belong to a plugin instance and are saved with the DAW project, shared preferences still sync between instances, and standalone-only settings (last preset, metronome, input mode, global FX) are no longer overwritten by a plugin instance.
+* The plugin editor window now reopens at the size you left it at. Each instance remembers its own size with the DAW project, so it survives closing and reopening the editor as well as reopening the project. Where the window sits on screen stays the host's to remember. A brand-new instance now opens at a size based on your display — up to 1600x1100 and never more than 80% of the screen — instead of a fixed 1200x900, which came up small on high-resolution or scaled displays.
 
 ### Performance
 * A preset or scene change now sends the UI a small state update instead of the entire app state including the resource library, which was around fifty times larger.

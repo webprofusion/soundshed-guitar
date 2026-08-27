@@ -14,6 +14,44 @@ namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
 
+    // Editor window size limits, in the units the wrapper works in. Those are logical
+    // units in every path: under CLAP on a scaled Windows desktop the peer is pinned to
+    // 1.0 and the host scale arrives as an editor transform instead, which cancels out
+    // to the same thing (see applyHostScaleWorkaround).
+    constexpr int minEditorWidth = 640;
+    constexpr int minEditorHeight = 400;
+    constexpr int maxEditorWidth = 8192;
+    constexpr int maxEditorHeight = 8192;
+
+    // What a brand-new instance opens at, when there is no remembered size to restore
+    // (PluginController::GetEditorWindowSize). A share of the display rather than a fixed
+    // pixel size, because no fixed pair works on both ends of the range: 1200x900 is only
+    // half the width of a 4K desktop running at 175%, while 1600x1000 is wider than a
+    // 1366x768 laptop screen. The preferred size is the cap - past it the extra pixels
+    // stop buying anything.
+    constexpr double defaultEditorDisplayFraction = 0.8;
+    constexpr int preferredEditorWidth = 1600;
+    constexpr int preferredEditorHeight = 1100;
+
+    juce::Point<int> getDefaultEditorSize()
+    {
+        auto width = preferredEditorWidth;
+        auto height = preferredEditorHeight;
+
+        // There is no peer yet while the editor is being constructed, so this is the
+        // primary display rather than the one the host's window will end up on. userArea
+        // excludes the taskbar and is in the same logical units the editor is sized in.
+        if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        {
+            const auto usable = display->userArea;
+            width = juce::jmin (width, juce::roundToInt ((double) usable.getWidth() * defaultEditorDisplayFraction));
+            height = juce::jmin (height, juce::roundToInt ((double) usable.getHeight() * defaultEditorDisplayFraction));
+        }
+
+        return { juce::jlimit (minEditorWidth, maxEditorWidth, width),
+                 juce::jlimit (minEditorHeight, maxEditorHeight, height) };
+    }
+
     bool isYouTubeUrl (const juce::String& url)
     {
         return url.containsIgnoreCase ("youtube-nocookie.com")
@@ -511,8 +549,23 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     }
 
     setResizable (true, true);
-    setResizeLimits (640, 400, 8192, 8192);
-    setSize (1200, 900);
+    setResizeLimits (minEditorWidth, minEditorHeight, maxEditorWidth, maxEditorHeight);
+
+    // Reopen at the size this instance was last left at. The size is restored from the
+    // DAW project (host state), so it survives both closing the editor window and
+    // reopening the project; a brand-new instance falls back to the default. Clamped to
+    // the resize limits, which setSize() itself does not enforce.
+    const auto rememberedSize = processorRef.getController().GetEditorWindowSize();
+    const auto defaultSize = getDefaultEditorSize();
+    const auto initialWidth = rememberedSize.IsValid()
+                                  ? juce::jlimit (minEditorWidth, maxEditorWidth, rememberedSize.width)
+                                  : defaultSize.x;
+    const auto initialHeight = rememberedSize.IsValid()
+                                   ? juce::jlimit (minEditorHeight, maxEditorHeight, rememberedSize.height)
+                                   : defaultSize.y;
+    setSize (initialWidth, initialHeight);
+    writeStartupLog ("[PluginEditor] opening at " + juce::String (initialWidth) + "x" + juce::String (initialHeight)
+                     + (rememberedSize.IsValid() ? " (remembered)" : " (default for this display)"));
 
     // Start periodic idle timer (~60 fps) for controller maintenance tasks.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.
@@ -522,6 +575,14 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 PluginEditor::~PluginEditor()
 {
     stopTimer();
+
+    // One line per editor lifetime, and the pair that matters when a window comes back at
+    // the wrong size: what the editor was last laid out at, and what was actually kept.
+    const auto remembered = processorRef.getController().GetEditorWindowSize();
+    writeStartupLog ("[PluginEditor] closing at " + juce::String (getWidth()) + "x" + juce::String (getHeight())
+                     + "; remembered "
+                     + (remembered.IsValid() ? juce::String (remembered.width) + "x" + juce::String (remembered.height)
+                                             : juce::String ("nothing")));
     processorRef.setWebMessageCallback (nullptr);
 }
 
@@ -688,6 +749,25 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     webView.setBounds (getLocalBounds());
+
+    // Remember the size the host left us at, so reopening this editor - or this project -
+    // comes back the same size. Only the size: the DAW owns where the window sits.
+    //
+    // Only while we are actually on screen, though. A host resizes the editor on its way
+    // to closing the window as well as while the user drags it, and setResizeLimits means
+    // a degenerate rect arrives here already clamped up to the minimum size - a plausible
+    // looking size nobody chose. Remembering that is what makes the next open come up
+    // tiny. The controller drops anything that does not then survive an idle tick.
+    if (isShowing())
+    {
+        processorRef.getController().SetEditorWindowSize (getWidth(), getHeight());
+    }
+    else if (getWidth() != lastIgnoredResize.x || getHeight() != lastIgnoredResize.y)
+    {
+        lastIgnoredResize = { getWidth(), getHeight() };
+        writeStartupLog ("[PluginEditor] not remembering off-screen resize to "
+                         + juce::String (getWidth()) + "x" + juce::String (getHeight()));
+    }
 
 #if JUCE_LINUX
     linuxWebViewStatusLabel.setBounds (getLocalBounds().reduced (24));

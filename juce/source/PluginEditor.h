@@ -66,6 +66,10 @@ private:
 
     SinglePageBrowser webView;
 
+    // Last off-screen size we logged as not-remembered, so a host that keeps re-reporting
+    // one does not fill the log with it. See resized().
+    juce::Point<int> lastIgnoredResize { -1, -1 };
+
    #if JUCE_LINUX
     juce::Label linuxWebViewStatusLabel;
     bool linuxWebViewLoadCompleted = false;
