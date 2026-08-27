@@ -25,8 +25,8 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 ; Components are used inside the script and can be composed of a set of 'Types'
 [Components]
-Name: "standalone"; Description: "Standalone application"; Types: full custom
-Name: "vst3"; Description: "VST3 plugin"; Types: full custom
+Name: "standalone"; Description: "Standalone application"; Types: full custom; Flags: checkablealone
+Name: "vst3"; Description: "VST3 plugin"; Types: full custom; Flags: checkablealone
 Name: "clap"; Description: "CLAP plugin"; Types: custom; Flags: checkablealone
 
 [Setup]
@@ -175,6 +175,19 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
     Result := True;
+
+    if CurPageID = wpSelectComponents then
+    begin
+        if not WizardIsComponentSelected('standalone')
+            and not WizardIsComponentSelected('vst3')
+            and not WizardIsComponentSelected('clap') then
+        begin
+            MsgBox('Select at least one component to install.', mbError, MB_OK);
+            Result := False;
+        end;
+
+        Exit;
+    end;
 
     if CurPageID <> InstallPathsPage.ID then
         Exit;
