@@ -47,11 +47,19 @@ inline constexpr double kTwoPi = 6.28318530717958647692;
 inline char BeatAccent(const std::string& pattern, int beatIndex)
 {
     if (pattern.empty())
+    {
         return (beatIndex == 0) ? 'H' : 'L';
+    }
     const std::size_t idx = static_cast<std::size_t>(beatIndex) % pattern.size();
     const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(pattern[idx])));
-    if (c == 'H') return 'H';
-    if (c == 'S' || c == '-' || c == '.') return 'S';
+    if (c == 'H')
+    {
+        return 'H';
+    }
+    if (c == 'S' || c == '-' || c == '.')
+    {
+        return 'S';
+    }
     return 'L';
 }
 

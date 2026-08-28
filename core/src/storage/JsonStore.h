@@ -14,50 +14,50 @@ struct sqlite3;
 
 namespace guitarfx::storage
 {
-  /**
-   * Every app-owned document lives in one SQLite table:
-   *
-   *     items(type TEXT, id TEXT, json TEXT, updated_at INTEGER, PRIMARY KEY (type, id))
-   *
-   * The schema is deliberately closed. A new kind of thing is a new `type`
-   * string, and a change to any thing's shape is a change to the JSON it stores
-   * — neither requires DDL, so the schema is expected never to version again.
-   *
-   * When a query needs to reach inside a document, use SQLite's json_extract()
-   * against the `json` column rather than promoting a field to a column; an
-   * expression index can be added later without touching the table.
-   *
-   * Concurrency: the standalone app and any number of plugin instances share one
-   * database file. WAL plus a busy timeout makes that safe across processes, and
-   * an internal mutex serializes the handle across threads in one process.
-   */
+/**
+ * Every app-owned document lives in one SQLite table:
+ *
+ *     items(type TEXT, id TEXT, json TEXT, updated_at INTEGER, PRIMARY KEY (type, id))
+ *
+ * The schema is deliberately closed. A new kind of thing is a new `type`
+ * string, and a change to any thing's shape is a change to the JSON it stores
+ * — neither requires DDL, so the schema is expected never to version again.
+ *
+ * When a query needs to reach inside a document, use SQLite's json_extract()
+ * against the `json` column rather than promoting a field to a column; an
+ * expression index can be added later without touching the table.
+ *
+ * Concurrency: the standalone app and any number of plugin instances share one
+ * database file. WAL plus a busy timeout makes that safe across processes, and
+ * an internal mutex serializes the handle across threads in one process.
+ */
 
-  /// Well-known values for the `type` column. Free-form by design — this list is
-  /// a convention, not a constraint, and adding to it needs no schema change.
-  namespace ItemType
-  {
-    inline constexpr const char* kSetting = "setting";              // id = setting key
-    inline constexpr const char* kPreset = "preset";                // id = preset id
-    inline constexpr const char* kCompositePreset = "composite";    // id = composite id
-    inline constexpr const char* kResource = "resource";            // id = "<resourceType>:<resourceId>"
-    inline constexpr const char* kBlend = "blend";                  // id = blend id
-    inline constexpr const char* kCustomEffect = "custom-effect";   // id = effect id
-    inline constexpr const char* kRiff = "riff";                    // id = riff id
-    inline constexpr const char* kLayout = "layout";                // id = layout id
-    inline constexpr const char* kSetlist = "setlist";              // id = setlist id
-    inline constexpr const char* kPresetFolder = "preset-folder";   // id = folder id
-    inline constexpr const char* kPresetFavorite = "preset-favorite"; // id = preset id
-    inline constexpr const char* kPresetRating = "preset-rating";     // id = preset id
-    inline constexpr const char* kEffectPreset = "effect-preset";   // id = effect preset id
-    inline constexpr const char* kEffectLayout = "effect-layout";   // id = effect type
-    inline constexpr const char* kAutomationSlot = "automation-slot";
-    /// Singleton documents that have no natural per-item decomposition
-    /// (factory-archive bookkeeping, shared-sync state, UI view state).
-    inline constexpr const char* kDocument = "document";            // id = logical name
-  } // namespace ItemType
+/// Well-known values for the `type` column. Free-form by design — this list is
+/// a convention, not a constraint, and adding to it needs no schema change.
+namespace ItemType
+{
+inline constexpr const char* kSetting = "setting";                // id = setting key
+inline constexpr const char* kPreset = "preset";                  // id = preset id
+inline constexpr const char* kCompositePreset = "composite";      // id = composite id
+inline constexpr const char* kResource = "resource";              // id = "<resourceType>:<resourceId>"
+inline constexpr const char* kBlend = "blend";                    // id = blend id
+inline constexpr const char* kCustomEffect = "custom-effect";     // id = effect id
+inline constexpr const char* kRiff = "riff";                      // id = riff id
+inline constexpr const char* kLayout = "layout";                  // id = layout id
+inline constexpr const char* kSetlist = "setlist";                // id = setlist id
+inline constexpr const char* kPresetFolder = "preset-folder";     // id = folder id
+inline constexpr const char* kPresetFavorite = "preset-favorite"; // id = preset id
+inline constexpr const char* kPresetRating = "preset-rating";     // id = preset id
+inline constexpr const char* kEffectPreset = "effect-preset";     // id = effect preset id
+inline constexpr const char* kEffectLayout = "effect-layout";     // id = effect type
+inline constexpr const char* kAutomationSlot = "automation-slot";
+/// Singleton documents that have no natural per-item decomposition
+/// (factory-archive bookkeeping, shared-sync state, UI view state).
+inline constexpr const char* kDocument = "document"; // id = logical name
+} // namespace ItemType
 
-  struct StoreItem
-  {
+struct StoreItem
+{
     std::string type;
     std::string id;
     std::string json;
@@ -66,10 +66,10 @@ namespace guitarfx::storage
     /// Parses `json`. Returns nullopt when the stored text is not valid JSON,
     /// which should not happen but is never allowed to throw into a caller.
     [[nodiscard]] std::optional<nlohmann::json> Parse() const;
-  };
+};
 
-  class JsonStore
-  {
+class JsonStore
+{
   public:
     JsonStore();
     ~JsonStore();
@@ -84,9 +84,9 @@ namespace guitarfx::storage
     /// "recovered" by destroying the file.
     enum class OpenStatus
     {
-      Ok,
-      Damaged,
-      Failed
+        Ok,
+        Damaged,
+        Failed
     };
 
     /**
@@ -99,7 +99,11 @@ namespace guitarfx::storage
     OpenStatus OpenChecked(const std::filesystem::path& dbPath, std::string& error);
     void Close();
     [[nodiscard]] bool IsOpen() const;
-    [[nodiscard]] const std::filesystem::path& Path() const { return mPath; }
+
+    [[nodiscard]] const std::filesystem::path& Path() const
+    {
+        return mPath;
+    }
 
     // ── Documents ──────────────────────────────────────────────────
     bool Put(std::string_view type, std::string_view id, const nlohmann::json& value);
@@ -175,6 +179,6 @@ namespace guitarfx::storage
     sqlite3* mDb = nullptr;
     std::filesystem::path mPath;
     int mTransactionDepth = 0;
-  };
+};
 
 } // namespace guitarfx::storage

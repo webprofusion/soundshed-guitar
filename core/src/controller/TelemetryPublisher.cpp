@@ -14,19 +14,17 @@ using namespace guitarfx::controller_detail;
 namespace guitarfx
 {
 
-TelemetryPublisher::TelemetryPublisher(IPluginHost& host,
-                                       MultiPresetMixer& presetMixer,
-                                       SendMessageFn sendMessage)
-    : mHost(host)
-    , mPresetMixer(presetMixer)
-    , mSendMessage(std::move(sendMessage))
+TelemetryPublisher::TelemetryPublisher(IPluginHost& host, MultiPresetMixer& presetMixer, SendMessageFn sendMessage)
+    : mHost(host), mPresetMixer(presetMixer), mSendMessage(std::move(sendMessage))
 {
 }
 
 void TelemetryPublisher::Send(const std::string& jsonMessage)
 {
     if (mSendMessage)
+    {
         mSendMessage(jsonMessage);
+    }
 }
 
 void TelemetryPublisher::OnIdle()
@@ -43,7 +41,9 @@ void TelemetryPublisher::OnIdle()
     {
         mPerformanceStatsCounter = 0;
         if (uiVisible)
+        {
             RequestPerformanceStats();
+        }
     }
 
     TrySendPendingPerformanceStats();
@@ -55,7 +55,9 @@ void TelemetryPublisher::OnIdle()
         {
             mSignalDiagnosticsCounter = 0;
             if (uiVisible)
+            {
                 RequestSignalDiagnostics();
+            }
         }
     }
 
@@ -83,12 +85,14 @@ void TelemetryPublisher::RequestSignalDiagnostics()
 void TelemetryPublisher::TrySendPendingSignalDiagnostics()
 {
     if (!mPendingSignalDiagnostics)
+    {
         return;
+    }
 
     constexpr auto kMinSignalDiagnosticsInterval = std::chrono::milliseconds(1000 / kSignalDiagnosticsRateHz);
     const auto now = std::chrono::steady_clock::now();
-    if (mLastSignalDiagnosticsSentAt.time_since_epoch().count() != 0
-        && (now - mLastSignalDiagnosticsSentAt) < kMinSignalDiagnosticsInterval)
+    if (mLastSignalDiagnosticsSentAt.time_since_epoch().count() != 0 &&
+        (now - mLastSignalDiagnosticsSentAt) < kMinSignalDiagnosticsInterval)
     {
         return;
     }
@@ -106,8 +110,7 @@ void TelemetryPublisher::SendSignalDiagnostics()
     // node ids. Values are rounded to 0.1 dB: the UI renders one decimal place, and full
     // double precision was costing ~14 characters per value for digits nothing displays.
     const auto roundDb = [](double db) { return std::round(db * 10.0) / 10.0; };
-    const auto buildLevelTuple = [&roundDb](const MultiPresetMixer::SignalLevelStats& stats)
-    {
+    const auto buildLevelTuple = [&roundDb](const MultiPresetMixer::SignalLevelStats& stats) {
         // `clipped` is carried explicitly rather than derived UI-side from the rounded peak:
         // a peak of 0.999 rounds to -0.0 dBFS, which would otherwise read as clipping.
         const bool clipped = stats.clipCount > 0 || stats.peak >= 1.0;
@@ -123,8 +126,8 @@ void TelemetryPublisher::SendSignalDiagnostics()
     roster.reserve(snapshot.nodes.size());
     for (const auto& n : snapshot.nodes)
     {
-        roster.push_back(RosterEntry{
-            n.scope, n.presetId, n.nodeId, n.nodeType, n.channelCount, n.analyzer.has_value() });
+        roster.push_back(
+            RosterEntry{n.scope, n.presetId, n.nodeId, n.nodeType, n.channelCount, n.analyzer.has_value()});
     }
 
     if (mRosterDirty || roster != mRoster)
@@ -136,9 +139,8 @@ void TelemetryPublisher::SendSignalDiagnostics()
         nlohmann::json rosterNodes = nlohmann::json::array();
         for (const auto& entry : mRoster)
         {
-            rosterNodes.push_back(nlohmann::json::array({
-                entry.scope, entry.presetId, entry.nodeId, entry.nodeType,
-                entry.channelCount, entry.hasAnalyzer ? 1 : 0 }));
+            rosterNodes.push_back(nlohmann::json::array({entry.scope, entry.presetId, entry.nodeId, entry.nodeType,
+                                                         entry.channelCount, entry.hasAnalyzer ? 1 : 0}));
         }
 
         // The analyzer display ranges are compile-time constants, so they ride along with
@@ -147,12 +149,12 @@ void TelemetryPublisher::SendSignalDiagnostics()
         rosterMsg["type"] = "sldRoster";
         rosterMsg["seq"] = mRosterSeq;
         rosterMsg["nodes"] = std::move(rosterNodes);
-        rosterMsg["spectrogramRange"] = nlohmann::json::array({
-            InputAnalyzerEffect::kSpectrogramMinDbfs, InputAnalyzerEffect::kSpectrogramMaxDbfs,
-            InputAnalyzerEffect::kSpectrogramMinFrequencyHz, InputAnalyzerEffect::kSpectrogramMaxFrequencyHz });
-        rosterMsg["barkRange"] = nlohmann::json::array({
-            InputAnalyzerEffect::kBarkMinDbfs, InputAnalyzerEffect::kBarkMaxDbfs,
-            InputAnalyzerEffect::kBarkMinFrequencyHz, InputAnalyzerEffect::kBarkMaxFrequencyHz });
+        rosterMsg["spectrogramRange"] = nlohmann::json::array(
+            {InputAnalyzerEffect::kSpectrogramMinDbfs, InputAnalyzerEffect::kSpectrogramMaxDbfs,
+             InputAnalyzerEffect::kSpectrogramMinFrequencyHz, InputAnalyzerEffect::kSpectrogramMaxFrequencyHz});
+        rosterMsg["barkRange"] =
+            nlohmann::json::array({InputAnalyzerEffect::kBarkMinDbfs, InputAnalyzerEffect::kBarkMaxDbfs,
+                                   InputAnalyzerEffect::kBarkMinFrequencyHz, InputAnalyzerEffect::kBarkMaxFrequencyHz});
         Send(rosterMsg.dump());
     }
 
@@ -160,7 +162,9 @@ void TelemetryPublisher::SendSignalDiagnostics()
     for (const auto& n : snapshot.nodes)
     {
         for (const auto& value : buildLevelTuple(n.levels))
+        {
             frameLevels.push_back(value);
+        }
     }
 
     nlohmann::json frame;
@@ -181,14 +185,17 @@ void TelemetryPublisher::SendSignalDiagnostics()
     for (const auto& n : snapshot.nodes)
     {
         if (!n.analyzer)
+        {
             continue;
+        }
 
         const auto& analyzer = *n.analyzer;
-        const auto quantiseBands = [](const std::vector<float>& values)
-        {
+        const auto quantiseBands = [](const std::vector<float>& values) {
             nlohmann::json out = nlohmann::json::array();
             for (const float value : values)
+            {
                 out.push_back(std::isfinite(value) ? static_cast<int>(std::lround(value)) : -120);
+            }
             return out;
         };
 
@@ -232,12 +239,14 @@ void TelemetryPublisher::RequestPerformanceStats()
 void TelemetryPublisher::TrySendPendingPerformanceStats()
 {
     if (!mPendingPerformanceStats)
+    {
         return;
+    }
 
     constexpr auto kMinPerformanceStatsInterval = std::chrono::milliseconds(1000 / kDspPerformanceStatsRateHz);
     const auto now = std::chrono::steady_clock::now();
-    if (mLastPerformanceStatsSentAt.time_since_epoch().count() != 0
-        && (now - mLastPerformanceStatsSentAt) < kMinPerformanceStatsInterval)
+    if (mLastPerformanceStatsSentAt.time_since_epoch().count() != 0 &&
+        (now - mLastPerformanceStatsSentAt) < kMinPerformanceStatsInterval)
     {
         return;
     }
@@ -258,19 +267,27 @@ void TelemetryPublisher::SendPerformanceStats()
     statsJson["totalLatencySamples"] = totalLatencySamples;
     nlohmann::json nodeTimes = nlohmann::json::object();
     for (const auto& [nodeId, timeUs] : stats.nodeProcessingTimesUs)
+    {
         nodeTimes[nodeId] = timeUs;
+    }
     statsJson["nodeProcessingTimesUs"] = nodeTimes;
     nlohmann::json scopedNodeTimes = nlohmann::json::object();
     for (const auto& [nodeId, timeUs] : stats.scopedNodeProcessingTimesUs)
+    {
         scopedNodeTimes[nodeId] = timeUs;
+    }
     statsJson["scopedNodeProcessingTimesUs"] = scopedNodeTimes;
     nlohmann::json nodeLatencies = nlohmann::json::object();
     for (const auto& [nodeId, latencySamples] : stats.nodeLatencySamples)
+    {
         nodeLatencies[nodeId] = latencySamples;
+    }
     statsJson["nodeLatencySamples"] = nodeLatencies;
     nlohmann::json scopedNodeLatencies = nlohmann::json::object();
     for (const auto& [nodeId, latencySamples] : stats.scopedNodeLatencySamples)
+    {
         scopedNodeLatencies[nodeId] = latencySamples;
+    }
     statsJson["scopedNodeLatencySamples"] = scopedNodeLatencies;
 
     nlohmann::json msg;
@@ -284,9 +301,8 @@ void TelemetryPublisher::SendPerformanceStats()
 void TelemetryPublisher::SendSpatialPositions()
 {
     static const std::vector<std::string> kSpatialReadoutParams = {
-        "currentAzimuth", "currentElevation", "currentDistance",
-        "currentItdUs", "currentIldDb", "effectiveRate", "motionMode"
-    };
+        "currentAzimuth", "currentElevation", "currentDistance", "currentItdUs",
+        "currentIldDb",   "effectiveRate",    "motionMode"};
 
     const auto readouts = mPresetMixer.ReadNodeParamsForType(EffectGuids::kSpatial3D, kSpatialReadoutParams);
 
@@ -295,7 +311,9 @@ void TelemetryPublisher::SendSpatialPositions()
         // Send one final empty update so a UI that was tracking a node it can no
         // longer see stops animating, then go quiet until a spatialiser reappears.
         if (!mSpatialPositionsWereSent)
+        {
             return;
+        }
         mSpatialPositionsWereSent = false;
     }
     else
@@ -307,25 +325,17 @@ void TelemetryPublisher::SendSpatialPositions()
     for (const auto& readout : readouts)
     {
         nlohmann::json node{
-            {"scope", readout.scope},
-            {"nodeId", readout.nodeId},
-            {"azimuth", readout.values[0]},
-            {"elevation", readout.values[1]},
-            {"distance", readout.values[2]},
-            {"itdUs", readout.values[3]},
-            {"ildDb", readout.values[4]},
-            {"rateHz", readout.values[5]},
-            {"moving", readout.values[6] > 0.5}
-        };
+            {"scope", readout.scope},         {"nodeId", readout.nodeId},      {"azimuth", readout.values[0]},
+            {"elevation", readout.values[1]}, {"distance", readout.values[2]}, {"itdUs", readout.values[3]},
+            {"ildDb", readout.values[4]},     {"rateHz", readout.values[5]},   {"moving", readout.values[6] > 0.5}};
         if (!readout.presetId.empty())
+        {
             node["presetId"] = readout.presetId;
+        }
         nodes.push_back(std::move(node));
     }
 
-    nlohmann::json msg{
-        {"type", "spatialPosition"},
-        {"nodes", std::move(nodes)}
-    };
+    nlohmann::json msg{{"type", "spatialPosition"}, {"nodes", std::move(nodes)}};
     Send(msg.dump());
 }
 

@@ -4,8 +4,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c,
-                                                    const nlohmann::json& msg,
+bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c, const nlohmann::json& msg,
                                                     const std::string& type)
 {
     if (type == "importRemoteResource")

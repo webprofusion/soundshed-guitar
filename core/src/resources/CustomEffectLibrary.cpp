@@ -5,57 +5,75 @@
 
 namespace guitarfx
 {
-  bool CustomEffectLibraryEntry::IsValid() const
-  {
-    return !id.empty()
-      && !name.empty()
-      && !baseEffectType.empty()
-      && !moduleResourceType.empty()
-      && !moduleResourceId.empty();
-  }
+bool CustomEffectLibraryEntry::IsValid() const
+{
+    return !id.empty() && !name.empty() && !baseEffectType.empty() && !moduleResourceType.empty() &&
+           !moduleResourceId.empty();
+}
 
-  nlohmann::json SerializeCustomEffectLibraryEntry(const CustomEffectLibraryEntry& entry)
-  {
+nlohmann::json SerializeCustomEffectLibraryEntry(const CustomEffectLibraryEntry& entry)
+{
     nlohmann::json json;
     json["id"] = entry.id;
     json["name"] = entry.name;
     json["category"] = entry.category;
     if (!entry.description.empty())
-      json["description"] = entry.description;
+    {
+        json["description"] = entry.description;
+    }
     json["baseEffectType"] = entry.baseEffectType;
     json["moduleResourceType"] = entry.moduleResourceType;
     json["moduleResourceId"] = entry.moduleResourceId;
     if (!entry.latestRevisionId.empty())
-      json["latestRevisionId"] = entry.latestRevisionId;
+    {
+        json["latestRevisionId"] = entry.latestRevisionId;
+    }
     if (!entry.thumbnailDataUrl.empty())
-      json["thumbnailDataUrl"] = entry.thumbnailDataUrl;
+    {
+        json["thumbnailDataUrl"] = entry.thumbnailDataUrl;
+    }
     if (!entry.tags.empty())
-      json["tags"] = entry.tags;
+    {
+        json["tags"] = entry.tags;
+    }
     if (!entry.defaultParams.empty())
     {
-      nlohmann::json params = nlohmann::json::object();
-      for (const auto& [key, value] : entry.defaultParams)
-        params[key] = value;
-      json["defaultParams"] = std::move(params);
+        nlohmann::json params = nlohmann::json::object();
+        for (const auto& [key, value] : entry.defaultParams)
+        {
+            params[key] = value;
+        }
+        json["defaultParams"] = std::move(params);
     }
     if (entry.descriptorSummary.is_object() && !entry.descriptorSummary.empty())
-      json["descriptorSummary"] = entry.descriptorSummary;
+    {
+        json["descriptorSummary"] = entry.descriptorSummary;
+    }
     if (!entry.origin.empty())
-      json["origin"] = entry.origin;
+    {
+        json["origin"] = entry.origin;
+    }
     if (!entry.createdAt.empty())
-      json["createdAt"] = entry.createdAt;
+    {
+        json["createdAt"] = entry.createdAt;
+    }
     if (!entry.updatedAt.empty())
-      json["updatedAt"] = entry.updatedAt;
+    {
+        json["updatedAt"] = entry.updatedAt;
+    }
     return json;
-  }
+}
 
-  std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(const nlohmann::json& json,
-                                                                              std::string* error)
-  {
+std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(const nlohmann::json& json,
+                                                                            std::string* error)
+{
     if (!json.is_object())
     {
-      if (error) *error = "Entry must be a JSON object";
-      return std::nullopt;
+        if (error)
+        {
+            *error = "Entry must be a JSON object";
+        }
+        return std::nullopt;
     }
 
     CustomEffectLibraryEntry entry;
@@ -74,141 +92,168 @@ namespace guitarfx
 
     if (json.contains("tags") && json["tags"].is_array())
     {
-      for (const auto& tag : json["tags"])
-      {
-        if (tag.is_string())
-          entry.tags.push_back(tag.get<std::string>());
-      }
+        for (const auto& tag : json["tags"])
+        {
+            if (tag.is_string())
+            {
+                entry.tags.push_back(tag.get<std::string>());
+            }
+        }
     }
 
     if (json.contains("defaultParams") && json["defaultParams"].is_object())
     {
-      for (const auto& [key, value] : json["defaultParams"].items())
-      {
-        if (value.is_number())
-          entry.defaultParams[key] = value.get<double>();
-      }
+        for (const auto& [key, value] : json["defaultParams"].items())
+        {
+            if (value.is_number())
+            {
+                entry.defaultParams[key] = value.get<double>();
+            }
+        }
     }
 
     if (json.contains("descriptorSummary") && json["descriptorSummary"].is_object())
-      entry.descriptorSummary = json["descriptorSummary"];
+    {
+        entry.descriptorSummary = json["descriptorSummary"];
+    }
 
     if (!entry.IsValid())
     {
-      if (error) *error = "Entry is missing required id/name/baseEffectType/moduleResourceType/moduleResourceId fields";
-      return std::nullopt;
+        if (error)
+        {
+            *error = "Entry is missing required id/name/baseEffectType/moduleResourceType/moduleResourceId fields";
+        }
+        return std::nullopt;
     }
 
     return entry;
-  }
+}
 
-  void CustomEffectLibrary::Clear()
-  {
+void CustomEffectLibrary::Clear()
+{
     mEntries.clear();
-  }
+}
 
-  void CustomEffectLibrary::UpsertEntry(const CustomEffectLibraryEntry& entry)
-  {
-    auto it = std::find_if(mEntries.begin(), mEntries.end(), [&](const CustomEffectLibraryEntry& existing) {
-      return existing.id == entry.id;
-    });
+void CustomEffectLibrary::UpsertEntry(const CustomEffectLibraryEntry& entry)
+{
+    auto it = std::find_if(mEntries.begin(), mEntries.end(),
+                           [&](const CustomEffectLibraryEntry& existing) { return existing.id == entry.id; });
     if (it != mEntries.end())
-      *it = entry;
+    {
+        *it = entry;
+    }
     else
-      mEntries.push_back(entry);
-  }
+    {
+        mEntries.push_back(entry);
+    }
+}
 
-  bool CustomEffectLibrary::RemoveEntry(const std::string& id)
-  {
+bool CustomEffectLibrary::RemoveEntry(const std::string& id)
+{
     const auto originalSize = mEntries.size();
-    mEntries.erase(std::remove_if(mEntries.begin(), mEntries.end(), [&](const CustomEffectLibraryEntry& entry) {
-      return entry.id == id;
-    }), mEntries.end());
+    mEntries.erase(std::remove_if(mEntries.begin(), mEntries.end(),
+                                  [&](const CustomEffectLibraryEntry& entry) { return entry.id == id; }),
+                   mEntries.end());
     return mEntries.size() != originalSize;
-  }
+}
 
-  const CustomEffectLibraryEntry* CustomEffectLibrary::GetEntry(const std::string& id) const
-  {
-    const auto it = std::find_if(mEntries.begin(), mEntries.end(), [&](const CustomEffectLibraryEntry& entry) {
-      return entry.id == id;
-    });
+const CustomEffectLibraryEntry* CustomEffectLibrary::GetEntry(const std::string& id) const
+{
+    const auto it = std::find_if(mEntries.begin(), mEntries.end(),
+                                 [&](const CustomEffectLibraryEntry& entry) { return entry.id == id; });
     return it != mEntries.end() ? &(*it) : nullptr;
-  }
+}
 
-  void CustomEffectLibrary::LoadFromFile(const std::filesystem::path& path)
-  {
+void CustomEffectLibrary::LoadFromFile(const std::filesystem::path& path)
+{
     Clear();
 
     std::ifstream file(path);
     if (!file.is_open())
-      return;
+    {
+        return;
+    }
 
     try
     {
-      nlohmann::json json;
-      file >> json;
-      if (!json.is_array())
-        return;
+        nlohmann::json json;
+        file >> json;
+        if (!json.is_array())
+        {
+            return;
+        }
 
-      for (const auto& item : json)
-      {
-        if (auto entry = DeserializeCustomEffectLibraryEntry(item))
-          mEntries.push_back(*entry);
-      }
+        for (const auto& item : json)
+        {
+            if (auto entry = DeserializeCustomEffectLibraryEntry(item))
+            {
+                mEntries.push_back(*entry);
+            }
+        }
     }
     catch (const std::exception&)
     {
-      Clear();
+        Clear();
     }
-  }
+}
 
-  void CustomEffectLibrary::SaveToFile(const std::filesystem::path& path) const
-  {
+void CustomEffectLibrary::SaveToFile(const std::filesystem::path& path) const
+{
     std::error_code dirEc;
     std::filesystem::create_directories(path.parent_path(), dirEc);
 
     nlohmann::json json = nlohmann::json::array();
     for (const auto& entry : mEntries)
-      json.push_back(SerializeCustomEffectLibraryEntry(entry));
+    {
+        json.push_back(SerializeCustomEffectLibraryEntry(entry));
+    }
 
     std::ofstream file(path);
     if (file.is_open())
-      file << json.dump(2);
-  }
+    {
+        file << json.dump(2);
+    }
+}
 
-  void CustomEffectLibrary::LoadFromStore(storage::JsonStore& store)
-  {
+void CustomEffectLibrary::LoadFromStore(storage::JsonStore& store)
+{
     Clear();
 
     for (const auto& item : store.List(storage::ItemType::kCustomEffect))
     {
-      const auto parsed = item.Parse();
-      if (!parsed)
-        continue;
+        const auto parsed = item.Parse();
+        if (!parsed)
+        {
+            continue;
+        }
 
-      if (auto entry = DeserializeCustomEffectLibraryEntry(*parsed))
-        mEntries.push_back(std::move(*entry));
+        if (auto entry = DeserializeCustomEffectLibraryEntry(*parsed))
+        {
+            mEntries.push_back(std::move(*entry));
+        }
     }
-  }
+}
 
-  bool CustomEffectLibrary::SaveToStore(storage::JsonStore& store) const
-  {
+bool CustomEffectLibrary::SaveToStore(storage::JsonStore& store) const
+{
     std::vector<storage::StoreItem> items;
     items.reserve(mEntries.size());
 
     for (const auto& entry : mEntries)
     {
-      if (entry.id.empty())
-        continue;
+        if (entry.id.empty())
+        {
+            continue;
+        }
 
-      storage::StoreItem item;
-      item.type = storage::ItemType::kCustomEffect;
-      item.id = entry.id;
-      item.json = SerializeCustomEffectLibraryEntry(entry).dump();
-      items.push_back(std::move(item));
+        storage::StoreItem item;
+        item.type = storage::ItemType::kCustomEffect;
+        item.id = entry.id;
+        item.json = SerializeCustomEffectLibraryEntry(entry).dump();
+        items.push_back(std::move(item));
     }
 
     return store.ReplaceAll(storage::ItemType::kCustomEffect, items);
-  }
+}
 
 } // namespace guitarfx

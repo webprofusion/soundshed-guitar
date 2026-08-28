@@ -27,22 +27,19 @@ namespace guitarfx::controller_detail
 bool IsSensitiveDebugKey(std::string_view key)
 {
     if (key.empty())
+    {
         return false;
+    }
 
     std::string normalizedKey(key);
-    std::transform(normalizedKey.begin(), normalizedKey.end(), normalizedKey.begin(), [](unsigned char ch)
-    {
-        return static_cast<char>(std::tolower(ch));
-    });
+    std::transform(normalizedKey.begin(), normalizedKey.end(), normalizedKey.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 
-    return normalizedKey.find("token") != std::string::npos
-        || normalizedKey.find("api_key") != std::string::npos
-        || normalizedKey.find("apikey") != std::string::npos
-        || normalizedKey.find("secret") != std::string::npos
-        || normalizedKey.find("password") != std::string::npos
-        || normalizedKey.find("authorization") != std::string::npos
-        || normalizedKey.find("cookie") != std::string::npos
-        || normalizedKey.find("credential") != std::string::npos;
+    return normalizedKey.find("token") != std::string::npos || normalizedKey.find("api_key") != std::string::npos ||
+           normalizedKey.find("apikey") != std::string::npos || normalizedKey.find("secret") != std::string::npos ||
+           normalizedKey.find("password") != std::string::npos ||
+           normalizedKey.find("authorization") != std::string::npos ||
+           normalizedKey.find("cookie") != std::string::npos || normalizedKey.find("credential") != std::string::npos;
 }
 
 void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey)
@@ -56,14 +53,18 @@ void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey)
     if (value.is_object())
     {
         for (auto it = value.begin(); it != value.end(); ++it)
+        {
             ScrubSensitiveJson(it.value(), it.key());
+        }
         return;
     }
 
     if (value.is_array())
     {
         for (auto& entry : value)
+        {
             ScrubSensitiveJson(entry);
+        }
     }
 }
 
@@ -74,7 +75,10 @@ std::filesystem::path ResolveDebugSnapshotPath(const guitarfx::FileSystem& fileS
 
 double ToDbFS(double linear)
 {
-    if (linear <= kMinLinear) return -120.0;
+    if (linear <= kMinLinear)
+    {
+        return -120.0;
+    }
     return 20.0 * std::log10(linear);
 }
 
@@ -96,7 +100,9 @@ std::string FormatTimestamp()
 double LinearFromDb(double db)
 {
     if (!std::isfinite(db))
+    {
         return 0.0;
+    }
     return std::pow(10.0, db / 20.0);
 }
 
@@ -105,30 +111,35 @@ double ClampValue(double value, double minimum, double maximum)
     return std::min(maximum, std::max(minimum, value));
 }
 
-int ComputeBarsFromFrames(std::size_t frameCount,
-                          double sampleRate,
-                          double tempoBpm,
-                          int timeSigNum,
-                          int timeSigDen)
+int ComputeBarsFromFrames(std::size_t frameCount, double sampleRate, double tempoBpm, int timeSigNum, int timeSigDen)
 {
     if (frameCount == 0)
+    {
         return 1;
+    }
 
-    const double samplesPerBeat = sampleRate
-        * (60.0 / std::max(1.0, tempoBpm))
-        * (4.0 / static_cast<double>(std::max(1, timeSigDen)));
+    const double samplesPerBeat =
+        sampleRate * (60.0 / std::max(1.0, tempoBpm)) * (4.0 / static_cast<double>(std::max(1, timeSigDen)));
     const double samplesPerBar = samplesPerBeat * static_cast<double>(std::max(1, timeSigNum));
-    return std::max(1, static_cast<int>(
-        std::round(static_cast<double>(frameCount) / std::max(1.0, samplesPerBar))));
+    return std::max(1, static_cast<int>(std::round(static_cast<double>(frameCount) / std::max(1.0, samplesPerBar))));
 }
 
 /// Maps a resource type onto a native dialog category.
 guitarfx::BrowseFileType ResolveBrowseFileType(const std::string& resourceType)
 {
     using guitarfx::BrowseFileType;
-    if (resourceType == "nam") return BrowseFileType::NAMModel;
-    if (resourceType == "ir") return BrowseFileType::IRFile;
-    if (resourceType == "plugin") return BrowseFileType::PluginFile;
+    if (resourceType == "nam")
+    {
+        return BrowseFileType::NAMModel;
+    }
+    if (resourceType == "ir")
+    {
+        return BrowseFileType::IRFile;
+    }
+    if (resourceType == "plugin")
+    {
+        return BrowseFileType::PluginFile;
+    }
     return BrowseFileType::Any;
 }
 
@@ -149,50 +160,61 @@ bool ShouldHashResourceFile(const std::filesystem::path& path)
 
 std::string InferPluginFormatFromPath(const std::filesystem::path& path)
 {
-    return std::string{guitarfx::pluginpath::PluginFormatId(
-        guitarfx::pluginpath::PluginFormatFromPath(path))};
+    return std::string{guitarfx::pluginpath::PluginFormatId(guitarfx::pluginpath::PluginFormatFromPath(path))};
 }
 
 bool HasUnsafeRelativeSegments(const std::filesystem::path& path)
 {
     if (path.empty() || path.is_absolute())
+    {
         return false;
+    }
 
     for (const auto& segment : path)
     {
         if (segment == "..")
+        {
             return true;
+        }
     }
 
     return false;
 }
 
-const guitarfx::GraphNode* FindNodeByIdOrType(const guitarfx::SignalGraph& graph,
-                                               const std::string& id,
-                                               const std::string& type)
+const guitarfx::GraphNode* FindNodeByIdOrType(const guitarfx::SignalGraph& graph, const std::string& id,
+                                              const std::string& type)
 {
     for (const auto& node : graph.nodes)
     {
         if (node.id == id)
+        {
             return &node;
+        }
     }
     for (const auto& node : graph.nodes)
     {
         if (node.type == type)
+        {
             return &node;
+        }
     }
     return nullptr;
 }
 
 int GetGlobalTransposeFromChainConfig(const guitarfx::GlobalSignalChainConfig& config)
 {
-    const auto* transposeNode = FindNodeByIdOrType(config.preChainGraph, "global_transpose", guitarfx::EffectGuids::kTranspose);
+    const auto* transposeNode =
+        FindNodeByIdOrType(config.preChainGraph, "global_transpose", guitarfx::EffectGuids::kTranspose);
     if (!transposeNode || !transposeNode->enabled)
+    {
         return 0;
+    }
 
     const auto semitonesIt = transposeNode->params.find("semitones");
     if (semitonesIt == transposeNode->params.end())
+    {
         return 0;
+    }
 
     return static_cast<int>(std::round(std::clamp(semitonesIt->second, -12.0, 12.0)));
 }
@@ -202,29 +224,32 @@ nlohmann::json SerializeGlobalFxSettings(const guitarfx::GlobalSignalChainConfig
     // Serialize global FX (gate, transpose, EQ, doubler) to app settings for persistence.
     // This is per-instance state saved to app.json (standalone) or host state (plugin).
     // Global FX are NEVER saved in presets—presets contain only the signal graph.
-    return nlohmann::json{
-        {"inputGain", config.inputGain},
-        {"outputGain", config.outputGain},
-        {"preChainGraph", guitarfx::SerializeSignalGraph(config.preChainGraph)},
-        {"postChainGraph", guitarfx::SerializeSignalGraph(config.postChainGraph)}
-    };
+    return nlohmann::json{{"inputGain", config.inputGain},
+                          {"outputGain", config.outputGain},
+                          {"preChainGraph", guitarfx::SerializeSignalGraph(config.preChainGraph)},
+                          {"postChainGraph", guitarfx::SerializeSignalGraph(config.postChainGraph)}};
 }
 
-void SaveJsonFile(const guitarfx::FileSystem& fileSystem,
-                  const std::filesystem::path& path,
+void SaveJsonFile(const guitarfx::FileSystem& fileSystem, const std::filesystem::path& path,
                   const nlohmann::json& payload)
 {
     if (path.empty())
+    {
         return;
+    }
 
     try
     {
         [[maybe_unused]] const auto ensuredParent = fileSystem.EnsureDirectory(path.parent_path());
         std::ofstream output(path);
         if (output.is_open())
+        {
             output << payload.dump(2);
+        }
     }
-    catch (const std::exception&) {}
+    catch (const std::exception&)
+    {
+    }
 }
 
 std::string BuildUtcIsoTimestamp()
@@ -246,7 +271,10 @@ std::string MakeUniqueNodeId(const guitarfx::SignalGraph& graph, const std::stri
 {
     std::string candidate = baseId;
     int suffix = 1;
-    while (graph.FindNode(candidate)) candidate = baseId + std::to_string(suffix++);
+    while (graph.FindNode(candidate))
+    {
+        candidate = baseId + std::to_string(suffix++);
+    }
     return candidate;
 }
 
@@ -272,7 +300,9 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
     for (const auto& [id, count] : indegree)
     {
         if (count == 0)
+        {
             queue.push_back(id);
+        }
     }
 
     size_t visited = 0;
@@ -284,16 +314,22 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
 
         const auto outIt = outgoing.find(nodeId);
         if (outIt == outgoing.end())
+        {
             continue;
+        }
 
         for (const auto& nextId : outIt->second)
         {
             auto indegreeIt = indegree.find(nextId);
             if (indegreeIt == indegree.end())
+            {
                 continue;
+            }
             indegreeIt->second -= 1;
             if (indegreeIt->second == 0)
+            {
                 queue.push_back(nextId);
+            }
         }
     }
 
@@ -347,7 +383,6 @@ std::string HashStringForLog(std::string_view value)
     stream << "0x" << std::hex << std::setw(16) << std::setfill('0') << hash;
     return stream.str();
 }
-
 
 std::string GenerateUserPresetId()
 {

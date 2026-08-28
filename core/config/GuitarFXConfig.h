@@ -56,7 +56,7 @@ inline constexpr const char* kCompany = GUITARFX_BRAND_COMPANY_STR;
 inline constexpr const char* kProduct = GUITARFX_BRAND_PRODUCT_STR;
 inline constexpr const char* kDisplay = GUITARFX_BRAND_DISPLAY_STR;
 inline constexpr const char* kDomain = GUITARFX_BRAND_DOMAIN_STR;
-}
+} // namespace guitarfx::branding
 
 namespace guitarfx::config
 {

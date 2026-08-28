@@ -9,52 +9,67 @@
 
 namespace guitarfx
 {
-  /**
-   * Reference to a resource (NAM model, IR, etc.)
-   *
-   * Resources can be referenced in three ways:
-   * 1. Library resource: resourceType + resourceId for pre-defined resources
-   * 2. Custom file: filePath for user-provided files
-   * 3. Embedded: embeddedId for portable preset sharing
-   */
-  struct ResourceRef
-  {
-    std::string resourceType; // "nam", "ir", etc.
-    std::string resourceId;   // Library ID (e.g., "plexi-bright")
-    std::filesystem::path filePath; // Direct file path
-    std::string embeddedId;   // References EmbeddedResource.id
-    std::string parameterId;  // Mapped parameter identifier (e.g., "gain", "warp")
-    std::optional<double> parameterValue; // Captured parameter value for blending
-    std::map<std::string, double> parameters; // Multi-parameter mappings for blends
+/**
+ * Reference to a resource (NAM model, IR, etc.)
+ *
+ * Resources can be referenced in three ways:
+ * 1. Library resource: resourceType + resourceId for pre-defined resources
+ * 2. Custom file: filePath for user-provided files
+ * 3. Embedded: embeddedId for portable preset sharing
+ */
+struct ResourceRef
+{
+    std::string resourceType;                    // "nam", "ir", etc.
+    std::string resourceId;                      // Library ID (e.g., "plexi-bright")
+    std::filesystem::path filePath;              // Direct file path
+    std::string embeddedId;                      // References EmbeddedResource.id
+    std::string parameterId;                     // Mapped parameter identifier (e.g., "gain", "warp")
+    std::optional<double> parameterValue;        // Captured parameter value for blending
+    std::map<std::string, double> parameters;    // Multi-parameter mappings for blends
     std::map<std::string, std::string> metadata; // Transient library metadata, not serialized into presets
 
-    [[nodiscard]] bool IsLibraryRef() const { return !resourceType.empty() && !resourceId.empty(); }
-    [[nodiscard]] bool IsFilePath() const { return !filePath.empty(); }
-    [[nodiscard]] bool IsEmbedded() const { return !embeddedId.empty(); }
-    [[nodiscard]] bool IsValid() const { return IsLibraryRef() || IsFilePath() || IsEmbedded(); }
+    [[nodiscard]] bool IsLibraryRef() const
+    {
+        return !resourceType.empty() && !resourceId.empty();
+    }
+
+    [[nodiscard]] bool IsFilePath() const
+    {
+        return !filePath.empty();
+    }
+
+    [[nodiscard]] bool IsEmbedded() const
+    {
+        return !embeddedId.empty();
+    }
+
+    [[nodiscard]] bool IsValid() const
+    {
+        return IsLibraryRef() || IsFilePath() || IsEmbedded();
+    }
 
     bool operator==(const ResourceRef&) const = default;
-  };
+};
 
-  /**
-   * Embedded resource for portable preset sharing.
-   * Only needed when sharing presets with custom files.
-   */
-  struct EmbeddedResource
-  {
-    std::string id;            // Reference ID within this preset
-    std::string type;          // "nam", "ir", etc.
-    std::string name;          // Display name
-    std::string hash;          // SHA-256 for verification
-    std::string data;          // Base64-encoded file data (optional)
+/**
+ * Embedded resource for portable preset sharing.
+ * Only needed when sharing presets with custom files.
+ */
+struct EmbeddedResource
+{
+    std::string id;                     // Reference ID within this preset
+    std::string type;                   // "nam", "ir", etc.
+    std::string name;                   // Display name
+    std::string hash;                   // SHA-256 for verification
+    std::string data;                   // Base64-encoded file data (optional)
     std::filesystem::path originalPath; // Original file path
-  };
+};
 
-  /**
-   * A node in the signal graph.
-   */
-  struct GraphNode
-  {
+/**
+ * A node in the signal graph.
+ */
+struct GraphNode
+{
     std::string id;       // Unique node ID within this graph
     std::string type;     // Effect type (e.g., "amp_nam", "ir_cab", "eq_parametric")
     std::string category; // UI grouping: "amp", "cab", "eq", "dynamics", etc.
@@ -64,16 +79,16 @@ namespace guitarfx
     std::map<std::string, double> params;      // Numeric parameters
     std::map<std::string, std::string> config; // String config
 
-    std::vector<ResourceRef> resources;       // For effects needing multiple external files
+    std::vector<ResourceRef> resources; // For effects needing multiple external files
 
     bool operator==(const GraphNode&) const = default;
-  };
+};
 
-  /**
-   * An edge connecting two nodes in the signal graph.
-   */
-  struct GraphEdge
-  {
+/**
+ * An edge connecting two nodes in the signal graph.
+ */
+struct GraphEdge
+{
     std::string from;  // Source node ID
     std::string to;    // Destination node ID
     int fromPort = 0;  // Output port index (for splitters)
@@ -81,79 +96,85 @@ namespace guitarfx
     double gain = 1.0; // Edge gain multiplier
 
     bool operator==(const GraphEdge&) const = default;
-  };
+};
 
-  /**
-   * Signal graph containing nodes and edges.
-   */
-  struct SignalGraph
-  {
+/**
+ * Signal graph containing nodes and edges.
+ */
+struct SignalGraph
+{
     std::vector<GraphNode> nodes;
     std::vector<GraphEdge> edges;
 
     [[nodiscard]] const GraphNode* FindNode(const std::string& id) const
     {
-      for (const auto& node : nodes)
-      {
-        if (node.id == id) return &node;
-      }
-      return nullptr;
+        for (const auto& node : nodes)
+        {
+            if (node.id == id)
+            {
+                return &node;
+            }
+        }
+        return nullptr;
     }
 
     [[nodiscard]] GraphNode* FindNode(const std::string& id)
     {
-      for (auto& node : nodes)
-      {
-        if (node.id == id) return &node;
-      }
-      return nullptr;
+        for (auto& node : nodes)
+        {
+            if (node.id == id)
+            {
+                return &node;
+            }
+        }
+        return nullptr;
     }
 
     bool operator==(const SignalGraph&) const = default;
-  };
+};
 
-  struct PresetScene
-  {
+struct PresetScene
+{
     std::string id;
     std::string title;
     SignalGraph graph;
-  };
+};
 
-  /**
-   * Global settings for the preset.
-   */
-  struct GlobalSettings
-  {
-    double inputTrim = 0.0;   // Input gain in dB
-    double outputTrim = 0.0;  // Output trim in dB
-    double outputVolume = 1.0; // Output volume (0.0-1.0 linear)
+/**
+ * Global settings for the preset.
+ */
+struct GlobalSettings
+{
+    double inputTrim = 0.0;       // Input gain in dB
+    double outputTrim = 0.0;      // Output trim in dB
+    double outputVolume = 1.0;    // Output volume (0.0-1.0 linear)
     bool autoLevelInput = false;  // Apply model-referenced input gain if available
     bool autoLevelOutput = false; // Apply model-referenced output trim if available
-    int transpose = 0;        // Pitch shift in semitones (-36..+12)
-  };
+    int transpose = 0;            // Pitch shift in semitones (-36..+12)
+};
 
-  /**
-   * Global signal chain configuration.
-   * Developer-only: defines global effects applied before and after preset processing.
-   * 
-   * Signal flow:
-   *   Input → [Pre-chain: Tuner tap → Noise Gate → Transpose] → 
-   *   [Preset Mixer] → [Post-chain: EQ → Doubler] → Output
-   */
-  struct GlobalSignalChainConfig
-  {
+/**
+ * Global signal chain configuration.
+ * Developer-only: defines global effects applied before and after preset processing.
+ *
+ * Signal flow:
+ *   Input → [Pre-chain: Tuner tap → Noise Gate → Transpose] →
+ *   [Preset Mixer] → [Post-chain: EQ → Doubler] → Output
+ */
+struct GlobalSignalChainConfig
+{
     // Signal graph definitions for global pre/post chains (preferred over legacy param blocks)
     SignalGraph preChainGraph;
     SignalGraph postChainGraph;
 
     // Input stage settings
-    double inputGain = 0.0;          // dB
+    double inputGain = 0.0; // dB
     bool monoMode = false;
-    int inputChannel = 0;            // 0=left, 1=right (when mono)
+    int inputChannel = 0; // 0=left, 1=right (when mono)
     bool autoLevelInput = false;
 
     // Output stage settings
-    double outputGain = 0.0;         // dB (master volume)
+    double outputGain = 0.0; // dB (master volume)
     bool autoLevelOutput = false;
     bool limiterEnabled = false;
 
@@ -181,13 +202,13 @@ namespace guitarfx
     /// Value equality over every configuration field. Used to skip redundant
     /// global-chain rebuilds, which are expensive and must not run under the DSP lock.
     bool operator==(const GlobalSignalChainConfig&) const = default;
-  };
+};
 
-  /**
-   * Preset data model with flexible signal graph.
-   */
-  struct Preset
-  {
+/**
+ * Preset data model with flexible signal graph.
+ */
+struct Preset
+{
     // Metadata
     std::string id;
     std::string name;
@@ -212,67 +233,67 @@ namespace guitarfx
 
     // Embedded resources (optional, for sharing)
     std::vector<EmbeddedResource> embeddedResources;
-  };
+};
 
-  /**
-   * Maps a user-facing parameter to an inner node parameter within a composite effect.
-   */
-  struct ExposedParameter
-  {
-    std::string paramId;       // User-facing parameter ID (e.g., "drive")
-    std::string displayName;   // Label shown in UI
-    std::string nodeId;        // Target node ID within the inner graph
-    std::string nodeParamKey;  // Parameter key on the target node
+/**
+ * Maps a user-facing parameter to an inner node parameter within a composite effect.
+ */
+struct ExposedParameter
+{
+    std::string paramId;      // User-facing parameter ID (e.g., "drive")
+    std::string displayName;  // Label shown in UI
+    std::string nodeId;       // Target node ID within the inner graph
+    std::string nodeParamKey; // Parameter key on the target node
 
-    double minValue = 0.0;     // Override min range
-    double maxValue = 1.0;     // Override max range
-    double defaultValue = 0.0; // Override default value
-    std::string unit;          // Display unit (e.g., "dB", "Hz", "ms")
+    double minValue = 0.0;        // Override min range
+    double maxValue = 1.0;        // Override max range
+    double defaultValue = 0.0;    // Override default value
+    std::string unit;             // Display unit (e.g., "dB", "Hz", "ms")
     std::string curve = "linear"; // Mapping curve: "linear", "log", "exp"
-  };
+};
 
-  /**
-   * Maps a user-facing resource selector to an inner node resource slot
-   * within a composite effect.
-   */
-  struct ExposedResource
-  {
-    std::string resourceId;    // User-facing resource key (e.g., "ampModel", "cabIr")
-    std::string displayName;   // Label shown in UI
-    std::string nodeId;        // Target node ID within the inner graph
-    std::string resourceType;  // Expected resource type (e.g., "nam", "ir")
-    int resourceIndex = 0;     // Target resource slot on the inner node
+/**
+ * Maps a user-facing resource selector to an inner node resource slot
+ * within a composite effect.
+ */
+struct ExposedResource
+{
+    std::string resourceId;      // User-facing resource key (e.g., "ampModel", "cabIr")
+    std::string displayName;     // Label shown in UI
+    std::string nodeId;          // Target node ID within the inner graph
+    std::string resourceType;    // Expected resource type (e.g., "nam", "ir")
+    int resourceIndex = 0;       // Target resource slot on the inner node
     bool allowBrowseFile = true; // Whether custom file browsing is allowed
 
     // Optional resource parameter mapping (used by some resource-driven systems)
     std::string parameterId;
     std::optional<double> parameterValue;
-  };
+};
 
-  /**
-   * Defines a composite effect — a reusable mini signal path that appears
-   * as a single node in the parent graph. Contains an inner graph of effects
-   * with only selected parameters exposed to the user.
-   */
-  struct CompositeEffectDefinition
-  {
-    std::string id;            // Unique identifier (e.g., "composite-vintage-marshall")
-    std::string name;          // Display name
-    std::string category;      // Effect category for UI grouping (e.g., "channel", "amp")
-    std::string description;   // User-facing description
-    std::string author;        // Creator name
+/**
+ * Defines a composite effect — a reusable mini signal path that appears
+ * as a single node in the parent graph. Contains an inner graph of effects
+ * with only selected parameters exposed to the user.
+ */
+struct CompositeEffectDefinition
+{
+    std::string id;                // Unique identifier (e.g., "composite-vintage-marshall")
+    std::string name;              // Display name
+    std::string category;          // Effect category for UI grouping (e.g., "channel", "amp")
+    std::string description;       // User-facing description
+    std::string author;            // Creator name
     std::vector<std::string> tags; // Searchable tags
-    int version = 1;           // Definition schema version
+    int version = 1;               // Definition schema version
 
-    SignalGraph innerGraph;    // The mini signal graph of inner effects
-    std::vector<ExposedParameter> exposedParams; // Parameters surfaced to the user
+    SignalGraph innerGraph;                        // The mini signal graph of inner effects
+    std::vector<ExposedParameter> exposedParams;   // Parameters surfaced to the user
     std::vector<ExposedResource> exposedResources; // Resources surfaced to the user
 
     // Optional layout JSON stored as a string (parsed by UI)
     std::string layoutJson;
 
-    std::string createdAt;     // ISO 8601 timestamp
-    std::string modifiedAt;    // Last modification timestamp
+    std::string createdAt;  // ISO 8601 timestamp
+    std::string modifiedAt; // Last modification timestamp
 
     /**
      * Get the effect type ID used to register this composite with the EffectRegistry.
@@ -280,7 +301,7 @@ namespace guitarfx
      */
     [[nodiscard]] std::string GetEffectTypeId() const
     {
-      return "composite:" + id;
+        return "composite:" + id;
     }
 
     /**
@@ -288,39 +309,38 @@ namespace guitarfx
      */
     [[nodiscard]] bool IsValid() const
     {
-      return !id.empty() && !name.empty() && !innerGraph.nodes.empty();
+        return !id.empty() && !name.empty() && !innerGraph.nodes.empty();
     }
-  };
+};
 
-  // Reserved node types for routing
-  constexpr const char* kNodeTypeInput    = "input";
-  constexpr const char* kNodeTypeOutput   = "output";
-  constexpr const char* kNodeTypeSplitter = EffectGuids::kSplitter;
-  constexpr const char* kNodeTypeMixer    = EffectGuids::kMixer;
-  constexpr const char* kNodeTypeCompositePrefix = "composite:";
+// Reserved node types for routing
+constexpr const char* kNodeTypeInput = "input";
+constexpr const char* kNodeTypeOutput = "output";
+constexpr const char* kNodeTypeSplitter = EffectGuids::kSplitter;
+constexpr const char* kNodeTypeMixer = EffectGuids::kMixer;
+constexpr const char* kNodeTypeCompositePrefix = "composite:";
 
-  /**
-    * Ensure preset graph has canonical input/output boundary nodes
-    * with built-in gain parameters.
-   */
-  void EnsurePresetBoundaryGainNodes(SignalGraph& graph);
+/**
+ * Ensure preset graph has canonical input/output boundary nodes
+ * with built-in gain parameters.
+ */
+void EnsurePresetBoundaryGainNodes(SignalGraph& graph);
 
-  void NormalizePresetScenes(Preset& preset);
-  [[nodiscard]] PresetScene* FindPresetScene(Preset& preset, const std::string& sceneId);
-  [[nodiscard]] const PresetScene* FindPresetScene(const Preset& preset, const std::string& sceneId);
-  [[nodiscard]] std::string GetDefaultPresetSceneId(const Preset& preset);
-  [[nodiscard]] bool SetPresetActiveScene(Preset& preset,
-                                          const std::string& sceneId,
-                                          std::string* resolvedSceneId = nullptr);
-  void SyncPresetSceneFromGraph(Preset& preset, const std::string& sceneId);
+void NormalizePresetScenes(Preset& preset);
+[[nodiscard]] PresetScene* FindPresetScene(Preset& preset, const std::string& sceneId);
+[[nodiscard]] const PresetScene* FindPresetScene(const Preset& preset, const std::string& sceneId);
+[[nodiscard]] std::string GetDefaultPresetSceneId(const Preset& preset);
+[[nodiscard]] bool SetPresetActiveScene(Preset& preset, const std::string& sceneId,
+                                        std::string* resolvedSceneId = nullptr);
+void SyncPresetSceneFromGraph(Preset& preset, const std::string& sceneId);
 
-  inline void EnsurePresetBoundaryGainNodes(Preset& preset)
-  {
+inline void EnsurePresetBoundaryGainNodes(Preset& preset)
+{
     EnsurePresetBoundaryGainNodes(preset.graph);
     for (auto& scene : preset.scenes)
     {
-      EnsurePresetBoundaryGainNodes(scene.graph);
+        EnsurePresetBoundaryGainNodes(scene.graph);
     }
-  }
+}
 
 } // namespace guitarfx

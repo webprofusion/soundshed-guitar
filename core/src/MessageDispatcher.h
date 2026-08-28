@@ -21,7 +21,7 @@ class PluginController;
 
 class MessageDispatcher
 {
-public:
+  public:
     /**
      * Parse a JSON message string and dispatch to the appropriate
      * PluginController handler based on the "type" field.
@@ -31,34 +31,19 @@ public:
      */
     static void Dispatch(PluginController& controller, const std::string& jsonMessage);
 
-private:
-    static bool DispatchStateAndLists(PluginController& controller,
-                                      const nlohmann::json& msg,
-                                      const std::string& type);
-    static bool DispatchSettings(PluginController& controller,
-                                 const nlohmann::json& msg,
-                                 const std::string& type);
-    static bool DispatchParameters(PluginController& controller,
-                                   const nlohmann::json& msg,
-                                   const std::string& type);
-    static bool DispatchPresetsAndResources(PluginController& controller,
-                                            const nlohmann::json& msg,
+  private:
+    static bool DispatchStateAndLists(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchSettings(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchParameters(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchPresetsAndResources(PluginController& controller, const nlohmann::json& msg,
                                             const std::string& type);
-    static bool DispatchSignalPath(PluginController& controller,
-                                   const nlohmann::json& msg,
-                                   const std::string& type);
-    static bool DispatchMixerAndMonitoring(PluginController& controller,
-                                           const nlohmann::json& msg,
+    static bool DispatchSignalPath(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchMixerAndMonitoring(PluginController& controller, const nlohmann::json& msg,
                                            const std::string& type);
-    static bool DispatchLibraryAndComposite(PluginController& controller,
-                                             const nlohmann::json& msg,
-                                             const std::string& type);
-    static bool DispatchAutomation(PluginController& controller,
-                                   const nlohmann::json& msg,
-                                   const std::string& type);
-    static bool DispatchPracticeTool(PluginController& controller,
-                                     const nlohmann::json& msg,
-                                     const std::string& type);
+    static bool DispatchLibraryAndComposite(PluginController& controller, const nlohmann::json& msg,
+                                            const std::string& type);
+    static bool DispatchAutomation(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchPracticeTool(PluginController& controller, const nlohmann::json& msg, const std::string& type);
 };
 
 } // namespace guitarfx

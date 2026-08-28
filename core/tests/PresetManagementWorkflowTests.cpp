@@ -28,16 +28,21 @@ namespace
 /// must be destroyed (or at least done writing) first.
 class StoreReader
 {
-public:
+  public:
     explicit StoreReader(const fs::path& sandbox)
     {
         std::string error;
         mOpen = mStore.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error);
         if (!mOpen)
+        {
             std::cerr << "StoreReader could not open the store: " << error << "\n";
+        }
     }
 
-    [[nodiscard]] bool Ok() const { return mOpen; }
+    [[nodiscard]] bool Ok() const
+    {
+        return mOpen;
+    }
 
     /// app.json's contents, reassembled from the one-row-per-key layout.
     [[nodiscard]] nlohmann::json AppSettings()
@@ -46,7 +51,9 @@ public:
         for (const auto& item : mStore.List(guitarfx::storage::ItemType::kSetting))
         {
             if (auto parsed = item.Parse())
+            {
                 settings[item.id] = std::move(*parsed);
+            }
         }
         return settings;
     }
@@ -73,18 +80,18 @@ public:
         return guitarfx::PresetStorage::SaveToStore(mStore, preset);
     }
 
-private:
+  private:
     guitarfx::storage::JsonStore mStore;
     bool mOpen = false;
 };
 
 class TestHost final : public guitarfx::IPluginHost
 {
-public:
+  public:
     explicit TestHost(fs::path userDataPath, fs::path bundledAssetsPath = {}, bool standalone = false)
-        : mUserDataPath(std::move(userDataPath))
-        , mBundledAssetsPath(bundledAssetsPath.empty() ? mUserDataPath : std::move(bundledAssetsPath))
-        , mStandalone(standalone)
+        : mUserDataPath(std::move(userDataPath)),
+          mBundledAssetsPath(bundledAssetsPath.empty() ? mUserDataPath : std::move(bundledAssetsPath)),
+          mStandalone(standalone)
     {
     }
 
@@ -93,16 +100,13 @@ public:
         sentMessages.push_back(jsonMessage);
     }
 
-    void BrowseFileAsync(guitarfx::BrowseFileType,
-                         const std::string&,
+    void BrowseFileAsync(guitarfx::BrowseFileType, const std::string&,
                          std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
     }
 
-    void SaveFileAsync(guitarfx::BrowseFileType,
-                       const std::string&,
-                       const std::string&,
+    void SaveFileAsync(guitarfx::BrowseFileType, const std::string&, const std::string&,
                        std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
@@ -146,7 +150,7 @@ public:
     int stateChangedCount = 0;
     std::vector<std::string> sentMessages;
 
-private:
+  private:
     fs::path mUserDataPath;
     fs::path mBundledAssetsPath;
     bool mStandalone = false;
@@ -218,8 +222,7 @@ guitarfx::Preset BuildPassthroughPreset(const std::string& id, const std::string
     return preset;
 }
 
-std::optional<nlohmann::json> FindLatestMessageOfType(const std::vector<std::string>& messages,
-                                                       const std::string& type)
+std::optional<nlohmann::json> FindLatestMessageOfType(const std::vector<std::string>& messages, const std::string& type)
 {
     for (auto it = messages.rbegin(); it != messages.rend(); ++it)
     {
@@ -275,6 +278,7 @@ struct StoredZipEntry
 std::vector<std::uint8_t> BuildStoredZip(const std::vector<StoredZipEntry>& entries)
 {
     std::vector<std::uint8_t> bytes;
+
     struct CentralRecord
     {
         std::string name;
@@ -282,6 +286,7 @@ std::vector<std::uint8_t> BuildStoredZip(const std::vector<StoredZipEntry>& entr
         std::uint32_t size = 0;
         std::uint32_t localOffset = 0;
     };
+
     std::vector<CentralRecord> central;
     central.reserve(entries.size());
 
@@ -350,7 +355,8 @@ bool TestRiffLibraryPathNormalization()
 {
     try
     {
-        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "riff-path-normalization";
+        const fs::path sandbox =
+            fs::temp_directory_path() / "guitarfx-preset-management-tests" / "riff-path-normalization";
         std::error_code ec;
         fs::remove_all(sandbox, ec);
         fs::create_directories(sandbox, ec);
@@ -377,21 +383,13 @@ bool TestRiffLibraryPathNormalization()
         {
             nlohmann::json index = nlohmann::json::object();
             index["path"] = libraryRoot.string();
-            index["riffs"] = nlohmann::json::array({
-                {
-                    {"id", "riff-1"},
-                    {"title", "Riff One"},
-                    {"favorite", false},
-                    {"used", false},
-                    {"takes", nlohmann::json::array({
-                        {
-                            {"id", "take-1"},
-                            {"filePath", takePath.string()},
-                            {"durationSec", 1.0}
-                        }
-                    })}
-                }
-            });
+            index["riffs"] = nlohmann::json::array(
+                {{{"id", "riff-1"},
+                  {"title", "Riff One"},
+                  {"favorite", false},
+                  {"used", false},
+                  {"takes", nlohmann::json::array(
+                                {{{"id", "take-1"}, {"filePath", takePath.string()}, {"durationSec", 1.0}}})}}});
             std::ofstream indexFile(indexPath);
             indexFile << index.dump(2);
         }
@@ -407,7 +405,9 @@ bool TestRiffLibraryPathNormalization()
 
         StoreReader reader(sandbox);
         if (!reader.Ok())
+        {
             return false;
+        }
         const nlohmann::json storedIndex = reader.Document("riff-library");
 
         if (!storedIndex.is_object() || storedIndex.empty())
@@ -554,7 +554,8 @@ bool TestPluginStateRestoresActiveScene()
         {"preset", nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset))},
         {"presetId", preset.id},
         {"sceneId", "scene-2"},
-    }.dump());
+    }
+                               .dump());
 
     const auto savedState = nlohmann::json::parse(source.SerializeState());
     if (savedState.value("activeSceneId", std::string{}) != "scene-2")
@@ -579,7 +580,8 @@ bool TestPluginStateRestoresActiveScene()
 
 bool TestPluginStateRestoresGlobalGate()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "plugin-global-gate-state";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "plugin-global-gate-state";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -590,9 +592,12 @@ bool TestPluginStateRestoresGlobalGate()
     guitarfx::PluginController source(host);
     source.Initialize();
 
-    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
-    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -52.0}}.dump());
-    source.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.enabled"}, {"value", true}}.dump());
+    source.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
+    source.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -52.0}}.dump());
+    source.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.enabled"}, {"value", true}}.dump());
 
     const auto savedState = nlohmann::json::parse(source.SerializeState());
 
@@ -645,12 +650,15 @@ bool TestSetParameterMessageRoutesToGlobalChain()
     // every parameter, including the boolean and integer ones, and must land on the
     // same global chain state that setGlobalChainParam writes.
     controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "gateEnabled"}, {"value", 1}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "gateThreshold"}, {"value", -47.5}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setParameter"}, {"name", "gateThreshold"}, {"value", -47.5}}.dump());
     controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "transpose"}, {"value", -5}}.dump());
     // snake_case spelling: what the older UI sliders emitted.
-    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "output_trim"}, {"value", -2.5}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setParameter"}, {"name", "output_trim"}, {"value", -2.5}}.dump());
     // Unknown names must be ignored rather than throwing or writing anything.
-    controller.HandleUIMessage(nlohmann::json{{"type", "setParameter"}, {"name", "notAParameter"}, {"value", 1}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setParameter"}, {"name", "notAParameter"}, {"value", 1}}.dump());
 
     const auto chain = controller.GetMixer().GetGlobalChainConfig();
 
@@ -670,8 +678,7 @@ bool TestSetParameterMessageRoutesToGlobalChain()
 
     const auto* transpose = chain.preChainGraph.FindNode("global_transpose");
     const auto semitonesIt = transpose ? transpose->params.find("semitones") : decltype(transpose->params.end()){};
-    if (!transpose || semitonesIt == transpose->params.end()
-        || std::abs(semitonesIt->second - (-5.0)) > 1e-9)
+    if (!transpose || semitonesIt == transpose->params.end() || std::abs(semitonesIt->second - (-5.0)) > 1e-9)
     {
         std::cerr << "setParameter transpose did not reach the global transpose node\n";
         return false;
@@ -688,7 +695,8 @@ bool TestSetParameterMessageRoutesToGlobalChain()
 
 bool TestPluginInstanceNamQualityNeverReachesSharedStore()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "instance-owned-nam-quality";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "instance-owned-nam-quality";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -702,22 +710,26 @@ bool TestPluginInstanceNamQualityNeverReachesSharedStore()
     {
         StoreReader reader(sandbox);
         if (!reader.Ok())
+        {
             return false;
+        }
         storedBefore = reader.AppSettings().value("audio.nam.oversampling", 0.0);
     }
 
     // Instance-owned: this instance's tier, never the machine's.
-    controller.HandleUIMessage(nlohmann::json{
-        {"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
 
     // A shared setting changed afterwards must still be persisted — and must not drag
     // the instance-owned key out to the store along with it.
-    controller.HandleUIMessage(nlohmann::json{
-        {"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
 
     StoreReader reader(sandbox);
     if (!reader.Ok())
+    {
         return false;
+    }
     const auto stored = reader.AppSettings();
 
     if (stored.value("app.updateCheckEnabled", true) != false)
@@ -756,8 +768,9 @@ bool TestHostStateRestoreDoesNotRepublishProjectSettings()
     {
         guitarfx::PluginController seed(host);
         seed.Initialize();
-        seed.HandleUIMessage(nlohmann::json{
-            {"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -24.0}}.dump());
+        seed.HandleUIMessage(
+            nlohmann::json{{"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -24.0}}
+                .dump());
     }
 
     // A DAW project saved back when the setting was something else.
@@ -770,12 +783,14 @@ bool TestHostStateRestoreDoesNotRepublishProjectSettings()
 
     // Any later save at all is enough to publish the merged snapshot, if it was left
     // looking like this instance's own edits.
-    restored.HandleUIMessage(nlohmann::json{
-        {"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
+    restored.HandleUIMessage(
+        nlohmann::json{{"type", "setSetting"}, {"key", "app.updateCheckEnabled"}, {"value", false}}.dump());
 
     StoreReader reader(sandbox);
     if (!reader.Ok())
+    {
         return false;
+    }
     const auto stored = reader.AppSettings();
 
     if (std::abs(stored.value("audio.dsp.nominalOperatingLevelDbfs", 0.0) - (-24.0)) > 1e-9)
@@ -795,7 +810,8 @@ bool TestHostStateRestoreDoesNotRepublishProjectSettings()
 
 bool TestHostStateRestoreAppliesMergedSettings()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "host-state-applies-settings";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "host-state-applies-settings";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -809,9 +825,8 @@ bool TestHostStateRestoreAppliesMergedSettings()
     state["appSettings"] = nlohmann::json{
         {"audio.dsp.nominalOperatingLevelDbfs", -12.0},
         {"audio.userInputCalibration.activeProfileId", "profile-a"},
-        {"audio.userInputCalibration.profiles", nlohmann::json::array({
-            nlohmann::json{{"id", "profile-a"}, {"name", "Profile A"}, {"gainDb", 4.5}}
-        })},
+        {"audio.userInputCalibration.profiles",
+         nlohmann::json::array({nlohmann::json{{"id", "profile-a"}, {"name", "Profile A"}, {"gainDb", 4.5}}})},
     };
 
     controller.DeserializeState(state.dump());
@@ -844,7 +859,9 @@ bool TestPluginInstanceDoesNotOwnLastPresetId()
     {
         StoreReader writer(sandbox);
         if (!writer.Ok() || !writer.SavePreset(appPreset) || !writer.SavePreset(daw))
+        {
             return false;
+        }
     }
 
     // Standalone owns the machine-wide "last preset".
@@ -855,7 +872,8 @@ bool TestPluginInstanceDoesNotOwnLastPresetId()
         app.HandleUIMessage(nlohmann::json{
             {"type", "loadPreset"},
             {"preset", nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(appPreset))},
-            {"presetId", appPreset.id}}.dump());
+            {"presetId",
+             appPreset.id}}.dump());
     }
 
     {
@@ -988,8 +1006,7 @@ bool TestPluginStateRemembersEditorWindowSize()
     }
 
     const auto savedState = nlohmann::json::parse(source.SerializeState());
-    if (savedState["editorWindow"].value("width", 0) != 1536
-        || savedState["editorWindow"].value("height", 0) != 1024)
+    if (savedState["editorWindow"].value("width", 0) != 1536 || savedState["editorWindow"].value("height", 0) != 1024)
     {
         std::cerr << "Host state did not carry the editor window size\n";
         return false;
@@ -1023,9 +1040,9 @@ bool TestUiLayoutIsNotSharedBetweenPluginAndStandalone()
         TestHost appHost(sandbox, {}, /*standalone=*/true);
         guitarfx::PluginController app(appHost);
         app.Initialize();
-        app.HandleUIMessage(nlohmann::json{
-            {"type", "uiSettingsChanged"},
-            {"settings", nlohmann::json{{"zoom", 1.0}, {"signalPathHeight", 300}}}}.dump());
+        app.HandleUIMessage(nlohmann::json{{"type", "uiSettingsChanged"},
+                                           {"settings", nlohmann::json{{"zoom", 1.0}, {"signalPathHeight", 300}}}}
+                                .dump());
     }
 
     {
@@ -1050,14 +1067,14 @@ bool TestUiLayoutIsNotSharedBetweenPluginAndStandalone()
     }
 
     // ...but resizing the editor in a DAW is the project's business.
-    plugin.HandleUIMessage(nlohmann::json{
-        {"type", "uiSettingsChanged"},
-        {"settings", nlohmann::json{{"zoom", 1.75}, {"signalPathHeight", 640}}}}.dump());
+    plugin.HandleUIMessage(nlohmann::json{{"type", "uiSettingsChanged"},
+                                          {"settings", nlohmann::json{{"zoom", 1.75}, {"signalPathHeight", 640}}}}
+                               .dump());
 
     StoreReader reader(sandbox);
     const auto stored = reader.AppSettings();
-    if (std::abs(stored["uiSettings"].value("zoom", 0.0) - 1.0) > 1e-9
-        || stored["uiSettings"].value("signalPathHeight", 0) != 300)
+    if (std::abs(stored["uiSettings"].value("zoom", 0.0) - 1.0) > 1e-9 ||
+        stored["uiSettings"].value("signalPathHeight", 0) != 300)
     {
         std::cerr << "A plugin instance's editor layout leaked into the shared store\n";
         return false;
@@ -1096,16 +1113,17 @@ bool TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned()
     plugin.Initialize();
 
     // This instance picks its own NAM tier. Instance-owned: nobody else may move it.
-    plugin.HandleUIMessage(nlohmann::json{
-        {"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
+    plugin.HandleUIMessage(
+        nlohmann::json{{"type", "setSetting"}, {"key", "audio.nam.oversampling"}, {"value", 3}}.dump());
 
     // Another instance changes a genuinely shared setting.
     {
         TestHost otherHost(sandbox, {}, /*standalone=*/true);
         guitarfx::PluginController other(otherHost);
         other.Initialize();
-        other.HandleUIMessage(nlohmann::json{
-            {"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -27.0}}.dump());
+        other.HandleUIMessage(
+            nlohmann::json{{"type", "setSetting"}, {"key", "audio.dsp.nominalOperatingLevelDbfs"}, {"value", -27.0}}
+                .dump());
     }
 
     // The level target lives in process-global storage, which the other controller above
@@ -1137,7 +1155,8 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginState()
 {
     try
     {
-        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-rehydrate";
+        const fs::path sandbox =
+            fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-rehydrate";
         std::error_code ec;
         fs::remove_all(sandbox, ec);
         fs::create_directories(sandbox, ec);
@@ -1241,7 +1260,8 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset()
 {
     try
     {
-        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-rehydrate-active";
+        const fs::path sandbox =
+            fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-rehydrate-active";
         std::error_code ec;
         fs::remove_all(sandbox, ec);
         fs::create_directories(sandbox, ec);
@@ -1348,7 +1368,8 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset()
     }
     catch (const std::exception& ex)
     {
-        std::cerr << "Exception in TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset: " << ex.what() << "\n";
+        std::cerr << "Exception in TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset: " << ex.what()
+                  << "\n";
         return false;
     }
 }
@@ -1357,7 +1378,8 @@ bool TestLoadPresetRemapsHostedPluginResourceByStableId()
 {
     try
     {
-        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-id-remap";
+        const fs::path sandbox =
+            fs::temp_directory_path() / "guitarfx-preset-management-tests" / "hosted-plugin-id-remap";
         std::error_code ec;
         fs::remove_all(sandbox, ec);
         fs::create_directories(sandbox, ec);
@@ -1458,10 +1480,14 @@ bool TestLoadPresetPreservesInstanceGlobalFxState()
     guitarfx::PluginController controller(host);
     controller.Initialize();
 
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -3.25}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -1.5}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -52.0}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -3.25}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -1.5}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -52.0}}.dump());
 
     auto preset = BuildPassthroughPreset("p-level-load", "Level Load");
     preset.global.inputTrim = -9.5;
@@ -1483,8 +1509,7 @@ bool TestLoadPresetPreservesInstanceGlobalFxState()
     }
 
     const auto chain = controller.GetMixer().GetGlobalChainConfig();
-    if (std::abs(chain.inputGain - (-3.25)) > 1e-9
-        || std::abs(chain.outputGain - (-1.5)) > 1e-9)
+    if (std::abs(chain.inputGain - (-3.25)) > 1e-9 || std::abs(chain.outputGain - (-1.5)) > 1e-9)
     {
         std::cerr << "Preset load should not replace instance global input/output levels\n";
         return false;
@@ -1505,8 +1530,7 @@ bool TestLoadPresetPreservesInstanceGlobalFxState()
 
     // Re-read the chain rather than a shadow copy: it is the only record of these values.
     const auto rechecked = controller.GetMixer().GetGlobalChainConfig();
-    if (std::abs(rechecked.inputGain - (-3.25)) > 1e-9
-        || std::abs(rechecked.outputGain - (-1.5)) > 1e-9)
+    if (std::abs(rechecked.inputGain - (-3.25)) > 1e-9 || std::abs(rechecked.outputGain - (-1.5)) > 1e-9)
     {
         std::cerr << "Global chain config did not retain the preserved input/output levels\n";
         return false;
@@ -1534,26 +1558,42 @@ bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
         guitarfx::PluginController controller(host);
         controller.Initialize();
 
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -6.0}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -2.0}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -48.0}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "transpose.enabled"}, {"value", true}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "transpose.semitones"}, {"value", 5}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.enabled"}, {"value", true}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.lowGain"}, {"value", 1.75}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.highMidQ"}, {"value", 1.4}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.enabled"}, {"value", true}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.delay"}, {"value", 31.0}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.mix"}, {"value", 0.35}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.detune"}, {"value", 7.5}}.dump());
-        controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "limiter.enabled"}, {"value", true}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -6.0}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -2.0}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.enabled"}, {"value", true}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "gate.threshold"}, {"value", -48.0}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "transpose.enabled"}, {"value", true}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "transpose.semitones"}, {"value", 5}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.enabled"}, {"value", true}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.lowGain"}, {"value", 1.75}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "eq.highMidQ"}, {"value", 1.4}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.enabled"}, {"value", true}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.delay"}, {"value", 31.0}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.mix"}, {"value", 0.35}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "doubler.detune"}, {"value", 7.5}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "limiter.enabled"}, {"value", true}}.dump());
     }
 
     {
         StoreReader reader(sandbox);
         if (!reader.Ok())
+        {
             return false;
+        }
         if (!reader.AppSettings().contains("globalFx.settings"))
         {
             std::cerr << "Standalone global FX settings were not written to app settings\n";
@@ -1566,8 +1606,7 @@ bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
     reloaded.Initialize();
 
     const auto chain = reloaded.GetMixer().GetGlobalChainConfig();
-    if (std::abs(chain.inputGain - (-6.0)) > 1e-9
-        || std::abs(chain.outputGain - (-2.0)) > 1e-9)
+    if (std::abs(chain.inputGain - (-6.0)) > 1e-9 || std::abs(chain.outputGain - (-2.0)) > 1e-9)
     {
         std::cerr << "Standalone global input/output levels were not restored\n";
         return false;
@@ -1588,19 +1627,16 @@ bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
     }
 
     const auto* eq = chain.postChainGraph.FindNode("global_eq");
-    if (!eq || !eq->enabled
-        || std::abs(eq->params.at("lowGain") - 1.75) > 1e-9
-        || std::abs(eq->params.at("highMidQ") - 1.4) > 1e-9)
+    if (!eq || !eq->enabled || std::abs(eq->params.at("lowGain") - 1.75) > 1e-9 ||
+        std::abs(eq->params.at("highMidQ") - 1.4) > 1e-9)
     {
         std::cerr << "Standalone global EQ settings were not restored\n";
         return false;
     }
 
     const auto* doubler = chain.postChainGraph.FindNode("global_doubler");
-    if (!doubler || !doubler->enabled
-        || std::abs(doubler->params.at("time") - 31.0) > 1e-9
-        || std::abs(doubler->params.at("mix") - 0.35) > 1e-9
-        || std::abs(doubler->params.at("detune") - 7.5) > 1e-9)
+    if (!doubler || !doubler->enabled || std::abs(doubler->params.at("time") - 31.0) > 1e-9 ||
+        std::abs(doubler->params.at("mix") - 0.35) > 1e-9 || std::abs(doubler->params.at("detune") - 7.5) > 1e-9)
     {
         std::cerr << "Standalone global doubler settings were not restored\n";
         return false;
@@ -1608,7 +1644,8 @@ bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
 
     if (chain.limiterEnabled)
     {
-        std::cerr << "Limiter should not be part of standalone global FX persistence; it is mixer state, not pre/post FX\n";
+        std::cerr
+            << "Limiter should not be part of standalone global FX persistence; it is mixer state, not pre/post FX\n";
         return false;
     }
 
@@ -1628,7 +1665,7 @@ bool TestLoadPresetRetiresNamInputAutoLeveling()
     controller.Initialize();
 
     auto preset = BuildPreset("p-nam-level-migration", "NAM Level Migration");
-    auto *ampNode = preset.graph.FindNode("amp");
+    auto* ampNode = preset.graph.FindNode("amp");
     if (!ampNode)
     {
         std::cerr << "Failed to build NAM test node\n";
@@ -1647,14 +1684,14 @@ bool TestLoadPresetRetiresNamInputAutoLeveling()
     message["presetId"] = preset.id;
     controller.HandleUIMessage(message.dump());
 
-    const auto &active = controller.GetActivePreset();
+    const auto& active = controller.GetActivePreset();
     if (!active)
     {
         std::cerr << "No active preset after NAM migration load\n";
         return false;
     }
 
-    const auto *loadedAmp = active->graph.FindNode("amp");
+    const auto* loadedAmp = active->graph.FindNode("amp");
     if (!loadedAmp)
     {
         std::cerr << "Loaded preset missing NAM node\n";
@@ -1762,16 +1799,13 @@ bool TestLoadAppSettingsAppliesUserInputCalibrationProfile()
         nlohmann::json settings = nlohmann::json::object();
         settings["audio.interfaceCalibration.enabled"] = true;
         settings["audio.interfaceCalibration.referenceDbu"] = 12.0;
-        settings["audio.userInputCalibration.profiles"] = nlohmann::json::array({
-            {
-                {"id", "guitar-x"},
-                {"name", "Guitar X, Interface Gain at 0"},
-                {"description", "Bridge humbucker"},
-                {"capturedPeakDbfs", -18.0},
-                {"targetPeakDbfs", -12.0},
-                {"gainDb", 6.0}
-            }
-        });
+        settings["audio.userInputCalibration.profiles"] =
+            nlohmann::json::array({{{"id", "guitar-x"},
+                                    {"name", "Guitar X, Interface Gain at 0"},
+                                    {"description", "Bridge humbucker"},
+                                    {"capturedPeakDbfs", -18.0},
+                                    {"targetPeakDbfs", -12.0},
+                                    {"gainDb", 6.0}}});
         settings["audio.userInputCalibration.activeProfileId"] = "guitar-x";
 
         std::ofstream output(settingsPath);
@@ -1789,8 +1823,8 @@ bool TestLoadAppSettingsAppliesUserInputCalibrationProfile()
     }
 
     const auto& appSettings = controller.GetAppSettings();
-    if (appSettings.contains("audio.interfaceCalibration.enabled")
-        || appSettings.contains("audio.interfaceCalibration.referenceDbu"))
+    if (appSettings.contains("audio.interfaceCalibration.enabled") ||
+        appSettings.contains("audio.interfaceCalibration.referenceDbu"))
     {
         std::cerr << "Legacy interface calibration settings should be removed during app settings migration\n";
         return false;
@@ -1798,11 +1832,13 @@ bool TestLoadAppSettingsAppliesUserInputCalibrationProfile()
 
     StoreReader migratedReader(sandbox);
     if (!migratedReader.Ok())
+    {
         return false;
+    }
     const auto persisted = migratedReader.AppSettings();
 
-    if (persisted.contains("audio.interfaceCalibration.enabled")
-        || persisted.contains("audio.interfaceCalibration.referenceDbu"))
+    if (persisted.contains("audio.interfaceCalibration.enabled") ||
+        persisted.contains("audio.interfaceCalibration.referenceDbu"))
     {
         std::cerr << "Persisted app settings still contain legacy interface calibration keys\n";
         return false;
@@ -1854,20 +1890,18 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
     controller.Initialize();
 
     const auto& appSettings = controller.GetAppSettings();
-    const std::array<const char*, 12> removedKeys = {
-        "appSettings",
-        "audioSettings",
-        "lastPresetJson",
-        "parameters",
-        "metronomeEnabled",
-        "performancePads.open",
-        "toneSharing.apiBase",
-        "ui.experimentalFeaturesEnabled",
-        "audio.processing.namMonoOnly",
-        "app.lastUpdateCheck",
-        "globalSignalChain",
-        "metronomeBpm"
-    };
+    const std::array<const char*, 12> removedKeys = {"appSettings",
+                                                     "audioSettings",
+                                                     "lastPresetJson",
+                                                     "parameters",
+                                                     "metronomeEnabled",
+                                                     "performancePads.open",
+                                                     "toneSharing.apiBase",
+                                                     "ui.experimentalFeaturesEnabled",
+                                                     "audio.processing.namMonoOnly",
+                                                     "app.lastUpdateCheck",
+                                                     "globalSignalChain",
+                                                     "metronomeBpm"};
     for (const auto* key : removedKeys)
     {
         if (appSettings.contains(key))
@@ -1885,7 +1919,9 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
 
     StoreReader cleanedReader(sandbox);
     if (!cleanedReader.Ok())
+    {
         return false;
+    }
     const auto persisted = cleanedReader.AppSettings();
 
     for (const auto* key : removedKeys)
@@ -1902,7 +1938,8 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
 
 bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelection()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "user-input-calibration-training";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "user-input-calibration-training";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -1912,16 +1949,13 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
-        settings["audio.userInputCalibration.profiles"] = nlohmann::json::array({
-            {
-                {"id", "guitar-x"},
-                {"name", "Guitar X, Interface Gain at 0"},
-                {"description", "Bridge humbucker"},
-                {"capturedPeakDbfs", -18.0},
-                {"targetPeakDbfs", -12.0},
-                {"gainDb", 6.0}
-            }
-        });
+        settings["audio.userInputCalibration.profiles"] =
+            nlohmann::json::array({{{"id", "guitar-x"},
+                                    {"name", "Guitar X, Interface Gain at 0"},
+                                    {"description", "Bridge humbucker"},
+                                    {"capturedPeakDbfs", -18.0},
+                                    {"targetPeakDbfs", -12.0},
+                                    {"gainDb", 6.0}}});
         settings["audio.userInputCalibration.activeProfileId"] = "guitar-x";
 
         std::ofstream output(settingsPath);
@@ -1938,7 +1972,8 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
         return false;
     }
 
-    controller.HandleUIMessage(nlohmann::json{{"type", "setUserInputCalibrationTrainingActive"}, {"active", true}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setUserInputCalibrationTrainingActive"}, {"active", true}}.dump());
 
     if (std::abs(controller.GetMixer().GetUserInputCalibrationGainDb()) > 1e-9)
     {
@@ -1955,7 +1990,9 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
 
     StoreReader trainingReader(sandbox);
     if (!trainingReader.Ok())
+    {
         return false;
+    }
     const auto duringTrainingPersisted = trainingReader.AppSettings();
 
     if (duringTrainingPersisted.value("audio.userInputCalibration.activeProfileId", std::string{}) != "guitar-x")
@@ -1964,7 +2001,8 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
         return false;
     }
 
-    controller.HandleUIMessage(nlohmann::json{{"type", "setUserInputCalibrationTrainingActive"}, {"active", false}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setUserInputCalibrationTrainingActive"}, {"active", false}}.dump());
 
     if (std::abs(controller.GetMixer().GetUserInputCalibrationGainDb() - 6.0) > 1e-9)
     {
@@ -1994,9 +2032,12 @@ bool TestSavePresetDoesNotPersistGlobalFxSettings()
     loadMessage["presetId"] = preset.id;
     controller.HandleUIMessage(loadMessage.dump());
 
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -7.0}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -2.5}}.dump());
-    controller.HandleUIMessage(nlohmann::json{{"type", "setAutoLevel"}, {"autoInput", true}, {"autoOutput", true}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "input.gain"}, {"value", -7.0}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -2.5}}.dump());
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setAutoLevel"}, {"autoInput", true}, {"autoOutput", true}}.dump());
 
     const std::string saveId = "unit-test-level-save";
     controller.HandleUIMessage(nlohmann::json{
@@ -2005,8 +2046,7 @@ bool TestSavePresetDoesNotPersistGlobalFxSettings()
         {"category", "Unit"},
         {"description", "Unified level save test"},
         {"includeGlobalSignalChain", true},
-        {"presetId", saveId}
-    }.dump());
+        {"presetId", saveId}}.dump());
 
     StoreReader levelReader(sandbox);
     const auto fromFile = levelReader.Ok() ? levelReader.Preset(saveId) : std::nullopt;
@@ -2016,11 +2056,8 @@ bool TestSavePresetDoesNotPersistGlobalFxSettings()
         return false;
     }
 
-    if (std::abs(fromFile->global.inputTrim) > 1e-9
-        || std::abs(fromFile->global.outputTrim) > 1e-9
-        || fromFile->global.autoLevelInput
-        || fromFile->global.autoLevelOutput
-        || fromFile->globalSignalChain.has_value())
+    if (std::abs(fromFile->global.inputTrim) > 1e-9 || std::abs(fromFile->global.outputTrim) > 1e-9 ||
+        fromFile->global.autoLevelInput || fromFile->global.autoLevelOutput || fromFile->globalSignalChain.has_value())
     {
         std::cerr << "Saved preset should not persist global FX state\n";
         return false;
@@ -2031,12 +2068,10 @@ bool TestSavePresetDoesNotPersistGlobalFxSettings()
 
 bool TestOptimizedNamMetadataAliasParsing()
 {
-    nlohmann::json metadata = {
-        {"input_level_dbu", 22.903},
-        {"output_level_dbu", 13.303},
-        {"loudness", -17.2881},
-        {"modeled_by", "unit-test-author"}
-    };
+    nlohmann::json metadata = {{"input_level_dbu", 22.903},
+                               {"output_level_dbu", 13.303},
+                               {"loudness", -17.2881},
+                               {"modeled_by", "unit-test-author"}};
 
     const auto inputLevel = guitarfx::nam::ReadMetadataDouble(metadata, "input_level_dbu", "input_level");
     const auto outputLevel = guitarfx::nam::ReadMetadataDouble(metadata, "output_level_dbu", "output_level");
@@ -2049,10 +2084,8 @@ bool TestOptimizedNamMetadataAliasParsing()
         return false;
     }
 
-    if (std::abs(*inputLevel - 22.903) > 1e-9
-        || std::abs(*outputLevel - 13.303) > 1e-9
-        || std::abs(*loudness - (-17.2881)) > 1e-9
-        || *author != "unit-test-author")
+    if (std::abs(*inputLevel - 22.903) > 1e-9 || std::abs(*outputLevel - 13.303) > 1e-9 ||
+        std::abs(*loudness - (-17.2881)) > 1e-9 || *author != "unit-test-author")
     {
         std::cerr << "Optimized NAM metadata alias parsing returned wrong values\n";
         return false;
@@ -2088,7 +2121,9 @@ bool TestSaveGetDeletePresetWorkflow()
     {
         StoreReader reader(sandbox);
         if (!reader.Ok())
+        {
             return false;
+        }
         if (!reader.HasPreset(saveId))
         {
             std::cerr << "Saved preset missing from the store: " << saveId << "\n";
@@ -2137,7 +2172,9 @@ bool TestSaveGetDeletePresetWorkflow()
     {
         StoreReader reader(sandbox);
         if (!reader.Ok())
+        {
             return false;
+        }
         if (reader.HasPreset(saveId))
         {
             std::cerr << "Preset still in the store after deletePreset\n";
@@ -2213,7 +2250,9 @@ bool TestSaveAsCreatesNewPresetId()
 
     StoreReader afterSaveAs(sandbox);
     if (!afterSaveAs.Ok())
+    {
         return false;
+    }
 
     if (!afterSaveAs.HasPreset(savedId))
     {
@@ -2242,7 +2281,8 @@ bool TestPresetArchiveSessionMode()
 {
     try
     {
-        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "preset-archive-session";
+        const fs::path sandbox =
+            fs::temp_directory_path() / "guitarfx-preset-management-tests" / "preset-archive-session";
         std::error_code ec;
         fs::remove_all(sandbox, ec);
         fs::create_directories(sandbox, ec);
@@ -2275,9 +2315,8 @@ bool TestPresetArchiveSessionMode()
         archive["resources"] = nlohmann::json::array();
 
         const auto archiveText = archive.dump(2);
-        const auto archiveBytes = BuildStoredZip({
-            {"preset.json", std::vector<std::uint8_t>(archiveText.begin(), archiveText.end())}
-        });
+        const auto archiveBytes =
+            BuildStoredZip({{"preset.json", std::vector<std::uint8_t>(archiveText.begin(), archiveText.end())}});
 
         TestHost host(sandbox, {}, true);
         guitarfx::PluginController controller(host);
@@ -2317,9 +2356,9 @@ bool TestPresetArchiveSessionMode()
             return false;
         }
         const auto sessionPresets = sessionPresetListMsg->value("presets", nlohmann::json::array());
-        if (!sessionPresets.is_array() || sessionPresets.size() != 1
-            || sessionPresets[0].value("source", "") != "session"
-            || sessionPresets[0].value("name", "") != "Archive Preset")
+        if (!sessionPresets.is_array() || sessionPresets.size() != 1 ||
+            sessionPresets[0].value("source", "") != "session" ||
+            sessionPresets[0].value("name", "") != "Archive Preset")
         {
             std::cerr << "Archive session preset list was not isolated to the archive presets\n";
             return false;
@@ -2413,40 +2452,27 @@ bool TestFactoryPresetArchiveStartupImport()
     nlohmann::json archive;
     archive["formatVersion"] = 1;
     archive["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
-    archive["resources"] = nlohmann::json::array({
-        {
-            {"id", "archive-model"},
-            {"name", "Archive Model"},
-            {"category", "Archive"},
-            {"type", "nam"},
-            {"fileName", "archive-model.nam"},
-            {"hash", "test-hash"}
-        }
-    });
-    archive["blends"] = nlohmann::json::array({
-        {
-            {"id", "archive-blend"},
-            {"name", "Archive Blend"},
-            {"models", nlohmann::json::array({"archive-model"})}
-        }
-    });
-    archive["presetFolders"] = nlohmann::json::array({
-        {
-            {"name", "High Gain"},
-            {"presetIds", nlohmann::json::array({preset.id})},
-            {"children", nlohmann::json::array()}
-        }
-    });
+    archive["resources"] = nlohmann::json::array({{{"id", "archive-model"},
+                                                   {"name", "Archive Model"},
+                                                   {"category", "Archive"},
+                                                   {"type", "nam"},
+                                                   {"fileName", "archive-model.nam"},
+                                                   {"hash", "test-hash"}}});
+    archive["blends"] = nlohmann::json::array(
+        {{{"id", "archive-blend"}, {"name", "Archive Blend"}, {"models", nlohmann::json::array({"archive-model"})}}});
+    archive["presetFolders"] = nlohmann::json::array({{{"name", "High Gain"},
+                                                       {"presetIds", nlohmann::json::array({preset.id})},
+                                                       {"children", nlohmann::json::array()}}});
 
     const auto archiveText = archive.dump(2);
-    const auto archiveBytes = BuildStoredZip({
-        {"preset.json", std::vector<std::uint8_t>(archiveText.begin(), archiveText.end())},
-        {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm'}}
-    });
+    const auto archiveBytes =
+        BuildStoredZip({{"preset.json", std::vector<std::uint8_t>(archiveText.begin(), archiveText.end())},
+                        {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm'}}});
     const fs::path archivePath = bundledAssets / "ui" / "presets" / "factory" / "bundle.soundshed.preset";
     {
         std::ofstream output(archivePath, std::ios::binary);
-        output.write(reinterpret_cast<const char*>(archiveBytes.data()), static_cast<std::streamsize>(archiveBytes.size()));
+        output.write(reinterpret_cast<const char*>(archiveBytes.data()),
+                     static_cast<std::streamsize>(archiveBytes.size()));
     }
 
     nlohmann::json settings = nlohmann::json::object();
@@ -2496,10 +2522,9 @@ bool TestFactoryPresetArchiveStartupImport()
     }
 
     const auto resources = controller.GetResourceLibrary().GetAllResources();
-    const auto resourceIt = std::find_if(resources.begin(), resources.end(), [](const guitarfx::LibraryResource& resource)
-    {
-        return resource.name == "Archive Model";
-    });
+    const auto resourceIt =
+        std::find_if(resources.begin(), resources.end(),
+                     [](const guitarfx::LibraryResource& resource) { return resource.name == "Archive Model"; });
     if (resourceIt == resources.end() || !fs::exists(resourceIt->filePath))
     {
         std::cerr << "Archive-backed factory resource was not imported into the runtime library\n";
@@ -2508,7 +2533,9 @@ bool TestFactoryPresetArchiveStartupImport()
 
     StoreReader archiveReader(sandbox);
     if (!archiveReader.Ok())
+    {
         return false;
+    }
 
     const auto persistedPreset = archiveReader.Preset("bundle__factory-archive-preset");
     if (!persistedPreset || persistedPreset->category != "Factory")
@@ -2529,7 +2556,9 @@ bool TestFactoryPresetArchiveStartupImport()
     for (const auto& folder : presetFoldersJson.value("folders", nlohmann::json::array()))
     {
         if (!folder.is_object() || folder.value("name", "") != "High Gain")
+        {
             continue;
+        }
 
         foundArchiveFolder = true;
         for (const auto& presetIdValue : folder.value("presetIds", nlohmann::json::array()))
@@ -2572,13 +2601,13 @@ bool TestFactoryPresetArchiveStartupImport()
     nlohmann::json updatedArchive = archive;
     updatedArchive["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(updatedPreset));
     const auto updatedArchiveText = updatedArchive.dump(2);
-    const auto updatedArchiveBytes = BuildStoredZip({
-        {"preset.json", std::vector<std::uint8_t>(updatedArchiveText.begin(), updatedArchiveText.end())},
-        {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm', '2'}}
-    });
+    const auto updatedArchiveBytes = BuildStoredZip(
+        {{"preset.json", std::vector<std::uint8_t>(updatedArchiveText.begin(), updatedArchiveText.end())},
+         {"resources/archive-model.nam", std::vector<std::uint8_t>{'n', 'a', 'm', '2'}}});
     {
         std::ofstream output(archivePath, std::ios::binary | std::ios::trunc);
-        output.write(reinterpret_cast<const char*>(updatedArchiveBytes.data()), static_cast<std::streamsize>(updatedArchiveBytes.size()));
+        output.write(reinterpret_cast<const char*>(updatedArchiveBytes.data()),
+                     static_cast<std::streamsize>(updatedArchiveBytes.size()));
     }
 
     {
@@ -2597,7 +2626,8 @@ bool TestFactoryPresetArchiveStartupImport()
 
 bool TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-deserialize-ignore";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-deserialize-ignore";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -2686,9 +2716,8 @@ bool TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot()
     }
 
     const auto afterDriveIt = afterAmp->params.find("drive");
-    if (afterDeserialize->name != "Saved Preset"
-        || afterDriveIt == afterAmp->params.end()
-        || std::abs(afterDriveIt->second - 0.25) > 1e-9)
+    if (afterDeserialize->name != "Saved Preset" || afterDriveIt == afterAmp->params.end() ||
+        std::abs(afterDriveIt->second - 0.25) > 1e-9)
     {
         std::cerr << "Standalone deserialize should not apply embedded preset snapshot\n";
         return false;
@@ -2706,7 +2735,8 @@ bool TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot()
 
 bool TestStandaloneStartupInputModeOverridesRestoredPreset()
 {
-    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-input-mode-restore";
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-input-mode-restore";
     std::error_code ec;
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox, ec);
@@ -2798,7 +2828,9 @@ std::vector<std::string> ChainOrder(const guitarfx::SignalGraph& graph)
     {
         order.push_back(current);
         if (current == "__output__")
+        {
             break;
+        }
 
         std::string next;
         for (const auto& edge : graph.edges)
@@ -2810,7 +2842,9 @@ std::vector<std::string> ChainOrder(const guitarfx::SignalGraph& graph)
             }
         }
         if (next.empty())
+        {
             break;
+        }
         current = next;
     }
     return order;
@@ -2819,12 +2853,13 @@ std::vector<std::string> ChainOrder(const guitarfx::SignalGraph& graph)
 const guitarfx::SignalGraph& ActiveEditGraph(const guitarfx::Preset& preset)
 {
     if (!preset.scenes.empty())
+    {
         return preset.scenes.front().graph;
+    }
     return preset.graph;
 }
 
-bool ExpectChainOrder(const guitarfx::SignalGraph& graph,
-                      const std::vector<std::string>& expected,
+bool ExpectChainOrder(const guitarfx::SignalGraph& graph, const std::vector<std::string>& expected,
                       const std::string& context)
 {
     const auto actual = ChainOrder(graph);
@@ -2832,7 +2867,9 @@ bool ExpectChainOrder(const guitarfx::SignalGraph& graph,
     {
         std::cerr << context << ": unexpected chain order:";
         for (const auto& id : actual)
+        {
             std::cerr << " " << id;
+        }
         std::cerr << "\n";
         return false;
     }
@@ -2866,7 +2903,9 @@ bool TestReorderSignalPathNodeFailuresDoNotCorruptGraph()
 
     const std::vector<std::string> initialOrder = {"__input__", "fx1", "fx2", "fx3", "__output__"};
     if (!ExpectChainOrder(ActiveEditGraph(*controller.GetActivePreset()), initialOrder, "initial"))
+    {
         return false;
+    }
 
     // A drop onto an edge that no longer exists must be rejected without mutating the graph.
     nlohmann::json staleEdgeMove;
@@ -2875,7 +2914,9 @@ bool TestReorderSignalPathNodeFailuresDoNotCorruptGraph()
     staleEdgeMove["edge"] = {{"from", "ghost-a"}, {"to", "ghost-b"}, {"fromPort", 0}, {"toPort", 0}};
     controller.HandleUIMessage(staleEdgeMove.dump());
     if (!ExpectChainOrder(ActiveEditGraph(*controller.GetActivePreset()), initialOrder, "after stale edge move"))
+    {
         return false;
+    }
 
     // Dropping a node back onto its own outgoing connection is a no-op.
     nlohmann::json selfMove;
@@ -2884,7 +2925,9 @@ bool TestReorderSignalPathNodeFailuresDoNotCorruptGraph()
     selfMove["edge"] = {{"from", "fx2"}, {"to", "fx3"}, {"fromPort", 0}, {"toPort", 0}};
     controller.HandleUIMessage(selfMove.dump());
     if (!ExpectChainOrder(ActiveEditGraph(*controller.GetActivePreset()), initialOrder, "after self move"))
+    {
         return false;
+    }
 
     // A valid reorder must still work after the rejected attempts.
     nlohmann::json validMove;
@@ -2893,9 +2936,10 @@ bool TestReorderSignalPathNodeFailuresDoNotCorruptGraph()
     validMove["targetNodeId"] = "fx3";
     controller.HandleUIMessage(validMove.dump());
     if (!ExpectChainOrder(ActiveEditGraph(*controller.GetActivePreset()),
-                          {"__input__", "fx2", "fx3", "fx1", "__output__"},
-                          "after valid reorder"))
+                          {"__input__", "fx2", "fx3", "fx1", "__output__"}, "after valid reorder"))
+    {
         return false;
+    }
 
     // Moving onto an explicit edge reference must splice the node into that edge.
     nlohmann::json edgeMove;
@@ -2904,7 +2948,9 @@ bool TestReorderSignalPathNodeFailuresDoNotCorruptGraph()
     edgeMove["edge"] = {{"from", "__input__"}, {"to", "fx2"}, {"fromPort", 0}, {"toPort", 0}};
     controller.HandleUIMessage(edgeMove.dump());
     if (!ExpectChainOrder(ActiveEditGraph(*controller.GetActivePreset()), initialOrder, "after edge move"))
+    {
         return false;
+    }
 
     return true;
 }
@@ -2924,8 +2970,8 @@ bool TestSetlistCursorSwitchesPresetWithoutStackingMixer()
         const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
-        for (const auto& [id, name] : std::vector<std::pair<std::string, std::string>>{
-                 {"setlist-a", "Setlist A"}, {"setlist-b", "Setlist B"}})
+        for (const auto& [id, name] :
+             std::vector<std::pair<std::string, std::string>>{{"setlist-a", "Setlist A"}, {"setlist-b", "Setlist B"}})
         {
             auto preset = BuildPassthroughPreset(id, name);
             guitarfx::NormalizePresetScenes(preset);
@@ -2994,9 +3040,18 @@ bool TestSetlistCursorSwitchesPresetWithoutStackingMixer()
             return true;
         };
 
-        if (!stepToSlot(0, "setlist-a")) return false;
-        if (!stepToSlot(1, "setlist-b")) return false;
-        if (!stepToSlot(0, "setlist-a")) return false;
+        if (!stepToSlot(0, "setlist-a"))
+        {
+            return false;
+        }
+        if (!stepToSlot(1, "setlist-b"))
+        {
+            return false;
+        }
+        if (!stepToSlot(0, "setlist-a"))
+        {
+            return false;
+        }
 
         if (controller.GetSetlistCursorIndex() != 0)
         {
@@ -3034,8 +3089,8 @@ bool TestPresetSwitchBroadcastsLightState()
         controller.OnIdle();
 
         const auto fullState = FindLatestMessageOfType(host.sentMessages, "state");
-        if (!fullState || !fullState->contains("resourceLibrary") || !fullState->contains("appSettings")
-            || !fullState->contains("riffLibrary"))
+        if (!fullState || !fullState->contains("resourceLibrary") || !fullState->contains("appSettings") ||
+            !fullState->contains("riffLibrary"))
         {
             std::cerr << "Startup broadcast was not a full state payload\n";
             return false;
@@ -3058,9 +3113,9 @@ bool TestPresetSwitchBroadcastsLightState()
             return false;
         }
 
-        for (const char* heavyKey : {"resourceLibrary", "appSettings", "riffLibrary",
-                                     "blendLibrary", "customEffectLibrary", "uiSettings",
-                                     "uiViewState", "metronome", "environment", "automation"})
+        for (const char* heavyKey :
+             {"resourceLibrary", "appSettings", "riffLibrary", "blendLibrary", "customEffectLibrary", "uiSettings",
+              "uiViewState", "metronome", "environment", "automation"})
         {
             if (lightState->contains(heavyKey))
             {
@@ -3072,8 +3127,8 @@ bool TestPresetSwitchBroadcastsLightState()
         // The UI needs these on every switch: it reads activePresetId unconditionally,
         // requests the global chain with an extra round trip when it is missing, and
         // clears its archive-session state when that key is absent.
-        for (const char* requiredKey : {"preset", "activePresetId", "activeSceneId", "mixer",
-                                        "activePresetIds", "globalSignalChain", "presetArchiveSession"})
+        for (const char* requiredKey : {"preset", "activePresetId", "activeSceneId", "mixer", "activePresetIds",
+                                        "globalSignalChain", "presetArchiveSession"})
         {
             if (!lightState->contains(requiredKey))
             {
@@ -3082,8 +3137,8 @@ bool TestPresetSwitchBroadcastsLightState()
             }
         }
 
-        if (FindLatestMessageOfType(host.sentMessages, "effectCatalog")
-            || FindLatestMessageOfType(host.sentMessages, "compositeLibrary"))
+        if (FindLatestMessageOfType(host.sentMessages, "effectCatalog") ||
+            FindLatestMessageOfType(host.sentMessages, "compositeLibrary"))
         {
             std::cerr << "Preset switch resent a static library the UI already has\n";
             return false;
@@ -3132,7 +3187,14 @@ int main()
 
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
-        if (ok) ++passed; else ++failed;
+        if (ok)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+        }
     };
 
     run("Load preset via message", TestLoadPresetViaMessage());
@@ -3140,22 +3202,27 @@ int main()
     run("Plugin state restores global gate", TestPluginStateRestoresGlobalGate());
     run("setParameter routes to global chain", TestSetParameterMessageRoutesToGlobalChain());
     run("Instance-owned NAM quality never reaches shared store", TestPluginInstanceNamQualityNeverReachesSharedStore());
-    run("Host state restore does not republish project settings", TestHostStateRestoreDoesNotRepublishProjectSettings());
+    run("Host state restore does not republish project settings",
+        TestHostStateRestoreDoesNotRepublishProjectSettings());
     run("Host state restore applies merged settings", TestHostStateRestoreAppliesMergedSettings());
     run("Plugin instance does not own lastPresetId", TestPluginInstanceDoesNotOwnLastPresetId());
     run("UI layout is not shared between plugin and standalone", TestUiLayoutIsNotSharedBetweenPluginAndStandalone());
     run("Plugin state remembers editor window size", TestPluginStateRemembersEditorWindowSize());
-    run("Shared-sync reload applies shared settings and keeps instance-owned", TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned());
+    run("Shared-sync reload applies shared settings and keeps instance-owned",
+        TestSharedSyncReloadAppliesSharedSettingsAndKeepsInstanceOwned());
     run("Load preset rehydrates scrubbed hosted plugin state", TestLoadPresetRehydratesScrubbedHostedPluginState());
-    run("Load preset rehydrates scrubbed hosted plugin state from active preset", TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset());
+    run("Load preset rehydrates scrubbed hosted plugin state from active preset",
+        TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset());
     run("Load preset remaps hosted plugin resource by stable id", TestLoadPresetRemapsHostedPluginResourceByStableId());
     run("Load preset preserves instance global FX state", TestLoadPresetPreservesInstanceGlobalFxState());
-    run("Standalone persists global FX settings between launches", TestStandalonePersistsGlobalFxSettingsBetweenLaunches());
+    run("Standalone persists global FX settings between launches",
+        TestStandalonePersistsGlobalFxSettingsBetweenLaunches());
     run("Load preset retires NAM input auto-leveling", TestLoadPresetRetiresNamInputAutoLeveling());
     run("Load preset preserves disabled NAM calibration toggle", TestLoadPresetPreservesDisabledNamCalibrationToggle());
     run("Load app settings applies user input calibration", TestLoadAppSettingsAppliesUserInputCalibrationProfile());
     run("Load app settings prunes unused legacy keys", TestLoadAppSettingsPrunesUnusedLegacyKeys());
-    run("User input calibration training bypasses active profile", TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelection());
+    run("User input calibration training bypasses active profile",
+        TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelection());
     run("Save preset does not persist global FX settings", TestSavePresetDoesNotPersistGlobalFxSettings());
     run("Save/Get/Delete preset workflow", TestSaveGetDeletePresetWorkflow());
     run("Save As creates new preset id", TestSaveAsCreatesNewPresetId());

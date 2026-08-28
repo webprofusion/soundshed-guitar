@@ -31,93 +31,95 @@ constexpr double kPi = 3.14159265358979323846;
 
 // Test frequencies covering guitar range (low E to high E)
 constexpr double kTestFrequencies[] = {
-  82.41,   // E2 (low E string)
-  110.0,   // A2
-  146.83,  // D3
-  196.0,   // G3
-  246.94,  // B3
-  329.63,  // E4 (high E string open)
-  440.0,   // A4 (concert A)
-  659.26,  // E5 (12th fret high E)
-  880.0,   // A5
-  1318.5   // E6 (24th fret high E)
+    82.41,  // E2 (low E string)
+    110.0,  // A2
+    146.83, // D3
+    196.0,  // G3
+    246.94, // B3
+    329.63, // E4 (high E string open)
+    440.0,  // A4 (concert A)
+    659.26, // E5 (12th fret high E)
+    880.0,  // A5
+    1318.5  // E6 (24th fret high E)
 };
 
 struct TestResult
 {
-  bool passed = false;
-  std::string message;
-  double detectedFreq = 0.0;
-  double expectedFreq = 0.0;
-  double errorCents = 0.0;
-  int samplesUntilLock = 0;
+    bool passed = false;
+    std::string message;
+    double detectedFreq = 0.0;
+    double expectedFreq = 0.0;
+    double errorCents = 0.0;
+    int samplesUntilLock = 0;
 };
 
 // Generate a sine wave at a specific frequency
-void GenerateSineWave(std::vector<float>& buffer, double frequency, 
-                      double amplitude = 0.5, double startPhase = 0.0)
+void GenerateSineWave(std::vector<float>& buffer, double frequency, double amplitude = 0.5, double startPhase = 0.0)
 {
-  for (size_t i = 0; i < buffer.size(); ++i)
-  {
-    double phase = startPhase + 2.0 * kPi * frequency * static_cast<double>(i) / kTestSampleRate;
-    buffer[i] = static_cast<float>(amplitude * std::sin(phase));
-  }
+    for (size_t i = 0; i < buffer.size(); ++i)
+    {
+        double phase = startPhase + 2.0 * kPi * frequency * static_cast<double>(i) / kTestSampleRate;
+        buffer[i] = static_cast<float>(amplitude * std::sin(phase));
+    }
 }
 
 // Generate silence
 void GenerateSilence(std::vector<float>& buffer)
 {
-  std::fill(buffer.begin(), buffer.end(), 0.0f);
+    std::fill(buffer.begin(), buffer.end(), 0.0f);
 }
 
 // Generate white noise
 void GenerateNoise(std::vector<float>& buffer, double amplitude = 0.1)
 {
-  for (size_t i = 0; i < buffer.size(); ++i)
-  {
-    // Simple pseudo-random noise
-    buffer[i] = static_cast<float>(amplitude * (2.0 * (rand() / static_cast<double>(RAND_MAX)) - 1.0));
-  }
+    for (size_t i = 0; i < buffer.size(); ++i)
+    {
+        // Simple pseudo-random noise
+        buffer[i] = static_cast<float>(amplitude * (2.0 * (rand() / static_cast<double>(RAND_MAX)) - 1.0));
+    }
 }
 
 // Calculate error in cents between two frequencies
 double FrequencyErrorCents(double detected, double expected)
 {
-  if (expected <= 0.0 || detected <= 0.0)
-    return 9999.0;
-  return 1200.0 * std::log2(detected / expected);
+    if (expected <= 0.0 || detected <= 0.0)
+    {
+        return 9999.0;
+    }
+    return 1200.0 * std::log2(detected / expected);
 }
 
 // Analyze output signal for fundamental frequency using zero-crossing
 double EstimateOutputFrequency(const std::vector<float>& buffer, double sampleRate)
 {
-  int crossings = 0;
-  for (size_t i = 1; i < buffer.size(); ++i)
-  {
-    if ((buffer[i - 1] < 0.0f && buffer[i] >= 0.0f) ||
-        (buffer[i - 1] >= 0.0f && buffer[i] < 0.0f))
+    int crossings = 0;
+    for (size_t i = 1; i < buffer.size(); ++i)
     {
-      crossings++;
+        if ((buffer[i - 1] < 0.0f && buffer[i] >= 0.0f) || (buffer[i - 1] >= 0.0f && buffer[i] < 0.0f))
+        {
+            crossings++;
+        }
     }
-  }
-  
-  // Frequency = crossings / 2 / duration
-  double duration = static_cast<double>(buffer.size()) / sampleRate;
-  return crossings / 2.0 / duration;
+
+    // Frequency = crossings / 2 / duration
+    double duration = static_cast<double>(buffer.size()) / sampleRate;
+    return crossings / 2.0 / duration;
 }
 
 // Check if signal has valid audio (not silent, no NaN/Inf)
 bool IsValidAudio(const std::vector<float>& buffer)
 {
-  double sumSquares = 0.0;
-  for (const auto& sample : buffer)
-  {
-    if (std::isnan(sample) || std::isinf(sample))
-      return false;
-    sumSquares += sample * sample;
-  }
-  double rms = std::sqrt(sumSquares / buffer.size());
-  return rms > 1e-6; // Not silent
+    double sumSquares = 0.0;
+    for (const auto& sample : buffer)
+    {
+        if (std::isnan(sample) || std::isinf(sample))
+        {
+            return false;
+        }
+        sumSquares += sample * sample;
+    }
+    double rms = std::sqrt(sumSquares / buffer.size());
+    return rms > 1e-6; // Not silent
 }
 
 /**
@@ -125,73 +127,75 @@ bool IsValidAudio(const std::vector<float>& buffer)
  */
 TestResult TestPitchDetection(guitarfx::SynthSawEffect& effect, double targetFreq)
 {
-  TestResult result;
-  result.expectedFreq = targetFreq;
+    TestResult result;
+    result.expectedFreq = targetFreq;
 
-  // Process enough audio to allow pitch detection to stabilize
-  // At 48kHz with 512-sample blocks, we need multiple blocks
-  constexpr int kWarmupBlocks = 20;  // ~213ms warmup
-  constexpr int kTestBlocks = 10;    // ~107ms test
+    // Process enough audio to allow pitch detection to stabilize
+    // At 48kHz with 512-sample blocks, we need multiple blocks
+    constexpr int kWarmupBlocks = 20; // ~213ms warmup
+    constexpr int kTestBlocks = 10;   // ~107ms test
 
-  std::vector<float> inputL(kTestBlockSize);
-  std::vector<float> inputR(kTestBlockSize);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    std::vector<float> inputL(kTestBlockSize);
+    std::vector<float> inputR(kTestBlockSize);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  effect.Reset();
+    effect.Reset();
 
-  double phase = 0.0;
-  double phaseInc = 2.0 * kPi * targetFreq / kTestSampleRate;
-  int samplesProcessed = 0;
-  int lockSample = -1;
+    double phase = 0.0;
+    double phaseInc = 2.0 * kPi * targetFreq / kTestSampleRate;
+    int samplesProcessed = 0;
+    int lockSample = -1;
 
-  // Process warmup + test blocks
-  for (int block = 0; block < kWarmupBlocks + kTestBlocks; ++block)
-  {
-    // Generate continuous sine wave
-    for (int i = 0; i < kTestBlockSize; ++i)
+    // Process warmup + test blocks
+    for (int block = 0; block < kWarmupBlocks + kTestBlocks; ++block)
     {
-      inputL[i] = static_cast<float>(0.5 * std::sin(phase));
-      inputR[i] = inputL[i];
-      phase += phaseInc;
-      if (phase >= 2.0 * kPi)
-        phase -= 2.0 * kPi;
+        // Generate continuous sine wave
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inputL[i] = static_cast<float>(0.5 * std::sin(phase));
+            inputR[i] = inputL[i];
+            phase += phaseInc;
+            if (phase >= 2.0 * kPi)
+            {
+                phase -= 2.0 * kPi;
+            }
+        }
+
+        effect.Process(inputs, outputs, kTestBlockSize);
+        samplesProcessed += kTestBlockSize;
+
+        // Check if pitch locked during warmup
+        if (lockSample < 0 && effect.GetPitchConfidence() > 0.7f)
+        {
+            double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), targetFreq));
+            if (error < 50.0) // Within 50 cents = locked
+            {
+                lockSample = samplesProcessed;
+            }
+        }
     }
 
-    effect.Process(inputs, outputs, kTestBlockSize);
-    samplesProcessed += kTestBlockSize;
+    result.detectedFreq = effect.GetDetectedFrequency();
+    result.errorCents = FrequencyErrorCents(result.detectedFreq, targetFreq);
+    result.samplesUntilLock = lockSample > 0 ? lockSample : -1;
 
-    // Check if pitch locked during warmup
-    if (lockSample < 0 && effect.GetPitchConfidence() > 0.7f)
+    // Pass criteria: within 15 cents of target frequency
+    if (std::abs(result.errorCents) < 15.0)
     {
-      double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), targetFreq));
-      if (error < 50.0) // Within 50 cents = locked
-      {
-        lockSample = samplesProcessed;
-      }
+        result.passed = true;
+        result.message = "PASS";
     }
-  }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL: Error " + std::to_string(result.errorCents) + " cents";
+    }
 
-  result.detectedFreq = effect.GetDetectedFrequency();
-  result.errorCents = FrequencyErrorCents(result.detectedFreq, targetFreq);
-  result.samplesUntilLock = lockSample > 0 ? lockSample : -1;
-
-  // Pass criteria: within 15 cents of target frequency
-  if (std::abs(result.errorCents) < 15.0)
-  {
-    result.passed = true;
-    result.message = "PASS";
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL: Error " + std::to_string(result.errorCents) + " cents";
-  }
-
-  return result;
+    return result;
 }
 
 /**
@@ -199,102 +203,102 @@ TestResult TestPitchDetection(guitarfx::SynthSawEffect& effect, double targetFre
  */
 TestResult TestPitchTrackingSpeed(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  
-  constexpr double kStartFreq = 220.0;  // A3
-  constexpr double kEndFreq = 440.0;    // A4 (octave up)
-  constexpr int kSteadyBlocks = 15;     // Blocks at each pitch
-  
-  std::vector<float> inputL(kTestBlockSize);
-  std::vector<float> inputR(kTestBlockSize);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    TestResult result;
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    constexpr double kStartFreq = 220.0; // A3
+    constexpr double kEndFreq = 440.0;   // A4 (octave up)
+    constexpr int kSteadyBlocks = 15;    // Blocks at each pitch
 
-  effect.Reset();
+    std::vector<float> inputL(kTestBlockSize);
+    std::vector<float> inputR(kTestBlockSize);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  double phase = 0.0;
-  double currentFreq = kStartFreq;
-  double phaseInc = 2.0 * kPi * currentFreq / kTestSampleRate;
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  // Establish first pitch
-  for (int block = 0; block < kSteadyBlocks; ++block)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
+    effect.Reset();
+
+    double phase = 0.0;
+    double currentFreq = kStartFreq;
+    double phaseInc = 2.0 * kPi * currentFreq / kTestSampleRate;
+
+    // Establish first pitch
+    for (int block = 0; block < kSteadyBlocks; ++block)
     {
-      inputL[i] = static_cast<float>(0.5 * std::sin(phase));
-      inputR[i] = inputL[i];
-      phase += phaseInc;
-    }
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
-
-  // Switch to second pitch and measure tracking time
-  currentFreq = kEndFreq;
-  phaseInc = 2.0 * kPi * currentFreq / kTestSampleRate;
-  phase = 0.0; // Reset phase for new note
-
-  int samplesUntilTracked = -1;
-  int sampleCount = 0;
-
-  // Debug: track detected frequency each block
-  std::cout << "    Debug: ";
-
-  for (int block = 0; block < kSteadyBlocks; ++block)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
-    {
-      inputL[i] = static_cast<float>(0.5 * std::sin(phase));
-      inputR[i] = inputL[i];
-      phase += phaseInc;
-    }
-    effect.Process(inputs, outputs, kTestBlockSize);
-    sampleCount += kTestBlockSize;
-
-    // Debug output
-    if (block < 5)
-    {
-      std::cout << std::fixed << std::setprecision(0) << effect.GetDetectedFrequency() << " ";
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inputL[i] = static_cast<float>(0.5 * std::sin(phase));
+            inputR[i] = inputL[i];
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
     }
 
-    if (samplesUntilTracked < 0)
+    // Switch to second pitch and measure tracking time
+    currentFreq = kEndFreq;
+    phaseInc = 2.0 * kPi * currentFreq / kTestSampleRate;
+    phase = 0.0; // Reset phase for new note
+
+    int samplesUntilTracked = -1;
+    int sampleCount = 0;
+
+    // Debug: track detected frequency each block
+    std::cout << "    Debug: ";
+
+    for (int block = 0; block < kSteadyBlocks; ++block)
     {
-      double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), kEndFreq));
-      if (error < 30.0) // Within 30 cents
-      {
-        samplesUntilTracked = sampleCount;
-      }
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inputL[i] = static_cast<float>(0.5 * std::sin(phase));
+            inputR[i] = inputL[i];
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
+        sampleCount += kTestBlockSize;
+
+        // Debug output
+        if (block < 5)
+        {
+            std::cout << std::fixed << std::setprecision(0) << effect.GetDetectedFrequency() << " ";
+        }
+
+        if (samplesUntilTracked < 0)
+        {
+            double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), kEndFreq));
+            if (error < 30.0) // Within 30 cents
+            {
+                samplesUntilTracked = sampleCount;
+            }
+        }
     }
-  }
-  std::cout << "Hz\n";
+    std::cout << "Hz\n";
 
-  result.samplesUntilLock = samplesUntilTracked;
-  result.detectedFreq = effect.GetDetectedFrequency();
-  result.expectedFreq = kEndFreq;
-  result.errorCents = FrequencyErrorCents(result.detectedFreq, kEndFreq);
+    result.samplesUntilLock = samplesUntilTracked;
+    result.detectedFreq = effect.GetDetectedFrequency();
+    result.expectedFreq = kEndFreq;
+    result.errorCents = FrequencyErrorCents(result.detectedFreq, kEndFreq);
 
-  // Pass criteria: track new pitch within 100ms (~4800 samples at 48kHz)
-  if (samplesUntilTracked > 0 && samplesUntilTracked < 4800)
-  {
-    result.passed = true;
-    double trackingMs = 1000.0 * samplesUntilTracked / kTestSampleRate;
-    result.message = "PASS: Tracked in " + std::to_string(trackingMs) + " ms";
-  }
-  else if (samplesUntilTracked < 0)
-  {
-    result.passed = false;
-    result.message = "FAIL: Did not track new pitch";
-  }
-  else
-  {
-    result.passed = false;
-    double trackingMs = 1000.0 * samplesUntilTracked / kTestSampleRate;
-    result.message = "FAIL: Tracking too slow (" + std::to_string(trackingMs) + " ms)";
-  }
+    // Pass criteria: track new pitch within 100ms (~4800 samples at 48kHz)
+    if (samplesUntilTracked > 0 && samplesUntilTracked < 4800)
+    {
+        result.passed = true;
+        double trackingMs = 1000.0 * samplesUntilTracked / kTestSampleRate;
+        result.message = "PASS: Tracked in " + std::to_string(trackingMs) + " ms";
+    }
+    else if (samplesUntilTracked < 0)
+    {
+        result.passed = false;
+        result.message = "FAIL: Did not track new pitch";
+    }
+    else
+    {
+        result.passed = false;
+        double trackingMs = 1000.0 * samplesUntilTracked / kTestSampleRate;
+        result.message = "FAIL: Tracking too slow (" + std::to_string(trackingMs) + " ms)";
+    }
 
-  return result;
+    return result;
 }
 
 /**
@@ -302,51 +306,51 @@ TestResult TestPitchTrackingSpeed(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestSilenceHandling(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
+    TestResult result;
 
-  std::vector<float> inputL(kTestBlockSize, 0.0f);
-  std::vector<float> inputR(kTestBlockSize, 0.0f);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    std::vector<float> inputL(kTestBlockSize, 0.0f);
+    std::vector<float> inputR(kTestBlockSize, 0.0f);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  effect.Reset();
+    effect.Reset();
 
-  // Process several blocks of silence
-  for (int block = 0; block < 10; ++block)
-  {
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
-
-  // Check output is silent (or near-silent)
-  double sumSquares = 0.0;
-  for (const auto& sample : outputL)
-  {
-    if (std::isnan(sample) || std::isinf(sample))
+    // Process several blocks of silence
+    for (int block = 0; block < 10; ++block)
     {
-      result.passed = false;
-      result.message = "FAIL: NaN or Inf in output";
-      return result;
+        effect.Process(inputs, outputs, kTestBlockSize);
     }
-    sumSquares += sample * sample;
-  }
-  
-  double rms = std::sqrt(sumSquares / outputL.size());
 
-  if (rms < 0.001) // Should be nearly silent
-  {
-    result.passed = true;
-    result.message = "PASS: Output silent on silent input";
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL: Output not silent (RMS=" + std::to_string(rms) + ")";
-  }
+    // Check output is silent (or near-silent)
+    double sumSquares = 0.0;
+    for (const auto& sample : outputL)
+    {
+        if (std::isnan(sample) || std::isinf(sample))
+        {
+            result.passed = false;
+            result.message = "FAIL: NaN or Inf in output";
+            return result;
+        }
+        sumSquares += sample * sample;
+    }
 
-  return result;
+    double rms = std::sqrt(sumSquares / outputL.size());
+
+    if (rms < 0.001) // Should be nearly silent
+    {
+        result.passed = true;
+        result.message = "PASS: Output silent on silent input";
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL: Output not silent (RMS=" + std::to_string(rms) + ")";
+    }
+
+    return result;
 }
 
 /**
@@ -354,41 +358,40 @@ TestResult TestSilenceHandling(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestNoiseHandling(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
+    TestResult result;
 
-  std::vector<float> inputL(kTestBlockSize);
-  std::vector<float> inputR(kTestBlockSize);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    std::vector<float> inputL(kTestBlockSize);
+    std::vector<float> inputR(kTestBlockSize);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  effect.Reset();
-  srand(12345); // Deterministic noise
+    effect.Reset();
+    srand(12345); // Deterministic noise
 
-  // Process noise
-  for (int block = 0; block < 10; ++block)
-  {
-    GenerateNoise(inputL, 0.3);
-    inputR = inputL;
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
+    // Process noise
+    for (int block = 0; block < 10; ++block)
+    {
+        GenerateNoise(inputL, 0.3);
+        inputR = inputL;
+        effect.Process(inputs, outputs, kTestBlockSize);
+    }
 
-  // Check confidence is low
-  if (effect.GetPitchConfidence() < 0.5f)
-  {
-    result.passed = true;
-    result.message = "PASS: Low confidence on noise input";
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL: High confidence on noise (conf=" + 
-                     std::to_string(effect.GetPitchConfidence()) + ")";
-  }
+    // Check confidence is low
+    if (effect.GetPitchConfidence() < 0.5f)
+    {
+        result.passed = true;
+        result.message = "PASS: Low confidence on noise input";
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL: High confidence on noise (conf=" + std::to_string(effect.GetPitchConfidence()) + ")";
+    }
 
-  return result;
+    return result;
 }
 
 /**
@@ -396,58 +399,58 @@ TestResult TestNoiseHandling(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestOutputFrequency(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  constexpr double kTargetFreq = 440.0;
+    TestResult result;
+    constexpr double kTargetFreq = 440.0;
 
-  std::vector<float> inputL(kTestBlockSize);
-  std::vector<float> inputR(kTestBlockSize);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    std::vector<float> inputL(kTestBlockSize);
+    std::vector<float> inputR(kTestBlockSize);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  effect.Reset();
-  effect.SetParam("mix", 1.0); // Full wet
+    effect.Reset();
+    effect.SetParam("mix", 1.0); // Full wet
 
-  double phase = 0.0;
-  double phaseInc = 2.0 * kPi * kTargetFreq / kTestSampleRate;
+    double phase = 0.0;
+    double phaseInc = 2.0 * kPi * kTargetFreq / kTestSampleRate;
 
-  // Warmup to lock pitch
-  for (int block = 0; block < 30; ++block)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
+    // Warmup to lock pitch
+    for (int block = 0; block < 30; ++block)
     {
-      inputL[i] = static_cast<float>(0.5 * std::sin(phase));
-      inputR[i] = inputL[i];
-      phase += phaseInc;
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inputL[i] = static_cast<float>(0.5 * std::sin(phase));
+            inputR[i] = inputL[i];
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
     }
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
 
-  // Analyze output frequency
-  double outputFreq = EstimateOutputFrequency(outputL, kTestSampleRate);
-  double detectedFreq = effect.GetDetectedFrequency();
+    // Analyze output frequency
+    double outputFreq = EstimateOutputFrequency(outputL, kTestSampleRate);
+    double detectedFreq = effect.GetDetectedFrequency();
 
-  result.detectedFreq = detectedFreq;
-  result.expectedFreq = kTargetFreq;
+    result.detectedFreq = detectedFreq;
+    result.expectedFreq = kTargetFreq;
 
-  // Output frequency should match detected frequency (within 5%)
-  double freqError = std::abs(outputFreq - detectedFreq) / detectedFreq;
-  
-  if (freqError < 0.05 && std::abs(FrequencyErrorCents(detectedFreq, kTargetFreq)) < 20.0)
-  {
-    result.passed = true;
-    result.message = "PASS: Output freq matches detected freq";
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL: Output freq mismatch (output=" + std::to_string(outputFreq) + 
-                     ", detected=" + std::to_string(detectedFreq) + ")";
-  }
+    // Output frequency should match detected frequency (within 5%)
+    double freqError = std::abs(outputFreq - detectedFreq) / detectedFreq;
 
-  return result;
+    if (freqError < 0.05 && std::abs(FrequencyErrorCents(detectedFreq, kTargetFreq)) < 20.0)
+    {
+        result.passed = true;
+        result.message = "PASS: Output freq matches detected freq";
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL: Output freq mismatch (output=" + std::to_string(outputFreq) +
+                         ", detected=" + std::to_string(detectedFreq) + ")";
+    }
+
+    return result;
 }
 
 /**
@@ -455,71 +458,69 @@ TestResult TestOutputFrequency(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestOctaveShiftValue(guitarfx::SynthSawEffect& effect, double octaveShift)
 {
-  TestResult result;
-  constexpr double kTargetFreq = 329.63; // E4 (high E string open)
+    TestResult result;
+    constexpr double kTargetFreq = 329.63; // E4 (high E string open)
 
-  std::vector<float> inputL(kTestBlockSize);
-  std::vector<float> inputR(kTestBlockSize);
-  std::vector<float> outputL(kTestBlockSize);
-  std::vector<float> outputR(kTestBlockSize);
+    std::vector<float> inputL(kTestBlockSize);
+    std::vector<float> inputR(kTestBlockSize);
+    std::vector<float> outputL(kTestBlockSize);
+    std::vector<float> outputR(kTestBlockSize);
 
-  float* inputs[2] = {inputL.data(), inputR.data()};
-  float* outputs[2] = {outputL.data(), outputR.data()};
+    float* inputs[2] = {inputL.data(), inputR.data()};
+    float* outputs[2] = {outputL.data(), outputR.data()};
 
-  effect.Reset();
-  effect.SetParam("mix", 1.0);
-  effect.SetParam("octaveShift", octaveShift);
-  
-  // Verify the parameter was set
-  double readbackOctave = effect.GetParam("octaveShift");
+    effect.Reset();
+    effect.SetParam("mix", 1.0);
+    effect.SetParam("octaveShift", octaveShift);
 
-  double phase = 0.0;
-  double phaseInc = 2.0 * kPi * kTargetFreq / kTestSampleRate;
+    // Verify the parameter was set
+    double readbackOctave = effect.GetParam("octaveShift");
 
-  // Process to lock pitch - more blocks for stability
-  for (int block = 0; block < 40; ++block)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
+    double phase = 0.0;
+    double phaseInc = 2.0 * kPi * kTargetFreq / kTestSampleRate;
+
+    // Process to lock pitch - more blocks for stability
+    for (int block = 0; block < 40; ++block)
     {
-      inputL[i] = static_cast<float>(0.5 * std::sin(phase));
-      inputR[i] = inputL[i];
-      phase += phaseInc;
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inputL[i] = static_cast<float>(0.5 * std::sin(phase));
+            inputR[i] = inputL[i];
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
     }
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
 
-  // Calculate expected output frequency: input * 2^octaveShift
-  double expectedOutputFreq = kTargetFreq * std::pow(2.0, octaveShift);
-  
-  // Analyze output frequency using zero-crossing
-  double outputFreq = EstimateOutputFrequency(outputL, kTestSampleRate);
-  
-  // Also check detected frequency
-  double detectedFreq = effect.GetDetectedFrequency();
+    // Calculate expected output frequency: input * 2^octaveShift
+    double expectedOutputFreq = kTargetFreq * std::pow(2.0, octaveShift);
 
-  double freqError = std::abs(outputFreq - expectedOutputFreq) / expectedOutputFreq;
-  
-  // Debug info for the result message
-  std::ostringstream debug;
-  debug << std::fixed << std::setprecision(1);
-  debug << "(octave=" << octaveShift 
-        << ", readback=" << readbackOctave
-        << ", detected=" << detectedFreq << " Hz"
-        << ", output=" << outputFreq << " Hz"
-        << ", expected=" << expectedOutputFreq << " Hz)";
+    // Analyze output frequency using zero-crossing
+    double outputFreq = EstimateOutputFrequency(outputL, kTestSampleRate);
 
-  if (freqError < 0.15) // Within 15%
-  {
-    result.passed = true;
-    result.message = "PASS " + debug.str();
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL " + debug.str();
-  }
+    // Also check detected frequency
+    double detectedFreq = effect.GetDetectedFrequency();
 
-  return result;
+    double freqError = std::abs(outputFreq - expectedOutputFreq) / expectedOutputFreq;
+
+    // Debug info for the result message
+    std::ostringstream debug;
+    debug << std::fixed << std::setprecision(1);
+    debug << "(octave=" << octaveShift << ", readback=" << readbackOctave << ", detected=" << detectedFreq << " Hz"
+          << ", output=" << outputFreq << " Hz"
+          << ", expected=" << expectedOutputFreq << " Hz)";
+
+    if (freqError < 0.15) // Within 15%
+    {
+        result.passed = true;
+        result.message = "PASS " + debug.str();
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL " + debug.str();
+    }
+
+    return result;
 }
 
 /**
@@ -527,7 +528,7 @@ TestResult TestOctaveShiftValue(guitarfx::SynthSawEffect& effect, double octaveS
  */
 TestResult TestOctaveShift(guitarfx::SynthSawEffect& effect)
 {
-  return TestOctaveShiftValue(effect, 1.0);
+    return TestOctaveShiftValue(effect, 1.0);
 }
 
 // ============================================================================
@@ -538,46 +539,46 @@ TestResult TestOctaveShift(guitarfx::SynthSawEffect& effect)
  * Helper: feed a sine wave at targetFreq until pitch locks (or timeout),
  * then process bufNum more blocks and return accumulated output.
  */
-std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect,
-                                         double targetFreq,
-                                         int lockBlocks = 30,
-                                         int collectBlocks = 10)
+std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect, double targetFreq, int lockBlocks = 30,
+                                        int collectBlocks = 10)
 {
-  std::vector<float> inBuf(kTestBlockSize);
-  std::vector<float> outBufL(kTestBlockSize);
-  std::vector<float> outBufR(kTestBlockSize);
-  float* inputs[2]  = {inBuf.data(), inBuf.data()};
-  float* outputs[2] = {outBufL.data(), outBufR.data()};
+    std::vector<float> inBuf(kTestBlockSize);
+    std::vector<float> outBufL(kTestBlockSize);
+    std::vector<float> outBufR(kTestBlockSize);
+    float* inputs[2] = {inBuf.data(), inBuf.data()};
+    float* outputs[2] = {outBufL.data(), outBufR.data()};
 
-  double phase = 0.0;
-  const double phaseInc = targetFreq / kTestSampleRate;
+    double phase = 0.0;
+    const double phaseInc = targetFreq / kTestSampleRate;
 
-  // Feed signal until pitch locks
-  for (int b = 0; b < lockBlocks; ++b)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
+    // Feed signal until pitch locks
+    for (int b = 0; b < lockBlocks; ++b)
     {
-      inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
-      phase += phaseInc;
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
     }
-    effect.Process(inputs, outputs, kTestBlockSize);
-  }
 
-  // Collect output for analysis
-  std::vector<float> collected;
-  collected.reserve(collectBlocks * kTestBlockSize);
-  for (int b = 0; b < collectBlocks; ++b)
-  {
-    for (int i = 0; i < kTestBlockSize; ++i)
+    // Collect output for analysis
+    std::vector<float> collected;
+    collected.reserve(collectBlocks * kTestBlockSize);
+    for (int b = 0; b < collectBlocks; ++b)
     {
-      inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
-      phase += phaseInc;
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
+            phase += phaseInc;
+        }
+        effect.Process(inputs, outputs, kTestBlockSize);
+        for (int i = 0; i < kTestBlockSize; ++i)
+        {
+            collected.push_back(outBufL[i]);
+        }
     }
-    effect.Process(inputs, outputs, kTestBlockSize);
-    for (int i = 0; i < kTestBlockSize; ++i)
-      collected.push_back(outBufL[i]);
-  }
-  return collected;
+    return collected;
 }
 
 /**
@@ -585,56 +586,62 @@ std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect,
  */
 TestResult TestSquareWaveOutput(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  // wet-only, nominal gain
-  effect.SetParam("waveShape", 1.0);
-  effect.SetParam("mix", 1.0);
-  effect.SetParam("pulseWidth", 0.5);
+    TestResult result;
+    // wet-only, nominal gain
+    effect.SetParam("waveShape", 1.0);
+    effect.SetParam("mix", 1.0);
+    effect.SetParam("pulseWidth", 0.5);
 
-  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+    auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
 
-  if (output.empty())
-  {
-    result.message = "FAIL (no output)";
+    if (output.empty())
+    {
+        result.message = "FAIL (no output)";
+        return result;
+    }
+
+    // Count samples above +0.5 and below -0.5 to estimate duty cycle fractions
+    int highCount = 0, lowCount = 0, totalNonZero = 0;
+    float maxAbs = 0.0f;
+    for (float s : output)
+    {
+        maxAbs = std::max(maxAbs, std::abs(s));
+        if (s > 0.2f)
+        {
+            ++highCount;
+            ++totalNonZero;
+        }
+        else if (s < -0.2f)
+        {
+            ++lowCount;
+            ++totalNonZero;
+        }
+    }
+
+    if (maxAbs < 0.1f)
+    {
+        result.message = "FAIL (silent output, pitch may not have locked)";
+        return result;
+    }
+
+    const double dutyCycle =
+        totalNonZero > 0 ? static_cast<double>(highCount) / static_cast<double>(totalNonZero) : 0.0;
+
+    std::ostringstream msg;
+    msg << std::fixed << std::setprecision(3) << "(peak=" << maxAbs << ", duty=" << dutyCycle << ")";
+
+    // 50% duty cycle, allow ±20% tolerance for anti-aliasing blur near transitions
+    if (dutyCycle > 0.30 && dutyCycle < 0.70 && maxAbs > 0.3f)
+    {
+        result.passed = true;
+        result.message = "PASS " + msg.str();
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL " + msg.str();
+    }
     return result;
-  }
-
-  // Count samples above +0.5 and below -0.5 to estimate duty cycle fractions
-  int highCount = 0, lowCount = 0, totalNonZero = 0;
-  float maxAbs = 0.0f;
-  for (float s : output)
-  {
-    maxAbs = std::max(maxAbs, std::abs(s));
-    if (s > 0.2f) { ++highCount; ++totalNonZero; }
-    else if (s < -0.2f) { ++lowCount; ++totalNonZero; }
-  }
-
-  if (maxAbs < 0.1f)
-  {
-    result.message = "FAIL (silent output, pitch may not have locked)";
-    return result;
-  }
-
-  const double dutyCycle = totalNonZero > 0
-    ? static_cast<double>(highCount) / static_cast<double>(totalNonZero)
-    : 0.0;
-
-  std::ostringstream msg;
-  msg << std::fixed << std::setprecision(3)
-      << "(peak=" << maxAbs << ", duty=" << dutyCycle << ")";
-
-  // 50% duty cycle, allow ±20% tolerance for anti-aliasing blur near transitions
-  if (dutyCycle > 0.30 && dutyCycle < 0.70 && maxAbs > 0.3f)
-  {
-    result.passed = true;
-    result.message = "PASS " + msg.str();
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL " + msg.str();
-  }
-  return result;
 }
 
 /**
@@ -642,39 +649,39 @@ TestResult TestSquareWaveOutput(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestTriangleWaveOutput(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  effect.SetParam("waveShape", 2.0);
-  effect.SetParam("mix", 1.0);
+    TestResult result;
+    effect.SetParam("waveShape", 2.0);
+    effect.SetParam("mix", 1.0);
 
-  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+    auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
 
-  if (output.empty())
-  {
-    result.message = "FAIL (no output)";
+    if (output.empty())
+    {
+        result.message = "FAIL (no output)";
+        return result;
+    }
+
+    float maxVal = *std::max_element(output.begin(), output.end());
+    float minVal = *std::min_element(output.begin(), output.end());
+
+    // Triangle should have roughly symmetric positive and negative peaks
+    const float asymmetry = std::abs(std::abs(maxVal) - std::abs(minVal));
+
+    std::ostringstream msg;
+    msg << std::fixed << std::setprecision(3) << "(max=" << maxVal << ", min=" << minVal << ", asymmetry=" << asymmetry
+        << ")";
+
+    if (maxVal > 0.2f && minVal < -0.2f && asymmetry < 0.3f)
+    {
+        result.passed = true;
+        result.message = "PASS " + msg.str();
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL " + msg.str();
+    }
     return result;
-  }
-
-  float maxVal = *std::max_element(output.begin(), output.end());
-  float minVal = *std::min_element(output.begin(), output.end());
-
-  // Triangle should have roughly symmetric positive and negative peaks
-  const float asymmetry = std::abs(std::abs(maxVal) - std::abs(minVal));
-
-  std::ostringstream msg;
-  msg << std::fixed << std::setprecision(3)
-      << "(max=" << maxVal << ", min=" << minVal << ", asymmetry=" << asymmetry << ")";
-
-  if (maxVal > 0.2f && minVal < -0.2f && asymmetry < 0.3f)
-  {
-    result.passed = true;
-    result.message = "PASS " + msg.str();
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL " + msg.str();
-  }
-  return result;
 }
 
 /**
@@ -682,43 +689,42 @@ TestResult TestTriangleWaveOutput(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestSineWaveOutput(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  effect.SetParam("waveShape", 3.0);
-  effect.SetParam("mix", 1.0);
+    TestResult result;
+    effect.SetParam("waveShape", 3.0);
+    effect.SetParam("mix", 1.0);
 
-  auto output = FeedAndCollectOutput(effect, 440.0, 40, 10);
+    auto output = FeedAndCollectOutput(effect, 440.0, 40, 10);
 
-  if (output.empty())
-  {
-    result.message = "FAIL (no output)";
+    if (output.empty())
+    {
+        result.message = "FAIL (no output)";
+        return result;
+    }
+
+    float maxAbs = 0.0f;
+    float maxDelta = 0.0f;
+    for (size_t i = 1; i < output.size(); ++i)
+    {
+        maxAbs = std::max(maxAbs, std::abs(output[i]));
+        maxDelta = std::max(maxDelta, std::abs(output[i] - output[i - 1]));
+    }
+
+    // Sine at 440 Hz, 48 kHz: maximum sample-to-sample change ≈ 2π*440/48000 ≈ 0.057
+    // Allow generous headroom (envelope, etc.) up to 0.2
+    std::ostringstream msg;
+    msg << std::fixed << std::setprecision(4) << "(peak=" << maxAbs << ", maxDelta=" << maxDelta << ")";
+
+    if (maxAbs > 0.1f && maxDelta < 0.20f)
+    {
+        result.passed = true;
+        result.message = "PASS " + msg.str();
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL " + msg.str();
+    }
     return result;
-  }
-
-  float maxAbs = 0.0f;
-  float maxDelta = 0.0f;
-  for (size_t i = 1; i < output.size(); ++i)
-  {
-    maxAbs = std::max(maxAbs, std::abs(output[i]));
-    maxDelta = std::max(maxDelta, std::abs(output[i] - output[i-1]));
-  }
-
-  // Sine at 440 Hz, 48 kHz: maximum sample-to-sample change ≈ 2π*440/48000 ≈ 0.057
-  // Allow generous headroom (envelope, etc.) up to 0.2
-  std::ostringstream msg;
-  msg << std::fixed << std::setprecision(4)
-      << "(peak=" << maxAbs << ", maxDelta=" << maxDelta << ")";
-
-  if (maxAbs > 0.1f && maxDelta < 0.20f)
-  {
-    result.passed = true;
-    result.message = "PASS " + msg.str();
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL " + msg.str();
-  }
-  return result;
 }
 
 /**
@@ -726,50 +732,56 @@ TestResult TestSineWaveOutput(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestPulseWidthChange(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  effect.SetParam("waveShape", 1.0);
-  effect.SetParam("mix", 1.0);
-  effect.SetParam("pulseWidth", 0.25);
+    TestResult result;
+    effect.SetParam("waveShape", 1.0);
+    effect.SetParam("mix", 1.0);
+    effect.SetParam("pulseWidth", 0.25);
 
-  auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
+    auto output = FeedAndCollectOutput(effect, 220.0, 40, 10);
 
-  if (output.empty())
-  {
-    result.message = "FAIL (no output)";
+    if (output.empty())
+    {
+        result.message = "FAIL (no output)";
+        return result;
+    }
+
+    float maxAbs = 0.0f;
+    int highCount = 0, lowCount = 0, totalNonZero = 0;
+    for (float s : output)
+    {
+        maxAbs = std::max(maxAbs, std::abs(s));
+        if (s > 0.2f)
+        {
+            ++highCount;
+            ++totalNonZero;
+        }
+        else if (s < -0.2f)
+        {
+            ++lowCount;
+            ++totalNonZero;
+        }
+    }
+
+    // At pw=0.25 the high state should occupy ~25% of non-transition samples
+    // Allow wide tolerance since PolyBLEP blurs the edges
+    const double dutyCycle =
+        totalNonZero > 0 ? static_cast<double>(highCount) / static_cast<double>(totalNonZero) : 0.5;
+
+    std::ostringstream msg;
+    msg << std::fixed << std::setprecision(3) << "(peak=" << maxAbs << ", duty=" << dutyCycle << ", expected ~0.25)";
+
+    // Expect duty clearly below 0.5 (asymmetric square)
+    if (maxAbs > 0.1f && dutyCycle < 0.45)
+    {
+        result.passed = true;
+        result.message = "PASS " + msg.str();
+    }
+    else
+    {
+        result.passed = false;
+        result.message = "FAIL " + msg.str();
+    }
     return result;
-  }
-
-  float maxAbs = 0.0f;
-  int highCount = 0, lowCount = 0, totalNonZero = 0;
-  for (float s : output)
-  {
-    maxAbs = std::max(maxAbs, std::abs(s));
-    if (s > 0.2f) { ++highCount; ++totalNonZero; }
-    else if (s < -0.2f) { ++lowCount; ++totalNonZero; }
-  }
-
-  // At pw=0.25 the high state should occupy ~25% of non-transition samples
-  // Allow wide tolerance since PolyBLEP blurs the edges
-  const double dutyCycle = totalNonZero > 0
-    ? static_cast<double>(highCount) / static_cast<double>(totalNonZero)
-    : 0.5;
-
-  std::ostringstream msg;
-  msg << std::fixed << std::setprecision(3)
-      << "(peak=" << maxAbs << ", duty=" << dutyCycle << ", expected ~0.25)";
-
-  // Expect duty clearly below 0.5 (asymmetric square)
-  if (maxAbs > 0.1f && dutyCycle < 0.45)
-  {
-    result.passed = true;
-    result.message = "PASS " + msg.str();
-  }
-  else
-  {
-    result.passed = false;
-    result.message = "FAIL " + msg.str();
-  }
-  return result;
 }
 
 /**
@@ -777,185 +789,255 @@ TestResult TestPulseWidthChange(guitarfx::SynthSawEffect& effect)
  */
 TestResult TestWaveShapeParamReadback(guitarfx::SynthSawEffect& effect)
 {
-  TestResult result;
-  bool allOk = true;
-  std::ostringstream msg;
+    TestResult result;
+    bool allOk = true;
+    std::ostringstream msg;
 
-  const int shapes[] = {0, 1, 2, 3};
-  const char* names[] = {"Saw", "Square", "Triangle", "Sine"};
-  for (int i = 0; i < 4; ++i)
-  {
-    effect.SetParam("waveShape", static_cast<double>(shapes[i]));
-    effect.SetParam("voice2WaveShape", static_cast<double>(shapes[i]));
-    const int readback  = static_cast<int>(std::round(effect.GetParam("waveShape")));
-    const int readback2 = static_cast<int>(std::round(effect.GetParam("voice2WaveShape")));
-    if (readback != shapes[i] || readback2 != shapes[i])
+    const int shapes[] = {0, 1, 2, 3};
+    const char* names[] = {"Saw", "Square", "Triangle", "Sine"};
+    for (int i = 0; i < 4; ++i)
     {
-      allOk = false;
-      msg << names[i] << " readback mismatch(v1=" << readback << ",v2=" << readback2 << ") ";
+        effect.SetParam("waveShape", static_cast<double>(shapes[i]));
+        effect.SetParam("voice2WaveShape", static_cast<double>(shapes[i]));
+        const int readback = static_cast<int>(std::round(effect.GetParam("waveShape")));
+        const int readback2 = static_cast<int>(std::round(effect.GetParam("voice2WaveShape")));
+        if (readback != shapes[i] || readback2 != shapes[i])
+        {
+            allOk = false;
+            msg << names[i] << " readback mismatch(v1=" << readback << ",v2=" << readback2 << ") ";
+        }
     }
-  }
 
-  // Verify pulseWidth clamp
-  effect.SetParam("pulseWidth", 0.05);   // below min
-  const double pwLow = effect.GetParam("pulseWidth");
-  effect.SetParam("pulseWidth", 0.95);   // above max
-  const double pwHigh = effect.GetParam("pulseWidth");
-  if (pwLow < 0.095 || pwHigh > 0.905)
-  {
-    allOk = false;
-    msg << "pulseWidth clamp failed(low=" << pwLow << ",high=" << pwHigh << ") ";
-  }
+    // Verify pulseWidth clamp
+    effect.SetParam("pulseWidth", 0.05); // below min
+    const double pwLow = effect.GetParam("pulseWidth");
+    effect.SetParam("pulseWidth", 0.95); // above max
+    const double pwHigh = effect.GetParam("pulseWidth");
+    if (pwLow < 0.095 || pwHigh > 0.905)
+    {
+        allOk = false;
+        msg << "pulseWidth clamp failed(low=" << pwLow << ",high=" << pwHigh << ") ";
+    }
 
-  result.passed = allOk;
-  result.message = allOk ? "PASS (all shapes + clamp verified)" : "FAIL " + msg.str();
-  return result;
+    result.passed = allOk;
+    result.message = allOk ? "PASS (all shapes + clamp verified)" : "FAIL " + msg.str();
+    return result;
 }
 
 } // anonymous namespace
 
 int main()
 {
-  std::cout << "========================================\n";
-  std::cout << "SynthSaw Effect Tests\n";
-  std::cout << "========================================\n\n";
+    std::cout << "========================================\n";
+    std::cout << "SynthSaw Effect Tests\n";
+    std::cout << "========================================\n\n";
 
-  // Register all effects
-  guitarfx::RegisterAllEffects();
+    // Register all effects
+    guitarfx::RegisterAllEffects();
 
-  // Create effect instance
-  auto effect = std::make_unique<guitarfx::SynthSawEffect>();
-  effect->Prepare(kTestSampleRate, kTestBlockSize);
+    // Create effect instance
+    auto effect = std::make_unique<guitarfx::SynthSawEffect>();
+    effect->Prepare(kTestSampleRate, kTestBlockSize);
 
-  int passed = 0;
-  int failed = 0;
+    int passed = 0;
+    int failed = 0;
 
-  // Test 1: Pitch detection accuracy across guitar range
-  std::cout << "--- Pitch Detection Accuracy Tests ---\n";
-  for (double freq : kTestFrequencies)
-  {
-    effect->Reset();
-    auto result = TestPitchDetection(*effect, freq);
-    
-    std::cout << std::fixed << std::setprecision(1);
-    std::cout << "  " << std::setw(7) << freq << " Hz: ";
-    std::cout << result.message;
-    if (result.passed)
+    // Test 1: Pitch detection accuracy across guitar range
+    std::cout << "--- Pitch Detection Accuracy Tests ---\n";
+    for (double freq : kTestFrequencies)
     {
-      std::cout << " (detected=" << result.detectedFreq << " Hz, error=" 
-                << std::setprecision(1) << result.errorCents << " cents)";
-      passed++;
-    }
-    else
-    {
-      std::cout << " (detected=" << result.detectedFreq << " Hz)";
-      failed++;
+        effect->Reset();
+        auto result = TestPitchDetection(*effect, freq);
+
+        std::cout << std::fixed << std::setprecision(1);
+        std::cout << "  " << std::setw(7) << freq << " Hz: ";
+        std::cout << result.message;
+        if (result.passed)
+        {
+            std::cout << " (detected=" << result.detectedFreq << " Hz, error=" << std::setprecision(1)
+                      << result.errorCents << " cents)";
+            passed++;
+        }
+        else
+        {
+            std::cout << " (detected=" << result.detectedFreq << " Hz)";
+            failed++;
+        }
+        std::cout << "\n";
     }
     std::cout << "\n";
-  }
-  std::cout << "\n";
 
-  // Test 2: Pitch tracking speed
-  std::cout << "--- Pitch Tracking Speed Test ---\n";
-  effect->Reset();
-  {
-    auto result = TestPitchTrackingSpeed(*effect);
-    std::cout << "  Octave jump (220->440 Hz): " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-  std::cout << "\n";
-
-  // Test 3: Silence handling
-  std::cout << "--- Edge Case Tests ---\n";
-  effect->Reset();
-  {
-    auto result = TestSilenceHandling(*effect);
-    std::cout << "  Silence input: " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-
-  // Test 4: Noise handling
-  effect->Reset();
-  {
-    auto result = TestNoiseHandling(*effect);
-    std::cout << "  Noise input: " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-  std::cout << "\n";
-
-  // Test 5: Output frequency verification
-  std::cout << "--- Output Verification Tests ---\n";
-  effect->Reset();
-  {
-    auto result = TestOutputFrequency(*effect);
-    std::cout << "  Output frequency match: " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-
-  // Test 6: Octave shift (multiple values)
-  std::cout << "--- Octave Shift Tests ---\n";
-  const double octaveShiftValues[] = {0.0, 1.0, -1.0, 2.0, -2.0};
-  for (double octaveVal : octaveShiftValues)
-  {
+    // Test 2: Pitch tracking speed
+    std::cout << "--- Pitch Tracking Speed Test ---\n";
     effect->Reset();
-    auto result = TestOctaveShiftValue(*effect, octaveVal);
-    std::cout << "  Octave shift " << std::showpos << octaveVal << std::noshowpos << ": " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-  std::cout << "\n";
+    {
+        auto result = TestPitchTrackingSpeed(*effect);
+        std::cout << "  Octave jump (220->440 Hz): " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+    std::cout << "\n";
 
-  // Test 7: Wave shape variants
-  std::cout << "\n--- Wave Shape Tests ---\n";
+    // Test 3: Silence handling
+    std::cout << "--- Edge Case Tests ---\n";
+    effect->Reset();
+    {
+        auto result = TestSilenceHandling(*effect);
+        std::cout << "  Silence input: " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
 
-  // Square wave
-  effect->Reset();
-  effect->SetParam("mix", 1.0);
-  {
-    auto result = TestSquareWaveOutput(*effect);
-    std::cout << "  Square wave output:     " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
+    // Test 4: Noise handling
+    effect->Reset();
+    {
+        auto result = TestNoiseHandling(*effect);
+        std::cout << "  Noise input: " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+    std::cout << "\n";
 
-  // Triangle wave
-  effect->Reset();
-  effect->SetParam("mix", 1.0);
-  {
-    auto result = TestTriangleWaveOutput(*effect);
-    std::cout << "  Triangle wave output:   " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
+    // Test 5: Output frequency verification
+    std::cout << "--- Output Verification Tests ---\n";
+    effect->Reset();
+    {
+        auto result = TestOutputFrequency(*effect);
+        std::cout << "  Output frequency match: " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
 
-  // Sine wave
-  effect->Reset();
-  effect->SetParam("mix", 1.0);
-  {
-    auto result = TestSineWaveOutput(*effect);
-    std::cout << "  Sine wave output:       " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
+    // Test 6: Octave shift (multiple values)
+    std::cout << "--- Octave Shift Tests ---\n";
+    const double octaveShiftValues[] = {0.0, 1.0, -1.0, 2.0, -2.0};
+    for (double octaveVal : octaveShiftValues)
+    {
+        effect->Reset();
+        auto result = TestOctaveShiftValue(*effect, octaveVal);
+        std::cout << "  Octave shift " << std::showpos << octaveVal << std::noshowpos << ": " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+    std::cout << "\n";
 
-  // Pulse width
-  effect->Reset();
-  effect->SetParam("mix", 1.0);
-  {
-    auto result = TestPulseWidthChange(*effect);
-    std::cout << "  Pulse width 25%:        " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
+    // Test 7: Wave shape variants
+    std::cout << "\n--- Wave Shape Tests ---\n";
 
-  // Param readback + clamp
-  effect->Reset();
-  {
-    auto result = TestWaveShapeParamReadback(*effect);
-    std::cout << "  Param readback/clamp:   " << result.message << "\n";
-    if (result.passed) passed++; else failed++;
-  }
-  std::cout << "\n";
+    // Square wave
+    effect->Reset();
+    effect->SetParam("mix", 1.0);
+    {
+        auto result = TestSquareWaveOutput(*effect);
+        std::cout << "  Square wave output:     " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
 
-  // Summary
-  std::cout << "========================================\n";
-  std::cout << "Results: " << passed << " passed, " << failed << " failed\n";
-  std::cout << "========================================\n";
+    // Triangle wave
+    effect->Reset();
+    effect->SetParam("mix", 1.0);
+    {
+        auto result = TestTriangleWaveOutput(*effect);
+        std::cout << "  Triangle wave output:   " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
 
-  return failed > 0 ? 1 : 0;
+    // Sine wave
+    effect->Reset();
+    effect->SetParam("mix", 1.0);
+    {
+        auto result = TestSineWaveOutput(*effect);
+        std::cout << "  Sine wave output:       " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+
+    // Pulse width
+    effect->Reset();
+    effect->SetParam("mix", 1.0);
+    {
+        auto result = TestPulseWidthChange(*effect);
+        std::cout << "  Pulse width 25%:        " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+
+    // Param readback + clamp
+    effect->Reset();
+    {
+        auto result = TestWaveShapeParamReadback(*effect);
+        std::cout << "  Param readback/clamp:   " << result.message << "\n";
+        if (result.passed)
+        {
+            passed++;
+        }
+        else
+        {
+            failed++;
+        }
+    }
+    std::cout << "\n";
+
+    // Summary
+    std::cout << "========================================\n";
+    std::cout << "Results: " << passed << " passed, " << failed << " failed\n";
+    std::cout << "========================================\n";
+
+    return failed > 0 ? 1 : 0;
 }

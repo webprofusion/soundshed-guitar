@@ -4,9 +4,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchSignalPath(PluginController& c,
-                                           const nlohmann::json& msg,
-                                           const std::string& type)
+bool MessageDispatcher::DispatchSignalPath(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "updateSignalPathNodeParam")
     {

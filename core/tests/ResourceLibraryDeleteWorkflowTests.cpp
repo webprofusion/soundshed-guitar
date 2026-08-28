@@ -19,9 +19,8 @@ namespace
 {
 class TestHost final : public guitarfx::IPluginHost
 {
-public:
-    explicit TestHost(fs::path root)
-        : mRoot(std::move(root))
+  public:
+    explicit TestHost(fs::path root) : mRoot(std::move(root))
     {
     }
 
@@ -30,16 +29,13 @@ public:
         messages.push_back(jsonMessage);
     }
 
-    void BrowseFileAsync(guitarfx::BrowseFileType,
-                         const std::string&,
+    void BrowseFileAsync(guitarfx::BrowseFileType, const std::string&,
                          std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
     }
 
-    void SaveFileAsync(guitarfx::BrowseFileType,
-                       const std::string&,
-                       const std::string&,
+    void SaveFileAsync(guitarfx::BrowseFileType, const std::string&, const std::string&,
                        std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
@@ -72,7 +68,7 @@ public:
 
     std::vector<std::string> messages;
 
-private:
+  private:
     fs::path mRoot;
 };
 
@@ -93,7 +89,9 @@ std::optional<nlohmann::json> FindLastMessageOfType(const std::vector<std::strin
         {
             const auto parsed = nlohmann::json::parse(*it);
             if (parsed.value("type", "") == type)
+            {
                 return parsed;
+            }
         }
         catch (const std::exception&)
         {
@@ -121,8 +119,7 @@ bool LibraryIndexContains(const fs::path& sandbox, const std::string& resourceTy
                      guitarfx::ResourceLibrary::MakeStoreId(resourceType, resourceId));
 }
 
-guitarfx::Preset BuildSingleNodeResourcePreset(const std::string& nodeId,
-                                               const std::string& resourceType,
+guitarfx::Preset BuildSingleNodeResourcePreset(const std::string& nodeId, const std::string& resourceType,
                                                const std::string& resourceId)
 {
     using namespace guitarfx;
@@ -173,8 +170,7 @@ struct SavedResourceInfo
     fs::path filePath;
 };
 
-std::optional<SavedResourceInfo> SaveLocalResource(guitarfx::PluginController& controller,
-                                                   TestHost& host,
+std::optional<SavedResourceInfo> SaveLocalResource(guitarfx::PluginController& controller, TestHost& host,
                                                    const nlohmann::json& payload)
 {
     host.messages.clear();
@@ -182,34 +178,36 @@ std::optional<SavedResourceInfo> SaveLocalResource(guitarfx::PluginController& c
 
     const auto importedMessage = FindLastMessageOfType(host.messages, "resourceImported");
     if (!importedMessage)
+    {
         return std::nullopt;
+    }
 
     SavedResourceInfo info;
     info.type = importedMessage->value("resourceType", "");
     info.id = importedMessage->value("id", "");
     info.filePath = importedMessage->value("filePath", "");
     if (info.type.empty() || info.id.empty() || info.filePath.empty())
+    {
         return std::nullopt;
+    }
 
     return info;
 }
 
-bool DeleteResourceAndExpectRemoved(guitarfx::PluginController& controller,
-                                    TestHost& host,
-                                    const std::string& resourceType,
-                                    const std::string& resourceId)
+bool DeleteResourceAndExpectRemoved(guitarfx::PluginController& controller, TestHost& host,
+                                    const std::string& resourceType, const std::string& resourceId)
 {
     host.messages.clear();
     controller.HandleUIMessage(nlohmann::json{
         {"type", "deleteLibraryResource"},
         {"resourceType", resourceType},
         {"resourceId", resourceId},
-    }.dump());
+    }
+                                   .dump());
 
     const auto removedMessage = FindLastMessageOfType(host.messages, "resourceRemoved");
-    return removedMessage
-        && removedMessage->value("resourceType", "") == resourceType
-        && removedMessage->value("id", "") == resourceId;
+    return removedMessage && removedMessage->value("resourceType", "") == resourceType &&
+           removedMessage->value("id", "") == resourceId;
 }
 
 bool TestDeleteStoredResourceRemovesFileAndIndex()
@@ -223,19 +221,19 @@ bool TestDeleteStoredResourceRemovesFileAndIndex()
     TestHost host(sandbox);
     guitarfx::PluginController controller(host);
 
-    const auto saved = SaveLocalResource(controller, host, nlohmann::json{
-        {"type", "saveLocalLibraryResource"},
-        {"resourceType", "wasm"},
-        {"name", "Stored Resource"},
-        {"fileName", "stored-resource.wasm"},
-        {"data", "AQID"},
-    });
+    const auto saved = SaveLocalResource(controller, host,
+                                         nlohmann::json{
+                                             {"type", "saveLocalLibraryResource"},
+                                             {"resourceType", "wasm"},
+                                             {"name", "Stored Resource"},
+                                             {"fileName", "stored-resource.wasm"},
+                                             {"data", "AQID"},
+                                         });
     if (!saved)
     {
         std::cerr << "Failed to save stored local resource\n";
         return false;
     }
-
 
     if (!fs::exists(saved->filePath) || !LibraryIndexContains(sandbox, saved->type, saved->id))
     {
@@ -281,18 +279,18 @@ bool TestDeleteExternalResourceKeepsFileButRemovesIndex()
     TestHost host(sandbox);
     guitarfx::PluginController controller(host);
 
-    const auto saved = SaveLocalResource(controller, host, nlohmann::json{
-        {"type", "saveLocalLibraryResource"},
-        {"resourceType", "wasm"},
-        {"name", "External Resource"},
-        {"filePath", externalFile.string()},
-    });
+    const auto saved = SaveLocalResource(controller, host,
+                                         nlohmann::json{
+                                             {"type", "saveLocalLibraryResource"},
+                                             {"resourceType", "wasm"},
+                                             {"name", "External Resource"},
+                                             {"filePath", externalFile.string()},
+                                         });
     if (!saved)
     {
         std::cerr << "Failed to index external resource\n";
         return false;
     }
-
 
     if (!LibraryIndexContains(sandbox, saved->type, saved->id))
     {
@@ -332,19 +330,19 @@ bool TestDeleteInUseResourceIsRefused()
     TestHost host(sandbox);
     guitarfx::PluginController controller(host);
 
-    const auto saved = SaveLocalResource(controller, host, nlohmann::json{
-        {"type", "saveLocalLibraryResource"},
-        {"resourceType", "wasm"},
-        {"name", "In Use Resource"},
-        {"fileName", "in-use-resource.wasm"},
-        {"data", "AQIDBA=="},
-    });
+    const auto saved = SaveLocalResource(controller, host,
+                                         nlohmann::json{
+                                             {"type", "saveLocalLibraryResource"},
+                                             {"resourceType", "wasm"},
+                                             {"name", "In Use Resource"},
+                                             {"fileName", "in-use-resource.wasm"},
+                                             {"data", "AQIDBA=="},
+                                         });
     if (!saved)
     {
         std::cerr << "Failed to save in-use resource\n";
         return false;
     }
-
 
     if (!LibraryIndexContains(sandbox, saved->type, saved->id))
     {
@@ -363,7 +361,8 @@ bool TestDeleteInUseResourceIsRefused()
         {"type", "deleteLibraryResource"},
         {"resourceType", saved->type},
         {"resourceId", saved->id},
-    }.dump());
+    }
+                                   .dump());
 
     const auto failedMessage = FindLastMessageOfType(host.messages, "resourceDeleteFailed");
     if (!failedMessage)
@@ -403,9 +402,13 @@ int main()
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
         if (ok)
+        {
             ++passed;
+        }
         else
+        {
             ++failed;
+        }
     };
 
     run("Delete stored resource removes file and index", TestDeleteStoredResourceRemovesFileAndIndex());

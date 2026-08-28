@@ -9,25 +9,32 @@ namespace guitarfx
 
 namespace
 {
-    /// Human-readable name for a MIDI status nibble, for the UI's log panel.
-    const char* MidiTypeName(const MidiEvent& event)
+/// Human-readable name for a MIDI status nibble, for the UI's log panel.
+const char* MidiTypeName(const MidiEvent& event)
+{
+    switch ((event.status >> 4) & 0x0F)
     {
-        switch ((event.status >> 4) & 0x0F)
-        {
-        case 0x08: return "NoteOff";
-        case 0x09: return event.data2 > 0 ? "NoteOn" : "NoteOff";
-        case 0x0A: return "Aftertouch";
-        case 0x0B: return "CC";
-        case 0x0C: return "ProgramChange";
-        case 0x0D: return "ChanPress";
-        case 0x0E: return "PitchBend";
-        default:   return "Unknown";
-        }
+    case 0x08:
+        return "NoteOff";
+    case 0x09:
+        return event.data2 > 0 ? "NoteOn" : "NoteOff";
+    case 0x0A:
+        return "Aftertouch";
+    case 0x0B:
+        return "CC";
+    case 0x0C:
+        return "ProgramChange";
+    case 0x0D:
+        return "ChanPress";
+    case 0x0E:
+        return "PitchBend";
+    default:
+        return "Unknown";
     }
 }
+} // namespace
 
-ControlSurfaceQueue::ControlSurfaceQueue(SendMessageFn sendMessage)
-    : mSendMessage(std::move(sendMessage))
+ControlSurfaceQueue::ControlSurfaceQueue(SendMessageFn sendMessage) : mSendMessage(std::move(sendMessage))
 {
     mMidiToApply.reserve(kMaxMidiToApply);
     mMidiLog.reserve(kMaxMidiLog);
@@ -71,17 +78,23 @@ void ControlSurfaceQueue::EnqueueMidi(const MidiEvent& event)
     {
         std::lock_guard<std::mutex> lock(mMidiLogMutex);
         if (mMidiLog.size() < kMaxMidiLog)
+        {
             mMidiLog.push_back(event);
+        }
     }
 
     if (mMidiToApply.size() < kMaxMidiToApply)
+    {
         mMidiToApply.push_back(event);
+    }
 }
 
 void ControlSurfaceQueue::DrainMidiForApply(const std::function<void(const MidiEvent&)>& apply)
 {
     for (const auto& event : mMidiToApply)
+    {
         apply(event);
+    }
     mMidiToApply.clear();
 }
 
@@ -98,7 +111,9 @@ void ControlSurfaceQueue::SetMidiLogEnabled(bool enabled)
 void ControlSurfaceQueue::PublishMidiLog()
 {
     if (!mMidiLogEnabled.load(std::memory_order_relaxed))
+    {
         return;
+    }
 
     std::vector<MidiEvent> events;
     {
@@ -111,7 +126,9 @@ void ControlSurfaceQueue::PublishMidiLog()
     }
 
     if (!mSendMessage)
+    {
         return;
+    }
 
     for (const auto& event : events)
     {

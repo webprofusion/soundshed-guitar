@@ -48,8 +48,8 @@ struct MidiControlMap
         PitchBend
     };
     EventType eventType = EventType::CC;
-    int channel = 0;       ///< 0-15, or -1 for "any channel"
-    int controller = 0;    ///< CC number (0-127) or note number
+    int channel = 0;    ///< 0-15, or -1 for "any channel"
+    int controller = 0; ///< CC number (0-127) or note number
     enum class Mode
     {
         Absolute,
@@ -57,8 +57,8 @@ struct MidiControlMap
         Toggle,
         Pickup
     } mode = Mode::Absolute;
-    float sensitivity = 0.1f;  ///< Relative mode increment scale
-    float pickupRange = 0.1f;  ///< Pickup mode tolerance
+    float sensitivity = 0.1f; ///< Relative mode increment scale
+    float pickupRange = 0.1f; ///< Pickup mode tolerance
 };
 
 /// Keyboard mapping for a slot (multiple keys can target the same slot).
@@ -69,9 +69,9 @@ struct KeyboardMap
         Trigger,
         SetValue
     };
-    std::string key;   ///< KeyboardEvent.key value, e.g. "1", "a", "PageUp"
+    std::string key; ///< KeyboardEvent.key value, e.g. "1", "a", "PageUp"
     Mode mode = Mode::Trigger;
-    float value = 0.0f;  ///< Normalized 0..1 for SetValue; ignored for Trigger
+    float value = 0.0f; ///< Normalized 0..1 for SetValue; ignored for Trigger
 };
 
 /// A single automation slot (default or custom).
@@ -89,8 +89,8 @@ struct AutomationSlot
     // Runtime state (audio-thread accessible via atomics)
     std::atomic<float> value{0.0f};
     std::atomic<int> lastSource{static_cast<int>(AutomationSource::UI)};
-    std::atomic<float> lastNormalized{0.0f};  ///< For trigger edge detection
-    std::atomic<bool> lastToggleGate{false};  ///< For MIDI toggle edge detection
+    std::atomic<float> lastNormalized{0.0f}; ///< For trigger edge detection
+    std::atomic<bool> lastToggleGate{false}; ///< For MIDI toggle edge detection
     std::atomic<bool> pendingApply{false};
 
     AutomationSlot() = default;
@@ -103,7 +103,10 @@ struct AutomationSlot
     void SetValue(float normalized, AutomationSource src);
 
     /// Check if this slot has any input mapping (MIDI or keyboard).
-    [[nodiscard]] bool HasInputMapping() const { return midiMap.has_value() || !keyMaps.empty(); }
+    [[nodiscard]] bool HasInputMapping() const
+    {
+        return midiMap.has_value() || !keyMaps.empty();
+    }
 };
 
 /// Default slot definitions (data, not code cases).
@@ -124,15 +127,15 @@ inline constexpr DefaultSlotDef kDefaultSlots[] = {
     {"default.setlistPreset6", "setlist.preset6", "Setlist Preset 6"},
     {"default.setlistPreset7", "setlist.preset7", "Setlist Preset 7"},
     {"default.setlistPreset8", "setlist.preset8", "Setlist Preset 8"},
-    {"default.bankUp",        "setlist.bankUp", "Bank Up"},
-    {"default.bankDown",      "setlist.bankDown", "Bank Down"},
-    {"default.bankSelect",    "setlist.bankSelect", "Select Bank"},
-    {"default.inputLevel",    "global.inputTrim", "Input Level"},
-    {"default.outputLevel",   "global.outputTrim", "Output Level"},
-    {"default.scene1",        "scene.select1", "Scene 1"},
-    {"default.scene2",        "scene.select2", "Scene 2"},
-    {"default.scene3",        "scene.select3", "Scene 3"},
-    {"default.scene4",        "scene.select4", "Scene 4"},
+    {"default.bankUp", "setlist.bankUp", "Bank Up"},
+    {"default.bankDown", "setlist.bankDown", "Bank Down"},
+    {"default.bankSelect", "setlist.bankSelect", "Select Bank"},
+    {"default.inputLevel", "global.inputTrim", "Input Level"},
+    {"default.outputLevel", "global.outputTrim", "Output Level"},
+    {"default.scene1", "scene.select1", "Scene 1"},
+    {"default.scene2", "scene.select2", "Scene 2"},
+    {"default.scene3", "scene.select3", "Scene 3"},
+    {"default.scene4", "scene.select4", "Scene 4"},
 };
 
 /// Maximum number of custom slots (reserved in the DAW parameter layout).

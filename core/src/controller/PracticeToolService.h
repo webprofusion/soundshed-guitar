@@ -70,9 +70,8 @@ namespace guitarfx
 
 class PracticeToolService
 {
-public:
-    PracticeToolService(IPluginHost& host,
-                        std::mutex& dspMutex,
+  public:
+    PracticeToolService(IPluginHost& host, std::mutex& dspMutex,
                         std::function<void(const std::string&, const std::string&)> reportError,
                         std::function<void(const std::string&)> sendMessage);
     ~PracticeToolService();
@@ -136,7 +135,7 @@ public:
 
     [[nodiscard]] bool IsLoaded() const;
 
-private:
+  private:
     // Grants the unit test (PracticeToolCrossfadeTests.cpp) direct access
     // to ReadSourceWindow()/BeginCrossfade() and the private TrackBuffer type
     // so the loop-wrap/seek crossfade logic can be exercised synchronously
@@ -186,9 +185,8 @@ private:
     /// a wrap never returns short — it transparently crossfades via
     /// BeginCrossfade()/DrainFadeCarry() so the stretch engine downstream
     /// always sees a continuous stream and is never reset.
-    int ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer,
-                         float* outL, float* outR,
-                         std::size_t& cursor, int numFrames);
+    int ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer, float* outL, float* outR, std::size_t& cursor,
+                         int numFrames);
 
     /// Prepares an equal-power crossfade between the track audio at
     /// [fromFrame, fromFrame+len) (fading out) and [toFrame, toFrame+len)
@@ -226,7 +224,7 @@ private:
     std::function<void(const std::string&)> mSendMessage;
 
     std::atomic<double> mSampleRate{0.0}; // written by Prepare() (message thread), read by the render thread
-    int mMaxBlockSize = 0;                // only touched under mDSPMutex (Prepare / RenderPostChain via ProcessAudioLocked)
+    int mMaxBlockSize = 0; // only touched under mDSPMutex (Prepare / RenderPostChain via ProcessAudioLocked)
 
     std::shared_ptr<TrackBuffer> mBuffer; // atomic load/store (message thread writes, render thread reads)
 
@@ -257,8 +255,8 @@ private:
     bool mStretchConfigured = false;
 
     std::vector<float> mSourceScratchL, mSourceScratchR; // background-thread only
-    std::vector<float> mStretchOutL, mStretchOutR;        // background-thread only
-    std::vector<StereoFrame> mPushScratch;                // background-thread only
+    std::vector<float> mStretchOutL, mStretchOutR;       // background-thread only
+    std::vector<StereoFrame> mPushScratch;               // background-thread only
 
     // Crossfade "carry" buffer: BeginCrossfade() can compute more faded
     // frames than fit in the caller's current request; the remainder is

@@ -18,8 +18,8 @@
 #include <vector>
 
 #if defined(_WIN32)
-#include <windows.h>
-#include <psapi.h>
+    #include <windows.h>
+    #include <psapi.h>
 #endif
 
 using namespace guitarfx;
@@ -150,7 +150,8 @@ Preset CreateBaselinePreset(const std::string& presetId)
 bool HasExtension(const fs::path& path, const std::string& extLower)
 {
     std::string ext = path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext == extLower;
 }
 
@@ -169,13 +170,19 @@ NamConvAssets DiscoverNamConvAssets(const fs::path& repoRoot)
     for (const auto& entry : fs::recursive_directory_iterator(presetsRoot))
     {
         if (!entry.is_regular_file())
+        {
             continue;
+        }
 
         const fs::path file = entry.path();
         if (HasExtension(file, ".nam"))
+        {
             models.push_back(file);
+        }
         else if (HasExtension(file, ".wav"))
+        {
             irs.push_back(file);
+        }
     }
 
     if (models.size() < 2)
@@ -298,9 +305,13 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
         const std::string id = "preset" + std::to_string(i + 1);
         Preset preset;
         if (settings.profile == kProfileNamConv)
+        {
             preset = CreateNamConvPreset(id, *namConvAssets);
+        }
         else
+        {
             preset = CreateBaselinePreset(id);
+        }
 
         if (!mixer.AddActivePreset(preset, id, id))
         {
@@ -317,13 +328,12 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
     {
         const double phase = static_cast<double>(i) * 2.0 * 3.14159265358979323846 / 64.0;
         inL[static_cast<std::size_t>(i)] = static_cast<float>(0.35 * std::sin(phase));
-        inR[static_cast<std::size_t>(i)] = settings.monoInput
-            ? inL[static_cast<std::size_t>(i)]
-            : static_cast<float>(0.35 * std::cos(phase));
+        inR[static_cast<std::size_t>(i)] =
+            settings.monoInput ? inL[static_cast<std::size_t>(i)] : static_cast<float>(0.35 * std::cos(phase));
     }
 
-    float* inputs[2] = { inL.data(), inR.data() };
-    float* outputs[2] = { outL.data(), outR.data() };
+    float* inputs[2] = {inL.data(), inR.data()};
+    float* outputs[2] = {outL.data(), outR.data()};
 
     for (int i = 0; i < kWarmupBlocks; ++i)
     {
@@ -350,14 +360,13 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
 
     const unsigned int logicalCores = std::max(1u, std::thread::hardware_concurrency());
     const std::uint64_t cpuDelta100ns = (endSnapshot.cpuTime100ns >= startSnapshot.cpuTime100ns)
-        ? (endSnapshot.cpuTime100ns - startSnapshot.cpuTime100ns)
-        : 0;
+                                            ? (endSnapshot.cpuTime100ns - startSnapshot.cpuTime100ns)
+                                            : 0;
 
     const double cpuSeconds = static_cast<double>(cpuDelta100ns) * 1.0e-7;
     const double wallSeconds = static_cast<double>(wallNs) * 1.0e-9;
-    const double cpuUtilPercent = (wallSeconds > 0.0)
-        ? (cpuSeconds / (wallSeconds * static_cast<double>(logicalCores))) * 100.0
-        : 0.0;
+    const double cpuUtilPercent =
+        (wallSeconds > 0.0) ? (cpuSeconds / (wallSeconds * static_cast<double>(logicalCores))) * 100.0 : 0.0;
 
     BenchmarkResult result;
     result.profile = settings.profile;
@@ -373,15 +382,12 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
 
 void PrintResult(const BenchmarkResult& result)
 {
-    std::cout << std::left
-              << std::setw(8) << (result.multiThreaded ? "multi" : "single")
-              << std::setw(9) << result.presetCount
-              << std::setw(14) << std::fixed << std::setprecision(2) << result.wallMs
-              << std::setw(14) << std::fixed << std::setprecision(3) << result.avgBlockUs
-              << std::setw(12) << std::fixed << std::setprecision(2) << result.cpuUtilPercent
-              << std::setw(15) << static_cast<unsigned long long>(result.workingSetBytes / (1024ull * 1024ull))
-              << std::setw(15) << static_cast<unsigned long long>(result.privateBytes / (1024ull * 1024ull))
-              << '\n';
+    std::cout << std::left << std::setw(8) << (result.multiThreaded ? "multi" : "single") << std::setw(9)
+              << result.presetCount << std::setw(14) << std::fixed << std::setprecision(2) << result.wallMs
+              << std::setw(14) << std::fixed << std::setprecision(3) << result.avgBlockUs << std::setw(12) << std::fixed
+              << std::setprecision(2) << result.cpuUtilPercent << std::setw(15)
+              << static_cast<unsigned long long>(result.workingSetBytes / (1024ull * 1024ull)) << std::setw(15)
+              << static_cast<unsigned long long>(result.privateBytes / (1024ull * 1024ull)) << '\n';
 }
 
 bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHelp)
@@ -460,9 +466,13 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
 
             const std::string mode = argv[++i];
             if (mode == "mono")
+            {
                 settings.monoInput = true;
+            }
             else if (mode == "stereo")
+            {
                 settings.monoInput = false;
+            }
             else
             {
                 std::cerr << "Unsupported input mode: " << mode << "\n";
@@ -474,7 +484,8 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
 
         if (arg == "-h" || arg == "--help")
         {
-            std::cout << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--input-mode mono|stereo] [--csv <path>]\n";
+            std::cout
+                << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--input-mode mono|stereo] [--csv <path>]\n";
             std::cout << "  --profile <name>  Benchmark profile to run (default: baseline).\n";
             std::cout << "  --sample-rate <hz>  Processing sample rate for benchmark run (default: 48000).\n";
             std::cout << "  --input-mode <mode>  Input signal mode: mono or stereo (default: stereo).\n";
@@ -484,19 +495,16 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
         }
 
         std::cerr << "Unknown argument: " << arg << '\n';
-        std::cerr << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--input-mode mono|stereo] [--csv <path>]\n";
+        std::cerr
+            << "Usage: SignalChainThreadingBenchmark [--profile baseline|namconv] [--sample-rate <hz>] [--input-mode mono|stereo] [--csv <path>]\n";
         return false;
     }
 
     return true;
 }
 
-bool WriteCsv(const std::string& csvPath,
-              const std::vector<BenchmarkResult>& rows,
-              double sampleRate,
-              bool monoInput,
-              double onePresetSpeedup,
-              double fourPresetSpeedup)
+bool WriteCsv(const std::string& csvPath, const std::vector<BenchmarkResult>& rows, double sampleRate, bool monoInput,
+              double onePresetSpeedup, double fourPresetSpeedup)
 {
     std::ofstream out(csvPath, std::ios::trunc);
     if (!out.is_open())
@@ -508,19 +516,12 @@ bool WriteCsv(const std::string& csvPath,
     out << "profile,sample_rate,input_mode,block_size,warmup_blocks,measure_blocks,mode,presets,wall_ms,avg_block_us,cpu_pct,working_set_mb,private_mb\n";
     for (const auto& row : rows)
     {
-        out << row.profile << ','
-            << static_cast<int>(std::lround(sampleRate)) << ','
-            << (monoInput ? "mono" : "stereo") << ','
-            << kBlockSize << ','
-            << kWarmupBlocks << ','
-            << kMeasureBlocks << ','
-            << (row.multiThreaded ? "multi" : "single") << ','
-            << row.presetCount << ','
-            << std::fixed << std::setprecision(6) << row.wallMs << ','
-            << std::fixed << std::setprecision(6) << row.avgBlockUs << ','
+        out << row.profile << ',' << static_cast<int>(std::lround(sampleRate)) << ',' << (monoInput ? "mono" : "stereo")
+            << ',' << kBlockSize << ',' << kWarmupBlocks << ',' << kMeasureBlocks << ','
+            << (row.multiThreaded ? "multi" : "single") << ',' << row.presetCount << ',' << std::fixed
+            << std::setprecision(6) << row.wallMs << ',' << std::fixed << std::setprecision(6) << row.avgBlockUs << ','
             << std::fixed << std::setprecision(6) << row.cpuUtilPercent << ','
-            << (row.workingSetBytes / (1024ull * 1024ull)) << ','
-            << (row.privateBytes / (1024ull * 1024ull)) << '\n';
+            << (row.workingSetBytes / (1024ull * 1024ull)) << ',' << (row.privateBytes / (1024ull * 1024ull)) << '\n';
     }
 
     out << "\nmetric,value\n";
@@ -549,8 +550,7 @@ int main(int argc, char* argv[])
         std::cout << "Signal Chain Threading Benchmark\n";
         std::cout << "Profile=" << settings.profile << "\n";
         std::cout << "SampleRate=" << settings.sampleRate << ", BlockSize=" << kBlockSize
-                  << ", InputMode=" << (settings.monoInput ? "mono" : "stereo")
-                  << ", WarmupBlocks=" << kWarmupBlocks
+                  << ", InputMode=" << (settings.monoInput ? "mono" : "stereo") << ", WarmupBlocks=" << kWarmupBlocks
                   << ", MeasureBlocks=" << kMeasureBlocks << "\n";
         std::cout << "==============================================\n\n";
 
@@ -561,15 +561,9 @@ int main(int argc, char* argv[])
         std::cout << "Non-Windows build: memory and CPU process snapshots are not collected.\n\n";
 #endif
 
-        std::cout << std::left
-                  << std::setw(8) << "mode"
-                  << std::setw(9) << "presets"
-                  << std::setw(14) << "wall_ms"
-                  << std::setw(14) << "avg_block_us"
-                  << std::setw(12) << "cpu_pct"
-                  << std::setw(15) << "working_set_mb"
-                  << std::setw(15) << "private_mb"
-                  << '\n';
+        std::cout << std::left << std::setw(8) << "mode" << std::setw(9) << "presets" << std::setw(14) << "wall_ms"
+                  << std::setw(14) << "avg_block_us" << std::setw(12) << "cpu_pct" << std::setw(15) << "working_set_mb"
+                  << std::setw(15) << "private_mb" << '\n';
 
         const auto singleOne = RunBenchmark(settings, 1, false);
         PrintResult(singleOne);
@@ -598,7 +592,8 @@ int main(int argc, char* argv[])
 
         if (!settings.csvPath.empty())
         {
-            if (!WriteCsv(settings.csvPath, rows, settings.sampleRate, settings.monoInput, onePresetSpeedup, fourPresetSpeedup))
+            if (!WriteCsv(settings.csvPath, rows, settings.sampleRate, settings.monoInput, onePresetSpeedup,
+                          fourPresetSpeedup))
             {
                 return 1;
             }

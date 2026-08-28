@@ -79,7 +79,7 @@ enum class SettingsApplyMode
  */
 class PluginController
 {
-public:
+  public:
     explicit PluginController(IPluginHost& host);
     ~PluginController();
 
@@ -119,11 +119,30 @@ public:
     void OnWebContentLoaded();
 
     // ── Accessors ──────────────────────────────────────────────────
-    [[nodiscard]] MultiPresetMixer& GetMixer() { return mPresetMixer; }
-    [[nodiscard]] const MultiPresetMixer& GetMixer() const { return mPresetMixer; }
-    [[nodiscard]] ResourceLibrary& GetResourceLibrary() { return mResourceLibrary; }
-    [[nodiscard]] const std::optional<Preset>& GetActivePreset() const { return mActivePreset; }
-    [[nodiscard]] const nlohmann::json& GetAppSettings() const { return mAppSettings; }
+    [[nodiscard]] MultiPresetMixer& GetMixer()
+    {
+        return mPresetMixer;
+    }
+
+    [[nodiscard]] const MultiPresetMixer& GetMixer() const
+    {
+        return mPresetMixer;
+    }
+
+    [[nodiscard]] ResourceLibrary& GetResourceLibrary()
+    {
+        return mResourceLibrary;
+    }
+
+    [[nodiscard]] const std::optional<Preset>& GetActivePreset() const
+    {
+        return mActivePreset;
+    }
+
+    [[nodiscard]] const nlohmann::json& GetAppSettings() const
+    {
+        return mAppSettings;
+    }
 
     // ── Editor window size ─────────────────────────────────────────
     /// The size, in the wrapper's own logical units, that this instance's editor window
@@ -133,7 +152,10 @@ public:
         int width = 0;
         int height = 0;
 
-        [[nodiscard]] bool IsValid() const { return width > 0 && height > 0; }
+        [[nodiscard]] bool IsValid() const
+        {
+            return width > 0 && height > 0;
+        }
     };
 
     /**
@@ -149,7 +171,10 @@ public:
      * Position is not stored: the DAW owns where a plugin window sits on screen, and no
      * plugin wrapper API lets us ask for a placement.
      */
-    [[nodiscard]] EditorWindowSize GetEditorWindowSize() const { return mEditorWindowSize; }
+    [[nodiscard]] EditorWindowSize GetEditorWindowSize() const
+    {
+        return mEditorWindowSize;
+    }
 
     /// Record the editor's current size. Non-positive or absurd values are ignored, so a
     /// transient zero-sized layout pass cannot wipe the remembered size.
@@ -165,7 +190,11 @@ public:
      * DSP is currently running at — so switching back to real time restores their tier.
      */
     void SetOfflineRendering(bool offline);
-    [[nodiscard]] bool IsOfflineRendering() const { return mOfflineRendering; }
+
+    [[nodiscard]] bool IsOfflineRendering() const
+    {
+        return mOfflineRendering;
+    }
 
     /// NAM quality tier owned by this plugin instance.
     struct NamQualityConfig
@@ -201,7 +230,11 @@ public:
     /// a NAM quality key while hosted as a plugin. Instance-owned keys are persisted in
     /// host state, are never written to disk, and survive a shared-settings reload.
     [[nodiscard]] bool IsInstanceOwnedSettingKey(const std::string& key) const;
-    [[nodiscard]] IPluginHost& GetHost() { return mHost; }
+
+    [[nodiscard]] IPluginHost& GetHost()
+    {
+        return mHost;
+    }
 
     // ── Automation (public API for host adapters) ───────────────────
     /// Queue a MIDI event from the audio thread. Non-blocking and allocation-free;
@@ -225,13 +258,30 @@ public:
     [[nodiscard]] int GetSetlistLength() const;
     [[nodiscard]] int GetSetlistBankBase() const;
     [[nodiscard]] int GetSetlistBankNumber() const;
+
     /// Index of the currently selected setlist slot (DAW "program").
-    [[nodiscard]] int GetSetlistCursorIndex() const { return mSetlistCursorIndex; }
+    [[nodiscard]] int GetSetlistCursorIndex() const
+    {
+        return mSetlistCursorIndex;
+    }
+
     /// Preset ID at the given active-setlist slot, or empty if out of range.
     [[nodiscard]] std::string GetSetlistSlotPresetId(int index) const;
-    [[nodiscard]] std::vector<std::string> GetAutomationSlotIds() const { return mAutomationSlots.GetSlotIds(); }
-    [[nodiscard]] AutomationSlotTable& GetAutomationSlots() { return mAutomationSlots; }
-    [[nodiscard]] const AutomationSlotTable& GetAutomationSlots() const { return mAutomationSlots; }
+
+    [[nodiscard]] std::vector<std::string> GetAutomationSlotIds() const
+    {
+        return mAutomationSlots.GetSlotIds();
+    }
+
+    [[nodiscard]] AutomationSlotTable& GetAutomationSlots()
+    {
+        return mAutomationSlots;
+    }
+
+    [[nodiscard]] const AutomationSlotTable& GetAutomationSlots() const
+    {
+        return mAutomationSlots;
+    }
 
     /// Apply a normalized 0..1 value from the DAW host to a slot. Takes DSP lock.
     void ApplyAutomationFromDAW(const std::string& slotId, float normalized);
@@ -272,7 +322,8 @@ public:
     /// Injects a test tone and reports what reached the output. Returns false
     /// if the host has no sample rate yet. See controller/SignalTestService.h.
     bool StartSignalPathTest(double frequencyHz = 440.0, double durationSeconds = 1.0);
-private:
+
+  private:
     friend class MessageDispatcher;
 
     // ── Internal handler methods ───────────────────────────────────
@@ -413,8 +464,7 @@ private:
     void HandleGetSharedSyncStateRequest();
 
     [[nodiscard]] std::optional<LibraryResource> SaveLocalLibraryResource(const nlohmann::json& payload,
-                                                                          std::string& error,
-                                                                          bool allowCreate = true);
+                                                                          std::string& error, bool allowCreate = true);
     void HandleGetAppInfoRequest();
     void HandleGetGlobalChainRequest();
     void HandleSetGlobalChainRequest(const nlohmann::json& payload);
@@ -440,23 +490,16 @@ private:
     void BroadcastState(StateScope scope = StateScope::Full);
     void ApplyPreset(const Preset& preset);
     void AttachRuntimeConfigCallbacks(const std::string& presetId, const Preset& preset);
-    void HandleRuntimeNodeConfigChanged(const std::string& presetId,
-                                        const std::string& nodeId,
-                                        const std::string& key,
+    void HandleRuntimeNodeConfigChanged(const std::string& presetId, const std::string& nodeId, const std::string& key,
                                         const std::string& value);
     void TryRemapHostedPluginResources(Preset& preset) const;
     void TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) const;
-    void PersistHostedPluginResourceMetadata(const GraphNode& node,
-                                             const std::string& key,
-                                             const std::string& value);
-    bool ReportHostedPluginResourceLoadFailure(const std::string& nodeId,
-                                               const ResourceRef& ref,
+    void PersistHostedPluginResourceMetadata(const GraphNode& node, const std::string& key, const std::string& value);
+    bool ReportHostedPluginResourceLoadFailure(const std::string& nodeId, const ResourceRef& ref,
                                                int resourceIndex = -1);
-    void NotifyHostedPluginResourceLoadCompleted(const std::string& nodeId,
-                                                 const ResourceRef& ref,
+    void NotifyHostedPluginResourceLoadCompleted(const std::string& nodeId, const ResourceRef& ref,
                                                  int resourceIndex = -1);
-    void DiscardFailedHostedPluginResourceSelection(const std::string& nodeId,
-                                                    const ResourceRef& ref,
+    void DiscardFailedHostedPluginResourceSelection(const std::string& nodeId, const ResourceRef& ref,
                                                     int resourceIndex = -1);
     void UpdateHostLatency();
     int mLastReportedLatency = -1; ///< Guards against redundant host latency notifications
@@ -485,10 +528,8 @@ private:
      */
     void CaptureMixerSlotHostedPluginState(Preset& preset, const std::string& presetId) const;
     /// Apply one runtime config change to a non-focused mixer slot's cached working copy.
-    void ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId,
-                                            const std::string& nodeId,
-                                            const std::string& key,
-                                            const std::string& value);
+    void ApplyRuntimeNodeConfigToMixerCache(const std::string& presetId, const std::string& nodeId,
+                                            const std::string& key, const std::string& value);
     /// Drop hosted plugin state that belongs to a plugin the node no longer hosts.
     /// Returns true when a stale chunk was removed.
     static bool ClearStaleHostedPluginState(GraphNode& node, const std::string& previousIdentity);
@@ -528,11 +569,9 @@ private:
     [[nodiscard]] std::filesystem::path GetEffectiveSettingsDirectory() const;
     void RefreshPresetLibraryViews();
     void ClearActivePresetMixerState();
-    void StartPresetArchiveSession(const std::string& archiveFileName,
-                                   const std::vector<std::uint8_t>& archiveBytes);
+    void StartPresetArchiveSession(const std::string& archiveFileName, const std::vector<std::uint8_t>& archiveBytes);
     void EndPresetArchiveSession(bool notifyUi = true);
-    void SendPresetArchiveSessionStateToUI(const char* messageType = nullptr,
-                                           const std::string& detail = {});
+    void SendPresetArchiveSessionStateToUI(const char* messageType = nullptr, const std::string& detail = {});
     void SendMessageToUI(const std::string& jsonMessage);
     void ReportErrorToUI(const std::string& message, const std::string& detail = {});
     void SendGlobalChainStateToUI();
@@ -551,23 +590,19 @@ private:
     void BroadcastCompositeEditState();
 
     // Resource helpers
-    bool UpdateResourceForNodeType(const std::string& nodeType,
-                                   const std::string& resourceType,
-                                   const std::filesystem::path& filePath,
-                                   bool applyPreset = true);
-    bool UpdateResourceForNodeId(const std::string& nodeId,
-                                 const ResourceRef& ref,
-                                 bool applyPreset = true);
+    bool UpdateResourceForNodeType(const std::string& nodeType, const std::string& resourceType,
+                                   const std::filesystem::path& filePath, bool applyPreset = true);
+    bool UpdateResourceForNodeId(const std::string& nodeId, const ResourceRef& ref, bool applyPreset = true);
     void RefreshWasmNodeDescriptor(GraphNode& node);
     [[nodiscard]] std::optional<std::filesystem::path> ResolveResourceRef(const ResourceRef& ref) const;
-    [[nodiscard]] std::optional<std::string> FindFirstPresetUsingResource(const std::string& resourceType, const std::string& resourceId) const;
+    [[nodiscard]] std::optional<std::string> FindFirstPresetUsingResource(const std::string& resourceType,
+                                                                          const std::string& resourceId) const;
     void EnsureResourceUsageDiskIndex() const;
     void InvalidateResourceUsageIndex();
     void AppendUserLibraryResource(const LibraryResource& resource);
     void RemoveUserLibraryResource(const std::string& type, const std::string& id);
     void EnsureBasicGraph();
-    bool ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& zipData,
-                                     const std::string& resourceType,
+    bool ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& zipData, const std::string& resourceType,
                                      const std::filesystem::path& outputPath);
 
     // NAM level-state normalization
@@ -695,6 +730,7 @@ private:
         std::filesystem::path presetDir;
         std::size_t presetCount = 0;
     };
+
     std::optional<PresetArchiveSessionState> mPresetArchiveSession;
 
     // Cached index of which disk/archive presets reference each library resource.
@@ -731,6 +767,7 @@ private:
         std::string paramKey;
         double value = 0.0;
     };
+
     std::mutex mPendingNodeParamMutex;
     std::vector<PendingNodeParamNotify> mPendingNodeParamNotifies;
 
@@ -786,7 +823,6 @@ private:
     bool mEditorWindowSizeChangedSinceIdle = false;
     bool mUserInputCalibrationTrainingActive = false;
     double mNamInterfaceCalibrationLevelDbu = std::numeric_limits<double>::quiet_NaN();
-
 
     // Metronome facade. The click engine itself is MetronomeService; these
     // stay on the controller because their callers are spread across the
@@ -863,6 +899,7 @@ private:
         std::filesystem::path tempFilePath;
         std::optional<ResourceRef> originalResourceRef;
     };
+
     PreviewState mPreviewState;
 
     // UI state

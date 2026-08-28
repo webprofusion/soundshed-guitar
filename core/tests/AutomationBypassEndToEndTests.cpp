@@ -30,7 +30,9 @@ constexpr int kBlockSize = 64;
 bool Expect(bool condition, const std::string& message)
 {
     if (!condition)
+    {
         std::cerr << "FAIL: " << message << std::endl;
+    }
     return condition;
 }
 
@@ -80,17 +82,8 @@ int main()
 
     AutomationSlotTable table;
     table.InitializeRegistry(
-        mixer,
-        []() { return 0.0; },
-        [](int) {},
-        [](int) {},
-        [](int) {},
-        []() { return 0; },
-        []() { return 0; },
-        [](int) {},
-        []() { return 0; },
-        [](int) {},
-        []() { return -1; });
+        mixer, []() { return 0.0; }, [](int) {}, [](int) {}, [](int) {}, []() { return 0; }, []() { return 0; },
+        [](int) {}, []() { return 0; }, [](int) {}, []() { return -1; });
     table.SetMixer(&mixer);
     table.SetEffectRegistry(&EffectRegistry::Instance());
 
@@ -101,18 +94,14 @@ int main()
     midiMap.controller = 60;
     midiMap.mode = MidiControlMap::Mode::Toggle;
 
-    const bool created = table.SetCustomSlot(
-        "custom.bypassGain",
-        std::optional<std::string>("Bypass Gain"),
-        std::optional<std::string>("node.gain.bypassed"),
-        std::nullopt,
-        std::optional<MidiControlMap>(midiMap),
-        std::nullopt);
+    const bool created = table.SetCustomSlot("custom.bypassGain", std::optional<std::string>("Bypass Gain"),
+                                             std::optional<std::string>("node.gain.bypassed"), std::nullopt,
+                                             std::optional<MidiControlMap>(midiMap), std::nullopt);
     allPassed &= Expect(created, "Failed to create custom bypass slot");
 
-    const MidiEvent noteOn{0x90, 60, 100, 0};       // press
-    const MidiEvent noteOnRelease{0x90, 60, 0, 0};  // release (NoteOn vel 0)
-    const MidiEvent noteOff{0x80, 60, 0, 0};        // release (NoteOff)
+    const MidiEvent noteOn{0x90, 60, 100, 0};      // press
+    const MidiEvent noteOnRelease{0x90, 60, 0, 0}; // release (NoteOn vel 0)
+    const MidiEvent noteOff{0x80, 60, 0, 0};       // release (NoteOff)
 
     allPassed &= Expect(GainEnabled(mixer), "Gain should start enabled");
 

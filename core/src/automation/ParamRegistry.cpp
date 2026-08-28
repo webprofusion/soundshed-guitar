@@ -36,8 +36,7 @@ std::vector<ParamRegistryInfo> ParamRegistry::GetAllInfo() const
         info.isTrigger = entry.isTrigger;
         result.push_back(std::move(info));
     }
-    std::sort(result.begin(), result.end(),
-              [](const auto& a, const auto& b) { return a.address < b.address; });
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) { return a.address < b.address; });
     return result;
 }
 
@@ -49,12 +48,16 @@ bool ParamRegistry::IsNodeAddress(const std::string& address)
 bool ParamRegistry::ParseNodeAddress(const std::string& address, std::string& effectType, std::string& paramId)
 {
     if (!IsNodeAddress(address))
+    {
         return false;
+    }
 
     // Format: node.<effectType>.<paramId>
     const auto firstDot = address.find('.', 5);
     if (firstDot == std::string::npos)
+    {
         return false;
+    }
 
     effectType = address.substr(5, firstDot - 5);
     paramId = address.substr(firstDot + 1);

@@ -34,15 +34,20 @@ bool PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
 {
     bool settingsChanged = false;
 
-    const auto readNumericSetting = [this, &settingsChanged](const char* key, double defaultValue) -> double
-    {
+    const auto readNumericSetting = [this, &settingsChanged](const char* key, double defaultValue) -> double {
         const auto it = mAppSettings.find(key);
         if (it == mAppSettings.end())
+        {
             return defaultValue;
+        }
         if (it->is_number())
+        {
             return it->get<double>();
+        }
         if (!it->is_null())
+        {
             settingsChanged = true;
+        }
         return defaultValue;
     };
 
@@ -54,8 +59,7 @@ bool PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
     SetNominalOperatingLevelDbfs(nominalLevelDbfs);
     SetOutputProtectionCeilingDbfs(protectionCeilingDbfs);
 
-    const auto updateStoredSetting = [this, &settingsChanged](const char* key, double value)
-    {
+    const auto updateStoredSetting = [this, &settingsChanged](const char* key, double value) {
         const auto it = mAppSettings.find(key);
         if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != value)
         {
@@ -74,24 +78,25 @@ void PluginController::ApplyInputModeSettingsFromAppSettings()
 {
     // Only applies in standalone mode; in plugin mode the DAW owns the input config.
     if (!mHost.IsStandalone())
+    {
         return;
+    }
 
     // Key names must match the UI constants in controls.ts:
     //   INPUT_CHANNEL_SETTING  = "inputChannel.mono"
     //   MONO_MODE_SETTING      = "inputChannel.monoMode"
-    constexpr auto kMonoModeKey    = "inputChannel.monoMode";
-    constexpr auto kInputChanKey   = "inputChannel.mono";
+    constexpr auto kMonoModeKey = "inputChannel.monoMode";
+    constexpr auto kInputChanKey = "inputChannel.mono";
 
     const auto monoIt = mAppSettings.find(kMonoModeKey);
     const auto chanIt = mAppSettings.find(kInputChanKey);
 
     const bool storedMonoMode = (monoIt != mAppSettings.end() && monoIt->is_boolean())
-        ? monoIt->get<bool>()
-        : true; // Default to mono mode so the guitar comes through on startup
+                                    ? monoIt->get<bool>()
+                                    : true; // Default to mono mode so the guitar comes through on startup
 
-    const int storedChannel = (chanIt != mAppSettings.end() && chanIt->is_number_integer())
-        ? std::clamp(chanIt->get<int>(), 0, 1)
-        : 0;
+    const int storedChannel =
+        (chanIt != mAppSettings.end() && chanIt->is_number_integer()) ? std::clamp(chanIt->get<int>(), 0, 1) : 0;
 
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.SetMonoMode(storedMonoMode);
@@ -101,11 +106,15 @@ void PluginController::ApplyInputModeSettingsFromAppSettings()
 void PluginController::ApplyGlobalFxSettingsFromAppSettings()
 {
     if (!mHost.IsStandalone())
+    {
         return;
+    }
 
     const auto it = mAppSettings.find(kGlobalFxSettingsKey);
     if (it == mAppSettings.end() || !it->is_object())
+    {
         return;
+    }
 
     try
     {
@@ -134,7 +143,9 @@ void PluginController::PersistGlobalFxSettingsToAppSettings()
     mHost.NotifyStateChanged();
 
     if (!mHost.IsStandalone())
+    {
         return;
+    }
 
     mAppSettings[kGlobalFxSettingsKey] = SerializeGlobalFxSettings(mPresetMixer.GetGlobalChainConfig());
     SaveAppSettings();
@@ -142,9 +153,8 @@ void PluginController::PersistGlobalFxSettingsToAppSettings()
 
 bool PluginController::IsNamQualitySettingKey(const std::string& key)
 {
-    return key == kNamSlimmableSizeSettingKey
-        || key == kNamOversamplingSettingKey
-        || key == kNamAntiAliasPhaseSettingKey;
+    return key == kNamSlimmableSizeSettingKey || key == kNamOversamplingSettingKey ||
+           key == kNamAntiAliasPhaseSettingKey;
 }
 
 bool PluginController::IsUiLayoutSettingKey(const std::string& key)
@@ -177,9 +187,7 @@ bool PluginController::ApplyNamQualitySettings()
 
     const auto readSetting = [&](const char* settingKey, auto sanitize, auto fallback) {
         const auto it = mAppSettings.find(settingKey);
-        const auto sanitized = (it != mAppSettings.end() && it->is_number())
-            ? sanitize(it->get<double>())
-            : fallback;
+        const auto sanitized = (it != mAppSettings.end() && it->is_number()) ? sanitize(it->get<double>()) : fallback;
         if (it == mAppSettings.end() || !it->is_number() || it->get<double>() != sanitized)
         {
             mAppSettings[settingKey] = sanitized;
@@ -189,16 +197,13 @@ bool PluginController::ApplyNamQualitySettings()
     };
 
     mNamQuality.slimmableSize = readSetting(
-        kNamSlimmableSizeSettingKey,
-        [](double raw) { return SanitizeNamSlimmableSize(raw); },
+        kNamSlimmableSizeSettingKey, [](double raw) { return SanitizeNamSlimmableSize(raw); },
         kNamSlimmableSizeDefault);
     mNamQuality.oversamplingIndex = readSetting(
-        kNamOversamplingSettingKey,
-        [](double raw) { return SanitizeNamOversamplingIndex(raw); },
+        kNamOversamplingSettingKey, [](double raw) { return SanitizeNamOversamplingIndex(raw); },
         kNamOversamplingIndexDefault);
     mNamQuality.antiAliasPhaseIndex = readSetting(
-        kNamAntiAliasPhaseSettingKey,
-        [](double raw) { return SanitizeNamAntiAliasPhaseIndex(raw); },
+        kNamAntiAliasPhaseSettingKey, [](double raw) { return SanitizeNamAntiAliasPhaseIndex(raw); },
         kNamAntiAliasPhaseIndexDefault);
 
     PushNamQualityToDsp();
@@ -236,7 +241,9 @@ PluginController::NamQualityConfig PluginController::EffectiveNamQuality() const
 void PluginController::SetOfflineRendering(bool offline)
 {
     if (mOfflineRendering == offline)
+    {
         return;
+    }
 
     mOfflineRendering = offline;
 
@@ -255,10 +262,8 @@ void PluginController::PushNamQualityToDsp()
     const std::string antiAliasPhaseValue = std::to_string(effective.antiAliasPhaseIndex);
 
     std::lock_guard<std::mutex> lock(mDSPMutex);
-    for (const char* nodeType : {EffectGuids::kAmpNam,
-                                 EffectGuids::kAmpNamOptimized,
-                                 EffectGuids::kAmpNamBlend,
-                                 EffectGuids::kFxNam})
+    for (const char* nodeType :
+         {EffectGuids::kAmpNam, EffectGuids::kAmpNamOptimized, EffectGuids::kAmpNamBlend, EffectGuids::kFxNam})
     {
         mPresetMixer.SetNodeTypeConfigDefault(nodeType, kNamSlimmableNodeConfigKey, slimmableValue);
         mPresetMixer.SetNodeTypeConfigDefault(nodeType, kNamOversamplingNodeConfigKey, oversamplingValue);
@@ -271,7 +276,9 @@ void PluginController::PushNamQualityToDsp()
 void PluginController::RestoreInstanceOwnedSettings()
 {
     if (mHost.IsStandalone())
+    {
         return;
+    }
 
     // The live values survive LoadAppSettings() — it only replaces mAppSettings — so this
     // reads them straight back out of the members rather than needing the caller to snapshot
@@ -296,8 +303,7 @@ bool PluginController::ApplySettingsToRuntime(SettingsApplyMode mode)
     // The standalone-only helpers self-guard, so a hosted instance runs the same list and
     // simply no-ops through them. The one real axis is whether this instance's own values
     // are re-derived from the store or re-asserted over it.
-    const bool preserveInstanceOwned = mode == SettingsApplyMode::kPreserveInstanceOwned
-        && !mHost.IsStandalone();
+    const bool preserveInstanceOwned = mode == SettingsApplyMode::kPreserveInstanceOwned && !mHost.IsStandalone();
 
     bool settingsChanged = false;
 
@@ -306,13 +312,19 @@ bool PluginController::ApplySettingsToRuntime(SettingsApplyMode mode)
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
     if (preserveInstanceOwned)
+    {
         RestoreInstanceOwnedSettings();
+    }
     else
+    {
         settingsChanged |= ApplyNamQualitySettings();
+    }
     ApplyNamInterfaceCalibrationFromAppSettings();
     settingsChanged |= ApplyUserInputCalibrationSettingsFromAppSettings();
     if (!preserveInstanceOwned)
+    {
         ApplyUiSettingsFromAppSettings();
+    }
 
     return settingsChanged;
 }
@@ -323,7 +335,9 @@ void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
     bool autoCalibrationEnabled = true;
     const auto enableIt = mAppSettings.find(kNamAutoInputCalibrationSettingKey);
     if (enableIt != mAppSettings.end() && enableIt->is_boolean())
+    {
         autoCalibrationEnabled = enableIt->get<bool>();
+    }
 
     const auto it = mAppSettings.find(kNamInterfaceCalibrationLevelDbuSettingKey);
     double calLevel = std::numeric_limits<double>::quiet_NaN();
@@ -333,9 +347,13 @@ void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
         {
             const double raw = it->get<double>();
             if (raw >= kNamInterfaceCalibrationLevelDbuMin && raw <= kNamInterfaceCalibrationLevelDbuMax)
+            {
                 calLevel = raw;
+            }
             else
+            {
                 calLevel = kNamInterfaceCalibrationLevelDbuDefault;
+            }
         }
         else
         {
@@ -356,10 +374,11 @@ void PluginController::ApplyNamInterfaceCalibrationFromAppSettings()
         for (const auto& node : graph.nodes)
         {
             if (!IsNamCalibratableEffectType(node.type))
+            {
                 continue;
+            }
 
-            const double calibrationToInject =
-                hasCalibrationValue ? calLevel : clearValue;
+            const double calibrationToInject = hasCalibrationValue ? calLevel : clearValue;
             mPresetMixer.SetNodeParam(mActivePresetId, node.id, "calibrationInputLevel", calibrationToInject);
         }
     }
@@ -370,16 +389,22 @@ bool PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
     bool settingsChanged = false;
 
     if (mAppSettings.erase(kLegacyInterfaceCalibrationEnabledSettingKey) > 0)
+    {
         settingsChanged = true;
+    }
     if (mAppSettings.erase(kLegacyInterfaceCalibrationReferenceDbuSettingKey) > 0)
+    {
         settingsChanged = true;
+    }
 
     std::string activeProfileId;
     const auto activeIt = mAppSettings.find(kUserInputCalibrationActiveProfileIdSettingKey);
     if (activeIt != mAppSettings.end())
     {
         if (activeIt->is_string())
+        {
             activeProfileId = activeIt->get<std::string>();
+        }
         else if (!activeIt->is_null())
         {
             mAppSettings[kUserInputCalibrationActiveProfileIdSettingKey] = nullptr;
@@ -397,11 +422,15 @@ bool PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
             for (const auto& profile : *profilesIt)
             {
                 if (!profile.is_object())
+                {
                     continue;
+                }
 
                 const auto idIt = profile.find("id");
                 if (idIt == profile.end() || !idIt->is_string() || idIt->get<std::string>() != activeProfileId)
+                {
                     continue;
+                }
 
                 foundActiveProfile = true;
 
@@ -414,8 +443,8 @@ bool PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
                 {
                     const auto capturedIt = profile.find("capturedPeakDbfs");
                     const auto targetIt = profile.find("targetPeakDbfs");
-                    if (capturedIt != profile.end() && capturedIt->is_number()
-                        && targetIt != profile.end() && targetIt->is_number())
+                    if (capturedIt != profile.end() && capturedIt->is_number() && targetIt != profile.end() &&
+                        targetIt->is_number())
                     {
                         gainDb = targetIt->get<double>() - capturedIt->get<double>();
                     }
@@ -438,7 +467,9 @@ bool PluginController::ApplyUserInputCalibrationSettingsFromAppSettings()
     }
 
     if (mUserInputCalibrationTrainingActive)
+    {
         gainDb = 0.0;
+    }
 
     mPresetMixer.SetUserInputCalibrationGainDb(gainDb);
 
@@ -459,17 +490,25 @@ void PluginController::ApplyUiSettingsFromAppSettings()
     // Fall back to the legacy flattened aliases for stores written before uiSettings existed.
     nlohmann::json legacy = nlohmann::json::object();
     if (const auto zoomIt = mAppSettings.find("uiZoom"); zoomIt != mAppSettings.end())
+    {
         legacy["zoom"] = *zoomIt;
+    }
     if (const auto boundsIt = mAppSettings.find("uiBounds"); boundsIt != mAppSettings.end())
+    {
         legacy["bounds"] = *boundsIt;
+    }
     if (!legacy.empty())
+    {
         mUiSettings = std::move(legacy);
+    }
 }
 
 void PluginController::SaveAppSettings() const
 {
     if (!mAppSettings.is_object())
+    {
         return;
+    }
 
     // Restoring host state must not write to the shared store — see HostStateRestoreScope
     // in DeserializeState().
@@ -480,7 +519,9 @@ void PluginController::SaveAppSettings() const
     // persists" claim is an audit over four separate guards, and an audit going stale is
     // exactly how a stale project came to republish its settings in the first place.
     if (mRestoringHostState)
+    {
         return;
+    }
 
     // Write only what *this* instance changed, against the snapshot it last
     // loaded or saved.
@@ -503,7 +544,9 @@ void PluginController::SaveAppSettings() const
     // at the call site is not enough, because the very next save of an unrelated key
     // would diff them as changed and push them out anyway.
     if (!mAppSettingsBaseline.is_object())
+    {
         mAppSettingsBaseline = nlohmann::json::object();
+    }
     const nlohmann::json& baseline = mAppSettingsBaseline;
 
     std::vector<std::pair<std::string, std::string>> upserts;
@@ -512,32 +555,44 @@ void PluginController::SaveAppSettings() const
     for (const auto& [key, value] : mAppSettings.items())
     {
         if (key.empty() || IsInstanceOwnedSettingKey(key))
+        {
             continue;
+        }
         const auto previous = baseline.find(key);
         if (previous == baseline.end() || *previous != value)
+        {
             upserts.emplace_back(key, value.dump());
+        }
     }
 
     for (const auto& [key, value] : baseline.items())
     {
         if (!key.empty() && !IsInstanceOwnedSettingKey(key) && !mAppSettings.contains(key))
+        {
             removals.push_back(key);
+        }
     }
 
     if (upserts.empty() && removals.empty())
+    {
         return;
+    }
 
     storage::JsonStore& store = Store();
     const bool wrote = store.Transact([&]() {
         for (const auto& [key, json] : upserts)
         {
             if (!store.PutRaw(storage::ItemType::kSetting, key, json))
+            {
                 return false;
+            }
         }
         for (const auto& key : removals)
         {
             if (!store.Remove(storage::ItemType::kSetting, key))
+            {
                 return false;
+            }
         }
         return true;
     });
@@ -559,13 +614,17 @@ void PluginController::AdoptAppSettingsAsBaseline() const
     // instead, because this instance never writes them and must not start claiming
     // its own value is what the store holds.
     if (!mAppSettings.is_object())
+    {
         return;
+    }
 
     nlohmann::json next = nlohmann::json::object();
     for (const auto& [key, value] : mAppSettings.items())
     {
         if (!key.empty() && !IsInstanceOwnedSettingKey(key))
+        {
             next[key] = value;
+        }
     }
 
     if (mAppSettingsBaseline.is_object())
@@ -573,7 +632,9 @@ void PluginController::AdoptAppSettingsAsBaseline() const
         for (const auto& [key, value] : mAppSettingsBaseline.items())
         {
             if (!key.empty() && IsInstanceOwnedSettingKey(key))
+            {
                 next[key] = value;
+            }
         }
     }
 
@@ -583,13 +644,16 @@ void PluginController::AdoptAppSettingsAsBaseline() const
 bool PluginController::CleanupLegacyAppSettingsOnLoad()
 {
     if (!mAppSettings.is_object())
+    {
         return false;
+    }
 
     bool settingsChanged = false;
-    const auto eraseKeyIfPresent = [&](const char* key)
-    {
+    const auto eraseKeyIfPresent = [&](const char* key) {
         if (mAppSettings.erase(key) > 0)
+        {
             settingsChanged = true;
+        }
     };
 
     // Legacy/dead keys no longer read by startup/runtime paths.
@@ -613,37 +677,52 @@ bool PluginController::CleanupLegacyAppSettingsOnLoad()
 
     // Legacy global chain app setting was superseded by globalFx.settings.
     if (mAppSettings.contains(kGlobalFxSettingsKey))
+    {
         eraseKeyIfPresent("globalSignalChain");
+    }
 
     // Prune legacy metronome aliases after canonical keys are present.
     if (mAppSettings.contains(kMetronomeBpmSettingKey))
+    {
         eraseKeyIfPresent(kMetronomeLegacyBpmKey);
+    }
     if (mAppSettings.contains(kMetronomeVolumeDbSettingKey))
+    {
         eraseKeyIfPresent(kMetronomeLegacyVolumeDbKey);
+    }
     if (mAppSettings.contains(kMetronomePanSettingKey))
+    {
         eraseKeyIfPresent(kMetronomeLegacyPanKey);
+    }
     if (mAppSettings.contains(kMetronomeClickTypeSettingKey))
+    {
         eraseKeyIfPresent(kMetronomeLegacyClickTypeKey);
+    }
 
     return settingsChanged;
 }
 
 void PluginController::LoadAppSettings()
 {
-    const auto applyBundledDefaults = [this]()
-    {
+    const auto applyBundledDefaults = [this]() {
         if (!mAppSettings.is_object())
+        {
             mAppSettings = nlohmann::json::object();
+        }
 
         if (std::strlen(kBundledJamYouTubeApiKey) > 0)
+        {
             mAppSettings[kJamYouTubeApiKeySettingKey] = std::string{kBundledJamYouTubeApiKey};
+        }
     };
 
     mAppSettings = nlohmann::json::object();
     for (const auto& item : Store().List(storage::ItemType::kSetting))
     {
         if (auto parsed = item.Parse())
+        {
             mAppSettings[item.id] = std::move(*parsed);
+        }
     }
 
     // The baseline is what the store held, before the bundled defaults are
@@ -655,7 +734,9 @@ void PluginController::LoadAppSettings()
     applyBundledDefaults();
 
     if (CleanupLegacyAppSettingsOnLoad())
+    {
         SaveAppSettings();
+    }
 }
 
 void PluginController::LoadLastSessionState()
@@ -679,7 +760,8 @@ void PluginController::LoadLastSessionState()
     {
         if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(lastPresetId))
         {
-            std::cout << "[Plugin] Skipping last factory archive preset restore because archive loading is disabled" << std::endl;
+            std::cout << "[Plugin] Skipping last factory archive preset restore because archive loading is disabled"
+                      << std::endl;
             mPendingStateBroadcast = true;
             std::cout << "[Plugin] Last session state restored" << std::endl;
             return;
@@ -689,9 +771,8 @@ void PluginController::LoadLastSessionState()
         try
         {
             const auto aliasIt = mFactoryArchivePresetAliases.find(lastPresetId);
-            const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end()
-                ? aliasIt->second
-                : lastPresetId;
+            const std::string resolvedPresetId =
+                aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : lastPresetId;
 
             // Try user presets first, then factory
             std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
@@ -704,7 +785,9 @@ void PluginController::LoadLastSessionState()
             {
                 auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
                 if (archiveIt != mFactoryArchivePresets.end())
+                {
                     presetOpt = archiveIt->second;
+                }
             }
 
             if (presetOpt)
@@ -727,7 +810,9 @@ void PluginController::LoadLastSessionState()
     }
 
     if (lastPresetId.empty())
+    {
         TryLoadConfiguredDefaultPreset();
+    }
 
     mPendingStateBroadcast = true;
     std::cout << "[Plugin] Last session state restored" << std::endl;

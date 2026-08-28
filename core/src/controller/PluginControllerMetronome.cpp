@@ -41,10 +41,14 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
     const auto outcome = mMetronome->ApplyRequest(payload);
 
     if (outcome.stateChanged)
+    {
         mPendingStateBroadcast = true;
+    }
 
     if (outcome.settingsChanged)
+    {
         SaveAppSettings();
+    }
 }
 
 } // namespace guitarfx

@@ -35,7 +35,7 @@ class IPluginHost;
 
 class MetronomeService
 {
-public:
+  public:
     struct ClickTypeConfig
     {
         std::string id;
@@ -53,11 +53,11 @@ public:
     /// What riff capture wants the click to do for the duration of a take.
     struct GuidanceConfig
     {
-        double tempoBpm = 0.0;      ///< <= 0 means "follow the current tempo"
+        double tempoBpm = 0.0; ///< <= 0 means "follow the current tempo"
         int timeSigNum = 4;
         int timeSigDen = 4;
         std::string beatPattern;
-        std::string clickType;      ///< empty means the default click
+        std::string clickType; ///< empty means the default click
     };
 
     /// What a Set-metronome request changed, so the caller knows whether to
@@ -68,9 +68,7 @@ public:
         bool settingsChanged = false;
     };
 
-    MetronomeService(IPluginHost& host,
-                     nlohmann::json& appSettings,
-                     const std::filesystem::path& resourceRoot);
+    MetronomeService(IPluginHost& host, nlohmann::json& appSettings, const std::filesystem::path& resourceRoot);
 
     // ── Tempo ───────────────────────────────────────────────────────
 
@@ -88,7 +86,10 @@ public:
     // ── Transport ───────────────────────────────────────────────────
 
     /// Restarts the beat cursor on the next block. Safe from any thread.
-    void RequestReset() { mResetPending.store(true, std::memory_order_release); }
+    void RequestReset()
+    {
+        mResetPending.store(true, std::memory_order_release);
+    }
 
     /// Clears the cursor outright. Message thread only, and only while the
     /// audio thread is not running (Prepare holds the DSP lock).
@@ -109,7 +110,10 @@ public:
     /// Adds the UI-facing metronome state to `target`.
     void AppendStateTo(nlohmann::json& target) const;
 
-    [[nodiscard]] const std::string& BeatPattern() const { return mBeatPattern; }
+    [[nodiscard]] const std::string& BeatPattern() const
+    {
+        return mBeatPattern;
+    }
 
     // ── Riff capture guidance ───────────────────────────────────────
 
@@ -121,11 +125,22 @@ public:
     /// leaving a live capture's guidance running.
     void DeactivateGuidance(bool previewOnly);
 
-    [[nodiscard]] bool IsGuidanceForPreview() const { return mGuidanceForPreview; }
-    [[nodiscard]] bool GuidancePreviewWasActive() const { return mGuidancePreviewWasActive; }
-    void SetGuidancePreviewWasActive(bool value) { mGuidancePreviewWasActive = value; }
+    [[nodiscard]] bool IsGuidanceForPreview() const
+    {
+        return mGuidanceForPreview;
+    }
 
-private:
+    [[nodiscard]] bool GuidancePreviewWasActive() const
+    {
+        return mGuidancePreviewWasActive;
+    }
+
+    void SetGuidancePreviewWasActive(bool value)
+    {
+        mGuidancePreviewWasActive = value;
+    }
+
+  private:
     [[nodiscard]] const ClickTypeConfig* FindClickType(const std::string& id) const;
     [[nodiscard]] std::shared_ptr<ClickSamples> BuildClickSamples(const ClickTypeConfig& config,
                                                                   double targetSampleRate) const;

@@ -15,9 +15,11 @@ constexpr double kNamSlimmableSizeMax = 1.0;
 
 inline double SanitizeNamSlimmableSize(double value)
 {
-  if (!std::isfinite(value))
-    return kNamSlimmableSizeDefault;
-  return std::clamp(value, kNamSlimmableSizeMin, kNamSlimmableSizeMax);
+    if (!std::isfinite(value))
+    {
+        return kNamSlimmableSizeDefault;
+    }
+    return std::clamp(value, kNamSlimmableSizeMin, kNamSlimmableSizeMax);
 }
 
 // Slimmable size is owned per NAM node rather than by a process-wide global. A DAW
@@ -26,15 +28,19 @@ inline double SanitizeNamSlimmableSize(double value)
 // value, delivered as node config by PluginController.
 inline bool ApplyNamSlimmableSize(::nam::DSP* dsp, double size)
 {
-  if (!dsp)
-    return false;
+    if (!dsp)
+    {
+        return false;
+    }
 
-  auto* slimmable = dynamic_cast<::nam::SlimmableModel*>(dsp);
-  if (!slimmable)
-    return false;
+    auto* slimmable = dynamic_cast<::nam::SlimmableModel*>(dsp);
+    if (!slimmable)
+    {
+        return false;
+    }
 
-  slimmable->SetSlimmableSize(SanitizeNamSlimmableSize(size));
-  return true;
+    slimmable->SetSlimmableSize(SanitizeNamSlimmableSize(size));
+    return true;
 }
 
 } // namespace guitarfx

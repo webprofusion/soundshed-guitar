@@ -18,10 +18,8 @@ namespace guitarfx
 
 class DemoPreviewService
 {
-public:
-    DemoPreviewService(IPluginHost& host,
-                       MultiPresetMixer& mixer,
-                       std::mutex& dspMutex,
+  public:
+    DemoPreviewService(IPluginHost& host, MultiPresetMixer& mixer, std::mutex& dspMutex,
                        std::atomic<bool>& signalTestActive,
                        std::function<void(const std::string&, const std::string&)> reportError,
                        std::function<void(const std::string&)> sendMessage);
@@ -32,7 +30,7 @@ public:
     void OnIdle();
     [[nodiscard]] bool IsPreviewActive() const;
 
-private:
+  private:
     struct DemoAudioBuffer
     {
         std::string id;

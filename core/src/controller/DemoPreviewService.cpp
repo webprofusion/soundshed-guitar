@@ -11,29 +11,27 @@
 namespace guitarfx
 {
 
-DemoPreviewService::DemoPreviewService(IPluginHost& host,
-                                       MultiPresetMixer& mixer,
-                                       std::mutex& dspMutex,
+DemoPreviewService::DemoPreviewService(IPluginHost& host, MultiPresetMixer& mixer, std::mutex& dspMutex,
                                        std::atomic<bool>& signalTestActive,
                                        std::function<void(const std::string&, const std::string&)> reportError,
                                        std::function<void(const std::string&)> sendMessage)
-    : mHost(host)
-    , mPresetMixer(mixer)
-    , mDSPMutex(dspMutex)
-    , mSignalTestActive(signalTestActive)
-    , mReportError(std::move(reportError))
-    , mSendMessage(std::move(sendMessage))
+    : mHost(host), mPresetMixer(mixer), mDSPMutex(dspMutex), mSignalTestActive(signalTestActive),
+      mReportError(std::move(reportError)), mSendMessage(std::move(sendMessage))
 {
 }
 
 void DemoPreviewService::MixIntoInput(float** inputs, int numSamples)
 {
     if (!mDemoAudioActive.load(std::memory_order_acquire))
+    {
         return;
+    }
 
     auto buf = std::atomic_load_explicit(&mDemoAudioBuffer, std::memory_order_acquire);
     if (!buf || buf->channels < 1)
+    {
         return;
+    }
 
     size_t cursor = mDemoAudioCursor.load(std::memory_order_relaxed);
     const size_t totalSamples = buf->channelSamples[0].size();
@@ -46,7 +44,9 @@ void DemoPreviewService::MixIntoInput(float** inputs, int numSamples)
     }
     mDemoAudioCursor.store(cursor, std::memory_order_relaxed);
     if (cursor >= totalSamples)
+    {
         mDemoAudioActive.store(false, std::memory_order_release);
+    }
 }
 
 void DemoPreviewService::StartPreview(const nlohmann::json& payload)
@@ -117,7 +117,10 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
     }
     for (auto& channel : resampled)
     {
-        if (channel.size() > minFrames) channel.resize(minFrames);
+        if (channel.size() > minFrames)
+        {
+            channel.resize(minFrames);
+        }
     }
 
     auto buffer = std::make_shared<DemoAudioBuffer>();
@@ -144,7 +147,8 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
 void DemoPreviewService::StopPreview()
 {
     mDemoAudioActive.store(false, std::memory_order_release);
-    auto stopped = std::atomic_exchange_explicit(&mDemoAudioBuffer, std::shared_ptr<DemoAudioBuffer>{}, std::memory_order_acq_rel);
+    auto stopped =
+        std::atomic_exchange_explicit(&mDemoAudioBuffer, std::shared_ptr<DemoAudioBuffer>{}, std::memory_order_acq_rel);
     nlohmann::json msg;
     msg["type"] = "previewStopped";
     if (stopped)
@@ -159,7 +163,9 @@ void DemoPreviewService::OnIdle()
 {
     auto demoBuffer = std::atomic_load_explicit(&mDemoAudioBuffer, std::memory_order_acquire);
     if (!demoBuffer || mDemoAudioActive.load(std::memory_order_acquire))
+    {
         return;
+    }
 
     nlohmann::json msg;
     msg["type"] = "previewComplete";

@@ -34,17 +34,8 @@ int main()
     AutomationSlotTable table;
     int bankUpCalls = 0;
     table.InitializeRegistry(
-        mixer,
-        []() { return 0.0; },
-        [](int) {},
-        [&](int step) { bankUpCalls += step; },
-        [](int) {},
-        []() { return 0; },
-        []() { return 0; },
-        [](int) {},
-        []() { return 0; },
-        [](int) {},
-        []() { return -1; });
+        mixer, []() { return 0.0; }, [](int) {}, [&](int step) { bankUpCalls += step; }, [](int) {}, []() { return 0; },
+        []() { return 0; }, [](int) {}, []() { return 0; }, [](int) {}, []() { return -1; });
 
     MidiControlMap midiMap;
     midiMap.eventType = MidiControlMap::EventType::NoteOn;
@@ -52,9 +43,8 @@ int main()
     midiMap.controller = 60;
     midiMap.mode = MidiControlMap::Mode::Toggle;
 
-    allPassed &= Expect(
-        table.SetDefaultSlotOverrides("default.bankUp", std::nullopt, midiMap, std::nullopt),
-        "Failed to set MIDI map on default.bankUp");
+    allPassed &= Expect(table.SetDefaultSlotOverrides("default.bankUp", std::nullopt, midiMap, std::nullopt),
+                        "Failed to set MIDI map on default.bankUp");
 
     const MidiEvent noteOn{0x90, 60, 100, 0};
     const MidiEvent noteOnVelocityZero{0x90, 60, 0, 0}; // NoteOff equivalent
@@ -64,7 +54,8 @@ int main()
     allPassed &= Expect(bankUpCalls == 1, "First NoteOn should trigger exactly once");
 
     table.HandleMidi(noteOn);
-    allPassed &= Expect(bankUpCalls == 2, "Repeated NoteOn presses should retrigger toggle even without explicit release");
+    allPassed &=
+        Expect(bankUpCalls == 2, "Repeated NoteOn presses should retrigger toggle even without explicit release");
 
     table.HandleMidi(noteOnVelocityZero);
     allPassed &= Expect(bankUpCalls == 2, "NoteOn velocity 0 release must not retrigger toggle");

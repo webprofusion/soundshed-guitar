@@ -38,14 +38,19 @@ void PluginController::SendCompositePresetListToUI()
     msg["type"] = "compositePresetList";
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& cp : presets)
+    {
         arr.push_back(nlohmann::json(cp));
+    }
     msg["compositePresets"] = std::move(arr);
     SendMessageToUI(msg.dump());
 }
 
 void PluginController::BroadcastState(StateScope scope)
 {
-    if (!mUIReady) return;
+    if (!mUIReady)
+    {
+        return;
+    }
 
     const bool full = scope == StateScope::Full;
 
@@ -65,12 +70,12 @@ void PluginController::BroadcastState(StateScope scope)
     // tone-sharing and update-check passes and echoes an input-mode message back to us, so
     // this is deliberately not resent on a preset switch.
     if (full)
+    {
         state["appSettings"] = mAppSettings;
+    }
 
     // Always sent: the UI clears its archive-session state when this key is absent.
-    state["presetArchiveSession"] = {
-        {"active", IsPresetArchiveSessionActive()}
-    };
+    state["presetArchiveSession"] = {{"active", IsPresetArchiveSessionActive()}};
     if (mPresetArchiveSession)
     {
         state["presetArchiveSession"]["archiveName"] = mPresetArchiveSession->archiveName;
@@ -80,11 +85,15 @@ void PluginController::BroadcastState(StateScope scope)
 
     // UI settings — UI reads "uiSettings"
     if (full)
+    {
         state["uiSettings"] = mUiSettings;
+    }
 
     // UI view state — UI reads "uiViewState"
     if (full)
+    {
         state["uiViewState"] = mUiViewState;
+    }
 
     // Global chain — UI reads "globalSignalChain". Always sent: the UI asks for it with a
     // round trip when the key is missing, which would cost more than including it.
@@ -133,7 +142,9 @@ void PluginController::BroadcastState(StateScope scope)
     // Active preset IDs — UI reads "activePresetIds" as string array
     nlohmann::json activePresetIds = nlohmann::json::array();
     for (const auto& id : mPresetMixer.GetActivePresetIds())
+    {
         activePresetIds.push_back(id);
+    }
     state["activePresetIds"] = activePresetIds;
 
     // Mixer snapshot
@@ -147,12 +158,7 @@ void PluginController::BroadcastState(StateScope scope)
         if (const auto cfg = mPresetMixer.GetPresetConfig(id))
         {
             presetConfigs[id] = {
-                {"name", cfg->name},
-                {"mix", cfg->mix},
-                {"pan", cfg->pan},
-                {"mute", cfg->mute},
-                {"solo", cfg->solo}
-            };
+                {"name", cfg->name}, {"mix", cfg->mix}, {"pan", cfg->pan}, {"mute", cfg->mute}, {"solo", cfg->solo}};
         }
     }
     mixer["presets"] = std::move(presetConfigs);
@@ -164,8 +170,13 @@ void PluginController::BroadcastState(StateScope scope)
         auto it = mMixerPresetJsonCache.find(id);
         if (it != mMixerPresetJsonCache.end())
         {
-            try { presetGraphs[id] = nlohmann::json::parse(it->second); }
-            catch (...) {}
+            try
+            {
+                presetGraphs[id] = nlohmann::json::parse(it->second);
+            }
+            catch (...)
+            {
+            }
         }
     }
     mixer["presetGraphs"] = std::move(presetGraphs);
@@ -184,24 +195,24 @@ void PluginController::BroadcastState(StateScope scope)
 
         // Environment
         state["environment"] = {
-        {"standalone", mHost.IsStandalone()},
-        {"version", GUITARFX_APP_VERSION},
-    #if defined(_WIN32)
-        {"os", "Windows"},
-    #elif defined(__APPLE__)
-        {"os", "macOS"},
-    #elif defined(__linux__)
-        {"os", "Linux"},
-    #else
-        {"os", "Unknown"},
-    #endif
-    #if defined(__x86_64__) || defined(_M_X64)
-        {"cpu", "x64"},
-    #elif defined(__aarch64__) || defined(_M_ARM64)
-        {"cpu", "arm64"},
-    #else
-        {"cpu", "Unknown"},
-    #endif
+            {"standalone", mHost.IsStandalone()},
+            {"version", GUITARFX_APP_VERSION},
+#if defined(_WIN32)
+            {"os", "Windows"},
+#elif defined(__APPLE__)
+            {"os", "macOS"},
+#elif defined(__linux__)
+            {"os", "Linux"},
+#else
+            {"os", "Unknown"},
+#endif
+#if defined(__x86_64__) || defined(_M_X64)
+            {"cpu", "x64"},
+#elif defined(__aarch64__) || defined(_M_ARM64)
+            {"cpu", "arm64"},
+#else
+            {"cpu", "Unknown"},
+#endif
         };
 
         // Blend library
@@ -211,7 +222,9 @@ void PluginController::BroadcastState(StateScope scope)
         {
             nlohmann::json customEffects = nlohmann::json::array();
             for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
+            {
                 customEffects.push_back(SerializeCustomEffectLibraryEntry(entry));
+            }
             state["customEffectLibrary"] = std::move(customEffects);
         }
 
@@ -240,7 +253,10 @@ void PluginController::BroadcastState(StateScope scope)
 
 void PluginController::BroadcastCompositeEditState()
 {
-    if (!mEditingComposite) return;
+    if (!mEditingComposite)
+    {
+        return;
+    }
 
     nlohmann::json msg;
     msg["type"] = "compositeEditState";
@@ -263,9 +279,15 @@ void PluginController::BroadcastCompositeEditState()
         nj["category"] = node.category;
         nj["bypassed"] = !node.enabled;
         nj["params"] = nlohmann::json::object();
-        for (const auto& [k, v] : node.params) nj["params"][k] = v;
+        for (const auto& [k, v] : node.params)
+        {
+            nj["params"][k] = v;
+        }
         nj["config"] = nlohmann::json::object();
-        for (const auto& [k, v] : node.config) nj["config"][k] = v;
+        for (const auto& [k, v] : node.config)
+        {
+            nj["config"][k] = v;
+        }
         if (!node.resources.empty())
         {
             nlohmann::json resArr = nlohmann::json::array();
@@ -324,7 +346,9 @@ void PluginController::SendCompositeLibraryToUI()
     msg["type"] = "compositeLibrary";
     nlohmann::json defs = nlohmann::json::array();
     for (const auto& def : mCompositeLibrary.GetAllDefinitions())
+    {
         defs.push_back(SerializeCompositeEffectDefinition(def));
+    }
     msg["definitions"] = defs;
     SendMessageToUI(msg.dump());
 }
@@ -335,7 +359,9 @@ void PluginController::SendCustomEffectLibraryToUI()
     msg["type"] = "customEffectLibrary";
     nlohmann::json entries = nlohmann::json::array();
     for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
+    {
         entries.push_back(SerializeCustomEffectLibraryEntry(entry));
+    }
     msg["entries"] = std::move(entries);
     SendMessageToUI(msg.dump());
 }
@@ -356,9 +382,13 @@ void PluginController::SendEffectCatalogToUI()
         entry["category"] = info.category;
         entry["requiresResource"] = info.requiresResource;
         if (!info.resourceType.empty())
+        {
             entry["resourceType"] = info.resourceType;
+        }
         if (!info.resourceFilterHint.empty())
+        {
             entry["resourceFilterHint"] = info.resourceFilterHint;
+        }
 
         nlohmann::json params = nlohmann::json::array();
         for (const auto& p : info.parameters)
@@ -371,13 +401,21 @@ void PluginController::SendEffectCatalogToUI()
             param["default"] = p.defaultValue;
             param["unit"] = p.unit;
             if (!p.group.empty())
+            {
                 param["group"] = p.group;
+            }
             if (p.advanced)
+            {
                 param["advanced"] = true;
+            }
             if (p.step != 0.0)
+            {
                 param["step"] = p.step;
+            }
             if (!p.labels.empty())
+            {
                 param["labels"] = p.labels;
+            }
             params.push_back(param);
         }
         entry["parameters"] = params;
@@ -411,9 +449,13 @@ void PluginController::SendEffectCatalogToUI()
                 resource["resourceIndex"] = er.resourceIndex;
                 resource["allowBrowseFile"] = er.allowBrowseFile;
                 if (!er.parameterId.empty())
+                {
                     resource["parameterId"] = er.parameterId;
+                }
                 if (er.parameterValue.has_value())
+                {
                     resource["parameterValue"] = *er.parameterValue;
+                }
                 exposedResources.push_back(resource);
             }
             entry["exposedResources"] = exposedResources;
@@ -434,9 +476,13 @@ void PluginController::SendEffectCatalogToUI()
                     resource["resourceIndex"] = er.resourceIndex;
                     resource["allowBrowseFile"] = er.allowBrowseFile;
                     if (!er.parameterId.empty())
+                    {
                         resource["parameterId"] = er.parameterId;
+                    }
                     if (er.parameterValue.has_value())
+                    {
                         resource["parameterValue"] = *er.parameterValue;
+                    }
                     exposedResources.push_back(resource);
                 }
                 entry["exposedResources"] = exposedResources;
@@ -463,9 +509,11 @@ void PluginController::SendPresetListToUI()
     // that LoadAllUserPresets() redirects to).
     auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
 
-    auto scanDir = [&](const std::filesystem::path& dir, const std::string& source)
-    {
-        if (!std::filesystem::exists(dir)) return;
+    auto scanDir = [&](const std::filesystem::path& dir, const std::string& source) {
+        if (!std::filesystem::exists(dir))
+        {
+            return;
+        }
         for (const auto& entry : std::filesystem::directory_iterator(dir))
         {
             if (entry.path().extension() == ".json")
@@ -473,10 +521,15 @@ void PluginController::SendPresetListToUI()
                 try
                 {
                     auto presetOpt = PresetStorage::LoadFromFile(entry.path());
-                    if (!presetOpt) continue;
+                    if (!presetOpt)
+                    {
+                        continue;
+                    }
                     auto& preset = *presetOpt;
                     if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+                    {
                         continue;
+                    }
                     nlohmann::json p;
                     p["id"] = preset.id;
                     p["name"] = preset.name;
@@ -484,19 +537,25 @@ void PluginController::SendPresetListToUI()
                     p["source"] = mFactoryArchivePresetIds.contains(preset.id) ? "factory" : source;
                     presets.push_back(p);
                 }
-                catch (...) {}
+                catch (...)
+                {
+                }
             }
         }
     };
 
     if (!archiveSessionActive)
+    {
         scanDir(factoryPath, "factory");
+    }
 
     // User presets come from the store; only factory presets still ship as files.
     for (const auto& preset : LoadAllUserPresets())
     {
         if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+        {
             continue;
+        }
         nlohmann::json p;
         p["id"] = preset.id;
         p["name"] = preset.name;
@@ -509,14 +568,20 @@ void PluginController::SendPresetListToUI()
     for (const auto& preset : presets)
     {
         if (preset.is_object())
+        {
             seenPresetIds.insert(preset.value("id", ""));
+        }
     }
     for (const auto& [presetId, preset] : mFactoryArchivePresets)
     {
         if (archiveSessionActive || !factoryArchiveLoadingEnabled)
+        {
             continue;
+        }
         if (seenPresetIds.contains(presetId))
+        {
             continue;
+        }
         nlohmann::json p;
         p["id"] = preset.id;
         p["name"] = preset.name;
@@ -528,7 +593,9 @@ void PluginController::SendPresetListToUI()
     if (archiveSessionActive)
     {
         for (auto& preset : presets)
+        {
             preset["source"] = "session";
+        }
     }
 
     msg["presets"] = presets;

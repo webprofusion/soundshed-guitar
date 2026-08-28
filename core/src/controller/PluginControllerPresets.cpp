@@ -38,25 +38,32 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
         Preset preset;
         std::optional<Preset> presetOpt;
         if (payload.contains("preset"))
+        {
             presetOpt = PresetStorage::DeserializeFromJson(payload["preset"].dump());
+        }
         else
+        {
             presetOpt = PresetStorage::DeserializeFromJson(payload.dump());
+        }
 
-        if (!presetOpt) return;
+        if (!presetOpt)
+        {
+            return;
+        }
         preset = std::move(*presetOpt);
 
         const std::string requestedPresetId = payload.value("presetId", preset.id);
         const bool scrubbedHostedState = PresetHasScrubbedHostedPluginState(preset);
-        AppendSessionLog("Hosted plugin load request presetId="
-            + (requestedPresetId.empty() ? std::string{"<none>"} : requestedPresetId)
-            + ", scrubbed=" + std::string{scrubbedHostedState ? "true" : "false"}
-            + ", payload=" + SummarizeHostedPluginState(preset));
+        AppendSessionLog("Hosted plugin load request presetId=" +
+                         (requestedPresetId.empty() ? std::string{"<none>"} : requestedPresetId) +
+                         ", scrubbed=" + std::string{scrubbedHostedState ? "true" : "false"} +
+                         ", payload=" + SummarizeHostedPluginState(preset));
         if (!requestedPresetId.empty() && scrubbedHostedState)
         {
             if (auto storedPreset = TryLoadStoredPresetById(requestedPresetId))
             {
-                AppendSessionLog("Hosted plugin load rehydrated presetId=" + requestedPresetId
-                    + " from authoritative source: " + SummarizeHostedPluginState(*storedPreset));
+                AppendSessionLog("Hosted plugin load rehydrated presetId=" + requestedPresetId +
+                                 " from authoritative source: " + SummarizeHostedPluginState(*storedPreset));
                 preset = std::move(*storedPreset);
             }
             else
@@ -69,13 +76,15 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 
         const std::string requestedSceneId = payload.value("sceneId", "");
         if (!SetPresetActiveScene(preset, requestedSceneId, &mActiveSceneId))
+        {
             mActiveSceneId = GetDefaultPresetSceneId(preset);
+        }
 
         ApplyBlendDefinitions(preset);
 
-        AppendSessionLog("Hosted plugin load applying presetId="
-            + (requestedPresetId.empty() ? preset.id : requestedPresetId)
-            + ", final=" + SummarizeHostedPluginState(preset));
+        AppendSessionLog(
+            "Hosted plugin load applying presetId=" + (requestedPresetId.empty() ? preset.id : requestedPresetId) +
+            ", final=" + SummarizeHostedPluginState(preset));
 
         mActivePresetId = requestedPresetId.empty() ? preset.id : requestedPresetId;
 
@@ -85,8 +94,9 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
         // the *entire* mixer down to a single instance, which would silently drop every
         // other active mixer preset.
         const auto activeMixerIds = mPresetMixer.GetActivePresetIds();
-        const bool isActiveMixerSlot = activeMixerIds.size() > 1
-            && std::find(activeMixerIds.begin(), activeMixerIds.end(), mActivePresetId) != activeMixerIds.end();
+        const bool isActiveMixerSlot =
+            activeMixerIds.size() > 1 &&
+            std::find(activeMixerIds.begin(), activeMixerIds.end(), mActivePresetId) != activeMixerIds.end();
 
         if (isActiveMixerSlot && ReplaceActiveMixerPresetInPlace(preset, mActivePresetId, preset.name))
         {
@@ -107,7 +117,9 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
             loaded["preset"] = SerializePresetForUi(*mActivePreset);
             nlohmann::json activeIds = nlohmann::json::array();
             for (const auto& id : mPresetMixer.GetActivePresetIds())
+            {
                 activeIds.push_back(id);
+            }
             loaded["activePresetIds"] = activeIds;
             loaded["sceneId"] = GetResolvedActiveSceneId();
             SendMessageToUI(loaded.dump());
@@ -128,45 +140,52 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 std::optional<Preset> PluginController::TryLoadStoredPresetById(const std::string& presetId)
 {
     if (presetId.empty())
+    {
         return std::nullopt;
+    }
 
     const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
     const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : presetId;
 
     if (mActivePreset)
     {
-        const bool matchesActivePreset = mActivePreset->id == resolvedPresetId
-            || (!mActivePresetId.empty() && (mActivePresetId == presetId || mActivePresetId == resolvedPresetId));
+        const bool matchesActivePreset =
+            mActivePreset->id == resolvedPresetId ||
+            (!mActivePresetId.empty() && (mActivePresetId == presetId || mActivePresetId == resolvedPresetId));
         if (matchesActivePreset)
         {
             Preset preset = *mActivePreset;
             CaptureRuntimePluginStates(preset, mActivePresetId.empty() ? resolvedPresetId : mActivePresetId);
-            AppendSessionLog("Hosted plugin rehydrate source=active presetId=" + resolvedPresetId
-                + ", state=" + SummarizeHostedPluginState(preset));
+            AppendSessionLog("Hosted plugin rehydrate source=active presetId=" + resolvedPresetId +
+                             ", state=" + SummarizeHostedPluginState(preset));
             return preset;
         }
     }
 
     if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
+    {
         return std::nullopt;
+    }
 
     if (auto presetOpt = LoadUserPreset(resolvedPresetId))
     {
-        AppendSessionLog("Hosted plugin rehydrate source=user-store presetId=" + resolvedPresetId
-            + ", state=" + SummarizeHostedPluginState(*presetOpt));
+        AppendSessionLog("Hosted plugin rehydrate source=user-store presetId=" + resolvedPresetId +
+                         ", state=" + SummarizeHostedPluginState(*presetOpt));
         return presetOpt;
     }
 
     if (IsPresetArchiveSessionActive())
+    {
         return std::nullopt;
+    }
 
     const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
     if (std::filesystem::exists(factoryPath))
     {
         if (auto presetOpt = PresetStorage::LoadFromFile(factoryPath))
         {
-            AppendSessionLog("Hosted plugin rehydrate source=factory-file presetId=" + resolvedPresetId
-                + ", path=" + factoryPath.generic_string() + ", state=" + SummarizeHostedPluginState(*presetOpt));
+            AppendSessionLog("Hosted plugin rehydrate source=factory-file presetId=" + resolvedPresetId + ", path=" +
+                             factoryPath.generic_string() + ", state=" + SummarizeHostedPluginState(*presetOpt));
             return presetOpt;
         }
     }
@@ -174,8 +193,8 @@ std::optional<Preset> PluginController::TryLoadStoredPresetById(const std::strin
     const auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
     if (archiveIt != mFactoryArchivePresets.end())
     {
-        AppendSessionLog("Hosted plugin rehydrate source=factory-archive presetId=" + resolvedPresetId
-            + ", state=" + SummarizeHostedPluginState(archiveIt->second));
+        AppendSessionLog("Hosted plugin rehydrate source=factory-archive presetId=" + resolvedPresetId +
+                         ", state=" + SummarizeHostedPluginState(archiveIt->second));
         return archiveIt->second;
     }
 
@@ -191,7 +210,8 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
     const std::string saveMode = payload.value("saveMode", "");
     std::string sourcePresetId = payload.value("sourcePresetId", "");
     const bool requireNewPresetId = payload.value("requireNewPresetId", saveMode == "save-as");
-    const bool includeGlobalSignalChain = payload.value("includeGlobalSignalChain", payload.contains("globalSignalChain"));
+    const bool includeGlobalSignalChain =
+        payload.value("includeGlobalSignalChain", payload.contains("globalSignalChain"));
 
     std::optional<Preset> payloadPreset;
     if (payload.contains("preset") && payload["preset"].is_object())
@@ -221,13 +241,15 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         NormalizePresetScenes(newPreset);
         EnsurePresetBoundaryGainNodes(newPreset);
         if (sourcePresetId.empty())
+        {
             sourcePresetId = mActivePresetId;
+        }
 
-        std::string resolvedPresetId = presetIdOverride.empty()
-            ? GenerateUserPresetId()
-            : presetIdOverride;
+        std::string resolvedPresetId = presetIdOverride.empty() ? GenerateUserPresetId() : presetIdOverride;
         if (requireNewPresetId && !sourcePresetId.empty() && resolvedPresetId == sourcePresetId)
+        {
             resolvedPresetId = GenerateUserPresetId();
+        }
 
         newPreset.id = std::move(resolvedPresetId);
         newPreset.name = presetName;
@@ -275,16 +297,18 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
 
         const std::string requestedSceneId = payload.value("sceneId", mActiveSceneId);
         if (!SetPresetActiveScene(newPreset, requestedSceneId, &mActiveSceneId))
+        {
             mActiveSceneId = GetDefaultPresetSceneId(newPreset);
+        }
 
-        AppendSessionLog("Hosted plugin preset save begin presetId=" + newPreset.id
-            + ", sourcePresetId=" + (sourcePresetId.empty() ? std::string{"<none>"} : sourcePresetId)
-            + ", beforeCapture=" + SummarizeHostedPluginState(newPreset));
+        AppendSessionLog("Hosted plugin preset save begin presetId=" + newPreset.id +
+                         ", sourcePresetId=" + (sourcePresetId.empty() ? std::string{"<none>"} : sourcePresetId) +
+                         ", beforeCapture=" + SummarizeHostedPluginState(newPreset));
 
         CaptureRuntimePluginStates(newPreset, sourcePresetId.empty() ? mActivePresetId : sourcePresetId);
 
-        AppendSessionLog("Hosted plugin preset save captured presetId=" + newPreset.id
-            + ", afterCapture=" + SummarizeHostedPluginState(newPreset));
+        AppendSessionLog("Hosted plugin preset save captured presetId=" + newPreset.id +
+                         ", afterCapture=" + SummarizeHostedPluginState(newPreset));
 
         if (!SaveUserPreset(newPreset))
         {
@@ -292,8 +316,8 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
             return;
         }
 
-        AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id
-            + ", state=" + SummarizeHostedPluginState(newPreset));
+        AppendSessionLog("Hosted plugin preset save wrote presetId=" + newPreset.id +
+                         ", state=" + SummarizeHostedPluginState(newPreset));
 
         // "Save as" mints a new preset id, but the running mixer slot is still keyed by the
         // old one and nothing re-applies the preset here. Left alone, the two drift apart:
@@ -323,8 +347,8 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
             }
             else
             {
-                AppendSessionLog("Mixer slot re-key skipped after save from " + previousSlotId
-                    + " to " + newPreset.id + " (slot not active or id already in use)");
+                AppendSessionLog("Mixer slot re-key skipped after save from " + previousSlotId + " to " + newPreset.id +
+                                 " (slot not active or id already in use)");
             }
         }
 
@@ -334,7 +358,9 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
         mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
         mPendingStateBroadcast = true;
         if (!IsPresetArchiveSessionActive())
+        {
             SaveAppSettings();
+        }
         TouchSharedSyncState({"presetLibrary"});
         InvalidateResourceUsageIndex();
 
@@ -354,7 +380,9 @@ void PluginController::HandleDeletePresetRequest(const nlohmann::json& payload)
 {
     const std::string presetId = payload.value("presetId", "");
     if (presetId.empty())
+    {
         return;
+    }
 
     if (!UserPresetExists(presetId))
     {
@@ -377,7 +405,9 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
     const std::string presetId = payload.value("presetId", "");
     const std::string requestId = payload.value("requestId", "");
     if (presetId.empty())
+    {
         return;
+    }
 
     const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
     const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : presetId;
@@ -389,7 +419,9 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
         msg["message"] = "Preset unavailable";
         msg["detail"] = "Factory preset archive loading is disabled in Advanced settings";
         if (!requestId.empty())
+        {
             msg["requestId"] = requestId;
+        }
         msg["presetId"] = presetId;
         SendMessageToUI(msg.dump());
         return;
@@ -399,12 +431,16 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
 
     std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
     if (!presetOpt && std::filesystem::exists(factoryPath))
+    {
         presetOpt = PresetStorage::LoadFromFile(factoryPath);
+    }
     if (!presetOpt)
     {
         auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
         if (archiveIt != mFactoryArchivePresets.end())
+        {
             presetOpt = archiveIt->second;
+        }
     }
 
     if (!presetOpt)
@@ -414,7 +450,9 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
         msg["message"] = "Preset not found";
         msg["detail"] = presetId;
         if (!requestId.empty())
+        {
             msg["requestId"] = requestId;
+        }
         msg["presetId"] = presetId;
         SendMessageToUI(msg.dump());
         return;
@@ -424,7 +462,9 @@ void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)
     msg["type"] = "presetData";
     msg["preset"] = SerializePresetForUi(*presetOpt);
     if (!requestId.empty())
+    {
         msg["requestId"] = requestId;
+    }
     msg["requestedPresetId"] = presetId;
     SendMessageToUI(msg.dump());
 }
@@ -445,7 +485,9 @@ void PluginController::HandleGetPresetFoldersRequest()
         for (const auto& folder : folders)
         {
             if (!folder.is_object())
+            {
                 continue;
+            }
 
             const std::string folderId = folder.value("id", "");
             if (IsFactoryArchiveFolderId(folderId))
@@ -545,7 +587,9 @@ void PluginController::ApplyPreset(const Preset& preset)
     NormalizePresetScenes(normalizedPreset);
     std::string resolvedSceneId = mActiveSceneId;
     if (!SetPresetActiveScene(normalizedPreset, resolvedSceneId, &resolvedSceneId))
+    {
         resolvedSceneId = GetDefaultPresetSceneId(normalizedPreset);
+    }
 
     for (auto& node : normalizedPreset.graph.nodes)
     {
@@ -555,7 +599,9 @@ void PluginController::ApplyPreset(const Preset& preset)
     for (auto& node : normalizedPreset.graph.nodes)
     {
         if (!IsNamEffectType(node.type))
+        {
             continue;
+        }
 
         // Strip legacy NAM level params; replaced by single useCalibration toggle.
         node.params.erase("autoLevelInput");
@@ -565,7 +611,9 @@ void PluginController::ApplyPreset(const Preset& preset)
         node.params.erase("useAutoLevel");
         ClearNamCalibrationParams(node);
         if (!node.params.contains("useCalibration"))
+        {
             node.params["useCalibration"] = 1.0;
+        }
     }
 
     // Hydrate blend node resources (model refs + blendMode) from the blend library.
@@ -591,18 +639,15 @@ void PluginController::ApplyPreset(const Preset& preset)
     chainConfig.autoLevelOutput = false;
     if (mHost.IsStandalone())
     {
-        constexpr auto kMonoModeKey  = "inputChannel.monoMode";
+        constexpr auto kMonoModeKey = "inputChannel.monoMode";
         constexpr auto kInputChanKey = "inputChannel.mono";
 
         const auto monoIt = mAppSettings.find(kMonoModeKey);
         const auto chanIt = mAppSettings.find(kInputChanKey);
 
-        chainConfig.monoMode = (monoIt != mAppSettings.end() && monoIt->is_boolean())
-            ? monoIt->get<bool>()
-            : true;
-        chainConfig.inputChannel = (chanIt != mAppSettings.end() && chanIt->is_number_integer())
-            ? std::clamp(chanIt->get<int>(), 0, 1)
-            : 0;
+        chainConfig.monoMode = (monoIt != mAppSettings.end() && monoIt->is_boolean()) ? monoIt->get<bool>() : true;
+        chainConfig.inputChannel =
+            (chanIt != mAppSettings.end() && chanIt->is_number_integer()) ? std::clamp(chanIt->get<int>(), 0, 1) : 0;
     }
 
     normalizedPreset.global.inputTrim = inputGainDb;
@@ -650,18 +695,16 @@ void PluginController::ApplyPreset(const Preset& preset)
         AttachRuntimeConfigCallbacks(initialSlotId, normalizedPreset);
 
         // Register tuner callback
-        mPresetMixer.SetTunerCallback(
-            [this](const MultiPresetMixer::TunerResult& result)
-            {
-                mTuner->PostReading({
-                    result.noteName,
-                    result.octave,
-                    result.frequency,
-                    result.centOffset,
-                    result.confidence,
-                    result.detected,
-                });
+        mPresetMixer.SetTunerCallback([this](const MultiPresetMixer::TunerResult& result) {
+            mTuner->PostReading({
+                result.noteName,
+                result.octave,
+                result.frequency,
+                result.centOffset,
+                result.confidence,
+                result.detected,
             });
+        });
 
         // Apply global interface calibration level to all calibratable NAM
         // effect nodes (overrides preset params; calibrationInputLevel is not
@@ -672,10 +715,11 @@ void PluginController::ApplyPreset(const Preset& preset)
         for (const auto& node : normalizedPreset.graph.nodes)
         {
             if (!IsNamCalibratableEffectType(node.type))
+            {
                 continue;
+            }
 
-            const double calibrationToInject =
-                hasCalibrationValue ? mNamInterfaceCalibrationLevelDbu : clearValue;
+            const double calibrationToInject = hasCalibrationValue ? mNamInterfaceCalibrationLevelDbu : clearValue;
             mPresetMixer.SetNodeParam(initialSlotId, node.id, "calibrationInputLevel", calibrationToInject);
         }
     }
@@ -689,7 +733,9 @@ std::optional<Preset> PluginController::LoadUserPreset(const std::string& preset
     // directory and completely shadow the real library for the duration, so they
     // are read from files and never enter the store.
     if (IsPresetArchiveSessionActive())
+    {
         return PresetStorage::LoadFromFile(GetEffectiveUserPresetDirectory() / (presetId + ".json"));
+    }
 
     return PresetStorage::LoadFromStore(Store(), presetId);
 }
@@ -697,7 +743,9 @@ std::optional<Preset> PluginController::LoadUserPreset(const std::string& preset
 std::vector<Preset> PluginController::LoadAllUserPresets() const
 {
     if (IsPresetArchiveSessionActive())
+    {
         return PresetStorage::LoadAllFromDirectory(GetEffectiveUserPresetDirectory());
+    }
 
     return PresetStorage::LoadAllFromStore(Store());
 }
@@ -739,19 +787,23 @@ bool PluginController::UserPresetExists(const std::string& presetId) const
 std::optional<Preset> PluginController::LoadPresetById(const std::string& presetId) const
 {
     if (presetId.empty())
+    {
         return std::nullopt;
+    }
 
     const auto aliasIt = mFactoryArchivePresetAliases.find(presetId);
-    const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end()
-        ? aliasIt->second
-        : presetId;
+    const std::string resolvedPresetId = aliasIt != mFactoryArchivePresetAliases.end() ? aliasIt->second : presetId;
 
     if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
+    {
         return std::nullopt;
+    }
 
     std::optional<Preset> presetOpt = LoadUserPreset(resolvedPresetId);
     if (IsPresetArchiveSessionActive())
+    {
         return presetOpt;
+    }
     if (!presetOpt)
     {
         const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
@@ -761,7 +813,9 @@ std::optional<Preset> PluginController::LoadPresetById(const std::string& preset
     {
         const auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
         if (archiveIt != mFactoryArchivePresets.end())
+        {
             presetOpt = archiveIt->second;
+        }
     }
 
     return presetOpt;
@@ -771,24 +825,31 @@ std::optional<std::string> PluginController::FindPresetIdByTitle(const std::stri
 {
     const std::string normalizedTitle = NormalizePresetTitle(presetTitle);
     if (normalizedTitle.empty())
+    {
         return std::nullopt;
+    }
     const bool factoryArchiveLoadingEnabled = IsFactoryPresetArchiveLoadingEnabled();
 
-    auto matchesTitle = [&](const Preset& preset) -> bool
-    {
+    auto matchesTitle = [&](const Preset& preset) -> bool {
         return NormalizePresetTitle(preset.name) == normalizedTitle;
     };
 
     for (const auto& preset : LoadAllUserPresets())
     {
         if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
+        {
             continue;
+        }
         if (matchesTitle(preset))
+        {
             return preset.id;
+        }
     }
 
     if (IsPresetArchiveSessionActive())
+    {
         return std::nullopt;
+    }
 
     const auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
     if (std::filesystem::exists(factoryPath))
@@ -796,10 +857,14 @@ std::optional<std::string> PluginController::FindPresetIdByTitle(const std::stri
         for (const auto& entry : std::filesystem::directory_iterator(factoryPath))
         {
             if (entry.path().extension() != ".json")
+            {
                 continue;
+            }
             const auto presetOpt = PresetStorage::LoadFromFile(entry.path());
             if (presetOpt && matchesTitle(*presetOpt))
+            {
                 return presetOpt->id;
+            }
         }
     }
 
@@ -808,7 +873,9 @@ std::optional<std::string> PluginController::FindPresetIdByTitle(const std::stri
         for (const auto& [presetId, preset] : mFactoryArchivePresets)
         {
             if (matchesTitle(preset))
+            {
                 return presetId;
+            }
         }
     }
 
@@ -819,7 +886,9 @@ bool PluginController::TryLoadConfiguredDefaultPreset()
 {
     const std::string configuredTitle = guitarfx::config::kDefaultStartupPresetTitle;
     if (NormalizePresetTitle(configuredTitle).empty())
+    {
         return false;
+    }
 
     const auto presetId = FindPresetIdByTitle(configuredTitle);
     if (!presetId)

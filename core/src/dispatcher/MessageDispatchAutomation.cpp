@@ -4,9 +4,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchAutomation(PluginController& c,
-                                           const nlohmann::json& msg,
-                                           const std::string& type)
+bool MessageDispatcher::DispatchAutomation(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "getAutomation")
     {

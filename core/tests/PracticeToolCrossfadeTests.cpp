@@ -29,8 +29,8 @@ namespace guitarfx
 // the crossfade logic directly with a synthetic buffer.
 struct PracticeToolServiceTestAccess
 {
-    static std::shared_ptr<PracticeToolService::TrackBuffer> MakeBuffer(
-        std::vector<float> left, std::vector<float> right, double sampleRate)
+    static std::shared_ptr<PracticeToolService::TrackBuffer> MakeBuffer(std::vector<float> left,
+                                                                        std::vector<float> right, double sampleRate)
     {
         auto buffer = std::make_shared<PracticeToolService::TrackBuffer>();
         buffer->sampleRate = sampleRate;
@@ -41,8 +41,8 @@ struct PracticeToolServiceTestAccess
     }
 
     static int ReadSourceWindow(PracticeToolService& svc,
-                                const std::shared_ptr<PracticeToolService::TrackBuffer>& buffer,
-                                float* outL, float* outR, std::size_t& cursor, int numFrames)
+                                const std::shared_ptr<PracticeToolService::TrackBuffer>& buffer, float* outL,
+                                float* outR, std::size_t& cursor, int numFrames)
     {
         return svc.ReadSourceWindow(buffer, outL, outR, cursor, numFrames);
     }
@@ -62,29 +62,54 @@ constexpr double kSampleRate = 48000.0;
 // host; PracticeToolService's constructor just requires a reference.
 class NullPluginHost : public guitarfx::IPluginHost
 {
-public:
-    void SendMessageToUI(const std::string&) override {}
+  public:
+    void SendMessageToUI(const std::string&) override
+    {
+    }
+
     void BrowseFileAsync(guitarfx::BrowseFileType, const std::string&,
-                         std::function<void(const guitarfx::BrowseFileResult&)>) override {}
+                         std::function<void(const guitarfx::BrowseFileResult&)>) override
+    {
+    }
+
     void SaveFileAsync(guitarfx::BrowseFileType, const std::string&, const std::string&,
-                       std::function<void(const guitarfx::BrowseFileResult&)>) override {}
+                       std::function<void(const guitarfx::BrowseFileResult&)>) override
+    {
+    }
+
     void RunOnMainThread(std::function<void()> fn) override
     {
         if (fn)
+        {
             fn();
+        }
     }
-    [[nodiscard]] std::filesystem::path GetUserDataPath() const override { return {}; }
-    [[nodiscard]] std::filesystem::path GetBundledAssetsPath() const override { return {}; }
-    [[nodiscard]] double GetSampleRate() const override { return kSampleRate; }
-    [[nodiscard]] int GetBlockSize() const override { return 512; }
+
+    [[nodiscard]] std::filesystem::path GetUserDataPath() const override
+    {
+        return {};
+    }
+
+    [[nodiscard]] std::filesystem::path GetBundledAssetsPath() const override
+    {
+        return {};
+    }
+
+    [[nodiscard]] double GetSampleRate() const override
+    {
+        return kSampleRate;
+    }
+
+    [[nodiscard]] int GetBlockSize() const override
+    {
+        return 512;
+    }
 };
 
 std::unique_ptr<PracticeToolService> MakeService(guitarfx::IPluginHost& host, std::mutex& mutex)
 {
     auto svc = std::make_unique<PracticeToolService>(
-        host, mutex,
-        [](const std::string&, const std::string&) {},
-        [](const std::string&) {});
+        host, mutex, [](const std::string&, const std::string&) {}, [](const std::string&) {});
     // Starts the background render thread, but since we never LoadFile()
     // through the public API in these tests, mBuffer stays null and the
     // thread just idles — harmless. Needed to give the service a sample
@@ -113,7 +138,9 @@ auto MakeRampLoopBuffer(std::size_t total, std::size_t regionStart, std::size_t 
         left[i] = static_cast<float>(-1.0 + 2.0 * t);
     }
     for (std::size_t i = regionEnd; i < total; ++i)
+    {
         left[i] = 1.0f; // continuous with the ramp's end value
+    }
 
     return PracticeToolServiceTestAccess::MakeBuffer(left, left, kSampleRate);
 }
@@ -131,11 +158,10 @@ bool TestLoopWrapStaysInBoundsAndBlends()
     constexpr std::size_t kLoopEnd = 15000;
     auto buffer = MakeRampLoopBuffer(kTotalFrames, kLoopStart, kLoopEnd);
 
-    svc->SetLoopRegion(static_cast<double>(kLoopStart) / kSampleRate,
-                       static_cast<double>(kLoopEnd) / kSampleRate);
+    svc->SetLoopRegion(static_cast<double>(kLoopStart) / kSampleRate, static_cast<double>(kLoopEnd) / kSampleRate);
     svc->SetLoopingEnabled(true);
 
-    constexpr int kChunk = 777; // deliberately not a divisor of the loop length
+    constexpr int kChunk = 777;     // deliberately not a divisor of the loop length
     constexpr int kNumChunks = 200; // several full loop traversals at this chunk size
     std::vector<float> outL(static_cast<std::size_t>(kChunk));
     std::vector<float> outR(static_cast<std::size_t>(kChunk));
@@ -150,25 +176,33 @@ bool TestLoopWrapStaysInBoundsAndBlends()
 
     for (int c = 0; c < kNumChunks; ++c)
     {
-        const int written = PracticeToolServiceTestAccess::ReadSourceWindow(
-            *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+        const int written =
+            PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
         if (written != kChunk)
+        {
             everyCallFullyFilled = false;
+        }
         if (cursor >= kTotalFrames)
+        {
             cursorAlwaysInBounds = false;
+        }
 
         for (int i = 0; i < written; ++i)
         {
             const float sample = outL[static_cast<std::size_t>(i)];
             if (!std::isfinite(sample))
+            {
                 noNonFiniteSamples = false;
+            }
             const float delta = std::fabs(sample - prevSample);
             maxAbsDelta = std::max(maxAbsDelta, delta);
             prevSample = sample;
             // "Intermediate" = clearly between the ramp's flat extremes, i.e.
             // actually mid-blend rather than sitting at -1 or +1.
             if (sample > -0.8f && sample < 0.8f)
+            {
                 ++intermediateValueCount;
+            }
         }
     }
 
@@ -179,19 +213,20 @@ bool TestLoopWrapStaysInBoundsAndBlends()
     // A genuine blend spends many samples transitioning, not just one.
     const bool sawSustainedBlend = intermediateValueCount > 50;
 
-    std::cout << "  " << std::left << std::setw(48) << "Every call fully filled while looping:"
-              << (everyCallFullyFilled ? "PASS" : "FAIL") << "\n";
-    std::cout << "  " << std::left << std::setw(48) << "Cursor always stays in [0, total):"
-              << (cursorAlwaysInBounds ? "PASS" : "FAIL") << "\n";
-    std::cout << "  " << std::left << std::setw(48) << "Output stays finite (no NaN/Inf):"
-              << (noNonFiniteSamples ? "PASS" : "FAIL") << "\n";
-    std::cout << "  " << std::left << std::setw(48) << "No hard-cut jump at wrap (blends):"
-              << (noHardCutJump ? "PASS" : "FAIL") << " (maxAbsDelta=" << maxAbsDelta << ")\n";
-    std::cout << "  " << std::left << std::setw(48) << "Sustained blend across the wrap:"
-              << (sawSustainedBlend ? "PASS" : "FAIL") << " (count=" << intermediateValueCount << ")\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Every call fully filled while looping:" << (everyCallFullyFilled ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Cursor always stays in [0, total):" << (cursorAlwaysInBounds ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Output stays finite (no NaN/Inf):" << (noNonFiniteSamples ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "No hard-cut jump at wrap (blends):" << (noHardCutJump ? "PASS" : "FAIL")
+              << " (maxAbsDelta=" << maxAbsDelta << ")\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Sustained blend across the wrap:" << (sawSustainedBlend ? "PASS" : "FAIL")
+              << " (count=" << intermediateValueCount << ")\n";
 
-    return everyCallFullyFilled && cursorAlwaysInBounds && noNonFiniteSamples
-        && noHardCutJump && sawSustainedBlend;
+    return everyCallFullyFilled && cursorAlwaysInBounds && noNonFiniteSamples && noHardCutJump && sawSustainedBlend;
 }
 
 bool TestVeryShortLoopRegionStaysInBounds()
@@ -210,8 +245,7 @@ bool TestVeryShortLoopRegionStaysInBounds()
     constexpr std::size_t kLoopEnd = 950; // 50-frame loop region
     auto buffer = MakeRampLoopBuffer(kTotalFrames, kLoopStart, kLoopEnd);
 
-    svc->SetLoopRegion(static_cast<double>(kLoopStart) / kSampleRate,
-                       static_cast<double>(kLoopEnd) / kSampleRate);
+    svc->SetLoopRegion(static_cast<double>(kLoopStart) / kSampleRate, static_cast<double>(kLoopEnd) / kSampleRate);
     svc->SetLoopingEnabled(true);
 
     constexpr int kChunk = 137;
@@ -226,25 +260,31 @@ bool TestVeryShortLoopRegionStaysInBounds()
 
     for (int c = 0; c < kNumChunks; ++c)
     {
-        const int written = PracticeToolServiceTestAccess::ReadSourceWindow(
-            *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+        const int written =
+            PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
         if (written != kChunk)
+        {
             everyCallFullyFilled = false;
+        }
         if (cursor >= kTotalFrames)
+        {
             cursorAlwaysInBounds = false;
+        }
         for (int i = 0; i < written; ++i)
         {
             if (!std::isfinite(outL[static_cast<std::size_t>(i)]))
+            {
                 noNonFiniteSamples = false;
+            }
         }
     }
 
-    std::cout << "  " << std::left << std::setw(48) << "Every call fully filled (tiny loop):"
-              << (everyCallFullyFilled ? "PASS" : "FAIL") << "\n";
-    std::cout << "  " << std::left << std::setw(48) << "Cursor always stays in [0, total):"
-              << (cursorAlwaysInBounds ? "PASS" : "FAIL") << "\n";
-    std::cout << "  " << std::left << std::setw(48) << "Output stays finite (no NaN/Inf):"
-              << (noNonFiniteSamples ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Every call fully filled (tiny loop):" << (everyCallFullyFilled ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Cursor always stays in [0, total):" << (cursorAlwaysInBounds ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Output stays finite (no NaN/Inf):" << (noNonFiniteSamples ? "PASS" : "FAIL") << "\n";
 
     return everyCallFullyFilled && cursorAlwaysInBounds && noNonFiniteSamples;
 }
@@ -267,19 +307,19 @@ bool TestNonLoopingExhaustionReturnsShortAtEnd()
     std::vector<float> outR(static_cast<std::size_t>(kChunk));
     std::size_t cursor = 800; // 200 frames of real audio remain
 
-    const int firstWritten = PracticeToolServiceTestAccess::ReadSourceWindow(
-        *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+    const int firstWritten =
+        PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
     const bool firstCallShortAtEnd = firstWritten == 200 && cursor == kTotalFrames;
 
-    const int secondWritten = PracticeToolServiceTestAccess::ReadSourceWindow(
-        *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+    const int secondWritten =
+        PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
     const bool secondCallReturnsZero = secondWritten == 0;
 
-    std::cout << "  " << std::left << std::setw(48) << "Non-looping read stops exactly at end:"
-              << (firstCallShortAtEnd ? "PASS" : "FAIL")
+    std::cout << "  " << std::left << std::setw(48)
+              << "Non-looping read stops exactly at end:" << (firstCallShortAtEnd ? "PASS" : "FAIL")
               << " (written=" << firstWritten << ", cursor=" << cursor << ")\n";
-    std::cout << "  " << std::left << std::setw(48) << "Further reads past end return 0:"
-              << (secondCallReturnsZero ? "PASS" : "FAIL") << "\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "Further reads past end return 0:" << (secondCallReturnsZero ? "PASS" : "FAIL") << "\n";
 
     return firstCallShortAtEnd && secondCallReturnsZero;
 }
@@ -291,11 +331,17 @@ int main()
     bool allPassed = true;
 
     if (!TestLoopWrapStaysInBoundsAndBlends())
+    {
         allPassed = false;
+    }
     if (!TestVeryShortLoopRegionStaysInBounds())
+    {
         allPassed = false;
+    }
     if (!TestNonLoopingExhaustionReturnsShortAtEnd())
+    {
         allPassed = false;
+    }
 
     std::cout << "\n" << (allPassed ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << "\n";
     return allPassed ? 0 : 1;

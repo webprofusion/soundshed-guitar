@@ -50,7 +50,7 @@ struct BrowseFileResult
  */
 class IPluginHost
 {
-public:
+  public:
     virtual ~IPluginHost() = default;
 
     // ── WebView message transport ──────────────────────────────────
@@ -59,15 +59,12 @@ public:
 
     // ── File dialogs ───────────────────────────────────────────────
     /// Open a native file browser asynchronously. Callback fires on main thread.
-    virtual void BrowseFileAsync(BrowseFileType type,
-                                 const std::string& title,
+    virtual void BrowseFileAsync(BrowseFileType type, const std::string& title,
                                  std::function<void(const BrowseFileResult&)> callback) = 0;
 
     /// Open a native save-file dialog asynchronously. Callback thread is host-specific;
     /// controller code that touches UI or framework state must bounce explicitly.
-    virtual void SaveFileAsync(BrowseFileType type,
-                               const std::string& title,
-                               const std::string& defaultName,
+    virtual void SaveFileAsync(BrowseFileType type, const std::string& title, const std::string& defaultName,
                                std::function<void(const BrowseFileResult&)> callback) = 0;
 
     // ── Threading ──────────────────────────────────────────────────
@@ -87,23 +84,38 @@ public:
 
     // ── Host-specific features ─────────────────────────────────────
     /// Open the standalone app audio/MIDI preferences (no-op in plugin formats).
-    virtual void OpenAudioPreferences() {}
+    virtual void OpenAudioPreferences()
+    {
+    }
 
     /// Notify host that plugin state has changed (marks DAW project dirty).
-    virtual void NotifyStateChanged() {}
+    virtual void NotifyStateChanged()
+    {
+    }
 
     /// Notify the host that algorithmic latency has changed (e.g. after loading an IR).
     /// Implementations should call the host's latency-reporting API (e.g. setLatencySamples).
-    virtual void NotifyLatencyChanged(int /*latencySamples*/) {}
+    virtual void NotifyLatencyChanged(int /*latencySamples*/)
+    {
+    }
 
     /// Get the DAW/host tempo in BPM, if available.
-    [[nodiscard]] virtual double GetHostTempo() const { return 120.0; }
+    [[nodiscard]] virtual double GetHostTempo() const
+    {
+        return 120.0;
+    }
 
     /// Check if DAW is currently playing.
-    [[nodiscard]] virtual bool IsHostPlaying() const { return false; }
+    [[nodiscard]] virtual bool IsHostPlaying() const
+    {
+        return false;
+    }
 
     /// True for standalone app builds; false for DAW plugin formats.
-    [[nodiscard]] virtual bool IsStandalone() const { return false; }
+    [[nodiscard]] virtual bool IsStandalone() const
+    {
+        return false;
+    }
 };
 
 } // namespace guitarfx

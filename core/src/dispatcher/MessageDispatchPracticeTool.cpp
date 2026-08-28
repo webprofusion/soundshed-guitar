@@ -4,9 +4,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchPracticeTool(PluginController& c,
-                                             const nlohmann::json& msg,
-                                             const std::string& type)
+bool MessageDispatcher::DispatchPracticeTool(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "browsePracticeToolFile")
     {

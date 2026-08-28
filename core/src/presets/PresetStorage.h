@@ -8,11 +8,11 @@
 
 namespace guitarfx
 {
-  /**
-   * Serialization and storage for presets.
-   */
-  class PresetStorage
-  {
+/**
+ * Serialization and storage for presets.
+ */
+class PresetStorage
+{
   public:
     // JSON serialization
     [[nodiscard]] static std::string SerializeToJson(const Preset& preset);
@@ -33,6 +33,6 @@ namespace guitarfx
     // files and for import/export; user presets live in the store.
     [[nodiscard]] static std::vector<Preset> LoadAllFromDirectory(const std::filesystem::path& directory);
     static void SaveAllToDirectory(const std::vector<Preset>& presets, const std::filesystem::path& directory);
-  };
+};
 
 } // namespace guitarfx

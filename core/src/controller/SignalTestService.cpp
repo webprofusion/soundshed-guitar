@@ -10,23 +10,24 @@ namespace guitarfx
 
 namespace
 {
-    constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
+constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
 
-    /// Output RMS above this counts as "audio reached the output". Well below
-    /// anything audible, but far enough above denormal noise that a chain
-    /// muted end to end still reads as a failure.
-    constexpr double kPassOutputRms = 0.001;
-}
+/// Output RMS above this counts as "audio reached the output". Well below
+/// anything audible, but far enough above denormal noise that a chain
+/// muted end to end still reads as a failure.
+constexpr double kPassOutputRms = 0.001;
+} // namespace
 
-SignalTestService::SignalTestService(SendMessageFn sendMessage)
-    : mSendMessage(std::move(sendMessage))
+SignalTestService::SignalTestService(SendMessageFn sendMessage) : mSendMessage(std::move(sendMessage))
 {
 }
 
 bool SignalTestService::Start(double frequencyHz, double durationSeconds, double sampleRate)
 {
     if (sampleRate <= 0.0)
+    {
         return false;
+    }
 
     auto& st = mState;
     st.frequencyHz = frequencyHz;
@@ -47,7 +48,9 @@ bool SignalTestService::Start(double frequencyHz, double durationSeconds, double
 void SignalTestService::InjectInput(float** inputs, int numSamples)
 {
     if (!mActive.load(std::memory_order_acquire))
+    {
         return;
+    }
 
     auto& st = mState;
     if (inputs && inputs[0] && inputs[1])
@@ -56,7 +59,10 @@ void SignalTestService::InjectInput(float** inputs, int numSamples)
         {
             const auto sample = static_cast<float>(std::sin(st.phase * kTwoPi));
             st.phase += st.phaseIncrement;
-            if (st.phase >= 1.0) st.phase -= 1.0;
+            if (st.phase >= 1.0)
+            {
+                st.phase -= 1.0;
+            }
             inputs[0][i] = sample;
             inputs[1][i] = sample;
             st.inputSumSquares += static_cast<double>(sample) * sample;
@@ -73,21 +79,29 @@ void SignalTestService::InjectInput(float** inputs, int numSamples)
 void SignalTestService::CollectOutput(float* const* outputs, int numSamples)
 {
     if (mState.samplesRemaining <= 0 && !mResultPending.load(std::memory_order_relaxed))
+    {
         return;
+    }
 
     for (int i = 0; i < numSamples; ++i)
     {
         if (outputs && outputs[0])
+        {
             mState.outputSumSquares[0] += static_cast<double>(outputs[0][i]) * outputs[0][i];
+        }
         if (outputs && outputs[1])
+        {
             mState.outputSumSquares[1] += static_cast<double>(outputs[1][i]) * outputs[1][i];
+        }
     }
 }
 
 void SignalTestService::OnIdle()
 {
     if (!mResultPending.load(std::memory_order_acquire))
+    {
         return;
+    }
     mResultPending.store(false, std::memory_order_release);
 
     const auto& st = mState;
@@ -110,11 +124,13 @@ void SignalTestService::OnIdle()
     result["duration"] = mResult.durationSeconds;
     result["elapsed"] = mResult.elapsedSeconds;
     result["inputRMS"] = mResult.inputRMS;
-    result["outputRMS"] = { mResult.outputRMS[0], mResult.outputRMS[1] };
+    result["outputRMS"] = {mResult.outputRMS[0], mResult.outputRMS[1]};
     result["passed"] = mResult.passed;
 
     if (mSendMessage)
+    {
         mSendMessage(result.dump());
+    }
 }
 
 } // namespace guitarfx

@@ -40,22 +40,17 @@ struct OfflineRenderBuffer
 
 /// Picks the render rate from the request, falling back to the host rate.
 /// On an unsupported request returns 0 and sets `error`.
-[[nodiscard]] double ResolveDemoRenderSampleRate(const nlohmann::json& payload,
-                                                 double hostSampleRate,
+[[nodiscard]] double ResolveDemoRenderSampleRate(const nlohmann::json& payload, double hostSampleRate,
                                                  std::string& error);
 
-[[nodiscard]] std::string BuildDemoRenderSuggestedFilename(const std::string& requestedName,
-                                                           double renderSampleRate);
+[[nodiscard]] std::string BuildDemoRenderSuggestedFilename(const std::string& requestedName, double renderSampleRate);
 
 /// Index one past the last frame louder than `threshold`, once at least
 /// `requiredQuietFrames` of silence follow it.
-[[nodiscard]] std::size_t FindTrailingAudibleFrameCount(const std::vector<float>& left,
-                                                        const std::vector<float>& right,
-                                                        float threshold,
-                                                        std::size_t requiredQuietFrames);
+[[nodiscard]] std::size_t FindTrailingAudibleFrameCount(const std::vector<float>& left, const std::vector<float>& right,
+                                                        float threshold, std::size_t requiredQuietFrames);
 
-void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer,
-                                            float threshold,
+void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer, float threshold,
                                             std::size_t requiredQuietFrames);
 
 /// Decodes and resamples source bytes into a buffer ready for the mixer.
@@ -71,21 +66,15 @@ void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer,
 /// restores the mixer to `restoreSampleRate`/`restoreBlockSize` before
 /// returning, including when the render throws. Returns false if nothing was
 /// rendered.
-[[nodiscard]] bool RenderBufferThroughMixer(MultiPresetMixer& mixer,
-                                            std::mutex& dspMutex,
-                                            const OfflineRenderBuffer& source,
-                                            int blockSize,
-                                            double restoreSampleRate,
-                                            int restoreBlockSize,
-                                            double tempoBpm,
-                                            std::vector<float>& renderedLeft,
+[[nodiscard]] bool RenderBufferThroughMixer(MultiPresetMixer& mixer, std::mutex& dspMutex,
+                                            const OfflineRenderBuffer& source, int blockSize, double restoreSampleRate,
+                                            int restoreBlockSize, double tempoBpm, std::vector<float>& renderedLeft,
                                             std::vector<float>& renderedRight);
 
 /// Per-bin peak magnitudes across both channels, normalised to [0, 1], for
 /// drawing a waveform overview. Returns an empty array for empty or
 /// mismatched channels.
-[[nodiscard]] nlohmann::json BuildWaveformPeaks(const std::vector<float>& left,
-                                                const std::vector<float>& right,
+[[nodiscard]] nlohmann::json BuildWaveformPeaks(const std::vector<float>& left, const std::vector<float>& right,
                                                 std::size_t bins);
 
 } // namespace guitarfx::controller_detail

@@ -24,16 +24,46 @@ void MessageDispatcher::Dispatch(PluginController& c, const std::string& jsonMes
     }
 
     const std::string type = msg.value("type", "");
-    if (type.empty()) return;
-    if (DispatchStateAndLists(c, msg, type)) return;
-    if (DispatchSettings(c, msg, type)) return;
-    if (DispatchParameters(c, msg, type)) return;
-    if (DispatchPresetsAndResources(c, msg, type)) return;
-    if (DispatchSignalPath(c, msg, type)) return;
-    if (DispatchMixerAndMonitoring(c, msg, type)) return;
-    if (DispatchLibraryAndComposite(c, msg, type)) return;
-    if (DispatchAutomation(c, msg, type)) return;
-    if (DispatchPracticeTool(c, msg, type)) return;
+    if (type.empty())
+    {
+        return;
+    }
+    if (DispatchStateAndLists(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchSettings(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchParameters(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchPresetsAndResources(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchSignalPath(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchMixerAndMonitoring(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchLibraryAndComposite(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchAutomation(c, msg, type))
+    {
+        return;
+    }
+    if (DispatchPracticeTool(c, msg, type))
+    {
+        return;
+    }
 
     // Unknown message type — silently ignored
 }

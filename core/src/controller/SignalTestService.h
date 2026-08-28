@@ -27,7 +27,7 @@ namespace guitarfx
 
 class SignalTestService
 {
-public:
+  public:
     struct Result
     {
         double sampleRate = 0.0;
@@ -57,13 +57,19 @@ public:
     /// Message thread: publishes the result once the tone has finished.
     void OnIdle();
 
-    [[nodiscard]] bool IsActive() const { return mActive.load(std::memory_order_acquire); }
+    [[nodiscard]] bool IsActive() const
+    {
+        return mActive.load(std::memory_order_acquire);
+    }
 
     /// DemoPreviewService refuses to start while a test is running, and needs
     /// the flag itself rather than a snapshot of it.
-    [[nodiscard]] std::atomic<bool>& ActiveFlag() { return mActive; }
+    [[nodiscard]] std::atomic<bool>& ActiveFlag()
+    {
+        return mActive;
+    }
 
-private:
+  private:
     struct RuntimeState
     {
         double frequencyHz = 0.0;

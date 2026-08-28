@@ -13,7 +13,7 @@
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
-#include "dsp/effects/WasmEffect.h"
+    #include "dsp/effects/WasmEffect.h"
 #endif
 #include "presets/CompositePresetStorage.h"
 #include "presets/CompositePresetTypes.h"
@@ -35,25 +35,44 @@ namespace guitarfx
 void PluginController::HandleSaveBlendDefinitionRequest(const nlohmann::json& payload)
 {
     const nlohmann::json blend = payload.value("blend", nlohmann::json::object());
-    if (!blend.is_object()) { ReportErrorToUI("Blend save failed", "Missing blend payload"); return; }
+    if (!blend.is_object())
+    {
+        ReportErrorToUI("Blend save failed", "Missing blend payload");
+        return;
+    }
 
     const std::string id = blend.value("id", "");
-    if (id.empty()) { ReportErrorToUI("Blend save failed", "Missing blend id"); return; }
+    if (id.empty())
+    {
+        ReportErrorToUI("Blend save failed", "Missing blend id");
+        return;
+    }
 
     const std::string category = blend.value("category", "");
     static const std::array<std::string, 5> allowedCategories = {"pedal", "preamp", "amp", "full-rig", "cab"};
     if (!category.empty())
     {
         if (!std::any_of(allowedCategories.begin(), allowedCategories.end(),
-            [&](const std::string& e) { return e == category; }))
-        { ReportErrorToUI("Blend save failed", "Invalid category"); return; }
+                         [&](const std::string& e) { return e == category; }))
+        {
+            ReportErrorToUI("Blend save failed", "Invalid category");
+            return;
+        }
     }
 
-    if (!mBlendLibrary.is_array()) mBlendLibrary = nlohmann::json::array();
+    if (!mBlendLibrary.is_array())
+    {
+        mBlendLibrary = nlohmann::json::array();
+    }
 
     nlohmann::json updated = nlohmann::json::array();
     for (const auto& item : mBlendLibrary)
-        if (item.value("id", "") != id) updated.push_back(item);
+    {
+        if (item.value("id", "") != id)
+        {
+            updated.push_back(item);
+        }
+    }
     updated.push_back(blend);
     mBlendLibrary = std::move(updated);
 
@@ -99,13 +118,21 @@ void PluginController::HandleSaveCustomEffectEntryRequest(const nlohmann::json& 
 
     const auto* existing = mCustomEffectLibrary.GetEntry(entry.id);
     if (entry.category.empty())
+    {
         entry.category = existing && !existing->category.empty() ? existing->category : "utility";
+    }
     if (entry.createdAt.empty())
+    {
         entry.createdAt = existing && !existing->createdAt.empty() ? existing->createdAt : BuildTimestampUtcIso();
+    }
     if (entry.updatedAt.empty())
+    {
         entry.updatedAt = BuildTimestampUtcIso();
+    }
     if (entry.origin.empty() && existing && !existing->origin.empty())
+    {
         entry.origin = existing->origin;
+    }
 
     mCustomEffectLibrary.UpsertEntry(entry);
     SaveCustomEffectLibrary();
@@ -152,14 +179,18 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
 
     const std::string linkedEntryId = [&]() -> std::string {
         if (const auto it = node->config.find("customEffectId"); it != node->config.end())
+        {
             return it->second;
+        }
         return {};
     }();
     const auto* linkedEntry = linkedEntryId.empty() ? nullptr : mCustomEffectLibrary.GetEntry(linkedEntryId);
 
     const auto getOptionalString = [&](const char* key) -> std::optional<std::string> {
         if (!entryJson.contains(key) || !entryJson[key].is_string())
+        {
             return std::nullopt;
+        }
         return entryJson[key].get<std::string>();
     };
 
@@ -173,9 +204,13 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
 
     ResourceRef moduleRef;
     if (!node->resources.empty())
+    {
         moduleRef = node->resources.front();
+    }
     if (moduleRef.resourceType.empty())
+    {
         moduleRef.resourceType = "wasm";
+    }
 
     if (moduleRef.resourceType != "wasm")
     {
@@ -185,7 +220,9 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
 
     std::optional<LibraryResource> moduleResource;
     if (!moduleRef.resourceId.empty())
+    {
         moduleResource = mResourceLibrary.LookupResource(moduleRef.resourceType, moduleRef.resourceId);
+    }
 
     if (!moduleResource && !moduleRef.filePath.empty())
     {
@@ -193,10 +230,10 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         savePayload["resourceType"] = moduleRef.resourceType;
         savePayload["filePath"] = util::PathToUtf8(moduleRef.filePath);
         savePayload["name"] = requestedNameOpt && !requestedNameOpt->empty()
-            ? *requestedNameOpt
-            : (!std::filesystem::path(moduleRef.filePath).stem().string().empty()
-                ? std::filesystem::path(moduleRef.filePath).stem().string()
-                : "Custom Effect Module");
+                                  ? *requestedNameOpt
+                                  : (!std::filesystem::path(moduleRef.filePath).stem().string().empty()
+                                         ? std::filesystem::path(moduleRef.filePath).stem().string()
+                                         : "Custom Effect Module");
         savePayload["category"] = "Local";
         savePayload["metadata"] = nlohmann::json::object({{"provider", kLocalResourceProvider}});
 
@@ -204,7 +241,8 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         moduleResource = SaveLocalLibraryResource(savePayload, resourceSaveError, true);
         if (!moduleResource)
         {
-            ReportErrorToUI("Custom Effect save failed", resourceSaveError.empty() ? "Failed to save local WASM module" : resourceSaveError);
+            ReportErrorToUI("Custom Effect save failed",
+                            resourceSaveError.empty() ? "Failed to save local WASM module" : resourceSaveError);
             return;
         }
     }
@@ -213,7 +251,8 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
     {
         if (!moduleRef.embeddedId.empty())
         {
-            ReportErrorToUI("Custom Effect save failed", "Embedded module resources are not supported by this save flow yet");
+            ReportErrorToUI("Custom Effect save failed",
+                            "Embedded module resources are not supported by this save flow yet");
         }
         else
         {
@@ -224,7 +263,9 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
 
     GraphNode descriptorNode = *node;
     if (descriptorNode.resources.empty())
+    {
         descriptorNode.resources.resize(1);
+    }
     descriptorNode.resources.front().resourceType = moduleResource->type;
     descriptorNode.resources.front().resourceId = moduleResource->id;
     descriptorNode.resources.front().filePath.clear();
@@ -238,65 +279,101 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         std::string parseError;
         descriptor = WasmEffect::ParseDescriptorConfig(descriptorIt->second, &parseError);
         if (!descriptor && !parseError.empty())
-            AppendSessionLog("WASM descriptor cache parse failed while saving current Custom Effect " + nodeId + ": " + parseError);
+        {
+            AppendSessionLog("WASM descriptor cache parse failed while saving current Custom Effect " + nodeId + ": " +
+                             parseError);
+        }
     }
 
     std::string entryName = requestedNameOpt.value_or("");
     if (entryName.empty() && linkedEntry && !linkedEntry->name.empty())
+    {
         entryName = linkedEntry->name;
+    }
     if (entryName.empty() && descriptor && !descriptor->displayName.empty())
+    {
         entryName = descriptor->displayName;
+    }
     if (entryName.empty() && !node->label.empty())
+    {
         entryName = node->label;
+    }
     if (entryName.empty() && !moduleResource->name.empty())
+    {
         entryName = moduleResource->name;
+    }
     if (entryName.empty())
+    {
         entryName = "Custom Effect";
+    }
 
     std::string entryId = requestedIdOpt.value_or("");
     if (entryId.empty())
+    {
         entryId = linkedEntryId;
+    }
     if (entryId.empty())
     {
         std::string baseId = util::SanitizePathSegment(entryName, true);
         if (baseId.empty())
+        {
             baseId = "custom-effect";
+        }
         entryId = baseId;
         std::size_t suffix = 2;
         while (mCustomEffectLibrary.GetEntry(entryId) != nullptr)
+        {
             entryId = baseId + "-" + std::to_string(suffix++);
+        }
     }
 
     std::string entryCategory = requestedCategoryOpt.value_or("");
     if (entryCategory.empty() && linkedEntry && !linkedEntry->category.empty())
+    {
         entryCategory = linkedEntry->category;
+    }
     if (entryCategory.empty() && descriptor && !descriptor->category.empty())
+    {
         entryCategory = descriptor->category;
+    }
     if (entryCategory.empty() && !node->category.empty())
+    {
         entryCategory = node->category;
+    }
     if (entryCategory.empty())
+    {
         entryCategory = "utility";
+    }
 
-    std::string entryDescription = requestedDescriptionOpt.has_value()
-        ? *requestedDescriptionOpt
-        : std::string{};
+    std::string entryDescription = requestedDescriptionOpt.has_value() ? *requestedDescriptionOpt : std::string{};
     if (!requestedDescriptionOpt.has_value() && linkedEntry && !linkedEntry->description.empty())
+    {
         entryDescription = linkedEntry->description;
-    if (!requestedDescriptionOpt.has_value() && entryDescription.empty() && descriptor && !descriptor->description.empty())
+    }
+    if (!requestedDescriptionOpt.has_value() && entryDescription.empty() && descriptor &&
+        !descriptor->description.empty())
+    {
         entryDescription = descriptor->description;
+    }
 
     nlohmann::json descriptorSummary = linkedEntry && linkedEntry->descriptorSummary.is_object()
-        ? linkedEntry->descriptorSummary
-        : nlohmann::json::object();
+                                           ? linkedEntry->descriptorSummary
+                                           : nlohmann::json::object();
     if (descriptor)
     {
         descriptorSummary = nlohmann::json::object();
         if (!descriptor->displayName.empty())
+        {
             descriptorSummary["displayName"] = descriptor->displayName;
+        }
         if (!descriptor->version.empty())
+        {
             descriptorSummary["version"] = descriptor->version;
+        }
         if (!descriptor->category.empty())
+        {
             descriptorSummary["category"] = descriptor->category;
+        }
         descriptorSummary["parameterCount"] = descriptor->parameters.size();
         descriptorSummary["resourceCount"] = descriptor->exposedResources.size();
     }
@@ -308,19 +385,27 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         for (const auto& tagValue : entryJson["tags"])
         {
             if (tagValue.is_string())
+            {
                 entryTags.push_back(tagValue.get<std::string>());
+            }
         }
     }
 
     std::string entryOrigin = requestedOriginOpt.value_or("");
     if (entryOrigin.empty() && linkedEntry && !linkedEntry->origin.empty())
+    {
         entryOrigin = linkedEntry->origin;
+    }
     if (entryOrigin.empty())
+    {
         entryOrigin = "imported";
+    }
 
     std::string latestRevisionId = requestedRevisionIdOpt.value_or("");
     if (latestRevisionId.empty() && linkedEntry && !linkedEntry->latestRevisionId.empty())
+    {
         latestRevisionId = linkedEntry->latestRevisionId;
+    }
     if (latestRevisionId.empty())
     {
         if (const auto revisionIt = moduleResource->metadata.find("customEffectRevisionId");
@@ -332,9 +417,13 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
 
     std::string thumbnailDataUrl = requestedThumbnailOpt.value_or("");
     if (thumbnailDataUrl.empty() && linkedEntry && !linkedEntry->thumbnailDataUrl.empty())
+    {
         thumbnailDataUrl = linkedEntry->thumbnailDataUrl;
+    }
     if (thumbnailDataUrl.empty() && descriptor && !descriptor->thumbnailDataUrl.empty())
+    {
         thumbnailDataUrl = descriptor->thumbnailDataUrl;
+    }
 
     CustomEffectLibraryEntry entry;
     entry.id = entryId;
@@ -359,7 +448,9 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
     if (applyToNode)
     {
         if (node->resources.empty())
+        {
             node->resources.resize(1);
+        }
         node->resources.front().resourceType = entry.moduleResourceType;
         node->resources.front().resourceId = entry.moduleResourceId;
         node->resources.front().filePath.clear();
@@ -387,7 +478,8 @@ void PluginController::HandleSaveCurrentCustomEffectRequest(const nlohmann::json
         {"name", entry.name},
         {"applyToNode", applyToNode},
         {"nodeId", nodeId},
-    }.dump());
+    }
+                        .dump());
 #endif
 }
 
@@ -438,13 +530,17 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
     const bool applyToNode = payload.value("applyToNode", false);
     const auto getOptionalString = [&](const nlohmann::json& json, const char* key) -> std::optional<std::string> {
         if (!json.contains(key) || !json[key].is_string())
+        {
             return std::nullopt;
+        }
         return json[key].get<std::string>();
     };
 
     const std::string linkedEntryId = [&]() -> std::string {
         if (const auto it = node->config.find("customEffectId"); it != node->config.end())
+        {
             return it->second;
+        }
         return {};
     }();
     const auto* linkedEntry = linkedEntryId.empty() ? nullptr : mCustomEffectLibrary.GetEntry(linkedEntryId);
@@ -470,16 +566,21 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
     savePayload["subfolder"] = moduleJson.value("subfolder", std::string{});
     savePayload["metadata"] = moduleJson.value("metadata", nlohmann::json::object());
     if (!requestedRevisionIdOpt.value_or("").empty())
+    {
         savePayload["metadata"]["customEffectRevisionId"] = *requestedRevisionIdOpt;
+    }
     if (!payload.value("sessionId", std::string{}).empty())
+    {
         savePayload["metadata"]["customEffectSessionId"] = payload.value("sessionId", std::string{});
+    }
     savePayload["metadata"]["customEffectOrigin"] = requestedOriginOpt.value_or("generated");
 
     std::string resourceSaveError;
     auto moduleResource = SaveLocalLibraryResource(savePayload, resourceSaveError, true);
     if (!moduleResource)
     {
-        ReportErrorToUI("Generated Custom Effect import failed", resourceSaveError.empty() ? "Failed to save generated WASM module" : resourceSaveError);
+        ReportErrorToUI("Generated Custom Effect import failed",
+                        resourceSaveError.empty() ? "Failed to save generated WASM module" : resourceSaveError);
         return;
     }
 
@@ -500,7 +601,8 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
             const auto descriptorPath = bundleDir / "descriptor.txt";
             if (!writeTextArtifact(descriptorPath, descriptorText))
             {
-                ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated descriptor artifact");
+                ReportErrorToUI("Generated Custom Effect import failed",
+                                "Failed to write generated descriptor artifact");
                 return;
             }
             persistArtifactPath("customEffectDescriptorPath", descriptorPath);
@@ -511,7 +613,8 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
             const auto specPath = bundleDir / "spec.txt";
             if (!writeTextArtifact(specPath, specText))
             {
-                ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated implementation spec artifact");
+                ReportErrorToUI("Generated Custom Effect import failed",
+                                "Failed to write generated implementation spec artifact");
                 return;
             }
             persistArtifactPath("customEffectSpecPath", specPath);
@@ -533,12 +636,12 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
                 const auto validationPath = bundleDir / "validation-report.json";
                 if (!writeTextArtifact(validationPath, validationIt->dump(2)))
                 {
-                    ReportErrorToUI("Generated Custom Effect import failed", "Failed to write generated validation artifact");
+                    ReportErrorToUI("Generated Custom Effect import failed",
+                                    "Failed to write generated validation artifact");
                     return;
                 }
                 persistArtifactPath("customEffectValidationPath", validationPath);
             }
-
         }
     }
 
@@ -547,7 +650,9 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
 
     GraphNode descriptorNode = *node;
     if (descriptorNode.resources.empty())
+    {
         descriptorNode.resources.resize(1);
+    }
     descriptorNode.resources.front().resourceType = moduleResource->type;
     descriptorNode.resources.front().resourceId = moduleResource->id;
     descriptorNode.resources.front().filePath.clear();
@@ -559,11 +664,15 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         for (const auto& item : entryJson["defaultParams"].items())
         {
             if (item.value().is_number())
+            {
                 requestedDefaultParams[item.key()] = item.value().get<double>();
+            }
         }
     }
     if (!requestedDefaultParams.empty())
+    {
         descriptorNode.params = requestedDefaultParams;
+    }
 
     RefreshWasmNodeDescriptor(descriptorNode);
 
@@ -574,63 +683,101 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         std::string parseError;
         descriptor = WasmEffect::ParseDescriptorConfig(descriptorIt->second, &parseError);
         if (!descriptor && !parseError.empty())
-            AppendSessionLog("WASM descriptor cache parse failed while importing generated Custom Effect " + nodeId + ": " + parseError);
+        {
+            AppendSessionLog("WASM descriptor cache parse failed while importing generated Custom Effect " + nodeId +
+                             ": " + parseError);
+        }
     }
 
     std::string entryName = requestedNameOpt.value_or("");
     if (entryName.empty() && linkedEntry && !linkedEntry->name.empty())
+    {
         entryName = linkedEntry->name;
+    }
     if (entryName.empty() && descriptor && !descriptor->displayName.empty())
+    {
         entryName = descriptor->displayName;
+    }
     if (entryName.empty() && !moduleResource->name.empty())
+    {
         entryName = moduleResource->name;
+    }
     if (entryName.empty())
+    {
         entryName = "Custom Effect";
+    }
 
     std::string entryId = requestedIdOpt.value_or("");
     if (entryId.empty())
+    {
         entryId = linkedEntryId;
+    }
     if (entryId.empty())
     {
         std::string baseId = util::SanitizePathSegment(entryName, true);
         if (baseId.empty())
+        {
             baseId = "custom-effect";
+        }
         entryId = baseId;
         std::size_t suffix = 2;
         while (mCustomEffectLibrary.GetEntry(entryId) != nullptr)
+        {
             entryId = baseId + "-" + std::to_string(suffix++);
+        }
     }
 
     std::string entryCategory = requestedCategoryOpt.value_or("");
     if (entryCategory.empty() && linkedEntry && !linkedEntry->category.empty())
+    {
         entryCategory = linkedEntry->category;
+    }
     if (entryCategory.empty() && descriptor && !descriptor->category.empty())
+    {
         entryCategory = descriptor->category;
+    }
     if (entryCategory.empty() && !node->category.empty())
+    {
         entryCategory = node->category;
+    }
     if (entryCategory.empty())
+    {
         entryCategory = "utility";
+    }
 
     std::string entryDescription = requestedDescriptionOpt.value_or("");
     if (entryDescription.empty() && linkedEntry && !linkedEntry->description.empty())
+    {
         entryDescription = linkedEntry->description;
+    }
     if (entryDescription.empty() && descriptor && !descriptor->description.empty())
+    {
         entryDescription = descriptor->description;
+    }
 
-    nlohmann::json descriptorSummary = entryJson.contains("descriptorSummary") && entryJson["descriptorSummary"].is_object()
-        ? entryJson["descriptorSummary"]
-        : nlohmann::json::object();
+    nlohmann::json descriptorSummary =
+        entryJson.contains("descriptorSummary") && entryJson["descriptorSummary"].is_object()
+            ? entryJson["descriptorSummary"]
+            : nlohmann::json::object();
     if (descriptorSummary.empty() && linkedEntry && linkedEntry->descriptorSummary.is_object())
+    {
         descriptorSummary = linkedEntry->descriptorSummary;
+    }
     if (descriptor)
     {
         descriptorSummary = nlohmann::json::object();
         if (!descriptor->displayName.empty())
+        {
             descriptorSummary["displayName"] = descriptor->displayName;
+        }
         if (!descriptor->version.empty())
+        {
             descriptorSummary["version"] = descriptor->version;
+        }
         if (!descriptor->category.empty())
+        {
             descriptorSummary["category"] = descriptor->category;
+        }
         descriptorSummary["parameterCount"] = descriptor->parameters.size();
         descriptorSummary["resourceCount"] = descriptor->exposedResources.size();
     }
@@ -642,19 +789,27 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         for (const auto& tagValue : entryJson["tags"])
         {
             if (tagValue.is_string())
+            {
                 entryTags.push_back(tagValue.get<std::string>());
+            }
         }
     }
 
     std::string entryOrigin = requestedOriginOpt.value_or("");
     if (entryOrigin.empty() && linkedEntry && !linkedEntry->origin.empty())
+    {
         entryOrigin = linkedEntry->origin;
+    }
     if (entryOrigin.empty())
+    {
         entryOrigin = "generated";
+    }
 
     std::string latestRevisionId = requestedRevisionIdOpt.value_or("");
     if (latestRevisionId.empty() && linkedEntry && !linkedEntry->latestRevisionId.empty())
+    {
         latestRevisionId = linkedEntry->latestRevisionId;
+    }
     if (latestRevisionId.empty())
     {
         if (const auto revisionIt = moduleResource->metadata.find("customEffectRevisionId");
@@ -666,9 +821,13 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
 
     std::string thumbnailDataUrl = requestedThumbnailOpt.value_or("");
     if (thumbnailDataUrl.empty() && linkedEntry && !linkedEntry->thumbnailDataUrl.empty())
+    {
         thumbnailDataUrl = linkedEntry->thumbnailDataUrl;
+    }
     if (thumbnailDataUrl.empty() && descriptor && !descriptor->thumbnailDataUrl.empty())
+    {
         thumbnailDataUrl = descriptor->thumbnailDataUrl;
+    }
 
     CustomEffectLibraryEntry entry;
     entry.id = entryId;
@@ -693,7 +852,9 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
     if (applyToNode)
     {
         if (node->resources.empty())
+        {
             node->resources.resize(1);
+        }
         node->resources.front().resourceType = entry.moduleResourceType;
         node->resources.front().resourceId = entry.moduleResourceId;
         node->resources.front().filePath.clear();
@@ -702,7 +863,9 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         node->label = entry.name;
         node->category = entry.category;
         if (!entry.defaultParams.empty())
+        {
             node->params = entry.defaultParams;
+        }
         RefreshWasmNodeDescriptor(*node);
 
         if (IsCompositeEditMode())
@@ -723,7 +886,8 @@ void PluginController::HandleImportGeneratedCustomEffectRequest(const nlohmann::
         {"name", entry.name},
         {"applyToNode", applyToNode},
         {"nodeId", nodeId},
-    }.dump());
+    }
+                        .dump());
 #endif
 }
 
@@ -734,43 +898,60 @@ void PluginController::HandleExportGeneratedCustomEffectBundleRequest(const nloh
 
     if (dataEncoded.empty())
     {
-        SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Missing export data"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Missing export data"}}
+                .dump());
         return;
     }
 
     mHost.SaveFileAsync(BrowseFileType::ArchiveFile, "Download Custom Effect Bundle", suggestedName,
-        [this, dataEncoded](const BrowseFileResult& result)
-        {
-            if (!result.success)
-            {
-                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Export cancelled"}}.dump());
-                return;
-            }
+                        [this, dataEncoded](const BrowseFileResult& result) {
+                            if (!result.success)
+                            {
+                                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"},
+                                                               {"message", "Export cancelled"}}
+                                                    .dump());
+                                return;
+                            }
 
-            const auto decodedBytes = util::DecodeBase64(dataEncoded);
-            if (decodedBytes.empty())
-            {
-                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Invalid export data"}}.dump());
-                return;
-            }
+                            const auto decodedBytes = util::DecodeBase64(dataEncoded);
+                            if (decodedBytes.empty())
+                            {
+                                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"},
+                                                               {"message", "Invalid export data"}}
+                                                    .dump());
+                                return;
+                            }
 
-            if (!WriteFile(result.path, decodedBytes))
-            {
-                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"}, {"message", "Failed to write file"}}.dump());
-                return;
-            }
+                            if (!WriteFile(result.path, decodedBytes))
+                            {
+                                SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportFailed"},
+                                                               {"message", "Failed to write file"}}
+                                                    .dump());
+                                return;
+                            }
 
-            SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportSaved"}, {"path", result.path.generic_string()}}.dump());
-            AppendSessionLog("Generated Custom Effect bundle exported: " + result.path.generic_string());
-        });
+                            SendMessageToUI(nlohmann::json{{"type", "generatedCustomEffectBundleExportSaved"},
+                                                           {"path", result.path.generic_string()}}
+                                                .dump());
+                            AppendSessionLog("Generated Custom Effect bundle exported: " +
+                                             result.path.generic_string());
+                        });
 }
 
 void PluginController::HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload)
 {
     const std::string id = payload.value("blendId", "");
-    if (id.empty()) { ReportErrorToUI("Blend delete failed", "Missing blend id"); return; }
+    if (id.empty())
+    {
+        ReportErrorToUI("Blend delete failed", "Missing blend id");
+        return;
+    }
 
-    if (!mBlendLibrary.is_array()) mBlendLibrary = nlohmann::json::array();
+    if (!mBlendLibrary.is_array())
+    {
+        mBlendLibrary = nlohmann::json::array();
+    }
 
     nlohmann::json updated = nlohmann::json::array();
     bool removed = false;
@@ -821,7 +1002,11 @@ void PluginController::HandleDeleteCustomEffectEntryRequest(const nlohmann::json
 void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& payload)
 {
     const std::string name = payload.value("name", "");
-    if (name.empty()) { ReportErrorToUI("Save Multi-Rig failed", "A name is required"); return; }
+    if (name.empty())
+    {
+        ReportErrorToUI("Save Multi-Rig failed", "A name is required");
+        return;
+    }
 
     const std::string description = payload.value("description", "");
     const nlohmann::json tagsPayload = payload.value("tags", nlohmann::json::array());
@@ -836,7 +1021,10 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
     for (const auto& pid : mPresetMixer.GetActivePresetIds())
     {
         const auto cfgOpt = mPresetMixer.GetPresetConfig(pid);
-        if (!cfgOpt) continue;
+        if (!cfgOpt)
+        {
+            continue;
+        }
         CompositePresetSlot slot;
         slot.slotId = cfgOpt->id;
         slot.presetId = pid;
@@ -847,26 +1035,32 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
         cp.slots.push_back(std::move(slot));
     }
 
-    if (cp.slots.empty()) { ReportErrorToUI("Save Multi-Rig failed", "No active presets in mixer"); return; }
+    if (cp.slots.empty())
+    {
+        ReportErrorToUI("Save Multi-Rig failed", "No active presets in mixer");
+        return;
+    }
 
     if (tagsPayload.is_array())
     {
         for (const auto& tagValue : tagsPayload)
         {
             if (!tagValue.is_string())
+            {
                 continue;
+            }
             std::string tag = tagValue.get<std::string>();
             const auto isSpace = [](unsigned char ch) { return std::isspace(ch) != 0; };
-            tag.erase(tag.begin(), std::find_if(tag.begin(), tag.end(), [&](char ch)
-            {
-                return !isSpace(static_cast<unsigned char>(ch));
-            }));
-            tag.erase(std::find_if(tag.rbegin(), tag.rend(), [&](char ch)
-            {
-                return !isSpace(static_cast<unsigned char>(ch));
-            }).base(), tag.end());
+            tag.erase(tag.begin(), std::find_if(tag.begin(), tag.end(),
+                                                [&](char ch) { return !isSpace(static_cast<unsigned char>(ch)); }));
+            tag.erase(std::find_if(tag.rbegin(), tag.rend(),
+                                   [&](char ch) { return !isSpace(static_cast<unsigned char>(ch)); })
+                          .base(),
+                      tag.end());
             if (!tag.empty())
+            {
                 cp.tags.push_back(tag);
+            }
         }
     }
 
@@ -890,7 +1084,10 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
     oss << std::put_time(std::gmtime(&tt), "%Y-%m-%dT%H:%M:%SZ");
     const std::string ts = oss.str();
 
-    if (cp.createdAt.empty()) cp.createdAt = ts;
+    if (cp.createdAt.empty())
+    {
+        cp.createdAt = ts;
+    }
     cp.modifiedAt = ts;
 
     if (!CompositePresetStorage::SaveToStore(Store(), cp))
@@ -907,21 +1104,34 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
 void PluginController::HandleLoadCompositePresetRequest(const nlohmann::json& payload)
 {
     const std::string id = payload.value("id", "");
-    if (id.empty()) { ReportErrorToUI("Load Multi-Rig failed", "Missing preset id"); return; }
+    if (id.empty())
+    {
+        ReportErrorToUI("Load Multi-Rig failed", "Missing preset id");
+        return;
+    }
 
     const auto cpOpt = CompositePresetStorage::LoadFromStore(Store(), id);
-    if (!cpOpt) { ReportErrorToUI("Load Multi-Rig failed", "Preset not found: " + id); return; }
+    if (!cpOpt)
+    {
+        ReportErrorToUI("Load Multi-Rig failed", "Preset not found: " + id);
+        return;
+    }
 
     const auto& cp = *cpOpt;
 
     // Clear existing mixer slots
     for (const auto& pid : mPresetMixer.GetActivePresetIds())
+    {
         RemoveActivePreset(pid);
+    }
 
     // Load each slot
     for (const auto& slot : cp.slots)
     {
-        if (!AddActivePresetById(slot.presetId)) continue;
+        if (!AddActivePresetById(slot.presetId))
+        {
+            continue;
+        }
         SetActivePresetMix(slot.presetId, slot.mix);
         SetActivePresetPan(slot.presetId, slot.pan);
         SetActivePresetMute(slot.presetId, slot.mute);
@@ -945,10 +1155,18 @@ void PluginController::HandleGetCompositePresetListRequest()
 void PluginController::HandleRemoveCompositePresetRequest(const nlohmann::json& payload)
 {
     const std::string id = payload.value("id", "");
-    if (id.empty()) { ReportErrorToUI("Remove Multi-Rig failed", "Missing preset id"); return; }
+    if (id.empty())
+    {
+        ReportErrorToUI("Remove Multi-Rig failed", "Missing preset id");
+        return;
+    }
 
     const bool removed = CompositePresetStorage::DeleteFromStore(Store(), id);
-    if (!removed) { ReportErrorToUI("Remove Multi-Rig failed", "Preset not found: " + id); return; }
+    if (!removed)
+    {
+        ReportErrorToUI("Remove Multi-Rig failed", "Preset not found: " + id);
+        return;
+    }
 
     SendCompositePresetListToUI();
 }
@@ -958,22 +1176,37 @@ void PluginController::HandleSaveBlendArchiveRequest(const nlohmann::json& paylo
     const std::string dataEncoded = payload.value("data", "");
     const std::string suggestedName = payload.value("fileName", "blend.namz");
     if (dataEncoded.empty())
-    { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Missing export data"}}.dump()); return; }
+    {
+        SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Missing export data"}}.dump());
+        return;
+    }
 
-    mHost.SaveFileAsync(BrowseFileType::ArchiveFile, "Save Blend Archive", suggestedName,
-        [this, dataEncoded](const BrowseFileResult& result)
-        {
+    mHost.SaveFileAsync(
+        BrowseFileType::ArchiveFile, "Save Blend Archive", suggestedName,
+        [this, dataEncoded](const BrowseFileResult& result) {
             if (!result.success)
-            { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Save cancelled"}}.dump()); return; }
+            {
+                SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Save cancelled"}}.dump());
+                return;
+            }
 
             const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
-            { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
+            {
+                SendMessageToUI(
+                    nlohmann::json{{"type", "blendExportFailed"}, {"message", "Invalid export data"}}.dump());
+                return;
+            }
 
             if (!WriteFile(result.path, decodedBytes))
-            { SendMessageToUI(nlohmann::json{{"type", "blendExportFailed"}, {"message", "Failed to save file"}}.dump()); return; }
+            {
+                SendMessageToUI(
+                    nlohmann::json{{"type", "blendExportFailed"}, {"message", "Failed to save file"}}.dump());
+                return;
+            }
 
-            SendMessageToUI(nlohmann::json{{"type", "blendExportSaved"}, {"path", result.path.generic_string()}}.dump());
+            SendMessageToUI(
+                nlohmann::json{{"type", "blendExportSaved"}, {"path", result.path.generic_string()}}.dump());
             AppendSessionLog("Blend export saved: " + result.path.generic_string());
         });
 }
@@ -982,17 +1215,34 @@ void PluginController::HandleSaveCompositeDefinitionRequest(const nlohmann::json
 {
     const nlohmann::json defJson = payload.value("definition", nlohmann::json::object());
     if (!defJson.is_object() || defJson.empty())
-    { ReportErrorToUI("Composite save failed", "Missing definition payload"); return; }
+    {
+        ReportErrorToUI("Composite save failed", "Missing definition payload");
+        return;
+    }
 
     CompositeEffectDefinition def;
-    try { def = DeserializeCompositeEffectDefinition(defJson); }
-    catch (const std::exception& e) { ReportErrorToUI("Composite save failed", std::string("Invalid definition: ") + e.what()); return; }
+    try
+    {
+        def = DeserializeCompositeEffectDefinition(defJson);
+    }
+    catch (const std::exception& e)
+    {
+        ReportErrorToUI("Composite save failed", std::string("Invalid definition: ") + e.what());
+        return;
+    }
 
-    if (!def.IsValid()) { ReportErrorToUI("Composite save failed", "Definition is invalid (missing id/name/innerGraph)"); return; }
+    if (!def.IsValid())
+    {
+        ReportErrorToUI("Composite save failed", "Definition is invalid (missing id/name/innerGraph)");
+        return;
+    }
 
     const auto userDir = mFileSystem.ResolveSettingsDirectory() / "composites" / "user";
     if (!mCompositeLibrary.SaveDefinition(def, userDir))
-    { ReportErrorToUI("Composite save failed", "Could not write definition file"); return; }
+    {
+        ReportErrorToUI("Composite save failed", "Could not write definition file");
+        return;
+    }
 
     mCompositeLibrary.AddDefinition(def);
     TouchSharedSyncState({"composites"});
@@ -1007,7 +1257,11 @@ void PluginController::HandleSaveCompositeDefinitionRequest(const nlohmann::json
 void PluginController::HandleDeleteCompositeDefinitionRequest(const nlohmann::json& payload)
 {
     const std::string id = payload.value("id", "");
-    if (id.empty()) { ReportErrorToUI("Composite delete failed", "Missing definition id"); return; }
+    if (id.empty())
+    {
+        ReportErrorToUI("Composite delete failed", "Missing definition id");
+        return;
+    }
 
     const auto userDir = mFileSystem.ResolveSettingsDirectory() / "composites" / "user";
     mCompositeLibrary.DeleteDefinition(id, userDir);
@@ -1037,8 +1291,7 @@ void PluginController::HandleEnterCompositeEditModeRequest(const nlohmann::json&
     }
 
     mEditingComposite = *def;
-    std::cout << "[Plugin] Entered composite edit mode: " << compositeId
-              << " (" << def->name << ")" << std::endl;
+    std::cout << "[Plugin] Entered composite edit mode: " << compositeId << " (" << def->name << ")" << std::endl;
     BroadcastCompositeEditState();
 }
 
@@ -1083,33 +1336,53 @@ void PluginController::HandleExitCompositeEditModeRequest(const nlohmann::json& 
 
 void PluginController::ApplyBlendDefinitions(Preset& preset)
 {
-    if (!mBlendLibrary.is_array()) return;
+    if (!mBlendLibrary.is_array())
+    {
+        return;
+    }
 
     auto findBlend = [&](const std::string& id) -> nlohmann::json {
         for (const auto& blend : mBlendLibrary)
         {
-            if (blend.is_object() && blend.value("id", "") == id) return blend;
+            if (blend.is_object() && blend.value("id", "") == id)
+            {
+                return blend;
+            }
         }
         return nlohmann::json::object();
     };
 
     for (auto& node : preset.graph.nodes)
     {
-        if (node.type != EffectGuids::kAmpNamBlend) continue;
+        if (node.type != EffectGuids::kAmpNamBlend)
+        {
+            continue;
+        }
 
         const auto blendIt = node.config.find("blendId");
-        if (blendIt == node.config.end()) continue;
+        if (blendIt == node.config.end())
+        {
+            continue;
+        }
 
         const std::string blendId = blendIt->second;
-        if (blendId.empty()) continue;
+        if (blendId.empty())
+        {
+            continue;
+        }
 
         const nlohmann::json blend = findBlend(blendId);
-        if (!blend.is_object()) continue;
+        if (!blend.is_object())
+        {
+            continue;
+        }
 
         const auto mappingsJson = blend.value("modelMappings", nlohmann::json::array());
         const auto modelsJson = blend.value("models", nlohmann::json::array());
         if ((!mappingsJson.is_array() || mappingsJson.empty()) && (!modelsJson.is_array() || modelsJson.empty()))
+        {
             continue;
+        }
 
         node.resources.clear();
 
@@ -1119,33 +1392,53 @@ void PluginController::ApplyBlendDefinitions(Preset& preset)
             for (std::size_t i = 0; i < count; ++i)
             {
                 const auto& mapping = mappingsJson[i];
-                if (!mapping.is_object()) continue;
+                if (!mapping.is_object())
+                {
+                    continue;
+                }
 
                 const std::string modelId = mapping.value("id", "");
-                if (modelId.empty()) continue;
+                if (modelId.empty())
+                {
+                    continue;
+                }
 
                 ResourceRef ref;
                 ref.resourceType = "nam";
                 ref.resourceId = modelId;
                 const std::string parameterId = mapping.value("parameterId", "");
-                if (!parameterId.empty()) ref.parameterId = parameterId;
+                if (!parameterId.empty())
+                {
+                    ref.parameterId = parameterId;
+                }
                 if (mapping.contains("parameterValue") && mapping["parameterValue"].is_number())
+                {
                     ref.parameterValue = mapping["parameterValue"].get<double>();
+                }
                 else if (count > 1)
+                {
                     ref.parameterValue = static_cast<double>(i) / static_cast<double>(count - 1);
+                }
 
                 if (mapping.contains("parameters") && mapping["parameters"].is_object())
                 {
                     for (const auto& [key, value] : mapping["parameters"].items())
                     {
-                        if (value.is_number()) ref.parameters[key] = value.get<double>();
+                        if (value.is_number())
+                        {
+                            ref.parameters[key] = value.get<double>();
+                        }
                     }
                 }
 
                 if (ref.parameters.empty() && !ref.parameterId.empty() && ref.parameterValue.has_value())
+                {
                     ref.parameters[ref.parameterId] = *ref.parameterValue;
+                }
                 else
+                {
                     ref.parameterValue = 0.0;
+                }
 
                 node.resources.push_back(std::move(ref));
             }
@@ -1155,7 +1448,10 @@ void PluginController::ApplyBlendDefinitions(Preset& preset)
             const std::size_t count = modelsJson.size();
             for (std::size_t i = 0; i < count; ++i)
             {
-                if (!modelsJson[i].is_string()) continue;
+                if (!modelsJson[i].is_string())
+                {
+                    continue;
+                }
 
                 ResourceRef ref;
                 ref.resourceType = "nam";
@@ -1167,7 +1463,10 @@ void PluginController::ApplyBlendDefinitions(Preset& preset)
 
         const std::string blendMode = blend.value("blendMode", "interpolate");
         node.config["blendMode"] = blendMode;
-        if (node.label.empty()) node.label = blend.value("name", "");
+        if (node.label.empty())
+        {
+            node.label = blend.value("name", "");
+        }
     }
 }
 
@@ -1178,7 +1477,9 @@ void PluginController::LoadBlendLibrary()
     for (const auto& item : Store().List(storage::ItemType::kBlend))
     {
         if (auto parsed = item.Parse())
+        {
             mBlendLibrary.push_back(std::move(*parsed));
+        }
     }
 }
 
@@ -1198,7 +1499,9 @@ void PluginController::SaveBlendLibrary() const
         {
             const std::string id = blend.value("id", "");
             if (id.empty() || mFactoryArchiveBlendIds.contains(id))
+            {
                 continue;
+            }
 
             storage::StoreItem item;
             item.type = storage::ItemType::kBlend;
@@ -1209,9 +1512,13 @@ void PluginController::SaveBlendLibrary() const
     }
 
     if (Store().ReplaceAll(storage::ItemType::kBlend, items))
+    {
         TouchSharedSyncState({"blends"});
+    }
     else
+    {
         AppendSessionLog("Failed to save the blend library");
+    }
 }
 
 void PluginController::SaveCustomEffectLibrary() const
@@ -1229,8 +1536,7 @@ void PluginController::LoadCompositeLibrary()
         if (std::filesystem::exists(factoryDir))
         {
             mCompositeLibrary.LoadFromDirectory(factoryDir);
-            std::cout << "[Plugin] Loaded factory composite definitions from "
-                      << factoryDir.string() << ": "
+            std::cout << "[Plugin] Loaded factory composite definitions from " << factoryDir.string() << ": "
                       << mCompositeLibrary.GetAllDefinitions().size() << std::endl;
         }
         else
@@ -1240,9 +1546,8 @@ void PluginController::LoadCompositeLibrary()
             if (std::filesystem::exists(legacyFactoryDir))
             {
                 mCompositeLibrary.LoadFromDirectory(legacyFactoryDir);
-                std::cout << "[Plugin] Loaded legacy factory composite definitions from "
-                          << legacyFactoryDir.string() << ": "
-                          << mCompositeLibrary.GetAllDefinitions().size() << std::endl;
+                std::cout << "[Plugin] Loaded legacy factory composite definitions from " << legacyFactoryDir.string()
+                          << ": " << mCompositeLibrary.GetAllDefinitions().size() << std::endl;
             }
         }
 

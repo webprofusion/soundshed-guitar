@@ -4,14 +4,14 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchStateAndLists(PluginController& c,
-                                              const nlohmann::json& msg,
-                                              const std::string& type)
+bool MessageDispatcher::DispatchStateAndLists(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "requestState" || type == "uiReady")
     {
         if (type == "uiReady")
+        {
             c.OnWebContentLoaded();
+        }
         c.HandleStateRequest();
         return true;
     }

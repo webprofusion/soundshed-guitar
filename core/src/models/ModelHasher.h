@@ -5,9 +5,9 @@
 
 namespace guitarfx
 {
-  class ModelHasher
-  {
+class ModelHasher
+{
   public:
-    [[nodiscard]] std::string HashFile(const std::filesystem::path &filePath) const;
-  };
+    [[nodiscard]] std::string HashFile(const std::filesystem::path& filePath) const;
+};
 } // namespace guitarfx

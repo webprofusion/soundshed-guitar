@@ -4,9 +4,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchParameters(PluginController& c,
-                                           const nlohmann::json& msg,
-                                           const std::string& type)
+bool MessageDispatcher::DispatchParameters(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "setParameter")
     {

@@ -10,138 +10,173 @@
 
 namespace guitarfx
 {
-  /**
-   * Tremoloeffect (amplitude modulation).
-   */
-  class TremoloEffect : public EffectProcessor
-  {
+/**
+ * Tremoloeffect (amplitude modulation).
+ */
+class TremoloEffect : public EffectProcessor
+{
   public:
     void Prepare(double sampleRate, int maxBlockSize) override
     {
-      if (!ValidatePrepare(sampleRate, maxBlockSize))
-        return;
-      mSampleRate = sampleRate;
-      mMaxBlockSize = maxBlockSize;
-      Reset();
+        if (!ValidatePrepare(sampleRate, maxBlockSize))
+        {
+            return;
+        }
+        mSampleRate = sampleRate;
+        mMaxBlockSize = maxBlockSize;
+        Reset();
     }
 
     void Reset() override
     {
-      mPhase = 0.0;
+        mPhase = 0.0;
     }
 
-    void Process(float **inputs, float **outputs, int numSamples) override
+    void Process(float** inputs, float** outputs, int numSamples) override
     {
-      const float rateHz = GetEffectiveRateHz();
-      const float depth = mDepth.load(std::memory_order_relaxed);
-      const float shape = mShape.load(std::memory_order_relaxed);
-      const float mix = mMix.load(std::memory_order_relaxed);
+        const float rateHz = GetEffectiveRateHz();
+        const float depth = mDepth.load(std::memory_order_relaxed);
+        const float shape = mShape.load(std::memory_order_relaxed);
+        const float mix = mMix.load(std::memory_order_relaxed);
 
-      const double phaseInc = 2.0 * kPi * rateHz / std::max(1.0, mSampleRate);
+        const double phaseInc = 2.0 * kPi * rateHz / std::max(1.0, mSampleRate);
 
-      for (int i = 0; i < numSamples; ++i)
-      {
-        const float inL = inputs[0] ? inputs[0][i] : 0.0f;
-        const float inR = inputs[1] ? inputs[1][i] : 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float inL = inputs[0] ? inputs[0][i] : 0.0f;
+            const float inR = inputs[1] ? inputs[1][i] : 0.0f;
 
-        float lfo = static_cast<float>(std::sin(mPhase));
-        const float shaped = ShapeLfo(lfo, shape);
-        const float mod = 0.5f * (1.0f + shaped);
-        const float gain = (1.0f - depth) + depth * mod;
+            float lfo = static_cast<float>(std::sin(mPhase));
+            const float shaped = ShapeLfo(lfo, shape);
+            const float mod = 0.5f * (1.0f + shaped);
+            const float gain = (1.0f - depth) + depth * mod;
 
-        const float wetL = inL * gain;
-        const float wetR = inR * gain;
+            const float wetL = inL * gain;
+            const float wetR = inR * gain;
 
-        const float outL = inL * (1.0f - mix) + wetL * mix;
-        const float outR = inR * (1.0f - mix) + wetR * mix;
+            const float outL = inL * (1.0f - mix) + wetL * mix;
+            const float outR = inR * (1.0f - mix) + wetR * mix;
 
-        if (outputs[0])
-          outputs[0][i] = outL;
-        if (outputs[1])
-          outputs[1][i] = outR;
+            if (outputs[0])
+            {
+                outputs[0][i] = outL;
+            }
+            if (outputs[1])
+            {
+                outputs[1][i] = outR;
+            }
 
-        mPhase += phaseInc;
-        // Wrap phase to prevent floating-point precision drift over long runtimes
-        if (mPhase >= 2.0 * kPi)
-          mPhase = std::fmod(mPhase, 2.0 * kPi);
-      }
+            mPhase += phaseInc;
+            // Wrap phase to prevent floating-point precision drift over long runtimes
+            if (mPhase >= 2.0 * kPi)
+            {
+                mPhase = std::fmod(mPhase, 2.0 * kPi);
+            }
+        }
     }
 
-    void SetParam(const std::string &key, double value) override
+    void SetParam(const std::string& key, double value) override
     {
-      if (key == "bpm")
-      {
-        mBpm.store(tempo_sync::ClampBpm(value), std::memory_order_relaxed);
-      }
-      else if (key == "syncMode")
-      {
-        mSyncMode.store(tempo_sync::ClampSyncMode(value), std::memory_order_relaxed);
-      }
-      else if (key == "syncDivision")
-      {
-        mSyncDivision.store(tempo_sync::ClampDivision(value), std::memory_order_relaxed);
-      }
-      else if (key == "rate")
-      {
-        mRateHz.store(static_cast<float>(std::clamp(value, 0.1, 12.0)), std::memory_order_relaxed);
-      }
-      else if (key == "depth")
-      {
-        mDepth.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
-      }
-      else if (key == "shape")
-      {
-        mShape.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
-      }
-      else if (key == "mix")
-      {
-        mMix.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
-      }
+        if (key == "bpm")
+        {
+            mBpm.store(tempo_sync::ClampBpm(value), std::memory_order_relaxed);
+        }
+        else if (key == "syncMode")
+        {
+            mSyncMode.store(tempo_sync::ClampSyncMode(value), std::memory_order_relaxed);
+        }
+        else if (key == "syncDivision")
+        {
+            mSyncDivision.store(tempo_sync::ClampDivision(value), std::memory_order_relaxed);
+        }
+        else if (key == "rate")
+        {
+            mRateHz.store(static_cast<float>(std::clamp(value, 0.1, 12.0)), std::memory_order_relaxed);
+        }
+        else if (key == "depth")
+        {
+            mDepth.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
+        }
+        else if (key == "shape")
+        {
+            mShape.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
+        }
+        else if (key == "mix")
+        {
+            mMix.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
+        }
     }
 
-    void SetConfig(const std::string &, const std::string &) override {}
-
-    [[nodiscard]] double GetParam(const std::string &key) const override
+    void SetConfig(const std::string&, const std::string&) override
     {
-      if (key == "bpm")
-        return mBpm.load(std::memory_order_relaxed);
-      if (key == "syncMode")
-        return mSyncMode.load(std::memory_order_relaxed);
-      if (key == "syncDivision")
-        return mSyncDivision.load(std::memory_order_relaxed);
-      if (key == "effectiveRate")
-        return GetEffectiveRateHz();
-      if (key == "rate")
-        return mRateHz.load(std::memory_order_relaxed);
-      if (key == "depth")
-        return mDepth.load(std::memory_order_relaxed);
-      if (key == "shape")
-        return mShape.load(std::memory_order_relaxed);
-      if (key == "mix")
-        return mMix.load(std::memory_order_relaxed);
-      return 0.0;
     }
 
-    [[nodiscard]] std::string GetType() const override { return "tremolo"; }
-    [[nodiscard]] std::string GetCategory() const override { return "modulation"; }
+    [[nodiscard]] double GetParam(const std::string& key) const override
+    {
+        if (key == "bpm")
+        {
+            return mBpm.load(std::memory_order_relaxed);
+        }
+        if (key == "syncMode")
+        {
+            return mSyncMode.load(std::memory_order_relaxed);
+        }
+        if (key == "syncDivision")
+        {
+            return mSyncDivision.load(std::memory_order_relaxed);
+        }
+        if (key == "effectiveRate")
+        {
+            return GetEffectiveRateHz();
+        }
+        if (key == "rate")
+        {
+            return mRateHz.load(std::memory_order_relaxed);
+        }
+        if (key == "depth")
+        {
+            return mDepth.load(std::memory_order_relaxed);
+        }
+        if (key == "shape")
+        {
+            return mShape.load(std::memory_order_relaxed);
+        }
+        if (key == "mix")
+        {
+            return mMix.load(std::memory_order_relaxed);
+        }
+        return 0.0;
+    }
+
+    [[nodiscard]] std::string GetType() const override
+    {
+        return "tremolo";
+    }
+
+    [[nodiscard]] std::string GetCategory() const override
+    {
+        return "modulation";
+    }
 
   private:
     static constexpr double kPi = 3.14159265358979323846;
 
     [[nodiscard]] float GetEffectiveRateHz() const
     {
-      if (mSyncMode.load(std::memory_order_relaxed) != tempo_sync::kSyncModeTempo)
-        return mRateHz.load(std::memory_order_relaxed);
+        if (mSyncMode.load(std::memory_order_relaxed) != tempo_sync::kSyncModeTempo)
+        {
+            return mRateHz.load(std::memory_order_relaxed);
+        }
 
-      const double bpm = mBpm.load(std::memory_order_relaxed);
-      const int division = mSyncDivision.load(std::memory_order_relaxed);
-      return static_cast<float>(std::clamp(tempo_sync::DivisionRateHz(bpm, division), 0.1, 12.0));
+        const double bpm = mBpm.load(std::memory_order_relaxed);
+        const int division = mSyncDivision.load(std::memory_order_relaxed);
+        return static_cast<float>(std::clamp(tempo_sync::DivisionRateHz(bpm, division), 0.1, 12.0));
     }
 
     static float ShapeLfo(float lfo, float shape)
     {
-      const float amount = 1.0f + shape * 8.0f;
-      return std::tanh(lfo * amount) / std::tanh(amount);
+        const float amount = 1.0f + shape * 8.0f;
+        return std::tanh(lfo * amount) / std::tanh(amount);
     }
 
     std::atomic<float> mRateHz{4.0f};
@@ -153,10 +188,10 @@ namespace guitarfx
     std::atomic<int> mSyncDivision{4};
 
     double mPhase = 0.0;
-  };
+};
 
-  inline void RegisterTremoloEffect()
-  {
+inline void RegisterTremoloEffect()
+{
     EffectTypeInfo info;
     info.type = EffectGuids::kTremolo;
     info.aliases = {"tremolo"};
@@ -166,16 +201,14 @@ namespace guitarfx
     info.requiresResource = false;
     info.requiresTempo = true;
     info.parameters = {
-      {"rate", "Rate", 4.0, 0.1, 12.0, "Hz"},
-      {"syncMode", "Sync", 0.0, 0.0, 1.0, "enum", "timing", false, 1.0, tempo_sync::SyncModeLabels()},
-      {"syncDivision", "Division", 4.0, 0.0, 14.0, "enum", "timing", false, 1.0, tempo_sync::DivisionLabels()},
-      {"depth", "Depth", 0.7, 0.0, 1.0, "amount"},
-      {"shape", "Shape", 0.0, 0.0, 1.0, "amount"},
-      {"mix", "Mix", 1.0, 0.0, 1.0, "amount"}
-    };
+        {"rate", "Rate", 4.0, 0.1, 12.0, "Hz"},
+        {"syncMode", "Sync", 0.0, 0.0, 1.0, "enum", "timing", false, 1.0, tempo_sync::SyncModeLabels()},
+        {"syncDivision", "Division", 4.0, 0.0, 14.0, "enum", "timing", false, 1.0, tempo_sync::DivisionLabels()},
+        {"depth", "Depth", 0.7, 0.0, 1.0, "amount"},
+        {"shape", "Shape", 0.0, 0.0, 1.0, "amount"},
+        {"mix", "Mix", 1.0, 0.0, 1.0, "amount"}};
 
-    EffectRegistry::Instance().Register(info.type, info, []()
-      { return std::make_unique<TremoloEffect>(); });
-  }
+    EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<TremoloEffect>(); });
+}
 
 } // namespace guitarfx

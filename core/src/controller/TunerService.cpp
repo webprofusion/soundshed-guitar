@@ -7,8 +7,7 @@
 namespace guitarfx
 {
 
-TunerService::TunerService(SendMessageFn sendMessage)
-    : mSendMessage(std::move(sendMessage))
+TunerService::TunerService(SendMessageFn sendMessage) : mSendMessage(std::move(sendMessage))
 {
 }
 
@@ -24,7 +23,9 @@ void TunerService::PostReading(const Reading& reading)
 void TunerService::OnIdle()
 {
     if (!mPending.load(std::memory_order_acquire))
+    {
         return;
+    }
     mPending.store(false, std::memory_order_release);
 
     Reading reading;
@@ -43,7 +44,9 @@ void TunerService::OnIdle()
     msg["detected"] = reading.detected;
 
     if (mSendMessage)
+    {
         mSendMessage(msg.dump());
+    }
 }
 
 } // namespace guitarfx

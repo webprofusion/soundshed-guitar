@@ -29,14 +29,11 @@
 namespace guitarfx::util
 {
 
-template <typename T>
-class SpscRingBuffer
+template <typename T> class SpscRingBuffer
 {
-public:
+  public:
     explicit SpscRingBuffer(std::size_t capacity)
-        : mCapacity(NextPowerOfTwo(std::max<std::size_t>(capacity, 2)))
-        , mMask(mCapacity - 1)
-        , mBuffer(mCapacity)
+        : mCapacity(NextPowerOfTwo(std::max<std::size_t>(capacity, 2))), mMask(mCapacity - 1), mBuffer(mCapacity)
     {
     }
 
@@ -50,7 +47,9 @@ public:
         const std::size_t freeSpace = (used <= mCapacity) ? (mCapacity - used) : 0;
         const std::size_t n = std::min(count, freeSpace);
         for (std::size_t i = 0; i < n; ++i)
+        {
             mBuffer[(writeIdx + i) & mMask] = data[i];
+        }
         mWriteIndex.store(writeIdx + n, std::memory_order_release);
         return n;
     }
@@ -67,7 +66,9 @@ public:
         const std::size_t available = writeIdx - readIdx;
         const std::size_t n = std::min(count, available);
         for (std::size_t i = 0; i < n; ++i)
+        {
             dest[i] = mBuffer[(readIdx + i) & mMask];
+        }
         mReadIndex.store(readIdx + n, std::memory_order_release);
         return n;
     }
@@ -95,14 +96,19 @@ public:
         return used <= mCapacity ? (mCapacity - used) : 0;
     }
 
-    [[nodiscard]] std::size_t Capacity() const { return mCapacity; }
+    [[nodiscard]] std::size_t Capacity() const
+    {
+        return mCapacity;
+    }
 
-private:
+  private:
     static std::size_t NextPowerOfTwo(std::size_t v)
     {
         std::size_t p = 1;
         while (p < v)
+        {
             p <<= 1;
+        }
         return p;
     }
 
@@ -111,14 +117,18 @@ private:
     {
         const auto gen = mFlushGeneration.load(std::memory_order_acquire);
         if (gen == mLastSeenFlushGeneration)
+        {
             return;
+        }
         mLastSeenFlushGeneration = gen;
         const std::size_t flushTo = mFlushToIndex.load(std::memory_order_relaxed);
         // Never move the read index backwards (a flush requested concurrently
         // with normal draining could otherwise re-expose already-read frames).
         const std::size_t current = mReadIndex.load(std::memory_order_relaxed);
         if (flushTo - current <= mCapacity)
+        {
             mReadIndex.store(flushTo, std::memory_order_release);
+        }
     }
 
     std::size_t mCapacity;

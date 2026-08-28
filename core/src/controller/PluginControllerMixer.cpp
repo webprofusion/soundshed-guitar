@@ -24,10 +24,11 @@ void PluginController::ClearActivePresetMixerState()
 {
     const auto activePresetIds = mPresetMixer.GetActivePresetIds();
     for (const auto& presetId : activePresetIds)
+    {
         mPresetMixer.RemoveActivePreset(presetId);
+    }
     mMixerPresetJsonCache.clear();
 }
-
 
 bool PluginController::AddActivePreset(const Preset& preset, const std::string& presetId, const std::string& name)
 {
@@ -36,8 +37,13 @@ bool PluginController::AddActivePreset(const Preset& preset, const std::string& 
     if (added)
     {
         AttachRuntimeConfigCallbacks(presetId, preset);
-        try { mMixerPresetJsonCache[presetId] = PresetStorage::SerializeToJson(preset); }
-        catch (...) {}
+        try
+        {
+            mMixerPresetJsonCache[presetId] = PresetStorage::SerializeToJson(preset);
+        }
+        catch (...)
+        {
+        }
         UpdateHostLatency();
     }
     return added;
@@ -50,7 +56,8 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
 
     if (!IsFactoryPresetArchiveLoadingEnabled() && mTrackedFactoryArchivePresetIds.contains(resolvedPresetId))
     {
-        ReportErrorToUI("Cannot add preset to mixer", "Factory preset archive loading is disabled in Advanced settings");
+        ReportErrorToUI("Cannot add preset to mixer",
+                        "Factory preset archive loading is disabled in Advanced settings");
         return false;
     }
 
@@ -73,7 +80,9 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
     {
         auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
         if (archiveIt != mFactoryArchivePresets.end())
+        {
             presetOpt = archiveIt->second;
+        }
     }
     if (presetOpt)
     {
@@ -87,11 +96,12 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
 bool PluginController::ApplyActivePresetById(const std::string& presetId)
 {
     if (presetId.empty())
+    {
         return false;
+    }
 
     auto presetOpt = LoadPresetById(presetId);
-    if (!presetOpt && mActivePreset
-        && (mActivePreset->id == presetId || mActivePresetId == presetId))
+    if (!presetOpt && mActivePreset && (mActivePreset->id == presetId || mActivePresetId == presetId))
     {
         // Unsaved/session-only preset that is already loaded — re-apply what we have.
         presetOpt = *mActivePreset;
@@ -105,7 +115,9 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
     Preset preset = std::move(*presetOpt);
     NormalizePresetScenes(preset);
     if (!SetPresetActiveScene(preset, std::string{}, &mActiveSceneId))
+    {
         mActiveSceneId = GetDefaultPresetSceneId(preset);
+    }
 
     mActivePresetId = presetId;
 
@@ -122,7 +134,9 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
         loaded["preset"] = SerializePresetForUi(*mActivePreset);
         nlohmann::json activeIds = nlohmann::json::array();
         for (const auto& id : mPresetMixer.GetActivePresetIds())
+        {
             activeIds.push_back(id);
+        }
         loaded["activePresetIds"] = activeIds;
         loaded["sceneId"] = GetResolvedActiveSceneId();
         SendMessageToUI(loaded.dump());
@@ -151,7 +165,9 @@ void PluginController::RemoveActivePreset(const std::string& presetId)
 void PluginController::FocusMixerPreset(const std::string& presetId)
 {
     if (presetId.empty() || presetId == mActivePresetId)
+    {
         return;
+    }
 
     // Bank the outgoing slot's live plugin state into its cache entry before the editing
     // focus moves; once it moves, this slot's runtime notifications land elsewhere.
@@ -184,15 +200,21 @@ void PluginController::FocusMixerPreset(const std::string& presetId)
     mPendingPresetStateBroadcast = true;
 }
 
-bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, const std::string& presetId, const std::string& name)
+bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, const std::string& presetId,
+                                                       const std::string& name)
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
     const bool replaced = mPresetMixer.ReplaceActivePresetInPlace(preset, presetId, name);
     if (replaced)
     {
         AttachRuntimeConfigCallbacks(presetId, preset);
-        try { mMixerPresetJsonCache[presetId] = PresetStorage::SerializeToJson(preset); }
-        catch (...) {}
+        try
+        {
+            mMixerPresetJsonCache[presetId] = PresetStorage::SerializeToJson(preset);
+        }
+        catch (...)
+        {
+        }
         UpdateHostLatency();
     }
     return replaced;

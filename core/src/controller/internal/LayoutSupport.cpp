@@ -24,23 +24,33 @@ nlohmann::json LoadEffectLayoutsSettings(const FileSystem& fileSystem)
     try
     {
         if (path.empty() || !std::filesystem::exists(path))
+        {
             return root;
+        }
 
         std::ifstream input(path);
         if (!input)
+        {
             return root;
+        }
 
         nlohmann::json parsed;
         input >> parsed;
 
         if (!parsed.is_object())
+        {
             return root;
+        }
 
         if (!parsed.contains("associations") || !parsed["associations"].is_object())
+        {
             parsed["associations"] = nlohmann::json::object();
+        }
 
         if (!parsed.contains("version") || !parsed["version"].is_number())
+        {
             parsed["version"] = 1;
+        }
 
         return parsed;
     }
@@ -54,7 +64,9 @@ void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::jso
 {
     const auto path = ResolveEffectLayoutsSettingsPath(fileSystem);
     if (path.empty())
+    {
         return;
+    }
 
     try
     {
@@ -62,9 +74,13 @@ void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::jso
         [[maybe_unused]] const auto ensured = fileSystem.EnsureDirectory(dir);
         std::ofstream output(path);
         if (output)
+        {
             output << root.dump(2);
+        }
     }
-    catch (...) {}
+    catch (...)
+    {
+    }
 }
 
 std::filesystem::path ResolveLayoutDir(const FileSystem& fileSystem, const std::string& layoutId)

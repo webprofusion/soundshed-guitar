@@ -25,25 +25,25 @@ void Check(bool condition, const std::string& label)
 {
     std::cout << "  " << label << ": " << (condition ? "PASS" : "FAIL") << "\n";
     if (!condition)
+    {
         ++gFailures;
+    }
 }
 
 /// The headline behaviour: a low realtime tier is lifted for the render.
 void TestBoostRaisesLowTier()
 {
     NamQuality userTier;
-    userTier.slimmableSize = 0.25;                 // heavily slimmed for live playing
-    userTier.oversamplingIndex = 0;                // oversampling off
-    userTier.antiAliasPhaseIndex = 0;              // minimum phase
+    userTier.slimmableSize = 0.25;    // heavily slimmed for live playing
+    userTier.oversamplingIndex = 0;   // oversampling off
+    userTier.antiAliasPhaseIndex = 0; // minimum phase
 
     const NamQuality rendered = guitarfx::PluginController::ApplyOfflineRenderBoost(userTier);
 
-    Check(rendered.slimmableSize == guitarfx::kNamSlimmableSizeMax,
-          "offline render uses maximum NAM quality");
+    Check(rendered.slimmableSize == guitarfx::kNamSlimmableSizeMax, "offline render uses maximum NAM quality");
     Check(rendered.oversamplingIndex == guitarfx::PluginController::kOfflineMinimumOversamplingIndex,
           "offline render lifts oversampling to the 2x floor");
-    Check(guitarfx::NamOversamplingFactorFromIndex(rendered.oversamplingIndex) == 2,
-          "the offline floor really is 2x");
+    Check(guitarfx::NamOversamplingFactorFromIndex(rendered.oversamplingIndex) == 2, "the offline floor really is 2x");
 }
 
 /// The boost is a floor, not an override: a user rendering at 8x keeps 8x.
@@ -51,8 +51,8 @@ void TestBoostNeverLowersUserChoice()
 {
     NamQuality userTier;
     userTier.slimmableSize = guitarfx::kNamSlimmableSizeMax;
-    userTier.oversamplingIndex = 3;                // 8x
-    userTier.antiAliasPhaseIndex = 2;              // linear long
+    userTier.oversamplingIndex = 3;   // 8x
+    userTier.antiAliasPhaseIndex = 2; // linear long
 
     const NamQuality rendered = guitarfx::PluginController::ApplyOfflineRenderBoost(userTier);
 

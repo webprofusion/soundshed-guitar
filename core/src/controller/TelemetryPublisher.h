@@ -31,30 +31,38 @@ class MultiPresetMixer;
 
 class TelemetryPublisher
 {
-public:
+  public:
     using SendMessageFn = std::function<void(const std::string&)>;
 
-    TelemetryPublisher(IPluginHost& host,
-                       MultiPresetMixer& presetMixer,
-                       SendMessageFn sendMessage);
+    TelemetryPublisher(IPluginHost& host, MultiPresetMixer& presetMixer, SendMessageFn sendMessage);
 
     /// Drives all three feeds. Called once per idle tick (~60 Hz).
     void OnIdle();
 
     /// Suppresses every feed while false. Set from the UI's visibility message.
-    void SetUiVisible(bool visible) { mUiVisible.store(visible, std::memory_order_release); }
-    [[nodiscard]] bool IsUiVisible() const { return mUiVisible.load(std::memory_order_acquire); }
+    void SetUiVisible(bool visible)
+    {
+        mUiVisible.store(visible, std::memory_order_release);
+    }
+
+    [[nodiscard]] bool IsUiVisible() const
+    {
+        return mUiVisible.load(std::memory_order_acquire);
+    }
 
     /// Forces the next diagnostics send to re-emit the roster even if the node
     /// set is unchanged — what a graph edit or a reloaded UI needs.
-    void MarkRosterDirty() { mRosterDirty = true; }
+    void MarkRosterDirty()
+    {
+        mRosterDirty = true;
+    }
 
     /// Out-of-band requests, for a UI asking for a sample immediately rather
     /// than waiting for the next tick.
     void RequestSignalDiagnostics();
     void RequestPerformanceStats();
 
-private:
+  private:
     /// One node in the diagnostics roster.
     struct RosterEntry
     {

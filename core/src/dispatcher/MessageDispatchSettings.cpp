@@ -5,9 +5,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchSettings(PluginController& c,
-                                         const nlohmann::json& msg,
-                                         const std::string& type)
+bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "setUserInputCalibrationTrainingActive")
     {
@@ -19,32 +17,36 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
     {
         const std::string key = msg.value("key", "");
         if (key.empty() || !msg.contains("value"))
+        {
             return true;
+        }
 
         // A null value means "unset"; anything else is the new value. Both then re-derive
         // whatever the key feeds, so the two cases only differ in this one line.
         if (msg["value"].is_null())
+        {
             c.mAppSettings.erase(key);
+        }
         else
+        {
             c.mAppSettings[key] = msg["value"];
+        }
 
-        if (key == "audio.userInputCalibration.profiles"
-            || key == "audio.userInputCalibration.activeProfileId"
-            || key == "audio.interfaceCalibration.enabled"
-            || key == "audio.interfaceCalibration.referenceDbu")
+        if (key == "audio.userInputCalibration.profiles" || key == "audio.userInputCalibration.activeProfileId" ||
+            key == "audio.interfaceCalibration.enabled" || key == "audio.interfaceCalibration.referenceDbu")
         {
             c.ApplyUserInputCalibrationSettingsFromAppSettings();
         }
-        if (key == "audio.dsp.nominalOperatingLevelDbfs"
-            || key == "audio.dsp.outputProtectionCeilingDbfs")
+        if (key == "audio.dsp.nominalOperatingLevelDbfs" || key == "audio.dsp.outputProtectionCeilingDbfs")
         {
             c.ApplyDspLevelTargetSettingsFromAppSettings();
             c.mPendingStateBroadcast = true;
         }
         if (PluginController::IsNamQualitySettingKey(key))
+        {
             c.ApplyNamQualitySettings();
-        if (key == "audio.nam.interfaceCalibrationLevelDbu"
-            || key == "audio.nam.autoInputCalibration")
+        }
+        if (key == "audio.nam.interfaceCalibrationLevelDbu" || key == "audio.nam.autoInputCalibration")
         {
             c.ApplyNamInterfaceCalibrationFromAppSettings();
         }
@@ -64,17 +66,25 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
             // finds the zoom and window rect. Only ApplyUiSettingsFromAppSettings' fallback
             // reads them back here.
             if (c.mUiSettings.contains("zoom"))
+            {
                 c.mAppSettings["uiZoom"] = c.mUiSettings["zoom"];
+            }
             if (c.mUiSettings.contains("bounds"))
+            {
                 c.mAppSettings["uiBounds"] = c.mUiSettings["bounds"];
+            }
             c.SaveAppSettings();
             c.mHost.NotifyStateChanged();
             return true;
         }
         if (msg.contains("zoom"))
+        {
             c.mAppSettings["uiZoom"] = msg["zoom"];
+        }
         if (msg.contains("theme"))
+        {
             c.mAppSettings["theme"] = msg["theme"];
+        }
         c.SaveAppSettings();
         c.mHost.NotifyStateChanged();
         return true;
@@ -93,9 +103,7 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
     {
         // Gates the periodic telemetry feeds (signal diagnostics, DSP performance). Absent
         // or non-boolean means "assume visible" — never silently stop feeding a live UI.
-        const bool visible = msg.contains("visible") && msg["visible"].is_boolean()
-            ? msg["visible"].get<bool>()
-            : true;
+        const bool visible = msg.contains("visible") && msg["visible"].is_boolean() ? msg["visible"].get<bool>() : true;
         c.mTelemetry->SetUiVisible(visible);
         // Suppressing the feeds is only half of it: with nobody reading them, the metering
         // and per-node timing that fill them are pure cost on the audio thread. Switch the

@@ -1,0 +1,57 @@
+# GuitarFX C++ formatting.
+#
+# Base: Microsoft — it is the stock style whose brace placement (Allman) already
+# matches this codebase. Overrides below were chosen to match what the majority
+# of core/src and core/tests already do, so adopting this was a
+# one-time normalisation rather than a rewrite.
+#
+# SCOPE: this governs core/. The juce/ subtree carries its own .clang-format
+# (JUCE house style, Chromium-based, SortIncludes on) and is deliberately left
+# under it - do not reformat juce/ with this config.
+#
+# NOTE: the "blank line before a control statement" convention documented in
+# .github/copilot-instructions.md CANNOT be expressed here — clang-format has no
+# option that inserts blank lines before if/for/while. It only preserves ones
+# that are already present (MaxEmptyLinesToKeep), which is enough for the
+# convention to survive formatting once written by hand.
+---
+Language: Cpp
+BasedOnStyle: Microsoft
+Standard: c++20
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+NamespaceIndentation: None
+
+# T* p and T& p — the dominant spelling in the tree by ~3.5:1.
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+
+# Vertical breathing room. These are the parts of the readability convention
+# clang-format *can* enforce: one blank line between definitions, and no dead
+# space immediately after an opening brace.
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtStartOfBlock: false
+
+# Include order is hand-maintained (own header first, then project, then std).
+# Sorting risks breaking implicit header dependencies, so leave it alone.
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# Nested #if/#define blocks (e.g. dsp/simd architecture detection) rely on
+# indentation to stay readable; Microsoft base would flatten them to column 0.
+IndentPPDirectives: BeforeHash
+
+# Never split a string literal across lines - it makes grepping for message text
+# and log strings fail.
+BreakStringLiterals: false
+
+# Every if/for/while gets braces, even a single-statement body. This is a code
+# change rather than a whitespace one, so the reformat that turned it on was
+# verified by diffing token streams with braces stripped, plus a full build and
+# test run.
+InsertBraces: true

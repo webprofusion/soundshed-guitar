@@ -32,7 +32,7 @@ namespace guitarfx
 
 class ControlSurfaceQueue
 {
-public:
+  public:
     /// Deferred requests: at most one of each kind, except the bank delta,
     /// which accumulates.
     struct PendingRequests
@@ -70,19 +70,26 @@ public:
     /// call entirely rather than block for it.
     void DrainMidiForApply(const std::function<void(const MidiEvent&)>& apply);
 
-    [[nodiscard]] bool HasMidiToApply() const { return !mMidiToApply.empty(); }
+    [[nodiscard]] bool HasMidiToApply() const
+    {
+        return !mMidiToApply.empty();
+    }
 
     /// Turning the log off discards anything already queued — a panel that was
     /// closed does not want a backlog when it reopens.
     void SetMidiLogEnabled(bool enabled);
-    [[nodiscard]] bool IsMidiLogEnabled() const { return mMidiLogEnabled.load(std::memory_order_relaxed); }
+
+    [[nodiscard]] bool IsMidiLogEnabled() const
+    {
+        return mMidiLogEnabled.load(std::memory_order_relaxed);
+    }
 
     /// Message thread: formats and sends whatever the log collected. Building
     /// JSON here is the whole point of the queue — it must never happen on the
     /// audio thread.
     void PublishMidiLog();
 
-private:
+  private:
     /// Caps chosen so a stalled message thread costs bounded memory. Both
     /// vectors are reserved to these sizes in the constructor.
     static constexpr std::size_t kMaxMidiToApply = 256;

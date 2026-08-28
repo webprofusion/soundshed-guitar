@@ -5,8 +5,7 @@
 namespace guitarfx
 {
 
-bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
-                                                   const nlohmann::json& msg,
+bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c, const nlohmann::json& msg,
                                                    const std::string& type)
 {
     if (type == "addActivePreset")
@@ -34,7 +33,9 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
                 }
             }
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
         // Send updated mixer state (including presetGraphs) back to the UI
         // so it can display the signal chain for the newly-added slot.
         c.BroadcastState();
@@ -44,7 +45,9 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
     {
         std::string presetId = msg.value("presetId", "");
         if (!presetId.empty())
+        {
             c.RemoveActivePreset(presetId);
+        }
         c.BroadcastState();
         return true;
     }
@@ -52,7 +55,9 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c,
     {
         std::string presetId = msg.value("presetId", "");
         if (!presetId.empty())
+        {
             c.FocusMixerPreset(presetId);
+        }
         return true;
     }
     if (type == "setPresetMix")

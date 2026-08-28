@@ -8,13 +8,14 @@ namespace guitarfx::util
 
 std::vector<std::uint8_t> DecodeBase64(const std::string& encoded)
 {
-    static const std::array<int, 256> decodeTable = []()
-    {
+    static const std::array<int, 256> decodeTable = []() {
         std::array<int, 256> table{};
         table.fill(-1);
         const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         for (std::size_t idx = 0; idx < alphabet.size(); ++idx)
+        {
             table[static_cast<unsigned char>(alphabet[idx])] = static_cast<int>(idx);
+        }
         table[static_cast<unsigned char>('-')] = 62;
         table[static_cast<unsigned char>('_')] = 63;
         return table;
@@ -26,10 +27,19 @@ std::vector<std::uint8_t> DecodeBase64(const std::string& encoded)
 
     for (unsigned char c : encoded)
     {
-        if (std::isspace(c)) continue;
-        if (c == '=') break;
+        if (std::isspace(c))
+        {
+            continue;
+        }
+        if (c == '=')
+        {
+            break;
+        }
         const int value = decodeTable[c];
-        if (value < 0) return {};
+        if (value < 0)
+        {
+            return {};
+        }
         accumulator = (accumulator << 6) + value;
         bits += 6;
         if (bits >= 0)

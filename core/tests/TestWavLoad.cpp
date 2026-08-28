@@ -8,7 +8,7 @@
 #include "util/Wav.h"
 
 #ifndef GUITARFX_TEST_RESOURCES_DIR
-#error "GUITARFX_TEST_RESOURCES_DIR must be defined"
+    #error "GUITARFX_TEST_RESOURCES_DIR must be defined"
 #endif
 
 namespace fs = std::filesystem;
@@ -19,11 +19,11 @@ std::vector<std::uint8_t> ReadBinaryFile(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input)
+    {
         return {};
+    }
 
-    return std::vector<std::uint8_t>(
-        std::istreambuf_iterator<char>(input),
-        std::istreambuf_iterator<char>());
+    return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
 bool ReportCheck(bool condition, const std::string& message)
@@ -43,17 +43,23 @@ bool TestDecodeRegressionFixture()
     bool passed = true;
     passed &= ReportCheck(fs::exists(wavPath), "  fixture exists:");
     if (!passed)
+    {
         return false;
+    }
 
     const auto bytes = ReadBinaryFile(wavPath);
     passed &= ReportCheck(!bytes.empty(), "  fixture bytes loaded:");
     if (!passed)
+    {
         return false;
+    }
 
     const auto decoded = guitarfx::util::DecodePcmWav(bytes);
     passed &= ReportCheck(decoded.has_value(), "  DecodePcmWav accepts WAVE_FORMAT_EXTENSIBLE PCM:");
     if (!decoded)
+    {
         return false;
+    }
 
     passed &= ReportCheck(decoded->channels == 2, "  channel count is stereo:");
     passed &= ReportCheck(static_cast<int>(decoded->sampleRate) == 8000, "  sample rate is 8000 Hz:");

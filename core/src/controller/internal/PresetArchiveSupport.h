@@ -26,8 +26,12 @@ namespace guitarfx
 {
 class IPluginHost;
 class FileSystem;
-namespace storage { class JsonStore; }
+
+namespace storage
+{
+class JsonStore;
 }
+} // namespace guitarfx
 
 namespace guitarfx::controller_detail
 {
@@ -81,23 +85,20 @@ struct ParsedFactoryPresetArchive
                                                             const std::string& folderPath);
 
 [[nodiscard]] nlohmann::json BuildFactoryArchiveFolders(
-    const std::string& archiveKey,
-    const nlohmann::json& archivePresetFolders,
+    const std::string& archiveKey, const nlohmann::json& archivePresetFolders,
     const std::unordered_map<std::string, std::string>& presetIdMapping);
 
 [[nodiscard]] bool IsFactoryArchiveTopLevelFolder(const std::string& archiveKey, const nlohmann::json& folder);
 
 /// Merges an archive's folders into the stored folder list, replacing any
 /// previous contribution from the same archive.
-void UpdateFactoryPresetFolders(storage::JsonStore& store,
-                                const std::string& archiveKey,
+void UpdateFactoryPresetFolders(storage::JsonStore& store, const std::string& archiveKey,
                                 const nlohmann::json& archivePresetFolders,
                                 const std::unordered_map<std::string, std::string>& presetIdMapping,
                                 const std::vector<std::string>& removedPresetIds);
 
 [[nodiscard]] nlohmann::json BuildPresetArchiveSessionFolders(
-    const std::string& archiveKey,
-    const nlohmann::json& archivePresetFolders,
+    const std::string& archiveKey, const nlohmann::json& archivePresetFolders,
     const std::unordered_map<std::string, std::string>& presetIdMapping);
 
 // -- Archive contents ------------------------------------------------
@@ -108,17 +109,13 @@ void UpdateFactoryPresetFolders(storage::JsonStore& store,
 /// Parses an archive's manifest and payload. On failure returns nullopt and
 /// sets `error` to a message suitable for the UI.
 [[nodiscard]] std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(
-    const std::filesystem::path& archivePath,
-    const std::vector<std::uint8_t>& zipBytes,
-    std::string& error);
+    const std::filesystem::path& archivePath, const std::vector<std::uint8_t>& zipBytes, std::string& error);
 
 /// Rewrites a graph's resource and blend references onto the archive-scoped ids.
-void RemapPresetGraphResources(SignalGraph& graph,
-                               const std::unordered_map<std::string, std::string>& resourceIdMap,
+void RemapPresetGraphResources(SignalGraph& graph, const std::unordered_map<std::string, std::string>& resourceIdMap,
                                const std::unordered_map<std::string, std::string>& blendIdMap);
 
-void RemapPresetArchiveReferences(Preset& preset,
-                                  const std::unordered_map<std::string, std::string>& resourceIdMap,
+void RemapPresetArchiveReferences(Preset& preset, const std::unordered_map<std::string, std::string>& resourceIdMap,
                                   const std::unordered_map<std::string, std::string>& blendIdMap);
 
 [[nodiscard]] std::filesystem::path ResolveFactoryPresetDirectory(const IPluginHost& host,

@@ -60,6 +60,89 @@
 - Keep DSP real-time safe: avoid allocations and locks in audio thread; prefer preallocation and lock-free patterns.
 - In-app dragging is pointer-driven via core/ui/ts/pointerDrag.ts — do not add `draggable="true"` for it. WebKitGTK (the Linux WebView) never delivers the HTML5 `drop` event to our targets. Native drag-and-drop is only for drags that start outside the WebView, i.e. files from the OS.
 
+### C++ formatting
+- `core/` is formatted by the repo-root `.clang-format` (Microsoft base: Allman
+  braces, 4-space indent, 120 columns, `T* p` / `T& p`, flush namespaces, and
+  braces inserted on every control statement).
+  Run it before committing C++:
+  `clang-format --style=file -i <files>` — the binary ships with Visual Studio at
+  `VC/Tools/Llvm/x64/bin/clang-format.exe`.
+- **`juce/` is out of scope.** That subtree has its own `.clang-format` (JUCE
+  house style, `SortIncludes: true`). Do not reformat it with the root config.
+- Include order is hand-maintained (own header, then project, then std) and
+  sorting is disabled on purpose — reordering can break implicit header
+  dependencies.
+
+### Braces
+Every `if`, `for`, `while` and `do` gets braces, even when the body is a single
+statement. `.clang-format` enforces this (`InsertBraces: true`), so you do not
+have to add them by hand — but write them anyway, because a formatter run is not
+a substitute for reading correct code.
+
+```cpp
+// Good
+if (!node)
+{
+    return;
+}
+
+// Avoid — clang-format will rewrite it, but do not author it this way
+if (!node) return;
+```
+
+### Vertical whitespace
+Three rules, none of which clang-format can enforce. It **preserves** blank
+lines once written (`MaxEmptyLinesToKeep: 1`), so it never undoes your work, but
+it will never insert them for you either. This is on the author and the reviewer.
+
+1. **Before a control statement.** A blank line before `if`, `for`, `while`,
+   `switch` and `do` when ordinary code precedes it.
+2. **After a braced `if`.** A blank line after the closing `}` of an `if`.
+3. **Around an `enum` declaration.** A blank line before and after it.
+
+All three have the same exception: **skip the blank line when it would land at
+the very start or the very end of a scope.** No blank line straight after an
+opening `{`, none straight before a closing `}`.
+
+```cpp
+// Good
+void Configure(Node* node)
+{
+    enum class Phase
+    {
+        Setup,
+        Run
+    };
+
+    int retries = 0;
+
+    if (!node)
+    {
+        return;
+    }
+
+    retries = node->Retries();
+}
+
+// Avoid
+void Configure(Node* node)
+{
+
+    enum class Phase
+    {
+        Setup,
+        Run
+    };
+    int retries = 0;
+    if (!node)
+    {
+        return;
+    }
+    retries = node->Retries();
+
+}
+```
+
 ## Key Files
 - Controller + message routing: core/src/PluginController.cpp (feature groups in
   core/src/controller/PluginController*.cpp; shared helpers in
@@ -85,6 +168,7 @@
 ## Change Checklist
 - Assumptions stated and confirmed where needed.
 - Error paths covered; log actionable messages.
+- C++ under core/ run through clang-format (`--style=file`) before committing.
 - Build or relevant tests executed (note which ones). For UI changes, run npm build.
 - For UI-facing changes, verified in the live running app (see Testing → live UI verification), not just typecheck/build.
 - Backward compatibility considered for presets, resources, and UI messages.

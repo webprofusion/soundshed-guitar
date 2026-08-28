@@ -39,20 +39,25 @@ std::string NormalizeHostedPluginIdentityToken(std::string_view value)
     }
 
     while (!normalized.empty() && normalized.back() == '-')
+    {
         normalized.pop_back();
+    }
 
     return normalized;
 }
 
-std::string BuildHostedPluginStableId(std::string_view manufacturer,
-                                      std::string_view pluginName)
+std::string BuildHostedPluginStableId(std::string_view manufacturer, std::string_view pluginName)
 {
     const std::string normalizedManufacturer = NormalizeHostedPluginIdentityToken(manufacturer);
     const std::string normalizedName = NormalizeHostedPluginIdentityToken(pluginName);
     if (!normalizedManufacturer.empty() && !normalizedName.empty())
+    {
         return normalizedManufacturer + "." + normalizedName;
+    }
     if (!normalizedName.empty())
+    {
         return normalizedName;
+    }
     return normalizedManufacturer;
 }
 
@@ -73,11 +78,17 @@ std::string HostedPluginResourceKey(const GraphNode& node)
     for (const auto& resource : node.resources)
     {
         if (resource.resourceType != "plugin")
+        {
             continue;
+        }
         if (!resource.resourceId.empty())
+        {
             return "res:" + resource.resourceId;
+        }
         if (!resource.filePath.empty())
+        {
             return "path:" + util::PathToUtf8(resource.filePath);
+        }
     }
 
     return {};
@@ -102,9 +113,13 @@ std::string HostedPluginIdentityKey(const GraphNode& node)
 
     // Stable id first: it survives a plugin being reinstalled at a different path.
     if (auto stableId = read(kHostedPluginStableIdConfigKey); !stableId.empty())
+    {
         return "stable:" + stableId;
+    }
     if (auto identifier = read(kHostedPluginIdentifierConfigKey); !identifier.empty())
+    {
         return "id:" + identifier;
+    }
 
     // Nothing authoritative — fall back to the resource, which is all an as-yet-unloaded
     // node has to go on.
@@ -120,7 +135,9 @@ bool HostedPluginIdentityMatches(const GraphNode& from, const GraphNode& to)
     // Both unknown: the node has never resolved a plugin on either side, so there is no
     // evidence of a swap and the state is the best guess available.
     if (fromKey.empty() && toKey.empty())
+    {
         return true;
+    }
 
     return fromKey == toKey;
 }
@@ -136,11 +153,15 @@ void ScrubHostedPluginStateForUi(SignalGraph& graph)
     for (auto& node : graph.nodes)
     {
         if (!IsHostedPluginNode(node))
+        {
             continue;
+        }
 
         const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         if (stateIt == node.config.end())
+        {
             continue;
+        }
 
         node.config[kHostedPluginStateLengthConfigKey] = std::to_string(stateIt->second.size());
         node.config.erase(stateIt);
@@ -152,7 +173,9 @@ nlohmann::json SerializePresetForUi(const Preset& preset)
     Preset uiPreset = preset;
     ScrubHostedPluginStateForUi(uiPreset.graph);
     for (auto& scene : uiPreset.scenes)
+    {
         ScrubHostedPluginStateForUi(scene.graph);
+    }
 
     return nlohmann::json::parse(PresetStorage::SerializeToJson(uiPreset));
 }
@@ -162,12 +185,16 @@ bool GraphHasScrubbedHostedPluginState(const SignalGraph& graph)
     for (const auto& node : graph.nodes)
     {
         if (!IsHostedPluginNode(node))
+        {
             continue;
+        }
 
         const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
         if (lengthIt != node.config.end() && (stateIt == node.config.end() || stateIt->second.empty()))
+        {
             return true;
+        }
     }
 
     return false;
@@ -176,38 +203,40 @@ bool GraphHasScrubbedHostedPluginState(const SignalGraph& graph)
 bool PresetHasScrubbedHostedPluginState(const Preset& preset)
 {
     if (GraphHasScrubbedHostedPluginState(preset.graph))
+    {
         return true;
+    }
 
     for (const auto& scene : preset.scenes)
     {
         if (GraphHasScrubbedHostedPluginState(scene.graph))
+        {
             return true;
+        }
     }
 
     return false;
 }
 
-void AppendHostedPluginGraphSummary(const SignalGraph& graph,
-                                           const std::string& scopeLabel,
-                                           std::vector<std::string>& entries)
+void AppendHostedPluginGraphSummary(const SignalGraph& graph, const std::string& scopeLabel,
+                                    std::vector<std::string>& entries)
 {
     for (const auto& node : graph.nodes)
     {
         if (!IsHostedPluginNode(node))
+        {
             continue;
+        }
 
         const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
-        const std::string stateLength = stateIt != node.config.end()
-            ? std::to_string(stateIt->second.size())
-            : std::string{"0"};
-        const std::string stateHash = stateIt != node.config.end()
-            ? HashStringForLog(stateIt->second)
-            : std::string{"<none>"};
-        const std::string scrubbedLength = lengthIt != node.config.end()
-            ? lengthIt->second
-            : std::string{"0"};
-        entries.push_back(scopeLabel + "/" + node.id + ":state=" + stateLength + ",hash=" + stateHash + ",scrubbed=" + scrubbedLength);
+        const std::string stateLength =
+            stateIt != node.config.end() ? std::to_string(stateIt->second.size()) : std::string{"0"};
+        const std::string stateHash =
+            stateIt != node.config.end() ? HashStringForLog(stateIt->second) : std::string{"<none>"};
+        const std::string scrubbedLength = lengthIt != node.config.end() ? lengthIt->second : std::string{"0"};
+        entries.push_back(scopeLabel + "/" + node.id + ":state=" + stateLength + ",hash=" + stateHash +
+                          ",scrubbed=" + scrubbedLength);
     }
 }
 
@@ -216,16 +245,22 @@ std::string SummarizeHostedPluginState(const Preset& preset)
     std::vector<std::string> entries;
     AppendHostedPluginGraphSummary(preset.graph, "graph", entries);
     for (const auto& scene : preset.scenes)
+    {
         AppendHostedPluginGraphSummary(scene.graph, "scene:" + scene.id, entries);
+    }
 
     if (entries.empty())
+    {
         return "no hosted plugin nodes";
+    }
 
     std::ostringstream summary;
     for (size_t index = 0; index < entries.size(); ++index)
     {
         if (index > 0)
+        {
             summary << "; ";
+        }
         summary << entries[index];
     }
     return summary.str();

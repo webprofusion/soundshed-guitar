@@ -20,7 +20,7 @@ namespace guitarfx
 struct GraphNode;
 struct SignalGraph;
 struct Preset;
-}
+} // namespace guitarfx
 
 namespace guitarfx::controller_detail
 {
@@ -40,8 +40,7 @@ inline constexpr const char* kHostedPluginStateLengthConfigKey = "pluginStateBas
 [[nodiscard]] std::string NormalizeHostedPluginIdentityToken(std::string_view value);
 
 /// Builds the reinstall-surviving id for a plugin from its manufacturer and name.
-[[nodiscard]] std::string BuildHostedPluginStableId(std::string_view manufacturer,
-                                                    std::string_view name);
+[[nodiscard]] std::string BuildHostedPluginStableId(std::string_view manufacturer, std::string_view name);
 
 [[nodiscard]] bool IsHostedPluginNode(const GraphNode& node);
 
@@ -70,8 +69,7 @@ void ScrubHostedPluginStateForUi(SignalGraph& graph);
 
 /// Appends a one-line-per-node description of hosted plugins to `entries`,
 /// for diagnostics logging.
-void AppendHostedPluginGraphSummary(const SignalGraph& graph,
-                                    const std::string& scopeLabel,
+void AppendHostedPluginGraphSummary(const SignalGraph& graph, const std::string& scopeLabel,
                                     std::vector<std::string>& entries);
 
 [[nodiscard]] std::string SummarizeHostedPluginState(const Preset& preset);

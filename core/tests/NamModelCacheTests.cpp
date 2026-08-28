@@ -27,97 +27,110 @@
 namespace fs = std::filesystem;
 namespace cache = guitarfx::nammodelcache;
 
-namespace nam::factory { void ForceFactoryRegistration(); }
+namespace nam::factory
+{
+void ForceFactoryRegistration();
+}
 
 namespace
 {
-  bool gAllPassed = true;
+bool gAllPassed = true;
 
-  void Check(bool condition, const std::string &what)
-  {
+void Check(bool condition, const std::string& what)
+{
     if (!condition)
     {
-      std::cerr << "FAIL: " << what << std::endl;
-      gAllPassed = false;
+        std::cerr << "FAIL: " << what << std::endl;
+        gAllPassed = false;
     }
     else
     {
-      std::cout << "  ok: " << what << std::endl;
+        std::cout << "  ok: " << what << std::endl;
     }
-  }
+}
 
-  /// First .nam file under the test asset tree that this build can actually parse.
-  /// The asset set deliberately spans several architectures and slimmable variants.
-  fs::path FindLoadableModel()
-  {
+/// First .nam file under the test asset tree that this build can actually parse.
+/// The asset set deliberately spans several architectures and slimmable variants.
+fs::path FindLoadableModel()
+{
     const fs::path root = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets" / "amps";
     if (!fs::exists(root))
-      return {};
+    {
+        return {};
+    }
 
     std::vector<fs::path> candidates;
-    for (const auto &entry : fs::recursive_directory_iterator(root))
+    for (const auto& entry : fs::recursive_directory_iterator(root))
     {
-      if (entry.is_regular_file() && entry.path().extension() == ".nam")
-        candidates.push_back(entry.path());
+        if (entry.is_regular_file() && entry.path().extension() == ".nam")
+        {
+            candidates.push_back(entry.path());
+        }
     }
     std::sort(candidates.begin(), candidates.end());
 
-    for (const auto &candidate : candidates)
+    for (const auto& candidate : candidates)
     {
-      try
-      {
-        if (auto model = ::nam::get_dsp(candidate))
-          return candidate;
-      }
-      catch (const std::exception &)
-      {
-        // Architecture not compiled into this build; try the next file.
-      }
+        try
+        {
+            if (auto model = ::nam::get_dsp(candidate))
+            {
+                return candidate;
+            }
+        }
+        catch (const std::exception&)
+        {
+            // Architecture not compiled into this build; try the next file.
+        }
     }
     return {};
-  }
+}
 
-  /// Run a short impulse-plus-tone burst through a model and capture the output, so two
-  /// models can be compared sample-for-sample.
-  std::vector<float> Render(::nam::DSP &model, double sampleRate, int blockSize, int blocks)
-  {
+/// Run a short impulse-plus-tone burst through a model and capture the output, so two
+/// models can be compared sample-for-sample.
+std::vector<float> Render(::nam::DSP& model, double sampleRate, int blockSize, int blocks)
+{
     model.Reset(sampleRate, blockSize);
 
     std::vector<NAM_SAMPLE> input(static_cast<size_t>(blockSize));
     std::vector<NAM_SAMPLE> output(static_cast<size_t>(blockSize));
-    NAM_SAMPLE *inputChannels[1] = {input.data()};
-    NAM_SAMPLE *outputChannels[1] = {output.data()};
+    NAM_SAMPLE* inputChannels[1] = {input.data()};
+    NAM_SAMPLE* outputChannels[1] = {output.data()};
     std::vector<float> captured;
     captured.reserve(static_cast<size_t>(blockSize) * blocks);
 
     int sampleIndex = 0;
     for (int b = 0; b < blocks; ++b)
     {
-      for (int i = 0; i < blockSize; ++i, ++sampleIndex)
-      {
-        const double t = static_cast<double>(sampleIndex) / sampleRate;
-        input[static_cast<size_t>(i)] =
-          static_cast<NAM_SAMPLE>(0.25 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * t));
-      }
-      model.process(inputChannels, outputChannels, blockSize);
-      for (int i = 0; i < blockSize; ++i)
-        captured.push_back(static_cast<float>(output[static_cast<size_t>(i)]));
+        for (int i = 0; i < blockSize; ++i, ++sampleIndex)
+        {
+            const double t = static_cast<double>(sampleIndex) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                static_cast<NAM_SAMPLE>(0.25 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * t));
+        }
+        model.process(inputChannels, outputChannels, blockSize);
+        for (int i = 0; i < blockSize; ++i)
+        {
+            captured.push_back(static_cast<float>(output[static_cast<size_t>(i)]));
+        }
     }
     return captured;
-  }
+}
 
-  void TestCacheHitProducesIdenticalOutput(const fs::path &modelPath)
-  {
+void TestCacheHitProducesIdenticalOutput(const fs::path& modelPath)
+{
     std::cout << "\n[cache hit is bit-identical]\n";
     cache::Clear();
     cache::ResetStats();
 
-    auto first = cache::GetModel(modelPath);   // miss: parses the file
-    auto second = cache::GetModel(modelPath);  // hit: builds from cached dspData
+    auto first = cache::GetModel(modelPath);  // miss: parses the file
+    auto second = cache::GetModel(modelPath); // hit: builds from cached dspData
     Check(first != nullptr, "first load returns a model");
     Check(second != nullptr, "second load returns a model");
     if (!first || !second)
-      return;
+    {
+        return;
+    }
 
     const auto statsAfter = cache::GetStats();
     Check(statsAfter.misses == 1, "first load is a miss");
@@ -135,13 +148,13 @@ namespace
     Check(direct != nullptr, "direct get_dsp still works");
     if (direct)
     {
-      const auto c = Render(*direct, 48000.0, 256, 8);
-      Check(a == c, "cached model matches an uncached get_dsp(path) model");
+        const auto c = Render(*direct, 48000.0, 256, 8);
+        Check(a == c, "cached model matches an uncached get_dsp(path) model");
     }
-  }
+}
 
-  void TestEditedFileInvalidates(const fs::path &modelPath)
-  {
+void TestEditedFileInvalidates(const fs::path& modelPath)
+{
     std::cout << "\n[edited file invalidates its entry]\n";
     cache::Clear();
     cache::ResetStats();
@@ -153,7 +166,9 @@ namespace
     fs::copy_file(modelPath, temp, fs::copy_options::overwrite_existing, ec);
     Check(!ec, "copied model to a temp path");
     if (ec)
-      return;
+    {
+        return;
+    }
 
     auto first = cache::GetModel(temp);
     Check(first != nullptr, "temp copy loads");
@@ -176,19 +191,19 @@ namespace
     Check(after.hits == before.hits, "a changed write time is not served from cache");
 
     fs::remove(temp, ec);
-  }
+}
 
-  void TestMissingFileIsHandled()
-  {
+void TestMissingFileIsHandled()
+{
     std::cout << "\n[missing file]\n";
     const fs::path missing = fs::temp_directory_path() / "soundshed-nam-cache-does-not-exist.nam";
     std::error_code ec;
     fs::remove(missing, ec);
     Check(cache::GetModel(missing) == nullptr, "a missing model returns nullptr rather than throwing");
-  }
+}
 
-  void TestBudgetEvicts(const fs::path &modelPath)
-  {
+void TestBudgetEvicts(const fs::path& modelPath)
+{
     std::cout << "\n[budget eviction]\n";
     cache::Clear();
     cache::ResetStats();
@@ -212,30 +227,27 @@ namespace
 
     cache::SetBudgetBytes(originalBudget);
     Check(cache::GetBudgetBytes() == originalBudget, "budget restores");
-  }
+}
 
-  void TestOversampledRendering(const fs::path &modelPath)
-  {
+void TestOversampledRendering(const fs::path& modelPath)
+{
     std::cout << "\n[time-scaled oversampled rendering]\n";
     auto model = cache::GetModel(modelPath);
     Check(model != nullptr, "model loads for oversampling");
     if (!model)
-      return;
+    {
+        return;
+    }
 
     constexpr double fallbackSampleRate = 48000.0;
     constexpr int blockSize = 64;
-    const double modelSampleRate = guitarfx::ResolveNamModelProcessingSampleRate(
-      model->GetExpectedSampleRate(), fallbackSampleRate);
+    const double modelSampleRate =
+        guitarfx::ResolveNamModelProcessingSampleRate(model->GetExpectedSampleRate(), fallbackSampleRate);
     const double hostSampleRate = modelSampleRate;
 
     guitarfx::NamOversamplingProcessor oversampling;
-    oversampling.Prepare(
-      *model,
-      hostSampleRate,
-      modelSampleRate,
-      blockSize,
-      2,
-      dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR);
+    oversampling.Prepare(*model, hostSampleRate, modelSampleRate, blockSize, 2,
+                         dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR);
 
     Check(oversampling.GetTimeScale() >= 2, "2x request applies a time-scaled NAM rendering rate");
     Check(oversampling.GetRenderingSampleRate() > modelSampleRate, "rendering rate exceeds the model rate");
@@ -246,39 +258,39 @@ namespace
     int sampleIndex = 0;
     for (int block = 0; block < 4; ++block)
     {
-      for (int i = 0; i < blockSize; ++i, ++sampleIndex)
-      {
-        input[static_cast<std::size_t>(i)] = static_cast<NAM_SAMPLE>(
-          0.1 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * sampleIndex / hostSampleRate));
-      }
-      oversampling.Process(*model, input.data(), output.data(), blockSize);
-      finite = finite && std::all_of(output.begin(), output.end(), [](NAM_SAMPLE sample)
-      {
-        return std::isfinite(static_cast<double>(sample));
-      });
+        for (int i = 0; i < blockSize; ++i, ++sampleIndex)
+        {
+            input[static_cast<std::size_t>(i)] = static_cast<NAM_SAMPLE>(
+                0.1 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * sampleIndex / hostSampleRate));
+        }
+        oversampling.Process(*model, input.data(), output.data(), blockSize);
+        finite = finite && std::all_of(output.begin(), output.end(),
+                                       [](NAM_SAMPLE sample) { return std::isfinite(static_cast<double>(sample)); });
     }
     Check(finite, "oversampled real-model output remains finite");
-  }
+}
 } // namespace
 
 int main()
 {
-  nam::factory::ForceFactoryRegistration();
+    nam::factory::ForceFactoryRegistration();
 
-  const fs::path modelPath = FindLoadableModel();
-  if (modelPath.empty())
-  {
-    std::cout << "NamModelCacheTests skipped: no loadable .nam asset found" << std::endl;
-    return 0;
-  }
+    const fs::path modelPath = FindLoadableModel();
+    if (modelPath.empty())
+    {
+        std::cout << "NamModelCacheTests skipped: no loadable .nam asset found" << std::endl;
+        return 0;
+    }
 
-  TestCacheHitProducesIdenticalOutput(modelPath);
-  TestEditedFileInvalidates(modelPath);
-  TestMissingFileIsHandled();
-  TestBudgetEvicts(modelPath);
-  TestOversampledRendering(modelPath);
+    TestCacheHitProducesIdenticalOutput(modelPath);
+    TestEditedFileInvalidates(modelPath);
+    TestMissingFileIsHandled();
+    TestBudgetEvicts(modelPath);
+    TestOversampledRendering(modelPath);
 
-  if (gAllPassed)
-    std::cout << "\nNamModelCacheTests passed" << std::endl;
-  return gAllPassed ? 0 : 1;
+    if (gAllPassed)
+    {
+        std::cout << "\nNamModelCacheTests passed" << std::endl;
+    }
+    return gAllPassed ? 0 : 1;
 }

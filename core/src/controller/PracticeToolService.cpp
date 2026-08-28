@@ -21,8 +21,8 @@ constexpr double kMinSpeed = 0.25;
 constexpr double kMaxSpeed = 2.0;
 constexpr double kMinPitchSemitones = -12.0;
 constexpr double kMaxPitchSemitones = 12.0;
-constexpr double kTonalityLimitHz = 8000.0; // matches PitchShiftEffect's convention
-constexpr double kCrossfadeSeconds = 0.008; // ~8ms, within the plan's 5-10ms guidance
+constexpr double kTonalityLimitHz = 8000.0;                // matches PitchShiftEffect's convention
+constexpr double kCrossfadeSeconds = 0.008;                // ~8ms, within the plan's 5-10ms guidance
 constexpr std::size_t kMaxCrossfadeCapacityFrames = 16384; // safety ceiling (~340ms @ 48kHz)
 constexpr int kRenderChunkOutFrames = 1024;
 constexpr double kHalfPi = 1.5707963267948966;
@@ -30,7 +30,9 @@ constexpr double kHalfPi = 1.5707963267948966;
 [[nodiscard]] std::size_t SecondsToFrames(double seconds, double sampleRate)
 {
     if (!(seconds > 0.0) || sampleRate <= 0.0)
+    {
         return 0;
+    }
     return static_cast<std::size_t>(std::llround(seconds * sampleRate));
 }
 
@@ -46,7 +48,9 @@ constexpr double kHalfPi = 1.5707963267948966;
 {
     nlohmann::json peaks = nlohmann::json::array();
     if (channel.empty() || bins == 0)
+    {
         return peaks;
+    }
 
     const std::size_t totalSamples = channel.size();
     const std::size_t binCount = std::min<std::size_t>(bins, totalSamples);
@@ -60,7 +64,9 @@ constexpr double kHalfPi = 1.5707963267948966;
         {
             const float p = std::fabs(channel[i]);
             if (p > peak)
+            {
                 peak = p;
+            }
         }
         peaks.push_back(static_cast<double>(std::clamp(peak, 0.0f, 1.0f)));
     }
@@ -70,14 +76,10 @@ constexpr double kHalfPi = 1.5707963267948966;
 
 } // namespace
 
-PracticeToolService::PracticeToolService(IPluginHost& host,
-                                         std::mutex& dspMutex,
+PracticeToolService::PracticeToolService(IPluginHost& host, std::mutex& dspMutex,
                                          std::function<void(const std::string&, const std::string&)> reportError,
                                          std::function<void(const std::string&)> sendMessage)
-    : mHost(host)
-    , mDSPMutex(dspMutex)
-    , mReportError(std::move(reportError))
-    , mSendMessage(std::move(sendMessage))
+    : mHost(host), mDSPMutex(dspMutex), mReportError(std::move(reportError)), mSendMessage(std::move(sendMessage))
 {
 }
 
@@ -104,8 +106,8 @@ void PracticeToolService::Prepare(double sampleRate, int maxBlockSize)
         // reconfiguring signalsmith-stretch in place, not by resizing this.
         const double sizingRate = sampleRate > 0.0 ? sampleRate : 48000.0;
         const std::size_t framesForLookahead = static_cast<std::size_t>(sizingRate * 1.5);
-        mOutputRing = std::make_unique<util::SpscRingBuffer<StereoFrame>>(
-            std::max<std::size_t>(framesForLookahead, 4096));
+        mOutputRing =
+            std::make_unique<util::SpscRingBuffer<StereoFrame>>(std::max<std::size_t>(framesForLookahead, 4096));
     }
 
     if (!mRenderThreadRunning.exchange(true, std::memory_order_acq_rel))
@@ -125,7 +127,9 @@ void PracticeToolService::Shutdown()
     mRenderThreadQuit.store(true, std::memory_order_release);
     mRenderWake.notify_all();
     if (mRenderThread.joinable())
+    {
         mRenderThread.join();
+    }
     mRenderThreadRunning.store(false, std::memory_order_release);
 }
 
@@ -141,8 +145,7 @@ void PracticeToolService::LoadFile(const std::string& path)
     LoadDecodedBytes(bytes, path);
 }
 
-void PracticeToolService::LoadFileFromBytes(const std::vector<std::uint8_t>& bytes,
-                                            const std::string& displayName)
+void PracticeToolService::LoadFileFromBytes(const std::vector<std::uint8_t>& bytes, const std::string& displayName)
 {
     if (bytes.empty())
     {
@@ -153,14 +156,13 @@ void PracticeToolService::LoadFileFromBytes(const std::vector<std::uint8_t>& byt
     LoadDecodedBytes(bytes, displayName);
 }
 
-void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& bytes,
-                                           const std::string& displayPath)
+void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& bytes, const std::string& displayPath)
 {
     const auto decoded = util::DecodeAudioBytes(bytes);
     if (!decoded)
     {
         mReportError("Unable to load audio file",
-                    "Unsupported audio format (expected WAV, AIFF, or MP3): " + displayPath);
+                     "Unsupported audio format (expected WAV, AIFF, or MP3): " + displayPath);
         return;
     }
 
@@ -197,7 +199,9 @@ void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& byte
     for (auto& channel : resampled)
     {
         if (channel.size() > minFrames)
+        {
             channel.resize(minFrames);
+        }
     }
 
     // Peaks are built from the pre-move samples (BuildChannelPeaks only
@@ -229,9 +233,8 @@ void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& byte
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 
-    const double durationSec = buffer->sampleRate > 0.0
-        ? static_cast<double>(buffer->totalFrames) / buffer->sampleRate
-        : 0.0;
+    const double durationSec =
+        buffer->sampleRate > 0.0 ? static_cast<double>(buffer->totalFrames) / buffer->sampleRate : 0.0;
 
     nlohmann::json msg;
     msg["type"] = "practiceToolFileLoaded";
@@ -248,7 +251,9 @@ void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& byte
 void PracticeToolService::Play()
 {
     if (!std::atomic_load_explicit(&mBuffer, std::memory_order_acquire))
+    {
         return;
+    }
     mState.store(static_cast<int>(PlaybackState::Playing), std::memory_order_release);
     mRenderWake.notify_all(); // wake the render thread immediately rather than waiting out its poll interval
     SendTransportStateToUI();
@@ -322,7 +327,9 @@ void PracticeToolService::SetLoopRegion(double startSec, double endSec)
         bounds->endFrame = std::min(bounds->endFrame, buffer->totalFrames);
     }
     if (bounds->endFrame <= bounds->startFrame)
+    {
         return; // ignore degenerate/invalid region rather than looping nothing
+    }
 
     std::atomic_store_explicit(&mActiveLoop, std::shared_ptr<ActiveLoopBounds>(bounds), std::memory_order_release);
     mParamGeneration.fetch_add(1, std::memory_order_release);
@@ -355,13 +362,21 @@ bool PracticeToolService::IsLoaded() const
 void PracticeToolService::RenderPostChain(float** outputs, int numSamples)
 {
     if (!outputs || !outputs[0] || !outputs[1] || numSamples <= 0)
+    {
         return;
+    }
     if (mPopScratch.empty()) // Prepare() not called yet
+    {
         return;
+    }
     if (mState.load(std::memory_order_acquire) != static_cast<int>(PlaybackState::Playing))
+    {
         return;
+    }
     if (!mOutputRing)
+    {
         return;
+    }
 
     numSamples = std::min(numSamples, static_cast<int>(mPopScratch.size()));
 
@@ -415,7 +430,9 @@ void PracticeToolService::OnIdle()
     // JSON build + dump + WebView IPC hop, and on the UI side a full
     // renderTransportControls()/renderWaveform() pass.
     if (!endedPending && mState.load(std::memory_order_acquire) != static_cast<int>(PlaybackState::Playing))
+    {
         return;
+    }
 
     SendTransportStateToUI();
 }
@@ -430,9 +447,7 @@ void PracticeToolService::SendTransportStateToUI()
     {
         const double speed = mSpeed.load(std::memory_order_relaxed);
         const double cursorFrames = static_cast<double>(mReadCursorFrames.load(std::memory_order_relaxed));
-        const double aheadOutFrames = mOutputRing
-            ? static_cast<double>(mOutputRing->AvailableToRead())
-            : 0.0;
+        const double aheadOutFrames = mOutputRing ? static_cast<double>(mOutputRing->AvailableToRead()) : 0.0;
         const double aheadInFrames = aheadOutFrames * speed;
         // The render-thread cursor is ahead of what's actually audible by
         // however much lookahead currently sits in the ring; back that out
@@ -459,18 +474,24 @@ void PracticeToolService::SendTransportStateToUI()
             const double loopLen = static_cast<double>(loop->endFrame - loop->startFrame);
             double offsetIntoLoop = std::fmod(cursorFrames - loopStart, loopLen);
             if (offsetIntoLoop < 0.0)
+            {
                 offsetIntoLoop += loopLen;
+            }
             double aheadInLoop = std::fmod(aheadInFrames, loopLen);
             double adjusted = offsetIntoLoop - aheadInLoop;
             if (adjusted < 0.0)
+            {
                 adjusted += loopLen;
+            }
             approxFrames = loopStart + adjusted;
         }
         else
         {
             approxFrames = cursorFrames - aheadInFrames;
             if (approxFrames < 0.0)
+            {
                 approxFrames = 0.0;
+            }
         }
         const double durationSec = static_cast<double>(buffer->totalFrames) / buffer->sampleRate;
         positionSec = std::min(approxFrames / buffer->sampleRate, durationSec);
@@ -494,7 +515,9 @@ void PracticeToolService::ApplyPitchToStretch(double semitones)
 {
     const double sr = mSampleRate.load(std::memory_order_relaxed);
     if (sr <= 0.0)
+    {
         return;
+    }
     const float tonalityLimit = static_cast<float>(kTonalityLimitHz / sr);
     mStretch.setTransposeSemitones(static_cast<float>(semitones), tonalityLimit);
 }
@@ -522,17 +545,21 @@ void PracticeToolService::EnsureFadeCarryCapacity(std::size_t frames)
     }
 }
 
-void PracticeToolService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buffer,
-                                         std::size_t fromFrame, std::size_t toFrame)
+void PracticeToolService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buffer, std::size_t fromFrame,
+                                         std::size_t toFrame)
 {
     mFadeCarryCount = 0;
     mFadeCarryPos = 0;
     if (!buffer || buffer->totalFrames == 0)
+    {
         return;
+    }
 
     const std::size_t total = buffer->totalFrames;
     if (fromFrame >= total || toFrame >= total)
+    {
         return; // nothing to blend at/past end-of-file; caller hard-cuts
+    }
 
     const double sr = mSampleRate.load(std::memory_order_relaxed);
     const std::size_t nominal = static_cast<std::size_t>(std::max(1.0, sr * kCrossfadeSeconds));
@@ -540,7 +567,9 @@ void PracticeToolService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buf
     const std::size_t maxByTo = total - toFrame;
     const std::size_t fadeLen = std::min({nominal, maxByFrom, maxByTo, kMaxCrossfadeCapacityFrames});
     if (fadeLen == 0)
+    {
         return;
+    }
 
     EnsureFadeCarryCapacity(fadeLen);
 
@@ -563,7 +592,9 @@ void PracticeToolService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buf
 std::size_t PracticeToolService::DrainFadeCarry(float* outL, float* outR, std::size_t maxCount)
 {
     if (mFadeCarryPos >= mFadeCarryCount)
+    {
         return 0;
+    }
     const std::size_t remaining = mFadeCarryCount - mFadeCarryPos;
     const std::size_t n = std::min(remaining, maxCount);
     for (std::size_t i = 0; i < n; ++i)
@@ -580,16 +611,19 @@ std::size_t PracticeToolService::DrainFadeCarry(float* outL, float* outR, std::s
     return n;
 }
 
-int PracticeToolService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer,
-                                          float* outL, float* outR,
+int PracticeToolService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer, float* outL, float* outR,
                                           std::size_t& cursor, int numFrames)
 {
     if (!buffer || buffer->totalFrames == 0 || numFrames <= 0)
+    {
         return 0;
+    }
 
     int written = static_cast<int>(DrainFadeCarry(outL, outR, static_cast<std::size_t>(numFrames)));
     if (written >= numFrames)
+    {
         return written;
+    }
 
     const auto& ch0 = buffer->channelSamples[0];
     const auto& ch1 = buffer->channelSamples.size() > 1 ? buffer->channelSamples[1] : buffer->channelSamples[0];
@@ -614,19 +648,23 @@ int PracticeToolService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& bu
     while (written < numFrames)
     {
         if (cursor >= total)
+        {
             break; // absolute end of file — caller pads silence / handles non-looping exhaustion
+        }
 
         if (loopEnabled && cursor >= regionEnd)
         {
             BeginCrossfade(buffer, regionEnd, regionStart);
             cursor = regionStart + mFadeCarryCount; // mFadeCarryCount==0 => hard-cut fallback to regionStart
-            const std::size_t n = DrainFadeCarry(outL + written, outR + written,
-                                                 static_cast<std::size_t>(numFrames - written));
+            const std::size_t n =
+                DrainFadeCarry(outL + written, outR + written, static_cast<std::size_t>(numFrames - written));
             written += static_cast<int>(n);
             continue;
         }
         if (!loopEnabled && cursor >= regionEnd) // regionEnd == total when not looping
+        {
             break;
+        }
 
         const std::size_t boundary = loopEnabled ? regionEnd : total;
         const std::size_t n = std::min(boundary - cursor, static_cast<std::size_t>(numFrames - written));
@@ -645,10 +683,12 @@ int PracticeToolService::ReadSourceWindow(const std::shared_ptr<TrackBuffer>& bu
 void PracticeToolService::RenderChunk(const std::shared_ptr<TrackBuffer>& buffer, std::size_t& cursor)
 {
     const double speed = std::clamp(mSpeed.load(std::memory_order_relaxed), kMinSpeed, kMaxSpeed);
-    const int roomFrames = static_cast<int>(std::min<std::size_t>(mOutputRing->AvailableToWrite(),
-                                                                  static_cast<std::size_t>(kRenderChunkOutFrames)));
+    const int roomFrames = static_cast<int>(
+        std::min<std::size_t>(mOutputRing->AvailableToWrite(), static_cast<std::size_t>(kRenderChunkOutFrames)));
     if (roomFrames <= 0)
+    {
         return;
+    }
 
     const int numOutFrames = roomFrames;
     const int numInFrames = std::max(1, static_cast<int>(std::lround(numOutFrames * speed)));
@@ -701,8 +741,8 @@ void PracticeToolService::RenderThreadLoop()
         {
             std::unique_lock<std::mutex> lock(mRenderWakeMutex);
             mRenderWake.wait_for(lock, std::chrono::milliseconds(200), [this]() {
-                return mRenderThreadQuit.load(std::memory_order_acquire)
-                    || std::atomic_load_explicit(&mBuffer, std::memory_order_acquire) != nullptr;
+                return mRenderThreadQuit.load(std::memory_order_acquire) ||
+                       std::atomic_load_explicit(&mBuffer, std::memory_order_acquire) != nullptr;
             });
             continue;
         }
@@ -742,13 +782,16 @@ void PracticeToolService::RenderThreadLoop()
                 // new one. Reset so the previous track's overlap-add state
                 // can't bleed into the first block of the new one.
                 if (mStretchConfigured)
+                {
                     mStretch.reset();
+                }
             }
             else if (seekReq)
             {
-                const std::size_t target = buffer->totalFrames > 0
-                    ? std::min(SecondsToFrames(seekSecs, buffer->sampleRate), buffer->totalFrames - 1)
-                    : std::size_t{0};
+                const std::size_t target =
+                    buffer->totalFrames > 0
+                        ? std::min(SecondsToFrames(seekSecs, buffer->sampleRate), buffer->totalFrames - 1)
+                        : std::size_t{0};
                 // Crossfade from wherever we were about to play next into the
                 // new target — the same click-free transition a loop wrap
                 // gets, per the plan ("The same crossfade-on-read approach
@@ -763,9 +806,13 @@ void PracticeToolService::RenderThreadLoop()
             // only the stale ring lookahead needs discarding below.
 
             if (buffer->totalFrames > 0)
+            {
                 localCursor = std::min(localCursor, buffer->totalFrames - 1);
+            }
             else
+            {
                 localCursor = 0;
+            }
 
             ApplyPitchToStretch(mPitchSemitones.load(std::memory_order_relaxed));
             mOutputRing->RequestFlush();
@@ -784,9 +831,9 @@ void PracticeToolService::RenderThreadLoop()
         {
             std::unique_lock<std::mutex> lock(mRenderWakeMutex);
             mRenderWake.wait_for(lock, std::chrono::milliseconds(50), [this, gen]() {
-                return mRenderThreadQuit.load(std::memory_order_acquire)
-                    || mState.load(std::memory_order_acquire) == static_cast<int>(PlaybackState::Playing)
-                    || mParamGeneration.load(std::memory_order_acquire) != gen;
+                return mRenderThreadQuit.load(std::memory_order_acquire) ||
+                       mState.load(std::memory_order_acquire) == static_cast<int>(PlaybackState::Playing) ||
+                       mParamGeneration.load(std::memory_order_acquire) != gen;
             });
             continue;
         }
@@ -795,9 +842,9 @@ void PracticeToolService::RenderThreadLoop()
         {
             std::unique_lock<std::mutex> lock(mRenderWakeMutex);
             mRenderWake.wait_for(lock, std::chrono::milliseconds(20), [this, gen]() {
-                return mRenderThreadQuit.load(std::memory_order_acquire)
-                    || mParamGeneration.load(std::memory_order_acquire) != gen
-                    || (mOutputRing && mOutputRing->AvailableToWrite() > 0);
+                return mRenderThreadQuit.load(std::memory_order_acquire) ||
+                       mParamGeneration.load(std::memory_order_acquire) != gen ||
+                       (mOutputRing && mOutputRing->AvailableToWrite() > 0);
             });
             continue;
         }

@@ -23,9 +23,8 @@ namespace
 {
 class TestHost final : public guitarfx::IPluginHost
 {
-public:
-    explicit TestHost(fs::path root)
-        : mRoot(std::move(root))
+  public:
+    explicit TestHost(fs::path root) : mRoot(std::move(root))
     {
     }
 
@@ -36,16 +35,13 @@ public:
         mMessageCv.notify_all();
     }
 
-    void BrowseFileAsync(guitarfx::BrowseFileType,
-                         const std::string&,
+    void BrowseFileAsync(guitarfx::BrowseFileType, const std::string&,
                          std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
     }
 
-    void SaveFileAsync(guitarfx::BrowseFileType,
-                       const std::string&,
-                       const std::string&,
+    void SaveFileAsync(guitarfx::BrowseFileType, const std::string&, const std::string&,
                        std::function<void(const guitarfx::BrowseFileResult&)> callback) override
     {
         callback(guitarfx::BrowseFileResult{});
@@ -81,14 +77,15 @@ public:
     bool WaitForMessageType(const std::string& type, std::chrono::milliseconds timeout)
     {
         std::unique_lock<std::mutex> lock(mMessageMutex);
-        return mMessageCv.wait_for(lock, timeout, [&]()
-        {
+        return mMessageCv.wait_for(lock, timeout, [&]() {
             for (const auto& message : messages)
             {
                 try
                 {
                     if (nlohmann::json::parse(message).value("type", "") == type)
+                    {
                         return true;
+                    }
                 }
                 catch (const std::exception&)
                 {
@@ -107,7 +104,9 @@ public:
             {
                 const auto parsed = nlohmann::json::parse(*it);
                 if (parsed.value("type", "") == type)
+                {
                     return parsed;
+                }
             }
             catch (const std::exception&)
             {
@@ -116,7 +115,7 @@ public:
         return std::nullopt;
     }
 
-private:
+  private:
     fs::path mRoot;
     std::condition_variable mMessageCv;
     std::mutex mMessageMutex;
@@ -131,10 +130,8 @@ void SetSettingsEnvRoot(const fs::path& root)
 #endif
 }
 
-guitarfx::Preset BuildSingleNodeResourcePreset(const std::string& nodeId,
-                                               const std::string& resourceType,
-                                               const std::string& resourceId,
-                                               int resourceSlots = 1)
+guitarfx::Preset BuildSingleNodeResourcePreset(const std::string& nodeId, const std::string& resourceType,
+                                               const std::string& resourceId, int resourceSlots = 1)
 {
     using namespace guitarfx;
 
@@ -305,11 +302,15 @@ bool TestPreviewHonorsResourceIndex()
 
     const auto& activeAfterPreview = controller.GetActivePreset();
     if (!activeAfterPreview)
+    {
         return false;
+    }
 
     const auto* node = activeAfterPreview->graph.FindNode("multi-slot");
     if (!node || node->resources.size() < 2)
+    {
         return false;
+    }
 
     const auto& slot0 = node->resources[0];
     const auto& slot1 = node->resources[1];
@@ -334,11 +335,15 @@ bool TestPreviewHonorsResourceIndex()
 
     const auto& activeAfterCancel = controller.GetActivePreset();
     if (!activeAfterCancel)
+    {
         return false;
+    }
 
     const auto* nodeAfterCancel = activeAfterCancel->graph.FindNode("multi-slot");
     if (!nodeAfterCancel || nodeAfterCancel->resources.size() < 2)
+    {
         return false;
+    }
 
     if (nodeAfterCancel->resources[1].resourceId != "slot-1" || !nodeAfterCancel->resources[1].filePath.empty())
     {
@@ -378,11 +383,15 @@ bool TestLibraryPreviewCloseRevertsOriginal()
 
     const auto& activeAfterPreview = controller.GetActivePreset();
     if (!activeAfterPreview)
+    {
         return false;
+    }
 
     const auto* previewNode = activeAfterPreview->graph.FindNode("amp-node");
     if (!previewNode || previewNode->resources.empty())
+    {
         return false;
+    }
 
     if (previewNode->resources[0].resourceId != "preview-lib-id")
     {
@@ -402,11 +411,15 @@ bool TestLibraryPreviewCloseRevertsOriginal()
 
     const auto& activeAfterRevert = controller.GetActivePreset();
     if (!activeAfterRevert)
+    {
         return false;
+    }
 
     const auto* revertedNode = activeAfterRevert->graph.FindNode("amp-node");
     if (!revertedNode || revertedNode->resources.empty())
+    {
         return false;
+    }
 
     if (revertedNode->resources[0].resourceId != "original-lib-id")
     {
@@ -436,7 +449,9 @@ bool TestPreviewMissingDataNoMutation()
 
     auto preset = BuildSingleNodeResourcePreset("amp-node", "nam", "original-lib-id", 1);
     if (!LoadPreset(controller, preset))
+    {
         return false;
+    }
 
     nlohmann::json preview;
     preview["type"] = "previewRemoteResource";
@@ -450,11 +465,15 @@ bool TestPreviewMissingDataNoMutation()
 
     const auto& active = controller.GetActivePreset();
     if (!active)
+    {
         return false;
+    }
 
     const auto* node = active->graph.FindNode("amp-node");
     if (!node || node->resources.empty())
+    {
         return false;
+    }
 
     return node->resources[0].resourceId == "original-lib-id" && node->resources[0].filePath.empty();
 }
@@ -472,7 +491,9 @@ bool TestPreviewMissingNodeIdNoMutation()
 
     auto preset = BuildSingleNodeResourcePreset("cab-node", "ir", "original-ir-id", 1);
     if (!LoadPreset(controller, preset))
+    {
         return false;
+    }
 
     nlohmann::json preview;
     preview["type"] = "previewRemoteResource";
@@ -485,11 +506,15 @@ bool TestPreviewMissingNodeIdNoMutation()
 
     const auto& active = controller.GetActivePreset();
     if (!active)
+    {
         return false;
+    }
 
     const auto* node = active->graph.FindNode("cab-node");
     if (!node || node->resources.empty())
+    {
         return false;
+    }
 
     return node->resources[0].resourceId == "original-ir-id" && node->resources[0].filePath.empty();
 }
@@ -507,7 +532,9 @@ bool TestCancelWithoutActivePreviewNoMutation()
 
     auto preset = BuildSingleNodeResourcePreset("amp-node", "nam", "steady-lib-id", 1);
     if (!LoadPreset(controller, preset))
+    {
         return false;
+    }
 
     nlohmann::json cancel;
     cancel["type"] = "cancelPreviewResource";
@@ -517,19 +544,22 @@ bool TestCancelWithoutActivePreviewNoMutation()
 
     const auto& active = controller.GetActivePreset();
     if (!active)
+    {
         return false;
+    }
 
     const auto* node = active->graph.FindNode("amp-node");
     if (!node || node->resources.empty())
+    {
         return false;
+    }
 
     return node->resources[0].resourceId == "steady-lib-id" && node->resources[0].filePath.empty();
 }
 
 bool TestFolderEnumerationPreservesUtf8Filename()
 {
-    const fs::path folder = fs::path(GUITARFX_TEST_RESOURCES_DIR)
-        / "assets" / "amps" / "Guitar" / "A2";
+    const fs::path folder = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets" / "amps" / "Guitar" / "A2";
     const std::string expectedName = "A2 -wth space an \xE2\x80\x94 _emdash.nam";
 
     TestHost host(fs::temp_directory_path() / "guitarfx-folder-enumeration-tests");
@@ -548,12 +578,16 @@ bool TestFolderEnumerationPreservesUtf8Filename()
 
     const auto listing = host.LastMessageOfType("resourceFolderListing");
     if (!listing || !listing->contains("files") || !(*listing)["files"].is_array())
+    {
         return false;
+    }
 
     for (const auto& file : (*listing)["files"])
     {
         if (file.value("name", "") == expectedName)
+        {
             return true;
+        }
     }
 
     std::cerr << "UTF-8 NAM filename was not returned by folder enumeration\n";
@@ -569,7 +603,14 @@ int main()
 
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
-        if (ok) ++passed; else ++failed;
+        if (ok)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+        }
     };
 
     run("NAM preview apply/cancel", TestPreviewApplyAndCancel("nam"));

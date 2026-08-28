@@ -49,7 +49,9 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     if (resourceType.empty() || resourceId.empty() || data.empty())
     {
         ReportErrorToUI("Import failed", "Missing resource metadata");
-        SendMessageToUI(nlohmann::json{{"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Missing resource metadata"}}.dump());
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Missing resource metadata"}}
+                            .dump());
         return;
     }
 
@@ -57,26 +59,35 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     const auto sanitizedProvider = util::SanitizePathSegment(provider, true);
     auto targetDir = settingsDir / "resources" / "content" / sanitizedProvider;
     const auto sanitizedSubfolder = util::SanitizeSubfolderPath(subfolder);
-    if (!sanitizedSubfolder.empty()) targetDir /= sanitizedSubfolder;
+    if (!sanitizedSubfolder.empty())
+    {
+        targetDir /= sanitizedSubfolder;
+    }
     [[maybe_unused]] const auto ensuredTargetDir = mFileSystem.EnsureDirectory(targetDir);
 
     std::string resolvedName = fileName.empty() ? resourceId : fileName;
     resolvedName = util::SanitizeFilename(resolvedName);
     if (resolvedName.find('.') == std::string::npos)
+    {
         resolvedName += resourceType == "ir" ? ".wav" : ".nam";
+    }
 
     const auto targetPath = targetDir / resolvedName;
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
     if (bytes.empty())
     {
         ReportErrorToUI("Import failed", "Invalid base64 payload");
-        SendMessageToUI(nlohmann::json{{"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Invalid base64 payload"}}.dump());
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Invalid base64 payload"}}
+                            .dump());
         return;
     }
     if (!WriteFile(targetPath, bytes))
     {
         ReportErrorToUI("Import failed", "Failed to write file");
-        SendMessageToUI(nlohmann::json{{"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Failed to write file"}}.dump());
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceImportFailed"}, {"message", "Import failed"}, {"detail", "Failed to write file"}}
+                            .dump());
         return;
     }
 
@@ -93,9 +104,18 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
         for (const auto& entry : metadataPayload.items())
         {
             const auto& value = entry.value();
-            if (value.is_string()) resource.metadata[entry.key()] = value.get<std::string>();
-            else if (value.is_number()) resource.metadata[entry.key()] = value.dump();
-            else if (value.is_boolean()) resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+            if (value.is_string())
+            {
+                resource.metadata[entry.key()] = value.get<std::string>();
+            }
+            else if (value.is_number())
+            {
+                resource.metadata[entry.key()] = value.dump();
+            }
+            else if (value.is_boolean())
+            {
+                resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+            }
         }
     }
     if (tagsPayload.is_array())
@@ -103,15 +123,21 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
         for (const auto& tagValue : tagsPayload)
         {
             if (!tagValue.is_string())
+            {
                 continue;
+            }
             const auto tag = tagValue.get<std::string>();
             if (!tag.empty())
+            {
                 resource.tags.push_back(tag);
+            }
         }
     }
 
     if (resourceType == "nam")
+    {
         EnrichNamResourceMetadata(resource, targetPath);
+    }
 
     resource.category = ResolveResourceLibraryCategory(resource, resource.category);
 
@@ -130,8 +156,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
 }
 
 std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const nlohmann::json& payload,
-                                                                          std::string& error,
-                                                                          bool allowCreate)
+                                                                          std::string& error, bool allowCreate)
 {
     const std::string resourceType = payload.value("resourceType", "");
     std::string resourceId = payload.value("resourceId", "");
@@ -173,24 +198,38 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             for (const auto& entry : metadataPayload.items())
             {
                 const auto& value = entry.value();
-                if (value.is_string()) resource.metadata[entry.key()] = value.get<std::string>();
-                else if (value.is_number()) resource.metadata[entry.key()] = value.dump();
-                else if (value.is_boolean()) resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+                if (value.is_string())
+                {
+                    resource.metadata[entry.key()] = value.get<std::string>();
+                }
+                else if (value.is_number())
+                {
+                    resource.metadata[entry.key()] = value.dump();
+                }
+                else if (value.is_boolean())
+                {
+                    resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+                }
             }
         }
         resource.metadata["provider"] = kLocalResourceProvider;
     };
 
-    auto getMetadataString = [&](const std::string& key) -> std::string
-    {
+    auto getMetadataString = [&](const std::string& key) -> std::string {
         if (!metadataPayload.is_object() || !metadataPayload.contains(key))
+        {
             return {};
+        }
 
         const auto& value = metadataPayload[key];
         if (value.is_string())
+        {
             return value.get<std::string>();
+        }
         if (value.is_number() || value.is_boolean())
+        {
             return value.dump();
+        }
         return {};
     };
 
@@ -202,14 +241,18 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         // from a preset, a synced library or a hand-edited entry, and path-based
         // de-duplication below only works if every route agrees.
         if (resourceType == "plugin")
+        {
             resolvedPath = guitarfx::pluginpath::ResolvePluginBundlePath(resolvedPath);
+        }
         if (!std::filesystem::exists(resolvedPath))
         {
             error = "Selected file does not exist";
             return std::nullopt;
         }
         if (resolvedHash.empty() && ShouldHashResourceFile(resolvedPath))
+        {
             resolvedHash = mHasher.HashFile(resolvedPath);
+        }
     }
     else
     {
@@ -228,26 +271,44 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             {
                 const std::string segment = util::SanitizePathSegment(part.string(), true);
                 if (segment.empty() || segment == "." || segment == "..")
+                {
                     continue;
+                }
                 sanitizedSubfolder /= segment;
             }
             if (!sanitizedSubfolder.empty())
+            {
                 targetDir /= sanitizedSubfolder;
+            }
         }
         [[maybe_unused]] const auto ensuredDir = mFileSystem.EnsureDirectory(targetDir);
 
         const auto defaultExtensionForType = [&](const std::string& type) {
-            if (type == "ir") return std::string{".wav"};
-            if (type == "wasm") return std::string{".wasm"};
-            if (type == "nam") return std::string{".nam"};
+            if (type == "ir")
+            {
+                return std::string{".wav"};
+            }
+            if (type == "wasm")
+            {
+                return std::string{".wasm"};
+            }
+            if (type == "nam")
+            {
+                return std::string{".nam"};
+            }
             return std::string{".bin"};
         };
 
-        std::string resolvedName = util::SanitizeFilename(fileName.empty() ? (resourceId.empty() ? name : resourceId) : fileName);
+        std::string resolvedName =
+            util::SanitizeFilename(fileName.empty() ? (resourceId.empty() ? name : resourceId) : fileName);
         if (resolvedName.empty())
+        {
             resolvedName = "resource" + defaultExtensionForType(resourceType);
+        }
         if (resolvedName.find('.') == std::string::npos)
+        {
             resolvedName += defaultExtensionForType(resourceType);
+        }
 
         resolvedPath = targetDir / resolvedName;
 
@@ -263,7 +324,8 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                 std::size_t suffix = 2;
                 while (std::filesystem::exists(candidate))
                 {
-                    candidate = targetDir / (stem.string() + "-" + hashSuffix + "-" + std::to_string(suffix++) + ext.string());
+                    candidate =
+                        targetDir / (stem.string() + "-" + hashSuffix + "-" + std::to_string(suffix++) + ext.string());
                 }
                 resolvedPath = candidate;
             }
@@ -275,17 +337,16 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             return std::nullopt;
         }
         if (resolvedHash.empty())
+        {
             resolvedHash = mHasher.HashFile(resolvedPath);
+        }
     }
 
     auto normalizedPathString = resolvedPath.lexically_normal().generic_string();
-    auto existingByPath = std::find_if(allResources.begin(), allResources.end(),
-        [&](const LibraryResource& resource)
-        {
-            return resource.type == resourceType
-                && !resource.filePath.empty()
-                && resource.filePath.lexically_normal().generic_string() == normalizedPathString;
-        });
+    auto existingByPath = std::find_if(allResources.begin(), allResources.end(), [&](const LibraryResource& resource) {
+        return resource.type == resourceType && !resource.filePath.empty() &&
+               resource.filePath.lexically_normal().generic_string() == normalizedPathString;
+    });
 
     if (resourceId.empty() && existingByPath != allResources.end())
     {
@@ -293,20 +354,23 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         const bool sameHash = canCompareHash && existingByPath->hash == resolvedHash;
         const bool unknownHash = !canCompareHash;
         if (sameHash || unknownHash)
+        {
             resourceId = existingByPath->id;
+        }
     }
 
     // For direct local file imports, keep entries path-specific to avoid mutating
     // an existing library item that happens to share a content hash.
     if (resourceId.empty() && !resolvedHash.empty() && !hasFilePath)
     {
-        auto existingByHash = std::find_if(allResources.begin(), allResources.end(),
-            [&](const LibraryResource& resource)
-            {
+        auto existingByHash =
+            std::find_if(allResources.begin(), allResources.end(), [&](const LibraryResource& resource) {
                 return resource.type == resourceType && !resource.hash.empty() && resource.hash == resolvedHash;
             });
         if (existingByHash != allResources.end())
+        {
             resourceId = existingByHash->id;
+        }
     }
 
     std::string normalizedPluginStableId;
@@ -314,35 +378,50 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     {
         std::string pluginName = payloadPluginName;
         if (pluginName.empty())
+        {
             pluginName = getMetadataString(kHostedPluginNameConfigKey);
+        }
         if (pluginName.empty())
+        {
             pluginName = resolvedPath.stem().string();
+        }
 
         std::string pluginManufacturer = payloadPluginManufacturer;
         if (pluginManufacturer.empty())
+        {
             pluginManufacturer = getMetadataString(kHostedPluginManufacturerConfigKey);
+        }
 
         std::string pluginStableId = payloadPluginStableId;
         if (pluginStableId.empty())
+        {
             pluginStableId = getMetadataString(kHostedPluginStableIdConfigKey);
+        }
         if (pluginStableId.empty())
+        {
             pluginStableId = BuildHostedPluginStableId(pluginManufacturer, pluginName);
+        }
         normalizedPluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
 
         if (resourceId.empty() && !normalizedPluginStableId.empty())
         {
-            auto existingByStableId = std::find_if(allResources.begin(), allResources.end(),
-                [&](const LibraryResource& resource)
-                {
+            auto existingByStableId =
+                std::find_if(allResources.begin(), allResources.end(), [&](const LibraryResource& resource) {
                     if (resource.type != "plugin")
+                    {
                         return false;
+                    }
                     const auto it = resource.metadata.find(kHostedPluginStableIdConfigKey);
                     if (it == resource.metadata.end())
+                    {
                         return false;
+                    }
                     return NormalizeHostedPluginIdentityToken(it->second) == normalizedPluginStableId;
                 });
             if (existingByStableId != allResources.end())
+            {
                 resourceId = existingByStableId->id;
+            }
         }
     }
 
@@ -360,22 +439,31 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         }
         else
         {
-            baseId = std::string{kLocalResourceProvider} + ":" + util::SanitizePathSegment(resolvedPath.stem().string(), true);
+            baseId = std::string{kLocalResourceProvider} + ":" +
+                     util::SanitizePathSegment(resolvedPath.stem().string(), true);
         }
         if (baseId == std::string{kLocalResourceProvider} + ":")
+        {
             baseId += "resource";
+        }
         const bool allowHashSuffix = !(resourceType == "plugin" && !normalizedPluginStableId.empty());
         if (allowHashSuffix && !resolvedHash.empty())
+        {
             baseId += ":" + resolvedHash.substr(0, std::min<std::size_t>(12, resolvedHash.size()));
+        }
         resourceId = baseId;
         std::size_t suffix = 2;
         while (mResourceLibrary.HasResource(resourceType, resourceId))
+        {
             resourceId = baseId + "-" + std::to_string(suffix++);
+        }
     }
 
     LibraryResource resource;
     if (auto existing = mResourceLibrary.LookupResource(resourceType, resourceId))
+    {
         resource = *existing;
+    }
     else if (!allowCreate)
     {
         error = "Resource not found";
@@ -384,12 +472,16 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
 
     resource.type = resourceType;
     resource.id = resourceId;
-    const std::string resolvedName = !name.empty() ? name : (!resource.name.empty() ? resource.name : resolvedPath.stem().string());
-    const std::string resolvedCategory = !category.empty() ? category : (!resource.category.empty() ? resource.category : std::string{"Local"});
+    const std::string resolvedName =
+        !name.empty() ? name : (!resource.name.empty() ? resource.name : resolvedPath.stem().string());
+    const std::string resolvedCategory =
+        !category.empty() ? category : (!resource.category.empty() ? resource.category : std::string{"Local"});
     resource.name = resolvedName.empty() ? resourceId : resolvedName;
     resource.category = resolvedCategory;
     if (!description.empty() || resource.description.empty())
+    {
         resource.description = description;
+    }
     resource.filePath = resolvedPath;
     resource.hash = resolvedHash;
     upsertMetadata(resource);
@@ -402,52 +494,67 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             for (const auto& tagValue : tagsPayload)
             {
                 if (!tagValue.is_string())
+                {
                     continue;
+                }
                 const auto tag = tagValue.get<std::string>();
                 if (!tag.empty())
+                {
                     resource.tags.push_back(tag);
+                }
             }
         }
     }
 
     // Extract all NAM metadata fields from the model file header.
     if (resourceType == "nam")
+    {
         EnrichNamResourceMetadata(resource, resolvedPath);
+    }
 
     resource.category = ResolveResourceLibraryCategory(resource, resource.category);
 
     if (resourceType == "plugin")
     {
         const std::string pluginName = payloadPluginName.empty()
-            ? (resource.metadata.contains(kHostedPluginNameConfigKey)
-                   ? resource.metadata[kHostedPluginNameConfigKey]
-                   : resolvedPath.stem().string())
-            : payloadPluginName;
+                                           ? (resource.metadata.contains(kHostedPluginNameConfigKey)
+                                                  ? resource.metadata[kHostedPluginNameConfigKey]
+                                                  : resolvedPath.stem().string())
+                                           : payloadPluginName;
         if (!pluginName.empty())
+        {
             resource.metadata[kHostedPluginNameConfigKey] = pluginName;
+        }
 
         const std::string pluginManufacturer = payloadPluginManufacturer.empty()
-            ? (resource.metadata.contains(kHostedPluginManufacturerConfigKey)
-                   ? resource.metadata[kHostedPluginManufacturerConfigKey]
-                   : std::string{})
-            : payloadPluginManufacturer;
+                                                   ? (resource.metadata.contains(kHostedPluginManufacturerConfigKey)
+                                                          ? resource.metadata[kHostedPluginManufacturerConfigKey]
+                                                          : std::string{})
+                                                   : payloadPluginManufacturer;
         if (!pluginManufacturer.empty())
+        {
             resource.metadata[kHostedPluginManufacturerConfigKey] = pluginManufacturer;
+        }
 
         std::string pluginStableId = payloadPluginStableId.empty()
-            ? (resource.metadata.contains(kHostedPluginStableIdConfigKey)
-                   ? resource.metadata[kHostedPluginStableIdConfigKey]
-                   : BuildHostedPluginStableId(pluginManufacturer, pluginName))
-            : payloadPluginStableId;
+                                         ? (resource.metadata.contains(kHostedPluginStableIdConfigKey)
+                                                ? resource.metadata[kHostedPluginStableIdConfigKey]
+                                                : BuildHostedPluginStableId(pluginManufacturer, pluginName))
+                                         : payloadPluginStableId;
         pluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
         if (!pluginStableId.empty())
+        {
             resource.metadata[kHostedPluginStableIdConfigKey] = pluginStableId;
+        }
 
-        if (!resource.metadata.contains(kHostedPluginFormatConfigKey) || resource.metadata[kHostedPluginFormatConfigKey].empty())
+        if (!resource.metadata.contains(kHostedPluginFormatConfigKey) ||
+            resource.metadata[kHostedPluginFormatConfigKey].empty())
         {
             const std::string inferredFormat = InferPluginFormatFromPath(resolvedPath);
             if (!inferredFormat.empty())
+            {
                 resource.metadata[kHostedPluginFormatConfigKey] = inferredFormat;
+            }
         }
     }
 
@@ -462,7 +569,9 @@ void PluginController::HandleSaveLocalLibraryResourceRequest(const nlohmann::jso
     if (!saved)
     {
         ReportErrorToUI("Local resource save failed", error);
-        SendMessageToUI(nlohmann::json{{"type", "resourceImportFailed"}, {"message", "Local resource save failed"}, {"detail", error}}.dump());
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceImportFailed"}, {"message", "Local resource save failed"}, {"detail", error}}
+                            .dump());
         return;
     }
 
@@ -473,9 +582,13 @@ void PluginController::HandleSaveLocalLibraryResourceRequest(const nlohmann::jso
         updatePayload["resourceType"] = saved->type;
         updatePayload["resourceId"] = saved->id;
         if (payload.contains("resourceIndex"))
+        {
             updatePayload["resourceIndex"] = payload["resourceIndex"];
+        }
         if (payload.contains("exposedResourceId"))
+        {
             updatePayload["exposedResourceId"] = payload["exposedResourceId"];
+        }
         HandleUpdateNodeResourceRequest(updatePayload);
     }
 
@@ -503,7 +616,9 @@ void PluginController::HandleRemoveLocalLibraryResourceRequest(const nlohmann::j
     const std::string filePath = payload.value("filePath", "");
 
     if (resourceType.empty())
+    {
         return;
+    }
 
     // Resolve the id by file path when only a path was provided (e.g. folder browser).
     if (resourceId.empty() && !filePath.empty())
@@ -518,7 +633,9 @@ void PluginController::HandleRemoveLocalLibraryResourceRequest(const nlohmann::j
         for (const auto& resource : mResourceLibrary.GetAllResources())
         {
             if (resource.type != resourceType)
+            {
                 continue;
+            }
             if (normalize(resource.filePath.string()) == target)
             {
                 resourceId = resource.id;
@@ -528,17 +645,16 @@ void PluginController::HandleRemoveLocalLibraryResourceRequest(const nlohmann::j
     }
 
     if (resourceId.empty() || !mResourceLibrary.HasResource(resourceType, resourceId))
+    {
         return;
+    }
 
     RemoveUserLibraryResource(resourceType, resourceId);
     BroadcastState();
     TouchSharedSyncState({"resourceLibrary"});
 
-    SendMessageToUI(nlohmann::json{
-        {"type", "resourceRemoved"},
-        {"resourceType", resourceType},
-        {"id", resourceId}
-    }.dump());
+    SendMessageToUI(
+        nlohmann::json{{"type", "resourceRemoved"}, {"resourceType", resourceType}, {"id", resourceId}}.dump());
 }
 
 void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& payload)
@@ -548,10 +664,8 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     if (resourceType.empty() || resourceId.empty())
     {
         SendMessageToUI(nlohmann::json{
-            {"type", "resourceDeleteFailed"},
-            {"message", "Resource delete failed"},
-            {"detail", "Missing resource id"}
-        }.dump());
+            {"type", "resourceDeleteFailed"}, {"message", "Resource delete failed"}, {"detail", "Missing resource id"}}
+                            .dump());
         return;
     }
 
@@ -559,34 +673,46 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     if (!resourceOpt)
     {
         SendMessageToUI(nlohmann::json{
-            {"type", "resourceDeleteFailed"},
-            {"message", "Resource delete failed"},
-            {"detail", "Resource not found"}
-        }.dump());
+            {"type", "resourceDeleteFailed"}, {"message", "Resource delete failed"}, {"detail", "Resource not found"}}
+                            .dump());
         return;
     }
 
     const auto firstUsingPreset = FindFirstPresetUsingResource(resourceType, resourceId);
     if (firstUsingPreset.has_value())
     {
-        SendMessageToUI(nlohmann::json{
-            {"type", "resourceDeleteFailed"},
-            {"message", "Resource is in use"},
-            {"detail", "Used by preset: " + *firstUsingPreset},
-            {"resourceType", resourceType},
-            {"id", resourceId},
-            {"presetName", *firstUsingPreset}
-        }.dump());
+        SendMessageToUI(nlohmann::json{{"type", "resourceDeleteFailed"},
+                                       {"message", "Resource is in use"},
+                                       {"detail", "Used by preset: " + *firstUsingPreset},
+                                       {"resourceType", resourceType},
+                                       {"id", resourceId},
+                                       {"presetName", *firstUsingPreset}}
+                            .dump());
         return;
     }
 
     const auto settingsResourcesDir = GetEffectiveSettingsDirectory() / "resources" / "content";
     const auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
-        auto nc = std::filesystem::weakly_canonical(candidate, ec); if (ec) return false;
-        auto nb = std::filesystem::weakly_canonical(base, ec); if (ec) return false;
-        auto bi = nb.begin(); auto ci = nc.begin();
-        for (; bi != nb.end(); ++bi, ++ci) { if (ci == nc.end() || *bi != *ci) return false; }
+        auto nc = std::filesystem::weakly_canonical(candidate, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto nb = std::filesystem::weakly_canonical(base, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto bi = nb.begin();
+        auto ci = nc.begin();
+        for (; bi != nb.end(); ++bi, ++ci)
+        {
+            if (ci == nc.end() || *bi != *ci)
+            {
+                return false;
+            }
+        }
         return true;
     };
 
@@ -598,11 +724,10 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
         std::filesystem::remove(resourcePath, ec);
         if (ec)
         {
-            SendMessageToUI(nlohmann::json{
-                {"type", "resourceDeleteFailed"},
-                {"message", "Resource delete failed"},
-                {"detail", "Failed to delete stored file: " + resourcePath.string()}
-            }.dump());
+            SendMessageToUI(nlohmann::json{{"type", "resourceDeleteFailed"},
+                                           {"message", "Resource delete failed"},
+                                           {"detail", "Failed to delete stored file: " + resourcePath.string()}}
+                                .dump());
             return;
         }
     }
@@ -611,59 +736,68 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     BroadcastState();
     TouchSharedSyncState({"resourceLibrary"});
 
-    SendMessageToUI(nlohmann::json{
-        {"type", "resourceRemoved"},
-        {"resourceType", resourceType},
-        {"id", resourceId}
-    }.dump());
+    SendMessageToUI(
+        nlohmann::json{{"type", "resourceRemoved"}, {"resourceType", resourceType}, {"id", resourceId}}.dump());
 }
 
-std::optional<std::string> PluginController::FindFirstPresetUsingResource(const std::string& resourceType, const std::string& resourceId) const
+std::optional<std::string> PluginController::FindFirstPresetUsingResource(const std::string& resourceType,
+                                                                          const std::string& resourceId) const
 {
-    const auto graphUsesResource = [&](const SignalGraph& graph) -> bool
-    {
+    const auto graphUsesResource = [&](const SignalGraph& graph) -> bool {
         for (const auto& node : graph.nodes)
         {
             for (const auto& ref : node.resources)
             {
                 if (ref.IsLibraryRef() && ref.resourceType == resourceType && ref.resourceId == resourceId)
+                {
                     return true;
+                }
             }
         }
         return false;
     };
 
-    const auto presetUsesResource = [&](const Preset& preset) -> bool
-    {
+    const auto presetUsesResource = [&](const Preset& preset) -> bool {
         if (graphUsesResource(preset.graph))
+        {
             return true;
+        }
         for (const auto& scene : preset.scenes)
         {
             if (graphUsesResource(scene.graph))
+            {
                 return true;
+            }
         }
         return false;
     };
 
-    const auto presetDisplayName = [](const Preset& preset) -> std::string
-    {
+    const auto presetDisplayName = [](const Preset& preset) -> std::string {
         if (!preset.name.empty())
+        {
             return preset.name;
+        }
         if (!preset.id.empty())
+        {
             return preset.id;
+        }
         return "Unnamed preset";
     };
 
     // Check active preset
     if (mActivePreset && presetUsesResource(*mActivePreset))
+    {
         return presetDisplayName(*mActivePreset);
+    }
 
     // Consult the cached disk/archive index (built once, reused until presets change).
     EnsureResourceUsageDiskIndex();
     const std::string key = resourceType + ":" + resourceId;
     const auto it = mResourceUsageDiskIndex.find(key);
     if (it != mResourceUsageDiskIndex.end())
+    {
         return it->second;
+    }
 
     return std::nullopt;
 }
@@ -671,24 +805,28 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
 void PluginController::EnsureResourceUsageDiskIndex() const
 {
     if (mResourceUsageDiskIndexValid)
+    {
         return;
+    }
 
     mResourceUsageDiskIndex.clear();
 
-    const auto indexPreset = [this](const Preset& preset)
-    {
+    const auto indexPreset = [this](const Preset& preset) {
         std::string displayName = preset.name;
         if (displayName.empty())
-            displayName = !preset.id.empty() ? preset.id : "Unnamed preset";
-
-        const auto indexGraph = [&](const SignalGraph& graph)
         {
+            displayName = !preset.id.empty() ? preset.id : "Unnamed preset";
+        }
+
+        const auto indexGraph = [&](const SignalGraph& graph) {
             for (const auto& node : graph.nodes)
             {
                 for (const auto& ref : node.resources)
                 {
                     if (!ref.IsLibraryRef())
+                    {
                         continue;
+                    }
                     const std::string key = ref.resourceType + ":" + ref.resourceId;
                     // Preserve first-found priority (user > factory > archive).
                     mResourceUsageDiskIndex.emplace(key, displayName);
@@ -698,12 +836,16 @@ void PluginController::EnsureResourceUsageDiskIndex() const
 
         indexGraph(preset.graph);
         for (const auto& scene : preset.scenes)
+        {
             indexGraph(scene.graph);
+        }
     };
 
     // User presets first so they win ties.
     for (const auto& preset : LoadAllUserPresets())
+    {
         indexPreset(preset);
+    }
 
     // Factory presets next.
     {
@@ -712,13 +854,17 @@ void PluginController::EnsureResourceUsageDiskIndex() const
         {
             const auto factoryPresets = PresetStorage::LoadAllFromDirectory(factoryDir);
             for (const auto& preset : factoryPresets)
+            {
                 indexPreset(preset);
+            }
         }
     }
 
     // Factory archive presets last.
     for (const auto& [_, preset] : mFactoryArchivePresets)
+    {
         indexPreset(preset);
+    }
 
     mResourceUsageDiskIndexValid = true;
 }
@@ -737,22 +883,18 @@ void PluginController::HandleQueryResourceUsageRequest(const nlohmann::json& pay
     if (resourceType.empty() || resourceId.empty())
     {
         SendMessageToUI(nlohmann::json{
-            {"type", "resourceUsageInfo"},
-            {"resourceType", resourceType},
-            {"id", resourceId},
-            {"inUse", false}
-        }.dump());
+            {"type", "resourceUsageInfo"}, {"resourceType", resourceType}, {"id", resourceId}, {"inUse", false}}
+                            .dump());
         return;
     }
 
     const auto presetName = FindFirstPresetUsingResource(resourceType, resourceId);
-    SendMessageToUI(nlohmann::json{
-        {"type", "resourceUsageInfo"},
-        {"resourceType", resourceType},
-        {"id", resourceId},
-        {"inUse", presetName.has_value()},
-        {"presetName", presetName ? *presetName : ""}
-    }.dump());
+    SendMessageToUI(nlohmann::json{{"type", "resourceUsageInfo"},
+                                   {"resourceType", resourceType},
+                                   {"id", resourceId},
+                                   {"inUse", presetName.has_value()},
+                                   {"presetName", presetName ? *presetName : ""}}
+                        .dump());
 }
 
 void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& payload)
@@ -778,18 +920,39 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     const auto settingsResourcesDir = GetEffectiveSettingsDirectory() / "resources" / "content";
     const auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
-        auto nc = std::filesystem::weakly_canonical(candidate, ec); if (ec) return false;
-        auto nb = std::filesystem::weakly_canonical(base, ec); if (ec) return false;
-        auto bi = nb.begin(); auto ci = nc.begin();
-        for (; bi != nb.end(); ++bi, ++ci) { if (ci == nc.end() || *bi != *ci) return false; }
+        auto nc = std::filesystem::weakly_canonical(candidate, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto nb = std::filesystem::weakly_canonical(base, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto bi = nb.begin();
+        auto ci = nc.begin();
+        for (; bi != nb.end(); ++bi, ++ci)
+        {
+            if (ci == nc.end() || *bi != *ci)
+            {
+                return false;
+            }
+        }
         return true;
     };
     if (payload.contains("name"))
+    {
         updated.name = payload.value("name", updated.name);
+    }
     if (payload.contains("category"))
+    {
         updated.category = payload.value("category", updated.category);
+    }
     if (payload.contains("description"))
+    {
         updated.description = payload.value("description", updated.description);
+    }
     if (payload.contains("tags"))
     {
         updated.tags.clear();
@@ -798,10 +961,14 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
             for (const auto& tagValue : payload["tags"])
             {
                 if (!tagValue.is_string())
+                {
                     continue;
+                }
                 const auto tag = tagValue.get<std::string>();
                 if (!tag.empty())
+                {
                     updated.tags.push_back(tag);
+                }
             }
         }
     }
@@ -811,12 +978,24 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         for (const auto& entry : payload["metadata"].items())
         {
             const auto& value = entry.value();
-            if (value.is_string()) updated.metadata[entry.key()] = value.get<std::string>();
-            else if (value.is_number()) updated.metadata[entry.key()] = value.dump();
-            else if (value.is_boolean()) updated.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+            if (value.is_string())
+            {
+                updated.metadata[entry.key()] = value.get<std::string>();
+            }
+            else if (value.is_number())
+            {
+                updated.metadata[entry.key()] = value.dump();
+            }
+            else if (value.is_boolean())
+            {
+                updated.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+            }
         }
         if (!updated.metadata.contains("provider"))
-            updated.metadata["provider"] = existing->metadata.contains("provider") ? existing->metadata.at("provider") : kLocalResourceProvider;
+        {
+            updated.metadata["provider"] =
+                existing->metadata.contains("provider") ? existing->metadata.at("provider") : kLocalResourceProvider;
+        }
     }
 
     if (payload.contains("filePath"))
@@ -828,7 +1007,9 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
             // Same normalization as SaveLocalLibraryResource: a plugin is stored
             // under its bundle root whichever route the path arrived by.
             if (resourceType == "plugin")
+            {
                 updatedPath = guitarfx::pluginpath::ResolvePluginBundlePath(updatedPath);
+            }
             if (!std::filesystem::exists(updatedPath))
             {
                 ReportErrorToUI("Resource update failed", "Selected file does not exist");
@@ -858,9 +1039,18 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         }
 
         const auto extensionForType = [&](const std::string& type) {
-            if (type == "ir") return std::string{".wav"};
-            if (type == "wasm") return std::string{".wasm"};
-            if (type == "nam") return std::string{".nam"};
+            if (type == "ir")
+            {
+                return std::string{".wav"};
+            }
+            if (type == "wasm")
+            {
+                return std::string{".wasm"};
+            }
+            if (type == "nam")
+            {
+                return std::string{".nam"};
+            }
             return std::string{".bin"};
         };
 
@@ -868,9 +1058,13 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         {
             std::string resolvedName = util::SanitizeFilename(fileNameValue);
             if (resolvedName.empty())
+            {
                 resolvedName = "resource" + extensionForType(resourceType);
+            }
             if (resolvedName.find('.') == std::string::npos)
+            {
                 resolvedName += extensionForType(resourceType);
+            }
             targetPath = updated.filePath.parent_path() / resolvedName;
         }
 
@@ -894,13 +1088,20 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     }
 
     if (resourceType == "nam")
+    {
         EnrichNamResourceMetadata(updated, updated.filePath);
+    }
 
     mResourceLibrary.UpdateResource(resourceType, resourceId, updated);
     AppendUserLibraryResource(updated);
     BroadcastState();
     TouchSharedSyncState({"resourceLibrary"});
-    SendMessageToUI(nlohmann::json{{"type", "resourceImported"}, {"resourceType", updated.type}, {"id", updated.id}, {"name", updated.name}, {"filePath", util::PathToUtf8(updated.filePath)}}.dump());
+    SendMessageToUI(nlohmann::json{{"type", "resourceImported"},
+                                   {"resourceType", updated.type},
+                                   {"id", updated.id},
+                                   {"name", updated.name},
+                                   {"filePath", util::PathToUtf8(updated.filePath)}}
+                        .dump());
 }
 
 void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::json& payload)
@@ -908,43 +1109,44 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
     const std::string resourceType = payload.value("resourceType", "");
     const std::string resourceId = payload.value("resourceId", "");
     if (resourceType.empty() || resourceId.empty())
+    {
         return;
+    }
 
     mHost.BrowseFileAsync(ResolveBrowseFileType(resourceType), "Select Local Resource",
-        [this, payload, resourceType, resourceId](const BrowseFileResult& result)
-        {
-            if (!result.success)
-                return;
+                          [this, payload, resourceType, resourceId](const BrowseFileResult& result) {
+                              if (!result.success)
+                              {
+                                  return;
+                              }
 
-            nlohmann::json updatePayload = payload;
-            updatePayload["resourceType"] = resourceType;
-            updatePayload["resourceId"] = resourceId;
-            updatePayload["filePath"] = util::PathToUtf8(result.path);
-            HandleUpdateLibraryResourceRequest(updatePayload);
-        });
+                              nlohmann::json updatePayload = payload;
+                              updatePayload["resourceType"] = resourceType;
+                              updatePayload["resourceId"] = resourceId;
+                              updatePayload["filePath"] = util::PathToUtf8(result.path);
+                              HandleUpdateLibraryResourceRequest(updatePayload);
+                          });
 }
 
 void PluginController::HandleBrowseResourceFolderRequest()
 {
-    mHost.BrowseFileAsync(BrowseFileType::Folder, "Select Resource Folder",
-        [this](const BrowseFileResult& result)
+    mHost.BrowseFileAsync(BrowseFileType::Folder, "Select Resource Folder", [this](const BrowseFileResult& result) {
+        nlohmann::json msg;
+        msg["type"] = "resourceFolderPicked";
+        std::error_code ec;
+        if (result.success && std::filesystem::is_directory(result.path, ec) && !ec)
         {
-            nlohmann::json msg;
-            msg["type"] = "resourceFolderPicked";
-            std::error_code ec;
-            if (result.success && std::filesystem::is_directory(result.path, ec) && !ec)
-            {
-                msg["success"] = true;
-                msg["path"] = result.path.generic_string();
-                const auto leaf = result.path.filename();
-                msg["name"] = leaf.empty() ? result.path.generic_string() : leaf.string();
-            }
-            else
-            {
-                msg["success"] = false;
-            }
-            SendMessageToUI(msg.dump());
-        });
+            msg["success"] = true;
+            msg["path"] = result.path.generic_string();
+            const auto leaf = result.path.filename();
+            msg["name"] = leaf.empty() ? result.path.generic_string() : leaf.string();
+        }
+        else
+        {
+            msg["success"] = false;
+        }
+        SendMessageToUI(msg.dump());
+    });
 }
 
 void PluginController::HandleListResourceFolderRequest(const nlohmann::json& payload)
@@ -966,42 +1168,39 @@ void PluginController::HandleListResourceFolderRequest(const nlohmann::json& pay
 
     try
     {
-        std::thread worker(
-            [this, rawPath, libraryPaths = std::move(libraryPaths), generation]() mutable
+        std::thread worker([this, rawPath, libraryPaths = std::move(libraryPaths), generation]() mutable {
+            const std::string requestedPath = rawPath;
+            try
             {
-                const std::string requestedPath = rawPath;
-                try
+                ScanResourceFolderWorker(std::move(rawPath), std::move(libraryPaths), generation);
+            }
+            catch (const std::exception& exception)
+            {
+                if (mFolderScanGeneration.load(std::memory_order_relaxed) == generation)
                 {
-                    ScanResourceFolderWorker(std::move(rawPath), std::move(libraryPaths), generation);
+                    SendMessageToUI(
+                        nlohmann::json{{"type", "resourceFolderListingFailed"},
+                                       {"path", requestedPath},
+                                       {"message", std::string{"Unable to scan folder: "} + exception.what()}}
+                            .dump());
                 }
-                catch (const std::exception& exception)
+            }
+            catch (...)
+            {
+                if (mFolderScanGeneration.load(std::memory_order_relaxed) == generation)
                 {
-                    if (mFolderScanGeneration.load(std::memory_order_relaxed) == generation)
-                    {
-                        SendMessageToUI(nlohmann::json{
-                            {"type", "resourceFolderListingFailed"},
-                            {"path", requestedPath},
-                            {"message", std::string{"Unable to scan folder: "} + exception.what()}
-                        }.dump());
-                    }
+                    SendMessageToUI(nlohmann::json{{"type", "resourceFolderListingFailed"},
+                                                   {"path", requestedPath},
+                                                   {"message", "Unable to scan folder"}}
+                                        .dump());
                 }
-                catch (...)
-                {
-                    if (mFolderScanGeneration.load(std::memory_order_relaxed) == generation)
-                    {
-                        SendMessageToUI(nlohmann::json{
-                            {"type", "resourceFolderListingFailed"},
-                            {"path", requestedPath},
-                            {"message", "Unable to scan folder"}
-                        }.dump());
-                    }
-                }
-                {
-                    std::lock_guard<std::mutex> lock(mFolderScanDoneMutex);
-                    mActiveFolderScans.fetch_sub(1, std::memory_order_relaxed);
-                }
-                mFolderScanDoneCv.notify_all();
-            });
+            }
+            {
+                std::lock_guard<std::mutex> lock(mFolderScanDoneMutex);
+                mActiveFolderScans.fetch_sub(1, std::memory_order_relaxed);
+            }
+            mFolderScanDoneCv.notify_all();
+        });
         worker.detach();
     }
     catch (const std::exception&)
@@ -1015,7 +1214,9 @@ void PluginController::HandleListResourceFolderRequest(const nlohmann::json& pay
             mActiveFolderScans.fetch_sub(1, std::memory_order_relaxed);
         }
         mFolderScanDoneCv.notify_all();
-        SendMessageToUI(nlohmann::json{{"type", "resourceFolderListingFailed"}, {"path", rawPath}, {"message", "Unable to start folder scan"}}.dump());
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceFolderListingFailed"}, {"path", rawPath}, {"message", "Unable to start folder scan"}}
+                            .dump());
     }
 }
 
@@ -1033,16 +1234,26 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     const auto normalizePath = [](const std::filesystem::path& p) -> std::string {
         std::string s = util::PathToUtf8(p.lexically_normal());
         if (!s.empty() && s.back() == '/')
+        {
             s.pop_back();
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        }
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return s;
     };
 
     const auto classify = [](const std::filesystem::path& p) -> std::string {
         std::string ext = p.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (ext == ".nam") return std::string{"nam"};
-        if (ext == ".wav" || ext == ".ir" || ext == ".aif" || ext == ".aiff" || ext == ".flac") return std::string{"ir"};
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext == ".nam")
+        {
+            return std::string{"nam"};
+        }
+        if (ext == ".wav" || ext == ".ir" || ext == ".aif" || ext == ".aiff" || ext == ".flac")
+        {
+            return std::string{"ir"};
+        }
         return std::string{};
     };
 
@@ -1051,7 +1262,10 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     if (requestPath.empty())
     {
         if (!superseded())
-            SendMessageToUI(nlohmann::json{{"type", "resourceFolderListingFailed"}, {"message", "Missing folder path"}}.dump());
+        {
+            SendMessageToUI(
+                nlohmann::json{{"type", "resourceFolderListingFailed"}, {"message", "Missing folder path"}}.dump());
+        }
         return;
     }
 
@@ -1060,7 +1274,11 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     if (!std::filesystem::is_directory(dir, dec) || dec)
     {
         if (!superseded())
-            SendMessageToUI(nlohmann::json{{"type", "resourceFolderListingFailed"}, {"path", requestPath}, {"message", "Folder not found"}}.dump());
+        {
+            SendMessageToUI(nlohmann::json{
+                {"type", "resourceFolderListingFailed"}, {"path", requestPath}, {"message", "Folder not found"}}
+                                .dump());
+        }
         return;
     }
 
@@ -1070,7 +1288,9 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     for (auto& entry : libraryPaths)
     {
         if (superseded())
+        {
             return;
+        }
         libraryIdByPath.emplace(normalizePath(std::filesystem::path(entry.first)), std::move(entry.second));
     }
 
@@ -1083,7 +1303,12 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     // Parallel list of (filesystem path, resourceType) for the second (metadata)
     // pass. Kept separate so the cheap listing can be sent before any file is
     // opened and parsed.
-    struct PendingFile { std::filesystem::path path; std::string resourceType; };
+    struct PendingFile
+    {
+        std::filesystem::path path;
+        std::string resourceType;
+    };
+
     std::vector<PendingFile> pendingMetadata;
 
     // ── Phase 1: enumerate the immediate level only (no file content reads) ──
@@ -1095,20 +1320,26 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     {
         const std::string detail = ec.message();
         if (!superseded())
+        {
             SendMessageToUI(nlohmann::json{
                 {"type", "resourceFolderListingFailed"},
                 {"path", requestPath},
-                {"message", detail.empty() ? "Unable to read folder" : "Unable to read folder: " + detail}
-            }.dump());
+                {"message", detail.empty() ? "Unable to read folder" : "Unable to read folder: " + detail}}
+                                .dump());
+        }
         return;
     }
 
     for (; it != std::filesystem::directory_iterator(); it.increment(ec))
     {
         if (ec)
+        {
             break; // Stop on iteration error rather than throwing on a detached thread.
+        }
         if (superseded())
+        {
             return;
+        }
 
         const auto& entry = *it;
         if (dirs.size() + files.size() >= kMaxEntries)
@@ -1121,15 +1352,20 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         const auto& entryPath = entry.path();
         if (entry.is_directory(eec) && !eec)
         {
-            dirs.push_back(nlohmann::json{{"name", util::PathToUtf8(entryPath.filename())}, {"path", util::PathToUtf8(entryPath)}});
+            dirs.push_back(nlohmann::json{{"name", util::PathToUtf8(entryPath.filename())},
+                                          {"path", util::PathToUtf8(entryPath)}});
             continue;
         }
         if (!entry.is_regular_file(eec) || eec)
+        {
             continue;
+        }
 
         const std::string resourceType = classify(entryPath);
         if (resourceType.empty())
+        {
             continue;
+        }
 
         nlohmann::json file;
         file["name"] = util::PathToUtf8(entryPath.filename());
@@ -1159,13 +1395,17 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     }
 
     if (superseded())
+    {
         return;
+    }
 
     const auto byName = [](const nlohmann::json& a, const nlohmann::json& b) {
         std::string an = a.value("name", "");
         std::string bn = b.value("name", "");
-        std::transform(an.begin(), an.end(), an.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        std::transform(bn.begin(), bn.end(), bn.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(an.begin(), an.end(), an.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(bn.begin(), bn.end(), bn.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return an < bn;
     };
     std::sort(dirs.begin(), dirs.end(), byName);
@@ -1174,7 +1414,9 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     const auto parentPath = dir.parent_path();
     std::string parentStr;
     if (!parentPath.empty() && parentPath != dir)
+    {
         parentStr = util::PathToUtf8(parentPath);
+    }
 
     const std::string folderPath = util::PathToUtf8(dir);
 
@@ -1190,7 +1432,9 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     msg["metadataPending"] = !pendingMetadata.empty();
 
     if (superseded())
+    {
         return;
+    }
     SendMessageToUI(msg.dump());
 
     // ── Phase 2: parse per-file metadata and stream it back in batches ──
@@ -1202,14 +1446,15 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
 
     const auto flushBatch = [&]() {
         if (batch.empty())
+        {
             return true;
+        }
         if (superseded())
+        {
             return false;
-        SendMessageToUI(nlohmann::json{
-            {"type", "resourceFolderMetadata"},
-            {"path", folderPath},
-            {"items", batch}
-        }.dump());
+        }
+        SendMessageToUI(
+            nlohmann::json{{"type", "resourceFolderMetadata"}, {"path", folderPath}, {"items", batch}}.dump());
         batch = nlohmann::json::array();
         return true;
     };
@@ -1217,7 +1462,9 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     for (const auto& pending : pendingMetadata)
     {
         if (superseded())
+        {
             return;
+        }
 
         nlohmann::json metadata = nlohmann::json::object();
         if (pending.resourceType == "nam")
@@ -1227,7 +1474,9 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
             for (const auto& [key, value] : temp.metadata)
             {
                 if (!value.empty())
+                {
                     metadata[key] = value;
+                }
             }
         }
         else
@@ -1235,9 +1484,18 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
             const util::WavHeaderInfo wav = util::ProbeWavHeader(pending.path);
             if (wav.valid)
             {
-                if (wav.sampleRate > 0) metadata["sampleRate"] = std::to_string(wav.sampleRate);
-                if (wav.channels > 0) metadata["channels"] = std::to_string(wav.channels);
-                if (wav.bitsPerSample > 0) metadata["bitsPerSample"] = std::to_string(wav.bitsPerSample);
+                if (wav.sampleRate > 0)
+                {
+                    metadata["sampleRate"] = std::to_string(wav.sampleRate);
+                }
+                if (wav.channels > 0)
+                {
+                    metadata["channels"] = std::to_string(wav.channels);
+                }
+                if (wav.bitsPerSample > 0)
+                {
+                    metadata["bitsPerSample"] = std::to_string(wav.bitsPerSample);
+                }
                 if (wav.durationSec > 0.0)
                 {
                     char buf[32];
@@ -1247,15 +1505,14 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
             }
         }
 
-        batch.push_back(nlohmann::json{
-            {"path", util::PathToUtf8(pending.path)},
-            {"metadata", std::move(metadata)}
-        });
+        batch.push_back(nlohmann::json{{"path", util::PathToUtf8(pending.path)}, {"metadata", std::move(metadata)}});
 
         if (batch.size() >= kMetadataBatchSize)
         {
             if (!flushBatch())
+            {
                 return;
+            }
         }
     }
 
@@ -1270,7 +1527,8 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
 
     if (data.empty())
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Missing pack data"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Missing pack data"}}.dump());
         return;
     }
 
@@ -1288,7 +1546,8 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
     if (bytes.empty())
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Invalid pack payload"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Invalid pack payload"}}.dump());
         return;
     }
 
@@ -1299,7 +1558,9 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
     auto targetPath = importsDir / fileName;
     if (!WriteFile(targetPath, bytes))
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Failed to write imported pack"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackImportFailed"}, {"message", "Failed to write imported pack"}}
+                .dump());
         return;
     }
 
@@ -1311,7 +1572,8 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
     result["byteSize"] = bytes.size();
     SendMessageToUI(result.dump());
 
-    AppendSessionLog("Imported tone sharing pack " + (packId.empty() ? std::string{"(unknown)"} : packId) + " -> " + targetPath.generic_string());
+    AppendSessionLog("Imported tone sharing pack " + (packId.empty() ? std::string{"(unknown)"} : packId) + " -> " +
+                     targetPath.generic_string());
 }
 
 void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann::json& payload)
@@ -1319,7 +1581,8 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
     const std::string rawPath = payload.value("path", "");
     if (rawPath.empty())
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Missing pack path"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Missing pack path"}}.dump());
         return;
     }
 
@@ -1331,7 +1594,9 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
     const auto canonicalImports = std::filesystem::weakly_canonical(importsDir, ec);
     if (ec)
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Unable to resolve import directory"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Unable to resolve import directory"}}
+                .dump());
         return;
     }
 
@@ -1339,7 +1604,9 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
     const auto canonicalRequested = std::filesystem::weakly_canonical(requestedPath, ec);
     if (ec)
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Imported pack path is invalid"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Imported pack path is invalid"}}
+                .dump());
         return;
     }
 
@@ -1357,7 +1624,9 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     if (!insideImports)
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Refusing to delete outside tone-sharing imports"}}.dump());
+        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"},
+                                       {"message", "Refusing to delete outside tone-sharing imports"}}
+                            .dump());
         return;
     }
 
@@ -1365,7 +1634,9 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
     const bool removed = std::filesystem::remove(canonicalRequested, ec);
     if (ec)
     {
-        SendMessageToUI(nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Failed to delete imported pack"}}.dump());
+        SendMessageToUI(
+            nlohmann::json{{"type", "toneSharingPackDeleteFailed"}, {"message", "Failed to delete imported pack"}}
+                .dump());
         return;
     }
 
@@ -1387,26 +1658,41 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     const std::string data = payload.value("data", "");
     const bool isZip = payload.value("isZip", false);
 
-    if (resourceType.empty() || data.empty()) { AppendSessionLog("Preview failed: missing resource type or data"); return; }
+    if (resourceType.empty() || data.empty())
+    {
+        AppendSessionLog("Preview failed: missing resource type or data");
+        return;
+    }
 
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
-    if (bytes.empty()) { AppendSessionLog("Preview failed: invalid base64 payload"); return; }
+    if (bytes.empty())
+    {
+        AppendSessionLog("Preview failed: invalid base64 payload");
+        return;
+    }
 
     const auto tempDir = mFileSystem.ResolveSettingsDirectory() / "temp";
     [[maybe_unused]] const auto ensuredTempDir = mFileSystem.EnsureDirectory(tempDir);
 
     const std::string extension = resourceType == "ir" ? ".wav" : ".nam";
-    std::filesystem::path tempPath = tempDir / ("preview_" + std::to_string(std::hash<std::string>{}(tempResourceId)) + extension);
+    std::filesystem::path tempPath =
+        tempDir / ("preview_" + std::to_string(std::hash<std::string>{}(tempResourceId)) + extension);
 
     if (isZip)
     {
         if (!ExtractFirstResourceFromZip(bytes, resourceType, tempPath))
-        { AppendSessionLog("Preview failed: no matching resource in zip"); return; }
+        {
+            AppendSessionLog("Preview failed: no matching resource in zip");
+            return;
+        }
     }
     else
     {
         if (!WriteFile(tempPath, bytes))
-        { AppendSessionLog("Preview failed: could not write temp file"); return; }
+        {
+            AppendSessionLog("Preview failed: could not write temp file");
+            return;
+        }
     }
 
     mPreviewState.active = true;
@@ -1419,7 +1705,9 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     {
         GraphNode* node = mActivePreset->graph.FindNode(nodeId);
         if (node && resourceIndex >= 0 && static_cast<size_t>(resourceIndex) < node->resources.size())
+        {
             mPreviewState.originalResourceRef = node->resources[resourceIndex];
+        }
     }
 
     if (!nodeId.empty())
@@ -1438,7 +1726,10 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
 
 void PluginController::HandleCancelPreviewResourceRequest(const nlohmann::json& payload)
 {
-    if (!mPreviewState.active) return;
+    if (!mPreviewState.active)
+    {
+        return;
+    }
 
     const bool restoreOriginal = payload.value("restoreOriginal", true);
 
@@ -1471,22 +1762,42 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     const std::string resourceId = payload.value("resourceId", "");
 
     if (requestId.empty() || resourceType.empty() || resourceId.empty())
-    { SendMessageToUI(nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Missing resource request info"}}.dump()); return; }
+    {
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Missing resource request info"}}
+                            .dump());
+        return;
+    }
 
     ResourceRef ref;
     ref.resourceType = resourceType;
     ref.resourceId = resourceId;
     const auto resolvedPath = ResolveResourceRef(ref);
     if (!resolvedPath || resolvedPath->empty())
-    { SendMessageToUI(nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Resource not found"}}.dump()); return; }
+    {
+        SendMessageToUI(
+            nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Resource not found"}}
+                .dump());
+        return;
+    }
 
     std::ifstream input(*resolvedPath, std::ios::binary);
     if (!input)
-    { SendMessageToUI(nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Failed to open resource file"}}.dump()); return; }
+    {
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Failed to open resource file"}}
+                            .dump());
+        return;
+    }
 
     std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     if (data.empty())
-    { SendMessageToUI(nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Resource file empty"}}.dump()); return; }
+    {
+        SendMessageToUI(
+            nlohmann::json{{"type", "resourceDataFailed"}, {"requestId", requestId}, {"message", "Resource file empty"}}
+                .dump());
+        return;
+    }
 
     const std::string encoded = util::EncodeBase64(data);
     nlohmann::json response;
@@ -1504,22 +1815,37 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
     const std::string dataEncoded = payload.value("data", "");
     const std::string suggestedName = payload.value("fileName", "library.soundshed-library.zip");
     if (dataEncoded.empty())
-    { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Missing export data"}}.dump()); return; }
+    {
+        SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Missing export data"}}.dump());
+        return;
+    }
 
-    mHost.SaveFileAsync(BrowseFileType::ArchiveFile, "Save Library Export", suggestedName,
-        [this, dataEncoded](const BrowseFileResult& result)
-        {
+    mHost.SaveFileAsync(
+        BrowseFileType::ArchiveFile, "Save Library Export", suggestedName,
+        [this, dataEncoded](const BrowseFileResult& result) {
             if (!result.success)
-            { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Save cancelled"}}.dump()); return; }
+            {
+                SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Save cancelled"}}.dump());
+                return;
+            }
 
             const auto decodedBytes = util::DecodeBase64(dataEncoded);
             if (decodedBytes.empty())
-            { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Invalid export data"}}.dump()); return; }
+            {
+                SendMessageToUI(
+                    nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Invalid export data"}}.dump());
+                return;
+            }
 
             if (!WriteFile(result.path, decodedBytes))
-            { SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Failed to save file"}}.dump()); return; }
+            {
+                SendMessageToUI(
+                    nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Failed to save file"}}.dump());
+                return;
+            }
 
-            SendMessageToUI(nlohmann::json{{"type", "libraryExportSaved"}, {"path", result.path.generic_string()}}.dump());
+            SendMessageToUI(
+                nlohmann::json{{"type", "libraryExportSaved"}, {"path", result.path.generic_string()}}.dump());
             AppendSessionLog("Library export saved: " + result.path.generic_string());
         });
 }
@@ -1530,7 +1856,11 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     const std::string scope = payload.value("scope", "all");
     const bool removeFiles = payload.value("removeFiles", true);
 
-    if (!resources.is_array()) { ReportErrorToUI("Cleanup failed", "Missing resource list"); return; }
+    if (!resources.is_array())
+    {
+        ReportErrorToUI("Cleanup failed", "Missing resource list");
+        return;
+    }
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto resourcesDir = settingsDir / "resources";
@@ -1546,7 +1876,10 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
         {
             nlohmann::json parsed;
             input >> parsed;
-            if (parsed.is_array()) entries = std::move(parsed);
+            if (parsed.is_array())
+            {
+                entries = std::move(parsed);
+            }
         }
     }
 
@@ -1556,33 +1889,75 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     for (const auto& e : entries)
     {
         const std::string t = e.value("type", ""), i = e.value("id", "");
-        if (!t.empty() && !i.empty()) userKeys.insert(makeKey(t, i));
+        if (!t.empty() && !i.empty())
+        {
+            userKeys.insert(makeKey(t, i));
+        }
     }
 
     std::unordered_set<std::string> usedKeys;
     auto addUsedPreset = [&](const Preset& preset) {
         for (const auto& n : preset.graph.nodes)
+        {
             for (const auto& r : n.resources)
-                if (r.IsLibraryRef()) usedKeys.insert(makeKey(r.resourceType, r.resourceId));
+            {
+                if (r.IsLibraryRef())
+                {
+                    usedKeys.insert(makeKey(r.resourceType, r.resourceId));
+                }
+            }
+        }
     };
 
-    if (mActivePreset) addUsedPreset(*mActivePreset);
-    for (const auto& p : LoadAllUserPresets()) addUsedPreset(p);
+    if (mActivePreset)
+    {
+        addUsedPreset(*mActivePreset);
+    }
+    for (const auto& p : LoadAllUserPresets())
+    {
+        addUsedPreset(p);
+    }
 
     if (mBlendLibrary.is_array())
+    {
         for (const auto& blend : mBlendLibrary)
+        {
             if (blend.is_object())
+            {
                 for (const auto& mid : blend.value("models", nlohmann::json::array()))
-                    if (mid.is_string()) usedKeys.insert(makeKey("nam", mid.get<std::string>()));
+                {
+                    if (mid.is_string())
+                    {
+                        usedKeys.insert(makeKey("nam", mid.get<std::string>()));
+                    }
+                }
+            }
+        }
+    }
 
     auto isScopeMatch = [&](const std::string& type) { return scope == "all" || scope == type; };
 
     auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
-        auto nc = std::filesystem::weakly_canonical(candidate, ec); if (ec) return false;
-        auto nb = std::filesystem::weakly_canonical(base, ec); if (ec) return false;
-        auto bi = nb.begin(); auto ci = nc.begin();
-        for (; bi != nb.end(); ++bi, ++ci) { if (ci == nc.end() || *bi != *ci) return false; }
+        auto nc = std::filesystem::weakly_canonical(candidate, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto nb = std::filesystem::weakly_canonical(base, ec);
+        if (ec)
+        {
+            return false;
+        }
+        auto bi = nb.begin();
+        auto ci = nc.begin();
+        for (; bi != nb.end(); ++bi, ++ci)
+        {
+            if (ci == nc.end() || *bi != *ci)
+            {
+                return false;
+            }
+        }
         return true;
     };
 
@@ -1591,26 +1966,53 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
 
     for (const auto& item : resources)
     {
-        if (!item.is_object()) { ++skipped; continue; }
+        if (!item.is_object())
+        {
+            ++skipped;
+            continue;
+        }
         const std::string t = item.value("type", ""), i = item.value("id", "");
-        if (t.empty() || i.empty()) { ++skipped; continue; }
-        if (!isScopeMatch(t)) continue;
+        if (t.empty() || i.empty())
+        {
+            ++skipped;
+            continue;
+        }
+        if (!isScopeMatch(t))
+        {
+            continue;
+        }
 
         const std::string key = makeKey(t, i);
-        if (usedKeys.count(key) > 0) { ++skippedUsed; continue; }
+        if (usedKeys.count(key) > 0)
+        {
+            ++skippedUsed;
+            continue;
+        }
 
         const auto resourceOpt = mResourceLibrary.LookupResource(t, i);
-        if (!resourceOpt) { ++skipped; continue; }
+        if (!resourceOpt)
+        {
+            ++skipped;
+            continue;
+        }
 
         const bool isUserEntry = userKeys.count(key) > 0;
-        const bool isUserFile = !resourceOpt->filePath.empty() && isUnderDirectory(resourceOpt->filePath, resourceFilesDir);
-        if (!isUserEntry && !isUserFile) { ++skipped; continue; }
+        const bool isUserFile =
+            !resourceOpt->filePath.empty() && isUnderDirectory(resourceOpt->filePath, resourceFilesDir);
+        if (!isUserEntry && !isUserFile)
+        {
+            ++skipped;
+            continue;
+        }
 
         mResourceLibrary.RemoveResource(t, i);
         removedKeys.push_back(key);
 
         if (removeFiles && isUserFile)
-        { std::error_code ec; std::filesystem::remove(resourceOpt->filePath, ec); }
+        {
+            std::error_code ec;
+            std::filesystem::remove(resourceOpt->filePath, ec);
+        }
     }
 
     if (!removedKeys.empty())
@@ -1620,12 +2022,18 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
         for (const auto& e : entries)
         {
             const std::string t = e.value("type", ""), i = e.value("id", "");
-            if (!t.empty() && !i.empty() && removedSet.count(makeKey(t, i)) > 0) continue;
+            if (!t.empty() && !i.empty() && removedSet.count(makeKey(t, i)) > 0)
+            {
+                continue;
+            }
             updated.push_back(e);
         }
         [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryDir);
         std::ofstream output(libraryFile);
-        if (output) output << updated.dump(2);
+        if (output)
+        {
+            output << updated.dump(2);
+        }
         TouchSharedSyncState({"resourceLibrary"});
     }
 
@@ -1642,9 +2050,13 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
 std::optional<std::filesystem::path> PluginController::ResolveResourceRef(const ResourceRef& ref) const
 {
     if (auto resolved = mResourceLibrary.ResolveResource(ref))
+    {
         return resolved;
+    }
     if (!ref.filePath.empty())
+    {
         return ref.filePath;
+    }
     return std::nullopt;
 }
 
@@ -1687,8 +2099,8 @@ void PluginController::LoadResourceLibraries()
 {
     mResourceLibrary.LoadFromStore(Store(), ResolveResourcesRoot());
     CleanupResourceLibraryCategoriesOnStartup();
-    std::cout << "[Plugin] Loaded " << mResourceLibrary.GetAllResources().size()
-              << " resources from " << ResolveDocumentStorePath().string() << std::endl;
+    std::cout << "[Plugin] Loaded " << mResourceLibrary.GetAllResources().size() << " resources from "
+              << ResolveDocumentStorePath().string() << std::endl;
 }
 
 void PluginController::CleanupResourceLibraryCategoriesOnStartup()
@@ -1700,7 +2112,9 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
     for (auto& resource : allResources)
     {
         if (resource.type != "nam")
+        {
             continue;
+        }
 
         // Backfill NAM metadata before category resolution so older entries can
         // be reassigned from file-native metadata (e.g. gear_type).
@@ -1708,7 +2122,9 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
 
         const std::string resolvedCategory = ResolveResourceLibraryCategory(resource, resource.category);
         if (resolvedCategory.empty() || resolvedCategory == resource.category)
+        {
             continue;
+        }
 
         resource.category = resolvedCategory;
         mResourceLibrary.UpdateResource(resource.type, resource.id, resource);
@@ -1724,7 +2140,9 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
             for (const auto& resource : changed)
             {
                 if (!ResourceLibrary::PutInStore(Store(), resource, resourcesRoot))
+                {
                     return false;
+                }
             }
             return true;
         });

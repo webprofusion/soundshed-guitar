@@ -23,17 +23,21 @@ constexpr const char* kEffectPresetsFile = "effect-presets.json";
 nlohmann::json NormalizeEffectPresetsDocument(nlohmann::json document)
 {
     if (!document.is_object())
+    {
         document = nlohmann::json::object();
+    }
     if (!document.contains("byEffectType") || !document["byEffectType"].is_object())
+    {
         document["byEffectType"] = nlohmann::json::object();
+    }
     return document;
 }
 } // namespace
 
 void PluginController::BroadcastEffectPresets()
 {
-    const auto document = NormalizeEffectPresetsDocument(
-        LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
+    const auto document =
+        NormalizeEffectPresetsDocument(LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
     nlohmann::json msg;
     msg["type"] = "effectPresets";
     msg["byEffectType"] = document["byEffectType"];
@@ -50,18 +54,23 @@ void PluginController::HandleSaveEffectPresetRequest(const nlohmann::json& paylo
     const std::string effectType = payload.value("effectType", "");
     const std::string name = payload.value("name", "");
     if (effectType.empty() || name.empty())
+    {
         return;
+    }
 
     const auto parameters = payload.value("parameters", nlohmann::json::object());
     if (!parameters.is_object())
+    {
         return;
+    }
 
-    auto document = NormalizeEffectPresetsDocument(
-        LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
+    auto document = NormalizeEffectPresetsDocument(LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
 
     auto& presets = document["byEffectType"][effectType];
     if (!presets.is_array())
+    {
         presets = nlohmann::json::array();
+    }
 
     // Saving under an existing name overwrites that entry in place, keeping its id
     // so any UI selection pointing at it stays valid.
@@ -91,31 +100,44 @@ void PluginController::HandleDeleteEffectPresetRequest(const nlohmann::json& pay
     const std::string effectType = payload.value("effectType", "");
     const std::string presetId = payload.value("presetId", "");
     if (effectType.empty() || presetId.empty())
+    {
         return;
+    }
 
-    auto document = NormalizeEffectPresetsDocument(
-        LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
+    auto document = NormalizeEffectPresetsDocument(LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
     if (!document["byEffectType"].contains(effectType))
+    {
         return;
+    }
 
     auto& presets = document["byEffectType"][effectType];
     if (!presets.is_array())
+    {
         return;
+    }
 
     nlohmann::json remaining = nlohmann::json::array();
     for (const auto& entry : presets)
     {
         if (entry.value("id", "") != presetId)
+        {
             remaining.push_back(entry);
+        }
     }
 
     if (remaining.size() == presets.size())
+    {
         return; // nothing matched — leave the file untouched
+    }
 
     if (remaining.empty())
+    {
         document["byEffectType"].erase(effectType);
+    }
     else
+    {
         presets = std::move(remaining);
+    }
 
     SaveUiStorageJson(kEffectPresetsFile, document);
     BroadcastEffectPresets();

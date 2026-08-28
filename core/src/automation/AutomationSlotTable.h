@@ -28,17 +28,15 @@ class EffectRegistry;
 /// Manages all automation slots and the apply dispatch.
 class AutomationSlotTable
 {
-public:
+  public:
     AutomationSlotTable();
     ~AutomationSlotTable();
 
     /// Initialize the param registry with global/setlist entries bound to the mixer.
     /// Called once at startup after the mixer is available.
-    void InitializeRegistry(MultiPresetMixer& mixer,
-                            const std::function<double()>& getSetlistCursor,
+    void InitializeRegistry(MultiPresetMixer& mixer, const std::function<double()>& getSetlistCursor,
                             const std::function<void(int)>& applySetlistPresetByIndex,
-                            const std::function<void(int)>& bankUp,
-                            const std::function<void(int)>& bankDown,
+                            const std::function<void(int)>& bankUp, const std::function<void(int)>& bankDown,
                             const std::function<int()>& getSetlistLength,
                             const std::function<int()>& getSetlistBankBase,
                             const std::function<void(int)>& selectSetlistBank,
@@ -64,14 +62,12 @@ public:
 
     /// Add or update a custom slot. Returns false if slotId is a default or max exceeded.
     bool SetCustomSlot(const std::string& slotId, const std::optional<std::string>& label,
-                       const std::optional<std::string>& address,
-                       const std::optional<std::string>& nodeSelector,
+                       const std::optional<std::string>& address, const std::optional<std::string>& nodeSelector,
                        const std::optional<MidiControlMap>& midiMap,
                        const std::optional<std::vector<KeyboardMap>>& keyMaps);
 
     /// Update a default slot's editable fields (label, midiMap, keyMaps only — not address).
-    bool SetDefaultSlotOverrides(const std::string& slotId,
-                                 const std::optional<std::string>& label,
+    bool SetDefaultSlotOverrides(const std::string& slotId, const std::optional<std::string>& label,
                                  const std::optional<MidiControlMap>& midiMap,
                                  const std::optional<std::vector<KeyboardMap>>& keyMaps);
 
@@ -87,42 +83,60 @@ public:
 
     /// Resolve a node.* address to a concrete nodeId in the active graph.
     /// Returns empty string if no matching enabled node found.
-    [[nodiscard]] std::string ResolveNodeAddress(const std::string& address,
-                                                  const std::string& nodeSelector) const;
+    [[nodiscard]] std::string ResolveNodeAddress(const std::string& address, const std::string& nodeSelector) const;
 
     /// Set the mixer reference for node.* apply dispatch (called at init).
-    void SetMixer(MultiPresetMixer* mixer) { mMixer = mixer; }
+    void SetMixer(MultiPresetMixer* mixer)
+    {
+        mMixer = mixer;
+    }
 
     /// Set the effect registry for node.* type resolution.
-    void SetEffectRegistry(const EffectRegistry* registry) { mEffectRegistry = registry; }
+    void SetEffectRegistry(const EffectRegistry* registry)
+    {
+        mEffectRegistry = registry;
+    }
 
     /// Callback invoked after a node.* param is successfully applied.
     /// Receives (effectType, paramId, nativeValue). Called under mDSPMutex.
     void SetOnNodeParamApplied(std::function<void(const std::string&, const std::string&, double)> cb)
-    { mOnNodeParamApplied = std::move(cb); }
+    {
+        mOnNodeParamApplied = std::move(cb);
+    }
 
     /// Callback invoked after a node.* bypass target is applied.
     /// Receives (effectType, enabled). Called under mDSPMutex.
     void SetOnNodeBypassApplied(std::function<void(const std::string&, bool)> cb)
-    { mOnNodeBypassApplied = std::move(cb); }
+    {
+        mOnNodeBypassApplied = std::move(cb);
+    }
 
     /// Handle a MIDI event — matches against slot MIDI maps and applies.
     void HandleMidi(const MidiEvent& ev);
 
     /// Check if any slot has a MIDI learn armed.
-    [[nodiscard]] bool IsMidiLearnArmed() const { return mMidiLearnSlotId.has_value(); }
+    [[nodiscard]] bool IsMidiLearnArmed() const
+    {
+        return mMidiLearnSlotId.has_value();
+    }
 
     /// Arm MIDI learn for a slot. Empty string disarms.
-    void ArmMidiLearn(const std::string& slotId) { mMidiLearnSlotId = slotId; }
+    void ArmMidiLearn(const std::string& slotId)
+    {
+        mMidiLearnSlotId = slotId;
+    }
 
     /// Get the slot ID currently armed for MIDI learn (empty if none).
-    [[nodiscard]] std::string GetMidiLearnSlot() const { return mMidiLearnSlotId.value_or(""); }
+    [[nodiscard]] std::string GetMidiLearnSlot() const
+    {
+        return mMidiLearnSlotId.value_or("");
+    }
 
     /// Poll for a captured MIDI learn result. Returns nullopt if none captured.
     /// If a result is returned, learn is automatically disarmed.
     [[nodiscard]] std::optional<MidiControlMap> PollMidiLearnCapture();
 
-private:
+  private:
     /// Build default slots from kDefaultSlots.
     void InitializeDefaultSlots();
 

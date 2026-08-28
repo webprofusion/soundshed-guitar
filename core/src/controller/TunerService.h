@@ -22,7 +22,7 @@ namespace guitarfx
 
 class TunerService
 {
-public:
+  public:
     struct Reading
     {
         std::string noteName;
@@ -43,10 +43,17 @@ public:
     /// Message thread: publishes the latest reading, if there is a new one.
     void OnIdle();
 
-    void SetActive(bool active) { mActive.store(active, std::memory_order_release); }
-    [[nodiscard]] bool IsActive() const { return mActive.load(std::memory_order_acquire); }
+    void SetActive(bool active)
+    {
+        mActive.store(active, std::memory_order_release);
+    }
 
-private:
+    [[nodiscard]] bool IsActive() const
+    {
+        return mActive.load(std::memory_order_acquire);
+    }
+
+  private:
     SendMessageFn mSendMessage;
 
     std::atomic<bool> mActive{false};

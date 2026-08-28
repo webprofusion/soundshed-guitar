@@ -20,13 +20,13 @@ namespace guitarfx
 /// A registered automatable parameter.
 struct ParamRegistryEntry
 {
-    std::string address;   ///< e.g. "global.inputTrim"
-    std::string label;     ///< "Input Trim"
-    std::string unit;      ///< "dB", "%", "st", ""
+    std::string address; ///< e.g. "global.inputTrim"
+    std::string label;   ///< "Input Trim"
+    std::string unit;    ///< "dB", "%", "st", ""
     double minValue = 0.0;
     double maxValue = 1.0;
-    bool isStepped = false;  ///< Discrete (setlist preset index)
-    bool isTrigger = false;  ///< Edge-triggered (bank up/down)
+    bool isStepped = false; ///< Discrete (setlist preset index)
+    bool isTrigger = false; ///< Edge-triggered (bank up/down)
 
     /// Read current native-range value.
     std::function<double()> get;
@@ -48,7 +48,7 @@ struct ParamRegistryInfo
 
 class ParamRegistry
 {
-public:
+  public:
     /// Register a static parameter (global.* or setlist.*).
     void Register(const ParamRegistryEntry& entry);
 
@@ -64,7 +64,7 @@ public:
     /// Parse a node.* address into (effectType, paramId). Returns false if not a node address.
     static bool ParseNodeAddress(const std::string& address, std::string& effectType, std::string& paramId);
 
-private:
+  private:
     std::unordered_map<std::string, ParamRegistryEntry> mEntries;
 };
 

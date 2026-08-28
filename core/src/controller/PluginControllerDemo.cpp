@@ -28,17 +28,15 @@ namespace guitarfx
 void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
 {
     if (mDemoPreview)
+    {
         mDemoPreview->StartPreview(payload);
+    }
 }
 
 void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payload)
 {
-    auto sendRenderFailure = [this](const std::string& message)
-    {
-        SendMessageToUI(nlohmann::json{
-            {"type", "demoAudioRenderFailed"},
-            {"message", message}
-        }.dump());
+    auto sendRenderFailure = [this](const std::string& message) {
+        SendMessageToUI(nlohmann::json{{"type", "demoAudioRenderFailed"}, {"message", message}}.dump());
     };
 
     const double hostSampleRate = mHost.GetSampleRate();
@@ -51,13 +49,12 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
     }
 
     const std::string suggestedName = BuildDemoRenderSuggestedFilename(
-        payload.value("suggestedName", std::string("demo-audio.wav")),
-        renderSampleRate);
+        payload.value("suggestedName", std::string("demo-audio.wav")), renderSampleRate);
 
     const nlohmann::json payloadCopy = payload;
-    mHost.SaveFileAsync(BrowseFileType::AudioFile, "Render Demo Audio", suggestedName,
-        [this, payloadCopy, sendRenderFailure, renderSampleRate](const BrowseFileResult& result)
-        {
+    mHost.SaveFileAsync(
+        BrowseFileType::AudioFile, "Render Demo Audio", suggestedName,
+        [this, payloadCopy, sendRenderFailure, renderSampleRate](const BrowseFileResult& result) {
             if (!result.success)
             {
                 sendRenderFailure("Save cancelled");
@@ -104,9 +101,8 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
                     return;
                 }
 
-                std::vector<std::uint8_t> bytes(
-                    (std::istreambuf_iterator<char>(input)),
-                    std::istreambuf_iterator<char>());
+                std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)),
+                                                std::istreambuf_iterator<char>());
                 if (bytes.empty())
                 {
                     sendRenderFailure("Take WAV file is empty");
@@ -114,11 +110,8 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
                 }
 
                 auto prepared = PrepareOfflineRenderBuffer(
-                    bytes,
-                    renderSampleRate,
-                    takeId,
-                    payloadCopy.value("title", take->value("title", std::string("Riff Take"))),
-                    error);
+                    bytes, renderSampleRate, takeId,
+                    payloadCopy.value("title", take->value("title", std::string("Riff Take"))), error);
                 if (!prepared)
                 {
                     sendRenderFailure(error.empty() ? "Unable to prepare riff take audio" : error);
@@ -150,11 +143,8 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
                 }
 
                 auto prepared = PrepareOfflineRenderBuffer(
-                    decodedBytes,
-                    renderSampleRate,
-                    audioIter->value("id", std::string{}),
-                    payloadCopy.value("title", audioIter->value("title", std::string("Demo Audio"))),
-                    error);
+                    decodedBytes, renderSampleRate, audioIter->value("id", std::string{}),
+                    payloadCopy.value("title", audioIter->value("title", std::string("Demo Audio"))), error);
                 if (!prepared)
                 {
                     sendRenderFailure(error.empty() ? "Unable to prepare demo audio" : error);
@@ -164,7 +154,9 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
             }
 
             if (mDemoPreview)
+            {
                 mDemoPreview->StopPreview();
+            }
             {
                 std::lock_guard<std::mutex> lock(mDSPMutex);
                 DeactivateRiffGuidance(true);
@@ -172,41 +164,36 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
 
             std::vector<float> renderedLeft;
             std::vector<float> renderedRight;
-            if (!RenderBufferThroughMixer(
-                    mPresetMixer,
-                    mDSPMutex,
-                    source,
-                    hostBlockSize,
-                    restoreSampleRate,
-                    hostBlockSize,
-                    GetEffectiveTempoBpm(),
-                    renderedLeft,
-                    renderedRight))
+            if (!RenderBufferThroughMixer(mPresetMixer, mDSPMutex, source, hostBlockSize, restoreSampleRate,
+                                          hostBlockSize, GetEffectiveTempoBpm(), renderedLeft, renderedRight))
             {
                 sendRenderFailure("Failed to render demo audio");
                 return;
             }
 
-            if (!util::WriteStereo16BitWav(result.path, renderedLeft, renderedRight, static_cast<int>(std::llround(renderSampleRate))))
+            if (!util::WriteStereo16BitWav(result.path, renderedLeft, renderedRight,
+                                           static_cast<int>(std::llround(renderSampleRate))))
             {
                 sendRenderFailure("Failed to write WAV file");
                 return;
             }
 
-            SendMessageToUI(nlohmann::json{
-                {"type", "demoAudioRenderSaved"},
-                {"path", result.path.generic_string()},
-                {"sampleRate", renderSampleRate}
-            }.dump());
-            AppendSessionLog("Demo audio rendered (" + std::to_string(static_cast<int>(std::llround(renderSampleRate)))
-                + " Hz): " + result.path.generic_string());
+            SendMessageToUI(nlohmann::json{{"type", "demoAudioRenderSaved"},
+                                           {"path", result.path.generic_string()},
+                                           {"sampleRate", renderSampleRate}}
+                                .dump());
+            AppendSessionLog("Demo audio rendered (" +
+                             std::to_string(static_cast<int>(std::llround(renderSampleRate))) +
+                             " Hz): " + result.path.generic_string());
         });
 }
 
 void PluginController::HandleStopDemoRequest()
 {
     if (mDemoPreview)
+    {
         mDemoPreview->StopPreview();
+    }
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
         DeactivateRiffGuidance(true);
@@ -221,32 +208,36 @@ void PluginController::HandleStopDemoRequest()
 // MessageDispatcher calls handlers outside its JSON try/catch.
 static double PracticeToolNumberField(const nlohmann::json& payload, const char* key, double fallback)
 {
-    for (const char* candidate : { key, "value" })
+    for (const char* candidate : {key, "value"})
     {
         const auto it = payload.find(candidate);
         if (it != payload.end() && it->is_number())
+        {
             return it->get<double>();
+        }
     }
     return fallback;
 }
 
 void PluginController::HandleBrowsePracticeToolFileRequest()
 {
-    mHost.BrowseFileAsync(BrowseFileType::AudioFile, "Select Backing Track",
-        [this](const BrowseFileResult& result)
+    mHost.BrowseFileAsync(BrowseFileType::AudioFile, "Select Backing Track", [this](const BrowseFileResult& result) {
+        if (!result.success)
         {
-            if (!result.success)
-                return;
-            nlohmann::json payload;
-            payload["path"] = util::PathToUtf8(result.path);
-            HandleLoadPracticeToolFileRequest(payload);
-        });
+            return;
+        }
+        nlohmann::json payload;
+        payload["path"] = util::PathToUtf8(result.path);
+        HandleLoadPracticeToolFileRequest(payload);
+    });
 }
 
 void PluginController::HandleLoadPracticeToolFileRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const std::string path = payload.value("path", "");
     if (path.empty())
     {
@@ -263,7 +254,9 @@ void PluginController::HandleLoadPracticeToolFileRequest(const nlohmann::json& p
 void PluginController::HandleLoadPracticeToolFileDataRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const std::string fileName = payload.value("fileName", "");
     const std::string dataEncoded = payload.value("data", "");
     if (dataEncoded.empty())
@@ -283,20 +276,30 @@ void PluginController::HandleLoadPracticeToolFileDataRequest(const nlohmann::jso
 void PluginController::HandleSetPracticeToolTransportRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const std::string action = payload.value("action", "");
     if (action == "play")
+    {
         mPracticeTool->Play();
+    }
     else if (action == "pause")
+    {
         mPracticeTool->Pause();
+    }
     else if (action == "stop")
+    {
         mPracticeTool->Stop();
+    }
 }
 
 void PluginController::HandleSeekPracticeToolFileRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const double seconds = payload.value("seconds", 0.0);
     mPracticeTool->SeekSeconds(seconds);
 }
@@ -304,7 +307,9 @@ void PluginController::HandleSeekPracticeToolFileRequest(const nlohmann::json& p
 void PluginController::HandleSetPracticeToolSpeedRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const double ratio = PracticeToolNumberField(payload, "ratio", 1.0);
     mPracticeTool->SetSpeed(ratio);
 }
@@ -312,7 +317,9 @@ void PluginController::HandleSetPracticeToolSpeedRequest(const nlohmann::json& p
 void PluginController::HandleSetPracticeToolPitchRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const double semitones = PracticeToolNumberField(payload, "semitones", 0.0);
     mPracticeTool->SetPitchSemitones(semitones);
 }
@@ -320,7 +327,9 @@ void PluginController::HandleSetPracticeToolPitchRequest(const nlohmann::json& p
 void PluginController::HandleSetPracticeToolGainRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const double gain = PracticeToolNumberField(payload, "gain", 1.0);
     mPracticeTool->SetGain(gain);
 }
@@ -328,7 +337,9 @@ void PluginController::HandleSetPracticeToolGainRequest(const nlohmann::json& pa
 void PluginController::HandleSetPracticeToolBalanceRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const double balance = PracticeToolNumberField(payload, "balance", 0.0);
     mPracticeTool->SetBalance(balance);
 }
@@ -336,7 +347,9 @@ void PluginController::HandleSetPracticeToolBalanceRequest(const nlohmann::json&
 void PluginController::HandleSetPracticeToolLoopRegionRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     if (payload.is_null() || !payload.contains("startSec") || !payload.contains("endSec"))
     {
         mPracticeTool->ClearLoopRegion();
@@ -350,7 +363,9 @@ void PluginController::HandleSetPracticeToolLoopRegionRequest(const nlohmann::js
 void PluginController::HandleSetPracticeToolLoopingRequest(const nlohmann::json& payload)
 {
     if (!mPracticeTool)
+    {
         return;
+    }
     const bool enabled = payload.value("enabled", false);
     mPracticeTool->SetLoopingEnabled(enabled);
 }

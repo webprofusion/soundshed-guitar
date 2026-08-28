@@ -25,7 +25,7 @@ enum class BrowseFileType;
 struct GraphNode;
 struct SignalGraph;
 struct GlobalSignalChainConfig;
-}
+} // namespace guitarfx
 
 namespace guitarfx::controller_detail
 {
@@ -76,10 +76,7 @@ void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey = {})
 [[nodiscard]] double ClampValue(double value, double minimum, double maximum);
 
 /// Bars covered by `frameCount` at the given tempo, rounded up, minimum 1.
-[[nodiscard]] int ComputeBarsFromFrames(std::size_t frameCount,
-                                        double sampleRate,
-                                        double tempoBpm,
-                                        int timeSigNum,
+[[nodiscard]] int ComputeBarsFromFrames(std::size_t frameCount, double sampleRate, double tempoBpm, int timeSigNum,
                                         int timeSigDen);
 
 // ── Ids and timestamps ──────────────────────────────────────────────
@@ -109,14 +106,11 @@ void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey = {})
 /// directory it is meant to stay inside.
 [[nodiscard]] bool HasUnsafeRelativeSegments(const std::filesystem::path& path);
 
-void SaveJsonFile(const FileSystem& fileSystem,
-                  const std::filesystem::path& path,
-                  const nlohmann::json& payload);
+void SaveJsonFile(const FileSystem& fileSystem, const std::filesystem::path& path, const nlohmann::json& payload);
 
 // ── Graph queries ───────────────────────────────────────────────────
 
-[[nodiscard]] const GraphNode* FindNodeByIdOrType(const SignalGraph& graph,
-                                                  const std::string& id,
+[[nodiscard]] const GraphNode* FindNodeByIdOrType(const SignalGraph& graph, const std::string& id,
                                                   const std::string& type);
 
 [[nodiscard]] int GetGlobalTransposeFromChainConfig(const GlobalSignalChainConfig& config);

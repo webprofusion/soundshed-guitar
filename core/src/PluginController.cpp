@@ -32,7 +32,7 @@
 #include "dsp/effects/BuiltinEffects.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
-#include "dsp/effects/WasmEffect.h"
+    #include "dsp/effects/WasmEffect.h"
 #endif
 #include "presets/CompositePresetTypes.h"
 #include "util/PathEncoding.h"
@@ -72,31 +72,23 @@ namespace guitarfx
 // Construction / Lifecycle
 // ════════════════════════════════════════════════════════════════════
 
-PluginController::PluginController(IPluginHost& host)
-    : mHost(host)
+PluginController::PluginController(IPluginHost& host) : mHost(host)
 {
     RegisterAllEffects();
-    mControlSurface = std::make_unique<ControlSurfaceQueue>(
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mControlSurface =
+        std::make_unique<ControlSurfaceQueue>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
     mMetronome = std::make_unique<MetronomeService>(mHost, mAppSettings, mResourceRoot);
     mTelemetry = std::make_unique<TelemetryPublisher>(
-        mHost,
-        mPresetMixer,
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mSignalTest = std::make_unique<SignalTestService>(
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mTuner = std::make_unique<TunerService>(
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+        mHost, mPresetMixer, [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mSignalTest =
+        std::make_unique<SignalTestService>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mTuner = std::make_unique<TunerService>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
     mDemoPreview = std::make_unique<DemoPreviewService>(
-        mHost,
-        mPresetMixer,
-        mDSPMutex,
-        mSignalTest->ActiveFlag(),
+        mHost, mPresetMixer, mDSPMutex, mSignalTest->ActiveFlag(),
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
         [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
     mPracticeTool = std::make_unique<PracticeToolService>(
-        mHost,
-        mDSPMutex,
+        mHost, mDSPMutex,
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
         [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
 }
@@ -116,9 +108,7 @@ PluginController::~PluginController()
     mFolderScanGeneration.fetch_add(1, std::memory_order_relaxed);
     {
         std::unique_lock<std::mutex> lock(mFolderScanDoneMutex);
-        mFolderScanDoneCv.wait(lock, [this]() {
-            return mActiveFolderScans.load(std::memory_order_relaxed) == 0;
-        });
+        mFolderScanDoneCv.wait(lock, [this]() { return mActiveFolderScans.load(std::memory_order_relaxed) == 0; });
     }
 
     // Close after the workers are done, since they can still write through it.
@@ -137,9 +127,11 @@ void PluginController::Initialize()
 
     // Ensure essential directories exist on first launch
     [[maybe_unused]] const auto ensuredResourceRoot = mFileSystem.EnsureDirectory(mResourceRoot);
-    [[maybe_unused]] const auto ensuredSettingsRoot = mFileSystem.EnsureDirectory(mFileSystem.ResolveSettingsDirectory());
+    [[maybe_unused]] const auto ensuredSettingsRoot =
+        mFileSystem.EnsureDirectory(mFileSystem.ResolveSettingsDirectory());
     [[maybe_unused]] const auto ensuredUserPresets = mFileSystem.EnsureDirectory(mUserPresetsPath);
-    [[maybe_unused]] const auto ensuredResources = mFileSystem.EnsureDirectory(mFileSystem.ResolveSettingsDirectory() / "resources");
+    [[maybe_unused]] const auto ensuredResources =
+        mFileSystem.EnsureDirectory(mFileSystem.ResolveSettingsDirectory() / "resources");
 
     // Eagerly, so the migration log lands at startup rather than on first use.
     // Goes through Store() so the once-flag is consumed here and a later access
@@ -154,11 +146,17 @@ void PluginController::Initialize()
 
     LoadAppSettings();
     if (ApplySettingsToRuntime(SettingsApplyMode::kApplyAll))
+    {
         SaveAppSettings();
+    }
     if (!IsPresetArchiveSessionActive())
+    {
         LoadResourceLibraries();
+    }
     if (!IsPresetArchiveSessionActive())
+    {
         LoadBlendLibrary();
+    }
     LoadCustomEffectLibrary();
     LoadFactoryPresetArchives();
     LoadCompositeLibrary();
@@ -174,26 +172,22 @@ void PluginController::Initialize()
     mAutomationSlots.SetMixer(&mPresetMixer);
     mAutomationSlots.SetEffectRegistry(&EffectRegistry::Instance());
     mAutomationSlots.InitializeRegistry(
-        mPresetMixer,
-        [this]() { return static_cast<double>(mSetlistCursorIndex); },
-        [this](int idx) { ApplySetlistPresetByIndex(idx); },
-        [this](int steps) { SetlistBankUp(steps); },
-        [this](int steps) { SetlistBankDown(steps); },
-        [this]() { return GetSetlistLength(); },
-        [this]() { return GetSetlistBankBase(); },
-        [this](int bankNumber) { SelectSetlistBank(bankNumber); },
-        [this]() { return GetSetlistBankNumber(); },
-        [this](int index) { SelectSceneByIndex(index); },
+        mPresetMixer, [this]() { return static_cast<double>(mSetlistCursorIndex); },
+        [this](int idx) { ApplySetlistPresetByIndex(idx); }, [this](int steps) { SetlistBankUp(steps); },
+        [this](int steps) { SetlistBankDown(steps); }, [this]() { return GetSetlistLength(); },
+        [this]() { return GetSetlistBankBase(); }, [this](int bankNumber) { SelectSetlistBank(bankNumber); },
+        [this]() { return GetSetlistBankNumber(); }, [this](int index) { SelectSceneByIndex(index); },
         [this]() { return GetActiveSceneIndex(); });
 
     // Wire node-param-applied callback so the UI can reflect automation-driven changes.
     mAutomationSlots.SetOnNodeParamApplied(
-        [this](const std::string& effectType, const std::string& paramId, double value)
-        {
+        [this](const std::string& effectType, const std::string& paramId, double value) {
             // Resolve the concrete nodeId from the mixer's runtime graph.
             const auto found = mPresetMixer.FindFirstEnabledNodeOfType(effectType);
             if (!found)
+            {
                 return;
+            }
 
             const auto& nodeId = found->second;
 
@@ -202,7 +196,9 @@ void PluginController::Initialize()
             {
                 auto* node = mActivePreset->graph.FindNode(nodeId);
                 if (node)
+                {
                     node->params[paramId] = value;
+                }
             }
 
             // Queue a lightweight UI notification (safe from audio or UI thread).
@@ -212,47 +208,55 @@ void PluginController::Initialize()
             }
         });
 
-    mAutomationSlots.SetOnNodeBypassApplied(
-        [this](const std::string& effectType, bool enabled)
+    mAutomationSlots.SetOnNodeBypassApplied([this](const std::string& effectType, bool enabled) {
+        if (!mActivePreset)
         {
-            if (!mActivePreset)
-                return;
+            return;
+        }
 
-            const auto resolvedType = EffectRegistry::Instance().Resolve(effectType);
-            bool updated = false;
-            const auto applyBypassToGraph = [&](SignalGraph& graph)
+        const auto resolvedType = EffectRegistry::Instance().Resolve(effectType);
+        bool updated = false;
+        const auto applyBypassToGraph = [&](SignalGraph& graph) {
+            for (auto& node : graph.nodes)
             {
-                for (auto& node : graph.nodes)
+                if (EffectRegistry::Instance().Resolve(node.type) != resolvedType)
                 {
-                    if (EffectRegistry::Instance().Resolve(node.type) != resolvedType)
-                        continue;
-                    node.enabled = enabled;
-                    updated = true;
+                    continue;
                 }
-            };
+                node.enabled = enabled;
+                updated = true;
+            }
+        };
 
-            // Keep both the active scene graph and mActivePreset->graph in sync.
-            // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
-            // active scene graph into mActivePreset->graph.
-            const std::string activeSceneId = GetResolvedActiveSceneId();
-            if (auto* scene = FindPresetScene(*mActivePreset, activeSceneId))
-                applyBypassToGraph(scene->graph);
-            applyBypassToGraph(mActivePreset->graph);
+        // Keep both the active scene graph and mActivePreset->graph in sync.
+        // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
+        // active scene graph into mActivePreset->graph.
+        const std::string activeSceneId = GetResolvedActiveSceneId();
+        if (auto* scene = FindPresetScene(*mActivePreset, activeSceneId))
+        {
+            applyBypassToGraph(scene->graph);
+        }
+        applyBypassToGraph(mActivePreset->graph);
 
-            if (!updated)
-                return;
+        if (!updated)
+        {
+            return;
+        }
 
-            mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
-            if (!mActivePresetId.empty())
-                mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
-            mPendingStateBroadcast = true;
-
-        });
+        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        if (!mActivePresetId.empty())
+        {
+            mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
+        }
+        mPendingStateBroadcast = true;
+    });
 
     // Load automation.json
     const auto automationData = LoadUiStorageJson("automation.json", nlohmann::json::object());
     if (!automationData.empty())
+    {
         mAutomationSlots.LoadFromJson(automationData);
+    }
 
     // Load setlist cursor/bankSize from setlists.json
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
@@ -268,7 +272,9 @@ void PluginController::Prepare(double sampleRate, int blockSize)
     mPresetMixer.Prepare(sampleRate, blockSize);
 
     if (mPracticeTool)
+    {
         mPracticeTool->Prepare(sampleRate, blockSize);
+    }
 
     // Report initial latency to the host (e.g. IR cab partition size may be
     // known only after Prepare sets the sample rate).
@@ -297,7 +303,9 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
     // Try to acquire the DSP lock without blocking the audio thread.
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
     if (!lock.owns_lock())
+    {
         return false; // Caller should output silence
+    }
 
     ProcessAudioLocked(inputs, outputs, numSamples);
     return true;
@@ -305,7 +313,6 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
 
 void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int numSamples)
 {
-
     // ARM mode: click is playing, waiting for input signal to trigger recording
     if (mRiffCapture.armed && !mRiffCapture.active && !mRiffCapture.complete)
     {
@@ -316,7 +323,9 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
             // Track count-in progress
             mRiffCapture.armCountInIndex += static_cast<std::size_t>(numSamples);
             if (mRiffCapture.armCountInIndex >= mRiffCapture.countInSamples)
+            {
                 mRiffCapture.armCountInComplete = true;
+            }
         }
         else if (hasInput)
         {
@@ -328,13 +337,12 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                 {
                     // Compute bar phase at trigger for snapping the trim start to the bar boundary
                     const double beatScaleTrig = 4.0 / static_cast<double>(std::max(1, mRiffCapture.config.timeSigDen));
-                    const double samplesPerBeatTrig = mRiffCapture.sampleRate
-                        * (60.0 / std::max(1.0, mRiffCapture.config.tempoBpm)) * beatScaleTrig;
-                    const double samplesPerBarTrig = samplesPerBeatTrig
-                        * static_cast<double>(std::max(1, mRiffCapture.config.timeSigNum));
+                    const double samplesPerBeatTrig =
+                        mRiffCapture.sampleRate * (60.0 / std::max(1.0, mRiffCapture.config.tempoBpm)) * beatScaleTrig;
+                    const double samplesPerBarTrig =
+                        samplesPerBeatTrig * static_cast<double>(std::max(1, mRiffCapture.config.timeSigNum));
                     const std::size_t barSamples = static_cast<std::size_t>(std::max(1.0, samplesPerBarTrig));
-                    const std::size_t triggerOffset = mRiffCapture.armPostCountInSamples
-                        + static_cast<std::size_t>(i);
+                    const std::size_t triggerOffset = mRiffCapture.armPostCountInSamples + static_cast<std::size_t>(i);
                     const std::size_t barAlignOffset = triggerOffset % barSamples;
 
                     // Trigger: start recording — audio from trigger point is captured
@@ -357,7 +365,9 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
             }
             // Only track detection-phase samples when still waiting (no trigger this block)
             if (mRiffCapture.armed)
+            {
                 mRiffCapture.armPostCountInSamples += static_cast<std::size_t>(numSamples);
+            }
         }
     }
 
@@ -382,17 +392,19 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                         const float peakVal = std::max(std::abs(inputs[0][i]), std::abs(capInputR[i]));
                         const std::size_t bucket = captureIndex / bucketSize;
                         if (bucket < mRiffCapture.livePeaks.size())
+                        {
                             mRiffCapture.livePeaks[bucket] = std::max(mRiffCapture.livePeaks[bucket], peakVal);
+                        }
                     }
                 }
                 ++mRiffCapture.writeIndex;
             }
 
             // Send live progress every ~250 ms
-            const std::size_t capturedSoFar = mRiffCapture.writeIndex > countInSamples
-                ? mRiffCapture.writeIndex - countInSamples : 0;
-            const std::size_t progressInterval = std::max<std::size_t>(1,
-                static_cast<std::size_t>(mRiffCapture.sampleRate * 0.25));
+            const std::size_t capturedSoFar =
+                mRiffCapture.writeIndex > countInSamples ? mRiffCapture.writeIndex - countInSamples : 0;
+            const std::size_t progressInterval =
+                std::max<std::size_t>(1, static_cast<std::size_t>(mRiffCapture.sampleRate * 0.25));
             if (capturedSoFar > 0 && capturedSoFar >= mRiffCapture.lastProgressSample + progressInterval)
             {
                 mRiffCapture.lastProgressSample = capturedSoFar;
@@ -410,12 +422,13 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                 mRiffCapture.active = false;
                 mRiffCapture.endedAt = std::chrono::steady_clock::now();
                 DeactivateRiffGuidance(false);
-                const double samplesPerBeat = mRiffCapture.sampleRate
-                    * (60.0 / std::max(1.0, mRiffCapture.config.tempoBpm))
-                    * (4.0 / static_cast<double>(std::max(1, mRiffCapture.config.timeSigDen)));
-                const double samplesPerBar = samplesPerBeat * static_cast<double>(std::max(1, mRiffCapture.config.timeSigNum));
-                const int computedBars = std::max(1, static_cast<int>(
-                    std::round(static_cast<double>(capturedFinal) / std::max(1.0, samplesPerBar))));
+                const double samplesPerBeat = mRiffCapture.sampleRate *
+                                              (60.0 / std::max(1.0, mRiffCapture.config.tempoBpm)) *
+                                              (4.0 / static_cast<double>(std::max(1, mRiffCapture.config.timeSigDen)));
+                const double samplesPerBar =
+                    samplesPerBeat * static_cast<double>(std::max(1, mRiffCapture.config.timeSigNum));
+                const int computedBars = std::max(
+                    1, static_cast<int>(std::round(static_cast<double>(capturedFinal) / std::max(1.0, samplesPerBar))));
                 nlohmann::json msg;
                 msg["type"] = "riffCaptureStopped";
                 msg["takeId"] = mRiffCapture.takeId;
@@ -431,14 +444,18 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
 
     // Mix in demo audio preview if active
     if (mDemoPreview)
+    {
         mDemoPreview->MixIntoInput(inputs, numSamples);
+    }
 
     // Deactivate guidance for preview only once the preview has been active and then stopped.
     // This avoids a race where guidance is deactivated before DemoPreview has loaded the buffer.
     if (mMetronome->IsGuidanceForPreview() && mDemoPreview)
     {
         if (mDemoPreview->IsPreviewActive())
+        {
             mMetronome->SetGuidancePreviewWasActive(true);
+        }
         else if (mMetronome->GuidancePreviewWasActive())
         {
             DeactivateRiffGuidance(true);
@@ -462,25 +479,26 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     // through the amp/cab chain. Audio-thread-safe: pops from a lock-free
     // ring only, never blocks.
     if (mPracticeTool)
+    {
         mPracticeTool->RenderPostChain(outputs, numSamples);
+    }
 
     mSignalTest->CollectOutput(outputs, numSamples);
-
 }
 
 namespace
 {
-    // Sizes an editor window can plausibly have been left at. Anything outside this is a
-    // layout artefact rather than a size a user dragged to.
-    bool IsPlausibleEditorWindowSize(int width, int height)
-    {
-        constexpr int kMinRememberedEditorDimension = 200;
-        constexpr int kMaxRememberedEditorDimension = 16384;
+// Sizes an editor window can plausibly have been left at. Anything outside this is a
+// layout artefact rather than a size a user dragged to.
+bool IsPlausibleEditorWindowSize(int width, int height)
+{
+    constexpr int kMinRememberedEditorDimension = 200;
+    constexpr int kMaxRememberedEditorDimension = 16384;
 
-        return width >= kMinRememberedEditorDimension && height >= kMinRememberedEditorDimension
-            && width <= kMaxRememberedEditorDimension && height <= kMaxRememberedEditorDimension;
-    }
+    return width >= kMinRememberedEditorDimension && height >= kMinRememberedEditorDimension &&
+           width <= kMaxRememberedEditorDimension && height <= kMaxRememberedEditorDimension;
 }
+} // namespace
 
 void PluginController::SetEditorWindowSize(int width, int height)
 {
@@ -495,7 +513,9 @@ void PluginController::SetEditorWindowSize(int width, int height)
     // it when it is destroyed, so a size that exists only while the window is being torn
     // down is never committed.
     if (!IsPlausibleEditorWindowSize(width, height))
+    {
         return;
+    }
 
     if (mEditorWindowSize.width == width && mEditorWindowSize.height == height)
     {
@@ -505,9 +525,8 @@ void PluginController::SetEditorWindowSize(int width, int height)
 
     // Repeated reports of the same pending size must not keep restarting the settle, or a
     // host that re-reports its size every frame would never let anything commit.
-    if (mPendingEditorWindowSize.has_value()
-        && mPendingEditorWindowSize->width == width
-        && mPendingEditorWindowSize->height == height)
+    if (mPendingEditorWindowSize.has_value() && mPendingEditorWindowSize->width == width &&
+        mPendingEditorWindowSize->height == height)
     {
         return;
     }
@@ -538,20 +557,15 @@ std::string PluginController::SerializeState() const
     // opened does not pin a default over whatever the wrapper would pick.
     if (mEditorWindowSize.IsValid())
     {
-        state["editorWindow"] = {
-            {"width", mEditorWindowSize.width},
-            {"height", mEditorWindowSize.height}
-        };
+        state["editorWindow"] = {{"width", mEditorWindowSize.width}, {"height", mEditorWindowSize.height}};
     }
 
     // NAM quality is per instance, so it rides in host state rather than app.json.
     // Emitted as its own block (not just inside appSettings) so it stays legible and
     // is restored explicitly, after the appSettings merge, on the way back in.
-    state["namQuality"] = {
-        {"slimmableSize", mNamQuality.slimmableSize},
-        {"oversampling", mNamQuality.oversamplingIndex},
-        {"antiAliasPhase", mNamQuality.antiAliasPhaseIndex}
-    };
+    state["namQuality"] = {{"slimmableSize", mNamQuality.slimmableSize},
+                           {"oversampling", mNamQuality.oversamplingIndex},
+                           {"antiAliasPhase", mNamQuality.antiAliasPhaseIndex}};
 
     // No "parameters" block: global FX live in globalSignalChain, which is the single
     // source of truth. States written before that consolidation still carry the key and
@@ -574,21 +588,20 @@ std::string PluginController::SerializeState() const
         if (const auto cfg = mPresetMixer.GetPresetConfig(id))
         {
             presetConfigs[id] = {
-                {"name", cfg->name},
-                {"mix", cfg->mix},
-                {"pan", cfg->pan},
-                {"mute", cfg->mute},
-                {"solo", cfg->solo}
-            };
+                {"name", cfg->name}, {"mix", cfg->mix}, {"pan", cfg->pan}, {"mute", cfg->mute}, {"solo", cfg->solo}};
         }
 
         // The focused slot already rides in state["preset"] with its runtime state folded in.
         if (mActivePreset && id == mActivePresetId)
+        {
             continue;
+        }
 
         const auto cachedIt = mMixerPresetJsonCache.find(id);
         if (cachedIt == mMixerPresetJsonCache.end())
+        {
             continue;
+        }
 
         if (auto slotPreset = PresetStorage::DeserializeFromJson(cachedIt->second))
         {
@@ -639,16 +652,19 @@ void PluginController::DeserializeState(const std::string& json)
     struct HostStateRestoreScope
     {
         PluginController& controller;
+
         explicit HostStateRestoreScope(PluginController& c) : controller(c)
         {
             controller.mRestoringHostState = true;
         }
+
         ~HostStateRestoreScope()
         {
             controller.mRestoringHostState = false;
             controller.AdoptAppSettingsAsBaseline();
         }
     };
+
     const HostStateRestoreScope restoreScope{*this};
 
     try
@@ -656,17 +672,25 @@ void PluginController::DeserializeState(const std::string& json)
         auto state = nlohmann::json::parse(json);
         const nlohmann::json* incomingSettings = nullptr;
         if (state.contains("appSettings") && state["appSettings"].is_object())
+        {
             incomingSettings = &state["appSettings"];
+        }
         else if (state.contains("settings") && state["settings"].is_object())
+        {
             incomingSettings = &state["settings"];
+        }
 
         if (incomingSettings != nullptr)
         {
             if (!mAppSettings.is_object())
+            {
                 mAppSettings = nlohmann::json::object();
+            }
 
             for (auto it = incomingSettings->begin(); it != incomingSettings->end(); ++it)
+            {
                 mAppSettings[it.key()] = it.value();
+            }
 
             // Merging is not applying. These values have to reach the DSP, or the
             // instance runs on whatever Initialize() read from the shared store while
@@ -697,12 +721,18 @@ void PluginController::DeserializeState(const std::string& json)
         }
 
         if (state.contains("uiSettings") && state["uiSettings"].is_object())
+        {
             mUiSettings = state["uiSettings"];
+        }
         else
+        {
             ApplyUiSettingsFromAppSettings();
+        }
 
         if (state.contains("uiViewState") && state["uiViewState"].is_object())
+        {
             mUiViewState = state["uiViewState"];
+        }
 
         if (state.contains("editorWindow") && state["editorWindow"].is_object())
         {
@@ -739,8 +769,8 @@ void PluginController::DeserializeState(const std::string& json)
             {
                 mActivePresetId = state.value("presetId", presetOpt->id);
                 mActiveSceneId = state.contains("activeSceneId") && state["activeSceneId"].is_string()
-                    ? state["activeSceneId"].get<std::string>()
-                    : std::string{};
+                                     ? state["activeSceneId"].get<std::string>()
+                                     : std::string{};
                 mActivePreset = *presetOpt;
                 mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
                 ApplyPreset(*presetOpt);
@@ -756,13 +786,19 @@ void PluginController::DeserializeState(const std::string& json)
         {
             const auto& mixer = state["mixer"];
             if (mixer.contains("masterGain") && mixer["masterGain"].is_number())
+            {
                 mPresetMixer.SetMasterGain(mixer["masterGain"].get<double>());
+            }
             if (mixer.contains("limiterEnabled") && mixer["limiterEnabled"].is_boolean())
+            {
                 mPresetMixer.SetLimiterEnabled(mixer["limiterEnabled"].get<bool>());
+            }
 
             // Reset active presets before restoring mixer state
             for (const auto& id : mPresetMixer.GetActivePresetIds())
+            {
                 mPresetMixer.RemoveActivePreset(id);
+            }
 
             std::vector<std::string> activeIds;
             if (mixer.contains("activePresetIds") && mixer["activePresetIds"].is_array())
@@ -770,24 +806,29 @@ void PluginController::DeserializeState(const std::string& json)
                 for (const auto& entry : mixer["activePresetIds"])
                 {
                     if (entry.is_string())
+                    {
                         activeIds.push_back(entry.get<std::string>());
+                    }
                 }
             }
             const auto presets = mixer.contains("presets") ? mixer["presets"] : nlohmann::json::object();
             // Written since full slot data was added to host state; absent in older projects,
             // which fall through to the restore-by-id path below exactly as before.
             const auto presetData = mixer.contains("presetData") && mixer["presetData"].is_object()
-                ? mixer["presetData"]
-                : nlohmann::json::object();
+                                        ? mixer["presetData"]
+                                        : nlohmann::json::object();
             if (activeIds.empty() && presets.is_object())
             {
                 for (const auto& [id, _] : presets.items())
+                {
                     activeIds.push_back(id);
+                }
             }
 
             for (const auto& id : activeIds)
             {
-                const auto presetEntry = presets.is_object() && presets.contains(id) ? presets[id] : nlohmann::json::object();
+                const auto presetEntry =
+                    presets.is_object() && presets.contains(id) ? presets[id] : nlohmann::json::object();
                 const std::string name = presetEntry.value("name", id);
 
                 bool added = false;
@@ -811,8 +852,8 @@ void PluginController::DeserializeState(const std::string& json)
                         {
                             AttachRuntimeConfigCallbacks(id, *slotPreset);
                             mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*slotPreset);
-                            AppendSessionLog("Mixer slot restored from host state id=" + id
-                                + ", state=" + SummarizeHostedPluginState(*slotPreset));
+                            AppendSessionLog("Mixer slot restored from host state id=" + id +
+                                             ", state=" + SummarizeHostedPluginState(*slotPreset));
                         }
                     }
                 }
@@ -833,19 +874,29 @@ void PluginController::DeserializeState(const std::string& json)
                 if (presetEntry.is_object())
                 {
                     if (presetEntry.contains("mix") && presetEntry["mix"].is_number())
+                    {
                         mPresetMixer.SetPresetMix(id, presetEntry["mix"].get<double>());
+                    }
                     if (presetEntry.contains("pan") && presetEntry["pan"].is_number())
+                    {
                         mPresetMixer.SetPresetPan(id, presetEntry["pan"].get<double>());
+                    }
                     if (presetEntry.contains("mute") && presetEntry["mute"].is_boolean())
+                    {
                         mPresetMixer.SetPresetMute(id, presetEntry["mute"].get<bool>());
+                    }
                     if (presetEntry.contains("solo") && presetEntry["solo"].is_boolean())
+                    {
                         mPresetMixer.SetPresetSolo(id, presetEntry["solo"].get<bool>());
+                    }
                 }
             }
         }
 
         if (state.contains("automation") && state["automation"].is_object())
+        {
             mAutomationSlots.LoadFromJson(state["automation"]);
+        }
     }
     catch (const std::exception&)
     {
@@ -906,7 +957,9 @@ void PluginController::OnIdle()
             mPendingEditorWindowSize.reset();
 
             if (!mHost.IsStandalone())
+            {
                 mHost.NotifyStateChanged();
+            }
         }
     }
 
@@ -932,9 +985,13 @@ void PluginController::OnIdle()
                 const auto keyMaps = slot ? std::optional<std::vector<KeyboardMap>>(slot->keyMaps) : std::nullopt;
 
                 if (isDefault)
+                {
                     mAutomationSlots.SetDefaultSlotOverrides(slotId, label, *captured, keyMaps);
+                }
                 else
+                {
                     mAutomationSlots.SetCustomSlot(slotId, label, address, nodeSelector, *captured, keyMaps);
+                }
 
                 captureMsg["type"] = "midiLearnCapture";
                 captureMsg["slotId"] = slotId;
@@ -992,13 +1049,21 @@ void PluginController::OnIdle()
     {
         const auto pending = mControlSurface->TakePending();
         if (pending.setlistPresetIndex.has_value())
+        {
             ApplySetlistPresetByIndexDirect(*pending.setlistPresetIndex);
+        }
         if (pending.setlistBankDelta.has_value())
+        {
             SetlistBankChangeDirect(*pending.setlistBankDelta);
+        }
         if (pending.setlistBankSelect.has_value())
+        {
             SelectSetlistBankDirect(*pending.setlistBankSelect);
+        }
         if (pending.sceneIndex.has_value())
+        {
             SelectSceneByIndexDirect(*pending.sceneIndex);
+        }
     }
 
     mSignalTest->OnIdle();
@@ -1008,7 +1073,9 @@ void PluginController::OnIdle()
     mTelemetry->OnIdle();
 
     if (mDemoPreview)
+    {
         mDemoPreview->OnIdle();
+    }
 
     if (mPracticeTool)
     {
@@ -1039,7 +1106,9 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     // instead; the live values are members, so nothing needs snapshotting first.
     LoadAppSettings();
     if (ApplySettingsToRuntime(SettingsApplyMode::kPreserveInstanceOwned))
+    {
         SaveAppSettings();
+    }
 
     LoadResourceLibraries();
     LoadBlendLibrary();
@@ -1048,9 +1117,13 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     std::vector<std::string> definitionIds;
     definitionIds.reserve(mCompositeLibrary.GetAllDefinitions().size());
     for (const auto& def : mCompositeLibrary.GetAllDefinitions())
+    {
         definitionIds.push_back(def.id);
+    }
     for (const auto& id : definitionIds)
+    {
         mCompositeLibrary.RemoveDefinition(id);
+    }
     LoadCompositeLibrary();
 
     {
@@ -1060,7 +1133,9 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
 
     const auto automationData = LoadUiStorageJson("automation.json", nlohmann::json::object());
     if (!automationData.empty())
+    {
         mAutomationSlots.LoadFromJson(automationData);
+    }
 
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     mSetlistBankSize = setlistsData.value("bankSize", 8);
@@ -1073,18 +1148,24 @@ void PluginController::PollSharedSyncState()
 {
     const auto now = std::chrono::steady_clock::now();
     if (now < mNextSharedSyncPollAt)
+    {
         return;
+    }
 
     mNextSharedSyncPollAt = now + kSharedSyncPollInterval;
 
-    const auto payload = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId)
-                           .value_or(nlohmann::json::object());
+    const auto payload =
+        Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId).value_or(nlohmann::json::object());
     if (!payload.is_object())
+    {
         return;
+    }
 
     const auto versionIt = payload.find("version");
     if (versionIt == payload.end() || !versionIt->is_number_unsigned())
+    {
         return;
+    }
 
     const auto version = versionIt->get<std::uint64_t>();
     if (!mSharedSyncVersionSeenInitialized)
@@ -1095,19 +1176,27 @@ void PluginController::PollSharedSyncState()
     }
 
     if (version <= mSharedSyncVersionSeen)
+    {
         return;
+    }
 
     mSharedSyncVersionSeen = version;
     if (!mUIReady)
+    {
         return;
+    }
 
     nlohmann::json msg;
     msg["type"] = "sharedSyncUpdated";
     msg["version"] = version;
     if (payload.contains("domains") && payload["domains"].is_array())
+    {
         msg["domains"] = payload["domains"];
+    }
     if (payload.contains("updatedAt"))
+    {
         msg["updatedAt"] = payload["updatedAt"];
+    }
     SendMessageToUI(msg.dump());
 }
 
@@ -1135,14 +1224,18 @@ void PluginController::ReportErrorToUI(const std::string& message, const std::st
     msg["type"] = "error";
     msg["message"] = message;
     if (!detail.empty())
+    {
         msg["detail"] = detail;
+    }
     SendMessageToUI(msg.dump());
 }
 
 void PluginController::AppendSessionLog(const std::string& message) const
 {
     if (message.empty())
+    {
         return;
+    }
 
     const auto settingsDir = GetEffectiveSettingsDirectory();
     const auto logPath = settingsDir / kSessionLogFileName;
@@ -1150,7 +1243,9 @@ void PluginController::AppendSessionLog(const std::string& message) const
 
     std::ofstream output(logPath, std::ios::app);
     if (!output)
+    {
         return;
+    }
 
     output << FormatTimestamp() << " " << message << "\n";
 }
@@ -1167,18 +1262,22 @@ void PluginController::HandleStateRequest()
 void PluginController::HandleGetSharedSyncStateRequest()
 {
     // Only act if the shared sync state has a new version since we last responded.
-    const auto filePayload = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId)
-                               .value_or(nlohmann::json::object());
+    const auto filePayload =
+        Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId).value_or(nlohmann::json::object());
     std::uint64_t currentVersion = 0;
     if (filePayload.is_object())
     {
         const auto it = filePayload.find("version");
         if (it != filePayload.end() && it->is_number_unsigned())
+        {
             currentVersion = it->get<std::uint64_t>();
+        }
     }
 
     if (currentVersion > 0 && currentVersion == mSharedSyncVersionHandled)
+    {
         return;
+    }
 
     mSharedSyncVersionHandled = currentVersion;
     if (!mSharedSyncVersionSeenInitialized || currentVersion > mSharedSyncVersionSeen)
@@ -1194,9 +1293,7 @@ void PluginController::HandleGetSharedSyncStateRequest()
     state["appSettings"] = mAppSettings;
     state["uiSettings"] = mUiSettings;
     state["blendLibrary"] = mBlendLibrary;
-    state["presetArchiveSession"] = {
-        {"active", IsPresetArchiveSessionActive()}
-    };
+    state["presetArchiveSession"] = {{"active", IsPresetArchiveSessionActive()}};
     if (mPresetArchiveSession)
     {
         state["presetArchiveSession"]["archiveName"] = mPresetArchiveSession->archiveName;
@@ -1213,7 +1310,9 @@ void PluginController::HandleGetSharedSyncStateRequest()
     {
         const std::string type = resource.type;
         if (!libraryInfo.contains(type) || !libraryInfo[type].is_array())
+        {
             libraryInfo[type] = nlohmann::json::array();
+        }
 
         nlohmann::json entry;
         entry["id"] = resource.id;
@@ -1224,7 +1323,9 @@ void PluginController::HandleGetSharedSyncStateRequest()
         entry["filePath"] = resource.filePath.empty() ? "" : util::PathToUtf8(resource.filePath);
         entry["hash"] = resource.hash;
         if (!resource.metadata.empty())
+        {
             entry["metadata"] = resource.metadata;
+        }
         const bool hasPath = !resource.filePath.empty();
         const bool exists = hasPath && std::filesystem::exists(resource.filePath);
         entry["fileMissing"] = !(hasPath && exists);
@@ -1236,7 +1337,9 @@ void PluginController::HandleGetSharedSyncStateRequest()
     {
         nlohmann::json customEffects = nlohmann::json::array();
         for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
+        {
             customEffects.push_back(SerializeCustomEffectLibraryEntry(entry));
+        }
         state["customEffectLibrary"] = std::move(customEffects);
     }
 
@@ -1270,7 +1373,8 @@ void PluginController::HandleCaptureDebugSnapshotRequest(const nlohmann::json& p
     SendMessageToUI(nlohmann::json{
         {"type", "captureDebugSnapshot"},
         {"source", source},
-    }.dump());
+    }
+                        .dump());
 }
 
 void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& payload)
@@ -1305,7 +1409,9 @@ void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& pay
         snapshot["backend"] = std::move(backendState);
 
         if (mActivePreset)
+        {
             snapshot["activePresetSummary"] = SummarizeHostedPluginState(*mActivePreset);
+        }
 
         const auto snapshotPath = ResolveDebugSnapshotPath(mFileSystem);
         SaveJsonFile(mFileSystem, snapshotPath, snapshot);
@@ -1314,7 +1420,8 @@ void PluginController::HandleDebugReportUiStateRequest(const nlohmann::json& pay
             {"type", "debugSnapshotWritten"},
             {"path", snapshotPath.generic_string()},
             {"source", source},
-        }.dump());
+        }
+                            .dump());
     }
     catch (const std::exception& e)
     {
@@ -1341,28 +1448,17 @@ void PluginController::HandleSetParameterRequest(const nlohmann::json& payload)
     };
 
     static const std::unordered_map<std::string, GlobalParamAlias> kAliases = {
-        {"inputTrim",      {"input.gain",         false, false}},
-        {"input_trim",     {"input.gain",         false, false}},
-        {"outputTrim",     {"output.gain",        false, false}},
-        {"output_trim",    {"output.gain",        false, false}},
-        {"gateEnabled",    {"gate.enabled",       true,  false}},
-        {"gate_enabled",   {"gate.enabled",       true,  false}},
-        {"gateThreshold",  {"gate.threshold",     false, false}},
-        {"gate_threshold", {"gate.threshold",     false, false}},
-        {"transpose",      {"transpose.semitones", false, true}},
-        {"doublerEnabled", {"doubler.enabled",    true,  false}},
-        {"doublerDelay",   {"doubler.delay",      false, false}},
-        {"eqEnabled",      {"eq.enabled",         true,  false}},
-        {"eqLowGain",      {"eq.lowGain",         false, false}},
-        {"eqLowFreq",      {"eq.lowFreq",         false, false}},
-        {"eqLowMidGain",   {"eq.lowMidGain",      false, false}},
-        {"eqLowMidFreq",   {"eq.lowMidFreq",      false, false}},
-        {"eqLowMidQ",      {"eq.lowMidQ",         false, false}},
-        {"eqHighMidGain",  {"eq.highMidGain",     false, false}},
-        {"eqHighMidFreq",  {"eq.highMidFreq",     false, false}},
-        {"eqHighMidQ",     {"eq.highMidQ",        false, false}},
-        {"eqHighGain",     {"eq.highGain",        false, false}},
-        {"eqHighFreq",     {"eq.highFreq",        false, false}},
+        {"inputTrim", {"input.gain", false, false}},         {"input_trim", {"input.gain", false, false}},
+        {"outputTrim", {"output.gain", false, false}},       {"output_trim", {"output.gain", false, false}},
+        {"gateEnabled", {"gate.enabled", true, false}},      {"gate_enabled", {"gate.enabled", true, false}},
+        {"gateThreshold", {"gate.threshold", false, false}}, {"gate_threshold", {"gate.threshold", false, false}},
+        {"transpose", {"transpose.semitones", false, true}}, {"doublerEnabled", {"doubler.enabled", true, false}},
+        {"doublerDelay", {"doubler.delay", false, false}},   {"eqEnabled", {"eq.enabled", true, false}},
+        {"eqLowGain", {"eq.lowGain", false, false}},         {"eqLowFreq", {"eq.lowFreq", false, false}},
+        {"eqLowMidGain", {"eq.lowMidGain", false, false}},   {"eqLowMidFreq", {"eq.lowMidFreq", false, false}},
+        {"eqLowMidQ", {"eq.lowMidQ", false, false}},         {"eqHighMidGain", {"eq.highMidGain", false, false}},
+        {"eqHighMidFreq", {"eq.highMidFreq", false, false}}, {"eqHighMidQ", {"eq.highMidQ", false, false}},
+        {"eqHighGain", {"eq.highGain", false, false}},       {"eqHighFreq", {"eq.highFreq", false, false}},
     };
 
     const auto name = payload.value("name", std::string{});
@@ -1384,15 +1480,20 @@ void PluginController::HandleSetParameterRequest(const nlohmann::json& payload)
     nlohmann::json forwarded;
     forwarded["path"] = it->second.path;
     if (it->second.isBoolean)
+    {
         forwarded["value"] = raw > 0.5;
+    }
     else if (it->second.isInteger)
+    {
         forwarded["value"] = static_cast<int>(std::llround(raw));
+    }
     else
+    {
         forwarded["value"] = raw;
+    }
 
     HandleSetGlobalChainParamRequest(forwarded);
 }
-
 
 void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& payload)
 {
@@ -1403,11 +1504,31 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
         std::lock_guard<std::mutex> lock(mDSPMutex);
 
         // Route paramPath strings to the corresponding mixer methods
-        if (path == "gate.enabled") { mPresetMixer.SetGlobalGateEnabled(value.get<bool>()); persistGlobalFx = true; }
-        else if (path == "gate.threshold") { mPresetMixer.SetGlobalGateThreshold(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "gate.attack") { mPresetMixer.SetGlobalGateAttack(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "gate.hold") { mPresetMixer.SetGlobalGateHold(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "gate.release") { mPresetMixer.SetGlobalGateRelease(value.get<double>()); persistGlobalFx = true; }
+        if (path == "gate.enabled")
+        {
+            mPresetMixer.SetGlobalGateEnabled(value.get<bool>());
+            persistGlobalFx = true;
+        }
+        else if (path == "gate.threshold")
+        {
+            mPresetMixer.SetGlobalGateThreshold(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "gate.attack")
+        {
+            mPresetMixer.SetGlobalGateAttack(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "gate.hold")
+        {
+            mPresetMixer.SetGlobalGateHold(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "gate.release")
+        {
+            mPresetMixer.SetGlobalGateRelease(value.get<double>());
+            persistGlobalFx = true;
+        }
         else if (path == "transpose.enabled")
         {
             mPresetMixer.SetGlobalTransposeEnabled(value.get<bool>());
@@ -1420,28 +1541,101 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
             UpdateHostLatency();
             persistGlobalFx = true;
         }
-        else if (path == "eq.enabled") { mPresetMixer.SetGlobalEQEnabled(value.get<bool>()); persistGlobalFx = true; }
-        else if (path == "doubler.enabled") { mPresetMixer.SetGlobalDoublerEnabled(value.get<bool>()); persistGlobalFx = true; }
-        else if (path == "doubler.delay") { mPresetMixer.SetGlobalDoublerDelay(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "doubler.mix") { mPresetMixer.SetGlobalDoublerMix(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "doubler.detune") { mPresetMixer.SetGlobalDoublerDetune(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "input.gain") { mPresetMixer.SetGlobalInputGain(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "output.gain") { mPresetMixer.SetGlobalOutputGain(value.get<double>()); persistGlobalFx = true; }
-        else if (path == "limiter.enabled") mPresetMixer.SetLimiterEnabled(value.get<bool>());
-        else if (path == "eq.lowGain") { mPresetMixer.SetGlobalEQBandGain(0, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.lowFreq") { mPresetMixer.SetGlobalEQBandFrequency(0, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.lowMidGain") { mPresetMixer.SetGlobalEQBandGain(1, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.lowMidFreq") { mPresetMixer.SetGlobalEQBandFrequency(1, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.lowMidQ") { mPresetMixer.SetGlobalEQBandQ(1, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.highMidGain") { mPresetMixer.SetGlobalEQBandGain(2, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.highMidFreq") { mPresetMixer.SetGlobalEQBandFrequency(2, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.highMidQ") { mPresetMixer.SetGlobalEQBandQ(2, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.highGain") { mPresetMixer.SetGlobalEQBandGain(3, value.get<double>()); persistGlobalFx = true; }
-        else if (path == "eq.highFreq") { mPresetMixer.SetGlobalEQBandFrequency(3, value.get<double>()); persistGlobalFx = true; }
+        else if (path == "eq.enabled")
+        {
+            mPresetMixer.SetGlobalEQEnabled(value.get<bool>());
+            persistGlobalFx = true;
+        }
+        else if (path == "doubler.enabled")
+        {
+            mPresetMixer.SetGlobalDoublerEnabled(value.get<bool>());
+            persistGlobalFx = true;
+        }
+        else if (path == "doubler.delay")
+        {
+            mPresetMixer.SetGlobalDoublerDelay(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "doubler.mix")
+        {
+            mPresetMixer.SetGlobalDoublerMix(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "doubler.detune")
+        {
+            mPresetMixer.SetGlobalDoublerDetune(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "input.gain")
+        {
+            mPresetMixer.SetGlobalInputGain(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "output.gain")
+        {
+            mPresetMixer.SetGlobalOutputGain(value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "limiter.enabled")
+        {
+            mPresetMixer.SetLimiterEnabled(value.get<bool>());
+        }
+        else if (path == "eq.lowGain")
+        {
+            mPresetMixer.SetGlobalEQBandGain(0, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.lowFreq")
+        {
+            mPresetMixer.SetGlobalEQBandFrequency(0, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.lowMidGain")
+        {
+            mPresetMixer.SetGlobalEQBandGain(1, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.lowMidFreq")
+        {
+            mPresetMixer.SetGlobalEQBandFrequency(1, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.lowMidQ")
+        {
+            mPresetMixer.SetGlobalEQBandQ(1, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.highMidGain")
+        {
+            mPresetMixer.SetGlobalEQBandGain(2, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.highMidFreq")
+        {
+            mPresetMixer.SetGlobalEQBandFrequency(2, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.highMidQ")
+        {
+            mPresetMixer.SetGlobalEQBandQ(2, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.highGain")
+        {
+            mPresetMixer.SetGlobalEQBandGain(3, value.get<double>());
+            persistGlobalFx = true;
+        }
+        else if (path == "eq.highFreq")
+        {
+            mPresetMixer.SetGlobalEQBandFrequency(3, value.get<double>());
+            persistGlobalFx = true;
+        }
     }
 
     if (persistGlobalFx)
+    {
         PersistGlobalFxSettingsToAppSettings();
+    }
 
     // No echo: the UI already owns the values it sent.
     // Full state is pushed via HandleGetGlobalChainRequest / HandleSetGlobalChainRequest.
@@ -1456,30 +1650,26 @@ void PluginController::HandleSignalTestRequest(const nlohmann::json& payload)
 
 void PluginController::HandleBrowseModelRequest()
 {
-    mHost.BrowseFileAsync(BrowseFileType::NAMModel, "Select NAM Model",
-        [this](const BrowseFileResult& result)
+    mHost.BrowseFileAsync(BrowseFileType::NAMModel, "Select NAM Model", [this](const BrowseFileResult& result) {
+        if (result.success)
         {
-            if (result.success)
-            {
-                nlohmann::json payload;
-                payload["path"] = util::PathToUtf8(result.path);
-                HandleLoadModelRequest(payload);
-            }
-        });
+            nlohmann::json payload;
+            payload["path"] = util::PathToUtf8(result.path);
+            HandleLoadModelRequest(payload);
+        }
+    });
 }
 
 void PluginController::HandleBrowseIRRequest()
 {
-    mHost.BrowseFileAsync(BrowseFileType::IRFile, "Select IR File",
-        [this](const BrowseFileResult& result)
+    mHost.BrowseFileAsync(BrowseFileType::IRFile, "Select IR File", [this](const BrowseFileResult& result) {
+        if (result.success)
         {
-            if (result.success)
-            {
-                nlohmann::json payload;
-                payload["path"] = util::PathToUtf8(result.path);
-                HandleLoadIRRequest(payload);
-            }
-        });
+            nlohmann::json payload;
+            payload["path"] = util::PathToUtf8(result.path);
+            HandleLoadIRRequest(payload);
+        }
+    });
 }
 
 void PluginController::HandleOpenAudioPreferencesRequest()
@@ -1498,10 +1688,14 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
             if (payload.contains("liveMode"))
+            {
                 mPresetMixer.SetLiveTunerMode(payload.value("liveMode", true));
+            }
 
             if (payload.contains("referenceFrequency"))
+            {
                 mPresetMixer.SetTunerReferenceFrequency(payload["referenceFrequency"].get<double>());
+            }
 
             mPresetMixer.SetTunerEnabled(true);
             referenceFrequency = mPresetMixer.GetTunerReferenceFrequency();
@@ -1590,14 +1784,22 @@ void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
     if (mHost.IsStandalone())
     {
         if (payload.contains("monoMode"))
+        {
             mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
+        }
         else if (payload.contains("mono"))
+        {
             mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
+        }
 
         if (payload.contains("inputChannel"))
+        {
             mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
+        }
         else if (payload.contains("channel"))
+        {
             mPresetMixer.SetInputChannel(payload["channel"].get<int>());
+        }
     }
     else
     {
@@ -1616,9 +1818,13 @@ void PluginController::HandleSetAmpCabStateRequest(const nlohmann::json& payload
     bool ampEnabled = true;
     bool cabEnabled = true;
     if (payload.contains("ampEnabled"))
+    {
         ampEnabled = payload.value("ampEnabled", true);
+    }
     if (payload.contains("cabEnabled"))
+    {
         cabEnabled = payload.value("cabEnabled", true);
+    }
 
     nlohmann::json message;
     message["type"] = "ampCabStateChanged";
@@ -1648,8 +1854,13 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
     if (path.empty())
+    {
         path = payload.value("filePath", "");
-    if (path.empty()) return;
+    }
+    if (path.empty())
+    {
+        return;
+    }
 
     std::filesystem::path filePath = util::PathFromUtf8(path);
     if (!std::filesystem::exists(filePath))
@@ -1660,26 +1871,24 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
 
     std::string resourceError;
     const auto savedResource = SaveLocalLibraryResource(
-        nlohmann::json{
-            {"resourceType", "nam"},
-            {"filePath", util::PathToUtf8(filePath)},
-            {"name", util::PathToUtf8(filePath.stem())},
-            {"category", "Local"},
-            {"metadata", nlohmann::json::object({{"provider", kLocalResourceProvider}})}
-        },
-        resourceError,
-        true);
+        nlohmann::json{{"resourceType", "nam"},
+                       {"filePath", util::PathToUtf8(filePath)},
+                       {"name", util::PathToUtf8(filePath.stem())},
+                       {"category", "Local"},
+                       {"metadata", nlohmann::json::object({{"provider", kLocalResourceProvider}})}},
+        resourceError, true);
     if (!savedResource)
     {
-        ReportErrorToUI("Model load failed", resourceError.empty() ? "Could not register model in the resource library" : resourceError);
+        ReportErrorToUI("Model load failed",
+                        resourceError.empty() ? "Could not register model in the resource library" : resourceError);
         return;
     }
 
     const bool updatedNamResource =
-        UpdateResourceForNodeType(EffectGuids::kAmpNamOptimized, savedResource->type, filePath)
-        || UpdateResourceForNodeType(EffectGuids::kAmpNamBlend, savedResource->type, filePath)
-        || UpdateResourceForNodeType(EffectGuids::kFxNam, savedResource->type, filePath)
-        || UpdateResourceForNodeType(EffectGuids::kAmpNam, savedResource->type, filePath);
+        UpdateResourceForNodeType(EffectGuids::kAmpNamOptimized, savedResource->type, filePath) ||
+        UpdateResourceForNodeType(EffectGuids::kAmpNamBlend, savedResource->type, filePath) ||
+        UpdateResourceForNodeType(EffectGuids::kFxNam, savedResource->type, filePath) ||
+        UpdateResourceForNodeType(EffectGuids::kAmpNam, savedResource->type, filePath);
 
     if (updatedNamResource)
     {
@@ -1697,8 +1906,13 @@ void PluginController::HandleLoadIRRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
     if (path.empty())
+    {
         path = payload.value("filePath", "");
-    if (path.empty()) return;
+    }
+    if (path.empty())
+    {
+        return;
+    }
 
     std::filesystem::path filePath = util::PathFromUtf8(path);
     if (!std::filesystem::exists(filePath))
@@ -1757,7 +1971,9 @@ void PluginController::HandleGetThemeRequest()
 
     const auto appThemeIt = mAppSettings.find("theme");
     if (appThemeIt != mAppSettings.end() && appThemeIt->is_string())
+    {
         theme = appThemeIt->get<std::string>();
+    }
 
     nlohmann::json msg;
     msg["type"] = "theme";
@@ -1776,7 +1992,7 @@ void PluginController::HandleGetAppInfoRequest()
     nlohmann::json msg;
     msg["type"] = "appInfo";
     msg["version"] = GUITARFX_APP_VERSION;
-    
+
 #if defined(_WIN32)
     msg["os"] = "Windows";
 #elif defined(__APPLE__)
@@ -1849,14 +2065,27 @@ void PluginController::HandleLoadNodeResourceRequest(const nlohmann::json& paylo
     std::string presetId = payload.value("presetId", "p1");
     std::string nodeId = payload.value("nodeId", "");
     ResourceRef ref;
-    if (payload.contains("resourceType")) ref.resourceType = payload["resourceType"].get<std::string>();
-    if (payload.contains("resourceId")) ref.resourceId = payload["resourceId"].get<std::string>();
-    if (payload.contains("filePath")) ref.filePath = payload["filePath"].get<std::string>();
+    if (payload.contains("resourceType"))
+    {
+        ref.resourceType = payload["resourceType"].get<std::string>();
+    }
+    if (payload.contains("resourceId"))
+    {
+        ref.resourceId = payload["resourceId"].get<std::string>();
+    }
+    if (payload.contains("filePath"))
+    {
+        ref.filePath = payload["filePath"].get<std::string>();
+    }
     const bool loaded = mPresetMixer.LoadNodeResource(presetId, nodeId, ref);
     if (!loaded && ReportHostedPluginResourceLoadFailure(nodeId, ref))
+    {
         DiscardFailedHostedPluginResourceSelection(nodeId, ref);
+    }
     else if (loaded)
+    {
         NotifyHostedPluginResourceLoadCompleted(nodeId, ref);
+    }
     UpdateHostLatency();
 }
 
@@ -1883,21 +2112,31 @@ void PluginController::UpdateHostLatency()
 {
     const int latency = mPresetMixer.GetTotalLatencySamples();
     if (latency == mLastReportedLatency)
+    {
         return;
+    }
     mLastReportedLatency = latency;
     mHost.NotifyLatencyChanged(latency);
 }
 
 void PluginController::ResetNamNodeLevelState(const std::string& nodeId)
 {
-    if (nodeId.empty() || !mActivePreset) return;
+    if (nodeId.empty() || !mActivePreset)
+    {
+        return;
+    }
 
     auto* node = mActivePreset->graph.FindNode(nodeId);
-    if (!node || !IsNamEffectType(node->type)) return;
+    if (!node || !IsNamEffectType(node->type))
+    {
+        return;
+    }
 
     ClearNamCalibrationParams(*node);
     if (!node->params.contains("useCalibration"))
+    {
         node->params["useCalibration"] = 1.0;
+    }
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
     mPendingStateBroadcast = true;
 
@@ -1913,9 +2152,7 @@ void PluginController::ResetNamNodeLevelState(const std::string& nodeId)
         // Keep this value resident even if no model is currently resolved so
         // calibration takes effect immediately when a model loads.
         const double calLevelToInject =
-            std::isfinite(mNamInterfaceCalibrationLevelDbu)
-                ? mNamInterfaceCalibrationLevelDbu
-                : clearValue;
+            std::isfinite(mNamInterfaceCalibrationLevelDbu) ? mNamInterfaceCalibrationLevelDbu : clearValue;
         mPresetMixer.SetNodeParam(mActivePresetId, nodeId, "calibrationInputLevel", calLevelToInject);
     }
 }
@@ -1931,7 +2168,9 @@ void PluginController::ClearNamCalibrationParams(GraphNode& node) const
 void PluginController::TouchSharedSyncState(const std::vector<std::string>& domains) const
 {
     if (domains.empty())
+    {
         return;
+    }
 
     nlohmann::json payload = nlohmann::json::object();
     payload["updatedAt"] = BuildUtcIsoTimestamp();
@@ -1939,13 +2178,17 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
     for (const auto& domain : domains)
     {
         if (domain.empty())
+        {
             continue;
+        }
         payload["domains"].push_back(domain);
     }
 
     const auto instanceIdIt = mAppSettings.find("app.instanceId");
     if (instanceIdIt != mAppSettings.end() && instanceIdIt->is_string())
+    {
         payload["writerInstanceId"] = instanceIdIt->get<std::string>();
+    }
 
     // The counter has to be read and written under the same lock. Reading it
     // outside the transaction lets two instances see the same version and both
@@ -1958,7 +2201,9 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
         {
             const auto versionIt = previous->find("version");
             if (versionIt != previous->end() && versionIt->is_number_unsigned())
+            {
                 nextVersion = versionIt->get<std::uint64_t>() + 1;
+            }
         }
 
         payload["version"] = nextVersion;
@@ -2028,18 +2273,19 @@ void PluginController::OpenDocumentStore() const
         // pre-upgrade library. The damaged file is kept, not deleted, so anything
         // salvageable can still be recovered from it by hand.
         const auto quarantinePath =
-            dbPath.parent_path()
-            / (dbPath.filename().string() + ".damaged-" + std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
-                                                              std::chrono::system_clock::now().time_since_epoch())
-                                                              .count()));
+            dbPath.parent_path() / (dbPath.filename().string() + ".damaged-" +
+                                    std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                                                       std::chrono::system_clock::now().time_since_epoch())
+                                                       .count()));
 
         std::error_code renameEc;
         std::filesystem::rename(dbPath, quarantinePath, renameEc);
         if (renameEc)
         {
-            AppendSessionLog("The document store at " + dbPath.string() + " is damaged and could not be moved aside: "
-                + renameEc.message());
-            std::cerr << "[Plugin] Damaged document store could not be quarantined: " << renameEc.message() << std::endl;
+            AppendSessionLog("The document store at " + dbPath.string() +
+                             " is damaged and could not be moved aside: " + renameEc.message());
+            std::cerr << "[Plugin] Damaged document store could not be quarantined: " << renameEc.message()
+                      << std::endl;
             return;
         }
 
@@ -2051,9 +2297,9 @@ void PluginController::OpenDocumentStore() const
             std::filesystem::remove(dbPath.parent_path() / (dbPath.filename().string() + suffix), sidecarEc);
         }
 
-        AppendSessionLog("The document store at " + dbPath.string() + " was damaged (" + error
-            + "). It has been moved to " + quarantinePath.string()
-            + " and the library will be rebuilt from the legacy files.");
+        AppendSessionLog("The document store at " + dbPath.string() + " was damaged (" + error +
+                         "). It has been moved to " + quarantinePath.string() +
+                         " and the library will be rebuilt from the legacy files.");
         std::cerr << "[Plugin] Damaged document store quarantined as " << quarantinePath.string() << std::endl;
 
         error.clear();
@@ -2074,17 +2320,20 @@ void PluginController::OpenDocumentStore() const
     // opened lazily before Initialize() has filled those in, and importing with
     // an empty preset directory would stamp the schema version having silently
     // skipped every preset.
-    const auto report = storage::MigrateLegacyJsonTree(mStore,
-                                                       mFileSystem.ResolveSettingsDirectory(),
+    const auto report = storage::MigrateLegacyJsonTree(mStore, mFileSystem.ResolveSettingsDirectory(),
                                                        mFileSystem.ResolvePresetDirectory() / "user");
     if (report.ran)
     {
-        std::string summary = "Imported the legacy JSON tree into " + dbPath.string() + ": "
-            + std::to_string(report.itemsImported) + " items";
+        std::string summary = "Imported the legacy JSON tree into " + dbPath.string() + ": " +
+                              std::to_string(report.itemsImported) + " items";
         for (const auto& note : report.notes)
+        {
             summary += "\n  " + note;
+        }
         for (const auto& failure : report.failures)
+        {
             summary += "\n  ! " + failure;
+        }
         AppendSessionLog(summary);
         std::cout << "[Plugin] " << summary << std::endl;
     }
@@ -2111,7 +2360,9 @@ nlohmann::json PluginController::LoadUiStorageJson(const std::string& filename, 
     // of `fallback` pushes the failure somewhere harder to read.
     if (auto stored = Store().Get(storage::ItemType::kDocument, UiStorageDocumentId(filename));
         stored && !stored->is_null())
+    {
         return *stored;
+    }
 
     return fallback;
 }
@@ -2127,15 +2378,22 @@ void PluginController::SaveUiStorageJson(const std::string& filename, const nloh
 
     std::vector<std::string> domains;
     if (filename == "automation.json")
+    {
         domains.push_back("automation");
+    }
     else if (filename == "setlists.json")
+    {
         domains.push_back("setlists");
-    else if (filename == "preset-folders.json"
-             || filename == "preset-favorites.json"
-             || filename == "preset-ratings.json")
+    }
+    else if (filename == "preset-folders.json" || filename == "preset-favorites.json" ||
+             filename == "preset-ratings.json")
+    {
         domains.push_back("presetMetadata");
+    }
     else
+    {
         domains.push_back("uiStorage");
+    }
 
     TouchSharedSyncState(domains);
 }
@@ -2145,7 +2403,10 @@ bool PluginController::WriteFile(const std::filesystem::path& target, const std:
     try
     {
         std::ofstream ofs(target, std::ios::binary);
-        if (!ofs.is_open()) return false;
+        if (!ofs.is_open())
+        {
+            return false;
+        }
         ofs.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
         return true;
     }

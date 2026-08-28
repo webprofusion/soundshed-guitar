@@ -41,10 +41,12 @@ inline constexpr double kNamInterfaceCalibrationLevelDbuMin = 0.0;
 inline constexpr double kNamInterfaceCalibrationLevelDbuMax = 24.0;
 inline constexpr const char* kNamAutoInputCalibrationSettingKey = "audio.nam.autoInputCalibration";
 inline constexpr const char* kUserInputCalibrationProfilesSettingKey = "audio.userInputCalibration.profiles";
-inline constexpr const char* kUserInputCalibrationActiveProfileIdSettingKey = "audio.userInputCalibration.activeProfileId";
+inline constexpr const char* kUserInputCalibrationActiveProfileIdSettingKey =
+    "audio.userInputCalibration.activeProfileId";
 
 // Superseded by the profile keys above; still read when migrating a settings file.
 inline constexpr const char* kLegacyInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
-inline constexpr const char* kLegacyInterfaceCalibrationReferenceDbuSettingKey = "audio.interfaceCalibration.referenceDbu";
+inline constexpr const char* kLegacyInterfaceCalibrationReferenceDbuSettingKey =
+    "audio.interfaceCalibration.referenceDbu";
 
 } // namespace guitarfx::controller_detail

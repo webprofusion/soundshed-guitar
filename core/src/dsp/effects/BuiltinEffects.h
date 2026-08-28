@@ -41,25 +41,25 @@
 #include "dsp/effects/SimpleCabEffect.h"
 #include "dsp/effects/CompositeEffectProcessor.h"
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
-#include "dsp/effects/WasmEffect.h"
+    #include "dsp/effects/WasmEffect.h"
 #endif
 
 namespace nam
 {
-  namespace factory
-  {
-    void ForceFactoryRegistration();
-  }
+namespace factory
+{
+void ForceFactoryRegistration();
 }
+} // namespace nam
 
 namespace guitarfx
 {
-  /**
-   * Registers all built-in effects with the EffectRegistry.
-   * Call this once at application startup before loading any presets.
-   */
-  inline void RegisterAllEffects()
-  {
+/**
+ * Registers all built-in effects with the EffectRegistry.
+ * Call this once at application startup before loading any presets.
+ */
+inline void RegisterAllEffects()
+{
     ::nam::factory::ForceFactoryRegistration();
 
     // Utility effects
@@ -69,29 +69,29 @@ namespace guitarfx
     RegisterWasmEffect();
 #endif
     {
-      EffectTypeInfo splitterInfo;
-      splitterInfo.type = EffectGuids::kSplitter;
-      splitterInfo.aliases = {"splitter"};
-      splitterInfo.displayName = "Splitter";
-      splitterInfo.category = "utility";
-      splitterInfo.description = "Split signal into parallel branches";
-      splitterInfo.requiresResource = false;
-      EffectRegistry::Instance().Register(splitterInfo.type, splitterInfo, []()
-        { return std::make_unique<PassthroughProcessor>(); });
+        EffectTypeInfo splitterInfo;
+        splitterInfo.type = EffectGuids::kSplitter;
+        splitterInfo.aliases = {"splitter"};
+        splitterInfo.displayName = "Splitter";
+        splitterInfo.category = "utility";
+        splitterInfo.description = "Split signal into parallel branches";
+        splitterInfo.requiresResource = false;
+        EffectRegistry::Instance().Register(splitterInfo.type, splitterInfo,
+                                            []() { return std::make_unique<PassthroughProcessor>(); });
 
-      EffectTypeInfo mixerInfo;
-      mixerInfo.type = EffectGuids::kMixer;
-      mixerInfo.aliases = {"mixer"};
-      mixerInfo.displayName = "Mixer";
-      mixerInfo.category = "utility";
-      mixerInfo.description = "Mix parallel branches with per-input level, pan, and delay";
-      mixerInfo.requiresResource = false;
-      mixerInfo.parameters = {
-        {"masterLevel", "Master", 0.0, -60.0, 12.0, "dB"}
-        // Per-input params (level_N, pan_N, delay_N, mute_N) are dynamic
-      };
-      EffectRegistry::Instance().Register(mixerInfo.type, mixerInfo, []()
-        { return std::make_unique<MixerEffect>(); });
+        EffectTypeInfo mixerInfo;
+        mixerInfo.type = EffectGuids::kMixer;
+        mixerInfo.aliases = {"mixer"};
+        mixerInfo.displayName = "Mixer";
+        mixerInfo.category = "utility";
+        mixerInfo.description = "Mix parallel branches with per-input level, pan, and delay";
+        mixerInfo.requiresResource = false;
+        mixerInfo.parameters = {
+            {"masterLevel", "Master", 0.0, -60.0, 12.0, "dB"}
+            // Per-input params (level_N, pan_N, delay_N, mute_N) are dynamic
+        };
+        EffectRegistry::Instance().Register(mixerInfo.type, mixerInfo,
+                                            []() { return std::make_unique<MixerEffect>(); });
     }
 
     // Dynamics
@@ -108,9 +108,9 @@ namespace guitarfx
 
     // Amp models
     RegisterBuiltinAmpEffect();
-    RegisterOptimizedNAMAmpEffect();   // NAM core-backed amp model
-    RegisterOptimizedNAMFXEffect();    // NAM core-backed FX variant
-    RegisterMultiModelNAMAmpEffect();  // Multi-model blend
+    RegisterOptimizedNAMAmpEffect();  // NAM core-backed amp model
+    RegisterOptimizedNAMFXEffect();   // NAM core-backed FX variant
+    RegisterMultiModelNAMAmpEffect(); // Multi-model blend
 
     // Cabinet simulation
     RegisterIRCabEffect();
@@ -143,6 +143,6 @@ namespace guitarfx
 
     // Note: Composite effects are registered dynamically by CompositeEffectLibrary
     // after loading definitions from disk. They are not part of static registration.
-  }
+}
 
 } // namespace guitarfx

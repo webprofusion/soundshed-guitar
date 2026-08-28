@@ -19,11 +19,11 @@ static volatile auto wavenet_create_config = &nam::wavenet::create_config;
 
 void ForceFactoryRegistration()
 {
-  (void)convnet_create_config;
-  (void)container_create_config;
-  (void)linear_create_config;
-  (void)lstm_create_config;
-  (void)wavenet_create_config;
+    (void)convnet_create_config;
+    (void)container_create_config;
+    (void)linear_create_config;
+    (void)lstm_create_config;
+    (void)wavenet_create_config;
 }
 
 } // namespace factory

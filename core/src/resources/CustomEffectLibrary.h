@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "storage/JsonStore.h"
 #include <filesystem>
 #include <map>
@@ -12,8 +11,8 @@
 
 namespace guitarfx
 {
-  struct CustomEffectLibraryEntry
-  {
+struct CustomEffectLibraryEntry
+{
     std::string id;
     std::string name;
     std::string category;
@@ -31,20 +30,24 @@ namespace guitarfx
     std::string updatedAt;
 
     [[nodiscard]] bool IsValid() const;
-  };
+};
 
-  [[nodiscard]] nlohmann::json SerializeCustomEffectLibraryEntry(const CustomEffectLibraryEntry& entry);
-  [[nodiscard]] std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(const nlohmann::json& json,
-                                                                                            std::string* error = nullptr);
+[[nodiscard]] nlohmann::json SerializeCustomEffectLibraryEntry(const CustomEffectLibraryEntry& entry);
+[[nodiscard]] std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(const nlohmann::json& json,
+                                                                                          std::string* error = nullptr);
 
-  class CustomEffectLibrary
-  {
+class CustomEffectLibrary
+{
   public:
     void Clear();
     void UpsertEntry(const CustomEffectLibraryEntry& entry);
     [[nodiscard]] bool RemoveEntry(const std::string& id);
     [[nodiscard]] const CustomEffectLibraryEntry* GetEntry(const std::string& id) const;
-    [[nodiscard]] const std::vector<CustomEffectLibraryEntry>& GetAllEntries() const { return mEntries; }
+
+    [[nodiscard]] const std::vector<CustomEffectLibraryEntry>& GetAllEntries() const
+    {
+        return mEntries;
+    }
 
     // Store-backed persistence: one row per entry, keyed by entry id.
     void LoadFromStore(storage::JsonStore& store);
@@ -56,6 +59,6 @@ namespace guitarfx
 
   private:
     std::vector<CustomEffectLibraryEntry> mEntries;
-  };
+};
 
 } // namespace guitarfx
