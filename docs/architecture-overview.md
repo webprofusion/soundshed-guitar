@@ -2,7 +2,9 @@
 
 ## Key Files
 - `core/src/PluginController.cpp` — Main application controller, state management, UI messaging
-  (split by feature across `core/src/controller/`; shared helpers in `core/src/controller/internal/`)
+  (split by feature across `core/src/controller/`; shared helpers in `core/src/controller/internal/`;
+  self-contained areas are services it owns — metronome, telemetry, control surface, tuner,
+  signal test, practice tool, demo preview)
 - `core/src/MessageDispatcher.cpp` — Message routing across UI, mixer, preset, and settings domains
 - `core/src/UiBridge.cpp` — Native UI bridge plumbing
 - `core/src/dsp/MultiPresetMixer.cpp` — Shared mixer and global chain orchestration

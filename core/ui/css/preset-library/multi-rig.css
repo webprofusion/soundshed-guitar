@@ -1,0 +1,84 @@
+/* ===== Multi-Rig (Composite Preset) list ─ styled to match .preset-item ===== */
+
+/* Unlike the Presets panel, there's no folder-tree sidebar here — override
+ * .preset-library-body's two-column grid so the list uses the full popover
+ * width instead of being squeezed into its 220px first column. */
+.preset-library-multi-rig-panel {
+  display: block;
+}
+
+.composite-preset-list {
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 420px;
+}
+
+.composite-preset-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 10px;
+  line-height: 1.5;
+}
+
+.composite-preset-chip {
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.15s ease;
+}
+
+.composite-preset-chip:last-child {
+  margin-bottom: 0;
+}
+
+.composite-preset-chip:hover,
+.composite-preset-chip:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--overlay-light);
+}
+
+.composite-preset-chip:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 2px;
+}
+
+.composite-preset-chip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.composite-preset-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composite-preset-slot-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.composite-preset-desc {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.composite-preset-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}

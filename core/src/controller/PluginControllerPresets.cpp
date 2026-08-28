@@ -9,6 +9,8 @@
 
 #include "PluginController.h"
 
+#include "controller/TunerService.h"
+
 #include "GuitarFXConfig.h"
 
 #include "controller/internal/ControllerUtils.h"
@@ -651,14 +653,14 @@ void PluginController::ApplyPreset(const Preset& preset)
         mPresetMixer.SetTunerCallback(
             [this](const MultiPresetMixer::TunerResult& result)
             {
-                std::lock_guard<std::mutex> lock(mTunerMutex);
-                mPendingTunerData.noteName = result.noteName;
-                mPendingTunerData.octave = result.octave;
-                mPendingTunerData.frequency = result.frequency;
-                mPendingTunerData.centOffset = result.centOffset;
-                mPendingTunerData.confidence = result.confidence;
-                mPendingTunerData.detected = result.detected;
-                mTunerDataPending.store(true, std::memory_order_release);
+                mTuner->PostReading({
+                    result.noteName,
+                    result.octave,
+                    result.frequency,
+                    result.centOffset,
+                    result.confidence,
+                    result.detected,
+                });
             });
 
         // Apply global interface calibration level to all calibratable NAM

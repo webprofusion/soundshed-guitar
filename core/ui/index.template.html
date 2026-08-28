@@ -67,7 +67,12 @@
   <link rel="stylesheet" href="css/modals/midi-automation.css" />
   <link rel="stylesheet" href="css/layout-designer.css" />
   <link rel="stylesheet" href="css/fx-library.css" />
-  <link rel="stylesheet" href="css/preset-library.css" />
+  <!-- Preset toolbar and library. Order matters: these are the parts of the
+       original stylesheet, in source order. Reordering changes the cascade. -->
+  <link rel="stylesheet" href="css/preset-library/toolbar.css" />
+  <link rel="stylesheet" href="css/preset-library/library.css" />
+  <link rel="stylesheet" href="css/preset-library/tags.css" />
+  <link rel="stylesheet" href="css/preset-library/multi-rig.css" />
   <link rel="stylesheet" href="css/advanced-panel.css" />
   <link rel="stylesheet" href="css/settings.css" />
   <link rel="stylesheet" href="css/tone-sharing.css" />

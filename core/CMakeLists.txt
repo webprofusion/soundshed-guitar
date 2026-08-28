@@ -520,10 +520,20 @@ set(GUITARFX_CORE_SOURCES
     src/dispatcher/MessageDispatchLibraryComposite.cpp
     src/dispatcher/MessageDispatchAutomation.cpp
     src/dispatcher/MessageDispatchPracticeTool.cpp
+    src/controller/ControlSurfaceQueue.h
+    src/controller/ControlSurfaceQueue.cpp
     src/controller/DemoPreviewService.h
     src/controller/DemoPreviewService.cpp
     src/controller/PracticeToolService.h
     src/controller/PracticeToolService.cpp
+    src/controller/MetronomeService.h
+    src/controller/MetronomeService.cpp
+    src/controller/SignalTestService.h
+    src/controller/SignalTestService.cpp
+    src/controller/TunerService.h
+    src/controller/TunerService.cpp
+    src/controller/TelemetryPublisher.h
+    src/controller/TelemetryPublisher.cpp
     src/controller/PluginControllerMetronome.cpp
     src/controller/PluginControllerSettings.cpp
     src/controller/PluginControllerPresetArchive.cpp

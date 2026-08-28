@@ -462,10 +462,6 @@ body.theme-classic {
   background: rgba(61, 47, 37, 0.4);
 }
 
-.theme-classic .preset-toolbar-group-label {
-  color: rgba(255, 234, 196, 0.72);
-}
-
 .theme-classic .preset-toolbar-separator {
   background: rgba(188, 138, 91, 0.28);
 }

@@ -15,7 +15,12 @@
  */
 #include "PluginController.h"
 #include "MessageDispatcher.h"
+#include "controller/ControlSurfaceQueue.h"
 #include "controller/DemoPreviewService.h"
+#include "controller/MetronomeService.h"
+#include "controller/SignalTestService.h"
+#include "controller/TelemetryPublisher.h"
+#include "controller/TunerService.h"
 #include "controller/PracticeToolService.h"
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/HostedPluginSupport.h"
@@ -70,14 +75,23 @@ namespace guitarfx
 PluginController::PluginController(IPluginHost& host)
     : mHost(host)
 {
-    mPendingMidiApply.reserve(kMaxPendingMidiApply);
-    mPendingMidiLog.reserve(kMaxPendingMidiLog);
     RegisterAllEffects();
+    mControlSurface = std::make_unique<ControlSurfaceQueue>(
+        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mMetronome = std::make_unique<MetronomeService>(mHost, mAppSettings, mResourceRoot);
+    mTelemetry = std::make_unique<TelemetryPublisher>(
+        mHost,
+        mPresetMixer,
+        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mSignalTest = std::make_unique<SignalTestService>(
+        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+    mTuner = std::make_unique<TunerService>(
+        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
     mDemoPreview = std::make_unique<DemoPreviewService>(
         mHost,
         mPresetMixer,
         mDSPMutex,
-        mSignalTestActive,
+        mSignalTest->ActiveFlag(),
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
         [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
     mPracticeTool = std::make_unique<PracticeToolService>(
@@ -262,14 +276,8 @@ void PluginController::Prepare(double sampleRate, int blockSize)
 
     if (mHost.IsStandalone())
     {
-        mMetronomeSamplesUntilClick = 0.0;
-        mMetronomeClickSamplesRemaining = 0;
-        mMetronomeClickPhase = 0.0;
-        mMetronomeBeatIndex = 0;
-        mMetronomeClickSamplePosition = 0;
-        mMetronomeClickUseHigh = false;
-        mMetronomeResetPending.store(true, std::memory_order_release);
-        RefreshMetronomeClickSamples(sampleRate);
+        mMetronome->ResetTransport();
+        mMetronome->RefreshClickSamples(sampleRate);
     }
 }
 
@@ -277,7 +285,7 @@ void PluginController::Reset()
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.Reset();
-    mMetronomeResetPending.store(true, std::memory_order_release);
+    mMetronome->RequestReset();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -427,39 +435,18 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
 
     // Deactivate guidance for preview only once the preview has been active and then stopped.
     // This avoids a race where guidance is deactivated before DemoPreview has loaded the buffer.
-    if (mRiffGuidanceForPreview && mDemoPreview)
+    if (mMetronome->IsGuidanceForPreview() && mDemoPreview)
     {
         if (mDemoPreview->IsPreviewActive())
-            mRiffGuidancePreviewWasActive = true;
-        else if (mRiffGuidancePreviewWasActive)
+            mMetronome->SetGuidancePreviewWasActive(true);
+        else if (mMetronome->GuidancePreviewWasActive())
         {
             DeactivateRiffGuidance(true);
-            mRiffGuidancePreviewWasActive = false;
+            mMetronome->SetGuidancePreviewWasActive(false);
         }
     }
 
-    // Signal path test tone injection
-    if (mSignalTestActive.load(std::memory_order_acquire))
-    {
-        auto& st = mSignalTestState;
-        if (inputs && inputs[0] && inputs[1])
-        {
-            for (int i = 0; i < numSamples && st.samplesRemaining > 0; ++i, --st.samplesRemaining)
-            {
-                float sample = static_cast<float>(std::sin(st.phase * 2.0 * 3.14159265358979323846));
-                st.phase += st.phaseIncrement;
-                if (st.phase >= 1.0) st.phase -= 1.0;
-                inputs[0][i] = sample;
-                inputs[1][i] = sample;
-                st.inputSumSquares += static_cast<double>(sample) * sample;
-            }
-        }
-        if (st.samplesRemaining <= 0)
-        {
-            mSignalTestActive.store(false, std::memory_order_release);
-            mSignalTestResultPending.store(true, std::memory_order_release);
-        }
-    }
+    mSignalTest->InjectInput(inputs, numSamples);
 
     // Push current tempo to any tempo-aware effect nodes
     mPresetMixer.SetTempo(GetEffectiveTempoBpm());
@@ -468,7 +455,7 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     mPresetMixer.Process(inputs, outputs, numSamples);
 
     // Add metronome click on top of processed audio (standalone only)
-    RenderMetronome(outputs, numSamples);
+    mMetronome->Render(outputs, numSamples);
 
     // Mix in the local backing-track player, post-chain (like the
     // metronome) — it is not the guitar signal and must never be routed
@@ -477,17 +464,7 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     if (mPracticeTool)
         mPracticeTool->RenderPostChain(outputs, numSamples);
 
-    // Collect signal test output
-    if (mSignalTestState.samplesRemaining > 0 || mSignalTestResultPending.load(std::memory_order_relaxed))
-    {
-        for (int i = 0; i < numSamples; ++i)
-        {
-            if (outputs && outputs[0])
-                mSignalTestState.outputSumSquares[0] += static_cast<double>(outputs[0][i]) * outputs[0][i];
-            if (outputs && outputs[1])
-                mSignalTestState.outputSumSquares[1] += static_cast<double>(outputs[1][i]) * outputs[1][i];
-        }
-    }
+    mSignalTest->CollectOutput(outputs, numSamples);
 
 }
 
@@ -1008,157 +985,27 @@ void PluginController::OnIdle()
         }
     }
 
-    // Drain diagnostic MIDI log events (only populated while the UI log panel is
-    // open). Building JSON + SendMessageToUI happens here on the idle thread, never
-    // on the audio thread.
-    if (mMidiLogEnabled.load(std::memory_order_relaxed))
-    {
-        std::vector<MidiEvent> events;
-        {
-            std::lock_guard<std::mutex> lock(mPendingMidiLogMutex);
-            events.assign(mPendingMidiLog.begin(), mPendingMidiLog.end());
-            mPendingMidiLog.clear();
-        }
-        for (const auto& ev : events)
-        {
-            const int channel = ev.status & 0x0F;
-            const int statusType = (ev.status >> 4) & 0x0F;
-            const char* typeName = "Unknown";
-            switch (statusType)
-            {
-            case 0x08: typeName = "NoteOff"; break;
-            case 0x09: typeName = ev.data2 > 0 ? "NoteOn" : "NoteOff"; break;
-            case 0x0A: typeName = "Aftertouch"; break;
-            case 0x0B: typeName = "CC"; break;
-            case 0x0C: typeName = "ProgramChange"; break;
-            case 0x0D: typeName = "ChanPress"; break;
-            case 0x0E: typeName = "PitchBend"; break;
-            }
+    mControlSurface->PublishMidiLog();
 
-            nlohmann::json logMsg;
-            logMsg["type"] = "midiLog";
-            logMsg["midiType"] = typeName;
-            logMsg["channel"] = channel;
-            logMsg["data1"] = static_cast<int>(ev.data1);
-            logMsg["data2"] = static_cast<int>(ev.data2);
-            SendMessageToUI(logMsg.dump());
-        }
+    // Apply whatever the control surface parked for us. These all load presets,
+    // which needs the DSP lock the audio thread was holding when it asked.
+    {
+        const auto pending = mControlSurface->TakePending();
+        if (pending.setlistPresetIndex.has_value())
+            ApplySetlistPresetByIndexDirect(*pending.setlistPresetIndex);
+        if (pending.setlistBankDelta.has_value())
+            SetlistBankChangeDirect(*pending.setlistBankDelta);
+        if (pending.setlistBankSelect.has_value())
+            SelectSetlistBankDirect(*pending.setlistBankSelect);
+        if (pending.sceneIndex.has_value())
+            SelectSceneByIndexDirect(*pending.sceneIndex);
     }
 
-    // Drain deferred setlist preset apply / bank change (from automation/MIDI under DSP lock)
-    {
-        std::optional<int> pendingIndex;
-        std::optional<int> pendingBankDelta;
-        std::optional<int> pendingBankSelect;
-        std::optional<int> pendingSceneIndex;
-        {
-            std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-            pendingIndex = mPendingSetlistPresetIndex;
-            mPendingSetlistPresetIndex.reset();
-            pendingBankDelta = mPendingSetlistBankDelta;
-            mPendingSetlistBankDelta.reset();
-            pendingBankSelect = mPendingSetlistBankSelect;
-            mPendingSetlistBankSelect.reset();
-            pendingSceneIndex = mPendingSceneIndex;
-            mPendingSceneIndex.reset();
-        }
-        if (pendingIndex.has_value())
-            ApplySetlistPresetByIndexDirect(*pendingIndex);
-        if (pendingBankDelta.has_value())
-            SetlistBankChangeDirect(*pendingBankDelta);
-        if (pendingBankSelect.has_value())
-            SelectSetlistBankDirect(*pendingBankSelect);
-        if (pendingSceneIndex.has_value())
-            SelectSceneByIndexDirect(*pendingSceneIndex);
-    }
+    mSignalTest->OnIdle();
 
-    // Signal test result
-    if (mSignalTestResultPending.load(std::memory_order_acquire))
-    {
-        mSignalTestResultPending.store(false, std::memory_order_release);
-        auto& st = mSignalTestState;
-        auto elapsed = std::chrono::steady_clock::now() - st.startTime;
-        mSignalTestResult.elapsedSeconds = std::chrono::duration<double>(elapsed).count();
-        mSignalTestResult.sampleRate = st.sampleRate;
-        mSignalTestResult.frequencyHz = st.frequencyHz;
-        mSignalTestResult.durationSeconds = static_cast<double>(st.totalSamples) / st.sampleRate;
-        int total = st.totalSamples;
-        mSignalTestResult.inputRMS = (total > 0) ? std::sqrt(st.inputSumSquares / total) : 0.0;
-        mSignalTestResult.outputRMS[0] = (total > 0) ? std::sqrt(st.outputSumSquares[0] / total) : 0.0;
-        mSignalTestResult.outputRMS[1] = (total > 0) ? std::sqrt(st.outputSumSquares[1] / total) : 0.0;
-        mSignalTestResult.passed = mSignalTestResult.outputRMS[0] > 0.001 || mSignalTestResult.outputRMS[1] > 0.001;
+    mTuner->OnIdle();
 
-        nlohmann::json result;
-        result["type"] = "signalPathTestResult";
-        result["sampleRate"] = mSignalTestResult.sampleRate;
-        result["frequency"] = mSignalTestResult.frequencyHz;
-        result["duration"] = mSignalTestResult.durationSeconds;
-        result["elapsed"] = mSignalTestResult.elapsedSeconds;
-        result["inputRMS"] = mSignalTestResult.inputRMS;
-        result["outputRMS"] = { mSignalTestResult.outputRMS[0], mSignalTestResult.outputRMS[1] };
-        result["passed"] = mSignalTestResult.passed;
-        SendMessageToUI(result.dump());
-    }
-
-    // Tuner data
-    if (mTunerDataPending.load(std::memory_order_acquire))
-    {
-        mTunerDataPending.store(false, std::memory_order_release);
-        TunerData data;
-        {
-            std::lock_guard<std::mutex> lock(mTunerMutex);
-            data = mPendingTunerData;
-        }
-        nlohmann::json msg;
-        msg["type"] = "tunerUpdate";
-        msg["noteName"] = data.noteName;
-        msg["octave"] = data.octave;
-        msg["frequency"] = data.frequency;
-        msg["centOffset"] = data.centOffset;
-        msg["confidence"] = data.confidence;
-        msg["detected"] = data.detected;
-        SendMessageToUI(msg.dump());
-    }
-
-    // Periodic updates. The telemetry feeds are the app's largest ongoing cost — signal
-    // diagnostics alone is ~6.7 KB at 20 Hz — and they only exist to drive on-screen meters,
-    // so they are suppressed entirely while the UI is hidden. The counters keep running so
-    // the cadence does not jump when it comes back.
-    const bool uiVisible = mUiVisible.load(std::memory_order_acquire);
-
-    mDSPPerformanceUpdateCounter++;
-    if (mDSPPerformanceUpdateCounter >= 60 / kDspPerformanceStatsRateHz) // fire at kDspPerformanceStatsRateHz; actual sends are rate-limited below
-    {
-        mDSPPerformanceUpdateCounter = 0;
-        if (uiVisible)
-            RequestPerformanceStatsToUI();
-    }
-
-    TrySendPendingPerformanceStatsToUI();
-
-    if (mSignalDiagnosticsEnabled.load(std::memory_order_acquire))
-    {
-        mSignalDiagnosticsUpdateCounter++;
-        if (mSignalDiagnosticsUpdateCounter >= 60 / kSignalDiagnosticsRateHz)
-        {
-            mSignalDiagnosticsUpdateCounter = 0;
-            if (uiVisible)
-                RequestSignalDiagnosticsToUI();
-        }
-    }
-
-    TrySendPendingSignalDiagnosticsToUI();
-
-    // The spatial panner's on-screen puck has to match what is being heard: on a
-    // 30 second orbit a visual phase drift is glaringly obvious. This is sent on its
-    // own schedule rather than piggybacking on the diagnostics feed, which the user
-    // has to opt into, and it costs nothing when no spatialiser is in the chain.
-    mSpatialPositionUpdateCounter++;
-    if (mSpatialPositionUpdateCounter >= 60 / kSpatialPositionRateHz)
-    {
-        mSpatialPositionUpdateCounter = 0;
-        SendSpatialPositionsToUI();
-    }
+    mTelemetry->OnIdle();
 
     if (mDemoPreview)
         mDemoPreview->OnIdle();
@@ -1270,23 +1117,7 @@ void PluginController::PollSharedSyncState()
 
 bool PluginController::StartSignalPathTest(double frequencyHz, double durationSeconds)
 {
-    double sr = mHost.GetSampleRate();
-    if (sr <= 0.0) return false;
-
-    auto& st = mSignalTestState;
-    st.frequencyHz = frequencyHz;
-    st.sampleRate = sr;
-    st.phase = 0.0;
-    st.phaseIncrement = frequencyHz / sr;
-    st.totalSamples = static_cast<int>(durationSeconds * sr);
-    st.samplesRemaining = st.totalSamples;
-    st.inputSumSquares = 0.0;
-    st.outputSumSquares = {0.0, 0.0};
-    st.startTime = std::chrono::steady_clock::now();
-
-    mSignalTestResult = {};
-    mSignalTestActive.store(true, std::memory_order_release);
-    return true;
+    return mSignalTest->Start(frequencyHz, durationSeconds, mHost.GetSampleRate());
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1661,7 +1492,7 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
     const std::string action = payload.value("action", "");
     if (action == "start")
     {
-        mTunerActive.store(true, std::memory_order_release);
+        mTuner->SetActive(true);
         double referenceFrequency = 440.0;
         bool liveMode = true;
         {
@@ -1687,7 +1518,7 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
 
     if (action == "stop")
     {
-        mTunerActive.store(false, std::memory_order_release);
+        mTuner->SetActive(false);
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
             mPresetMixer.SetTunerEnabled(false);
@@ -1734,7 +1565,7 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
     if (payload.contains("enabled"))
     {
         bool enabled = payload.value("enabled", false);
-        mTunerActive.store(enabled, std::memory_order_release);
+        mTuner->SetActive(enabled);
         double referenceFrequency = 440.0;
         bool liveMode = true;
         {
@@ -1892,13 +1723,13 @@ void PluginController::HandleGetSignalDiagnosticsRequest()
 {
     // The UI only asks for this on startup or after a reload, when it has no roster to
     // resolve frames against, so always re-send the roster alongside the next frame.
-    mSignalDiagnosticsRosterDirty = true;
-    RequestSignalDiagnosticsToUI();
+    mTelemetry->MarkRosterDirty();
+    mTelemetry->RequestSignalDiagnostics();
 }
 
 void PluginController::HandleGetPerformanceStatsRequest()
 {
-    RequestPerformanceStatsToUI();
+    mTelemetry->RequestPerformanceStats();
 }
 
 void PluginController::HandleSetSignalDiagnosticsEnabledRequest(const nlohmann::json& payload)
@@ -1907,7 +1738,7 @@ void PluginController::HandleSetSignalDiagnosticsEnabledRequest(const nlohmann::
     // kept because it is still the UI's way of asking for a fresh node roster.
     (void)payload;
     mPresetMixer.SetSignalDiagnosticsEnabled(true);
-    mSignalDiagnosticsRosterDirty = true;
+    mTelemetry->MarkRosterDirty();
 }
 
 void PluginController::HandleGetEffectCatalogRequest()
@@ -2032,7 +1863,7 @@ void PluginController::HandleLoadNodeResourceRequest(const nlohmann::json& paylo
 void PluginController::HandleSetTunerEnabledRequest(const nlohmann::json& payload)
 {
     bool enabled = payload.value("enabled", false);
-    mTunerActive.store(enabled, std::memory_order_release);
+    mTuner->SetActive(enabled);
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.SetTunerEnabled(enabled);
 }

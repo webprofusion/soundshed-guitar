@@ -54,6 +54,28 @@ parsing, archive scoping, offline render, hosted-plugin identity. Each
 controller TU opens with `using namespace guitarfx::controller_detail;`, so
 call sites read unqualified.
 
+### Services the controller owns
+
+Areas with state and a lifetime of their own are separate classes, held as
+`unique_ptr` members and constructed in `PluginController`'s constructor with
+their dependencies injected by reference plus a `SendMessageToUI` callback.
+Prefer adding to one of these over adding another member to the controller:
+
+| Service (`core/src/controller/`) | Owns                                                                 |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `MetronomeService`               | Click track and riff-capture guidance click — one engine, guidance overrides it |
+| `TelemetryPublisher`             | The three metering feeds, their rate limits and the diagnostics roster |
+| `ControlSurfaceQueue`            | MIDI in, and setlist/scene requests parked for the message thread     |
+| `PracticeToolService`            | Backing-track playback with tempo/pitch shift                        |
+| `DemoPreviewService`             | Demo audio preview mixed into the input                              |
+| `SignalTestService`              | Test-tone injection and the measurement it reports                   |
+| `TunerService`                   | Pitch readings handed from the audio thread to the UI                |
+
+What is left on `PluginController` itself is the shared core every area needs
+— the host, the mixer, the DSP lock, the active preset, app settings, the
+document store — plus the message handlers, which are declarations in the
+header and definitions in the files above.
+
 **Adding a controller method:** declare it in `PluginController.h`, define it in
 whichever file above owns that feature. A new file needs registering in
 `core/CMakeLists.txt` (`GUITARFX_CORE_SOURCES`).

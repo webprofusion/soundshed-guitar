@@ -50,7 +50,12 @@
 namespace guitarfx
 {
 
+class ControlSurfaceQueue;
 class DemoPreviewService;
+class MetronomeService;
+class SignalTestService;
+class TelemetryPublisher;
+class TunerService;
 class PracticeToolService;
 
 /// How ApplySettingsToRuntime() treats settings a plugin instance owns rather than shares.
@@ -264,17 +269,8 @@ public:
     bool ReplaceActiveMixerPresetInPlace(const Preset& preset, const std::string& presetId, const std::string& name);
 
     // ── Signal path test ───────────────────────────────────────────
-    struct SignalPathTestResult
-    {
-        double sampleRate = 0.0;
-        double frequencyHz = 0.0;
-        double durationSeconds = 0.0;
-        double elapsedSeconds = 0.0;
-        double inputRMS = 0.0;
-        std::array<double, 2> outputRMS{0.0, 0.0};
-        bool passed = false;
-    };
-
+    /// Injects a test tone and reports what reached the output. Returns false
+    /// if the host has no sample rate yet. See controller/SignalTestService.h.
     bool StartSignalPathTest(double frequencyHz = 440.0, double durationSeconds = 1.0);
 private:
     friend class MessageDispatcher;
@@ -545,13 +541,6 @@ private:
     void SendEffectCatalogToUI();
     void SendPresetListToUI();
     void SendCompositePresetListToUI();
-    void RequestSignalDiagnosticsToUI();
-    void TrySendPendingSignalDiagnosticsToUI();
-    void SendSignalDiagnosticsToUI();
-    void RequestPerformanceStatsToUI();
-    void TrySendPendingPerformanceStatsToUI();
-    void SendPerformanceStatsToUI();
-    void SendSpatialPositionsToUI();
     void SendRiffLibraryStateToUI();
 
     // Composite edit helpers
@@ -734,7 +723,6 @@ private:
 
     // Whether the editor UI is on screen. Set from the UI's "uiVisibility" message; gates
     // the periodic telemetry feeds, which exist only to drive visible meters.
-    std::atomic<bool> mUiVisible{true};
 
     // Deferred node-param notifications (populated on audio/UI thread, drained in OnIdle)
     struct PendingNodeParamNotify
@@ -745,29 +733,6 @@ private:
     };
     std::mutex mPendingNodeParamMutex;
     std::vector<PendingNodeParamNotify> mPendingNodeParamNotifies;
-
-    // Deferred setlist preset apply (drained in OnIdle to avoid DSP lock recursion)
-    std::mutex mPendingSetlistMutex;
-    std::optional<int> mPendingSetlistPresetIndex;
-    std::optional<int> mPendingSetlistBankDelta;
-    std::optional<int> mPendingSetlistBankSelect;
-    std::optional<int> mPendingSceneIndex;
-
-    // ── MIDI event queueing ─────────────────────────────────────────
-    // Audio-thread-only queue of MIDI events awaiting application under the DSP
-    // lock. Drained once per processBlock by ProcessQueuedMidi(). Not mutex
-    // protected: only ever touched on the audio thread. Pre-reserved + capped so
-    // push_back never allocates on the audio thread.
-    static constexpr std::size_t kMaxPendingMidiApply = 256;
-    std::vector<MidiEvent> mPendingMidiApply;
-
-    // Diagnostic MIDI log forwarded to the UI. Only populated while the UI log
-    // panel is open. Built on the audio thread (under mPendingMidiLogMutex) and
-    // drained/sent in OnIdle so no JSON is built on the audio thread.
-    static constexpr std::size_t kMaxPendingMidiLog = 512;
-    std::atomic<bool> mMidiLogEnabled{false};
-    std::mutex mPendingMidiLogMutex;
-    std::vector<MidiEvent> mPendingMidiLog;
 
     // App settings
     nlohmann::json mAppSettings = nlohmann::json::object();
@@ -823,96 +788,24 @@ private:
     double mNamInterfaceCalibrationLevelDbu = std::numeric_limits<double>::quiet_NaN();
 
 
-    // Signal path test
-    struct SignalTestRuntimeState
-    {
-        double frequencyHz = 0.0;
-        double phase = 0.0;
-        double phaseIncrement = 0.0;
-        int samplesRemaining = 0;
-        int totalSamples = 0;
-        double sampleRate = 0.0;
-        double inputSumSquares = 0.0;
-        std::array<double, 2> outputSumSquares{0.0, 0.0};
-        std::chrono::steady_clock::time_point startTime;
-    };
-    std::atomic<bool> mSignalTestActive{false};
-    std::atomic<bool> mSignalTestResultPending{false};
-    SignalTestRuntimeState mSignalTestState;
-    SignalPathTestResult mSignalTestResult;
-
-    // Tuner state
-    std::atomic<bool> mTunerActive{false};
-    struct TunerData
-    {
-        std::string noteName;
-        int octave = 0;
-        double frequency = 0.0;
-        double centOffset = 0.0;
-        double confidence = 0.0;
-        bool detected = false;
-    };
-    std::atomic<bool> mTunerDataPending{false};
-    TunerData mPendingTunerData;
-    mutable std::mutex mTunerMutex;
-
-    // Metronome helpers
+    // Metronome facade. The click engine itself is MetronomeService; these
+    // stay on the controller because their callers are spread across the
+    // riff, demo and broadcast paths, and because ActivateRiffGuidance is
+    // where a RiffCaptureConfig is translated into the service's own terms.
     struct RiffCaptureConfig;
     [[nodiscard]] double GetEffectiveTempoBpm() const;
-    void RenderMetronome(float** outputs, int numSamples);
-    void ApplyMetronomeSettingsFromAppSettings();
-    void UpdateMetronomeClickConfigFromSettings();
-    struct MetronomeClickTypeConfig;
-    [[nodiscard]] const MetronomeClickTypeConfig* FindMetronomeClickType(const std::string& id) const;
-    struct MetronomeClickSamples;
-    std::shared_ptr<MetronomeClickSamples> BuildMetronomeClickSamples(const MetronomeClickTypeConfig& config, double targetSampleRate) const;
-    void RefreshMetronomeClickSamples(double sampleRate);
     void ActivateRiffGuidance(const RiffCaptureConfig& config, bool forPreview);
     void DeactivateRiffGuidance(bool previewOnly = false);
 
-    // Metronome state
-    std::atomic<double> mMetronomeBpm{120.0};
-    std::atomic<bool> mMetronomeEnabled{false};
-    std::atomic<double> mMetronomeVolumeDb{-12.0};
-    std::atomic<double> mMetronomePan{0.0};
-    std::string mMetronomeClickType{"click"};
-    std::atomic<bool> mMetronomeResetPending{false};
-    double mMetronomeSamplesUntilClick = 0.0;
-    int mMetronomeClickSamplesRemaining = 0;
-    double mMetronomeClickPhase = 0.0;
-    double mMetronomeClickPhaseIncrement = 0.0;
-    int mMetronomeBeatIndex = 0;
-    int mMetronomeClickSamplePosition = 0;
-    bool mMetronomeClickUseHigh = false;
-
-    struct MetronomeClickTypeConfig
-    {
-        std::string id;
-        std::string label;
-        std::filesystem::path lowPath;
-        std::filesystem::path highPath;
-    };
-
-    struct MetronomeClickSamples
-    {
-        std::vector<std::vector<float>> low;
-        std::vector<std::vector<float>> high;
-    };
-
-    std::vector<MetronomeClickTypeConfig> mMetronomeClickConfig;
-    std::shared_ptr<MetronomeClickSamples> mMetronomeClickSamples;
-    bool mRiffGuidanceActive = false;
-    bool mRiffGuidanceForPreview = false;
-    double mRiffGuidanceBpm = 120.0;
-    int mRiffGuidanceBeatsPerBar = 4;
-    double mRiffGuidanceBeatScale = 1.0;
-    std::shared_ptr<MetronomeClickSamples> mRiffGuidanceClickSamples;
-    std::string mRiffGuidanceBeatPattern;
-    bool mRiffGuidancePreviewWasActive = false;
-    std::string mMetronomeBeatPattern; // e.g. "HLLL"
-
+    std::unique_ptr<ControlSurfaceQueue> mControlSurface;
+    std::unique_ptr<MetronomeService> mMetronome;
+    std::unique_ptr<SignalTestService> mSignalTest;
+    std::unique_ptr<TelemetryPublisher> mTelemetry;
+    std::unique_ptr<TunerService> mTuner;
     std::unique_ptr<DemoPreviewService> mDemoPreview;
     std::unique_ptr<PracticeToolService> mPracticeTool;
+    /// Idle-tick divider for the practice tool's transport updates.
+    int mPracticeToolUpdateCounter = 0;
 
     struct RiffCaptureConfig
     {
@@ -972,49 +865,12 @@ private:
     };
     PreviewState mPreviewState;
 
-    // Signal diagnostics
-    std::atomic<bool> mSignalDiagnosticsEnabled{true};
-    int mDSPPerformanceUpdateCounter = 0;
-    int mSignalDiagnosticsUpdateCounter = 0;
-    int mSpatialPositionUpdateCounter = 0;
-    int mPracticeToolUpdateCounter = 0;
-    bool mSpatialPositionsWereSent = false;
-    bool mPendingSignalDiagnosticsUpdate = false;
-    std::chrono::steady_clock::time_point mLastSignalDiagnosticsUpdateSentAt{};
-
-    // Identity of one node in the signal diagnostics roster. The roster holds everything
-    // about a node that does not change frame to frame, so the 20 Hz frames can carry
-    // nothing but numbers. A roster is re-sent (with a new sequence number) whenever this
-    // set changes; frames whose seq does not match the UI's roster are dropped there.
-    struct SignalDiagnosticsRosterEntry
-    {
-        std::string scope;
-        std::string presetId;
-        std::string nodeId;
-        std::string nodeType;
-        int channelCount = 0;
-        bool hasAnalyzer = false;
-
-        bool operator==(const SignalDiagnosticsRosterEntry&) const = default;
-    };
-    std::vector<SignalDiagnosticsRosterEntry> mSignalDiagnosticsRoster;
-    std::uint32_t mSignalDiagnosticsRosterSeq = 0;
-    // Forces the next send to re-emit the roster even if the node set is unchanged, so a
-    // reloaded UI can recover without waiting for a graph edit.
-    bool mSignalDiagnosticsRosterDirty = true;
-
-    bool mPendingPerformanceStatsUpdate = false;
-    std::chrono::steady_clock::time_point mLastPerformanceStatsUpdateSentAt{};
-
     // UI state
     bool mUIReady = false;
     mutable std::uint64_t mSharedSyncVersionSeen = 0;
     mutable bool mSharedSyncVersionSeenInitialized = false;
     std::uint64_t mSharedSyncVersionHandled = 0;
     std::chrono::steady_clock::time_point mNextSharedSyncPollAt{};
-
-    // Layout library cache
-    nlohmann::json mLayoutLibrary = nlohmann::json::object();
 
     // Automation
     AutomationSlotTable mAutomationSlots;

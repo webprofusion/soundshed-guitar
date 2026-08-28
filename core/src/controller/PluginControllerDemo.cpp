@@ -10,6 +10,7 @@
 #include "PluginController.h"
 
 #include "controller/DemoPreviewService.h"
+#include "controller/SignalTestService.h"
 #include "controller/PracticeToolService.h"
 #include "controller/internal/OfflineRenderSupport.h"
 #include "util/Base64.h"
@@ -63,7 +64,7 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
                 return;
             }
 
-            if (mSignalTestActive.load(std::memory_order_acquire))
+            if (mSignalTest->IsActive())
             {
                 sendRenderFailure("Signal path test is currently running");
                 return;

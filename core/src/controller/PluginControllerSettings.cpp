@@ -9,6 +9,8 @@
 
 #include "PluginController.h"
 
+#include "controller/MetronomeService.h"
+
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/MetronomeSupport.h"
 #include "controller/internal/NamResourceMetadata.h"
@@ -299,7 +301,7 @@ bool PluginController::ApplySettingsToRuntime(SettingsApplyMode mode)
 
     bool settingsChanged = false;
 
-    ApplyMetronomeSettingsFromAppSettings();
+    mMetronome->ApplySettingsFromAppSettings();
     settingsChanged |= ApplyDspLevelTargetSettingsFromAppSettings();
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();

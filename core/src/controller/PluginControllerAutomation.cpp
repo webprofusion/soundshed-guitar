@@ -9,6 +9,8 @@
 
 #include "PluginController.h"
 
+#include "controller/ControlSurfaceQueue.h"
+
 #include "controller/internal/HostedPluginSupport.h"
 
 #include <algorithm>
@@ -170,19 +172,7 @@ void PluginController::HandleCancelMidiLearnRequest()
 
 void PluginController::EnqueueMidi(const MidiEvent& ev)
 {
-    // Audio thread. Must never block or allocate: both vectors are pre-reserved
-    // and capped, so push_back never reallocates. Events dropped past the cap are
-    // a deliberate safety valve against pathological message-thread stalls.
-
-    if (mMidiLogEnabled.load(std::memory_order_relaxed))
-    {
-        std::lock_guard<std::mutex> lock(mPendingMidiLogMutex);
-        if (mPendingMidiLog.size() < kMaxPendingMidiLog)
-            mPendingMidiLog.push_back(ev);
-    }
-
-    if (mPendingMidiApply.size() < kMaxPendingMidiApply)
-        mPendingMidiApply.push_back(ev);
+    mControlSurface->EnqueueMidi(ev);
 }
 
 void PluginController::ProcessQueuedMidi()
@@ -190,26 +180,20 @@ void PluginController::ProcessQueuedMidi()
     // Audio thread. Drain queued MIDI events under the DSP lock without ever
     // blocking: if the lock is held (e.g. a preset load on the message thread),
     // leave the events queued and retry on the next block.
-    if (mPendingMidiApply.empty())
+    if (!mControlSurface->HasMidiToApply())
         return;
 
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
     if (!lock.owns_lock())
         return;
 
-    for (const auto& ev : mPendingMidiApply)
-        mAutomationSlots.HandleMidi(ev);
-    mPendingMidiApply.clear();
+    mControlSurface->DrainMidiForApply(
+        [this](const MidiEvent& event) { mAutomationSlots.HandleMidi(event); });
 }
 
 void PluginController::SetMidiLogEnabled(bool enabled)
 {
-    mMidiLogEnabled.store(enabled, std::memory_order_relaxed);
-    if (!enabled)
-    {
-        std::lock_guard<std::mutex> lock(mPendingMidiLogMutex);
-        mPendingMidiLog.clear();
-    }
+    mControlSurface->SetMidiLogEnabled(enabled);
 }
 
 void PluginController::ApplySetlistPresetByIndex(int index)
@@ -231,8 +215,7 @@ void PluginController::ApplySetlistPresetByIndex(int index)
     else
     {
         // Lock is held (audio thread under DSP lock) — defer to OnIdle.
-        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-        mPendingSetlistPresetIndex = index;
+        mControlSurface->RequestSetlistPreset(index);
     }
 }
 
@@ -296,8 +279,7 @@ void PluginController::SetlistBankUp(int steps)
     }
     else
     {
-        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-        mPendingSetlistBankDelta = mPendingSetlistBankDelta.value_or(0) + steps;
+        mControlSurface->AddSetlistBankDelta(steps);
     }
 }
 
@@ -328,8 +310,7 @@ void PluginController::SelectSceneByIndex(int index)
     }
     else
     {
-        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-        mPendingSceneIndex = index;
+        mControlSurface->RequestScene(index);
     }
 }
 
@@ -382,8 +363,7 @@ void PluginController::SetlistBankDown(int steps)
     }
     else
     {
-        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-        mPendingSetlistBankDelta = mPendingSetlistBankDelta.value_or(0) - steps;
+        mControlSurface->AddSetlistBankDelta(-steps);
     }
 }
 
@@ -448,8 +428,7 @@ void PluginController::SelectSetlistBank(int bankNumber)
     }
     else
     {
-        std::lock_guard<std::mutex> lock(mPendingSetlistMutex);
-        mPendingSetlistBankSelect = bankNumber;
+        mControlSurface->RequestSetlistBankSelect(bankNumber);
     }
 }
 

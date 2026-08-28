@@ -1,5 +1,6 @@
 #include "MessageDispatcher.h"
 #include "PluginController.h"
+#include "controller/TelemetryPublisher.h"
 
 namespace guitarfx
 {
@@ -95,7 +96,7 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
         const bool visible = msg.contains("visible") && msg["visible"].is_boolean()
             ? msg["visible"].get<bool>()
             : true;
-        c.mUiVisible.store(visible, std::memory_order_release);
+        c.mTelemetry->SetUiVisible(visible);
         return true;
     }
     return false;

@@ -8,6 +8,8 @@
 
 #include "PluginController.h"
 
+#include "controller/MetronomeService.h"
+
 #include "controller/DemoPreviewService.h"
 
 #include "controller/internal/ControllerUtils.h"
@@ -28,58 +30,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
-void PluginController::ActivateRiffGuidance(const RiffCaptureConfig& config, bool forPreview)
-{
-    if (!mHost.IsStandalone())
-        return;
-
-    if (!config.metronomeClickEnabled)
-    {
-        mRiffGuidanceActive = false;
-        mRiffGuidanceForPreview = false;
-        mRiffGuidancePreviewWasActive = false;
-        mRiffGuidanceBeatScale = 1.0;
-        mRiffGuidanceClickSamples.reset();
-        mMetronomeResetPending.store(true, std::memory_order_release);
-        return;
-    }
-
-    mRiffGuidanceActive = true;
-    mRiffGuidanceForPreview = forPreview;
-    mRiffGuidancePreviewWasActive = false;
-    mRiffGuidanceBeatPattern = config.beatPattern;
-    mRiffGuidanceBpm = ClampValue(config.tempoBpm > 0.0 ? config.tempoBpm : GetEffectiveTempoBpm(),
-                                  kMetronomeMinBpm,
-                                  kMetronomeMaxBpm);
-    mRiffGuidanceBeatsPerBar = std::max(1, config.timeSigNum);
-    mRiffGuidanceBeatScale = 4.0 / static_cast<double>(std::max(1, config.timeSigDen));
-
-    const std::string clickType = config.patternType.empty() ? std::string{kMetronomeDefaultClickType} : config.patternType;
-    const auto* clickConfig = FindMetronomeClickType(clickType);
-    const double sampleRate = mHost.GetSampleRate();
-    if (clickConfig && sampleRate > 0.0)
-        mRiffGuidanceClickSamples = BuildMetronomeClickSamples(*clickConfig, sampleRate);
-    else
-        mRiffGuidanceClickSamples.reset();
-
-    if (!mRiffGuidanceClickSamples)
-        mRiffGuidanceClickSamples = std::atomic_load_explicit(&mMetronomeClickSamples, std::memory_order_acquire);
-
-    mMetronomeResetPending.store(true, std::memory_order_release);
-}
-
-void PluginController::DeactivateRiffGuidance(bool previewOnly)
-{
-    if (previewOnly && !mRiffGuidanceForPreview)
-        return;
-
-    mRiffGuidanceActive = false;
-    mRiffGuidanceForPreview = false;
-    mRiffGuidanceBeatScale = 1.0;
-    mRiffGuidanceClickSamples.reset();
-    mMetronomeResetPending.store(true, std::memory_order_release);
-}
 
 void PluginController::HandleGetRiffLibraryRequest()
 {
@@ -145,7 +95,7 @@ void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& paylo
     config.metronomeClickEnabled = payload.value("metronomeClickEnabled", true);
     config.patternType = payload.value("patternType", std::string("click"));
     config.patternId = payload.value("patternId", std::string{});
-    config.beatPattern = payload.value("beatPattern", mMetronomeBeatPattern); // use UI value or fall back to global
+    config.beatPattern = payload.value("beatPattern", mMetronome->BeatPattern()); // use UI value or fall back to global
     config.presetId = mActivePresetId;
     config.presetName = mActivePreset ? mActivePreset->name : std::string{};
 
@@ -217,7 +167,7 @@ void PluginController::HandleArmRiffCaptureRequest(const nlohmann::json& payload
     config.metronomeClickEnabled = payload.value("metronomeClickEnabled", true);
     config.patternType = payload.value("patternType", std::string("click"));
     config.patternId = payload.value("patternId", std::string{});
-    config.beatPattern = payload.value("beatPattern", mMetronomeBeatPattern);
+    config.beatPattern = payload.value("beatPattern", mMetronome->BeatPattern());
     config.presetId = mActivePresetId;
     config.presetName = mActivePreset ? mActivePreset->name : std::string{};
 
@@ -865,7 +815,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     guideConfig.metronomeClickEnabled = take->value("metronomeClickEnabled", true);
     guideConfig.patternType = take->value("patternType", std::string("click"));
     guideConfig.patternId = take->value("patternId", std::string{});
-    guideConfig.beatPattern = take->value("beatPattern", mMetronomeBeatPattern);
+    guideConfig.beatPattern = take->value("beatPattern", mMetronome->BeatPattern());
 
     if (mDemoPreview)
     {
