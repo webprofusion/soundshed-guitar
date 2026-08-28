@@ -10,7 +10,7 @@
   <!--
     Module specifiers for the vendored three.js build. three.js is only fetched by
     the dynamic import in dist/amp3d, which is currently unreachable: the 3D chain
-    stage is disabled behind CHAIN_3D_VIEW_ENABLED in ts/signalPath.ts.
+    stage is disabled behind CHAIN_3D_VIEW_ENABLED in ts/signalPath/amp3dBridge.ts.
   -->
   <script type="importmap">
     {
@@ -37,8 +37,34 @@
   <link rel="stylesheet" href="css/amp.css" />
   <link rel="stylesheet" href="css/effects.css" />
   <link rel="stylesheet" href="css/amp3d.css" />
-  <link rel="stylesheet" href="css/signal-path.css" />
-  <link rel="stylesheet" href="css/modals.css" />
+  <!-- Signal path. Order matters: these are the parts of the original
+       stylesheet, in source order. Reordering changes the cascade. -->
+  <link rel="stylesheet" href="css/signal-path/bar.css" />
+  <link rel="stylesheet" href="css/signal-path/mixer.css" />
+  <link rel="stylesheet" href="css/signal-path/nodes.css" />
+  <link rel="stylesheet" href="css/signal-path/parallel.css" />
+  <link rel="stylesheet" href="css/signal-path/chain.css" />
+  <link rel="stylesheet" href="css/signal-path/cards.css" />
+  <link rel="stylesheet" href="css/signal-path/params-panel.css" />
+  <link rel="stylesheet" href="css/signal-path/resource-slots.css" />
+  <link rel="stylesheet" href="css/signal-path/blend.css" />
+  <link rel="stylesheet" href="css/signal-path/plugin-list.css" />
+  <link rel="stylesheet" href="css/signal-path/add-menu.css" />
+  <link rel="stylesheet" href="css/signal-path/mixer-inputs.css" />
+  <link rel="stylesheet" href="css/signal-path/custom-layouts.css" />
+  <link rel="stylesheet" href="css/signal-path/effect-presets.css" />
+  <!-- Modals, one file per modal. Order matters: these are the parts of the original
+       stylesheet, in source order. Reordering changes the cascade. -->
+  <link rel="stylesheet" href="css/modals/shell.css" />
+  <link rel="stylesheet" href="css/modals/tone3000-details.css" />
+  <link rel="stylesheet" href="css/modals/blend-editor.css" />
+  <link rel="stylesheet" href="css/modals/save-preset.css" />
+  <link rel="stylesheet" href="css/modals/resource-browser.css" />
+  <link rel="stylesheet" href="css/modals/tuner.css" />
+  <link rel="stylesheet" href="css/modals/metronome.css" />
+  <link rel="stylesheet" href="css/modals/eq.css" />
+  <link rel="stylesheet" href="css/splash.css" />
+  <link rel="stylesheet" href="css/modals/midi-automation.css" />
   <link rel="stylesheet" href="css/layout-designer.css" />
   <link rel="stylesheet" href="css/fx-library.css" />
   <link rel="stylesheet" href="css/preset-library.css" />

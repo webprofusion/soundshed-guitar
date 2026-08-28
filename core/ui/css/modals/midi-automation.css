@@ -1,0 +1,405 @@
+/* ===== MIDI & Automation Modal ===== */
+
+.midi-modal .midi-modal-content {
+  width: 860px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.midi-modal-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.midi-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--modal-border-medium);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.midi-tab-panel {
+  display: none;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.midi-tab-panel.active {
+  display: block;
+}
+
+.midi-help {
+  color: var(--modal-text-muted);
+  font-size: 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* Automation slot rows */
+.automation-slots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automation-section {
+  margin-bottom: 20px;
+}
+
+.automation-section h3 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--modal-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.automation-slot-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 140px 120px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--modal-text);
+}
+
+.automation-slot-label {
+  font-weight: 600;
+  color: var(--modal-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.automation-slot-address {
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.automation-slot-midi,
+.automation-slot-key {
+  color: var(--modal-text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.automation-learn-btn,
+.automation-remove-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.automation-learn-btn:hover,
+.automation-remove-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.automation-learn-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  animation: pulse-learn 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-learn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.automation-add-slot {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px dashed var(--modal-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--modal-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.automation-add-slot:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.automation-target-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.automation-target-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.automation-test-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.automation-test-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.automation-test-btn:active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.automation-target-editor {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  align-items: end;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-top: 4px;
+  background: var(--modal-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.automation-target-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.automation-target-field > span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--modal-text-muted);
+}
+
+.automation-target-field input,
+.automation-target-field select {
+  padding: 6px 8px;
+  border: 1px solid var(--modal-border-medium);
+  border-radius: 6px;
+  background: var(--modal-bg-raised);
+  color: var(--modal-text);
+  font-size: 12px;
+  font-family: inherit;
+  min-width: 0;
+  width: 100%;
+}
+
+.automation-target-field input:focus,
+.automation-target-field select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.automation-target-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.automation-target-save,
+.automation-target-cancel {
+  padding: 6px 12px;
+  border: 1px solid var(--modal-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.automation-target-save {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.automation-target-save:hover {
+  opacity: 0.9;
+}
+
+.automation-target-cancel:hover {
+  border-color: var(--modal-text-secondary);
+  color: var(--modal-text);
+}
+
+/* MIDI Log */
+.midi-log-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.midi-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--modal-text-secondary);
+  cursor: pointer;
+}
+
+.midi-log-toggle input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.midi-log-output {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--modal-border-medium);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--font-mono, "Courier New", monospace);
+  font-size: 11px;
+  color: var(--modal-text-secondary);
+  overflow-y: auto;
+  max-height: 400px;
+  min-height: 200px;
+  line-height: 1.6;
+}
+
+.midi-log-empty {
+  color: var(--modal-text-muted);
+  font-style: italic;
+}
+
+.midi-log-entry {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.midi-log-entry .midi-log-time {
+  color: var(--modal-text-muted);
+  flex-shrink: 0;
+}
+
+.midi-log-entry .midi-log-type {
+  color: var(--color-accent);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.midi-log-entry .midi-log-data {
+  color: var(--modal-text-secondary);
+}
+
+/* Inline clear buttons in mapping rows */
+.automation-clear-btn {
+  display: inline-block;
+  padding: 0 4px;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  color: var(--modal-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.automation-clear-btn:hover {
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Keyboard tab */
+.keyboard-slot-row {
+  grid-template-columns: 120px 1fr auto;
+}
+
+.keyboard-slot-row .automation-slot-key-display {
+  color: var(--modal-text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-self: center;
+}
+
+.keyboard-slot-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.automation-key-learn-btn,
+.automation-key-clear-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--modal-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.automation-key-learn-btn:hover,
+.automation-key-clear-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.automation-key-learn-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  animation: pulse-learn 1.2s ease-in-out infinite;
+}

@@ -33,7 +33,6 @@ const MAX_AZIMUTH = 1.1;
 const MIN_POLAR = -0.12;
 const MAX_POLAR = 0.72;
 const DEFAULT_POLAR = 0.28;
-const CLICK_SLOP_PX = 4;
 const PAN_PIXEL_SCALE = 0.002;
 const MAX_PAN = 2.5;
 const MAX_PIXEL_RATIO = 1.5;

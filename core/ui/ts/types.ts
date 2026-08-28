@@ -1,4 +1,4 @@
-export type AttachmentType = "audiofx" | "ir" | string;
+export type AttachmentType = "audiofx" | "ir" | (string & {});
 
 import type { LayoutLibrary } from "./layoutTypes.js";
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
@@ -334,7 +334,7 @@ export interface CustomEffectLibraryEntry {
   tags?: string[];
   defaultParams?: Record<string, number>;
   descriptorSummary?: CustomEffectDescriptorSummary;
-  origin?: "generated" | "imported" | "duplicated" | string;
+  origin?: "generated" | "imported" | "duplicated" | (string & {});
   createdAt?: string;
   updatedAt?: string;
 }
@@ -412,7 +412,7 @@ export interface SignalLevelMetrics {
 }
 
 export interface SignalLevelNodeMetrics {
-  scope: "pre" | "post" | "preset" | string;
+  scope: "pre" | "post" | "preset" | (string & {});
   presetId?: string;
   nodeId: string;
   nodeType: string;

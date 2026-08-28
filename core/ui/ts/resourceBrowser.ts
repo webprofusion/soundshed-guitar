@@ -2418,7 +2418,7 @@ export class ResourceBrowserModal {
     this.tone3000NextBtn.disabled = loading;
   }
   
-  private updateTone3000PaginationFromData(data: Record<string, unknown>, pageSize: number): void {
+  private updateTone3000PaginationFromData(data: Record<string, unknown>, _pageSize: number): void {
     const parsed = parseTone3000Pagination(data, this.tone3000Page, 20);
     this.tone3000Page = parsed.page;
     this.tone3000TotalPages = parsed.total ? parsed.totalPages : this.tone3000Page;
@@ -4154,7 +4154,7 @@ export const resourceBrowserModal = new ResourceBrowserModal();
 
 function sanitizeFilename(raw: string): string {
   const trimmed = raw.trim() || "resource";
-  return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
+  return trimmed.replace(/[^a-z0-9-_.]+/gi, "-");
 }
 
 function formatBytes(bytes: number): string {

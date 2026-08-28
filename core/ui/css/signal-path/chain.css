@@ -1,0 +1,200 @@
+/* Signal Chain Panel Styles */
+.signal-chain-container {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Loading overlay rendered inside .signal-chain-container while preset is building */
+.signal-chain-container .preset-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 20;
+  pointer-events: all;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.signal-chain-container .preset-loading-overlay::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--color-primary, #4a9eff);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: preset-loading-spin 0.65s linear infinite;
+}
+
+/* Loading overlay on the signal path effect bar */
+#signal-path-bar.preset-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10;
+  pointer-events: all;
+}
+
+.signal-chain-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.preset-info {
+  flex: 1;
+}
+
+.preset-title {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-dark-primary);
+}
+
+.preset-description {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.signal-chain-section {
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, #e8ecf4 0%, #d8dce8 100%);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-lighter);
+}
+
+.signal-chain-section-chain {
+  position: relative;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-icon .section-icon-img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* FX Chain Flow */
+.fx-chain-flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 16px;
+  background: linear-gradient(180deg, #f0f2f8 0%, #e0e4ec 100%);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.signal-chain-performance-link {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.signal-chain-performance-link:hover {
+  color: var(--color-primary);
+}
+
+.fx-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, #f0f2f8 100%);
+  border-radius: 8px;
+  border: 2px solid var(--border-lighter);
+  min-width: 80px;
+  transition: all 0.2s;
+}
+
+.fx-node:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(224, 120, 72, 0.2);
+}
+
+.fx-node.input-node {
+  border-color: var(--node-input);
+  background: linear-gradient(180deg, #f0fff0 0%, #e0f0e0 100%);
+}
+
+.fx-node.output-node {
+  border-color: #6888a8;
+  background: linear-gradient(180deg, #f0f8ff 0%, #e0e8f0 100%);
+}
+
+.fx-node-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fx-node-icon .fx-node-icon-img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.fx-node-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a4a58;
+  text-transform: uppercase;
+}
+
+.fx-connector {
+  width: 32px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--border-light), var(--border-lighter));
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.fx-empty {
+  color: var(--text-dark-dimmed);
+  font-style: italic;
+  font-size: 13px;
+}

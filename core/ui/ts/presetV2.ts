@@ -5,7 +5,7 @@
  * that supports signal graphs with arbitrary effect types.
  */
 
-import type { Preset, GraphNode, GraphEdge, ResourceRef } from "./types.js";
+import type { Preset, GraphNode, ResourceRef } from "./types.js";
 import { EffectGuids, resolveEffectType } from "./effectGuids.js";
 
 export interface ParameterDef {
@@ -218,7 +218,7 @@ function buildWasmNodeEffectInfo(base: EffectTypeInfo, node: Pick<GraphNode, "co
 
   const parameters = [...paramGroups.entries()]
     .sort((left, right) => left[0] - right[0])
-    .map(([index, fields]): ParameterDef | null => {
+    .map(([_index, fields]): ParameterDef | null => {
       if (!fields.id) {
         return null;
       }

@@ -26,9 +26,9 @@ import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { showConfirm } from "./dialogs.js";
 import {
-  isCompositeEditMode,
   getCompositeEditDefinition,
 } from "./state.js";
+import { escapeHtml } from "./utils.js";
 
 // ─────────────────────────────────────────────────────────────
 // DOM References
@@ -133,9 +133,9 @@ export function renderCompositeList(): void {
       (def) => `
     <div class="composite-list-item" data-composite-id="${def.id}">
       <div class="composite-list-info">
-        <span class="composite-list-name">${escHtml(def.name)}</span>
-        <span class="composite-list-meta">${escHtml(def.category)} · ${def.innerGraph.nodes.filter((n) => n.type !== "input" && n.type !== "output").length} effects · ${def.exposedParams.length} params</span>
-        ${def.description ? `<span class="composite-list-desc">${escHtml(def.description)}</span>` : ""}
+        <span class="composite-list-name">${escapeHtml(def.name)}</span>
+        <span class="composite-list-meta">${escapeHtml(def.category)} · ${def.innerGraph.nodes.filter((n) => n.type !== "input" && n.type !== "output").length} effects · ${def.exposedParams.length} params</span>
+        ${def.description ? `<span class="composite-list-desc">${escapeHtml(def.description)}</span>` : ""}
       </div>
       <div class="composite-list-actions">
         <button class="composite-edit-btn advanced-action-btn" data-composite-id="${def.id}" title="Edit">Edit</button>
@@ -337,18 +337,18 @@ function renderExposedParams(): void {
       (ep, idx) => `
     <div class="exposed-param-row" data-param-index="${idx}">
       <div class="exposed-param-fields">
-        <input type="text" class="ep-param-id" value="${escAttr(ep.paramId)}" placeholder="Param ID" title="Parameter ID" />
-        <input type="text" class="ep-display-name" value="${escAttr(ep.displayName)}" placeholder="Display Name" title="Display name" />
+        <input type="text" class="ep-param-id" value="${escapeHtml(ep.paramId)}" placeholder="Param ID" title="Parameter ID" />
+        <input type="text" class="ep-display-name" value="${escapeHtml(ep.displayName)}" placeholder="Display Name" title="Display name" />
         <select class="ep-node-id" title="Target node">
           ${getInnerEffectNodeOptions(ep.nodeId)}
         </select>
-        <select class="ep-node-param" title="Node parameter" data-current="${escAttr(ep.nodeParamKey)}">
+        <select class="ep-node-param" title="Node parameter" data-current="${escapeHtml(ep.nodeParamKey)}">
           ${getNodeParamOptions(ep.nodeId, ep.nodeParamKey)}
         </select>
         <input type="number" class="ep-min" value="${ep.minValue ?? 0}" step="any" title="Min" placeholder="Min" />
         <input type="number" class="ep-max" value="${ep.maxValue ?? 1}" step="any" title="Max" placeholder="Max" />
         <input type="number" class="ep-default" value="${ep.defaultValue ?? 0}" step="any" title="Default" placeholder="Default" />
-        <input type="text" class="ep-unit" value="${escAttr(ep.unit ?? "")}" placeholder="Unit" title="Unit" />
+        <input type="text" class="ep-unit" value="${escapeHtml(ep.unit ?? "")}" placeholder="Unit" title="Unit" />
       </div>
       <button class="exposed-param-remove advanced-action-btn danger" data-param-index="${idx}" title="Remove">×</button>
     </div>`
@@ -447,7 +447,7 @@ function getInnerEffectNodeOptions(selectedNodeId: string): string {
     .map((n) => {
       const typeInfo = getNodeEffectInfo(n);
       const label = n.displayName || typeInfo?.displayName || n.type;
-      return `<option value="${n.id}" ${n.id === selectedNodeId ? "selected" : ""}>${escHtml(label)} (${n.id})</option>`;
+      return `<option value="${n.id}" ${n.id === selectedNodeId ? "selected" : ""}>${escapeHtml(label)} (${n.id})</option>`;
     })
     .join("");
 }
@@ -471,7 +471,7 @@ function getNodeParamOptions(nodeId: string, selectedKey: string): string {
   return params
     .map(
       (p) =>
-        `<option value="${p.key}" ${p.key === selectedKey ? "selected" : ""}>${escHtml(p.name)} (${p.key})</option>`
+        `<option value="${p.key}" ${p.key === selectedKey ? "selected" : ""}>${escapeHtml(p.name)} (${p.key})</option>`
     )
     .join("");
 }
@@ -480,10 +480,4 @@ function getNodeParamOptions(nodeId: string, selectedKey: string): string {
 // Helpers
 // ─────────────────────────────────────────────────────────────
 
-function escHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
-function escAttr(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

@@ -1,0 +1,6 @@
+{
+  "featureGroups": [
+    "layoutDesigner + signalPath",
+    "navigation + presets + toneSharingPanel"
+  ]
+}

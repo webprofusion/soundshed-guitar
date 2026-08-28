@@ -49,8 +49,8 @@ export type IconKey =
   | "settings";
 
 export function renderIcon(icon: IconKey, className: string, title?: string): string {
-  const titleAttr = title ? ` title=\"${title}\"` : "";
-  return `<span class=\"${className}\" style=\"--icon-url: url('${ICON_BASE}/${icon}.svg')\" aria-hidden=\"true\"${titleAttr}></span>`;
+  const titleAttr = title ? ` title="${title}"` : "";
+  return `<span class="${className}" style="--icon-url: url('${ICON_BASE}/${icon}.svg')" aria-hidden="true"${titleAttr}></span>`;
 }
 
 const categoryIcons: Record<string, IconKey> = {

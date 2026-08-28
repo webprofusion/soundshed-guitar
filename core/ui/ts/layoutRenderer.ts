@@ -5,7 +5,7 @@
  */
 
 import { uiState } from "./state.js";
-import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
+import { type ParameterDef } from "./presetV2.js";
 import { renderIcon } from "./iconAssets.js";
 import { escapeHtml } from "./utils.js";
 import { ensureLayoutImagesLoaded } from "./layoutImages.js";
@@ -20,6 +20,7 @@ import type {
 import { layoutLookupKey } from "./layoutTypes.js";
 import { areEffectLayoutsEnabled } from "./layoutPreferences.js";
 import type { GraphNode } from "./types.js";
+import { isNodeBypassed } from "./graphNodes.js";
 
 export interface LayoutResourceControlDef {
   resourceControlKey: string;
@@ -181,17 +182,6 @@ function renderOverlays(node: GraphNode, overlays: LayoutRectangleOverlay[]): st
       `;
     })
     .join("");
-}
-
-function isNodeBypassed(node: GraphNode): boolean {
-  const anyNode = node as unknown as { bypassed?: unknown; enabled?: unknown };
-  if (typeof anyNode.bypassed === "boolean") {
-    return anyNode.bypassed;
-  }
-  if (typeof anyNode.enabled === "boolean") {
-    return !anyNode.enabled;
-  }
-  return false;
 }
 
 function colorWithAlpha(hexColor: string, alpha: number): string {
@@ -540,7 +530,6 @@ function renderControls(
         `;
       } else if (control.type === "slider") {
         // Slider
-        const normalized = (value - (min ?? 0)) / ((max ?? 1) - (min ?? 0));
         controlHtml += `
           <input
             type="range"

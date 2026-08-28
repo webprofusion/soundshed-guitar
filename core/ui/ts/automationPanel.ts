@@ -11,6 +11,7 @@ import { uiState } from "./state.js";
 import type { AutomationSlot, AutomationRegistryEntry } from "./types.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { getXMarkSvg } from "./iconAssets.js";
+import { escapeHtml } from "./utils.js";
 
 let modalInitialized = false;
 let pendingLearnSlotId: string | null = null;
@@ -50,7 +51,7 @@ export function applyAutomationState(next: Partial<AutomationState>): void {
   renderKeyboardPanel();
 }
 
-export function handleMidiLearnCapture(slotId: string): void {
+export function handleMidiLearnCapture(_slotId: string): void {
   pendingLearnSlotId = null;
   renderAutomationPanel();
 }
@@ -489,10 +490,6 @@ function blurActive(): void {
   if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === "BUTTON") {
     document.activeElement.blur();
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 // ── Keyboard mapping tab ───────────────────────────────────────────────────

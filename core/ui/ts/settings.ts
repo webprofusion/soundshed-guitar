@@ -8,8 +8,8 @@ import { updateSignalDiagnosticsView, scheduleDSPPerformancePlotUpdate } from ".
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { getAudioFxLibrary, getIrLibrary } from "./dataLibraries.js";
 import { buildArchiveFileName, requestResourceData, sanitizeFilename, arrayBufferToBase64 } from "./archiveUtils.js";
-import { escapeHtml, sha256HexFromBase64, findResourceById } from "./utils.js";
-import type { AppSettingValue, Preset, BlendDefinition, ResourceRef, LibraryResource, UserInputCalibrationProfile } from "./types.js";
+import { escapeHtml, sha256HexFromBase64 } from "./utils.js";
+import type { AppSettingValue, BlendDefinition, LibraryResource, Preset, ResourceRef, UserInputCalibrationProfile } from "./types.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { themeSwitcher, type ThemeName } from "./theme-switcher.js";
 import { renderIcon } from "./iconAssets.js";
@@ -19,7 +19,7 @@ import { initLayoutManager, renderLayoutList } from "./layoutManager.js";
 import { initBlendManager, renderBlendList } from "./blendManager.js";
 import { updateSelectedNodePeakMeter } from "./signalPath.js";
 import { updateUiSettings } from "./windowSettings.js";
-import { getApiBaseUrl } from "./toneSharingPanel.js";
+import { getApiBaseUrl } from "./apiConfig.js";
 import {
   FEATURE_DEFINITIONS,
   FEATURE_FLAGS_CHANGED_EVENT,
@@ -28,10 +28,10 @@ import {
   areAdvancedLibraryFeaturesEnabled,
   getFeatureSettingKey,
   isJamExperienceEnabled,
-  isLibraryExperienceEnabled,
   isFeatureEnabled,
   type FeatureId,
 } from "./featureFlags.js";
+import { getLibraryResource } from "./resourceLibrary.js";
 
 const API_KEY_SETTING = "tone3000.apiKey";
 const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
@@ -171,7 +171,7 @@ let themeSelectInitialized = false;
 let zoomControlsInitialized = false;
 let libraryTabsInitialized = false;
 let libraryCreatorFilter = "all";
-let libraryActiveTagFilters = new Set<string>();
+const libraryActiveTagFilters = new Set<string>();
 let userInputCalibrationControlsInitialized = false;
 let dspLevelTargetsInitialized = false;
 let libraryStateRequestedAt = 0;
@@ -885,9 +885,10 @@ function initTone3000ProxyHealthCheck(): void {
       }
 
       if (!response.ok) {
-        const message = (payload && typeof payload === "object" && "error" in payload)
-          ? String((payload as { error?: { message?: unknown } }).error?.message ?? `HTTP ${response.status}`)
-          : `HTTP ${response.status}`;
+        const reported = (payload && typeof payload === "object" && "error" in payload)
+          ? (payload as { error?: { message?: unknown } }).error?.message
+          : undefined;
+        const message = typeof reported === "string" && reported ? reported : `HTTP ${response.status}`;
         updateTone3000ProxyHealthStatus(`API health: failed (${message})`);
         return;
       }
@@ -1095,7 +1096,7 @@ export function initDiagnosticsToggle(): void {
       const preset = clonePreset(
         uiState.presetCache.get(activeId) ??
         uiState.presets.find((p) => p.id === activeId) ??
-        ({} as import("./types.js").Preset)
+        ({} as Preset)
       );
       preset.designedPeakInputDbfs = Math.round(peakDbfs * 10) / 10;
       delete (preset as Record<string, unknown>).globalSignalChain;
@@ -1519,8 +1520,8 @@ function openUserInputCalibrationTrainingModal(): void {
 
   closeUserInputCalibrationToolbarMenu();
   setUserInputCalibrationTrainingBypassActive(true);
-  userInputCalibrationNameInput && (userInputCalibrationNameInput.value = "");
-  userInputCalibrationDescriptionInput && (userInputCalibrationDescriptionInput.value = "");
+  if (userInputCalibrationNameInput) userInputCalibrationNameInput.value = "";
+  if (userInputCalibrationDescriptionInput) userInputCalibrationDescriptionInput.value = "";
   userInputCalibrationLivePeakDbfs = Number.NEGATIVE_INFINITY;
   userInputCalibrationTrainingPeakDbfs = Number.NEGATIVE_INFINITY;
   userInputCalibrationModal.style.display = "flex";
@@ -1924,11 +1925,6 @@ type LibraryArchive = {
   resources: LibraryArchiveResource[];
 };
 
-function getLibraryResource(resourceType: string, resourceId: string): LibraryResource | undefined {
-  const resources = uiState.resourceLibrary[resourceType] ?? [];
-  return findResourceById(resources, resourceId);
-}
-
 function collectPresetBlendIds(preset: Preset): string[] {
   if (!preset.graph?.nodes) {
     return [];
@@ -2242,7 +2238,7 @@ function getLibraryItems(): LibraryItem[] {
       if (!res || typeof res !== "object") {
         return;
       }
-      const entry = res as import("./types.js").LibraryResource;
+      const entry = res as LibraryResource;
       const entryFilePath = entry.filePath ?? "";
       items.push({
         type,

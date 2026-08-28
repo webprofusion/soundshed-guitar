@@ -1,5 +1,5 @@
-import { uiState, clonePreset, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty } from "./state.js";
-import { renderActivePreset, applyPresetFromLibrary, populatePresetDropdown, updatePresetDropdownSelection, cachePresetInMemory, updatePresetActionButtons, applyPresetFoldersFromBackend, applyPresetFavoritesFromBackend, applyPresetRecentsFromAppSettings, applyPresetRatingsFromBackend, applySetlistsFromBackend, applySetlistCursorFromBackend, handlePresetDataMessage, recordRecentPreset, refreshSavePresetModalPeakInfoIfOpen, rejectPendingPresetRequest, applyPresetArchiveSessionState, refreshPresetCacheEntryFromBackend } from "./presets.js";
+import { uiState, clonePreset, enterCompositeEditState, exitCompositeEditState, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, updateCompositeEditState } from "./state.js";
+import { renderActivePreset, populatePresetDropdown, updatePresetDropdownSelection, cachePresetInMemory, updatePresetActionButtons, applyPresetFoldersFromBackend, applyPresetFavoritesFromBackend, applyPresetRecentsFromAppSettings, applyPresetRatingsFromBackend, applySetlistsFromBackend, applySetlistCursorFromBackend, handlePresetDataMessage, recordRecentPreset, refreshSavePresetModalPeakInfoIfOpen, rejectPendingPresetRequest, applyPresetArchiveSessionState, refreshPresetCacheEntryFromBackend } from "./presets.js";
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
@@ -8,9 +8,9 @@ import { handleTunerUpdate, handleTunerStarted, handleTunerStopped, handleTunerR
 import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
-import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
+import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete } from "./riffLibrary.js";
 import { applyPracticeToolFileLoaded, applyPracticeToolPlaybackEnded, applyPracticeToolTransportState } from "./practiceTool.js";
-import { getRiffLibrary, postMessage } from "./bridge.js";
+import { getRiffLibrary, postMessage, requestGlobalChainState } from "./bridge.js";
 import { refreshEffectPresetsFlyout, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeState } from "./metronome.js";
@@ -18,25 +18,21 @@ import { applyAutomationState, handleMidiLogEntry, handleMidiLearnCapture } from
 import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport, handleToneSharingDeepLink } from "./toneSharingPanel.js";
 import { applyJamAppSettings } from "./jam.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
-import type { CompositePreset, GlobalSignalChainConfig, InputAnalyzerTelemetry, LibraryResource, Preset, PresetFolder, ResourceRef, Setlist, SignalDiagnosticsAnalyzerFrame, SignalDiagnosticsFrame, SignalDiagnosticsRoster, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, StoredEffectPreset, UiSettings } from "./types.js";
+import type { AppSettings, AutomationRegistryEntry, AutomationSlot, BlendLibrary, CompositePreset, CustomEffectLibrary, DSPPerformanceStats, GlobalSignalChainConfig, InputAnalyzerTelemetry, LibraryResource, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, PresetFolder, ResourceLibrary, ResourceRef, RiffLibrary, Setlist, SignalDiagnosticsAnalyzerFrame, SignalDiagnosticsFrame, SignalDiagnosticsRoster, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, StoredEffectPreset, UiSettings, UiViewState } from "./types.js";
 import { SIGNAL_DIAGNOSTICS_TUPLE_LENGTH } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
-import { migratePresetNodeTypes, setNodeParam } from "./presetV2.js";
+import { EffectTypeRegistry, migratePresetNodeTypes, setNodeParam } from "./presetV2.js";
 import { handleResourceDataMessage } from "./archiveUtils.js";
 import { layoutDesigner } from "./layoutDesigner.js";
-import type { LayoutLibrary, EffectLayout } from "./layoutTypes.js";
-import { layoutLookupKey } from "./layoutTypes.js";
+import type { LayoutImageRef, LayoutLibrary } from "./layoutTypes.js";
 import { handleCompositeLibrary, handleCompositeDefinitionAdded, handleCompositeDefinitionRemoved } from "./compositeEffects.js";
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
 import { renderCompositeList, handleCompositeEditModeExited, handleCompositeEditStateUpdate } from "./compositeEditor.js";
 import { handleCustomEffectLibrary } from "./customEffects.js";
 import { renderLayoutList } from "./layoutManager.js";
 import { ensureLayoutImagesLoaded, markLayoutImagesLoaded, areLayoutImagesLoaded } from "./layoutImages.js";
-import type { LayoutImageRef } from "./layoutTypes.js";
 import { renderBlendList } from "./blendManager.js";
 import { handleCompositePresetList, handleCompositePresetSaved, handleCompositePresetLoaded } from "./multiPresetMixer.js";
-import { enterCompositeEditState, updateCompositeEditState, exitCompositeEditState } from "./state.js";
-import { EffectTypeRegistry } from "./presetV2.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { applyUiViewState } from "./navigation.js";
 import { triggerUpdateCheck } from "./updateCheck.js";
@@ -418,6 +414,10 @@ function sanitizeDebugValue(value: unknown, seen = new WeakSet<object>(), curren
     seen.delete(value as object);
     return sanitized;
   }
+  // Primitives, dates, arrays, maps and plain objects have all returned by
+  // now; only functions, symbols and bigints reach here, where String() is
+  // the correct rendering.
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
   return String(value);
 }
 
@@ -657,6 +657,1548 @@ function normalizeGlobalSignalChain(chain?: GlobalSignalChainConfig | null): Glo
   return chain;
 }
 
+/** A decoded message from the backend. Shape depends on `type`. */
+type IncomingPayload = Record<string, unknown>;
+
+type MessageHandler = (payload: IncomingPayload) => void;
+
+function onState(payload: IncomingPayload): void {
+  uiState.activePresetId = (payload as { activePresetId?: string }).activePresetId ?? null;
+  uiState.activePresetSceneId = (payload as { activeSceneId?: string }).activeSceneId ?? uiState.activePresetSceneId ?? null;
+  const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
+  if (parameters) {
+    uiState.parameters = {
+      values: Array.isArray((parameters as { parameters?: unknown }).parameters)
+        ? ((parameters as { parameters: [] }).parameters as [])
+        : [],
+    };
+  }
+  // Process resource library
+  const resourceLibrary = (payload as { resourceLibrary?: Record<string, unknown[]> }).resourceLibrary;
+  if (resourceLibrary) {
+    uiState.resourceLibrary = resourceLibrary as ResourceLibrary;
+  }
+  const missingNodeResources = (payload as { missingNodeResources?: Array<{ nodeId?: string; resourceType?: string; resourceId?: string; filePath?: string }> }).missingNodeResources;
+  if (Array.isArray(missingNodeResources)) {
+    uiState.missingNodeResources = missingNodeResources
+      .filter((entry) => entry && typeof entry.nodeId === "string")
+      .map((entry) => ({
+        nodeId: entry.nodeId ?? "",
+        resourceType: typeof entry.resourceType === "string" ? entry.resourceType : undefined,
+        resourceId: typeof entry.resourceId === "string" ? entry.resourceId : undefined,
+        filePath: typeof entry.filePath === "string" ? entry.filePath : undefined,
+      }));
+  } else {
+    uiState.missingNodeResources = [];
+  }
+  const blendLibrary = (payload as { blendLibrary?: unknown[] }).blendLibrary;
+  if (Array.isArray(blendLibrary)) {
+    uiState.blendLibrary = blendLibrary as BlendLibrary;
+    refreshFxSelector();
+    renderBlendList();
+  }
+  const customEffectLibrary = (payload as { customEffectLibrary?: unknown[] }).customEffectLibrary;
+  if (Array.isArray(customEffectLibrary)) {
+    handleCustomEffectLibrary(customEffectLibrary as CustomEffectLibrary);
+    refreshFxSelector();
+  }
+  const compositeLibrary = (payload as { compositeLibrary?: CompositeEffectDefinition[] }).compositeLibrary;
+  if (Array.isArray(compositeLibrary)) {
+    handleCompositeLibrary(compositeLibrary);
+    refreshFxSelector();
+    renderCompositeList();
+  }
+  const appSettings = (payload as { appSettings?: Record<string, unknown> }).appSettings;
+  if (appSettings) {
+    uiState.appSettings = appSettings as AppSettings;
+    applyStoredDemoAudioSelection();
+    applyToneSharingAppSettings(appSettings);
+    applyJamAppSettings();
+    applyPresetRecentsFromAppSettings();
+    applyPerformancePadAppSettings(appSettings as AppSettings);
+    triggerUpdateCheck();
+  }
+  applyPresetArchiveSessionState((payload as { presetArchiveSession?: PresetArchiveSessionState | null }).presetArchiveSession ?? null);
+  const globalSignalChain = (payload as { globalSignalChain?: GlobalSignalChainConfig }).globalSignalChain;
+  if (globalSignalChain) {
+    uiState.globalSignalChain = normalizeGlobalSignalChain(globalSignalChain) ?? uiState.globalSignalChain;
+  } else {
+    requestGlobalChainState();
+  }
+  const uiSettings = (payload as { uiSettings?: UiSettings }).uiSettings;
+  if (uiSettings) {
+    uiState.uiSettings = uiSettings;
+    applyUiSettings(uiSettings);
+  }
+  const uiViewState = (payload as { uiViewState?: UiViewState }).uiViewState;
+  if (uiViewState) {
+    uiState.uiViewState = uiViewState;
+    applyUiViewState(uiViewState);
+  }
+  const environment = (payload as { environment?: { standalone?: boolean; version?: string; os?: string; cpu?: string } }).environment;
+  if (environment) {
+    applyEnvironmentState({ 
+      standalone: Boolean(environment.standalone),
+      version: environment.version ?? uiState.environment?.version,
+      os: environment.os ?? uiState.environment?.os,
+      cpu: environment.cpu ?? uiState.environment?.cpu
+    });
+    refreshSettingsView();
+  }
+  // Apply stored input channel AFTER environment so isStandaloneUi() is correct.
+  if (appSettings) {
+    applyStoredInputChannel();
+  }
+  const metronome = (payload as { metronome?: { bpm?: number; enabled?: boolean; editable?: boolean; source?: string; volumeDb?: number; pan?: number; clickType?: string; beatPattern?: string; clickTypes?: Array<{ id?: string; label?: string }> } }).metronome;
+  if (metronome) {
+    applyMetronomeState({
+      bpm: typeof metronome.bpm === "number" ? metronome.bpm : uiState.metronome?.bpm ?? 120,
+      enabled: Boolean(metronome.enabled),
+      editable: metronome.editable !== undefined ? Boolean(metronome.editable) : true,
+      source: metronome.source === "host" ? "host" : "app",
+      volumeDb: typeof metronome.volumeDb === "number" ? metronome.volumeDb : uiState.metronome?.volumeDb ?? -12,
+      pan: typeof metronome.pan === "number" ? metronome.pan : uiState.metronome?.pan ?? 0,
+      clickType: typeof metronome.clickType === "string" ? metronome.clickType : uiState.metronome?.clickType ?? "click",
+      beatPattern: typeof metronome.beatPattern === "string" ? metronome.beatPattern : uiState.metronome?.beatPattern,
+      clickTypes: Array.isArray(metronome.clickTypes)
+        ? metronome.clickTypes
+            .filter((entry) => entry && typeof entry.id === "string")
+            .map((entry) => ({ id: entry.id ?? "", label: typeof entry.label === "string" ? entry.label : entry.id }))
+        : uiState.metronome?.clickTypes,
+    });
+  }
+  const riffLibrary = (payload as { riffLibrary?: RiffLibrary }).riffLibrary;
+  if (riffLibrary) {
+    applyRiffLibraryState(riffLibrary);
+    refreshDemoAudioSelectors();
+  }
+  const automation = (payload as { automation?: AutomationSlot[] }).automation;
+  if (automation) {
+    applyAutomationState({ slots: automation });
+  }
+  const mixer = (payload as { mixer?: MixerState }).mixer;
+  if (mixer) {
+    const activePresetIds = Array.isArray(mixer.activePresetIds) ? mixer.activePresetIds.slice() : [];
+    const presets = mixer.presets ?? {};
+    const resolvedPresets: Record<string, MixerPresetState> = {};
+
+    const ensurePreset = (id: string) => {
+      const entry = presets[id] as (MixerPresetState & { name?: string }) | undefined;
+      resolvedPresets[id] = {
+        id,
+        name: typeof entry?.name === "string" ? entry.name : undefined,
+        mix: typeof entry?.mix === "number" ? entry.mix : 1.0,
+        pan: typeof entry?.pan === "number" ? entry.pan : 0.0,
+        mute: Boolean(entry?.mute),
+        solo: Boolean(entry?.solo),
+      };
+    };
+
+    activePresetIds.forEach((id) => ensurePreset(id));
+    Object.keys(presets).forEach((id) => {
+      if (!resolvedPresets[id]) ensurePreset(id);
+    });
+
+    uiState.mixer = {
+      activePresetIds,
+      presets: resolvedPresets,
+      masterGain: typeof mixer.masterGain === "number" ? mixer.masterGain : uiState.mixer?.masterGain ?? 1.0,
+      limiterEnabled: Boolean(mixer.limiterEnabled),
+    };
+
+    // Populate presetCache with full graph data for each mixer slot.
+    // The C++ includes these so the UI can display signal chains even for
+    // slots that the user has never explicitly loaded as the active preset.
+    const presetGraphs = (mixer as { presetGraphs?: Record<string, unknown> }).presetGraphs;
+    if (presetGraphs && typeof presetGraphs === "object") {
+      for (const [slotId, presetData] of Object.entries(presetGraphs)) {
+        if (presetData && typeof presetData === "object") {
+          const existing = uiState.presetCache.get(slotId);
+          // Only overwrite stubs (entries without graph nodes)
+          if (!existing?.graph?.nodes?.length) {
+            const p = presetData as Preset;
+            migratePresetNodeTypes(p);
+            normalizePresetResources(p);
+            normalizePresetScenes(p);
+            uiState.presetCache.set(slotId, p);
+          }
+        }
+      }
+    }
+  }
+  uiState.signalTest = null;
+  const preset = (payload as { preset?: Preset }).preset;
+  if (preset) {
+    if (!shouldIgnoreStatePreset(preset)) {
+      normalizePresetResources(preset);
+      uiState.activePresetSceneId = normalizePresetScenes(preset, uiState.activePresetSceneId ?? undefined);
+      const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
+      setActivePresetIsNew(preserveNewDraft);
+      const snapshot = uiState.activePresetSnapshot;
+      const isNewPreset = !snapshot || snapshot.id !== preset.id;
+      if (isNewPreset) {
+        setActivePresetSnapshot(preset);
+        setPresetDirty(false);
+        uiState.presetCache.set(preset.id, clonePreset(preset));
+        if (!uiState.presets.some((p) => p.id === preset.id)) {
+          uiState.presets = [clonePreset(preset), ...uiState.presets];
+          uiState.filteredPresets = uiState.presets.slice();
+          populatePresetDropdown();
+        }
+      } else {
+        if (!uiState.presetDirty) {
+          const dirty = presetSignature(snapshot) !== presetSignature(preset);
+          setPresetDirty(dirty);
+        }
+      }
+      setActivePresetDraft(preset);
+    } else {
+      appendLog(`state preset ignored ← ${preset.name ?? preset.id ?? "unknown"} (stale post-save state)`);
+    }
+  }
+  renderActivePreset();
+  refreshPerformancePads();
+  syncControlsFromState();
+  updatePresetActionButtons();
+  updatePresetDropdownSelection();
+  showNotification("");
+  refreshSettingsView();
+}
+
+function onMetronomeState(payload: IncomingPayload): void {
+  const metroPayload = payload as { bpm?: number; enabled?: boolean; editable?: boolean; source?: string; volumeDb?: number; pan?: number; clickType?: string; clickTypes?: Array<{ id?: string; label?: string }> };
+  applyMetronomeState({
+    bpm: typeof metroPayload.bpm === "number" ? metroPayload.bpm : uiState.metronome?.bpm ?? 120,
+    enabled: Boolean(metroPayload.enabled),
+    editable: metroPayload.editable !== undefined ? Boolean(metroPayload.editable) : true,
+    source: metroPayload.source === "host" ? "host" : "app",
+    volumeDb: typeof metroPayload.volumeDb === "number" ? metroPayload.volumeDb : uiState.metronome?.volumeDb ?? -12,
+    pan: typeof metroPayload.pan === "number" ? metroPayload.pan : uiState.metronome?.pan ?? 0,
+    clickType: typeof metroPayload.clickType === "string" ? metroPayload.clickType : uiState.metronome?.clickType ?? "click",
+    clickTypes: Array.isArray(metroPayload.clickTypes)
+      ? metroPayload.clickTypes
+          .filter((entry) => entry && typeof entry.id === "string")
+          .map((entry) => ({ id: entry.id ?? "", label: typeof entry.label === "string" ? entry.label : entry.id }))
+      : uiState.metronome?.clickTypes,
+  });
+}
+
+function onRiffCaptureProgress(payload: IncomingPayload): void {
+  applyRiffCaptureProgress(
+    (payload as { capturedSamples?: number }).capturedSamples ?? 0,
+    Array.isArray((payload as { waveformPeaks?: unknown[] }).waveformPeaks)
+      ? ((payload as { waveformPeaks?: unknown[] }).waveformPeaks as unknown[])
+          .filter((value): value is number => typeof value === "number")
+      : [],
+  );
+}
+
+function onRiffCaptureStarted(payload: IncomingPayload): void {
+  appendLog(`riff capture started ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+  applyRiffCaptureState({
+    active: true,
+    complete: false,
+    takeId: (payload as { takeId?: string }).takeId ?? "",
+    bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
+    tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
+    timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
+    timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+    metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
+      ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
+      : uiState.riffCapture?.metronomeClickEnabled ?? true,
+    hasAudio: false,
+    waveformPeaks: [],
+    barAlignOffsetSamples: typeof (payload as { barAlignOffsetSamples?: number }).barAlignOffsetSamples === "number"
+      ? (payload as { barAlignOffsetSamples?: number }).barAlignOffsetSamples
+      : 0,
+  });
+  showNotification("Riff capture started");
+}
+
+function onRiffCaptureStopped(payload: IncomingPayload): void {
+  appendLog(`riff capture stopped ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+  const source = (payload as { source?: string }).source ?? "capture";
+  applyRiffCaptureState({
+    active: false,
+    complete: true,
+    takeId: (payload as { takeId?: string }).takeId ?? uiState.riffCapture?.takeId ?? "",
+    bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
+    tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
+    timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
+    timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
+    metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
+      ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
+      : uiState.riffCapture?.metronomeClickEnabled ?? true,
+    capturedSamples: (payload as { capturedSamples?: number }).capturedSamples ?? uiState.riffCapture?.capturedSamples ?? 0,
+    sampleRate: (payload as { sampleRate?: number }).sampleRate ?? uiState.riffCapture?.sampleRate ?? 0,
+    hasAudio: Boolean((payload as { hasAudio?: boolean }).hasAudio),
+    waveformPeaks: Array.isArray((payload as { waveformPeaks?: unknown[] }).waveformPeaks)
+      ? ((payload as { waveformPeaks?: unknown[] }).waveformPeaks as unknown[])
+          .filter((value): value is number => typeof value === "number")
+      : [],
+  });
+  showNotification(
+    source === "import"
+      ? "Riff WAV imported"
+      : source === "editLoad"
+        ? "Riff take loaded for edit"
+      : source === "trim"
+        ? "Riff cropped to markers"
+        : "Riff capture complete",
+  );
+}
+
+function onRiffCaptureCanceled(payload: IncomingPayload): void {
+  appendLog(`riff capture cancelled ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
+  applyRiffCaptureState({ active: false, complete: false, takeId: "", capturedSamples: 0, sampleRate: 0, hasAudio: false, waveformPeaks: [] });
+  showNotification("Riff capture canceled");
+}
+
+function onRiffSaved(payload: IncomingPayload): void {
+  appendLog(`riff saved ← ${(payload as { riffId?: string }).riffId ?? "riff"}`);
+  const riffLibrary = (payload as { library?: RiffLibrary }).library;
+  if (riffLibrary) {
+    applyRiffLibraryState(riffLibrary);
+  }
+  showNotification("Riff saved", (payload as { path?: string }).path ?? "");
+  if (!riffLibrary) {
+    getRiffLibrary();
+  }
+  refreshDemoAudioSelectors();
+}
+
+function onPracticeToolFileLoaded(payload: IncomingPayload): void {
+  const info = payload as { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] };
+  applyPracticeToolFileLoaded(info);
+}
+
+function onPracticeToolTransportState(payload: IncomingPayload): void {
+  const info = payload as { state?: string; positionSec?: number };
+  applyPracticeToolTransportState(info);
+}
+
+function onPracticeToolPlaybackEnded(): void {
+  applyPracticeToolPlaybackEnded();
+}
+
+function onResourceCleanupResult(payload: IncomingPayload): void {
+  const removed = typeof (payload as { removed?: number }).removed === "number"
+    ? (payload as { removed?: number }).removed as number
+    : 0;
+  const skipped = typeof (payload as { skipped?: number }).skipped === "number"
+    ? (payload as { skipped?: number }).skipped as number
+    : 0;
+  const skippedUsed = typeof (payload as { skippedUsed?: number }).skippedUsed === "number"
+    ? (payload as { skippedUsed?: number }).skippedUsed as number
+    : 0;
+  const message = removed > 0 ? `Removed ${removed} resources.` : "No resources removed.";
+  const parts: string[] = [];
+  if (skipped > 0) {
+    parts.push(`${skipped} skipped`);
+  }
+  if (skippedUsed > 0) {
+    parts.push(`${skippedUsed} in use`);
+  }
+  const detail = parts.length ? `${parts.join("; ")}.` : "";
+  showNotification(message, detail);
+  refreshSettingsView();
+}
+
+function onPresetLoaded(payload: IncomingPayload): void {
+  const preset = (payload as { preset?: Preset }).preset;
+  if (preset) {
+    // Clear loading state before re-rendering — the re-render below removes
+    // all loading classes and overlays baked into the DOM by the render functions.
+    uiState.presetLoadingId = null;
+    migratePresetNodeTypes(preset);
+    normalizePresetResources(preset);
+    const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
+    uiState.activePresetSceneId = normalizePresetScenes(preset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined);
+    recordRecentPreset(preset.id);
+    uiState.activePresetId = preset.id;
+    setActivePresetIsNew(preserveNewDraft);
+    uiState.presetCache.set(preset.id, clonePreset(preset));
+    setActivePresetSnapshot(preset);
+    setActivePresetDraft(preset);
+    setPresetDirty(false);
+    updatePresetDropdownSelection();
+  }
+  const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
+  if (Array.isArray(activePresetIds)) {
+    uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, limiterEnabled: false };
+    uiState.mixer.activePresetIds = activePresetIds.slice();
+    activePresetIds.forEach((id) => {
+      if (!uiState.mixer!.presets[id]) {
+        uiState.mixer!.presets[id] = { id, mix: 1.0, pan: 0.0, mute: false, solo: false };
+      }
+    });
+  }
+  const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
+  if (parameters) {
+    uiState.parameters = {
+      values: Array.isArray((parameters as { parameters?: unknown }).parameters)
+        ? ((parameters as { parameters: [] }).parameters as [])
+        : uiState.parameters.values,
+    };
+  }
+  if (preset) {
+    uiState.presetCache.set(preset.id, clonePreset(preset));
+    setActivePresetSnapshot(preset);
+    setActivePresetDraft(preset);
+    setPresetDirty(false);
+  }
+  renderActivePreset();
+  refreshPerformancePads();
+  syncControlsFromState();
+  updatePresetActionButtons();
+}
+
+function onSignalPathTestResult(payload: IncomingPayload): void {
+  const result = payload as Record<string, unknown>;
+  uiState.signalTest = {
+    frequency: (result.frequency as number) ?? 0,
+    duration: (result.duration as number) ?? 0,
+    elapsed: (result.elapsed as number) ?? 0,
+    sampleRate: (result.sampleRate as number) ?? 0,
+    inputRMS: (result.inputRMS as number) ?? 0,
+    outputLeft: Array.isArray(result.outputRMS) ? ((result.outputRMS as number[])[0] ?? 0) : 0,
+    outputRight: Array.isArray(result.outputRMS) ? ((result.outputRMS as number[])[1] ?? 0) : 0,
+    passed: Boolean(result.passed),
+    message: (result.message as string) ?? "",
+  };
+  renderActivePreset();
+  const ratio = uiState.signalTest.elapsed > 0 ? (uiState.signalTest.duration / uiState.signalTest.elapsed).toFixed(2) : "N/A";
+  const timingInfo = `Audio: ${uiState.signalTest.duration.toFixed(3)}s, Elapsed: ${uiState.signalTest.elapsed.toFixed(3)}s (${ratio}x realtime)`;
+  showNotification(
+    uiState.signalTest.passed ? "Signal path test passed" : "Signal path test failed",
+    timingInfo + (uiState.signalTest.message ? ` - ${uiState.signalTest.message}` : ""),
+  );
+}
+
+function onPreviewStarted(payload: IncomingPayload): void {
+  appendLog(`preview started ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+  handleRiffPreviewPlayback("start", (payload as { id?: string }).id ?? "");
+  syncDemoAudioSelectionFromPreview((payload as { id?: string }).id ?? null);
+  onDemoAudioStarted();
+  showNotification("Playing demo audio", (payload as { title?: string }).title ?? "Demo");
+}
+
+function onPreviewComplete(payload: IncomingPayload): void {
+  appendLog(`preview complete ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+  const previewId = (payload as { id?: string }).id ?? "";
+  const savedRiffLooped = handleSavedRiffPreviewComplete(previewId);
+  if (savedRiffLooped) {
+    return;
+  }
+  handleRiffPreviewPlayback("stop", previewId);
+  const capturedLooped = handleCapturedPreviewComplete(previewId);
+  if (capturedLooped) {
+    return;
+  }
+  onDemoAudioStopped();
+  if (uiState.demoAudioRepeat) {
+    void previewSelectedDemoAudio();
+  } else {
+    showNotification("Demo playback finished", (payload as { title?: string }).title ?? "Demo");
+  }
+}
+
+function onPreviewStopped(payload: IncomingPayload): void {
+  appendLog(`preview stopped ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
+  handleRiffPreviewPlayback("stop", (payload as { id?: string }).id ?? "");
+  onDemoAudioStopped();
+  showNotification("Demo playback stopped", (payload as { title?: string }).title ?? "Demo");
+}
+
+function onDemoAudioRenderSaved(payload: IncomingPayload): void {
+  const info = payload as { path?: string; sampleRate?: number };
+  const sampleRate = typeof info.sampleRate === "number" && info.sampleRate > 0
+    ? `${Math.round(info.sampleRate / 100) / 10} kHz`
+    : "";
+  appendLog(`demo audio rendered ← ${info.path ?? "unknown"}${sampleRate ? ` @ ${sampleRate}` : ""}`);
+  showNotification("Demo audio rendered", sampleRate ? `${sampleRate} - ${info.path ?? ""}` : info.path ?? "");
+}
+
+function onDemoAudioRenderFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string };
+  appendLog(`demo audio render failed ← ${info.message ?? "unknown"}`);
+  showNotification("Demo audio render failed", info.message ?? "");
+}
+
+function onError(payload: IncomingPayload): void {
+  console.error("Plugin error", payload);
+  const requestId = (payload as { requestId?: string }).requestId;
+  if (requestId) {
+    rejectPendingPresetRequest(requestId, (payload as { message?: string }).message ?? "An error occurred", (payload as { detail?: string }).detail);
+  }
+  showNotification((payload as { message?: string }).message ?? "An error occurred", (payload as { detail?: string }).detail ?? "");
+  if (uiState.presetLoadingId) {
+    // A backend-driven load (e.g. a setlist step onto a missing preset) failed, so the
+    // "presetLoaded" that would clear the loading state is never coming.
+    uiState.presetLoadingId = null;
+    renderActivePreset();
+  }
+}
+
+function onModelLoaded(payload: IncomingPayload): void {
+  appendLog(`model loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
+  renderActivePreset();
+  showNotification("Model loaded", (payload as { path?: string }).path ?? "");
+}
+
+function onIrLoaded(payload: IncomingPayload): void {
+  console.log("[JS] IR loaded event received, path:", (payload as { path?: string }).path);
+  appendLog(`IR loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
+  renderActivePreset();
+  showNotification("IR loaded", (payload as { path?: string }).path ?? "");
+}
+
+function onResourceImported(payload: IncomingPayload): void {
+  const info = payload as { id?: string; name?: string; resourceType?: string; filePath?: string };
+  upsertImportedResourceInUiState(info);
+  appendLog(`resource imported ← ${info.name ?? "unknown"}`);
+  showNotification("Resource imported", info.name ?? info.filePath ?? "");
+  document.dispatchEvent(new CustomEvent("resource-browser:resource-imported", {
+    detail: {
+      id: info.id ?? "",
+      name: info.name ?? "",
+      resourceType: info.resourceType ?? "",
+      filePath: info.filePath ?? "",
+    },
+  }));
+}
+
+function onResourceImportFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string; detail?: string };
+  appendLog(`resource import failed ← ${info.message ?? "unknown"}`);
+  showNotification(info.message ?? "Import failed", info.detail ?? "");
+}
+
+function onResourceRemoved(payload: IncomingPayload): void {
+  const info = payload as { id?: string; resourceType?: string };
+  removeResourceFromUiState(info);
+  appendLog(`resource removed ← ${info.id ?? "unknown"}`);
+  document.dispatchEvent(new CustomEvent("resource-browser:resource-removed", {
+    detail: {
+      id: info.id ?? "",
+      resourceType: info.resourceType ?? "",
+    },
+  }));
+}
+
+function onResourceDeleteFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string; detail?: string; presetName?: string };
+  appendLog(`resource delete failed ← ${info.message ?? "unknown"}`);
+  showNotification(info.message ?? "Resource delete failed", info.detail ?? info.presetName ?? "");
+}
+
+function onResourceUsageInfo(payload: IncomingPayload): void {
+  document.dispatchEvent(new CustomEvent("resource-browser:usage-info", { detail: payload }));
+}
+
+function onResourceFolderPicked(payload: IncomingPayload): void {
+  document.dispatchEvent(new CustomEvent("resource-browser:folder-picked", { detail: payload }));
+}
+
+function onResourceFolderListing(payload: IncomingPayload): void {
+  document.dispatchEvent(new CustomEvent("resource-browser:folder-listing", { detail: payload }));
+}
+
+function onResourceFolderMetadata(payload: IncomingPayload): void {
+  document.dispatchEvent(new CustomEvent("resource-browser:folder-metadata", { detail: payload }));
+}
+
+function onResourceFolderListingFailed(payload: IncomingPayload): void {
+  const info = payload as { path?: string; message?: string };
+  appendLog(`folder listing failed ← ${info.message ?? "unknown"}`);
+  document.dispatchEvent(new CustomEvent("resource-browser:folder-listing-failed", { detail: payload }));
+}
+
+function onHostedPluginResourceLoadFailed(payload: IncomingPayload): void {
+  handleHostedPluginResourceLoadFailed(payload as {
+    nodeId?: string;
+    resourceType?: string;
+    resourceId?: string;
+    filePath?: string;
+    resourceIndex?: number;
+    message?: string;
+    errorCode?: string;
+  });
+}
+
+function onHostedPluginResourceLoadCompleted(payload: IncomingPayload): void {
+  handleHostedPluginResourceLoadCompleted(payload as {
+    nodeId?: string;
+    resourceType?: string;
+  });
+}
+
+function onNodeResourceBrowseCancelled(payload: IncomingPayload): void {
+  handleNodeResourceBrowseCancelled(payload as {
+    nodeId?: string;
+    resourceType?: string;
+  });
+}
+
+function onToneSharingPackImported(payload: IncomingPayload): void {
+  const info = payload as { fileName?: string; path?: string; byteSize?: number };
+  const detail = info.path ?? info.fileName ?? "";
+  appendLog(`tone sharing pack imported ← ${detail}`);
+  registerInstalledToneSharingPackFromImport(info);
+  showNotification("Pack imported", detail);
+}
+
+function onToneSharingPackImportFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string };
+  appendLog(`tone sharing pack import failed ← ${info.message ?? "unknown"}`);
+  showNotification("Pack import failed", info.message ?? "");
+}
+
+function onResourceData(payload: IncomingPayload): void {
+  handleResourceDataMessage(payload as { requestId: string; data?: string; fileName?: string; message?: string });
+}
+
+function onResourceDataFailed(payload: IncomingPayload): void {
+  handleResourceDataMessage(payload as { requestId: string; data?: string; fileName?: string; message?: string });
+}
+
+function onBlendExportSaved(payload: IncomingPayload): void {
+  const info = payload as { path?: string };
+  showNotification("Blend exported", info.path ?? "");
+}
+
+function onBlendExportFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string };
+  showNotification("Blend export failed", info.message ?? "");
+}
+
+function onLibraryExportSaved(payload: IncomingPayload): void {
+  const info = payload as { path?: string };
+  showNotification("Library exported", info.path ?? "");
+}
+
+function onLibraryExportFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string };
+  showNotification("Library export failed", info.message ?? "");
+}
+
+function onPresetExportSaved(payload: IncomingPayload): void {
+  const info = payload as { path?: string };
+  showNotification("Preset exported", info.path ?? "");
+}
+
+function onPresetExportFailed(payload: IncomingPayload): void {
+  const info = payload as { message?: string };
+  showNotification("Preset export failed", info.message ?? "");
+}
+
+function onPresetSaved(payload: IncomingPayload): void {
+  const savedPreset = (payload as { preset?: Preset }).preset;
+  appendLog(
+    `preset saved ← ${savedPreset?.name ?? "unknown"} `
+    + `(graphNodes=${savedPreset?.graph?.nodes?.length ?? 0}, scenes=${savedPreset?.scenes?.length ?? 0})`,
+  );
+  if (savedPreset) {
+    normalizePresetResources(savedPreset);
+    uiState.activePresetSceneId = normalizePresetScenes(savedPreset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined);
+    cachePresetInMemory(savedPreset);
+    uiState.activePresetId = savedPreset.id;
+    setActivePresetIsNew(false);
+    uiState.presetCache.set(savedPreset.id, clonePreset(savedPreset));
+    setActivePresetSnapshot(savedPreset);
+    setActivePresetDraft(savedPreset);
+    setPresetDirty(false);
+    if (!uiState.presets.some((p) => p.id === savedPreset.id)) {
+      uiState.presets.unshift(clonePreset(savedPreset));
+      uiState.filteredPresets = uiState.presets.slice();
+      populatePresetDropdown();
+    }
+    renderActivePreset();
+    updatePresetDropdownSelection();
+    markIgnoreNextStatePreset(savedPreset.id);
+  }
+  showNotification("Preset saved", (payload as { path?: string }).path ?? savedPreset?.name ?? "");
+}
+
+function onPresetArchiveSessionStarted(payload: IncomingPayload): void {
+  const sessionPayload = payload as { active?: boolean; archiveName?: string; archiveKey?: string; presetCount?: number };
+  applyPresetArchiveSessionState({
+    active: Boolean(sessionPayload.active),
+    archiveName: sessionPayload.archiveName,
+    archiveKey: sessionPayload.archiveKey,
+    presetCount: sessionPayload.presetCount,
+  });
+  renderActivePreset();
+  updatePresetActionButtons();
+  showNotification("Preset archive session started", sessionPayload.archiveName ?? "");
+}
+
+function onPresetArchiveSessionEnded(): void {
+  applyPresetArchiveSessionState({ active: false });
+  renderActivePreset();
+  updatePresetActionButtons();
+  showNotification("Preset archive session ended");
+}
+
+function onPresetArchiveSessionFailed(payload: IncomingPayload): void {
+  showNotification("Preset archive session failed", (payload as { message?: string }).message ?? "");
+}
+
+function onPresetList(payload: IncomingPayload): void {
+  const presetListPayload = payload as { presets?: Array<{ id: string; name: string; category?: string; source?: string }> };
+  if (Array.isArray(presetListPayload.presets)) {
+    appendLog(`preset list received ← ${presetListPayload.presets.length} presets`);
+    const cachedBeforeUpdate = new Set(uiState.presetCache.keys());
+    const nextPresets: Preset[] = [];
+    for (const p of presetListPayload.presets) {
+      const incomingCategory = p.category ?? "Factory";
+      const existingCached = uiState.presetCache.get(p.id);
+      const nextPreset: Preset = existingCached
+        ? {
+            ...existingCached,
+            name: p.name,
+            category: incomingCategory,
+          }
+        : { id: p.id, name: p.name, category: incomingCategory } as Preset;
+      uiState.presetCache.set(p.id, nextPreset);
+      nextPresets.push(nextPreset);
+    }
+    uiState.presets = nextPresets;
+    uiState.filteredPresets = nextPresets.slice();
+    populatePresetDropdown();
+    renderActivePreset();
+
+    if (pendingSharedPresetHydration) {
+      pendingSharedPresetHydration = false;
+      presetListPayload.presets.forEach((presetSummary) => {
+        if (cachedBeforeUpdate.has(presetSummary.id)) {
+          refreshPresetCacheEntryFromBackend(presetSummary.id);
+        }
+      });
+    }
+  }
+}
+
+function onAppInfo(payload: IncomingPayload): void {
+  const infoPayload = payload as { version?: string; os?: string; cpu?: string };
+  applyEnvironmentState({
+    standalone: uiState.environment?.standalone ?? false,
+    version: infoPayload.version ?? uiState.environment?.version,
+    os: infoPayload.os ?? uiState.environment?.os,
+    cpu: infoPayload.cpu ?? uiState.environment?.cpu,
+  });
+  refreshSettingsView();
+}
+
+function onSharedSyncUpdated(): void {
+  pendingSharedPresetHydration = true;
+  scheduleSharedSyncRefresh();
+}
+
+function onSharedSyncState(payload: IncomingPayload): void {
+  pendingSharedPresetHydration = true;
+  const sharedPayload = payload as {
+    appSettings?: Record<string, unknown>;
+    uiSettings?: UiSettings;
+    resourceLibrary?: Record<string, unknown[]>;
+    blendLibrary?: unknown[];
+    customEffectLibrary?: unknown[];
+    presetArchiveSession?: PresetArchiveSessionState | null;
+  };
+
+  if (sharedPayload.appSettings) {
+    uiState.appSettings = sharedPayload.appSettings as AppSettings;
+    applyStoredDemoAudioSelection();
+    applyToneSharingAppSettings(sharedPayload.appSettings);
+    applyJamAppSettings();
+    applyPresetRecentsFromAppSettings();
+    applyPerformancePadAppSettings(sharedPayload.appSettings as AppSettings);
+    triggerUpdateCheck();
+    applyStoredInputChannel();
+  }
+  applyPresetArchiveSessionState(sharedPayload.presetArchiveSession ?? null);
+
+  if (sharedPayload.uiSettings) {
+    uiState.uiSettings = sharedPayload.uiSettings;
+  }
+
+  if (sharedPayload.resourceLibrary) {
+    uiState.resourceLibrary = sharedPayload.resourceLibrary as ResourceLibrary;
+  }
+
+  if (Array.isArray(sharedPayload.blendLibrary)) {
+    uiState.blendLibrary = sharedPayload.blendLibrary as BlendLibrary;
+    renderBlendList();
+  }
+
+  if (Array.isArray(sharedPayload.customEffectLibrary)) {
+    handleCustomEffectLibrary(sharedPayload.customEffectLibrary as CustomEffectLibrary);
+  }
+
+  refreshFxSelector();
+  refreshPerformancePads();
+  refreshSettingsView();
+}
+
+function onPresetData(payload: IncomingPayload): void {
+  const presetPayload = payload as { preset?: Preset };
+  if (presetPayload.preset) {
+    migratePresetNodeTypes(presetPayload.preset);
+    normalizePresetResources(presetPayload.preset);
+    normalizePresetScenes(presetPayload.preset);
+    handlePresetDataMessage(presetPayload.preset, (payload as { requestId?: string }).requestId);
+  }
+}
+
+function onPresetFolders(payload: IncomingPayload): void {
+  const foldersPayload = payload as { folders?: PresetFolder[]; activeFolderId?: string | null };
+  applyPresetFoldersFromBackend(foldersPayload.folders ?? [], foldersPayload.activeFolderId ?? null);
+}
+
+function onPresetFavorites(payload: IncomingPayload): void {
+  const favoritesPayload = payload as { favorites?: string[] };
+  applyPresetFavoritesFromBackend(Array.isArray(favoritesPayload.favorites) ? favoritesPayload.favorites : []);
+}
+
+function onPresetRatings(payload: IncomingPayload): void {
+  const ratingsPayload = payload as { ratings?: Record<string, number> };
+  applyPresetRatingsFromBackend(ratingsPayload.ratings ?? {});
+}
+
+function onSetlists(payload: IncomingPayload): void {
+  const setlistsPayload = payload as { setlists?: Setlist[]; activeSetlistId?: string | null };
+  applySetlistsFromBackend(setlistsPayload.setlists ?? [], setlistsPayload.activeSetlistId ?? null);
+  refreshPerformancePads();
+}
+
+function onEffectPresets(payload: IncomingPayload): void {
+  const effectPresetsPayload = payload as { byEffectType?: Record<string, StoredEffectPreset[]> };
+  uiState.effectPresets = effectPresetsPayload.byEffectType ?? {};
+  // The backend re-broadcasts after each save/delete, so both the params panel
+  // and an open presets flyout need to pick up the new list.
+  refreshSelectedNodeParams();
+  refreshEffectPresetsFlyout();
+}
+
+function onSetlistCursorChanged(payload: IncomingPayload): void {
+  const cursorPayload = payload as { cursorIndex?: number; presetId?: string; activeSetlistId?: string };
+  if (typeof cursorPayload.cursorIndex === "number") {
+    applySetlistCursorFromBackend(cursorPayload.cursorIndex, cursorPayload.presetId, cursorPayload.activeSetlistId);
+    refreshPerformancePads();
+  }
+}
+
+function onAutomation(payload: IncomingPayload): void {
+  const autoPayload = payload as {
+    slots?: AutomationSlot[];
+    registry?: AutomationRegistryEntry[];
+    maxCustomSlots?: number;
+  };
+  applyAutomationState({
+    slots: autoPayload.slots ?? [],
+    registry: autoPayload.registry ?? [],
+    maxCustomSlots: autoPayload.maxCustomSlots ?? 16,
+  });
+}
+
+function onMidiLog(payload: IncomingPayload): void {
+  const logPayload = payload as { midiType?: string; channel?: number; data1?: number; data2?: number };
+  handleMidiLogEntry({
+    type: logPayload.midiType ?? "Unknown",
+    channel: logPayload.channel ?? 0,
+    data1: logPayload.data1 ?? 0,
+    data2: logPayload.data2 ?? 0,
+  });
+}
+
+function onMidiLearnCapture(payload: IncomingPayload): void {
+  const capturePayload = payload as { slotId?: string };
+  if (typeof capturePayload.slotId === "string") {
+    handleMidiLearnCapture(capturePayload.slotId);
+  }
+}
+
+function onTheme(payload: IncomingPayload): void {
+  const themePayload = payload as { theme?: string };
+  const theme = themePayload.theme === "light" || themePayload.theme === "classic" ? themePayload.theme : "dark";
+  themeSwitcher.applyTheme(theme);
+}
+
+function onTunerUpdate(payload: IncomingPayload): void {
+  const tunerPayload = payload as { 
+    detected?: boolean; 
+    noteName?: string; 
+    octave?: number;
+    frequency?: number;
+    centOffset?: number;
+    confidence?: number;
+    debugRms?: number;
+    debugRawFreq?: number;
+  };
+  
+  // Log debug info to console
+  const rms = tunerPayload.debugRms?.toFixed(6) ?? "?";
+  const rawFreq = tunerPayload.debugRawFreq?.toFixed(2) ?? "?";
+  console.log(`[Tuner] RMS=${rms}, rawFreq=${rawFreq}Hz, detected=${tunerPayload.detected}, note=${tunerPayload.noteName ?? "-"}`);
+  
+  handleTunerUpdate({
+    detected: tunerPayload.detected ?? false,
+    noteName: tunerPayload.noteName,
+    octave: tunerPayload.octave,
+    frequency: tunerPayload.frequency,
+    centOffset: tunerPayload.centOffset,
+    confidence: tunerPayload.confidence,
+  });
+}
+
+function onTunerStarted(payload: IncomingPayload): void {
+  const startPayload = payload as { referenceFrequency?: number; liveMode?: boolean };
+  handleTunerStarted(startPayload.referenceFrequency ?? 440.0);
+  if (startPayload.liveMode !== undefined) {
+    handleTunerLiveModeChanged(startPayload.liveMode);
+  }
+}
+
+function onTunerStopped(): void {
+  handleTunerStopped();
+}
+
+function onTunerReferenceChanged(payload: IncomingPayload): void {
+  handleTunerReferenceChanged((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
+}
+
+function onTunerLiveModeChanged(payload: IncomingPayload): void {
+  handleTunerLiveModeChanged((payload as { liveMode?: boolean }).liveMode ?? true);
+}
+
+function onDebug(payload: IncomingPayload): void {
+  const msg = (payload as { message?: string }).message ?? "";
+  console.log("[C++]", msg);
+  appendLog(`[C++] ${msg}`);
+}
+
+function onCaptureDebugSnapshot(payload: IncomingPayload): void {
+  const source = typeof (payload as { source?: string }).source === "string"
+    ? (payload as { source?: string }).source as string
+    : "backend-request";
+  postUiDebugSnapshot(source);
+}
+
+function onDebugSnapshotWritten(payload: IncomingPayload): void {
+  const info = payload as { path?: string; source?: string };
+  console.log("[DebugSnapshot] written", info.path ?? "", info.source ?? "");
+  if (info.source === "footer-button") {
+    appendLog(`debug snapshot written ← ${info.path ?? "unknown path"}`);
+    showNotification("Debug state captured", info.path ?? "logs/debug-state.json");
+  }
+}
+
+function onInputModeChanged(payload: IncomingPayload): void {
+  const modePayload = payload as { monoMode?: boolean; inputChannel?: number };
+  handleInputModeChanged(
+    modePayload.monoMode ?? true,
+    modePayload.inputChannel ?? 1
+  );
+  appendLog(`Input mode changed: ${modePayload.monoMode ? "Mono" : "Stereo"}, Channel: ${(modePayload.inputChannel ?? 1) + 1}`);
+}
+
+function onAmpCabStateChanged(payload: IncomingPayload): void {
+  const statePayload = payload as { ampEnabled?: boolean; cabEnabled?: boolean };
+  handleAmpCabStateChanged(
+    statePayload.ampEnabled ?? true,
+    statePayload.cabEnabled ?? true
+  );
+  appendLog(`Amp: ${statePayload.ampEnabled ? "ON" : "OFF"}, Cab: ${statePayload.cabEnabled ? "ON" : "OFF"}`);
+}
+
+function onAutoLevelChanged(payload: IncomingPayload): void {
+  const autoPayload = payload as { autoInput?: boolean; autoOutput?: boolean };
+  const activeId = uiState.activePresetId ?? "";
+  const preset = uiState.presetCache.get(activeId) as any;
+  if (preset) {
+    const globals = preset.globals ?? preset.global ?? {};
+    const merged = {
+      inputTrim: globals.inputTrim ?? 0,
+      outputTrim: globals.outputTrim ?? 0,
+      masterVolume: globals.masterVolume ?? globals.outputVolume ?? 1,
+      autoLevelInput: autoPayload.autoInput ?? globals.autoLevelInput ?? false,
+      autoLevelOutput: autoPayload.autoOutput ?? globals.autoLevelOutput ?? false,
+      transpose: globals.transpose ?? 0,
+    };
+    preset.globals = merged;
+    preset.global = merged;
+    uiState.presetCache.set(activeId, preset);
+  }
+  syncAutoLevelControlsFromState();
+}
+
+function onUiSettingsChanged(payload: IncomingPayload): void {
+  const uiSettings = (payload as { settings?: UiSettings }).settings;
+  if (uiSettings) {
+    uiState.uiSettings = uiSettings;
+    applyUiSettings(uiSettings);
+    applyPresetRecentsFromAppSettings();
+  }
+}
+
+function onDspPerformance(payload: IncomingPayload): void {
+  const stats = payload as {
+    stats?: DSPPerformanceStats;
+    sampleRate?: number;
+    blockSize?: number;
+  };
+  if (stats.stats) {
+    const mergedStats: DSPPerformanceStats = {
+      ...stats.stats,
+      sampleRate: stats.sampleRate ?? stats.stats.sampleRate,
+      blockSize: stats.blockSize ?? stats.stats.blockSize,
+    };
+    uiState.dspPerformance = mergedStats;
+    uiState.dspPerformanceHistory.push(mergedStats);
+    if (uiState.dspPerformanceHistory.length > 100) {
+      uiState.dspPerformanceHistory.shift();
+    }
+   
+    queueTelemetryUiUpdate("dsp");
+  }
+}
+
+function onSldRoster(payload: IncomingPayload): void {
+  applySignalDiagnosticsRoster(payload as unknown as SignalDiagnosticsRoster);
+}
+
+function onSld(payload: IncomingPayload): void {
+  if (applySignalDiagnosticsFrame(payload as unknown as SignalDiagnosticsFrame)) {
+    queueTelemetryUiUpdate("signalDiagnostics");
+  }
+}
+
+function onSldA(payload: IncomingPayload): void {
+  if (applySignalDiagnosticsAnalyzer(payload as unknown as SignalDiagnosticsAnalyzerFrame)) {
+    queueTelemetryUiUpdate("signalDiagnostics");
+  }
+}
+
+function onSpatialPosition(payload: IncomingPayload): void {
+  // Live source position from the spatialiser's motion engine, so the on-screen
+  // puck matches what is being heard. Purely cosmetic: if it never arrives, the
+  // widget just shows the anchor position instead.
+  const nodes = payload.nodes;
+  if (Array.isArray(nodes)) {
+    applySpatialPositionUpdate(nodes as never);
+  }
+}
+
+function onSignalPathNodeConfigUpdated(payload: IncomingPayload): void {
+  const update = payload as {
+    nodeId?: string;
+    key?: string;
+    value?: string;
+    valueLength?: number;
+    captured?: boolean;
+    dirty?: boolean;
+    persist?: boolean;
+    silent?: boolean;
+  };
+  if (typeof update.nodeId === "string" && typeof update.key === "string") {
+    const markDirty = shouldMarkSignalPathNodeConfigUpdateDirty(update);
+    let applied = false;
+    if (typeof update.value === "string") {
+      applied = applySignalPathNodeConfigUpdate(update.nodeId, update.key, update.value, update.valueLength, { markDirty });
+    } else if (update.captured && update.key === "pluginStateBase64") {
+      applied = applySignalPathNodeConfigUpdate(update.nodeId, update.key, undefined, update.valueLength, { markDirty });
+    }
+    if (!applied && markDirty) {
+      setPresetDirty(true);
+    }
+    if (update.key === "pluginStateBase64" && !update.silent) {
+      showNotification("Plugin state captured", "success");
+    }
+  }
+}
+
+function onSignalPathNodeParamUpdated(payload: IncomingPayload): void {
+  const update = payload as { nodeId?: string; key?: string; value?: number };
+  if (typeof update.nodeId === "string" && typeof update.key === "string" && typeof update.value === "number") {
+    const preset = getActivePresetForRender();
+    if (preset) {
+      try {
+        setNodeParam(preset, update.nodeId, update.key, update.value);
+      } catch {
+        // Node not in the active preset draft — ignore silently.
+      }
+    }
+    refreshSelectedNodeParams();
+  }
+}
+
+function onSignalPathNodeBypassUpdated(payload: IncomingPayload): void {
+  const update = payload as { nodeId?: string; bypassed?: boolean };
+  if (typeof update.nodeId === "string" && typeof update.bypassed === "boolean") {
+    const preset = getActivePresetForRender();
+    const node = preset?.graph?.nodes?.find((n) => n.id === update.nodeId);
+    if (node) {
+      (node as unknown as { bypassed?: boolean }).bypassed = update.bypassed;
+      (node as unknown as { enabled?: boolean }).enabled = !update.bypassed;
+    }
+    refreshSelectedNodeParams();
+    renderActivePreset();
+  }
+}
+
+function onGlobalSignalChainChanged(payload: IncomingPayload): void {
+  const chainPayload = payload as { config?: GlobalSignalChainConfig; globalSignalChain?: GlobalSignalChainConfig };
+  const chainConfig = chainPayload.config ?? chainPayload.globalSignalChain;
+  if (chainConfig) {
+    uiState.globalSignalChain = normalizeGlobalSignalChain(chainConfig) ?? uiState.globalSignalChain;
+    appendLog("Global signal chain configuration loaded");
+    syncControlsFromState();
+  }
+}
+
+function onLayoutLibraryLoaded(payload: IncomingPayload): void {
+  const libraryPayload = payload as { layoutLibrary?: LayoutLibrary };
+  if (libraryPayload.layoutLibrary) {
+    // Images are no longer shipped in this payload (loaded on demand). Preserve any
+    // images we already received so an open designer keeps its backgrounds, then
+    // refresh them if they had been loaded (picks up additions/removals).
+    const previousImages = uiState.layoutLibrary?.images ?? [];
+    uiState.layoutLibrary = libraryPayload.layoutLibrary;
+    if ((!uiState.layoutLibrary.images || uiState.layoutLibrary.images.length === 0) && previousImages.length) {
+      uiState.layoutLibrary.images = previousImages;
+    }
+    if (areLayoutImagesLoaded()) {
+      ensureLayoutImagesLoaded(true);
+    }
+    appendLog("Layout library loaded");
+    renderLayoutList();
+    // Ensure any open node params panel picks up the updated layout mapping.
+    renderActivePreset();
+  }
+}
+
+function onLayoutSaved(payload: IncomingPayload): void {
+  const savePayload = payload as { effectType?: string; blendId?: string; layoutId?: string; lookupKey?: string };
+  const displayKey = savePayload.blendId ? `${savePayload.effectType} (blend: ${savePayload.blendId})` : savePayload.effectType;
+  appendLog(`Layout saved for ${displayKey ?? "effect"}${savePayload.layoutId ? ` (${savePayload.layoutId})` : ""}`);
+  showNotification("Layout saved", "success");
+  // layoutLibraryLoaded will follow and trigger a full refresh.
+}
+
+function onLayoutImagesLoaded(payload: IncomingPayload): void {
+  const imagesPayload = payload as { images?: LayoutImageRef[] };
+  const images = Array.isArray(imagesPayload.images) ? imagesPayload.images : [];
+  if (!uiState.layoutLibrary) {
+    uiState.layoutLibrary = { byEffectType: {}, defaults: {}, images: [] };
+  }
+  uiState.layoutLibrary.images = images;
+  markLayoutImagesLoaded();
+  appendLog(`Layout images loaded (${images.length})`);
+  renderLayoutList();
+  // Re-render the designer canvas so backgrounds appear once images arrive.
+  layoutDesigner.notifyImagesLoaded();
+  // Refresh the live signal-path node params panel so custom-layout backgrounds resolve.
+  refreshSelectedNodeParams();
+}
+
+function onLayoutImageSelected(payload: IncomingPayload): void {
+  console.log("[Messages] layoutImageSelected received:", payload);
+  const imgPayload = payload as { purpose?: string; imageId?: string; fileName?: string; dataUrl?: string; layerIndex?: number; paramKey?: string };
+  if (imgPayload.purpose && imgPayload.imageId && imgPayload.fileName) {
+    // Add image to layout library so it can be resolved
+    if (uiState.layoutLibrary) {
+      const existingIdx = uiState.layoutLibrary.images.findIndex(img => img.imageId === imgPayload.imageId);
+      const imageEntry = { 
+        imageId: imgPayload.imageId, 
+        fileName: imgPayload.fileName, 
+        dataUrl: imgPayload.dataUrl,
+        type: imgPayload.purpose as "background" | "knob" | "general" 
+      };
+      if (existingIdx >= 0) {
+        uiState.layoutLibrary.images[existingIdx] = imageEntry;
+      } else {
+        uiState.layoutLibrary.images.push(imageEntry);
+      }
+    }
+    layoutDesigner.handleImageSelected(
+      imgPayload.purpose,
+      imgPayload.imageId,
+      imgPayload.layerIndex,
+      imgPayload.paramKey
+    );
+  }
+}
+
+function onLayoutExportSaved(payload: IncomingPayload): void {
+  const exportPayload = payload as { path?: string };
+  if (exportPayload.path) {
+    showNotification(`Layout exported to ${exportPayload.path}`, "success");
+    appendLog(`Layout exported: ${exportPayload.path}`);
+  }
+}
+
+function onLayoutExportFailed(payload: IncomingPayload): void {
+  const failPayload = payload as { message?: string };
+  showNotification(failPayload.message ?? "Layout export failed", "error");
+  appendLog(`Layout export failed: ${failPayload.message ?? "unknown error"}`);
+}
+
+function onCompositeLibrary(payload: IncomingPayload): void {
+  const compPayload = payload as { definitions?: CompositeEffectDefinition[] };
+  if (compPayload.definitions) {
+    handleCompositeLibrary(compPayload.definitions);
+    refreshFxSelector();
+  }
+}
+
+function onCustomEffectLibrary(payload: IncomingPayload): void {
+  const customPayload = payload as { entries?: CustomEffectLibrary };
+  if (Array.isArray(customPayload.entries)) {
+    handleCustomEffectLibrary(customPayload.entries);
+    refreshFxSelector();
+  }
+}
+
+function onCustomEffectSaved(payload: IncomingPayload): void {
+  const customPayload = payload as { name?: string; applyToNode?: boolean };
+  const detail = customPayload.name ?? "Custom Effect";
+  appendLog(`custom effect saved ← ${detail}`);
+  showNotification(customPayload.applyToNode ? "Custom Effect applied" : "Custom Effect saved", detail);
+}
+
+function onGeneratedCustomEffectBundleExportSaved(payload: IncomingPayload): void {
+  const exportPayload = payload as { path?: string };
+  showNotification("Custom Effect bundle exported", exportPayload.path ?? "");
+}
+
+function onGeneratedCustomEffectBundleExportFailed(payload: IncomingPayload): void {
+  const exportPayload = payload as { message?: string };
+  showNotification("Custom Effect bundle export failed", exportPayload.message ?? "");
+}
+
+function onEffectCatalog(payload: IncomingPayload): void {
+  const catalogPayload = payload as { catalog?: Array<Record<string, unknown>> };
+  if (Array.isArray(catalogPayload.catalog)) {
+    for (const entry of catalogPayload.catalog) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const effect = entry as {
+        type?: unknown;
+        name?: unknown;
+        category?: unknown;
+        parameters?: unknown;
+        presets?: unknown;
+        requiresResource?: unknown;
+        resourceType?: unknown;
+        exposedResources?: unknown;
+      };
+      const type = typeof effect.type === "string" ? effect.type : "";
+      if (!type) {
+        continue;
+      }
+      const existing = EffectTypeRegistry.get(type);
+      const rawName = typeof effect.name === "string" ? effect.name.trim() : "";
+      const rawCategory = typeof effect.category === "string" ? effect.category.trim() : "";
+      const displayName = rawName || existing?.displayName || type;
+      const category = rawCategory || existing?.category || "utility";
+      const requiresResource =
+        typeof effect.requiresResource === "boolean" ? effect.requiresResource : existing?.requiresResource ?? false;
+      const resourceType = typeof effect.resourceType === "string" ? effect.resourceType : existing?.resourceType;
+      const existingParamsByKey = new Map(
+        (existing?.parameters ?? []).map((param) => [param.key, param]),
+      );
+      const parameters = Array.isArray(effect.parameters)
+        ? effect.parameters
+            .filter((param) => param && typeof param === "object")
+            .map((param) => {
+              const p = param as {
+                key?: unknown;
+                name?: unknown;
+                default?: unknown;
+                min?: unknown;
+                max?: unknown;
+                unit?: unknown;
+                step?: unknown;
+                labels?: unknown;
+                group?: unknown;
+                advanced?: unknown;
+              };
+              const key = typeof p.key === "string" ? p.key : "";
+              const existingParam = key ? existingParamsByKey.get(key) : undefined;
+              const labels = Array.isArray(p.labels) ? p.labels.filter((label) => typeof label === "string") : null;
+              return {
+                key,
+                name: typeof p.name === "string" ? p.name : existingParam?.name ?? "",
+                default: typeof p.default === "number" ? p.default : existingParam?.default ?? 0,
+                min: typeof p.min === "number" ? p.min : existingParam?.min ?? 0,
+                max: typeof p.max === "number" ? p.max : existingParam?.max ?? 1,
+                unit: typeof p.unit === "string" ? p.unit : existingParam?.unit ?? "",
+                step: typeof p.step === "number" ? p.step : existingParam?.step,
+                labels: labels ?? existingParam?.labels,
+                group: typeof p.group === "string" ? p.group : existingParam?.group,
+                advanced: typeof p.advanced === "boolean" ? p.advanced : existingParam?.advanced,
+              };
+            })
+            .filter((param) => param.key !== "")
+        : existing?.parameters ?? [];
+
+      const exposedResources = Array.isArray(effect.exposedResources)
+        ? effect.exposedResources
+            .filter((resource) => resource && typeof resource === "object")
+            .map((resource) => {
+              const r = resource as {
+                resourceId?: unknown;
+                displayName?: unknown;
+                nodeId?: unknown;
+                resourceType?: unknown;
+                resourceIndex?: unknown;
+                allowBrowseFile?: unknown;
+                parameterId?: unknown;
+                parameterValue?: unknown;
+              };
+              return {
+                resourceId: typeof r.resourceId === "string" ? r.resourceId : "",
+                displayName: typeof r.displayName === "string" ? r.displayName : "",
+                nodeId: typeof r.nodeId === "string" ? r.nodeId : "",
+                resourceType: typeof r.resourceType === "string" ? r.resourceType : "",
+                resourceIndex: typeof r.resourceIndex === "number" ? r.resourceIndex : 0,
+                allowBrowseFile: typeof r.allowBrowseFile === "boolean" ? r.allowBrowseFile : true,
+                parameterId: typeof r.parameterId === "string" ? r.parameterId : undefined,
+                parameterValue: typeof r.parameterValue === "number" ? r.parameterValue : undefined,
+              };
+            })
+            .filter((resource) => resource.resourceId && resource.resourceType)
+        : existing?.exposedResources;
+      const presets = Array.isArray(effect.presets)
+        ? effect.presets
+            .filter((preset) => preset && typeof preset === "object")
+            .flatMap((preset) => {
+              const p = preset as {
+                id?: unknown;
+                name?: unknown;
+                source?: unknown;
+                parameters?: unknown;
+                parameterOrder?: unknown;
+              };
+              if (typeof p.id !== "string" || !p.id || typeof p.name !== "string") {
+                return [];
+              }
+              const parameters = p.parameters && typeof p.parameters === "object" && !Array.isArray(p.parameters)
+                ? Object.fromEntries(
+                    Object.entries(p.parameters)
+                      .filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
+                  )
+                : {};
+              return [{
+                id: p.id,
+                name: p.name,
+                source: p.source === "custom" ? "custom" as const : "factory" as const,
+                parameters,
+                parameterOrder: Array.isArray(p.parameterOrder)
+                  ? p.parameterOrder.filter((key): key is string => typeof key === "string" && key in parameters)
+                  : undefined,
+              }];
+            })
+        : existing?.presets;
+
+      EffectTypeRegistry.register(type, {
+        type,
+        displayName,
+        category,
+        catalogHidden: existing?.catalogHidden ?? (type === EffectGuids.kAmpNam || type === EffectGuids.kAmpNamBlend),
+        requiresResource,
+        resourceType,
+        parameters,
+        presets,
+        exposedResources,
+      });
+    }
+    refreshFxSelector();
+    if (getActivePresetForRender()) {
+      renderActivePreset();
+      refreshSelectedNodeParams();
+    }
+  }
+}
+
+function onCompositeDefinitionAdded(payload: IncomingPayload): void {
+  const compAddPayload = payload as { definition?: CompositeEffectDefinition };
+  if (compAddPayload.definition) {
+    handleCompositeDefinitionAdded(compAddPayload.definition);
+    refreshFxSelector();
+    renderCompositeList();
+  }
+}
+
+function onCompositeDefinitionRemoved(payload: IncomingPayload): void {
+  const compRemovePayload = payload as { id?: string };
+  if (compRemovePayload.id) {
+    handleCompositeDefinitionRemoved(compRemovePayload.id);
+    refreshFxSelector();
+    renderCompositeList();
+  }
+}
+
+function onCompositeEditState(payload: IncomingPayload): void {
+  // C++ broadcasts the composite's current inner graph after each mutation
+  const editPayload = payload as { definition?: CompositeEffectDefinition };
+  if (editPayload.definition) {
+    const isAlreadyEditing = uiState.compositeEditMode;
+    if (isAlreadyEditing) {
+      updateCompositeEditState(editPayload.definition);
+    } else {
+      enterCompositeEditState(editPayload.definition);
+    }
+    renderSignalPathBar();
+    handleCompositeEditStateUpdate();
+  }
+}
+
+function onCompositeEditModeExited(): void {
+  // C++ confirms we've left composite edit mode
+  exitCompositeEditState();
+  handleCompositeEditModeExited();
+  renderSignalPathBar();
+}
+
+function onCompositePresetList(payload: IncomingPayload): void {
+  const list = (payload as { compositePresets?: CompositePreset[] }).compositePresets;
+  if (Array.isArray(list)) {
+    handleCompositePresetList(list);
+  }
+}
+
+function onCompositePresetSaved(payload: IncomingPayload): void {
+  const saved = payload as { id?: string; name?: string };
+  handleCompositePresetSaved(saved.id ?? "", saved.name ?? "");
+}
+
+function onCompositePresetLoaded(payload: IncomingPayload): void {
+  const loaded = payload as { id?: string; name?: string };
+  handleCompositePresetLoaded(loaded.id ?? "", loaded.name ?? "");
+}
+
+function onNavigateToToneSharingDeepLink(payload: IncomingPayload): void {
+  const deepLink = payload as { deepLink?: string };
+  if (deepLink.deepLink) {
+    handleToneSharingDeepLink(deepLink.deepLink);
+  }
+}
+
+/**
+ * Every message the backend can send, and what handles it.
+ *
+ * This replaced a single 1,451-line `switch (type)`. Each arm is now an
+ * independently readable — and independently testable — function.
+ */
+const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
+  "state": onState,
+  "metronomeState": onMetronomeState,
+  "riffCaptureProgress": onRiffCaptureProgress,
+  "riffCaptureStarted": onRiffCaptureStarted,
+  "riffCaptureStopped": onRiffCaptureStopped,
+  "riffCaptureCanceled": onRiffCaptureCanceled,
+  "riffSaved": onRiffSaved,
+  "practiceToolFileLoaded": onPracticeToolFileLoaded,
+  "practiceToolTransportState": onPracticeToolTransportState,
+  "practiceToolPlaybackEnded": onPracticeToolPlaybackEnded,
+  "resourceCleanupResult": onResourceCleanupResult,
+  "presetLoaded": onPresetLoaded,
+  "signalPathTestResult": onSignalPathTestResult,
+  "previewStarted": onPreviewStarted,
+  "previewComplete": onPreviewComplete,
+  "previewStopped": onPreviewStopped,
+  "demoAudioRenderSaved": onDemoAudioRenderSaved,
+  "demoAudioRenderFailed": onDemoAudioRenderFailed,
+  "error": onError,
+  "modelLoaded": onModelLoaded,
+  "irLoaded": onIrLoaded,
+  "resourceImported": onResourceImported,
+  "resourceImportFailed": onResourceImportFailed,
+  "resourceRemoved": onResourceRemoved,
+  "resourceDeleteFailed": onResourceDeleteFailed,
+  "resourceUsageInfo": onResourceUsageInfo,
+  "resourceFolderPicked": onResourceFolderPicked,
+  "resourceFolderListing": onResourceFolderListing,
+  "resourceFolderMetadata": onResourceFolderMetadata,
+  "resourceFolderListingFailed": onResourceFolderListingFailed,
+  "hostedPluginResourceLoadFailed": onHostedPluginResourceLoadFailed,
+  "hostedPluginResourceLoadCompleted": onHostedPluginResourceLoadCompleted,
+  "nodeResourceBrowseCancelled": onNodeResourceBrowseCancelled,
+  "toneSharingPackImported": onToneSharingPackImported,
+  "toneSharingPackImportFailed": onToneSharingPackImportFailed,
+  "resourceData": onResourceData,
+  "resourceDataFailed": onResourceDataFailed,
+  "blendExportSaved": onBlendExportSaved,
+  "blendExportFailed": onBlendExportFailed,
+  "libraryExportSaved": onLibraryExportSaved,
+  "libraryExportFailed": onLibraryExportFailed,
+  "presetExportSaved": onPresetExportSaved,
+  "presetExportFailed": onPresetExportFailed,
+  "presetSaved": onPresetSaved,
+  "presetArchiveSessionStarted": onPresetArchiveSessionStarted,
+  "presetArchiveSessionEnded": onPresetArchiveSessionEnded,
+  "presetArchiveSessionFailed": onPresetArchiveSessionFailed,
+  "presetList": onPresetList,
+  "appInfo": onAppInfo,
+  "sharedSyncUpdated": onSharedSyncUpdated,
+  "sharedSyncState": onSharedSyncState,
+  "presetData": onPresetData,
+  "presetFolders": onPresetFolders,
+  "presetFavorites": onPresetFavorites,
+  "presetRatings": onPresetRatings,
+  "setlists": onSetlists,
+  "effectPresets": onEffectPresets,
+  "setlistCursorChanged": onSetlistCursorChanged,
+  "automation": onAutomation,
+  "midiLog": onMidiLog,
+  "midiLearnCapture": onMidiLearnCapture,
+  "theme": onTheme,
+  "tunerUpdate": onTunerUpdate,
+  "tunerStarted": onTunerStarted,
+  "tunerStopped": onTunerStopped,
+  "tunerReferenceChanged": onTunerReferenceChanged,
+  "tunerLiveModeChanged": onTunerLiveModeChanged,
+  "debug": onDebug,
+  "captureDebugSnapshot": onCaptureDebugSnapshot,
+  "debugSnapshotWritten": onDebugSnapshotWritten,
+  "inputModeChanged": onInputModeChanged,
+  "ampCabStateChanged": onAmpCabStateChanged,
+  "autoLevelChanged": onAutoLevelChanged,
+  "uiSettingsChanged": onUiSettingsChanged,
+  "dspPerformance": onDspPerformance,
+  "sldRoster": onSldRoster,
+  "sld": onSld,
+  "sldA": onSldA,
+  "spatialPosition": onSpatialPosition,
+  "signalPathNodeConfigUpdated": onSignalPathNodeConfigUpdated,
+  "signalPathNodeParamUpdated": onSignalPathNodeParamUpdated,
+  "signalPathNodeBypassUpdated": onSignalPathNodeBypassUpdated,
+  "globalSignalChainChanged": onGlobalSignalChainChanged,
+  "globalChain": onGlobalSignalChainChanged,
+  "layoutLibraryLoaded": onLayoutLibraryLoaded,
+  "layoutSaved": onLayoutSaved,
+  "layoutImagesLoaded": onLayoutImagesLoaded,
+  "layoutImageSelected": onLayoutImageSelected,
+  "layoutExportSaved": onLayoutExportSaved,
+  "layoutExportFailed": onLayoutExportFailed,
+  "compositeLibrary": onCompositeLibrary,
+  "customEffectLibrary": onCustomEffectLibrary,
+  "customEffectSaved": onCustomEffectSaved,
+  "generatedCustomEffectBundleExportSaved": onGeneratedCustomEffectBundleExportSaved,
+  "generatedCustomEffectBundleExportFailed": onGeneratedCustomEffectBundleExportFailed,
+  "effectCatalog": onEffectCatalog,
+  "compositeDefinitionAdded": onCompositeDefinitionAdded,
+  "compositeDefinitionRemoved": onCompositeDefinitionRemoved,
+  "compositeEditState": onCompositeEditState,
+  "compositeEditModeExited": onCompositeEditModeExited,
+  "compositePresetList": onCompositePresetList,
+  "compositePresetSaved": onCompositePresetSaved,
+  "compositePresetLoaded": onCompositePresetLoaded,
+  "navigateToToneSharingDeepLink": onNavigateToToneSharingDeepLink,
+};
+
 export function handleIncomingMessage(message: string): void {
   const payload = JSON.parse(message) as Record<string, unknown>;
   const type = typeof payload.type === "string" ? payload.type : "";
@@ -666,1437 +2208,11 @@ export function handleIncomingMessage(message: string): void {
     console.log("[JS] Parsed message type:", type);
   }
 
-  /*if (payload.type === "dspPerformance") {
-    console.log("[JS] DSP Performance message received:", payload);
-  }*/
-  switch (type) {
-    case "state": {
-      uiState.activePresetId = (payload as { activePresetId?: string }).activePresetId ?? null;
-      uiState.activePresetSceneId = (payload as { activeSceneId?: string }).activeSceneId ?? uiState.activePresetSceneId ?? null;
-      const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
-      if (parameters) {
-        uiState.parameters = {
-          values: Array.isArray((parameters as { parameters?: unknown }).parameters)
-            ? ((parameters as { parameters: [] }).parameters as [])
-            : [],
-        };
-      }
-      // Process resource library
-      const resourceLibrary = (payload as { resourceLibrary?: Record<string, unknown[]> }).resourceLibrary;
-      if (resourceLibrary) {
-        uiState.resourceLibrary = resourceLibrary as import("./types.js").ResourceLibrary;
-      }
-      const missingNodeResources = (payload as { missingNodeResources?: Array<{ nodeId?: string; resourceType?: string; resourceId?: string; filePath?: string }> }).missingNodeResources;
-      if (Array.isArray(missingNodeResources)) {
-        uiState.missingNodeResources = missingNodeResources
-          .filter((entry) => entry && typeof entry.nodeId === "string")
-          .map((entry) => ({
-            nodeId: entry.nodeId ?? "",
-            resourceType: typeof entry.resourceType === "string" ? entry.resourceType : undefined,
-            resourceId: typeof entry.resourceId === "string" ? entry.resourceId : undefined,
-            filePath: typeof entry.filePath === "string" ? entry.filePath : undefined,
-          }));
-      } else {
-        uiState.missingNodeResources = [];
-      }
-      const blendLibrary = (payload as { blendLibrary?: unknown[] }).blendLibrary;
-      if (Array.isArray(blendLibrary)) {
-        uiState.blendLibrary = blendLibrary as import("./types.js").BlendLibrary;
-        refreshFxSelector();
-        renderBlendList();
-      }
-      const customEffectLibrary = (payload as { customEffectLibrary?: unknown[] }).customEffectLibrary;
-      if (Array.isArray(customEffectLibrary)) {
-        handleCustomEffectLibrary(customEffectLibrary as import("./types.js").CustomEffectLibrary);
-        refreshFxSelector();
-      }
-      const compositeLibrary = (payload as { compositeLibrary?: CompositeEffectDefinition[] }).compositeLibrary;
-      if (Array.isArray(compositeLibrary)) {
-        handleCompositeLibrary(compositeLibrary);
-        refreshFxSelector();
-        renderCompositeList();
-      }
-      const appSettings = (payload as { appSettings?: Record<string, unknown> }).appSettings;
-      if (appSettings) {
-        uiState.appSettings = appSettings as import("./types.js").AppSettings;
-        applyStoredDemoAudioSelection();
-        applyToneSharingAppSettings(appSettings);
-        applyJamAppSettings();
-        applyPresetRecentsFromAppSettings();
-        applyPerformancePadAppSettings(appSettings as import("./types.js").AppSettings);
-        triggerUpdateCheck();
-      }
-      applyPresetArchiveSessionState((payload as { presetArchiveSession?: import("./types.js").PresetArchiveSessionState | null }).presetArchiveSession ?? null);
-      const globalSignalChain = (payload as { globalSignalChain?: GlobalSignalChainConfig }).globalSignalChain;
-      if (globalSignalChain) {
-        uiState.globalSignalChain = normalizeGlobalSignalChain(globalSignalChain) ?? uiState.globalSignalChain;
-      } else {
-        requestGlobalChainState();
-      }
-      const uiSettings = (payload as { uiSettings?: UiSettings }).uiSettings;
-      if (uiSettings) {
-        uiState.uiSettings = uiSettings;
-        applyUiSettings(uiSettings);
-      }
-      const uiViewState = (payload as { uiViewState?: import("./types.js").UiViewState }).uiViewState;
-      if (uiViewState) {
-        uiState.uiViewState = uiViewState;
-        applyUiViewState(uiViewState);
-      }
-      const environment = (payload as { environment?: { standalone?: boolean; version?: string; os?: string; cpu?: string } }).environment;
-      if (environment) {
-        applyEnvironmentState({ 
-          standalone: Boolean(environment.standalone),
-          version: environment.version ?? uiState.environment?.version,
-          os: environment.os ?? uiState.environment?.os,
-          cpu: environment.cpu ?? uiState.environment?.cpu
-        });
-        refreshSettingsView();
-      }
-      // Apply stored input channel AFTER environment so isStandaloneUi() is correct.
-      if (appSettings) {
-        applyStoredInputChannel();
-      }
-      const metronome = (payload as { metronome?: { bpm?: number; enabled?: boolean; editable?: boolean; source?: string; volumeDb?: number; pan?: number; clickType?: string; beatPattern?: string; clickTypes?: Array<{ id?: string; label?: string }> } }).metronome;
-      if (metronome) {
-        applyMetronomeState({
-          bpm: typeof metronome.bpm === "number" ? metronome.bpm : uiState.metronome?.bpm ?? 120,
-          enabled: Boolean(metronome.enabled),
-          editable: metronome.editable !== undefined ? Boolean(metronome.editable) : true,
-          source: metronome.source === "host" ? "host" : "app",
-          volumeDb: typeof metronome.volumeDb === "number" ? metronome.volumeDb : uiState.metronome?.volumeDb ?? -12,
-          pan: typeof metronome.pan === "number" ? metronome.pan : uiState.metronome?.pan ?? 0,
-          clickType: typeof metronome.clickType === "string" ? metronome.clickType : uiState.metronome?.clickType ?? "click",
-          beatPattern: typeof metronome.beatPattern === "string" ? metronome.beatPattern : uiState.metronome?.beatPattern,
-          clickTypes: Array.isArray(metronome.clickTypes)
-            ? metronome.clickTypes
-                .filter((entry) => entry && typeof entry.id === "string")
-                .map((entry) => ({ id: entry.id ?? "", label: typeof entry.label === "string" ? entry.label : entry.id }))
-            : uiState.metronome?.clickTypes,
-        });
-      }
-      const riffLibrary = (payload as { riffLibrary?: import("./types.js").RiffLibrary }).riffLibrary;
-      if (riffLibrary) {
-        applyRiffLibraryState(riffLibrary);
-        refreshDemoAudioSelectors();
-      }
-      const automation = (payload as { automation?: import("./types.js").AutomationSlot[] }).automation;
-      if (automation) {
-        applyAutomationState({ slots: automation });
-      }
-      const mixer = (payload as { mixer?: import("./types.js").MixerState }).mixer;
-      if (mixer) {
-        const activePresetIds = Array.isArray(mixer.activePresetIds) ? mixer.activePresetIds.slice() : [];
-        const presets = mixer.presets ?? {};
-        const resolvedPresets: Record<string, import("./types.js").MixerPresetState> = {};
-
-        const ensurePreset = (id: string) => {
-          const entry = presets[id] as (import("./types.js").MixerPresetState & { name?: string }) | undefined;
-          resolvedPresets[id] = {
-            id,
-            name: typeof entry?.name === "string" ? entry.name : undefined,
-            mix: typeof entry?.mix === "number" ? entry.mix : 1.0,
-            pan: typeof entry?.pan === "number" ? entry.pan : 0.0,
-            mute: Boolean(entry?.mute),
-            solo: Boolean(entry?.solo),
-          };
-        };
-
-        activePresetIds.forEach((id) => ensurePreset(id));
-        Object.keys(presets).forEach((id) => {
-          if (!resolvedPresets[id]) ensurePreset(id);
-        });
-
-        uiState.mixer = {
-          activePresetIds,
-          presets: resolvedPresets,
-          masterGain: typeof mixer.masterGain === "number" ? mixer.masterGain : uiState.mixer?.masterGain ?? 1.0,
-          limiterEnabled: Boolean(mixer.limiterEnabled),
-        };
-
-        // Populate presetCache with full graph data for each mixer slot.
-        // The C++ includes these so the UI can display signal chains even for
-        // slots that the user has never explicitly loaded as the active preset.
-        const presetGraphs = (mixer as { presetGraphs?: Record<string, unknown> }).presetGraphs;
-        if (presetGraphs && typeof presetGraphs === "object") {
-          for (const [slotId, presetData] of Object.entries(presetGraphs)) {
-            if (presetData && typeof presetData === "object") {
-              const existing = uiState.presetCache.get(slotId);
-              // Only overwrite stubs (entries without graph nodes)
-              if (!existing?.graph?.nodes?.length) {
-                const p = presetData as Preset;
-                migratePresetNodeTypes(p);
-                normalizePresetResources(p);
-                normalizePresetScenes(p);
-                uiState.presetCache.set(slotId, p);
-              }
-            }
-          }
-        }
-      }
-      uiState.signalTest = null;
-      const preset = (payload as { preset?: Preset }).preset;
-      if (preset) {
-        if (!shouldIgnoreStatePreset(preset)) {
-          normalizePresetResources(preset);
-          uiState.activePresetSceneId = normalizePresetScenes(preset, uiState.activePresetSceneId ?? undefined);
-          const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
-          setActivePresetIsNew(preserveNewDraft);
-          const snapshot = uiState.activePresetSnapshot;
-          const isNewPreset = !snapshot || snapshot.id !== preset.id;
-          if (isNewPreset) {
-            setActivePresetSnapshot(preset);
-            setPresetDirty(false);
-            uiState.presetCache.set(preset.id, clonePreset(preset));
-            if (!uiState.presets.some((p) => p.id === preset.id)) {
-              uiState.presets = [clonePreset(preset), ...uiState.presets];
-              uiState.filteredPresets = uiState.presets.slice();
-              populatePresetDropdown();
-            }
-          } else {
-            if (!uiState.presetDirty) {
-              const dirty = presetSignature(snapshot) !== presetSignature(preset);
-              setPresetDirty(dirty);
-            }
-          }
-          setActivePresetDraft(preset);
-        } else {
-          appendLog(`state preset ignored ← ${preset.name ?? preset.id ?? "unknown"} (stale post-save state)`);
-        }
-      }
-      renderActivePreset();
-      refreshPerformancePads();
-      syncControlsFromState();
-      updatePresetActionButtons();
-      updatePresetDropdownSelection();
-      showNotification("");
-      refreshSettingsView();
-      break;
-    }
-    case "metronomeState": {
-      const metroPayload = payload as { bpm?: number; enabled?: boolean; editable?: boolean; source?: string; volumeDb?: number; pan?: number; clickType?: string; clickTypes?: Array<{ id?: string; label?: string }> };
-      applyMetronomeState({
-        bpm: typeof metroPayload.bpm === "number" ? metroPayload.bpm : uiState.metronome?.bpm ?? 120,
-        enabled: Boolean(metroPayload.enabled),
-        editable: metroPayload.editable !== undefined ? Boolean(metroPayload.editable) : true,
-        source: metroPayload.source === "host" ? "host" : "app",
-        volumeDb: typeof metroPayload.volumeDb === "number" ? metroPayload.volumeDb : uiState.metronome?.volumeDb ?? -12,
-        pan: typeof metroPayload.pan === "number" ? metroPayload.pan : uiState.metronome?.pan ?? 0,
-        clickType: typeof metroPayload.clickType === "string" ? metroPayload.clickType : uiState.metronome?.clickType ?? "click",
-        clickTypes: Array.isArray(metroPayload.clickTypes)
-          ? metroPayload.clickTypes
-              .filter((entry) => entry && typeof entry.id === "string")
-              .map((entry) => ({ id: entry.id ?? "", label: typeof entry.label === "string" ? entry.label : entry.id }))
-          : uiState.metronome?.clickTypes,
-      });
-      break;
-    }
-    case "riffCaptureProgress": {
-      applyRiffCaptureProgress(
-        (payload as { capturedSamples?: number }).capturedSamples ?? 0,
-        Array.isArray((payload as { waveformPeaks?: unknown[] }).waveformPeaks)
-          ? ((payload as { waveformPeaks?: unknown[] }).waveformPeaks as unknown[])
-              .filter((value): value is number => typeof value === "number")
-          : [],
-      );
-      break;
-    }
-    case "riffCaptureStarted": {
-      appendLog(`riff capture started ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
-      applyRiffCaptureState({
-        active: true,
-        complete: false,
-        takeId: (payload as { takeId?: string }).takeId ?? "",
-        bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
-        tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
-        timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
-        timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
-        metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
-          ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
-          : uiState.riffCapture?.metronomeClickEnabled ?? true,
-        hasAudio: false,
-        waveformPeaks: [],
-        barAlignOffsetSamples: typeof (payload as { barAlignOffsetSamples?: number }).barAlignOffsetSamples === "number"
-          ? (payload as { barAlignOffsetSamples?: number }).barAlignOffsetSamples
-          : 0,
-      });
-      showNotification("Riff capture started");
-      break;
-    }
-    case "riffCaptureStopped": {
-      appendLog(`riff capture stopped ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
-      const source = (payload as { source?: string }).source ?? "capture";
-      applyRiffCaptureState({
-        active: false,
-        complete: true,
-        takeId: (payload as { takeId?: string }).takeId ?? uiState.riffCapture?.takeId ?? "",
-        bars: (payload as { bars?: number }).bars ?? uiState.riffCapture?.bars ?? 1,
-        tempoBpm: (payload as { tempoBpm?: number }).tempoBpm ?? uiState.riffCapture?.tempoBpm ?? 120,
-        timeSigNum: (payload as { timeSigNum?: number }).timeSigNum ?? uiState.riffCapture?.timeSigNum ?? 4,
-        timeSigDen: (payload as { timeSigDen?: number }).timeSigDen ?? uiState.riffCapture?.timeSigDen ?? 4,
-        metronomeClickEnabled: typeof (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled === "boolean"
-          ? (payload as { metronomeClickEnabled?: boolean }).metronomeClickEnabled
-          : uiState.riffCapture?.metronomeClickEnabled ?? true,
-        capturedSamples: (payload as { capturedSamples?: number }).capturedSamples ?? uiState.riffCapture?.capturedSamples ?? 0,
-        sampleRate: (payload as { sampleRate?: number }).sampleRate ?? uiState.riffCapture?.sampleRate ?? 0,
-        hasAudio: Boolean((payload as { hasAudio?: boolean }).hasAudio),
-        waveformPeaks: Array.isArray((payload as { waveformPeaks?: unknown[] }).waveformPeaks)
-          ? ((payload as { waveformPeaks?: unknown[] }).waveformPeaks as unknown[])
-              .filter((value): value is number => typeof value === "number")
-          : [],
-      });
-      showNotification(
-        source === "import"
-          ? "Riff WAV imported"
-          : source === "editLoad"
-            ? "Riff take loaded for edit"
-          : source === "trim"
-            ? "Riff cropped to markers"
-            : "Riff capture complete",
-      );
-      break;
-    }
-    case "riffCaptureCanceled": {
-      appendLog(`riff capture cancelled ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
-      applyRiffCaptureState({ active: false, complete: false, takeId: "", capturedSamples: 0, sampleRate: 0, hasAudio: false, waveformPeaks: [] });
-      showNotification("Riff capture canceled");
-      break;
-    }
-    case "riffSaved": {
-      appendLog(`riff saved ← ${(payload as { riffId?: string }).riffId ?? "riff"}`);
-      const riffLibrary = (payload as { library?: import("./types.js").RiffLibrary }).library;
-      if (riffLibrary) {
-        applyRiffLibraryState(riffLibrary);
-      }
-      showNotification("Riff saved", (payload as { path?: string }).path ?? "");
-      if (!riffLibrary) {
-        getRiffLibrary();
-      }
-      refreshDemoAudioSelectors();
-      break;
-    }
-    case "practiceToolFileLoaded": {
-      const info = payload as { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] };
-      applyPracticeToolFileLoaded(info);
-      break;
-    }
-    case "practiceToolTransportState": {
-      const info = payload as { state?: string; positionSec?: number };
-      applyPracticeToolTransportState(info);
-      break;
-    }
-    case "practiceToolPlaybackEnded": {
-      applyPracticeToolPlaybackEnded();
-      break;
-    }
-    case "resourceCleanupResult": {
-      const removed = typeof (payload as { removed?: number }).removed === "number"
-        ? (payload as { removed?: number }).removed as number
-        : 0;
-      const skipped = typeof (payload as { skipped?: number }).skipped === "number"
-        ? (payload as { skipped?: number }).skipped as number
-        : 0;
-      const skippedUsed = typeof (payload as { skippedUsed?: number }).skippedUsed === "number"
-        ? (payload as { skippedUsed?: number }).skippedUsed as number
-        : 0;
-      const message = removed > 0 ? `Removed ${removed} resources.` : "No resources removed.";
-      const parts: string[] = [];
-      if (skipped > 0) {
-        parts.push(`${skipped} skipped`);
-      }
-      if (skippedUsed > 0) {
-        parts.push(`${skippedUsed} in use`);
-      }
-      const detail = parts.length ? `${parts.join("; ")}.` : "";
-      showNotification(message, detail);
-      refreshSettingsView();
-      break;
-    }
-    case "presetLoaded": {
-      const preset = (payload as { preset?: Preset }).preset;
-      if (preset) {
-        // Clear loading state before re-rendering — the re-render below removes
-        // all loading classes and overlays baked into the DOM by the render functions.
-        uiState.presetLoadingId = null;
-        migratePresetNodeTypes(preset);
-        normalizePresetResources(preset);
-        const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
-        uiState.activePresetSceneId = normalizePresetScenes(preset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined);
-        recordRecentPreset(preset.id);
-        uiState.activePresetId = preset.id;
-        setActivePresetIsNew(preserveNewDraft);
-        uiState.presetCache.set(preset.id, clonePreset(preset));
-        setActivePresetSnapshot(preset);
-        setActivePresetDraft(preset);
-        setPresetDirty(false);
-        updatePresetDropdownSelection();
-      }
-      const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
-      if (Array.isArray(activePresetIds)) {
-        uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, limiterEnabled: false };
-        uiState.mixer.activePresetIds = activePresetIds.slice();
-        activePresetIds.forEach((id) => {
-          if (!uiState.mixer!.presets[id]) {
-            uiState.mixer!.presets[id] = { id, mix: 1.0, pan: 0.0, mute: false, solo: false };
-          }
-        });
-      }
-      const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
-      if (parameters) {
-        uiState.parameters = {
-          values: Array.isArray((parameters as { parameters?: unknown }).parameters)
-            ? ((parameters as { parameters: [] }).parameters as [])
-            : uiState.parameters.values,
-        };
-      }
-      if (preset) {
-        uiState.presetCache.set(preset.id, clonePreset(preset));
-        setActivePresetSnapshot(preset);
-        setActivePresetDraft(preset);
-        setPresetDirty(false);
-      }
-      renderActivePreset();
-      refreshPerformancePads();
-      syncControlsFromState();
-      updatePresetActionButtons();
-      break;
-    }
-    case "signalPathTestResult": {
-      const result = payload as Record<string, unknown>;
-      uiState.signalTest = {
-        frequency: (result.frequency as number) ?? 0,
-        duration: (result.duration as number) ?? 0,
-        elapsed: (result.elapsed as number) ?? 0,
-        sampleRate: (result.sampleRate as number) ?? 0,
-        inputRMS: (result.inputRMS as number) ?? 0,
-        outputLeft: Array.isArray(result.outputRMS) ? ((result.outputRMS as number[])[0] ?? 0) : 0,
-        outputRight: Array.isArray(result.outputRMS) ? ((result.outputRMS as number[])[1] ?? 0) : 0,
-        passed: Boolean(result.passed),
-        message: (result.message as string) ?? "",
-      };
-      renderActivePreset();
-      const ratio = uiState.signalTest.elapsed > 0 ? (uiState.signalTest.duration / uiState.signalTest.elapsed).toFixed(2) : "N/A";
-      const timingInfo = `Audio: ${uiState.signalTest.duration.toFixed(3)}s, Elapsed: ${uiState.signalTest.elapsed.toFixed(3)}s (${ratio}x realtime)`;
-      showNotification(
-        uiState.signalTest.passed ? "Signal path test passed" : "Signal path test failed",
-        timingInfo + (uiState.signalTest.message ? ` - ${uiState.signalTest.message}` : ""),
-      );
-      break;
-    }
-    case "previewStarted": {
-      appendLog(`preview started ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
-      handleRiffPreviewPlayback("start", (payload as { id?: string }).id ?? "");
-      syncDemoAudioSelectionFromPreview((payload as { id?: string }).id ?? null);
-      onDemoAudioStarted();
-      showNotification("Playing demo audio", (payload as { title?: string }).title ?? "Demo");
-      break;
-    }
-    case "previewComplete": {
-      appendLog(`preview complete ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
-      const previewId = (payload as { id?: string }).id ?? "";
-      const savedRiffLooped = handleSavedRiffPreviewComplete(previewId);
-      if (savedRiffLooped) {
-        break;
-      }
-      handleRiffPreviewPlayback("stop", previewId);
-      const capturedLooped = handleCapturedPreviewComplete(previewId);
-      if (capturedLooped) {
-        break;
-      }
-      onDemoAudioStopped();
-      if (uiState.demoAudioRepeat) {
-        previewSelectedDemoAudio();
-      } else {
-        showNotification("Demo playback finished", (payload as { title?: string }).title ?? "Demo");
-      }
-      break;
-    }
-    case "previewStopped": {
-      appendLog(`preview stopped ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
-      handleRiffPreviewPlayback("stop", (payload as { id?: string }).id ?? "");
-      onDemoAudioStopped();
-      showNotification("Demo playback stopped", (payload as { title?: string }).title ?? "Demo");
-      break;
-    }
-    case "demoAudioRenderSaved": {
-      const info = payload as { path?: string; sampleRate?: number };
-      const sampleRate = typeof info.sampleRate === "number" && info.sampleRate > 0
-        ? `${Math.round(info.sampleRate / 100) / 10} kHz`
-        : "";
-      appendLog(`demo audio rendered ← ${info.path ?? "unknown"}${sampleRate ? ` @ ${sampleRate}` : ""}`);
-      showNotification("Demo audio rendered", sampleRate ? `${sampleRate} - ${info.path ?? ""}` : info.path ?? "");
-      break;
-    }
-    case "demoAudioRenderFailed": {
-      const info = payload as { message?: string };
-      appendLog(`demo audio render failed ← ${info.message ?? "unknown"}`);
-      showNotification("Demo audio render failed", info.message ?? "");
-      break;
-    }
-    case "error": {
-      console.error("Plugin error", payload);
-      const requestId = (payload as { requestId?: string }).requestId;
-      if (requestId) {
-        rejectPendingPresetRequest(requestId, (payload as { message?: string }).message ?? "An error occurred", (payload as { detail?: string }).detail);
-      }
-      showNotification((payload as { message?: string }).message ?? "An error occurred", (payload as { detail?: string }).detail ?? "");
-      if (uiState.presetLoadingId) {
-        // A backend-driven load (e.g. a setlist step onto a missing preset) failed, so the
-        // "presetLoaded" that would clear the loading state is never coming.
-        uiState.presetLoadingId = null;
-        renderActivePreset();
-      }
-      break;
-    }
-    case "modelLoaded": {
-      appendLog(`model loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
-      renderActivePreset();
-      showNotification("Model loaded", (payload as { path?: string }).path ?? "");
-      break;
-    }
-    case "irLoaded": {
-      console.log("[JS] IR loaded event received, path:", (payload as { path?: string }).path);
-      appendLog(`IR loaded ← ${(payload as { path?: string }).path ?? "unknown"}`);
-      renderActivePreset();
-      showNotification("IR loaded", (payload as { path?: string }).path ?? "");
-      break;
-    }
-    case "resourceImported": {
-      const info = payload as { id?: string; name?: string; resourceType?: string; filePath?: string };
-      upsertImportedResourceInUiState(info);
-      appendLog(`resource imported ← ${info.name ?? "unknown"}`);
-      showNotification("Resource imported", info.name ?? info.filePath ?? "");
-      document.dispatchEvent(new CustomEvent("resource-browser:resource-imported", {
-        detail: {
-          id: info.id ?? "",
-          name: info.name ?? "",
-          resourceType: info.resourceType ?? "",
-          filePath: info.filePath ?? "",
-        },
-      }));
-      break;
-    }
-    case "resourceImportFailed": {
-      const info = payload as { message?: string; detail?: string };
-      appendLog(`resource import failed ← ${info.message ?? "unknown"}`);
-      showNotification(info.message ?? "Import failed", info.detail ?? "");
-      break;
-    }
-    case "resourceRemoved": {
-      const info = payload as { id?: string; resourceType?: string };
-      removeResourceFromUiState(info);
-      appendLog(`resource removed ← ${info.id ?? "unknown"}`);
-      document.dispatchEvent(new CustomEvent("resource-browser:resource-removed", {
-        detail: {
-          id: info.id ?? "",
-          resourceType: info.resourceType ?? "",
-        },
-      }));
-      break;
-    }
-    case "resourceDeleteFailed": {
-      const info = payload as { message?: string; detail?: string; presetName?: string };
-      appendLog(`resource delete failed ← ${info.message ?? "unknown"}`);
-      showNotification(info.message ?? "Resource delete failed", info.detail ?? info.presetName ?? "");
-      break;
-    }
-    case "resourceUsageInfo": {
-      document.dispatchEvent(new CustomEvent("resource-browser:usage-info", { detail: payload }));
-      break;
-    }
-    case "resourceFolderPicked": {
-      document.dispatchEvent(new CustomEvent("resource-browser:folder-picked", { detail: payload }));
-      break;
-    }
-    case "resourceFolderListing": {
-      document.dispatchEvent(new CustomEvent("resource-browser:folder-listing", { detail: payload }));
-      break;
-    }
-    case "resourceFolderMetadata": {
-      document.dispatchEvent(new CustomEvent("resource-browser:folder-metadata", { detail: payload }));
-      break;
-    }
-    case "resourceFolderListingFailed": {
-      const info = payload as { path?: string; message?: string };
-      appendLog(`folder listing failed ← ${info.message ?? "unknown"}`);
-      document.dispatchEvent(new CustomEvent("resource-browser:folder-listing-failed", { detail: payload }));
-      break;
-    }
-    case "hostedPluginResourceLoadFailed": {
-      handleHostedPluginResourceLoadFailed(payload as {
-        nodeId?: string;
-        resourceType?: string;
-        resourceId?: string;
-        filePath?: string;
-        resourceIndex?: number;
-        message?: string;
-        errorCode?: string;
-      });
-      break;
-    }
-    case "hostedPluginResourceLoadCompleted": {
-      handleHostedPluginResourceLoadCompleted(payload as {
-        nodeId?: string;
-        resourceType?: string;
-      });
-      break;
-    }
-    case "nodeResourceBrowseCancelled": {
-      handleNodeResourceBrowseCancelled(payload as {
-        nodeId?: string;
-        resourceType?: string;
-      });
-      break;
-    }
-    case "toneSharingPackImported": {
-      const info = payload as { fileName?: string; path?: string; byteSize?: number };
-      const detail = info.path ?? info.fileName ?? "";
-      appendLog(`tone sharing pack imported ← ${detail}`);
-      registerInstalledToneSharingPackFromImport(info);
-      showNotification("Pack imported", detail);
-      break;
-    }
-    case "toneSharingPackImportFailed": {
-      const info = payload as { message?: string };
-      appendLog(`tone sharing pack import failed ← ${info.message ?? "unknown"}`);
-      showNotification("Pack import failed", info.message ?? "");
-      break;
-    }
-    case "resourceData": {
-      handleResourceDataMessage(payload as { requestId: string; data?: string; fileName?: string; message?: string });
-      break;
-    }
-    case "resourceDataFailed": {
-      handleResourceDataMessage(payload as { requestId: string; data?: string; fileName?: string; message?: string });
-      break;
-    }
-    case "blendExportSaved": {
-      const info = payload as { path?: string };
-      showNotification("Blend exported", info.path ?? "");
-      break;
-    }
-    case "blendExportFailed": {
-      const info = payload as { message?: string };
-      showNotification("Blend export failed", info.message ?? "");
-      break;
-    }
-    case "libraryExportSaved": {
-      const info = payload as { path?: string };
-      showNotification("Library exported", info.path ?? "");
-      break;
-    }
-    case "libraryExportFailed": {
-      const info = payload as { message?: string };
-      showNotification("Library export failed", info.message ?? "");
-      break;
-    }
-    case "presetExportSaved": {
-      const info = payload as { path?: string };
-      showNotification("Preset exported", info.path ?? "");
-      break;
-    }
-    case "presetExportFailed": {
-      const info = payload as { message?: string };
-      showNotification("Preset export failed", info.message ?? "");
-      break;
-    }
-    case "presetSaved": {
-      const savedPreset = (payload as { preset?: Preset }).preset;
-      appendLog(
-        `preset saved ← ${savedPreset?.name ?? "unknown"} `
-        + `(graphNodes=${savedPreset?.graph?.nodes?.length ?? 0}, scenes=${savedPreset?.scenes?.length ?? 0})`,
-      );
-      if (savedPreset) {
-        normalizePresetResources(savedPreset);
-        uiState.activePresetSceneId = normalizePresetScenes(savedPreset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined);
-        cachePresetInMemory(savedPreset);
-        uiState.activePresetId = savedPreset.id;
-        setActivePresetIsNew(false);
-        uiState.presetCache.set(savedPreset.id, clonePreset(savedPreset));
-        setActivePresetSnapshot(savedPreset);
-        setActivePresetDraft(savedPreset);
-        setPresetDirty(false);
-        if (!uiState.presets.some((p) => p.id === savedPreset.id)) {
-          uiState.presets.unshift(clonePreset(savedPreset));
-          uiState.filteredPresets = uiState.presets.slice();
-          populatePresetDropdown();
-        }
-        renderActivePreset();
-        updatePresetDropdownSelection();
-        markIgnoreNextStatePreset(savedPreset.id);
-      }
-      showNotification("Preset saved", (payload as { path?: string }).path ?? savedPreset?.name ?? "");
-      break;
-    }
-    case "presetArchiveSessionStarted": {
-      const sessionPayload = payload as { active?: boolean; archiveName?: string; archiveKey?: string; presetCount?: number };
-      applyPresetArchiveSessionState({
-        active: Boolean(sessionPayload.active),
-        archiveName: sessionPayload.archiveName,
-        archiveKey: sessionPayload.archiveKey,
-        presetCount: sessionPayload.presetCount,
-      });
-      renderActivePreset();
-      updatePresetActionButtons();
-      showNotification("Preset archive session started", sessionPayload.archiveName ?? "");
-      break;
-    }
-    case "presetArchiveSessionEnded": {
-      applyPresetArchiveSessionState({ active: false });
-      renderActivePreset();
-      updatePresetActionButtons();
-      showNotification("Preset archive session ended");
-      break;
-    }
-    case "presetArchiveSessionFailed": {
-      showNotification("Preset archive session failed", (payload as { message?: string }).message ?? "");
-      break;
-    }
-    case "presetList": {
-      const presetListPayload = payload as { presets?: Array<{ id: string; name: string; category?: string; source?: string }> };
-      if (Array.isArray(presetListPayload.presets)) {
-        appendLog(`preset list received ← ${presetListPayload.presets.length} presets`);
-        const cachedBeforeUpdate = new Set(uiState.presetCache.keys());
-        const nextPresets: Preset[] = [];
-        for (const p of presetListPayload.presets) {
-          const incomingCategory = p.category ?? "Factory";
-          const existingCached = uiState.presetCache.get(p.id);
-          const nextPreset: Preset = existingCached
-            ? {
-                ...existingCached,
-                name: p.name,
-                category: incomingCategory,
-              }
-            : { id: p.id, name: p.name, category: incomingCategory } as Preset;
-          uiState.presetCache.set(p.id, nextPreset);
-          nextPresets.push(nextPreset);
-        }
-        uiState.presets = nextPresets;
-        uiState.filteredPresets = nextPresets.slice();
-        populatePresetDropdown();
-        renderActivePreset();
-
-        if (pendingSharedPresetHydration) {
-          pendingSharedPresetHydration = false;
-          presetListPayload.presets.forEach((presetSummary) => {
-            if (cachedBeforeUpdate.has(presetSummary.id)) {
-              refreshPresetCacheEntryFromBackend(presetSummary.id);
-            }
-          });
-        }
-      }
-      break;
-    }
-    case "appInfo": {
-      const infoPayload = payload as { version?: string; os?: string; cpu?: string };
-      applyEnvironmentState({
-        standalone: uiState.environment?.standalone ?? false,
-        version: infoPayload.version ?? uiState.environment?.version,
-        os: infoPayload.os ?? uiState.environment?.os,
-        cpu: infoPayload.cpu ?? uiState.environment?.cpu,
-      });
-      refreshSettingsView();
-      break;
-    }
-    case "sharedSyncUpdated": {
-      pendingSharedPresetHydration = true;
-      scheduleSharedSyncRefresh();
-      break;
-    }
-    case "sharedSyncState": {
-      pendingSharedPresetHydration = true;
-      const sharedPayload = payload as {
-        appSettings?: Record<string, unknown>;
-        uiSettings?: UiSettings;
-        resourceLibrary?: Record<string, unknown[]>;
-        blendLibrary?: unknown[];
-        customEffectLibrary?: unknown[];
-        presetArchiveSession?: import("./types.js").PresetArchiveSessionState | null;
-      };
-
-      if (sharedPayload.appSettings) {
-        uiState.appSettings = sharedPayload.appSettings as import("./types.js").AppSettings;
-        applyStoredDemoAudioSelection();
-        applyToneSharingAppSettings(sharedPayload.appSettings);
-        applyJamAppSettings();
-        applyPresetRecentsFromAppSettings();
-        applyPerformancePadAppSettings(sharedPayload.appSettings as import("./types.js").AppSettings);
-        triggerUpdateCheck();
-        applyStoredInputChannel();
-      }
-      applyPresetArchiveSessionState(sharedPayload.presetArchiveSession ?? null);
-
-      if (sharedPayload.uiSettings) {
-        uiState.uiSettings = sharedPayload.uiSettings;
-      }
-
-      if (sharedPayload.resourceLibrary) {
-        uiState.resourceLibrary = sharedPayload.resourceLibrary as import("./types.js").ResourceLibrary;
-      }
-
-      if (Array.isArray(sharedPayload.blendLibrary)) {
-        uiState.blendLibrary = sharedPayload.blendLibrary as import("./types.js").BlendLibrary;
-        renderBlendList();
-      }
-
-      if (Array.isArray(sharedPayload.customEffectLibrary)) {
-        handleCustomEffectLibrary(sharedPayload.customEffectLibrary as import("./types.js").CustomEffectLibrary);
-      }
-
-      refreshFxSelector();
-      refreshPerformancePads();
-      refreshSettingsView();
-      break;
-    }
-    case "presetData": {
-      const presetPayload = payload as { preset?: Preset };
-      if (presetPayload.preset) {
-        migratePresetNodeTypes(presetPayload.preset);
-        normalizePresetResources(presetPayload.preset);
-        normalizePresetScenes(presetPayload.preset);
-        handlePresetDataMessage(presetPayload.preset, (payload as { requestId?: string }).requestId);
-      }
-      break;
-    }
-    case "presetFolders": {
-      const foldersPayload = payload as { folders?: PresetFolder[]; activeFolderId?: string | null };
-      applyPresetFoldersFromBackend(foldersPayload.folders ?? [], foldersPayload.activeFolderId ?? null);
-      break;
-    }
-    case "presetFavorites": {
-      const favoritesPayload = payload as { favorites?: string[] };
-      applyPresetFavoritesFromBackend(Array.isArray(favoritesPayload.favorites) ? favoritesPayload.favorites : []);
-      break;
-    }
-    case "presetRatings": {
-      const ratingsPayload = payload as { ratings?: Record<string, number> };
-      applyPresetRatingsFromBackend(ratingsPayload.ratings ?? {});
-      break;
-    }
-    case "setlists": {
-      const setlistsPayload = payload as { setlists?: Setlist[]; activeSetlistId?: string | null };
-      applySetlistsFromBackend(setlistsPayload.setlists ?? [], setlistsPayload.activeSetlistId ?? null);
-      refreshPerformancePads();
-      break;
-    }
-    case "effectPresets": {
-      const effectPresetsPayload = payload as { byEffectType?: Record<string, StoredEffectPreset[]> };
-      uiState.effectPresets = effectPresetsPayload.byEffectType ?? {};
-      // The backend re-broadcasts after each save/delete, so both the params panel
-      // and an open presets flyout need to pick up the new list.
-      refreshSelectedNodeParams();
-      refreshEffectPresetsFlyout();
-      break;
-    }
-    case "setlistCursorChanged": {
-      const cursorPayload = payload as { cursorIndex?: number; presetId?: string; activeSetlistId?: string };
-      if (typeof cursorPayload.cursorIndex === "number") {
-        applySetlistCursorFromBackend(cursorPayload.cursorIndex, cursorPayload.presetId, cursorPayload.activeSetlistId);
-        refreshPerformancePads();
-      }
-      break;
-    }
-    case "automation": {
-      const autoPayload = payload as {
-        slots?: import("./types.js").AutomationSlot[];
-        registry?: import("./types.js").AutomationRegistryEntry[];
-        maxCustomSlots?: number;
-      };
-      applyAutomationState({
-        slots: autoPayload.slots ?? [],
-        registry: autoPayload.registry ?? [],
-        maxCustomSlots: autoPayload.maxCustomSlots ?? 16,
-      });
-      break;
-    }
-    case "midiLog": {
-      const logPayload = payload as { midiType?: string; channel?: number; data1?: number; data2?: number };
-      handleMidiLogEntry({
-        type: logPayload.midiType ?? "Unknown",
-        channel: logPayload.channel ?? 0,
-        data1: logPayload.data1 ?? 0,
-        data2: logPayload.data2 ?? 0,
-      });
-      break;
-    }
-    case "midiLearnCapture": {
-      const capturePayload = payload as { slotId?: string };
-      if (typeof capturePayload.slotId === "string") {
-        handleMidiLearnCapture(capturePayload.slotId);
-      }
-      break;
-    }
-    case "theme": {
-      const themePayload = payload as { theme?: string };
-      const theme = themePayload.theme === "light" || themePayload.theme === "classic" ? themePayload.theme : "dark";
-      themeSwitcher.applyTheme(theme);
-      break;
-    }
-    case "tunerUpdate": {
-      const tunerPayload = payload as { 
-        detected?: boolean; 
-        noteName?: string; 
-        octave?: number;
-        frequency?: number;
-        centOffset?: number;
-        confidence?: number;
-        debugRms?: number;
-        debugRawFreq?: number;
-      };
-      
-      // Log debug info to console
-      const rms = tunerPayload.debugRms?.toFixed(6) ?? "?";
-      const rawFreq = tunerPayload.debugRawFreq?.toFixed(2) ?? "?";
-      console.log(`[Tuner] RMS=${rms}, rawFreq=${rawFreq}Hz, detected=${tunerPayload.detected}, note=${tunerPayload.noteName ?? "-"}`);
-      
-      handleTunerUpdate({
-        detected: tunerPayload.detected ?? false,
-        noteName: tunerPayload.noteName,
-        octave: tunerPayload.octave,
-        frequency: tunerPayload.frequency,
-        centOffset: tunerPayload.centOffset,
-        confidence: tunerPayload.confidence,
-      });
-      break;
-    }
-    case "tunerStarted": {
-      const startPayload = payload as { referenceFrequency?: number; liveMode?: boolean };
-      handleTunerStarted(startPayload.referenceFrequency ?? 440.0);
-      if (startPayload.liveMode !== undefined) {
-        handleTunerLiveModeChanged(startPayload.liveMode);
-      }
-      break;
-    }
-    case "tunerStopped": {
-      handleTunerStopped();
-      break;
-    }
-    case "tunerReferenceChanged": {
-      handleTunerReferenceChanged((payload as { referenceFrequency?: number }).referenceFrequency ?? 440.0);
-      break;
-    }
-    case "tunerLiveModeChanged": {
-      handleTunerLiveModeChanged((payload as { liveMode?: boolean }).liveMode ?? true);
-      break;
-    }
-    case "debug": {
-      const msg = (payload as { message?: string }).message ?? "";
-      console.log("[C++]", msg);
-      appendLog(`[C++] ${msg}`);
-      break;
-    }
-    case "captureDebugSnapshot": {
-      const source = typeof (payload as { source?: string }).source === "string"
-        ? (payload as { source?: string }).source as string
-        : "backend-request";
-      postUiDebugSnapshot(source);
-      break;
-    }
-    case "debugSnapshotWritten": {
-      const info = payload as { path?: string; source?: string };
-      console.log("[DebugSnapshot] written", info.path ?? "", info.source ?? "");
-      if (info.source === "footer-button") {
-        appendLog(`debug snapshot written ← ${info.path ?? "unknown path"}`);
-        showNotification("Debug state captured", info.path ?? "logs/debug-state.json");
-      }
-      break;
-    }
-    case "inputModeChanged": {
-      const modePayload = payload as { monoMode?: boolean; inputChannel?: number };
-      handleInputModeChanged(
-        modePayload.monoMode ?? true,
-        modePayload.inputChannel ?? 1
-      );
-      appendLog(`Input mode changed: ${modePayload.monoMode ? "Mono" : "Stereo"}, Channel: ${(modePayload.inputChannel ?? 1) + 1}`);
-      break;
-    }
-    case "ampCabStateChanged": {
-      const statePayload = payload as { ampEnabled?: boolean; cabEnabled?: boolean };
-      handleAmpCabStateChanged(
-        statePayload.ampEnabled ?? true,
-        statePayload.cabEnabled ?? true
-      );
-      appendLog(`Amp: ${statePayload.ampEnabled ? "ON" : "OFF"}, Cab: ${statePayload.cabEnabled ? "ON" : "OFF"}`);
-      break;
-    }
-    case "autoLevelChanged": {
-      const autoPayload = payload as { autoInput?: boolean; autoOutput?: boolean };
-      const activeId = uiState.activePresetId ?? "";
-      const preset = uiState.presetCache.get(activeId) as any;
-      if (preset) {
-        const globals = preset.globals ?? preset.global ?? {};
-        const merged = {
-          inputTrim: globals.inputTrim ?? 0,
-          outputTrim: globals.outputTrim ?? 0,
-          masterVolume: globals.masterVolume ?? globals.outputVolume ?? 1,
-          autoLevelInput: autoPayload.autoInput ?? globals.autoLevelInput ?? false,
-          autoLevelOutput: autoPayload.autoOutput ?? globals.autoLevelOutput ?? false,
-          transpose: globals.transpose ?? 0,
-        };
-        preset.globals = merged;
-        preset.global = merged;
-        uiState.presetCache.set(activeId, preset);
-      }
-      syncAutoLevelControlsFromState();
-      break;
-    }
-    case "uiSettingsChanged": {
-      const uiSettings = (payload as { settings?: UiSettings }).settings;
-      if (uiSettings) {
-        uiState.uiSettings = uiSettings;
-        applyUiSettings(uiSettings);
-        applyPresetRecentsFromAppSettings();
-      }
-      break;
-    }
-    case "dspPerformance": {
-      const stats = payload as {
-        stats?: import("./types.js").DSPPerformanceStats;
-        sampleRate?: number;
-        blockSize?: number;
-      };
-      if (stats.stats) {
-        const mergedStats: import("./types.js").DSPPerformanceStats = {
-          ...stats.stats,
-          sampleRate: stats.sampleRate ?? stats.stats.sampleRate,
-          blockSize: stats.blockSize ?? stats.stats.blockSize,
-        };
-        uiState.dspPerformance = mergedStats;
-        uiState.dspPerformanceHistory.push(mergedStats);
-        if (uiState.dspPerformanceHistory.length > 100) {
-          uiState.dspPerformanceHistory.shift();
-        }
-       
-        queueTelemetryUiUpdate("dsp");
-      }
-      break;
-    }
-    case "sldRoster": {
-      applySignalDiagnosticsRoster(payload as unknown as SignalDiagnosticsRoster);
-      break;
-    }
-    case "sld": {
-      if (applySignalDiagnosticsFrame(payload as unknown as SignalDiagnosticsFrame)) {
-        queueTelemetryUiUpdate("signalDiagnostics");
-      }
-      break;
-    }
-    case "sldA": {
-      if (applySignalDiagnosticsAnalyzer(payload as unknown as SignalDiagnosticsAnalyzerFrame)) {
-        queueTelemetryUiUpdate("signalDiagnostics");
-      }
-      break;
-    }
-    case "spatialPosition": {
-      // Live source position from the spatialiser's motion engine, so the on-screen
-      // puck matches what is being heard. Purely cosmetic: if it never arrives, the
-      // widget just shows the anchor position instead.
-      const nodes = payload.nodes;
-      if (Array.isArray(nodes)) {
-        applySpatialPositionUpdate(nodes as never);
-      }
-      break;
-    }
-    case "signalPathNodeConfigUpdated": {
-      const update = payload as {
-        nodeId?: string;
-        key?: string;
-        value?: string;
-        valueLength?: number;
-        captured?: boolean;
-        dirty?: boolean;
-        persist?: boolean;
-        silent?: boolean;
-      };
-      if (typeof update.nodeId === "string" && typeof update.key === "string") {
-        const markDirty = shouldMarkSignalPathNodeConfigUpdateDirty(update);
-        let applied = false;
-        if (typeof update.value === "string") {
-          applied = applySignalPathNodeConfigUpdate(update.nodeId, update.key, update.value, update.valueLength, { markDirty });
-        } else if (update.captured && update.key === "pluginStateBase64") {
-          applied = applySignalPathNodeConfigUpdate(update.nodeId, update.key, undefined, update.valueLength, { markDirty });
-        }
-        if (!applied && markDirty) {
-          setPresetDirty(true);
-        }
-        if (update.key === "pluginStateBase64" && !update.silent) {
-          showNotification("Plugin state captured", "success");
-        }
-      }
-      break;
-    }
-    case "signalPathNodeParamUpdated": {
-      const update = payload as { nodeId?: string; key?: string; value?: number };
-      if (typeof update.nodeId === "string" && typeof update.key === "string" && typeof update.value === "number") {
-        const preset = getActivePresetForRender();
-        if (preset) {
-          try {
-            setNodeParam(preset, update.nodeId, update.key, update.value);
-          } catch {
-            // Node not in the active preset draft — ignore silently.
-          }
-        }
-        refreshSelectedNodeParams();
-      }
-      break;
-    }
-    case "signalPathNodeBypassUpdated": {
-      const update = payload as { nodeId?: string; bypassed?: boolean };
-      if (typeof update.nodeId === "string" && typeof update.bypassed === "boolean") {
-        const preset = getActivePresetForRender();
-        const node = preset?.graph?.nodes?.find((n) => n.id === update.nodeId);
-        if (node) {
-          (node as unknown as { bypassed?: boolean }).bypassed = update.bypassed;
-          (node as unknown as { enabled?: boolean }).enabled = !update.bypassed;
-        }
-        refreshSelectedNodeParams();
-        renderActivePreset();
-      }
-      break;
-    }
-    case "globalSignalChainChanged":
-    case "globalChain": {
-      const chainPayload = payload as { config?: import("./types.js").GlobalSignalChainConfig; globalSignalChain?: import("./types.js").GlobalSignalChainConfig };
-      const chainConfig = chainPayload.config ?? chainPayload.globalSignalChain;
-      if (chainConfig) {
-        uiState.globalSignalChain = normalizeGlobalSignalChain(chainConfig) ?? uiState.globalSignalChain;
-        appendLog("Global signal chain configuration loaded");
-        syncControlsFromState();
-      }
-      break;
-    }
-    case "layoutLibraryLoaded": {
-      const libraryPayload = payload as { layoutLibrary?: LayoutLibrary };
-      if (libraryPayload.layoutLibrary) {
-        // Images are no longer shipped in this payload (loaded on demand). Preserve any
-        // images we already received so an open designer keeps its backgrounds, then
-        // refresh them if they had been loaded (picks up additions/removals).
-        const previousImages = uiState.layoutLibrary?.images ?? [];
-        uiState.layoutLibrary = libraryPayload.layoutLibrary;
-        if ((!uiState.layoutLibrary.images || uiState.layoutLibrary.images.length === 0) && previousImages.length) {
-          uiState.layoutLibrary.images = previousImages;
-        }
-        if (areLayoutImagesLoaded()) {
-          ensureLayoutImagesLoaded(true);
-        }
-        appendLog("Layout library loaded");
-        renderLayoutList();
-        // Ensure any open node params panel picks up the updated layout mapping.
-        renderActivePreset();
-      }
-      break;
-    }
-    case "layoutSaved": {
-      const savePayload = payload as { effectType?: string; blendId?: string; layoutId?: string; lookupKey?: string };
-      const displayKey = savePayload.blendId ? `${savePayload.effectType} (blend: ${savePayload.blendId})` : savePayload.effectType;
-      appendLog(`Layout saved for ${displayKey ?? "effect"}${savePayload.layoutId ? ` (${savePayload.layoutId})` : ""}`);
-      showNotification("Layout saved", "success");
-      // layoutLibraryLoaded will follow and trigger a full refresh.
-      break;
-    }
-    case "layoutImagesLoaded": {
-      const imagesPayload = payload as { images?: LayoutImageRef[] };
-      const images = Array.isArray(imagesPayload.images) ? imagesPayload.images : [];
-      if (!uiState.layoutLibrary) {
-        uiState.layoutLibrary = { byEffectType: {}, defaults: {}, images: [] };
-      }
-      uiState.layoutLibrary.images = images;
-      markLayoutImagesLoaded();
-      appendLog(`Layout images loaded (${images.length})`);
-      renderLayoutList();
-      // Re-render the designer canvas so backgrounds appear once images arrive.
-      layoutDesigner.notifyImagesLoaded();
-      // Refresh the live signal-path node params panel so custom-layout backgrounds resolve.
-      refreshSelectedNodeParams();
-      break;
-    }
-    case "layoutImageSelected": {
-      console.log("[Messages] layoutImageSelected received:", payload);
-      const imgPayload = payload as { purpose?: string; imageId?: string; fileName?: string; dataUrl?: string; layerIndex?: number; paramKey?: string };
-      if (imgPayload.purpose && imgPayload.imageId && imgPayload.fileName) {
-        // Add image to layout library so it can be resolved
-        if (uiState.layoutLibrary) {
-          const existingIdx = uiState.layoutLibrary.images.findIndex(img => img.imageId === imgPayload.imageId);
-          const imageEntry = { 
-            imageId: imgPayload.imageId, 
-            fileName: imgPayload.fileName, 
-            dataUrl: imgPayload.dataUrl,
-            type: imgPayload.purpose as "background" | "knob" | "general" 
-          };
-          if (existingIdx >= 0) {
-            uiState.layoutLibrary.images[existingIdx] = imageEntry;
-          } else {
-            uiState.layoutLibrary.images.push(imageEntry);
-          }
-        }
-        layoutDesigner.handleImageSelected(
-          imgPayload.purpose,
-          imgPayload.imageId,
-          imgPayload.layerIndex,
-          imgPayload.paramKey
-        );
-      }
-      break;
-    }
-    case "layoutExportSaved": {
-      const exportPayload = payload as { path?: string };
-      if (exportPayload.path) {
-        showNotification(`Layout exported to ${exportPayload.path}`, "success");
-        appendLog(`Layout exported: ${exportPayload.path}`);
-      }
-      break;
-    }
-    case "layoutExportFailed": {
-      const failPayload = payload as { message?: string };
-      showNotification(failPayload.message ?? "Layout export failed", "error");
-      appendLog(`Layout export failed: ${failPayload.message ?? "unknown error"}`);
-      break;
-    }
-    case "compositeLibrary": {
-      const compPayload = payload as { definitions?: CompositeEffectDefinition[] };
-      if (compPayload.definitions) {
-        handleCompositeLibrary(compPayload.definitions);
-        refreshFxSelector();
-      }
-      break;
-    }
-    case "customEffectLibrary": {
-      const customPayload = payload as { entries?: import("./types.js").CustomEffectLibrary };
-      if (Array.isArray(customPayload.entries)) {
-        handleCustomEffectLibrary(customPayload.entries);
-        refreshFxSelector();
-      }
-      break;
-    }
-    case "customEffectSaved": {
-      const customPayload = payload as { name?: string; applyToNode?: boolean };
-      const detail = customPayload.name ?? "Custom Effect";
-      appendLog(`custom effect saved ← ${detail}`);
-      showNotification(customPayload.applyToNode ? "Custom Effect applied" : "Custom Effect saved", detail);
-      break;
-    }
-    case "generatedCustomEffectBundleExportSaved": {
-      const exportPayload = payload as { path?: string };
-      showNotification("Custom Effect bundle exported", exportPayload.path ?? "");
-      break;
-    }
-    case "generatedCustomEffectBundleExportFailed": {
-      const exportPayload = payload as { message?: string };
-      showNotification("Custom Effect bundle export failed", exportPayload.message ?? "");
-      break;
-    }
-    case "effectCatalog": {
-      const catalogPayload = payload as { catalog?: Array<Record<string, unknown>> };
-      if (Array.isArray(catalogPayload.catalog)) {
-        for (const entry of catalogPayload.catalog) {
-          if (!entry || typeof entry !== "object") {
-            continue;
-          }
-          const effect = entry as {
-            type?: unknown;
-            name?: unknown;
-            category?: unknown;
-            parameters?: unknown;
-            presets?: unknown;
-            requiresResource?: unknown;
-            resourceType?: unknown;
-            exposedResources?: unknown;
-          };
-          const type = typeof effect.type === "string" ? effect.type : "";
-          if (!type) {
-            continue;
-          }
-          const existing = EffectTypeRegistry.get(type);
-          const rawName = typeof effect.name === "string" ? effect.name.trim() : "";
-          const rawCategory = typeof effect.category === "string" ? effect.category.trim() : "";
-          const displayName = rawName || existing?.displayName || type;
-          const category = rawCategory || existing?.category || "utility";
-          const requiresResource =
-            typeof effect.requiresResource === "boolean" ? effect.requiresResource : existing?.requiresResource ?? false;
-          const resourceType = typeof effect.resourceType === "string" ? effect.resourceType : existing?.resourceType;
-          const existingParamsByKey = new Map(
-            (existing?.parameters ?? []).map((param) => [param.key, param]),
-          );
-          const parameters = Array.isArray(effect.parameters)
-            ? effect.parameters
-                .filter((param) => param && typeof param === "object")
-                .map((param) => {
-                  const p = param as {
-                    key?: unknown;
-                    name?: unknown;
-                    default?: unknown;
-                    min?: unknown;
-                    max?: unknown;
-                    unit?: unknown;
-                    step?: unknown;
-                    labels?: unknown;
-                    group?: unknown;
-                    advanced?: unknown;
-                  };
-                  const key = typeof p.key === "string" ? p.key : "";
-                  const existingParam = key ? existingParamsByKey.get(key) : undefined;
-                  const labels = Array.isArray(p.labels) ? p.labels.filter((label) => typeof label === "string") : null;
-                  return {
-                    key,
-                    name: typeof p.name === "string" ? p.name : existingParam?.name ?? "",
-                    default: typeof p.default === "number" ? p.default : existingParam?.default ?? 0,
-                    min: typeof p.min === "number" ? p.min : existingParam?.min ?? 0,
-                    max: typeof p.max === "number" ? p.max : existingParam?.max ?? 1,
-                    unit: typeof p.unit === "string" ? p.unit : existingParam?.unit ?? "",
-                    step: typeof p.step === "number" ? p.step : existingParam?.step,
-                    labels: labels ?? existingParam?.labels,
-                    group: typeof p.group === "string" ? p.group : existingParam?.group,
-                    advanced: typeof p.advanced === "boolean" ? p.advanced : existingParam?.advanced,
-                  };
-                })
-                .filter((param) => param.key !== "")
-            : existing?.parameters ?? [];
-
-          const exposedResources = Array.isArray(effect.exposedResources)
-            ? effect.exposedResources
-                .filter((resource) => resource && typeof resource === "object")
-                .map((resource) => {
-                  const r = resource as {
-                    resourceId?: unknown;
-                    displayName?: unknown;
-                    nodeId?: unknown;
-                    resourceType?: unknown;
-                    resourceIndex?: unknown;
-                    allowBrowseFile?: unknown;
-                    parameterId?: unknown;
-                    parameterValue?: unknown;
-                  };
-                  return {
-                    resourceId: typeof r.resourceId === "string" ? r.resourceId : "",
-                    displayName: typeof r.displayName === "string" ? r.displayName : "",
-                    nodeId: typeof r.nodeId === "string" ? r.nodeId : "",
-                    resourceType: typeof r.resourceType === "string" ? r.resourceType : "",
-                    resourceIndex: typeof r.resourceIndex === "number" ? r.resourceIndex : 0,
-                    allowBrowseFile: typeof r.allowBrowseFile === "boolean" ? r.allowBrowseFile : true,
-                    parameterId: typeof r.parameterId === "string" ? r.parameterId : undefined,
-                    parameterValue: typeof r.parameterValue === "number" ? r.parameterValue : undefined,
-                  };
-                })
-                .filter((resource) => resource.resourceId && resource.resourceType)
-            : existing?.exposedResources;
-          const presets = Array.isArray(effect.presets)
-            ? effect.presets
-                .filter((preset) => preset && typeof preset === "object")
-                .flatMap((preset) => {
-                  const p = preset as {
-                    id?: unknown;
-                    name?: unknown;
-                    source?: unknown;
-                    parameters?: unknown;
-                    parameterOrder?: unknown;
-                  };
-                  if (typeof p.id !== "string" || !p.id || typeof p.name !== "string") {
-                    return [];
-                  }
-                  const parameters = p.parameters && typeof p.parameters === "object" && !Array.isArray(p.parameters)
-                    ? Object.fromEntries(
-                        Object.entries(p.parameters)
-                          .filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
-                      )
-                    : {};
-                  return [{
-                    id: p.id,
-                    name: p.name,
-                    source: p.source === "custom" ? "custom" as const : "factory" as const,
-                    parameters,
-                    parameterOrder: Array.isArray(p.parameterOrder)
-                      ? p.parameterOrder.filter((key): key is string => typeof key === "string" && key in parameters)
-                      : undefined,
-                  }];
-                })
-            : existing?.presets;
-
-          EffectTypeRegistry.register(type, {
-            type,
-            displayName,
-            category,
-            catalogHidden: existing?.catalogHidden ?? (type === EffectGuids.kAmpNam || type === EffectGuids.kAmpNamBlend),
-            requiresResource,
-            resourceType,
-            parameters,
-            presets,
-            exposedResources,
-          });
-        }
-        refreshFxSelector();
-        if (getActivePresetForRender()) {
-          renderActivePreset();
-          refreshSelectedNodeParams();
-        }
-      }
-      break;
-    }
-    case "compositeDefinitionAdded": {
-      const compAddPayload = payload as { definition?: CompositeEffectDefinition };
-      if (compAddPayload.definition) {
-        handleCompositeDefinitionAdded(compAddPayload.definition);
-        refreshFxSelector();
-        renderCompositeList();
-      }
-      break;
-    }
-    case "compositeDefinitionRemoved": {
-      const compRemovePayload = payload as { id?: string };
-      if (compRemovePayload.id) {
-        handleCompositeDefinitionRemoved(compRemovePayload.id);
-        refreshFxSelector();
-        renderCompositeList();
-      }
-      break;
-    }
-    case "compositeEditState": {
-      // C++ broadcasts the composite's current inner graph after each mutation
-      const editPayload = payload as { definition?: CompositeEffectDefinition };
-      if (editPayload.definition) {
-        const isAlreadyEditing = uiState.compositeEditMode;
-        if (isAlreadyEditing) {
-          updateCompositeEditState(editPayload.definition);
-        } else {
-          enterCompositeEditState(editPayload.definition);
-        }
-        renderSignalPathBar();
-        handleCompositeEditStateUpdate();
-      }
-      break;
-    }
-    case "compositeEditModeExited": {
-      // C++ confirms we've left composite edit mode
-      exitCompositeEditState();
-      handleCompositeEditModeExited();
-      renderSignalPathBar();
-      break;
-    }
-    case "compositePresetList": {
-      const list = (payload as { compositePresets?: CompositePreset[] }).compositePresets;
-      if (Array.isArray(list)) {
-        handleCompositePresetList(list);
-      }
-      break;
-    }
-    case "compositePresetSaved": {
-      const saved = payload as { id?: string; name?: string };
-      handleCompositePresetSaved(saved.id ?? "", saved.name ?? "");
-      break;
-    }
-    case "compositePresetLoaded": {
-      const loaded = payload as { id?: string; name?: string };
-      handleCompositePresetLoaded(loaded.id ?? "", loaded.name ?? "");
-      break;
-    }
-    case "navigateToToneSharingDeepLink": {
-      const deepLink = payload as { deepLink?: string };
-      if (deepLink.deepLink) {
-        handleToneSharingDeepLink(deepLink.deepLink);
-      }
-      break;
-    }
-    default:
-      console.warn("Unknown message type", payload.type);
+  const handler = MESSAGE_HANDLERS[type];
+  if (handler) {
+    handler(payload);
+  } else {
+    console.warn("Unknown message type", payload.type);
   }
 
   // Building this snapshot serializes the whole of uiState — resource library, preset cache
@@ -2142,19 +2258,3 @@ export function handleMixerStateMessage(message: Record<string, unknown>): void 
  * @param paramPath - Dot-notation path to the parameter (e.g., "postChainGraph.global_eq.params.lowGain")
  * @param value - The new value for the parameter
  */
-export function sendGlobalChainParam(paramPath: string, value: number | boolean): void {
-  window.NAMBridge?.postMessage({
-    type: "setGlobalChainParam",
-    path: paramPath,
-    value,
-  });
-}
-
-/**
- * Request the current global signal chain configuration from the plugin.
- */
-export function requestGlobalChainState(): void {
-  window.NAMBridge?.postMessage({
-    type: "getGlobalChain",
-  });
-}

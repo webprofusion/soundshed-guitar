@@ -7,7 +7,7 @@
  */
 
 import type { EffectLayout } from "./layoutTypes.js";
-import type { GraphNode, GraphEdge, SignalGraph, ResourceRef } from "./types.js";
+import type { GraphNode, GraphEdge, SignalGraph } from "./types.js";
 
 /**
  * Maps a user-facing parameter to an inner node parameter.

@@ -9,7 +9,7 @@ import {
   tone3000AuthenticatedFetch,
 } from "./tone3000.js";
 import { escapeHtml } from "./utils.js";
-import { openBlendEditorWithDefinition } from "./signalPath.js";
+import { openBlendEditorWithDefinition } from "./signalPathBlend.js";
 import { Tone3000DetailsView } from "./tone3000DetailsView.js";
 import {
   createTone3000BlendDefinition,
@@ -389,7 +389,7 @@ async function runSearch(page = 1): Promise<void> {
   }
 }
 
-function updatePagination(loading: boolean, data?: Record<string, unknown>, pageSize?: number): void {
+function updatePagination(loading: boolean, data?: Record<string, unknown>, _pageSize?: number): void {
   if (!paginationEl || !pageLabelEl || !prevButtonEl || !nextButtonEl) {
     return;
   }

@@ -1,0 +1,580 @@
+/* ─────────────────────────────────────────────────────────────
+   Effect layout picker popover
+
+   Standard-vs-custom layout switching plus per-keyword / per-preset
+   layout rules. Appended to <body> because .default-effect-shell
+   clips its own overflow.
+   ───────────────────────────────────────────────────────────── */
+
+/* Effect presets flyout — same shell as the layout picker, one dropdown wide. */
+.effect-presets-popover {
+  position: fixed;
+  z-index: 4000;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.16));
+  border-radius: 10px;
+  background: var(--bg-elevated, #1b1f2a);
+  color: var(--text-primary, #e8ecf6);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.effect-presets-popover select,
+.effect-presets-popover input,
+.effect-presets-popover button {
+  font: inherit;
+  font-size: 12px;
+}
+
+.effect-presets-picker {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.effect-presets-popover-row {
+  display: flex;
+  gap: 6px;
+}
+
+.effect-presets-popover-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.effect-presets-popover-save,
+.effect-presets-popover-delete {
+  padding: 6px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.effect-presets-popover-save:hover,
+.effect-presets-popover-delete:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.effect-presets-popover-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.effect-presets-popover :focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.layout-picker-popover {
+  position: fixed;
+  z-index: 4000;
+  width: 320px;
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.16));
+  border-radius: 10px;
+  background: var(--bg-elevated, #1b1f2a);
+  color: var(--text-primary, #e8ecf6);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.layout-picker-header {
+  position: relative;
+  padding: 10px 34px 8px 12px;
+  border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+}
+
+.layout-picker-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.layout-picker-subtitle {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.7));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-picker-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.layout-picker-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Master "Use Effect Layouts" switch — sits above the tabs and governs everything below. */
+.layout-picker-master {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.layout-picker-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.layout-picker-switch input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.layout-picker-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+}
+
+.layout-picker-tab {
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.62));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.layout-picker-tab:hover {
+  color: inherit;
+}
+
+.layout-picker-tab.is-active {
+  border-bottom-color: var(--accent-primary, #6ea8ff);
+  color: inherit;
+}
+
+.layout-picker-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.layout-picker-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.layout-picker-tabpanel[hidden] {
+  display: none;
+}
+
+.layout-picker-note {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.7));
+}
+
+.layout-picker-section-title {
+  margin-bottom: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.62));
+}
+
+.layout-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layout-picker-option-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.layout-picker-option {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Custom layouts live behind one dropdown — an effect type can have many. */
+.layout-picker-dropdown-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.layout-picker-custom-row {
+  /* Line the dropdown up with the option text, past the radio column. */
+  margin-left: 21px;
+}
+
+.layout-picker-dropdown {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.layout-picker-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.layout-picker-dropdown-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.layout-picker-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.layout-picker-dropdown-selected {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.layout-picker-dropdown-caret {
+  flex: 0 0 auto;
+  padding-right: 2px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.layout-picker-dropdown[open] .layout-picker-dropdown-caret {
+  transform: rotate(180deg);
+}
+
+.layout-picker-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 210px;
+  padding: 4px;
+  border-top: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+  overflow-y: auto;
+}
+
+.layout-picker-dropdown-item {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.layout-picker-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.layout-picker-dropdown-item.is-selected {
+  border-color: color-mix(in srgb, var(--accent-primary, #6ea8ff) 55%, transparent);
+  background: rgba(110, 168, 255, 0.1);
+}
+
+.layout-picker-empty {
+  padding: 6px;
+  font-size: 10px;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.62));
+}
+
+/* Inside the layout list, line the empty state up past the radio column. */
+.layout-picker-options .layout-picker-empty {
+  padding-left: 21px;
+}
+
+.layout-picker-option-edit {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.layout-picker-option-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+.layout-picker-option-edit:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.layout-picker-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.layout-picker-option.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary, #6ea8ff) 55%, transparent);
+  background: rgba(110, 168, 255, 0.1);
+}
+
+.layout-picker-option-thumb {
+  display: block;
+  width: 44px;
+  height: 30px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.layout-picker-option-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.layout-picker-option-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layout-picker-option-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-picker-option-meta {
+  font-size: 9px;
+  color: var(--text-secondary, rgba(220, 228, 245, 0.62));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-picker-badge {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.layout-picker-scope {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.layout-picker-scope.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.layout-picker-keyword {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24);
+  color: inherit;
+  font-size: 11px;
+}
+
+.layout-picker-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.layout-picker-suggestion {
+  padding: 2px 7px;
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.layout-picker-suggestion:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.layout-picker-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.layout-picker-rule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+}
+
+.layout-picker-rule-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.layout-picker-rule-text span,
+.layout-picker-rule-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-picker-rule-remove {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.layout-picker-rule-remove:hover {
+  background: rgba(255, 120, 120, 0.22);
+}
+
+.layout-picker-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+}
+
+.layout-picker-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layout-picker-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.layout-picker-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.layout-picker-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.layout-picker-btn.is-primary {
+  border-color: color-mix(in srgb, var(--accent-primary, #6ea8ff) 60%, transparent);
+  background: color-mix(in srgb, var(--accent-primary, #6ea8ff) 26%, transparent);
+}
+
+.effect-visualization-toolbar-btn.node-layout-switch-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary, #6ea8ff) 55%, var(--border-medium, rgba(255, 255, 255, 0.18)));
+}

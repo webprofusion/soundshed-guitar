@@ -22,7 +22,6 @@ import type {
 
 const UNIT_SPACING_X = 0.62;
 /** Single amp/cab cluster advance along X. */
-const AMP_CLUSTER_SPACING_X = 0.95;
 /**
  * Dual 4x12 cabs span ~1.7m wide; advance far enough that neighbouring
  * 19" racks (~0.52m) never collide with either cab.

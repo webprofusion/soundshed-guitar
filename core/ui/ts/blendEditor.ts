@@ -856,7 +856,7 @@ export class BlendEditorModal {
     `;
   }
 
-  private bindModelRowEvents(category: string): void {
+  private bindModelRowEvents(_category: string): void {
     if (!this.modelList) {
       return;
     }

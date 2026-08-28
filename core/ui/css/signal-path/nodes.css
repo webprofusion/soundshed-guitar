@@ -1,0 +1,745 @@
+/* Drag handle under the visualisation — selects the signal-chain display mode */
+.signal-path-resize-handle {
+  flex: 0 0 auto;
+  height: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-top: 1px solid var(--border-medium);
+  background: var(--bg-secondary);
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  z-index: 5;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.signal-path-resize-handle:hover,
+.signal-path-resize-handle:focus-visible,
+body.signal-path-resizing .signal-path-resize-handle {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--bg-secondary));
+  border-top-color: color-mix(in srgb, var(--color-accent) 45%, var(--border-medium));
+  outline: none;
+}
+
+.signal-path-resize-handle-grip {
+  width: 48px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  pointer-events: none;
+  transform: scaleX(0.75);
+  transform-origin: center;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.signal-path-resize-handle:hover .signal-path-resize-handle-grip,
+.signal-path-resize-handle:focus-visible .signal-path-resize-handle-grip,
+body.signal-path-resizing .signal-path-resize-handle-grip {
+  transform: scaleX(1);
+  background: color-mix(in srgb, var(--color-accent) 70%, var(--text-muted));
+}
+
+body.signal-path-resizing {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+
+body.signal-path-resizing * {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+
+.signal-path-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+}
+
+.signal-path-toolbar.scene-toolbar-empty {
+  display: none;
+}
+
+.signal-path-scene-toolbar {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.signal-path-add-menu {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: var(--z-dropdown, 120);
+}
+
+.signal-path-add-menu-trigger {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid #4a4a58;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #3a3a44 0%, var(--bg-dark-surface) 100%);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+  font-size: 16px;
+  line-height: 1;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.signal-path-add-menu-trigger:hover,
+.signal-path-add-menu-trigger[aria-expanded="true"] {
+  border-color: var(--color-accent);
+  background: linear-gradient(180deg, var(--color-primary) 0%, #c85830 100%);
+  color: white;
+  box-shadow: 0 0 12px rgba(224, 120, 72, 0.5);
+  transform: scale(1.1);
+}
+
+.signal-path-add-menu-trigger:active {
+  transform: scale(0.95);
+}
+
+.signal-path-add-menu-trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.signal-path-add-menu-options {
+  position: fixed;
+  display: flex;
+  min-width: 132px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-medium);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+.signal-path-add-menu-options[hidden] {
+  display: none;
+}
+
+.signal-path-add-menu-options button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.signal-path-add-menu-options button:hover,
+.signal-path-add-menu-options button:focus-visible {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--bg-panel) 76%, var(--color-accent) 24%);
+  outline: none;
+}
+
+.signal-path-bar.mix-tab-active .signal-path-add-menu {
+  display: none;
+}
+
+.signal-path-add-menu.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .signal-path-bar.fx-library-collapsed:not(.mix-tab-active) .signal-path-scroll {
+    padding-right: 12px;
+    padding-bottom: 16px;
+  }
+
+  .signal-path-toolbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .signal-path-scene-toolbar {
+    width: 100%;
+  }
+
+}
+
+.signal-path-nodes {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px 0;
+  min-width: max-content;
+  min-height: 100%;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.signal-node {
+  --node-accent-strong: var(--color-accent);
+  --node-accent-soft: color-mix(in srgb, var(--node-accent-strong) 20%, transparent);
+  --node-accent-border: color-mix(in srgb, var(--node-accent-strong) 42%, var(--border-light));
+  --node-accent-glow: color-mix(in srgb, var(--node-accent-strong) 24%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 88%, var(--node-accent-strong) 12%) 0%, var(--bg-card) 44%),
+    var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid var(--node-accent-border);
+  min-width: 72px;
+  min-height:72px;
+  cursor: pointer;
+  /* Nodes are dragged with pointer events, and the browser cancels the gesture
+     the moment it decides the touch was a scroll. The chain still scrolls by
+     dragging the strip between nodes. */
+  touch-action: none;
+  /* Size properties animate on density switch; interaction colours animate on hover/focus. */
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    min-width 0.14s ease-out,
+    width 0.14s ease-out,
+    min-height 0.14s ease-out,
+    padding 0.14s ease-out,
+    gap 0.1s ease-out,
+    border-radius 0.1s ease-out;
+  position: relative;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, var(--node-accent-soft));
+}
+
+.signal-node:hover {
+  border-color: var(--node-accent-border);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 5%, var(--node-accent-soft)),
+    0 8px 16px color-mix(in srgb, rgb(0, 0, 0) 25%, var(--node-accent-strong) 15%);
+}
+
+.signal-node.selected, .signal-node:focus {
+  border-width: 2px;
+  border-color: var(--node-accent-strong);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 7%, var(--node-accent-soft)),
+    0 0 0 1px color-mix(in srgb, var(--node-accent-strong) 36%, transparent),
+    0 0 18px var(--node-accent-glow);
+  outline: none;
+}
+
+.signal-node.amp {
+  --node-accent-strong: #f0a24c;
+}
+
+.signal-node.cab {
+  --node-accent-strong: #aeb9d0;
+}
+
+.signal-node.eq {
+  --node-accent-strong: #61b4d6;
+}
+
+.signal-node.dynamics {
+  --node-accent-strong: #cf7575;
+}
+
+.signal-node.modulation {
+  --node-accent-strong: #8c79db;
+}
+
+.signal-node.delay {
+  --node-accent-strong: #64c2aa;
+}
+
+.signal-node.reverb {
+  --node-accent-strong: #7fa4ee;
+}
+
+.signal-node.utility {
+  --node-accent-strong: #97a1b4;
+}
+
+.signal-node.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-xl);
+  z-index: 100;
+}
+
+.signal-node-drag-preview {
+  position: fixed !important;
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.92;
+  transform: translate(-50%, -50%) scale(1.04);
+  z-index: 1000;
+}
+
+.signal-node.drag-over {
+  border-color: var(--node-drag-over);
+  box-shadow: var(--shadow-md);
+}
+
+.signal-node.drag-over::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--node-drag-over);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-drag-over) 24%, transparent);
+}
+
+/* Layout thumbnail avatar — small card at top-left of node */
+.node-layout-thumb {
+  position: absolute;
+  top: -8px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 3px;
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.signal-node.bypassed {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: var(--node-accent-border);
+}
+
+.signal-node.bypassed .node-label::after {
+  content: none;
+}
+
+.signal-node.input-node {
+  --node-accent-strong: var(--node-input);
+  border-color: color-mix(in srgb, var(--node-input) 60%, var(--border-light));
+}
+
+.signal-node.input-node:hover {
+  border-color: var(--node-input-hover);
+}
+
+.signal-node.output-node {
+  --node-accent-strong: var(--node-output);
+  border-color: color-mix(in srgb, var(--node-output) 60%, var(--border-light));
+}
+
+.signal-node.output-node:hover {
+  border-color: var(--node-output-hover);
+}
+
+.node-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--node-accent-strong);
+}
+
+.node-icon .fx-effect-icon {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--node-accent-strong) 18%, transparent));
+}
+
+.node-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: 160px;
+}
+
+.node-name {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+/*
+ * The splitter selects one of two fixed density modes. Full mode uses the
+ * base styles above; compact mode uses icon-only nodes with no labels.
+ */
+
+.signal-path-bar[data-density="compact"] .signal-path-scroll {
+  padding: 4px 8px 12px;
+}
+
+/* Icon-only compact */
+.signal-path-bar[data-density="compact"] .signal-path-nodes {
+  padding: 0;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node {
+  min-width: 40px;
+  width: 40px;
+  min-height: 40px;
+  gap: 0;
+  border-radius: 8px;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node .node-info,
+.signal-path-bar[data-density="compact"] .signal-node .node-label {
+  display: none;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node .node-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node .node-icon .fx-effect-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-icon {
+  display: none;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-layout-thumb {
+  position: static;
+  top: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  opacity: 1;
+}
+
+/* Compact connectors retain a fixed, readable spacing. */
+.signal-path-bar[data-density="compact"] .signal-connector {
+  width: 32px;
+}
+
+.signal-path-bar[data-density="compact"] .signal-arrow {
+  font-size: 12px;
+  margin: 0 4px;
+}
+
+.signal-path-bar[data-density="compact"] .node-bypass-badge {
+  top: 16px;
+  right: 1px;
+  font-size: 6px;
+  padding: 1px 3px;
+}
+
+.signal-path-bar[data-density="compact"] .node-missing-badge {
+  top: auto;
+  bottom: 2px;
+  left: 2px;
+  right: auto;
+  font-size: 9px;
+  padding: 0 3px;
+}
+
+.signal-path-bar[data-density="compact"] .node-clip-indicator {
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+}
+
+.signal-path-bar[data-density="compact"] .signal-node-delete,
+.signal-path-bar[data-density="compact"] .signal-node-bypass {
+  width: 14px;
+  height: 14px;
+  font-size: 11px;
+  line-height: 12px;
+}
+
+/* Tighter parallel layout when space is limited */
+.signal-path-bar[data-density="compact"] .signal-graph-container {
+  gap: 4px;
+  padding: 0;
+}
+
+.signal-path-bar[data-density="compact"] .parallel-branches {
+  gap: 4px;
+  padding: 4px 2px;
+  margin: 0 2px;
+}
+
+.signal-path-bar[data-density="compact"] .parallel-split,
+.signal-path-bar[data-density="compact"] .parallel-join {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 2px;
+}
+
+.node-type {
+  font-size: 8px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text-muted) 74%, var(--node-accent-strong) 26%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.node-architecture-badge {
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #a2ffd8 74%, #ffffff 26%);
+  border: 1px solid rgba(128, 230, 188, 0.36);
+  background: rgba(56, 118, 98, 0.28);
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+
+.node-bypass-badge {
+  position: absolute;
+  top: 20px;
+  right: 2px;
+  font-size: 7px;
+  color: #ff6666;
+  background: rgba(255, 102, 102, 0.2);
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.node-calibration-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 7px;
+  color: #ffe08a;
+  background: rgba(255, 208, 128, 0.2);
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.signal-node.missing-resource {
+  border-color: rgba(232, 76, 76, 0.6);
+  box-shadow: 0 0 0 1px rgba(232, 76, 76, 0.35);
+}
+
+.node-missing-badge {
+  position: absolute;
+  top: 18px;
+  right: 2px;
+  font-size: 10px;
+  color: #ff8a8a;
+  background: rgba(232, 76, 76, 0.2);
+  border: 1px solid rgba(232, 76, 76, 0.4);
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.node-clip-indicator {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  border: none;
+  box-shadow: none;
+}
+
+.node-clip-indicator.clip-on {
+  background: #ff5c5c;
+  box-shadow: 0 0 4px rgba(255, 92, 92, 0.6);
+}
+
+.node-clip-indicator.clip-off {
+  background: #48e078;
+  box-shadow: 0 0 6px rgba(72, 224, 120, 0.6);
+}
+
+.node-clip-indicator.clip-inactive,
+.node-clip-indicator.clip-unknown {
+  background: var(--control-indicator);
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.signal-node-delete {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 14px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.signal-node-bypass {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(160, 236, 186, 0.95);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.signal-node-bypass-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.signal-node:hover .signal-node-bypass,
+.signal-node:focus-within .signal-node-bypass,
+.signal-node.bypassed .signal-node-bypass {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.signal-node-bypass:hover {
+  background: rgba(116, 228, 158, 0.2);
+  color: rgba(196, 255, 216, 0.98);
+  border-color: rgba(116, 228, 158, 0.4);
+}
+
+.signal-node-bypass.bypassed {
+  background: rgba(255, 80, 80, 0.2);
+  color: rgba(255, 170, 170, 0.98);
+  border-color: rgba(255, 80, 80, 0.35);
+}
+
+.signal-node-bypass:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.signal-node:hover .signal-node-delete,
+.signal-node:focus-within .signal-node-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.signal-node-delete:hover {
+  background: rgba(255, 80, 80, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 80, 80, 0.35);
+}
+
+.signal-node-delete:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.signal-arrow {
+  font-size: 16px;
+  color: #00a621;
+  margin: 0 4px;
+}
+
+.signal-connector {
+  width: 32px;
+  height: 1.5px;
+  background: var(--color-success);
+  border-radius: 2px;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.signal-connector::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background: var(--text-secondary);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.signal-connector.drag-over {
+  height: 3px;
+  background: var(--node-drag-over);
+  box-shadow: 0 0 8px rgba(72, 224, 120, 0.5);
+}
+
+.signal-connector.drag-over::after {
+  border-left-color: var(--node-drag-over);
+}
+
+.signal-graph-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-width: max-content;
+}
+
+.signal-graph-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}

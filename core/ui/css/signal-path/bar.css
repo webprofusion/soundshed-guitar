@@ -1,0 +1,59 @@
+/* ===== Signal Path & Chain Visualization ===== */
+
+/* Signal Path Bar */
+.signal-path-bar {
+  --signal-path-scroll-height: 96px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  transition: grid-template-rows 0.22s ease;
+  border-bottom: none;
+  padding: 0;
+  gap: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  position: relative;
+  background: var(--bg-secondary);
+}
+
+.signal-path-bar.is-collapsed {
+  grid-template-rows: auto 0fr;
+}
+
+/* Body wraps all collapsible content; clips to 0 when the bar is collapsed */
+.signal-path-body {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Composite Edit Mode Banner */
+.composite-edit-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: linear-gradient(90deg, var(--accent-primary, #4a90d9) 0%, var(--accent-secondary, #6a5acd) 100%);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.composite-edit-banner-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.composite-edit-banner-name {
+  font-weight: 600;
+}
+
+.composite-edit-banner-hint {
+  margin-left: auto;
+  opacity: 0.7;
+  font-size: 0.7rem;
+}

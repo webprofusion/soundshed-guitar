@@ -1,7 +1,5 @@
 import { appendLog } from "./logging.js";
-import { setAppSetting } from "./bridge.js";
-import { postMessage, setMasterGain, setParameter } from "./bridge.js";
-import { sendGlobalChainParam } from "./messages.js";
+import { postMessage, sendGlobalChainParam, setAppSetting, setMasterGain, setParameter } from "./bridge.js";
 import { uiState } from "./state.js";
 import {
   drawEqCurve,
@@ -12,7 +10,7 @@ import {
   buildEqBandConfigsFromParams,
   eqBandChangeToParams,
 } from "./eqCurve.js";
-import type { GraphNode, SignalGraph } from "./types.js";
+import type { GlobalSettings, GraphNode, SignalGraph } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
 
 export interface KnobConfig {
@@ -1123,16 +1121,6 @@ function updateAutoLevelKnobStates(): void {
   setKnobControlDisabled("output-control", false);
 }
 
-function readAutoLevelFromPreset(): { input?: boolean; output?: boolean } {
-  const activeId = uiState.activePresetId ?? "";
-  const preset = uiState.presetCache.get(activeId) as import("./types.js").Preset | undefined;
-  const globals = (preset as any)?.globals ?? (preset as any)?.global;
-  return {
-    input: typeof globals?.autoLevelInput === "boolean" ? globals.autoLevelInput : undefined,
-    output: typeof globals?.autoLevelOutput === "boolean" ? globals.autoLevelOutput : undefined,
-  };
-}
-
 function sendAmpCabStateToPlugin(): void {
   const message = JSON.stringify({
     type: "setAmpCabState",
@@ -1741,21 +1729,7 @@ export function syncEQControlsFromState(): void {
 export { initializeEQControls };
 
 
-function getActivePresetGlobals(): import("./types.js").GlobalSettings | null {
-  const activeId = uiState.activePresetId ?? "";
-  const activePreset = uiState.presetCache.get(activeId) as import("./types.js").Preset | undefined;
-  const globals = (activePreset as any)?.globals ?? (activePreset as any)?.global;
-  if (!globals) return null;
-  return {
-    inputTrim: globals.inputTrim ?? 0,
-    outputTrim: globals.outputTrim ?? 0,
-    masterVolume: globals.masterVolume ?? globals.outputVolume ?? 1,
-    autoLevelInput: globals.autoLevelInput ?? false,
-    autoLevelOutput: globals.autoLevelOutput ?? false,
-  };
-}
-
-function updateActivePresetGlobals(next: Partial<import("./types.js").GlobalSettings>): void {
+function updateActivePresetGlobals(next: Partial<GlobalSettings>): void {
   const activeId = uiState.activePresetId ?? "";
   const preset = uiState.presetCache.get(activeId) as any;
   if (!preset) return;

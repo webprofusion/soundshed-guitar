@@ -2,9 +2,9 @@ import { postMessage } from "./bridge.js";
 import { importGeneratedCustomEffect, getCustomEffectEntry } from "./customEffects.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { showNotification } from "./notifications.js";
-import { getApiBaseUrl } from "./toneSharingPanel.js";
+import { getApiBaseUrl } from "./apiConfig.js";
 import type { GraphNode } from "./types.js";
-import { escapeHtml } from "./utils.js";
+import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 
 type ModuleNodeContext = {
   nodeId?: string;
@@ -112,6 +112,7 @@ function normaliseText(value: unknown, maxLength: number): string {
   if (typeof value !== "string") {
     return "";
   }
+  // eslint-disable-next-line no-control-regex -- stripping control characters is the point
   return value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
@@ -213,16 +214,6 @@ function slugifyFileStem(value: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
   return slug || "custom-effect";
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
 }
 
 function formatParamRows(parameters: Record<string, number>): string {

@@ -20,8 +20,6 @@ import {
   createEmptyCompositeDefinition,
   createCompositeFromNodes,
 } from "./compositeTypes.js";
-import type { SignalGraph } from "./types.js";
-
 // ─────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────

@@ -522,7 +522,7 @@ interface CaseBuildCtx {
 function addFlightCaseShell(ctx: CaseBuildCtx): void {
   const {
     root, geometries, textures, materials, nodeId,
-    bayHeight, bayFloor, outerW, outerD, outerH, caseCenterY, faceZ,
+    bayHeight, bayFloor, outerW, outerD, caseCenterY, faceZ,
   } = ctx;
 
   const laminateMap = canvasTexture(makeLaminateCanvas(256), { srgb: true, anisotropy: 6 });

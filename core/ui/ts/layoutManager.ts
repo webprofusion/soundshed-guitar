@@ -14,7 +14,8 @@ import { showNotification } from "./notifications.js";
 import { appendLog } from "./logging.js";
 import { showConfirm } from "./dialogs.js";
 import { ensureLayoutImagesLoaded } from "./layoutImages.js";
-import type { LayoutLibraryEntry, EffectLayout } from "./layoutTypes.js";
+import type { LayoutLibraryEntry } from "./layoutTypes.js";
+import { escapeHtml } from "./utils.js";
 
 // ─────────────────────────────────────────────────────────────
 // DOM References
@@ -107,22 +108,22 @@ export function renderLayoutList(): void {
       const dims = layout.dimensions;
 
       return `
-      <div class="layout-list-item" data-layout-key="${escAttr(key)}" data-layout-id="${escAttr(entry.layoutId)}">
-        ${layout.thumbnailDataUrl ? `<img class="layout-list-thumb" src="${escAttr(layout.thumbnailDataUrl)}" alt="Layout preview" />` : ""}
+      <div class="layout-list-item" data-layout-key="${escapeHtml(key)}" data-layout-id="${escapeHtml(entry.layoutId)}">
+        ${layout.thumbnailDataUrl ? `<img class="layout-list-thumb" src="${escapeHtml(layout.thumbnailDataUrl)}" alt="Layout preview" />` : ""}
         <div class="layout-list-info">
-          <span class="layout-list-name">${escHtml(layoutName)}</span>
+          <span class="layout-list-name">${escapeHtml(layoutName)}</span>
           <span class="layout-list-meta">
-            ${escHtml(effectName)}${escHtml(blendLabel)} · ${controlCount} controls · ${dims.width}×${dims.height}
+            ${escapeHtml(effectName)}${escapeHtml(blendLabel)} · ${controlCount} controls · ${dims.width}×${dims.height}
             ${isDefault ? ' · <strong>Default</strong>' : ""}
             ${isFactory ? ' · <span class="layout-factory-badge">Factory</span>' : ""}
           </span>
-          ${layout.author ? `<span class="layout-list-author">by ${escHtml(layout.author)}</span>` : ""}
+          ${layout.author ? `<span class="layout-list-author">by ${escapeHtml(layout.author)}</span>` : ""}
         </div>
         <div class="layout-list-actions">
-          <button class="layout-edit-btn advanced-action-btn" data-layout-key="${escAttr(key)}" data-layout-id="${escAttr(entry.layoutId)}" data-effect-type="${escAttr(layout.effectType)}" data-blend-id="${escAttr(layout.blendId ?? "")}" title="Edit in designer">Edit</button>
+          <button class="layout-edit-btn advanced-action-btn" data-layout-key="${escapeHtml(key)}" data-layout-id="${escapeHtml(entry.layoutId)}" data-effect-type="${escapeHtml(layout.effectType)}" data-blend-id="${escapeHtml(layout.blendId ?? "")}" title="Edit in designer">Edit</button>
           ${isFactory
             ? ""
-            : `<button class="layout-delete-btn advanced-action-btn danger" data-layout-key="${escAttr(key)}" data-layout-id="${escAttr(entry.layoutId)}" title="Delete layout">Delete</button>`}
+            : `<button class="layout-delete-btn advanced-action-btn danger" data-layout-key="${escapeHtml(key)}" data-layout-id="${escapeHtml(entry.layoutId)}" title="Delete layout">Delete</button>`}
         </div>
       </div>`;
     })
@@ -227,10 +228,4 @@ async function confirmDeleteLayout(key: string, layoutId: string): Promise<void>
 // Helpers
 // ─────────────────────────────────────────────────────────────
 
-function escHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
-function escAttr(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

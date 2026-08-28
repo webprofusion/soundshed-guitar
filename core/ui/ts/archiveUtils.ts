@@ -13,7 +13,7 @@ const resourceRequests = new Map<string, (data?: string) => void>();
 
 export function sanitizeFilename(raw: string, fallback = "file"): string {
   const trimmed = raw.trim() || fallback;
-  return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
+  return trimmed.replace(/[^a-z0-9-_.]+/gi, "-");
 }
 
 function splitFileName(raw: string): { stem: string; ext: string } {

@@ -8,11 +8,11 @@ import {
   initializePresetTagFilterBar,
   handleDroppedPresetPack,
   renderActivePreset,
+  requestSignalPathTest,
 } from "./presets.js";
 import { installFetchLogger, renderLogEntries } from "./logging.js";
 import { scheduleDSPPerformancePlotUpdate } from "./views.js";
 import { handleIncomingMessage } from "./messages.js";
-import { requestSignalPathTest } from "./presets.js";
 import { initializeTuner } from "./tuner.js";
 import { initFxSelector, refreshFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
@@ -193,7 +193,7 @@ async function bootstrap(): Promise<void> {
   try { initSignalPathResize(); } catch {}
 
   // Initialize theme switcher
-  themeSwitcher; // Ensure singleton is created
+  void themeSwitcher; // Ensure the singleton is constructed
   console.log("[JS] Theme switcher initialized:", themeSwitcher.getCurrentTheme());
   initThemeSelect();
   initZoomControls();

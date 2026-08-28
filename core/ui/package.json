@@ -6,8 +6,17 @@
     "build": "tsc -p tsconfig.json && node scripts/assemble-html.js",
     "build:html": "node scripts/assemble-html.js",
     "build:models": "node scripts/generate-amp-models.js",
+    "postbuild": "node scripts/copy-vendor.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "postbuild": "node scripts/copy-vendor.js"
+    "lint": "eslint ts tests",
+    "lint:fix": "eslint ts tests --fix",
+    "format": "prettier --write",
+    "check:cycles": "node scripts/check-cycles.js",
+    "check:sizes": "node scripts/check-file-sizes.js",
+    "check:smoke": "node ../../tools/agent-ui-debug/smoke-test.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run check:cycles && npm run check:sizes && npm run check:stylesheets",
+    "check:stylesheets": "node scripts/check-stylesheets.js"
   },
   "dependencies": {
     "alpinejs": "^3.15.12",
@@ -15,9 +24,13 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/three": "^0.180.0",
+    "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
+    "prettier": "^3.9.6",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^2.1.8"
   }
 }

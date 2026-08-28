@@ -99,7 +99,10 @@ jobs:
               "$ui_dir/package.json" \
               "$ui_dir/package-lock.json" \
               "$ui_dir/tsconfig.json" \
+              "$ui_dir/tsconfig.eslint.json" \
               "$ui_dir/vitest.config.ts" \
+              "$ui_dir/eslint.config.mjs" \
+              "$ui_dir/.prettierrc.json" \
               "$ui_dir/index.template.html"
             removed=$((removed + 1))
             echo "Pruned non-runtime UI files → $ui_dir"

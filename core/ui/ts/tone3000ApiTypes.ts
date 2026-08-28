@@ -66,8 +66,8 @@ export interface Tone3000Tone {
   name?: string;
   slug?: string;
   description?: string | null;
-  gear?: Tone3000Gear | string;
-  platform?: Tone3000Platform | string;
+  gear?: Tone3000Gear | (string & {});
+  platform?: Tone3000Platform | (string & {});
   license?: Tone3000License;
   sizes?: Tone3000Size[];
   makes?: Tone3000Make[];

@@ -542,7 +542,7 @@ export function initializeMetronome(): void {
 
   if (toggleButton) {
     toggleButton.addEventListener("click", () => {
-      const enabled = !Boolean(uiState.metronome?.enabled);
+      const enabled = !uiState.metronome?.enabled;
       updateEnabled(enabled);
     });
   }
@@ -570,7 +570,7 @@ export function initializeMetronome(): void {
   if (footerMetronomeToggleButton) {
     footerMetronomeToggleButton.addEventListener("click", () => {
       if (!isEditable()) return;
-      updateEnabled(!Boolean(uiState.metronome?.enabled));
+      updateEnabled(!uiState.metronome?.enabled);
     });
   }
 

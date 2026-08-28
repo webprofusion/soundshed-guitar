@@ -4,13 +4,13 @@ import { buildToneSharingPresetArchiveBlobs, importPackWithConfirmation, importP
 import { clonePreset, uiState } from "./state.js";
 import type { Preset, PresetFolder } from "./types.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
-import { arrayBufferToBase64, generateResourceId } from "./archiveUtils.js";
 import { switchMainPanel } from "./navigation.js";
 import { activateEquipmentTab, activateLibraryTab } from "./settings.js";
 import { setTone3000Search } from "./tone3000Browser.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { showNotification } from "./notifications.js";
 import { STANDARD_TAGS, renderTagChips } from "./presetTags.js";
+import { API_BASE_URL } from "./apiConfig.js";
 
 type ToneSharingUser = {
   id: string;
@@ -187,7 +187,7 @@ const FEATURED_PRESET_MAX = 10;
 const SHOW_TONE_SHARING_STATS = false;
 
 const state = {
-  apiBase: "https://api-guitar.soundshed.com/v1", //"http://127.0.0.1:8787/v1", 
+  apiBase: API_BASE_URL, //"http://127.0.0.1:8787/v1", 
   sessionId: "",
   user: null as ToneSharingUser | null,
   myItems: [] as ToneSharingItem[],
@@ -233,7 +233,6 @@ function isAiToneSearchEnabled(): boolean {
 
 let editingPackId: string | null = null;
 let previewingItemId: string | null = null;
-let previewingItemTitle = "";
 let previewPriorPresetId: string | null = null;
 
 type ToneSharingShareTarget = {
@@ -843,10 +842,6 @@ function mergeInstalledPackMetadata(entry: InstalledPackMetadata): void {
   persistInstalledPacks();
 }
 
-export function getApiBaseUrl(): string {
-  return state.apiBase;
-}
-
 export function registerInstalledToneSharingPack(entry: InstalledPackMetadata): void {
   mergeInstalledPackMetadata(entry);
   if (browseMode === "installed") {
@@ -1306,11 +1301,6 @@ function resolveCreatorAvatarUrl(item: Record<string, unknown>): string | null {
   }
 
   return null;
-}
-
-function sanitizePublishFileName(raw: string): string {
-  const cleaned = raw.trim().replace(/[^a-z0-9\-_. ]/gi, "").replace(/\s+/g, "-").replace(/\.+$/, "");
-  return cleaned || "preset";
 }
 
 function buildApiUrl(pathOrUrl: string): string {
@@ -2540,7 +2530,7 @@ async function renderPackDetail(details: ToneSharingPackDetails): Promise<void> 
   const presetsEl = element<HTMLElement>("tone-sharing-pack-view-presets");
   if (presetsEl) {
     if (!details.items.length) {
-      presetsEl.innerHTML = `<div class=\"tone-sharing-status\">No presets in this pack.</div>`;
+      presetsEl.innerHTML = `<div class="tone-sharing-status">No presets in this pack.</div>`;
     } else {
       presetsEl.innerHTML = [...details.items]
         .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -2549,14 +2539,14 @@ async function renderPackDetail(details: ToneSharingPackDetails): Promise<void> 
             const isItemInstalled = installedLookup.itemIds.has(item.itemId);
             const displayTags = getToneSharingDisplayTags(item.tags);
             return `
-          <div class=\"tone-sharing-pack-preset-row\" data-item-id=\"${escapeHtml(item.itemId)}\">
-            <div class=\"tone-sharing-pack-preset-info\">
-              <div class=\"tone-sharing-pack-preset-title\">${escapeHtml(item.title)}</div>
-              ${item.type ? `<div class=\"tone-sharing-pack-preset-type\">${escapeHtml(item.type)}</div>` : ""}
-              ${item.description ? `<div class=\"tone-sharing-pack-preset-desc\">${escapeHtml(item.description)}</div>` : ""}
-              ${displayTags.length > 0 ? `<div class=\"tone-sharing-pack-preset-tags\">${displayTags.map((tag) => `<span class=\"tone-sharing-tag-badge\">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+          <div class="tone-sharing-pack-preset-row" data-item-id="${escapeHtml(item.itemId)}">
+            <div class="tone-sharing-pack-preset-info">
+              <div class="tone-sharing-pack-preset-title">${escapeHtml(item.title)}</div>
+              ${item.type ? `<div class="tone-sharing-pack-preset-type">${escapeHtml(item.type)}</div>` : ""}
+              ${item.description ? `<div class="tone-sharing-pack-preset-desc">${escapeHtml(item.description)}</div>` : ""}
+              ${displayTags.length > 0 ? `<div class="tone-sharing-pack-preset-tags">${displayTags.map((tag) => `<span class="tone-sharing-tag-badge">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
             </div>
-            <div class=\"tone-sharing-pack-preset-actions\">
+            <div class="tone-sharing-pack-preset-actions">
               ${renderToneIconButton({
                 kind: "pack-action",
                 value: "preview",
@@ -2863,7 +2853,6 @@ async function clearPreviewPreset(): Promise<void> {
     }
   }
   previewingItemId = null;
-  previewingItemTitle = "";
   hidePreviewIndicator();
   if (previewPriorPresetId) {
     const priorPreset = uiState.presetCache.get(previewPriorPresetId);
@@ -2880,46 +2869,6 @@ async function clearPreviewPreset(): Promise<void> {
  * This is needed so previewed presets resolve to resources imported from
  * the tone-sharing archive.
  */
-function remapPresetResourceIds(preset: Record<string, unknown>, idMap: Map<string, string>): void {
-  const graph = preset.graph as {
-    nodes?: Array<{
-      resources?: Array<{ resourceId?: string; id?: string }>;
-      config?: { blendId?: string };
-    }>;
-  } | undefined;
-
-  if (graph?.nodes) {
-    for (const node of graph.nodes) {
-      if (Array.isArray(node.resources)) {
-        for (const res of node.resources) {
-          const resourceId = res.resourceId ?? res.id;
-          if (resourceId) {
-            const mapped = idMap.get(resourceId);
-            if (mapped) {
-              res.resourceId = mapped;
-              res.id = mapped;
-            }
-          }
-        }
-      }
-      const blendId = node.config?.blendId;
-      if (blendId) {
-        const mappedBlend = idMap.get(blendId);
-        if (mappedBlend && node.config) {
-          node.config.blendId = mappedBlend;
-        }
-      }
-    }
-  }
-
-  if (typeof preset.audioFxModelId === "string" && idMap.has(preset.audioFxModelId)) {
-    preset.audioFxModelId = idMap.get(preset.audioFxModelId);
-  }
-  if (typeof preset.irId === "string" && idMap.has(preset.irId)) {
-    preset.irId = idMap.get(preset.irId);
-  }
-}
-
 /**
  * For a single-item archive buffer from the tone-sharing API, extract any
  * embedded resource files (NAM models, IR WAVs, etc.) and import them into
@@ -2929,91 +2878,6 @@ function remapPresetResourceIds(preset: Record<string, unknown>, idMap: Map<stri
  * Returns a Map<oldId, newId> suitable for remapping the preset JSON before
  * it is loaded or previewed.
  */
-async function importPreviewResources(buffer: ArrayBuffer): Promise<Map<string, string>> {
-  const idMap = new Map<string, string>();
-
-  const bytes = new Uint8Array(buffer);
-  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
-  if (!isZip) {
-    return idMap; // plain-JSON preset – no embedded resources
-  }
-
-  const zipLib = window.JSZip;
-  if (!zipLib) {
-    return idMap;
-  }
-
-  const zip = await zipLib.loadAsync(buffer);
-  const presetEntry = zip.file("preset.json");
-  if (!presetEntry) {
-    return idMap;
-  }
-
-  const archive = JSON.parse(await presetEntry.async("text")) as ItemArchive;
-  const resources = archive.resources ?? [];
-
-  // Build a lookup map from the zip file entries
-  const fileMap = new Map<string, { async(type: "arraybuffer"): Promise<ArrayBuffer> }>();
-  Object.values(zip.files).forEach((entry) => {
-    if (!(entry as { dir?: boolean }).dir) {
-      const stripped = entry.name.replace(/^resources\//, "");
-      const e = entry as { async(type: "arraybuffer"): Promise<ArrayBuffer> };
-      fileMap.set(stripped, e);
-      fileMap.set(entry.name, e);
-    }
-  });
-
-  for (const resource of resources) {
-    const fileName = resource.fileName ?? "";
-
-    // Dedup by content hash
-    if (resource.hash) {
-      const existing = (uiState.resourceLibrary[resource.type] ?? []).find(
-        (r) => r.hash?.toLowerCase() === resource.hash!.toLowerCase()
-      );
-      if (existing) {
-        idMap.set(resource.id, existing.id);
-        continue;
-      }
-    }
-
-    // Dedup by id
-    const existingById = (uiState.resourceLibrary[resource.type] ?? []).find(
-      (r) => r.id === resource.id
-    );
-    if (existingById) {
-      idMap.set(resource.id, resource.id);
-      continue;
-    }
-
-    const entry = fileMap.get(fileName);
-    if (!entry) {
-      continue; // binary not present in archive – skip
-    }
-
-    const dataBuffer = await entry.async("arraybuffer");
-    const data = arrayBufferToBase64(dataBuffer);
-    const newId = generateResourceId(fileName);
-    idMap.set(resource.id, newId);
-
-    postMessage({
-      type: "importRemoteResource",
-      provider: "toneSharing",
-      resourceType: resource.type,
-      resourceId: newId,
-      name: resource.name ?? fileName,
-      description: "",
-      category: resource.category ?? "",
-      subfolder: "tone-sharing",
-      fileName,
-      hash: resource.hash ?? "",
-      data,
-    });
-  }
-
-  return idMap;
-}
-
 async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
   // Save original preset ID so we can restore it later (only on first preview)
   if (!previewingItemId) {
@@ -3029,7 +2893,7 @@ async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
   }
 
   const disposition = response.headers.get("content-disposition") || "";
-  const fileMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
+  const fileMatch = disposition.match(/filename="?([^"]+)"?/i);
   const fileName = fileMatch?.[1] || `item-${itemId}.soundshed.preset`;
   const blob = await response.blob();
 
@@ -3070,7 +2934,6 @@ async function previewPreset(itemId: string, itemTitle: string): Promise<void> {
   }
 
   previewingItemId = itemId;
-  previewingItemTitle = itemTitle;
 
   const newCard = feedEl?.querySelector(`.tone-sharing-card-item[data-id="${CSS.escape(itemId)}"]`) as HTMLElement | null;
   if (newCard) {
@@ -3495,10 +3358,6 @@ async function uploadAndPublishItem(): Promise<void> {
   }
 }
 
-async function createAndPublishPack(): Promise<void> {
-  return savePack(true);
-}
-
 function hasInstallStateChanged(beforeInstalledSnapshot: string, beforePresetCount: number): boolean {
   return beforePresetCount !== uiState.presets.length || beforeInstalledSnapshot !== JSON.stringify(state.installedPacks);
 }
@@ -3539,7 +3398,7 @@ async function downloadAsset(kind: "item" | "pack", id: string): Promise<void> {
   }
 
   const disposition = response.headers.get("content-disposition") || "";
-  const fileMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
+  const fileMatch = disposition.match(/filename="?([^"]+)"?/i);
   const fileName = fileMatch?.[1] || `${kind}-${id}${kind === "pack" ? ".zip" : ""}`;
 
   if (kind === "pack") {
@@ -3645,15 +3504,6 @@ function presetFolderExistsById(folders: PresetFolder[], folderId: string): bool
     }
   }
   return false;
-}
-
-function buildPresetContentSignature(preset: Preset): string {
-  const json = JSON.stringify(preset ?? null);
-  let hash = 5381;
-  for (let i = 0; i < json.length; i += 1) {
-    hash = (((hash << 5) + hash) ^ json.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(16).padStart(8, "0");
 }
 
 function collectPresetResourceKeys(preset: Preset): Set<string> {
@@ -3867,7 +3717,7 @@ function bindBrowseActions(): void {
           + (plan.preservedResourceEntries.length > 0 ? `\nResources kept (used by other presets): ${plan.preservedResourceEntries.length}` : "")
         : "";
       const confirmed = await showConfirm(
-        `Delete installed pack \"${title}\"?\nPresets in pack: ${presetCount}\nResources in pack: ${resourceCount}${summaryLines}${archiveLine}\n\nAll presets from this pack will be removed. Resources still in use by other presets will be kept.`,
+        `Delete installed pack "${title}"?\nPresets in pack: ${presetCount}\nResources in pack: ${resourceCount}${summaryLines}${archiveLine}\n\nAll presets from this pack will be removed. Resources still in use by other presets will be kept.`,
         "Delete Installed Pack",
       );
       if (!confirmed) {
@@ -3950,7 +3800,7 @@ function bindBrowseActions(): void {
 
     if (button.dataset.action === "delete") {
       const title = card.querySelector(".tone-sharing-card-item-title")?.textContent?.trim() || `${kind} ${id}`;
-      const confirmed = await showConfirm(`Delete ${kind} \"${title}\"? This cannot be undone.`);
+      const confirmed = await showConfirm(`Delete ${kind} "${title}"? This cannot be undone.`);
       if (!confirmed) {
         return;
       }

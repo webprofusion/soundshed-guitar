@@ -1,0 +1,220 @@
+/* Custom Layout Container - rendered from layout editor */
+.custom-layout-scale-outer {
+  /* Outer wrapper that captures available width and provides the scale context.
+     JS (applyCustomLayoutScaling) sets height and applies transform to the inner
+     container so the entire layout scales uniformly as a single unit. */
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.custom-layout-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+  isolation: isolate;
+  /* transform-origin: top left is set inline by renderCustomLayout */
+}
+
+/* Sizing rules for controls rendered inside a custom backdrop layout.
+   These apply both at runtime (custom-layout-backdrop wraps controls inside the
+   outer .default-effect-shell) and in the designer preview (wrapper uses this
+   class directly), ensuring identical control spacing in both contexts. */
+.custom-layout-backdrop .params-controls {
+  gap: 18px;
+}
+
+.custom-layout-backdrop .node-param-group-block {
+  min-width: 220px;
+  gap: 14px;
+}
+
+.custom-layout-backdrop .node-param-group-items {
+  gap: 16px;
+}
+
+.custom-layout-backdrop .node-param-group-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(220, 227, 243, 0.68);
+}
+
+.custom-layout-backdrop .node-param-tabs {
+  padding: 0;
+}
+
+.custom-layout-backdrop .node-param-tab {
+  letter-spacing: 0.08em;
+}
+
+.custom-layout-backdrop .node-param-group {
+  gap: 8px;
+  min-width: 86px;
+}
+
+.custom-layout-backdrop .node-param-label {
+  letter-spacing: 0.12em;
+}
+
+.custom-layout-backdrop .node-param-value {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.custom-layout-control {
+  box-sizing: border-box;
+  pointer-events: auto;
+  min-width: 80px;
+}
+
+.custom-layout-control .custom-control-label,
+.custom-layout-control .node-param-value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.custom-layout-control .node-param-value {
+  min-height: 1.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-layout-resource-selector {
+  padding: 0;
+  margin: 0;
+  gap: 4px;
+}
+
+.custom-layout-resource-selector .resource-controls {
+  gap: 6px;
+  width: 100%;
+}
+
+.custom-layout-resource-selector .resource-picker-btn {
+  min-width: 62px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.custom-layout-resource-selector .resource-picker-label {
+  padding: 5px 8px;
+  font-size: 11px;
+  border-color: var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+}
+
+.custom-layout-resource-selector .resource-browse-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-layout-resource-selector .resource-clear-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border-dark-medium);
+  background: var(--bg-dark-tertiary);
+  color: var(--text-dark-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-layout-resource-selector .resource-browse-btn:hover {
+  color: var(--text-dark-primary);
+  border-color: var(--accent-primary);
+}
+
+.custom-layout-resource-selector .resource-clear-btn:hover {
+  color: var(--text-dark-primary);
+  border-color: #be6f66;
+}
+
+.custom-layout-resource-selector .resource-path-info {
+  font-size: 10px;
+  color: var(--text-dark-muted);
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-layout-bg {
+  pointer-events: none;
+}
+
+.custom-control-label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 80px;
+}
+
+.custom-knob-pedal {
+  background: #c8cad2 !important;
+  border-color: #888 !important;
+  box-shadow: none;
+}
+
+.custom-knob-pedal .knob-indicator {
+  background: #333 !important;
+}
+
+.custom-knob-amp {
+  background: #2f3038 !important;
+  border: 1px solid #666 !important;
+  box-shadow: none;
+}
+
+.custom-knob-amp .knob-indicator {
+  background: #f0c040 !important;
+  width: 2px !important;
+  border-radius: 1px !important;
+}
+
+.custom-knob-minimal {
+  background: transparent !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: none;
+}
+
+.custom-knob-minimal .knob-indicator {
+  background: var(--accent-primary) !important;
+  width: 2px !important;
+  height: 14px !important;
+}
+
+/* Slider control type in custom layout */
+.custom-layout-slider {
+  width: 80px;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  margin: 8px 0;
+}
+
+.custom-layout-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}

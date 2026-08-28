@@ -1,10 +1,11 @@
 import { uiState } from "./state.js";
-import { openBlendEditorWithDefinition } from "./signalPath.js";
+import { openBlendEditorWithDefinition } from "./signalPathBlend.js";
 import { postMessage } from "./bridge.js";
 import { showNotification } from "./notifications.js";
 import { showConfirm } from "./dialogs.js";
 import type { BlendDefinition, Preset } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
+import { escapeHtml } from "./utils.js";
 
 const blendList = document.getElementById("blend-list");
 const blendSearchInput = document.getElementById("blend-search-input") as HTMLInputElement | null;
@@ -58,15 +59,15 @@ export function renderBlendList(): void {
       const paramCount = blend.parameters?.length ?? 0;
       const mode = blend.blendMode ?? "interpolate";
       return `
-        <div class="composite-list-item" data-blend-id="${escAttr(blend.id)}">
+        <div class="composite-list-item" data-blend-id="${escapeHtml(blend.id)}">
           <div class="composite-list-info">
-            <span class="composite-list-name">${escHtml(blend.name || blend.id)}</span>
-            <span class="composite-list-meta">${escHtml(blend.category || "amp")} · ${modelCount} models · ${paramCount} params · ${escHtml(mode)}</span>
-            ${blend.toneGroupTitle ? `<span class="composite-list-desc">${escHtml(blend.toneGroupTitle)}</span>` : ""}
+            <span class="composite-list-name">${escapeHtml(blend.name || blend.id)}</span>
+            <span class="composite-list-meta">${escapeHtml(blend.category || "amp")} · ${modelCount} models · ${paramCount} params · ${escapeHtml(mode)}</span>
+            ${blend.toneGroupTitle ? `<span class="composite-list-desc">${escapeHtml(blend.toneGroupTitle)}</span>` : ""}
           </div>
           <div class="composite-list-actions">
-            <button class="blend-edit-btn advanced-action-btn" data-blend-id="${escAttr(blend.id)}" title="Edit">Edit</button>
-            <button class="blend-delete-btn advanced-action-btn danger" data-blend-id="${escAttr(blend.id)}" title="Delete">Delete</button>
+            <button class="blend-edit-btn advanced-action-btn" data-blend-id="${escapeHtml(blend.id)}" title="Edit">Edit</button>
+            <button class="blend-delete-btn advanced-action-btn danger" data-blend-id="${escapeHtml(blend.id)}" title="Delete">Delete</button>
           </div>
         </div>
       `;
@@ -151,10 +152,4 @@ function countBlendUsage(blendId: string): number {
   return count;
 }
 
-function escHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-}
 
-function escAttr(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

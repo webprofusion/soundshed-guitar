@@ -1,0 +1,8 @@
+/* Blend Editor Modal */
+.blend-editor-modal {
+  width: 860px;
+  max-width: 98vw;
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  box-shadow: var(--shadow-xl);
+}

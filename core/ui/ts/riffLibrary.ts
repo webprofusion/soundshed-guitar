@@ -1,4 +1,4 @@
-import { armRiffCapture, deleteRiff, getRiffLibrary, importRiffWav, loadRiffTakeForEdit, markRiffUsed, previewCapturedRiffRange, previewRiffTake, saveRiffTake, setMetronome, setRiffFavorite, setRiffLibraryPath, startRiffCapture, stopPreviewPlayback, stopRiffCapture, trimCapturedRiff } from "./bridge.js";
+import { armRiffCapture, deleteRiff, getRiffLibrary, importRiffWav, loadRiffTakeForEdit, markRiffUsed, previewCapturedRiffRange, previewRiffTake, saveRiffTake, setMetronome, setRiffFavorite, setRiffLibraryPath, stopPreviewPlayback, stopRiffCapture, trimCapturedRiff } from "./bridge.js";
 import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
@@ -797,7 +797,7 @@ function renderRiffCaptureStatus(): void {
   // Toggle recording/armed class on modal content for visual indicator
   const modalContent = document.querySelector<HTMLElement>(".riff-capture-modal-content");
   modalContent?.classList.toggle("recording", Boolean(capture?.active));
-  modalContent?.classList.toggle("armed", isArmed && !Boolean(capture?.active));
+  modalContent?.classList.toggle("armed", isArmed && !capture?.active);
 
   // Show inline save fields when a take has been captured; disable Save Take until then
   const saveSectionEl = document.getElementById("riff-capture-save-section") as HTMLElement | null;

@@ -2,7 +2,6 @@
 
 ## Key Files
 - `core/ui/ts/theme-switcher.ts` — Core theme management logic
-- `core/ui/ts/theme-switcher-ui.ts` — Theme switcher UI component
 - `core/ui/css/variables.css` — Base/default tokens (`:root`) shared by every theme
 - `core/ui/css/themes/light.css` — `.theme-light` token overrides
 - `core/ui/css/themes/dark.css` — `.theme-dark` token overrides (primary theme)
@@ -153,7 +152,7 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
    - add the theme to `ThemeName` and `THEME_LIST`
    - remove/adjust any relevant legacy mapping in `LEGACY_THEME_MAP`
 
-4. Update `theme-switcher-ui.ts` if adding a menu option.
+4. Update `initThemeSelect()` in `settings.ts` if adding a menu option.
 
 > Base/default token values live in `css/variables.css` (`:root`). Theme files
 > also own theme-specific component styling selectors (for example

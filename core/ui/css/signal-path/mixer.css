@@ -1,0 +1,327 @@
+/* ── Mixer preset tab bar ──────────────────────────────────────────── */
+.mixer-preset-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-medium);
+  flex-shrink: 0;
+}
+
+.mixer-preset-tab-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 4px 12px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mixer-preset-tab-row::-webkit-scrollbar { display: none; }
+
+.mixer-preset-tab {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.mixer-preset-tab:hover {
+  color: var(--text-primary);
+  background: var(--overlay-light);
+}
+.mixer-preset-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+.mixer-tab-mix {
+  margin-left: auto;
+  font-style: normal;
+}
+
+.tab-indicator {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.tab-indicator.muted  { background: #c44; color: #fff; }
+.tab-indicator.soloed { background: #c94; color: #fff; }
+
+.mixer-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
+  width: 14px;
+  height: 14px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.1s, color 0.1s;
+}
+.mixer-tab-close:hover {
+  background: rgba(220, 60, 60, 0.25);
+  color: #e05050;
+}
+
+.mixer-preset-scene-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.preset-scene-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+}
+
+.preset-scene-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.preset-scene-tab {
+  border: 1px solid var(--border-medium);
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.preset-scene-tab:hover {
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+}
+
+.preset-scene-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.preset-scene-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  min-width: 220px;
+}
+
+.preset-scene-title-input {
+  min-width: 140px;
+  max-width: 240px;
+  flex: 1;
+  border: 1px solid var(--border-medium);
+  background: var(--overlay-light);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.preset-scene-action {
+  border: 1px solid var(--border-medium);
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preset-scene-action:hover:not(:disabled) {
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+}
+
+.preset-scene-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Inline mixer panel (shown when Mix tab active) ──────────────────
+ * Channel strips reuse the app's normal knob (.knob-control) and toggle
+ * (.toggle-switch) components — see components.css / controls.css — so this
+ * file only adds layout/positioning on top, per the canonical-components
+ * convention. Strips are fixed-width and packed left rather than stretched,
+ * so 1-2 active presets don't balloon into huge slabs of empty card. */
+.inline-mixer-panel {
+  flex: 0 0 auto;
+  height: var(--signal-path-scroll-height, 96px);
+  min-height: 96px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.iml-strips {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.iml-strip {
+  flex: 0 0 auto;
+  width: 172px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 6px 12px;
+  border-right: 1px solid var(--border-medium);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent, #666) 60%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent, #666) 8%, transparent) 0%, transparent 46%),
+    var(--bg-secondary);
+}
+.iml-strip:first-child {
+  border-left: 1px solid var(--border-medium);
+}
+
+.iml-strip-name {
+  flex-shrink: 0;
+  line-height: 1;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.iml-strip-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iml-knobs {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Tighten the knob's label/value line-boxes so a strip's title + knob row
+ * fits the full-size signal-chain height (96px) without either clipping. */
+.iml-knob .knob-label,
+.iml-knob .knob-value {
+  line-height: 1;
+}
+
+.iml-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.iml-toolbar {
+  display: flex;
+  gap: 4px;
+}
+
+.iml-toolbar-btn {
+  padding: 3px 9px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Preserve the mute=red / solo=amber convention from the old buttons on
+ * top of the normal toggle-switch look. */
+.iml-mute-toggle .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.2) 100%), #c0453f;
+  border-color: #c0453f;
+}
+.iml-solo-toggle .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.2) 100%), #c9962f;
+  border-color: #c9962f;
+}
+
+.iml-master {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  /* No extra `gap` here — .iml-strip-name's own margin-bottom already
+   * spaces it from .iml-strip-row, matching .iml-strip. A container gap on
+   * top of that margin was pushing content past the 96px budget and
+   * squashing the "Master" title down to a sliver (flex items with
+   * overflow:hidden get an automatic min-height of 0, so they're what
+   * shrinks first when a flex column runs out of room). */
+  padding: 6px 14px;
+  border-left: 1px solid var(--border-medium);
+  background: var(--bg-secondary);
+}
+
+.iml-master .iml-save-multi-rig-btn {
+  white-space: nowrap;
+}
+
+/* ── end inline mixer ───────────────────────────────────────────────── */
+
+.signal-path-visualizer {
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--signal-path-scroll-height, 96px);
+  min-height: 48px;
+}
+
+/* Hiding .signal-path-scroll (via the `hidden` attribute) only hides the
+ * chain's scroll viewport — its wrapper, .signal-path-visualizer, keeps its
+ * own height regardless, so without this the inline mixer panel renders
+ * *below* an empty, invisible chain-height box instead of replacing it. */
+.signal-path-bar.mix-tab-active .signal-path-visualizer {
+  display: none;
+}
+
+.signal-path-scroll {
+  position: relative;
+  height: 100%;
+  overflow-x: auto;
+  /* The viewport grows to the rendered graph height in either density mode. */
+  overflow-y: hidden;
+  scrollbar-gutter: stable both-edges;
+  /* Reserve the thin horizontal scrollbar's track below the signal nodes. */
+  padding: 8px 12px 16px;
+}
+
+.signal-path-bar.fx-library-collapsed:not(.mix-tab-active) .signal-path-scroll {
+  padding-right: 12px;
+  padding-bottom: 16px;
+}

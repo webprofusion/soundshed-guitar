@@ -320,3 +320,20 @@ export function setPracticeToolLoopRegion(region: { startSec: number; endSec: nu
 export function setPracticeToolLooping(enabled: boolean): void {
   postMessage({ type: "setPracticeToolLooping", enabled });
 }
+
+/**
+ * Sets one parameter on the global (always-on) signal chain — input gain,
+ * gate, EQ, transpose, doubler and output.
+ */
+export function sendGlobalChainParam(paramPath: string, value: number | boolean): void {
+  postMessage({
+    type: "setGlobalChainParam",
+    path: paramPath,
+    value,
+  });
+}
+
+/** Asks the plugin to send back the current global signal chain configuration. */
+export function requestGlobalChainState(): void {
+  postMessage({ type: "getGlobalChain" });
+}

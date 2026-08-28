@@ -306,5 +306,5 @@ function normalizeBlendCategory(category?: string): string {
 
 function sanitizeFilename(raw: string): string {
   const trimmed = raw.trim() || "resource";
-  return trimmed.replace(/[^a-z0-9-_\.]+/gi, "-");
+  return trimmed.replace(/[^a-z0-9-_.]+/gi, "-");
 }

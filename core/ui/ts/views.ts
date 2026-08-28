@@ -7,7 +7,7 @@ import { renderIcon, getCheckmarkSvg, getXMarkSvg, getPlaySvg } from "./iconAsse
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput } from "./controls.js";
-import type { GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelNodeMetrics } from "./types.js";
+import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 
 const presetListElement = document.getElementById("preset-list");
@@ -25,14 +25,16 @@ interface RenderHooks {
   onBindLoadButtons: () => void;
 }
 
+/** Renders a parameter value for display. The value is whatever the backend sent. */
 function formatParameterValue(parameter: { value: unknown }): string {
-  if (typeof parameter.value === "number") {
-    return parameter.value.toFixed(2);
-  }
-  if (typeof parameter.value === "boolean") {
-    return parameter.value ? "On" : "Off";
-  }
-  return `${parameter.value ?? ""}`;
+  const { value } = parameter;
+  if (typeof value === "number") return value.toFixed(2);
+  if (typeof value === "boolean") return value ? "On" : "Off";
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  // Values arrive as parsed JSON, so anything left is an object or an array.
+  // Show its shape rather than the useless "[object Object]".
+  return JSON.stringify(value) ?? "";
 }
 
 function renderParameterSection(): string {
@@ -655,58 +657,6 @@ export function renderPresetDetails(
 
   const fxChainContent = fxChainNodes || '<span class="fx-empty">No effects in chain</span>';
 
-  function renderMixerSection(): string {
-    const mixer = uiState.mixer;
-    if (!mixer || !mixer.activePresetIds.length) {
-      return "";
-    }
-
-    const rows = mixer.activePresetIds.map((id) => {
-      const presetName = uiState.presetCache.get(id)?.name ?? id;
-      const ps = mixer.presets[id] ?? { id, mix: 1.0, pan: 0.0, mute: false, solo: false };
-      return `
-        <div class="mixer-row" data-preset-id="${escapeHtml(id)}">
-          <div class="mixer-row-header">
-            <span class="mixer-row-name">${escapeHtml(presetName)}</span>
-            <label class="toggle"><input type="checkbox" class="mixer-solo" ${ps.solo ? "checked" : ""}/> Solo</label>
-            <label class="toggle"><input type="checkbox" class="mixer-mute" ${ps.mute ? "checked" : ""}/> Mute</label>
-          </div>
-          <div class="mixer-controls">
-            <label class="mixer-control">
-              <span>Mix</span>
-              <input type="range" class="mixer-mix" min="0" max="1" step="0.01" value="${ps.mix}"/>
-            </label>
-            <label class="mixer-control">
-              <span>Pan</span>
-              <input type="range" class="mixer-pan" min="-1" max="1" step="0.01" value="${ps.pan}"/>
-            </label>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    return `
-      <div class="signal-chain-section">
-        <h3 class="section-title">
-          <span class="section-icon">${renderIcon("mixer", "section-icon-img")}</span>
-          Mixer
-        </h3>
-        <div class="mixer-master">
-          <label class="mixer-control">
-            <span>Master Gain</span>
-            <input type="range" id="mixer-master-gain" min="0" max="2" step="0.01" value="${mixer.masterGain}"/>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" id="mixer-limiter" ${mixer.limiterEnabled ? "checked" : ""}/> Limiter
-          </label>
-        </div>
-        <div class="mixer-rows">
-          ${rows}
-        </div>
-      </div>
-    `;
-  }
-
   const isPresetLoading = Boolean(uiState.presetLoadingId && preset.id === uiState.presetLoadingId);
 
   presetDetailsElement.innerHTML = `
@@ -935,12 +885,12 @@ function formatDb(value: number): string {
 
 const PEAK_HOLD_WINDOW_MS = 10_000;
 
-function updateSignalPeakHold(diagnostics: import("./types.js").SignalLevelDiagnostics): void {
+function updateSignalPeakHold(diagnostics: SignalLevelDiagnostics): void {
   const now = Date.now();
   const currentPresetId = uiState.activePresetId ?? null;
   const hold = uiState.signalPeakHold;
 
-  const makeEntry = (peakDbfs: number): import("./types.js").SignalPeakHoldEntry => ({
+  const makeEntry = (peakDbfs: number): SignalPeakHoldEntry => ({
     peakDbfs,
     windowStartedAt: now,
   });
@@ -1198,7 +1148,7 @@ function formatNodeLatencySamples(value: number | null | undefined, sampleRate?:
   return `${value} smp`;
 }
 
-function formatLatencyValue(stats: import("./types.js").DSPPerformanceStats | null | undefined): string {
+function formatLatencyValue(stats: DSPPerformanceStats | null | undefined): string {
   if (!stats) {
     return "—";
   }
@@ -1344,7 +1294,7 @@ function computeGraphCriticalPathNodeIds(graph: SignalGraph | undefined, scopedP
   return path;
 }
 
-function getOverallCriticalPathMembership(diagnostics: import("./types.js").SignalLevelDiagnostics | null | undefined): Set<string> {
+function getOverallCriticalPathMembership(diagnostics: SignalLevelDiagnostics | null | undefined): Set<string> {
   const membership = new Set<string>();
   if (!diagnostics?.nodes?.length) {
     return membership;
@@ -1403,7 +1353,6 @@ const VU_SEGMENT_THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48] as const;
 // Cached DOM references for the VU meter (populated on first call).
 let vuSegments: HTMLElement[] | null = null;
 let vuPeakHold: HTMLElement | null = null;
-let vuDbValue: HTMLElement | null = null;
 let vuPeakHoldDbfs = -Infinity;
 let vuPeakHoldTimer: ReturnType<typeof setTimeout> | null = null;
 let vuLastPeakDbfs: number | null = null;
@@ -1411,14 +1360,13 @@ let vuLastActiveStates: boolean[] | null = null;
 let vuLastPeakHoldVisible = false;
 let vuLastPeakHoldTop: string | null = null;
 
-function updateInputVuMeter(levels: import("./types.js").SignalLevelMetrics | null): void {
+function updateInputVuMeter(levels: SignalLevelMetrics | null): void {
   if (!vuSegments) {
     const container = document.getElementById("vu-segments");
     vuSegments = container
       ? Array.from(container.querySelectorAll<HTMLElement>(".vu-seg"))
       : [];
     vuPeakHold = document.getElementById("vu-peak-hold");
-    vuDbValue = document.getElementById("vu-db-value");
     vuLastActiveStates = new Array(vuSegments.length).fill(false);
   }
 
@@ -1762,17 +1710,17 @@ export function updateSignalDiagnosticsView(): void {
 
     // Only update list HTML if it has changed
     const newListHtml = `
-      <div class=\"signal-diagnostics-header\">
-        <span class=\"signal-diagnostics-cell scope\">Scope</span>
-        <span class=\"signal-diagnostics-cell node\">Node</span>
+      <div class="signal-diagnostics-header">
+        <span class="signal-diagnostics-cell scope">Scope</span>
+        <span class="signal-diagnostics-cell node">Node</span>
         <span class="signal-diagnostics-cell">Ch</span>
         <span class="signal-diagnostics-cell">CPU</span>
         <span class="signal-diagnostics-cell">Latency</span>
-        <span class=\"signal-diagnostics-cell\">Peak</span>
-        <span class=\"signal-diagnostics-cell\">Headroom</span>
-        <span class=\"signal-diagnostics-cell\">Clip</span>
+        <span class="signal-diagnostics-cell">Peak</span>
+        <span class="signal-diagnostics-cell">Headroom</span>
+        <span class="signal-diagnostics-cell">Clip</span>
       </div>
-      <div class=\"signal-diagnostics-columns\">
+      <div class="signal-diagnostics-columns">
         ${rows}
       </div>
     `;

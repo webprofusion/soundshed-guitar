@@ -1,0 +1,213 @@
+/* ===== Plugin Host Resource List ===== */
+
+.plugin-host-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+  background: rgba(20, 20, 28, 0.55);
+  padding: 4px;
+}
+
+.plugin-host-list:focus-visible {
+  outline: 2px solid rgba(90, 138, 219, 0.7);
+  outline-offset: 1px;
+}
+
+.plugin-host-list.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.plugin-host-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.plugin-host-item:hover {
+  background: rgba(74, 74, 90, 0.45);
+}
+
+.plugin-host-item.is-selected {
+  background: rgba(74, 90, 122, 0.4);
+  border-color: var(--color-primary, #5a8adb);
+}
+
+.plugin-host-item:focus-visible {
+  outline: none;
+  border-color: rgba(90, 138, 219, 0.8);
+  background: rgba(90, 138, 219, 0.18);
+}
+
+.plugin-host-item.is-custom {
+  cursor: default;
+}
+
+.plugin-host-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.plugin-host-item-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.plugin-host-item-title {
+  font-size: 12px;
+  color: #e0e0f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-host-item-format {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #a8b4d0;
+  background: rgba(90, 106, 138, 0.32);
+  border: 1px solid rgba(120, 138, 172, 0.35);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.plugin-host-item-path {
+  font-size: 9px;
+  color: var(--text-dark-dimmed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-host-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.plugin-host-favorite-btn {
+  flex-shrink: 0;
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #8f93a8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: all 0.2s;
+}
+
+.plugin-host-item:hover .plugin-host-favorite-btn,
+.plugin-host-favorite-btn.is-favorite {
+  opacity: 1;
+}
+
+.plugin-host-favorite-btn.is-favorite {
+  color: #f3c767;
+}
+
+.plugin-host-favorite-btn:hover {
+  background: #4a4a5a;
+  border-color: #c89b45;
+}
+
+.plugin-host-favorite-btn:focus-visible,
+.plugin-host-remove-btn:focus-visible {
+  outline: 2px solid rgba(90, 138, 219, 0.8);
+  outline-offset: 1px;
+}
+
+.plugin-host-favorite-btn .plugin-host-favorite-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.plugin-host-remove-btn {
+  flex-shrink: 0;
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e0e0f0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
+  transition: all 0.2s;
+}
+
+.plugin-host-item:hover .plugin-host-remove-btn {
+  opacity: 1;
+}
+
+.plugin-host-remove-btn:hover {
+  background: #4a4a5a;
+  border-color: #be6f66;
+}
+
+.plugin-host-remove-btn .plugin-host-remove-icon {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.plugin-host-list-empty {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dark-dimmed);
+  padding: 8px;
+}
+
+.plugin-host-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #a8b4d0;
+}
+
+.plugin-host-loading[hidden] {
+  display: none;
+}
+
+.plugin-host-loading-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(120, 138, 172, 0.35);
+  border-top-color: var(--color-primary, #5a8adb);
+  border-radius: 50%;
+  animation: plugin-host-loading-spin 0.8s linear infinite;
+}
+
+@keyframes plugin-host-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

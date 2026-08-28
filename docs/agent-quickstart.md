@@ -58,6 +58,14 @@ If you only load a few files, use these:
 - Configure core: cmake -G "Visual Studio 18 2026" -A x64 -S core -B core/build
 - Build JUCE standalone debug: cmake --build juce/builds --config Debug --target SoundshedGuitar_Standalone
 - UI build: cd core/ui && npm run build
+- **UI checks (run this before any UI change is done): cd core/ui && npm run verify**
+  Runs typecheck, eslint, vitest, the import-cycle gate, the file-size budget and
+  the stylesheet-reachability check. The same set runs in CI
+  (`.github/workflows/ui-checks.yml`).
+- UI boot check: `node tools/agent-ui-debug/smoke-test.mjs` — builds the UI, syncs
+  it into the Standalone artefact, launches the app and asserts it booted clean.
+  This is the only check that catches an import-cycle TDZ crash; `tsc` cannot see
+  those. Run it for anything that moves code between modules.
 - Tests (Debug): cd core/build && ctest -C Debug --output-on-failure
 - Skip the slow benchmarks: add `-LE benchmark`
 - The signal-chain mutation stress test (~15 min concurrency fuzzer, random seed) is not
@@ -71,7 +79,7 @@ If you only load a few files, use these:
 Static code review misses regressions that only show up at runtime — e.g. a DOM
 `insertBefore()` against a node that moved to a different parent during a layout
 rework, which throws and silently kills the rest of that render pass with no
-compile error. Before declaring a UI-facing fix (especially in `core/ui/ts/signalPath.ts`,
+compile error. Before declaring a UI-facing fix (especially in `core/ui/ts/signalPath/`,
 mixer/tab rendering, or anything touching layout structure) actually done, run it.
 
 The app's UI is WebView2 (Chromium) — a **different surface** from a normal browser
@@ -91,3 +99,41 @@ Full workflow, gotchas, and how to verify backend-truth (not just optimistic
 client UI state) via the in-app debug-state snapshot: `tools/agent-ui-debug/README.md`.
 Always `taskkill //F //IM "Soundshed Guitar.exe"` and remove any test presets
 from `%APPDATA%\Soundshed Guitar\` when done — it's the real user profile.
+
+## UI Module Conventions
+
+`core/ui/ts` is plain ES modules compiled by `tsc` with no bundler, so one source
+file is one runtime module fetched through JUCE's resource provider. A few rules
+keep that tractable:
+
+- **A feature directory, behind the original module path.** A large feature lives
+  in `ts/<feature>/`, and `ts/<feature>.ts` stays as the public facade that
+  re-exports it. Importers keep using `./<feature>.js` and never learn about the
+  split. `ts/signalPath/`, `ts/presets/` and `ts/amp3d/` all follow this.
+- **No top-level DOM access in a feature module.** DOM roots shared across a
+  feature go in one `state.ts` (see `ts/signalPath/state.ts`), which also owns any
+  mutable state, exposed through accessors. `export let` cannot be assigned by an
+  importing module, so a bare `export let` compiles and then fails at runtime.
+- **Senders are not receivers.** Outbound `postMessage` wrappers belong in
+  `bridge.ts`, not alongside the inbound handlers. Two of them sitting in
+  `messages.ts` were single-handedly responsible for a 20-module import cycle.
+- **Ask for a re-render, do not reach for the renderer.** A submodule that needs
+  the feature redrawn calls `requestSignalPathRender()` / `requestNodeParamsRefresh()`
+  / `requestPresetLibraryRefresh()`; the owning module registers the real
+  implementation once at load. This is what stops a leaf module importing the
+  1,800-line facade and forming a cycle.
+- **Mark type-only imports as `import type`.** `verbatimModuleSyntax` is on, so
+  those are erased and cannot create a runtime cycle — which is why the cycle
+  checker ignores them.
+
+`npm run check:cycles -- --list` prints the current tangles. The baseline in
+`scripts/cycles-baseline.json` is compared at feature level, so splitting a file
+into a directory does not trip it, but entangling two features does.
+
+### Stylesheets
+
+`css/signal-path/` and `css/modals/` are ordered parts of what used to be one
+file each. **The `<link>` order in `index.template.html` is the cascade** — the
+parts must stay in the order listed there. `npm run check:stylesheets` fails if a
+stylesheet is not reachable from the template, which otherwise shows up as one
+silently unstyled panel.

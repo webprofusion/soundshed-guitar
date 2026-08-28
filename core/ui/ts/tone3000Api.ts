@@ -1,5 +1,4 @@
-import type { Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
-import type { Tone3000Architecture } from "./tone3000ApiTypes.js";
+import type { Tone3000Architecture, Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
 import { uiState } from "./state.js";
 
 export const TONE3000_OFFICIAL_API_BASE = "https://www.tone3000.com/api/v1";

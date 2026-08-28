@@ -4,7 +4,7 @@ import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
 import type { AppSettingValue, JamPlayerState, JamState, JamVideoSummary } from "./types.js";
 import { escapeHtml } from "./utils.js";
-import { getApiBaseUrl } from "./toneSharingPanel.js";
+import { getApiBaseUrl } from "./apiConfig.js";
 import { isJamEnabled } from "./buildFlags.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
 import { renderRiffLibraryPanel } from "./riffLibrary.js";

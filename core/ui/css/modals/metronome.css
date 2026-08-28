@@ -1,0 +1,35 @@
+/* Metronome Modal */
+.metronome-modal {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.metronome-modal .metronome-content {
+  width: 760px;
+  max-width: 95vw;
+  padding: 0;
+}
+
+.metronome-modal .metronome-card {
+  margin: 0;
+}
+
+.metronome-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metronome-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dark-muted);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.metronome-close-btn:hover {
+  color: var(--text-dark-primary);
+}

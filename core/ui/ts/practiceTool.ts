@@ -16,7 +16,7 @@ import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
-import type { PracticeToolLoopRegion, PracticeToolState } from "./types.js";
+import type { AppSettingValue, PracticeToolLoopRegion, PracticeToolState } from "./types.js";
 import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 
 /** Small, static, non-user-editable set of common song-section names, offered as
@@ -207,7 +207,7 @@ function persistLoopsForCurrentFile(): void {
   } else {
     delete map[fingerprint];
   }
-  uiState.appSettings[LOOPS_SETTING_KEY] = map as unknown as import("./types.js").AppSettingValue;
+  uiState.appSettings[LOOPS_SETTING_KEY] = map as unknown as AppSettingValue;
   setAppSetting(LOOPS_SETTING_KEY, map);
 }
 

@@ -2,7 +2,7 @@ import { uiState } from "./state.js";
 import { setAppSetting, requestAppInfo } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
-import { getApiBaseUrl } from "./toneSharingPanel.js";
+import { getApiBaseUrl } from "./apiConfig.js";
 import { refreshSettingsUpdateBanner } from "./settings.js";
 
 const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
@@ -215,7 +215,7 @@ function renderMarkdown(text: string): string {
     .replace(/^### (.*$)/gim, '<h3>$1</h3>')
     .replace(/^## (.*$)/gim, '<h2>$1</h2>')
     .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
+    .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
     .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
     .replace(/\*(.*)\*/gim, '<em>$1</em>')
     .replace(/!\[(.*?)\]\((.*?)\)/gim, "<img alt='$1' src='$2' />")

@@ -1,0 +1,100 @@
+/* EQ Modal */
+.eq-modal {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.eq-modal-content {
+  background: var(--modal-bg);
+  border-radius: 16px;
+  width: 900px;
+  max-width: 95vw;
+  border: 1px solid var(--modal-border);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.eq-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--modal-bg-raised);
+  border-bottom: 1px solid var(--modal-border-medium);
+}
+
+.eq-modal-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eq-modal-toggle {
+  margin-right: 2px;
+}
+
+.eq-modal-toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--modal-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.eq-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--modal-text);
+}
+
+.eq-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--modal-text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.eq-modal-close:hover {
+  background: var(--modal-close-hover);
+  color: var(--modal-text);
+}
+
+.eq-modal-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--modal-bg);
+}
+
+.eq-modal .eq-section {
+  background: var(--modal-bg-raised);
+  border: 1px solid var(--modal-border-medium);
+}
+
+.eq-modal .eq-label {
+  color: var(--modal-text);
+}
+
+.eq-modal .eq-band {
+  background: var(--modal-input-bg);
+  border: 1px solid var(--modal-border-medium);
+}
+
+.eq-modal .eq-band-title {
+  color: var(--modal-text);
+  border-bottom: 1px solid var(--modal-border-medium);
+}
+
+.eq-modal .eq-knob-label,
+.eq-modal .eq-knob-control .knob-value {
+  color: var(--modal-text-muted);
+}
+
+.eq-modal .eq-curve-canvas {
+  height: 160px;
+}
