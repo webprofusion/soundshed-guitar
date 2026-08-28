@@ -1,0 +1,55 @@
+name: C++ structure
+
+# Structural gate for the C++ tree. This is the counterpart of ui-checks.yml:
+# it needs no C++ toolchain, so it runs in seconds and can gate every push
+# rather than waiting on a platform build.
+#
+# It checks one thing: no source file grows past the size budget, and no file
+# already over it gets bigger. The controller was a single 15k-line translation
+# unit before it was split into core/src/controller/; this is what stops it
+# growing back.
+#
+# Not covered here: compiling. The platform build workflows do that.
+
+on:
+  push:
+    paths:
+      - "core/src/**"
+      - "core/config/**"
+      - "core/tests/**"
+      - "juce/source/**"
+      - "juce/tests/**"
+      - "tools/check-cpp-file-sizes.js"
+      - "tools/cpp-file-size-allowlist.json"
+      - ".github/workflows/cpp-structure.yml"
+  pull_request:
+    paths:
+      - "core/src/**"
+      - "core/config/**"
+      - "core/tests/**"
+      - "juce/source/**"
+      - "juce/tests/**"
+      - "tools/check-cpp-file-sizes.js"
+      - "tools/cpp-file-size-allowlist.json"
+      - ".github/workflows/cpp-structure.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cpp-structure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  file-sizes:
+    name: file size budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: File size budget
+        run: node tools/check-cpp-file-sizes.js

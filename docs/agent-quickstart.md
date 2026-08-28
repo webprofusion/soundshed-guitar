@@ -16,10 +16,51 @@ If you only load a few files, use these:
 ## Core Entry Points
 
 - Application controller and UI bridge: core/src/PluginController.cpp, core/src/UiBridge.cpp
+  (the controller is split across core/src/controller/ — see "Where controller code lives" below)
 - DSP graph executor: core/src/dsp/SignalGraphExecutor.h
 - Effect base and registry: core/src/dsp/EffectProcessor.h, core/src/dsp/EffectRegistry.h
 - Preset schema and storage: core/src/presets/PresetTypes.h
 - UI messages and state: core/ui/ts/messages.ts, core/ui/ts/state.ts
+
+## Where Controller Code Lives
+
+`PluginController` is one class spread over several translation units. The
+header `core/src/PluginController.h` declares all of it; the definitions are
+grouped by feature so you can open the file for the thing you are changing
+instead of scrolling one enormous one:
+
+| File (`core/src/`)                              | Owns                                                 |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `PluginController.cpp`                          | Lifecycle, audio callback, state (de)serialisation, idle loop, tuner |
+| `controller/PluginControllerPresets.cpp`        | Preset load/save/apply, folders, favourites, setlists |
+| `controller/PluginControllerSignalPath.cpp`     | Node graph edits, composite edit target               |
+| `controller/PluginControllerResources.cpp`      | Resource library: import, edit, delete, usage index   |
+| `controller/PluginControllerCustomEffects.cpp`  | Blends, custom effects, composites                    |
+| `controller/PluginControllerRiffs.cpp`          | Riff capture, editing, playback, library index        |
+| `controller/PluginControllerBroadcast.cpp`      | `BroadcastState` and the `Send*ToUI` pushes           |
+| `controller/PluginControllerSettings.cpp`       | App settings load/apply/persist                       |
+| `controller/PluginControllerHostedPlugins.cpp`  | Third-party plugin state capture and restore          |
+| `controller/PluginControllerPresetArchive.cpp`  | Factory archives and archive sessions                 |
+| `controller/PluginControllerLayouts.cpp`        | Custom effect layouts and their images                |
+| `controller/PluginControllerAutomation.cpp`     | Automation slots, MIDI learn, setlist/scene switching |
+| `controller/PluginControllerMixer.cpp`          | Mixer slots and levels                                |
+| `controller/PluginControllerMetronome.cpp`      | Click track                                           |
+| `controller/PluginControllerDemo.cpp`           | Demo render and practice-tool transport               |
+| `controller/PluginControllerEffectPresets.cpp`  | Per-effect user parameter presets                     |
+
+Free functions shared between those files live in `core/src/controller/internal/`
+in namespace `guitarfx::controller_detail` — settings keys, NAM metadata
+parsing, archive scoping, offline render, hosted-plugin identity. Each
+controller TU opens with `using namespace guitarfx::controller_detail;`, so
+call sites read unqualified.
+
+**Adding a controller method:** declare it in `PluginController.h`, define it in
+whichever file above owns that feature. A new file needs registering in
+`core/CMakeLists.txt` (`GUITARFX_CORE_SOURCES`).
+
+**Size budget:** `node tools/check-cpp-file-sizes.js` fails if a source file
+grows past 800 lines, or if a file already over it gets bigger. CI runs this
+(`.github/workflows/cpp-structure.yml`). Re-pin deliberately with `--update`.
 
 ## Common Agent Tasks
 
@@ -33,7 +74,9 @@ If you only load a few files, use these:
 ### Add or Change a UI Message
 
 1. Update types and handler in core/ui/ts/messages.ts.
-2. Update the relevant dispatcher/controller path in core/src/MessageDispatcher.cpp and core/src/PluginController.cpp.
+2. Route it in core/src/dispatcher/MessageDispatch*.cpp, then implement the
+   handler in the matching core/src/controller/PluginController*.cpp (declare it
+   in core/src/PluginController.h).
 3. Keep messages backward compatible and validate payloads.
 4. Update docs/user-interface.md for the protocol contract.
 
@@ -67,6 +110,7 @@ If you only load a few files, use these:
   This is the only check that catches an import-cycle TDZ crash; `tsc` cannot see
   those. Run it for anything that moves code between modules.
 - Tests (Debug): cd core/build && ctest -C Debug --output-on-failure
+- C++ structure check: `node tools/check-cpp-file-sizes.js`
 - Skip the slow benchmarks: add `-LE benchmark`
 - The signal-chain mutation stress test (~15 min concurrency fuzzer, random seed) is not
   registered with ctest by default. Run its executable directly, or reconfigure with

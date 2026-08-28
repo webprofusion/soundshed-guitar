@@ -22,6 +22,8 @@
 
 ## UI ↔ Plugin Messaging
 - Messaging flows through core/src/MessageDispatcher.cpp and PluginController::HandleUIMessage().
+  Handler definitions are grouped by feature across core/src/controller/ — see
+  docs/agent-quickstart.md for the map.
 - Common payloads: state, presetLoaded, loadPreset, setParameter, browseModel, addSignalPathNode, removeSignalPathNode.
 - UI bridge lives in core/ui/ts/bridge.ts and core/ui/ts/messages.ts; native host glue is in juce/source/PluginProcessorAdapter.cpp and juce/source/PluginEditor.cpp.
 - Keep messages backward compatible; guard against missing fields and unknown message types.
@@ -59,7 +61,10 @@
 - In-app dragging is pointer-driven via core/ui/ts/pointerDrag.ts — do not add `draggable="true"` for it. WebKitGTK (the Linux WebView) never delivers the HTML5 `drop` event to our targets. Native drag-and-drop is only for drags that start outside the WebView, i.e. files from the OS.
 
 ## Key Files
-- Controller + message routing: core/src/PluginController.cpp, core/src/MessageDispatcher.cpp
+- Controller + message routing: core/src/PluginController.cpp (feature groups in
+  core/src/controller/PluginController*.cpp; shared helpers in
+  core/src/controller/internal/), core/src/MessageDispatcher.cpp
+  (routing tables in core/src/dispatcher/)
 - Effect base + registry: core/src/dsp/EffectProcessor.h, core/src/dsp/EffectRegistry.h
 - Preset types: core/src/presets/PresetTypes.h
 - Graph executor: core/src/dsp/SignalGraphExecutor.h

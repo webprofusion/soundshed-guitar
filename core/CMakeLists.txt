@@ -524,6 +524,37 @@ set(GUITARFX_CORE_SOURCES
     src/controller/DemoPreviewService.cpp
     src/controller/PracticeToolService.h
     src/controller/PracticeToolService.cpp
+    src/controller/PluginControllerMetronome.cpp
+    src/controller/PluginControllerSettings.cpp
+    src/controller/PluginControllerPresetArchive.cpp
+    src/controller/PluginControllerRiffs.cpp
+    src/controller/PluginControllerLayouts.cpp
+    src/controller/PluginControllerAutomation.cpp
+    src/controller/PluginControllerHostedPlugins.cpp
+    src/controller/PluginControllerBroadcast.cpp
+    src/controller/PluginControllerEffectPresets.cpp
+    src/controller/PluginControllerSignalPath.cpp
+    src/controller/PluginControllerResources.cpp
+    src/controller/PluginControllerCustomEffects.cpp
+    src/controller/PluginControllerPresets.cpp
+    src/controller/PluginControllerMixer.cpp
+    src/controller/PluginControllerDemo.cpp
+    src/controller/internal/ControllerUtils.h
+    src/controller/internal/ControllerUtils.cpp
+    src/controller/internal/HostedPluginSupport.h
+    src/controller/internal/HostedPluginSupport.cpp
+    src/controller/internal/LayoutSupport.h
+    src/controller/internal/LayoutSupport.cpp
+    src/controller/internal/MetronomeSupport.h
+    src/controller/internal/NamResourceMetadata.h
+    src/controller/internal/NamResourceMetadata.cpp
+    src/controller/internal/OfflineRenderSupport.h
+    src/controller/internal/OfflineRenderSupport.cpp
+    src/controller/internal/PresetArchiveSupport.h
+    src/controller/internal/PresetArchiveSupport.cpp
+    src/controller/internal/RiffSupport.h
+    src/controller/internal/RiffSupport.cpp
+    src/controller/internal/SettingsKeys.h
 
     # DSP core
     src/dsp/EffectProcessor.h

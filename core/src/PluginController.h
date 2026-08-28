@@ -501,7 +501,6 @@ private:
     /// takes this narrow path instead of the full DeserializeState restore.
     void RestoreStandaloneHostedPluginState(const std::string& json);
     std::optional<Preset> TryLoadStoredPresetById(const std::string& presetId);
-    bool ApplyNodeParameter(const GraphNode& node, const std::string& paramKey, double value);
     /**
      * Push mAppSettings into the running DSP and UI state.
      *
@@ -553,7 +552,6 @@ private:
     void TrySendPendingPerformanceStatsToUI();
     void SendPerformanceStatsToUI();
     void SendSpatialPositionsToUI();
-    void SendMetronomeStateToUI();
     void SendRiffLibraryStateToUI();
 
     // Composite edit helpers

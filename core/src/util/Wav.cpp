@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 
@@ -225,6 +227,184 @@ std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav,
         }
     }
     return output;
+}
+
+std::vector<std::uint8_t> EncodeStereo16BitWav(const std::vector<float>& left,
+                                               const std::vector<float>& right,
+                                               int sampleRate)
+{
+    if (left.empty() || right.empty() || left.size() != right.size() || sampleRate <= 0)
+        return {};
+
+    constexpr std::uint16_t kChannels = 2;
+    constexpr std::uint16_t kBitsPerSample = 16;
+    constexpr std::uint16_t kBlockAlign = kChannels * (kBitsPerSample / 8);
+    constexpr std::uint32_t kHeaderSize = 44u;
+
+    const auto frameCount = static_cast<std::uint32_t>(left.size());
+    const std::uint32_t dataSize = frameCount * kBlockAlign;
+
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(static_cast<std::size_t>(kHeaderSize + dataSize));
+
+    const auto pushChars = [&bytes](const char* data, std::size_t count) {
+        bytes.insert(bytes.end(), data, data + count);
+    };
+    const auto pushU16 = [&bytes](std::uint16_t value) {
+        bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+        bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+    };
+    const auto pushU32 = [&bytes](std::uint32_t value) {
+        bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+        bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+        bytes.push_back(static_cast<std::uint8_t>((value >> 16u) & 0xFFu));
+        bytes.push_back(static_cast<std::uint8_t>((value >> 24u) & 0xFFu));
+    };
+
+    pushChars("RIFF", 4);
+    pushU32(kHeaderSize - 8u + dataSize);
+    pushChars("WAVE", 4);
+    pushChars("fmt ", 4);
+    pushU32(16u);
+    pushU16(kWavFormatPcm);
+    pushU16(kChannels);
+    pushU32(static_cast<std::uint32_t>(sampleRate));
+    pushU32(static_cast<std::uint32_t>(sampleRate) * kBlockAlign);
+    pushU16(kBlockAlign);
+    pushU16(kBitsPerSample);
+    pushChars("data", 4);
+    pushU32(dataSize);
+
+    const auto pushSample = [&pushU16](float sample) {
+        const float clamped = std::clamp(sample, -1.0f, 1.0f);
+        pushU16(static_cast<std::uint16_t>(static_cast<std::int16_t>(std::lround(clamped * 32767.0f))));
+    };
+
+    for (std::size_t i = 0; i < left.size(); ++i)
+    {
+        pushSample(left[i]);
+        pushSample(right[i]);
+    }
+
+    return bytes;
+}
+
+bool WriteStereo16BitWav(const std::filesystem::path& path,
+                         const std::vector<float>& left,
+                         const std::vector<float>& right,
+                         int sampleRate)
+{
+    const auto bytes = EncodeStereo16BitWav(left, right, sampleRate);
+    if (bytes.empty())
+        return false;
+
+    try
+    {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream output(path, std::ios::binary);
+        if (!output)
+            return false;
+
+        output.write(reinterpret_cast<const char*>(bytes.data()),
+                     static_cast<std::streamsize>(bytes.size()));
+        return static_cast<bool>(output);
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
+{
+    WavHeaderInfo info;
+    std::error_code ec;
+    if (!std::filesystem::exists(wavFilePath, ec) || ec)
+        return info;
+
+    try
+    {
+        std::ifstream file(wavFilePath, std::ios::binary);
+        if (!file)
+            return info;
+
+        const auto readU32 = [&file]() -> std::uint32_t {
+            unsigned char b[4]{};
+            file.read(reinterpret_cast<char*>(b), 4);
+            if (file.gcount() != 4) return 0u;
+            return static_cast<std::uint32_t>(b[0]) | (static_cast<std::uint32_t>(b[1]) << 8)
+                 | (static_cast<std::uint32_t>(b[2]) << 16) | (static_cast<std::uint32_t>(b[3]) << 24);
+        };
+        const auto readU16 = [&file]() -> std::uint16_t {
+            unsigned char b[2]{};
+            file.read(reinterpret_cast<char*>(b), 2);
+            if (file.gcount() != 2) return 0u;
+            return static_cast<std::uint16_t>(static_cast<std::uint16_t>(b[0]) | (static_cast<std::uint16_t>(b[1]) << 8));
+        };
+
+        char riff[4]{};
+        file.read(riff, 4);
+        if (file.gcount() != 4 || std::memcmp(riff, "RIFF", 4) != 0)
+            return info;
+        (void)readU32(); // overall size
+        char wave[4]{};
+        file.read(wave, 4);
+        if (file.gcount() != 4 || std::memcmp(wave, "WAVE", 4) != 0)
+            return info;
+
+        std::uint32_t byteRate = 0;
+        std::uint32_t dataBytes = 0;
+        bool haveFmt = false;
+        bool haveData = false;
+
+        // Walk chunks until both fmt and data are found, or EOF. Bounded by file size.
+        for (int guard = 0; guard < 4096 && file && !(haveFmt && haveData); ++guard)
+        {
+            char chunkId[4]{};
+            file.read(chunkId, 4);
+            if (file.gcount() != 4)
+                break;
+            const std::uint32_t chunkSize = readU32();
+            if (std::memcmp(chunkId, "fmt ", 4) == 0)
+            {
+                (void)readU16();              // audio format
+                info.channels = readU16();
+                info.sampleRate = readU32();
+                byteRate = readU32();
+                (void)readU16();              // block align
+                info.bitsPerSample = readU16();
+                haveFmt = true;
+                // Skip any remaining fmt bytes (e.g. extensible header).
+                if (chunkSize > 16)
+                    file.seekg(static_cast<std::streamoff>(chunkSize - 16), std::ios::cur);
+                if (chunkSize & 1u)
+                    file.seekg(1, std::ios::cur);
+            }
+            else if (std::memcmp(chunkId, "data", 4) == 0)
+            {
+                dataBytes = chunkSize;
+                haveData = true;
+                // Do not read the payload.
+                file.seekg(static_cast<std::streamoff>(chunkSize) + (chunkSize & 1u), std::ios::cur);
+            }
+            else
+            {
+                file.seekg(static_cast<std::streamoff>(chunkSize) + (chunkSize & 1u), std::ios::cur);
+            }
+        }
+
+        if (haveFmt && info.sampleRate > 0)
+        {
+            info.valid = true;
+            if (byteRate > 0 && dataBytes > 0)
+                info.durationSec = static_cast<double>(dataBytes) / static_cast<double>(byteRate);
+        }
+    }
+    catch (...)
+    {
+    }
+
+    return info;
 }
 
 } // namespace guitarfx::util
