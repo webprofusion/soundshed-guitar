@@ -52,7 +52,6 @@ namespace guitarfx
 {
 namespace simd
 {
-
 // ============================================================================
 // Runtime SIMD Detection
 // ============================================================================
@@ -77,6 +76,7 @@ inline SimdLevel DetectSimdLevel()
     if (nIds >= 7)
     {
         __cpuidex(cpuInfo, 7, 0);
+
         if (cpuInfo[1] & (1 << 5)) // AVX2
         {
             return SimdLevel::AVX2;
@@ -86,19 +86,23 @@ inline SimdLevel DetectSimdLevel()
     if (nIds >= 1)
     {
         __cpuid(cpuInfo, 1);
+
         if (cpuInfo[2] & (1 << 28)) // AVX
         {
             return SimdLevel::AVX;
         }
+
         if (cpuInfo[2] & (1 << 19)) // SSE4.1
         {
             return SimdLevel::SSE4;
         }
+
         if (cpuInfo[3] & (1 << 26)) // SSE2
         {
             return SimdLevel::SSE2;
         }
     }
+
 #elif defined(GUITARFX_GCC_CLANG)
     // GCC/Clang typically have these as compile-time defines
     #if defined(__AVX2__)
@@ -127,7 +131,6 @@ inline SimdLevel GetSimdLevel()
 
 namespace scalar
 {
-
 GUITARFX_FORCE_INLINE float FastTanh(float x)
 {
     // Pade approximant - accurate for |x| < 4, clamps otherwise
@@ -198,7 +201,6 @@ inline void ApplyReLU(float* data, long size)
         data[i] = ReLU(data[i]);
     }
 }
-
 } // namespace scalar
 
 // ============================================================================
@@ -209,7 +211,6 @@ inline void ApplyReLU(float* data, long size)
 
 namespace sse2
 {
-
 // SSE2 fast tanh using polynomial approximation
 GUITARFX_FORCE_INLINE __m128 FastTanh(__m128 x)
 {
@@ -327,7 +328,6 @@ inline void ApplyGatedActivation(float* data, float* gate, long size)
         data[i] = scalar::FastTanh(data[i]) * scalar::FastSigmoid(gate[i]);
     }
 }
-
 } // namespace sse2
 
 #endif // GUITARFX_HAS_SSE2
@@ -340,7 +340,6 @@ inline void ApplyGatedActivation(float* data, float* gate, long size)
 
 namespace avx
 {
-
 GUITARFX_FORCE_INLINE __m256 FastTanh(__m256 x)
 {
     // Clamp input
@@ -386,12 +385,14 @@ inline void ApplyTanh(float* data, long size)
 
     // Handle remainder with SSE
     #ifdef GUITARFX_HAS_SSE2
+
     for (; i + 4 <= size; i += 4)
     {
         __m128 v = _mm_loadu_ps(data + i);
         v = sse2::FastTanh(v);
         _mm_storeu_ps(data + i, v);
     }
+
     #endif
 
     // Scalar remainder
@@ -413,12 +414,14 @@ inline void ApplySigmoid(float* data, long size)
     }
 
     #ifdef GUITARFX_HAS_SSE2
+
     for (; i + 4 <= size; i += 4)
     {
         __m128 v = _mm_loadu_ps(data + i);
         v = sse2::FastSigmoid(v);
         _mm_storeu_ps(data + i, v);
     }
+
     #endif
 
     for (; i < size; ++i)
@@ -440,12 +443,14 @@ inline void ApplyReLU(float* data, long size)
     }
 
     #ifdef GUITARFX_HAS_SSE2
+
     for (; i + 4 <= size; i += 4)
     {
         __m128 v = _mm_loadu_ps(data + i);
         v = _mm_max_ps(v, _mm_setzero_ps());
         _mm_storeu_ps(data + i, v);
     }
+
     #endif
 
     for (; i < size; ++i)
@@ -472,6 +477,7 @@ inline void ApplyGatedActivation(float* data, float* gate, long size)
     }
 
     #ifdef GUITARFX_HAS_SSE2
+
     for (; i + 4 <= size; i += 4)
     {
         __m128 x = _mm_loadu_ps(data + i);
@@ -483,6 +489,7 @@ inline void ApplyGatedActivation(float* data, float* gate, long size)
         __m128 result = _mm_mul_ps(x, g);
         _mm_storeu_ps(data + i, result);
     }
+
     #endif
 
     for (; i < size; ++i)
@@ -518,6 +525,7 @@ inline void ApplyGatedActivationInterleaved(float* data, long channels, long num
         }
 
     #ifdef GUITARFX_HAS_SSE2
+
         for (; i + 4 <= halfChannels; i += 4)
         {
             __m128 x = _mm_loadu_ps(frameData + i);
@@ -528,6 +536,7 @@ inline void ApplyGatedActivationInterleaved(float* data, long channels, long num
 
             _mm_storeu_ps(frameData + i, _mm_mul_ps(x, g));
         }
+
     #endif
 
         for (; i < halfChannels; ++i)
@@ -536,7 +545,6 @@ inline void ApplyGatedActivationInterleaved(float* data, long channels, long num
         }
     }
 }
-
 } // namespace avx
 
 #endif // GUITARFX_HAS_AVX
@@ -548,18 +556,22 @@ inline void ApplyGatedActivationInterleaved(float* data, long channels, long num
 inline void ApplyTanh(float* data, long size)
 {
 #ifdef GUITARFX_HAS_AVX
+
     if (GetSimdLevel() >= SimdLevel::AVX)
     {
         avx::ApplyTanh(data, size);
         return;
     }
+
 #endif
 #ifdef GUITARFX_HAS_SSE2
+
     if (GetSimdLevel() >= SimdLevel::SSE2)
     {
         sse2::ApplyTanh(data, size);
         return;
     }
+
 #endif
     scalar::ApplyTanh(data, size);
 }
@@ -567,18 +579,22 @@ inline void ApplyTanh(float* data, long size)
 inline void ApplySigmoid(float* data, long size)
 {
 #ifdef GUITARFX_HAS_AVX
+
     if (GetSimdLevel() >= SimdLevel::AVX)
     {
         avx::ApplySigmoid(data, size);
         return;
     }
+
 #endif
 #ifdef GUITARFX_HAS_SSE2
+
     if (GetSimdLevel() >= SimdLevel::SSE2)
     {
         sse2::ApplySigmoid(data, size);
         return;
     }
+
 #endif
     scalar::ApplySigmoid(data, size);
 }
@@ -586,18 +602,22 @@ inline void ApplySigmoid(float* data, long size)
 inline void ApplyReLU(float* data, long size)
 {
 #ifdef GUITARFX_HAS_AVX
+
     if (GetSimdLevel() >= SimdLevel::AVX)
     {
         avx::ApplyReLU(data, size);
         return;
     }
+
 #endif
 #ifdef GUITARFX_HAS_SSE2
+
     if (GetSimdLevel() >= SimdLevel::SSE2)
     {
         sse2::ApplyReLU(data, size);
         return;
     }
+
 #endif
     scalar::ApplyReLU(data, size);
 }
@@ -605,19 +625,24 @@ inline void ApplyReLU(float* data, long size)
 inline void ApplyGatedActivation(float* data, float* gate, long size)
 {
 #ifdef GUITARFX_HAS_AVX
+
     if (GetSimdLevel() >= SimdLevel::AVX)
     {
         avx::ApplyGatedActivation(data, gate, size);
         return;
     }
+
 #endif
 #ifdef GUITARFX_HAS_SSE2
+
     if (GetSimdLevel() >= SimdLevel::SSE2)
     {
         sse2::ApplyGatedActivation(data, gate, size);
         return;
     }
+
 #endif
+
     // Scalar fallback
     for (long i = 0; i < size; ++i)
     {
@@ -628,24 +653,27 @@ inline void ApplyGatedActivation(float* data, float* gate, long size)
 inline void ApplyGatedActivationInterleaved(float* data, long channels, long numFrames)
 {
 #ifdef GUITARFX_HAS_AVX
+
     if (GetSimdLevel() >= SimdLevel::AVX)
     {
         avx::ApplyGatedActivationInterleaved(data, channels, numFrames);
         return;
     }
+
 #endif
     // Fallback implementation
     const long halfChannels = channels / 2;
+
     for (long frame = 0; frame < numFrames; ++frame)
     {
         float* frameData = data + frame * channels;
         float* gateData = frameData + halfChannels;
+
         for (long i = 0; i < halfChannels; ++i)
         {
             frameData[i] = scalar::FastTanh(frameData[i]) * scalar::FastSigmoid(gateData[i]);
         }
     }
 }
-
 } // namespace simd
 } // namespace guitarfx

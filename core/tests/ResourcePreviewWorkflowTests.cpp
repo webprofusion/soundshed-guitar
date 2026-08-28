@@ -91,6 +91,7 @@ class TestHost final : public guitarfx::IPluginHost
                 {
                 }
             }
+
             return false;
         });
     }
@@ -98,11 +99,13 @@ class TestHost final : public guitarfx::IPluginHost
     std::optional<nlohmann::json> LastMessageOfType(const std::string& type)
     {
         std::lock_guard<std::mutex> lock(mMessageMutex);
+
         for (auto it = messages.rbegin(); it != messages.rend(); ++it)
         {
             try
             {
                 const auto parsed = nlohmann::json::parse(*it);
+
                 if (parsed.value("type", "") == type)
                 {
                     return parsed;
@@ -112,6 +115,7 @@ class TestHost final : public guitarfx::IPluginHost
             {
             }
         }
+
         return std::nullopt;
     }
 
@@ -190,6 +194,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     const std::string originalResourceId = resourceType == "ir" ? "orig-ir" : "orig-nam";
 
     auto preset = BuildSingleNodeResourcePreset(nodeId, resourceType, originalResourceId, 1);
+
     if (!LoadPreset(controller, preset))
     {
         std::cerr << "Failed to load initial preset for " << resourceType << " test\n";
@@ -207,6 +212,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     controller.HandleUIMessage(preview.dump());
 
     const auto& activeAfterPreview = controller.GetActivePreset();
+
     if (!activeAfterPreview)
     {
         std::cerr << "Active preset missing after preview for " << resourceType << "\n";
@@ -214,6 +220,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     }
 
     const auto* nodeAfterPreview = activeAfterPreview->graph.FindNode(nodeId);
+
     if (!nodeAfterPreview || nodeAfterPreview->resources.empty())
     {
         std::cerr << "Target node missing after preview for " << resourceType << "\n";
@@ -221,6 +228,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     }
 
     const auto& previewRef = nodeAfterPreview->resources[0];
+
     if (!previewRef.filePath.has_filename() || !fs::exists(previewRef.filePath))
     {
         std::cerr << "Preview file path not set/existing for " << resourceType << "\n";
@@ -240,6 +248,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     controller.HandleUIMessage(cancel.dump());
 
     const auto& activeAfterCancel = controller.GetActivePreset();
+
     if (!activeAfterCancel)
     {
         std::cerr << "Active preset missing after cancel for " << resourceType << "\n";
@@ -247,6 +256,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     }
 
     const auto* nodeAfterCancel = activeAfterCancel->graph.FindNode(nodeId);
+
     if (!nodeAfterCancel || nodeAfterCancel->resources.empty())
     {
         std::cerr << "Target node missing after cancel for " << resourceType << "\n";
@@ -254,6 +264,7 @@ bool TestPreviewApplyAndCancel(const std::string& resourceType)
     }
 
     const auto& restoredRef = nodeAfterCancel->resources[0];
+
     if (restoredRef.resourceId != originalResourceId)
     {
         std::cerr << "Cancel did not restore original resourceId for " << resourceType << "\n";
@@ -301,12 +312,14 @@ bool TestPreviewHonorsResourceIndex()
     controller.HandleUIMessage(preview.dump());
 
     const auto& activeAfterPreview = controller.GetActivePreset();
+
     if (!activeAfterPreview)
     {
         return false;
     }
 
     const auto* node = activeAfterPreview->graph.FindNode("multi-slot");
+
     if (!node || node->resources.size() < 2)
     {
         return false;
@@ -334,12 +347,14 @@ bool TestPreviewHonorsResourceIndex()
     controller.HandleUIMessage(cancel.dump());
 
     const auto& activeAfterCancel = controller.GetActivePreset();
+
     if (!activeAfterCancel)
     {
         return false;
     }
 
     const auto* nodeAfterCancel = activeAfterCancel->graph.FindNode("multi-slot");
+
     if (!nodeAfterCancel || nodeAfterCancel->resources.size() < 2)
     {
         return false;
@@ -366,6 +381,7 @@ bool TestLibraryPreviewCloseRevertsOriginal()
     guitarfx::PluginController controller(host);
 
     auto preset = BuildSingleNodeResourcePreset("amp-node", "nam", "original-lib-id", 1);
+
     if (!LoadPreset(controller, preset))
     {
         std::cerr << "Failed to load preset for library preview revert test\n";
@@ -382,12 +398,14 @@ bool TestLibraryPreviewCloseRevertsOriginal()
     controller.HandleUIMessage(previewSelect.dump());
 
     const auto& activeAfterPreview = controller.GetActivePreset();
+
     if (!activeAfterPreview)
     {
         return false;
     }
 
     const auto* previewNode = activeAfterPreview->graph.FindNode("amp-node");
+
     if (!previewNode || previewNode->resources.empty())
     {
         return false;
@@ -410,12 +428,14 @@ bool TestLibraryPreviewCloseRevertsOriginal()
     controller.HandleUIMessage(revert.dump());
 
     const auto& activeAfterRevert = controller.GetActivePreset();
+
     if (!activeAfterRevert)
     {
         return false;
     }
 
     const auto* revertedNode = activeAfterRevert->graph.FindNode("amp-node");
+
     if (!revertedNode || revertedNode->resources.empty())
     {
         return false;
@@ -448,6 +468,7 @@ bool TestPreviewMissingDataNoMutation()
     guitarfx::PluginController controller(host);
 
     auto preset = BuildSingleNodeResourcePreset("amp-node", "nam", "original-lib-id", 1);
+
     if (!LoadPreset(controller, preset))
     {
         return false;
@@ -464,12 +485,14 @@ bool TestPreviewMissingDataNoMutation()
     controller.HandleUIMessage(preview.dump());
 
     const auto& active = controller.GetActivePreset();
+
     if (!active)
     {
         return false;
     }
 
     const auto* node = active->graph.FindNode("amp-node");
+
     if (!node || node->resources.empty())
     {
         return false;
@@ -490,6 +513,7 @@ bool TestPreviewMissingNodeIdNoMutation()
     guitarfx::PluginController controller(host);
 
     auto preset = BuildSingleNodeResourcePreset("cab-node", "ir", "original-ir-id", 1);
+
     if (!LoadPreset(controller, preset))
     {
         return false;
@@ -505,12 +529,14 @@ bool TestPreviewMissingNodeIdNoMutation()
     controller.HandleUIMessage(preview.dump());
 
     const auto& active = controller.GetActivePreset();
+
     if (!active)
     {
         return false;
     }
 
     const auto* node = active->graph.FindNode("cab-node");
+
     if (!node || node->resources.empty())
     {
         return false;
@@ -531,6 +557,7 @@ bool TestCancelWithoutActivePreviewNoMutation()
     guitarfx::PluginController controller(host);
 
     auto preset = BuildSingleNodeResourcePreset("amp-node", "nam", "steady-lib-id", 1);
+
     if (!LoadPreset(controller, preset))
     {
         return false;
@@ -543,12 +570,14 @@ bool TestCancelWithoutActivePreviewNoMutation()
     controller.HandleUIMessage(cancel.dump());
 
     const auto& active = controller.GetActivePreset();
+
     if (!active)
     {
         return false;
     }
 
     const auto* node = active->graph.FindNode("amp-node");
+
     if (!node || node->resources.empty())
     {
         return false;
@@ -577,6 +606,7 @@ bool TestFolderEnumerationPreservesUtf8Filename()
     }
 
     const auto listing = host.LastMessageOfType("resourceFolderListing");
+
     if (!listing || !listing->contains("files") || !(*listing)["files"].is_array())
     {
         return false;
@@ -593,7 +623,6 @@ bool TestFolderEnumerationPreservesUtf8Filename()
     std::cerr << "UTF-8 NAM filename was not returned by folder enumeration\n";
     return false;
 }
-
 } // namespace
 
 int main()
@@ -603,6 +632,7 @@ int main()
 
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
+
         if (ok)
         {
             ++passed;

@@ -144,5 +144,4 @@ inline void RegisterAllEffects()
     // Note: Composite effects are registered dynamically by CompositeEffectLibrary
     // after loading definitions from disk. They are not part of static registration.
 }
-
 } // namespace guitarfx

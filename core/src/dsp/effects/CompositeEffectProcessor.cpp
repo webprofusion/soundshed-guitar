@@ -24,6 +24,7 @@ CompositeEffectProcessor::CompositeEffectProcessor(const CompositeEffectDefiniti
 void CompositeEffectProcessor::BuildParamMap()
 {
     mParamMap.clear();
+
     for (const auto& ep : mDefinition.exposedParams)
     {
         mParamMap[ep.paramId] = &ep;
@@ -65,6 +66,7 @@ void CompositeEffectProcessor::Process(float** inputs, float** outputs, int numS
 void CompositeEffectProcessor::SetParam(const std::string& key, double value)
 {
     auto it = mParamMap.find(key);
+
     if (it != mParamMap.end())
     {
         const ExposedParameter* ep = it->second;
@@ -87,10 +89,12 @@ void CompositeEffectProcessor::SetConfig(const std::string& key, const std::stri
 double CompositeEffectProcessor::GetParam(const std::string& key) const
 {
     auto it = mParamMap.find(key);
+
     if (it != mParamMap.end())
     {
         return it->second->defaultValue;
     }
+
     return 0.0;
 }
 
@@ -111,6 +115,7 @@ bool CompositeEffectProcessor::LoadResources(const std::vector<ResourceRef>& ref
     }
 
     const std::size_t count = std::min(refs.size(), mDefinition.exposedResources.size());
+
     for (std::size_t i = 0; i < count; ++i)
     {
         const auto& surface = mDefinition.exposedResources[i];
@@ -214,6 +219,7 @@ const CompositeEffectDefinition* CompositeEffectLibrary::GetDefinition(const std
             return &def;
         }
     }
+
     return nullptr;
 }
 
@@ -260,10 +266,12 @@ void CompositeEffectLibrary::RegisterDefinition(const CompositeEffectDefinition&
 
     registry.Register(typeId, info, [capturedDef, resLib]() {
         auto processor = std::make_unique<CompositeEffectProcessor>(capturedDef);
+
         if (resLib)
         {
             processor->SetResourceLibrary(resLib);
         }
+
         return processor;
     });
 }
@@ -294,6 +302,7 @@ void CompositeEffectLibrary::LoadFromDirectory(const std::filesystem::path& dir)
             {
                 continue;
             }
+
             if (entry.path().extension() != ".json")
             {
                 continue;
@@ -302,6 +311,7 @@ void CompositeEffectLibrary::LoadFromDirectory(const std::filesystem::path& dir)
             try
             {
                 std::ifstream file(entry.path());
+
                 if (!file.is_open())
                 {
                     continue;
@@ -344,6 +354,7 @@ bool CompositeEffectLibrary::SaveDefinition(const CompositeEffectDefinition& def
         std::filesystem::path filePath = userDir / filename;
 
         std::ofstream file(filePath);
+
         if (!file.is_open())
         {
             return false;
@@ -361,12 +372,13 @@ bool CompositeEffectLibrary::SaveDefinition(const CompositeEffectDefinition& def
 bool CompositeEffectLibrary::DeleteDefinition(const std::string& id, const std::filesystem::path& userDir)
 {
     std::filesystem::path filePath = userDir / (id + ".json");
+
     if (std::filesystem::exists(filePath))
     {
         std::filesystem::remove(filePath);
     }
+
     RemoveDefinition(id);
     return true;
 }
-
 } // namespace guitarfx

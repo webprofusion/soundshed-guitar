@@ -7,7 +7,6 @@
 
 namespace guitarfx
 {
-
 namespace
 {
 constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
@@ -53,16 +52,19 @@ void SignalTestService::InjectInput(float** inputs, int numSamples)
     }
 
     auto& st = mState;
+
     if (inputs && inputs[0] && inputs[1])
     {
         for (int i = 0; i < numSamples && st.samplesRemaining > 0; ++i, --st.samplesRemaining)
         {
             const auto sample = static_cast<float>(std::sin(st.phase * kTwoPi));
             st.phase += st.phaseIncrement;
+
             if (st.phase >= 1.0)
             {
                 st.phase -= 1.0;
             }
+
             inputs[0][i] = sample;
             inputs[1][i] = sample;
             st.inputSumSquares += static_cast<double>(sample) * sample;
@@ -89,6 +91,7 @@ void SignalTestService::CollectOutput(float* const* outputs, int numSamples)
         {
             mState.outputSumSquares[0] += static_cast<double>(outputs[0][i]) * outputs[0][i];
         }
+
         if (outputs && outputs[1])
         {
             mState.outputSumSquares[1] += static_cast<double>(outputs[1][i]) * outputs[1][i];
@@ -102,6 +105,7 @@ void SignalTestService::OnIdle()
     {
         return;
     }
+
     mResultPending.store(false, std::memory_order_release);
 
     const auto& st = mState;
@@ -132,5 +136,4 @@ void SignalTestService::OnIdle()
         mSendMessage(result.dump());
     }
 }
-
 } // namespace guitarfx

@@ -20,7 +20,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 std::string BuildFactoryArchiveKey(const std::filesystem::path& archivePath)
 {
     std::string name = archivePath.filename().string();
@@ -34,6 +33,7 @@ std::string BuildFactoryArchiveKey(const std::filesystem::path& archivePath)
     std::string lowerName = name;
     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                    [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
     for (const auto suffix : suffixes)
     {
         if (lowerName.size() >= suffix.size() &&
@@ -45,30 +45,36 @@ std::string BuildFactoryArchiveKey(const std::filesystem::path& archivePath)
     }
 
     auto sanitized = guitarfx::util::SanitizePathSegment(name, true);
+
     if (sanitized.empty())
     {
         sanitized = "factory-archive";
     }
+
     return sanitized;
 }
 
 std::string BuildScopedFactoryArchiveId(const std::string& archiveKey, const std::string& rawId)
 {
     auto sanitizedRaw = guitarfx::util::SanitizePathSegment(rawId, true);
+
     if (sanitizedRaw.empty())
     {
         sanitizedRaw = "item";
     }
+
     return archiveKey + "__" + sanitizedRaw;
 }
 
 std::string BuildScopedPresetArchiveSessionId(const std::string& archiveKey, const std::string& rawId)
 {
     auto sanitizedRaw = guitarfx::util::SanitizePathSegment(rawId, true);
+
     if (sanitizedRaw.empty())
     {
         sanitizedRaw = "item";
     }
+
     return std::string{"preset-archive-session__"} + archiveKey + "__" + sanitizedRaw;
 }
 
@@ -114,10 +120,12 @@ std::string BuildFactoryArchiveNestedFolderId(const std::string& archiveKey, con
     const auto sanitizedPath = guitarfx::util::SanitizeSubfolderPath(folderPath);
     std::string sanitized = sanitizedPath.generic_string<char>();
     std::replace(sanitized.begin(), sanitized.end(), '/', '_');
+
     if (sanitized.empty())
     {
         sanitized = "folder";
     }
+
     return "factory-archive-folder::" + archiveKey + "::" + sanitized;
 }
 
@@ -126,10 +134,12 @@ std::string BuildPresetArchiveSessionFolderId(const std::string& archiveKey, con
     const auto sanitizedPath = guitarfx::util::SanitizeSubfolderPath(folderPath);
     std::string sanitized = sanitizedPath.generic_string<char>();
     std::replace(sanitized.begin(), sanitized.end(), '/', '_');
+
     if (sanitized.empty())
     {
         sanitized = "folder";
     }
+
     return "preset-archive-session-folder::" + archiveKey + "::" + sanitized;
 }
 
@@ -139,6 +149,7 @@ nlohmann::json BuildFactoryArchiveFolders(const std::string& archiveKey, const n
     std::function<nlohmann::json(const nlohmann::json&, const std::string&)> buildFolders;
     buildFolders = [&](const nlohmann::json& sourceFolders, const std::string& parentPath) -> nlohmann::json {
         nlohmann::json result = nlohmann::json::array();
+
         if (!sourceFolders.is_array())
         {
             return result;
@@ -152,6 +163,7 @@ nlohmann::json BuildFactoryArchiveFolders(const std::string& archiveKey, const n
             }
 
             const std::string name = sourceFolder.value("name", "");
+
             if (name.empty())
             {
                 continue;
@@ -169,11 +181,14 @@ nlohmann::json BuildFactoryArchiveFolders(const std::string& archiveKey, const n
                     {
                         continue;
                     }
+
                     const auto mappedIt = presetIdMapping.find(presetIdValue.get<std::string>());
+
                     if (mappedIt == presetIdMapping.end())
                     {
                         continue;
                     }
+
                     folder["presetIds"].push_back(mappedIt->second);
                 }
             }
@@ -207,6 +222,7 @@ void UpdateFactoryPresetFolders(guitarfx::storage::JsonStore& store, const std::
 {
     auto payload =
         store.Get(guitarfx::storage::ItemType::kDocument, "preset-folders").value_or(nlohmann::json::object());
+
     if (!payload.is_object())
     {
         payload = nlohmann::json::object();
@@ -216,12 +232,14 @@ void UpdateFactoryPresetFolders(guitarfx::storage::JsonStore& store, const std::
     {
         payload["folders"] = nlohmann::json::array();
     }
+
     if (!payload.contains("activeFolderId") || !payload["activeFolderId"].is_string())
     {
         payload["activeFolderId"] = "__all__";
     }
 
     nlohmann::json filteredFolders = nlohmann::json::array();
+
     for (const auto& folder : payload["folders"])
     {
         if (!IsFactoryArchiveTopLevelFolder(archiveKey, folder))
@@ -249,6 +267,7 @@ nlohmann::json BuildPresetArchiveSessionFolders(const std::string& archiveKey,
     std::function<nlohmann::json(const nlohmann::json&, const std::string&)> buildFolders;
     buildFolders = [&](const nlohmann::json& sourceFolders, const std::string& parentPath) -> nlohmann::json {
         nlohmann::json result = nlohmann::json::array();
+
         if (!sourceFolders.is_array())
         {
             return result;
@@ -262,6 +281,7 @@ nlohmann::json BuildPresetArchiveSessionFolders(const std::string& archiveKey,
             }
 
             const std::string name = sourceFolder.value("name", "");
+
             if (name.empty())
             {
                 continue;
@@ -279,11 +299,14 @@ nlohmann::json BuildPresetArchiveSessionFolders(const std::string& archiveKey,
                     {
                         continue;
                     }
+
                     const auto mappedIt = presetIdMapping.find(presetIdValue.get<std::string>());
+
                     if (mappedIt == presetIdMapping.end())
                     {
                         continue;
                     }
+
                     folder["presetIds"].push_back(mappedIt->second);
                 }
             }
@@ -302,12 +325,14 @@ std::optional<std::vector<std::uint8_t>> ExtractZipEntry(const std::vector<std::
                                                          const std::string& entryName)
 {
     mz_zip_archive archive{};
+
     if (!mz_zip_reader_init_mem(&archive, zipBytes.data(), zipBytes.size(), 0))
     {
         return std::nullopt;
     }
 
     const int fileIndex = mz_zip_reader_locate_file(&archive, entryName.c_str(), nullptr, 0);
+
     if (fileIndex < 0)
     {
         mz_zip_reader_end(&archive);
@@ -316,6 +341,7 @@ std::optional<std::vector<std::uint8_t>> ExtractZipEntry(const std::vector<std::
 
     size_t extractedSize = 0;
     void* extracted = mz_zip_reader_extract_to_heap(&archive, static_cast<mz_uint>(fileIndex), &extractedSize, 0);
+
     if (!extracted)
     {
         mz_zip_reader_end(&archive);
@@ -334,6 +360,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
                                                                     std::string& error)
 {
     mz_zip_archive archive{};
+
     if (!mz_zip_reader_init_mem(&archive, zipBytes.data(), zipBytes.size(), 0))
     {
         error = "Invalid zip archive";
@@ -348,6 +375,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
 
     const int presetIndex = mz_zip_reader_locate_file(&archive, "preset.json", nullptr, 0);
     const int presetsIndex = mz_zip_reader_locate_file(&archive, "presets.json", nullptr, 0);
+
     if (presetIndex < 0 && presetsIndex < 0)
     {
         return finishWithError("Archive is missing preset.json or presets.json");
@@ -361,6 +389,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
 
         size_t extractedSize = 0;
         void* extracted = mz_zip_reader_extract_to_heap(&archive, static_cast<mz_uint>(index), &extractedSize, 0);
+
         if (!extracted)
         {
             return std::nullopt;
@@ -382,12 +411,14 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
 
     ParsedFactoryPresetArchive parsed;
     const auto archiveJson = extractJsonEntry(presetIndex >= 0 ? presetIndex : presetsIndex);
+
     if (!archiveJson || !archiveJson->is_object())
     {
         return finishWithError(error.empty() ? "Archive JSON is invalid" : error);
     }
 
     const nlohmann::json& root = *archiveJson;
+
     if (root.contains("resources") && root["resources"].is_array())
     {
         for (const auto& resourceJson : root["resources"])
@@ -404,12 +435,14 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
             resource.type = resourceJson.value("type", "");
             resource.fileName = resourceJson.value("fileName", "");
             resource.hash = resourceJson.value("hash", "");
+
             if (resource.type.empty() || resource.id.empty() || resource.fileName.empty())
             {
                 continue;
             }
 
             const auto resourceBytes = ExtractZipEntry(zipBytes, "resources/" + resource.fileName);
+
             if (!resourceBytes)
             {
                 return finishWithError("Archive resource missing: resources/" + resource.fileName);
@@ -446,12 +479,15 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
         {
             return true;
         }
+
         const auto presetOpt = guitarfx::PresetStorage::DeserializeFromJson(presetJson.dump());
+
         if (!presetOpt)
         {
             error = "Failed to parse preset JSON from archive " + archivePath.filename().string();
             return false;
         }
+
         parsed.presets.push_back(*presetOpt);
         return true;
     };
@@ -462,6 +498,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
         {
             return finishWithError("Archive has no preset data");
         }
+
         if (!appendPreset(root["preset"]))
         {
             return finishWithError(error);
@@ -473,6 +510,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
         {
             return finishWithError("Archive has no presets data");
         }
+
         for (const auto& presetJson : root["presets"])
         {
             if (!appendPreset(presetJson))
@@ -493,9 +531,11 @@ void RemapPresetGraphResources(guitarfx::SignalGraph& graph,
     for (auto& node : graph.nodes)
     {
         const auto blendIt = node.config.find("blendId");
+
         if (blendIt != node.config.end())
         {
             const auto mappedBlend = blendIdMap.find(blendIt->second);
+
             if (mappedBlend != blendIdMap.end())
             {
                 blendIt->second = mappedBlend->second;
@@ -508,7 +548,9 @@ void RemapPresetGraphResources(guitarfx::SignalGraph& graph,
             {
                 continue;
             }
+
             const auto mappedResource = resourceIdMap.find(resource.resourceId);
+
             if (mappedResource != resourceIdMap.end())
             {
                 resource.resourceId = mappedResource->second;
@@ -522,6 +564,7 @@ void RemapPresetArchiveReferences(guitarfx::Preset& preset,
                                   const std::unordered_map<std::string, std::string>& blendIdMap)
 {
     RemapPresetGraphResources(preset.graph, resourceIdMap, blendIdMap);
+
     for (auto& scene : preset.scenes)
     {
         RemapPresetGraphResources(scene.graph, resourceIdMap, blendIdMap);
@@ -532,15 +575,18 @@ std::filesystem::path ResolveFactoryPresetDirectory(const guitarfx::IPluginHost&
                                                     const std::filesystem::path& legacyResourceRoot)
 {
     const auto bundledRoot = host.GetBundledAssetsPath();
+
     if (!bundledRoot.empty())
     {
         const auto bundledUiFactoryDir = bundledRoot / "ui" / "presets" / "factory";
+
         if (std::filesystem::exists(bundledUiFactoryDir))
         {
             return bundledUiFactoryDir;
         }
 
         const auto bundledLegacyFactoryDir = bundledRoot / "presets" / "factory";
+
         if (std::filesystem::exists(bundledLegacyFactoryDir))
         {
             return bundledLegacyFactoryDir;
@@ -581,5 +627,4 @@ std::filesystem::path NormalizePresetArchiveSavePath(const std::filesystem::path
 
     return path.parent_path() / normalized;
 }
-
 } // namespace guitarfx::controller_detail

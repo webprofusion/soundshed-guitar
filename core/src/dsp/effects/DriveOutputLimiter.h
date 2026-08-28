@@ -9,6 +9,7 @@ inline float SoftClipNearCeiling(float sample, float knee = 0.92f, float ceiling
 {
     const float safeKnee = std::clamp(knee, 0.0f, ceiling - 1.0e-4f);
     const float magnitude = std::abs(sample);
+
     if (magnitude <= safeKnee)
     {
         return sample;

@@ -54,12 +54,14 @@ void Check(bool condition, const std::string& what)
 fs::path FindLoadableModel()
 {
     const fs::path root = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets" / "amps";
+
     if (!fs::exists(root))
     {
         return {};
     }
 
     std::vector<fs::path> candidates;
+
     for (const auto& entry : fs::recursive_directory_iterator(root))
     {
         if (entry.is_regular_file() && entry.path().extension() == ".nam")
@@ -67,6 +69,7 @@ fs::path FindLoadableModel()
             candidates.push_back(entry.path());
         }
     }
+
     std::sort(candidates.begin(), candidates.end());
 
     for (const auto& candidate : candidates)
@@ -83,6 +86,7 @@ fs::path FindLoadableModel()
             // Architecture not compiled into this build; try the next file.
         }
     }
+
     return {};
 }
 
@@ -100,6 +104,7 @@ std::vector<float> Render(::nam::DSP& model, double sampleRate, int blockSize, i
     captured.reserve(static_cast<size_t>(blockSize) * blocks);
 
     int sampleIndex = 0;
+
     for (int b = 0; b < blocks; ++b)
     {
         for (int i = 0; i < blockSize; ++i, ++sampleIndex)
@@ -108,12 +113,15 @@ std::vector<float> Render(::nam::DSP& model, double sampleRate, int blockSize, i
             input[static_cast<size_t>(i)] =
                 static_cast<NAM_SAMPLE>(0.25 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * t));
         }
+
         model.process(inputChannels, outputChannels, blockSize);
+
         for (int i = 0; i < blockSize; ++i)
         {
             captured.push_back(static_cast<float>(output[static_cast<size_t>(i)]));
         }
     }
+
     return captured;
 }
 
@@ -127,6 +135,7 @@ void TestCacheHitProducesIdenticalOutput(const fs::path& modelPath)
     auto second = cache::GetModel(modelPath); // hit: builds from cached dspData
     Check(first != nullptr, "first load returns a model");
     Check(second != nullptr, "second load returns a model");
+
     if (!first || !second)
     {
         return;
@@ -146,6 +155,7 @@ void TestCacheHitProducesIdenticalOutput(const fs::path& modelPath)
     // And identical to the uncached library path, so the cache introduces no drift.
     auto direct = ::nam::get_dsp(modelPath);
     Check(direct != nullptr, "direct get_dsp still works");
+
     if (direct)
     {
         const auto c = Render(*direct, 48000.0, 256, 8);
@@ -165,6 +175,7 @@ void TestEditedFileInvalidates(const fs::path& modelPath)
     fs::remove(temp, ec);
     fs::copy_file(modelPath, temp, fs::copy_options::overwrite_existing, ec);
     Check(!ec, "copied model to a temp path");
+
     if (ec)
     {
         return;
@@ -234,6 +245,7 @@ void TestOversampledRendering(const fs::path& modelPath)
     std::cout << "\n[time-scaled oversampled rendering]\n";
     auto model = cache::GetModel(modelPath);
     Check(model != nullptr, "model loads for oversampling");
+
     if (!model)
     {
         return;
@@ -256,6 +268,7 @@ void TestOversampledRendering(const fs::path& modelPath)
     std::vector<NAM_SAMPLE> output(blockSize);
     bool finite = true;
     int sampleIndex = 0;
+
     for (int block = 0; block < 4; ++block)
     {
         for (int i = 0; i < blockSize; ++i, ++sampleIndex)
@@ -263,10 +276,12 @@ void TestOversampledRendering(const fs::path& modelPath)
             input[static_cast<std::size_t>(i)] = static_cast<NAM_SAMPLE>(
                 0.1 * std::sin(2.0 * 3.14159265358979323846 * 220.0 * sampleIndex / hostSampleRate));
         }
+
         oversampling.Process(*model, input.data(), output.data(), blockSize);
         finite = finite && std::all_of(output.begin(), output.end(),
                                        [](NAM_SAMPLE sample) { return std::isfinite(static_cast<double>(sample)); });
     }
+
     Check(finite, "oversampled real-model output remains finite");
 }
 } // namespace
@@ -276,6 +291,7 @@ int main()
     nam::factory::ForceFactoryRegistration();
 
     const fs::path modelPath = FindLoadableModel();
+
     if (modelPath.empty())
     {
         std::cout << "NamModelCacheTests skipped: no loadable .nam asset found" << std::endl;
@@ -292,5 +308,6 @@ int main()
     {
         std::cout << "\nNamModelCacheTests passed" << std::endl;
     }
+
     return gAllPassed ? 0 : 1;
 }

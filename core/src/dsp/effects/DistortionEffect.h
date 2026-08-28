@@ -50,6 +50,7 @@ class DistortionEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         UpdateInputFilterCoefficient();
@@ -103,6 +104,7 @@ class DistortionEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -141,18 +143,22 @@ class DistortionEffect : public EffectProcessor
         {
             return mDrive.load(std::memory_order_relaxed);
         }
+
         if (key == "tone")
         {
             return mTone.load(std::memory_order_relaxed);
         }
+
         if (key == "level")
         {
             return mLevelDb.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -195,6 +201,7 @@ class DistortionEffect : public EffectProcessor
     static float ApplyTone(float input, float& state, float toneCoef, float tone)
     {
         const float dark = ApplyOnePole(input, state, toneCoef);
+
         if (tone <= 0.5f)
         {
             const float blend = tone * 2.0f;
@@ -242,5 +249,4 @@ inline void RegisterDistortionEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<DistortionEffect>(); });
 }
-
 } // namespace guitarfx

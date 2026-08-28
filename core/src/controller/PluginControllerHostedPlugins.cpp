@@ -22,7 +22,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::AttachRuntimeConfigCallbacks(const std::string& presetId, const Preset& preset)
 {
     if (presetId.empty())
@@ -53,40 +52,48 @@ bool PluginController::ReportHostedPluginResourceLoadFailure(const std::string& 
     }
 
     const std::string presetId = !mActivePresetId.empty() ? mActivePresetId : mActivePreset->id;
+
     if (presetId.empty())
     {
         return false;
     }
 
     auto* processor = mPresetMixer.GetNodeProcessor(presetId, nodeId);
+
     if (!processor)
     {
         return false;
     }
 
     const std::string lastError = processor->GetConfig("lastError");
+
     if (lastError.empty())
     {
         return false;
     }
+
     const std::string lastErrorCode = processor->GetConfig(kHostedPluginLastErrorCodeConfigKey);
 
     nlohmann::json message{{"type", "hostedPluginResourceLoadFailed"},
                            {"nodeId", nodeId},
                            {"resourceType", "plugin"},
                            {"message", lastError}};
+
     if (!lastErrorCode.empty())
     {
         message["errorCode"] = lastErrorCode;
     }
+
     if (resourceIndex >= 0)
     {
         message["resourceIndex"] = resourceIndex;
     }
+
     if (!ref.resourceId.empty())
     {
         message["resourceId"] = ref.resourceId;
     }
+
     if (!ref.filePath.empty())
     {
         message["filePath"] = util::PathToUtf8(ref.filePath);
@@ -110,10 +117,12 @@ void PluginController::NotifyHostedPluginResourceLoadCompleted(const std::string
 
     nlohmann::json message{
         {"type", "hostedPluginResourceLoadCompleted"}, {"nodeId", nodeId}, {"resourceType", "plugin"}};
+
     if (resourceIndex >= 0)
     {
         message["resourceIndex"] = resourceIndex;
     }
+
     if (!ref.resourceId.empty())
     {
         message["resourceId"] = ref.resourceId;
@@ -138,6 +147,7 @@ void PluginController::DiscardFailedHostedPluginResourceSelection(const std::str
             const bool isLocalResource =
                 providerIt != resource->metadata.end() && providerIt->second == kLocalResourceProvider;
             mResourceLibrary.RemoveResource("plugin", ref.resourceId);
+
             if (isLocalResource)
             {
                 ResourceLibrary::RemoveFromStore(Store(), "plugin", ref.resourceId);
@@ -147,6 +157,7 @@ void PluginController::DiscardFailedHostedPluginResourceSelection(const std::str
 
     auto* targetGraph = ResolveEditTarget();
     auto* target = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+
     if (!target)
     {
         return;
@@ -215,16 +226,19 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
 
     auto* targetGraph = ResolveEditTarget();
     auto* node = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+
     if (!node)
     {
         node = mActivePreset->graph.FindNode(nodeId);
     }
+
     if (!node)
     {
         return;
     }
 
     const auto existingIt = node->config.find(key);
+
     if ((value.empty() && existingIt == node->config.end()) ||
         (existingIt != node->config.end() && existingIt->second == value))
     {
@@ -268,6 +282,7 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
 void PluginController::TryRemapHostedPluginResources(Preset& preset) const
 {
     TryRemapHostedPluginResourcesInGraph(preset.graph);
+
     for (auto& scene : preset.scenes)
     {
         TryRemapHostedPluginResourcesInGraph(scene.graph);
@@ -277,6 +292,7 @@ void PluginController::TryRemapHostedPluginResources(Preset& preset) const
 void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) const
 {
     const auto pluginResources = mResourceLibrary.GetResourcesByType("plugin");
+
     if (pluginResources.empty())
     {
         return;
@@ -297,6 +313,7 @@ void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) 
         {
             continue;
         }
+
         if (mResourceLibrary.HasResource("plugin", resourceIt->resourceId))
         {
             continue;
@@ -349,6 +366,7 @@ void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) 
                                                                       : std::string{});
 
             bool match = false;
+
             if (!normalizedStableId.empty() && !candidateStableId.empty() && normalizedStableId == candidateStableId)
             {
                 match = true;
@@ -379,6 +397,7 @@ void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) 
         }
 
         const LibraryResource* selected = nullptr;
+
         if (candidates.size() == 1)
         {
             selected = candidates.front();
@@ -388,6 +407,7 @@ void PluginController::TryRemapHostedPluginResourcesInGraph(SignalGraph& graph) 
             for (const auto* candidate : candidates)
             {
                 const auto formatIt = candidate->metadata.find(kHostedPluginFormatConfigKey);
+
                 if (formatIt != candidate->metadata.end() &&
                     NormalizeHostedPluginIdentityToken(formatIt->second) == normalizedFormat)
                 {
@@ -427,12 +447,14 @@ void PluginController::PersistHostedPluginResourceMetadata(const GraphNode& node
     const auto resourceIt = std::find_if(node.resources.begin(), node.resources.end(), [](const ResourceRef& ref) {
         return ref.resourceType == "plugin" && ref.IsLibraryRef();
     });
+
     if (resourceIt == node.resources.end())
     {
         return;
     }
 
     auto resource = mResourceLibrary.LookupResource("plugin", resourceIt->resourceId);
+
     if (!resource)
     {
         return;
@@ -440,12 +462,14 @@ void PluginController::PersistHostedPluginResourceMetadata(const GraphNode& node
 
     auto updated = *resource;
     const auto existingIt = updated.metadata.find(key);
+
     if (value.empty())
     {
         if (existingIt == updated.metadata.end())
         {
             return;
         }
+
         updated.metadata.erase(existingIt);
     }
     else
@@ -454,6 +478,7 @@ void PluginController::PersistHostedPluginResourceMetadata(const GraphNode& node
         {
             return;
         }
+
         updated.metadata[key] = value;
     }
 
@@ -479,6 +504,7 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
         }
 
         const SignalGraph* graph = nullptr;
+
         if (sceneId.empty())
         {
             graph = &mActivePreset->graph;
@@ -494,6 +520,7 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
         }
 
         const auto* storedNode = graph->FindNode(node.id);
+
         if (!storedNode || !HostedPluginIdentityMatches(*storedNode, node))
         {
             return {};
@@ -586,6 +613,7 @@ void PluginController::CaptureRuntimePluginStates(Preset& preset, const std::str
     };
 
     captureGraph(preset.graph, {});
+
     for (auto& scene : preset.scenes)
     {
         captureGraph(scene.graph, scene.id);
@@ -613,6 +641,7 @@ void PluginController::RestoreStandaloneHostedPluginState(const std::string& jso
     try
     {
         const auto state = nlohmann::json::parse(json);
+
         if (!state.contains("preset") || !state["preset"].is_object())
         {
             return;
@@ -622,12 +651,14 @@ void PluginController::RestoreStandaloneHostedPluginState(const std::string& jso
         // startup. If they disagree, something else moved the last preset on (another
         // instance, a settings sync) and the snapshot is stale.
         const std::string sessionPresetId = state.value("presetId", std::string{});
+
         if (sessionPresetId.empty() || sessionPresetId != mActivePresetId)
         {
             return;
         }
 
         auto sessionPreset = PresetStorage::DeserializeFromJson(state["preset"].dump());
+
         if (!sessionPreset)
         {
             return;
@@ -651,12 +682,14 @@ void PluginController::RestoreStandaloneHostedPluginState(const std::string& jso
                 }
 
                 const auto* sessionNode = source->FindNode(node.id);
+
                 if (!sessionNode)
                 {
                     continue;
                 }
 
                 const auto sessionState = GetHostedPluginNodeState(*sessionNode);
+
                 if (sessionState.empty() || sessionState == GetHostedPluginNodeState(node))
                 {
                     continue;
@@ -675,6 +708,7 @@ void PluginController::RestoreStandaloneHostedPluginState(const std::string& jso
         };
 
         graftGraph(mActivePreset->graph, &sessionPreset->graph);
+
         for (auto& scene : mActivePreset->scenes)
         {
             const auto* sessionScene = FindPresetScene(*sessionPreset, scene.id);
@@ -720,6 +754,7 @@ void PluginController::CaptureLiveHostedPluginStateIntoActivePreset()
             }
 
             auto state = mPresetMixer.GetNodeConfig(mActivePresetId, node.id, kHostedPluginStateConfigKey);
+
             if (state.empty() || GetHostedPluginNodeState(node) == state)
             {
                 continue;
@@ -733,6 +768,7 @@ void PluginController::CaptureLiveHostedPluginStateIntoActivePreset()
 
     // The top-level graph mirrors the live scene; both carry the node the DSP is running.
     foldGraph(mActivePreset->graph);
+
     if (auto* liveScene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
     {
         foldGraph(liveScene->graph);
@@ -771,6 +807,7 @@ void PluginController::CaptureMixerSlotHostedPluginState(Preset& preset, const s
         }
 
         auto state = mPresetMixer.GetNodeConfig(presetId, node.id, kHostedPluginStateConfigKey);
+
         if (state.empty())
         {
             continue;
@@ -795,12 +832,14 @@ void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& pre
                                                           const std::string& key, const std::string& value)
 {
     const auto cachedIt = mMixerPresetJsonCache.find(presetId);
+
     if (cachedIt == mMixerPresetJsonCache.end())
     {
         return;
     }
 
     auto presetOpt = PresetStorage::DeserializeFromJson(cachedIt->second);
+
     if (!presetOpt)
     {
         return;
@@ -809,18 +848,21 @@ void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& pre
     bool changed = false;
     const auto patchGraph = [&](SignalGraph& graph) {
         auto* node = graph.FindNode(nodeId);
+
         if (!node)
         {
             return;
         }
 
         const auto existingIt = node->config.find(key);
+
         if (value.empty())
         {
             if (existingIt == node->config.end())
             {
                 return;
             }
+
             node->config.erase(existingIt);
         }
         else
@@ -829,6 +871,7 @@ void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& pre
             {
                 return;
             }
+
             node->config[key] = value;
         }
 
@@ -837,6 +880,7 @@ void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& pre
 
     // See CaptureMixerSlotHostedPluginState for why the default scene tracks `graph`.
     patchGraph(presetOpt->graph);
+
     if (auto* scene = FindPresetScene(*presetOpt, GetDefaultPresetSceneId(*presetOpt)))
     {
         patchGraph(scene->graph);
@@ -868,6 +912,7 @@ bool PluginController::ClearStaleHostedPluginState(GraphNode& node, const std::s
 
     const bool hadState =
         node.config.count(kHostedPluginStateConfigKey) > 0 || node.config.count(kHostedPluginStateLengthConfigKey) > 0;
+
     if (!hadState)
     {
         return false;
@@ -886,5 +931,4 @@ bool PluginController::ClearStaleHostedPluginState(GraphNode& node, const std::s
     node.config.erase(kHostedPluginFormatConfigKey);
     return true;
 }
-
 } // namespace guitarfx

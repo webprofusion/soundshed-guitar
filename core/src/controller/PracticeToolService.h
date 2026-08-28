@@ -67,7 +67,6 @@
 
 namespace guitarfx
 {
-
 class PracticeToolService
 {
   public:
@@ -282,5 +281,4 @@ class PracticeToolService
     std::condition_variable mRenderWake;
     std::mutex mRenderWakeMutex;
 };
-
 } // namespace guitarfx

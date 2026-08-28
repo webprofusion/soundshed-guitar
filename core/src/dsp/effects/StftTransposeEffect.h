@@ -45,6 +45,7 @@ class StftTransposeChannel
     [[nodiscard]] static int GetExpectedLatencySamples(int semitones, int mode)
     {
         const int clamped = std::clamp(semitones, -15, 12);
+
         if (clamped == 0)
         {
             return 0;
@@ -84,6 +85,7 @@ class StftTransposeChannel
         const int clamped = std::clamp(semitones, -15, 12);
         const StftTransposeOptions sanitizedOptions = SanitizeOptions(options);
         const double factor = std::pow(2.0, static_cast<double>(clamped) / 12.0);
+
         if (clamped == mSemitones && sanitizedOptions.mode == mOptions.mode &&
             std::abs(sanitizedOptions.quefrencySeconds - mOptions.quefrencySeconds) < 1.0e-9 &&
             std::abs(sanitizedOptions.timbre - mOptions.timbre) < 1.0e-9 &&
@@ -138,6 +140,7 @@ class StftTransposeChannel
             }
 
             mInputFrame[static_cast<size_t>(mInputFill++)] = input[sampleIndex];
+
             if (mInputFill == static_cast<int>(mProfile.synthesisWindow))
             {
                 ProcessSynthesisBlock();
@@ -161,12 +164,14 @@ class StftTransposeChannel
     static StftTransposeProfile SelectProfile(int semitones, int mode, int /*maxBlockSize*/)
     {
         const int amount = std::abs(semitones);
+
         if (mode > 0)
         {
             if (amount <= 2)
             {
                 return {1024, 256, 8};
             }
+
             return {2048, 512, 8};
         }
 
@@ -174,6 +179,7 @@ class StftTransposeChannel
         {
             return {512, 128, 4};
         }
+
         return {1024, 256, 4};
     }
 
@@ -348,6 +354,7 @@ class StftTransposeEffect : public EffectProcessor
                     std::copy(source, source + numSamples, outputs[ch]);
                 }
             }
+
             return;
         }
 
@@ -365,12 +372,14 @@ class StftTransposeEffect : public EffectProcessor
 
         const float dryMix = static_cast<float>(1.0 - mActiveMix);
         const float wetMix = static_cast<float>(mActiveMix);
+
         for (int i = 0; i < numSamples; ++i)
         {
             if (outputs[0])
             {
                 outputs[0][i] = leftInput[i] * dryMix + mWetL[static_cast<size_t>(i)] * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = rightInput[i] * dryMix + mWetR[static_cast<size_t>(i)] * wetMix;
@@ -383,6 +392,7 @@ class StftTransposeEffect : public EffectProcessor
         if (key == "semitones")
         {
             const int semitones = static_cast<int>(std::round(std::clamp(value, -12.0, 12.0)));
+
             if (semitones != mRequestedSemitones.load(std::memory_order_relaxed))
             {
                 mRequestedSemitones.store(semitones, std::memory_order_relaxed);
@@ -399,6 +409,7 @@ class StftTransposeEffect : public EffectProcessor
         else if (key == "mode")
         {
             const int mode = value >= 0.5 ? 1 : 0;
+
             if (mode != mRequestedMode.load(std::memory_order_relaxed))
             {
                 mRequestedMode.store(mode, std::memory_order_relaxed);
@@ -435,26 +446,32 @@ class StftTransposeEffect : public EffectProcessor
         {
             return static_cast<double>(mRequestedSemitones.load(std::memory_order_relaxed));
         }
+
         if (key == "mix")
         {
             return mRequestedMix.load(std::memory_order_relaxed);
         }
+
         if (key == "mode")
         {
             return static_cast<double>(mRequestedMode.load(std::memory_order_relaxed));
         }
+
         if (key == "quefrencyMs")
         {
             return mRequestedQuefrencyMs.load(std::memory_order_relaxed);
         }
+
         if (key == "timbre")
         {
             return mRequestedTimbre.load(std::memory_order_relaxed);
         }
+
         if (key == "normalize")
         {
             return mRequestedNormalization.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -564,5 +581,4 @@ inline void RegisterStftTransposeEffect()
                        {"normalize", "Normalize", 1.0, 0.0, 1.0, "enum", "", false, 1.0, {"Off", "On"}}};
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<StftTransposeEffect>(); });
 }
-
 } // namespace guitarfx

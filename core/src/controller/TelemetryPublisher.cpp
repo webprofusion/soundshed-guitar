@@ -13,7 +13,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 TelemetryPublisher::TelemetryPublisher(IPluginHost& host, MultiPresetMixer& presetMixer, SendMessageFn sendMessage)
     : mHost(host), mPresetMixer(presetMixer), mSendMessage(std::move(sendMessage))
 {
@@ -37,9 +36,11 @@ void TelemetryPublisher::OnIdle()
     const bool uiVisible = mUiVisible.load(std::memory_order_acquire);
 
     mPerformanceStatsCounter++;
+
     if (mPerformanceStatsCounter >= 60 / kDspPerformanceStatsRateHz)
     {
         mPerformanceStatsCounter = 0;
+
         if (uiVisible)
         {
             RequestPerformanceStats();
@@ -51,9 +52,11 @@ void TelemetryPublisher::OnIdle()
     if (mSignalDiagnosticsEnabled.load(std::memory_order_acquire))
     {
         mSignalDiagnosticsCounter++;
+
         if (mSignalDiagnosticsCounter >= 60 / kSignalDiagnosticsRateHz)
         {
             mSignalDiagnosticsCounter = 0;
+
             if (uiVisible)
             {
                 RequestSignalDiagnostics();
@@ -69,6 +72,7 @@ void TelemetryPublisher::OnIdle()
     // which the user has to opt into, and it costs nothing when no spatialiser
     // is in the chain.
     mSpatialPositionCounter++;
+
     if (mSpatialPositionCounter >= 60 / kSpatialPositionRateHz)
     {
         mSpatialPositionCounter = 0;
@@ -91,6 +95,7 @@ void TelemetryPublisher::TrySendPendingSignalDiagnostics()
 
     constexpr auto kMinSignalDiagnosticsInterval = std::chrono::milliseconds(1000 / kSignalDiagnosticsRateHz);
     const auto now = std::chrono::steady_clock::now();
+
     if (mLastSignalDiagnosticsSentAt.time_since_epoch().count() != 0 &&
         (now - mLastSignalDiagnosticsSentAt) < kMinSignalDiagnosticsInterval)
     {
@@ -124,6 +129,7 @@ void TelemetryPublisher::SendSignalDiagnostics()
 
     std::vector<RosterEntry> roster;
     roster.reserve(snapshot.nodes.size());
+
     for (const auto& n : snapshot.nodes)
     {
         roster.push_back(
@@ -137,6 +143,7 @@ void TelemetryPublisher::SendSignalDiagnostics()
         ++mRosterSeq;
 
         nlohmann::json rosterNodes = nlohmann::json::array();
+
         for (const auto& entry : mRoster)
         {
             rosterNodes.push_back(nlohmann::json::array({entry.scope, entry.presetId, entry.nodeId, entry.nodeType,
@@ -159,6 +166,7 @@ void TelemetryPublisher::SendSignalDiagnostics()
     }
 
     nlohmann::json frameLevels = nlohmann::json::array();
+
     for (const auto& n : snapshot.nodes)
     {
         for (const auto& value : buildLevelTuple(n.levels))
@@ -192,10 +200,12 @@ void TelemetryPublisher::SendSignalDiagnostics()
         const auto& analyzer = *n.analyzer;
         const auto quantiseBands = [](const std::vector<float>& values) {
             nlohmann::json out = nlohmann::json::array();
+
             for (const float value : values)
             {
                 out.push_back(std::isfinite(value) ? static_cast<int>(std::lround(value)) : -120);
             }
+
             return out;
         };
 
@@ -245,6 +255,7 @@ void TelemetryPublisher::TrySendPendingPerformanceStats()
 
     constexpr auto kMinPerformanceStatsInterval = std::chrono::milliseconds(1000 / kDspPerformanceStatsRateHz);
     const auto now = std::chrono::steady_clock::now();
+
     if (mLastPerformanceStatsSentAt.time_since_epoch().count() != 0 &&
         (now - mLastPerformanceStatsSentAt) < kMinPerformanceStatsInterval)
     {
@@ -266,28 +277,36 @@ void TelemetryPublisher::SendPerformanceStats()
     statsJson["dspLoadPercent"] = stats.dspLoadPercent;
     statsJson["totalLatencySamples"] = totalLatencySamples;
     nlohmann::json nodeTimes = nlohmann::json::object();
+
     for (const auto& [nodeId, timeUs] : stats.nodeProcessingTimesUs)
     {
         nodeTimes[nodeId] = timeUs;
     }
+
     statsJson["nodeProcessingTimesUs"] = nodeTimes;
     nlohmann::json scopedNodeTimes = nlohmann::json::object();
+
     for (const auto& [nodeId, timeUs] : stats.scopedNodeProcessingTimesUs)
     {
         scopedNodeTimes[nodeId] = timeUs;
     }
+
     statsJson["scopedNodeProcessingTimesUs"] = scopedNodeTimes;
     nlohmann::json nodeLatencies = nlohmann::json::object();
+
     for (const auto& [nodeId, latencySamples] : stats.nodeLatencySamples)
     {
         nodeLatencies[nodeId] = latencySamples;
     }
+
     statsJson["nodeLatencySamples"] = nodeLatencies;
     nlohmann::json scopedNodeLatencies = nlohmann::json::object();
+
     for (const auto& [nodeId, latencySamples] : stats.scopedNodeLatencySamples)
     {
         scopedNodeLatencies[nodeId] = latencySamples;
     }
+
     statsJson["scopedNodeLatencySamples"] = scopedNodeLatencies;
 
     nlohmann::json msg;
@@ -314,6 +333,7 @@ void TelemetryPublisher::SendSpatialPositions()
         {
             return;
         }
+
         mSpatialPositionsWereSent = false;
     }
     else
@@ -322,21 +342,23 @@ void TelemetryPublisher::SendSpatialPositions()
     }
 
     nlohmann::json nodes = nlohmann::json::array();
+
     for (const auto& readout : readouts)
     {
         nlohmann::json node{
             {"scope", readout.scope},         {"nodeId", readout.nodeId},      {"azimuth", readout.values[0]},
             {"elevation", readout.values[1]}, {"distance", readout.values[2]}, {"itdUs", readout.values[3]},
             {"ildDb", readout.values[4]},     {"rateHz", readout.values[5]},   {"moving", readout.values[6] > 0.5}};
+
         if (!readout.presetId.empty())
         {
             node["presetId"] = readout.presetId;
         }
+
         nodes.push_back(std::move(node));
     }
 
     nlohmann::json msg{{"type", "spatialPosition"}, {"nodes", std::move(nodes)}};
     Send(msg.dump());
 }
-
 } // namespace guitarfx

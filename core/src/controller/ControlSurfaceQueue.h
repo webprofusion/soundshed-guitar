@@ -29,7 +29,6 @@
 
 namespace guitarfx
 {
-
 class ControlSurfaceQueue
 {
   public:
@@ -107,5 +106,4 @@ class ControlSurfaceQueue
     std::mutex mMidiLogMutex;
     std::vector<MidiEvent> mMidiLog;
 };
-
 } // namespace guitarfx

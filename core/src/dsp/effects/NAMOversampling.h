@@ -39,11 +39,13 @@ inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
 {
     int index = 0;
     int normalized = std::max(1, factor);
+
     while (normalized > 1 && index < kNamOversamplingMaxIndex)
     {
         normalized >>= 1;
         ++index;
     }
+
     return index;
 }
 
@@ -53,6 +55,7 @@ inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
     {
         return kNamOversamplingIndexDefault;
     }
+
     return std::clamp(static_cast<int>(std::llround(value)), 0, kNamOversamplingMaxIndex);
 }
 
@@ -62,6 +65,7 @@ inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
     {
         return kNamAntiAliasPhaseIndexDefault;
     }
+
     return std::clamp(static_cast<int>(std::llround(value)), 0, kNamAntiAliasPhaseMaxIndex);
 }
 
@@ -90,6 +94,7 @@ inline constexpr int kNamAntiAliasPhaseIndexDefault = 0;
     {
         return modelSampleRate;
     }
+
     if (factor <= 1)
     {
         return modelSampleRate;
@@ -122,6 +127,7 @@ class NamOversamplingProcessor
 
         mRenderingSampleRate =
             ResolveNamOversampledRenderingRate(mModelSampleRate, mHostSampleRate, oversamplingFactor);
+
         if (mRenderingSampleRate <= 0.0)
         {
             mRenderingSampleRate = mHostSampleRate;
@@ -135,11 +141,13 @@ class NamOversamplingProcessor
                             1);
 
         mResamplingActive = std::abs(mRenderingSampleRate - mHostSampleRate) > 1.0e-6;
+
         if (mResamplingActive)
         {
             mResampler = std::make_unique<dsp::ResamplingContainer<NAM_SAMPLE, 1, 32>>(mRenderingSampleRate,
                                                                                        mFilterPhase, mModelSampleRate);
             mResampler->Reset(mHostSampleRate, mMaxBlockSize);
+
             if (mFilterPhase == dsp::EAntiAliasFilterPhase::MinimumPhaseCascadedFIR &&
                 mResampler->HasSingleProcessCallbackPerBlock())
             {
@@ -168,6 +176,7 @@ class NamOversamplingProcessor
             mResampler->SetAntiAliasFilterPhase(mFilterPhase);
             mResampler->Reset(mHostSampleRate, mMaxBlockSize);
         }
+
         model.SetTimeScale(mTimeScale);
         model.Reset(mRenderingSampleRate, mMaxRenderingBlockSize);
     }
@@ -283,14 +292,17 @@ class NamDryDelay
         for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
         {
             std::size_t readPosition = mWritePosition + mBuffer.size() - static_cast<std::size_t>(mLatencySamples);
+
             if (readPosition >= mBuffer.size())
             {
                 readPosition -= mBuffer.size();
             }
+
             const float delayed = mBuffer[readPosition];
             mBuffer[mWritePosition] = samples[sampleIndex];
             samples[sampleIndex] = delayed;
             ++mWritePosition;
+
             if (mWritePosition == mBuffer.size())
             {
                 mWritePosition = 0;

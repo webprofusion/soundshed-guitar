@@ -46,10 +46,12 @@ class SimpleCabEffect : public EffectProcessor
             {
                 std::copy_n(inputs[0], numSamples, outputs[0]);
             }
+
             if (outputs[1] && inputs[1])
             {
                 std::copy_n(inputs[1], numSamples, outputs[1]);
             }
+
             return;
         }
 
@@ -121,22 +123,27 @@ class SimpleCabEffect : public EffectProcessor
         {
             return mBass;
         }
+
         if (key == "presence")
         {
             return mPresence;
         }
+
         if (key == "brightness")
         {
             return mBrightness;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "enabled")
         {
             return mEnabled ? 1.0 : 0.0;
         }
+
         return 0.0;
     }
 
@@ -262,5 +269,4 @@ inline void RegisterSimpleCabEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<SimpleCabEffect>(); });
 }
-
 } // namespace guitarfx

@@ -58,10 +58,12 @@ std::string DisplayName(const fs::path& path)
         const auto wide = path.filename().wstring();
         std::string ascii;
         ascii.reserve(wide.size());
+
         for (const wchar_t c : wide)
         {
             ascii.push_back(c < 128 ? static_cast<char>(c) : '?');
         }
+
         return ascii;
     }
 }
@@ -78,6 +80,7 @@ double Median(std::vector<double> values)
     {
         return 0.0;
     }
+
     std::sort(values.begin(), values.end());
     return values[values.size() / 2];
 }
@@ -91,26 +94,32 @@ void PrintRow(const std::string& label, double ms)
 std::vector<fs::path> CollectFiles(const fs::path& root, const std::string& extension, std::size_t limit)
 {
     std::vector<fs::path> found;
+
     if (!fs::exists(root))
     {
         return found;
     }
+
     for (const auto& entry : fs::recursive_directory_iterator(root))
     {
         if (!entry.is_regular_file())
         {
             continue;
         }
+
         if (entry.path().extension() != extension)
         {
             continue;
         }
+
         found.push_back(entry.path());
+
         if (found.size() >= limit)
         {
             break;
         }
     }
+
     std::sort(found.begin(), found.end());
     return found;
 }
@@ -141,6 +150,7 @@ void BenchmarkNamModel(const fs::path& path)
             const auto t = Clock::now();
             auto model = ::nam::get_dsp(path);
             fromFile.push_back(MsSince(t));
+
             if (!model)
             {
                 std::cout << "  (null model)\n";
@@ -165,6 +175,7 @@ void BenchmarkNamModel(const fs::path& path)
     std::vector<double> resetMs;
     {
         auto model = ::nam::get_dsp(path);
+
         for (int i = 0; i < kIterations; ++i)
         {
             const auto t = Clock::now();
@@ -195,6 +206,7 @@ void BenchmarkIr(const fs::path& path, int blockSize)
     }
 
     std::vector<double> loadMs, partitionMs;
+
     for (int i = 0; i < kIterations; ++i)
     {
         {
@@ -205,12 +217,14 @@ void BenchmarkIr(const fs::path& path, int blockSize)
         }
         {
             std::vector<float> mono = data.samples;
+
             if (data.channels > 1)
             {
                 std::vector<float> l, r;
                 guitarfx::irwav::SplitToStereo(data, l, r);
                 mono = l;
             }
+
             guitarfx::RealtimeConvolver convolver;
             const auto t = Clock::now();
             convolver.SetImpulse(mono, blockSize);
@@ -283,6 +297,7 @@ void BenchmarkPresetBuild(const fs::path& namPath, const fs::path& irPath)
     mixer.CommitPresetSwap();
 
     std::vector<double> prepareMs, commitMs;
+
     for (int i = 0; i < kIterations; ++i)
     {
         const Preset& next = (i % 2 == 0) ? b : a;
@@ -305,6 +320,7 @@ void BenchmarkPresetBuild(const fs::path& namPath, const fs::path& irPath)
     // Split the build so it is clear how much is resource loading and how much is
     // graph construction / buffer allocation.
     std::vector<double> setGraphMs, executorPrepareMs, namOnlyMs, noResourceMs;
+
     for (int i = 0; i < kIterations; ++i)
     {
         {
@@ -320,10 +336,12 @@ void BenchmarkPresetBuild(const fs::path& namPath, const fs::path& irPath)
         {
             // Same graph with the resource refs stripped: isolates construction from loading.
             Preset bare = a;
+
             for (auto& n : bare.graph.nodes)
             {
                 n.resources.clear();
             }
+
             SignalGraphExecutor executor;
             const auto t = Clock::now();
             executor.SetGraph(bare.graph);
@@ -333,6 +351,7 @@ void BenchmarkPresetBuild(const fs::path& namPath, const fs::path& irPath)
         {
             // Amp node alone, to attribute the NAM share of SetGraph.
             Preset ampOnly = a;
+
             for (auto& n : ampOnly.graph.nodes)
             {
                 if (n.id != "amp")
@@ -340,6 +359,7 @@ void BenchmarkPresetBuild(const fs::path& namPath, const fs::path& irPath)
                     n.resources.clear();
                 }
             }
+
             SignalGraphExecutor executor;
             const auto t = Clock::now();
             executor.SetGraph(ampOnly.graph);
@@ -368,10 +388,12 @@ int main()
     std::cout << "=====================================================================\n";
 
     const auto namFiles = CollectFiles(assets / "amps", ".nam", 4);
+
     if (namFiles.empty())
     {
         std::cout << "\nNo .nam assets found under " << (assets / "amps").string() << "\n";
     }
+
     for (const auto& path : namFiles)
     {
         try
@@ -389,10 +411,12 @@ int main()
     std::cout << "---------------------------------------------------------------------\n";
 
     const auto irFiles = CollectFiles(assets / "ir", ".wav", 3);
+
     if (irFiles.empty())
     {
         std::cout << "\nNo .wav assets found under " << (assets / "ir").string() << "\n";
     }
+
     for (const auto& path : irFiles)
     {
         BenchmarkIr(path, 512);

@@ -6,7 +6,6 @@
 
 namespace guitarfx
 {
-
 namespace
 {
 /// Human-readable name for a MIDI status nibble, for the UI's log panel.
@@ -77,6 +76,7 @@ void ControlSurfaceQueue::EnqueueMidi(const MidiEvent& event)
     if (mMidiLogEnabled.load(std::memory_order_relaxed))
     {
         std::lock_guard<std::mutex> lock(mMidiLogMutex);
+
         if (mMidiLog.size() < kMaxMidiLog)
         {
             mMidiLog.push_back(event);
@@ -95,12 +95,14 @@ void ControlSurfaceQueue::DrainMidiForApply(const std::function<void(const MidiE
     {
         apply(event);
     }
+
     mMidiToApply.clear();
 }
 
 void ControlSurfaceQueue::SetMidiLogEnabled(bool enabled)
 {
     mMidiLogEnabled.store(enabled, std::memory_order_relaxed);
+
     if (!enabled)
     {
         std::lock_guard<std::mutex> lock(mMidiLogMutex);
@@ -141,5 +143,4 @@ void ControlSurfaceQueue::PublishMidiLog()
         mSendMessage(logMsg.dump());
     }
 }
-
 } // namespace guitarfx

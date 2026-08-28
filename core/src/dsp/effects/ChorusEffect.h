@@ -23,6 +23,7 @@ class ChorusEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         const double maxDelayMs = 50.0;
@@ -81,6 +82,7 @@ class ChorusEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -88,11 +90,13 @@ class ChorusEffect : public EffectProcessor
 
             AdvanceWriteIndex();
             phase += phaseInc;
+
             if (phase >= 2.0 * kPi)
             {
                 phase = std::fmod(phase, 2.0 * kPi);
             }
         }
+
         mPhase.store(phase, std::memory_order_relaxed);
     }
 
@@ -142,38 +146,47 @@ class ChorusEffect : public EffectProcessor
         {
             return mBpm.load(std::memory_order_relaxed);
         }
+
         if (key == "syncMode")
         {
             return mSyncMode.load(std::memory_order_relaxed);
         }
+
         if (key == "syncDivision")
         {
             return mSyncDivision.load(std::memory_order_relaxed);
         }
+
         if (key == "effectiveRate")
         {
             return GetEffectiveRateHz();
         }
+
         if (key == "rate")
         {
             return mRateHz.load(std::memory_order_relaxed);
         }
+
         if (key == "depth")
         {
             return mDepthMs.load(std::memory_order_relaxed);
         }
+
         if (key == "delay")
         {
             return mDelayMs.load(std::memory_order_relaxed);
         }
+
         if (key == "feedback")
         {
             return mFeedback.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -260,5 +273,4 @@ inline void RegisterChorusEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<ChorusEffect>(); });
 }
-
 } // namespace guitarfx

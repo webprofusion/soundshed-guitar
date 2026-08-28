@@ -12,7 +12,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 inline constexpr const char* kRiffLibraryPathSettingKey = "riffLibrary.path";
 inline constexpr const char* kRiffLibraryDefaultFolder = "riff-library";
 inline constexpr const char* kRiffLibraryDocumentId = "riff-library";
@@ -24,5 +23,4 @@ inline constexpr const char* kRiffLibraryDocumentId = "riff-library";
 /// Converts a runtime path back to the library-relative form written to the index.
 [[nodiscard]] std::filesystem::path BuildRiffTakePathForStorage(const std::filesystem::path& runtimePath,
                                                                 const std::filesystem::path& libraryPath);
-
 } // namespace guitarfx::controller_detail

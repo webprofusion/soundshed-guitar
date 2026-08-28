@@ -25,6 +25,5 @@ void ForceFactoryRegistration()
     (void)lstm_create_config;
     (void)wavenet_create_config;
 }
-
 } // namespace factory
 } // namespace nam

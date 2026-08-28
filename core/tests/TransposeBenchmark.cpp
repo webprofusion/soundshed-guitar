@@ -127,22 +127,26 @@ struct StereoAudio
 std::vector<std::uint8_t> ReadBinaryFile(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
+
     if (!input)
     {
         return {};
     }
+
     return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
 std::optional<StereoAudio> LoadDemoSample(const fs::path& path)
 {
     const auto bytes = ReadBinaryFile(path);
+
     if (bytes.empty())
     {
         return std::nullopt;
     }
 
     const auto decoded = guitarfx::util::DecodePcmWav(bytes);
+
     if (!decoded || decoded->channelSamples.empty() || decoded->sampleRate <= 0.0)
     {
         return std::nullopt;
@@ -158,17 +162,20 @@ std::optional<StereoAudio> LoadDemoSample(const fs::path& path)
 
     audio.left.resize(frames);
     audio.right.resize(frames);
+
     for (size_t i = 0; i < frames; ++i)
     {
         audio.left[i] = static_cast<float>(srcL[i]);
         audio.right[i] = static_cast<float>(srcR[i]);
     }
+
     return audio;
 }
 
 bool WriteWav16(const fs::path& path, const StereoAudio& audio)
 {
     std::ofstream out(path, std::ios::binary);
+
     if (!out)
     {
         return false;
@@ -211,6 +218,7 @@ bool WriteWav16(const fs::path& path, const StereoAudio& audio)
         out.write(reinterpret_cast<const char*>(&l), 2);
         out.write(reinterpret_cast<const char*>(&r), 2);
     }
+
     return static_cast<bool>(out);
 }
 
@@ -227,15 +235,18 @@ std::vector<double> ComputeEnvelope(const std::vector<float>& left, const std::v
     std::vector<double> envelope;
     envelope.reserve(left.size() / kEnvelopeDecimation + 1);
     double state = 0.0;
+
     for (size_t i = 0; i < left.size(); ++i)
     {
         const double mono = 0.5 * (std::abs(static_cast<double>(left[i])) + std::abs(static_cast<double>(right[i])));
         state += alpha * (mono - state);
+
         if (i % kEnvelopeDecimation == 0)
         {
             envelope.push_back(state);
         }
     }
+
     return envelope;
 }
 
@@ -248,6 +259,7 @@ int MeasureLatencyFrames(const StereoAudio& input, const StereoAudio& output)
 {
     const auto inputEnv = ComputeEnvelope(input.left, input.right, input.sampleRate);
     const auto outputEnv = ComputeEnvelope(output.left, output.right, output.sampleRate);
+
     if (inputEnv.size() < 16 || outputEnv.size() < 16)
     {
         return -1;
@@ -255,16 +267,19 @@ int MeasureLatencyFrames(const StereoAudio& input, const StereoAudio& output)
 
     const int maxLag = static_cast<int>(kMaxMeasuredLatencySeconds * input.sampleRate) / kEnvelopeDecimation;
     const int usableLag = std::min<int>(maxLag, static_cast<int>(outputEnv.size()) - 8);
+
     if (usableLag <= 0)
     {
         return -1;
     }
 
     double inputEnergy = 0.0;
+
     for (const double v : inputEnv)
     {
         inputEnergy += v * v;
     }
+
     if (inputEnergy <= 1.0e-12)
     {
         return -1;
@@ -272,22 +287,27 @@ int MeasureLatencyFrames(const StereoAudio& input, const StereoAudio& output)
 
     int bestLag = 0;
     double bestScore = -1.0;
+
     for (int lag = 0; lag <= usableLag; ++lag)
     {
         double dot = 0.0;
         double outEnergy = 0.0;
         const size_t count = std::min(inputEnv.size(), outputEnv.size() - static_cast<size_t>(lag));
+
         for (size_t i = 0; i < count; ++i)
         {
             const double o = outputEnv[i + static_cast<size_t>(lag)];
             dot += inputEnv[i] * o;
             outEnergy += o * o;
         }
+
         if (outEnergy <= 1.0e-12)
         {
             continue;
         }
+
         const double score = dot / std::sqrt(inputEnergy * outEnergy);
+
         if (score > bestScore)
         {
             bestScore = score;
@@ -299,6 +319,7 @@ int MeasureLatencyFrames(const StereoAudio& input, const StereoAudio& output)
     {
         return -1;
     }
+
     return bestLag * kEnvelopeDecimation;
 }
 
@@ -315,26 +336,33 @@ std::vector<double> DecimateForPitch(const std::vector<float>& left, const std::
 
     std::vector<double> out;
     out.reserve(frameCount / factor + 1);
+
     for (size_t i = 0; i + factor <= frameCount; i += factor)
     {
         double acc = 0.0;
         size_t taken = 0;
+
         for (size_t k = 0; k < factor; ++k)
         {
             const size_t idx = offsetFrames + i + k;
+
             if (idx >= left.size() || idx >= right.size())
             {
                 break;
             }
+
             acc += 0.5 * (static_cast<double>(left[idx]) + static_cast<double>(right[idx]));
             ++taken;
         }
+
         if (taken == 0)
         {
             break;
         }
+
         out.push_back(acc / static_cast<double>(taken));
     }
+
     return out;
 }
 
@@ -354,44 +382,53 @@ double EstimateF0(const std::vector<double>& x, size_t start, size_t count, doub
     const int window = static_cast<int>(count) / 2;
     const int tauMax = std::min(window, static_cast<int>(sampleRate / std::max(minHz, 1.0)));
     const int tauMin = std::max(2, static_cast<int>(sampleRate / std::max(maxHz, 1.0)));
+
     if (tauMax <= tauMin + 2)
     {
         return 0.0;
     }
 
     double mean = 0.0;
+
     for (size_t i = 0; i < count; ++i)
     {
         mean += x[start + i];
     }
+
     mean /= static_cast<double>(count);
 
     double energy = 0.0;
+
     for (size_t i = 0; i < count; ++i)
     {
         const double centered = x[start + i] - mean;
         energy += centered * centered;
     }
+
     if (std::sqrt(energy / static_cast<double>(count)) < kPitchSilenceRms)
     {
         return 0.0;
     }
 
     std::vector<double> diff(static_cast<size_t>(tauMax) + 1, 0.0);
+
     for (int tau = 1; tau <= tauMax; ++tau)
     {
         double sum = 0.0;
+
         for (int i = 0; i < window; ++i)
         {
             const double a = x[start + static_cast<size_t>(i)] - mean;
             const double b = x[start + static_cast<size_t>(i + tau)] - mean;
             sum += (a - b) * (a - b);
         }
+
         diff[static_cast<size_t>(tau)] = sum;
     }
 
     std::vector<double> normalized(diff.size(), 1.0);
     double running = 0.0;
+
     for (int tau = 1; tau <= tauMax; ++tau)
     {
         running += diff[static_cast<size_t>(tau)];
@@ -399,23 +436,28 @@ double EstimateF0(const std::vector<double>& x, size_t start, size_t count, doub
     }
 
     int tau = -1;
+
     for (int t = tauMin; t <= tauMax; ++t)
     {
         if (normalized[static_cast<size_t>(t)] >= kPitchYinThreshold)
         {
             continue;
         }
+
         // Descend to the local minimum so we lock the true period, not its onset.
         while (t + 1 <= tauMax && normalized[static_cast<size_t>(t + 1)] < normalized[static_cast<size_t>(t)])
         {
             ++t;
         }
+
         tau = t;
         break;
     }
+
     if (tau < 1)
     {
         int best = tauMin;
+
         for (int t = tauMin; t <= tauMax; ++t)
         {
             if (normalized[static_cast<size_t>(t)] < normalized[static_cast<size_t>(best)])
@@ -423,25 +465,30 @@ double EstimateF0(const std::vector<double>& x, size_t start, size_t count, doub
                 best = t;
             }
         }
+
         if (normalized[static_cast<size_t>(best)] > kPitchFallbackMax)
         {
             return 0.0;
         }
+
         tau = best;
     }
 
     double refined = static_cast<double>(tau);
+
     if (tau > 1 && tau < tauMax)
     {
         const double a = normalized[static_cast<size_t>(tau) - 1];
         const double b = normalized[static_cast<size_t>(tau)];
         const double c = normalized[static_cast<size_t>(tau) + 1];
         const double denom = a - 2.0 * b + c;
+
         if (std::abs(denom) > 1.0e-12)
         {
             refined = tau + 0.5 * (a - c) / denom;
         }
     }
+
     return refined > 0.0 ? sampleRate / refined : 0.0;
 }
 
@@ -467,6 +514,7 @@ PitchAccuracy MeasurePitchAccuracy(const StereoAudio& dry, const StereoAudio& we
                                    int semitones)
 {
     PitchAccuracy result;
+
     if (dry.frames() == 0 || wet.left.size() <= wetOffsetFrames)
     {
         return result;
@@ -479,6 +527,7 @@ PitchAccuracy MeasurePitchAccuracy(const StereoAudio& dry, const StereoAudio& we
     const std::vector<double> dryMono = DecimateForPitch(dry.left, dry.right, 0, frameCount, dry.sampleRate, rate);
     const std::vector<double> wetMono =
         DecimateForPitch(wet.left, wet.right, wetOffsetFrames, frameCount, wet.sampleRate, wetRate);
+
     if (rate <= 0.0 || dryMono.size() < static_cast<size_t>(kPitchFrameSamples))
     {
         return result;
@@ -495,6 +544,7 @@ PitchAccuracy MeasurePitchAccuracy(const StereoAudio& dry, const StereoAudio& we
     // Track both signals on a common grid first, then decide which frames to trust.
     std::vector<double> dryTrack;
     std::vector<double> wetTrack;
+
     for (size_t start = 0; start + frameSamples <= usable; start += hop)
     {
         dryTrack.push_back(EstimateF0(dryMono, start, frameSamples, rate, kPitchDryMinHz, kPitchDryMaxHz));
@@ -502,37 +552,44 @@ PitchAccuracy MeasurePitchAccuracy(const StereoAudio& dry, const StereoAudio& we
     }
 
     std::vector<double> cents;
+
     for (size_t i = 0; i < dryTrack.size(); ++i)
     {
         const double here = dryTrack[i];
+
         if (here <= 0.0)
         {
             continue;
         }
 
         const double wetF0 = wetTrack[i];
+
         if (wetF0 <= 0.0)
         {
             continue;
         }
 
         const double expected = here * factor;
+
         if (expected <= 0.0)
         {
             continue;
         }
 
         const double error = 1200.0 * std::log2(wetF0 / expected);
+
         // Reject octave-tracking artifacts; a genuine engine error of >600 cents
         // would show up as a collapse in frame count instead.
         if (std::abs(error) >= kPitchOctaveRejectCents)
         {
             continue;
         }
+
         cents.push_back(error);
     }
 
     result.frames = static_cast<int>(cents.size());
+
     if (result.frames < kPitchMinFrames)
     {
         return result;
@@ -551,10 +608,12 @@ PitchAccuracy MeasurePitchAccuracy(const StereoAudio& dry, const StereoAudio& we
     // would let those outliers dominate the number.
     std::vector<double> deviations;
     deviations.reserve(cents.size());
+
     for (const double c : cents)
     {
         deviations.push_back(std::abs(c - result.medianCents));
     }
+
     result.jitterCents = 1.4826 * median(std::move(deviations));
     result.valid = true;
     return result;
@@ -567,6 +626,7 @@ std::string FormatPitchSummary(const nlohmann::json& stats)
     {
         return ", pitch n/a";
     }
+
     std::ostringstream out;
     out << std::fixed << std::setprecision(1) << ", pitch " << stats["pitchErrorCents"].get<double>() << " +/-"
         << stats["pitchJitterCents"].get<double>() << " cents";
@@ -586,6 +646,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     auto& registry = guitarfx::EffectRegistry::Instance();
     const std::string resolvedType = registry.Resolve(alias);
     auto effect = registry.Create(resolvedType);
+
     if (!effect)
     {
         std::cerr << "  SKIP: cannot create effect '" << label << "' (alias='" << alias << "')\n";
@@ -621,6 +682,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     for (size_t pos = 0; pos < totalFrames; pos += kBlockSize)
     {
         const int blockFrames = static_cast<int>(std::min<size_t>(kBlockSize, totalFrames - pos));
+
         for (int i = 0; i < blockFrames; ++i)
         {
             const size_t idx = pos + static_cast<size_t>(i);
@@ -636,6 +698,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
         {
             maxBlockNs = std::max(maxBlockNs, std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed));
         }
+
         totalNs += std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed);
         ++timedBlocks;
 
@@ -653,6 +716,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     render.left.assign(inputFrames, 0.0f);
     render.right.assign(inputFrames, 0.0f);
     const size_t offset = static_cast<size_t>(std::max(reportedLatency, 0));
+
     for (size_t i = 0; i < inputFrames && (i + offset) < totalFrames; ++i)
     {
         render.left[i] = raw.left[i + offset];
@@ -661,6 +725,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
 
     double peak = 0.0;
     double sumSquares = 0.0;
+
     for (size_t i = 0; i < inputFrames; ++i)
     {
         const double l = std::abs(static_cast<double>(render.left[i]));
@@ -668,6 +733,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
         peak = std::max({peak, l, r});
         sumSquares += 0.5 * (l * l + r * r);
     }
+
     const double rms = inputFrames > 0 ? std::sqrt(sumSquares / static_cast<double>(inputFrames)) : 0.0;
 
     const double audioMs = 1000.0 * static_cast<double>(totalFrames) / input.sampleRate;
@@ -684,6 +750,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     stats["reportedLatencyMs"] = toMs(reportedLatency);
     stats["measuredLatencySamples"] = measuredLatency;
     stats["measuredLatencyMs"] = measuredLatency >= 0 ? toMs(measuredLatency) : -1.0;
+
     if (measuredLatency >= 0)
     {
         stats["latencyDeltaSamples"] = measuredLatency - reportedLatency;
@@ -692,6 +759,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     {
         stats["latencyDeltaSamples"] = nullptr;
     }
+
     stats["processMs"] = processMs;
     stats["audioMs"] = audioMs;
     stats["realtimeFactor"] = processMs > 0.0 ? audioMs / processMs : 0.0;
@@ -705,6 +773,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
     const size_t pitchOffset =
         static_cast<size_t>(std::max(measuredLatency >= 0 ? measuredLatency : reportedLatency, 0));
     const PitchAccuracy pitch = MeasurePitchAccuracy(input, raw, pitchOffset, semitones);
+
     if (pitch.valid)
     {
         stats["pitchErrorCents"] = pitch.medianCents;
@@ -715,6 +784,7 @@ std::optional<PassResult> RunConfiguredPass(const std::string& alias, const std:
         stats["pitchErrorCents"] = nullptr;
         stats["pitchJitterCents"] = nullptr;
     }
+
     stats["pitchFrames"] = pitch.frames;
 
     PassResult result;
@@ -730,6 +800,7 @@ std::optional<PassResult> RunPass(const EffectVariant& variant, int semitones, c
         // memory: TransposeEffect only applies preloaded semitones during Prepare).
         effect.SetParam("semitones", static_cast<double>(semitones));
         effect.SetParam("mix", 1.0);
+
         for (const auto& [key, value] : variant.extraParams)
         {
             effect.SetParam(key, value);
@@ -760,33 +831,40 @@ std::string SanitizeForFilename(std::string value)
             c = '_';
         }
     }
+
     return value;
 }
 
 std::optional<fs::path> FindExternalPluginCollectionPath()
 {
     fs::path current = fs::current_path();
+
     for (int i = 0; i < 6; ++i)
     {
         const fs::path candidate = current / kExternalPluginsCollectionRelPath;
+
         if (fs::exists(candidate))
         {
             return candidate;
         }
 
         const fs::path parent = current.parent_path();
+
         if (parent == current)
         {
             break;
         }
+
         current = parent;
     }
+
     return std::nullopt;
 }
 
 nlohmann::json LoadExternalPluginCollection(const fs::path& path)
 {
     std::ifstream input(path);
+
     if (!input)
     {
         return nlohmann::json::array();
@@ -803,20 +881,24 @@ nlohmann::json LoadExternalPluginCollection(const fs::path& path)
     }
 
     const auto pluginsIt = parsed.find("plugins");
+
     if (pluginsIt == parsed.end() || !pluginsIt->is_array())
     {
         return nlohmann::json::array();
     }
 
     nlohmann::json out = nlohmann::json::array();
+
     for (const auto& row : *pluginsIt)
     {
         if (!row.is_object())
         {
             continue;
         }
+
         const auto idIt = row.find("pluginId");
         const auto labelIt = row.find("pluginLabel");
+
         if (idIt == row.end() || labelIt == row.end() || !idIt->is_string() || !labelIt->is_string())
         {
             continue;
@@ -826,18 +908,22 @@ nlohmann::json LoadExternalPluginCollection(const fs::path& path)
         plugin["pluginId"] = *idIt;
         plugin["pluginLabel"] = *labelIt;
         const auto pathIt = row.find("pluginPath");
+
         if (pathIt != row.end() && pathIt->is_string())
         {
             plugin["pluginPath"] = *pathIt;
         }
+
         out.push_back(std::move(plugin));
     }
+
     return out;
 }
 
 std::vector<ExternalPluginVariant> ParseExternalPluginVariants(const nlohmann::json& pluginsJson)
 {
     std::vector<ExternalPluginVariant> out;
+
     if (!pluginsJson.is_array())
     {
         return out;
@@ -853,6 +939,7 @@ std::vector<ExternalPluginVariant> ParseExternalPluginVariants(const nlohmann::j
         const auto pluginIdIt = row.find("pluginId");
         const auto labelIt = row.find("pluginLabel");
         const auto pathIt = row.find("pluginPath");
+
         if (pluginIdIt == row.end() || labelIt == row.end() || pathIt == row.end() || !pluginIdIt->is_string() ||
             !labelIt->is_string() || !pathIt->is_string())
         {
@@ -865,12 +952,14 @@ std::vector<ExternalPluginVariant> ParseExternalPluginVariants(const nlohmann::j
         variant.pluginPath = pathIt->get<std::string>();
 
         const auto stateKeyIt = row.find("stateConfigKey");
+
         if (stateKeyIt != row.end() && stateKeyIt->is_string() && !stateKeyIt->get<std::string>().empty())
         {
             variant.stateConfigKey = stateKeyIt->get<std::string>();
         }
 
         const auto stateMapIt = row.find("stateBySemitone");
+
         if (stateMapIt != row.end() && stateMapIt->is_object())
         {
             for (auto it = stateMapIt->begin(); it != stateMapIt->end(); ++it)
@@ -879,6 +968,7 @@ std::vector<ExternalPluginVariant> ParseExternalPluginVariants(const nlohmann::j
                 {
                     continue;
                 }
+
                 try
                 {
                     const int semitone = std::stoi(it.key());
@@ -906,11 +996,13 @@ int main(int argc, char** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
+
         if (arg == "--all-demo-audio")
         {
             renderAllDemoAudio = true;
             continue;
         }
+
         if (arg == "-h" || arg == "--help")
         {
             std::cout << "Usage: " << argv[0] << " [--all-demo-audio] [outputRoot] [snapshotLabel]\n"
@@ -919,11 +1011,13 @@ int main(int argc, char** argv)
                       << "  snapshotLabel     default: snapshot-<UTC timestamp>\n";
             return 0;
         }
+
         if (!arg.empty() && arg[0] == '-')
         {
             std::cerr << "ERROR: unknown option: " << arg << '\n';
             return 1;
         }
+
         positionalArgs.push_back(arg);
     }
 
@@ -940,6 +1034,7 @@ int main(int argc, char** argv)
 
     std::error_code ec;
     fs::create_directories(snapshotDir, ec);
+
     if (ec)
     {
         std::cerr << "ERROR: cannot create output directory " << snapshotDir << ": " << ec.message() << '\n';
@@ -984,15 +1079,19 @@ int main(int argc, char** argv)
 
     const std::string pluginHostAlias = [&]() -> std::string {
         const std::string resolved = registry.Resolve("plugin_host");
+
         if (!resolved.empty())
         {
             return "plugin_host";
         }
+
         const std::string resolvedJuce = registry.Resolve("juce_plugin_host");
+
         if (!resolvedJuce.empty())
         {
             return "juce_plugin_host";
         }
+
         return {};
     }();
 
@@ -1006,6 +1105,7 @@ int main(int argc, char** argv)
     int failures = 0;
 
     std::vector<std::string> demoSamplesToRender;
+
     if (renderAllDemoAudio)
     {
         demoSamplesToRender = kDemoSamples;
@@ -1025,6 +1125,7 @@ int main(int argc, char** argv)
     {
         const fs::path samplePath = demoDir / sampleName;
         const auto audio = LoadDemoSample(samplePath);
+
         if (!audio)
         {
             std::cerr << "WARN: skipping demo sample (missing or undecodable): " << samplePath << '\n';
@@ -1035,12 +1136,14 @@ int main(int argc, char** argv)
 
         // Dry reference for the report.
         const std::string referenceFile = "reference_" + sampleStem + ".wav";
+
         if (!WriteWav16(snapshotDir / referenceFile, *audio))
         {
             std::cerr << "ERROR: cannot write reference wav for " << sampleName << '\n';
             ++failures;
             continue;
         }
+
         nlohmann::json reference;
         reference["sample"] = sampleName;
         reference["wav"] = referenceFile;
@@ -1056,6 +1159,7 @@ int main(int argc, char** argv)
             const auto info = registry.GetTypeInfo(registry.Resolve(variant.alias));
             double minSemitones = -12.0;
             double maxSemitones = 12.0;
+
             if (info)
             {
                 for (const auto& param : info->parameters)
@@ -1077,6 +1181,7 @@ int main(int argc, char** argv)
 
                 std::cout << "  " << variant.label << " @ " << semitones << " st ... " << std::flush;
                 const auto pass = RunPass(variant, semitones, *audio);
+
                 if (!pass)
                 {
                     ++failures;
@@ -1085,6 +1190,7 @@ int main(int argc, char** argv)
 
                 const std::string wavFile = SanitizeForFilename(variant.label) + "_" + (semitones < 0 ? "m" : "p") +
                                             std::to_string(std::abs(semitones)) + "st_" + sampleStem + ".wav";
+
                 if (!WriteWav16(snapshotDir / wavFile, pass->render))
                 {
                     std::cerr << "ERROR: cannot write " << wavFile << '\n';
@@ -1112,6 +1218,7 @@ int main(int argc, char** argv)
             for (const auto& plugin : externalVariants)
             {
                 std::vector<int> semitonesToRun;
+
                 if (!plugin.stateBySemitone.empty())
                 {
                     for (const int semitone : kSemitoneSettings)
@@ -1142,12 +1249,14 @@ int main(int argc, char** argv)
                         pluginHostAlias, plugin.label, *audio, semitones, [&](guitarfx::EffectProcessor& effect) {
                             effect.SetParam("mix", 1.0);
                             effect.SetConfig("pluginPath", plugin.pluginPath);
+
                             if (const auto stateIt = plugin.stateBySemitone.find(semitones);
                                 stateIt != plugin.stateBySemitone.end())
                             {
                                 effect.SetConfig(plugin.stateConfigKey, stateIt->second);
                             }
                         });
+
                     if (!pass)
                     {
                         ++failures;
@@ -1156,6 +1265,7 @@ int main(int argc, char** argv)
 
                     const std::string wavFile = SanitizeForFilename(plugin.label) + "_" + (semitones < 0 ? "m" : "p") +
                                                 std::to_string(std::abs(semitones)) + "st_" + sampleStem + ".wav";
+
                     if (!WriteWav16(snapshotDir / wavFile, pass->render))
                     {
                         std::cerr << "ERROR: cannot write " << wavFile << '\n';
@@ -1189,11 +1299,13 @@ int main(int argc, char** argv)
 
     const fs::path resultsPath = snapshotDir / "results.json";
     std::ofstream results(resultsPath);
+
     if (!results)
     {
         std::cerr << "ERROR: cannot write " << resultsPath << '\n';
         return 1;
     }
+
     results << report.dump(2) << '\n';
 
     std::cout << "\nWrote " << report["passes"].size() << " passes to " << snapshotDir << '\n';

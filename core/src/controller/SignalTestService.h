@@ -24,7 +24,6 @@
 
 namespace guitarfx
 {
-
 class SignalTestService
 {
   public:
@@ -90,5 +89,4 @@ class SignalTestService
     RuntimeState mState;
     Result mResult;
 };
-
 } // namespace guitarfx

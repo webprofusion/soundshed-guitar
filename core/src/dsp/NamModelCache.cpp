@@ -69,12 +69,14 @@ bool StatFile(const std::filesystem::path& path, std::uintmax_t& outSize, std::i
 {
     std::error_code ec;
     outSize = std::filesystem::file_size(path, ec);
+
     if (ec)
     {
         return false;
     }
 
     const auto writeTime = std::filesystem::last_write_time(path, ec);
+
     if (ec)
     {
         return false;
@@ -88,10 +90,12 @@ bool StatFile(const std::filesystem::path& path, std::uintmax_t& outSize, std::i
 void TouchLocked(CacheState& state, const std::string& key)
 {
     auto positionIt = state.lruPositions.find(key);
+
     if (positionIt != state.lruPositions.end())
     {
         state.lru.erase(positionIt->second);
     }
+
     state.lru.push_front(key);
     state.lruPositions[key] = state.lru.begin();
 }
@@ -100,6 +104,7 @@ void TouchLocked(CacheState& state, const std::string& key)
 void EraseLocked(CacheState& state, const std::string& key)
 {
     auto entryIt = state.entries.find(key);
+
     if (entryIt == state.entries.end())
     {
         return;
@@ -109,6 +114,7 @@ void EraseLocked(CacheState& state, const std::string& key)
     state.entries.erase(entryIt);
 
     auto positionIt = state.lruPositions.find(key);
+
     if (positionIt != state.lruPositions.end())
     {
         state.lru.erase(positionIt->second);
@@ -134,6 +140,7 @@ std::unique_ptr<::nam::DSP> GetModel(const std::filesystem::path& path)
 {
     std::uintmax_t fileSize = 0;
     std::int64_t writeTime = 0;
+
     if (!StatFile(path, fileSize, writeTime))
     {
         return nullptr;
@@ -146,6 +153,7 @@ std::unique_ptr<::nam::DSP> GetModel(const std::filesystem::path& path)
     {
         std::lock_guard<std::mutex> lock(state.mutex);
         auto it = state.entries.find(key);
+
         if (it != state.entries.end())
         {
             if (it->second.fileSize == fileSize && it->second.writeTime == writeTime)
@@ -160,6 +168,7 @@ std::unique_ptr<::nam::DSP> GetModel(const std::filesystem::path& path)
                 EraseLocked(state, key);
             }
         }
+
         if (!cached)
         {
             ++state.misses;
@@ -178,6 +187,7 @@ std::unique_ptr<::nam::DSP> GetModel(const std::filesystem::path& path)
 
         ::nam::dspData parsed;
         auto model = ::nam::get_dsp(path, parsed);
+
         if (!model)
         {
             return nullptr;

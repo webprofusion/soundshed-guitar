@@ -14,16 +14,17 @@
 
 namespace guitarfx::controller_detail
 {
-
 std::string NormalizeHostedPluginIdentityToken(std::string_view value)
 {
     std::string normalized;
     normalized.reserve(value.size());
 
     bool lastWasSeparator = false;
+
     for (const char raw : value)
     {
         const unsigned char ch = static_cast<unsigned char>(raw);
+
         if (std::isalnum(ch))
         {
             normalized.push_back(static_cast<char>(std::tolower(ch)));
@@ -50,14 +51,17 @@ std::string BuildHostedPluginStableId(std::string_view manufacturer, std::string
 {
     const std::string normalizedManufacturer = NormalizeHostedPluginIdentityToken(manufacturer);
     const std::string normalizedName = NormalizeHostedPluginIdentityToken(pluginName);
+
     if (!normalizedManufacturer.empty() && !normalizedName.empty())
     {
         return normalizedManufacturer + "." + normalizedName;
     }
+
     if (!normalizedName.empty())
     {
         return normalizedName;
     }
+
     return normalizedManufacturer;
 }
 
@@ -81,10 +85,12 @@ std::string HostedPluginResourceKey(const GraphNode& node)
         {
             continue;
         }
+
         if (!resource.resourceId.empty())
         {
             return "res:" + resource.resourceId;
         }
+
         if (!resource.filePath.empty())
         {
             return "path:" + util::PathToUtf8(resource.filePath);
@@ -116,6 +122,7 @@ std::string HostedPluginIdentityKey(const GraphNode& node)
     {
         return "stable:" + stableId;
     }
+
     if (auto identifier = read(kHostedPluginIdentifierConfigKey); !identifier.empty())
     {
         return "id:" + identifier;
@@ -158,6 +165,7 @@ void ScrubHostedPluginStateForUi(SignalGraph& graph)
         }
 
         const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
+
         if (stateIt == node.config.end())
         {
             continue;
@@ -172,6 +180,7 @@ nlohmann::json SerializePresetForUi(const Preset& preset)
 {
     Preset uiPreset = preset;
     ScrubHostedPluginStateForUi(uiPreset.graph);
+
     for (auto& scene : uiPreset.scenes)
     {
         ScrubHostedPluginStateForUi(scene.graph);
@@ -191,6 +200,7 @@ bool GraphHasScrubbedHostedPluginState(const SignalGraph& graph)
 
         const auto stateIt = node.config.find(kHostedPluginStateConfigKey);
         const auto lengthIt = node.config.find(kHostedPluginStateLengthConfigKey);
+
         if (lengthIt != node.config.end() && (stateIt == node.config.end() || stateIt->second.empty()))
         {
             return true;
@@ -244,6 +254,7 @@ std::string SummarizeHostedPluginState(const Preset& preset)
 {
     std::vector<std::string> entries;
     AppendHostedPluginGraphSummary(preset.graph, "graph", entries);
+
     for (const auto& scene : preset.scenes)
     {
         AppendHostedPluginGraphSummary(scene.graph, "scene:" + scene.id, entries);
@@ -255,15 +266,17 @@ std::string SummarizeHostedPluginState(const Preset& preset)
     }
 
     std::ostringstream summary;
+
     for (size_t index = 0; index < entries.size(); ++index)
     {
         if (index > 0)
         {
             summary << "; ";
         }
+
         summary << entries[index];
     }
+
     return summary.str();
 }
-
 } // namespace guitarfx::controller_detail

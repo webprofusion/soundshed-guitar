@@ -53,6 +53,7 @@ fs::path WriteStereoWav(const std::vector<float>& left, const std::vector<float>
 
     const std::size_t frames = std::min(left.size(), right.size());
     std::vector<float> interleaved(frames * 2);
+
     for (std::size_t i = 0; i < frames; ++i)
     {
         interleaved[i * 2] = left[i];
@@ -105,6 +106,7 @@ fs::path MakeReverbIR(double seconds, double sampleRate, const std::string& name
         left[i] = static_cast<float>(noise(rng) * envelope);
         right[i] = static_cast<float>(noise(rng) * envelope);
     }
+
     // Direct impulse at the head so the IR has a well-defined onset.
     left[0] = 1.0f;
     right[0] = 1.0f;
@@ -144,10 +146,12 @@ RenderResult RenderBlocks(guitarfx::EffectProcessor& effect, int blocks)
         for (int i = 0; i < kBlockSize; ++i)
         {
             const float v = outL[static_cast<std::size_t>(i)];
+
             if (!std::isfinite(v))
             {
                 result.hasNonFinite = true;
             }
+
             sumSquares += static_cast<double>(v) * v;
             ++count;
         }
@@ -160,6 +164,7 @@ RenderResult RenderBlocks(guitarfx::EffectProcessor& effect, int blocks)
 std::unique_ptr<guitarfx::EffectProcessor> MakeReverb(const fs::path& irPath)
 {
     auto effect = guitarfx::EffectRegistry::Instance().Create(guitarfx::EffectGuids::kReverbIr);
+
     if (!effect)
     {
         return nullptr;
@@ -167,6 +172,7 @@ std::unique_ptr<guitarfx::EffectProcessor> MakeReverb(const fs::path& irPath)
 
     effect->Prepare(kHostSampleRate, kBlockSize);
     effect->SetParam("mix", 1.0); // wet only, so a bypassed reverb is obvious
+
     if (!effect->LoadResource(irPath))
     {
         return nullptr;
@@ -195,6 +201,7 @@ bool TestQualityChangeIsNotBlocking()
     auto effect = MakeReverb(irPath);
     const double loadMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count();
+
     if (!effect)
     {
         std::cout << "FAILED (could not create ir_reverb effect)\n";
@@ -212,11 +219,13 @@ bool TestQualityChangeIsNotBlocking()
     for (const auto& [label, value] : tiers)
     {
         const double elapsedMs = TimeQualityChange(*effect, value);
+
         if (elapsedMs > worstMs)
         {
             worstMs = elapsedMs;
             worstLabel = label;
         }
+
         if (elapsedMs > kRebuildBudgetMs)
         {
             ok = false;
@@ -236,6 +245,7 @@ bool TestReverbStillWetAfterQualityChanges()
 
     const auto irPath = MakeReverbIR(4.0, 48000.0, "reverb_4s_48k.wav");
     auto effect = MakeReverb(irPath);
+
     if (!effect)
     {
         std::cout << "FAILED (could not create ir_reverb effect)\n";
@@ -254,6 +264,7 @@ bool TestReverbStillWetAfterQualityChanges()
             std::cout << "FAILED (non-finite output at quality " << quality << ")\n";
             return false;
         }
+
         // Convolving a sine with a dense noise IR should not collapse the level; a
         // stuck-bypassed reverb would land far from the reference render.
         if (after.rms < before.rms * 0.1)
@@ -277,6 +288,7 @@ bool TestRedundantQualityWriteIsIgnored()
 
     const auto irPath = MakeReverbIR(4.0, 44100.0, "reverb_4s_44k.wav");
     auto effect = MakeReverb(irPath);
+
     if (!effect)
     {
         std::cout << "FAILED (could not create ir_reverb effect)\n";
@@ -304,6 +316,7 @@ bool TestOversizedBlockFillsWholeBuffer()
 
     const auto irPath = MakeReverbIR(2.0, 48000.0, "reverb_2s_48k.wav");
     auto effect = guitarfx::EffectRegistry::Instance().Create(guitarfx::EffectGuids::kReverbIr);
+
     if (!effect)
     {
         std::cout << "FAILED (could not create ir_reverb effect)\n";
@@ -314,6 +327,7 @@ bool TestOversizedBlockFillsWholeBuffer()
     const int oversized = kBlockSize * 2;
     effect->Prepare(kHostSampleRate, prepared);
     effect->SetParam("mix", 1.0);
+
     if (!effect->LoadResource(irPath))
     {
         std::cout << "FAILED (LoadResource failed)\n";
@@ -338,6 +352,7 @@ bool TestOversizedBlockFillsWholeBuffer()
     effect->Process(inputs, outputs, oversized);
 
     int untouched = 0;
+
     for (int i = 0; i < oversized; ++i)
     {
         if (outL[static_cast<std::size_t>(i)] == kPoison || outR[static_cast<std::size_t>(i)] == kPoison)
@@ -364,7 +379,6 @@ void CleanupTempFiles()
         fs::remove(path, ec);
     }
 }
-
 } // namespace
 
 int main()

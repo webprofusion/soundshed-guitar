@@ -75,21 +75,25 @@ bool TestRemoveEntry()
     entry.moduleResourceId = "custom-effect:tape-drift:rev-0001";
 
     library.UpsertEntry(entry);
+
     if (!library.RemoveEntry(entry.id))
     {
         std::cerr << "CustomEffectLibrary could not remove an existing entry.\n";
         return false;
     }
+
     if (library.GetEntry(entry.id) != nullptr)
     {
         std::cerr << "CustomEffectLibrary still returned an entry after removal.\n";
         return false;
     }
+
     if (library.RemoveEntry(entry.id))
     {
         std::cerr << "CustomEffectLibrary reported removal for a missing entry.\n";
         return false;
     }
+
     return true;
 }
 } // namespace

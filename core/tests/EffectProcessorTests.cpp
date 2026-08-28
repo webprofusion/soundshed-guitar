@@ -28,7 +28,6 @@
 
 namespace
 {
-
 namespace fs = std::filesystem;
 
 constexpr double kTestSampleRate = 48000.0;
@@ -98,6 +97,7 @@ SignalAnalysis AnalyzeSignal(const std::vector<float>& buffer)
         }
 
         double absSample = std::abs(sample);
+
         if (absSample > peak)
         {
             peak = absSample;
@@ -128,6 +128,7 @@ std::vector<fs::path> FindTestNamModels(std::size_t count)
 {
     std::vector<fs::path> models;
     const fs::path assetsDir = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets";
+
     if (!fs::exists(assetsDir))
     {
         return models;
@@ -139,6 +140,7 @@ std::vector<fs::path> FindTestNamModels(std::size_t count)
         {
             continue;
         }
+
         if (entry.path().extension() == ".nam")
         {
             models.push_back(entry.path());
@@ -146,10 +148,12 @@ std::vector<fs::path> FindTestNamModels(std::size_t count)
     }
 
     std::sort(models.begin(), models.end());
+
     if (models.size() > count)
     {
         models.resize(count);
     }
+
     return models;
 }
 
@@ -157,10 +161,12 @@ double MaxAbsDifference(const std::vector<float>& left, const std::vector<float>
 {
     const std::size_t count = std::min(left.size(), right.size());
     double maxDiff = 0.0;
+
     for (std::size_t i = 0; i < count; ++i)
     {
         maxDiff = std::max(maxDiff, static_cast<double>(std::abs(left[i] - right[i])));
     }
+
     return maxDiff;
 }
 
@@ -173,6 +179,7 @@ double EstimateFrequencyFromPositiveZeroCrossings(const std::vector<float>& buff
     {
         const float previous = buffer[i - 1];
         const float current = buffer[i];
+
         if (previous <= 0.0f && current > 0.0f)
         {
             const float delta = current - previous;
@@ -188,9 +195,11 @@ double EstimateFrequencyFromPositiveZeroCrossings(const std::vector<float>& buff
 
     double totalPeriod = 0.0;
     int periods = 0;
+
     for (size_t i = 1; i < crossingIndices.size(); ++i)
     {
         const double period = crossingIndices[i] - crossingIndices[i - 1];
+
         if (period > 1.0)
         {
             totalPeriod += period;
@@ -210,6 +219,7 @@ double EstimateFrequencyFromPositiveZeroCrossings(const std::vector<float>& buff
 DriveMetrics MeasureDriveMetrics(const std::vector<float>& buffer)
 {
     DriveMetrics metrics;
+
     if (buffer.empty())
     {
         return metrics;
@@ -218,6 +228,7 @@ DriveMetrics MeasureDriveMetrics(const std::vector<float>& buffer)
     double sum = 0.0;
     double sumSquares = 0.0;
     double peak = 0.0;
+
     for (float sample : buffer)
     {
         const double absSample = std::abs(sample);
@@ -236,6 +247,7 @@ DriveMetrics MeasureDriveMetrics(const std::vector<float>& buffer)
 std::vector<float> RenderDriveEffect(const std::string& effectType, double inputAmplitude, int blocksToProcess = 6)
 {
     auto effect = guitarfx::EffectRegistry::Instance().Create(effectType);
+
     if (!effect)
     {
         return {};
@@ -256,6 +268,7 @@ std::vector<float> RenderDriveEffect(const std::string& effectType, double input
     for (int block = 0; block < blocksToProcess; ++block)
     {
         const std::size_t startIndex = static_cast<std::size_t>(block * kTestBlockSize);
+
         for (int i = 0; i < kTestBlockSize; ++i)
         {
             const double phase =
@@ -264,6 +277,7 @@ std::vector<float> RenderDriveEffect(const std::string& effectType, double input
             inputL[static_cast<std::size_t>(i)] = sample;
             inputR[static_cast<std::size_t>(i)] = sample;
         }
+
         effect->Process(inputs, outputs, kTestBlockSize);
     }
 
@@ -273,6 +287,7 @@ std::vector<float> RenderDriveEffect(const std::string& effectType, double input
 double NormalizedDifference(const std::vector<float>& a, const std::vector<float>& b)
 {
     const std::size_t length = std::min(a.size(), b.size());
+
     if (length == 0)
     {
         return 0.0;
@@ -280,6 +295,7 @@ double NormalizedDifference(const std::vector<float>& a, const std::vector<float
 
     double diffSquares = 0.0;
     double refSquares = 0.0;
+
     for (std::size_t i = 0; i < length; ++i)
     {
         const double diff = static_cast<double>(a[i]) - static_cast<double>(b[i]);
@@ -293,6 +309,7 @@ double NormalizedDifference(const std::vector<float>& a, const std::vector<float
 fs::path WriteStereoImpulseToWav(const std::vector<float>& left, const std::vector<float>& right, double sampleRate)
 {
     const std::size_t length = std::min(left.size(), right.size());
+
     if (length == 0)
     {
         throw std::runtime_error("Stereo IR must have data");
@@ -303,12 +320,14 @@ fs::path WriteStereoImpulseToWav(const std::vector<float>& left, const std::vect
     const fs::path path = tempDir / "flanger_reverb_stability_ir.wav";
 
     std::ofstream file(path, std::ios::binary);
+
     if (!file)
     {
         throw std::runtime_error("Failed to create temp stereo IR file");
     }
 
     std::vector<float> interleaved(length * 2);
+
     for (std::size_t i = 0; i < length; ++i)
     {
         interleaved[i * 2] = left[i];
@@ -349,6 +368,7 @@ bool TestEffectProcessor(const std::string& effectType)
 
     // Create effect
     auto effect = registry.Create(effectType);
+
     if (!effect)
     {
         std::cout << "  ERROR: Failed to create effect\n";
@@ -426,7 +446,6 @@ bool TestEffectProcessor(const std::string& effectType)
               << ", rms=" << outputAnalysis.rmsValue << ")\n";
     return true;
 }
-
 } // anonymous namespace
 
 // ════════════════════════════════════════════════════════════════════
@@ -435,7 +454,6 @@ bool TestEffectProcessor(const std::string& effectType)
 
 namespace
 {
-
 bool TestAutoArpSpecific()
 {
     std::cout << "\n--- AutoArpEffect Specific Tests ---\n";
@@ -483,11 +501,13 @@ bool TestAutoArpSpecific()
     {
         auto e = makeArp();
         e->SetParam("bpm", 90.0);
+
         // Process a few blocks to advance phase
         for (int b = 0; b < 4; ++b)
         {
             e->Process(ins, outs, kTestBlockSize);
         }
+
         e->Reset();
         // After reset, replaying the same input should match a freshly-prepared instance
         auto fresh = makeArp();
@@ -501,6 +521,7 @@ bool TestAutoArpSpecific()
         fresh->Process(ins, o2, kTestBlockSize);
 
         bool match = true;
+
         for (int i = 0; i < kTestBlockSize && match; ++i)
         {
             if (std::abs(out1[static_cast<size_t>(i)] - out2[static_cast<size_t>(i)]) > 1e-5f)
@@ -508,6 +529,7 @@ bool TestAutoArpSpecific()
                 match = false;
             }
         }
+
         std::cout << "  Reset restores initial state:                " << (match ? "PASS" : "FAIL") << "\n";
         match ? ++passed : ++failed;
     }
@@ -548,6 +570,7 @@ bool TestAutoArpSpecific()
     // Test 6: BPM injection via SetParam("bpm") at multiple BPMs
     {
         bool allOk = true;
+
         for (const double bpm : {60.0, 120.0, 180.0, 300.0})
         {
             auto e = makeArp();
@@ -556,11 +579,13 @@ bool TestAutoArpSpecific()
             std::fill(outR.begin(), outR.end(), 0.f);
             e->Process(ins, outs, kTestBlockSize);
             const auto analysis = AnalyzeSignal(outL);
+
             if (analysis.hasNaN || analysis.hasInf)
             {
                 allOk = false;
             }
         }
+
         std::cout << "  BPM range 60-300 no NaN/Inf:                 " << (allOk ? "PASS" : "FAIL") << "\n";
         allOk ? ++passed : ++failed;
     }
@@ -576,6 +601,7 @@ bool TestFlangerReverbStability()
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto flanger = registry.Create(guitarfx::EffectGuids::kFlanger);
     auto reverb = registry.Create(guitarfx::EffectGuids::kReverbIr);
+
     if (!flanger || !reverb)
     {
         std::cout << "  FAIL: Could not create flanger or IR reverb\n";
@@ -585,6 +611,7 @@ bool TestFlangerReverbStability()
     constexpr std::size_t kIRLength = 4096;
     std::vector<float> irL(kIRLength, 0.0f);
     std::vector<float> irR(kIRLength, 0.0f);
+
     for (std::size_t i = 0; i < kIRLength; ++i)
     {
         const float t = static_cast<float>(i) / static_cast<float>(kIRLength);
@@ -594,6 +621,7 @@ bool TestFlangerReverbStability()
         irL[i] = env * static_cast<float>(0.65 * modA + 0.35 * modB);
         irR[i] = env * static_cast<float>(0.60 * modB - 0.30 * modA);
     }
+
     irL[0] += 0.6f;
     irR[0] += 0.6f;
 
@@ -612,6 +640,7 @@ bool TestFlangerReverbStability()
 
         reverb->SetParam("mix", 1.0);
         reverb->SetParam("outputGain", 0.0);
+
         if (!reverb->LoadResource(irPath))
         {
             std::cout << "  FAIL: Could not load IR resource\n";
@@ -639,6 +668,7 @@ bool TestFlangerReverbStability()
         for (int block = 0; block < totalBlocks; ++block)
         {
             const std::size_t startIndex = static_cast<std::size_t>(block * kTestBlockSize);
+
             for (int i = 0; i < kTestBlockSize; ++i)
             {
                 const double phase =
@@ -656,6 +686,7 @@ bool TestFlangerReverbStability()
             for (int i = 0; i < kTestBlockSize; ++i)
             {
                 const float samples[2] = {reverbL[static_cast<std::size_t>(i)], reverbR[static_cast<std::size_t>(i)]};
+
                 for (float sample : samples)
                 {
                     if (!std::isfinite(sample))
@@ -715,6 +746,7 @@ bool TestAlgorithmicReverbsStaySilentOnSilence()
     for (const char* effectType : reverbTypes)
     {
         auto effect = registry.Create(effectType);
+
         if (!effect)
         {
             std::cout << "  FAIL: Could not create " << effectType << "\n";
@@ -725,6 +757,7 @@ bool TestAlgorithmicReverbsStaySilentOnSilence()
         effect->Reset();
 
         double peak = 0.0;
+
         for (int block = 0; block < kBlocksToProcess; ++block)
         {
             std::fill(outputL.begin(), outputL.end(), 0.0f);
@@ -752,6 +785,7 @@ bool TestSpringReverbTailDecaysCleanly()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kReverbSpring);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create spring reverb\n";
@@ -778,10 +812,12 @@ bool TestSpringReverbTailDecaysCleanly()
     float* outputs[2] = {outputL.data(), outputR.data()};
 
     double tailPeak = 0.0;
+
     for (int block = 0; block < kBlocksToProcess; ++block)
     {
         std::fill(inputL.begin(), inputL.end(), 0.0f);
         std::fill(inputR.begin(), inputR.end(), 0.0f);
+
         if (block == kExcitationBlock)
         {
             inputL[0] = 0.8f;
@@ -794,6 +830,7 @@ bool TestSpringReverbTailDecaysCleanly()
 
         const auto leftAnalysis = AnalyzeSignal(outputL);
         const auto rightAnalysis = AnalyzeSignal(outputR);
+
         if (leftAnalysis.hasNaN || rightAnalysis.hasNaN || leftAnalysis.hasInf || rightAnalysis.hasInf)
         {
             std::cout << "  FAIL: Tail produced invalid samples\n";
@@ -854,6 +891,7 @@ bool TestTempoSyncSpecific()
     for (const auto& testCase : cases)
     {
         auto effect = registry.Create(testCase.type);
+
         if (!effect)
         {
             std::cout << "  " << std::left << std::setw(44) << testCase.label << "FAIL (create)\n";
@@ -939,6 +977,7 @@ bool TestParametricEQClippingStability()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kEqParametric);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create parametric EQ\n";
@@ -966,9 +1005,11 @@ bool TestParametricEQClippingStability()
     float* outputs[2] = {outputL.data(), outputR.data()};
 
     constexpr int kBlocksToProcess = 12;
+
     for (int block = 0; block < kBlocksToProcess; ++block)
     {
         const std::size_t startIndex = static_cast<std::size_t>(block * kTestBlockSize);
+
         for (int i = 0; i < kTestBlockSize; ++i)
         {
             const double phase =
@@ -1001,6 +1042,7 @@ bool TestGraphicEQProfilesAndStability()
     std::cout << "\n--- Graphic EQ Profile and Stability Test ---\n";
 
     auto effect = guitarfx::EffectRegistry::Instance().Create(guitarfx::EffectGuids::kEqGraphic);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create graphic EQ\n";
@@ -1038,6 +1080,7 @@ bool TestGraphicEQProfilesAndStability()
     bool profileConfigApplied = false;
     bool guitarProfileApplied = false;
     bool profileSelectionIsMetadataOnly = false;
+
     if (typeInfo)
     {
         const auto presetParam = std::find_if(typeInfo->parameters.begin(), typeInfo->parameters.end(),
@@ -1050,14 +1093,17 @@ bool TestGraphicEQProfilesAndStability()
                                              [&](const guitarfx::EffectPresetDefinition& candidate) {
                                                  return candidate.id == presetId && candidate.isFactory;
                                              });
+
             if (preset == typeInfo->presets.end())
             {
                 return false;
             }
+
             for (const auto& key : preset->parameterOrder)
             {
                 effect->SetParam(key, preset->parameters.at(key));
             }
+
             return true;
         };
         profileConfigApplied = applyPreset("bass-10") && effect->GetParam("bandCount") == 10.0 &&
@@ -1072,6 +1118,7 @@ bool TestGraphicEQProfilesAndStability()
                     return false;
                 }
             }
+
             return true;
         };
         guitarProfileApplied = applyPreset("guitar-10") && effect->GetParam("bandCount") == 10.0 &&
@@ -1104,6 +1151,7 @@ bool TestDynamicsSoftClipOptions()
     auto renderEffect = [&](const std::string& effectType, double inputAmplitude, auto configure,
                             int blocksToProcess = 6) {
         auto effect = guitarfx::EffectRegistry::Instance().Create(effectType);
+
         if (!effect)
         {
             return std::vector<float>{};
@@ -1122,6 +1170,7 @@ bool TestDynamicsSoftClipOptions()
         for (int block = 0; block < blocksToProcess; ++block)
         {
             const std::size_t startIndex = static_cast<std::size_t>(block * kTestBlockSize);
+
             for (int i = 0; i < kTestBlockSize; ++i)
             {
                 const double phase =
@@ -1263,6 +1312,7 @@ bool TestNamWetDryMixSpecific()
     }
 
     const auto models = FindTestNamModels(2);
+
     if (models.empty())
     {
         std::cout << "  FAIL: No test NAM models found under " << (fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets")
@@ -1272,6 +1322,7 @@ bool TestNamWetDryMixSpecific()
 
     auto runSingleModelDryTest = [&](const std::string& effectType, const char* label) {
         auto effect = registry.Create(effectType);
+
         if (!effect)
         {
             std::cout << "  " << std::left << std::setw(44) << label << "FAIL (create)\n";
@@ -1279,6 +1330,7 @@ bool TestNamWetDryMixSpecific()
         }
 
         effect->Prepare(kTestSampleRate, kTestBlockSize);
+
         if (!effect->LoadResource(models.front()))
         {
             std::cout << "  " << std::left << std::setw(44) << label << "FAIL (load)\n";
@@ -1317,6 +1369,7 @@ bool TestNamWetDryMixSpecific()
         }
 
         auto effect = registry.Create(guitarfx::EffectGuids::kAmpNamBlend);
+
         if (!effect)
         {
             std::cout << "  " << std::left << std::setw(44) << label << "FAIL (create)\n";
@@ -1328,6 +1381,7 @@ bool TestNamWetDryMixSpecific()
 
         std::vector<guitarfx::ResourceRef> refs;
         refs.reserve(models.size());
+
         for (std::size_t index = 0; index < models.size(); ++index)
         {
             guitarfx::ResourceRef ref;
@@ -1387,6 +1441,7 @@ bool TestOctaveSpecific()
 
     auto runVoiceTest = [&](double octaveUp, double octaveDown, const char* label) {
         auto effect = registry.Create(guitarfx::EffectGuids::kOctave);
+
         if (!effect)
         {
             std::cout << "  FAIL: Could not create octave effect\n";
@@ -1441,6 +1496,7 @@ bool TestTransposeLatencySpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kTranspose);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create transpose effect\n";
@@ -1495,10 +1551,12 @@ bool TestHybridTransposeSpecific()
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto createHybrid = [&](double transientAssist = 0.65) {
         auto effect = registry.Create(guitarfx::EffectGuids::kTransposeHybrid);
+
         if (!effect)
         {
             return effect;
         }
+
         effect->Prepare(kTestSampleRate, kTestBlockSize);
         effect->SetParam("mix", 1.0);
         effect->SetParam("transientAssist", transientAssist);
@@ -1524,6 +1582,7 @@ bool TestHybridTransposeSpecific()
     };
 
     auto effect = createHybrid();
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create hybrid transpose effect\n";
@@ -1558,6 +1617,7 @@ bool TestHybridTransposeSpecific()
     chordEffect->SetParam("semitones", -12.0);
     std::vector<float> chordInput(static_cast<size_t>(totalSamples), 0.0f);
     std::vector<float> chordOutput(static_cast<size_t>(totalSamples), 0.0f);
+
     for (size_t i = 0; i < chordInput.size(); ++i)
     {
         const double time = static_cast<double>(i) / kTestSampleRate;
@@ -1565,6 +1625,7 @@ bool TestHybridTransposeSpecific()
                                            0.18 * std::sin(2.0 * kPi * 554.3652619537 * time) +
                                            0.14 * std::sin(2.0 * kPi * 659.2551138257 * time));
     }
+
     renderEffect(*chordEffect, chordInput, chordOutput);
     std::vector<float> chordSteady(chordOutput.begin() + static_cast<std::ptrdiff_t>(warmupStart), chordOutput.end());
     const auto chordAnalysis = AnalyzeSignal(chordSteady);
@@ -1575,26 +1636,32 @@ bool TestHybridTransposeSpecific()
     const int transientBlocks = latencyBlocks + 8;
     const int transientSamples = transientBlocks * kTestBlockSize;
     std::vector<float> transientInput(static_cast<size_t>(transientSamples), 0.0f);
+
     for (int block = latencyBlocks + 2; block < transientBlocks; ++block)
     {
         const bool gateOn = (block % 3) == 0 || (block % 3) == 1;
+
         if (!gateOn)
         {
             continue;
         }
+
         for (int i = 0; i < kTestBlockSize; ++i)
         {
             const size_t index = static_cast<size_t>(block * kTestBlockSize + i);
             const double time = static_cast<double>(index) / kTestSampleRate;
             double sample = 0.55 * std::sin(2.0 * kPi * 440.0 * time);
+
             if (i < 48)
             {
                 const double burstEnv = std::exp(-static_cast<double>(i) / 14.0);
                 sample += 0.22 * burstEnv * std::sin(2.0 * kPi * 3200.0 * time);
             }
+
             transientInput[index] = static_cast<float>(sample);
         }
     }
+
     std::vector<float> assistedOutput(static_cast<size_t>(transientSamples), 0.0f);
     renderEffect(*assistedEffect, transientInput, assistedOutput);
 
@@ -1606,10 +1673,12 @@ bool TestHybridTransposeSpecific()
     const size_t steadyEnd = std::min(assistedOutput.size(), steadyStart + static_cast<size_t>(kTestBlockSize));
     double onsetPeak = 0.0;
     double steadyPeak = 0.0;
+
     for (size_t i = onsetStart; i < onsetEnd; ++i)
     {
         onsetPeak = std::max(onsetPeak, std::abs(static_cast<double>(assistedOutput[i])));
     }
+
     for (size_t i = steadyStart; i < steadyEnd; ++i)
     {
         steadyPeak = std::max(steadyPeak, std::abs(static_cast<double>(assistedOutput[i])));
@@ -1660,6 +1729,7 @@ bool TestHybridTransposeLiveChangesSpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kTransposeHybrid);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create hybrid transpose effect\n";
@@ -1725,6 +1795,7 @@ bool TestStftTransposeSpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kTransposeStft);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create STFT transpose effect\n";
@@ -1751,6 +1822,7 @@ bool TestStftTransposeSpecific()
     GenerateSineWave(inputR, 440.0, 0.5);
 
     float* outputs[2] = {blockOutL.data(), blockOutR.data()};
+
     for (int block = 0; block < blocksToProcess; ++block)
     {
         std::fill(blockOutL.begin(), blockOutL.end(), 0.0f);
@@ -1790,6 +1862,7 @@ bool TestStftTransposeLiveChangesSpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kTransposeStft);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create STFT transpose effect\n";
@@ -1846,6 +1919,7 @@ bool TestStftTransposePolyphonicModeSpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kTransposeStft);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create STFT transpose effect\n";
@@ -1883,6 +1957,7 @@ bool TestStftTransposePolyphonicModeSpecific()
     }
 
     float* outputs[2] = {blockOutL.data(), blockOutR.data()};
+
     for (int block = 0; block < blocksToProcess; ++block)
     {
         std::fill(blockOutL.begin(), blockOutL.end(), 0.0f);
@@ -1917,6 +1992,7 @@ bool TestPitchShiftLatencySpecific()
 
     auto& registry = guitarfx::EffectRegistry::Instance();
     auto effect = registry.Create(guitarfx::EffectGuids::kPitchShift);
+
     if (!effect)
     {
         std::cout << "  FAIL: Could not create pitch shift effect\n";
@@ -1958,6 +2034,7 @@ bool TestPitchShiftLatencySpecific()
     // stretch engine (PitchShiftEffect used to call ApplyTranspose before marking
     // configured, so transpose stayed at 0 and the benchmark rendered dry).
     auto preload = registry.Create(guitarfx::EffectGuids::kPitchShift);
+
     if (!preload)
     {
         std::cout << "  FAIL: Could not create pitch shift effect for preload test\n";
@@ -1982,6 +2059,7 @@ bool TestPitchShiftLatencySpecific()
     for (int pos = 0; pos < totalFrames; pos += kTestBlockSize)
     {
         const int block = std::min(kTestBlockSize, totalFrames - pos);
+
         for (int i = 0; i < block; ++i)
         {
             const int src = pos + i;
@@ -1994,9 +2072,11 @@ bool TestPitchShiftLatencySpecific()
             blockOutL[static_cast<size_t>(i)] = 0.0f;
             blockOutR[static_cast<size_t>(i)] = 0.0f;
         }
+
         float* inputs[2] = {blockInL.data(), blockInR.data()};
         float* outputs[2] = {blockOutL.data(), blockOutR.data()};
         preload->Process(inputs, outputs, block);
+
         for (int i = 0; i < block; ++i)
         {
             renderedL[static_cast<size_t>(pos + i)] = blockOutL[static_cast<size_t>(i)];
@@ -2006,6 +2086,7 @@ bool TestPitchShiftLatencySpecific()
     // Zero-crossing density of a +12 st shifted 440 Hz tone is roughly double 440 Hz.
     auto countZeroCrossings = [](const std::vector<float>& buf, int start, int count) {
         int crossings = 0;
+
         for (int i = start + 1; i < start + count && i < static_cast<int>(buf.size()); ++i)
         {
             if ((buf[static_cast<size_t>(i - 1)] < 0.0f && buf[static_cast<size_t>(i)] >= 0.0f) ||
@@ -2014,6 +2095,7 @@ bool TestPitchShiftLatencySpecific()
                 ++crossings;
             }
         }
+
         return crossings;
     };
 
@@ -2037,7 +2119,6 @@ bool TestPitchShiftLatencySpecific()
     return zeroShiftTransparent && reportsPositiveLatency && latencyRemainsStableAcrossPitchChanges && paramRetained &&
            transposeApplied;
 }
-
 } // anonymous namespace
 
 int main()
@@ -2085,10 +2166,12 @@ int main()
     if (failed > 0)
     {
         std::cout << "\nFailed effects:\n";
+
         for (const auto& name : failedEffects)
         {
             std::cout << "  - " << name << "\n";
         }
+
         std::cout << "\n";
         return 1;
     }
@@ -2170,6 +2253,7 @@ int main()
     {
         return 1;
     }
+
     if (!TestGraphicEQProfilesAndStability())
     {
         return 1;

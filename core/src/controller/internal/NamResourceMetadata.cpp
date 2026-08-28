@@ -14,7 +14,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 bool IsNamEffectType(const std::string& type)
 {
     return type == guitarfx::EffectGuids::kAmpNam || type == "amp_nam" ||
@@ -41,6 +40,7 @@ bool IsNamCalibratableEffectType(const std::string& type)
 NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
 {
     NamFileMetadata result;
+
     if (!std::filesystem::exists(namFilePath))
     {
         return result;
@@ -49,6 +49,7 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
     try
     {
         std::ifstream file(namFilePath, std::ios::binary);
+
         if (!file)
         {
             return result;
@@ -58,6 +59,7 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
         std::vector<char> buf(kBufSize);
         file.read(buf.data(), static_cast<std::streamsize>(kBufSize));
         const auto len = static_cast<std::size_t>(file.gcount());
+
         if (len == 0)
         {
             return result;
@@ -69,30 +71,39 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
         const auto extractStr = [](const std::string_view sv, const std::string_view key) -> std::string {
             const auto needle = std::string("\"").append(key).append("\"");
             const auto kp = sv.find(needle);
+
             if (kp == std::string_view::npos)
             {
                 return {};
             }
+
             const auto cp = sv.find(':', kp + needle.size());
+
             if (cp == std::string_view::npos)
             {
                 return {};
             }
+
             auto p = cp + 1;
+
             while (p < sv.size() && std::isspace(static_cast<unsigned char>(sv[p])))
             {
                 ++p;
             }
+
             if (p >= sv.size() || sv[p] != '"')
             {
                 return {};
             }
+
             ++p;
             const auto eq = sv.find('"', p);
+
             if (eq == std::string_view::npos)
             {
                 return {};
             }
+
             return std::string(sv.substr(p, eq - p));
         };
 
@@ -100,34 +111,44 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
         const auto extractNum = [](const std::string_view sv, const std::string_view key) -> std::string {
             const auto needle = std::string("\"").append(key).append("\"");
             const auto kp = sv.find(needle);
+
             if (kp == std::string_view::npos)
             {
                 return {};
             }
+
             const auto cp = sv.find(':', kp + needle.size());
+
             if (cp == std::string_view::npos)
             {
                 return {};
             }
+
             auto p = cp + 1;
+
             while (p < sv.size() && std::isspace(static_cast<unsigned char>(sv[p])))
             {
                 ++p;
             }
+
             if (p >= sv.size())
             {
                 return {};
             }
+
             if (!std::isdigit(static_cast<unsigned char>(sv[p])) && sv[p] != '-')
             {
                 return {};
             }
+
             const auto ns = p;
+
             while (p < sv.size() && (std::isdigit(static_cast<unsigned char>(sv[p])) || sv[p] == '.' || sv[p] == '-' ||
                                      sv[p] == '+' || sv[p] == 'e' || sv[p] == 'E'))
             {
                 ++p;
             }
+
             return std::string(sv.substr(ns, p - ns));
         };
 
@@ -135,25 +156,32 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
         const auto extractObjContent = [](const std::string_view sv, const std::string_view key) -> std::string_view {
             const auto needle = std::string("\"").append(key).append("\"");
             const auto kp = sv.find(needle);
+
             if (kp == std::string_view::npos)
             {
                 return {};
             }
+
             auto p = sv.find('{', kp + needle.size());
+
             if (p == std::string_view::npos)
             {
                 return {};
             }
+
             int depth = 0;
             bool ins = false, esc = false;
+
             for (std::size_t i = p; i < sv.size(); ++i)
             {
                 const char c = sv[i];
+
                 if (esc)
                 {
                     esc = false;
                     continue;
                 }
+
                 if (ins)
                 {
                     if (c == '\\')
@@ -164,8 +192,10 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
                     {
                         ins = false;
                     }
+
                     continue;
                 }
+
                 if (c == '"')
                 {
                     ins = true;
@@ -182,6 +212,7 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
                     }
                 }
             }
+
             return sv.substr(p); // buffer truncated — still usable
         };
 
@@ -192,6 +223,7 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
 
         // metadata sub-object
         const auto metaContent = extractObjContent(content, "metadata");
+
         if (!metaContent.empty())
         {
             result.namName = extractStr(metaContent, "name");
@@ -205,9 +237,11 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
 
             // date sub-object → "YYYY-MM-DD"
             const auto dateContent = extractObjContent(metaContent, "date");
+
             if (!dateContent.empty())
             {
                 const auto yearStr = extractNum(dateContent, "year");
+
                 if (!yearStr.empty())
                 {
                     try
@@ -229,6 +263,7 @@ NamFileMetadata TryExtractNamMetadata(const std::filesystem::path& namFilePath)
 
             // training.final_loss
             const auto trainContent = extractObjContent(metaContent, "training");
+
             if (!trainContent.empty())
             {
                 result.trainingFinalLoss = extractNum(trainContent, "final_loss");
@@ -290,6 +325,7 @@ std::string NormalizeCategoryToken(std::string value)
         {
             return '-';
         }
+
         return static_cast<char>(std::tolower(ch));
     });
     return value;
@@ -298,6 +334,7 @@ std::string NormalizeCategoryToken(std::string value)
 std::optional<std::string> MapToLibraryCategory(const std::string& rawCategory)
 {
     const std::string category = NormalizeCategoryToken(rawCategory);
+
     if (category.empty())
     {
         return std::nullopt;
@@ -307,19 +344,23 @@ std::optional<std::string> MapToLibraryCategory(const std::string& rawCategory)
     {
         return std::string{"amp"};
     }
+
     if (category == "preamp" || category == "outboard")
     {
         return std::string{"preamp"};
     }
+
     if (category == "pedal" || category == "stomp" || category == "stompbox" || category == "effect" ||
         category == "fx")
     {
         return std::string{"pedal"};
     }
+
     if (category == "cab" || category == "cabinet" || category == "ir")
     {
         return std::string{"cab"};
     }
+
     if (category == "full-rig" || category == "fullrig" || category == "amp-cab" || category == "ampcab" ||
         category == "amp+cab" || category == "amp-and-cab")
     {
@@ -344,6 +385,7 @@ std::string ResolveResourceLibraryCategory(const guitarfx::LibraryResource& reso
         {
             return *mapped;
         }
+
         if (auto mapped = MapToLibraryCategory(metadataValue("gear")); mapped.has_value())
         {
             return *mapped;
@@ -367,5 +409,4 @@ std::string ResolveResourceLibraryCategory(const guitarfx::LibraryResource& reso
 
     return requestedCategory;
 }
-
 } // namespace guitarfx::controller_detail

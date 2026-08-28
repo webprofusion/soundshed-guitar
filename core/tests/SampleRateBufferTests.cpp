@@ -90,6 +90,7 @@ struct SignalStats
 template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
 {
     SignalStats stats;
+
     if (buffer.empty())
     {
         return stats;
@@ -111,6 +112,7 @@ template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
             stats.numNaN++;
             continue;
         }
+
         if (std::isinf(val))
         {
             stats.hasInf = true;
@@ -122,6 +124,7 @@ template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
         {
             stats.isAllZeros = false;
         }
+
         stats.min = std::min(stats.min, val);
         stats.max = std::max(stats.max, val);
         sum += val;
@@ -223,18 +226,22 @@ void PrintStats(const std::string& label, const SignalStats& stats)
 {
     std::cout << "    " << label << ": Peak=" << std::fixed << std::setprecision(4) << stats.peak
               << ", RMS=" << stats.rms;
+
     if (stats.hasNaN)
     {
         std::cout << " [NaN:" << stats.numNaN << "]";
     }
+
     if (stats.hasInf)
     {
         std::cout << " [Inf:" << stats.numInf << "]";
     }
+
     if (stats.isAllZeros)
     {
         std::cout << " [ZEROS]";
     }
+
     std::cout << "\n";
 }
 
@@ -269,6 +276,7 @@ bool TestSampleRates(const fs::path& modelPath)
 
         // Process multiple blocks to check stability
         bool stable = true;
+
         for (int block = 0; block < 20; ++block)
         {
             GenerateSineWave(inputL, 440.0, sampleRate, 0.3);
@@ -277,12 +285,14 @@ bool TestSampleRates(const fs::path& modelPath)
             dsp.Process(inputs, outputs, blockSize);
 
             auto stats = AnalyzeBuffer(outputL);
+
             if (stats.hasNaN || stats.hasInf)
             {
                 std::cerr << "  Block " << block << ": NaN/Inf detected!\n";
                 stable = false;
                 break;
             }
+
             if (stats.peak > 10.0)
             {
                 std::cerr << "  Block " << block << ": Excessive peak: " << stats.peak << "\n";
@@ -302,6 +312,7 @@ bool TestSampleRates(const fs::path& modelPath)
             std::cout << "  FAILED: Unstable at " << static_cast<int>(sampleRate) << " Hz\n";
             allPassed = false;
         }
+
         std::cout << "\n";
     }
 
@@ -347,12 +358,14 @@ bool TestBufferSizes(const fs::path& modelPath)
             dsp.Process(inputs, outputs, blockSize);
 
             auto stats = AnalyzeBuffer(outputL);
+
             if (stats.hasNaN || stats.hasInf)
             {
                 std::cerr << "  Block " << block << ": NaN/Inf detected!\n";
                 stable = false;
                 break;
             }
+
             if (stats.peak > 10.0)
             {
                 std::cerr << "  Block " << block << ": Excessive peak: " << stats.peak << "\n";
@@ -376,6 +389,7 @@ bool TestBufferSizes(const fs::path& modelPath)
             std::cout << "  FAILED\n";
             allPassed = false;
         }
+
         std::cout << "\n";
     }
 
@@ -419,6 +433,7 @@ bool TestDynamicBufferChanges(const fs::path& modelPath)
 
         // Process a few blocks after the change
         bool stable = true;
+
         for (int block = 0; block < 10; ++block)
         {
             GenerateSineWave(inputL, 440.0, sampleRate, 0.3);
@@ -427,12 +442,14 @@ bool TestDynamicBufferChanges(const fs::path& modelPath)
             dsp.Process(inputs, outputs, currentBlockSize);
 
             auto stats = AnalyzeBuffer(outputL);
+
             if (stats.hasNaN || stats.hasInf)
             {
                 std::cerr << "  Block " << block << " after change: NaN/Inf!\n";
                 stable = false;
                 break;
             }
+
             if (stats.peak > 10.0)
             {
                 std::cerr << "  Block " << block << " after change: Excessive peak!\n";
@@ -564,6 +581,7 @@ bool TestEdgeCases(const fs::path& modelPath)
         float* outputs[2] = {outputL.data(), outputR.data()};
 
         bool stable = true;
+
         for (int i = 0; i < 1000; ++i)
         {
             inputL[0] = inputR[0] = static_cast<float>(0.3 * std::sin(2.0 * kPi * 440.0 * i / 48000.0));
@@ -700,7 +718,6 @@ bool TestEdgeCases(const fs::path& modelPath)
 
     return allPassed;
 }
-
 } // namespace
 
 // ============================================================================

@@ -35,7 +35,6 @@ class JsonStore;
 
 namespace guitarfx::controller_detail
 {
-
 inline constexpr const char* kFactoryArchiveResourceProvider = "factory-archives";
 inline constexpr int kFactoryArchiveStateSchemaVersion = 1;
 inline constexpr const char* kFactoryArchiveLoadingEnabledSettingKey = "factoryPresets.archiveLoadingEnabled";
@@ -123,5 +122,4 @@ void RemapPresetArchiveReferences(Preset& preset, const std::unordered_map<std::
 
 /// Ensures a save path carries the archive extension and a safe filename.
 [[nodiscard]] std::filesystem::path NormalizePresetArchiveSavePath(const std::filesystem::path& path);
-
 } // namespace guitarfx::controller_detail

@@ -14,7 +14,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 // ── Jam panel ───────────────────────────────────────────────────────
 inline constexpr const char* kJamYouTubeApiKeySettingKey = "jam.youtubeApiKey";
 inline constexpr const char* kBundledJamYouTubeApiKey = "";
@@ -48,5 +47,4 @@ inline constexpr const char* kUserInputCalibrationActiveProfileIdSettingKey =
 inline constexpr const char* kLegacyInterfaceCalibrationEnabledSettingKey = "audio.interfaceCalibration.enabled";
 inline constexpr const char* kLegacyInterfaceCalibrationReferenceDbuSettingKey =
     "audio.interfaceCalibration.referenceDbu";
-
 } // namespace guitarfx::controller_detail

@@ -13,6 +13,7 @@ void EffectRegistry::Register(const std::string& type, const EffectTypeInfo& inf
 {
     mTypeInfo[type] = info;
     mFactories[type] = std::move(factory);
+
     for (const auto& alias : info.aliases)
     {
         mAliases[alias] = type;
@@ -33,6 +34,7 @@ void EffectRegistry::Unregister(const std::string& type)
             ++it;
         }
     }
+
     mTypeInfo.erase(type);
     mFactories.erase(type);
 }
@@ -47,10 +49,12 @@ std::unique_ptr<EffectProcessor> EffectRegistry::Create(const std::string& type)
 {
     const std::string canonical = Resolve(type);
     auto it = mFactories.find(canonical);
+
     if (it != mFactories.end())
     {
         return it->second();
     }
+
     // Return passthrough for unknown types
     return std::make_unique<PassthroughProcessor>();
 }
@@ -59,16 +63,19 @@ std::vector<EffectTypeInfo> EffectRegistry::GetAllTypes() const
 {
     std::vector<EffectTypeInfo> result;
     result.reserve(mTypeInfo.size());
+
     for (const auto& [type, info] : mTypeInfo)
     {
         result.push_back(info);
     }
+
     return result;
 }
 
 std::vector<EffectTypeInfo> EffectRegistry::GetTypesByCategory(const std::string& category) const
 {
     std::vector<EffectTypeInfo> result;
+
     for (const auto& [type, info] : mTypeInfo)
     {
         if (info.category == category)
@@ -76,12 +83,14 @@ std::vector<EffectTypeInfo> EffectRegistry::GetTypesByCategory(const std::string
             result.push_back(info);
         }
     }
+
     return result;
 }
 
 std::vector<std::string> EffectRegistry::GetCategories() const
 {
     std::vector<std::string> categories;
+
     for (const auto& [type, info] : mTypeInfo)
     {
         if (std::find(categories.begin(), categories.end(), info.category) == categories.end())
@@ -89,6 +98,7 @@ std::vector<std::string> EffectRegistry::GetCategories() const
             categories.push_back(info.category);
         }
     }
+
     return categories;
 }
 
@@ -100,11 +110,12 @@ bool EffectRegistry::HasType(const std::string& type) const
 std::optional<EffectTypeInfo> EffectRegistry::GetTypeInfo(const std::string& type) const
 {
     auto it = mTypeInfo.find(Resolve(type));
+
     if (it != mTypeInfo.end())
     {
         return it->second;
     }
+
     return std::nullopt;
 }
-
 } // namespace guitarfx

@@ -14,7 +14,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 constexpr std::array<int, 6> kDemoRenderSampleRateOptions = {
     44100, 48000, 88200, 96000, 176400, 192000,
 };
@@ -27,6 +26,7 @@ bool IsSupportedDemoRenderSampleRate(double sampleRate)
     }
 
     const int roundedSampleRate = static_cast<int>(std::llround(sampleRate));
+
     if (std::abs(sampleRate - static_cast<double>(roundedSampleRate)) >= 1.0)
     {
         return false;
@@ -45,6 +45,7 @@ double ResolveDemoRenderSampleRate(const nlohmann::json& payload, double hostSam
     }
 
     const auto sampleRateIter = payload.find("renderSampleRate");
+
     if (sampleRateIter == payload.end() || sampleRateIter->is_null())
     {
         return hostSampleRate;
@@ -57,6 +58,7 @@ double ResolveDemoRenderSampleRate(const nlohmann::json& payload, double hostSam
     }
 
     const double requestedSampleRate = sampleRateIter->get<double>();
+
     if (requestedSampleRate <= 0.0)
     {
         return hostSampleRate;
@@ -133,16 +135,19 @@ std::size_t FindTrailingAudibleFrameCount(const std::vector<float>& left, const 
                                           float threshold, std::size_t requiredQuietFrames)
 {
     const std::size_t frameCount = std::min(left.size(), right.size());
+
     if (frameCount == 0)
     {
         return 0;
     }
 
     std::size_t quietFrames = 0;
+
     for (std::size_t frame = frameCount; frame > 0; --frame)
     {
         const std::size_t index = frame - 1;
         const float peak = std::max(std::abs(left[index]), std::abs(right[index]));
+
         if (peak <= threshold)
         {
             ++quietFrames;
@@ -171,6 +176,7 @@ void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer, float t
     auto& left = buffer.channelSamples[0];
     auto& right = buffer.channelSamples.size() > 1 ? buffer.channelSamples[1] : buffer.channelSamples[0];
     const std::size_t trimmedFrames = FindTrailingAudibleFrameCount(left, right, threshold, requiredQuietFrames);
+
     if (trimmedFrames == 0 || trimmedFrames >= left.size())
     {
         return;
@@ -187,6 +193,7 @@ std::optional<OfflineRenderBuffer> PrepareOfflineRenderBuffer(const std::vector<
                                                               const std::string& title, std::string& error)
 {
     const auto wavData = guitarfx::util::DecodeAudioBytes(bytes);
+
     if (!wavData)
     {
         error = "Unsupported audio format (expected WAV, AIFF, or MP3)";
@@ -201,6 +208,7 @@ std::optional<OfflineRenderBuffer> PrepareOfflineRenderBuffer(const std::vector<
 
     auto resampled =
         guitarfx::util::ConvertToSampleRate(*wavData, targetSampleRate, guitarfx::SampleRateConversionQuality::Highest);
+
     if (resampled.empty() || resampled.front().empty())
     {
         error = "Audio buffer is empty";
@@ -208,6 +216,7 @@ std::optional<OfflineRenderBuffer> PrepareOfflineRenderBuffer(const std::vector<
     }
 
     std::size_t minFrames = resampled.front().size();
+
     for (const auto& channel : resampled)
     {
         if (channel.empty())
@@ -215,6 +224,7 @@ std::optional<OfflineRenderBuffer> PrepareOfflineRenderBuffer(const std::vector<
             error = "Audio buffer is empty";
             return std::nullopt;
         }
+
         minFrames = std::min(minFrames, channel.size());
     }
 
@@ -299,6 +309,7 @@ bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer, std::mutex& dsp
         {
             std::copy_n(source.channelSamples[0].begin() + static_cast<std::ptrdiff_t>(frameOffset), framesThisBlock,
                         inputLeft.begin());
+
             if (hasRightChannel)
             {
                 std::copy_n(source.channelSamples[1].begin() + static_cast<std::ptrdiff_t>(frameOffset),
@@ -328,6 +339,7 @@ bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer, std::mutex& dsp
         ++tailBlocks;
 
         float peak = 0.0f;
+
         for (int i = 0; i < framesThisBlock; ++i)
         {
             peak = std::max(peak, std::abs(outputLeft[static_cast<std::size_t>(i)]));
@@ -335,6 +347,7 @@ bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer, std::mutex& dsp
         }
 
         silentBlocks = (peak <= kTailSilencePeak) ? (silentBlocks + 1) : 0;
+
         if (silentBlocks >= requiredSilentBlocks)
         {
             break;
@@ -345,6 +358,7 @@ bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer, std::mutex& dsp
         std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(source.sampleRate * 0.05)));
     const std::size_t trimmedFrames =
         FindTrailingAudibleFrameCount(renderedLeft, renderedRight, kTailSilencePeak, requiredQuietFrames);
+
     if (trimmedFrames > 0 && trimmedFrames < renderedLeft.size())
     {
         renderedLeft.resize(trimmedFrames);
@@ -358,6 +372,7 @@ bool RenderBufferThroughMixer(guitarfx::MultiPresetMixer& mixer, std::mutex& dsp
 nlohmann::json BuildWaveformPeaks(const std::vector<float>& left, const std::vector<float>& right, std::size_t bins)
 {
     nlohmann::json peaks = nlohmann::json::array();
+
     if (left.empty() || right.empty() || left.size() != right.size() || bins == 0)
     {
         return peaks;
@@ -371,18 +386,20 @@ nlohmann::json BuildWaveformPeaks(const std::vector<float>& left, const std::vec
         const std::size_t start = (b * totalSamples) / binCount;
         const std::size_t end = std::max(start + 1, ((b + 1) * totalSamples) / binCount);
         float peak = 0.0f;
+
         for (std::size_t i = start; i < end && i < totalSamples; ++i)
         {
             const float p = std::max(std::fabs(left[i]), std::fabs(right[i]));
+
             if (p > peak)
             {
                 peak = p;
             }
         }
+
         peaks.push_back(static_cast<double>(std::clamp(peak, 0.0f, 1.0f)));
     }
 
     return peaks;
 }
-
 } // namespace guitarfx::controller_detail

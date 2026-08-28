@@ -24,6 +24,7 @@ int gFailures = 0;
 void Check(bool condition, const std::string& label)
 {
     std::cout << "  " << label << ": " << (condition ? "PASS" : "FAIL") << "\n";
+
     if (!condition)
     {
         ++gFailures;
@@ -69,12 +70,14 @@ void TestBoostLeavesAntiAliasPhaseAlone()
         NamQuality userTier;
         userTier.antiAliasPhaseIndex = phase;
         const NamQuality rendered = guitarfx::PluginController::ApplyOfflineRenderBoost(userTier);
+
         if (rendered.antiAliasPhaseIndex != phase)
         {
             Check(false, "anti-alias phase preserved for index " + std::to_string(phase));
             return;
         }
     }
+
     Check(true, "anti-alias phase is preserved for every setting");
 }
 

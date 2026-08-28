@@ -8,7 +8,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 std::filesystem::path ResolveEffectLayoutsSettingsPath(const FileSystem& fileSystem)
 {
     return fileSystem.ResolveSettingsDirectory() / "layouts" / "indexes" / "effect-layouts.json";
@@ -29,6 +28,7 @@ nlohmann::json LoadEffectLayoutsSettings(const FileSystem& fileSystem)
         }
 
         std::ifstream input(path);
+
         if (!input)
         {
             return root;
@@ -63,6 +63,7 @@ nlohmann::json LoadEffectLayoutsSettings(const FileSystem& fileSystem)
 void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::json& root)
 {
     const auto path = ResolveEffectLayoutsSettingsPath(fileSystem);
+
     if (path.empty())
     {
         return;
@@ -73,6 +74,7 @@ void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::jso
         const auto dir = path.parent_path();
         [[maybe_unused]] const auto ensured = fileSystem.EnsureDirectory(dir);
         std::ofstream output(path);
+
         if (output)
         {
             output << root.dump(2);
@@ -94,5 +96,4 @@ std::filesystem::path ResolveLayoutFilePath(const FileSystem& fileSystem, const 
 {
     return ResolveLayoutDir(fileSystem, layoutId) / "layout.json";
 }
-
 } // namespace guitarfx::controller_detail

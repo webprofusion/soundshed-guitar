@@ -7,7 +7,6 @@
 
 namespace guitarfx
 {
-
 inline constexpr double kDefaultNamModelSampleRate = 48000.0;
 
 inline double ResolveNamModelProcessingSampleRate(double expectedSampleRate, double hostSampleRate)
@@ -31,7 +30,6 @@ inline bool NeedsNamRuntimeResampling(double modelProcessingSampleRate, double h
 
 namespace nam
 {
-
 struct ModelMetadata
 {
     std::string name;
@@ -52,6 +50,7 @@ inline std::optional<double> ReadMetadataDouble(const nlohmann::json& meta, cons
         }
 
         const auto& value = meta[key];
+
         if (value.is_number())
         {
             return value.get<double>();
@@ -64,6 +63,7 @@ inline std::optional<double> ReadMetadataDouble(const nlohmann::json& meta, cons
                 std::size_t parsedLength = 0;
                 const std::string text = value.get<std::string>();
                 const double parsed = std::stod(text, &parsedLength);
+
                 if (parsedLength == text.size())
                 {
                     return parsed;
@@ -95,10 +95,12 @@ inline std::optional<std::string> ReadMetadataString(const nlohmann::json& meta,
         }
 
         const std::string value = meta[key].get<std::string>();
+
         if (value.empty())
         {
             return std::nullopt;
         }
+
         return value;
     };
 
@@ -135,7 +137,5 @@ inline double ReadExpectedSampleRateFromNamJson(const nlohmann::json& j)
 
     return -1.0;
 }
-
 } // namespace nam
-
 } // namespace guitarfx

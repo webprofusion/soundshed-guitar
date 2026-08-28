@@ -83,6 +83,7 @@ void GenerateSineWave(std::vector<float>& buffer, double frequency, double sampl
 void GenerateImpulse(std::vector<NAM_SAMPLE>& buffer, double amplitude = 0.8)
 {
     std::fill(buffer.begin(), buffer.end(), static_cast<NAM_SAMPLE>(0.0));
+
     if (!buffer.empty())
     {
         buffer[0] = static_cast<NAM_SAMPLE>(amplitude);
@@ -100,7 +101,9 @@ void GenerateRamp(std::vector<NAM_SAMPLE>& buffer, double startVal = -0.5, doubl
     {
         return;
     }
+
     const double step = (endVal - startVal) / static_cast<double>(buffer.size() - 1);
+
     for (std::size_t i = 0; i < buffer.size(); ++i)
     {
         buffer[i] = static_cast<NAM_SAMPLE>(startVal + step * static_cast<double>(i));
@@ -130,6 +133,7 @@ struct SignalStats
 template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
 {
     SignalStats stats;
+
     if (buffer.empty())
     {
         return stats;
@@ -152,6 +156,7 @@ template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
             stats.numNaN++;
             continue;
         }
+
         if (std::isinf(val))
         {
             stats.hasInf = true;
@@ -163,10 +168,12 @@ template <typename T> SignalStats AnalyzeBuffer(const std::vector<T>& buffer)
         {
             stats.isAllZeros = false;
         }
+
         if (val != firstVal)
         {
             stats.isConstant = false;
         }
+
         if (std::abs(val) < 1e-10)
         {
             stats.numZeros++;
@@ -190,18 +197,22 @@ void PrintSignalStats(const std::string& label, const SignalStats& stats)
     std::cout << "  " << label << ":\n";
     std::cout << "    Range: [" << std::fixed << std::setprecision(6) << stats.min << ", " << stats.max << "]\n";
     std::cout << "    Mean: " << stats.mean << ", RMS: " << stats.rms << ", Peak: " << stats.peak << "\n";
+
     if (stats.hasNaN)
     {
         std::cout << "    WARNING: Contains " << stats.numNaN << " NaN values!\n";
     }
+
     if (stats.hasInf)
     {
         std::cout << "    WARNING: Contains " << stats.numInf << " Inf values!\n";
     }
+
     if (stats.isAllZeros)
     {
         std::cout << "    WARNING: All zeros!\n";
     }
+
     if (stats.isConstant && !stats.isAllZeros)
     {
         std::cout << "    WARNING: Constant value (DC)!\n";
@@ -213,14 +224,17 @@ template <typename T> void PrintSamples(const std::string& label, const std::vec
 {
     std::cout << "  " << label << " (first " << count << " samples): ";
     const int n = std::min(count, static_cast<int>(buffer.size()));
+
     for (int i = 0; i < n; ++i)
     {
         std::cout << std::fixed << std::setprecision(4) << buffer[i];
+
         if (i < n - 1)
         {
             std::cout << ", ";
         }
     }
+
     std::cout << "\n";
 }
 
@@ -250,6 +264,7 @@ guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& i
     amp.type = ampType;
     amp.category = "amp";
     amp.enabled = fs::exists(modelPath);
+
     if (amp.enabled)
     {
         guitarfx::ResourceRef ref;
@@ -265,6 +280,7 @@ guitarfx::Preset MakeNamGraphPreset(const fs::path& modelPath, const fs::path& i
     cab.enabled = fs::exists(irPath);
     cab.params["mix"] = 1.0;
     cab.params["outputGain"] = 0.0;
+
     if (cab.enabled)
     {
         guitarfx::ResourceRef ref;
@@ -352,11 +368,13 @@ bool TestDirectModelProcessing(const fs::path& modelPath)
     try
     {
         model = nam::get_dsp(modelPath);
+
         if (!model)
         {
             std::cerr << "ERROR: Failed to load model (returned nullptr)\n";
             return false;
         }
+
         std::cout << "Model loaded successfully\n";
     }
     catch (const std::exception& ex)
@@ -435,6 +453,7 @@ bool TestDirectModelProcessing(const fs::path& modelPath)
     GenerateSineWave(input, 440.0, kTestSampleRate, 0.3);
 
     bool allBlocksOk = true;
+
     for (int block = 0; block < 10; ++block)
     {
         model->process(inputPtrs, outputPtrs, kTestBlockSize);
@@ -516,6 +535,7 @@ bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelP
     // Test 2: Check if output differs from input
     std::cout << "\n--- Test 2: Verify Processing Changed Signal ---\n";
     bool signalChanged = false;
+
     for (int i = 0; i < kTestBlockSize; ++i)
     {
         if (std::abs(outputL[i] - inputL[i]) > 1e-6)
@@ -524,11 +544,13 @@ bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelP
             break;
         }
     }
+
     std::cout << "Signal changed by processing: " << (signalChanged ? "YES" : "NO (possible passthrough!)") << "\n";
 
     // Test 3: Stability over multiple blocks
     std::cout << "\n--- Test 3: 20 Block Stability Test ---\n";
     bool stable = true;
+
     for (int block = 0; block < 20; ++block)
     {
         // Regenerate input each block with slightly different phase
@@ -541,18 +563,21 @@ bool TestDSPManagerPipeline(const fs::path& resourcesDir, const fs::path& modelP
         dsp.Process(inputs, outputs, kTestBlockSize);
 
         auto stats = AnalyzeBuffer(outputL);
+
         if (stats.hasNaN || stats.hasInf)
         {
             std::cerr << "Block " << block << ": NaN/Inf detected!\n";
             stable = false;
             break;
         }
+
         if (stats.peak > 10.0)
         {
             std::cerr << "Block " << block << ": Excessive peak " << stats.peak << "\n";
             stable = false;
         }
     }
+
     std::cout << "Stability test: " << (stable ? "PASSED" : "FAILED") << "\n";
 
     // Test 4: Bypass comparison (set mix to 0 for dry signal)
@@ -590,11 +615,13 @@ bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath
 
     // Load model directly
     auto directModel = nam::get_dsp(modelPath);
+
     if (!directModel)
     {
         std::cerr << "ERROR: Failed to load model for direct test\n";
         return false;
     }
+
     directModel->ResetAndPrewarm(kTestSampleRate, kTestBlockSize);
 
     // Set up graph-based DSP manager
@@ -646,12 +673,14 @@ bool TestDirectVsManager(const fs::path& resourcesDir, const fs::path& modelPath
     std::cout << "\n--- Signal Difference Analysis ---\n";
     double maxDiff = 0.0;
     double sumDiffSquares = 0.0;
+
     for (int i = 0; i < kTestBlockSize; ++i)
     {
         const double diff = std::abs(static_cast<double>(directOutput[i]) - static_cast<double>(managerOutputL[i]));
         maxDiff = std::max(maxDiff, diff);
         sumDiffSquares += diff * diff;
     }
+
     const double rmsDiff = std::sqrt(sumDiffSquares / kTestBlockSize);
 
     std::cout << "Max difference: " << std::scientific << maxDiff << "\n";
@@ -691,6 +720,7 @@ bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json
     // Pick first model, and then the first different model with a distinct file path
     const auto& modelA = audioModelsJson.front();
     const auto* modelBPtr = static_cast<const nlohmann::json*>(nullptr);
+
     for (const auto& m : audioModelsJson)
     {
         if (m.value("filePath", std::string{}) != modelA.value("filePath", std::string{}))
@@ -761,12 +791,14 @@ bool TestModelDifferentiation(const fs::path& resourcesDir, const nlohmann::json
 
     double sumSq = 0.0;
     double maxDiff = 0.0;
+
     for (std::size_t i = 0; i < std::min(outA.size(), outB.size()); ++i)
     {
         const double diff = std::abs(outA[i] - outB[i]);
         sumSq += diff * diff;
         maxDiff = std::max(maxDiff, diff);
     }
+
     const double rmsDiff = std::sqrt(sumSq / static_cast<double>(std::min(outA.size(), outB.size())));
 
     std::cout << "Model A: " << modelA.value("title", "(unknown)") << "\n";
@@ -844,16 +876,19 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
         std::cerr << "ERROR: Standard NAM produced NaN/Inf!\n";
         return false;
     }
+
     if (optimizedStats.hasNaN || optimizedStats.hasInf)
     {
         std::cerr << "ERROR: Optimized NAM produced NaN/Inf!\n";
         return false;
     }
+
     if (standardStats.isAllZeros)
     {
         std::cerr << "ERROR: Standard NAM produced all zeros!\n";
         return false;
     }
+
     if (optimizedStats.isAllZeros)
     {
         std::cerr << "ERROR: Optimized NAM produced all zeros!\n";
@@ -863,12 +898,14 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
     // Calculate difference between outputs
     double sumSq = 0.0;
     double maxDiff = 0.0;
+
     for (std::size_t i = 0; i < std::min(standardOutput.size(), optimizedOutput.size()); ++i)
     {
         const double diff = std::abs(standardOutput[i] - optimizedOutput[i]);
         sumSq += diff * diff;
         maxDiff = std::max(maxDiff, diff);
     }
+
     const double rmsDiff =
         std::sqrt(sumSq / static_cast<double>(std::min(standardOutput.size(), optimizedOutput.size())));
 
@@ -881,6 +918,7 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
     const double meanStd = standardStats.mean;
     const double meanOpt = optimizedStats.mean;
     double sumXY = 0.0, sumX2 = 0.0, sumY2 = 0.0;
+
     for (std::size_t i = 0; i < standardOutput.size(); ++i)
     {
         const double x = standardOutput[i] - meanStd;
@@ -889,6 +927,7 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
         sumX2 += x * x;
         sumY2 += y * y;
     }
+
     const double correlation = (sumX2 > 0 && sumY2 > 0) ? sumXY / std::sqrt(sumX2 * sumY2) : 0.0;
     std::cout << "Correlation: " << std::setprecision(6) << correlation << "\n";
 
@@ -911,6 +950,7 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
     }
 
     std::cout << "\nConclusion: Standard and Optimized NAM produce ";
+
     if (rmsDiff < 0.001)
     {
         std::cout << "nearly identical output (excellent match)\n";
@@ -930,7 +970,6 @@ bool TestStandardVsOptimized(const fs::path& resourcesDir, const fs::path& model
 
     return true;
 }
-
 } // namespace
 
 // ============================================================================
@@ -968,6 +1007,7 @@ int main(int argc, char* argv[])
         {
             modelPath = fs::path(argv[1]);
             modelName = modelPath.filename().string();
+
             if (!modelPath.is_absolute())
             {
                 modelPath = resourcesDir / modelPath;
@@ -995,6 +1035,7 @@ int main(int argc, char* argv[])
         try
         {
             const auto irLibraryJson = nlohmann::json::parse(std::ifstream(dataDir / "ir-library.json"));
+
             if (irLibraryJson.is_array() && !irLibraryJson.empty())
             {
                 irPath = resourcesDir / irLibraryJson[0].value("filePath", "");

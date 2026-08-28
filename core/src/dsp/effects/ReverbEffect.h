@@ -73,6 +73,7 @@ class ReverbEffect : public EffectProcessor
             mCombPrecompSinOffsets[i] = static_cast<float>(std::sin(kCombModPhaseOffsets[i]));
             mCombPrecompCosOffsets[i] = static_cast<float>(std::cos(kCombModPhaseOffsets[i]));
         }
+
         for (size_t i = 0; i < kAllpassCount; ++i)
         {
             mAllpassPrecompSinOffsets[i] = static_cast<float>(std::sin(kAllpassModPhaseOffsets[i]));
@@ -155,6 +156,7 @@ class ReverbEffect : public EffectProcessor
                     std::copy(inputs[ch], inputs[ch] + numSamples, outputs[ch]);
                 }
             }
+
             return;
         }
 
@@ -171,6 +173,7 @@ class ReverbEffect : public EffectProcessor
                     std::fill_n(outputs[0], numSamples, 0.0f);
                 }
             }
+
             if (outputs[1])
             {
                 if (inputs && inputs[1])
@@ -186,6 +189,7 @@ class ReverbEffect : public EffectProcessor
                     std::fill_n(outputs[1], numSamples, 0.0f);
                 }
             }
+
             return;
         }
 
@@ -230,6 +234,7 @@ class ReverbEffect : public EffectProcessor
 
             float earlyL = preL * mEarlyBaseGain;
             float earlyR = preR * mEarlyBaseGain;
+
             for (size_t t = 0; t < kEarlyTapCount; ++t)
             {
                 earlyL += ReadFromDelay(mPreDelayL, mPreDelayWrite, mPreDelaySamples + mEarlyTapSamples[t]) *
@@ -249,6 +254,7 @@ class ReverbEffect : public EffectProcessor
             const float mod = FastSin(phaseF);
             const float cosPhase = FastCos(phaseF);
             mModPhase += mModPhaseInc;
+
             if (mModPhase >= kTwoPi)
             {
                 mModPhase -= kTwoPi;
@@ -294,6 +300,7 @@ class ReverbEffect : public EffectProcessor
 
             constexpr float kHouseholderScale = 2.0f / static_cast<float>(kCombCount);
             constexpr float kStereoFeedbackBlend = 0.12f;
+
             for (size_t c = 0; c < kCombCount; ++c)
             {
                 const float mixedL = combFeedbackL[c] - combFeedbackSumL * kHouseholderScale;
@@ -308,6 +315,7 @@ class ReverbEffect : public EffectProcessor
                 {
                     mCombWriteL[c] = 0;
                 }
+
                 if (++mCombWriteR[c] >= mCombBufferR[c].size())
                 {
                     mCombWriteR[c] = 0;
@@ -343,6 +351,7 @@ class ReverbEffect : public EffectProcessor
                 {
                     mAllpassWriteL[a] = 0;
                 }
+
                 if (++mAllpassWriteR[a] >= mAllpassBufferR[a].size())
                 {
                     mAllpassWriteR[a] = 0;
@@ -379,6 +388,7 @@ class ReverbEffect : public EffectProcessor
             {
                 outputs[0][i] = mixedL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = mixedR;
@@ -475,62 +485,77 @@ class ReverbEffect : public EffectProcessor
         {
             return mDecay;
         }
+
         if (key == "size")
         {
             return mSize;
         }
+
         if (key == "damping")
         {
             return mDamping;
         }
+
         if (key == "diffusion")
         {
             return mDiffusion;
         }
+
         if (key == "preDelay")
         {
             return mPreDelayMs;
         }
+
         if (key == "lowCut")
         {
             return mLowCutHz;
         }
+
         if (key == "highCut")
         {
             return mHighCutHz;
         }
+
         if (key == "tone")
         {
             return mTone;
         }
+
         if (key == "width")
         {
             return mWidth;
         }
+
         if (key == "modRate")
         {
             return mModRateHz;
         }
+
         if (key == "modDepth")
         {
             return mModDepth;
         }
+
         if (key == "ducking")
         {
             return mDucking;
         }
+
         if (key == "drive")
         {
             return mDrive;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "character")
         {
             return static_cast<double>(CharacterToIndex(mCharacter));
         }
+
         return 0.0;
     }
 
@@ -722,6 +747,7 @@ class ReverbEffect : public EffectProcessor
         {
             return 0.0f;
         }
+
         const size_t back = std::min(delaySamples, buffer.size() - 1);
         const size_t readPos = (writePos + buffer.size() - back) % buffer.size();
         return buffer[readPos];
@@ -735,6 +761,7 @@ class ReverbEffect : public EffectProcessor
         {
             return 0.0f;
         }
+
         const size_t d0 = static_cast<size_t>(delaySamples);
         const float frac = delaySamples - static_cast<float>(d0);
         const float s0 = ReadFromDelay(buffer, writePos, d0);
@@ -772,6 +799,7 @@ class ReverbEffect : public EffectProcessor
             a2 = 0.0;
             return;
         }
+
         const double w0 = kTwoPi * freq / mSampleRate;
         const double cosw0 = std::cos(w0);
         const double sinw0 = std::sin(w0);
@@ -1004,10 +1032,12 @@ class ReverbEffect : public EffectProcessor
         {
             return 1.0f;
         }
+
         if (x < -5.5f)
         {
             return -1.0f;
         }
+
         const float x2 = x * x;
         return x * (27.0f + x2) / (27.0f + 9.0f * x2);
     }
@@ -1023,12 +1053,15 @@ class ReverbEffect : public EffectProcessor
         {
             return sample;
         }
+
         const float drive = 1.0f + amount * 5.0f;
         const float norm = FastTanh(drive);
+
         if (norm <= 0.0f)
         {
             return sample;
         }
+
         return FastTanh(sample * drive) / norm;
     }
 
@@ -1208,5 +1241,4 @@ inline void RegisterReverbEffect()
         EffectRegistry::Instance().Register(info.type, info, [mode]() { return std::make_unique<ReverbEffect>(mode); });
     }
 }
-
 } // namespace guitarfx

@@ -19,7 +19,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::HandleGetAutomationRequest()
 {
     nlohmann::json msg;
@@ -27,6 +26,7 @@ void PluginController::HandleGetAutomationRequest()
     msg["slots"] = mAutomationSlots.GetSlotsJson();
 
     nlohmann::json registry = nlohmann::json::array();
+
     for (const auto& info : mAutomationSlots.GetRegistryInfo())
     {
         registry.push_back({{"address", info.address},
@@ -37,6 +37,7 @@ void PluginController::HandleGetAutomationRequest()
                             {"isStepped", info.isStepped},
                             {"isTrigger", info.isTrigger}});
     }
+
     msg["registry"] = std::move(registry);
     msg["maxCustomSlots"] = kMaxCustomSlots;
     SendMessageToUI(msg.dump());
@@ -45,6 +46,7 @@ void PluginController::HandleGetAutomationRequest()
 void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payload)
 {
     const std::string slotId = payload.value("slotId", "");
+
     if (slotId.empty())
     {
         return;
@@ -54,18 +56,21 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
     const bool isDefault = existing && existing->isDefault;
 
     std::optional<std::string> label;
+
     if (payload.contains("label") && payload["label"].is_string())
     {
         label = payload["label"].get<std::string>();
     }
 
     std::optional<std::string> address;
+
     if (payload.contains("address") && payload["address"].is_string())
     {
         address = payload["address"].get<std::string>();
     }
 
     std::optional<std::string> nodeSelector;
+
     if (payload.contains("nodeSelector") && payload["nodeSelector"].is_string())
     {
         nodeSelector = payload["nodeSelector"].get<std::string>();
@@ -73,6 +78,7 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
 
     std::optional<MidiControlMap> midiMap;
     bool clearMidiMap = false;
+
     if (payload.contains("midiMap") && payload["midiMap"].is_object())
     {
         const auto& mm = payload["midiMap"];
@@ -92,9 +98,11 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
 
     std::optional<std::vector<KeyboardMap>> keyMaps;
     bool clearKeyMap = false;
+
     if (payload.contains("keyMap") && payload["keyMap"].is_array())
     {
         std::vector<KeyboardMap> kms;
+
         for (const auto& k : payload["keyMap"])
         {
             KeyboardMap km;
@@ -103,6 +111,7 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
             km.value = k.value("value", 0.0f);
             kms.push_back(std::move(km));
         }
+
         keyMaps = std::move(kms);
     }
     else if (payload.contains("keyMap") && payload["keyMap"].is_null())
@@ -115,6 +124,7 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
         // realloc/erase mSlots while the audio thread iterates it in HandleMidi.
         // Keep the critical section short: no disk I/O or UI sends under the lock.
         std::lock_guard<std::mutex> lock(mDSPMutex);
+
         if (isDefault)
         {
             mAutomationSlots.SetDefaultSlotOverrides(slotId, label, midiMap, keyMaps);
@@ -127,14 +137,17 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
         if (clearMidiMap)
         {
             auto* slot = mAutomationSlots.FindSlot(slotId);
+
             if (slot)
             {
                 slot->midiMap.reset();
             }
         }
+
         if (clearKeyMap)
         {
             auto* slot = mAutomationSlots.FindSlot(slotId);
+
             if (slot)
             {
                 slot->keyMaps.clear();
@@ -210,6 +223,7 @@ void PluginController::ProcessQueuedMidi()
     }
 
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
+
     if (!lock.owns_lock())
     {
         return;
@@ -250,6 +264,7 @@ void PluginController::ApplySetlistPresetByIndexDirect(int index)
 {
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
+
     if (setlists.empty())
     {
         return;
@@ -258,6 +273,7 @@ void PluginController::ApplySetlistPresetByIndexDirect(int index)
     // Resolve the active setlist by activeSetlistId (first setlist as fallback)
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
     const nlohmann::json* activeSlots = nullptr;
+
     for (const auto& sl : setlists)
     {
         if (activeSetlistId.empty() || sl.value("id", "") == activeSetlistId)
@@ -266,6 +282,7 @@ void PluginController::ApplySetlistPresetByIndexDirect(int index)
             break;
         }
     }
+
     if (!activeSlots || !activeSlots->is_array())
     {
         return;
@@ -278,6 +295,7 @@ void PluginController::ApplySetlistPresetByIndexDirect(int index)
 
     const auto& slot = (*activeSlots)[index];
     const std::string presetId = slot.value("presetId", "");
+
     if (presetId.empty())
     {
         return;
@@ -326,6 +344,7 @@ int PluginController::GetActiveSceneIndex() const
     }
 
     const std::string activeSceneId = GetResolvedActiveSceneId();
+
     for (std::size_t i = 0; i < mActivePreset->scenes.size(); ++i)
     {
         if (mActivePreset->scenes[i].id == activeSceneId)
@@ -333,6 +352,7 @@ int PluginController::GetActiveSceneIndex() const
             return static_cast<int>(i);
         }
     }
+
     return -1;
 }
 
@@ -374,6 +394,7 @@ void PluginController::SelectSceneByIndexDirect(int index)
     }
 
     const std::string targetSceneId = mActivePreset->scenes[static_cast<std::size_t>(index)].id;
+
     if (targetSceneId == GetResolvedActiveSceneId())
     {
         return;
@@ -394,10 +415,12 @@ void PluginController::SelectSceneByIndexDirect(int index)
     loaded["type"] = "presetLoaded";
     loaded["preset"] = SerializePresetForUi(*mActivePreset);
     nlohmann::json activeIds = nlohmann::json::array();
+
     for (const auto& id : mPresetMixer.GetActivePresetIds())
     {
         activeIds.push_back(id);
     }
+
     loaded["activePresetIds"] = activeIds;
     loaded["sceneId"] = GetResolvedActiveSceneId();
     SendMessageToUI(loaded.dump());
@@ -428,6 +451,7 @@ void PluginController::SetlistBankChangeDirect(int delta)
     auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
     const int count = static_cast<int>(setlists.size());
+
     if (count == 0)
     {
         return;
@@ -436,6 +460,7 @@ void PluginController::SetlistBankChangeDirect(int delta)
     // Resolve the current active setlist index (by id), defaulting to the first.
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
     int currentIndex = 0;
+
     if (!activeSetlistId.empty())
     {
         for (int i = 0; i < count; ++i)
@@ -449,6 +474,7 @@ void PluginController::SetlistBankChangeDirect(int delta)
     }
 
     const int newIndex = std::clamp(currentIndex + delta, 0, count - 1);
+
     if (newIndex == currentIndex)
     {
         return;
@@ -493,12 +519,14 @@ void PluginController::SelectSetlistBankDirect(int bankNumber)
     // the active setlist ("bank"). No-op (with a log) if no setlist claims it.
     auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
+
     if (setlists.empty())
     {
         return;
     }
 
     std::string targetId;
+
     for (const auto& sl : setlists)
     {
         if (sl.contains("bank") && sl["bank"].is_number_integer() && sl["bank"].get<int>() == bankNumber)
@@ -516,6 +544,7 @@ void PluginController::SelectSetlistBankDirect(int bankNumber)
     }
 
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
+
     if (targetId == activeSetlistId)
     {
         return;
@@ -540,6 +569,7 @@ int PluginController::GetSetlistLength() const
 {
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
+
     if (setlists.empty())
     {
         return 0;
@@ -547,6 +577,7 @@ int PluginController::GetSetlistLength() const
 
     // Resolve the active setlist by activeSetlistId (first setlist as fallback)
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
+
     for (const auto& sl : setlists)
     {
         if (activeSetlistId.empty() || sl.value("id", "") == activeSetlistId)
@@ -555,6 +586,7 @@ int PluginController::GetSetlistLength() const
             return static_cast<int>(slots.size());
         }
     }
+
     return 0;
 }
 
@@ -570,12 +602,14 @@ int PluginController::GetSetlistBankNumber() const
     // Return the bank number of the active setlist, or 0 if none/unassigned.
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
+
     if (setlists.empty())
     {
         return 0;
     }
 
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
+
     for (const auto& sl : setlists)
     {
         if (activeSetlistId.empty() || sl.value("id", "") == activeSetlistId)
@@ -584,9 +618,11 @@ int PluginController::GetSetlistBankNumber() const
             {
                 return sl["bank"].get<int>();
             }
+
             return 0;
         }
     }
+
     return 0;
 }
 
@@ -599,25 +635,29 @@ std::string PluginController::GetSetlistSlotPresetId(int index) const
 
     const auto setlistsData = LoadUiStorageJson("setlists.json", nlohmann::json::object());
     const auto setlists = setlistsData.value("setlists", nlohmann::json::array());
+
     if (setlists.empty())
     {
         return "";
     }
 
     const std::string activeSetlistId = setlistsData.value("activeSetlistId", "");
+
     for (const auto& sl : setlists)
     {
         if (activeSetlistId.empty() || sl.value("id", "") == activeSetlistId)
         {
             const auto& slots = sl.value("slots", nlohmann::json::array());
+
             if (index >= static_cast<int>(slots.size()))
             {
                 return "";
             }
+
             return slots[index].value("presetId", "");
         }
     }
+
     return "";
 }
-
 } // namespace guitarfx

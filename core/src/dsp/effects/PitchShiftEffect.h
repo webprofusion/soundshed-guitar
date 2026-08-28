@@ -49,6 +49,7 @@ class PitchShiftEffect : public EffectProcessor
         {
             mStretch.reset();
         }
+
         std::fill(mDryDelayL.begin(), mDryDelayL.end(), 0.0f);
         std::fill(mDryDelayR.begin(), mDryDelayR.end(), 0.0f);
         mDryWritePos = 0;
@@ -63,6 +64,7 @@ class PitchShiftEffect : public EffectProcessor
 
         // Clamp to allocated buffer size to prevent out-of-bounds writes
         numSamples = std::min(numSamples, mMaxBlockSize);
+
         if (numSamples <= 0)
         {
             return;
@@ -96,6 +98,7 @@ class PitchShiftEffect : public EffectProcessor
         const float dryMix = static_cast<float>(1.0 - mMix);
         const float wetMix = static_cast<float>(mMix);
         const bool needDry = dryMix > 0.0f;
+
         if (needDry)
         {
             EnsureDryDelayCapacity();
@@ -107,6 +110,7 @@ class PitchShiftEffect : public EffectProcessor
         {
             float dryL = 0.0f;
             float dryR = 0.0f;
+
             if (needDry)
             {
                 PushAndReadDry(inputs[0] ? inputs[0][i] : 0.0f, inputs[1] ? inputs[1][i] : 0.0f, latency, dryL, dryR);
@@ -116,6 +120,7 @@ class PitchShiftEffect : public EffectProcessor
             {
                 outputs[0][i] = dryL * dryMix + mWetL[static_cast<size_t>(i)] * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = dryR * dryMix + mWetR[static_cast<size_t>(i)] * wetMix;
@@ -146,10 +151,12 @@ class PitchShiftEffect : public EffectProcessor
         {
             return mSemitones;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         return 0.0;
     }
 
@@ -169,6 +176,7 @@ class PitchShiftEffect : public EffectProcessor
         {
             return 0;
         }
+
         return SignalsmithTotalLatencySamples(mStretch);
     }
 
@@ -184,6 +192,7 @@ class PitchShiftEffect : public EffectProcessor
         {
             return;
         }
+
         // Tonality limit is normalised to sample rate (Signalsmith API contract).
         const float tonalityLimit = static_cast<float>(kTonalityLimitHz / mSampleRate);
         mStretch.setTransposeSemitones(static_cast<float>(mSemitones), tonalityLimit);
@@ -195,8 +204,10 @@ class PitchShiftEffect : public EffectProcessor
         {
             return;
         }
+
         const int latency = SignalsmithTotalLatencySamples(mStretch);
         const size_t needed = static_cast<size_t>(std::max(latency, 0) + std::max(mMaxBlockSize, 1) + 8);
+
         if (mDryDelayL.size() < needed)
         {
             mDryDelayL.assign(needed, 0.0f);
@@ -257,5 +268,4 @@ inline void RegisterPitchShiftEffect()
                        {"mix", "Mix", 1.0, 0.0, 1.0, "amount"}};
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<PitchShiftEffect>(); });
 }
-
 } // namespace guitarfx

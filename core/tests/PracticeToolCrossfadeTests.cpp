@@ -23,7 +23,6 @@
 
 namespace guitarfx
 {
-
 // Friend accessor granted by PracticeToolService — exposes just enough
 // of its private surface (ReadSourceWindow + the TrackBuffer type) to drive
 // the crossfade logic directly with a synthetic buffer.
@@ -47,12 +46,10 @@ struct PracticeToolServiceTestAccess
         return svc.ReadSourceWindow(buffer, outL, outR, cursor, numFrames);
     }
 };
-
 } // namespace guitarfx
 
 namespace
 {
-
 using guitarfx::PracticeToolService;
 using guitarfx::PracticeToolServiceTestAccess;
 
@@ -132,11 +129,13 @@ auto MakeRampLoopBuffer(std::size_t total, std::size_t regionStart, std::size_t 
 {
     std::vector<float> left(total, -1.0f);
     const double span = static_cast<double>(regionEnd - regionStart);
+
     for (std::size_t i = regionStart; i < regionEnd; ++i)
     {
         const double t = static_cast<double>(i - regionStart) / span;
         left[i] = static_cast<float>(-1.0 + 2.0 * t);
     }
+
     for (std::size_t i = regionEnd; i < total; ++i)
     {
         left[i] = 1.0f; // continuous with the ramp's end value
@@ -178,10 +177,12 @@ bool TestLoopWrapStaysInBoundsAndBlends()
     {
         const int written =
             PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+
         if (written != kChunk)
         {
             everyCallFullyFilled = false;
         }
+
         if (cursor >= kTotalFrames)
         {
             cursorAlwaysInBounds = false;
@@ -190,13 +191,16 @@ bool TestLoopWrapStaysInBoundsAndBlends()
         for (int i = 0; i < written; ++i)
         {
             const float sample = outL[static_cast<std::size_t>(i)];
+
             if (!std::isfinite(sample))
             {
                 noNonFiniteSamples = false;
             }
+
             const float delta = std::fabs(sample - prevSample);
             maxAbsDelta = std::max(maxAbsDelta, delta);
             prevSample = sample;
+
             // "Intermediate" = clearly between the ramp's flat extremes, i.e.
             // actually mid-blend rather than sitting at -1 or +1.
             if (sample > -0.8f && sample < 0.8f)
@@ -262,14 +266,17 @@ bool TestVeryShortLoopRegionStaysInBounds()
     {
         const int written =
             PracticeToolServiceTestAccess::ReadSourceWindow(*svc, buffer, outL.data(), outR.data(), cursor, kChunk);
+
         if (written != kChunk)
         {
             everyCallFullyFilled = false;
         }
+
         if (cursor >= kTotalFrames)
         {
             cursorAlwaysInBounds = false;
         }
+
         for (int i = 0; i < written; ++i)
         {
             if (!std::isfinite(outL[static_cast<std::size_t>(i)]))
@@ -323,7 +330,6 @@ bool TestNonLoopingExhaustionReturnsShortAtEnd()
 
     return firstCallShortAtEnd && secondCallReturnsZero;
 }
-
 } // namespace
 
 int main()
@@ -334,10 +340,12 @@ int main()
     {
         allPassed = false;
     }
+
     if (!TestVeryShortLoopRegionStaysInBounds())
     {
         allPassed = false;
     }
+
     if (!TestNonLoopingExhaustionReturnsShortAtEnd())
     {
         allPassed = false;

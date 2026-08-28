@@ -12,10 +12,12 @@ namespace
 constexpr size_t NextPowerOf2(size_t n)
 {
     size_t power = 1;
+
     while (power < n)
     {
         power *= 2;
     }
+
     return power;
 }
 } // namespace
@@ -67,10 +69,12 @@ bool RealtimeConvolver::SetImpulse(const std::vector<float>& irSamples, int bloc
         // exceeds the uniform partition (otherwise non-uniform gives no benefit).
         const size_t base =
             std::clamp(NextPowerOf2(static_cast<size_t>(std::max(blockSize, 64))), size_t{64}, size_t{256});
+
         if (base < uniformPartition)
         {
             return BuildNonUniform(irSamples, blockSize);
         }
+
         // No latency benefit available (host block already >= uniform partition):
         // fall through to the uniform engine.
     }
@@ -136,10 +140,12 @@ bool RealtimeConvolver::BuildUniform(const std::vector<float>& irSamples, size_t
 
     // Allocate delay line for input FFTs
     mInputFFTDelayLine.resize(mNumPartitions);
+
     for (auto& fft : mInputFFTDelayLine)
     {
         fft.assign(mFFTSize, std::complex<float>(0.0f, 0.0f));
     }
+
     mDelayLineIndex = 0;
 
     // Allocate I/O buffers
@@ -189,10 +195,12 @@ bool RealtimeConvolver::BuildNonUniform(const std::vector<float>& irSamples, int
         stage->mLowLatencyMode = false;
         std::vector<float> slice(irSamples.begin() + static_cast<std::ptrdiff_t>(off),
                                  irSamples.begin() + static_cast<std::ptrdiff_t>(std::min(off + len, n)));
+
         if (!stage->BuildUniform(slice, partition))
         {
             return false;
         }
+
         mNonUniformStages.push_back(std::move(stage));
         return true;
     };
@@ -205,13 +213,16 @@ bool RealtimeConvolver::BuildNonUniform(const std::vector<float>& irSamples, int
 
     // Geometrically growing head segments until the partition reaches maxPartition.
     size_t off = base;
+
     while (off < n && off < maxPartition)
     {
         const size_t partition = off; // P == off keeps every stage delay-aligned to `base`
+
         if (!addStage(off, partition, partition))
         {
             return false;
         }
+
         off += partition;
     }
 
@@ -223,10 +234,12 @@ bool RealtimeConvolver::BuildNonUniform(const std::vector<float>& irSamples, int
         std::vector<float> tail(irSamples.begin() + static_cast<std::ptrdiff_t>(off), irSamples.end());
         auto stage = std::make_unique<RealtimeConvolver>();
         stage->mLowLatencyMode = false;
+
         if (!stage->BuildUniform(tail, maxPartition))
         {
             return false;
         }
+
         mNonUniformStages.push_back(std::move(stage));
     }
 
@@ -234,6 +247,7 @@ bool RealtimeConvolver::BuildNonUniform(const std::vector<float>& irSamples, int
     mBaseBlock = base;
     mPartitionSize = base; // GetLatency() reports the base block as the engine latency
     mNumPartitions = 0;
+
     for (const auto& stage : mNonUniformStages)
     {
         mNumPartitions += stage->GetNumPartitions();
@@ -262,12 +276,14 @@ void RealtimeConvolver::ProcessDirect(const float* input, float* output, int num
 
         // Direct FIR convolution: output[n] = sum(input[n-k] * ir[k])
         float sum = 0.0f;
+
         for (size_t k = 0; k < irLen; ++k)
         {
             // Calculate index into circular history buffer
             size_t histIdx = (mDirectHistoryPos + irLen - k) % irLen;
             sum += mDirectHistory[histIdx] * mDirectIR[k];
         }
+
         output[i] = sum;
 
         // Advance history position
@@ -349,6 +365,7 @@ void RealtimeConvolver::Process(const float* input, float* output, int numSample
         {
             std::memset(output, 0, static_cast<size_t>(numSamples) * sizeof(float));
         }
+
         return;
     }
 
@@ -367,6 +384,7 @@ void RealtimeConvolver::Process(const float* input, float* output, int numSample
     }
 
     int i = 0;
+
     while (i < numSamples)
     {
         // If output buffer exhausted, process next block
@@ -393,6 +411,7 @@ void RealtimeConvolver::ProcessNonUniform(const float* input, float* output, int
 {
     const size_t numStages = mNonUniformStages.size();
     int processed = 0;
+
     while (processed < numSamples)
     {
         const int chunk =
@@ -405,9 +424,11 @@ void RealtimeConvolver::ProcessNonUniform(const float* input, float* output, int
 
         // Remaining stages accumulate into mNuRestScratch.
         std::fill_n(mNuRestScratch.data(), static_cast<size_t>(chunk), 0.0f);
+
         for (size_t s = 1; s < numStages; ++s)
         {
             mNonUniformStages[s]->Process(in, mNuStageScratch.data(), chunk);
+
             for (int k = 0; k < chunk; ++k)
             {
                 mNuRestScratch[static_cast<size_t>(k)] += mNuStageScratch[static_cast<size_t>(k)];
@@ -462,6 +483,7 @@ void RealtimeConvolver::Reset()
                 stage->Reset();
             }
         }
+
         std::fill(mNuDelayLine.begin(), mNuDelayLine.end(), 0.0f);
         mNuDelayPos = 0;
         std::fill(mNuHeadScratch.begin(), mNuHeadScratch.end(), 0.0f);
@@ -475,6 +497,7 @@ void RealtimeConvolver::Reset()
     {
         std::fill(fft.begin(), fft.end(), std::complex<float>(0.0f, 0.0f));
     }
+
     mDelayLineIndex = 0;
 
     // Clear buffers
@@ -484,5 +507,4 @@ void RealtimeConvolver::Reset()
     mInputBufferPos = 0;
     mOutputBufferReadPos = mPartitionSize;
 }
-
 } // namespace guitarfx

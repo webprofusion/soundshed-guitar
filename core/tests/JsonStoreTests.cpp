@@ -39,6 +39,7 @@ bool Expect(bool condition, const std::string& what)
     {
         std::cerr << "FAIL: " << what << "\n";
     }
+
     return condition;
 }
 
@@ -95,11 +96,13 @@ bool TestPersistsAcrossReopen()
     {
         JsonStore store;
         bool opened = store.Open(dbPath, error);
+
         if (!opened)
         {
             std::cerr << "FAIL: open for write: " << error << "\n";
             return false;
         }
+
         store.Put(ItemType::kSetting, "theme", "classic");
         store.SetMeta("schema_version", "1");
         store.Close();
@@ -397,15 +400,18 @@ bool TestDamagedDatabaseIsRefused()
 
     {
         JsonStore store;
+
         if (!store.Open(dbPath, error))
         {
             std::cerr << "FAIL: could not create the database to damage: " << error << "\n";
             return false;
         }
+
         for (int i = 0; i < 200; ++i)
         {
             store.Put(ItemType::kPreset, "p" + std::to_string(i), {{"id", i}, {"pad", std::string(200, 'x')}});
         }
+
         store.Close();
     }
 

@@ -30,7 +30,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& payload)
 {
     const std::string resourceType = payload.value("resourceType", "");
@@ -59,14 +58,17 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     const auto sanitizedProvider = util::SanitizePathSegment(provider, true);
     auto targetDir = settingsDir / "resources" / "content" / sanitizedProvider;
     const auto sanitizedSubfolder = util::SanitizeSubfolderPath(subfolder);
+
     if (!sanitizedSubfolder.empty())
     {
         targetDir /= sanitizedSubfolder;
     }
+
     [[maybe_unused]] const auto ensuredTargetDir = mFileSystem.EnsureDirectory(targetDir);
 
     std::string resolvedName = fileName.empty() ? resourceId : fileName;
     resolvedName = util::SanitizeFilename(resolvedName);
+
     if (resolvedName.find('.') == std::string::npos)
     {
         resolvedName += resourceType == "ir" ? ".wav" : ".nam";
@@ -74,6 +76,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
 
     const auto targetPath = targetDir / resolvedName;
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
+
     if (bytes.empty())
     {
         ReportErrorToUI("Import failed", "Invalid base64 payload");
@@ -82,6 +85,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
                             .dump());
         return;
     }
+
     if (!WriteFile(targetPath, bytes))
     {
         ReportErrorToUI("Import failed", "Failed to write file");
@@ -99,11 +103,13 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     resource.description = description;
     resource.filePath = targetPath;
     resource.hash = hash;
+
     if (metadataPayload.is_object())
     {
         for (const auto& entry : metadataPayload.items())
         {
             const auto& value = entry.value();
+
             if (value.is_string())
             {
                 resource.metadata[entry.key()] = value.get<std::string>();
@@ -118,6 +124,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
             }
         }
     }
+
     if (tagsPayload.is_array())
     {
         for (const auto& tagValue : tagsPayload)
@@ -126,7 +133,9 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
             {
                 continue;
             }
+
             const auto tag = tagValue.get<std::string>();
+
             if (!tag.empty())
             {
                 resource.tags.push_back(tag);
@@ -182,6 +191,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
 
     const bool hasFilePath = !filePathValue.empty();
     const bool hasInlineData = !data.empty();
+
     if (!hasFilePath && !hasInlineData)
     {
         error = "Missing local file path or file data";
@@ -198,6 +208,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             for (const auto& entry : metadataPayload.items())
             {
                 const auto& value = entry.value();
+
                 if (value.is_string())
                 {
                     resource.metadata[entry.key()] = value.get<std::string>();
@@ -212,6 +223,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                 }
             }
         }
+
         resource.metadata["provider"] = kLocalResourceProvider;
     };
 
@@ -222,20 +234,24 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         }
 
         const auto& value = metadataPayload[key];
+
         if (value.is_string())
         {
             return value.get<std::string>();
         }
+
         if (value.is_number() || value.is_boolean())
         {
             return value.dump();
         }
+
         return {};
     };
 
     if (hasFilePath)
     {
         resolvedPath = util::PathFromUtf8(filePathValue);
+
         // Normalize plugin paths to the bundle root before anything is keyed off
         // them. Dialog results already arrive normalized, but paths can also come
         // from a preset, a synced library or a hand-edited entry, and path-based
@@ -244,11 +260,13 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         {
             resolvedPath = guitarfx::pluginpath::ResolvePluginBundlePath(resolvedPath);
         }
+
         if (!std::filesystem::exists(resolvedPath))
         {
             error = "Selected file does not exist";
             return std::nullopt;
         }
+
         if (resolvedHash.empty() && ShouldHashResourceFile(resolvedPath))
         {
             resolvedHash = mHasher.HashFile(resolvedPath);
@@ -257,6 +275,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     else
     {
         const auto decodedBytes = util::DecodeBase64(data);
+
         if (decodedBytes.empty())
         {
             error = "Invalid file data";
@@ -264,23 +283,29 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         }
 
         auto targetDir = GetEffectiveSettingsDirectory() / "resources" / "content" / kLocalResourceStorageFolder;
+
         if (!subfolder.empty())
         {
             std::filesystem::path sanitizedSubfolder;
+
             for (const auto& part : std::filesystem::path(subfolder))
             {
                 const std::string segment = util::SanitizePathSegment(part.string(), true);
+
                 if (segment.empty() || segment == "." || segment == "..")
                 {
                     continue;
                 }
+
                 sanitizedSubfolder /= segment;
             }
+
             if (!sanitizedSubfolder.empty())
             {
                 targetDir /= sanitizedSubfolder;
             }
         }
+
         [[maybe_unused]] const auto ensuredDir = mFileSystem.EnsureDirectory(targetDir);
 
         const auto defaultExtensionForType = [&](const std::string& type) {
@@ -288,23 +313,28 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             {
                 return std::string{".wav"};
             }
+
             if (type == "wasm")
             {
                 return std::string{".wasm"};
             }
+
             if (type == "nam")
             {
                 return std::string{".nam"};
             }
+
             return std::string{".bin"};
         };
 
         std::string resolvedName =
             util::SanitizeFilename(fileName.empty() ? (resourceId.empty() ? name : resourceId) : fileName);
+
         if (resolvedName.empty())
         {
             resolvedName = "resource" + defaultExtensionForType(resourceType);
         }
+
         if (resolvedName.find('.') == std::string::npos)
         {
             resolvedName += defaultExtensionForType(resourceType);
@@ -315,6 +345,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         if (std::filesystem::exists(resolvedPath) && !resolvedHash.empty())
         {
             const std::string existingHash = mHasher.HashFile(resolvedPath);
+
             if (!existingHash.empty() && existingHash != resolvedHash)
             {
                 const std::filesystem::path stem = resolvedPath.stem();
@@ -322,11 +353,13 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                 const std::string hashSuffix = resolvedHash.substr(0, std::min<std::size_t>(12, resolvedHash.size()));
                 std::filesystem::path candidate = targetDir / (stem.string() + "-" + hashSuffix + ext.string());
                 std::size_t suffix = 2;
+
                 while (std::filesystem::exists(candidate))
                 {
                     candidate =
                         targetDir / (stem.string() + "-" + hashSuffix + "-" + std::to_string(suffix++) + ext.string());
                 }
+
                 resolvedPath = candidate;
             }
         }
@@ -336,6 +369,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             error = "Failed to write local resource file";
             return std::nullopt;
         }
+
         if (resolvedHash.empty())
         {
             resolvedHash = mHasher.HashFile(resolvedPath);
@@ -353,6 +387,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         const bool canCompareHash = !resolvedHash.empty() && !existingByPath->hash.empty();
         const bool sameHash = canCompareHash && existingByPath->hash == resolvedHash;
         const bool unknownHash = !canCompareHash;
+
         if (sameHash || unknownHash)
         {
             resourceId = existingByPath->id;
@@ -367,6 +402,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             std::find_if(allResources.begin(), allResources.end(), [&](const LibraryResource& resource) {
                 return resource.type == resourceType && !resource.hash.empty() && resource.hash == resolvedHash;
             });
+
         if (existingByHash != allResources.end())
         {
             resourceId = existingByHash->id;
@@ -374,33 +410,40 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     }
 
     std::string normalizedPluginStableId;
+
     if (resourceType == "plugin")
     {
         std::string pluginName = payloadPluginName;
+
         if (pluginName.empty())
         {
             pluginName = getMetadataString(kHostedPluginNameConfigKey);
         }
+
         if (pluginName.empty())
         {
             pluginName = resolvedPath.stem().string();
         }
 
         std::string pluginManufacturer = payloadPluginManufacturer;
+
         if (pluginManufacturer.empty())
         {
             pluginManufacturer = getMetadataString(kHostedPluginManufacturerConfigKey);
         }
 
         std::string pluginStableId = payloadPluginStableId;
+
         if (pluginStableId.empty())
         {
             pluginStableId = getMetadataString(kHostedPluginStableIdConfigKey);
         }
+
         if (pluginStableId.empty())
         {
             pluginStableId = BuildHostedPluginStableId(pluginManufacturer, pluginName);
         }
+
         normalizedPluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
 
         if (resourceId.empty() && !normalizedPluginStableId.empty())
@@ -411,13 +454,17 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                     {
                         return false;
                     }
+
                     const auto it = resource.metadata.find(kHostedPluginStableIdConfigKey);
+
                     if (it == resource.metadata.end())
                     {
                         return false;
                     }
+
                     return NormalizeHostedPluginIdentityToken(it->second) == normalizedPluginStableId;
                 });
+
             if (existingByStableId != allResources.end())
             {
                 resourceId = existingByStableId->id;
@@ -432,7 +479,9 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             error = "Resource not found";
             return std::nullopt;
         }
+
         std::string baseId;
+
         if (resourceType == "plugin" && !normalizedPluginStableId.empty())
         {
             baseId = std::string{kLocalResourceProvider} + ":plugin:" + normalizedPluginStableId;
@@ -442,17 +491,22 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             baseId = std::string{kLocalResourceProvider} + ":" +
                      util::SanitizePathSegment(resolvedPath.stem().string(), true);
         }
+
         if (baseId == std::string{kLocalResourceProvider} + ":")
         {
             baseId += "resource";
         }
+
         const bool allowHashSuffix = !(resourceType == "plugin" && !normalizedPluginStableId.empty());
+
         if (allowHashSuffix && !resolvedHash.empty())
         {
             baseId += ":" + resolvedHash.substr(0, std::min<std::size_t>(12, resolvedHash.size()));
         }
+
         resourceId = baseId;
         std::size_t suffix = 2;
+
         while (mResourceLibrary.HasResource(resourceType, resourceId))
         {
             resourceId = baseId + "-" + std::to_string(suffix++);
@@ -460,6 +514,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     }
 
     LibraryResource resource;
+
     if (auto existing = mResourceLibrary.LookupResource(resourceType, resourceId))
     {
         resource = *existing;
@@ -478,17 +533,21 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         !category.empty() ? category : (!resource.category.empty() ? resource.category : std::string{"Local"});
     resource.name = resolvedName.empty() ? resourceId : resolvedName;
     resource.category = resolvedCategory;
+
     if (!description.empty() || resource.description.empty())
     {
         resource.description = description;
     }
+
     resource.filePath = resolvedPath;
     resource.hash = resolvedHash;
     upsertMetadata(resource);
     resource.metadata["sourceFileName"] = resolvedPath.filename().string();
+
     if (payload.contains("tags"))
     {
         resource.tags.clear();
+
         if (tagsPayload.is_array())
         {
             for (const auto& tagValue : tagsPayload)
@@ -497,7 +556,9 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                 {
                     continue;
                 }
+
                 const auto tag = tagValue.get<std::string>();
+
                 if (!tag.empty())
                 {
                     resource.tags.push_back(tag);
@@ -521,6 +582,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                                                   ? resource.metadata[kHostedPluginNameConfigKey]
                                                   : resolvedPath.stem().string())
                                            : payloadPluginName;
+
         if (!pluginName.empty())
         {
             resource.metadata[kHostedPluginNameConfigKey] = pluginName;
@@ -531,6 +593,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                                                           ? resource.metadata[kHostedPluginManufacturerConfigKey]
                                                           : std::string{})
                                                    : payloadPluginManufacturer;
+
         if (!pluginManufacturer.empty())
         {
             resource.metadata[kHostedPluginManufacturerConfigKey] = pluginManufacturer;
@@ -542,6 +605,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                                                 : BuildHostedPluginStableId(pluginManufacturer, pluginName))
                                          : payloadPluginStableId;
         pluginStableId = NormalizeHostedPluginIdentityToken(pluginStableId);
+
         if (!pluginStableId.empty())
         {
             resource.metadata[kHostedPluginStableIdConfigKey] = pluginStableId;
@@ -551,6 +615,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
             resource.metadata[kHostedPluginFormatConfigKey].empty())
         {
             const std::string inferredFormat = InferPluginFormatFromPath(resolvedPath);
+
             if (!inferredFormat.empty())
             {
                 resource.metadata[kHostedPluginFormatConfigKey] = inferredFormat;
@@ -566,6 +631,7 @@ void PluginController::HandleSaveLocalLibraryResourceRequest(const nlohmann::jso
 {
     std::string error;
     auto saved = SaveLocalLibraryResource(payload, error, true);
+
     if (!saved)
     {
         ReportErrorToUI("Local resource save failed", error);
@@ -581,14 +647,17 @@ void PluginController::HandleSaveLocalLibraryResourceRequest(const nlohmann::jso
         updatePayload["nodeId"] = payload.value("nodeId", "");
         updatePayload["resourceType"] = saved->type;
         updatePayload["resourceId"] = saved->id;
+
         if (payload.contains("resourceIndex"))
         {
             updatePayload["resourceIndex"] = payload["resourceIndex"];
         }
+
         if (payload.contains("exposedResourceId"))
         {
             updatePayload["exposedResourceId"] = payload["exposedResourceId"];
         }
+
         HandleUpdateNodeResourceRequest(updatePayload);
     }
 
@@ -630,12 +699,14 @@ void PluginController::HandleRemoveLocalLibraryResourceRequest(const nlohmann::j
             return value;
         };
         const std::string target = normalize(filePath);
+
         for (const auto& resource : mResourceLibrary.GetAllResources())
         {
             if (resource.type != resourceType)
             {
                 continue;
             }
+
             if (normalize(resource.filePath.string()) == target)
             {
                 resourceId = resource.id;
@@ -661,6 +732,7 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
 {
     const std::string resourceType = payload.value("resourceType", "");
     const std::string resourceId = payload.value("resourceId", "");
+
     if (resourceType.empty() || resourceId.empty())
     {
         SendMessageToUI(nlohmann::json{
@@ -670,6 +742,7 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     }
 
     const auto resourceOpt = mResourceLibrary.LookupResource(resourceType, resourceId);
+
     if (!resourceOpt)
     {
         SendMessageToUI(nlohmann::json{
@@ -679,6 +752,7 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     }
 
     const auto firstUsingPreset = FindFirstPresetUsingResource(resourceType, resourceId);
+
     if (firstUsingPreset.has_value())
     {
         SendMessageToUI(nlohmann::json{{"type", "resourceDeleteFailed"},
@@ -695,17 +769,22 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
     const auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
         auto nc = std::filesystem::weakly_canonical(candidate, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto nb = std::filesystem::weakly_canonical(base, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto bi = nb.begin();
         auto ci = nc.begin();
+
         for (; bi != nb.end(); ++bi, ++ci)
         {
             if (ci == nc.end() || *bi != *ci)
@@ -713,15 +792,18 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
                 return false;
             }
         }
+
         return true;
     };
 
     const std::filesystem::path resourcePath = resourceOpt->filePath;
     const bool shouldDeleteFile = !resourcePath.empty() && isUnderDirectory(resourcePath, settingsResourcesDir);
+
     if (shouldDeleteFile)
     {
         std::error_code ec;
         std::filesystem::remove(resourcePath, ec);
+
         if (ec)
         {
             SendMessageToUI(nlohmann::json{{"type", "resourceDeleteFailed"},
@@ -754,6 +836,7 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
                 }
             }
         }
+
         return false;
     };
 
@@ -762,6 +845,7 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
         {
             return true;
         }
+
         for (const auto& scene : preset.scenes)
         {
             if (graphUsesResource(scene.graph))
@@ -769,6 +853,7 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
                 return true;
             }
         }
+
         return false;
     };
 
@@ -777,10 +862,12 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
         {
             return preset.name;
         }
+
         if (!preset.id.empty())
         {
             return preset.id;
         }
+
         return "Unnamed preset";
     };
 
@@ -794,6 +881,7 @@ std::optional<std::string> PluginController::FindFirstPresetUsingResource(const 
     EnsureResourceUsageDiskIndex();
     const std::string key = resourceType + ":" + resourceId;
     const auto it = mResourceUsageDiskIndex.find(key);
+
     if (it != mResourceUsageDiskIndex.end())
     {
         return it->second;
@@ -813,6 +901,7 @@ void PluginController::EnsureResourceUsageDiskIndex() const
 
     const auto indexPreset = [this](const Preset& preset) {
         std::string displayName = preset.name;
+
         if (displayName.empty())
         {
             displayName = !preset.id.empty() ? preset.id : "Unnamed preset";
@@ -827,6 +916,7 @@ void PluginController::EnsureResourceUsageDiskIndex() const
                     {
                         continue;
                     }
+
                     const std::string key = ref.resourceType + ":" + ref.resourceId;
                     // Preserve first-found priority (user > factory > archive).
                     mResourceUsageDiskIndex.emplace(key, displayName);
@@ -835,6 +925,7 @@ void PluginController::EnsureResourceUsageDiskIndex() const
         };
 
         indexGraph(preset.graph);
+
         for (const auto& scene : preset.scenes)
         {
             indexGraph(scene.graph);
@@ -850,9 +941,11 @@ void PluginController::EnsureResourceUsageDiskIndex() const
     // Factory presets next.
     {
         const auto factoryDir = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
+
         if (std::filesystem::exists(factoryDir))
         {
             const auto factoryPresets = PresetStorage::LoadAllFromDirectory(factoryDir);
+
             for (const auto& preset : factoryPresets)
             {
                 indexPreset(preset);
@@ -901,6 +994,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
 {
     const std::string resourceType = payload.value("resourceType", "");
     const std::string resourceId = payload.value("resourceId", "");
+
     if (resourceType.empty() || resourceId.empty())
     {
         ReportErrorToUI("Resource update failed", "Missing resource id");
@@ -908,6 +1002,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     }
 
     auto existing = mResourceLibrary.LookupResource(resourceType, resourceId);
+
     if (!existing)
     {
         ReportErrorToUI("Resource update failed", "Resource not found");
@@ -921,17 +1016,22 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     const auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
         auto nc = std::filesystem::weakly_canonical(candidate, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto nb = std::filesystem::weakly_canonical(base, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto bi = nb.begin();
         auto ci = nc.begin();
+
         for (; bi != nb.end(); ++bi, ++ci)
         {
             if (ci == nc.end() || *bi != *ci)
@@ -939,23 +1039,29 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
                 return false;
             }
         }
+
         return true;
     };
+
     if (payload.contains("name"))
     {
         updated.name = payload.value("name", updated.name);
     }
+
     if (payload.contains("category"))
     {
         updated.category = payload.value("category", updated.category);
     }
+
     if (payload.contains("description"))
     {
         updated.description = payload.value("description", updated.description);
     }
+
     if (payload.contains("tags"))
     {
         updated.tags.clear();
+
         if (payload["tags"].is_array())
         {
             for (const auto& tagValue : payload["tags"])
@@ -964,7 +1070,9 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
                 {
                     continue;
                 }
+
                 const auto tag = tagValue.get<std::string>();
+
                 if (!tag.empty())
                 {
                     updated.tags.push_back(tag);
@@ -972,12 +1080,15 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
             }
         }
     }
+
     if (payload.contains("metadata") && payload["metadata"].is_object())
     {
         updated.metadata.clear();
+
         for (const auto& entry : payload["metadata"].items())
         {
             const auto& value = entry.value();
+
             if (value.is_string())
             {
                 updated.metadata[entry.key()] = value.get<std::string>();
@@ -991,6 +1102,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
                 updated.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
             }
         }
+
         if (!updated.metadata.contains("provider"))
         {
             updated.metadata["provider"] =
@@ -1001,20 +1113,24 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     if (payload.contains("filePath"))
     {
         const std::string filePathValue = payload.value("filePath", "");
+
         if (!filePathValue.empty())
         {
             std::filesystem::path updatedPath(filePathValue);
+
             // Same normalization as SaveLocalLibraryResource: a plugin is stored
             // under its bundle root whichever route the path arrived by.
             if (resourceType == "plugin")
             {
                 updatedPath = guitarfx::pluginpath::ResolvePluginBundlePath(updatedPath);
             }
+
             if (!std::filesystem::exists(updatedPath))
             {
                 ReportErrorToUI("Resource update failed", "Selected file does not exist");
                 return;
             }
+
             updated.filePath = updatedPath;
             updated.hash = ShouldHashResourceFile(updatedPath) ? mHasher.HashFile(updatedPath) : std::string{};
             updated.metadata["sourceFileName"] = updatedPath.filename().string();
@@ -1024,6 +1140,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     if (!inlineData.empty())
     {
         const std::vector<std::uint8_t> decodedBytes = util::DecodeBase64(inlineData);
+
         if (decodedBytes.empty())
         {
             ReportErrorToUI("Resource update failed", "Invalid file data");
@@ -1032,6 +1149,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
 
         std::filesystem::path targetPath = updated.filePath;
         const bool hasExistingPath = !targetPath.empty();
+
         if (!hasExistingPath)
         {
             ReportErrorToUI("Resource update failed", "Existing resource file path is missing");
@@ -1043,32 +1161,39 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
             {
                 return std::string{".wav"};
             }
+
             if (type == "wasm")
             {
                 return std::string{".wasm"};
             }
+
             if (type == "nam")
             {
                 return std::string{".nam"};
             }
+
             return std::string{".bin"};
         };
 
         if (!fileNameValue.empty())
         {
             std::string resolvedName = util::SanitizeFilename(fileNameValue);
+
             if (resolvedName.empty())
             {
                 resolvedName = "resource" + extensionForType(resourceType);
             }
+
             if (resolvedName.find('.') == std::string::npos)
             {
                 resolvedName += extensionForType(resourceType);
             }
+
             targetPath = updated.filePath.parent_path() / resolvedName;
         }
 
         [[maybe_unused]] const auto ensuredTargetDir = mFileSystem.EnsureDirectory(targetPath.parent_path());
+
         if (!WriteFile(targetPath, decodedBytes))
         {
             ReportErrorToUI("Resource update failed", "Failed to write replacement file");
@@ -1108,6 +1233,7 @@ void PluginController::HandleBrowseLibraryResourcePathRequest(const nlohmann::js
 {
     const std::string resourceType = payload.value("resourceType", "");
     const std::string resourceId = payload.value("resourceId", "");
+
     if (resourceType.empty() || resourceId.empty())
     {
         return;
@@ -1134,6 +1260,7 @@ void PluginController::HandleBrowseResourceFolderRequest()
         nlohmann::json msg;
         msg["type"] = "resourceFolderPicked";
         std::error_code ec;
+
         if (result.success && std::filesystem::is_directory(result.path, ec) && !ec)
         {
             msg["success"] = true;
@@ -1145,6 +1272,7 @@ void PluginController::HandleBrowseResourceFolderRequest()
         {
             msg["success"] = false;
         }
+
         SendMessageToUI(msg.dump());
     });
 }
@@ -1233,10 +1361,12 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     // never touches the disk, so it can't stall on a slow/disconnected drive.
     const auto normalizePath = [](const std::filesystem::path& p) -> std::string {
         std::string s = util::PathToUtf8(p.lexically_normal());
+
         if (!s.empty() && s.back() == '/')
         {
             s.pop_back();
         }
+
         std::transform(s.begin(), s.end(), s.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return s;
@@ -1246,14 +1376,17 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         std::string ext = p.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
         if (ext == ".nam")
         {
             return std::string{"nam"};
         }
+
         if (ext == ".wav" || ext == ".ir" || ext == ".aif" || ext == ".aiff" || ext == ".flac")
         {
             return std::string{"ir"};
         }
+
         return std::string{};
     };
 
@@ -1266,11 +1399,13 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
             SendMessageToUI(
                 nlohmann::json{{"type", "resourceFolderListingFailed"}, {"message", "Missing folder path"}}.dump());
         }
+
         return;
     }
 
     const std::filesystem::path dir = util::PathFromUtf8(requestPath);
     std::error_code dec;
+
     if (!std::filesystem::is_directory(dir, dec) || dec)
     {
         if (!superseded())
@@ -1279,18 +1414,21 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
                 {"type", "resourceFolderListingFailed"}, {"path", requestPath}, {"message", "Folder not found"}}
                                 .dump());
         }
+
         return;
     }
 
     // Build the (normalized path -> library id) lookup off-thread from the cheap
     // snapshot captured on the message thread.
     std::map<std::string, std::string> libraryIdByPath;
+
     for (auto& entry : libraryPaths)
     {
         if (superseded())
         {
             return;
         }
+
         libraryIdByPath.emplace(normalizePath(std::filesystem::path(entry.first)), std::move(entry.second));
     }
 
@@ -1316,9 +1454,11 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     // the user navigated into. This is cheap even for large folders, so the UI
     // gets a populated listing almost immediately.
     std::filesystem::directory_iterator it(dir, std::filesystem::directory_options::skip_permission_denied, ec);
+
     if (ec)
     {
         const std::string detail = ec.message();
+
         if (!superseded())
         {
             SendMessageToUI(nlohmann::json{
@@ -1327,6 +1467,7 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
                 {"message", detail.empty() ? "Unable to read folder" : "Unable to read folder: " + detail}}
                                 .dump());
         }
+
         return;
     }
 
@@ -1336,12 +1477,14 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         {
             break; // Stop on iteration error rather than throwing on a detached thread.
         }
+
         if (superseded())
         {
             return;
         }
 
         const auto& entry = *it;
+
         if (dirs.size() + files.size() >= kMaxEntries)
         {
             truncated = true;
@@ -1350,18 +1493,21 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
 
         std::error_code eec;
         const auto& entryPath = entry.path();
+
         if (entry.is_directory(eec) && !eec)
         {
             dirs.push_back(nlohmann::json{{"name", util::PathToUtf8(entryPath.filename())},
                                           {"path", util::PathToUtf8(entryPath)}});
             continue;
         }
+
         if (!entry.is_regular_file(eec) || eec)
         {
             continue;
         }
 
         const std::string resourceType = classify(entryPath);
+
         if (resourceType.empty())
         {
             continue;
@@ -1377,6 +1523,7 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         file["sizeBytes"] = sec ? 0 : static_cast<std::uint64_t>(sizeBytes);
 
         const auto libIt = libraryIdByPath.find(normalizePath(entryPath));
+
         if (libIt != libraryIdByPath.end())
         {
             file["alreadyInLibrary"] = true;
@@ -1413,6 +1560,7 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
 
     const auto parentPath = dir.parent_path();
     std::string parentStr;
+
     if (!parentPath.empty() && parentPath != dir)
     {
         parentStr = util::PathToUtf8(parentPath);
@@ -1435,6 +1583,7 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
     {
         return;
     }
+
     SendMessageToUI(msg.dump());
 
     // ── Phase 2: parse per-file metadata and stream it back in batches ──
@@ -1449,10 +1598,12 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         {
             return true;
         }
+
         if (superseded())
         {
             return false;
         }
+
         SendMessageToUI(
             nlohmann::json{{"type", "resourceFolderMetadata"}, {"path", folderPath}, {"items", batch}}.dump());
         batch = nlohmann::json::array();
@@ -1467,10 +1618,12 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         }
 
         nlohmann::json metadata = nlohmann::json::object();
+
         if (pending.resourceType == "nam")
         {
             LibraryResource temp;
             EnrichNamResourceMetadata(temp, pending.path);
+
             for (const auto& [key, value] : temp.metadata)
             {
                 if (!value.empty())
@@ -1482,20 +1635,24 @@ void PluginController::ScanResourceFolderWorker(std::string requestPath,
         else
         {
             const util::WavHeaderInfo wav = util::ProbeWavHeader(pending.path);
+
             if (wav.valid)
             {
                 if (wav.sampleRate > 0)
                 {
                     metadata["sampleRate"] = std::to_string(wav.sampleRate);
                 }
+
                 if (wav.channels > 0)
                 {
                     metadata["channels"] = std::to_string(wav.channels);
                 }
+
                 if (wav.bitsPerSample > 0)
                 {
                     metadata["bitsPerSample"] = std::to_string(wav.bitsPerSample);
                 }
+
                 if (wav.durationSec > 0.0)
                 {
                     char buf[32];
@@ -1538,12 +1695,14 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
     }
 
     fileName = util::SanitizeFilename(fileName);
+
     if (fileName.find('.') == std::string::npos)
     {
         fileName += ".zip";
     }
 
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
+
     if (bytes.empty())
     {
         SendMessageToUI(
@@ -1556,6 +1715,7 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
     [[maybe_unused]] const auto ensuredImportsDir = mFileSystem.EnsureDirectory(importsDir);
 
     auto targetPath = importsDir / fileName;
+
     if (!WriteFile(targetPath, bytes))
     {
         SendMessageToUI(
@@ -1579,6 +1739,7 @@ void PluginController::HandleImportToneSharingPackRequest(const nlohmann::json& 
 void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann::json& payload)
 {
     const std::string rawPath = payload.value("path", "");
+
     if (rawPath.empty())
     {
         SendMessageToUI(
@@ -1592,6 +1753,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     std::error_code ec;
     const auto canonicalImports = std::filesystem::weakly_canonical(importsDir, ec);
+
     if (ec)
     {
         SendMessageToUI(
@@ -1602,6 +1764,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     ec.clear();
     const auto canonicalRequested = std::filesystem::weakly_canonical(requestedPath, ec);
+
     if (ec)
     {
         SendMessageToUI(
@@ -1612,6 +1775,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     auto requestedIt = canonicalRequested.begin();
     bool insideImports = true;
+
     for (auto importsIt = canonicalImports.begin(); importsIt != canonicalImports.end(); ++importsIt)
     {
         if (requestedIt == canonicalRequested.end() || *requestedIt != *importsIt)
@@ -1619,6 +1783,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
             insideImports = false;
             break;
         }
+
         ++requestedIt;
     }
 
@@ -1632,6 +1797,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     ec.clear();
     const bool removed = std::filesystem::remove(canonicalRequested, ec);
+
     if (ec)
     {
         SendMessageToUI(
@@ -1665,6 +1831,7 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     }
 
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
+
     if (bytes.empty())
     {
         AppendSessionLog("Preview failed: invalid base64 payload");
@@ -1704,6 +1871,7 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     if (mActivePreset)
     {
         GraphNode* node = mActivePreset->graph.FindNode(nodeId);
+
         if (node && resourceIndex >= 0 && static_cast<size_t>(resourceIndex) < node->resources.size())
         {
             mPreviewState.originalResourceRef = node->resources[resourceIndex];
@@ -1773,6 +1941,7 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     ref.resourceType = resourceType;
     ref.resourceId = resourceId;
     const auto resolvedPath = ResolveResourceRef(ref);
+
     if (!resolvedPath || resolvedPath->empty())
     {
         SendMessageToUI(
@@ -1782,6 +1951,7 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     }
 
     std::ifstream input(*resolvedPath, std::ios::binary);
+
     if (!input)
     {
         SendMessageToUI(nlohmann::json{
@@ -1791,6 +1961,7 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     }
 
     std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
     if (data.empty())
     {
         SendMessageToUI(
@@ -1814,6 +1985,7 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
 {
     const std::string dataEncoded = payload.value("data", "");
     const std::string suggestedName = payload.value("fileName", "library.soundshed-library.zip");
+
     if (dataEncoded.empty())
     {
         SendMessageToUI(nlohmann::json{{"type", "libraryExportFailed"}, {"message", "Missing export data"}}.dump());
@@ -1830,6 +2002,7 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
             }
 
             const auto decodedBytes = util::DecodeBase64(dataEncoded);
+
             if (decodedBytes.empty())
             {
                 SendMessageToUI(
@@ -1869,13 +2042,16 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     const auto resourceFilesDir = resourcesDir / "content";
 
     nlohmann::json entries = nlohmann::json::array();
+
     if (std::filesystem::exists(libraryFile))
     {
         std::ifstream input(libraryFile);
+
         if (input)
         {
             nlohmann::json parsed;
             input >> parsed;
+
             if (parsed.is_array())
             {
                 entries = std::move(parsed);
@@ -1886,9 +2062,11 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     auto makeKey = [](const std::string& type, const std::string& id) { return type + ":" + id; };
 
     std::unordered_set<std::string> userKeys;
+
     for (const auto& e : entries)
     {
         const std::string t = e.value("type", ""), i = e.value("id", "");
+
         if (!t.empty() && !i.empty())
         {
             userKeys.insert(makeKey(t, i));
@@ -1913,6 +2091,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     {
         addUsedPreset(*mActivePreset);
     }
+
     for (const auto& p : LoadAllUserPresets())
     {
         addUsedPreset(p);
@@ -1940,17 +2119,22 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     auto isUnderDirectory = [](const std::filesystem::path& candidate, const std::filesystem::path& base) {
         std::error_code ec;
         auto nc = std::filesystem::weakly_canonical(candidate, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto nb = std::filesystem::weakly_canonical(base, ec);
+
         if (ec)
         {
             return false;
         }
+
         auto bi = nb.begin();
         auto ci = nc.begin();
+
         for (; bi != nb.end(); ++bi, ++ci)
         {
             if (ci == nc.end() || *bi != *ci)
@@ -1958,6 +2142,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
                 return false;
             }
         }
+
         return true;
     };
 
@@ -1971,18 +2156,22 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
             ++skipped;
             continue;
         }
+
         const std::string t = item.value("type", ""), i = item.value("id", "");
+
         if (t.empty() || i.empty())
         {
             ++skipped;
             continue;
         }
+
         if (!isScopeMatch(t))
         {
             continue;
         }
 
         const std::string key = makeKey(t, i);
+
         if (usedKeys.count(key) > 0)
         {
             ++skippedUsed;
@@ -1990,6 +2179,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
         }
 
         const auto resourceOpt = mResourceLibrary.LookupResource(t, i);
+
         if (!resourceOpt)
         {
             ++skipped;
@@ -1999,6 +2189,7 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
         const bool isUserEntry = userKeys.count(key) > 0;
         const bool isUserFile =
             !resourceOpt->filePath.empty() && isUnderDirectory(resourceOpt->filePath, resourceFilesDir);
+
         if (!isUserEntry && !isUserFile)
         {
             ++skipped;
@@ -2019,21 +2210,27 @@ void PluginController::HandleCleanupResourceLibraryRequest(const nlohmann::json&
     {
         std::unordered_set<std::string> removedSet(removedKeys.begin(), removedKeys.end());
         nlohmann::json updated = nlohmann::json::array();
+
         for (const auto& e : entries)
         {
             const std::string t = e.value("type", ""), i = e.value("id", "");
+
             if (!t.empty() && !i.empty() && removedSet.count(makeKey(t, i)) > 0)
             {
                 continue;
             }
+
             updated.push_back(e);
         }
+
         [[maybe_unused]] const auto ensuredLibraryDir = mFileSystem.EnsureDirectory(libraryDir);
         std::ofstream output(libraryFile);
+
         if (output)
         {
             output << updated.dump(2);
         }
+
         TouchSharedSyncState({"resourceLibrary"});
     }
 
@@ -2053,10 +2250,12 @@ std::optional<std::filesystem::path> PluginController::ResolveResourceRef(const 
     {
         return resolved;
     }
+
     if (!ref.filePath.empty())
     {
         return ref.filePath;
     }
+
     return std::nullopt;
 }
 
@@ -2121,6 +2320,7 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
         EnrichNamResourceMetadata(resource, resource.filePath);
 
         const std::string resolvedCategory = ResolveResourceLibraryCategory(resource, resource.category);
+
         if (resolvedCategory.empty() || resolvedCategory == resource.category)
         {
             continue;
@@ -2144,10 +2344,10 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
                     return false;
                 }
             }
+
             return true;
         });
         AppendSessionLog("Normalized resource categories at startup: " + std::to_string(changed.size()));
     }
 }
-
 } // namespace guitarfx

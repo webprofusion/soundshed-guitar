@@ -22,7 +22,6 @@
 
 namespace guitarfx::pluginpath
 {
-
 enum class PluginFormat
 {
     Unknown,
@@ -68,5 +67,4 @@ enum class PluginFormat
 /// suffix, plus the payload extensions a user has to fall back to when the
 /// native dialog will not let them select the bundle directory itself.
 [[nodiscard]] std::string PluginBrowseFilters();
-
 } // namespace guitarfx::pluginpath

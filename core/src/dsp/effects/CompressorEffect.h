@@ -23,6 +23,7 @@ class CompressorEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         UpdateCoefficients();
         // Clear state when sample rate changes to ensure clean initialization
@@ -55,6 +56,7 @@ class CompressorEffect : public EffectProcessor
             // Gain computer: above-threshold level is reduced by the ratio; the
             // optional knee eases into compression around the threshold.
             float targetGainDb = 0.0f;
+
             if (detectorDb > thresholdDb)
             {
                 const float overDb = detectorDb - thresholdDb;
@@ -65,6 +67,7 @@ class CompressorEffect : public EffectProcessor
             if (knee > 0.0f)
             {
                 const float halfKnee = knee * 0.5f;
+
                 if (detectorDb > thresholdDb - halfKnee && detectorDb < thresholdDb + halfKnee)
                 {
                     const float x = detectorDb - thresholdDb + halfKnee;
@@ -91,6 +94,7 @@ class CompressorEffect : public EffectProcessor
                 const float peakDb = (peak > 1e-10f) ? 20.0f * std::log10(peak) : -200.0f;
                 const float targetGainDb = computeTargetGainDb(peakDb);
                 const float targetEnv = -targetGainDb;
+
                 if (targetEnv > mEnvelope[ch])
                 {
                     mEnvelope[ch] += attackCoef * (targetEnv - mEnvelope[ch]);
@@ -119,6 +123,7 @@ class CompressorEffect : public EffectProcessor
             {
                 outputs[0][i] = mixedL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = mixedR;
@@ -176,34 +181,42 @@ class CompressorEffect : public EffectProcessor
         {
             return mThresholdDb.load(std::memory_order_relaxed);
         }
+
         if (key == "ratio")
         {
             return mRatio.load(std::memory_order_relaxed);
         }
+
         if (key == "attack")
         {
             return mAttackMs.load(std::memory_order_relaxed);
         }
+
         if (key == "release")
         {
             return mReleaseMs.load(std::memory_order_relaxed);
         }
+
         if (key == "knee")
         {
             return mKnee.load(std::memory_order_relaxed);
         }
+
         if (key == "makeup")
         {
             return mMakeupDb.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         if (key == "softClip")
         {
             return mSoftClip.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -267,6 +280,7 @@ class OptoCompressorEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         UpdateCoefficients();
         // Clear state when sample rate changes to ensure clean initialization
@@ -308,6 +322,7 @@ class OptoCompressorEffect : public EffectProcessor
                 const float rmsDb = (rms > 1e-10f) ? 20.0f * std::log10(rms) : -200.0f;
 
                 float targetReduction = 0.0f;
+
                 if (rmsDb > thresholdDb)
                 {
                     const float overDb = rmsDb - thresholdDb;
@@ -315,6 +330,7 @@ class OptoCompressorEffect : public EffectProcessor
                 }
 
                 float optoSpeed = (targetReduction > mOptoCellState[ch]) ? attackCoef : releaseCoef;
+
                 if (targetReduction < mOptoCellState[ch])
                 {
                     optoSpeed *= std::max(0.2f, 1.0f - mOptoCellState[ch] * 0.02f);
@@ -340,6 +356,7 @@ class OptoCompressorEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -391,30 +408,37 @@ class OptoCompressorEffect : public EffectProcessor
         {
             return mThresholdDb.load(std::memory_order_relaxed);
         }
+
         if (key == "ratio")
         {
             return mRatio.load(std::memory_order_relaxed);
         }
+
         if (key == "attack")
         {
             return mAttackMs.load(std::memory_order_relaxed);
         }
+
         if (key == "release")
         {
             return mReleaseMs.load(std::memory_order_relaxed);
         }
+
         if (key == "makeup")
         {
             return mMakeupDb.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         if (key == "softClip")
         {
             return mSoftClip.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -503,5 +527,4 @@ inline void RegisterCompressorEffects()
         EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<OptoCompressorEffect>(); });
     }
 }
-
 } // namespace guitarfx

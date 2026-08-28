@@ -115,6 +115,7 @@ struct SignalGraph
                 return &node;
             }
         }
+
         return nullptr;
     }
 
@@ -127,6 +128,7 @@ struct SignalGraph
                 return &node;
             }
         }
+
         return nullptr;
     }
 
@@ -337,10 +339,10 @@ void SyncPresetSceneFromGraph(Preset& preset, const std::string& sceneId);
 inline void EnsurePresetBoundaryGainNodes(Preset& preset)
 {
     EnsurePresetBoundaryGainNodes(preset.graph);
+
     for (auto& scene : preset.scenes)
     {
         EnsurePresetBoundaryGainNodes(scene.graph);
     }
 }
-
 } // namespace guitarfx

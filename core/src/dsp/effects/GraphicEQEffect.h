@@ -25,6 +25,7 @@ class GraphicEQEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         UpdateCoefficients();
         Reset();
@@ -49,10 +50,12 @@ class GraphicEQEffect : public EffectProcessor
             for (int bandIndex = 0; bandIndex < mBandCount; ++bandIndex)
             {
                 auto& band = mBands[bandIndex];
+
                 if (!band.enabled)
                 {
                     continue;
                 }
+
                 left = ProcessSample(left, band.b0, band.b1, band.b2, band.a1, band.a2, band.x1L, band.x2L, band.y1L,
                                      band.y2L);
                 right = ProcessSample(right, band.b0, band.b1, band.b2, band.a1, band.a2, band.x1R, band.x2R, band.y1R,
@@ -63,6 +66,7 @@ class GraphicEQEffect : public EffectProcessor
             {
                 outputs[0][sampleIndex] = left;
             }
+
             if (outputs[1])
             {
                 outputs[1][sampleIndex] = right;
@@ -84,6 +88,7 @@ class GraphicEQEffect : public EffectProcessor
         else
         {
             const int bandIndex = ParseBandIndex(key);
+
             if (bandIndex < 0)
             {
                 return;
@@ -91,6 +96,7 @@ class GraphicEQEffect : public EffectProcessor
 
             auto& band = mBands[bandIndex];
             const std::string suffix = key.substr(key.find_first_not_of("0123456789", 4));
+
             if (suffix == "Enabled")
             {
                 band.enabled = value >= 0.5;
@@ -122,12 +128,14 @@ class GraphicEQEffect : public EffectProcessor
         {
             return mBandCount;
         }
+
         if (key == "preset")
         {
             return mPreset;
         }
 
         const int bandIndex = ParseBandIndex(key);
+
         if (bandIndex < 0)
         {
             return 0.0;
@@ -135,22 +143,27 @@ class GraphicEQEffect : public EffectProcessor
 
         const auto& band = mBands[bandIndex];
         const std::string suffix = key.substr(key.find_first_not_of("0123456789", 4));
+
         if (suffix == "Enabled")
         {
             return band.enabled ? 1.0 : 0.0;
         }
+
         if (suffix == "Gain")
         {
             return band.gainDb;
         }
+
         if (suffix == "Freq")
         {
             return band.frequencyHz;
         }
+
         if (suffix == "Q")
         {
             return band.q;
         }
+
         return 0.0;
     }
 
@@ -209,11 +222,13 @@ class GraphicEQEffect : public EffectProcessor
 
         std::size_t cursor = 4;
         int oneBasedIndex = 0;
+
         while (cursor < key.size() && key[cursor] >= '0' && key[cursor] <= '9')
         {
             oneBasedIndex = oneBasedIndex * 10 + (key[cursor] - '0');
             ++cursor;
         }
+
         return cursor == 4 || oneBasedIndex < 1 || oneBasedIndex > kMaxBands ? -1 : oneBasedIndex - 1;
     }
 
@@ -222,11 +237,13 @@ class GraphicEQEffect : public EffectProcessor
     {
         const float sanitizedInput = std::isfinite(input) ? input : 0.0f;
         float output = b0 * sanitizedInput + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+
         if (!std::isfinite(output))
         {
             x1 = x2 = y1 = y2 = 0.0f;
             return sanitizedInput;
         }
+
         x2 = x1;
         x1 = sanitizedInput;
         y2 = y1;
@@ -237,6 +254,7 @@ class GraphicEQEffect : public EffectProcessor
     void UpdateCoefficients()
     {
         const double maxFrequency = MaxFrequency();
+
         for (int index = 0; index < kMaxBands; ++index)
         {
             auto& band = mBands[index];
@@ -255,6 +273,7 @@ class GraphicEQEffect : public EffectProcessor
             const double w0 = 2.0 * 3.14159265358979323846 * band.frequencyHz / mSampleRate;
             const double alpha = std::sin(w0) / (2.0 * band.q);
             const double a0 = 1.0 + alpha / amplitude;
+
             if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
             {
                 band.b0 = 1.0f;
@@ -275,10 +294,12 @@ class GraphicEQEffect : public EffectProcessor
     int mPreset = 0;
     std::array<Band, kMaxBands> mBands = [] {
         std::array<Band, kMaxBands> bands{};
+
         for (int index = 0; index < kMaxBands; ++index)
         {
             bands[index].frequencyHz = kDefaultFrequencies[index];
         }
+
         return bands;
     }();
 };
@@ -293,6 +314,7 @@ inline EffectPresetDefinition MakeGraphicEQFactoryPreset(
     preset.id = std::move(id);
     preset.displayName = std::move(displayName);
     preset.parameters = {{"preset", presetIndex}, {"bandCount", bandCount}};
+
     for (int index = 0; index < GraphicEQEffect::kMaxBands; ++index)
     {
         const std::string prefix = "band" + std::to_string(index + 1);
@@ -302,14 +324,17 @@ inline EffectPresetDefinition MakeGraphicEQFactoryPreset(
         preset.parameters[prefix + "Gain"] = gains[index];
         preset.parameterOrder.push_back(prefix + "Freq");
     }
+
     for (const auto& [key, value] : preset.parameters)
     {
         (void)value;
+
         if (std::find(preset.parameterOrder.begin(), preset.parameterOrder.end(), key) == preset.parameterOrder.end())
         {
             preset.parameterOrder.push_back(key);
         }
     }
+
     return preset;
 }
 
@@ -349,6 +374,7 @@ inline void RegisterGraphicEQEffect()
                                     1.4142135623730951, 1.4142135623730951},
                                    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
     };
+
     // All profiles are flat, so a new Graphic EQ is audibly neutral whichever it
     // starts on; this only picks which band layout it starts with. Marking rather
     // than reordering avoids remapping the "preset" enum indices that already-saved
@@ -360,12 +386,15 @@ inline void RegisterGraphicEQEffect()
 
     std::vector<std::string> profileLabels;
     profileLabels.reserve(info.presets.size());
+
     for (const auto& preset : info.presets)
     {
         profileLabels.push_back(preset.displayName);
     }
+
     info.parameters = {{"preset", "Profile", 0.0, 0.0, 5.0, "enum", "Profile", false, 1.0, std::move(profileLabels)},
                        {"bandCount", "Bands", 5.0, 5.0, 10.0, "amount", "Profile", true, 1.0, {}}};
+
     for (int index = 1; index <= GraphicEQEffect::kMaxBands; ++index)
     {
         const std::string prefix = "band" + std::to_string(index);
@@ -384,6 +413,7 @@ inline void RegisterGraphicEQEffect()
                                    {}});
         info.parameters.push_back({prefix + "Q", "Q", 1.0, 0.2, 8.0, "amount", group, true, 0.01, {}});
     }
+
     EffectRegistry::Instance().Register(info.type, info, [] { return std::make_unique<GraphicEQEffect>(); });
 }
 } // namespace guitarfx

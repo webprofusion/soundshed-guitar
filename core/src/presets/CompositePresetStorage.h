@@ -41,5 +41,4 @@ class CompositePresetStorage
     [[nodiscard]] static std::vector<CompositePreset> ListAllFromStore(const storage::JsonStore& store);
     static bool DeleteFromStore(storage::JsonStore& store, const std::string& id);
 };
-
 } // namespace guitarfx

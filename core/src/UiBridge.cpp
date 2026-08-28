@@ -38,12 +38,14 @@ std::filesystem::path NormalizeResourceRoot(const std::filesystem::path& candida
 std::filesystem::path ResolveEnvOverride()
 {
     const char* envValue = std::getenv("SOUNDSHED_RESOURCE_ROOT");
+
     if (!envValue || envValue[0] == '\0')
     {
         return {};
     }
 
     const std::filesystem::path envPath(envValue);
+
     if (const auto normalized = NormalizeResourceRoot(envPath); !normalized.empty())
     {
         return normalized;
@@ -56,10 +58,10 @@ std::filesystem::path ResolveEnvOverride()
 
 namespace guitarfx::ui
 {
-
 bool IsValidResourceRoot(const std::filesystem::path& root)
 {
     std::error_code ec;
+
     if (!std::filesystem::exists(root, ec))
     {
         return false;
@@ -78,6 +80,7 @@ std::filesystem::path ResolveResourceRoot(const std::vector<std::filesystem::pat
 
     std::error_code ec;
     const auto cwd = std::filesystem::current_path(ec);
+
     if (!ec)
     {
         if (const auto normalized = NormalizeResourceRoot(cwd); !normalized.empty())
@@ -101,6 +104,7 @@ std::string EscapeForJavascript(std::string_view input)
 {
     std::string escaped;
     escaped.reserve(input.size() + 8);
+
     for (const char c : input)
     {
         switch (c)
@@ -125,6 +129,7 @@ std::string EscapeForJavascript(std::string_view input)
             break;
         }
     }
+
     return escaped;
 }
 
@@ -135,5 +140,4 @@ std::string BuildIPlugReceiveScript(std::string_view jsonMessage)
     script += "\"); }";
     return script;
 }
-
 } // namespace guitarfx::ui

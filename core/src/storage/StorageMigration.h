@@ -49,5 +49,4 @@ struct MigrationReport
  */
 MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::path& settingsDirectory,
                                       const std::filesystem::path& userPresetDirectory);
-
 } // namespace guitarfx::storage

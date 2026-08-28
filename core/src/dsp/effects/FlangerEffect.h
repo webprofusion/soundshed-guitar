@@ -23,6 +23,7 @@ class FlangerEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         const double maxDelayMs = 10.0;
@@ -70,6 +71,7 @@ class FlangerEffect : public EffectProcessor
                     }
                 }
             }
+
             return;
         }
 
@@ -108,14 +110,17 @@ class FlangerEffect : public EffectProcessor
 
             float writeL = inL + feedbackL;
             float writeR = inR + feedbackR;
+
             if (!std::isfinite(writeL))
             {
                 writeL = 0.0f;
             }
+
             if (!std::isfinite(writeR))
             {
                 writeR = 0.0f;
             }
+
             mDelayBufferL[mWriteIndex] = writeL;
             mDelayBufferR[mWriteIndex] = writeR;
 
@@ -127,6 +132,7 @@ class FlangerEffect : public EffectProcessor
             {
                 outL = 0.0f;
             }
+
             if (!std::isfinite(outR))
             {
                 outR = 0.0f;
@@ -136,6 +142,7 @@ class FlangerEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -143,6 +150,7 @@ class FlangerEffect : public EffectProcessor
 
             AdvanceWriteIndex();
             mPhase += phaseInc;
+
             // Wrap phase to prevent floating-point precision drift over long runtimes
             if (mPhase >= 2.0 * kPi)
             {
@@ -197,38 +205,47 @@ class FlangerEffect : public EffectProcessor
         {
             return mBpm.load(std::memory_order_relaxed);
         }
+
         if (key == "syncMode")
         {
             return mSyncMode.load(std::memory_order_relaxed);
         }
+
         if (key == "syncDivision")
         {
             return mSyncDivision.load(std::memory_order_relaxed);
         }
+
         if (key == "effectiveRate")
         {
             return GetEffectiveRateHz();
         }
+
         if (key == "rate")
         {
             return mRateHz.load(std::memory_order_relaxed);
         }
+
         if (key == "depth")
         {
             return mDepthMs.load(std::memory_order_relaxed);
         }
+
         if (key == "delay")
         {
             return mDelayMs.load(std::memory_order_relaxed);
         }
+
         if (key == "feedback")
         {
             return mFeedback.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -340,5 +357,4 @@ inline void RegisterFlangerEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<FlangerEffect>(); });
 }
-
 } // namespace guitarfx

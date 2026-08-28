@@ -62,10 +62,12 @@ class DelayEffect : public EffectProcessor
         const bool pingPong = (mStereoMode == 1);
         const bool hasRightInput = (inputs[1] != nullptr);
         bool dualMonoInput = false;
+
         if (hasRightInput && inputs[0] && inputs[1])
         {
             dualMonoInput = true;
             constexpr float kDualMonoEpsilon = 1.0e-6f;
+
             for (int i = 0; i < numSamples; ++i)
             {
                 if (std::abs(inputs[0][i] - inputs[1][i]) > kDualMonoEpsilon)
@@ -75,6 +77,7 @@ class DelayEffect : public EffectProcessor
                 }
             }
         }
+
         const bool monoSource = !hasRightInput || dualMonoInput;
         const size_t bufSize = mBufferL.size();
         const double maxDelay = static_cast<double>(bufSize - 2);
@@ -85,6 +88,7 @@ class DelayEffect : public EffectProcessor
             // the feedback path, then mix ducked wet signal with dry input.
             const float lfoVal = std::sin(mLfoPhase * 6.28318530f);
             mLfoPhase += lfoStep;
+
             if (mLfoPhase >= 1.0f)
             {
                 mLfoPhase -= 1.0f;
@@ -100,6 +104,7 @@ class DelayEffect : public EffectProcessor
             // centered but add a small side bias so repeats can alternate L/R.
             float delayInL = inL;
             float delayInR = inR;
+
             if (pingPong && monoSource)
             {
                 constexpr float kPingPongSkew = 0.3f;
@@ -160,6 +165,7 @@ class DelayEffect : public EffectProcessor
             {
                 outputs[0][i] = inL * dry + delayedL * wet * duckGainL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = inR * dry + delayedR * wet * duckGainR;
@@ -174,6 +180,7 @@ class DelayEffect : public EffectProcessor
         if (key == "bpm")
         {
             mBpm = tempo_sync::ClampBpm(value);
+
             if (mSyncMode == tempo_sync::kSyncModeTempo)
             {
                 UpdateDelaySamples();
@@ -187,6 +194,7 @@ class DelayEffect : public EffectProcessor
         else if (key == "syncDivision")
         {
             mSyncDivision = tempo_sync::ClampDivision(value);
+
             if (mSyncMode == tempo_sync::kSyncModeTempo)
             {
                 UpdateDelaySamples();
@@ -195,6 +203,7 @@ class DelayEffect : public EffectProcessor
         else if (key == "time" || key == "timeMs")
         {
             mDelayMs = std::clamp(value, 1.0, 2000.0);
+
             if (mSyncMode != tempo_sync::kSyncModeTempo)
             {
                 UpdateDelaySamples();
@@ -255,62 +264,77 @@ class DelayEffect : public EffectProcessor
         {
             return mBpm;
         }
+
         if (key == "syncMode")
         {
             return mSyncMode;
         }
+
         if (key == "syncDivision")
         {
             return mSyncDivision;
         }
+
         if (key == "effectiveTimeMs")
         {
             return GetEffectiveDelayMs();
         }
+
         if (key == "time" || key == "timeMs")
         {
             return mDelayMs;
         }
+
         if (key == "feedback")
         {
             return mFeedback;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "highCut")
         {
             return mHighCutHz;
         }
+
         if (key == "lowCut")
         {
             return mLowCutHz;
         }
+
         if (key == "stereoMode")
         {
             return mStereoMode;
         }
+
         if (key == "spread")
         {
             return mSpreadMs;
         }
+
         if (key == "modRate")
         {
             return mModRate;
         }
+
         if (key == "modDepth")
         {
             return mModDepth;
         }
+
         if (key == "drive")
         {
             return mDrive;
         }
+
         if (key == "ducking")
         {
             return mDucking;
         }
+
         return 0.0;
     }
 
@@ -370,6 +394,7 @@ class DelayEffect : public EffectProcessor
         const double delayMs = GetEffectiveDelayMs();
         mDelaySamples = mSampleRate * delayMs * 0.001;
         mSpreadSamples = mSampleRate * mSpreadMs * 0.001;
+
         if (!mBufferL.empty())
         {
             const double maxD = static_cast<double>(mBufferL.size() - 2);
@@ -384,6 +409,7 @@ class DelayEffect : public EffectProcessor
         {
             return;
         }
+
         constexpr double pi2 = 6.28318530717958647;
         mLpCoeff = static_cast<float>(1.0 - std::exp(-pi2 * mHighCutHz / mSampleRate));
         mHpCoeff = static_cast<float>(std::exp(-pi2 * mLowCutHz / mSampleRate));
@@ -453,5 +479,4 @@ inline void RegisterDelayEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<DelayEffect>(); });
 }
-
 } // namespace guitarfx

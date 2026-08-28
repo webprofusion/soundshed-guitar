@@ -46,6 +46,7 @@ class DoublerEffect : public EffectProcessor
         }
 
         const std::size_t bufSize = mBufferL.size();
+
         if (bufSize == 0)
         {
             return;
@@ -68,10 +69,12 @@ class DoublerEffect : public EffectProcessor
             const float delayedR = mBufferR[safeReadIdx];
 
             const float mixAmount = static_cast<float>(mMix);
+
             if (outputs[0])
             {
                 outputs[0][i] = inL + delayedL * mixAmount;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = inR - delayedR * mixAmount;
@@ -104,10 +107,12 @@ class DoublerEffect : public EffectProcessor
         {
             return mDelayMs;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         return 0.0;
     }
 
@@ -147,5 +152,4 @@ inline void RegisterDoublerEffect()
     info.parameters = {{"time", "Delay Time", 6.0, 0.0, 100.0, "ms"}, {"mix", "Mix", 0.3, 0.0, 1.0, "amount"}};
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<DoublerEffect>(); });
 }
-
 } // namespace guitarfx

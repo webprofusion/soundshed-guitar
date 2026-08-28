@@ -32,7 +32,6 @@
 
 namespace
 {
-
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlockSize = 256;
 constexpr double kPi = 3.14159265358979323846;
@@ -43,6 +42,7 @@ int gChecks = 0;
 void Check(bool condition, const std::string& what, const std::string& detail = "")
 {
     ++gChecks;
+
     if (condition)
     {
         std::cout << "  [PASS] " << what;
@@ -52,10 +52,12 @@ void Check(bool condition, const std::string& what, const std::string& detail = 
         ++gFailures;
         std::cout << "  [FAIL] " << what;
     }
+
     if (!detail.empty())
     {
         std::cout << "  (" << detail << ")";
     }
+
     std::cout << std::endl;
 }
 
@@ -69,10 +71,12 @@ std::string Num(double v, int precision = 3)
 std::unique_ptr<guitarfx::EffectProcessor> MakeEffect()
 {
     auto effect = guitarfx::EffectRegistry::Instance().Create(guitarfx::EffectGuids::kSpatial3D);
+
     if (effect)
     {
         effect->Prepare(kSampleRate, kBlockSize);
     }
+
     return effect;
 }
 
@@ -94,6 +98,7 @@ struct Stereo
 Stereo Sine(std::size_t samples, double frequency, double amplitude = 0.5)
 {
     Stereo s(samples);
+
     for (std::size_t i = 0; i < samples; ++i)
     {
         const auto v =
@@ -101,6 +106,7 @@ Stereo Sine(std::size_t samples, double frequency, double amplitude = 0.5)
         s.left[i] = v;
         s.right[i] = v;
     }
+
     return s;
 }
 
@@ -109,12 +115,14 @@ Stereo Noise(std::size_t samples, unsigned seed = 12345, double amplitude = 0.3)
     std::mt19937 rng(seed);
     std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
     Stereo s(samples);
+
     for (std::size_t i = 0; i < samples; ++i)
     {
         const float v = dist(rng) * static_cast<float>(amplitude);
         s.left[i] = v;
         s.right[i] = v;
     }
+
     return s;
 }
 
@@ -135,6 +143,7 @@ Stereo GuitarLikeNoise(std::size_t samples, double amplitude = 0.25)
     const float a = static_cast<float>(std::exp(-2.0 * 3.14159265358979323846 * cutoff / kSampleRate));
     float z0 = 0.0f;
     float z1 = 0.0f;
+
     for (std::size_t i = 0; i < samples; ++i)
     {
         z0 = (1.0f - a) * s.left[i] + a * z0;
@@ -142,6 +151,7 @@ Stereo GuitarLikeNoise(std::size_t samples, double amplitude = 0.25)
         s.left[i] = z1 * 3.0f;
         s.right[i] = s.left[i];
     }
+
     return s;
 }
 
@@ -149,6 +159,7 @@ Stereo Run(guitarfx::EffectProcessor& effect, const Stereo& input)
 {
     Stereo output(input.Size());
     const int total = static_cast<int>(input.Size());
+
     for (int offset = 0; offset < total; offset += kBlockSize)
     {
         const int len = std::min(kBlockSize, total - offset);
@@ -157,6 +168,7 @@ Stereo Run(guitarfx::EffectProcessor& effect, const Stereo& input)
         float* out[2] = {output.left.data() + offset, output.right.data() + offset};
         effect.Process(in, out, len);
     }
+
     return output;
 }
 
@@ -166,11 +178,14 @@ double Rms(const std::vector<float>& v, std::size_t from = 0)
     {
         return 0.0;
     }
+
     double sum = 0.0;
+
     for (std::size_t i = from; i < v.size(); ++i)
     {
         sum += static_cast<double>(v[i]) * static_cast<double>(v[i]);
     }
+
     return std::sqrt(sum / static_cast<double>(v.size() - from));
 }
 
@@ -185,30 +200,37 @@ double CrossCorrelationLag(const std::vector<float>& left, const std::vector<flo
 {
     double best = -std::numeric_limits<double>::infinity();
     int bestLag = 0;
+
     for (int lag = -maxLag; lag <= maxLag; ++lag)
     {
         double sum = 0.0;
+
         for (std::size_t i = skip; i < left.size(); ++i)
         {
             const auto j = static_cast<long long>(i) - lag;
+
             if (j < 0 || j >= static_cast<long long>(right.size()))
             {
                 continue;
             }
+
             sum += static_cast<double>(left[i]) * static_cast<double>(right[static_cast<std::size_t>(j)]);
         }
+
         if (sum > best)
         {
             best = sum;
             bestLag = lag;
         }
     }
+
     return static_cast<double>(bestLag);
 }
 
 int ZeroCrossings(const std::vector<float>& v, std::size_t from)
 {
     int count = 0;
+
     for (std::size_t i = from + 1; i < v.size(); ++i)
     {
         if ((v[i - 1] <= 0.0f && v[i] > 0.0f) || (v[i - 1] >= 0.0f && v[i] < 0.0f))
@@ -216,6 +238,7 @@ int ZeroCrossings(const std::vector<float>& v, std::size_t from)
             ++count;
         }
     }
+
     return count;
 }
 
@@ -228,16 +251,19 @@ bool AllFinite(const Stereo& s)
             return false;
         }
     }
+
     return true;
 }
 
 float PeakAbs(const Stereo& s)
 {
     float peak = 0.0f;
+
     for (std::size_t i = 0; i < s.Size(); ++i)
     {
         peak = std::max({peak, std::fabs(s.left[i]), std::fabs(s.right[i])});
     }
+
     return peak;
 }
 
@@ -264,6 +290,7 @@ void TestRegistration()
 
     auto info = guitarfx::EffectRegistry::Instance().GetTypeInfo(guitarfx::EffectGuids::kSpatial3D);
     Check(info.has_value(), "effect type is registered");
+
     if (!info.has_value())
     {
         return;
@@ -282,34 +309,42 @@ void TestRegistration()
     bool allComplete = true;
     bool allInRange = true;
     std::string firstProblem;
+
     for (const auto& preset : info->presets)
     {
         for (const auto& param : info->parameters)
         {
             auto it = preset.parameters.find(param.id);
+
             if (it == preset.parameters.end())
             {
                 allComplete = false;
+
                 if (firstProblem.empty())
                 {
                     firstProblem = preset.id + " missing " + param.id;
                 }
+
                 continue;
             }
+
             if (it->second < param.minValue - 1e-9 || it->second > param.maxValue + 1e-9)
             {
                 allInRange = false;
+
                 if (firstProblem.empty())
                 {
                     firstProblem = preset.id + "." + param.id + " = " + Num(it->second) + " out of range";
                 }
             }
         }
+
         for (const auto& ordered : preset.parameterOrder)
         {
             if (preset.parameters.find(ordered) == preset.parameters.end())
             {
                 allComplete = false;
+
                 if (firstProblem.empty())
                 {
                     firstProblem = preset.id + " orders unknown parameter " + ordered;
@@ -317,19 +352,23 @@ void TestRegistration()
             }
         }
     }
+
     Check(allComplete, "every preset specifies every parameter", firstProblem);
     Check(allInRange, "every preset value is within its declared range", firstProblem);
 
     bool hasMotion = false;
+
     for (const auto& preset : info->presets)
     {
         auto it = preset.parameters.find("motionMode");
+
         if (it != preset.parameters.end() && it->second > 0.5)
         {
             hasMotion = true;
             break;
         }
     }
+
     Check(hasMotion, "at least one preset animates the position");
 }
 
@@ -346,6 +385,7 @@ void TestInterauralTimeDifference()
 
     auto effect = MakeEffect();
     Check(effect != nullptr, "effect instantiates");
+
     if (!effect)
     {
         return;
@@ -394,12 +434,14 @@ void TestInterauralLevelDifference()
     const Stereo input = Noise(samples);
 
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
     }
 
     std::vector<double> ilds;
+
     for (double azimuth : {0.0, 30.0, 60.0, 90.0})
     {
         SetStatic(*effect, azimuth, 0.0, 1.5);
@@ -419,6 +461,7 @@ void TestInterauralLevelDifference()
     const Stereo musical = GuitarLikeNoise(samples);
     double minRms = std::numeric_limits<double>::max();
     double maxRms = 0.0;
+
     for (double azimuth = -180.0; azimuth <= 180.0; azimuth += 30.0)
     {
         SetStatic(*effect, azimuth, 0.0, 1.5);
@@ -428,6 +471,7 @@ void TestInterauralLevelDifference()
         minRms = std::min(minRms, power);
         maxRms = std::max(maxRms, power);
     }
+
     Check(Db(maxRms / minRms) < 4.0, "loudness stays stable as the source rotates",
           Num(Db(maxRms / minRms), 2) + " dB spread");
 }
@@ -438,6 +482,7 @@ void TestFrontBackAndElevation()
 
     const std::size_t samples = static_cast<std::size_t>(kSampleRate * 0.3);
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -479,6 +524,7 @@ void TestDistance()
     const std::size_t samples = static_cast<std::size_t>(kSampleRate * 0.3);
     const Stereo input = Sine(samples, 200.0);
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -516,6 +562,7 @@ void TestLatencyAndDryBlend()
     std::cout << "\nLatency and dry blend" << std::endl;
 
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -533,6 +580,7 @@ void TestLatencyAndDryBlend()
     const Stereo out = Run(*effect, input);
 
     double worst = 0.0;
+
     for (std::size_t i = static_cast<std::size_t>(latency); i < samples; ++i)
     {
         worst = std::max(
@@ -540,6 +588,7 @@ void TestLatencyAndDryBlend()
         worst = std::max(
             worst, static_cast<double>(std::fabs(out.right[i] - input.right[i - static_cast<std::size_t>(latency)])));
     }
+
     Check(worst == 0.0, "at zero mix the output is the input delayed by exactly the reported latency",
           "max deviation " + Num(worst, 9));
 
@@ -560,6 +609,7 @@ void TestMotionOffMatchesStatic()
 
     auto staticEffect = MakeEffect();
     auto zeroDepth = MakeEffect();
+
     if (!staticEffect || !zeroDepth)
     {
         return;
@@ -578,11 +628,13 @@ void TestMotionOffMatchesStatic()
     const Stereo zeroOut = Run(*zeroDepth, input);
 
     double worst = 0.0;
+
     for (std::size_t i = 0; i < samples; ++i)
     {
         worst = std::max(worst, static_cast<double>(std::fabs(staticOut.left[i] - zeroOut.left[i])));
         worst = std::max(worst, static_cast<double>(std::fabs(staticOut.right[i] - zeroOut.right[i])));
     }
+
     Check(worst < 1.0e-6, "zero-depth motion is identical to a static position", "max deviation " + Num(worst, 9));
 }
 
@@ -591,6 +643,7 @@ void TestMotionRateAndSync()
     std::cout << "\nMotion engine: rate, sync and direction" << std::endl;
 
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -602,6 +655,7 @@ void TestMotionRateAndSync()
         double previous = effect->GetParam("currentAzimuth");
         double travel = 0.0;
         const int total = static_cast<int>(samples);
+
         for (int offset = 0; offset < total; offset += kBlockSize)
         {
             const int len = std::min(kBlockSize, total - offset);
@@ -614,17 +668,21 @@ void TestMotionRateAndSync()
 
             const double current = effect->GetParam("currentAzimuth");
             double delta = current - previous;
+
             while (delta > 180.0)
             {
                 delta -= 360.0;
             }
+
             while (delta < -180.0)
             {
                 delta += 360.0;
             }
+
             travel += delta;
             previous = current;
         }
+
         return travel;
     };
 
@@ -678,11 +736,13 @@ void TestDriftDeterminism()
 
     double sameWorst = 0.0;
     double diffWorst = 0.0;
+
     for (std::size_t i = 0; i < samples; ++i)
     {
         sameWorst = std::max(sameWorst, static_cast<double>(std::fabs(a.left[i] - b.left[i])));
         diffWorst = std::max(diffWorst, static_cast<double>(std::fabs(a.left[i] - c.left[i])));
     }
+
     Check(sameWorst == 0.0, "the same drift seed reproduces the same trajectory exactly",
           "max deviation " + Num(sameWorst, 9));
     Check(diffWorst > 1.0e-5, "a different drift seed produces a different trajectory",
@@ -709,10 +769,12 @@ void TestPitchStabilityDuringMotion()
 
     auto peakFrequencyDeviation = [&](int delayMode, double rateHz, double distanceDepth) {
         auto effect = MakeEffect();
+
         if (!effect)
         {
             return -1.0;
         }
+
         SetStatic(*effect, 0.0, 0.0, 1.5);
         effect->SetParam("motionMode", 1.0); // Orbit
         effect->SetParam("motionRate", rateHz);
@@ -726,10 +788,12 @@ void TestPitchStabilityDuringMotion()
         // Sub-sample rising zero crossings, skipping the smoothing ramp-in.
         std::vector<double> crossings;
         const std::size_t from = static_cast<std::size_t>(kSampleRate * 0.5);
+
         for (std::size_t i = from + 1; i < out.left.size(); ++i)
         {
             const float previous = out.left[i - 1];
             const float current = out.left[i];
+
             if (previous <= 0.0f && current > 0.0f && current != previous)
             {
                 crossings.push_back(static_cast<double>(i - 1) +
@@ -740,22 +804,27 @@ void TestPitchStabilityDuringMotion()
         // Average over 20 periods: long enough to reject interpolation noise, short
         // enough to still resolve the peak of a sub-hertz modulation.
         const std::size_t window = 20;
+
         if (crossings.size() <= window + 1)
         {
             return -1.0;
         }
 
         double worst = 0.0;
+
         for (std::size_t i = 0; i + window < crossings.size(); ++i)
         {
             const double span = crossings[i + window] - crossings[i];
+
             if (span <= 0.0)
             {
                 continue;
             }
+
             const double frequency = static_cast<double>(window) * kSampleRate / span;
             worst = std::max(worst, std::fabs(frequency / toneHz - 1.0));
         }
+
         return worst;
     };
 
@@ -783,6 +852,7 @@ void TestEdgeCases()
 
     // Invalid Prepare arguments must leave the effect in a safe passthrough state.
     auto unprepared = guitarfx::EffectRegistry::Instance().Create(guitarfx::EffectGuids::kSpatial3D);
+
     if (unprepared)
     {
         unprepared->Prepare(0.0, 0);
@@ -790,6 +860,7 @@ void TestEdgeCases()
         const Stereo input = Noise(samples, 5);
         const Stereo out = Run(*unprepared, input);
         bool passthrough = true;
+
         for (std::size_t i = 0; i < samples; ++i)
         {
             if (out.left[i] != input.left[i] || out.right[i] != input.right[i])
@@ -797,11 +868,13 @@ void TestEdgeCases()
                 passthrough = false;
             }
         }
+
         Check(passthrough, "an invalid Prepare leaves the effect passing audio through unchanged");
         Check(unprepared->GetLatencySamples() == 0, "an unprepared effect reports no latency");
     }
 
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -816,10 +889,12 @@ void TestEdgeCases()
         float* out[2] = {outL.data(), outR.data()};
         effect->Process(in, out, kBlockSize);
         bool finite = true;
+
         for (int i = 0; i < kBlockSize; ++i)
         {
             finite = finite && std::isfinite(outL[i]) && std::isfinite(outR[i]);
         }
+
         Check(finite, "a missing right input channel is handled without producing garbage");
     }
 
@@ -852,6 +927,7 @@ void TestFactoryPresetsBehaviour()
     std::cout << "\nFactory preset playback" << std::endl;
 
     auto info = guitarfx::EffectRegistry::Instance().GetTypeInfo(guitarfx::EffectGuids::kSpatial3D);
+
     if (!info.has_value())
     {
         return;
@@ -870,14 +946,17 @@ void TestFactoryPresetsBehaviour()
     for (const auto& preset : info->presets)
     {
         auto effect = MakeEffect();
+
         if (!effect)
         {
             return;
         }
+
         for (const auto& [key, value] : preset.parameters)
         {
             effect->SetParam(key, value);
         }
+
         effect->Reset();
 
         // Sample the rendered position while processing so that presets which claim
@@ -888,6 +967,7 @@ void TestFactoryPresetsBehaviour()
         double previousAz = effect->GetParam("currentAzimuth");
         Stereo output(samples);
         const int total = static_cast<int>(samples);
+
         for (int offset = 0; offset < total; offset += kBlockSize)
         {
             const int len = std::min(kBlockSize, total - offset);
@@ -900,14 +980,17 @@ void TestFactoryPresetsBehaviour()
             minAz = std::min(minAz, az);
             maxAz = std::max(maxAz, az);
             double delta = az - previousAz;
+
             while (delta > 180.0)
             {
                 delta -= 360.0;
             }
+
             while (delta < -180.0)
             {
                 delta += 360.0;
             }
+
             travel += std::fabs(delta);
             previousAz = az;
         }
@@ -917,18 +1000,23 @@ void TestFactoryPresetsBehaviour()
             allFinite = false;
             problem = preset.id + " produced non-finite samples";
         }
+
         const double outputRms = Rms(output.left, samples / 4);
+
         if (outputRms < inputRms * 0.05)
         {
             allAudible = false;
+
             if (problem.empty())
             {
                 problem = preset.id + " is effectively silent";
             }
         }
+
         if (PeakAbs(output) > 4.0f)
         {
             allSane = false;
+
             if (problem.empty())
             {
                 problem = preset.id + " peaks at " + Num(PeakAbs(output), 2);
@@ -937,6 +1025,7 @@ void TestFactoryPresetsBehaviour()
 
         const auto motionIt = preset.parameters.find("motionMode");
         const bool animated = motionIt != preset.parameters.end() && motionIt->second > 0.5;
+
         if (animated)
         {
             // An animated preset must move the source somewhere over two seconds,
@@ -944,9 +1033,11 @@ void TestFactoryPresetsBehaviour()
             const bool movedHorizontally = travel > 5.0;
             const auto elevIt = preset.parameters.find("motionElevDepth");
             const bool couldMoveVertically = elevIt != preset.parameters.end() && elevIt->second > 0.01;
+
             if (!movedHorizontally && !couldMoveVertically)
             {
                 allMoved = false;
+
                 if (problem.empty())
                 {
                     problem = preset.id + " claims motion but the source barely moves";
@@ -966,6 +1057,7 @@ void TestStereoPreservationContract()
     std::cout << "\nSignal graph contract" << std::endl;
 
     auto effect = MakeEffect();
+
     if (!effect)
     {
         return;
@@ -981,13 +1073,14 @@ void TestStereoPreservationContract()
     SetStatic(*effect, 60.0, 0.0, 1.5);
     const Stereo out = Run(*effect, Noise(samples, 606));
     double difference = 0.0;
+
     for (std::size_t i = samples / 4; i < samples; ++i)
     {
         difference += std::fabs(static_cast<double>(out.left[i] - out.right[i]));
     }
+
     Check(difference > 1.0, "a mono input becomes a genuinely stereo image", Num(difference, 1));
 }
-
 } // namespace
 
 int main()
@@ -1013,9 +1106,11 @@ int main()
 
     std::cout << "\n=======================" << std::endl;
     std::cout << (gChecks - gFailures) << " / " << gChecks << " checks passed" << std::endl;
+
     if (gFailures > 0)
     {
         std::cout << gFailures << " FAILED" << std::endl;
     }
+
     return gFailures == 0 ? 0 : 1;
 }

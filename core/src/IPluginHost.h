@@ -22,7 +22,6 @@
 
 namespace guitarfx
 {
-
 /// Categories for file browse dialogs.
 enum class BrowseFileType
 {
@@ -117,5 +116,4 @@ class IPluginHost
         return false;
     }
 };
-
 } // namespace guitarfx

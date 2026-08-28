@@ -9,11 +9,12 @@
 # (JUCE house style, Chromium-based, SortIncludes on) and is deliberately left
 # under it - do not reformat juce/ with this config.
 #
-# NOTE: the "blank line before a control statement" convention documented in
+# NOTE: the blank-line-around-control-flow conventions in
 # .github/copilot-instructions.md CANNOT be expressed here — clang-format has no
-# option that inserts blank lines before if/for/while. It only preserves ones
-# that are already present (MaxEmptyLinesToKeep), which is enough for the
-# convention to survive formatting once written by hand.
+# option that inserts blank lines before or after if/for/while. They are applied
+# by tools/uncrustify.cfg, which runs BEFORE this. clang-format only preserves
+# blank lines already present (MaxEmptyLinesToKeep), which is what lets the two
+# tools compose instead of fighting.
 ---
 Language: Cpp
 BasedOnStyle: Microsoft

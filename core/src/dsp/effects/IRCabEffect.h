@@ -60,6 +60,7 @@ class IRCabEffect : public EffectProcessor
         {
             InitializeConvolverA();
         }
+
         if (!mImpulseBL.empty())
         {
             InitializeConvolverB();
@@ -100,10 +101,12 @@ class IRCabEffect : public EffectProcessor
             {
                 std::fill_n(outputs[0], numSamples, 0.0f);
             }
+
             if (outputs[1])
             {
                 std::fill_n(outputs[1], numSamples, 0.0f);
             }
+
             return;
         }
 
@@ -124,6 +127,7 @@ class IRCabEffect : public EffectProcessor
                     std::fill_n(outputs[0], numSamples, 0.0f);
                 }
             }
+
             if (outputs[1])
             {
                 if (inputs[1])
@@ -139,6 +143,7 @@ class IRCabEffect : public EffectProcessor
                     std::fill_n(outputs[1], numSamples, 0.0f);
                 }
             }
+
             return;
         }
 
@@ -157,6 +162,7 @@ class IRCabEffect : public EffectProcessor
                     std::fill_n(outputs[0], numSamples, 0.0f);
                 }
             }
+
             if (outputs[1])
             {
                 if (inputs[1])
@@ -172,6 +178,7 @@ class IRCabEffect : public EffectProcessor
                     std::fill_n(outputs[1], numSamples, 0.0f);
                 }
             }
+
             return;
         }
 
@@ -192,12 +199,14 @@ class IRCabEffect : public EffectProcessor
         {
             // Run slot A (left) and slot B (right) in parallel
             bool ran = false;
+
             if (allowParallel)
             {
                 ran = rtparallel::DualLaneExecutor::Instance().Run(
                     [&]() { mConvolverBL.Process(mInputBufferR.data(), mOutputBufferBL.data(), numSamples); },
                     [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
             }
+
             if (!ran)
             {
                 mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
@@ -207,12 +216,14 @@ class IRCabEffect : public EffectProcessor
         else
         {
             bool ranParallel = false;
+
             if (allowParallel)
             {
                 ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
                     [&]() { mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples); },
                     [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
             }
+
             if (!ranParallel)
             {
                 mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
@@ -222,12 +233,14 @@ class IRCabEffect : public EffectProcessor
             if (hasB)
             {
                 bool ranBParallel = false;
+
                 if (allowParallel)
                 {
                     ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
                         [&]() { mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples); },
                         [&]() { mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples); });
                 }
+
                 if (!ranBParallel)
                 {
                     mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
@@ -237,12 +250,14 @@ class IRCabEffect : public EffectProcessor
         }
 
         const bool transitionActive = mResourceTransitionSamplesRemaining > 0 && mPrevHasSlotA;
+
         if (transitionActive)
         {
             if (useLRSplit)
             {
                 // Mirror the live split routing for the fade-out of the previous state.
                 bool ran = false;
+
                 if (allowParallel)
                 {
                     ran = rtparallel::DualLaneExecutor::Instance().Run(
@@ -256,9 +271,11 @@ class IRCabEffect : public EffectProcessor
                             mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
                         });
                 }
+
                 if (!ran)
                 {
                     mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+
                     if (mPrevHasSlotB)
                     {
                         mPrevConvolverBL.Process(mInputBufferR.data(), mPrevOutputBufferBL.data(), numSamples);
@@ -268,6 +285,7 @@ class IRCabEffect : public EffectProcessor
             else
             {
                 bool ranPrevParallel = false;
+
                 if (allowParallel)
                 {
                     ranPrevParallel = rtparallel::DualLaneExecutor::Instance().Run(
@@ -276,6 +294,7 @@ class IRCabEffect : public EffectProcessor
                             mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
                         });
                 }
+
                 if (!ranPrevParallel)
                 {
                     mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
@@ -285,6 +304,7 @@ class IRCabEffect : public EffectProcessor
                 if (mPrevHasSlotB)
                 {
                     bool ranPrevBParallel = false;
+
                     if (allowParallel)
                     {
                         ranPrevBParallel = rtparallel::DualLaneExecutor::Instance().Run(
@@ -295,6 +315,7 @@ class IRCabEffect : public EffectProcessor
                                 mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
                             });
                     }
+
                     if (!ranPrevBParallel)
                     {
                         mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
@@ -311,6 +332,7 @@ class IRCabEffect : public EffectProcessor
 
         // In L/R split mode each slot handles one channel at full gain; normal mode uses blend.
         double blend, slotAGain, slotBGain, autoCompGain;
+
         if (useLRSplit)
         {
             blend = 0.0;
@@ -331,14 +353,17 @@ class IRCabEffect : public EffectProcessor
         static constexpr double kSqrt2 = 1.41421356237309504880;
         const bool hasPanA = std::abs(mSlotAPan) > 1e-6;
         double slotAPanL = 1.0, slotAPanR = 1.0;
+
         if (hasPanA)
         {
             const double angle = (mSlotAPan + 1.0) * kPi / 4.0;
             slotAPanL = kSqrt2 * std::cos(angle);
             slotAPanR = kSqrt2 * std::sin(angle);
         }
+
         const bool hasPanB = hasB && std::abs(mSlotBPan) > 1e-6;
         double slotBPanL = 1.0, slotBPanR = 1.0;
+
         if (hasPanB)
         {
             const double angle = (mSlotBPan + 1.0) * kPi / 4.0;
@@ -349,11 +374,13 @@ class IRCabEffect : public EffectProcessor
         for (int i = 0; i < numSamples; ++i)
         {
             double wetL, wetR;
+
             if (useLRSplit)
             {
                 // Slot A → left channel; slot B → right channel.
                 wetL = mOutputBufferL[i] * slotAGain;
                 wetR = mOutputBufferBL[i] * slotBGain;
+
                 if (mMicEmulationEnabled)
                 {
                     wetL = ProcessMicPositionSlotA(wetL, 0);
@@ -364,17 +391,20 @@ class IRCabEffect : public EffectProcessor
             {
                 double slotAL = mOutputBufferL[i] * slotAGain;
                 double slotAR = mOutputBufferR[i] * slotAGain;
+
                 if (mMicEmulationEnabled)
                 {
                     slotAL = ProcessMicPositionSlotA(slotAL, 0);
                     slotAR = ProcessMicPositionSlotA(slotAR, 1);
                 }
+
                 if (hasPanA)
                 {
                     const double monoA = (slotAL + slotAR) * 0.5;
                     slotAL = monoA * slotAPanL;
                     slotAR = monoA * slotAPanR;
                 }
+
                 wetL = slotAL;
                 wetR = slotAR;
 
@@ -382,17 +412,20 @@ class IRCabEffect : public EffectProcessor
                 {
                     double slotBL = mOutputBufferBL[i] * slotBGain;
                     double slotBR = mOutputBufferBR[i] * slotBGain;
+
                     if (mMicEmulationEnabled)
                     {
                         slotBL = ProcessMicPositionSlotB(slotBL, 0);
                         slotBR = ProcessMicPositionSlotB(slotBR, 1);
                     }
+
                     if (hasPanB)
                     {
                         const double monoB = (slotBL + slotBR) * 0.5;
                         slotBL = monoB * slotBPanL;
                         slotBR = monoB * slotBPanR;
                     }
+
                     wetL += slotBL;
                     wetR += slotBR;
                 }
@@ -406,6 +439,7 @@ class IRCabEffect : public EffectProcessor
                 const double oldWeight = 1.0 - std::clamp(newWeight, 0.0, 1.0);
 
                 double prevWetL, prevWetR;
+
                 if (useLRSplit)
                 {
                     prevWetL = mPrevOutputBufferL[i] * slotAGain;
@@ -415,6 +449,7 @@ class IRCabEffect : public EffectProcessor
                 {
                     prevWetL = mPrevOutputBufferL[i] * slotAGain;
                     prevWetR = mPrevOutputBufferR[i] * slotAGain;
+
                     if (mPrevHasSlotB)
                     {
                         prevWetL += mPrevOutputBufferBL[i] * slotBGain;
@@ -426,6 +461,7 @@ class IRCabEffect : public EffectProcessor
                 wetR = prevWetR * oldWeight + wetR * (1.0 - oldWeight);
 
                 mResourceTransitionSamplesRemaining -= 1;
+
                 if (mResourceTransitionSamplesRemaining <= 0)
                 {
                     mPrevHasSlotA = false;
@@ -461,6 +497,7 @@ class IRCabEffect : public EffectProcessor
                     outputs[0][i] = static_cast<float>(wetL) * wetGain + dryL * dryGain;
                 }
             }
+
             if (outputs[1])
             {
                 if (wetOnly)
@@ -531,6 +568,7 @@ class IRCabEffect : public EffectProcessor
         else if (key == "normalizeIR")
         {
             const bool nv = value > 0.5;
+
             if (nv != mNormalizeIR)
             {
                 // The normalisation gain is baked into the convolver coefficients at load
@@ -541,10 +579,12 @@ class IRCabEffect : public EffectProcessor
                     CapturePreviousConvolvers(); // capture with the old normalisation for the crossfade
                     mNormalizeIR = nv;
                     InitializeConvolverA();
+
                     if (!mImpulseBL.empty())
                     {
                         InitializeConvolverB();
                     }
+
                     BeginResourceTransition();
                 }
                 else
@@ -569,6 +609,7 @@ class IRCabEffect : public EffectProcessor
         else if (key == "lowLatency")
         {
             const bool nv = value > 0.5;
+
             if (nv != mLowLatency)
             {
                 // Rebuild immediately so the latency change takes effect without a reload.
@@ -582,10 +623,12 @@ class IRCabEffect : public EffectProcessor
                     mLowLatency = nv;
                     ApplyPendingQuality();
                     InitializeConvolverA();
+
                     if (!mImpulseBL.empty())
                     {
                         InitializeConvolverB();
                     }
+
                     BeginResourceTransition();
                 }
                 else
@@ -641,99 +684,123 @@ class IRCabEffect : public EffectProcessor
         {
             return mMix;
         }
+
         if (key == "irBlend")
         {
             return mIRBlend;
         }
+
         if (key == "lowCutHz")
         {
             return mLowCutHz;
         }
+
         if (key == "highCutHz")
         {
             return mHighCutHz;
         }
+
         if (key == "slotAGain")
         {
             return 20.0 * std::log10(std::max(mSlotAGain, 1e-9));
         }
+
         if (key == "slotBGain")
         {
             return 20.0 * std::log10(std::max(mSlotBGain, 1e-9));
         }
+
         if (key == "slotAPan")
         {
             return mSlotAPan;
         }
+
         if (key == "slotBPan")
         {
             return mSlotBPan;
         }
+
         if (key == "lrSplit")
         {
             return mLRSplitEnabled ? 1.0 : 0.0;
         }
+
         if (key == "slotAPolarity")
         {
             return mSlotAPolarityInverted ? 1.0 : 0.0;
         }
+
         if (key == "slotBPolarity")
         {
             return mSlotBPolarityInverted ? 1.0 : 0.0;
         }
+
         if (key == "autoGainComp")
         {
             return mAutoGainCompEnabled ? 1.0 : 0.0;
         }
+
         if (key == "normalizeIR")
         {
             return mNormalizeIR ? 1.0 : 0.0;
         }
+
         if (key == "outputGain")
         {
             return 20.0 * std::log10(mOutputGain);
         }
+
         if (key == "enabled")
         {
             return mEnabled ? 1.0 : 0.0;
         }
+
         if (key == "quality")
         {
             const int pending = mPendingQuality.load(std::memory_order_acquire);
             return pending >= 0 ? static_cast<double>(pending) : static_cast<double>(mQuality);
         }
+
         if (key == "lowLatency")
         {
             return mLowLatency ? 1.0 : 0.0;
         }
+
         if (key == "air")
         {
             return mAir;
         }
+
         if (key == "airMode")
         {
             return static_cast<double>(mAirMode);
         }
+
         if (key == "micEmulation")
         {
             return mMicEmulationEnabled ? 1.0 : 0.0;
         }
+
         if (key == "micRadialA")
         {
             return mMicRadialA;
         }
+
         if (key == "micProximityA")
         {
             return mMicProximityA;
         }
+
         if (key == "micRadialB")
         {
             return mMicRadialB;
         }
+
         if (key == "micProximityB")
         {
             return mMicProximityB;
         }
+
         return 0.0;
     }
 
@@ -762,6 +829,7 @@ class IRCabEffect : public EffectProcessor
         mConvolverBR.Reset();
         ApplyPendingQuality();
         const bool loaded = InitializeConvolverA();
+
         if (!loaded)
         {
             std::cerr << "[IRCabEffect] ERROR: Failed to initialize convolver for: " << resourcePath << "\n";
@@ -781,13 +849,16 @@ class IRCabEffect : public EffectProcessor
         int slotAIdx = -1;
         int slotBIdx = -1;
         bool hasSlotMetadata = false;
+
         for (std::size_t i = 0; i < refs.size() && i < paths.size(); ++i)
         {
             const auto it = refs[i].metadata.find("resourceSlotIndex");
+
             if (it != refs[i].metadata.end())
             {
                 hasSlotMetadata = true;
                 const int slotIndex = std::stoi(it->second);
+
                 if (slotIndex == 0)
                 {
                     slotAIdx = static_cast<int>(i);
@@ -798,12 +869,14 @@ class IRCabEffect : public EffectProcessor
                 }
             }
         }
+
         if (!hasSlotMetadata)
         {
             if (!paths.empty())
             {
                 slotAIdx = 0;
             }
+
             if (paths.size() >= 2)
             {
                 slotBIdx = 1;
@@ -814,6 +887,7 @@ class IRCabEffect : public EffectProcessor
 
         // --- Slot A ---
         bool loadedA = false;
+
         if (slotAIdx >= 0)
         {
             if (!std::filesystem::exists(paths[slotAIdx]))
@@ -825,6 +899,7 @@ class IRCabEffect : public EffectProcessor
                 mIRPath = paths[slotAIdx];
                 ApplyPendingQuality();
                 loadedA = InitializeConvolverA();
+
                 if (!loadedA)
                 {
                     std::cerr << "[IRCabEffect] ERROR: Failed to initialize convolver A for: " << paths[slotAIdx]
@@ -836,6 +911,7 @@ class IRCabEffect : public EffectProcessor
                 std::cerr << "[IRCabEffect] ERROR: Failed to load IR A: " << paths[slotAIdx] << "\n";
             }
         }
+
         if (!loadedA)
         {
             mImpulseL.clear();
@@ -852,6 +928,7 @@ class IRCabEffect : public EffectProcessor
         mConvolverBL.Reset();
         mConvolverBR.Reset();
         bool loadedB = false;
+
         if (slotBIdx >= 0)
         {
             if (!std::filesystem::exists(paths[slotBIdx]))
@@ -861,11 +938,14 @@ class IRCabEffect : public EffectProcessor
             else if (LoadWavFileInto(paths[slotBIdx], mImpulseBL, mImpulseBR, mIRSampleRateB, mIsStereoB))
             {
                 mIRPathB = paths[slotBIdx];
+
                 if (slotBIdx < static_cast<int>(refs.size()) && refs[slotBIdx].parameterValue.has_value())
                 {
                     mIRBlend = std::clamp(*refs[slotBIdx].parameterValue, 0.0, 1.0);
                 }
+
                 loadedB = InitializeConvolverB();
+
                 if (!loadedB)
                 {
                     std::cerr << "[IRCabEffect] WARNING: Failed to initialize convolver B for: " << paths[slotBIdx]
@@ -950,6 +1030,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         double totalEnergy = 0.0;
+
         for (const float s : samples)
         {
             totalEnergy += static_cast<double>(s) * static_cast<double>(s);
@@ -966,11 +1047,13 @@ class IRCabEffect : public EffectProcessor
         for (size_t i = 0; i < samples.size(); ++i)
         {
             cumulativeEnergy += static_cast<double>(samples[i]) * static_cast<double>(samples[i]);
+
             if (cumulativeEnergy >= targetEnergy)
             {
                 return std::min(i + 256, samples.size()); // Add small buffer after threshold
             }
         }
+
         return samples.size();
     }
 
@@ -978,12 +1061,14 @@ class IRCabEffect : public EffectProcessor
                                                   float threshold = 0.001f)
     {
         const size_t length = std::min(left.size(), right.size());
+
         if (length == 0)
         {
             return 0;
         }
 
         double totalEnergy = 0.0;
+
         for (size_t i = 0; i < length; ++i)
         {
             totalEnergy += static_cast<double>(left[i]) * static_cast<double>(left[i]);
@@ -1002,11 +1087,13 @@ class IRCabEffect : public EffectProcessor
         {
             cumulativeEnergy += static_cast<double>(left[i]) * static_cast<double>(left[i]);
             cumulativeEnergy += static_cast<double>(right[i]) * static_cast<double>(right[i]);
+
             if (cumulativeEnergy >= targetEnergy)
             {
                 return std::min(i + 256, length); // Add small buffer after threshold
             }
         }
+
         return length;
     }
 
@@ -1026,6 +1113,7 @@ class IRCabEffect : public EffectProcessor
 
         const double qualitySampleRate = impulseSampleRate > 0.0 ? impulseSampleRate : mSampleRate;
         const size_t maxSamples = GetMaxIRSamples(mQuality, qualitySampleRate);
+
         if (maxSamples == 0 || samples.size() <= maxSamples)
         {
             return samples;
@@ -1039,6 +1127,7 @@ class IRCabEffect : public EffectProcessor
         std::vector<float> truncated(samples.begin(), samples.begin() + truncLength);
 
         constexpr size_t kFadeLength = 64;
+
         if (truncLength > kFadeLength)
         {
             for (size_t i = 0; i < kFadeLength; ++i)
@@ -1047,6 +1136,7 @@ class IRCabEffect : public EffectProcessor
                 truncated[truncLength - kFadeLength + i] *= fadeGain;
             }
         }
+
         return truncated;
     }
 
@@ -1069,6 +1159,7 @@ class IRCabEffect : public EffectProcessor
 
         const size_t maxSamples = GetMaxIRSamples(mQuality, mIRSampleRate);
         const size_t length = std::min(mImpulseL.size(), mImpulseR.size());
+
         if (maxSamples == 0 || length <= maxSamples)
         {
             left.assign(mImpulseL.begin(), mImpulseL.begin() + length);
@@ -1083,6 +1174,7 @@ class IRCabEffect : public EffectProcessor
         right.assign(mImpulseR.begin(), mImpulseR.begin() + truncLength);
 
         constexpr size_t kFadeLength = 64;
+
         if (truncLength > kFadeLength)
         {
             for (size_t i = 0; i < kFadeLength; ++i)
@@ -1109,6 +1201,7 @@ class IRCabEffect : public EffectProcessor
     {
         constexpr int kHalfTaps = 64;
         const double normalizedDistance = std::abs(distance) / static_cast<double>(kHalfTaps);
+
         if (normalizedDistance >= 1.0)
         {
             return 0.0;
@@ -1128,6 +1221,7 @@ class IRCabEffect : public EffectProcessor
         const double ratio = targetRate / sourceRate;
         const double cutoff = std::min(ratio, 1.0);
         const std::size_t newSize = static_cast<std::size_t>(std::ceil(static_cast<double>(samples.size()) * ratio));
+
         if (newSize == 0)
         {
             samples.clear();
@@ -1147,6 +1241,7 @@ class IRCabEffect : public EffectProcessor
             for (int tapOffset = -kHalfTaps; tapOffset <= kHalfTaps; ++tapOffset)
             {
                 const int sourceIndex = center + tapOffset;
+
                 if (sourceIndex < 0 || sourceIndex >= sourceLength)
                 {
                     continue;
@@ -1167,6 +1262,7 @@ class IRCabEffect : public EffectProcessor
                          std::vector<float>& outImpulseR, double& outSampleRate, bool& outIsStereo)
     {
         IRWavData data;
+
         if (!irwav::LoadAudioFile(path, data))
         {
             return false;
@@ -1174,6 +1270,7 @@ class IRCabEffect : public EffectProcessor
 
         std::vector<float> left;
         std::vector<float> right;
+
         if (data.channels >= 2)
         {
             irwav::SplitToStereo(data, left, right);
@@ -1190,6 +1287,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         outSampleRate = data.sampleRate;
+
         if (data.channels >= 2 && !right.empty())
         {
             const size_t length = std::min(left.size(), right.size());
@@ -1205,6 +1303,7 @@ class IRCabEffect : public EffectProcessor
             outImpulseR.clear();
             outIsStereo = false;
         }
+
         return true;
     }
 
@@ -1250,10 +1349,12 @@ class IRCabEffect : public EffectProcessor
                 // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
                 // Uses combined L+R L2 norm so stereo and mono IRs normalize consistently.
                 const float normGain = ComputeL2NormGain(mSampleRate, processedL, processedR);
+
                 for (auto& s : processedL)
                 {
                     s *= normGain;
                 }
+
                 for (auto& s : processedR)
                 {
                     s *= normGain;
@@ -1262,6 +1363,7 @@ class IRCabEffect : public EffectProcessor
 
             convolverL.SetLowLatencyMode(mLowLatency);
             convolverR.SetLowLatencyMode(mLowLatency);
+
             if (!convolverL.SetImpulse(processedL, mMaxBlockSize) || !convolverR.SetImpulse(processedR, mMaxBlockSize))
             {
                 convolverL.Reset();
@@ -1274,6 +1376,7 @@ class IRCabEffect : public EffectProcessor
 
         const double sourceRate = impulseSampleRate > 0.0 ? impulseSampleRate : mSampleRate;
         std::vector<float> processedIR = GetProcessedImpulse(impulseL, sourceRate);
+
         if (processedIR.empty())
         {
             return false;
@@ -1290,6 +1393,7 @@ class IRCabEffect : public EffectProcessor
         {
             // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
             const float normGain = ComputeL2NormGain(mSampleRate, processedIR);
+
             for (auto& s : processedIR)
             {
                 s *= normGain;
@@ -1298,6 +1402,7 @@ class IRCabEffect : public EffectProcessor
 
         convolverL.SetLowLatencyMode(mLowLatency);
         convolverR.SetLowLatencyMode(mLowLatency);
+
         if (!convolverL.SetImpulse(processedIR, mMaxBlockSize) || !convolverR.SetImpulse(processedIR, mMaxBlockSize))
         {
             convolverL.Reset();
@@ -1354,18 +1459,22 @@ class IRCabEffect : public EffectProcessor
                                    const std::vector<float>& samplesR = {})
     {
         double sumSq = 0.0;
+
         for (const float s : samplesL)
         {
             sumSq += static_cast<double>(s) * s;
         }
+
         if (!samplesR.empty())
         {
             for (const float s : samplesR)
             {
                 sumSq += static_cast<double>(s) * s;
             }
+
             sumSq *= 0.5; // average channels so stereo == mono for the same impulse response
         }
+
         if (sumSq <= 1e-12)
         {
             return 1.0f;
@@ -1384,6 +1493,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         double sum = 0.0;
+
         for (const float sample : samples)
         {
             const double value = static_cast<double>(sample);
@@ -1397,12 +1507,14 @@ class IRCabEffect : public EffectProcessor
     static double ComputeSignalEnergyStereo(const std::vector<float>& left, const std::vector<float>& right)
     {
         const size_t count = std::min(left.size(), right.size());
+
         if (count == 0)
         {
             return ComputeSignalEnergy(left.empty() ? right : left);
         }
 
         double sum = 0.0;
+
         for (size_t i = 0; i < count; ++i)
         {
             const double l = static_cast<double>(left[i]);
@@ -1434,6 +1546,7 @@ class IRCabEffect : public EffectProcessor
     void ApplyPendingQuality()
     {
         const int pending = mPendingQuality.exchange(-1, std::memory_order_acq_rel);
+
         if (pending >= 0)
         {
             mQuality = static_cast<IRQuality>(pending);
@@ -1500,6 +1613,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         const double clamped = std::clamp(mAir, 0.0, 1.0);
+
         if (clamped <= 0.0001)
         {
             mAirActive = false;
@@ -1582,6 +1696,7 @@ class IRCabEffect : public EffectProcessor
             const double clamped = std::clamp(mLowCutHz, 20.0, nyquist - 100.0);
             ComputeHighPass(clamped, mLowCutB0, mLowCutB1, mLowCutB2, mLowCutA1, mLowCutA2);
         }
+
         if (mHighCutActive)
         {
             const double clamped = std::clamp(mHighCutHz, 1000.0, nyquist - 100.0);
@@ -1601,16 +1716,19 @@ class IRCabEffect : public EffectProcessor
     double ProcessCabFilters(double input, int channel)
     {
         double output = input;
+
         if (mLowCutActive)
         {
             output = ProcessBiquad(output, mLowCutB0, mLowCutB1, mLowCutB2, mLowCutA1, mLowCutA2, mLowCutS1[channel],
                                    mLowCutS2[channel]);
         }
+
         if (mHighCutActive)
         {
             output = ProcessBiquad(output, mHighCutB0, mHighCutB1, mHighCutB2, mHighCutA1, mHighCutA2,
                                    mHighCutS1[channel], mHighCutS2[channel]);
         }
+
         return output;
     }
 
@@ -1843,5 +1961,4 @@ inline void RegisterIRCabEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<IRCabEffect>(); });
 }
-
 } // namespace guitarfx

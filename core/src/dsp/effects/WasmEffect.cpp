@@ -18,10 +18,8 @@
 
 namespace guitarfx
 {
-
 namespace
 {
-
 constexpr std::size_t kModuleSlot = 0;
 constexpr std::size_t kTempoParamIndex = WasmEffect::kGuestMacroCount;
 
@@ -38,6 +36,7 @@ double DbToLinear(double value)
 std::optional<std::size_t> ParseResourceSlotIndex(const ResourceRef& ref)
 {
     const auto it = ref.metadata.find("resourceSlotIndex");
+
     if (it == ref.metadata.end())
     {
         return std::nullopt;
@@ -56,6 +55,7 @@ std::optional<std::size_t> ParseResourceSlotIndex(const ResourceRef& ref)
 std::optional<std::size_t> ParseGuestMacroIndex(const std::string& key)
 {
     constexpr char kPrefix[] = "param";
+
     if (key.rfind(kPrefix, 0) != 0)
     {
         return std::nullopt;
@@ -64,10 +64,12 @@ std::optional<std::size_t> ParseGuestMacroIndex(const std::string& key)
     try
     {
         const std::size_t oneBasedIndex = static_cast<std::size_t>(std::stoul(key.substr(sizeof(kPrefix) - 1)));
+
         if (oneBasedIndex == 0 || oneBasedIndex > WasmEffect::kGuestMacroCount)
         {
             return std::nullopt;
         }
+
         return oneBasedIndex - 1;
     }
     catch (...)
@@ -122,10 +124,12 @@ std::vector<std::string> SplitLabels(const std::string& value)
     std::vector<std::string> labels;
     std::string current;
     std::istringstream stream(value);
+
     while (std::getline(stream, current, '|'))
     {
         labels.push_back(TrimDescriptorToken(current));
     }
+
     return labels;
 }
 
@@ -133,18 +137,21 @@ std::optional<std::pair<std::size_t, std::string>> ParseIndexedDescriptorKey(con
                                                                              const std::string& prefix)
 {
     const std::string stem = prefix + ".";
+
     if (key.rfind(stem, 0) != 0)
     {
         return std::nullopt;
     }
 
     const std::size_t fieldSeparator = key.find('.', stem.size());
+
     if (fieldSeparator == std::string::npos)
     {
         return std::nullopt;
     }
 
     const auto index = ParseSizeTLike(key.substr(stem.size(), fieldSeparator - stem.size()));
+
     if (!index)
     {
         return std::nullopt;
@@ -163,6 +170,7 @@ std::string CopyWasmMessage(const wasm_name_t& message)
     }
 
     std::size_t size = message.size;
+
     if (size > 0 && message.data[size - 1] == '\0')
     {
         --size;
@@ -275,18 +283,21 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
     for (const auto& [declIndex, fields] : parameterFields)
     {
         const auto idIt = fields.find("id");
+
         if (idIt == fields.end() || idIt->second.empty())
         {
             if (error)
             {
                 *error = "WASM descriptor param." + std::to_string(declIndex) + " is missing required 'id'.";
             }
+
             return std::nullopt;
         }
 
         const auto slotIt = fields.find("slot");
         const std::size_t slot =
             slotIt != fields.end() ? ParseSizeTLike(slotIt->second).value_or(WasmEffect::kGuestMacroCount) : declIndex;
+
         if (slot >= WasmEffect::kGuestMacroCount)
         {
             if (error)
@@ -294,6 +305,7 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
                 *error = "WASM descriptor param." + std::to_string(declIndex) +
                          " declares slot outside the supported 0..7 range.";
             }
+
             return std::nullopt;
         }
 
@@ -303,14 +315,17 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
             {
                 *error = "WASM descriptor declares duplicate parameter id '" + idIt->second + "'.";
             }
+
             return std::nullopt;
         }
+
         if (usedSlots.count(slot) > 0)
         {
             if (error)
             {
                 *error = "WASM descriptor declares multiple parameters for guest slot " + std::to_string(slot) + ".";
             }
+
             return std::nullopt;
         }
 
@@ -335,20 +350,24 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         {
             paramDescriptor.definition.defaultValue = ParseDoubleLike(defaultIt->second).value_or(0.0);
         }
+
         if (const auto minIt = fields.find("min"); minIt != fields.end())
         {
             paramDescriptor.definition.minValue = ParseDoubleLike(minIt->second).value_or(0.0);
         }
+
         if (const auto maxIt = fields.find("max"); maxIt != fields.end())
         {
             paramDescriptor.definition.maxValue = ParseDoubleLike(maxIt->second).value_or(1.0);
         }
+
         if (paramDescriptor.definition.maxValue < paramDescriptor.definition.minValue)
         {
             if (error)
             {
                 *error = "WASM descriptor param '" + idIt->second + "' has max < min.";
             }
+
             return std::nullopt;
         }
 
@@ -356,26 +375,32 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         {
             paramDescriptor.definition.unit = unitIt->second;
         }
+
         if (const auto groupIt = fields.find("group"); groupIt != fields.end())
         {
             paramDescriptor.definition.group = groupIt->second;
         }
+
         if (const auto advancedIt = fields.find("advanced"); advancedIt != fields.end())
         {
             paramDescriptor.definition.advanced = ParseBoolLike(advancedIt->second);
         }
+
         if (const auto stepIt = fields.find("step"); stepIt != fields.end())
         {
             paramDescriptor.definition.step = ParseDoubleLike(stepIt->second).value_or(0.0);
         }
+
         if (const auto labelsIt = fields.find("labels"); labelsIt != fields.end())
         {
             paramDescriptor.definition.labels = SplitLabels(labelsIt->second);
         }
+
         if (!paramDescriptor.definition.labels.empty() && paramDescriptor.definition.unit.empty())
         {
             paramDescriptor.definition.unit = "enum";
         }
+
         if (!paramDescriptor.definition.labels.empty() && paramDescriptor.definition.step == 0.0)
         {
             paramDescriptor.definition.step = 1.0;
@@ -389,17 +414,20 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
     for (const auto& [declIndex, fields] : resourceFields)
     {
         const auto idIt = fields.find("id");
+
         if (idIt == fields.end() || idIt->second.empty())
         {
             if (error)
             {
                 *error = "WASM descriptor resource." + std::to_string(declIndex) + " is missing required 'id'.";
             }
+
             return std::nullopt;
         }
 
         ExposedResource resource;
         resource.resourceId = idIt->second;
+
         if (const auto titleIt = fields.find("title"); titleIt != fields.end() && !titleIt->second.empty())
         {
             resource.displayName = titleIt->second;
@@ -417,6 +445,7 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         resource.resourceIndex = static_cast<int>(
             fields.contains("slot") ? ParseSizeTLike(fields.at("slot")).value_or(declIndex + 1) : declIndex + 1);
         resource.allowBrowseFile = !fields.contains("allowBrowseFile") || ParseBoolLike(fields.at("allowBrowseFile"));
+
         if (resource.resourceIndex <= 0)
         {
             if (error)
@@ -424,6 +453,7 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
                 *error = "WASM descriptor resource '" + resource.resourceId +
                          "' must use a positive resource slot; slot 0 is reserved for the module itself.";
             }
+
             return std::nullopt;
         }
 
@@ -431,6 +461,7 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         {
             resource.parameterId = parameterIdIt->second;
         }
+
         if (const auto parameterValueIt = fields.find("parameterValue"); parameterValueIt != fields.end())
         {
             resource.parameterValue = ParseDoubleLike(parameterValueIt->second).value_or(0.0);
@@ -452,6 +483,7 @@ std::optional<WasmModuleDescriptor> ParseDescriptorBlob(const std::string& text,
     std::vector<WasmMetadataEntry> entries;
     std::istringstream stream(text);
     std::string line;
+
     while (std::getline(stream, line))
     {
         if (!line.empty() && line.back() == '\r')
@@ -460,32 +492,38 @@ std::optional<WasmModuleDescriptor> ParseDescriptorBlob(const std::string& text,
         }
 
         line = TrimDescriptorToken(line);
+
         if (line.empty() || line[0] == '#')
         {
             continue;
         }
 
         const std::size_t separator = line.find('=');
+
         if (separator == std::string::npos)
         {
             if (error)
             {
                 *error = "WASM descriptor line is missing '=': " + line;
             }
+
             return std::nullopt;
         }
 
         WasmMetadataEntry entry;
         entry.key = TrimDescriptorToken(line.substr(0, separator));
         entry.value = TrimDescriptorToken(line.substr(separator + 1));
+
         if (entry.key.empty())
         {
             if (error)
             {
                 *error = "WASM descriptor contains an empty key.";
             }
+
             return std::nullopt;
         }
+
         entries.push_back(std::move(entry));
     }
 
@@ -572,13 +610,13 @@ extern "C" wasm_trap_t* HostReadResourceByteRaw(void* env, wasmtime_caller_t* ca
     results[0] = MakeI32Value(host->ReadGuestResourceByte(args[0].of.i32, args[1].of.i32));
     return nullptr;
 }
-
 } // namespace
 
 WasmEffect::WasmEffect()
 {
     ResetGuestDescriptor();
     mEngine = wasm_engine_new();
+
     if (!mEngine)
     {
         SetError("Failed to create Wasmtime engine.");
@@ -605,18 +643,21 @@ std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::fil
         {
             *error = "WASM module file not found: " + modulePath.string();
         }
+
         return std::nullopt;
     }
 
     WasmEffect probe;
     probe.mModuleBytes = guitarfx::util::ReadFileBytes(modulePath);
     probe.mModulePath = modulePath;
+
     if (probe.mModuleBytes.empty())
     {
         if (error)
         {
             *error = "WASM module file is empty: " + modulePath.string();
         }
+
         return std::nullopt;
     }
 
@@ -626,6 +667,7 @@ std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::fil
         {
             *error = probe.mLastError;
         }
+
         return std::nullopt;
     }
 
@@ -635,6 +677,7 @@ std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::fil
         {
             *error = probe.mLastError;
         }
+
         probe.TeardownRuntime();
         return std::nullopt;
     }
@@ -648,16 +691,19 @@ std::optional<WasmModuleDescriptor> WasmEffect::ParseDescriptorConfig(const std:
     try
     {
         const auto parsed = nlohmann::json::parse(configJson);
+
         if (!parsed.is_array())
         {
             if (error)
             {
                 *error = "WASM descriptor config must be a JSON array of { key, value } entries.";
             }
+
             return std::nullopt;
         }
 
         std::vector<WasmMetadataEntry> entries;
+
         for (const auto& item : parsed)
         {
             if (!item.is_object())
@@ -668,6 +714,7 @@ std::optional<WasmModuleDescriptor> WasmEffect::ParseDescriptorConfig(const std:
             WasmMetadataEntry entry;
             entry.key = item.value("key", "");
             entry.value = item.value("value", "");
+
             if (!entry.key.empty())
             {
                 entries.push_back(std::move(entry));
@@ -682,6 +729,7 @@ std::optional<WasmModuleDescriptor> WasmEffect::ParseDescriptorConfig(const std:
         {
             *error = std::string("Failed to parse WASM descriptor config: ") + ex.what();
         }
+
         return std::nullopt;
     }
 }
@@ -689,6 +737,7 @@ std::optional<WasmModuleDescriptor> WasmEffect::ParseDescriptorConfig(const std:
 std::string WasmEffect::SerializeDescriptorConfig(const std::vector<WasmMetadataEntry>& entries)
 {
     nlohmann::json payload = nlohmann::json::array();
+
     for (const auto& entry : entries)
     {
         payload.push_back({
@@ -696,6 +745,7 @@ std::string WasmEffect::SerializeDescriptorConfig(const std::vector<WasmMetadata
             {"value", entry.value},
         });
     }
+
     return payload.dump();
 }
 
@@ -724,6 +774,7 @@ void WasmEffect::Reset()
     }
 
     wasm_trap_t* trap = nullptr;
+
     if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mResetFunction, nullptr, 0, nullptr, 0, &trap))
     {
         SetError(std::string("WASM reset failed: ") + TakeErrorMessage(error));
@@ -791,6 +842,7 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
         {
             outputLeft[sample] = mixedLeft * outputGain;
         }
+
         if (outputRight)
         {
             outputRight[sample] = mixedRight * outputGain;
@@ -832,6 +884,7 @@ void WasmEffect::SetParam(const std::string& key, double value)
     }
 
     mPendingGuestParamValues[key] = value;
+
     if (const auto slotIt = mGuestParamSlots.find(key); slotIt != mGuestParamSlots.end())
     {
         mGuestMacros[slotIt->second] = value;
@@ -844,30 +897,37 @@ double WasmEffect::GetParam(const std::string& key) const
     {
         return mMix;
     }
+
     if (key == "inputGainDb")
     {
         return mInputGainDb;
     }
+
     if (key == "outputGainDb")
     {
         return mOutputGainDb;
     }
+
     if (key == "bpm")
     {
         return mBpm;
     }
+
     if (const auto macroIndex = ParseGuestMacroIndex(key))
     {
         return mGuestMacros[*macroIndex];
     }
+
     if (const auto pendingIt = mPendingGuestParamValues.find(key); pendingIt != mPendingGuestParamValues.end())
     {
         return pendingIt->second;
     }
+
     if (const auto slotIt = mGuestParamSlots.find(key); slotIt != mGuestParamSlots.end())
     {
         return mGuestMacros[slotIt->second];
     }
+
     return 0.0;
 }
 
@@ -883,6 +943,7 @@ std::string WasmEffect::GetConfig(const std::string& key) const
     {
         return mLastError;
     }
+
     return {};
 }
 
@@ -898,6 +959,7 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
     TeardownRuntime();
 
     const std::size_t resourceCount = std::min(refs.size(), paths.size());
+
     if (resourceCount == 0)
     {
         SetError("WASM effect requires a module resource in slot 0.");
@@ -915,6 +977,7 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
         }
 
         mResourceBytesBySlot[slotIndex] = fileBytes;
+
         if (slotIndex == kModuleSlot)
         {
             mModuleBytes = fileBytes;
@@ -957,14 +1020,17 @@ float WasmEffect::ReadGuestParam(int index) const
     }
 
     const std::size_t slot = static_cast<std::size_t>(index);
+
     if (slot < mGuestMacros.size())
     {
         return static_cast<float>(mGuestMacros[slot]);
     }
+
     if (slot == kTempoParamIndex)
     {
         return static_cast<float>(mBpm);
     }
+
     return 0.0f;
 }
 
@@ -976,6 +1042,7 @@ int WasmEffect::ReadGuestResourceSize(int slot) const
     }
 
     const std::size_t resourceSlot = static_cast<std::size_t>(slot);
+
     if (resourceSlot >= mResourceBytesBySlot.size())
     {
         return 0;
@@ -993,12 +1060,14 @@ int WasmEffect::ReadGuestResourceByte(int slot, int offset) const
 
     const std::size_t resourceSlot = static_cast<std::size_t>(slot);
     const std::size_t resourceOffset = static_cast<std::size_t>(offset);
+
     if (resourceSlot >= mResourceBytesBySlot.size())
     {
         return 0;
     }
 
     const auto& resourceBytes = mResourceBytesBySlot[resourceSlot];
+
     if (resourceOffset >= resourceBytes.size())
     {
         return 0;
@@ -1048,6 +1117,7 @@ bool WasmEffect::BuildRuntimeOnly()
     if (!mEngine)
     {
         mEngine = wasm_engine_new();
+
         if (!mEngine)
         {
             SetError("Failed to create Wasmtime engine.");
@@ -1063,6 +1133,7 @@ bool WasmEffect::BuildRuntimeOnly()
     }
 
     mLinker = wasmtime_linker_new(mEngine);
+
     if (!mLinker)
     {
         SetError("Failed to create Wasmtime linker.");
@@ -1071,6 +1142,7 @@ bool WasmEffect::BuildRuntimeOnly()
     }
 
     mStore = wasmtime_store_new(mEngine, this, nullptr);
+
     if (!mStore)
     {
         SetError("Failed to create Wasmtime store.");
@@ -1079,6 +1151,7 @@ bool WasmEffect::BuildRuntimeOnly()
     }
 
     mContext = wasmtime_store_context(mStore);
+
     if (!mContext)
     {
         SetError("Failed to access Wasmtime store context.");
@@ -1123,10 +1196,12 @@ bool WasmEffect::BuildRuntimeOnly()
     const auto loadAliasedFunctionExport = [&](const char* preferredName, const char* legacyName,
                                                wasmtime_func_t& outFunction, bool required, bool& found) -> bool {
         bool hasPreferred = false;
+
         if (!LoadFunctionExport(preferredName, outFunction, false, hasPreferred))
         {
             return false;
         }
+
         if (hasPreferred)
         {
             found = true;
@@ -1134,10 +1209,12 @@ bool WasmEffect::BuildRuntimeOnly()
         }
 
         bool hasLegacy = false;
+
         if (!LoadFunctionExport(legacyName, outFunction, false, hasLegacy))
         {
             return false;
         }
+
         if (hasLegacy)
         {
             found = true;
@@ -1145,6 +1222,7 @@ bool WasmEffect::BuildRuntimeOnly()
         }
 
         found = false;
+
         if (required)
         {
             SetError(std::string("WASM module is missing required export '") + preferredName + "' (legacy '" +
@@ -1156,6 +1234,7 @@ bool WasmEffect::BuildRuntimeOnly()
     };
 
     wasm_trap_t* trap = nullptr;
+
     if (wasmtime_error_t* error = wasmtime_linker_instantiate(mLinker, mContext, mModule, &mInstance, &trap))
     {
         SetError(std::string("Failed to instantiate WASM module: ") + TakeErrorMessage(error));
@@ -1199,6 +1278,7 @@ bool WasmEffect::LoadFunctionExport(const char* exportName, wasmtime_func_t& out
     }
 
     wasmtime_extern_t item{};
+
     if (!wasmtime_instance_export_get(mContext, &mInstance, exportName, std::strlen(exportName), &item))
     {
         if (required)
@@ -1238,6 +1318,7 @@ bool WasmEffect::InvokePrepare()
     std::array<wasmtime_val_t, 1> results{};
 
     wasm_trap_t* trap = nullptr;
+
     if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mPrepareFunction, args.data(), args.size(),
                                                      results.data(), results.size(), &trap))
     {
@@ -1284,6 +1365,7 @@ bool WasmEffect::InvokeProcess(float inputLeft, float inputRight, float& outputL
     std::array<wasmtime_val_t, 2> results{};
 
     wasm_trap_t* trap = nullptr;
+
     if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mProcessFunction, args.data(), args.size(),
                                                      results.data(), results.size(), &trap))
     {
@@ -1324,6 +1406,7 @@ int WasmEffect::QueryLatencySamples()
     std::array<wasmtime_val_t, 1> results{};
 
     wasm_trap_t* trap = nullptr;
+
     if (wasmtime_error_t* error =
             wasmtime_func_call(mContext, &mLatencyFunction, nullptr, 0, results.data(), results.size(), &trap))
     {
@@ -1361,6 +1444,7 @@ bool WasmEffect::LoadGuestDescriptor()
 
     bool hasAudioDescriptorPtr = false;
     bool hasAudioDescriptorLen = false;
+
     if (!LoadFunctionExport("audiofx_descriptor_ptr", descriptorPtrFunction, false, hasAudioDescriptorPtr) ||
         !LoadFunctionExport("audiofx_descriptor_len", descriptorLenFunction, false, hasAudioDescriptorLen))
     {
@@ -1415,27 +1499,32 @@ bool WasmEffect::LoadGuestDescriptor()
     auto callI32Function = [&](wasmtime_func_t& function, const char* functionName) -> std::optional<int32_t> {
         std::array<wasmtime_val_t, 1> results{};
         wasm_trap_t* trap = nullptr;
+
         if (wasmtime_error_t* error =
                 wasmtime_func_call(mContext, &function, nullptr, 0, results.data(), results.size(), &trap))
         {
             SetError(std::string("WASM descriptor call failed for '") + functionName + "': " + TakeErrorMessage(error));
             return std::nullopt;
         }
+
         if (trap)
         {
             SetError(std::string("WASM descriptor call trapped for '") + functionName + "': " + TakeTrapMessage(trap));
             return std::nullopt;
         }
+
         if (results[0].kind != WASMTIME_I32)
         {
             SetError(std::string("WASM descriptor function '") + functionName + "' returned a non-i32 result.");
             return std::nullopt;
         }
+
         return results[0].of.i32;
     };
 
     const auto descriptorPtr = callI32Function(descriptorPtrFunction, descriptorPtrName);
     const auto descriptorLen = callI32Function(descriptorLenFunction, descriptorLenName);
+
     if (!descriptorPtr || !descriptorLen)
     {
         return false;
@@ -1454,11 +1543,13 @@ bool WasmEffect::LoadGuestDescriptor()
     }
 
     wasmtime_extern_t memoryItem{};
+
     if (!wasmtime_instance_export_get(mContext, &mInstance, "memory", std::strlen("memory"), &memoryItem))
     {
         SetError("WASM descriptor exports require an exported linear memory named 'memory'.");
         return false;
     }
+
     if (memoryItem.kind != WASMTIME_EXTERN_MEMORY)
     {
         wasmtime_extern_delete(&memoryItem);
@@ -1470,6 +1561,7 @@ bool WasmEffect::LoadGuestDescriptor()
     std::uint8_t* memoryData = wasmtime_memory_data(mContext, &memoryItem.of.memory);
     const std::size_t descriptorOffset = static_cast<std::size_t>(*descriptorPtr);
     const std::size_t descriptorSize = static_cast<std::size_t>(*descriptorLen);
+
     if (!memoryData || descriptorOffset + descriptorSize > memorySize)
     {
         wasmtime_extern_delete(&memoryItem);
@@ -1482,6 +1574,7 @@ bool WasmEffect::LoadGuestDescriptor()
 
     std::string parseError;
     const auto descriptor = ParseDescriptorBlob(descriptorBlob, &parseError);
+
     if (!descriptor)
     {
         SetError(parseError.empty() ? "Failed to parse WASM descriptor." : parseError);
@@ -1532,6 +1625,7 @@ void WasmEffect::ApplyPendingGuestParamValues()
     for (std::size_t slot = 0; slot < kGuestMacroCount; ++slot)
     {
         const std::string genericKey = "param" + std::to_string(slot + 1);
+
         if (const auto genericIt = mPendingGuestParamValues.find(genericKey);
             genericIt != mPendingGuestParamValues.end())
         {
@@ -1629,5 +1723,4 @@ void RegisterWasmEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<WasmEffect>(); });
 }
-
 } // namespace guitarfx

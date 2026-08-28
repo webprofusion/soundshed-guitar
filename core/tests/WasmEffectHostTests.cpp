@@ -21,7 +21,6 @@ namespace guitarfx
 {
 namespace
 {
-
 using ByteVector = std::vector<uint8_t>;
 
 constexpr double kSampleRate = 48000.0;
@@ -100,10 +99,12 @@ void AppendU32Leb(ByteVector& out, uint32_t value)
     {
         uint8_t byte = static_cast<uint8_t>(value & 0x7fu);
         value >>= 7u;
+
         if (value != 0)
         {
             byte |= 0x80u;
         }
+
         out.push_back(byte);
     } while (value != 0);
 }
@@ -111,16 +112,19 @@ void AppendU32Leb(ByteVector& out, uint32_t value)
 void AppendI32Leb(ByteVector& out, int32_t value)
 {
     bool more = true;
+
     while (more)
     {
         uint8_t byte = static_cast<uint8_t>(value & 0x7f);
         value >>= 7;
         const bool signBitSet = (byte & 0x40u) != 0;
         more = !((value == 0 && !signBitSet) || (value == -1 && signBitSet));
+
         if (more)
         {
             byte |= 0x80u;
         }
+
         out.push_back(byte);
     }
 }
@@ -203,26 +207,32 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
 
     ByteVector typePayload;
     AppendU32Leb(typePayload, static_cast<uint32_t>(types.size()));
+
     for (const auto& type : types)
     {
         AppendU8(typePayload, 0x60);
         AppendU32Leb(typePayload, static_cast<uint32_t>(type.params.size()));
+
         for (const auto valueType : type.params)
         {
             AppendU8(typePayload, static_cast<uint8_t>(valueType));
         }
+
         AppendU32Leb(typePayload, static_cast<uint32_t>(type.results.size()));
+
         for (const auto valueType : type.results)
         {
             AppendU8(typePayload, static_cast<uint8_t>(valueType));
         }
     }
+
     AppendBytes(module, MakeSection(1, typePayload));
 
     if (!imports.empty())
     {
         ByteVector importPayload;
         AppendU32Leb(importPayload, static_cast<uint32_t>(imports.size()));
+
         for (const auto& import : imports)
         {
             AppendString(importPayload, import.moduleName);
@@ -230,6 +240,7 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
             AppendU8(importPayload, 0x00);
             AppendU32Leb(importPayload, import.typeIndex);
         }
+
         AppendBytes(module, MakeSection(2, importPayload));
     }
 
@@ -237,10 +248,12 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
     {
         ByteVector functionPayload;
         AppendU32Leb(functionPayload, static_cast<uint32_t>(definedFunctions.size()));
+
         for (const auto& function : definedFunctions)
         {
             AppendU32Leb(functionPayload, function.typeIndex);
         }
+
         AppendBytes(module, MakeSection(3, functionPayload));
     }
 
@@ -257,6 +270,7 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
     {
         ByteVector globalPayload;
         AppendU32Leb(globalPayload, static_cast<uint32_t>(globals.size()));
+
         for (const auto& global : globals)
         {
             AppendU8(globalPayload, static_cast<uint8_t>(global.valueType));
@@ -264,27 +278,32 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
             AppendBytes(globalPayload, global.initExpr);
             AppendU8(globalPayload, 0x0b);
         }
+
         AppendBytes(module, MakeSection(6, globalPayload));
     }
 
     ByteVector exportPayload;
     AppendU32Leb(exportPayload, static_cast<uint32_t>(exports.size() + (exportMemory ? 1 : 0)));
+
     for (const auto& [name, functionIndex] : exports)
     {
         AppendString(exportPayload, name);
         AppendU8(exportPayload, 0x00);
         AppendU32Leb(exportPayload, functionIndex);
     }
+
     if (exportMemory)
     {
         AppendString(exportPayload, "memory");
         AppendU8(exportPayload, 0x02);
         AppendU32Leb(exportPayload, 0);
     }
+
     AppendBytes(module, MakeSection(7, exportPayload));
 
     ByteVector codePayload;
     AppendU32Leb(codePayload, static_cast<uint32_t>(definedFunctions.size()));
+
     for (const auto& function : definedFunctions)
     {
         ByteVector body;
@@ -294,12 +313,14 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
         AppendU32Leb(codePayload, static_cast<uint32_t>(body.size()));
         AppendBytes(codePayload, body);
     }
+
     AppendBytes(module, MakeSection(10, codePayload));
 
     if (!dataSegments.empty())
     {
         ByteVector dataPayload;
         AppendU32Leb(dataPayload, static_cast<uint32_t>(dataSegments.size()));
+
         for (const auto& segment : dataSegments)
         {
             AppendU8(dataPayload, 0x00);
@@ -308,6 +329,7 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
             AppendU32Leb(dataPayload, static_cast<uint32_t>(segment.bytes.size()));
             AppendBytes(dataPayload, segment.bytes);
         }
+
         AppendBytes(module, MakeSection(11, dataPayload));
     }
 
@@ -317,6 +339,7 @@ ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<I
 ByteVector BuildDescriptorBlob(std::initializer_list<std::pair<std::string, std::string>> entries)
 {
     ByteVector blob;
+
     for (const auto& [key, value] : entries)
     {
         blob.insert(blob.end(), key.begin(), key.end());
@@ -324,6 +347,7 @@ ByteVector BuildDescriptorBlob(std::initializer_list<std::pair<std::string, std:
         blob.insert(blob.end(), value.begin(), value.end());
         blob.push_back('\n');
     }
+
     return blob;
 }
 
@@ -578,10 +602,12 @@ ByteVector MakeStatefulBiasModule()
 bool WriteBytes(const std::filesystem::path& path, const ByteVector& bytes)
 {
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+
     if (!stream.is_open())
     {
         return false;
     }
+
     stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     return stream.good();
 }
@@ -599,6 +625,7 @@ std::unique_ptr<EffectProcessor> CreateWasmHost()
 bool TestRegistryMetadata()
 {
     const auto info = EffectRegistry::Instance().GetTypeInfo(EffectGuids::kWasmHost);
+
     if (!info)
     {
         std::cerr << "WASM host effect was not registered.\n";
@@ -618,6 +645,7 @@ bool TestRegistryMetadata()
 bool TestDescriptorInspection(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "gain_descriptor.wasm";
+
     if (!WriteBytes(modulePath, MakeGainModule()))
     {
         std::cerr << "Failed to write descriptor-enabled gain module.\n";
@@ -626,6 +654,7 @@ bool TestDescriptorInspection(const TempDir& tempDir)
 
     std::string error;
     const auto descriptor = WasmEffect::InspectModuleFile(modulePath, &error);
+
     if (!descriptor)
     {
         std::cerr << "Failed to inspect WASM descriptor: " << error << "\n";
@@ -646,6 +675,7 @@ bool TestDescriptorInspection(const TempDir& tempDir)
 bool TestDirectGainModule(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "gain.wasm";
+
     if (!WriteBytes(modulePath, MakeGainModule()))
     {
         std::cerr << "Failed to write gain WASM module.\n";
@@ -653,6 +683,7 @@ bool TestDirectGainModule(const TempDir& tempDir)
     }
 
     auto effect = CreateWasmHost();
+
     if (!effect)
     {
         std::cerr << "Failed to create WASM effect instance.\n";
@@ -695,6 +726,7 @@ bool TestDirectGainModule(const TempDir& tempDir)
 bool TestMonoInputToStereoGuestUsesDualMono(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "stereo_average_mono_input.wasm";
+
     if (!WriteBytes(modulePath, MakeStereoAverageModule()))
     {
         std::cerr << "Failed to write stereo-average WASM module for mono-input test.\n";
@@ -702,6 +734,7 @@ bool TestMonoInputToStereoGuestUsesDualMono(const TempDir& tempDir)
     }
 
     auto effect = CreateWasmHost();
+
     if (!effect)
     {
         std::cerr << "Failed to create WASM effect instance.\n";
@@ -742,6 +775,7 @@ bool TestMonoInputToStereoGuestUsesDualMono(const TempDir& tempDir)
 bool TestSignalGraphStereoModule(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "stereo_average.wasm";
+
     if (!WriteBytes(modulePath, MakeStereoAverageModule()))
     {
         std::cerr << "Failed to write stereo-average WASM module.\n";
@@ -797,6 +831,7 @@ bool TestResourceBackedModule(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "resource_scaler.wasm";
     const auto dataPath = tempDir.root / "scale.bin";
+
     if (!WriteBytes(modulePath, MakeResourceScalerModule()) || !WriteBytes(dataPath, {32u}))
     {
         std::cerr << "Failed to write resource-scaler test files.\n";
@@ -804,6 +839,7 @@ bool TestResourceBackedModule(const TempDir& tempDir)
     }
 
     auto effect = CreateWasmHost();
+
     if (!effect)
     {
         std::cerr << "Failed to create WASM effect instance.\n";
@@ -851,6 +887,7 @@ bool TestResourceBackedModule(const TempDir& tempDir)
 bool TestResetStatefulModule(const TempDir& tempDir)
 {
     const auto modulePath = tempDir.root / "stateful_bias.wasm";
+
     if (!WriteBytes(modulePath, MakeStatefulBiasModule()))
     {
         std::cerr << "Failed to write stateful-bias WASM module.\n";
@@ -858,6 +895,7 @@ bool TestResetStatefulModule(const TempDir& tempDir)
     }
 
     auto effect = CreateWasmHost();
+
     if (!effect)
     {
         std::cerr << "Failed to create WASM effect instance.\n";
@@ -902,9 +940,7 @@ bool TestResetStatefulModule(const TempDir& tempDir)
 
     return true;
 }
-
 } // namespace
-
 } // namespace guitarfx
 
 int main()

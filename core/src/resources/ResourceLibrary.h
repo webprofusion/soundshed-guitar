@@ -100,5 +100,4 @@ class ResourceLibrary
 
     [[nodiscard]] static std::string MakeKey(const std::string& type, const std::string& id);
 };
-
 } // namespace guitarfx

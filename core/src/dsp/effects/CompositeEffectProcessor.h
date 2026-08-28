@@ -171,5 +171,4 @@ class CompositeEffectLibrary
     std::vector<CompositeEffectDefinition> mDefinitions;
     ResourceLibrary* mResourceLibrary = nullptr;
 };
-
 } // namespace guitarfx

@@ -15,7 +15,6 @@ namespace guitarfx
 {
 namespace activations
 {
-
 /**
  * Base class for optimized activation functions.
  * Matches the NAM Activation interface but uses SIMD under the hood.
@@ -143,6 +142,7 @@ class HardSwishActivation : public Activation
         for (long i = 0; i < size; ++i)
         {
             float x = data[i];
+
             if (x <= -3.0f)
             {
                 data[i] = 0.0f;
@@ -175,6 +175,7 @@ class ActivationRegistry
     Activation* Get(const std::string& name)
     {
         auto it = mActivations.find(name);
+
         if (it != mActivations.end())
         {
             return it->second.get();
@@ -321,6 +322,5 @@ inline void ApplyWaveNetLayerActivation(Eigen::MatrixXf& z, long channels, int n
         simd::ApplyGatedActivation(frameData, gateData, channels);
     }
 }
-
 } // namespace activations
 } // namespace guitarfx

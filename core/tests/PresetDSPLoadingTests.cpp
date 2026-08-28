@@ -22,6 +22,7 @@ namespace
 nlohmann::json LoadJson(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
+
     if (!input)
     {
         throw std::runtime_error("Failed to open JSON file: " + path.string());
@@ -62,12 +63,14 @@ int main()
         // Load model library
         const auto audioModelsJson = LoadJson(dataDir / "audiofx-models.json");
         std::unordered_map<std::string, LibraryEntry> modelLibrary;
+
         if (audioModelsJson.is_array())
         {
             for (const auto& entry : audioModelsJson)
             {
                 const std::string id = entry.value("id", "");
                 const std::string relPath = entry.value("filePath", "");
+
                 if (!id.empty() && !relPath.empty())
                 {
                     modelLibrary.emplace(id, LibraryEntry{resourcesDir / relPath, entry.value("title", id)});
@@ -78,12 +81,14 @@ int main()
         // Load IR library
         const auto irLibraryJson = LoadJson(dataDir / "ir-library.json");
         std::unordered_map<std::string, LibraryEntry> irLibrary;
+
         if (irLibraryJson.is_array())
         {
             for (const auto& entry : irLibraryJson)
             {
                 const std::string id = entry.value("id", "");
                 const std::string relPath = entry.value("filePath", "");
+
                 if (!id.empty() && !relPath.empty())
                 {
                     irLibrary.emplace(id, LibraryEntry{resourcesDir / relPath, entry.value("title", id)});
@@ -93,6 +98,7 @@ int main()
 
         // Load and test each preset
         const auto presetsJson = LoadJson(dataDir / "default-presets.json");
+
         if (!presetsJson.is_array())
         {
             throw std::runtime_error("default-presets.json is not an array");
@@ -108,18 +114,22 @@ int main()
         auto extractResourceIds = [](const nlohmann::json& preset, const std::string& nodeType,
                                      const std::string& resourceType) -> std::vector<std::string> {
             std::vector<std::string> ids;
+
             if (!preset.contains("graph") || !preset["graph"].contains("nodes"))
             {
                 return ids;
             }
+
             for (const auto& node : preset["graph"]["nodes"])
             {
                 if (node.value("type", "") == nodeType && node.contains("resource"))
                 {
                     const auto& resource = node["resource"];
+
                     if (resource.value("type", "") == resourceType)
                     {
                         const std::string id = resource.value("id", "");
+
                         if (!id.empty())
                         {
                             ids.push_back(id);
@@ -127,6 +137,7 @@ int main()
                     }
                 }
             }
+
             return ids;
         };
 
@@ -144,11 +155,13 @@ int main()
             try
             {
                 auto presetOpt = guitarfx::PresetStorage::DeserializeFromJson(preset.dump());
+
                 if (!presetOpt)
                 {
                     recordError("Preset '" + presetName + "': failed to parse JSON");
                     continue;
                 }
+
                 presetStruct = std::move(*presetOpt);
             }
             catch (const std::exception& ex)
@@ -166,6 +179,7 @@ int main()
                 recordError("Preset '" + presetName + "' has no amp_nam nodes with NAM resources");
                 continue;
             }
+
             if (irIds.empty())
             {
                 recordError("Preset '" + presetName + "' has no cab_ir nodes with IR resources");
@@ -183,6 +197,7 @@ int main()
                 }
 
                 const fs::path modelPath = modelLibrary.at(modelId).filePath;
+
                 if (!fs::exists(modelPath))
                 {
                     recordError("Preset '" + presetName + "': model file does not exist: " + Describe(modelPath));
@@ -201,6 +216,7 @@ int main()
                 }
 
                 const fs::path irPath = irLibrary.at(irId).filePath;
+
                 if (!fs::exists(irPath))
                 {
                     recordError("Preset '" + presetName + "': IR file does not exist: " + Describe(irPath));
@@ -216,6 +232,7 @@ int main()
 
             // Register effects once
             static bool effectsRegistered = false;
+
             if (!effectsRegistered)
             {
                 guitarfx::RegisterAllEffects();
@@ -235,6 +252,7 @@ int main()
                 resource.filePath = entry.filePath;
                 resourceLibrary->AddResource(resource);
             }
+
             for (const auto& [id, entry] : irLibrary)
             {
                 guitarfx::LibraryResource resource;
@@ -270,10 +288,12 @@ int main()
         if (!errors.empty())
         {
             std::cerr << "\nDSP loading test failed with " << errors.size() << " issue(s):\n";
+
             for (const auto& error : errors)
             {
                 std::cerr << " - " << error << '\n';
             }
+
             return 1;
         }
 

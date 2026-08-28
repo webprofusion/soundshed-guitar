@@ -16,7 +16,6 @@
 
 namespace
 {
-
 namespace fs = std::filesystem;
 
 constexpr double kSampleRate = 48000.0;
@@ -48,11 +47,13 @@ using EffectSetup = std::function<bool(guitarfx::EffectProcessor&, const TestRes
 std::vector<float> GenerateSine(double frequency, double amplitude)
 {
     std::vector<float> buffer(static_cast<size_t>(kTotalSamples), 0.0f);
+
     for (int i = 0; i < kTotalSamples; ++i)
     {
         const double phase = 2.0 * kPi * frequency * static_cast<double>(i) / kSampleRate;
         buffer[static_cast<size_t>(i)] = static_cast<float>(amplitude * std::sin(phase));
     }
+
     return buffer;
 }
 
@@ -60,10 +61,12 @@ std::vector<float> GeneratePulsedSine(double frequency, double amplitude, int on
 {
     std::vector<float> buffer(static_cast<size_t>(kTotalSamples), 0.0f);
     const int cycleBlocks = std::max(1, onBlockCount + offBlockCount);
+
     for (int i = 0; i < kTotalSamples; ++i)
     {
         const int blockIndex = i / kBlockSize;
         const bool isOnBlock = (blockIndex % cycleBlocks) < onBlockCount;
+
         if (!isOnBlock)
         {
             continue;
@@ -72,6 +75,7 @@ std::vector<float> GeneratePulsedSine(double frequency, double amplitude, int on
         const double phase = 2.0 * kPi * frequency * static_cast<double>(i) / kSampleRate;
         buffer[static_cast<size_t>(i)] = static_cast<float>(amplitude * std::sin(phase));
     }
+
     return buffer;
 }
 
@@ -83,10 +87,12 @@ std::vector<float> GenerateSilence()
 double PeakAbs(const std::vector<float>& buffer, size_t startIndex)
 {
     double peak = 0.0;
+
     for (size_t i = std::min(startIndex, buffer.size()); i < buffer.size(); ++i)
     {
         peak = std::max(peak, std::abs(static_cast<double>(buffer[i])));
     }
+
     return peak;
 }
 
@@ -94,10 +100,12 @@ double MaxAbsDiff(const std::vector<float>& a, const std::vector<float>& b, size
 {
     const size_t begin = std::min({startIndex, a.size(), b.size()});
     double peak = 0.0;
+
     for (size_t i = begin; i < a.size() && i < b.size(); ++i)
     {
         peak = std::max(peak, std::abs(static_cast<double>(a[i] - b[i])));
     }
+
     return peak;
 }
 
@@ -105,12 +113,14 @@ TestResources LoadTestResources(const fs::path& resourcesDir)
 {
     const fs::path libraryPath = resourcesDir / "data" / "audiofx-models.json";
     std::ifstream input(libraryPath);
+
     if (!input)
     {
         throw std::runtime_error("Failed to open audiofx-models.json");
     }
 
     const auto json = nlohmann::json::parse(input);
+
     if (!json.is_array())
     {
         throw std::runtime_error("audiofx-models.json must be an array");
@@ -122,12 +132,14 @@ TestResources LoadTestResources(const fs::path& resourcesDir)
     for (const auto& entry : json)
     {
         const fs::path modelPath = resourcesDir / entry.value("filePath", "");
+
         if (modelPath.empty() || !fs::exists(modelPath))
         {
             continue;
         }
 
         resources.models.push_back({modelPath, entry.value("title", modelPath.filename().string())});
+
         if (resources.models.size() >= 2)
         {
             break;
@@ -146,6 +158,7 @@ std::unique_ptr<guitarfx::EffectProcessor> CreatePreparedEffect(const std::strin
                                                                 const TestResources& resources)
 {
     auto effect = guitarfx::EffectRegistry::Instance().Create(effectType);
+
     if (!effect)
     {
         std::cerr << "ERROR: Failed to create effect type '" << effectType << "'\n";
@@ -153,6 +166,7 @@ std::unique_ptr<guitarfx::EffectProcessor> CreatePreparedEffect(const std::strin
     }
 
     effect->Prepare(kSampleRate, kBlockSize);
+
     if (!setup(*effect, resources))
     {
         std::cerr << "ERROR: Failed to configure effect type '" << effectType << "'\n";
@@ -211,6 +225,7 @@ bool RunLeakIsolationTest(const std::string& label, const std::string& effectTyp
 
     auto leftDriven = CreatePreparedEffect(effectType, setup, resources);
     auto rightDriven = CreatePreparedEffect(effectType, setup, resources);
+
     if (!leftDriven || !rightDriven)
     {
         return false;
@@ -243,6 +258,7 @@ bool RunChannelIndependenceTest(const std::string& label, const std::string& eff
 {
     auto quietEffect = CreatePreparedEffect(effectType, setup, resources);
     auto hotEffect = CreatePreparedEffect(effectType, setup, resources);
+
     if (!quietEffect || !hotEffect)
     {
         return false;
@@ -259,6 +275,7 @@ bool RunChannelIndependenceTest(const std::string& label, const std::string& eff
     const double leftDifference = MaxAbsDiff(quietRender.left, hotRender.left, analysisStart);
 
     bool pass = leftDifference <= std::max(diffAbsoluteLimit, referencePeak * diffRatioLimit);
+
     if (requireLeftActivity)
     {
         pass = pass && referencePeak > 1.0e-3;
@@ -288,6 +305,7 @@ bool LoadBlendModels(guitarfx::EffectProcessor& effect, const TestResources& res
     refs[1].parameterValue = 1.0;
 
     std::vector<fs::path> paths = {resources.models[0].path, resources.models[1].path};
+
     if (!effect.LoadResources(refs, paths))
     {
         return false;
@@ -296,7 +314,6 @@ bool LoadBlendModels(guitarfx::EffectProcessor& effect, const TestResources& res
     effect.SetParam("blend", 0.35);
     return true;
 }
-
 } // namespace
 
 int main()

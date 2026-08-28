@@ -30,7 +30,6 @@
 
 namespace guitarfx
 {
-
 class IPluginHost;
 
 class MetronomeService
@@ -181,5 +180,4 @@ class MetronomeService
     std::string mGuidanceBeatPattern;
     std::shared_ptr<ClickSamples> mGuidanceClickSamples;
 };
-
 } // namespace guitarfx

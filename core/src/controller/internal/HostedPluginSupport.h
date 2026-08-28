@@ -24,7 +24,6 @@ struct Preset;
 
 namespace guitarfx::controller_detail
 {
-
 // Node config keys describing which plugin a node hosts, and its saved state.
 inline constexpr const char* kHostedPluginStableIdConfigKey = "pluginStableId";
 inline constexpr const char* kHostedPluginIdentifierConfigKey = "pluginIdentifier";
@@ -73,5 +72,4 @@ void AppendHostedPluginGraphSummary(const SignalGraph& graph, const std::string&
                                     std::vector<std::string>& entries);
 
 [[nodiscard]] std::string SummarizeHostedPluginState(const Preset& preset);
-
 } // namespace guitarfx::controller_detail

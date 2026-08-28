@@ -38,9 +38,11 @@ std::vector<double> RunConvolver(guitarfx::RealtimeConvolver& conv, const std::v
     std::vector<float> outBlock(static_cast<std::size_t>(blockSize));
 
     std::size_t pos = 0;
+
     while (pos < input.size())
     {
         const int n = static_cast<int>(std::min<std::size_t>(blockSize, input.size() - pos));
+
         for (int i = 0; i < n; ++i)
         {
             inBlock[static_cast<std::size_t>(i)] = input[pos + static_cast<std::size_t>(i)];
@@ -55,6 +57,7 @@ std::vector<double> RunConvolver(guitarfx::RealtimeConvolver& conv, const std::v
 
         pos += static_cast<std::size_t>(n);
     }
+
     return output;
 }
 
@@ -63,16 +66,20 @@ std::vector<double> ReferenceConvolve(const std::vector<float>& input, const std
 {
     std::vector<double> ref(input.size(), 0.0);
     const std::size_t irLen = ir.size();
+
     for (std::size_t n = 0; n < input.size(); ++n)
     {
         double acc = 0.0;
         const std::size_t kMax = std::min(n + 1, irLen);
+
         for (std::size_t k = 0; k < kMax; ++k)
         {
             acc += static_cast<double>(input[n - k]) * static_cast<double>(ir[k]);
         }
+
         ref[n] = acc;
     }
+
     return ref;
 }
 
@@ -82,6 +89,7 @@ double NormalizedRmsDiff(const std::vector<double>& a, const std::vector<double>
     double diffSq = 0.0;
     double refSq = 0.0;
     std::size_t count = 0;
+
     for (std::size_t i = start; i < end && i < a.size() && i < b.size(); ++i)
     {
         const double d = a[i] - b[i];
@@ -89,10 +97,12 @@ double NormalizedRmsDiff(const std::vector<double>& a, const std::vector<double>
         refSq += b[i] * b[i];
         ++count;
     }
+
     if (count == 0 || refSq < 1e-20)
     {
         return 0.0;
     }
+
     return std::sqrt(diffSq / refSq);
 }
 
@@ -100,12 +110,14 @@ double NormalizedRmsDiff(const std::vector<double>& a, const std::vector<double>
 std::vector<float> MakeIR(std::size_t length)
 {
     std::vector<float> ir(length, 0.0f);
+
     for (std::size_t i = 0; i < length; ++i)
     {
         const double t = static_cast<double>(i) / static_cast<double>(length);
         const double env = std::exp(-6.0 * t);
         ir[i] = static_cast<float>(env * std::sin(2.0 * M_PI * 60.0 * t));
     }
+
     ir[0] = 1.0f; // strong direct component
     return ir;
 }
@@ -115,10 +127,12 @@ std::vector<float> MakeNoise(std::size_t length, unsigned seed)
     std::mt19937 rng(seed);
     std::uniform_real_distribution<float> dist(-0.5f, 0.5f);
     std::vector<float> out(length);
+
     for (auto& s : out)
     {
         s = dist(rng);
     }
+
     return out;
 }
 
@@ -149,6 +163,7 @@ bool TestLowLatencyReportsSmallerLatency()
         std::cout << "FAILED (uniform=" << uniformLatency << ", lowLatency=" << lowLatency << ")\n";
         return false;
     }
+
     if (lowLatency != 128)
     {
         std::cout << "FAILED (expected base latency 128, got " << lowLatency << ")\n";
@@ -171,6 +186,7 @@ bool TestNonUniformMatchesReference()
 
     guitarfx::RealtimeConvolver conv;
     conv.SetLowLatencyMode(true);
+
     if (!conv.SetImpulse(ir, blockSize))
     {
         std::cout << "FAILED (SetImpulse returned false)\n";
@@ -183,6 +199,7 @@ bool TestNonUniformMatchesReference()
 
     // Align: got[latency + k] should match ref[k].
     std::vector<double> aligned(ref.size(), 0.0);
+
     for (std::size_t k = 0; k + static_cast<std::size_t>(latency) < got.size(); ++k)
     {
         aligned[k] = got[k + static_cast<std::size_t>(latency)];
@@ -230,10 +247,12 @@ bool TestNonUniformMatchesUniform()
     // Shift both to remove their latency, then compare on common indices.
     std::vector<double> uAligned(input.size(), 0.0);
     std::vector<double> lAligned(input.size(), 0.0);
+
     for (std::size_t k = 0; k + static_cast<std::size_t>(uLat) < uOut.size(); ++k)
     {
         uAligned[k] = uOut[k + static_cast<std::size_t>(uLat)];
     }
+
     for (std::size_t k = 0; k + static_cast<std::size_t>(lLat) < lOut.size(); ++k)
     {
         lAligned[k] = lOut[k + static_cast<std::size_t>(lLat)];
@@ -273,6 +292,7 @@ bool TestResetClearsState()
     const std::vector<double> second = RunConvolver(conv, input, blockSize);
 
     const double err = NormalizedRmsDiff(first, second, ir.size(), input.size());
+
     if (!(err < 1e-9))
     {
         std::cout << "FAILED (post-reset run differs, error " << err << ")\n";
@@ -282,7 +302,6 @@ bool TestResetClearsState()
     std::cout << "OK\n";
     return true;
 }
-
 } // anonymous namespace
 
 int main()

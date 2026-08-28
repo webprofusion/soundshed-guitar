@@ -57,6 +57,7 @@ class SimdFFT
     {
         // Calculate log2(size)
         size_t n = size;
+
         while (n > 1)
         {
             n >>= 1;
@@ -76,6 +77,7 @@ class SimdFFT
     ~SimdFFT()
     {
         FreeAligned(mWorkBuffer);
+
         for (auto* ptr : mTwiddleBuffers)
         {
             FreeAligned(ptr);
@@ -100,6 +102,7 @@ class SimdFFT
         if (this != &other)
         {
             FreeAligned(mWorkBuffer);
+
             for (auto* ptr : mTwiddleBuffers)
             {
                 FreeAligned(ptr);
@@ -114,6 +117,7 @@ class SimdFFT
 
             other.mWorkBuffer = nullptr;
         }
+
         return *this;
     }
 
@@ -225,11 +229,14 @@ class SimdFFT
         {
             acc[i] += a[i] * b[i];
         }
+
 #else
+
         for (size_t i = 0; i < count; ++i)
         {
             acc[i] += a[i] * b[i];
         }
+
 #endif
     }
 
@@ -245,6 +252,7 @@ class SimdFFT
         const __m128 zero = _mm_setzero_ps();
 
         size_t i = 0;
+
         for (; i + 16 <= floatCount; i += 16)
         {
             _mm_storeu_ps(p + i, zero);
@@ -252,15 +260,19 @@ class SimdFFT
             _mm_storeu_ps(p + i + 8, zero);
             _mm_storeu_ps(p + i + 12, zero);
         }
+
         for (; i < floatCount; ++i)
         {
             p[i] = 0.0f;
         }
+
 #else
+
         for (size_t i = 0; i < floatCount; ++i)
         {
             p[i] = 0.0f;
         }
+
 #endif
     }
 
@@ -276,10 +288,12 @@ class SimdFFT
         return static_cast<float*>(_aligned_malloc(count * sizeof(float), SIMD_ALIGN));
 #else
         void* ptr = nullptr;
+
         if (posix_memalign(&ptr, SIMD_ALIGN, count * sizeof(float)) != 0)
         {
             return nullptr;
         }
+
         return static_cast<float*>(ptr);
 #endif
     }
@@ -324,15 +338,18 @@ class SimdFFT
     void PrecomputeBitReversal()
     {
         mBitReversed.resize(mSize);
+
         for (size_t i = 0; i < mSize; ++i)
         {
             size_t result = 0;
             size_t x = i;
+
             for (size_t b = 0; b < mLog2Size; ++b)
             {
                 result = (result << 1) | (x & 1);
                 x >>= 1;
             }
+
             mBitReversed[i] = result;
         }
     }
@@ -353,6 +370,7 @@ class SimdFFT
                 size_t j = 0;
 
 #if defined(GUITARFX_ARCH_X86)
+
                 // SSE3: process 2 butterflies per iteration using one __m128 per pair.
                 // idx0 and idx1=idx0+2 are adjacent; idx0h and idx1h=idx0h+2 are adjacent,
                 // so we can load/store 2 complex floats in a single 128-bit op.
@@ -385,6 +403,7 @@ class SimdFFT
                     _mm_storeu_ps(data + idx0, _mm_add_ps(u, twt));
                     _mm_storeu_ps(data + idx0h, _mm_sub_ps(u, twt));
                 }
+
 #endif
 
                 // Handle remaining butterfly (if halfM is odd)
@@ -420,5 +439,4 @@ class SimdFFT
     std::vector<float*> mTwiddleBuffers;
     std::vector<size_t> mBitReversed;
 };
-
 } // namespace guitarfx

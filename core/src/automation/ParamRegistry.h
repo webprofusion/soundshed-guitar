@@ -16,7 +16,6 @@
 
 namespace guitarfx
 {
-
 /// A registered automatable parameter.
 struct ParamRegistryEntry
 {
@@ -67,5 +66,4 @@ class ParamRegistry
   private:
     std::unordered_map<std::string, ParamRegistryEntry> mEntries;
 };
-
 } // namespace guitarfx

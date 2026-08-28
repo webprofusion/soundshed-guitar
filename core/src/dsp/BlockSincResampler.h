@@ -124,14 +124,17 @@ class BlockSincResampler
         {
             // Fast pass-through path used when SRC is effectively disabled.
             const int framesToCopy = std::min(inputFrames, outputFrames);
+
             for (int sampleIndex = 0; sampleIndex < framesToCopy; ++sampleIndex)
             {
                 output[sampleIndex] = static_cast<OutputSample>(input[sampleIndex]);
             }
+
             for (int sampleIndex = framesToCopy; sampleIndex < outputFrames; ++sampleIndex)
             {
                 output[sampleIndex] = static_cast<OutputSample>(input[inputFrames - 1]);
             }
+
             return outputFrames;
         }
 
@@ -173,6 +176,7 @@ class BlockSincResampler
         {
             return kHighPerformanceHalfTaps;
         }
+
         return kHalfTaps;
     }
 
@@ -190,6 +194,7 @@ class BlockSincResampler
     [[nodiscard]] static double Blackman(double distance, int halfTaps)
     {
         const double normalizedDistance = std::abs(distance) / static_cast<double>(halfTaps);
+
         if (normalizedDistance >= 1.0)
         {
             return 0.0;
@@ -235,6 +240,7 @@ class BlockSincResampler
             {
                 // Normalize each row once so runtime path can skip coefficient-sum division.
                 const std::size_t rowStart = static_cast<std::size_t>(phaseIndex) * static_cast<std::size_t>(tapCount);
+
                 for (int tapIndex = 0; tapIndex < tapCount; ++tapIndex)
                 {
                     mKernelTable[rowStart + static_cast<std::size_t>(tapIndex)] /= coeffSum;
@@ -257,6 +263,7 @@ class BlockSincResampler
     int ProcessLinear(const InputSample* input, int inputFrames, OutputSample* output, int outputFrames) const
     {
         const double sourceStep = static_cast<double>(inputFrames) / static_cast<double>(outputFrames);
+
         for (int outputIndex = 0; outputIndex < outputFrames; ++outputIndex)
         {
             const double sourcePosition = (static_cast<double>(outputIndex) + 0.5) * sourceStep - 0.5;
@@ -267,6 +274,7 @@ class BlockSincResampler
             const double upperSample = ReadClampedSample(input, inputFrames, upperIndex);
             output[outputIndex] = static_cast<OutputSample>(lowerSample + (upperSample - lowerSample) * fraction);
         }
+
         return outputFrames;
     }
 

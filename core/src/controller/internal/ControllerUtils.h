@@ -29,7 +29,6 @@ struct GlobalSignalChainConfig;
 
 namespace guitarfx::controller_detail
 {
-
 // ── Storage / provider identifiers ──────────────────────────────────
 
 inline constexpr const char* kLocalResourceProvider = "local";
@@ -121,5 +120,4 @@ void SaveJsonFile(const FileSystem& fileSystem, const std::filesystem::path& pat
 
 /// Graphs must be acyclic before they reach Process().
 [[nodiscard]] bool IsGraphAcyclic(const SignalGraph& graph);
-
 } // namespace guitarfx::controller_detail

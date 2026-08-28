@@ -140,5 +140,4 @@ class EffectRegistry
         }                                                                                                              \
     } g##TypeClass##Registrar;                                                                                         \
     }
-
 } // namespace guitarfx

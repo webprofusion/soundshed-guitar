@@ -49,7 +49,6 @@
 
 namespace guitarfx
 {
-
 class ControlSurfaceQueue;
 class DemoPreviewService;
 class MetronomeService;
@@ -935,5 +934,4 @@ class PluginController
     std::mutex mFolderScanDoneMutex;
     std::condition_variable mFolderScanDoneCv;
 };
-
 } // namespace guitarfx

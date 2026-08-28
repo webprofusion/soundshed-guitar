@@ -5,17 +5,18 @@
 
 namespace guitarfx::util
 {
-
 std::vector<std::uint8_t> DecodeBase64(const std::string& encoded)
 {
     static const std::array<int, 256> decodeTable = []() {
         std::array<int, 256> table{};
         table.fill(-1);
         const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
         for (std::size_t idx = 0; idx < alphabet.size(); ++idx)
         {
             table[static_cast<unsigned char>(alphabet[idx])] = static_cast<int>(idx);
         }
+
         table[static_cast<unsigned char>('-')] = 62;
         table[static_cast<unsigned char>('_')] = 63;
         return table;
@@ -31,23 +32,29 @@ std::vector<std::uint8_t> DecodeBase64(const std::string& encoded)
         {
             continue;
         }
+
         if (c == '=')
         {
             break;
         }
+
         const int value = decodeTable[c];
+
         if (value < 0)
         {
             return {};
         }
+
         accumulator = (accumulator << 6) + value;
         bits += 6;
+
         if (bits >= 0)
         {
             output.push_back(static_cast<std::uint8_t>((accumulator >> bits) & 0xFF));
             bits -= 8;
         }
     }
+
     return output;
 }
 
@@ -69,7 +76,7 @@ std::string EncodeBase64(const std::vector<std::uint8_t>& data)
         output.push_back((i + 1) < data.size() ? alphabet[(triple >> 6) & 0x3F] : '=');
         output.push_back((i + 2) < data.size() ? alphabet[triple & 0x3F] : '=');
     }
+
     return output;
 }
-
 } // namespace guitarfx::util

@@ -62,6 +62,7 @@ class OctaveEffect : public EffectProcessor
         }
 
         numSamples = std::min(numSamples, mMaxBlockSize);
+
         if (numSamples <= 0)
         {
             return;
@@ -100,6 +101,7 @@ class OctaveEffect : public EffectProcessor
         const float dryMix = 1.0f - mMix;
         const float wetMix = mMix;
         const bool needDry = dryMix > 0.0f;
+
         if (needDry)
         {
             EnsureDryDelayCapacity();
@@ -111,6 +113,7 @@ class OctaveEffect : public EffectProcessor
         {
             float dryL = leftInput[i];
             float dryR = rightInput[i];
+
             if (needDry)
             {
                 PushAndReadDry(leftInput[i], rightInput[i], latency, dryL, dryR);
@@ -125,6 +128,7 @@ class OctaveEffect : public EffectProcessor
             {
                 outputs[0][i] = dryL * dryMix + wetL * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = dryR * dryMix + wetR * wetMix;
@@ -163,18 +167,22 @@ class OctaveEffect : public EffectProcessor
         {
             return mOctaveUp;
         }
+
         if (key == "octaveDown")
         {
             return mOctaveDown;
         }
+
         if (key == "tone")
         {
             return mTone;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         return 0.0;
     }
 
@@ -196,6 +204,7 @@ class OctaveEffect : public EffectProcessor
         {
             return 0;
         }
+
         return SignalsmithTotalLatencySamples(mUpStretch, mDownStretch);
     }
 
@@ -214,8 +223,10 @@ class OctaveEffect : public EffectProcessor
         {
             return;
         }
+
         const int latency = SignalsmithTotalLatencySamples(mUpStretch, mDownStretch);
         const size_t needed = static_cast<size_t>(std::max(latency, 0) + std::max(mMaxBlockSize, 1) + 8);
+
         if (mDryDelayL.size() < needed)
         {
             mDryDelayL.assign(needed, 0.0f);
@@ -337,5 +348,4 @@ inline void RegisterOctaveEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<OctaveEffect>(); });
 }
-
 } // namespace guitarfx

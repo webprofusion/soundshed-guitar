@@ -17,7 +17,6 @@
 
 namespace guitarfx
 {
-
 /// Normalized value source — used for reconciliation and UI feedback.
 enum class AutomationSource
 {
@@ -161,5 +160,4 @@ inline constexpr int kSetlistPresetsPerBank = 8;
 
 /// Number of directly selectable scene slots exposed to MIDI/automation.
 inline constexpr int kSceneSelectSlots = 4;
-
 } // namespace guitarfx

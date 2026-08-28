@@ -27,6 +27,7 @@ bool Expect(bool condition, const std::string& what)
     {
         std::cerr << "FAIL: " << what << "\n";
     }
+
     return condition;
 }
 
@@ -306,6 +307,7 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
         ok &= Expect(fs::exists(oldStyle->filePath, existsEc),
                      "index-relative path resolves to a real file, got: " + oldStyle->filePath.string());
     }
+
     if (newStyle)
     {
         std::error_code existsEc;

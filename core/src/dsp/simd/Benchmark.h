@@ -19,7 +19,6 @@ namespace guitarfx
 {
 namespace benchmark
 {
-
 struct BenchmarkResult
 {
     std::string name;
@@ -89,6 +88,7 @@ inline void BenchmarkActivations()
     std::cout << "\n=== Activation Function Benchmarks ===" << std::endl;
     std::cout << "Buffer size: " << bufferSize << ", Iterations: " << iterations << std::endl;
     std::cout << "SIMD Level: ";
+
     switch (simd::GetSimdLevel())
     {
     case simd::SimdLevel::AVX2:
@@ -107,6 +107,7 @@ inline void BenchmarkActivations()
         std::cout << "Scalar";
         break;
     }
+
     std::cout << std::endl << std::endl;
 
     // Scalar Tanh
@@ -114,6 +115,7 @@ inline void BenchmarkActivations()
         "Scalar Tanh",
         [&]() {
             data = dataBackup; // Reset
+
             for (long i = 0; i < bufferSize; ++i)
             {
                 data[i] = std::tanh(data[i]);
@@ -151,6 +153,7 @@ inline void BenchmarkActivations()
         "Scalar Sigmoid",
         [&]() {
             data = dataBackup;
+
             for (long i = 0; i < bufferSize; ++i)
             {
                 data[i] = 1.0f / (1.0f + std::exp(-data[i]));
@@ -174,10 +177,12 @@ inline void BenchmarkActivations()
 
     // Gated activation benchmark
     std::vector<float> gate(bufferSize);
+
     for (auto& v : gate)
     {
         v = dist(gen);
     }
+
     std::vector<float> gateBackup = gate;
 
     auto scalarGated = RunBenchmark(
@@ -185,6 +190,7 @@ inline void BenchmarkActivations()
         [&]() {
             data = dataBackup;
             gate = gateBackup;
+
             for (long i = 0; i < bufferSize; ++i)
             {
                 data[i] = std::tanh(data[i]) * (1.0f / (1.0f + std::exp(-gate[i])));
@@ -231,6 +237,7 @@ inline void BenchmarkMatrixOps()
         "Column-wise activation (original)",
         [&]() {
             z = zBackup;
+
             for (int i = 0; i < numFrames; ++i)
             {
                 // Apply tanh to first half
@@ -238,11 +245,13 @@ inline void BenchmarkMatrixOps()
                 {
                     z(c, i) = std::tanh(z(c, i));
                 }
+
                 // Apply sigmoid to second half
                 for (int c = 0; c < channels; ++c)
                 {
                     z(channels + c, i) = 1.0f / (1.0f + std::exp(-z(channels + c, i)));
                 }
+
                 // Multiply
                 for (int c = 0; c < channels; ++c)
                 {
@@ -258,6 +267,7 @@ inline void BenchmarkMatrixOps()
         "SIMD per-frame gated (optimized)",
         [&]() {
             z = zBackup;
+
             for (int frame = 0; frame < numFrames; ++frame)
             {
                 float* activationData = z.data() + frame * z.rows();
@@ -285,6 +295,5 @@ inline void RunAllBenchmarks()
     std::cout << "  Benchmarks Complete" << std::endl;
     std::cout << "======================================" << std::endl;
 }
-
 } // namespace benchmark
 } // namespace guitarfx

@@ -126,6 +126,7 @@ JsonStore::OpenStatus JsonStore::OpenChecked(const std::filesystem::path& dbPath
     }
 
     std::error_code dirEc;
+
     if (!dbPath.parent_path().empty())
     {
         std::filesystem::create_directories(dbPath.parent_path(), dirEc);
@@ -139,6 +140,7 @@ JsonStore::OpenStatus JsonStore::OpenChecked(const std::filesystem::path& dbPath
     // hold the handle across many, so the recursive_mutex cannot be removed.
     // FULLMUTEX can be, if the extra lock ever shows up in a profile.
     const int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
+
     if (const int rc = sqlite3_open_v2(util::PathToUtf8(dbPath).c_str(), &mDb, flags, nullptr); rc != SQLITE_OK)
     {
         error = mDb ? sqlite3_errmsg(mDb) : "sqlite3_open_v2 failed";
@@ -169,6 +171,7 @@ JsonStore::OpenStatus JsonStore::OpenChecked(const std::filesystem::path& dbPath
     {
         error = "database failed its integrity check: " + problems.front();
         std::cerr << "[JsonStore] " << dbPath.string() << " is damaged and will not be opened:" << std::endl;
+
         for (const auto& problem : problems)
         {
             std::cerr << "[JsonStore]   " << problem << std::endl;
@@ -193,12 +196,14 @@ JsonStore::OpenStatus JsonStore::OpenChecked(const std::filesystem::path& dbPath
 void JsonStore::Close()
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return;
     }
 
     Checkpoint();
+
     // close_v2, not close: every statement is finalized by Stmt's destructor, so
     // a BUSY return should not happen — but if one ever did, close() would leave
     // the handle open while the line below drops our only pointer to it.
@@ -228,16 +233,19 @@ bool JsonStore::ApplyPragmasLocked(std::string& error) const
     {
         return false;
     }
+
     // NORMAL is the recommended pairing with WAL: durable across a process
     // crash (which is what we care about), only at risk on OS/power loss.
     if (!ExecLocked("PRAGMA synchronous=NORMAL;", error))
     {
         return false;
     }
+
     if (!ExecLocked("PRAGMA foreign_keys=ON;", error))
     {
         return false;
     }
+
     // Other instances of the app may hold the write lock briefly.
     sqlite3_busy_timeout(mDb, kDefaultBusyTimeoutMs);
     return true;
@@ -246,6 +254,7 @@ bool JsonStore::ApplyPragmasLocked(std::string& error) const
 void JsonStore::SetBusyTimeoutMs(int milliseconds)
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb != nullptr)
     {
         sqlite3_busy_timeout(mDb, milliseconds);
@@ -276,12 +285,14 @@ bool JsonStore::CreateSchemaLocked(std::string& error) const
 bool JsonStore::ExecLocked(const char* sql, std::string& error) const
 {
     char* message = nullptr;
+
     if (sqlite3_exec(mDb, sql, nullptr, nullptr, &message) != SQLITE_OK)
     {
         error = message ? message : "SQL execution failed";
         sqlite3_free(message);
         return false;
     }
+
     sqlite3_free(message);
     return true;
 }
@@ -316,6 +327,7 @@ bool JsonStore::PutRawLocked(std::string_view type, std::string_view id, std::st
 
     Stmt stmt(mDb, "INSERT INTO items(type, id, json, updated_at) VALUES(?1, ?2, ?3, ?4) "
                    "ON CONFLICT(type, id) DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at;");
+
     if (!stmt.Ok())
     {
         LogFailure("Prepare put", mDb);
@@ -332,6 +344,7 @@ bool JsonStore::PutRawLocked(std::string_view type, std::string_view id, std::st
         LogFailure("Put", mDb);
         return false;
     }
+
     return true;
 }
 
@@ -346,6 +359,7 @@ bool JsonStore::ReplaceAll(std::string_view type, const std::vector<StoreItem>& 
     // intact rather than a half-written one.
     return Transact([&]() {
         std::lock_guard<std::recursive_mutex> lock(mMutex);
+
         if (mDb == nullptr)
         {
             return false;
@@ -353,12 +367,15 @@ bool JsonStore::ReplaceAll(std::string_view type, const std::vector<StoreItem>& 
 
         {
             Stmt del(mDb, "DELETE FROM items WHERE type = ?1;");
+
             if (!del.Ok())
             {
                 LogFailure("Prepare replace-all delete", mDb);
                 return false;
             }
+
             del.BindText(1, type);
+
             if (del.Step() != SQLITE_DONE)
             {
                 LogFailure("Replace-all delete", mDb);
@@ -373,6 +390,7 @@ bool JsonStore::ReplaceAll(std::string_view type, const std::vector<StoreItem>& 
                 return false;
             }
         }
+
         return true;
     });
 }
@@ -380,12 +398,14 @@ bool JsonStore::ReplaceAll(std::string_view type, const std::vector<StoreItem>& 
 std::optional<std::string> JsonStore::GetRaw(std::string_view type, std::string_view id) const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return std::nullopt;
     }
 
     Stmt stmt(mDb, "SELECT json FROM items WHERE type = ?1 AND id = ?2;");
+
     if (!stmt.Ok())
     {
         LogFailure("Prepare get", mDb);
@@ -406,6 +426,7 @@ std::optional<std::string> JsonStore::GetRaw(std::string_view type, std::string_
 std::optional<nlohmann::json> JsonStore::Get(std::string_view type, std::string_view id) const
 {
     const auto raw = GetRaw(type, id);
+
     if (!raw)
     {
         return std::nullopt;
@@ -425,12 +446,14 @@ std::optional<nlohmann::json> JsonStore::Get(std::string_view type, std::string_
 bool JsonStore::Has(std::string_view type, std::string_view id) const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return false;
     }
 
     Stmt stmt(mDb, "SELECT 1 FROM items WHERE type = ?1 AND id = ?2;");
+
     if (!stmt.Ok())
     {
         return false;
@@ -444,12 +467,14 @@ bool JsonStore::Has(std::string_view type, std::string_view id) const
 bool JsonStore::Remove(std::string_view type, std::string_view id)
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return false;
     }
 
     Stmt stmt(mDb, "DELETE FROM items WHERE type = ?1 AND id = ?2;");
+
     if (!stmt.Ok())
     {
         LogFailure("Prepare remove", mDb);
@@ -464,29 +489,34 @@ bool JsonStore::Remove(std::string_view type, std::string_view id)
         LogFailure("Remove", mDb);
         return false;
     }
+
     return true;
 }
 
 std::int64_t JsonStore::RemoveAllOfType(std::string_view type)
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return 0;
     }
 
     Stmt stmt(mDb, "DELETE FROM items WHERE type = ?1;");
+
     if (!stmt.Ok())
     {
         return 0;
     }
 
     stmt.BindText(1, type);
+
     if (stmt.Step() != SQLITE_DONE)
     {
         LogFailure("RemoveAllOfType", mDb);
         return 0;
     }
+
     return sqlite3_changes(mDb);
 }
 
@@ -495,12 +525,14 @@ std::vector<StoreItem> JsonStore::List(std::string_view type) const
     std::vector<StoreItem> result;
 
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return result;
     }
 
     Stmt stmt(mDb, "SELECT id, json, updated_at FROM items WHERE type = ?1 ORDER BY id;");
+
     if (!stmt.Ok())
     {
         LogFailure("Prepare list", mDb);
@@ -508,6 +540,7 @@ std::vector<StoreItem> JsonStore::List(std::string_view type) const
     }
 
     stmt.BindText(1, type);
+
     while (stmt.Step() == SQLITE_ROW)
     {
         StoreItem item;
@@ -517,6 +550,7 @@ std::vector<StoreItem> JsonStore::List(std::string_view type) const
         item.updatedAt = stmt.ColumnInt64(2);
         result.push_back(std::move(item));
     }
+
     return result;
 }
 
@@ -525,18 +559,21 @@ std::vector<std::string> JsonStore::ListIds(std::string_view type) const
     std::vector<std::string> result;
 
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return result;
     }
 
     Stmt stmt(mDb, "SELECT id FROM items WHERE type = ?1 ORDER BY id;");
+
     if (!stmt.Ok())
     {
         return result;
     }
 
     stmt.BindText(1, type);
+
     while (stmt.Step() == SQLITE_ROW)
     {
         result.push_back(stmt.ColumnText(0));
@@ -548,12 +585,14 @@ std::vector<std::string> JsonStore::ListIds(std::string_view type) const
 std::int64_t JsonStore::Count(std::string_view type) const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return 0;
     }
 
     Stmt stmt(mDb, "SELECT COUNT(*) FROM items WHERE type = ?1;");
+
     if (!stmt.Ok())
     {
         return 0;
@@ -566,6 +605,7 @@ std::int64_t JsonStore::Count(std::string_view type) const
 std::int64_t JsonStore::MaxUpdatedAt(std::string_view type) const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return 0;
@@ -574,18 +614,22 @@ std::int64_t JsonStore::MaxUpdatedAt(std::string_view type) const
     if (type.empty())
     {
         Stmt stmt(mDb, "SELECT IFNULL(MAX(updated_at), 0) FROM items;");
+
         if (!stmt.Ok())
         {
             return 0;
         }
+
         return stmt.Step() == SQLITE_ROW ? stmt.ColumnInt64(0) : 0;
     }
 
     Stmt stmt(mDb, "SELECT IFNULL(MAX(updated_at), 0) FROM items WHERE type = ?1;");
+
     if (!stmt.Ok())
     {
         return 0;
     }
+
     stmt.BindText(1, type);
     return stmt.Step() == SQLITE_ROW ? stmt.ColumnInt64(0) : 0;
 }
@@ -593,18 +637,21 @@ std::int64_t JsonStore::MaxUpdatedAt(std::string_view type) const
 std::optional<std::string> JsonStore::GetMeta(std::string_view key) const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return std::nullopt;
     }
 
     Stmt stmt(mDb, "SELECT value FROM meta WHERE key = ?1;");
+
     if (!stmt.Ok())
     {
         return std::nullopt;
     }
 
     stmt.BindText(1, key);
+
     if (stmt.Step() != SQLITE_ROW)
     {
         return std::nullopt;
@@ -616,6 +663,7 @@ std::optional<std::string> JsonStore::GetMeta(std::string_view key) const
 bool JsonStore::SetMeta(std::string_view key, std::string_view value)
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return false;
@@ -623,6 +671,7 @@ bool JsonStore::SetMeta(std::string_view key, std::string_view value)
 
     Stmt stmt(mDb, "INSERT INTO meta(key, value) VALUES(?1, ?2) "
                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value;");
+
     if (!stmt.Ok())
     {
         LogFailure("Prepare set-meta", mDb);
@@ -637,12 +686,14 @@ bool JsonStore::SetMeta(std::string_view key, std::string_view value)
         LogFailure("SetMeta", mDb);
         return false;
     }
+
     return true;
 }
 
 bool JsonStore::Transact(const std::function<bool()>& work)
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return false;
@@ -655,6 +706,7 @@ bool JsonStore::Transact(const std::function<bool()>& work)
     {
         const std::string savepoint = "jsonstore_sp_" + std::to_string(mTransactionDepth);
         std::string savepointError;
+
         if (!ExecLocked(("SAVEPOINT " + savepoint + ";").c_str(), savepointError))
         {
             std::cerr << "[JsonStore] Could not create savepoint: " << savepointError << std::endl;
@@ -684,6 +736,7 @@ bool JsonStore::Transact(const std::function<bool()>& work)
             // ROLLBACK TO leaves the savepoint on the stack, so it still has to be
             // released afterwards or the transaction keeps growing.
             std::string rollbackError;
+
             if (!ExecLocked(("ROLLBACK TO " + savepoint + ";").c_str(), rollbackError))
             {
                 std::cerr << "[JsonStore] Savepoint rollback failed: " << rollbackError << std::endl;
@@ -691,6 +744,7 @@ bool JsonStore::Transact(const std::function<bool()>& work)
         }
 
         std::string releaseError;
+
         if (!ExecLocked(("RELEASE " + savepoint + ";").c_str(), releaseError))
         {
             std::cerr << "[JsonStore] Savepoint release failed: " << releaseError << std::endl;
@@ -700,6 +754,7 @@ bool JsonStore::Transact(const std::function<bool()>& work)
     }
 
     std::string error;
+
     if (!ExecLocked("BEGIN IMMEDIATE;", error))
     {
         std::cerr << "[JsonStore] Could not begin transaction: " << error << std::endl;
@@ -727,10 +782,12 @@ bool JsonStore::Transact(const std::function<bool()>& work)
     if (!succeeded)
     {
         std::string rollbackError;
+
         if (!ExecLocked("ROLLBACK;", rollbackError))
         {
             std::cerr << "[JsonStore] Rollback failed: " << rollbackError << std::endl;
         }
+
         return false;
     }
 
@@ -743,18 +800,21 @@ bool JsonStore::Transact(const std::function<bool()>& work)
         (void)ExecLocked("ROLLBACK;", rollbackError);
         return false;
     }
+
     return true;
 }
 
 std::vector<std::string> JsonStore::RunCheckLocked(const char* pragma) const
 {
     Stmt stmt(mDb, pragma);
+
     if (!stmt.Ok())
     {
         return {std::string{"could not run "} + pragma};
     }
 
     std::vector<std::string> problems;
+
     while (stmt.Step() == SQLITE_ROW)
     {
         // A healthy database reports the single row "ok".
@@ -763,6 +823,7 @@ std::vector<std::string> JsonStore::RunCheckLocked(const char* pragma) const
             problems.push_back(std::move(row));
         }
     }
+
     return problems;
 }
 
@@ -774,6 +835,7 @@ std::vector<std::string> JsonStore::QuickCheckLocked() const
 std::vector<std::string> JsonStore::IntegrityCheck() const
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return {"store is not open"};
@@ -785,6 +847,7 @@ std::vector<std::string> JsonStore::IntegrityCheck() const
 void JsonStore::Checkpoint()
 {
     std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     if (mDb == nullptr)
     {
         return;
@@ -796,5 +859,4 @@ void JsonStore::Checkpoint()
     (void)ExecLocked("PRAGMA wal_checkpoint(TRUNCATE);", error);
     (void)ExecLocked("PRAGMA optimize;", error);
 }
-
 } // namespace guitarfx::storage

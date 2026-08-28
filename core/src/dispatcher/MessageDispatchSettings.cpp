@@ -4,7 +4,6 @@
 
 namespace guitarfx
 {
-
 bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "setUserInputCalibrationTrainingActive")
@@ -13,9 +12,11 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
         c.ApplyUserInputCalibrationSettingsFromAppSettings();
         return true;
     }
+
     if (type == "setSetting")
     {
         const std::string key = msg.value("key", "");
+
         if (key.empty() || !msg.contains("value"))
         {
             return true;
@@ -37,15 +38,18 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
         {
             c.ApplyUserInputCalibrationSettingsFromAppSettings();
         }
+
         if (key == "audio.dsp.nominalOperatingLevelDbfs" || key == "audio.dsp.outputProtectionCeilingDbfs")
         {
             c.ApplyDspLevelTargetSettingsFromAppSettings();
             c.mPendingStateBroadcast = true;
         }
+
         if (PluginController::IsNamQualitySettingKey(key))
         {
             c.ApplyNamQualitySettings();
         }
+
         if (key == "audio.nam.interfaceCalibrationLevelDbu" || key == "audio.nam.autoInputCalibration")
         {
             c.ApplyNamInterfaceCalibrationFromAppSettings();
@@ -56,12 +60,14 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
         c.SaveAppSettings();
         return true;
     }
+
     if (type == "uiSettingsChanged")
     {
         if (msg.contains("settings") && msg["settings"].is_object())
         {
             c.mUiSettings = msg["settings"];
             c.mAppSettings["uiSettings"] = c.mUiSettings;
+
             // Legacy flattened aliases, kept so an older build reading this store still
             // finds the zoom and window rect. Only ApplyUiSettingsFromAppSettings' fallback
             // reads them back here.
@@ -69,26 +75,32 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
             {
                 c.mAppSettings["uiZoom"] = c.mUiSettings["zoom"];
             }
+
             if (c.mUiSettings.contains("bounds"))
             {
                 c.mAppSettings["uiBounds"] = c.mUiSettings["bounds"];
             }
+
             c.SaveAppSettings();
             c.mHost.NotifyStateChanged();
             return true;
         }
+
         if (msg.contains("zoom"))
         {
             c.mAppSettings["uiZoom"] = msg["zoom"];
         }
+
         if (msg.contains("theme"))
         {
             c.mAppSettings["theme"] = msg["theme"];
         }
+
         c.SaveAppSettings();
         c.mHost.NotifyStateChanged();
         return true;
     }
+
     if (type == "uiViewStateChanged")
     {
         if (msg.contains("viewState") && msg["viewState"].is_object())
@@ -97,8 +109,10 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
             c.mHost.NotifyStateChanged();
             return true;
         }
+
         return true;
     }
+
     if (type == "uiVisibility")
     {
         // Gates the periodic telemetry feeds (signal diagnostics, DSP performance). Absent
@@ -111,7 +125,7 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
         c.mPresetMixer.SetSignalDiagnosticsEnabled(visible);
         return true;
     }
+
     return false;
 }
-
 } // namespace guitarfx

@@ -53,6 +53,7 @@ class DualLaneExecutor
         }
 
         bool expected = false;
+
         if (!mBusy.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
         {
             return false;
@@ -92,6 +93,7 @@ class DualLaneExecutor
     DualLaneExecutor()
     {
         const unsigned int hw = std::thread::hardware_concurrency();
+
         if (hw < 2)
         {
             return;
@@ -134,7 +136,9 @@ class DualLaneExecutor
         {
             return;
         }
+
         auto* typed = static_cast<JobContext*>(ctx);
+
         if (typed->fn)
         {
             (*typed->fn)();
@@ -144,6 +148,7 @@ class DualLaneExecutor
     void WorkerLoop()
     {
         std::uint32_t lastGeneration = 0;
+
         while (true)
         {
             {
@@ -163,6 +168,7 @@ class DualLaneExecutor
 
             auto* thunk = mWorkerThunk.load(std::memory_order_acquire);
             void* context = mWorkerContext.load(std::memory_order_acquire);
+
             if (thunk)
             {
                 thunk(context);

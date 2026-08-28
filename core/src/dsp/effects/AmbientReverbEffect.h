@@ -163,6 +163,7 @@ class AmbientReverbEffect : public EffectProcessor
 
             float earlyL = preL * 0.38f;
             float earlyR = preR * 0.38f;
+
             for (size_t tap = 0; tap < kEarlyTapCount; ++tap)
             {
                 earlyL += ReadFromDelay(mPreDelayL, mPreDelayWrite, mPreDelaySamples + mEarlyTapSamples[tap]) *
@@ -182,6 +183,7 @@ class AmbientReverbEffect : public EffectProcessor
             const float sinPhi = FastSin(phaseF);
             const float cosPhi = FastCos(phaseF);
             mModPhase += mModPhaseInc;
+
             if (mModPhase >= kTwoPi)
             {
                 mModPhase -= kTwoPi;
@@ -192,6 +194,7 @@ class AmbientReverbEffect : public EffectProcessor
 
             float combSumL = 0.0f;
             float combSumR = 0.0f;
+
             for (size_t combIndex = 0; combIndex < kCombCount; ++combIndex)
             {
                 // Additive modulation: sin(φ) + sin(φ+offset) via angle-addition identity.
@@ -223,6 +226,7 @@ class AmbientReverbEffect : public EffectProcessor
                 {
                     mCombWriteL[combIndex] = 0;
                 }
+
                 if (++mCombWriteR[combIndex] >= mCombBufferR[combIndex].size())
                 {
                     mCombWriteR[combIndex] = 0;
@@ -271,6 +275,7 @@ class AmbientReverbEffect : public EffectProcessor
             {
                 outputs[0][sampleIndex] = inL * dryMix + wetL * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][sampleIndex] = inR * dryMix + wetR * wetMix;
@@ -338,42 +343,52 @@ class AmbientReverbEffect : public EffectProcessor
         {
             return mDecay;
         }
+
         if (key == "space")
         {
             return mSpace;
         }
+
         if (key == "diffusion")
         {
             return mDiffusionAmount;
         }
+
         if (key == "preDelay")
         {
             return mPreDelayMs;
         }
+
         if (key == "tone")
         {
             return mTone;
         }
+
         if (key == "width")
         {
             return mWidth;
         }
+
         if (key == "modRate")
         {
             return mModRateHz;
         }
+
         if (key == "modDepth")
         {
             return mModDepth;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "outputGain")
         {
             return mOutputGainDb;
         }
+
         return 0.0;
     }
 
@@ -420,6 +435,7 @@ class AmbientReverbEffect : public EffectProcessor
         {
             return 0.0f;
         }
+
         const size_t back = std::min(delaySamples, buffer.size() - 1);
         const size_t readPos = (writePos + buffer.size() - back) % buffer.size();
         return buffer[readPos];
@@ -444,10 +460,12 @@ class AmbientReverbEffect : public EffectProcessor
         const float delayed = ReadFromDelayFractional(buffer, writePos, delaySamples);
         const float output = delayed - input * gain;
         buffer[writePos] = input + delayed * gain;
+
         if (++writePos >= buffer.size())
         {
             writePos = 0;
         }
+
         return output;
     }
 
@@ -459,6 +477,7 @@ class AmbientReverbEffect : public EffectProcessor
             {
                 continue;
             }
+
             if (inputs && inputs[channel])
             {
                 std::copy_n(inputs[channel], numSamples, outputs[channel]);

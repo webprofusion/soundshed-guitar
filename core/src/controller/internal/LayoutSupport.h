@@ -20,7 +20,6 @@ class FileSystem;
 
 namespace guitarfx::controller_detail
 {
-
 /// Index file listing every known effect layout.
 [[nodiscard]] std::filesystem::path ResolveEffectLayoutsSettingsPath(const FileSystem& fileSystem);
 
@@ -33,5 +32,4 @@ void SaveEffectLayoutsSettings(const FileSystem& fileSystem, const nlohmann::jso
 [[nodiscard]] std::filesystem::path ResolveLayoutDir(const FileSystem& fileSystem, const std::string& layoutId);
 
 [[nodiscard]] std::filesystem::path ResolveLayoutFilePath(const FileSystem& fileSystem, const std::string& layoutId);
-
 } // namespace guitarfx::controller_detail

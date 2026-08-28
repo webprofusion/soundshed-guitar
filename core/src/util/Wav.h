@@ -12,7 +12,6 @@ enum class SampleRateConversionQuality;
 
 namespace guitarfx::util
 {
-
 struct DecodedWav
 {
     double sampleRate = 0.0;
@@ -51,5 +50,4 @@ struct WavHeaderInfo
 /// Reads just the header of a WAV file. `valid` is false when the file is
 /// missing or is not a readable RIFF/WAVE container.
 [[nodiscard]] WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath);
-
 } // namespace guitarfx::util

@@ -16,7 +16,6 @@
 
 namespace guitarfx
 {
-
 struct WasmMetadataEntry
 {
     std::string key;
@@ -153,5 +152,4 @@ class WasmEffect final : public EffectProcessor
 };
 
 void RegisterWasmEffect();
-
 } // namespace guitarfx

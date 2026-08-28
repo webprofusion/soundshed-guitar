@@ -28,7 +28,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::json& payload)
 {
     // Updates a single DSP parameter on a graph node by nodeId/paramKey
@@ -38,18 +37,21 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
     // Prefer an explicit presetId from the payload; fall back to the active preset ID so
     // that effects whose instance is keyed by a real UUID (not "p1") still receive the update.
     std::string presetId = payload.value("presetId", std::string{});
+
     if (presetId.empty())
     {
         presetId = mActivePresetId.empty() ? "p1" : mActivePresetId;
     }
 
     auto* graph = ResolveEditTarget();
+
     if (!graph)
     {
         return;
     }
 
     auto* node = graph->FindNode(nodeId);
+
     if (!node)
     {
         return;
@@ -61,12 +63,14 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
         std::lock_guard<std::mutex> lock(mDSPMutex);
         mPresetMixer.SetNodeParam(presetId, nodeId, paramKey, value);
     }
+
     // Some parameters (e.g. the convolution low-latency toggle) change a node's
     // processing latency. Re-report total plugin latency so the host updates PDC.
     if (paramKey == "lowLatency")
     {
         UpdateHostLatency();
     }
+
     mActivePresetJson = mActivePreset ? PresetStorage::SerializeToJson(*mActivePreset) : "{}";
 }
 
@@ -74,20 +78,24 @@ void PluginController::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::j
 {
     std::string nodeId = payload.value("nodeId", "");
     bool enabled = payload.value("enabled", true);
+
     if (payload.contains("bypassed"))
     {
         enabled = !payload.value("bypassed", false);
     }
+
     const std::string fallbackId = mActivePresetId.empty() ? "p1" : mActivePresetId;
     std::string presetId = payload.value("presetId", fallbackId);
 
     auto* graph = ResolveEditTarget();
+
     if (!graph)
     {
         return;
     }
 
     auto* node = graph->FindNode(nodeId);
+
     if (!node)
     {
         return;
@@ -124,12 +132,14 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
         AppendSessionLog("Hosted plugin capture requested presetId=" + presetId + ", nodeId=" + nodeId);
         key = kHostedPluginStateConfigKey;
         value = mPresetMixer.GetNodeConfig(presetId, nodeId, key);
+
         if (value.empty() && !mActivePresetId.empty() && mActivePresetId != presetId)
         {
             // The UI can address the focused preset by an id the mixer slot does not answer
             // to yet. Prefer an answer over a spurious "capture failed".
             value = mPresetMixer.GetNodeConfig(mActivePresetId, nodeId, key);
         }
+
         if (value.empty())
         {
             AppendSessionLog("Hosted plugin capture failed presetId=" + presetId + ", nodeId=" + nodeId +
@@ -148,6 +158,7 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
     {
         auto* graph = ResolveEditTarget();
         auto* node = graph ? graph->FindNode(nodeId) : nullptr;
+
         if (!node)
         {
             return;
@@ -193,10 +204,12 @@ void PluginController::HandleUpdateSignalPathNodeConfigRequest(const nlohmann::j
 void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& payload)
 {
     std::string nodeId = payload.value("nodeId", "");
+
     if (nodeId.empty())
     {
         return;
     }
+
     const bool openPluginEditorAfterLoad = payload.value("openPluginEditorAfterLoad", false);
 
     // Swapping any node's resource rebuilds the whole chain, so unrelated hosted plugins
@@ -207,26 +220,32 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     const std::string exposedResourceId = payload.value("exposedResourceId", "");
 
     ResourceRef ref;
+
     if (payload.contains("resourceType"))
     {
         ref.resourceType = payload["resourceType"].get<std::string>();
     }
+
     if (payload.contains("resourceId"))
     {
         ref.resourceId = payload["resourceId"].get<std::string>();
     }
+
     if (payload.contains("filePath"))
     {
         ref.filePath = payload["filePath"].get<std::string>();
     }
+
     if (payload.contains("embeddedId"))
     {
         ref.embeddedId = payload["embeddedId"].get<std::string>();
     }
+
     if (payload.contains("parameterId"))
     {
         ref.parameterId = payload["parameterId"].get<std::string>();
     }
+
     if (payload.contains("parameterValue") && payload["parameterValue"].is_number())
     {
         ref.parameterValue = payload["parameterValue"].get<double>();
@@ -236,9 +255,11 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     {
         auto* targetGraph = ResolveEditTarget();
         auto* targetNode = targetGraph ? targetGraph->FindNode(nodeId) : nullptr;
+
         if (targetNode && targetNode->type.rfind("composite:", 0) == 0)
         {
             const std::string definitionId = targetNode->type.substr(std::string("composite:").size());
+
             if (const auto* definition = mCompositeLibrary.GetDefinition(definitionId))
             {
                 const auto exposedIt = std::find_if(
@@ -251,10 +272,12 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
                     {
                         ref.resourceType = exposedIt->resourceType;
                     }
+
                     if (ref.parameterId.empty() && !exposedIt->parameterId.empty())
                     {
                         ref.parameterId = exposedIt->parameterId;
                     }
+
                     if (!ref.parameterValue.has_value() && exposedIt->parameterValue.has_value())
                     {
                         ref.parameterValue = *exposedIt->parameterValue;
@@ -288,12 +311,14 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
 
         auto* targetGraph = ResolveEditTarget();
+
         if (!targetGraph)
         {
             return;
         }
 
         auto* target = targetGraph->FindNode(nodeId);
+
         if (!target)
         {
             return;
@@ -308,6 +333,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
 
         ResourceRef& slot = target->resources[static_cast<size_t>(resourceIndex)];
+
         if (!ref.resourceType.empty())
         {
             slot.resourceType = ref.resourceType;
@@ -316,6 +342,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         // A clear is signalled by empty resourceId + empty filePath with no parameterValue update.
         // (Contrast with a blend-value-only update which also sends empty IDs but includes parameterValue.)
         const bool isClearOperation = ref.resourceId.empty() && ref.filePath.empty() && !ref.parameterValue.has_value();
+
         if (isClearOperation)
         {
             slot.resourceId.clear();
@@ -331,28 +358,34 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
                 slot.resourceId = ref.resourceId;
                 slot.filePath.clear();
             }
+
             if (!ref.filePath.empty())
             {
                 slot.filePath = ref.filePath;
                 slot.resourceId.clear();
             }
+
             if (!ref.embeddedId.empty())
             {
                 slot.embeddedId = ref.embeddedId;
             }
+
             if (!ref.parameterId.empty())
             {
                 slot.parameterId = ref.parameterId;
             }
+
             if (ref.parameterValue.has_value())
             {
                 slot.parameterValue = ref.parameterValue;
             }
+
             if (!ref.parameters.empty())
             {
                 slot.parameters = ref.parameters;
             }
         }
+
         const ResourceRef selectedRef = slot;
 
         if (ClearStaleHostedPluginState(*target, previousPluginResourceKey))
@@ -380,6 +413,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         {
             ResetNamNodeLevelState(nodeId);
         }
+
         if (appliedPreset && ReportHostedPluginResourceLoadFailure(nodeId, selectedRef, resourceIndex))
         {
             DiscardFailedHostedPluginResourceSelection(nodeId, selectedRef, resourceIndex);
@@ -389,6 +423,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             NotifyHostedPluginResourceLoadCompleted(nodeId, selectedRef, resourceIndex);
             requestHostedPluginEditorOpen(nodeId, selectedRef);
         }
+
         return;
     }
 
@@ -396,6 +431,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     {
         auto* fpGraph = ResolveEditTarget();
         auto* node = fpGraph ? fpGraph->FindNode(nodeId) : nullptr;
+
         if (node && !node->resources.empty())
         {
             const std::string previousPluginResourceKey = HostedPluginResourceKey(*node);
@@ -429,6 +465,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             {
                 ResetNamNodeLevelState(node->id);
             }
+
             if (appliedPreset && ReportHostedPluginResourceLoadFailure(nodeId, selectedRef))
             {
                 DiscardFailedHostedPluginResourceSelection(nodeId, selectedRef);
@@ -438,6 +475,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
                 NotifyHostedPluginResourceLoadCompleted(nodeId, selectedRef);
                 requestHostedPluginEditorOpen(nodeId, selectedRef);
             }
+
             return;
         }
     }
@@ -455,11 +493,13 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
     if (mActivePreset)
     {
         auto* node = mActivePreset->graph.FindNode(nodeId);
+
         if (node && IsNamEffectType(node->type) && !node->resources.empty() && node->resources.front().IsValid())
         {
             ResetNamNodeLevelState(nodeId);
         }
     }
+
     if (updatedResource && ReportHostedPluginResourceLoadFailure(nodeId, ref))
     {
         DiscardFailedHostedPluginResourceSelection(nodeId, ref);
@@ -492,18 +532,22 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
                                   payload["name"] = util::PathToUtf8(result.path.stem());
                                   payload["category"] = category.empty() ? std::string{"Local"} : category;
                                   payload["metadata"] = nlohmann::json::object({{"provider", kLocalResourceProvider}});
+
                                   if (resourceIndex >= 0)
                                   {
                                       payload["resourceIndex"] = resourceIndex;
                                   }
+
                                   if (!exposedResourceId.empty())
                                   {
                                       payload["exposedResourceId"] = exposedResourceId;
                                   }
+
                                   if (openPluginEditorAfterLoad)
                                   {
                                       payload["openPluginEditorAfterLoad"] = true;
                                   }
+
                                   HandleSaveLocalLibraryResourceRequest(payload);
                               }
                               else
@@ -513,14 +557,17 @@ void PluginController::HandleBrowseNodeResourceRequest(const nlohmann::json& pay
                                   nlohmann::json cancelMsg{{"type", "nodeResourceBrowseCancelled"},
                                                            {"nodeId", nodeId},
                                                            {"resourceType", resourceType}};
+
                                   if (resourceIndex >= 0)
                                   {
                                       cancelMsg["resourceIndex"] = resourceIndex;
                                   }
+
                                   if (!exposedResourceId.empty())
                                   {
                                       cancelMsg["exposedResourceId"] = exposedResourceId;
                                   }
+
                                   SendMessageToUI(cancelMsg.dump());
                               }
                           });
@@ -544,6 +591,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     double edgeGain = 1.0;
 
     const auto edgeIt = payload.find("edge");
+
     if (edgeIt != payload.end() && edgeIt->is_object())
     {
         edgeFrom = edgeIt->value("from", "");
@@ -560,6 +608,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     }
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Add node failed", "No active preset or composite");
@@ -580,6 +629,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     {
         chosenEdgeIt = std::find_if(edges.begin(), edges.end(),
                                     [&](const GraphEdge& e) { return e.from == insertAfter && e.fromPort == 0; });
+
         if (chosenEdgeIt == edges.end())
         {
             chosenEdgeIt =
@@ -594,6 +644,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     }
 
     const std::string resolvedEffectType = EffectRegistry::Instance().Resolve(effectType);
+
     if (resolvedEffectType == EffectGuids::kSplitter)
     {
         auto& graph = *targetGraph;
@@ -656,6 +707,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
             ApplyPreset(*mActivePreset);
             BroadcastState();
         }
+
         return;
     }
 
@@ -666,24 +718,29 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     newNode.enabled = true;
 
     const auto effectInfoOpt = EffectRegistry::Instance().GetTypeInfo(resolvedEffectType);
+
     if (effectInfoOpt)
     {
         newNode.category = effectInfoOpt->category;
         newNode.label = effectInfoOpt->displayName;
+
         for (const auto& p : effectInfoOpt->parameters)
         {
             newNode.params[p.id] = p.defaultValue;
         }
+
         // Prefer the preset the effect nominates as its starting point; fall back
         // to the first factory preset for effects that don't mark one.
         auto factoryPreset =
             std::find_if(effectInfoOpt->presets.begin(), effectInfoOpt->presets.end(),
                          [](const EffectPresetDefinition& preset) { return preset.isFactory && preset.isDefault; });
+
         if (factoryPreset == effectInfoOpt->presets.end())
         {
             factoryPreset = std::find_if(effectInfoOpt->presets.begin(), effectInfoOpt->presets.end(),
                                          [](const EffectPresetDefinition& preset) { return preset.isFactory; });
         }
+
         if (factoryPreset != effectInfoOpt->presets.end())
         {
             for (const auto& [key, value] : factoryPreset->parameters)
@@ -728,7 +785,9 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
             {
                 continue;
             }
+
             const auto resource = DeserializeResourceRef(resourceJson);
+
             if (resource.IsValid())
             {
                 newNode.resources.push_back(resource);
@@ -740,10 +799,12 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     {
         newNode.label = labelOverride;
     }
+
     if (!categoryOverride.empty())
     {
         newNode.category = categoryOverride;
     }
+
     RefreshWasmNodeDescriptor(newNode);
 
     const std::string nextNodeId = chosenEdgeIt->to;
@@ -788,6 +849,7 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
     CaptureLiveHostedPluginStateIntoActivePreset();
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Split failed", "No active preset or composite");
@@ -795,6 +857,7 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
     }
 
     const auto edgeIt = payload.find("edge");
+
     if (edgeIt == payload.end() || !edgeIt->is_object())
     {
         ReportErrorToUI("Split failed", "Missing edge payload");
@@ -805,6 +868,7 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
     const std::string to = edgeIt->value("to", "");
     const int fromPort = edgeIt->value("fromPort", 0);
     const int toPort = edgeIt->value("toPort", 0);
+
     if (from.empty() || to.empty())
     {
         ReportErrorToUI("Split failed", "Edge is missing from/to");
@@ -815,6 +879,7 @@ void PluginController::HandleSplitSignalPathEdgeRequest(const nlohmann::json& pa
     auto targetEdgeIt = std::find_if(edges.begin(), edges.end(), [&](const GraphEdge& e) {
         return e.from == from && e.to == to && e.fromPort == fromPort && e.toPort == toPort;
     });
+
     if (targetEdgeIt == edges.end())
     {
         ReportErrorToUI("Split failed", "Target edge not found");
@@ -887,6 +952,7 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
     CaptureLiveHostedPluginStateIntoActivePreset();
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Collapse split failed", "No active preset or composite");
@@ -895,6 +961,7 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
 
     const std::string splitterId = payload.value("splitterId", "");
     const std::string mixerId = payload.value("mixerId", "");
+
     if (splitterId.empty() || mixerId.empty())
     {
         ReportErrorToUI("Collapse split failed", "Missing splitterId/mixerId");
@@ -912,10 +979,12 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
         {
             splitterOut.push_back(&e);
         }
+
         if (e.from == mixerId)
         {
             mixerOut = &e;
         }
+
         if (e.to == splitterId)
         {
             splitterIn = &e;
@@ -931,6 +1000,7 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
     const bool branchesEmpty =
         !splitterOut.empty() &&
         std::all_of(splitterOut.begin(), splitterOut.end(), [&](const GraphEdge* e) { return e && e->to == mixerId; });
+
     if (!branchesEmpty)
     {
         ReportErrorToUI("Collapse split failed", "Can only collapse an empty split (remove branch effects first)");
@@ -981,6 +1051,7 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     }
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Replace node failed", "No active preset or composite");
@@ -988,6 +1059,7 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     }
 
     GraphNode* node = targetGraph->FindNode(nodeId);
+
     if (!node)
     {
         ReportErrorToUI("Replace node failed", "Node not found: " + nodeId);
@@ -997,6 +1069,7 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     const auto oldEffectInfoOpt = EffectRegistry::Instance().GetTypeInfo(node->type);
     const std::string resolvedNewEffectType = EffectRegistry::Instance().Resolve(newEffectType);
     const auto newEffectInfoOpt = EffectRegistry::Instance().GetTypeInfo(resolvedNewEffectType);
+
     if (!newEffectInfoOpt)
     {
         ReportErrorToUI("Replace node failed", "Unknown effect type: " + newEffectType);
@@ -1005,6 +1078,7 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
 
     const std::string oldCategory = oldEffectInfoOpt ? oldEffectInfoOpt->category : node->category;
     const std::string requestedCategory = !categoryOverride.empty() ? categoryOverride : newEffectInfoOpt->category;
+
     if (!oldCategory.empty() && !requestedCategory.empty() && oldCategory != requestedCategory)
     {
         ReportErrorToUI("Replace node failed", "Cannot replace effect with different category");
@@ -1053,7 +1127,9 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
             {
                 continue;
             }
+
             const auto resource = DeserializeResourceRef(resourceJson);
+
             if (resource.IsValid())
             {
                 node->resources.push_back(resource);
@@ -1065,10 +1141,12 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     {
         node->label = labelOverride;
     }
+
     if (!categoryOverride.empty())
     {
         node->category = categoryOverride;
     }
+
     RefreshWasmNodeDescriptor(*node);
 
     if (IsCompositeEditMode())
@@ -1094,6 +1172,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
     int edgeFromPort = 0, edgeToPort = 0;
 
     const auto edgeIt = payload.find("edge");
+
     if (edgeIt != payload.end() && edgeIt->is_object())
     {
         edgeFrom = edgeIt->value("from", "");
@@ -1108,6 +1187,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
     }
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Reorder node failed", "No active preset or composite");
@@ -1115,11 +1195,13 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
     }
 
     const GraphNode* node = targetGraph->FindNode(nodeId);
+
     if (!node)
     {
         ReportErrorToUI("Reorder node failed", "Node not found");
         return;
     }
+
     if (node->type == "splitter" || node->type == "mixer" || node->type == EffectGuids::kSplitter ||
         node->type == EffectGuids::kMixer)
     {
@@ -1137,12 +1219,14 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
     std::size_t outgoingIndex = edgeCount;
     std::size_t incomingCount = 0;
     std::size_t outgoingCount = 0;
+
     for (std::size_t i = 0; i < edgeCount; ++i)
     {
         if (currentEdges[i].to == nodeId && incomingCount++ == 0)
         {
             incomingIndex = i;
         }
+
         if (currentEdges[i].from == nodeId && outgoingCount++ == 0)
         {
             outgoingIndex = i;
@@ -1154,6 +1238,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
         ReportErrorToUI("Reorder node failed", "Node is not fully connected (missing input or output connection)");
         return;
     }
+
     if (incomingCount > 1 || outgoingCount > 1)
     {
         ReportErrorToUI("Reorder node failed", "Node has multiple connections. Remove branch effects first.");
@@ -1161,6 +1246,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
     }
 
     std::size_t targetEdgeIndex = edgeCount;
+
     if (!edgeFrom.empty() && !edgeTo.empty())
     {
         // Dropping a node back onto one of its own connections is a no-op, not an error.
@@ -1172,12 +1258,14 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
         for (std::size_t i = 0; i < edgeCount; ++i)
         {
             const auto& e = currentEdges[i];
+
             if (e.from == edgeFrom && e.to == edgeTo && e.fromPort == edgeFromPort && e.toPort == edgeToPort)
             {
                 targetEdgeIndex = i;
                 break;
             }
         }
+
         if (targetEdgeIndex == edgeCount)
         {
             ReportErrorToUI("Reorder node failed", "Cannot find target edge");
@@ -1190,6 +1278,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
         {
             return;
         }
+
         if (!targetGraph->FindNode(targetNodeId))
         {
             ReportErrorToUI("Reorder node failed", "Target node not found");
@@ -1204,6 +1293,7 @@ void PluginController::HandleReorderSignalPathNodeRequest(const nlohmann::json& 
                 break;
             }
         }
+
         if (targetEdgeIndex == edgeCount)
         {
             ReportErrorToUI("Reorder node failed", "Cannot find target position");
@@ -1265,12 +1355,14 @@ void PluginController::HandleDeleteSignalPathNodeRequest(const nlohmann::json& p
     CaptureLiveHostedPluginStateIntoActivePreset();
 
     const std::string nodeId = payload.value("nodeId", "");
+
     if (nodeId.empty())
     {
         return;
     }
 
     SignalGraph* targetGraph = ResolveEditTarget();
+
     if (!targetGraph)
     {
         ReportErrorToUI("Delete node failed", "No active preset or composite");
@@ -1278,6 +1370,7 @@ void PluginController::HandleDeleteSignalPathNodeRequest(const nlohmann::json& p
     }
 
     const GraphNode* node = targetGraph->FindNode(nodeId);
+
     if (!node)
     {
         ReportErrorToUI("Delete node failed", "Node not found: " + nodeId);
@@ -1289,12 +1382,14 @@ void PluginController::HandleDeleteSignalPathNodeRequest(const nlohmann::json& p
 
     std::vector<GraphEdge*> incomingEdges;
     std::vector<GraphEdge*> outgoingEdges;
+
     for (auto& edge : edges)
     {
         if (edge.to == nodeId)
         {
             incomingEdges.push_back(&edge);
         }
+
         if (edge.from == nodeId)
         {
             outgoingEdges.push_back(&edge);
@@ -1340,15 +1435,19 @@ SignalGraph* PluginController::ResolveEditTarget()
     {
         return &mEditingComposite->innerGraph;
     }
+
     if (mActivePreset)
     {
         NormalizePresetScenes(*mActivePreset);
+
         if (auto* scene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
         {
             return &scene->graph;
         }
+
         return &mActivePreset->graph;
     }
+
     return nullptr;
 }
 
@@ -1360,8 +1459,10 @@ std::string PluginController::GetResolvedActiveSceneId() const
         {
             return mActiveSceneId;
         }
+
         return GetDefaultPresetSceneId(*mActivePreset);
     }
+
     return mActiveSceneId;
 }
 
@@ -1374,6 +1475,7 @@ void PluginController::SyncActivePresetSceneGraph()
 
     NormalizePresetScenes(*mActivePreset);
     const std::string resolvedSceneId = GetResolvedActiveSceneId();
+
     if (auto* scene = FindPresetScene(*mActivePreset, resolvedSceneId))
     {
         EnsurePresetBoundaryGainNodes(scene->graph);
@@ -1411,6 +1513,7 @@ bool PluginController::UpdateResourceForNodeType(const std::string& nodeType, co
                 return normalized;
             };
             const auto normalizedFilePath = normalizePath(filePath);
+
             for (const auto& resource : mResourceLibrary.GetResourcesByType(resourceType))
             {
                 if (normalizePath(resource.filePath) == normalizedFilePath)
@@ -1439,18 +1542,21 @@ bool PluginController::UpdateResourceForNodeType(const std::string& nodeType, co
             return true;
         }
     }
+
     return false;
 }
 
 bool PluginController::UpdateResourceForNodeId(const std::string& nodeId, const ResourceRef& ref, bool applyPreset)
 {
     auto* graph = ResolveEditTarget();
+
     if (!graph)
     {
         return false;
     }
 
     auto* node = graph->FindNode(nodeId);
+
     if (!node)
     {
         return false;
@@ -1463,6 +1569,7 @@ bool PluginController::UpdateResourceForNodeId(const std::string& nodeId, const 
     // keeps this correct regardless of what the fold touched.
     graph = ResolveEditTarget();
     node = graph ? graph->FindNode(nodeId) : nullptr;
+
     if (!node)
     {
         return false;
@@ -1500,17 +1607,20 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
     return;
 #else
     auto& registry = EffectRegistry::Instance();
+
     if (registry.Resolve(node.type) != EffectGuids::kWasmHost)
     {
         return;
     }
 
     std::optional<WasmModuleDescriptor> previousDescriptor;
+
     if (const auto existingDescriptorIt = node.config.find(WasmEffect::kDescriptorConfigKey);
         existingDescriptorIt != node.config.end())
     {
         std::string parseError;
         previousDescriptor = WasmEffect::ParseDescriptorConfig(existingDescriptorIt->second, &parseError);
+
         if (!previousDescriptor && !parseError.empty())
         {
             AppendSessionLog("WASM descriptor cache parse failed for node " + node.id + ": " + parseError);
@@ -1539,10 +1649,12 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
         }
 
         node.config.erase(WasmEffect::kDescriptorConfigKey);
+
         if (typeInfo && labelIsDefault())
         {
             node.label = typeInfo->displayName;
         }
+
         if (typeInfo && categoryIsDefault())
         {
             node.category = typeInfo->category;
@@ -1556,6 +1668,7 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
     }
 
     const auto modulePath = ResolveResourceRef(node.resources.front());
+
     if (!modulePath)
     {
         return;
@@ -1563,13 +1676,16 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
 
     std::string readError;
     const auto descriptor = WasmEffect::InspectModuleFile(*modulePath, &readError);
+
     if (!descriptor)
     {
         clearDescriptorState();
+
         if (!readError.empty())
         {
             AppendSessionLog("WASM descriptor read failed for node " + node.id + ": " + readError);
         }
+
         return;
     }
 
@@ -1580,28 +1696,34 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
     }
 
     node.config[WasmEffect::kDescriptorConfigKey] = WasmEffect::SerializeDescriptorConfig(descriptor->entries);
+
     if (labelIsDefault() && !descriptor->displayName.empty())
     {
         node.label = descriptor->displayName;
     }
+
     if (categoryIsDefault() && !descriptor->category.empty())
     {
         node.category = descriptor->category;
     }
 
     std::unordered_set<std::string> currentGuestParamIds;
+
     for (const auto& guestParam : descriptor->parameters)
     {
         currentGuestParamIds.insert(guestParam.definition.id);
+
         if (node.params.count(guestParam.definition.id) > 0)
         {
             continue;
         }
 
         double initialValue = guestParam.definition.defaultValue;
+
         if (!previousDescriptor.has_value())
         {
             const std::string legacyParamKey = "param" + std::to_string(guestParam.slot + 1);
+
             if (const auto legacyIt = node.params.find(legacyParamKey); legacyIt != node.params.end())
             {
                 initialValue = legacyIt->second;
@@ -1621,6 +1743,7 @@ void PluginController::RefreshWasmNodeDescriptor(GraphNode& node)
             }
         }
     }
+
 #endif
 }
 
@@ -1630,6 +1753,7 @@ void PluginController::EnsureBasicGraph()
     {
         return;
     }
+
     if (mActivePreset->graph.nodes.empty())
     {
         // Create a minimal input → output graph
@@ -1649,5 +1773,4 @@ void PluginController::EnsureBasicGraph()
 
     EnsurePresetBoundaryGainNodes(mActivePreset->graph);
 }
-
 } // namespace guitarfx

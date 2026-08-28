@@ -55,10 +55,12 @@ double ComputeRms(const std::vector<double>& samples)
     }
 
     double sumSquares = 0.0;
+
     for (double sample : samples)
     {
         sumSquares += sample * sample;
     }
+
     return std::sqrt(sumSquares / static_cast<double>(samples.size()));
 }
 
@@ -70,6 +72,7 @@ double ComputeRmsFrom(const std::vector<double>& samples, std::size_t start)
     }
 
     double sumSquares = 0.0;
+
     for (std::size_t i = start; i < samples.size(); ++i)
     {
         sumSquares += samples[i] * samples[i];
@@ -87,6 +90,7 @@ std::vector<double> ConvertSampleRate(const std::vector<double>& samples, double
 
     const int inputFrames = static_cast<int>(samples.size());
     const int outputFrames = guitarfx::BlockSincResampler::ComputeOutputFrameCount(inputFrames, sourceRate, targetRate);
+
     if (outputFrames <= 0)
     {
         return {};
@@ -109,9 +113,11 @@ int FindBestAlignedLag(const std::vector<double>& reference, const std::vector<d
     {
         double sumSquares = 0.0;
         std::size_t count = 0;
+
         for (std::size_t i = start; i < reference.size(); ++i)
         {
             const long long candidateIndex = static_cast<long long>(i) + static_cast<long long>(lag);
+
             if (candidateIndex < 0 || candidateIndex >= static_cast<long long>(candidate.size()))
             {
                 continue;
@@ -128,6 +134,7 @@ int FindBestAlignedLag(const std::vector<double>& reference, const std::vector<d
         }
 
         const double error = sumSquares / static_cast<double>(count);
+
         if (error < bestError)
         {
             bestError = error;
@@ -148,6 +155,7 @@ double ComputeAlignedNormalizedRmsDifference(const std::vector<double>& referenc
     for (std::size_t i = start; i < reference.size(); ++i)
     {
         const long long candidateIndex = static_cast<long long>(i) + static_cast<long long>(lag);
+
         if (candidateIndex < 0 || candidateIndex >= static_cast<long long>(candidate.size()))
         {
             continue;
@@ -187,6 +195,7 @@ std::vector<double> ReferenceConvolve(const std::vector<double>& input, const st
     for (std::size_t n = 0; n < input.size(); ++n)
     {
         double sum = 0.0;
+
         for (std::size_t k = 0; k < irLength; ++k)
         {
             // For sample index n-k, if it would be negative, use 0 (zero-padding)
@@ -195,6 +204,7 @@ std::vector<double> ReferenceConvolve(const std::vector<double>& input, const st
                 sum += input[n - k] * static_cast<double>(impulse[k]);
             }
         }
+
         output[n] = sum;
     }
 
@@ -204,6 +214,7 @@ std::vector<double> ReferenceConvolve(const std::vector<double>& input, const st
 void RegisterEffectsOnce()
 {
     static bool registered = false;
+
     if (!registered)
     {
         guitarfx::RegisterAllEffects();
@@ -221,6 +232,7 @@ std::filesystem::path WriteImpulseToWav(const std::vector<float>& impulse, doubl
     const auto path = tempDir / filename;
 
     std::ofstream file(path, std::ios::binary);
+
     if (!file)
     {
         throw std::runtime_error("Failed to create temp IR file");
@@ -262,6 +274,7 @@ std::filesystem::path WriteStereoImpulseToWav(const std::vector<float>& left, co
                                               double sampleRate)
 {
     const std::size_t length = std::min(left.size(), right.size());
+
     if (length == 0)
     {
         throw std::runtime_error("Stereo IR must have data");
@@ -275,12 +288,14 @@ std::filesystem::path WriteStereoImpulseToWav(const std::vector<float>& left, co
     const auto path = tempDir / filename;
 
     std::ofstream file(path, std::ios::binary);
+
     if (!file)
     {
         throw std::runtime_error("Failed to create temp stereo IR file");
     }
 
     std::vector<float> interleaved(length * 2);
+
     for (std::size_t i = 0; i < length; ++i)
     {
         interleaved[i * 2] = left[i];
@@ -463,6 +478,7 @@ class IRConvolutionTester
     void Convolve(std::vector<double>& samples, int channel = 0)
     {
         std::size_t offset = 0;
+
         while (offset < samples.size())
         {
             const int currentBlock = static_cast<int>(std::min<std::size_t>(mMaxBlockSize, samples.size() - offset));
@@ -474,6 +490,7 @@ class IRConvolutionTester
             for (int i = 0; i < currentBlock; ++i)
             {
                 const float sample = static_cast<float>(samples[offset + static_cast<std::size_t>(i)]);
+
                 if (channel == 0)
                 {
                     mInputBufferL[static_cast<std::size_t>(i)] = sample;
@@ -925,6 +942,7 @@ bool TestStereoChannels()
                       << channelL[i] << ")\n";
             return false;
         }
+
         if (!ApproxEqual(channelR[i], expectedR[i]))
         {
             std::cout << "FAILED on R channel at index " << i << " (expected " << expectedR[i] << ", got "
@@ -966,6 +984,7 @@ bool TestStereoIRRetention()
                       << channelL[i] << ")\n";
             return false;
         }
+
         if (!ApproxEqual(channelR[i], expectedR[i]))
         {
             std::cout << "FAILED on R channel at index " << i << " (expected " << expectedR[i] << ", got "
@@ -999,6 +1018,7 @@ bool TestRealtimeLatency()
 
     // Generate a 1-second test signal (e.g., swept frequency)
     std::vector<double> inputSignal(totalSamples);
+
     for (int i = 0; i < totalSamples; ++i)
     {
         // Create a simple sine wave swept from 100Hz to 1kHz
@@ -1053,6 +1073,7 @@ bool TestRealtimeLatency()
     // Check that we got output samples in realtime fashion
     // Count non-zero output samples in first block
     int firstNonZeroIndex = -1;
+
     for (int i = 0; i < std::min(blockSize, totalSamples); ++i)
     {
         if (std::abs(outputSignal[i]) > 1e-10)
@@ -1111,6 +1132,7 @@ bool TestAudioCleanness()
 
         // Check amplitude is reasonable (with identity IR, should be same)
         double maxVal = 0.0;
+
         for (int i = 0; i < duration; ++i)
         {
             maxVal = std::max(maxVal, std::abs(testSignal[i]));
@@ -1158,6 +1180,7 @@ bool TestLargeScaleRealtimeProcessing()
 
         // Create test signal: simple pattern (avoid LCG complexity)
         std::vector<double> signal(totalSamples);
+
         for (int i = 0; i < totalSamples; ++i)
         {
             signal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / sampleRate); // 440Hz tone
@@ -1223,6 +1246,7 @@ bool TestImpulseToStepResponse()
 
     // Expected output should be the IR itself
     std::vector<double> expected(impulseInput.size(), 0.0);
+
     for (std::size_t i = 0; i < knownIR.size() && i < expected.size(); ++i)
     {
         expected[i] = knownIR[i];
@@ -1272,6 +1296,7 @@ bool TestFrequencyResponseStability()
 
             // Generate sine wave
             std::vector<double> sineWave(samplesPerFreq);
+
             for (int i = 0; i < samplesPerFreq; ++i)
             {
                 double t = static_cast<double>(i) / sampleRate;
@@ -1319,9 +1344,11 @@ bool TestDualIRBlendEndpoints()
 
         std::vector<double> samplesA = {1.0, 0.5, -0.25, 0.125};
         tester.Convolve(samplesA);
+
         for (std::size_t i = 0; i < samplesA.size(); ++i)
         {
             const double expected = std::vector<double>{1.0, 0.5, -0.25, 0.125}[i];
+
             if (!ApproxEqual(samplesA[i], expected, 1e-5))
             {
                 std::cout << "FAILED at A endpoint index " << i << "\n";
@@ -1333,9 +1360,11 @@ bool TestDualIRBlendEndpoints()
         tester.SetCabParam("normalizeIR", 0.0); // keep normalisation off for this endpoint too
         std::vector<double> samplesB = {1.0, 0.5, -0.25, 0.125};
         tester.Convolve(samplesB);
+
         for (std::size_t i = 0; i < samplesB.size(); ++i)
         {
             const double expected = std::vector<double>{0.5, 0.25, -0.125, 0.0625}[i];
+
             if (!ApproxEqual(samplesB[i], expected, 1e-5))
             {
                 std::cout << "FAILED at B endpoint index " << i << "\n";
@@ -1360,6 +1389,7 @@ bool TestL2NormEqualizesIRLevels()
     try
     {
         std::vector<double> input(2048);
+
         for (std::size_t i = 0; i < input.size(); ++i)
         {
             input[i] = 0.5 * std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate);
@@ -1382,6 +1412,7 @@ bool TestL2NormEqualizesIRLevels()
         const double rmsB = ComputeRms(signalB);
 
         const double ratio = rmsA > 0 ? rmsB / rmsA : 0.0;
+
         if (ratio < 0.95 || ratio > 1.05)
         {
             std::cout << "FAILED (rmsA=" << rmsA << ", rmsB=" << rmsB << ", ratio=" << ratio << ")\n";
@@ -1405,6 +1436,7 @@ bool TestHighCutAttenuatesHighFrequency()
     try
     {
         std::vector<double> input(4096);
+
         for (std::size_t i = 0; i < input.size(); ++i)
         {
             input[i] = 0.5 * std::sin(2.0 * M_PI * 8000.0 * static_cast<double>(i) / kSampleRate);
@@ -1452,6 +1484,7 @@ bool TestCabIR192kHzLevelMatches48kHz()
         std::vector<float> impulse(irLength, 0.0f);
 
         const double pole = std::exp(-2.0 * M_PI * 1800.0 / sourceRate);
+
         for (std::size_t i = 0; i < impulse.size(); ++i)
         {
             const double t = static_cast<double>(i) / sourceRate;
@@ -1468,6 +1501,7 @@ bool TestCabIR192kHzLevelMatches48kHz()
 
             const std::size_t sampleCount = static_cast<std::size_t>(hostRate * 0.75);
             std::vector<double> samples(sampleCount, 0.0);
+
             for (std::size_t i = 0; i < samples.size(); ++i)
             {
                 samples[i] = 0.2 * std::sin(2.0 * M_PI * 440.0 * static_cast<double>(i) / hostRate);
@@ -1486,6 +1520,7 @@ bool TestCabIR192kHzLevelMatches48kHz()
         const double autoRatio = rms192Auto / std::max(1e-12, rms48Auto);
 
         const bool ok = ratio > 0.75 && ratio < 1.25 && autoRatio > 0.75 && autoRatio < 1.25;
+
         if (!ok)
         {
             std::cout << "FAILED (ratio=" << ratio << ", autoRatio=" << autoRatio << ", rms48=" << rms48
@@ -1513,6 +1548,7 @@ bool TestDemoRenderCabIRRateEquivalence()
         constexpr double highRate = 192000.0;
 
         std::vector<double> source48(static_cast<std::size_t>(sourceRate * 0.75), 0.0);
+
         for (std::size_t i = 0; i < source48.size(); ++i)
         {
             const double t = static_cast<double>(i) / sourceRate;
@@ -1526,6 +1562,7 @@ bool TestDemoRenderCabIRRateEquivalence()
         const std::size_t irLength = static_cast<std::size_t>(sourceRate * 0.120);
         std::vector<float> impulse(irLength, 0.0f);
         const double pole = std::exp(-2.0 * M_PI * 1500.0 / sourceRate);
+
         for (std::size_t i = 0; i < impulse.size(); ++i)
         {
             const double t = static_cast<double>(i) / sourceRate;
@@ -1549,6 +1586,7 @@ bool TestDemoRenderCabIRRateEquivalence()
             ComputeRmsFrom(rendered192At48, compareStart) / std::max(1.0e-12, ComputeRmsFrom(rendered48, compareStart));
 
         const bool ok = normalizedError < 0.18 && rmsRatio > 0.90 && rmsRatio < 1.10;
+
         if (!ok)
         {
             std::cout << "FAILED (error=" << normalizedError << ", rmsRatio=" << rmsRatio << ", lag=" << lag << ")\n";
@@ -1575,6 +1613,7 @@ bool TestDemoRenderCabIRRateEquivalence()
 bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& sampleRate)
 {
     std::ifstream file(path, std::ios::binary);
+
     if (!file)
     {
         return false;
@@ -1583,6 +1622,7 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
     // Read RIFF header
     char riff[4];
     file.read(riff, 4);
+
     if (std::memcmp(riff, "RIFF", 4) != 0)
     {
         return false;
@@ -1591,6 +1631,7 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
     file.seekg(8, std::ios::beg);
     char wave[4];
     file.read(wave, 4);
+
     if (std::memcmp(wave, "WAVE", 4) != 0)
     {
         return false;
@@ -1607,11 +1648,14 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
         char chunkId[4];
         uint32_t chunkSize;
         file.read(chunkId, 4);
+
         if (!file)
         {
             break;
         }
+
         file.read(reinterpret_cast<char*>(&chunkSize), 4);
+
         if (!file)
         {
             break;
@@ -1641,6 +1685,7 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
                 std::vector<int16_t> rawSamples(numSamples);
                 file.read(reinterpret_cast<char*>(rawSamples.data()), chunkSize);
                 samples.resize(numSamples);
+
                 for (size_t i = 0; i < numSamples; ++i)
                 {
                     samples[i] = static_cast<float>(rawSamples[i]) / 32768.0f;
@@ -1650,16 +1695,19 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
             {
                 size_t numSamples = chunkSize / 3;
                 samples.resize(numSamples);
+
                 for (size_t i = 0; i < numSamples; ++i)
                 {
                     uint8_t bytes[3];
                     file.read(reinterpret_cast<char*>(bytes), 3);
                     int32_t value = (static_cast<int32_t>(bytes[2]) << 16) | (static_cast<int32_t>(bytes[1]) << 8) |
                                     static_cast<int32_t>(bytes[0]);
+
                     if (value & 0x800000)
                     {
                         value |= 0xFF000000; // Sign extend
                     }
+
                     samples[i] = static_cast<float>(value) / 8388608.0f;
                 }
             }
@@ -1667,6 +1715,7 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
             {
                 return false; // Unsupported format
             }
+
             return true;
         }
         else
@@ -1674,6 +1723,7 @@ bool LoadWavFile(const fs::path& path, std::vector<float>& samples, double& samp
             file.seekg(chunkSize, std::ios::cur);
         }
     }
+
     return false;
 }
 
@@ -1700,11 +1750,13 @@ bool TestRealCabinetIR()
         else
         {
             irSamples.resize(4096);
+
             for (size_t i = 0; i < irSamples.size(); ++i)
             {
                 const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
                 irSamples[i] = static_cast<float>(0.9 * std::exp(-10.0 * t));
             }
+
             tester.SetImpulse(irSamples);
             std::cout << "(using synthetic long IR) ";
         }
@@ -1712,6 +1764,7 @@ bool TestRealCabinetIR()
         // Generate 1 second of test audio
         const int numSamples = static_cast<int>(kSampleRate);
         std::vector<double> testSignal(numSamples);
+
         for (int i = 0; i < numSamples; ++i)
         {
             testSignal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / kSampleRate);
@@ -1719,6 +1772,7 @@ bool TestRealCabinetIR()
 
         // Process in blocks
         const int blockSize = 512;
+
         for (int offset = 0; offset < numSamples; offset += blockSize)
         {
             int currentBlockSize = std::min(blockSize, numSamples - offset);
@@ -1760,9 +1814,11 @@ bool TestLongIRLatency()
         double irSampleRate = kSampleRate;
         const bool loadedFile =
             fs::exists(irPath) && LoadWavFile(irPath, irSamples, irSampleRate) && irSamples.size() > 64;
+
         if (!loadedFile)
         {
             irSamples.resize(4096);
+
             for (size_t i = 0; i < irSamples.size(); ++i)
             {
                 const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
@@ -1773,6 +1829,7 @@ bool TestLongIRLatency()
         // Long IRs use FFT convolution which has latency
         // The first output samples will be zeros (latency)
         IRConvolutionTester tester;
+
         if (loadedFile)
         {
             tester.SetImpulseFromFile(irPath);
@@ -1791,6 +1848,7 @@ bool TestLongIRLatency()
         // For FFT convolution, we expect some initial latency (zeros at start)
         // The latency should be at most the partition size (typically 256-512)
         int firstNonZeroIdx = -1;
+
         for (int i = 0; i < static_cast<int>(impulseInput.size()); ++i)
         {
             if (std::abs(impulseInput[i]) > 1e-10)
@@ -1802,6 +1860,7 @@ bool TestLongIRLatency()
 
         // FFT convolution has some latency, but should be reasonable
         const int maxExpectedLatency = 512; // Partition size
+
         if (firstNonZeroIdx < 0)
         {
             std::cout << "FAILED - No output detected\n";
@@ -1837,9 +1896,11 @@ bool TestMultipleLongIRs()
         std::vector<std::string> testFiles = {"421 1960.wav", "906 1960.wav", "i5 1960.wav", "test.wav"};
 
         int testedCount = 0;
+
         for (const auto& filename : testFiles)
         {
             const fs::path irPath = irDir / filename;
+
             if (!fs::exists(irPath))
             {
                 continue;
@@ -1847,6 +1908,7 @@ bool TestMultipleLongIRs()
 
             std::vector<float> irSamples;
             double irSampleRate;
+
             if (!LoadWavFile(irPath, irSamples, irSampleRate))
             {
                 continue;
@@ -1863,6 +1925,7 @@ bool TestMultipleLongIRs()
 
             // Generate test signal
             std::vector<double> testSignal(4096);
+
             for (size_t i = 0; i < testSignal.size(); ++i)
             {
                 testSignal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / kSampleRate);
@@ -1887,18 +1950,22 @@ bool TestMultipleLongIRs()
         {
             IRConvolutionTester tester;
             std::vector<float> synthetic(8192);
+
             for (size_t i = 0; i < synthetic.size(); ++i)
             {
                 const double t = static_cast<double>(i) / static_cast<double>(synthetic.size());
                 synthetic[i] = static_cast<float>(0.8 * std::exp(-12.0 * t));
             }
+
             tester.SetImpulse(synthetic);
 
             std::vector<double> testSignal(4096);
+
             for (size_t i = 0; i < testSignal.size(); ++i)
             {
                 testSignal[i] = 0.5 * std::sin(2.0 * M_PI * 440.0 * i / kSampleRate);
             }
+
             tester.Convolve(testSignal);
 
             for (size_t i = 0; i < testSignal.size(); ++i)
@@ -1942,6 +2009,7 @@ bool TestLongIRExtendedProcessing()
         if (!loadedFile)
         {
             irSamples.resize(8192);
+
             for (size_t i = 0; i < irSamples.size(); ++i)
             {
                 const double t = static_cast<double>(i) / static_cast<double>(irSamples.size());
@@ -1950,6 +2018,7 @@ bool TestLongIRExtendedProcessing()
         }
 
         IRConvolutionTester tester;
+
         if (loadedFile)
         {
             tester.SetImpulseFromFile(irPath);
@@ -1970,6 +2039,7 @@ bool TestLongIRExtendedProcessing()
 
             // Generate block of test signal
             std::vector<double> block(currentBlockSize);
+
             for (int i = 0; i < currentBlockSize; ++i)
             {
                 int sampleIdx = offset + i;
@@ -2001,7 +2071,6 @@ bool TestLongIRExtendedProcessing()
     }
 }
 #endif // GUITARFX_TEST_RESOURCES_DIR
-
 } // anonymous namespace
 
 int main()

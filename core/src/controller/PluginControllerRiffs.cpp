@@ -30,7 +30,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::HandleGetRiffLibraryRequest()
 {
     SendRiffLibraryStateToUI();
@@ -39,6 +38,7 @@ void PluginController::HandleGetRiffLibraryRequest()
 void PluginController::HandleSetRiffLibraryPathRequest(const nlohmann::json& payload)
 {
     const std::string requestedPath = payload.value("path", "");
+
     if (requestedPath.empty())
     {
         ReportErrorToUI("Riff Library", "Path is required");
@@ -56,10 +56,12 @@ void PluginController::HandleSetRiffLibraryPathRequest(const nlohmann::json& pay
             std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
             mRiffLibraryIndex = LoadRiffLibraryIndex();
             mRiffLibraryIndex["path"] = util::PathToUtf8(libraryPath);
+
             if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
             {
                 mRiffLibraryIndex["riffs"] = nlohmann::json::array();
             }
+
             SaveRiffLibraryIndex(mRiffLibraryIndex);
         }
 
@@ -74,6 +76,7 @@ void PluginController::HandleSetRiffLibraryPathRequest(const nlohmann::json& pay
 void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& payload)
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
+
     if (mRiffCapture.active)
     {
         ReportErrorToUI("Riff Capture", "Capture is already running");
@@ -81,6 +84,7 @@ void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& paylo
     }
 
     const double sampleRate = mHost.GetSampleRate();
+
     if (sampleRate <= 0.0)
     {
         ReportErrorToUI("Riff Capture", "Audio device sample rate is unavailable");
@@ -147,6 +151,7 @@ void PluginController::HandleStartRiffCaptureRequest(const nlohmann::json& paylo
 void PluginController::HandleArmRiffCaptureRequest(const nlohmann::json& payload)
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
+
     if (mRiffCapture.active || mRiffCapture.armed)
     {
         ReportErrorToUI("Riff Capture", "Capture or arm is already active");
@@ -154,6 +159,7 @@ void PluginController::HandleArmRiffCaptureRequest(const nlohmann::json& payload
     }
 
     const double sampleRate = mHost.GetSampleRate();
+
     if (sampleRate <= 0.0)
     {
         ReportErrorToUI("Riff Capture", "Audio device sample rate is unavailable");
@@ -232,6 +238,7 @@ void PluginController::HandleStopRiffCaptureRequest(const nlohmann::json& payloa
 void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
 {
     const std::string base64 = payload.value("data", std::string{});
+
     if (base64.empty())
     {
         ReportErrorToUI("Riff Library", "Dropped audio data is missing");
@@ -239,6 +246,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     }
 
     const auto bytes = util::DecodeBase64(base64);
+
     if (bytes.empty())
     {
         ReportErrorToUI("Riff Library", "Failed to decode dropped audio data");
@@ -246,6 +254,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     }
 
     const auto decodedOpt = util::DecodeAudioBytes(bytes);
+
     if (!decodedOpt)
     {
         ReportErrorToUI("Riff Library", "Unsupported audio format (expected WAV, AIFF, or MP3)");
@@ -253,6 +262,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     }
 
     const auto& decoded = *decodedOpt;
+
     if (decoded.channelSamples.empty() || decoded.channelSamples.front().empty())
     {
         ReportErrorToUI("Riff Library", "Dropped audio file has no audio samples");
@@ -260,6 +270,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     }
 
     const std::size_t frameCount = decoded.channelSamples.front().size();
+
     if (frameCount == 0)
     {
         ReportErrorToUI("Riff Library", "Dropped audio file has no audio frames");
@@ -289,6 +300,7 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     imported.right.resize(frameCount, 0.0f);
 
     const std::size_t rightChannelIndex = decoded.channelSamples.size() > 1 ? 1u : 0u;
+
     for (std::size_t i = 0; i < frameCount; ++i)
     {
         imported.left[i] = static_cast<float>(std::clamp(decoded.channelSamples[0][i], -1.0, 1.0));
@@ -321,10 +333,12 @@ void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
     msg["metronomeClickEnabled"] = captureSnapshot.config.metronomeClickEnabled;
     msg["patternType"] = captureSnapshot.config.patternType;
+
     if (!captureSnapshot.config.patternId.empty())
     {
         msg["patternId"] = captureSnapshot.config.patternId;
     }
+
     msg["source"] = "import";
     SendMessageToUI(msg.dump());
 }
@@ -334,6 +348,7 @@ void PluginController::HandleTrimCapturedRiffRequest(const nlohmann::json& paylo
     RiffCaptureRuntime captureSnapshot;
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
+
         if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
         {
             ReportErrorToUI("Riff Library", "No captured take available to trim");
@@ -385,10 +400,12 @@ void PluginController::HandleTrimCapturedRiffRequest(const nlohmann::json& paylo
     msg["timeSigNum"] = captureSnapshot.config.timeSigNum;
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
     msg["patternType"] = captureSnapshot.config.patternType;
+
     if (!captureSnapshot.config.patternId.empty())
     {
         msg["patternId"] = captureSnapshot.config.patternId;
     }
+
     msg["source"] = "trim";
     SendMessageToUI(msg.dump());
 }
@@ -396,6 +413,7 @@ void PluginController::HandleTrimCapturedRiffRequest(const nlohmann::json& paylo
 void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& payload)
 {
     const std::string takeId = payload.value("takeId", std::string{});
+
     if (takeId.empty())
     {
         ReportErrorToUI("Riff Library", "Missing takeId for edit");
@@ -403,6 +421,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     const auto take = FindRiffTakeById(takeId);
+
     if (!take)
     {
         ReportErrorToUI("Riff Library", "Take not found");
@@ -410,6 +429,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     const std::string filePath = take->value("filePath", std::string{});
+
     if (filePath.empty() || !std::filesystem::exists(filePath))
     {
         ReportErrorToUI("Riff Library", "Take WAV file is missing");
@@ -417,6 +437,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     std::ifstream input(filePath, std::ios::binary);
+
     if (!input)
     {
         ReportErrorToUI("Riff Library", "Unable to open take WAV file");
@@ -424,6 +445,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
     if (bytes.empty())
     {
         ReportErrorToUI("Riff Library", "Take WAV file is empty");
@@ -431,6 +453,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     const auto decodedOpt = util::DecodePcmWav(bytes);
+
     if (!decodedOpt)
     {
         ReportErrorToUI("Riff Library", "Unable to decode take WAV file");
@@ -438,6 +461,7 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     }
 
     const auto& decoded = *decodedOpt;
+
     if (decoded.channelSamples.empty() || decoded.channelSamples.front().empty())
     {
         ReportErrorToUI("Riff Library", "Take WAV has no audio samples");
@@ -466,11 +490,13 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     imported.bitsPerSample = decoded.bitsPerSample > 0 ? decoded.bitsPerSample : 16;
     imported.left.resize(frameCount, 0.0f);
     imported.right.resize(frameCount, 0.0f);
+
     for (std::size_t i = 0; i < frameCount; ++i)
     {
         imported.left[i] = static_cast<float>(std::clamp(decoded.channelSamples[0][i], -1.0, 1.0));
         imported.right[i] = static_cast<float>(std::clamp(decoded.channelSamples[rightChannelIndex][i], -1.0, 1.0));
     }
+
     imported.writeIndex = frameCount;
     imported.targetSamples = frameCount;
     imported.countInSamples = 0;
@@ -497,10 +523,12 @@ void PluginController::HandleLoadRiffTakeForEditRequest(const nlohmann::json& pa
     msg["timeSigDen"] = captureSnapshot.config.timeSigDen;
     msg["metronomeClickEnabled"] = captureSnapshot.config.metronomeClickEnabled;
     msg["patternType"] = captureSnapshot.config.patternType;
+
     if (!captureSnapshot.config.patternId.empty())
     {
         msg["patternId"] = captureSnapshot.config.patternId;
     }
+
     msg["source"] = "editLoad";
     msg["originalTakeId"] = takeId;
     SendMessageToUI(msg.dump());
@@ -512,11 +540,13 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
     nlohmann::json updatedLibrary = nlohmann::json::object();
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
+
         if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
         {
             ReportErrorToUI("Riff Library", "No completed take to save");
             return;
         }
+
         capture = mRiffCapture;
     }
 
@@ -525,31 +555,38 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
         capture.config.tempoBpm =
             ClampValue(payload.value("tempoBpm", capture.config.tempoBpm), kMetronomeMinBpm, kMetronomeMaxBpm);
     }
+
     if (payload.contains("timeSigNum"))
     {
         capture.config.timeSigNum = std::max(1, payload.value("timeSigNum", capture.config.timeSigNum));
     }
+
     if (payload.contains("timeSigDen"))
     {
         capture.config.timeSigDen = std::max(1, payload.value("timeSigDen", capture.config.timeSigDen));
     }
+
     if (payload.contains("bars"))
     {
         capture.config.bars = std::max(1, payload.value("bars", capture.config.bars));
     }
+
     if (payload.contains("metronomeClickEnabled"))
     {
         capture.config.metronomeClickEnabled =
             payload.value("metronomeClickEnabled", capture.config.metronomeClickEnabled);
     }
+
     if (payload.contains("patternType") && payload["patternType"].is_string())
     {
         capture.config.patternType = payload.value("patternType", capture.config.patternType);
     }
+
     if (payload.contains("patternId") && payload["patternId"].is_string())
     {
         capture.config.patternId = payload.value("patternId", std::string{});
     }
+
     if (payload.contains("presetId") && payload["presetId"].is_string())
     {
         capture.config.presetId = payload.value("presetId", capture.config.presetId);
@@ -582,34 +619,41 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
     takeJson["timeSigDen"] = capture.config.timeSigDen;
     takeJson["metronomeClickEnabled"] = capture.config.metronomeClickEnabled;
     takeJson["patternType"] = capture.config.patternType;
+
     if (!capture.config.patternId.empty())
     {
         takeJson["patternId"] = capture.config.patternId;
     }
+
     if (!capture.config.beatPattern.empty())
     {
         takeJson["beatPattern"] = capture.config.beatPattern;
     }
+
     if (!capture.config.presetId.empty())
     {
         takeJson["presetId"] = capture.config.presetId;
     }
+
     if (!capture.config.presetName.empty())
     {
         takeJson["presetName"] = capture.config.presetName;
     }
+
     takeJson["sampleRate"] = capture.sampleRate;
     takeJson["bitsPerSample"] = capture.bitsPerSample;
     takeJson["createdAt"] = BuildTimestampUtcIso();
 
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+
         if (!mRiffLibraryIndex.is_object())
         {
             mRiffLibraryIndex = nlohmann::json::object();
         }
 
         mRiffLibraryIndex["path"] = util::PathToUtf8(libraryPath);
+
         if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
         {
             mRiffLibraryIndex["riffs"] = nlohmann::json::array();
@@ -617,6 +661,7 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
 
         auto& riffs = mRiffLibraryIndex["riffs"];
         nlohmann::json* riffEntry = nullptr;
+
         for (auto& riff : riffs)
         {
             if (riff.is_object() && riff.value("id", std::string{}) == riffId)
@@ -647,26 +692,32 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
         {
             (*riffEntry)["title"] = baseTitle;
             (*riffEntry)["updatedAt"] = BuildTimestampUtcIso();
+
             if (payload.contains("categories") && payload["categories"].is_array())
             {
                 (*riffEntry)["categories"] = payload["categories"];
             }
+
             if (payload.contains("tags") && payload["tags"].is_array())
             {
                 (*riffEntry)["tags"] = payload["tags"];
             }
+
             if (payload.contains("notes") && payload["notes"].is_string())
             {
                 (*riffEntry)["notes"] = payload["notes"];
             }
+
             if (payload.contains("favorite") && payload["favorite"].is_boolean())
             {
                 (*riffEntry)["favorite"] = payload["favorite"];
             }
+
             if (!(*riffEntry).contains("takes") || !(*riffEntry)["takes"].is_array())
             {
                 (*riffEntry)["takes"] = nlohmann::json::array();
             }
+
             (*riffEntry)["takes"].push_back(takeJson);
             (*riffEntry)["preferredTakeId"] = capture.takeId;
         }
@@ -694,6 +745,7 @@ void PluginController::HandleSaveRiffTakeRequest(const nlohmann::json& payload)
 void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
 {
     const std::string riffId = payload.value("riffId", "");
+
     if (riffId.empty())
     {
         return;
@@ -704,6 +756,7 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
 
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+
         if (!mRiffLibraryIndex.is_object() || !mRiffLibraryIndex.contains("riffs") ||
             !mRiffLibraryIndex["riffs"].is_array())
         {
@@ -711,6 +764,7 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
         }
 
         auto& riffs = mRiffLibraryIndex["riffs"];
+
         for (const auto& riff : riffs)
         {
             if (!riff.is_object() || riff.value("id", std::string{}) != riffId)
@@ -719,6 +773,7 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
             }
 
             const auto takes = riff.value("takes", nlohmann::json::array());
+
             if (takes.is_array())
             {
                 for (const auto& take : takes)
@@ -727,13 +782,16 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
                     {
                         continue;
                     }
+
                     const auto runtimePath = util::PathFromUtf8(take["filePath"].get<std::string>());
+
                     if (!runtimePath.empty())
                     {
                         takeFiles.push_back(runtimePath);
                     }
                 }
             }
+
             break;
         }
 
@@ -763,6 +821,7 @@ void PluginController::HandleDeleteRiffRequest(const nlohmann::json& payload)
 void PluginController::HandleSetRiffFavoriteRequest(const nlohmann::json& payload)
 {
     const std::string riffId = payload.value("riffId", "");
+
     if (riffId.empty())
     {
         return;
@@ -771,6 +830,7 @@ void PluginController::HandleSetRiffFavoriteRequest(const nlohmann::json& payloa
     const bool favorite = payload.value("favorite", false);
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+
         if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
         {
             return;
@@ -782,6 +842,7 @@ void PluginController::HandleSetRiffFavoriteRequest(const nlohmann::json& payloa
             {
                 continue;
             }
+
             riff["favorite"] = favorite;
             riff["updatedAt"] = BuildTimestampUtcIso();
             break;
@@ -795,6 +856,7 @@ void PluginController::HandleSetRiffFavoriteRequest(const nlohmann::json& payloa
 void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
 {
     const std::string riffId = payload.value("riffId", "");
+
     if (riffId.empty())
     {
         return;
@@ -804,6 +866,7 @@ void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
     const std::string songTitle = payload.value("songTitle", std::string{});
     {
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+
         if (!mRiffLibraryIndex.contains("riffs") || !mRiffLibraryIndex["riffs"].is_array())
         {
             return;
@@ -815,7 +878,9 @@ void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
             {
                 continue;
             }
+
             riff["used"] = used;
+
             if (used)
             {
                 riff["usedSongTitle"] = songTitle;
@@ -826,6 +891,7 @@ void PluginController::HandleMarkRiffUsedRequest(const nlohmann::json& payload)
                 riff.erase("usedSongTitle");
                 riff.erase("usedAt");
             }
+
             riff["updatedAt"] = BuildTimestampUtcIso();
             break;
         }
@@ -839,6 +905,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
 {
     const std::string takeId = payload.value("takeId", "");
     const bool enableGuidance = payload.value("enableGuidance", true);
+
     if (takeId.empty())
     {
         ReportErrorToUI("Riff preview", "Missing takeId");
@@ -846,6 +913,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     }
 
     const auto take = FindRiffTakeById(takeId);
+
     if (!take)
     {
         ReportErrorToUI("Riff preview", "Take not found");
@@ -853,6 +921,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     }
 
     const std::string filePath = take->value("filePath", std::string{});
+
     if (filePath.empty() || !std::filesystem::exists(filePath))
     {
         ReportErrorToUI("Riff preview", "Take WAV file is missing");
@@ -860,6 +929,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     }
 
     std::ifstream input(filePath, std::ios::binary);
+
     if (!input)
     {
         ReportErrorToUI("Riff preview", "Unable to open take WAV file");
@@ -867,6 +937,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     }
 
     std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
     if (bytes.empty())
     {
         ReportErrorToUI("Riff preview", "Take WAV file is empty");
@@ -893,6 +964,7 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
     {
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
+
             if (enableGuidance)
             {
                 ActivateRiffGuidance(guideConfig, true);
@@ -911,16 +983,19 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
     RiffCaptureRuntime capture;
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
+
         if (!mRiffCapture.complete || mRiffCapture.left.empty() || mRiffCapture.right.empty())
         {
             ReportErrorToUI("Riff preview", "No captured take available yet");
             return;
         }
+
         capture = mRiffCapture;
     }
 
     std::vector<float> previewLeft = capture.left;
     std::vector<float> previewRight = capture.right;
+
     if (!previewLeft.empty() && !previewRight.empty())
     {
         const std::size_t totalSamples = previewLeft.size();
@@ -941,6 +1016,7 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
 
     const auto wavBytes =
         util::EncodeStereo16BitWav(previewLeft, previewRight, static_cast<int>(std::llround(capture.sampleRate)));
+
     if (wavBytes.empty())
     {
         ReportErrorToUI("Riff preview", "Unable to encode captured take");
@@ -968,6 +1044,7 @@ std::filesystem::path PluginController::ResolveRiffLibraryPath() const
     if (mAppSettings.contains(kRiffLibraryPathSettingKey) && mAppSettings[kRiffLibraryPathSettingKey].is_string())
     {
         const auto configured = util::PathFromUtf8(mAppSettings[kRiffLibraryPathSettingKey].get<std::string>());
+
         if (!configured.empty())
         {
             return configured;
@@ -988,12 +1065,14 @@ nlohmann::json PluginController::LoadRiffLibraryIndex() const
 
     nlohmann::json index =
         Store().Get(storage::ItemType::kDocument, kRiffLibraryDocumentId).value_or(nlohmann::json::object());
+
     if (!index.is_object())
     {
         index = nlohmann::json::object();
     }
 
     index["path"] = util::PathToUtf8(path);
+
     if (!index.contains("riffs") || !index["riffs"].is_array())
     {
         index["riffs"] = nlohmann::json::array();
@@ -1014,6 +1093,7 @@ nlohmann::json PluginController::LoadRiffLibraryIndex() const
             }
 
             const auto storedPath = util::PathFromUtf8(take["filePath"].get<std::string>());
+
             if (storedPath.empty())
             {
                 continue;
@@ -1044,6 +1124,7 @@ bool PluginController::SaveRiffLibraryIndex(const nlohmann::json& payload) const
     nlohmann::json normalizedPayload = payload;
 
     normalizedPayload["path"] = util::PathToUtf8(libraryPath);
+
     if (!normalizedPayload.contains("riffs") || !normalizedPayload["riffs"].is_array())
     {
         normalizedPayload["riffs"] = nlohmann::json::array();
@@ -1096,6 +1177,7 @@ std::string PluginController::BuildTimestampUtcIso() const
 std::optional<nlohmann::json> PluginController::FindRiffTakeById(const std::string& takeId) const
 {
     std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
+
     if (!mRiffLibraryIndex.is_object() || !mRiffLibraryIndex.contains("riffs") ||
         !mRiffLibraryIndex["riffs"].is_array())
     {
@@ -1108,18 +1190,22 @@ std::optional<nlohmann::json> PluginController::FindRiffTakeById(const std::stri
         {
             continue;
         }
+
         const std::string riffTitle = riff.value("title", std::string("Riff"));
         const auto takes = riff.value("takes", nlohmann::json::array());
+
         if (!takes.is_array())
         {
             continue;
         }
+
         for (const auto& take : takes)
         {
             if (!take.is_object() || take.value("id", std::string{}) != takeId)
             {
                 continue;
             }
+
             nlohmann::json result = take;
             result["title"] = riffTitle;
             return result;
@@ -1163,10 +1249,12 @@ void PluginController::FinalizeRiffCaptureLocked(bool canceled)
 
     const std::size_t written = std::min(mRiffCapture.writeIndex, mRiffCapture.targetSamples);
     const std::size_t captured = written > mRiffCapture.countInSamples ? (written - mRiffCapture.countInSamples) : 0;
+
     if (captured < mRiffCapture.left.size())
     {
         mRiffCapture.left.resize(captured);
     }
+
     if (captured < mRiffCapture.right.size())
     {
         mRiffCapture.right.resize(captured);
@@ -1225,5 +1313,4 @@ void PluginController::SendRiffLibraryStateToUI()
 
     SendMessageToUI(msg.dump());
 }
-
 } // namespace guitarfx

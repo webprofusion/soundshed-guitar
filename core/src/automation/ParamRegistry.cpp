@@ -8,7 +8,6 @@
 
 namespace guitarfx
 {
-
 void ParamRegistry::Register(const ParamRegistryEntry& entry)
 {
     mEntries[entry.address] = entry;
@@ -24,6 +23,7 @@ std::vector<ParamRegistryInfo> ParamRegistry::GetAllInfo() const
 {
     std::vector<ParamRegistryInfo> result;
     result.reserve(mEntries.size());
+
     for (const auto& [addr, entry] : mEntries)
     {
         ParamRegistryInfo info;
@@ -36,6 +36,7 @@ std::vector<ParamRegistryInfo> ParamRegistry::GetAllInfo() const
         info.isTrigger = entry.isTrigger;
         result.push_back(std::move(info));
     }
+
     std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) { return a.address < b.address; });
     return result;
 }
@@ -54,6 +55,7 @@ bool ParamRegistry::ParseNodeAddress(const std::string& address, std::string& ef
 
     // Format: node.<effectType>.<paramId>
     const auto firstDot = address.find('.', 5);
+
     if (firstDot == std::string::npos)
     {
         return false;
@@ -63,5 +65,4 @@ bool ParamRegistry::ParseNodeAddress(const std::string& address, std::string& ef
     paramId = address.substr(firstDot + 1);
     return !effectType.empty() && !paramId.empty();
 }
-
 } // namespace guitarfx

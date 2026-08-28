@@ -20,12 +20,12 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
 {
     const std::string effectType = payload.value("effectType", "");
     const std::string blendId = payload.value("blendId", "");
     const std::string layoutId = payload.value("layoutId", "");
+
     if (effectType.empty())
     {
         ReportErrorToUI("Delete layout failed", "Missing effect type");
@@ -45,43 +45,53 @@ void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
     // The document is in the store now, but the image sidecars are still files.
     const auto layoutDir = ResolveLayoutDir(mFileSystem, layoutId);
     std::error_code ec;
+
     if (std::filesystem::exists(layoutDir, ec))
     {
         std::filesystem::remove_all(layoutDir, ec);
+
         if (ec)
         {
             ReportErrorToUI("Delete layout failed", "Unable to remove the layout's image folder");
             return;
         }
     }
+
     AppendSessionLog("Layout deleted: " + layoutId);
 
     // Update associations mapping
     nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+
     if (settings.contains("associations") && settings["associations"].is_object())
     {
         auto& assoc = settings["associations"];
+
         if (assoc.contains(lookupKey) && assoc[lookupKey].is_object())
         {
             auto& entry = assoc[lookupKey];
             auto ids = entry.value("layoutIds", nlohmann::json::array());
+
             if (!ids.is_array())
             {
                 ids = nlohmann::json::array();
             }
 
             nlohmann::json updated = nlohmann::json::array();
+
             for (const auto& id : ids)
             {
                 if (id.is_string() && id.get<std::string>() == layoutId)
                 {
                     continue;
                 }
+
                 updated.push_back(id);
             }
+
             entry["layoutIds"] = updated;
 
             const std::string currentDefault = entry.value("defaultLayoutId", "");
+
             if (currentDefault == layoutId)
             {
                 if (!updated.empty() && updated[0].is_string())
@@ -101,6 +111,7 @@ void PluginController::HandleDeleteLayoutRequest(const nlohmann::json& payload)
             }
         }
     }
+
     SaveEffectLayoutsSettings(mFileSystem, settings);
 
     LoadLayoutLibrary();
@@ -141,6 +152,7 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
         [[maybe_unused]] const auto ensuredDest = mFileSystem.EnsureDirectory(destImagesDir);
 
         const auto referencedIt = payload.find("referencedImageIds");
+
         if (referencedIt != payload.end() && referencedIt->is_array())
         {
             const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
@@ -152,6 +164,7 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
                 {
                     continue;
                 }
+
                 const std::string imageId = idVal.get<std::string>();
 
                 // Search: first in other user layout image dirs, then legacy fallback dir.
@@ -166,23 +179,28 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
                         {
                             continue;
                         }
+
                         const auto imagesDir = layoutDir.path() / "images";
+
                         if (!std::filesystem::exists(imagesDir))
                         {
                             continue;
                         }
+
                         for (const auto& imgEntry : std::filesystem::directory_iterator(imagesDir, ec))
                         {
                             if (!imgEntry.is_regular_file())
                             {
                                 continue;
                             }
+
                             if (imgEntry.path().stem().string() == imageId)
                             {
                                 sourcePath = imgEntry.path();
                                 break;
                             }
                         }
+
                         if (!sourcePath.empty())
                         {
                             break;
@@ -196,10 +214,12 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
                 }
 
                 const auto destPath = destImagesDir / sourcePath.filename();
+
                 if (destPath != sourcePath)
                 {
                     std::filesystem::copy_file(sourcePath, destPath, std::filesystem::copy_options::overwrite_existing,
                                                ec);
+
                     if (ec)
                     {
                         AppendSessionLog("Failed to copy layout image " + sourcePath.generic_string() + ": " +
@@ -212,10 +232,12 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
 
     // Update association mapping
     nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+
     if (!settings.contains("associations") || !settings["associations"].is_object())
     {
         settings["associations"] = nlohmann::json::object();
     }
+
     if (!settings["associations"].contains(lookupKey) || !settings["associations"][lookupKey].is_object())
     {
         settings["associations"][lookupKey] =
@@ -224,11 +246,14 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
 
     auto& assocEntry = settings["associations"][lookupKey];
     auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+
     if (!ids.is_array())
     {
         ids = nlohmann::json::array();
     }
+
     bool found = false;
+
     for (const auto& id : ids)
     {
         if (id.is_string() && id.get<std::string>() == layoutId)
@@ -237,10 +262,12 @@ void PluginController::HandleSaveEffectLayoutRequest(const nlohmann::json& paylo
             break;
         }
     }
+
     if (!found)
     {
         ids.push_back(layoutId);
     }
+
     assocEntry["layoutIds"] = ids;
     assocEntry["defaultLayoutId"] = layoutId;
 
@@ -282,6 +309,7 @@ void PluginController::HandleExportEffectLayoutRequest(const nlohmann::json& pay
             }
 
             const auto decodedBytes = util::DecodeBase64(dataEncoded);
+
             if (decodedBytes.empty())
             {
                 SendMessageToUI(
@@ -333,11 +361,13 @@ void PluginController::HandleBrowseLayoutImageRequest(const nlohmann::json& payl
                 std::filesystem::copy_file(selectedPath, destPath, std::filesystem::copy_options::overwrite_existing);
 
                 std::ifstream imageFile(destPath, std::ios::binary);
+
                 if (!imageFile)
                 {
                     ReportErrorToUI("Image import failed", "Failed to read copied image file");
                     return;
                 }
+
                 std::vector<std::uint8_t> imageData((std::istreambuf_iterator<char>(imageFile)),
                                                     std::istreambuf_iterator<char>());
                 imageFile.close();
@@ -345,10 +375,12 @@ void PluginController::HandleBrowseLayoutImageRequest(const nlohmann::json& payl
                 const std::string base64Data = util::EncodeBase64(imageData);
                 std::string mimeType = "image/png";
                 const auto ext = selectedPath.extension().string();
+
                 if (ext == ".jpg" || ext == ".jpeg")
                 {
                     mimeType = "image/jpeg";
                 }
+
                 const std::string dataUrl = "data:" + mimeType + ";base64," + base64Data;
 
                 SendMessageToUI(nlohmann::json{
@@ -387,6 +419,7 @@ void PluginController::HandleSaveLayoutImageRequest(const nlohmann::json& payloa
     [[maybe_unused]] const auto ensuredImagesDir = mFileSystem.EnsureDirectory(imagesDir);
 
     const auto decodedBytes = util::DecodeBase64(dataEncoded);
+
     if (decodedBytes.empty())
     {
         AppendSessionLog("SaveLayoutImage: failed to decode base64 data for " + imageId);
@@ -394,6 +427,7 @@ void PluginController::HandleSaveLayoutImageRequest(const nlohmann::json& payloa
     }
 
     const auto destPath = imagesDir / fileName;
+
     if (WriteFile(destPath, decodedBytes))
     {
         AppendSessionLog("Layout image saved from import: " + destPath.generic_string());
@@ -419,12 +453,14 @@ void PluginController::LoadLayoutLibrary()
     // Each layout lives in its own subfolder: layouts/content/<layoutId>/layout.json
     // Images live in: layouts/content/<layoutId>/images/
     nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+
     if (settings.contains("associations") && settings["associations"].is_object())
     {
         for (auto it = settings["associations"].begin(); it != settings["associations"].end(); ++it)
         {
             const std::string lookupKey = it.key();
             const auto& assocEntry = it.value();
+
             if (!assocEntry.is_object())
             {
                 continue;
@@ -432,20 +468,24 @@ void PluginController::LoadLayoutLibrary()
 
             const std::string defaultLayoutId = assocEntry.value("defaultLayoutId", "");
             const auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+
             if (!ids.is_array())
             {
                 continue;
             }
 
             nlohmann::json entries = nlohmann::json::array();
+
             for (const auto& id : ids)
             {
                 if (!id.is_string())
                 {
                     continue;
                 }
+
                 const std::string layoutId = id.get<std::string>();
                 auto layoutJson = Store().Get(storage::ItemType::kLayout, layoutId);
+
                 if (!layoutJson || !layoutJson->is_object())
                 {
                     continue;
@@ -467,6 +507,7 @@ void PluginController::LoadLayoutLibrary()
             if (!entries.empty())
             {
                 library["byEffectType"][lookupKey] = entries;
+
                 if (!defaultLayoutId.empty())
                 {
                     library["defaults"][lookupKey] = defaultLayoutId;
@@ -482,6 +523,7 @@ void PluginController::LoadLayoutLibrary()
     {
         const auto bundledRoot = mHost.GetBundledAssetsPath();
         const auto factoryLayoutsDir = bundledRoot / "ui" / "assets" / "layouts";
+
         if (std::filesystem::exists(factoryLayoutsDir))
         {
             for (const auto& layoutFolder : std::filesystem::directory_iterator(factoryLayoutsDir))
@@ -492,6 +534,7 @@ void PluginController::LoadLayoutLibrary()
                 }
 
                 const auto layoutJsonPath = layoutFolder.path() / "layout.json";
+
                 if (!std::filesystem::exists(layoutJsonPath))
                 {
                     continue;
@@ -500,6 +543,7 @@ void PluginController::LoadLayoutLibrary()
                 try
                 {
                     std::ifstream input(layoutJsonPath);
+
                     if (!input)
                     {
                         continue;
@@ -516,6 +560,7 @@ void PluginController::LoadLayoutLibrary()
                     nlohmann::json layoutJson = archive["layout"];
 
                     const std::string effectType = layoutJson.value("effectType", "");
+
                     if (effectType.empty())
                     {
                         continue;
@@ -526,6 +571,7 @@ void PluginController::LoadLayoutLibrary()
 
                     // Use embedded layoutId or derive a stable one from the folder name.
                     std::string layoutId = layoutJson.value("layoutId", "");
+
                     if (layoutId.empty())
                     {
                         layoutId = "factory::" + layoutFolder.path().filename().string();
@@ -573,6 +619,7 @@ void PluginController::LoadLayoutLibrary()
                 if (entry.value("isFactory", false))
                 {
                     const std::string fid = entry.value("layoutId", "");
+
                     if (!fid.empty())
                     {
                         library["defaults"][key] = fid;
@@ -581,8 +628,10 @@ void PluginController::LoadLayoutLibrary()
                 }
             }
         }
+
         // Stamp isDefault on each entry.
         const std::string defaultId = library["defaults"].value(key, "");
+
         for (auto& entry : entries)
         {
             entry["isDefault"] = (!defaultId.empty() && entry.value("layoutId", "") == defaultId);
@@ -611,12 +660,14 @@ nlohmann::json PluginController::BuildLayoutImages()
             }
 
             const auto ext = entry.path().extension().string();
+
             if (ext != ".png" && ext != ".jpg" && ext != ".jpeg")
             {
                 continue;
             }
 
             std::ifstream imageFile(entry.path(), std::ios::binary);
+
             if (!imageFile)
             {
                 continue;
@@ -628,14 +679,17 @@ nlohmann::json PluginController::BuildLayoutImages()
 
             const std::string base64Data = util::EncodeBase64(imageData);
             std::string mimeType = "image/png";
+
             if (ext == ".jpg" || ext == ".jpeg")
             {
                 mimeType = "image/jpeg";
             }
+
             const std::string dataUrl = "data:" + mimeType + ";base64," + base64Data;
 
             const std::string imageId = entry.path().stem().string();
             bool replaced = false;
+
             for (auto& existing : images)
             {
                 if (existing.is_object() && existing.value("imageId", std::string{}) == imageId)
@@ -646,6 +700,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                     break;
                 }
             }
+
             if (!replaced)
             {
                 nlohmann::json imageRef;
@@ -659,17 +714,20 @@ nlohmann::json PluginController::BuildLayoutImages()
 
     // User layout images: one images/ folder per associated layoutId.
     nlohmann::json settings = LoadEffectLayoutsSettings(mFileSystem);
+
     if (settings.contains("associations") && settings["associations"].is_object())
     {
         for (auto it = settings["associations"].begin(); it != settings["associations"].end(); ++it)
         {
             const auto& assocEntry = it.value();
+
             if (!assocEntry.is_object())
             {
                 continue;
             }
 
             const auto ids = assocEntry.value("layoutIds", nlohmann::json::array());
+
             if (!ids.is_array())
             {
                 continue;
@@ -681,6 +739,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                 {
                     continue;
                 }
+
                 const std::string layoutId = id.get<std::string>();
                 appendImagesFromDir(ResolveLayoutDir(mFileSystem, layoutId) / "images");
             }
@@ -691,6 +750,7 @@ nlohmann::json PluginController::BuildLayoutImages()
     {
         const auto bundledRoot = mHost.GetBundledAssetsPath();
         const auto factoryLayoutsDir = bundledRoot / "ui" / "assets" / "layouts";
+
         if (std::filesystem::exists(factoryLayoutsDir))
         {
             for (const auto& layoutFolder : std::filesystem::directory_iterator(factoryLayoutsDir))
@@ -701,6 +761,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                 }
 
                 const auto layoutJsonPath = layoutFolder.path() / "layout.json";
+
                 if (!std::filesystem::exists(layoutJsonPath))
                 {
                     continue;
@@ -709,6 +770,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                 try
                 {
                     std::ifstream input(layoutJsonPath);
+
                     if (!input)
                     {
                         continue;
@@ -723,6 +785,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                     }
 
                     const auto imagesDir = layoutFolder.path() / "images";
+
                     if (!std::filesystem::exists(imagesDir))
                     {
                         continue;
@@ -734,20 +797,24 @@ nlohmann::json PluginController::BuildLayoutImages()
                         {
                             continue;
                         }
+
                         const std::string imageId = imgRef.value("imageId", "");
                         const std::string fileName = imgRef.value("fileName", "");
+
                         if (imageId.empty() || fileName.empty())
                         {
                             continue;
                         }
 
                         const auto imgPath = imagesDir / fileName;
+
                         if (!std::filesystem::exists(imgPath))
                         {
                             continue;
                         }
 
                         std::ifstream imgFile(imgPath, std::ios::binary);
+
                         if (!imgFile)
                         {
                             continue;
@@ -760,13 +827,16 @@ nlohmann::json PluginController::BuildLayoutImages()
                         const std::string base64Data = util::EncodeBase64(imgData);
                         const auto ext = imgPath.extension().string();
                         std::string mimeType = "image/png";
+
                         if (ext == ".jpg" || ext == ".jpeg")
                         {
                             mimeType = "image/jpeg";
                         }
+
                         const std::string dataUrl = "data:" + mimeType + ";base64," + base64Data;
 
                         bool replaced = false;
+
                         for (auto& existing : images)
                         {
                             if (existing.is_object() && existing.value("imageId", std::string{}) == imageId)
@@ -777,6 +847,7 @@ nlohmann::json PluginController::BuildLayoutImages()
                                 break;
                             }
                         }
+
                         if (!replaced)
                         {
                             nlohmann::json imageRef;
@@ -820,5 +891,4 @@ void PluginController::SaveLayoutToFile(const std::string& layoutId, const nlohm
         AppendSessionLog("Failed to save layout: " + layoutId);
     }
 }
-
 } // namespace guitarfx

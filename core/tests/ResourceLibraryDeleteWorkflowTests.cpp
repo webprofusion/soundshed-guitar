@@ -88,6 +88,7 @@ std::optional<nlohmann::json> FindLastMessageOfType(const std::vector<std::strin
         try
         {
             const auto parsed = nlohmann::json::parse(*it);
+
             if (parsed.value("type", "") == type)
             {
                 return parsed;
@@ -109,6 +110,7 @@ bool LibraryIndexContains(const fs::path& sandbox, const std::string& resourceTy
 {
     guitarfx::storage::JsonStore store;
     std::string error;
+
     if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
     {
         std::cerr << "Could not open the document store: " << error << "\n";
@@ -177,6 +179,7 @@ std::optional<SavedResourceInfo> SaveLocalResource(guitarfx::PluginController& c
     controller.HandleUIMessage(payload.dump());
 
     const auto importedMessage = FindLastMessageOfType(host.messages, "resourceImported");
+
     if (!importedMessage)
     {
         return std::nullopt;
@@ -186,6 +189,7 @@ std::optional<SavedResourceInfo> SaveLocalResource(guitarfx::PluginController& c
     info.type = importedMessage->value("resourceType", "");
     info.id = importedMessage->value("id", "");
     info.filePath = importedMessage->value("filePath", "");
+
     if (info.type.empty() || info.id.empty() || info.filePath.empty())
     {
         return std::nullopt;
@@ -229,6 +233,7 @@ bool TestDeleteStoredResourceRemovesFileAndIndex()
                                              {"fileName", "stored-resource.wasm"},
                                              {"data", "AQID"},
                                          });
+
     if (!saved)
     {
         std::cerr << "Failed to save stored local resource\n";
@@ -286,6 +291,7 @@ bool TestDeleteExternalResourceKeepsFileButRemovesIndex()
                                              {"name", "External Resource"},
                                              {"filePath", externalFile.string()},
                                          });
+
     if (!saved)
     {
         std::cerr << "Failed to index external resource\n";
@@ -338,6 +344,7 @@ bool TestDeleteInUseResourceIsRefused()
                                              {"fileName", "in-use-resource.wasm"},
                                              {"data", "AQIDBA=="},
                                          });
+
     if (!saved)
     {
         std::cerr << "Failed to save in-use resource\n";
@@ -365,6 +372,7 @@ bool TestDeleteInUseResourceIsRefused()
                                    .dump());
 
     const auto failedMessage = FindLastMessageOfType(host.messages, "resourceDeleteFailed");
+
     if (!failedMessage)
     {
         std::cerr << "Delete in-use resource did not emit resourceDeleteFailed\n";
@@ -391,7 +399,6 @@ bool TestDeleteInUseResourceIsRefused()
 
     return true;
 }
-
 } // namespace
 
 int main()
@@ -401,6 +408,7 @@ int main()
 
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
+
         if (ok)
         {
             ++passed;

@@ -28,7 +28,6 @@
 
 namespace guitarfx::util
 {
-
 template <typename T> class SpscRingBuffer
 {
   public:
@@ -46,10 +45,12 @@ template <typename T> class SpscRingBuffer
         const std::size_t used = writeIdx - readIdx;
         const std::size_t freeSpace = (used <= mCapacity) ? (mCapacity - used) : 0;
         const std::size_t n = std::min(count, freeSpace);
+
         for (std::size_t i = 0; i < n; ++i)
         {
             mBuffer[(writeIdx + i) & mMask] = data[i];
         }
+
         mWriteIndex.store(writeIdx + n, std::memory_order_release);
         return n;
     }
@@ -65,10 +66,12 @@ template <typename T> class SpscRingBuffer
         const std::size_t writeIdx = mWriteIndex.load(std::memory_order_acquire);
         const std::size_t available = writeIdx - readIdx;
         const std::size_t n = std::min(count, available);
+
         for (std::size_t i = 0; i < n; ++i)
         {
             dest[i] = mBuffer[(readIdx + i) & mMask];
         }
+
         mReadIndex.store(readIdx + n, std::memory_order_release);
         return n;
     }
@@ -105,10 +108,12 @@ template <typename T> class SpscRingBuffer
     static std::size_t NextPowerOfTwo(std::size_t v)
     {
         std::size_t p = 1;
+
         while (p < v)
         {
             p <<= 1;
         }
+
         return p;
     }
 
@@ -116,15 +121,18 @@ template <typename T> class SpscRingBuffer
     void ApplyPendingFlush()
     {
         const auto gen = mFlushGeneration.load(std::memory_order_acquire);
+
         if (gen == mLastSeenFlushGeneration)
         {
             return;
         }
+
         mLastSeenFlushGeneration = gen;
         const std::size_t flushTo = mFlushToIndex.load(std::memory_order_relaxed);
         // Never move the read index backwards (a flush requested concurrently
         // with normal draining could otherwise re-expose already-read frames).
         const std::size_t current = mReadIndex.load(std::memory_order_relaxed);
+
         if (flushTo - current <= mCapacity)
         {
             mReadIndex.store(flushTo, std::memory_order_release);
@@ -142,5 +150,4 @@ template <typename T> class SpscRingBuffer
     std::atomic<std::size_t> mFlushToIndex{0};
     std::uint32_t mLastSeenFlushGeneration{0}; // consumer-thread-local cache
 };
-
 } // namespace guitarfx::util

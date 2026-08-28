@@ -15,7 +15,6 @@
 
 namespace guitarfx
 {
-
 class DemoPreviewService
 {
   public:
@@ -51,5 +50,4 @@ class DemoPreviewService
     std::atomic<size_t> mDemoAudioCursor{0};
     std::atomic<bool> mDemoAudioActive{false};
 };
-
 } // namespace guitarfx

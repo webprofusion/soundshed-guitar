@@ -25,7 +25,6 @@
 
 namespace guitarfx
 {
-
 class IPluginHost;
 class MultiPresetMixer;
 
@@ -109,5 +108,4 @@ class TelemetryPublisher
     /// spatialiser leaves the chain, instead of the puck freezing where it was.
     bool mSpatialPositionsWereSent = false;
 };
-
 } // namespace guitarfx

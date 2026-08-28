@@ -58,6 +58,7 @@ class GainEffect : public EffectProcessor
         {
             return mGainDb;
         }
+
         return 0.0;
     }
 
@@ -89,5 +90,4 @@ inline void RegisterGainEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<GainEffect>(); });
 }
-
 } // namespace guitarfx

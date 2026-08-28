@@ -16,7 +16,6 @@
 
 namespace guitarfx
 {
-
 class PluginController;
 
 class MessageDispatcher
@@ -45,5 +44,4 @@ class MessageDispatcher
     static bool DispatchAutomation(PluginController& controller, const nlohmann::json& msg, const std::string& type);
     static bool DispatchPracticeTool(PluginController& controller, const nlohmann::json& msg, const std::string& type);
 };
-
 } // namespace guitarfx

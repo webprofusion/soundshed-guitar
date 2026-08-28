@@ -21,7 +21,6 @@
 
 namespace guitarfx
 {
-
 class MultiPresetMixer;
 class EffectRegistry;
 
@@ -170,5 +169,4 @@ class AutomationSlotTable
     std::function<void(const std::string&, const std::string&, double)> mOnNodeParamApplied;
     std::function<void(const std::string&, bool)> mOnNodeBypassApplied;
 };
-
 } // namespace guitarfx

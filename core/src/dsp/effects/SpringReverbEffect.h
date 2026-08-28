@@ -31,6 +31,7 @@ class SpringReverbEffect : public EffectProcessor
         mInputDelayWrite = 0;
 
         constexpr double extraTailMs = 12.0;
+
         for (size_t index = 0; index < kTankCount; ++index)
         {
             const size_t lenL = DelayMsToSamples(kTankDelayMsL[index] * kMaxTensionScale + extraTailMs);
@@ -44,6 +45,7 @@ class SpringReverbEffect : public EffectProcessor
         }
 
         constexpr double extraDispersionMs = 4.0;
+
         for (size_t index = 0; index < kDispersionCount; ++index)
         {
             const size_t lenL = DelayMsToSamples(kDispersionDelayMsL[index] * kMaxTensionScale + extraDispersionMs);
@@ -156,6 +158,7 @@ class SpringReverbEffect : public EffectProcessor
             mInputDelayR[mInputDelayWrite] = drivenR;
             const float delayedInL = ReadFromDelay(mInputDelayL, mInputDelayWrite, mInputDelaySamples);
             const float delayedInR = ReadFromDelay(mInputDelayR, mInputDelayWrite, mInputDelaySamples);
+
             if (++mInputDelayWrite >= mInputDelayL.size())
             {
                 mInputDelayWrite = 0;
@@ -163,6 +166,7 @@ class SpringReverbEffect : public EffectProcessor
 
             float exciteL = delayedInL;
             float exciteR = delayedInR;
+
             for (size_t index = 0; index < kDispersionCount; ++index)
             {
                 const float delayL = std::clamp(DelayMsToSamplesFloat(kDispersionDelayMsL[index] * mTensionScale), 1.0f,
@@ -175,6 +179,7 @@ class SpringReverbEffect : public EffectProcessor
 
             float tankOutL = 0.0f;
             float tankOutR = 0.0f;
+
             for (size_t tankIndex = 0; tankIndex < kTankCount; ++tankIndex)
             {
                 const float delayL = std::clamp(DelayMsToSamplesFloat(kTankDelayMsL[tankIndex] * mTensionScale), 1.0f,
@@ -212,6 +217,7 @@ class SpringReverbEffect : public EffectProcessor
                 {
                     mTankWriteL[tankIndex] = 0;
                 }
+
                 if (++mTankWriteR[tankIndex] >= mTankDelayR[tankIndex].size())
                 {
                     mTankWriteR[tankIndex] = 0;
@@ -252,6 +258,7 @@ class SpringReverbEffect : public EffectProcessor
             {
                 outputs[0][sampleIndex] = FlushNearZero(inL * dryMix + wetL * mMixSmoothed);
             }
+
             if (outputs[1])
             {
                 outputs[1][sampleIndex] = FlushNearZero(inR * dryMix + wetR * mMixSmoothed);
@@ -295,18 +302,22 @@ class SpringReverbEffect : public EffectProcessor
         {
             return mDecay;
         }
+
         if (key == "tone")
         {
             return mTone;
         }
+
         if (key == "drive")
         {
             return mDrive;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         return 0.0;
     }
 
@@ -349,6 +360,7 @@ class SpringReverbEffect : public EffectProcessor
         {
             return 0.0f;
         }
+
         const size_t back = std::min(delaySamples, buffer.size() - 1);
         const size_t readPos = (writePos + buffer.size() - back) % buffer.size();
         return buffer[readPos];
@@ -373,10 +385,12 @@ class SpringReverbEffect : public EffectProcessor
         const float delayed = ReadFromDelayFractional(buffer, writePos, delaySamples);
         const float output = delayed - input * gain;
         buffer[writePos] = input + delayed * gain;
+
         if (++writePos >= buffer.size())
         {
             writePos = 0;
         }
+
         return output;
     }
 
@@ -387,10 +401,12 @@ class SpringReverbEffect : public EffectProcessor
         {
             return 1.0f;
         }
+
         if (x < -5.5f)
         {
             return -1.0f;
         }
+
         const float x2 = x * x;
         return x * (27.0f + x2) / (27.0f + 9.0f * x2);
     }
@@ -401,12 +417,15 @@ class SpringReverbEffect : public EffectProcessor
         {
             return sample;
         }
+
         const float drive = 1.0f + amount * 6.0f;
         const float norm = FastTanh(drive);
+
         if (norm <= 0.0f)
         {
             return sample;
         }
+
         return FastTanh(sample * drive) / norm;
     }
 
@@ -418,6 +437,7 @@ class SpringReverbEffect : public EffectProcessor
             {
                 continue;
             }
+
             if (inputs && inputs[channel])
             {
                 std::copy_n(inputs[channel], numSamples, outputs[channel]);
@@ -471,6 +491,7 @@ class SpringReverbEffect : public EffectProcessor
     void UpdateParameters()
     {
         mInputDelaySamples = DelayMsToSamples(1.5 + mDrive * 3.5);
+
         if (!mInputDelayL.empty())
         {
             mInputDelaySamples = std::min(mInputDelaySamples, mInputDelayL.size() - 1);

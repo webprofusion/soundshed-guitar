@@ -51,24 +51,29 @@ Analysis Analyze(const std::vector<float>& l, const std::vector<float>& r)
     double sumSq = 0.0;
     double pk = 0.0;
     bool anyNonZero = false;
+
     for (size_t i = 0; i < l.size(); ++i)
     {
         const float sL = l[i];
         const float sR = r[i];
+
         if (std::isnan(sL) || std::isnan(sR))
         {
             a.hasNaN = true;
         }
+
         if (std::isinf(sL) || std::isinf(sR))
         {
             a.hasInf = true;
         }
+
         const double absl = std::abs(static_cast<double>(sL));
         const double absr = std::abs(static_cast<double>(sR));
         pk = std::max(pk, std::max(absl, absr));
         sumSq += absl * absl * 0.5 + absr * absr * 0.5; // average of channels
         anyNonZero = anyNonZero || (absl > 0.0) || (absr > 0.0);
     }
+
     a.peak = pk;
     a.rms = std::sqrt(sumSq / static_cast<double>(l.size()));
     a.allZero = !anyNonZero;
@@ -356,10 +361,12 @@ void RegisterConfigProbeEffect()
 {
     using namespace guitarfx;
     static bool registered = false;
+
     if (registered)
     {
         return;
     }
+
     registered = true;
 
     EffectTypeInfo info;
@@ -407,6 +414,7 @@ bool TestNodeTypeConfigDefaultAppliesToLaterNodes()
 
     // A later change reaches the live node too.
     exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "1");
+
     if (exec.GetNodeConfig("probe", "oversampling") != "1")
     {
         return false;
@@ -476,10 +484,12 @@ bool TestNodeTypeConfigDefaultReachesCompositeInterior()
 
     auto* processor = exec.GetNodeProcessor("composite");
     auto* wrapped = dynamic_cast<CompositeEffectProcessor*>(processor);
+
     if (!wrapped)
     {
         return false;
     }
+
     if (wrapped->GetInnerExecutor().GetNodeConfig("probe", "oversampling") != "4")
     {
         return false;
@@ -489,7 +499,6 @@ bool TestNodeTypeConfigDefaultReachesCompositeInterior()
     exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "2");
     return wrapped->GetInnerExecutor().GetNodeConfig("probe", "oversampling") == "2";
 }
-
 } // namespace
 
 int main()
@@ -512,6 +521,7 @@ int main()
         std::cout << "Simple path: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << (ok && within ? "  PASS" : "  FAIL")
                   << " (expected peak≈" << std::setprecision(3) << expected << ")\n";
+
         if (ok && within)
         {
             ++passed;
@@ -529,6 +539,7 @@ int main()
         const bool boundsOk = (a.peak > 1e-4) && (a.peak < 1.5) && (a.rms > 1e-4);
         std::cout << "Complex single path: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << ((ok && boundsOk) ? "  PASS" : "  FAIL") << "\n";
+
         if (ok && boundsOk)
         {
             ++passed;
@@ -546,6 +557,7 @@ int main()
         const bool boundsOk = (a.peak > 1e-4) && (a.peak < 1.5) && (a.rms > 1e-4);
         std::cout << "Spring reverb path: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << ((ok && boundsOk) ? "  PASS" : "  FAIL") << "\n";
+
         if (ok && boundsOk)
         {
             ++passed;
@@ -563,6 +575,7 @@ int main()
         const bool boundsOk = (a.peak > 1e-4) && (a.peak < 1.5) && (a.rms > 1e-4);
         std::cout << "Ambient reverb path: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << ((ok && boundsOk) ? "  PASS" : "  FAIL") << "\n";
+
         if (ok && boundsOk)
         {
             ++passed;
@@ -588,6 +601,7 @@ int main()
         std::cout << "Parallel path: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << (ok && within ? "  PASS" : "  FAIL")
                   << " (expected peak≈" << std::setprecision(3) << expected << ")\n";
+
         if (ok && within)
         {
             ++passed;
@@ -609,6 +623,7 @@ int main()
 
         double peakL = 0.0;
         double peakR = 0.0;
+
         for (int i = 0; i < kBlock; ++i)
         {
             peakL = std::max(peakL, std::abs(static_cast<double>(outL[static_cast<size_t>(i)])));
@@ -623,6 +638,7 @@ int main()
                   << ", peakR=" << std::setprecision(3) << peakR
                   << ((ok && leftWithin && rightWithin && separated) ? "  PASS" : "  FAIL") << " (expected L≈"
                   << std::setprecision(3) << expectedL << ", R≈" << expectedR << ")\n";
+
         if (ok && leftWithin && rightWithin && separated)
         {
             ++passed;
@@ -680,6 +696,7 @@ int main()
         const bool ok = !a.hasNaN && !a.hasInf && !a.allZero && a.peak > 1e-4 && a.peak < 1.5;
         std::cout << "Resource NAM only: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -754,6 +771,7 @@ int main()
                 GenerateSine(inL, inR);
                 exec.Process(in, outBuf, kBlock);
                 a = Analyze(outL, outR);
+
                 if (!a.allZero && a.peak >= 1e-4)
                 {
                     break;
@@ -767,6 +785,7 @@ int main()
         const bool ok = !a.hasNaN && !a.hasInf && !a.allZero && (a.peak > 1e-4) && differsFromInput;
         std::cout << "Resource IR only: peak=" << std::fixed << std::setprecision(3) << a.peak
                   << ", rms=" << std::setprecision(3) << a.rms;
+
         if (ok)
         {
             std::cout << "  PASS\n";
@@ -839,6 +858,7 @@ int main()
 
         std::cout << "Resource NAM calibration metadata: uncalibratedRms=" << std::fixed << std::setprecision(4)
                   << uncalibrated.rms << ", calibratedRms=" << calibrated.rms << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -885,6 +905,7 @@ int main()
         std::vector<float> outL(static_cast<size_t>(kBlock), 0.0f), outR(static_cast<size_t>(kBlock), 0.0f);
         // Program-level signal on the left only; right channel stays at digital silence.
         constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
+
         for (int i = 0; i < kBlock; ++i)
         {
             inL[static_cast<size_t>(i)] =
@@ -902,6 +923,7 @@ int main()
 
         double peakL = 0.0;
         double maxLRDiff = 0.0;
+
         for (int i = 0; i < kBlock; ++i)
         {
             const double l = static_cast<double>(outL[static_cast<size_t>(i)]);
@@ -915,6 +937,7 @@ int main()
         const bool ok = active && dualMono;
         std::cout << "Mono source on stereo bus -> single NAM model: peakL=" << std::fixed << std::setprecision(4)
                   << peakL << ", maxLRdiff=" << std::setprecision(8) << maxLRDiff << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -958,6 +981,7 @@ int main()
         std::vector<float> inL(static_cast<size_t>(kBlock), 0.0f), inR(static_cast<size_t>(kBlock), 0.0f);
         std::vector<float> outL(static_cast<size_t>(kBlock), 0.0f), outR(static_cast<size_t>(kBlock), 0.0f);
         constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
+
         for (int i = 0; i < kBlock; ++i)
         {
             const double t = static_cast<double>(i) / kSR;
@@ -975,6 +999,7 @@ int main()
 
         double peakL = 0.0;
         double maxLRDiff = 0.0;
+
         for (int i = 0; i < kBlock; ++i)
         {
             const double l = static_cast<double>(outL[static_cast<size_t>(i)]);
@@ -988,6 +1013,7 @@ int main()
         const bool ok = active && dualMono;
         std::cout << "NAM forced-mono input mode: peakL=" << std::fixed << std::setprecision(4) << peakL
                   << ", maxLRdiff=" << std::setprecision(8) << maxLRDiff << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -1003,6 +1029,7 @@ int main()
         guitarfx::IRCabEffect effect;
         const bool ok = std::abs(effect.GetParam("autoGainComp") - 1.0) < 1e-9;
         std::cout << "IR auto compensation default: " << (ok ? "PASS" : "FAIL") << " (expected enabled)\n";
+
         if (ok)
         {
             ++passed;
@@ -1024,6 +1051,7 @@ int main()
         const bool ok = latencySamples > 0;
         std::cout << "Single-path latency: reported=" << latencySamples << (ok ? "  PASS" : "  FAIL")
                   << " (expected > 0)\n";
+
         if (ok)
         {
             ++passed;
@@ -1050,6 +1078,7 @@ int main()
         const bool ok = latencySamples == singleBranchLatency;
         std::cout << "Parallel-path latency: reported=" << latencySamples << (ok ? "  PASS" : "  FAIL")
                   << " (expected longest-path " << singleBranchLatency << ")\n";
+
         if (ok)
         {
             ++passed;
@@ -1071,6 +1100,7 @@ int main()
         const bool ok = latencySamples == 0;
         std::cout << "Disabled-node latency: reported=" << latencySamples << (ok ? "  PASS" : "  FAIL")
                   << " (expected 0)\n";
+
         if (ok)
         {
             ++passed;
@@ -1085,6 +1115,7 @@ int main()
     {
         const bool ok = TestNodeTypeConfigDefaultAppliesToLaterNodes();
         std::cout << "Node-type config default (later nodes):" << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -1099,6 +1130,7 @@ int main()
     {
         const bool ok = TestNodeConfigOverridesTypeDefault();
         std::cout << "Node config overrides type default:" << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;
@@ -1113,6 +1145,7 @@ int main()
     {
         const bool ok = TestNodeTypeConfigDefaultReachesCompositeInterior();
         std::cout << "Node-type config default (inside composite):" << (ok ? "  PASS" : "  FAIL") << "\n";
+
         if (ok)
         {
             ++passed;

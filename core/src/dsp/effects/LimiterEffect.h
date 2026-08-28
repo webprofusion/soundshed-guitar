@@ -46,6 +46,7 @@ class LimiterEffect : public EffectProcessor
             {
                 const float peak = std::abs(inputByChannel[ch]);
                 float targetGain = 1.0f;
+
                 if (peak > ceiling && peak > 1e-12f)
                 {
                     targetGain = ceiling / peak;
@@ -82,6 +83,7 @@ class LimiterEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -116,14 +118,17 @@ class LimiterEffect : public EffectProcessor
         {
             return mCeilingDb;
         }
+
         if (key == "release")
         {
             return mReleaseMs;
         }
+
         if (key == "softClip")
         {
             return mSoftClip;
         }
+
         return 0.0;
     }
 
@@ -173,5 +178,4 @@ inline void RegisterLimiterEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<LimiterEffect>(); });
 }
-
 } // namespace guitarfx

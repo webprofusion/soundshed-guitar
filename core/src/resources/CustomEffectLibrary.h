@@ -60,5 +60,4 @@ class CustomEffectLibrary
   private:
     std::vector<CustomEffectLibraryEntry> mEntries;
 };
-
 } // namespace guitarfx

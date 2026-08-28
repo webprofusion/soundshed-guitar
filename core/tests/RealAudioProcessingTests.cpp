@@ -50,6 +50,7 @@ struct AudioStats
 AudioStats Analyze(const std::vector<double>& signal)
 {
     AudioStats stats;
+
     if (signal.empty())
     {
         return stats;
@@ -66,6 +67,7 @@ AudioStats Analyze(const std::vector<double>& signal)
             stats.hasNaN = true;
             return stats;
         }
+
         if (std::isinf(sample))
         {
             stats.hasInf = true;
@@ -259,11 +261,13 @@ bool TestPassthrough()
         const auto outputSignal = dsp.Process(inputSignal);
 
         const auto stats = Analyze(outputSignal);
+
         if (stats.hasNaN || stats.hasInf)
         {
             std::cout << "FAILED - Invalid samples in output\n";
             return false;
         }
+
         if (stats.isClipped)
         {
             std::cout << "FAILED - Output clipped\n";
@@ -295,11 +299,13 @@ bool TestOutputTrim()
         const auto outputSignal = dsp.Process(inputSignal);
 
         const auto stats = Analyze(outputSignal);
+
         if (stats.hasNaN || stats.hasInf)
         {
             std::cout << "FAILED - Invalid samples\n";
             return false;
         }
+
         if (stats.rms < 0.001)
         {
             std::cout << "FAILED - No output signal\n";
@@ -331,11 +337,13 @@ bool TestNoClipping()
         const auto outputSignal = dsp.Process(inputSignal);
 
         const auto stats = Analyze(outputSignal);
+
         if (stats.isClipped)
         {
             std::cout << "FAILED - Signal clipped (" << stats.clippedSampleCount << " samples)\n";
             return false;
         }
+
         if (stats.peakLevel > 1.0)
         {
             std::cout << "FAILED - Peak exceeds 1.0: " << stats.peakLevel << "\n";
@@ -368,6 +376,7 @@ bool TestAudioQuality()
         for (const auto& sigType : signalTypes)
         {
             std::vector<double> inputSignal;
+
             if (sigType == "sine")
             {
                 inputSignal = GenerateSineWave(1000.0, 0.5, 0.2);
@@ -393,16 +402,19 @@ bool TestAudioQuality()
                 std::cout << "FAILED - NaN in " << sigType << " signal\n";
                 return false;
             }
+
             if (stats.hasInf)
             {
                 std::cout << "FAILED - Inf in " << sigType << " signal\n";
                 return false;
             }
+
             if (std::abs(stats.dcOffset) > 0.1)
             {
                 std::cout << "FAILED - Excessive DC offset in " << sigType << " (" << stats.dcOffset << ")\n";
                 return false;
             }
+
             if (stats.peakLevel > 1.5)
             {
                 std::cout << "FAILED - Excessive peak in " << sigType << " (" << stats.peakLevel << ")\n";
@@ -435,21 +447,25 @@ bool TestCabinetIRProcessing()
         const auto outputSignal = dsp.Process(inputSignal);
 
         const auto outputStats = Analyze(outputSignal);
+
         if (outputStats.hasNaN || outputStats.hasInf)
         {
             std::cout << "FAILED - Invalid samples in output\n";
             return false;
         }
+
         if (outputStats.peakLevel > 1.5)
         {
             std::cout << "FAILED - Excessive peak level: " << outputStats.peakLevel << "\n";
             return false;
         }
+
         if (outputStats.rms < 0.001)
         {
             std::cout << "FAILED - No significant output\n";
             return false;
         }
+
         if (std::abs(outputStats.dcOffset) > 0.1)
         {
             std::cout << "FAILED - Excessive DC offset: " << outputStats.dcOffset << "\n";
@@ -465,7 +481,6 @@ bool TestCabinetIRProcessing()
         return false;
     }
 }
-
 } // anonymous namespace
 
 int main()

@@ -3,7 +3,6 @@
 
 namespace guitarfx
 {
-
 bool MessageDispatcher::DispatchParameters(PluginController& c, const nlohmann::json& msg, const std::string& type)
 {
     if (type == "setParameter")
@@ -11,12 +10,13 @@ bool MessageDispatcher::DispatchParameters(PluginController& c, const nlohmann::
         c.HandleSetParameterRequest(msg);
         return true;
     }
+
     if (type == "setGlobalChainParam")
     {
         c.HandleSetGlobalChainParamRequest(msg);
         return true;
     }
+
     return false;
 }
-
 } // namespace guitarfx

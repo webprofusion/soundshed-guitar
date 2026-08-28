@@ -139,10 +139,12 @@ class DelayLine
         const double size = static_cast<double>(mBuffer.size());
         const double d = std::clamp(delaySamples, 0.0, size - 2.0);
         double pos = static_cast<double>(mWrite) - d;
+
         if (pos < 0.0)
         {
             pos += size;
         }
+
         const auto i0 = static_cast<std::size_t>(pos);
         const double frac = pos - static_cast<double>(i0);
         const std::size_t i1 = (i0 + 1 >= mBuffer.size()) ? 0 : i0 + 1;
@@ -220,6 +222,7 @@ struct Biquad
             SetIdentity();
             return;
         }
+
         const double f0 = std::clamp(freqHz, 20.0, sampleRate * 0.45);
         const double A = std::pow(10.0, gainDb / 40.0);
         const double w0 = kTwoPi * f0 / sampleRate;
@@ -240,6 +243,7 @@ struct Biquad
             SetIdentity();
             return;
         }
+
         const double f0 = std::clamp(freqHz, 20.0, sampleRate * 0.45);
         const double A = std::pow(10.0, gainDb / 40.0);
         const double w0 = kTwoPi * f0 / sampleRate;
@@ -317,6 +321,7 @@ class Spatial3DEffect : public EffectProcessor
         mDryLineR.Prepare(static_cast<std::size_t>(mBiasSamples) + 4);
 
         mRearTapSamples = static_cast<std::size_t>(spatial3d::kRearTapMs * 0.001 * sampleRate);
+
         for (std::size_t i = 0; i < spatial3d::kErTapMs.size(); ++i)
         {
             mErTapSamples[i] = static_cast<std::size_t>(spatial3d::kErTapMs[i] * 0.001 * sampleRate);
@@ -346,6 +351,7 @@ class Spatial3DEffect : public EffectProcessor
 
         // Deterministic start phase, so a preset always begins at the same point.
         const double start = std::fmod(mMotionStartPhaseDeg.load(std::memory_order_relaxed) / 360.0, 1.0);
+
         for (auto& phase : mPhases)
         {
             phase = start < 0.0 ? start + 1.0 : start;
@@ -385,6 +391,7 @@ class Spatial3DEffect : public EffectProcessor
         const bool speakers = (listenMode == spatial3d::kListenSpeakers);
 
         int offset = 0;
+
         while (offset < numSamples)
         {
             const int len = std::min(spatial3d::kControlBlock, numSamples - offset);
@@ -441,6 +448,7 @@ class Spatial3DEffect : public EffectProcessor
                 const float t = static_cast<float>(i + 1) * invLen;
                 float earL;
                 float earR;
+
                 if (delayMode == spatial3d::kDelayDoppler)
                 {
                     const double dl = prevDelayL + (mDelayL - prevDelayL) * static_cast<double>(t);
@@ -453,6 +461,7 @@ class Spatial3DEffect : public EffectProcessor
                     earL = mSourceLine.Read(prevDelayL) * (1.0f - t) + mSourceLine.Read(mDelayL) * t;
                     earR = mSourceLine.Read(prevDelayR) * (1.0f - t) + mSourceLine.Read(mDelayR) * t;
                 }
+
                 mSourceLine.Advance();
 
                 // Contralateral head shadow.
@@ -465,6 +474,7 @@ class Spatial3DEffect : public EffectProcessor
                 {
                     mShadowL.Process(earL, coeff.shadowCoeffLeft);
                 }
+
                 if (coeff.shadowRight > 0.0f)
                 {
                     const float lp = mShadowR.Process(earR, coeff.shadowCoeffRight);
@@ -488,10 +498,12 @@ class Spatial3DEffect : public EffectProcessor
                 // Early reflections are fed from the direct source so that the
                 // direct/reflected ratio, not the absolute level, carries distance.
                 mErLine.Write(travelled * coeff.erSend);
+
                 if (coeff.erSend > 0.0f)
                 {
                     float erL = 0.0f;
                     float erR = 0.0f;
+
                     for (std::size_t tap = 0; tap < mErTapSamples.size(); ++tap)
                     {
                         const float tapValue = mErLine.ReadInt(mErTapSamples[tap]) * spatial3d::kErTapGain[tap];
@@ -499,6 +511,7 @@ class Spatial3DEffect : public EffectProcessor
                         erL += tapValue * (0.5f - 0.5f * pan);
                         erR += tapValue * (0.5f + 0.5f * pan);
                     }
+
                     wetL += mErFilterL.Process(erL, coeff.erCoeff);
                     wetR += mErFilterR.Process(erR, coeff.erCoeff);
                 }
@@ -507,6 +520,7 @@ class Spatial3DEffect : public EffectProcessor
                     mErFilterL.Process(0.0f, coeff.erCoeff);
                     mErFilterR.Process(0.0f, coeff.erCoeff);
                 }
+
                 mErLine.Advance();
 
                 // The dry path is delayed by the reported latency so that blending it
@@ -522,6 +536,7 @@ class Spatial3DEffect : public EffectProcessor
                 {
                     outputs[0][n] = dryL * (1.0f - mix) + wetL * mix * trim;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][n] = dryR * (1.0f - mix) + wetR * mix * trim;
@@ -632,82 +647,102 @@ class Spatial3DEffect : public EffectProcessor
         {
             return mAzimuth.load(std::memory_order_relaxed);
         }
+
         if (key == "elevation")
         {
             return mElevation.load(std::memory_order_relaxed);
         }
+
         if (key == "distance")
         {
             return mDistance.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         if (key == "roomAmount")
         {
             return mRoomAmount.load(std::memory_order_relaxed);
         }
+
         if (key == "listenMode")
         {
             return mListenMode.load(std::memory_order_relaxed);
         }
+
         if (key == "delayMode")
         {
             return mDelayMode.load(std::memory_order_relaxed);
         }
+
         if (key == "outputTrim")
         {
             return mOutputTrimDb.load(std::memory_order_relaxed);
         }
+
         if (key == "motionMode")
         {
             return mMotionMode.load(std::memory_order_relaxed);
         }
+
         if (key == "motionRate")
         {
             return mMotionRateHz.load(std::memory_order_relaxed);
         }
+
         if (key == "syncMode")
         {
             return mSyncMode.load(std::memory_order_relaxed);
         }
+
         if (key == "syncDivision")
         {
             return mSyncDivision.load(std::memory_order_relaxed);
         }
+
         if (key == "bpm")
         {
             return mBpm.load(std::memory_order_relaxed);
         }
+
         if (key == "effectiveRate")
         {
             return EffectiveMotionRateHz();
         }
+
         if (key == "motionDepth")
         {
             return mMotionDepth.load(std::memory_order_relaxed);
         }
+
         if (key == "motionElevDepth")
         {
             return mMotionElevDepth.load(std::memory_order_relaxed);
         }
+
         if (key == "motionDistDepth")
         {
             return mMotionDistDepth.load(std::memory_order_relaxed);
         }
+
         if (key == "motionPhase")
         {
             return mMotionStartPhaseDeg.load(std::memory_order_relaxed);
         }
+
         if (key == "motionDirection")
         {
             return mMotionDirection.load(std::memory_order_relaxed);
         }
+
         if (key == "motionSmooth")
         {
             return mMotionSmooth.load(std::memory_order_relaxed);
         }
+
         if (key == "motionSeed")
         {
             return mMotionSeed.load(std::memory_order_relaxed);
@@ -719,18 +754,22 @@ class Spatial3DEffect : public EffectProcessor
         {
             return mPublishedAzimuth.load(std::memory_order_relaxed);
         }
+
         if (key == "currentElevation")
         {
             return mPublishedElevation.load(std::memory_order_relaxed);
         }
+
         if (key == "currentDistance")
         {
             return mPublishedDistance.load(std::memory_order_relaxed);
         }
+
         if (key == "currentItdUs")
         {
             return mPublishedItdUs.load(std::memory_order_relaxed);
         }
+
         if (key == "currentIldDb")
         {
             return mPublishedIldDb.load(std::memory_order_relaxed);
@@ -820,9 +859,11 @@ class Spatial3DEffect : public EffectProcessor
         }
 
         const int seed = mMotionSeed.load(std::memory_order_relaxed);
+
         if (seed != mCachedSeed)
         {
             mCachedSeed = seed;
+
             for (int i = 0; i < 4; ++i)
             {
                 mDriftPhase[static_cast<std::size_t>(i)] = SeedPhase(seed, i);
@@ -927,12 +968,14 @@ class Spatial3DEffect : public EffectProcessor
         // Woodworth ITD. Positive means the source is to the right, so the right ear
         // is nearer and its delay is shorter.
         double itdSec = (spatial3d::kHeadRadiusM / spatial3d::kSpeedOfSoundMs) * (lateral + std::sin(lateral));
+
         if (speakers)
         {
             itdSec = 0.0; // ITD does not survive loudspeaker crosstalk or mono fold-down
         }
 
         double propagationSamples = 0.0;
+
         if (mDelayMode.load(std::memory_order_relaxed) == spatial3d::kDelayDoppler)
         {
             propagationSamples = (distance / spatial3d::kSpeedOfSoundMs) * mSampleRate;
@@ -1036,10 +1079,12 @@ class Spatial3DEffect : public EffectProcessor
     void PublishPosition()
     {
         double wrapped = std::fmod(mSmoothedAzimuth + 180.0, 360.0);
+
         if (wrapped < 0.0)
         {
             wrapped += 360.0;
         }
+
         mPublishedAzimuth.store(wrapped - 180.0, std::memory_order_relaxed);
         mPublishedElevation.store(std::clamp(mSmoothedElevation, -90.0, 90.0), std::memory_order_relaxed);
         mPublishedDistance.store(std::clamp(mSmoothedDistance, spatial3d::kMinDistanceM, spatial3d::kMaxDistanceM),
@@ -1249,5 +1294,4 @@ inline void RegisterSpatial3DEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<Spatial3DEffect>(); });
 }
-
 } // namespace guitarfx

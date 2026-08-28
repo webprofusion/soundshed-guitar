@@ -145,18 +145,22 @@ void PluginController::Initialize()
     mPresetMixer.SetHostControlledInput(!mHost.IsStandalone());
 
     LoadAppSettings();
+
     if (ApplySettingsToRuntime(SettingsApplyMode::kApplyAll))
     {
         SaveAppSettings();
     }
+
     if (!IsPresetArchiveSessionActive())
     {
         LoadResourceLibraries();
     }
+
     if (!IsPresetArchiveSessionActive())
     {
         LoadBlendLibrary();
     }
+
     LoadCustomEffectLibrary();
     LoadFactoryPresetArchives();
     LoadCompositeLibrary();
@@ -184,6 +188,7 @@ void PluginController::Initialize()
         [this](const std::string& effectType, const std::string& paramId, double value) {
             // Resolve the concrete nodeId from the mixer's runtime graph.
             const auto found = mPresetMixer.FindFirstEnabledNodeOfType(effectType);
+
             if (!found)
             {
                 return;
@@ -195,6 +200,7 @@ void PluginController::Initialize()
             if (mActivePreset)
             {
                 auto* node = mActivePreset->graph.FindNode(nodeId);
+
                 if (node)
                 {
                     node->params[paramId] = value;
@@ -223,6 +229,7 @@ void PluginController::Initialize()
                 {
                     continue;
                 }
+
                 node.enabled = enabled;
                 updated = true;
             }
@@ -232,10 +239,12 @@ void PluginController::Initialize()
         // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
         // active scene graph into mActivePreset->graph.
         const std::string activeSceneId = GetResolvedActiveSceneId();
+
         if (auto* scene = FindPresetScene(*mActivePreset, activeSceneId))
         {
             applyBypassToGraph(scene->graph);
         }
+
         applyBypassToGraph(mActivePreset->graph);
 
         if (!updated)
@@ -244,15 +253,18 @@ void PluginController::Initialize()
         }
 
         mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+
         if (!mActivePresetId.empty())
         {
             mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
         }
+
         mPendingStateBroadcast = true;
     });
 
     // Load automation.json
     const auto automationData = LoadUiStorageJson("automation.json", nlohmann::json::object());
+
     if (!automationData.empty())
     {
         mAutomationSlots.LoadFromJson(automationData);
@@ -302,6 +314,7 @@ bool PluginController::ProcessAudio(float** inputs, float** outputs, int numSamp
 {
     // Try to acquire the DSP lock without blocking the audio thread.
     std::unique_lock<std::mutex> lock(mDSPMutex, std::try_to_lock);
+
     if (!lock.owns_lock())
     {
         return false; // Caller should output silence
@@ -318,10 +331,12 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     {
         const bool hasInput = (inputs && inputs[0]);
         const float* inputR = (inputs && inputs[1]) ? inputs[1] : (inputs ? inputs[0] : nullptr);
+
         if (!mRiffCapture.armCountInComplete)
         {
             // Track count-in progress
             mRiffCapture.armCountInIndex += static_cast<std::size_t>(numSamples);
+
             if (mRiffCapture.armCountInIndex >= mRiffCapture.countInSamples)
             {
                 mRiffCapture.armCountInComplete = true;
@@ -333,6 +348,7 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
             for (int i = 0; i < numSamples; ++i)
             {
                 const float level = std::max(std::abs(inputs[0][i]), std::abs(inputR[i]));
+
                 if (level >= mRiffCapture.armThreshold)
                 {
                     // Compute bar phase at trigger for snapping the trim start to the bar boundary
@@ -363,6 +379,7 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                     break;
                 }
             }
+
             // Only track detection-phase samples when still waiting (no trigger this block)
             if (mRiffCapture.armed)
             {
@@ -375,15 +392,18 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     {
         const bool hasInputCh0 = (inputs && inputs[0]);
         const float* capInputR = (inputs && inputs[1]) ? inputs[1] : (hasInputCh0 ? inputs[0] : nullptr);
+
         if (hasInputCh0 && mRiffCapture.writeIndex < mRiffCapture.targetSamples)
         {
             const std::size_t countInSamples = mRiffCapture.countInSamples;
             const std::size_t bucketSize = std::max<std::size_t>(1, mRiffCapture.livePeakBucketSize);
+
             for (int i = 0; i < numSamples && mRiffCapture.writeIndex < mRiffCapture.targetSamples; ++i)
             {
                 if (mRiffCapture.writeIndex >= countInSamples)
                 {
                     const std::size_t captureIndex = mRiffCapture.writeIndex - countInSamples;
+
                     if (captureIndex < mRiffCapture.left.size() && captureIndex < mRiffCapture.right.size())
                     {
                         mRiffCapture.left[captureIndex] = inputs[0][i];
@@ -391,12 +411,14 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                         // Update live waveform peak bucket
                         const float peakVal = std::max(std::abs(inputs[0][i]), std::abs(capInputR[i]));
                         const std::size_t bucket = captureIndex / bucketSize;
+
                         if (bucket < mRiffCapture.livePeaks.size())
                         {
                             mRiffCapture.livePeaks[bucket] = std::max(mRiffCapture.livePeaks[bucket], peakVal);
                         }
                     }
                 }
+
                 ++mRiffCapture.writeIndex;
             }
 
@@ -405,6 +427,7 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
                 mRiffCapture.writeIndex > countInSamples ? mRiffCapture.writeIndex - countInSamples : 0;
             const std::size_t progressInterval =
                 std::max<std::size_t>(1, static_cast<std::size_t>(mRiffCapture.sampleRate * 0.25));
+
             if (capturedSoFar > 0 && capturedSoFar >= mRiffCapture.lastProgressSample + progressInterval)
             {
                 mRiffCapture.lastProgressSample = capturedSoFar;
@@ -539,12 +562,14 @@ std::string PluginController::SerializeState() const
 {
     nlohmann::json state = nlohmann::json::object();
     state["version"] = 1;
+
     if (mActivePreset)
     {
         Preset presetWithRuntimeState = *mActivePreset;
         CaptureRuntimePluginStates(presetWithRuntimeState, mActivePresetId);
         state["preset"] = nlohmann::json::parse(PresetStorage::SerializeToJson(presetWithRuntimeState));
     }
+
     state["presetId"] = mActivePresetId;
     state["activeSceneId"] = GetResolvedActiveSceneId();
     state["appSettings"] = mAppSettings;
@@ -582,9 +607,11 @@ std::string PluginController::SerializeState() const
     // throws away every project-local edit — hosted plugin state included — and fails
     // outright when the project is opened on a machine that does not have the preset.
     nlohmann::json presetData = nlohmann::json::object();
+
     for (const auto& id : mPresetMixer.GetActivePresetIds())
     {
         activePresetIds.push_back(id);
+
         if (const auto cfg = mPresetMixer.GetPresetConfig(id))
         {
             presetConfigs[id] = {
@@ -598,6 +625,7 @@ std::string PluginController::SerializeState() const
         }
 
         const auto cachedIt = mMixerPresetJsonCache.find(id);
+
         if (cachedIt == mMixerPresetJsonCache.end())
         {
             continue;
@@ -617,6 +645,7 @@ std::string PluginController::SerializeState() const
             }
         }
     }
+
     mixer["activePresetIds"] = std::move(activePresetIds);
     mixer["presets"] = std::move(presetConfigs);
     mixer["presetData"] = std::move(presetData);
@@ -671,6 +700,7 @@ void PluginController::DeserializeState(const std::string& json)
     {
         auto state = nlohmann::json::parse(json);
         const nlohmann::json* incomingSettings = nullptr;
+
         if (state.contains("appSettings") && state["appSettings"].is_object())
         {
             incomingSettings = &state["appSettings"];
@@ -748,6 +778,7 @@ void PluginController::DeserializeState(const std::string& json)
             // resize, so a hand-edited or corrupt project cannot pin an absurd size.
             const auto width = readDimension("width");
             const auto height = readDimension("height");
+
             if (IsPlausibleEditorWindowSize(width, height))
             {
                 mEditorWindowSize = EditorWindowSize{width, height};
@@ -762,9 +793,11 @@ void PluginController::DeserializeState(const std::string& json)
             std::lock_guard<std::mutex> dspLock(mDSPMutex);
             mPresetMixer.CommitGlobalChainSwap();
         }
+
         if (state.contains("preset"))
         {
             auto presetOpt = PresetStorage::DeserializeFromJson(state["preset"].dump());
+
             if (presetOpt)
             {
                 mActivePresetId = state.value("presetId", presetOpt->id);
@@ -785,10 +818,12 @@ void PluginController::DeserializeState(const std::string& json)
         if (state.contains("mixer") && state["mixer"].is_object())
         {
             const auto& mixer = state["mixer"];
+
             if (mixer.contains("masterGain") && mixer["masterGain"].is_number())
             {
                 mPresetMixer.SetMasterGain(mixer["masterGain"].get<double>());
             }
+
             if (mixer.contains("limiterEnabled") && mixer["limiterEnabled"].is_boolean())
             {
                 mPresetMixer.SetLimiterEnabled(mixer["limiterEnabled"].get<bool>());
@@ -801,6 +836,7 @@ void PluginController::DeserializeState(const std::string& json)
             }
 
             std::vector<std::string> activeIds;
+
             if (mixer.contains("activePresetIds") && mixer["activePresetIds"].is_array())
             {
                 for (const auto& entry : mixer["activePresetIds"])
@@ -811,12 +847,14 @@ void PluginController::DeserializeState(const std::string& json)
                     }
                 }
             }
+
             const auto presets = mixer.contains("presets") ? mixer["presets"] : nlohmann::json::object();
             // Written since full slot data was added to host state; absent in older projects,
             // which fall through to the restore-by-id path below exactly as before.
             const auto presetData = mixer.contains("presetData") && mixer["presetData"].is_object()
                                         ? mixer["presetData"]
                                         : nlohmann::json::object();
+
             if (activeIds.empty() && presets.is_object())
             {
                 for (const auto& [id, _] : presets.items())
@@ -832,15 +870,18 @@ void PluginController::DeserializeState(const std::string& json)
                 const std::string name = presetEntry.value("name", id);
 
                 bool added = false;
+
                 if (mActivePreset && (id == "p1" || id == mActivePresetId))
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
+
                     if (added)
                     {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
                         mMixerPresetJsonCache[id] = PresetStorage::SerializeToJson(*mActivePreset);
                     }
                 }
+
                 // The project's own copy of this slot wins over the machine's preset library:
                 // it is the one carrying the project's edits and its hosted plugin state.
                 if (!added && presetData.contains(id))
@@ -848,6 +889,7 @@ void PluginController::DeserializeState(const std::string& json)
                     if (auto slotPreset = PresetStorage::DeserializeFromJson(presetData[id].dump()))
                     {
                         added = mPresetMixer.AddActivePreset(*slotPreset, id, name);
+
                         if (added)
                         {
                             AttachRuntimeConfigCallbacks(id, *slotPreset);
@@ -857,13 +899,16 @@ void PluginController::DeserializeState(const std::string& json)
                         }
                     }
                 }
+
                 if (!added)
                 {
                     added = AddActivePresetById(id);
                 }
+
                 if (!added && mActivePreset)
                 {
                     added = mPresetMixer.AddActivePreset(*mActivePreset, id, name);
+
                     if (added)
                     {
                         AttachRuntimeConfigCallbacks(id, *mActivePreset);
@@ -877,14 +922,17 @@ void PluginController::DeserializeState(const std::string& json)
                     {
                         mPresetMixer.SetPresetMix(id, presetEntry["mix"].get<double>());
                     }
+
                     if (presetEntry.contains("pan") && presetEntry["pan"].is_number())
                     {
                         mPresetMixer.SetPresetPan(id, presetEntry["pan"].get<double>());
                     }
+
                     if (presetEntry.contains("mute") && presetEntry["mute"].is_boolean())
                     {
                         mPresetMixer.SetPresetMute(id, presetEntry["mute"].get<bool>());
                     }
+
                     if (presetEntry.contains("solo") && presetEntry["solo"].is_boolean())
                     {
                         mPresetMixer.SetPresetSolo(id, presetEntry["solo"].get<bool>());
@@ -915,6 +963,7 @@ void PluginController::HandleUIMessage(const std::string& jsonMessage)
     try
     {
         const auto msg = nlohmann::json::parse(jsonMessage);
+
         if (msg.is_object() && msg.value("type", std::string{}) == "uiBootstrapError")
         {
             const auto source = msg.value("source", std::string{"unknown"});
@@ -975,6 +1024,7 @@ void PluginController::OnIdle()
             std::lock_guard<std::mutex> lock(mDSPMutex);
             const auto slotId = mAutomationSlots.GetMidiLearnSlot();
             auto captured = mAutomationSlots.PollMidiLearnCapture();
+
             if (captured.has_value() && !slotId.empty())
             {
                 const auto* slot = mAutomationSlots.FindSlot(slotId);
@@ -1001,6 +1051,7 @@ void PluginController::OnIdle()
                 committed = true;
             }
         }
+
         if (committed)
         {
             SaveUiStorageJson("automation.json", mAutomationSlots.SaveToJson());
@@ -1031,6 +1082,7 @@ void PluginController::OnIdle()
             notifies = std::move(mPendingNodeParamNotifies);
             mPendingNodeParamNotifies.clear();
         }
+
         for (const auto& n : notifies)
         {
             nlohmann::json msg;
@@ -1048,18 +1100,22 @@ void PluginController::OnIdle()
     // which needs the DSP lock the audio thread was holding when it asked.
     {
         const auto pending = mControlSurface->TakePending();
+
         if (pending.setlistPresetIndex.has_value())
         {
             ApplySetlistPresetByIndexDirect(*pending.setlistPresetIndex);
         }
+
         if (pending.setlistBankDelta.has_value())
         {
             SetlistBankChangeDirect(*pending.setlistBankDelta);
         }
+
         if (pending.setlistBankSelect.has_value())
         {
             SelectSetlistBankDirect(*pending.setlistBankSelect);
         }
+
         if (pending.sceneIndex.has_value())
         {
             SelectSceneByIndexDirect(*pending.sceneIndex);
@@ -1080,6 +1136,7 @@ void PluginController::OnIdle()
     if (mPracticeTool)
     {
         mPracticeToolUpdateCounter++;
+
         if (mPracticeToolUpdateCounter >= 60 / kPracticeToolRateHz)
         {
             mPracticeToolUpdateCounter = 0;
@@ -1105,6 +1162,7 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     // instance (or the standalone app) last wrote. kPreserveInstanceOwned re-asserts them
     // instead; the live values are members, so nothing needs snapshotting first.
     LoadAppSettings();
+
     if (ApplySettingsToRuntime(SettingsApplyMode::kPreserveInstanceOwned))
     {
         SaveAppSettings();
@@ -1116,14 +1174,17 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
 
     std::vector<std::string> definitionIds;
     definitionIds.reserve(mCompositeLibrary.GetAllDefinitions().size());
+
     for (const auto& def : mCompositeLibrary.GetAllDefinitions())
     {
         definitionIds.push_back(def.id);
     }
+
     for (const auto& id : definitionIds)
     {
         mCompositeLibrary.RemoveDefinition(id);
     }
+
     LoadCompositeLibrary();
 
     {
@@ -1132,6 +1193,7 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
     }
 
     const auto automationData = LoadUiStorageJson("automation.json", nlohmann::json::object());
+
     if (!automationData.empty())
     {
         mAutomationSlots.LoadFromJson(automationData);
@@ -1147,6 +1209,7 @@ void PluginController::ReloadSharedSyncSourcesFromDisk()
 void PluginController::PollSharedSyncState()
 {
     const auto now = std::chrono::steady_clock::now();
+
     if (now < mNextSharedSyncPollAt)
     {
         return;
@@ -1156,18 +1219,21 @@ void PluginController::PollSharedSyncState()
 
     const auto payload =
         Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId).value_or(nlohmann::json::object());
+
     if (!payload.is_object())
     {
         return;
     }
 
     const auto versionIt = payload.find("version");
+
     if (versionIt == payload.end() || !versionIt->is_number_unsigned())
     {
         return;
     }
 
     const auto version = versionIt->get<std::uint64_t>();
+
     if (!mSharedSyncVersionSeenInitialized)
     {
         mSharedSyncVersionSeen = version;
@@ -1181,6 +1247,7 @@ void PluginController::PollSharedSyncState()
     }
 
     mSharedSyncVersionSeen = version;
+
     if (!mUIReady)
     {
         return;
@@ -1189,14 +1256,17 @@ void PluginController::PollSharedSyncState()
     nlohmann::json msg;
     msg["type"] = "sharedSyncUpdated";
     msg["version"] = version;
+
     if (payload.contains("domains") && payload["domains"].is_array())
     {
         msg["domains"] = payload["domains"];
     }
+
     if (payload.contains("updatedAt"))
     {
         msg["updatedAt"] = payload["updatedAt"];
     }
+
     SendMessageToUI(msg.dump());
 }
 
@@ -1223,10 +1293,12 @@ void PluginController::ReportErrorToUI(const std::string& message, const std::st
     nlohmann::json msg;
     msg["type"] = "error";
     msg["message"] = message;
+
     if (!detail.empty())
     {
         msg["detail"] = detail;
     }
+
     SendMessageToUI(msg.dump());
 }
 
@@ -1242,6 +1314,7 @@ void PluginController::AppendSessionLog(const std::string& message) const
     [[maybe_unused]] const auto ensuredLogDir = mFileSystem.EnsureDirectory(logPath.parent_path());
 
     std::ofstream output(logPath, std::ios::app);
+
     if (!output)
     {
         return;
@@ -1265,9 +1338,11 @@ void PluginController::HandleGetSharedSyncStateRequest()
     const auto filePayload =
         Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId).value_or(nlohmann::json::object());
     std::uint64_t currentVersion = 0;
+
     if (filePayload.is_object())
     {
         const auto it = filePayload.find("version");
+
         if (it != filePayload.end() && it->is_number_unsigned())
         {
             currentVersion = it->get<std::uint64_t>();
@@ -1280,6 +1355,7 @@ void PluginController::HandleGetSharedSyncStateRequest()
     }
 
     mSharedSyncVersionHandled = currentVersion;
+
     if (!mSharedSyncVersionSeenInitialized || currentVersion > mSharedSyncVersionSeen)
     {
         mSharedSyncVersionSeen = currentVersion;
@@ -1294,6 +1370,7 @@ void PluginController::HandleGetSharedSyncStateRequest()
     state["uiSettings"] = mUiSettings;
     state["blendLibrary"] = mBlendLibrary;
     state["presetArchiveSession"] = {{"active", IsPresetArchiveSessionActive()}};
+
     if (mPresetArchiveSession)
     {
         state["presetArchiveSession"]["archiveName"] = mPresetArchiveSession->archiveName;
@@ -1309,6 +1386,7 @@ void PluginController::HandleGetSharedSyncStateRequest()
     for (const auto& resource : allResources)
     {
         const std::string type = resource.type;
+
         if (!libraryInfo.contains(type) || !libraryInfo[type].is_array())
         {
             libraryInfo[type] = nlohmann::json::array();
@@ -1322,24 +1400,29 @@ void PluginController::HandleGetSharedSyncStateRequest()
         entry["tags"] = resource.tags;
         entry["filePath"] = resource.filePath.empty() ? "" : util::PathToUtf8(resource.filePath);
         entry["hash"] = resource.hash;
+
         if (!resource.metadata.empty())
         {
             entry["metadata"] = resource.metadata;
         }
+
         const bool hasPath = !resource.filePath.empty();
         const bool exists = hasPath && std::filesystem::exists(resource.filePath);
         entry["fileMissing"] = !(hasPath && exists);
 
         libraryInfo[type].push_back(entry);
     }
+
     state["resourceLibrary"] = std::move(libraryInfo);
 
     {
         nlohmann::json customEffects = nlohmann::json::array();
+
         for (const auto& entry : mCustomEffectLibrary.GetAllEntries())
         {
             customEffects.push_back(SerializeCustomEffectLibraryEntry(entry));
         }
+
         state["customEffectLibrary"] = std::move(customEffects);
     }
 
@@ -1463,6 +1546,7 @@ void PluginController::HandleSetParameterRequest(const nlohmann::json& payload)
 
     const auto name = payload.value("name", std::string{});
     const auto it = kAliases.find(name);
+
     if (it == kAliases.end())
     {
         AppendSessionLog("Ignoring setParameter for unknown parameter: " + name);
@@ -1479,6 +1563,7 @@ void PluginController::HandleSetParameterRequest(const nlohmann::json& payload)
 
     nlohmann::json forwarded;
     forwarded["path"] = it->second.path;
+
     if (it->second.isBoolean)
     {
         forwarded["value"] = raw > 0.5;
@@ -1680,6 +1765,7 @@ void PluginController::HandleOpenAudioPreferencesRequest()
 void PluginController::HandleTunerRequest(const nlohmann::json& payload)
 {
     const std::string action = payload.value("action", "");
+
     if (action == "start")
     {
         mTuner->SetActive(true);
@@ -1687,6 +1773,7 @@ void PluginController::HandleTunerRequest(const nlohmann::json& payload)
         bool liveMode = true;
         {
             std::lock_guard<std::mutex> lock(mDSPMutex);
+
             if (payload.contains("liveMode"))
             {
                 mPresetMixer.SetLiveTunerMode(payload.value("liveMode", true));
@@ -1817,10 +1904,12 @@ void PluginController::HandleSetAmpCabStateRequest(const nlohmann::json& payload
 {
     bool ampEnabled = true;
     bool cabEnabled = true;
+
     if (payload.contains("ampEnabled"))
     {
         ampEnabled = payload.value("ampEnabled", true);
     }
+
     if (payload.contains("cabEnabled"))
     {
         cabEnabled = payload.value("cabEnabled", true);
@@ -1853,16 +1942,19 @@ void PluginController::HandleSetAutoLevelRequest(const nlohmann::json& payload)
 void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
+
     if (path.empty())
     {
         path = payload.value("filePath", "");
     }
+
     if (path.empty())
     {
         return;
     }
 
     std::filesystem::path filePath = util::PathFromUtf8(path);
+
     if (!std::filesystem::exists(filePath))
     {
         ReportErrorToUI("Model file not found", path);
@@ -1877,6 +1969,7 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
                        {"category", "Local"},
                        {"metadata", nlohmann::json::object({{"provider", kLocalResourceProvider}})}},
         resourceError, true);
+
     if (!savedResource)
     {
         ReportErrorToUI("Model load failed",
@@ -1905,16 +1998,19 @@ void PluginController::HandleLoadModelRequest(const nlohmann::json& payload)
 void PluginController::HandleLoadIRRequest(const nlohmann::json& payload)
 {
     std::string path = payload.value("path", "");
+
     if (path.empty())
     {
         path = payload.value("filePath", "");
     }
+
     if (path.empty())
     {
         return;
     }
 
     std::filesystem::path filePath = util::PathFromUtf8(path);
+
     if (!std::filesystem::exists(filePath))
     {
         ReportErrorToUI("IR file not found", path);
@@ -1970,6 +2066,7 @@ void PluginController::HandleGetThemeRequest()
     std::string theme = "dark";
 
     const auto appThemeIt = mAppSettings.find("theme");
+
     if (appThemeIt != mAppSettings.end() && appThemeIt->is_string())
     {
         theme = appThemeIt->get<std::string>();
@@ -2035,6 +2132,7 @@ void PluginController::HandleSetGlobalChainRequest(const nlohmann::json& payload
         }
         PersistGlobalFxSettingsToAppSettings();
     }
+
     SendGlobalChainStateToUI();
 }
 
@@ -2065,19 +2163,24 @@ void PluginController::HandleLoadNodeResourceRequest(const nlohmann::json& paylo
     std::string presetId = payload.value("presetId", "p1");
     std::string nodeId = payload.value("nodeId", "");
     ResourceRef ref;
+
     if (payload.contains("resourceType"))
     {
         ref.resourceType = payload["resourceType"].get<std::string>();
     }
+
     if (payload.contains("resourceId"))
     {
         ref.resourceId = payload["resourceId"].get<std::string>();
     }
+
     if (payload.contains("filePath"))
     {
         ref.filePath = payload["filePath"].get<std::string>();
     }
+
     const bool loaded = mPresetMixer.LoadNodeResource(presetId, nodeId, ref);
+
     if (!loaded && ReportHostedPluginResourceLoadFailure(nodeId, ref))
     {
         DiscardFailedHostedPluginResourceSelection(nodeId, ref);
@@ -2086,6 +2189,7 @@ void PluginController::HandleLoadNodeResourceRequest(const nlohmann::json& paylo
     {
         NotifyHostedPluginResourceLoadCompleted(nodeId, ref);
     }
+
     UpdateHostLatency();
 }
 
@@ -2111,10 +2215,12 @@ void PluginController::HandleSetTunerReferenceRequest(const nlohmann::json& payl
 void PluginController::UpdateHostLatency()
 {
     const int latency = mPresetMixer.GetTotalLatencySamples();
+
     if (latency == mLastReportedLatency)
     {
         return;
     }
+
     mLastReportedLatency = latency;
     mHost.NotifyLatencyChanged(latency);
 }
@@ -2127,16 +2233,19 @@ void PluginController::ResetNamNodeLevelState(const std::string& nodeId)
     }
 
     auto* node = mActivePreset->graph.FindNode(nodeId);
+
     if (!node || !IsNamEffectType(node->type))
     {
         return;
     }
 
     ClearNamCalibrationParams(*node);
+
     if (!node->params.contains("useCalibration"))
     {
         node->params["useCalibration"] = 1.0;
     }
+
     mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
     mPendingStateBroadcast = true;
 
@@ -2175,16 +2284,19 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
     nlohmann::json payload = nlohmann::json::object();
     payload["updatedAt"] = BuildUtcIsoTimestamp();
     payload["domains"] = nlohmann::json::array();
+
     for (const auto& domain : domains)
     {
         if (domain.empty())
         {
             continue;
         }
+
         payload["domains"].push_back(domain);
     }
 
     const auto instanceIdIt = mAppSettings.find("app.instanceId");
+
     if (instanceIdIt != mAppSettings.end() && instanceIdIt->is_string())
     {
         payload["writerInstanceId"] = instanceIdIt->get<std::string>();
@@ -2197,9 +2309,11 @@ void PluginController::TouchSharedSyncState(const std::vector<std::string>& doma
     std::uint64_t nextVersion = 1;
     const bool wrote = Store().Transact([&]() {
         nextVersion = 1;
+
         if (const auto previous = Store().Get(storage::ItemType::kDocument, kSharedSyncStateDocumentId))
         {
             const auto versionIt = previous->find("version");
+
             if (versionIt != previous->end() && versionIt->is_number_unsigned())
             {
                 nextVersion = versionIt->get<std::uint64_t>() + 1;
@@ -2280,6 +2394,7 @@ void PluginController::OpenDocumentStore() const
 
         std::error_code renameEc;
         std::filesystem::rename(dbPath, quarantinePath, renameEc);
+
         if (renameEc)
         {
             AppendSessionLog("The document store at " + dbPath.string() +
@@ -2322,18 +2437,22 @@ void PluginController::OpenDocumentStore() const
     // skipped every preset.
     const auto report = storage::MigrateLegacyJsonTree(mStore, mFileSystem.ResolveSettingsDirectory(),
                                                        mFileSystem.ResolvePresetDirectory() / "user");
+
     if (report.ran)
     {
         std::string summary = "Imported the legacy JSON tree into " + dbPath.string() + ": " +
                               std::to_string(report.itemsImported) + " items";
+
         for (const auto& note : report.notes)
         {
             summary += "\n  " + note;
         }
+
         for (const auto& failure : report.failures)
         {
             summary += "\n  ! " + failure;
         }
+
         AppendSessionLog(summary);
         std::cout << "[Plugin] " << summary << std::endl;
     }
@@ -2370,6 +2489,7 @@ nlohmann::json PluginController::LoadUiStorageJson(const std::string& filename, 
 void PluginController::SaveUiStorageJson(const std::string& filename, const nlohmann::json& payload) const
 {
     const bool wrote = Store().Put(storage::ItemType::kDocument, UiStorageDocumentId(filename), payload);
+
     if (!wrote)
     {
         AppendSessionLog("Failed to save UI storage document: " + UiStorageDocumentId(filename));
@@ -2377,6 +2497,7 @@ void PluginController::SaveUiStorageJson(const std::string& filename, const nloh
     }
 
     std::vector<std::string> domains;
+
     if (filename == "automation.json")
     {
         domains.push_back("automation");
@@ -2403,10 +2524,12 @@ bool PluginController::WriteFile(const std::filesystem::path& target, const std:
     try
     {
         std::ofstream ofs(target, std::ios::binary);
+
         if (!ofs.is_open())
         {
             return false;
         }
+
         ofs.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
         return true;
     }
@@ -2415,5 +2538,4 @@ bool PluginController::WriteFile(const std::filesystem::path& target, const std:
         return false;
     }
 }
-
 } // namespace guitarfx

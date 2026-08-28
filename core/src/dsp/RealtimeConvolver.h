@@ -153,5 +153,4 @@ class RealtimeConvolver
     size_t mNuDelayPos = 0;
     size_t mNuScratchSize = 0; // max chunk size for the scratch buffers
 };
-
 } // namespace guitarfx

@@ -40,10 +40,12 @@ struct OutputProtectionCeilingScope
 double PeakAbs(const std::vector<float>& buffer)
 {
     double peak = 0.0;
+
     for (float sample : buffer)
     {
         peak = std::max(peak, std::abs(static_cast<double>(sample)));
     }
+
     return peak;
 }
 
@@ -121,6 +123,7 @@ TestResult TestDSPPerformanceStatsPopulation()
         // Process multiple blocks to accumulate timing data
         float* inputs[2] = {inputL.data(), inputR.data()};
         float* outputs[2] = {outputL.data(), outputR.data()};
+
         for (int i = 0; i < 10; ++i)
         {
             executor.Process(inputs, outputs, kBlock);
@@ -165,6 +168,7 @@ TestResult TestDSPPerformanceStatsPopulation()
         // Verify we have timing data for our nodes
         bool hasGainTiming = false;
         double gainProcessingTime = 0.0;
+
         for (const auto& [nodeId, timeUs] : updatedStats.nodeProcessingTimesUs)
         {
             if (nodeId == "gain" && timeUs >= 0.0)
@@ -197,6 +201,7 @@ TestResult TestDSPPerformanceStatsPopulation()
 
         // Verify output is correct (unity gain)
         bool outputCorrect = true;
+
         for (size_t i = 0; i < outputL.size(); ++i)
         {
             if (std::abs(outputL[i] - 0.5f) > 0.01f || std::abs(outputR[i] - 0.5f) > 0.01f)
@@ -262,6 +267,7 @@ TestResult TestDSPPerformanceStatsReset()
         // Process some audio
         float* inputs[2] = {inputL.data(), inputR.data()};
         float* outputs[2] = {outputL.data(), outputR.data()};
+
         for (int i = 0; i < 5; ++i)
         {
             executor.Process(inputs, outputs, kBlock);
@@ -331,6 +337,7 @@ TestResult TestMultiPresetMixerPerformanceStats()
 
         // Get initial stats (should be zero)
         auto initialStats = mixer.GetPerformanceStats();
+
         if (initialStats.totalProcessingTimeUs != 0.0)
         {
             result.message =
@@ -346,6 +353,7 @@ TestResult TestMultiPresetMixerPerformanceStats()
 
         float* inputs[2] = {inputL.data(), inputR.data()};
         float* outputs[2] = {outputL.data(), outputR.data()};
+
         for (int i = 0; i < 10; ++i)
         {
             mixer.Process(inputs, outputs, kBlock);
@@ -371,6 +379,7 @@ TestResult TestMultiPresetMixerPerformanceStats()
         // Check that we have timing data for the gain node
         bool hasGainTiming =
             updatedStats.nodeProcessingTimesUs.find("gain") != updatedStats.nodeProcessingTimesUs.end();
+
         if (!hasGainTiming)
         {
             result.message = "No timing data found for 'gain' node in MultiPresetMixer stats";
@@ -406,6 +415,7 @@ TestResult TestMultiPresetMixerLimiterUsesProtectionCeiling()
         mixer.SetLimiterEnabled(true);
 
         const guitarfx::Preset preset = CreateUnityGainPreset();
+
         if (!mixer.AddActivePreset(preset, "preset1", "Test Preset"))
         {
             result.message = "Failed to add preset to mixer";
@@ -423,6 +433,7 @@ TestResult TestMultiPresetMixerLimiterUsesProtectionCeiling()
 
         const double peak = std::max(PeakAbs(outputL), PeakAbs(outputR));
         const double expectedCeiling = guitarfx::GetOutputProtectionCeilingLinear();
+
         if (peak > expectedCeiling + 1.0e-4)
         {
             result.message = "Limiter peak exceeds protection ceiling: peak=" + std::to_string(peak) +
@@ -459,6 +470,7 @@ TestResult TestMultiPresetMixerAutoLevelOutputTargetsProtectionCeiling()
         mixer.SetAutoLevelOutput(true);
 
         const guitarfx::Preset preset = CreateUnityGainPreset();
+
         if (!mixer.AddActivePreset(preset, "preset1", "Test Preset"))
         {
             result.message = "Failed to add preset to mixer";
@@ -479,6 +491,7 @@ TestResult TestMultiPresetMixerAutoLevelOutputTargetsProtectionCeiling()
 
         const double peak = std::max(PeakAbs(outputL), PeakAbs(outputR));
         const double expectedCeiling = guitarfx::GetOutputProtectionCeilingLinear();
+
         if (peak > expectedCeiling + 0.02)
         {
             result.message =
@@ -518,6 +531,7 @@ TestResult TestMultiPresetMixerLimiterAppliesUpdatedProtectionCeilingImmediately
         mixer.SetLimiterEnabled(true);
 
         const guitarfx::Preset preset = CreateUnityGainPreset();
+
         if (!mixer.AddActivePreset(preset, "preset1", "Test Preset"))
         {
             result.message = "Failed to add preset to mixer";
@@ -535,6 +549,7 @@ TestResult TestMultiPresetMixerLimiterAppliesUpdatedProtectionCeilingImmediately
 
         const double peak = std::max(PeakAbs(outputL), PeakAbs(outputR));
         const double expectedCeiling = guitarfx::GetOutputProtectionCeilingLinear();
+
         if (peak > expectedCeiling + 1.0e-4)
         {
             result.message = "Updated protection ceiling was not applied immediately: peak=" + std::to_string(peak) +
@@ -556,7 +571,6 @@ TestResult TestMultiPresetMixerLimiterAppliesUpdatedProtectionCeilingImmediately
 
     return result;
 }
-
 } // namespace
 
 int main()
@@ -573,10 +587,12 @@ int main()
         std::cout << "Testing DSP performance stats population... ";
         auto result = TestDSPPerformanceStatsPopulation();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;
@@ -592,10 +608,12 @@ int main()
         std::cout << "Testing DSP performance stats reset... ";
         auto result = TestDSPPerformanceStatsReset();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;
@@ -611,10 +629,12 @@ int main()
         std::cout << "Testing MultiPresetMixer performance stats... ";
         auto result = TestMultiPresetMixerPerformanceStats();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;
@@ -630,10 +650,12 @@ int main()
         std::cout << "Testing MultiPresetMixer limiter ceiling... ";
         auto result = TestMultiPresetMixerLimiterUsesProtectionCeiling();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;
@@ -649,10 +671,12 @@ int main()
         std::cout << "Testing MultiPresetMixer auto-level output ceiling... ";
         auto result = TestMultiPresetMixerAutoLevelOutputTargetsProtectionCeiling();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;
@@ -668,10 +692,12 @@ int main()
         std::cout << "Testing MultiPresetMixer runtime ceiling updates... ";
         auto result = TestMultiPresetMixerLimiterAppliesUpdatedProtectionCeilingImmediately();
         std::cout << (result.passed ? "PASS" : "FAIL") << "\n";
+
         if (!result.passed)
         {
             std::cout << "  " << result.message << "\n";
         }
+
         if (result.passed)
         {
             ++passed;

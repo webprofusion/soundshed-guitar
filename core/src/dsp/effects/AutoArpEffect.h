@@ -69,20 +69,24 @@ class AutoArpEffect : public EffectProcessor
     {
         mPhase = 0.0;
         mCurrentStep = 0;
+
         if (!mStepSemitones.empty())
         {
             mCurrentSemitones = mStepSemitones[0];
         }
+
         if (mConfigured)
         {
             mStretch.reset();
             ApplyStretchSemitones(mCurrentSemitones);
         }
+
         mDetectedHz = 0.0;
         mSmoothedHz = 0.0;
         mTriggerVote = 0;
         mArpActive = (mPitchMode == 0);
         mPitchFillPos = 0;
+
         if (!mPitchBuf.empty())
         {
             std::fill(mPitchBuf.begin(), mPitchBuf.end(), 0.0f);
@@ -104,6 +108,7 @@ class AutoArpEffect : public EffectProcessor
             const int toCopy = std::min(numSamples, kPitchBufSize - mPitchFillPos);
             std::copy(inputs[0], inputs[0] + toCopy, mPitchBuf.data() + mPitchFillPos);
             mPitchFillPos += toCopy;
+
             if (mPitchFillPos >= kPitchBufSize)
             {
                 mDetectedHz = EstimatePitch();
@@ -128,16 +133,19 @@ class AutoArpEffect : public EffectProcessor
                 if (conditionMet)
                 {
                     mTriggerVote = std::max(0, mTriggerVote) + 1;
+
                     if (mTriggerVote >= kActivateFrames && !mArpActive)
                     {
                         // Reset to beat-start on fresh activation.
                         mPhase = 0.0;
                         mCurrentStep = 0;
+
                         if (!mStepSemitones.empty())
                         {
                             mCurrentSemitones = mStepSemitones[0];
                             ApplyStretchSemitones(mCurrentSemitones);
                         }
+
                         mStretch.reset();
                         mArpActive = true;
                     }
@@ -145,6 +153,7 @@ class AutoArpEffect : public EffectProcessor
                 else
                 {
                     mTriggerVote = std::min(0, mTriggerVote) - 1;
+
                     if (mTriggerVote <= -kDeactivateFrames)
                     {
                         mArpActive = false;
@@ -162,16 +171,19 @@ class AutoArpEffect : public EffectProcessor
                 {
                     outputs[0][i] = inputs[0] ? inputs[0][i] : 0.0f;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][i] = inputs[1] ? inputs[1][i] : 0.0f;
                 }
             }
+
             return;
         }
 
         // Pitch-shift (or bypass) based on the semitones active at block start.
         const int blockSemitones = mCurrentSemitones;
+
         if (blockSemitones == 0)
         {
             // No pitch change: copy input to wet buffers directly.
@@ -189,6 +201,7 @@ class AutoArpEffect : public EffectProcessor
                 mWetR.resize(static_cast<size_t>(numSamples), 0.0f);
                 mZero.resize(static_cast<size_t>(numSamples), 0.0f);
             }
+
             float* ip[2] = {inputs[0] ? inputs[0] : mZero.data(), inputs[1] ? inputs[1] : mZero.data()};
             float* wp[2] = {mWetL.data(), mWetR.data()};
             mStretch.process(ip, numSamples, wp, numSamples);
@@ -208,6 +221,7 @@ class AutoArpEffect : public EffectProcessor
             // Gate envelope: [0, attack) ramp up | [attack, gate) hold | [gate, gate+release) ramp down | silence
             const float phase = static_cast<float>(mPhase);
             float gateGain;
+
             if (phase < attackFrac)
             {
                 gateGain = (attackFrac > 0.0f) ? (phase / attackFrac) : 1.0f;
@@ -232,6 +246,7 @@ class AutoArpEffect : public EffectProcessor
             {
                 outputs[0][i] = dryL * dryMix + mWetL[static_cast<size_t>(i)] * gateGain * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = dryR * dryMix + mWetR[static_cast<size_t>(i)] * gateGain * wetMix;
@@ -239,10 +254,12 @@ class AutoArpEffect : public EffectProcessor
 
             // Advance phase; on wrap, advance to next step.
             mPhase += mPhaseIncrement;
+
             if (mPhase >= 1.0)
             {
                 mPhase -= 1.0;
                 const int count = static_cast<int>(mStepSemitones.size());
+
                 if (count > 0)
                 {
                     if (mRandomDirection)
@@ -253,6 +270,7 @@ class AutoArpEffect : public EffectProcessor
                     {
                         mCurrentStep = (mCurrentStep + 1) % count;
                     }
+
                     if (mRandomPattern)
                     {
                         // Fresh random semitone for this step so every note is unpredictable.
@@ -263,6 +281,7 @@ class AutoArpEffect : public EffectProcessor
                     {
                         mCurrentSemitones = mStepSemitones[static_cast<size_t>(mCurrentStep)];
                     }
+
                     // Update stretch with new pitch for the next block.
                     ApplyStretchSemitones(mCurrentSemitones);
                 }
@@ -316,6 +335,7 @@ class AutoArpEffect : public EffectProcessor
         else if (key == "pitchMode")
         {
             mPitchMode = static_cast<int>(std::clamp(std::round(value), 0.0, 2.0));
+
             if (mPitchMode == 0)
             {
                 mArpActive = true;
@@ -329,9 +349,11 @@ class AutoArpEffect : public EffectProcessor
         {
             // step0 .. step7
             const int idx = std::stoi(key.substr(4));
+
             if (idx >= 0 && idx < kMaxCustomSteps)
             {
                 mCustomSteps[static_cast<size_t>(idx)] = static_cast<int>(std::clamp(std::round(value), -24.0, 24.0));
+
                 if (mPattern == kPatternCustom)
                 {
                     RebuildStepList();
@@ -350,54 +372,67 @@ class AutoArpEffect : public EffectProcessor
         {
             return mBpm;
         }
+
         if (key == "stepRate")
         {
             return static_cast<double>(mStepRate);
         }
+
         if (key == "numSteps")
         {
             return static_cast<double>(mNumSteps);
         }
+
         if (key == "pattern")
         {
             return static_cast<double>(mPattern);
         }
+
         if (key == "direction")
         {
             return static_cast<double>(mDirection);
         }
+
         if (key == "gate")
         {
             return mGate;
         }
+
         if (key == "attack")
         {
             return mAttack;
         }
+
         if (key == "release")
         {
             return mRelease;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "pitchMode")
         {
             return static_cast<double>(mPitchMode);
         }
+
         if (key == "pitchThreshold")
         {
             return mPitchThreshold;
         }
+
         if (key.size() > 4 && key.substr(0, 4) == "step")
         {
             const int idx = std::stoi(key.substr(4));
+
             if (idx >= 0 && idx < kMaxCustomSteps)
             {
                 return static_cast<double>(mCustomSteps[static_cast<size_t>(idx)]);
             }
         }
+
         return 0.0;
     }
 
@@ -419,6 +454,7 @@ class AutoArpEffect : public EffectProcessor
         {
             return 0;
         }
+
         return SignalsmithTotalLatencySamples(mStretch);
     }
 
@@ -492,6 +528,7 @@ class AutoArpEffect : public EffectProcessor
         else
         {
             const auto& row = kPatternTable[static_cast<size_t>(mPattern)];
+
             for (int i = 0; i < 9 && row[i] >= 0; ++i)
             {
                 base.push_back(row[i]);
@@ -520,6 +557,7 @@ class AutoArpEffect : public EffectProcessor
             case 2: // Up-Down — base + reverse without duplicating endpoints
             {
                 mStepSemitones = base;
+
                 if (base.size() > 1)
                 {
                     for (int i = static_cast<int>(base.size()) - 2; i >= 1; --i)
@@ -527,6 +565,7 @@ class AutoArpEffect : public EffectProcessor
                         mStepSemitones.push_back(base[static_cast<size_t>(i)]);
                     }
                 }
+
                 break;
             }
             default:
@@ -541,10 +580,12 @@ class AutoArpEffect : public EffectProcessor
 
         // Clamp current step index to new list size
         const int count = static_cast<int>(mStepSemitones.size());
+
         if (count > 0)
         {
             mCurrentStep = mCurrentStep % count;
             mCurrentSemitones = mStepSemitones[static_cast<size_t>(mCurrentStep)];
+
             if (mConfigured)
             {
                 ApplyStretchSemitones(mCurrentSemitones);
@@ -560,6 +601,7 @@ class AutoArpEffect : public EffectProcessor
         const int n = kPitchBufSize;
         const int minPeriod = static_cast<int>(mSampleRate / 1300.0); // ~1300 Hz max
         const int maxPeriod = static_cast<int>(mSampleRate / 50.0);   // ~50 Hz min
+
         if (minPeriod < 2 || maxPeriod >= n / 2)
         {
             return 0.0;
@@ -567,11 +609,13 @@ class AutoArpEffect : public EffectProcessor
 
         // Silence check: skip if RMS² is below noise floor
         double sumSq = 0.0;
+
         for (int i = 0; i < n; ++i)
         {
             const double s = static_cast<double>(mPitchBuf[static_cast<size_t>(i)]);
             sumSq += s * s;
         }
+
         if (sumSq / n < 9.0e-6) // RMS < 0.003
         {
             return 0.0;
@@ -585,30 +629,36 @@ class AutoArpEffect : public EffectProcessor
         for (int tau = minPeriod; tau <= maxPeriod; ++tau)
         {
             double sum = 0.0;
+
             for (int i = 0; i < n - tau; ++i)
             {
                 const double delta = static_cast<double>(mPitchBuf[static_cast<size_t>(i)]) -
                                      static_cast<double>(mPitchBuf[static_cast<size_t>(i + tau)]);
                 sum += delta * delta;
             }
+
             runningSum += sum;
             const double cmndf = (runningSum > 0.0) ? (sum * static_cast<double>(tau) / runningSum) : 1.0;
+
             if (cmndf < 0.15) // First clear minimum wins (YIN step 5)
             {
                 bestTau = tau;
                 bestCmndf = cmndf;
                 break;
             }
+
             if (cmndf < bestCmndf)
             {
                 bestCmndf = cmndf;
                 bestTau = tau;
             }
         }
+
         if (bestTau <= 0 || bestCmndf > 0.5)
         {
             return 0.0;
         }
+
         return mSampleRate / static_cast<double>(bestTau);
     }
 
@@ -619,6 +669,7 @@ class AutoArpEffect : public EffectProcessor
         {
             return;
         }
+
         static constexpr double kTonalityLimitHz = 8000.0;
         const float tonalityLimit = static_cast<float>(kTonalityLimitHz / std::max(1.0, mSampleRate));
         mStretch.setTransposeSemitones(static_cast<float>(semitones), tonalityLimit);
@@ -722,5 +773,4 @@ inline void RegisterAutoArpEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<AutoArpEffect>(); });
 }
-
 } // namespace guitarfx

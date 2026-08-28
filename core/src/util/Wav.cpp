@@ -40,13 +40,13 @@ bool HasStandardExtensibleGuidTail(const std::uint8_t* data)
 
 namespace guitarfx::util
 {
-
 std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
 {
     if (bytes.size() < 44)
     {
         return std::nullopt;
     }
+
     if (std::memcmp(bytes.data(), "RIFF", 4) != 0 || std::memcmp(bytes.data() + 8, "WAVE", 4) != 0)
     {
         return std::nullopt;
@@ -63,6 +63,7 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
         const std::string chunkId(ch, ch + 4);
         const std::uint32_t chunkSize = ReadUint32LE(bytes.data() + offset + 4);
         const std::size_t chunkDataStart = offset + 8;
+
         if (chunkDataStart + chunkSize > bytes.size())
         {
             return std::nullopt;
@@ -84,6 +85,7 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
                 }
 
                 const auto* subFormat = bytes.data() + chunkDataStart + 24;
+
                 if (!HasStandardExtensibleGuidTail(subFormat))
                 {
                     return std::nullopt;
@@ -103,6 +105,7 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
             dataSize = chunkSize;
             break;
         }
+
         offset = chunkDataStart + chunkSize + (chunkSize % 2);
     }
 
@@ -113,12 +116,14 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
     }
 
     const std::size_t bytesPerSample = static_cast<std::size_t>(bitsPerSample) / 8;
+
     if (bytesPerSample == 0)
     {
         return std::nullopt;
     }
 
     const std::size_t frameCount = dataSize / blockAlign;
+
     if (frameCount == 0)
     {
         return std::nullopt;
@@ -131,18 +136,22 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
     wav.channelSamples.assign(static_cast<std::size_t>(channels), std::vector<double>(frameCount, 0.0));
 
     const bool isFloat = (audioFormat == kWavFormatIeeeFloat);
+
     for (std::size_t frame = 0; frame < frameCount; ++frame)
     {
         const std::size_t frameOffset = dataOffset + frame * blockAlign;
+
         for (std::size_t ch = 0; ch < static_cast<std::size_t>(channels); ++ch)
         {
             const std::size_t so = frameOffset + ch * bytesPerSample;
+
             if (so + bytesPerSample > dataOffset + dataSize)
             {
                 return std::nullopt;
             }
 
             double sample = 0.0;
+
             if (isFloat)
             {
                 if (bitsPerSample == 32)
@@ -174,10 +183,12 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
                     std::int32_t v = static_cast<std::int32_t>(bytes[so]) |
                                      (static_cast<std::int32_t>(bytes[so + 1]) << 8) |
                                      (static_cast<std::int32_t>(bytes[so + 2]) << 16);
+
                     if (v & 0x800000)
                     {
                         v |= ~0xFFFFFF;
                     }
+
                     sample = static_cast<double>(v) / 8388608.0;
                     break;
                 }
@@ -189,9 +200,11 @@ std::optional<DecodedWav> DecodePcmWav(const std::vector<std::uint8_t>& bytes)
                     return std::nullopt;
                 }
             }
+
             wav.channelSamples[ch][frame] = std::clamp(sample, -1.0, 1.0);
         }
     }
+
     return wav;
 }
 
@@ -207,7 +220,9 @@ std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav, doubl
     {
         return {};
     }
+
     const double sourceRate = wav.sampleRate > 0.0 ? wav.sampleRate : targetRate;
+
     if (sourceRate <= 0.0)
     {
         return {};
@@ -223,22 +238,26 @@ std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav, doubl
         {
             const auto& src = wav.channelSamples[std::min(c, wav.channelSamples.size() - 1)];
             output[c].resize(sourceFrames);
+
             for (std::size_t f = 0; f < sourceFrames; ++f)
             {
                 output[c][f] = static_cast<float>(std::clamp(src[f], -1.0, 1.0));
             }
         }
+
         return output;
     }
 
     const double ratio = targetRate / sourceRate;
     const std::size_t destFrames = std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(sourceFrames * ratio)));
+
     if (quality == guitarfx::SampleRateConversionQuality::Linear)
     {
         for (std::size_t c = 0; c < channelCount; ++c)
         {
             const auto& src = wav.channelSamples[std::min(c, wav.channelSamples.size() - 1)];
             output[c].resize(destFrames);
+
             for (std::size_t f = 0; f < destFrames; ++f)
             {
                 const double pos = (static_cast<double>(f) * sourceRate) / targetRate;
@@ -248,6 +267,7 @@ std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav, doubl
                 output[c][f] = static_cast<float>(std::clamp(src[i0] + (src[i1] - src[i0]) * frac, -1.0, 1.0));
             }
         }
+
         return output;
     }
 
@@ -266,11 +286,13 @@ std::vector<std::vector<float>> ConvertToSampleRate(const DecodedWav& wav, doubl
         output[c].resize(destFrames);
         resampler.ProcessFixedOutput(src.data(), static_cast<int>(sourceFrames), output[c].data(),
                                      static_cast<int>(destFrames));
+
         for (float& sample : output[c])
         {
             sample = std::clamp(sample, -1.0f, 1.0f);
         }
     }
+
     return output;
 }
 
@@ -339,6 +361,7 @@ bool WriteStereo16BitWav(const std::filesystem::path& path, const std::vector<fl
                          const std::vector<float>& right, int sampleRate)
 {
     const auto bytes = EncodeStereo16BitWav(left, right, sampleRate);
+
     if (bytes.empty())
     {
         return false;
@@ -348,6 +371,7 @@ bool WriteStereo16BitWav(const std::filesystem::path& path, const std::vector<fl
     {
         std::filesystem::create_directories(path.parent_path());
         std::ofstream output(path, std::ios::binary);
+
         if (!output)
         {
             return false;
@@ -366,6 +390,7 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
 {
     WavHeaderInfo info;
     std::error_code ec;
+
     if (!std::filesystem::exists(wavFilePath, ec) || ec)
     {
         return info;
@@ -374,6 +399,7 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
     try
     {
         std::ifstream file(wavFilePath, std::ios::binary);
+
         if (!file)
         {
             return info;
@@ -382,33 +408,40 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
         const auto readU32 = [&file]() -> std::uint32_t {
             unsigned char b[4]{};
             file.read(reinterpret_cast<char*>(b), 4);
+
             if (file.gcount() != 4)
             {
                 return 0u;
             }
+
             return static_cast<std::uint32_t>(b[0]) | (static_cast<std::uint32_t>(b[1]) << 8) |
                    (static_cast<std::uint32_t>(b[2]) << 16) | (static_cast<std::uint32_t>(b[3]) << 24);
         };
         const auto readU16 = [&file]() -> std::uint16_t {
             unsigned char b[2]{};
             file.read(reinterpret_cast<char*>(b), 2);
+
             if (file.gcount() != 2)
             {
                 return 0u;
             }
+
             return static_cast<std::uint16_t>(static_cast<std::uint16_t>(b[0]) |
                                               (static_cast<std::uint16_t>(b[1]) << 8));
         };
 
         char riff[4]{};
         file.read(riff, 4);
+
         if (file.gcount() != 4 || std::memcmp(riff, "RIFF", 4) != 0)
         {
             return info;
         }
+
         (void)readU32(); // overall size
         char wave[4]{};
         file.read(wave, 4);
+
         if (file.gcount() != 4 || std::memcmp(wave, "WAVE", 4) != 0)
         {
             return info;
@@ -424,11 +457,14 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
         {
             char chunkId[4]{};
             file.read(chunkId, 4);
+
             if (file.gcount() != 4)
             {
                 break;
             }
+
             const std::uint32_t chunkSize = readU32();
+
             if (std::memcmp(chunkId, "fmt ", 4) == 0)
             {
                 (void)readU16(); // audio format
@@ -438,11 +474,13 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
                 (void)readU16(); // block align
                 info.bitsPerSample = readU16();
                 haveFmt = true;
+
                 // Skip any remaining fmt bytes (e.g. extensible header).
                 if (chunkSize > 16)
                 {
                     file.seekg(static_cast<std::streamoff>(chunkSize - 16), std::ios::cur);
                 }
+
                 if (chunkSize & 1u)
                 {
                     file.seekg(1, std::ios::cur);
@@ -464,6 +502,7 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
         if (haveFmt && info.sampleRate > 0)
         {
             info.valid = true;
+
             if (byteRate > 0 && dataBytes > 0)
             {
                 info.durationSec = static_cast<double>(dataBytes) / static_cast<double>(byteRate);
@@ -476,5 +515,4 @@ WavHeaderInfo ProbeWavHeader(const std::filesystem::path& wavFilePath)
 
     return info;
 }
-
 } // namespace guitarfx::util

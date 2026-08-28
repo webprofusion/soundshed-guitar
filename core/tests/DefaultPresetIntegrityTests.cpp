@@ -16,6 +16,7 @@ namespace
 nlohmann::json LoadJson(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
+
     if (!input)
     {
         throw std::runtime_error("Failed to open JSON file: " + path.string());
@@ -56,6 +57,7 @@ int main()
         // Load model library
         const auto audioModelsJson = LoadJson(dataDir / "audiofx-models.json");
         std::unordered_map<std::string, LibraryEntry> modelLibrary;
+
         if (!audioModelsJson.is_array())
         {
             recordError("audiofx-models.json is not an array");
@@ -66,6 +68,7 @@ int main()
             {
                 const std::string id = entry.value("id", "");
                 const std::string relPath = entry.value("filePath", "");
+
                 if (id.empty() || relPath.empty())
                 {
                     recordError("AudioFX model entry is missing id or filePath");
@@ -73,6 +76,7 @@ int main()
                 }
 
                 const fs::path modelPath = resourcesDir / relPath;
+
                 if (!fs::exists(modelPath))
                 {
                     recordError("AudioFX model file missing: " + id + " -> " + Describe(modelPath));
@@ -85,6 +89,7 @@ int main()
         // Load IR library
         const auto irLibraryJson = LoadJson(dataDir / "ir-library.json");
         std::unordered_map<std::string, LibraryEntry> irLibrary;
+
         if (!irLibraryJson.is_array())
         {
             recordError("ir-library.json is not an array");
@@ -95,6 +100,7 @@ int main()
             {
                 const std::string id = entry.value("id", "");
                 const std::string relPath = entry.value("filePath", "");
+
                 if (id.empty() || relPath.empty())
                 {
                     recordError("IR entry is missing id or filePath");
@@ -102,6 +108,7 @@ int main()
                 }
 
                 const fs::path irPath = resourcesDir / relPath;
+
                 if (!fs::exists(irPath))
                 {
                     recordError("IR file missing: " + id + " -> " + Describe(irPath));
@@ -113,6 +120,7 @@ int main()
 
         // Validate default presets
         const auto presetsJson = LoadJson(dataDir / "default-presets.json");
+
         if (!presetsJson.is_array())
         {
             recordError("default-presets.json is not an array");
@@ -131,6 +139,7 @@ int main()
                 }
 
                 const auto& graph = preset["graph"];
+
                 if (!graph.contains("nodes") || !graph["nodes"].is_array())
                 {
                     recordError("Preset " + presetId + " has invalid graph structure (missing nodes array)");
@@ -152,6 +161,7 @@ int main()
                                         " (amp_nam) is missing resource config");
                             continue;
                         }
+
                         const auto& resource = node["resource"];
                         const std::string resourceType = resource.value("type", "");
                         const std::string resourceId = resource.value("id", "");
@@ -179,6 +189,7 @@ int main()
                                         " (cab_ir) is missing resource config");
                             continue;
                         }
+
                         const auto& resource = node["resource"];
                         const std::string resourceType = resource.value("type", "");
                         const std::string resourceId = resource.value("id", "");
@@ -205,10 +216,12 @@ int main()
         if (!errors.empty())
         {
             std::cerr << "Preset integrity test failed with " << errors.size() << " issue(s):\n";
+
             for (const auto& error : errors)
             {
                 std::cerr << " - " << error << '\n';
             }
+
             return 1;
         }
 

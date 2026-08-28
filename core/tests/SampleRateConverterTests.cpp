@@ -19,10 +19,12 @@ std::atomic<std::size_t> gAllocationCount{0};
 void* operator new(std::size_t size)
 {
     gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+
     if (void* pointer = std::malloc(std::max<std::size_t>(size, 1)))
     {
         return pointer;
     }
+
     throw std::bad_alloc();
 }
 
@@ -107,23 +109,27 @@ bool BufferIsFinite(const std::vector<float>& buffer)
             return false;
         }
     }
+
     return true;
 }
 
 double RmsError(const std::vector<float>& first, const std::vector<float>& second)
 {
     const std::size_t count = std::min(first.size(), second.size());
+
     if (count == 0)
     {
         return std::numeric_limits<double>::infinity();
     }
 
     double sumSquares = 0.0;
+
     for (std::size_t sampleIndex = 0; sampleIndex < count; ++sampleIndex)
     {
         const double delta = static_cast<double>(first[sampleIndex]) - static_cast<double>(second[sampleIndex]);
         sumSquares += delta * delta;
     }
+
     return std::sqrt(sumSquares / static_cast<double>(count));
 }
 
@@ -244,6 +250,7 @@ bool TestNamOversamplingIsPerProcessor()
     {
         return false;
     }
+
     if (processorUp.GetTimeScale() != 4 || !processorUp.IsResamplingActive())
     {
         return false;
@@ -268,6 +275,7 @@ bool TestNamDryDelay()
     std::vector<float> firstBlock{1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
     delay.Process(firstBlock.data(), static_cast<int>(firstBlock.size()));
     const std::vector<float> expectedFirst{0.0f, 0.0f, 0.0f, 1.0f, 2.0f};
+
     if (firstBlock != expectedFirst)
     {
         return false;
@@ -276,6 +284,7 @@ bool TestNamDryDelay()
     std::vector<float> secondBlock{6.0f, 7.0f};
     delay.Process(secondBlock.data(), static_cast<int>(secondBlock.size()));
     const std::vector<float> expectedSecond{3.0f, 4.0f};
+
     if (secondBlock != expectedSecond)
     {
         return false;
@@ -302,6 +311,7 @@ bool TestNamOversamplingProcessor()
 
     std::vector<NAM_SAMPLE> input(blockSize);
     std::vector<NAM_SAMPLE> output(blockSize, static_cast<NAM_SAMPLE>(0.0));
+
     for (int sampleIndex = 0; sampleIndex < blockSize; ++sampleIndex)
     {
         input[static_cast<std::size_t>(sampleIndex)] = static_cast<NAM_SAMPLE>(sampleIndex) / blockSize;
@@ -310,14 +320,17 @@ bool TestNamOversamplingProcessor()
     const std::size_t allocationsBeforeProcess = gAllocationCount.load(std::memory_order_relaxed);
     processor.Process(model, input.data(), output.data(), blockSize);
     const std::size_t allocationsAfterProcess = gAllocationCount.load(std::memory_order_relaxed);
+
     if (allocationsAfterProcess != allocationsBeforeProcess)
     {
         return false;
     }
+
     if (model.processCount <= 0 || model.processedFrames < blockSize)
     {
         return false;
     }
+
     for (const NAM_SAMPLE sample : output)
     {
         if (!std::isfinite(static_cast<double>(sample)))
@@ -327,6 +340,7 @@ bool TestNamOversamplingProcessor()
     }
 
     processor.Reset(model);
+
     if (model.resetCount != 2 || model.timeScale != 4)
     {
         return false;
@@ -336,6 +350,7 @@ bool TestNamOversamplingProcessor()
     guitarfx::NamOversamplingProcessor linearProcessor;
     linearProcessor.Prepare(linearModel, 48000.0, 48000.0, blockSize, 2,
                             dsp::EAntiAliasFilterPhase::LinearCascadedFIRShort);
+
     if (linearProcessor.GetLatencySamples() <= 0)
     {
         return false;
@@ -344,6 +359,7 @@ bool TestNamOversamplingProcessor()
     std::fill(output.begin(), output.end(), static_cast<NAM_SAMPLE>(0.0));
     const std::size_t allocationsBeforeLinear = gAllocationCount.load(std::memory_order_relaxed);
     linearProcessor.Process(linearModel, input.data(), output.data(), blockSize);
+
     if (gAllocationCount.load(std::memory_order_relaxed) != allocationsBeforeLinear)
     {
         return false;
@@ -375,34 +391,42 @@ int main()
     {
         std::cerr << "Sample-rate converter round-trip quality test failed\n";
     }
+
     if (!fixedOutputOk)
     {
         std::cerr << "Sample-rate converter fixed output count test failed\n";
     }
+
     if (!optimizedNamSampleRateParsingOk)
     {
         std::cerr << "Optimized NAM sample-rate metadata parsing test failed\n";
     }
+
     if (!namDefaultProcessingRateOk)
     {
         std::cerr << "NAM default processing-rate test failed\n";
     }
+
     if (!namOversamplingConfigurationOk)
     {
         std::cerr << "NAM oversampling configuration test failed\n";
     }
+
     if (!namQualitySanitizingOk)
     {
         std::cerr << "NAM quality sanitizing test failed\n";
     }
+
     if (!namPerProcessorOk)
     {
         std::cerr << "NAM per-processor oversampling independence test failed\n";
     }
+
     if (!namDryDelayOk)
     {
         std::cerr << "NAM dry-delay alignment test failed\n";
     }
+
     if (!namOversamplingProcessorOk)
     {
         std::cerr << "NAM oversampling processor test failed\n";

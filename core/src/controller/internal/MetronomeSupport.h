@@ -14,7 +14,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 inline constexpr const char* kMetronomeEnabledSettingKey = "metronome.enabled";
 inline constexpr const char* kMetronomeBpmSettingKey = "metronome.bpm";
 inline constexpr const char* kMetronomeVolumeDbSettingKey = "metronome.volumeDb";
@@ -50,17 +49,20 @@ inline char BeatAccent(const std::string& pattern, int beatIndex)
     {
         return (beatIndex == 0) ? 'H' : 'L';
     }
+
     const std::size_t idx = static_cast<std::size_t>(beatIndex) % pattern.size();
     const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(pattern[idx])));
+
     if (c == 'H')
     {
         return 'H';
     }
+
     if (c == 'S' || c == '-' || c == '.')
     {
         return 'S';
     }
+
     return 'L';
 }
-
 } // namespace guitarfx::controller_detail

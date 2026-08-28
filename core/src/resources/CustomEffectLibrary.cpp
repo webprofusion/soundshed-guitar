@@ -17,50 +17,63 @@ nlohmann::json SerializeCustomEffectLibraryEntry(const CustomEffectLibraryEntry&
     json["id"] = entry.id;
     json["name"] = entry.name;
     json["category"] = entry.category;
+
     if (!entry.description.empty())
     {
         json["description"] = entry.description;
     }
+
     json["baseEffectType"] = entry.baseEffectType;
     json["moduleResourceType"] = entry.moduleResourceType;
     json["moduleResourceId"] = entry.moduleResourceId;
+
     if (!entry.latestRevisionId.empty())
     {
         json["latestRevisionId"] = entry.latestRevisionId;
     }
+
     if (!entry.thumbnailDataUrl.empty())
     {
         json["thumbnailDataUrl"] = entry.thumbnailDataUrl;
     }
+
     if (!entry.tags.empty())
     {
         json["tags"] = entry.tags;
     }
+
     if (!entry.defaultParams.empty())
     {
         nlohmann::json params = nlohmann::json::object();
+
         for (const auto& [key, value] : entry.defaultParams)
         {
             params[key] = value;
         }
+
         json["defaultParams"] = std::move(params);
     }
+
     if (entry.descriptorSummary.is_object() && !entry.descriptorSummary.empty())
     {
         json["descriptorSummary"] = entry.descriptorSummary;
     }
+
     if (!entry.origin.empty())
     {
         json["origin"] = entry.origin;
     }
+
     if (!entry.createdAt.empty())
     {
         json["createdAt"] = entry.createdAt;
     }
+
     if (!entry.updatedAt.empty())
     {
         json["updatedAt"] = entry.updatedAt;
     }
+
     return json;
 }
 
@@ -73,6 +86,7 @@ std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(cons
         {
             *error = "Entry must be a JSON object";
         }
+
         return std::nullopt;
     }
 
@@ -123,6 +137,7 @@ std::optional<CustomEffectLibraryEntry> DeserializeCustomEffectLibraryEntry(cons
         {
             *error = "Entry is missing required id/name/baseEffectType/moduleResourceType/moduleResourceId fields";
         }
+
         return std::nullopt;
     }
 
@@ -138,6 +153,7 @@ void CustomEffectLibrary::UpsertEntry(const CustomEffectLibraryEntry& entry)
 {
     auto it = std::find_if(mEntries.begin(), mEntries.end(),
                            [&](const CustomEffectLibraryEntry& existing) { return existing.id == entry.id; });
+
     if (it != mEntries.end())
     {
         *it = entry;
@@ -169,6 +185,7 @@ void CustomEffectLibrary::LoadFromFile(const std::filesystem::path& path)
     Clear();
 
     std::ifstream file(path);
+
     if (!file.is_open())
     {
         return;
@@ -178,6 +195,7 @@ void CustomEffectLibrary::LoadFromFile(const std::filesystem::path& path)
     {
         nlohmann::json json;
         file >> json;
+
         if (!json.is_array())
         {
             return;
@@ -203,12 +221,14 @@ void CustomEffectLibrary::SaveToFile(const std::filesystem::path& path) const
     std::filesystem::create_directories(path.parent_path(), dirEc);
 
     nlohmann::json json = nlohmann::json::array();
+
     for (const auto& entry : mEntries)
     {
         json.push_back(SerializeCustomEffectLibraryEntry(entry));
     }
 
     std::ofstream file(path);
+
     if (file.is_open())
     {
         file << json.dump(2);
@@ -222,6 +242,7 @@ void CustomEffectLibrary::LoadFromStore(storage::JsonStore& store)
     for (const auto& item : store.List(storage::ItemType::kCustomEffect))
     {
         const auto parsed = item.Parse();
+
         if (!parsed)
         {
             continue;
@@ -255,5 +276,4 @@ bool CustomEffectLibrary::SaveToStore(storage::JsonStore& store) const
 
     return store.ReplaceAll(storage::ItemType::kCustomEffect, items);
 }
-
 } // namespace guitarfx

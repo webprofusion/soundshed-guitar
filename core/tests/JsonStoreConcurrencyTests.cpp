@@ -42,6 +42,7 @@ bool Expect(bool condition, const std::string& what)
     {
         std::cerr << "FAIL: " << what << "\n";
     }
+
     return condition;
 }
 
@@ -57,18 +58,22 @@ void WriteFile(const fs::path& path, const std::string& content)
 std::vector<std::unique_ptr<JsonStore>> OpenInstances(const fs::path& dbPath, int count, bool& ok)
 {
     std::vector<std::unique_ptr<JsonStore>> stores;
+
     for (int i = 0; i < count; ++i)
     {
         auto store = std::make_unique<JsonStore>();
         std::string error;
+
         if (!store->Open(dbPath, error))
         {
             std::cerr << "FAIL: instance " << i << " could not open the store: " << error << "\n";
             ok = false;
             break;
         }
+
         stores.push_back(std::move(store));
     }
+
     return stores;
 }
 
@@ -80,6 +85,7 @@ double MeasureWriteContention(int instances, int writesPerInstance)
     const auto dir = MakeTempDir("bench-" + std::to_string(instances));
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", instances, ok);
+
     if (!ok)
     {
         return -1.0;
@@ -88,10 +94,12 @@ double MeasureWriteContention(int instances, int writesPerInstance)
     const auto started = std::chrono::steady_clock::now();
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < instances; ++i)
     {
         threads.emplace_back([&, i]() {
             JsonStore& store = *stores[static_cast<std::size_t>(i)];
+
             for (int w = 0; w < writesPerInstance; ++w)
             {
                 const std::string id = "i" + std::to_string(i) + "-p" + std::to_string(w);
@@ -99,6 +107,7 @@ double MeasureWriteContention(int instances, int writesPerInstance)
             }
         });
     }
+
     for (auto& thread : threads)
     {
         thread.join();
@@ -148,6 +157,7 @@ bool TestBulkImportUnderLoad()
         const auto dir = MakeTempDir(batched ? "bulk-batched" : "bulk-individual");
         bool opened = true;
         auto stores = OpenInstances(dir / "soundshed.db", kInstances, opened);
+
         if (!opened)
         {
             return -1.0;
@@ -157,10 +167,12 @@ bool TestBulkImportUnderLoad()
         // write, which is what a loaded project looks like.
         std::atomic<bool> stop{false};
         std::vector<std::thread> background;
+
         for (int i = 1; i < kInstances; ++i)
         {
             background.emplace_back([&, i]() {
                 int n = 0;
+
                 while (!stop)
                 {
                     stores[static_cast<std::size_t>(i)]->List(ItemType::kResource);
@@ -187,6 +199,7 @@ bool TestBulkImportUnderLoad()
                         return false;
                     }
                 }
+
                 return true;
             });
         }
@@ -202,6 +215,7 @@ bool TestBulkImportUnderLoad()
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
 
         stop = true;
+
         for (auto& thread : background)
         {
             thread.join();
@@ -235,6 +249,7 @@ bool TestConcurrentWritesAndReads()
     const auto dir = MakeTempDir("writes");
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -247,13 +262,16 @@ bool TestConcurrentWritesAndReads()
     const auto started = std::chrono::steady_clock::now();
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
             JsonStore& store = *stores[static_cast<std::size_t>(i)];
+
             for (int w = 0; w < kWritesPerInstance; ++w)
             {
                 const std::string id = "inst-" + std::to_string(i) + "-preset-" + std::to_string(w);
+
                 if (!store.Put(ItemType::kPreset, id, {{"id", id}, {"name", id}, {"instance", i}}))
                 {
                     ++failedWrites;
@@ -267,6 +285,7 @@ bool TestConcurrentWritesAndReads()
             }
         });
     }
+
     for (auto& thread : threads)
     {
         thread.join();
@@ -298,6 +317,7 @@ bool TestConcurrentSettingsDoNotClobber()
     const auto dir = MakeTempDir("settings");
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -310,10 +330,12 @@ bool TestConcurrentSettingsDoNotClobber()
     }
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
             JsonStore& store = *stores[static_cast<std::size_t>(i)];
+
             // Each instance owns exactly one key and writes it repeatedly.
             for (int w = 0; w < 20; ++w)
             {
@@ -321,15 +343,18 @@ bool TestConcurrentSettingsDoNotClobber()
             }
         });
     }
+
     for (auto& thread : threads)
     {
         thread.join();
     }
 
     int clobbered = 0;
+
     for (int i = 0; i < kInstances; ++i)
     {
         const auto value = stores[0]->Get(ItemType::kSetting, "shared-key-" + std::to_string(i));
+
         if (!value || *value != 1000 + i)
         {
             ++clobbered;
@@ -358,6 +383,7 @@ bool TestSyncVersionBumpsAreNotLost()
     const auto dir = MakeTempDir("sync");
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -366,24 +392,29 @@ bool TestSyncVersionBumpsAreNotLost()
     constexpr int kBumpsPerInstance = 15;
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
             JsonStore& store = *stores[static_cast<std::size_t>(i)];
+
             for (int b = 0; b < kBumpsPerInstance; ++b)
             {
                 // Mirrors TouchSharedSyncState: read the counter, increment, write back.
                 store.Transact([&]() {
                     std::uint64_t next = 1;
+
                     if (const auto previous = store.Get(ItemType::kDocument, "shared-sync-state"))
                     {
                         next = previous->value("version", std::uint64_t{0}) + 1;
                     }
+
                     return store.Put(ItemType::kDocument, "shared-sync-state", {{"version", next}});
                 });
             }
         });
     }
+
     for (auto& thread : threads)
     {
         thread.join();
@@ -411,17 +442,21 @@ bool TestSimultaneousMigration()
 
     // A legacy tree worth importing.
     std::string resources = "[";
+
     for (int i = 0; i < 200; ++i)
     {
         if (i > 0)
         {
             resources += ",";
         }
+
         resources += R"({"type":"nam","id":"tone3000:)" + std::to_string(i) + R"(","name":"Model )" +
                      std::to_string(i) + R"(","filePath":"content/m.nam","tags":[]})";
     }
+
     resources += "]";
     WriteFile(profile / "resources" / "indexes" / "resources-index.json", resources);
+
     for (int i = 0; i < 50; ++i)
     {
         WriteFile(profile / "presets" / "user" / ("user-" + std::to_string(i) + ".json"),
@@ -430,6 +465,7 @@ bool TestSimultaneousMigration()
 
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -439,21 +475,25 @@ bool TestSimultaneousMigration()
     std::atomic<int> failedCount{0};
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
             const auto report = guitarfx::storage::MigrateLegacyJsonTree(*stores[static_cast<std::size_t>(i)], profile,
                                                                          profile / "presets" / "user");
+
             if (report.ran)
             {
                 ++ranCount;
             }
+
             if (!report.succeeded)
             {
                 ++failedCount;
             }
         });
     }
+
     for (auto& thread : threads)
     {
         thread.join();
@@ -480,6 +520,7 @@ bool TestReplaceAllUnderContention()
     const auto dir = MakeTempDir("replace");
     bool ok = true;
     auto stores = OpenInstances(dir / "soundshed.db", 4, ok);
+
     if (!ok)
     {
         return false;
@@ -494,6 +535,7 @@ bool TestReplaceAllUnderContention()
         for (int round = 0; round < 40; ++round)
         {
             std::vector<StoreItem> items;
+
             for (int i = 0; i < kCollectionSize; ++i)
             {
                 StoreItem item;
@@ -502,38 +544,48 @@ bool TestReplaceAllUnderContention()
                 item.json = nlohmann::json{{"id", item.id}, {"round", round}}.dump();
                 items.push_back(std::move(item));
             }
+
             stores[0]->ReplaceAll(ItemType::kBlend, items);
         }
+
         stop = true;
     });
 
     // Readers must always see either the previous full collection or the next
     // one — never a partial count, and never a mix of rounds.
     std::vector<std::thread> readers;
+
     for (int r = 1; r < 4; ++r)
     {
         readers.emplace_back([&, r]() {
             while (!stop)
             {
                 const auto items = stores[static_cast<std::size_t>(r)]->List(ItemType::kBlend);
+
                 if (items.empty())
                 {
                     continue;
                 }
+
                 if (items.size() != kCollectionSize)
                 {
                     ++torn;
                     continue;
                 }
+
                 int round = -1;
+
                 for (const auto& item : items)
                 {
                     const auto parsed = item.Parse();
+
                     if (!parsed)
                     {
                         continue;
                     }
+
                     const int itemRound = parsed->value("round", -1);
+
                     if (round == -1)
                     {
                         round = itemRound;
@@ -548,6 +600,7 @@ bool TestReplaceAllUnderContention()
     }
 
     writer.join();
+
     for (auto& reader : readers)
     {
         reader.join();
@@ -572,6 +625,7 @@ bool TestNoCorruptionUnderSustainedContention()
     const auto dbPath = dir / "soundshed.db";
     bool ok = true;
     auto stores = OpenInstances(dbPath, kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -582,11 +636,13 @@ bool TestNoCorruptionUnderSustainedContention()
     std::atomic<int> operations{0};
 
     std::vector<std::thread> threads;
+
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
             JsonStore& store = *stores[static_cast<std::size_t>(i)];
             int n = 0;
+
             while (!stop)
             {
                 const std::string tag = std::to_string(i) + "-" + std::to_string(n);
@@ -600,6 +656,7 @@ bool TestNoCorruptionUnderSustainedContention()
                 case 1: // whole-collection swap, the heaviest
                 {
                     std::vector<StoreItem> items;
+
                     for (int k = 0; k < 10; ++k)
                     {
                         StoreItem item;
@@ -608,6 +665,7 @@ bool TestNoCorruptionUnderSustainedContention()
                         item.json = nlohmann::json{{"id", item.id}, {"n", n}}.dump();
                         items.push_back(std::move(item));
                     }
+
                     // Scoped per instance would be nicer, but a shared type is the
                     // harsher test: every instance fights over the same collection.
                     store.ReplaceAll(ItemType::kCustomEffect, items);
@@ -617,10 +675,12 @@ bool TestNoCorruptionUnderSustainedContention()
                 case 2: // read-modify-write of a counter shared by all instances
                     store.Transact([&]() {
                         std::uint64_t next = 1;
+
                         if (const auto previous = store.Get(ItemType::kDocument, "shared-sync-state"))
                         {
                             next = previous->value("version", std::uint64_t{0}) + 1;
                         }
+
                         return store.Put(ItemType::kDocument, "shared-sync-state", {{"version", next}});
                     });
                     break;
@@ -647,6 +707,7 @@ bool TestNoCorruptionUnderSustainedContention()
 
     std::this_thread::sleep_for(kDuration);
     stop = true;
+
     for (auto& thread : threads)
     {
         thread.join();
@@ -656,13 +717,16 @@ bool TestNoCorruptionUnderSustainedContention()
     for (int i = 0; i < kInstances; ++i)
     {
         const auto problems = stores[static_cast<std::size_t>(i)]->IntegrityCheck();
+
         if (!problems.empty())
         {
             std::cerr << "FAIL: instance " << i << " reports database problems:\n";
+
             for (const auto& problem : problems)
             {
                 std::cerr << "    " << problem << "\n";
             }
+
             ok = false;
         }
     }
@@ -701,6 +765,7 @@ bool TestInstancesClosingUnderLoad()
     const auto dbPath = dir / "soundshed.db";
     bool ok = true;
     auto stores = OpenInstances(dbPath, kInstances, ok);
+
     if (!ok)
     {
         return false;
@@ -710,10 +775,12 @@ bool TestInstancesClosingUnderLoad()
 
     // Half the instances keep working throughout.
     std::vector<std::thread> workers;
+
     for (int i = 0; i < kInstances / 2; ++i)
     {
         workers.emplace_back([&, i]() {
             int n = 0;
+
             while (!stop)
             {
                 stores[static_cast<std::size_t>(i)]->Put(
@@ -736,6 +803,7 @@ bool TestInstancesClosingUnderLoad()
     closer.join();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     stop = true;
+
     for (auto& worker : workers)
     {
         worker.join();

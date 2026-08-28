@@ -8,7 +8,6 @@
 
 namespace guitarfx::util
 {
-
 /// Detects the audio format from magic bytes and delegates to the appropriate
 /// decoder.  Supports WAV (RIFF/WAVE), AIFF/AIFC, and MP3 (ID3 tag or raw
 /// sync-word frames).  Returns nullopt for unrecognised formats or decode
@@ -27,5 +26,4 @@ namespace guitarfx::util
 /// Decodes MP3 audio from raw bytes using minimp3.
 /// Returns nullopt if the bytes do not contain a valid MP3 stream.
 [[nodiscard]] std::optional<DecodedWav> DecodeMp3(const std::vector<std::uint8_t>& bytes);
-
 } // namespace guitarfx::util

@@ -103,6 +103,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         ConfigureLoudnessAnalysis();
@@ -143,10 +144,12 @@ class InputAnalyzerEffect : public EffectProcessor
         mRightLoudnessFilter2.Reset();
         std::fill(mMomentaryEnergyRing.begin(), mMomentaryEnergyRing.end(), 0.0);
         std::fill(mShortTermEnergyRing.begin(), mShortTermEnergyRing.end(), 0.0);
+
         for (auto& bin : mSpectrogramBinsDb)
         {
             bin.store(static_cast<float>(kSpectrogramMinDbfs), std::memory_order_relaxed);
         }
+
         for (auto& band : mBarkBandsDb)
         {
             band.store(static_cast<float>(kBarkMinDbfs), std::memory_order_relaxed);
@@ -168,6 +171,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             float* out = outputs[ch];
             const float* in = inputs ? inputs[ch] : nullptr;
+
             if (!out)
             {
                 continue;
@@ -227,6 +231,7 @@ class InputAnalyzerEffect : public EffectProcessor
         const bool leftActive = leftIn && leftPeak > kActiveChannelThreshold;
         const bool rightActive = rightIn && rightPeak > kActiveChannelThreshold;
         const bool hasActiveSignal = leftActive || rightActive;
+
         if (!hasActiveSignal)
         {
             mActiveChannelCount.store(0, std::memory_order_relaxed);
@@ -241,14 +246,17 @@ class InputAnalyzerEffect : public EffectProcessor
         // identical (dual-mono) content, is reported as mono. Hysteresis on the
         // side-to-reference energy ratio prevents flicker near the threshold.
         bool stereoSignal = false;
+
         if (leftActive && rightActive)
         {
             double diffSumSquares = 0.0;
+
             for (int i = 0; i < numSamples; ++i)
             {
                 const double diff = static_cast<double>(leftIn[i]) - static_cast<double>(rightIn[i]);
                 diffSumSquares += diff * diff;
             }
+
             const double inv = 1.0 / static_cast<double>(numSamples);
             const double leftRms = std::sqrt(leftSumSquares * inv);
             const double rightRms = std::sqrt(rightSumSquares * inv);
@@ -315,6 +323,7 @@ class InputAnalyzerEffect : public EffectProcessor
                 const double left = leftActive ? static_cast<double>(leftIn[i]) : 0.0;
                 const double right = rightActive ? static_cast<double>(rightIn[i]) : left;
                 double mono = left;
+
                 if (leftActive && rightActive)
                 {
                     mono = 0.5 * (left + right);
@@ -323,6 +332,7 @@ class InputAnalyzerEffect : public EffectProcessor
                 {
                     mono = right;
                 }
+
                 const double window =
                     0.5 - 0.5 * std::cos((2.0 * kPi * static_cast<double>(i)) / static_cast<double>(sampleWindow));
                 s0 = (mono * window) + coeff * s1 - s2;
@@ -333,11 +343,13 @@ class InputAnalyzerEffect : public EffectProcessor
             const double power = std::max(0.0, (s1 * s1) + (s2 * s2) - (coeff * s1 * s2));
             const double magnitude = std::sqrt(power) / static_cast<double>(sampleWindow);
             const int barkBand = FindBarkBandIndex(freq);
+
             if (barkBand >= 0)
             {
                 barkPowerByBand[static_cast<std::size_t>(barkBand)] += magnitude * magnitude;
                 barkSampleCounts[static_cast<std::size_t>(barkBand)] += 1;
             }
+
             const float magnitudeDb =
                 static_cast<float>(std::clamp(ToDbfs(magnitude), kSpectrogramMinDbfs, kSpectrogramMaxDbfs));
             const float previous = mSpectrogramBinsDb[static_cast<std::size_t>(bin)].load(std::memory_order_relaxed);
@@ -347,6 +359,7 @@ class InputAnalyzerEffect : public EffectProcessor
 
         constexpr float kBarkSmoothing = 0.68f;
         constexpr float kBarkOneMinusSmoothing = 1.0f - kBarkSmoothing;
+
         for (int band = 0; band < kBarkBands; ++band)
         {
             const int count = barkSampleCounts[static_cast<std::size_t>(band)];
@@ -404,16 +417,19 @@ class InputAnalyzerEffect : public EffectProcessor
         snapshot.integratedLufs = mIntegratedLufs.load(std::memory_order_relaxed);
         snapshot.activeChannelCount = mActiveChannelCount.load(std::memory_order_relaxed);
         snapshot.stereo = mStereoSignal.load(std::memory_order_relaxed);
+
         for (int i = 0; i < kSpectrogramBins; ++i)
         {
             snapshot.spectrogramBinsDb[static_cast<std::size_t>(i)] =
                 mSpectrogramBinsDb[static_cast<std::size_t>(i)].load(std::memory_order_relaxed);
         }
+
         for (int i = 0; i < kBarkBands; ++i)
         {
             snapshot.barkBandsDb[static_cast<std::size_t>(i)] =
                 mBarkBandsDb[static_cast<std::size_t>(i)].load(std::memory_order_relaxed);
         }
+
         snapshot.generatedAtMs = mGeneratedAtMs.load(std::memory_order_relaxed);
         return snapshot;
     }
@@ -444,6 +460,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return kSpectrogramMinDbfs;
         }
+
         return 20.0 * std::log10(linear);
     }
 
@@ -453,6 +470,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return 0.0;
         }
+
         return std::pow(10.0, (lufs + 0.691) / 10.0);
     }
 
@@ -462,6 +480,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return -std::numeric_limits<double>::infinity();
         }
+
         return -0.691 + 10.0 * std::log10(meanSquare);
     }
 
@@ -507,15 +526,18 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return -1;
         }
+
         for (int band = 0; band < kBarkBands; ++band)
         {
             const double low = kBarkBandEdgesHz[static_cast<std::size_t>(band)];
             const double high = kBarkBandEdgesHz[static_cast<std::size_t>(band + 1)];
+
             if (frequencyHz >= low && frequencyHz < high)
             {
                 return band;
             }
         }
+
         return kBarkBands - 1;
     }
 
@@ -603,6 +625,7 @@ class InputAnalyzerEffect : public EffectProcessor
         }
 
         ++writeIndex;
+
         if (writeIndex >= windowSamples)
         {
             writeIndex = 0;
@@ -617,10 +640,12 @@ class InputAnalyzerEffect : public EffectProcessor
         }
 
         mLoudnessBlocks[mLoudnessBlockWriteIndex] = blockLufs;
+
         if (mLoudnessBlockCount < kLoudnessHistoryBlocks)
         {
             ++mLoudnessBlockCount;
         }
+
         mLoudnessBlockWriteIndex = (mLoudnessBlockWriteIndex + 1) % kLoudnessHistoryBlocks;
         RecomputeIntegratedLoudness();
     }
@@ -635,15 +660,18 @@ class InputAnalyzerEffect : public EffectProcessor
 
         std::array<double, kLoudnessHistoryBlocks> energies{};
         std::size_t validCount = 0;
+
         for (std::size_t i = 0; i < mLoudnessBlockCount; ++i)
         {
             const std::size_t index =
                 (mLoudnessBlockWriteIndex + kLoudnessHistoryBlocks - mLoudnessBlockCount + i) % kLoudnessHistoryBlocks;
             const double lufs = mLoudnessBlocks[index];
+
             if (!std::isfinite(lufs) || lufs < kLoudnessAbsoluteGateLufs)
             {
                 continue;
             }
+
             energies[validCount++] = LufsToMeanSquare(lufs);
         }
 
@@ -654,18 +682,22 @@ class InputAnalyzerEffect : public EffectProcessor
         }
 
         double absEnergySum = 0.0;
+
         for (std::size_t i = 0; i < validCount; ++i)
         {
             absEnergySum += energies[i];
         }
+
         const double absAverageEnergy = absEnergySum / static_cast<double>(validCount);
         const double relativeGateLufs = MeanSquareToLufs(absAverageEnergy) + kLoudnessRelativeGateDb;
 
         double gatedEnergySum = 0.0;
         std::size_t gatedCount = 0;
+
         for (std::size_t i = 0; i < validCount; ++i)
         {
             const double lufs = MeanSquareToLufs(energies[i]);
+
             if (lufs > relativeGateLufs)
             {
                 gatedEnergySum += energies[i];
@@ -689,10 +721,12 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             return 0.0;
         }
+
         if (!std::isfinite(timeConstantSeconds) || timeConstantSeconds <= 0.0)
         {
             return 0.0;
         }
+
         return std::exp(-deltaSeconds / timeConstantSeconds);
     }
 
@@ -703,6 +737,7 @@ class InputAnalyzerEffect : public EffectProcessor
         {
             currentLinear = 0.0;
         }
+
         if (!std::isfinite(previousLinear))
         {
             previousLinear = 0.0;

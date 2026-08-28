@@ -32,7 +32,6 @@
 
 namespace guitarfx
 {
-
 class MultiModelNAMAmpEffect : public EffectProcessor
 {
   public:
@@ -83,10 +82,12 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             {
                 std::fill_n(outputs[0], numSamples, 0.0f);
             }
+
             if (outputs[1])
             {
                 std::fill_n(outputs[1], numSamples, 0.0f);
             }
+
             return;
         }
 
@@ -106,15 +107,18 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             {
                 const float outL = mInputBufferL[i];
                 const float outR = mInputBufferR[i];
+
                 if (outputs[0])
                 {
                     outputs[0][i] = outL;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][i] = outR;
                 }
             }
+
             return;
         }
 
@@ -137,11 +141,13 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         if (selection.upperIndex == selection.lowerIndex)
         {
             auto& model = mModels[selection.lowerIndex];
+
             if (rtparallel::ShouldParallelizeStereoWork(numSamples))
             {
                 const bool ran = rtparallel::DualLaneExecutor::Instance().Run(
                     [&]() { ProcessModel(model, mInputBufferR.data(), model.outputBufferR.data(), numSamples, 1); },
                     [&]() { ProcessModel(model, mInputBufferL.data(), model.outputBufferL.data(), numSamples, 0); });
+
                 if (!ran)
                 {
                     ProcessModel(model, mInputBufferL.data(), model.outputBufferL.data(), numSamples, 0);
@@ -153,6 +159,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
                 ProcessModel(model, mInputBufferL.data(), model.outputBufferL.data(), numSamples, 0);
                 ProcessModel(model, mInputBufferR.data(), model.outputBufferR.data(), numSamples, 1);
             }
+
             WriteOutputs(model.outputBufferL.data(), model.outputBufferR.data(), mDryBufferL.data(), mDryBufferR.data(),
                          outputs, numSamples, outputGain, wetMix, dryMix);
             return;
@@ -175,10 +182,12 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             float mixedR = modelA.outputBufferR[i] * weightA + modelB.outputBufferR[i] * weightB;
             mixedL = mDryBufferL[i] * dryMix + mixedL * outputGain * wetMix;
             mixedR = mDryBufferR[i] * dryMix + mixedR * outputGain * wetMix;
+
             if (outputs[0])
             {
                 outputs[0][i] = mixedL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = mixedR;
@@ -196,6 +205,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         EnsureLevelTargetsCurrent();
 
         numSamples = std::min(numSamples, mMaxBlockSize);
+
         if (!output || numSamples <= 0)
         {
             return;
@@ -220,6 +230,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             {
                 output[i] = mInputBufferL[i];
             }
+
             return;
         }
 
@@ -241,10 +252,12 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         {
             auto& model = mModels[selection.lowerIndex];
             ProcessModel(model, mInputBufferL.data(), model.outputBufferL.data(), numSamples, 0);
+
             for (int i = 0; i < numSamples; ++i)
             {
                 output[i] = mDryBufferL[i] * dryMix + model.outputBufferL[i] * outputGain * wetMix;
             }
+
             return;
         }
 
@@ -345,6 +358,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             // rendering rate or the AA filter, so models already prepared for a
             // different tier have to be re-prepared.
             const auto parsed = ParseDouble(value);
+
             if (!parsed.has_value())
             {
                 return;
@@ -372,31 +386,39 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         {
             return 20.0 * std::log10(mUserInputGain);
         }
+
         if (key == "outputGain")
         {
             return 20.0 * std::log10(mUserOutputGain);
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "blend")
         {
             return mBlend;
         }
+
         if (key == "enabled")
         {
             return mEnabled ? 1.0 : 0.0;
         }
+
         if (key == "useCalibration")
         {
             return mUseCalibration ? 1.0 : 0.0;
         }
+
         const auto it = mTargetParams.find(key);
+
         if (it != mTargetParams.end())
         {
             return it->second;
         }
+
         return 0.0;
     }
 
@@ -405,6 +427,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         mModels.clear();
         mHasModelParameters = false;
         UpdateLatencyAlignment();
+
         if (refs.empty() || paths.empty())
         {
             return false;
@@ -428,10 +451,12 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             instance.parameterId = ref.parameterId;
             instance.parameterValue = ref.parameterValue.value_or(static_cast<double>(i));
             instance.parameters = ref.parameters;
+
             if (instance.parameters.empty() && !ref.parameterId.empty() && ref.parameterValue.has_value())
             {
                 instance.parameters[ref.parameterId] = *ref.parameterValue;
             }
+
             if (!instance.parameters.empty())
             {
                 mHasModelParameters = true;
@@ -575,6 +600,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     static std::optional<double> ReadResourceMetadataDouble(const ResourceRef& ref, const std::string& key)
     {
         const auto it = ref.metadata.find(key);
+
         if (it == ref.metadata.end())
         {
             return std::nullopt;
@@ -597,6 +623,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             // Shared parse behind two per-channel model instances. See dsp/NamModelCache.h.
             instance.fallbackLeft = nammodelcache::GetModel(instance.path);
             instance.fallbackRight = nammodelcache::GetModel(instance.path);
+
             if (instance.fallbackLeft && instance.fallbackRight)
             {
                 ApplyNamSlimmableSize(instance.fallbackLeft.get(), mSlimmableSize);
@@ -647,6 +674,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     {
         (void)sampleRate;
         (void)maxBlockSize;
+
         if (instance.fallbackLeft && instance.fallbackRight)
         {
             instance.oversamplingLeft.Reset(*instance.fallbackLeft);
@@ -665,15 +693,19 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             auto* fallback = channel == 0 ? instance.fallbackLeft.get() : instance.fallbackRight.get();
             auto& oversampling = channel == 0 ? instance.oversamplingLeft : instance.oversamplingRight;
             auto& wetDelay = channel == 0 ? instance.wetDelayLeft : instance.wetDelayRight;
+
             for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
             {
                 fallbackInput[sampleIndex] = static_cast<NAM_SAMPLE>(input[sampleIndex]);
             }
+
             oversampling.Process(*fallback, fallbackInput.data(), fallbackOutput.data(), numSamples);
+
             for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
             {
                 output[sampleIndex] = static_cast<float>(fallbackOutput[sampleIndex]);
             }
+
             wetDelay.Process(output, numSamples);
             return;
         }
@@ -688,10 +720,12 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         {
             const float outL = dryLeft[i] * dryMix + left[i] * gain * wetMix;
             const float outR = dryRight[i] * dryMix + right[i] * gain * wetMix;
+
             if (outputs[0])
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -717,6 +751,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     BlendSelection SelectBlendModelsByParams() const
     {
         BlendSelection selection;
+
         if (mModels.empty())
         {
             return selection;
@@ -741,14 +776,17 @@ class MultiModelNAMAmpEffect : public EffectProcessor
             const auto& model = mModels[i];
             double dist = 0.0;
             bool anyMatched = false;
+
             for (const auto& [paramId, targetValue] : mTargetParams)
             {
                 const auto it = model.parameters.find(paramId);
+
                 if (it == model.parameters.end())
                 {
                     dist += 4.0;
                     continue;
                 }
+
                 const double delta = it->second - targetValue;
                 dist += delta * delta;
                 anyMatched = true;
@@ -797,6 +835,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     BlendSelection SelectBlendModelsByBlend() const
     {
         BlendSelection selection;
+
         if (mModels.empty())
         {
             return selection;
@@ -834,6 +873,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         }
 
         std::size_t upperIndex = 1;
+
         while (upperIndex < mModels.size() && mModels[upperIndex].parameterValue < target)
         {
             ++upperIndex;
@@ -843,6 +883,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
 
         const double lowerValue = mModels[lowerIndex].parameterValue;
         const double upperValue = mModels[upperIndex].parameterValue;
+
         if (mSnapBlend)
         {
             const double lowerDist = std::abs(target - lowerValue);
@@ -872,14 +913,17 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         {
             return (*a) * weightA + (*b) * weightB;
         }
+
         if (a.has_value())
         {
             return *a;
         }
+
         if (b.has_value())
         {
             return *b;
         }
+
         return std::nullopt;
     }
 
@@ -926,6 +970,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     void EnsureLevelTargetsCurrent()
     {
         const auto revision = GetLevelTargetsRevision();
+
         if (revision == mLevelTargetsRevision)
         {
             return;
@@ -951,6 +996,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
         {
             return instance.fallbackLeft->GetExpectedSampleRate();
         }
+
         return -1.0;
     }
 
@@ -978,6 +1024,7 @@ class MultiModelNAMAmpEffect : public EffectProcessor
     void UpdateLatencyAlignment()
     {
         mLatencySamples = 0;
+
         for (const auto& model : mModels)
         {
             mLatencySamples = std::max(mLatencySamples, model.oversamplingLeft.GetLatencySamples());
@@ -1013,5 +1060,4 @@ inline void RegisterMultiModelNAMAmpEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<MultiModelNAMAmpEffect>(); });
 }
-
 } // namespace guitarfx

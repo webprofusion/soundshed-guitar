@@ -85,6 +85,7 @@ class FakeHostedPluginEffect final : public guitarfx::EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
     }
@@ -159,6 +160,7 @@ class FakeHostedPluginEffect final : public guitarfx::EffectProcessor
     void MutateStateAndNotify(const std::string& newState)
     {
         mConfig[kStateKey] = newState;
+
         if (mRuntimeConfigChanged)
         {
             mRuntimeConfigChanged(kStateKey, newState);
@@ -178,6 +180,7 @@ class FakeHostedPluginEffect final : public guitarfx::EffectProcessor
 void RegisterFakeHostedPluginEffect()
 {
     static bool registered = false;
+
     if (registered)
     {
         return;
@@ -200,6 +203,7 @@ void RegisterFakeHostedPluginEffect()
 FakeHostedPluginEffect* FindLiveFake(const std::string& seededState)
 {
     std::lock_guard<std::mutex> lock(FakeHostedPluginEffect::RegistryMutex());
+
     for (auto* instance : FakeHostedPluginEffect::Instances())
     {
         if (instance->LiveState() == seededState)
@@ -207,6 +211,7 @@ FakeHostedPluginEffect* FindLiveFake(const std::string& seededState)
             return instance;
         }
     }
+
     return nullptr;
 }
 
@@ -332,10 +337,12 @@ guitarfx::Preset BuildHostedPluginPreset(const std::string& id, const std::strin
     plugin.id = kPluginNodeId;
     plugin.type = EffectGuids::kPluginHost;
     plugin.category = "utility";
+
     if (!initialState.empty())
     {
         plugin.config[kStateKey] = initialState;
     }
+
     plugin.config[kStableIdKey] = stableId;
     plugin.resources.push_back(ResourceRef{"plugin", stableId, fs::path{}, ""});
 
@@ -368,20 +375,24 @@ guitarfx::Preset ScrubLikeUi(guitarfx::Preset preset)
         for (auto& node : graph.nodes)
         {
             const auto stateIt = node.config.find(kStateKey);
+
             if (stateIt == node.config.end())
             {
                 continue;
             }
+
             node.config[kStateLengthKey] = std::to_string(stateIt->second.size());
             node.config.erase(stateIt);
         }
     };
 
     scrubGraph(preset.graph);
+
     for (auto& scene : preset.scenes)
     {
         scrubGraph(scene.graph);
     }
+
     return preset;
 }
 
@@ -397,10 +408,12 @@ void LoadPreset(guitarfx::PluginController& controller, const guitarfx::Preset& 
 std::string NodeStateInGraph(const guitarfx::SignalGraph& graph, const std::string& nodeId)
 {
     const auto* node = graph.FindNode(nodeId);
+
     if (!node)
     {
         return "<no node>";
     }
+
     const auto it = node->config.find(kStateKey);
     return it != node->config.end() ? it->second : std::string{"<no state>"};
 }
@@ -408,20 +421,24 @@ std::string NodeStateInGraph(const guitarfx::SignalGraph& graph, const std::stri
 std::string ActiveGraphState(const guitarfx::PluginController& controller)
 {
     const auto& preset = controller.GetActivePreset();
+
     if (!preset)
     {
         return "<no preset>";
     }
+
     return NodeStateInGraph(preset->graph, kPluginNodeId);
 }
 
 std::string SceneState(const guitarfx::Preset& preset, const std::string& sceneId)
 {
     const auto* scene = guitarfx::FindPresetScene(preset, sceneId);
+
     if (!scene)
     {
         return "<no scene>";
     }
+
     return NodeStateInGraph(scene->graph, kPluginNodeId);
 }
 
@@ -431,6 +448,7 @@ bool Expect(bool condition, const std::string& message)
     {
         std::cerr << "  " << message << "\n";
     }
+
     return condition;
 }
 
@@ -440,6 +458,7 @@ bool ExpectEqual(const std::string& actual, const std::string& expected, const s
     {
         return true;
     }
+
     std::cerr << "  " << what << ": expected '" << expected << "', got '" << actual << "'\n";
     return false;
 }
@@ -461,6 +480,7 @@ bool TestGraphEditPreservesUnnotifiedPluginState()
     LoadPreset(controller, preset);
 
     auto* live = NewestLiveFake();
+
     if (!Expect(live != nullptr, "no live hosted plugin processor after load"))
     {
         return false;
@@ -479,6 +499,7 @@ bool TestGraphEditPreservesUnnotifiedPluginState()
     }
 
     auto* rebuilt = NewestLiveFake();
+
     if (!Expect(rebuilt != nullptr, "no live processor after reorder"))
     {
         return false;
@@ -504,10 +525,12 @@ bool TestSavePreservesPerScenePluginState()
     sceneB.id = "scene-b";
     sceneB.title = "Scene B";
     sceneB.graph = preset.graph;
+
     if (auto* node = sceneB.graph.FindNode(kPluginNodeId))
     {
         node->config[kStateKey] = "state-scene-b";
     }
+
     preset.scenes.push_back(sceneB);
 
     const std::string sceneAId = preset.scenes.front().id;
@@ -519,6 +542,7 @@ bool TestSavePreservesPerScenePluginState()
                                    .dump());
 
     const auto& saved = controller.GetActivePreset();
+
     if (!Expect(saved.has_value(), "no active preset after save"))
     {
         return false;
@@ -546,10 +570,12 @@ bool TestSceneSwitchBanksOutgoingSceneState()
     sceneB.id = "scene-b";
     sceneB.title = "Scene B";
     sceneB.graph = preset.graph;
+
     if (auto* node = sceneB.graph.FindNode(kPluginNodeId))
     {
         node->config[kStateKey] = "state-scene-b";
     }
+
     preset.scenes.push_back(sceneB);
 
     const std::string sceneAId = preset.scenes.front().id;
@@ -557,10 +583,12 @@ bool TestSceneSwitchBanksOutgoingSceneState()
     LoadPreset(controller, preset);
 
     auto* live = NewestLiveFake();
+
     if (!Expect(live != nullptr, "no live processor after load"))
     {
         return false;
     }
+
     live->MutateStateSilently("state-scene-a-edited");
 
     // A UI scene switch is a load of the same preset, scrubbed as the UI always sends it,
@@ -573,6 +601,7 @@ bool TestSceneSwitchBanksOutgoingSceneState()
                        preset)))}}.dump());
 
     const auto& afterSwitch = controller.GetActivePreset();
+
     if (!Expect(afterSwitch.has_value(), "no active preset after scene switch"))
     {
         return false;
@@ -605,10 +634,12 @@ bool TestSaveAsKeepsRuntimeCaptureWorking()
                                    .dump());
 
     const auto& saved = controller.GetActivePreset();
+
     if (!Expect(saved.has_value(), "no active preset after save-as"))
     {
         return false;
     }
+
     if (!Expect(saved->id != preset.id, "save-as did not mint a new preset id"))
     {
         return false;
@@ -617,10 +648,12 @@ bool TestSaveAsKeepsRuntimeCaptureWorking()
     // The plugin is edited *after* the save-as, and does notify this time. The capture has
     // to reach the working copy under the preset's new id.
     auto* live = NewestLiveFake();
+
     if (!Expect(live != nullptr, "no live processor after save-as"))
     {
         return false;
     }
+
     live->MutateStateAndNotify("state-after-save-as");
 
     if (!ExpectEqual(ActiveGraphState(controller), "state-after-save-as", "working copy after post-save-as capture"))
@@ -641,6 +674,7 @@ bool TestSaveAsKeepsRuntimeCaptureWorking()
     for (const auto& message : host.sentMessages)
     {
         const auto parsed = nlohmann::json::parse(message, nullptr, false);
+
         if (!parsed.is_discarded() && parsed.value("type", "") == "error")
         {
             std::cerr << "  manual capture after save-as reported an error: " << message << "\n";
@@ -665,6 +699,7 @@ bool TestUnfocusedMixerSlotPersistsPluginState()
     const auto presetB = BuildHostedPluginPreset("hp-slot-b", "Slot B", "state-b");
 
     LoadPreset(controller, presetA);
+
     if (!Expect(controller.AddActivePreset(presetB, presetB.id, presetB.name), "could not add second mixer slot"))
     {
         return false;
@@ -672,10 +707,12 @@ bool TestUnfocusedMixerSlotPersistsPluginState()
 
     // Slot A holds the editing focus; slot B's plugin is edited from its own editor.
     auto* liveB = FindLiveFake("state-b");
+
     if (!Expect(liveB != nullptr, "no live processor for the unfocused slot"))
     {
         return false;
     }
+
     liveB->MutateStateAndNotify("state-b-edited");
 
     // The focused slot must not have absorbed the other slot's state.
@@ -687,6 +724,7 @@ bool TestUnfocusedMixerSlotPersistsPluginState()
     // Round-trip through host state: the unfocused slot's edit has to come back.
     const auto serialized = controller.SerializeState();
     const auto parsed = nlohmann::json::parse(serialized);
+
     if (!Expect(parsed.contains("mixer") && parsed["mixer"].contains("presetData"),
                 "host state carries no mixer preset data"))
     {
@@ -694,12 +732,14 @@ bool TestUnfocusedMixerSlotPersistsPluginState()
     }
 
     const auto& presetData = parsed["mixer"]["presetData"];
+
     if (!Expect(presetData.contains(presetB.id), "host state has no data for the unfocused slot"))
     {
         return false;
     }
 
     auto restoredB = guitarfx::PresetStorage::DeserializeFromJson(presetData[presetB.id].dump());
+
     if (!Expect(restoredB.has_value(), "unfocused slot data did not deserialize"))
     {
         return false;
@@ -725,26 +765,31 @@ bool TestHostStateRoundTripRestoresPluginState()
         LoadPreset(controller, preset);
 
         auto* live = NewestLiveFake();
+
         if (!Expect(live != nullptr, "no live processor before serialize"))
         {
             return false;
         }
+
         live->MutateStateSilently("state-in-project");
 
         serialized = controller.SerializeState();
     }
 
     const auto parsed = nlohmann::json::parse(serialized);
+
     if (!Expect(parsed.contains("preset"), "serialized host state carries no preset"))
     {
         return false;
     }
 
     auto projectPreset = guitarfx::PresetStorage::DeserializeFromJson(parsed["preset"].dump());
+
     if (!Expect(projectPreset.has_value(), "project preset did not deserialize"))
     {
         return false;
     }
+
     if (!ExpectEqual(NodeStateInGraph(projectPreset->graph, kPluginNodeId), "state-in-project",
                      "state captured into the project"))
     {
@@ -763,6 +808,7 @@ bool TestHostStateRoundTripRestoresPluginState()
     }
 
     auto* live = NewestLiveFake();
+
     if (!Expect(live != nullptr, "no live processor after restore"))
     {
         return false;
@@ -779,10 +825,12 @@ bool TestStandaloneRestoresPluginStateButNotGraphEdits()
     const auto sandbox = MakeSandbox("standalone-session-restore");
 
     auto storedPreset = BuildHostedPluginPreset("hp-standalone", "Standalone", "state-saved-to-disk");
+
     if (auto* tail = storedPreset.graph.FindNode("tail"))
     {
         tail->params["gain"] = 1.0;
     }
+
     for (auto& scene : storedPreset.scenes)
     {
         if (auto* tail = scene.graph.FindNode("tail"))
@@ -810,10 +858,12 @@ bool TestStandaloneRestoresPluginStateButNotGraphEdits()
         // After the save the user keeps working: the plugin's state changes, and an
         // unrelated graph parameter changes. Neither is saved to the preset again.
         auto* live = NewestLiveFake();
+
         if (!Expect(live != nullptr, "no live processor in the first session"))
         {
             return false;
         }
+
         live->MutateStateSilently("state-unsaved-session-edit");
 
         controller.HandleUIMessage(nlohmann::json{
@@ -838,6 +888,7 @@ bool TestStandaloneRestoresPluginStateButNotGraphEdits()
     controller.DeserializeState(sessionState);
 
     const auto& active = controller.GetActivePreset();
+
     if (!Expect(active.has_value(), "active preset cleared by standalone session restore"))
     {
         return false;
@@ -849,10 +900,12 @@ bool TestStandaloneRestoresPluginStateButNotGraphEdits()
 
     // The unsaved graph edit must NOT come back: the store stays authoritative for the graph.
     const auto* tail = active->graph.FindNode("tail");
+
     if (!Expect(tail != nullptr, "restored preset has no tail node"))
     {
         return false;
     }
+
     const auto gainIt = tail->params.find("gain");
     const double gain = gainIt != tail->params.end() ? gainIt->second : 0.0;
     ok &= Expect(std::abs(gain - 9.0) > 1e-9,
@@ -860,10 +913,12 @@ bool TestStandaloneRestoresPluginStateButNotGraphEdits()
 
     auto* live = NewestLiveFake();
     ok &= Expect(live != nullptr, "no live processor after standalone restore");
+
     if (live)
     {
         ok &= ExpectEqual(live->LiveState(), "state-unsaved-session-edit", "processor state after standalone restore");
     }
+
     return ok;
 }
 
@@ -932,12 +987,14 @@ bool TestPluginSwapDropsStaleState()
                                    .dump());
 
     const auto& active = controller.GetActivePreset();
+
     if (!Expect(active.has_value(), "no active preset after plugin swap"))
     {
         return false;
     }
 
     const auto* node = active->graph.FindNode(kPluginNodeId);
+
     if (!Expect(node != nullptr, "plugin node missing after swap"))
     {
         return false;
@@ -964,6 +1021,7 @@ bool TestEmptyRuntimeCaptureDoesNotEraseStoredState()
     LoadPreset(controller, preset);
 
     auto* live = NewestLiveFake();
+
     if (!Expect(live != nullptr, "no live processor after load"))
     {
         return false;
@@ -979,7 +1037,6 @@ bool TestEmptyRuntimeCaptureDoesNotEraseStoredState()
     return ExpectEqual(ActiveGraphState(controller), "state-worth-keeping",
                        "stored state after an empty runtime capture");
 }
-
 } // namespace
 
 int main()
@@ -991,6 +1048,7 @@ int main()
 
     const auto run = [&](const std::string& name, bool ok) {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << "\n";
+
         if (ok)
         {
             ++passed;

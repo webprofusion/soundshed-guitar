@@ -19,7 +19,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 MetronomeService::MetronomeService(IPluginHost& host, nlohmann::json& appSettings,
                                    const std::filesystem::path& resourceRoot)
     : mHost(host), mAppSettings(appSettings), mResourceRoot(resourceRoot)
@@ -34,6 +33,7 @@ double MetronomeService::EffectiveTempoBpm() const
     }
 
     const double hostTempo = mHost.GetHostTempo();
+
     if (hostTempo > 0.0)
     {
         return ClampValue(hostTempo, kMetronomeMinBpm, kMetronomeMaxBpm);
@@ -66,6 +66,7 @@ void MetronomeService::Render(float** outputs, int numSamples)
     }
 
     const bool guidanceActive = mGuidanceActive;
+
     if (!guidanceActive && !mEnabled.load(std::memory_order_relaxed))
     {
         return;
@@ -82,6 +83,7 @@ void MetronomeService::Render(float** outputs, int numSamples)
     }
 
     const double sampleRate = mHost.GetSampleRate();
+
     if (sampleRate <= 0.0)
     {
         return;
@@ -139,12 +141,14 @@ void MetronomeService::Render(float** outputs, int numSamples)
             {
                 mClickSamplesRemaining = silent ? 0 : clickSamples;
             }
+
             mBeatIndex = (mBeatIndex + 1) % beatsPerBar;
             mSamplesUntilClick += samplesPerBeat;
         }
 
         float clickSampleL = 0.0f;
         float clickSampleR = 0.0f;
+
         if (mClickSamplesRemaining > 0)
         {
             if (hasSampleClick)
@@ -152,9 +156,11 @@ void MetronomeService::Render(float** outputs, int numSamples)
                 const auto& preferred = mClickUseHigh ? clickSampleSet->high : clickSampleSet->low;
                 const auto& fallback = mClickUseHigh ? clickSampleSet->low : clickSampleSet->high;
                 const auto& selected = (!preferred.empty() && !preferred.front().empty()) ? preferred : fallback;
+
                 if (!selected.empty() && !selected.front().empty())
                 {
                     const int index = mClickSamplePosition;
+
                     if (index >= 0 && static_cast<std::size_t>(index) < selected.front().size())
                     {
                         clickSampleL = selected[0][static_cast<std::size_t>(index)];
@@ -162,6 +168,7 @@ void MetronomeService::Render(float** outputs, int numSamples)
                             selected.size() > 1 ? selected[1][static_cast<std::size_t>(index)] : clickSampleL;
                     }
                 }
+
                 ++mClickSamplePosition;
                 --mClickSamplesRemaining;
             }
@@ -172,10 +179,12 @@ void MetronomeService::Render(float** outputs, int numSamples)
                 clickSampleL = clickSample;
                 clickSampleR = clickSample;
                 mClickPhase += mClickPhaseIncrement;
+
                 if (mClickPhase >= kTwoPi)
                 {
                     mClickPhase -= kTwoPi;
                 }
+
                 --mClickSamplesRemaining;
             }
         }
@@ -198,10 +207,12 @@ void MetronomeService::ApplySettingsFromAppSettings()
         {
             return ClampValue(mAppSettings[primary].get<double>(), minVal, maxVal);
         }
+
         if (mAppSettings.contains(legacy) && mAppSettings[legacy].is_number())
         {
             return ClampValue(mAppSettings[legacy].get<double>(), minVal, maxVal);
         }
+
         return ClampValue(fallback, minVal, maxVal);
     };
 
@@ -213,6 +224,7 @@ void MetronomeService::ApplySettingsFromAppSettings()
     // The click never starts enabled: a session that reopens clicking is worse
     // than one the user has to switch on.
     mEnabled.store(false, std::memory_order_release);
+
     if (mAppSettings.contains(kMetronomeEnabledSettingKey))
     {
         mAppSettings.erase(kMetronomeEnabledSettingKey);
@@ -228,6 +240,7 @@ void MetronomeService::ApplySettingsFromAppSettings()
     mAppSettings[kMetronomePanSettingKey] = pan;
 
     std::string clickType = kMetronomeDefaultClickType;
+
     if (mAppSettings.contains(kMetronomeClickTypeSettingKey) && mAppSettings[kMetronomeClickTypeSettingKey].is_string())
     {
         clickType = mAppSettings[kMetronomeClickTypeSettingKey].get<std::string>();
@@ -242,14 +255,17 @@ void MetronomeService::ApplySettingsFromAppSettings()
     {
         mClickType = clickType;
     }
+
     mAppSettings[kMetronomeClickTypeSettingKey] = mClickType;
 
     mBeatPattern.clear();
+
     if (mAppSettings.contains(kMetronomeBeatPatternSettingKey) &&
         mAppSettings[kMetronomeBeatPatternSettingKey].is_string())
     {
         mBeatPattern = mAppSettings[kMetronomeBeatPatternSettingKey].get<std::string>();
     }
+
     mAppSettings[kMetronomeBeatPatternSettingKey] = mBeatPattern;
 
     UpdateClickConfigFromSettings();
@@ -267,6 +283,7 @@ void MetronomeService::UpdateClickConfigFromSettings()
         }
 
         std::filesystem::path path{rawPath};
+
         if (path.is_absolute())
         {
             return path;
@@ -274,14 +291,18 @@ void MetronomeService::UpdateClickConfigFromSettings()
 
         std::error_code ec;
         const auto assetsRoot = mHost.GetBundledAssetsPath();
+
         if (!assetsRoot.empty())
         {
             const auto candidateUi = assetsRoot / "ui" / path;
+
             if (std::filesystem::exists(candidateUi, ec))
             {
                 return candidateUi;
             }
+
             const auto candidateRoot = assetsRoot / path;
+
             if (std::filesystem::exists(candidateRoot, ec))
             {
                 return candidateRoot;
@@ -291,11 +312,14 @@ void MetronomeService::UpdateClickConfigFromSettings()
         if (!mResourceRoot.empty())
         {
             const auto candidateUi = mResourceRoot / "ui" / path;
+
             if (std::filesystem::exists(candidateUi, ec))
             {
                 return candidateUi;
             }
+
             const auto candidateRoot = mResourceRoot / path;
+
             if (std::filesystem::exists(candidateRoot, ec))
             {
                 return candidateRoot;
@@ -307,6 +331,7 @@ void MetronomeService::UpdateClickConfigFromSettings()
 
     const auto configIt = mAppSettings.find(kMetronomeClickConfigSettingKey);
     bool hasValidConfig = false;
+
     if (configIt != mAppSettings.end() && configIt->is_array())
     {
         for (const auto& entry : *configIt)
@@ -317,6 +342,7 @@ void MetronomeService::UpdateClickConfigFromSettings()
             }
 
             const std::string id = entry.value("id", "");
+
             if (id.empty())
             {
                 continue;
@@ -327,10 +353,12 @@ void MetronomeService::UpdateClickConfigFromSettings()
             config.label = entry.value("label", id);
             const std::string lowPath = entry.value("lowPath", "");
             const std::string highPath = entry.value("highPath", "");
+
             if (!lowPath.empty())
             {
                 config.lowPath = resolveClickPath(lowPath);
             }
+
             if (!highPath.empty())
             {
                 config.highPath = resolveClickPath(highPath);
@@ -339,6 +367,7 @@ void MetronomeService::UpdateClickConfigFromSettings()
             std::error_code ec;
             const bool lowExists = !config.lowPath.empty() && std::filesystem::exists(config.lowPath, ec);
             const bool highExists = !config.highPath.empty() && std::filesystem::exists(config.highPath, ec);
+
             if (!lowExists && !highExists)
             {
                 continue;
@@ -357,6 +386,7 @@ void MetronomeService::UpdateClickConfigFromSettings()
         };
 
         nlohmann::json defaultConfig = nlohmann::json::array();
+
         for (const auto& entry : defaults)
         {
             const auto& id = std::get<0>(entry);
@@ -401,6 +431,7 @@ const MetronomeService::ClickTypeConfig* MetronomeService::FindClickType(const s
             return &config;
         }
     }
+
     return mClickConfig.empty() ? nullptr : &mClickConfig.front();
 }
 
@@ -420,6 +451,7 @@ std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamp
         {
             return;
         }
+
         if (!std::filesystem::exists(path))
         {
             std::cerr << "[Plugin] Metronome " << label << " sample not found: " << path.generic_string() << std::endl;
@@ -427,6 +459,7 @@ std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamp
         }
 
         const auto bytes = util::ReadFileBytes(path);
+
         if (bytes.empty())
         {
             std::cerr << "[Plugin] Metronome " << label << " sample empty: " << path.generic_string() << std::endl;
@@ -434,6 +467,7 @@ std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamp
         }
 
         const auto wavData = util::DecodePcmWav(bytes);
+
         if (!wavData)
         {
             std::cerr << "[Plugin] Metronome " << label << " sample unsupported WAV: " << path.generic_string()
@@ -442,6 +476,7 @@ std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamp
         }
 
         auto resampled = util::ConvertToSampleRate(*wavData, targetSampleRate);
+
         if (resampled.empty() || resampled.front().empty())
         {
             std::cerr << "[Plugin] Metronome " << label << " sample empty after resample: " << path.generic_string()
@@ -451,14 +486,17 @@ std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamp
 
         // Channels must be the same length: Render() indexes them together.
         std::size_t minFrames = resampled.front().size();
+
         for (const auto& channel : resampled)
         {
             if (channel.empty())
             {
                 return;
             }
+
             minFrames = std::min(minFrames, channel.size());
         }
+
         for (auto& channel : resampled)
         {
             if (channel.size() > minFrames)
@@ -499,6 +537,7 @@ void MetronomeService::RefreshClickSamples(double sampleRate)
     }
 
     const auto* config = FindClickType(mClickType);
+
     if (!config)
     {
         std::atomic_store_explicit(&mClickSamples, std::shared_ptr<ClickSamples>{}, std::memory_order_release);
@@ -520,6 +559,7 @@ void MetronomeService::RefreshClickSamples(double sampleRate)
 MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::json& payload)
 {
     RequestOutcome outcome;
+
     if (!mHost.IsStandalone())
     {
         return outcome;
@@ -541,11 +581,13 @@ MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::
     {
         const bool enabled = payload.value("enabled", false);
         mEnabled.store(enabled, std::memory_order_release);
+
         // Deliberately not persisted — see ApplySettingsFromAppSettings.
         if (mAppSettings.contains(kMetronomeEnabledSettingKey))
         {
             mAppSettings.erase(kMetronomeEnabledSettingKey);
         }
+
         outcome.stateChanged = true;
         resetRequired = enabled && !wasEnabled;
     }
@@ -581,6 +623,7 @@ MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::
     if (payload.contains("clickType") && payload["clickType"].is_string())
     {
         const std::string clickType = payload.value("clickType", std::string{kMetronomeDefaultClickType});
+
         if (!clickType.empty())
         {
             mClickType = clickType;
@@ -594,14 +637,17 @@ MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::
     if (payload.contains("beatPattern") && payload["beatPattern"].is_string())
     {
         std::string validated;
+
         for (const char ch : payload.value("beatPattern", std::string{}))
         {
             const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+
             if (upper == 'H' || upper == 'L' || upper == 'S' || upper == '-' || upper == '.')
             {
                 validated += upper;
             }
         }
+
         mBeatPattern = validated;
         mAppSettings[kMetronomeBeatPatternSettingKey] = validated;
         outcome.stateChanged = true;
@@ -624,10 +670,12 @@ void MetronomeService::AppendStateTo(nlohmann::json& target) const
     target["clickType"] = mClickType;
 
     nlohmann::json clickTypes = nlohmann::json::array();
+
     for (const auto& config : mClickConfig)
     {
         clickTypes.push_back({{"id", config.id}, {"label", config.label}});
     }
+
     target["clickTypes"] = std::move(clickTypes);
 }
 
@@ -661,6 +709,7 @@ void MetronomeService::ActivateGuidance(const GuidanceConfig& config, bool enabl
     const std::string clickType = config.clickType.empty() ? std::string{kMetronomeDefaultClickType} : config.clickType;
     const auto* clickConfig = FindClickType(clickType);
     const double sampleRate = mHost.GetSampleRate();
+
     if (clickConfig && sampleRate > 0.0)
     {
         mGuidanceClickSamples = BuildClickSamples(*clickConfig, sampleRate);
@@ -694,5 +743,4 @@ void MetronomeService::DeactivateGuidance(bool previewOnly)
     mGuidanceClickSamples.reset();
     RequestReset();
 }
-
 } // namespace guitarfx

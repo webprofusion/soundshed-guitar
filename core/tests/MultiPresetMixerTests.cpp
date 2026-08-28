@@ -48,6 +48,7 @@ static Preset MakeLinearPreset(const std::string& id, const std::vector<std::str
     preset.graph.nodes.push_back(in);
     std::string prevId = in.id;
     int idx = 0;
+
     for (const auto& type : nodeTypes)
     {
         GraphNode node;
@@ -87,6 +88,7 @@ int main()
         auto pR = MakePassthroughPreset("pR");
         const bool okL = mixer.AddActivePreset(pL, "pL", "LeftPreset");
         const bool okR = mixer.AddActivePreset(pR, "pR", "RightPreset");
+
         if (!okL || !okR)
         {
             std::cerr << "Failed to add passthrough presets" << std::endl;
@@ -135,6 +137,7 @@ int main()
 
         auto pL = MakePassthroughPreset("threadL");
         auto pR = MakePassthroughPreset("threadR");
+
         if (!mixer.AddActivePreset(pL, "threadL", "ThreadLeft") || !mixer.AddActivePreset(pR, "threadR", "ThreadRight"))
         {
             std::cerr << "Failed to add threading-mode presets" << std::endl;
@@ -202,6 +205,7 @@ int main()
         }
 
         mixer.RemoveActivePreset(presetId);
+
         if (!mixer.AddActivePreset(pathB, presetId, "PathB"))
         {
             std::cerr << "Failed to add second preset instance" << std::endl;
@@ -209,6 +213,7 @@ int main()
         }
 
         mixer.RemoveActivePreset(presetId);
+
         if (!mixer.AddActivePreset(pathC, presetId, "PathC"))
         {
             std::cerr << "Failed to add final preset instance" << std::endl;
@@ -225,10 +230,12 @@ int main()
         if (sortedActual != sortedExpected)
         {
             std::cerr << "Final mixer node types mismatch. Expected {input, eq_parametric, output} but got: ";
+
             for (const auto& t : nodeTypes)
             {
                 std::cerr << t << ' ';
             }
+
             std::cerr << std::endl;
             allPassed = false;
         }
@@ -246,6 +253,7 @@ int main()
         mixer.Prepare(kTestSampleRate, kTestBlockSize);
 
         auto preset = MakePassthroughPreset("pCal");
+
         if (!mixer.AddActivePreset(preset, "pCal", "CalibrationPreset"))
         {
             std::cerr << "Failed to add calibration preset" << std::endl;
@@ -266,6 +274,7 @@ int main()
 
         const float expected =
             0.25f * static_cast<float>(std::pow(10.0, 6.0 / 20.0)) * static_cast<float>(std::sqrt(0.5));
+
         for (int i = 0; i < kTestBlockSize; ++i)
         {
             if (std::fabs(outL[static_cast<size_t>(i)] - expected) > 1e-3f ||
@@ -301,6 +310,7 @@ int main()
 
         // Simulate preset load path: preset itself has no globalSignalChain override
         auto preset = MakePassthroughPreset("pNoGlobals");
+
         if (!mixer.AddActivePreset(preset, "pNoGlobals", "NoGlobals"))
         {
             std::cerr << "Failed to add no-globals preset" << std::endl;
@@ -310,6 +320,7 @@ int main()
         mixer.SetTranspose(3);
 
         const auto normalized = mixer.GetGlobalChainConfig();
+
         if (!GraphHasNodeType(normalized.preChainGraph, EffectGuids::kDynamicsGate) ||
             !GraphHasNodeType(normalized.preChainGraph, EffectGuids::kTranspose))
         {
@@ -331,6 +342,7 @@ int main()
 
         const std::string presetId = "typeBypass";
         const auto preset = MakeLinearPreset("typeBypassPreset", {"delay_digital", "delay_digital"});
+
         if (!mixer.AddActivePreset(preset, presetId, "TypeBypass"))
         {
             std::cerr << "Failed to add type-by-bypass preset" << std::endl;
@@ -338,6 +350,7 @@ int main()
         }
 
         const auto initial = mixer.FindFirstEnabledNodeOfType("delay_digital");
+
         if (!initial || initial->second != "n0")
         {
             std::cerr << "Expected first enabled delay node to be n0 before bypass updates" << std::endl;
@@ -369,6 +382,7 @@ int main()
         }
 
         const auto reenabled = mixer.FindFirstEnabledNodeOfType("delay_digital");
+
         if (!reenabled || reenabled->second != "n0")
         {
             std::cerr << "Expected first enabled delay node to be n0 after re-enabling by type" << std::endl;
@@ -397,11 +411,13 @@ int main()
         mixer.Prepare(kTestSampleRate, kTestBlockSize);
 
         auto preset = MakePassthroughPreset("oversized");
+
         if (!mixer.AddActivePreset(preset, "oversized", "Oversized"))
         {
             std::cerr << "Failed to add preset for oversized-block test" << std::endl;
             return 1;
         }
+
         mixer.SetPresetMix("oversized", 1.0);
         mixer.SetPresetPan("oversized", 0.0);
 
@@ -417,6 +433,7 @@ int main()
         mixer.Process(inputs, outputs, oversized);
 
         int untouched = 0;
+
         for (int i = 0; i < oversized; ++i)
         {
             if (outL[static_cast<size_t>(i)] == kPoison || outR[static_cast<size_t>(i)] == kPoison)

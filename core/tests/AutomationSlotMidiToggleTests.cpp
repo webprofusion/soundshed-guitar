@@ -18,6 +18,7 @@ bool Expect(const bool condition, const std::string& message)
         std::cerr << message << std::endl;
         return false;
     }
+
     return true;
 }
 } // namespace

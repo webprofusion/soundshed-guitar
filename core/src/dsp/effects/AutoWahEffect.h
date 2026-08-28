@@ -73,6 +73,7 @@ class AutoWahEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -114,22 +115,27 @@ class AutoWahEffect : public EffectProcessor
         {
             return mSensitivity;
         }
+
         if (key == "minFreq")
         {
             return mMinFreq;
         }
+
         if (key == "maxFreq")
         {
             return mMaxFreq;
         }
+
         if (key == "resonance")
         {
             return mResonance;
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         return 0.0;
     }
 
@@ -199,5 +205,4 @@ inline void RegisterAutoWahEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<AutoWahEffect>(); });
 }
-
 } // namespace guitarfx

@@ -53,6 +53,7 @@ class BuiltinAmpEffect : public EffectProcessor
             mPostHPS1[ch] = mPostHPS2[ch] = 0.0;
             mSagEnv[ch] = 0.0f;
         }
+
         mVoiceSmoothed = mVoice;
     }
 
@@ -80,6 +81,7 @@ class BuiltinAmpEffect : public EffectProcessor
             {
                 float* in = inputs ? (ch == 0 ? inputs[0] : inputs[1]) : nullptr;
                 float* out = (ch == 0) ? outputs[0] : outputs[1];
+
                 if (!out)
                 {
                     continue;
@@ -98,6 +100,7 @@ class BuiltinAmpEffect : public EffectProcessor
                 const float blended = clean + (drive - clean) * voice;
 
                 float stageOut = blended;
+
                 if (preStages >= 2)
                 {
                     stageOut = SoftClip(stageOut * masterGain * mStageGainLinear);
@@ -119,12 +122,14 @@ class BuiltinAmpEffect : public EffectProcessor
                 }
 
                 float powerInput = static_cast<float>(processed);
+
                 if (std::abs(mBias) > 1.0e-6f)
                 {
                     powerInput += mBias * 0.1f;
                 }
 
                 const float detector = std::abs(powerInput);
+
                 if (detector > mSagEnv[ch])
                 {
                     mSagEnv[ch] = mSagAttackCoef * mSagEnv[ch] + (1.0f - mSagAttackCoef) * detector;
@@ -254,75 +259,93 @@ class BuiltinAmpEffect : public EffectProcessor
         {
             return mVoice;
         }
+
         if (key == "gain")
         {
             return mGain;
         }
+
         if (key == "bright")
         {
             return mBright;
         }
+
         if (key == "preEmphasis")
         {
             return mPreEmphasis;
         }
+
         if (key == "bass")
         {
             return mBass;
         }
+
         if (key == "middle")
         {
             return mMiddle;
         }
+
         if (key == "treble")
         {
             return mTreble;
         }
+
         if (key == "contour")
         {
             return mContour;
         }
+
         if (key == "presence")
         {
             return mPresence;
         }
+
         if (key == "output")
         {
             return mOutputDb;
         }
+
         if (key == "stageCount")
         {
             return mStageCount;
         }
+
         if (key == "stageGain" || key == "stage1Gain" || key == "stage2Gain" || key == "stage3Gain" ||
             key == "stage4Gain" || key == "stage5Gain" || key == "stage6Gain")
         {
             return mStageGainDb;
         }
+
         if (key == "powerDrive")
         {
             return mPowerDrive;
         }
+
         if (key == "sag")
         {
             return mSag;
         }
+
         if (key == "bias")
         {
             return mBias;
         }
+
         if (key == "depth")
         {
             return mDepth;
         }
+
         if (key == "resonance")
         {
             return mResonance;
         }
+
         if (key == "damping")
         {
             return mDamping;
         }
+
         return 0.0;
     }
 
@@ -374,6 +397,7 @@ class BuiltinAmpEffect : public EffectProcessor
             mVoiceSmoothCoef = 0.0f;
             return;
         }
+
         const double tau = 0.03; // 30 ms smoothing
         mVoiceSmoothCoef = static_cast<float>(std::exp(-1.0 / (tau * mSampleRate)));
     }
@@ -386,6 +410,7 @@ class BuiltinAmpEffect : public EffectProcessor
             mSagReleaseCoef = 0.0f;
             return;
         }
+
         const double attackTau = 0.01;  // 10 ms
         const double releaseTau = 0.18; // 180 ms
         mSagAttackCoef = static_cast<float>(std::exp(-1.0 / (attackTau * mSampleRate)));
@@ -615,5 +640,4 @@ inline void RegisterBuiltinAmpEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<BuiltinAmpEffect>(); });
 }
-
 } // namespace guitarfx

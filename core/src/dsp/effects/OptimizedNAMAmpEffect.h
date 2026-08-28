@@ -41,7 +41,6 @@ void ForceFactoryRegistration();
 
 namespace guitarfx
 {
-
 // Simple biquad filter (Transposed Direct Form II) for amp tone stack.
 // Coefficients use Audio EQ Cookbook formulas (RBJ).
 struct AmpToneBiquad
@@ -166,6 +165,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         {
             mOversamplingLeft.Reset(*mModelLeft);
         }
+
         if (mModelRight)
         {
             mOversamplingRight.Reset(*mModelRight);
@@ -203,14 +203,17 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             {
                 std::fill_n(outputs[0], numSamples, 0.0f);
             }
+
             if (outputs[1])
             {
                 std::fill_n(outputs[1], numSamples, 0.0f);
             }
+
             return;
         }
 
         const float inputGainF = static_cast<float>(mInputGain);
+
         for (int i = 0; i < numSamples; ++i)
         {
             float inL = inputs[0] ? inputs[0][i] : 0.0f;
@@ -241,20 +244,24 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 {
                     float outL = static_cast<float>(mOutputBufferL[i]);
                     float outR = static_cast<float>(mOutputBufferR[i]);
+
                     if (applyPostDcBlocker)
                     {
                         outL = mPostDcBlocker[0].Process(outL);
                         outR = mPostDcBlocker[1].Process(outR);
                     }
+
                     if (outputs[0])
                     {
                         outputs[0][i] = outL;
                     }
+
                     if (outputs[1])
                     {
                         outputs[1][i] = outR;
                     }
                 }
+
                 return;
             }
 
@@ -264,27 +271,33 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 {
                     float outL = static_cast<float>(mOutputBufferL[i]);
                     float outR = static_cast<float>(mOutputBufferR[i]);
+
                     if (applyPostDcBlocker)
                     {
                         outL = mPostDcBlocker[0].Process(outL);
                         outR = mPostDcBlocker[1].Process(outR);
                     }
+
                     outL *= outputGainF;
                     outR *= outputGainF;
+
                     if (!wetOnly)
                     {
                         outL = mDryBufferL[i] * dryMix + outL * wetMix;
                         outR = mDryBufferR[i] * dryMix + outR * wetMix;
                     }
+
                     if (outputs[0])
                     {
                         outputs[0][i] = outL;
                     }
+
                     if (outputs[1])
                     {
                         outputs[1][i] = outR;
                     }
                 }
+
                 return;
             }
 
@@ -295,11 +308,14 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 outL = mMidFilter[0].Process(outL);
                 outL = mTrebleFilter[0].Process(outL);
                 outL = mPresenceFilter[0].Process(outL);
+
                 if (applyPostDcBlocker)
                 {
                     outL = mPostDcBlocker[0].Process(outL);
                 }
+
                 outL *= outputGainF;
+
                 if (!wetOnly)
                 {
                     outL = mDryBufferL[i] * dryMix + outL * wetMix;
@@ -310,11 +326,14 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 outR = mMidFilter[1].Process(outR);
                 outR = mTrebleFilter[1].Process(outR);
                 outR = mPresenceFilter[1].Process(outR);
+
                 if (applyPostDcBlocker)
                 {
                     outR = mPostDcBlocker[1].Process(outR);
                 }
+
                 outR *= outputGainF;
+
                 if (!wetOnly)
                 {
                     outR = mDryBufferR[i] * dryMix + outR * wetMix;
@@ -324,6 +343,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 {
                     outputs[0][i] = outL;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][i] = outR;
@@ -336,10 +356,12 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             {
                 const float outL = static_cast<float>(mInputBufferL[i]);
                 const float outR = static_cast<float>(mInputBufferR[i]);
+
                 if (outputs[0])
                 {
                     outputs[0][i] = outL;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][i] = outR;
@@ -363,6 +385,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         EnsureLevelTargetsCurrent();
 
         numSamples = std::min(numSamples, mMaxBlockSize);
+
         if (!output || numSamples <= 0)
         {
             return;
@@ -375,6 +398,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         }
 
         const float inputGainF = static_cast<float>(mInputGain);
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float in = input[i];
@@ -400,12 +424,15 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 for (int i = 0; i < numSamples; ++i)
                 {
                     float out = static_cast<float>(mOutputBufferL[i]);
+
                     if (applyPostDcBlocker)
                     {
                         out = mPostDcBlocker[0].Process(out);
                     }
+
                     output[i] = out;
                 }
+
                 return;
             }
 
@@ -414,17 +441,22 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 for (int i = 0; i < numSamples; ++i)
                 {
                     float out = static_cast<float>(mOutputBufferL[i]);
+
                     if (applyPostDcBlocker)
                     {
                         out = mPostDcBlocker[0].Process(out);
                     }
+
                     out *= outputGainF;
+
                     if (!wetOnly)
                     {
                         out = mDryBufferL[i] * dryMix + out * wetMix;
                     }
+
                     output[i] = out;
                 }
+
                 return;
             }
 
@@ -435,15 +467,19 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 out = mMidFilter[0].Process(out);
                 out = mTrebleFilter[0].Process(out);
                 out = mPresenceFilter[0].Process(out);
+
                 if (applyPostDcBlocker)
                 {
                     out = mPostDcBlocker[0].Process(out);
                 }
+
                 out *= outputGainF;
+
                 if (!wetOnly)
                 {
                     out = mDryBufferL[i] * dryMix + out * wetMix;
                 }
+
                 output[i] = out;
             }
         }
@@ -487,6 +523,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             {
                 mCalibrationInputLevel.reset();
             }
+
             RecalculateAutoGains();
         }
         else if (key == "bass")
@@ -528,6 +565,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             {
                 mSlimmableSize = SanitizeNamSlimmableSize(*parsed);
             }
+
             ApplyNamSlimmableSize(mModelLeft.get(), mSlimmableSize);
             ApplyNamSlimmableSize(mModelRight.get(), mSlimmableSize);
         }
@@ -537,6 +575,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             // rendering rate or the AA filter, so models already prepared for a
             // different tier have to be re-prepared.
             const auto parsed = ParseDouble(value);
+
             if (!parsed.has_value())
             {
                 return;
@@ -565,38 +604,47 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         {
             return 20.0 * std::log10(mUserInputGain);
         }
+
         if (key == "outputGain")
         {
             return 20.0 * std::log10(mUserOutputGain);
         }
+
         if (key == "mix")
         {
             return mMix;
         }
+
         if (key == "bass")
         {
             return mBassDb;
         }
+
         if (key == "mid")
         {
             return mMidDb;
         }
+
         if (key == "treble")
         {
             return mTrebleDb;
         }
+
         if (key == "presence")
         {
             return mPresenceDb;
         }
+
         if (key == "enabled")
         {
             return mEnabled ? 1.0 : 0.0;
         }
+
         if (key == "useCalibration")
         {
             return mUseCalibration ? 1.0 : 0.0;
         }
+
         return 0.0;
     }
 
@@ -645,6 +693,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         }
 
         const auto it = ref->metadata.find(key);
+
         if (it == ref->metadata.end())
         {
             return std::nullopt;
@@ -675,6 +724,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             // file read and JSON parse. See dsp/NamModelCache.h.
             auto modelLeft = nammodelcache::GetModel(resourcePath);
             auto modelRight = nammodelcache::GetModel(resourcePath);
+
             if (!modelLeft || !modelRight)
             {
                 std::cerr << "[OptimizedNAMAmpEffect] ERROR: Failed to parse NAM model file: " << resourcePath << "\n";
@@ -793,6 +843,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         {
             return;
         }
+
         for (int ch = 0; ch < 2; ++ch)
         {
             mBassFilter[ch].SetLowShelf(100.0, mBassDb, mSampleRate);
@@ -847,6 +898,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
     void EnsureLevelTargetsCurrent()
     {
         const auto revision = GetLevelTargetsRevision();
+
         if (revision != mLevelTargetsRevision)
         {
             RecalculateAutoGains();
@@ -940,6 +992,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
     void ProcessModels(int numSamples)
     {
         bool ranParallel = false;
+
         if (rtparallel::ShouldParallelizeStereoWork(numSamples))
         {
             ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
@@ -950,6 +1003,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                     mOversamplingLeft.Process(*mModelLeft, mInputBufferL.data(), mOutputBufferL.data(), numSamples);
                 });
         }
+
         if (!ranParallel)
         {
             mOversamplingLeft.Process(*mModelLeft, mInputBufferL.data(), mOutputBufferL.data(), numSamples);
@@ -1005,5 +1059,4 @@ inline void RegisterOptimizedNAMAmpEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<OptimizedNAMAmpEffect>(); });
 }
-
 } // namespace guitarfx

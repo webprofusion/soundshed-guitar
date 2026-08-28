@@ -28,14 +28,15 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 bool PluginController::IsFactoryPresetArchiveLoadingEnabled() const
 {
     const auto it = mAppSettings.find(kFactoryArchiveLoadingEnabledSettingKey);
+
     if (it == mAppSettings.end() || !it->is_boolean())
     {
         return true;
     }
+
     return it->get<bool>();
 }
 
@@ -50,6 +51,7 @@ std::filesystem::path PluginController::GetEffectiveUserPresetDirectory() const
     {
         return mPresetArchiveSession->presetDir;
     }
+
     return mUserPresetsPath;
 }
 
@@ -59,6 +61,7 @@ std::filesystem::path PluginController::GetEffectiveSettingsDirectory() const
     {
         return mPresetArchiveSession->rootPath;
     }
+
     return mFileSystem.ResolveSettingsDirectory();
 }
 
@@ -76,16 +79,19 @@ void PluginController::SendPresetArchiveSessionStateToUI(const char* messageType
     nlohmann::json message;
     message["type"] = messageType == nullptr ? "presetArchiveSessionState" : messageType;
     message["active"] = IsPresetArchiveSessionActive();
+
     if (mPresetArchiveSession)
     {
         message["archiveName"] = mPresetArchiveSession->archiveName;
         message["archiveKey"] = mPresetArchiveSession->archiveKey;
         message["presetCount"] = mPresetArchiveSession->presetCount;
     }
+
     if (!detail.empty())
     {
         message["detail"] = detail;
     }
+
     SendMessageToUI(message.dump());
 }
 
@@ -94,16 +100,19 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
 {
     std::string parseError;
     auto parsedOpt = ParseFactoryPresetArchive(std::filesystem::path(archiveFileName), archiveBytes, parseError);
+
     if (!parsedOpt)
     {
         throw std::runtime_error(parseError.empty() ? "Failed to parse preset archive" : parseError);
     }
 
     auto parsed = std::move(*parsedOpt);
+
     if (parsed.presets.empty())
     {
         throw std::runtime_error("Archive contains no presets");
     }
+
     if (parsed.tone3000ResourceCount > 0)
     {
         throw std::runtime_error("Archive session mode does not support Tone3000-linked resources yet");
@@ -131,17 +140,20 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
     [[maybe_unused]] const auto ensuredResourceDir = mFileSystem.EnsureDirectory(resourceContentDir);
 
     std::unordered_map<std::string, std::string> resourceIdMap;
+
     for (const auto& resource : parsed.resources)
     {
         const std::string scopedResourceId = BuildScopedPresetArchiveSessionId(archiveKey, resource.id);
         std::string resolvedName = resource.fileName.empty() ? resource.id : resource.fileName;
         resolvedName = util::SanitizeFilename(resolvedName);
+
         if (resolvedName.empty())
         {
             resolvedName = scopedResourceId + (resource.type == "ir" ? ".wav" : ".nam");
         }
 
         const auto targetPath = resourceContentDir / resolvedName;
+
         if (!WriteFile(targetPath, resource.bytes))
         {
             throw std::runtime_error("Failed to extract archive resource: " + resolvedName);
@@ -161,22 +173,27 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
         libraryResource.metadata["archiveName"] = archiveFileName;
         libraryResource.metadata["archiveKey"] = archiveKey;
         libraryResource.metadata["originalId"] = resource.id;
+
         if (resource.type == "nam")
         {
             EnrichNamResourceMetadata(libraryResource, targetPath);
         }
+
         libraryResource.category = ResolveResourceLibraryCategory(libraryResource, libraryResource.category);
         mResourceLibrary.AddResource(libraryResource);
     }
 
     std::unordered_map<std::string, std::string> blendIdMap;
+
     if (!mBlendLibrary.is_array())
     {
         mBlendLibrary = nlohmann::json::array();
     }
+
     for (auto blend : parsed.blends)
     {
         const std::string originalBlendId = blend.value("id", "");
+
         if (originalBlendId.empty())
         {
             continue;
@@ -194,7 +211,9 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
                 {
                     continue;
                 }
+
                 const auto mapped = resourceIdMap.find(modelId.get<std::string>());
+
                 if (mapped != resourceIdMap.end())
                 {
                     modelId = mapped->second;
@@ -210,7 +229,9 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
                 {
                     continue;
                 }
+
                 const auto mapped = resourceIdMap.find(mapping.value("id", ""));
+
                 if (mapped != resourceIdMap.end())
                 {
                     mapping["id"] = mapped->second;
@@ -219,6 +240,7 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
         }
 
         bool replaced = false;
+
         for (auto& existing : mBlendLibrary)
         {
             if (existing.is_object() && existing.value("id", "") == scopedBlendId)
@@ -228,6 +250,7 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
                 break;
             }
         }
+
         if (!replaced)
         {
             mBlendLibrary.push_back(blend);
@@ -236,6 +259,7 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
 
     std::unordered_map<std::string, std::string> presetIdMap;
     std::optional<Preset> firstPreset;
+
     for (auto preset : parsed.presets)
     {
         RemapPresetArchiveReferences(preset, resourceIdMap, blendIdMap);
@@ -247,12 +271,14 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
         presetIdMap[sourcePresetId] = scopedPresetId;
 
         preset.id = scopedPresetId;
+
         if (preset.category.empty())
         {
             preset.category = "Imported";
         }
 
         const auto presetPath = presetDir / (preset.id + ".json");
+
         if (!PresetStorage::SaveToFile(preset, presetPath))
         {
             throw std::runtime_error("Failed to write session preset: " + preset.name);
@@ -284,10 +310,12 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
     if (firstPreset)
     {
         ApplyBlendDefinitions(*firstPreset);
+
         if (!SetPresetActiveScene(*firstPreset, "", &mActiveSceneId))
         {
             mActiveSceneId = GetDefaultPresetSceneId(*firstPreset);
         }
+
         mActivePresetId = firstPreset->id;
         ApplyPreset(*firstPreset);
     }
@@ -326,6 +354,7 @@ void PluginController::EndPresetArchiveSession(bool notifyUi)
     mPendingStateBroadcast = true;
     BroadcastState();
     RefreshPresetLibraryViews();
+
     if (notifyUi)
     {
         SendPresetArchiveSessionStateToUI("presetArchiveSessionEnded");
@@ -336,6 +365,7 @@ void PluginController::HandleStartPresetArchiveSessionRequest(const nlohmann::js
 {
     const std::string dataEncoded = payload.value("data", "");
     const std::string archiveFileName = payload.value("fileName", "preset-archive.soundshed.presets");
+
     if (dataEncoded.empty())
     {
         SendMessageToUI(
@@ -344,6 +374,7 @@ void PluginController::HandleStartPresetArchiveSessionRequest(const nlohmann::js
     }
 
     const auto archiveBytes = util::DecodeBase64(dataEncoded);
+
     if (archiveBytes.empty())
     {
         SendMessageToUI(
@@ -396,6 +427,7 @@ void PluginController::HandleSavePresetArchiveRequest(const nlohmann::json& payl
     {
         suggestedName = "preset";
     }
+
     suggestedName += selectedSuffix;
 
     if (dataEncoded.empty())
@@ -416,6 +448,7 @@ void PluginController::HandleSavePresetArchiveRequest(const nlohmann::json& payl
             const auto normalizedPath = NormalizePresetArchiveSavePath(result.path);
 
             const auto decodedBytes = util::DecodeBase64(dataEncoded);
+
             if (decodedBytes.empty())
             {
                 SendMessageToUI(
@@ -446,11 +479,14 @@ void PluginController::LoadFactoryPresetArchives()
 
     auto factoryArchiveState =
         Store().Get(storage::ItemType::kDocument, kFactoryArchiveStateDocumentId).value_or(nlohmann::json::object());
+
     if (!factoryArchiveState.is_object())
     {
         factoryArchiveState = nlohmann::json::object();
     }
+
     factoryArchiveState["schemaVersion"] = kFactoryArchiveStateSchemaVersion;
+
     if (!factoryArchiveState.contains("archives") || !factoryArchiveState["archives"].is_object())
     {
         factoryArchiveState["archives"] = nlohmann::json::object();
@@ -459,21 +495,26 @@ void PluginController::LoadFactoryPresetArchives()
     for (const auto& archiveEntry : factoryArchiveState["archives"].items())
     {
         const auto& mappings = archiveEntry.value().value("presetMappings", nlohmann::json::object());
+
         if (!mappings.is_object())
         {
             continue;
         }
+
         for (const auto& mapping : mappings.items())
         {
             if (!mapping.value().is_string())
             {
                 continue;
             }
+
             const std::string importedId = mapping.value().get<std::string>();
+
             if (importedId.empty())
             {
                 continue;
             }
+
             mTrackedFactoryArchivePresetIds.insert(importedId);
         }
     }
@@ -487,21 +528,26 @@ void PluginController::LoadFactoryPresetArchives()
     for (const auto& archiveEntry : factoryArchiveState["archives"].items())
     {
         const auto& mappings = archiveEntry.value().value("presetMappings", nlohmann::json::object());
+
         if (!mappings.is_object())
         {
             continue;
         }
+
         for (const auto& mapping : mappings.items())
         {
             if (!mapping.value().is_string())
             {
                 continue;
             }
+
             const std::string importedId = mapping.value().get<std::string>();
+
             if (importedId.empty())
             {
                 continue;
             }
+
             mFactoryArchivePresetAliases[mapping.key()] = importedId;
             mFactoryArchivePresetIds.insert(importedId);
             mTrackedFactoryArchivePresetIds.insert(importedId);
@@ -509,6 +555,7 @@ void PluginController::LoadFactoryPresetArchives()
     }
 
     const auto factoryDir = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
+
     if (!std::filesystem::exists(factoryDir))
     {
         return;
@@ -519,10 +566,12 @@ void PluginController::LoadFactoryPresetArchives()
     [[maybe_unused]] const auto ensuredExtractedRoot = mFileSystem.EnsureDirectory(extractedRoot);
 
     std::unordered_set<std::string> occupiedPresetIds;
+
     for (const auto& presetId : Store().ListIds(storage::ItemType::kPreset))
     {
         occupiedPresetIds.insert(presetId);
     }
+
     for (const auto& entry : std::filesystem::directory_iterator(factoryDir))
     {
         if (entry.path().extension() == ".json")
@@ -544,6 +593,7 @@ void PluginController::LoadFactoryPresetArchives()
         }
 
         const auto zipBytes = util::ReadFileBytes(entry.path());
+
         if (zipBytes.empty())
         {
             AppendSessionLog("Factory preset archive skipped (empty or unreadable): " + entry.path().string());
@@ -552,6 +602,7 @@ void PluginController::LoadFactoryPresetArchives()
 
         std::string parseError;
         auto parsedOpt = ParseFactoryPresetArchive(entry.path(), zipBytes, parseError);
+
         if (!parsedOpt)
         {
             AppendSessionLog("Factory preset archive skipped (" + entry.path().filename().string() +
@@ -566,23 +617,28 @@ void PluginController::LoadFactoryPresetArchives()
                                     factoryArchiveState["archives"][archiveKey].is_object()
                                 ? factoryArchiveState["archives"][archiveKey]
                                 : nlohmann::json::object();
+
         if (!archiveState.contains("presetMappings") || !archiveState["presetMappings"].is_object())
         {
             archiveState["presetMappings"] = nlohmann::json::object();
         }
 
         std::unordered_set<std::string> trackedPresetIds;
+
         for (const auto& mapping : archiveState["presetMappings"].items())
         {
             if (!mapping.value().is_string())
             {
                 continue;
             }
+
             const std::string importedId = mapping.value().get<std::string>();
+
             if (importedId.empty())
             {
                 continue;
             }
+
             trackedPresetIds.insert(importedId);
             mFactoryArchivePresetAliases[mapping.key()] = importedId;
             mFactoryArchivePresetIds.insert(importedId);
@@ -597,6 +653,7 @@ void PluginController::LoadFactoryPresetArchives()
             const std::string scopedResourceId = BuildScopedFactoryArchiveId(archiveKey, resource.id);
             std::string resolvedName = resource.fileName.empty() ? resource.id : resource.fileName;
             resolvedName = util::SanitizeFilename(resolvedName);
+
             if (resolvedName.empty())
             {
                 resolvedName = scopedResourceId + (resource.type == "ir" ? ".wav" : ".nam");
@@ -606,11 +663,13 @@ void PluginController::LoadFactoryPresetArchives()
             [[maybe_unused]] const auto ensuredArchiveDir = mFileSystem.EnsureDirectory(archiveExtractDir);
             const auto targetPath = archiveExtractDir / resolvedName;
             const bool needsWrite = archiveChanged || !std::filesystem::exists(targetPath);
+
             if (needsWrite && !WriteFile(targetPath, resource.bytes))
             {
                 AppendSessionLog("Factory preset archive resource write failed: " + targetPath.string());
                 continue;
             }
+
             if (!std::filesystem::exists(targetPath))
             {
                 AppendSessionLog("Factory preset archive resource missing after import: " + targetPath.string());
@@ -632,6 +691,7 @@ void PluginController::LoadFactoryPresetArchives()
             libraryResource.metadata["factoryArchiveKey"] = archiveKey;
             libraryResource.metadata["factoryArchiveHash"] = archiveHash;
             libraryResource.metadata["originalId"] = resource.id;
+
             if (needsWrite || !mResourceLibrary.HasResource(libraryResource.type, libraryResource.id))
             {
                 AppendUserLibraryResource(libraryResource);
@@ -645,6 +705,7 @@ void PluginController::LoadFactoryPresetArchives()
         for (auto blend : parsed.blends)
         {
             const std::string originalBlendId = blend.value("id", "");
+
             if (originalBlendId.empty())
             {
                 continue;
@@ -662,7 +723,9 @@ void PluginController::LoadFactoryPresetArchives()
                     {
                         continue;
                     }
+
                     const auto mapped = resourceIdMap.find(modelId.get<std::string>());
+
                     if (mapped != resourceIdMap.end())
                     {
                         modelId = mapped->second;
@@ -678,7 +741,9 @@ void PluginController::LoadFactoryPresetArchives()
                     {
                         continue;
                     }
+
                     const auto mapped = resourceIdMap.find(mapping.value("id", ""));
+
                     if (mapped != resourceIdMap.end())
                     {
                         mapping["id"] = mapped->second;
@@ -689,6 +754,7 @@ void PluginController::LoadFactoryPresetArchives()
             mFactoryArchiveBlendIds.insert(scopedBlendId);
 
             bool replaced = false;
+
             for (auto& existing : mBlendLibrary)
             {
                 if (existing.is_object() && existing.value("id", "") == scopedBlendId)
@@ -698,6 +764,7 @@ void PluginController::LoadFactoryPresetArchives()
                     break;
                 }
             }
+
             if (!replaced)
             {
                 mBlendLibrary.push_back(blend);
@@ -706,6 +773,7 @@ void PluginController::LoadFactoryPresetArchives()
 
         std::unordered_map<std::string, std::string> presetIdMapping;
         std::vector<std::string> importedPresetIds;
+
         for (auto preset : parsed.presets)
         {
             RemapPresetArchiveReferences(preset, resourceIdMap, blendIdMap);
@@ -717,12 +785,14 @@ void PluginController::LoadFactoryPresetArchives()
                     : preset.id;
 
             std::string uniquePresetId = archiveState["presetMappings"].value(sourcePresetId, std::string{});
+
             if (uniquePresetId.empty())
             {
                 const std::string basePresetId =
                     BuildScopedFactoryArchiveId(archiveKey, sourcePresetId.empty() ? "preset" : sourcePresetId);
                 std::size_t suffix = 2;
                 uniquePresetId = basePresetId;
+
                 while (
                     (occupiedPresetIds.contains(uniquePresetId) || mFactoryArchivePresets.contains(uniquePresetId)) &&
                     !trackedPresetIds.contains(uniquePresetId))
@@ -768,5 +838,4 @@ void PluginController::LoadFactoryPresetArchives()
     Store().Put(storage::ItemType::kDocument, kFactoryArchiveStateDocumentId, factoryArchiveState);
     InvalidateResourceUsageIndex();
 }
-
 } // namespace guitarfx

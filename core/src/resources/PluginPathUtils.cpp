@@ -78,6 +78,7 @@ constexpr bool IsOfferedInPicker(PluginFormat format)
     case PluginFormat::Unknown:
         break;
     }
+
     return false;
 }
 
@@ -95,11 +96,13 @@ std::filesystem::path StripTrailingSeparator(const std::filesystem::path& path)
     if (!path.has_filename() && path.has_parent_path())
     {
         auto parent = path.parent_path();
+
         if (parent != path)
         {
             return parent;
         }
     }
+
     return path;
 }
 
@@ -111,12 +114,14 @@ const FormatSuffix* MatchSuffix(const std::string& lowerName, bool bundlesOnly)
         {
             continue;
         }
+
         if (lowerName.size() > entry.suffix.size() &&
             lowerName.compare(lowerName.size() - entry.suffix.size(), entry.suffix.size(), entry.suffix) == 0)
         {
             return &entry;
         }
     }
+
     return nullptr;
 }
 
@@ -142,6 +147,7 @@ std::filesystem::path ResolvePluginBundlePath(const std::filesystem::path& path)
 
     // Nearest ancestor (starting with the path itself) that looks like a bundle.
     std::filesystem::path nearest;
+
     for (auto current = trimmed;;)
     {
         if (MatchSuffix(ToLowerAscii(current.filename().string()), /*bundlesOnly=*/true) != nullptr)
@@ -151,10 +157,12 @@ std::filesystem::path ResolvePluginBundlePath(const std::filesystem::path& path)
         }
 
         auto parent = current.parent_path();
+
         if (parent.empty() || parent == current)
         {
             break;
         }
+
         current = std::move(parent);
     }
 
@@ -168,6 +176,7 @@ std::filesystem::path ResolvePluginBundlePath(const std::filesystem::path& path)
     // stops here, so "Container.vst3\Foo.vst3" resolves to Foo.vst3.
     const std::string nearestName = ToLowerAscii(nearest.filename().string());
     std::filesystem::path outermost = nearest;
+
     for (auto current = nearest.parent_path(); !current.empty();)
     {
         if (ToLowerAscii(current.filename().string()) == nearestName)
@@ -176,10 +185,12 @@ std::filesystem::path ResolvePluginBundlePath(const std::filesystem::path& path)
         }
 
         auto parent = current.parent_path();
+
         if (parent.empty() || parent == current)
         {
             break;
         }
+
         current = std::move(parent);
     }
 
@@ -212,6 +223,7 @@ std::string_view PluginFormatId(PluginFormat format)
     case PluginFormat::Unknown:
         break;
     }
+
     return {};
 }
 
@@ -234,6 +246,7 @@ std::string_view PluginFormatDisplayName(PluginFormat format)
     case PluginFormat::Unknown:
         break;
     }
+
     return {};
 }
 
@@ -245,6 +258,7 @@ std::string PluginBrowseFilters()
         {
             filters += ';';
         }
+
         filters += '*';
         filters += suffix;
     };
@@ -256,6 +270,7 @@ std::string PluginBrowseFilters()
             append(entry.suffix);
         }
     }
+
     for (const auto extension : kPayloadExtensions)
     {
         append(extension);
@@ -263,5 +278,4 @@ std::string PluginBrowseFilters()
 
     return filters;
 }
-
 } // namespace guitarfx::pluginpath

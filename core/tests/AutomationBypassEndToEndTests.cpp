@@ -33,6 +33,7 @@ bool Expect(bool condition, const std::string& message)
     {
         std::cerr << "FAIL: " << message << std::endl;
     }
+
     return condition;
 }
 
@@ -74,6 +75,7 @@ int main()
     mixer.Prepare(kSampleRate, kBlockSize);
 
     const auto preset = MakeGainPreset();
+
     if (!mixer.AddActivePreset(preset, preset.id, preset.name))
     {
         std::cerr << "Failed to add gain preset" << std::endl;
@@ -133,5 +135,6 @@ int main()
         std::cout << "AutomationBypassEndToEnd MIDI toggle test passed" << std::endl;
         return 0;
     }
+
     return 1;
 }

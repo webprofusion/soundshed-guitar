@@ -91,18 +91,33 @@ if (!node) return;
 ```
 
 ### Vertical whitespace
-Three rules, none of which clang-format can enforce. It **preserves** blank
-lines once written (`MaxEmptyLinesToKeep: 1`), so it never undoes your work, but
-it will never insert them for you either. This is on the author and the reviewer.
+Three rules. Rules 1 and 2 are enforced by **uncrustify**
+(`tools/uncrustify.cfg`) because clang-format has no option that inserts blank
+lines around control flow. Rule 3 no tool can do — uncrustify's `nl_before_*`
+family covers struct, class and namespace but has no enum entry — so it stays on
+the author and the reviewer.
 
 1. **Before a control statement.** A blank line before `if`, `for`, `while`,
-   `switch` and `do` when ordinary code precedes it.
-2. **After a braced `if`.** A blank line after the closing `}` of an `if`.
+   `switch` and `do` when ordinary code precedes it. *(uncrustify)*
+2. **After a control statement.** A blank line after its closing `}`.
+   *(uncrustify)*
 3. **Around an `enum` declaration.** A blank line before and after it.
+   *(by hand)*
 
 All three have the same exception: **skip the blank line when it would land at
 the very start or the very end of a scope.** No blank line straight after an
-opening `{`, none straight before a closing `}`.
+opening `{`, none straight before a closing `}`. For rules 1 and 2 uncrustify
+handles this via `eat_blanks_after_open_brace` / `eat_blanks_before_close_brace`.
+
+Run uncrustify FIRST and clang-format SECOND — always both, in that order.
+Uncrustify inserts the blank lines; clang-format then normalises everything else
+and preserves them (`MaxEmptyLinesToKeep: 1`), so the two compose rather than
+fight. The pair is confirmed convergent: a second run is a no-op.
+
+```bash
+uncrustify -c tools/uncrustify.cfg -l CPP --no-backup <files>
+clang-format --style=file -i <files>
+```
 
 ```cpp
 // Good
@@ -168,7 +183,8 @@ void Configure(Node* node)
 ## Change Checklist
 - Assumptions stated and confirmed where needed.
 - Error paths covered; log actionable messages.
-- C++ under core/ run through clang-format (`--style=file`) before committing.
+- C++ under core/ run through uncrustify then clang-format before committing
+  (see Coding Conventions → Vertical whitespace for the two commands).
 - Build or relevant tests executed (note which ones). For UI changes, run npm build.
 - For UI-facing changes, verified in the live running app (see Testing → live UI verification), not just typecheck/build.
 - Backward compatibility considered for presets, resources, and UI messages.

@@ -74,6 +74,7 @@ class IRReverbEffect : public EffectProcessor
         if (mMaxBlockSize > 0 && numSamples > mMaxBlockSize)
         {
             int offset = 0;
+
             while (offset < numSamples)
             {
                 const int chunk = std::min(mMaxBlockSize, numSamples - offset);
@@ -84,6 +85,7 @@ class IRReverbEffect : public EffectProcessor
                 ProcessChunk(chunkIn, chunkOut, chunk);
                 offset += chunk;
             }
+
             return;
         }
 
@@ -108,6 +110,7 @@ class IRReverbEffect : public EffectProcessor
                     std::fill_n(outputs[0], numSamples, 0.0f);
                 }
             }
+
             if (outputs[1])
             {
                 if (inputs[1])
@@ -123,6 +126,7 @@ class IRReverbEffect : public EffectProcessor
                     std::fill_n(outputs[1], numSamples, 0.0f);
                 }
             }
+
             return;
         }
 
@@ -134,12 +138,14 @@ class IRReverbEffect : public EffectProcessor
 
         const bool allowParallel = rtparallel::ShouldParallelizeStereoWork(numSamples);
         bool ranParallel = false;
+
         if (allowParallel)
         {
             ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
                 [&]() { mConvolverRR.Process(mInputBufferR.data(), mOutputBufferRR.data(), numSamples); },
                 [&]() { mConvolverLL.Process(mInputBufferL.data(), mOutputBufferLL.data(), numSamples); });
         }
+
         if (!ranParallel)
         {
             mConvolverLL.Process(mInputBufferL.data(), mOutputBufferLL.data(), numSamples);
@@ -149,12 +155,14 @@ class IRReverbEffect : public EffectProcessor
         if (mHasTrueStereo)
         {
             bool ranTrueStereoParallel = false;
+
             if (allowParallel)
             {
                 ranTrueStereoParallel = rtparallel::DualLaneExecutor::Instance().Run(
                     [&]() { mConvolverRL.Process(mInputBufferL.data(), mOutputBufferRL.data(), numSamples); },
                     [&]() { mConvolverLR.Process(mInputBufferR.data(), mOutputBufferLR.data(), numSamples); });
             }
+
             if (!ranTrueStereoParallel)
             {
                 mConvolverLR.Process(mInputBufferR.data(), mOutputBufferLR.data(), numSamples);
@@ -187,6 +195,7 @@ class IRReverbEffect : public EffectProcessor
             {
                 outputs[0][i] = wetL * wetGain + dryL * dryGain;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = wetR * wetGain + dryR * dryGain;
@@ -219,6 +228,7 @@ class IRReverbEffect : public EffectProcessor
             const int q = static_cast<int>(std::clamp(value, 0.0, 3.0));
             const int pending = mPendingQuality.load(std::memory_order_acquire);
             const int effective = pending >= 0 ? pending : static_cast<int>(mQuality);
+
             // Rebuilding drops the effect to dry until the new convolvers are ready, so a
             // redundant write (preset re-apply, automation resending the same value) would
             // be audible as a click for no reason. Match the lowLatency handler and ignore it.
@@ -228,6 +238,7 @@ class IRReverbEffect : public EffectProcessor
             }
 
             mPendingQuality.store(q, std::memory_order_release);
+
             // Reinitialise immediately so quality changes take effect without requiring
             // a prepareToPlay() call. Only safe when called from non-audio thread (UI interaction).
             if (HasResource())
@@ -239,9 +250,11 @@ class IRReverbEffect : public EffectProcessor
         else if (key == "lowLatency")
         {
             const bool nv = value > 0.5;
+
             if (nv != mLowLatency)
             {
                 mLowLatency = nv;
+
                 // Rebuild immediately so the latency change takes effect without a reload.
                 // Safe from the non-audio (UI/controller) thread; InitializeConvolvers raises
                 // mRebuilding so the audio thread bypasses while convolvers are swapped.
@@ -263,27 +276,33 @@ class IRReverbEffect : public EffectProcessor
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         if (key == "tone")
         {
             return mTone.load(std::memory_order_relaxed);
         }
+
         if (key == "outputGain")
         {
             return 20.0 * std::log10(mOutputGain.load(std::memory_order_relaxed));
         }
+
         if (key == "enabled")
         {
             return mEnabled ? 1.0 : 0.0;
         }
+
         if (key == "quality")
         {
             const int pending = mPendingQuality.load(std::memory_order_acquire);
             return pending >= 0 ? static_cast<double>(pending) : static_cast<double>(mQuality);
         }
+
         if (key == "lowLatency")
         {
             return mLowLatency ? 1.0 : 0.0;
         }
+
         return 0.0;
     }
 
@@ -358,6 +377,7 @@ class IRReverbEffect : public EffectProcessor
         {
             totalEnergy += static_cast<double>(a[i]) * static_cast<double>(a[i]);
             totalEnergy += static_cast<double>(b[i]) * static_cast<double>(b[i]);
+
             if (c && d)
             {
                 totalEnergy += static_cast<double>((*c)[i]) * static_cast<double>((*c)[i]);
@@ -377,11 +397,13 @@ class IRReverbEffect : public EffectProcessor
         {
             cumulativeEnergy += static_cast<double>(a[i]) * static_cast<double>(a[i]);
             cumulativeEnergy += static_cast<double>(b[i]) * static_cast<double>(b[i]);
+
             if (c && d)
             {
                 cumulativeEnergy += static_cast<double>((*c)[i]) * static_cast<double>((*c)[i]);
                 cumulativeEnergy += static_cast<double>((*d)[i]) * static_cast<double>((*d)[i]);
             }
+
             if (cumulativeEnergy >= targetEnergy)
             {
                 return std::min(i + 256, frames);
@@ -405,6 +427,7 @@ class IRReverbEffect : public EffectProcessor
         // Use a long fade (~42ms at 48kHz) to prevent Gibbs-phenomenon ringing
         // when the reverb tail is still active at the truncation point.
         const std::size_t effectiveFade = std::min(fadeLen, truncLength);
+
         if (effectiveFade > 1)
         {
             for (std::size_t i = 0; i < effectiveFade; ++i)
@@ -429,28 +452,34 @@ class IRReverbEffect : public EffectProcessor
                                    const std::vector<float>* c = nullptr, const std::vector<float>* d = nullptr)
     {
         double sumSq = 0.0;
+
         for (const float s : a)
         {
             sumSq += static_cast<double>(s) * s;
         }
+
         for (const float s : b)
         {
             sumSq += static_cast<double>(s) * s;
         }
+
         if (c && d)
         {
             for (const float s : *c)
             {
                 sumSq += static_cast<double>(s) * s;
             }
+
             for (const float s : *d)
             {
                 sumSq += static_cast<double>(s) * s;
             }
         }
+
         // Average across the two output channels so mono/stereo/true-stereo IRs all
         // normalise to the same perceived level.
         sumSq *= 0.5;
+
         if (sumSq <= 1e-12)
         {
             return 1.0f;
@@ -467,6 +496,7 @@ class IRReverbEffect : public EffectProcessor
         {
             return 1.0;
         }
+
         const double px = 3.14159265358979323846 * x;
         return std::sin(px) / px;
     }
@@ -476,6 +506,7 @@ class IRReverbEffect : public EffectProcessor
         constexpr double kPi = 3.14159265358979323846;
         constexpr int kHalfTaps = 64;
         const double normalizedDistance = std::abs(distance) / static_cast<double>(kHalfTaps);
+
         if (normalizedDistance >= 1.0)
         {
             return 0.0;
@@ -495,6 +526,7 @@ class IRReverbEffect : public EffectProcessor
         const double ratio = targetRate / sourceRate;
         const double cutoff = std::min(ratio, 1.0);
         const std::size_t newSize = static_cast<std::size_t>(std::ceil(static_cast<double>(samples.size()) * ratio));
+
         if (newSize == 0)
         {
             samples.clear();
@@ -514,6 +546,7 @@ class IRReverbEffect : public EffectProcessor
             for (int tapOffset = -kHalfTaps; tapOffset <= kHalfTaps; ++tapOffset)
             {
                 const int sourceIndex = center + tapOffset;
+
                 if (sourceIndex < 0 || sourceIndex >= sourceLength)
                 {
                     continue;
@@ -538,6 +571,7 @@ class IRReverbEffect : public EffectProcessor
     void EnsurePlaybackImpulses()
     {
         const bool needsResample = std::abs(mIRSampleRate - mSampleRate) > 1.0;
+
         if (mPlaybackCacheValid && mPlaybackCacheRate == mSampleRate && mPlaybackCacheIRRate == mIRSampleRate)
         {
             return;
@@ -555,6 +589,7 @@ class IRReverbEffect : public EffectProcessor
             mPlaybackRR = mImpulseRR;
             ResampleImpulseForConvolution(mPlaybackLL, mIRSampleRate, mSampleRate);
             ResampleImpulseForConvolution(mPlaybackRR, mIRSampleRate, mSampleRate);
+
             if (mHasTrueStereo)
             {
                 mPlaybackLR = mImpulseLR;
@@ -607,6 +642,7 @@ class IRReverbEffect : public EffectProcessor
         {
             return std::min({PlaybackLL().size(), PlaybackLR().size(), PlaybackRL().size(), PlaybackRR().size()});
         }
+
         return std::min(PlaybackLL().size(), PlaybackRR().size());
     }
 
@@ -614,6 +650,7 @@ class IRReverbEffect : public EffectProcessor
     std::size_t GetTruncationLength() const
     {
         const std::size_t minLength = GetMinimumImpulseLength();
+
         if (minLength == 0)
         {
             return 0;
@@ -627,6 +664,7 @@ class IRReverbEffect : public EffectProcessor
         // GetMaxReverbIRSamples returns a limit expressed in playback-rate samples, which is
         // the domain the cached impulses are already in.
         const size_t maxSamples = GetMaxReverbIRSamples(mQuality, mSampleRate);
+
         if (maxSamples == 0 || minLength <= maxSamples)
         {
             return minLength;
@@ -642,6 +680,7 @@ class IRReverbEffect : public EffectProcessor
     bool LoadWavFile(const std::filesystem::path& path)
     {
         IRWavData data;
+
         if (!irwav::LoadAudioFile(path, data))
         {
             std::cerr << "[IRReverbEffect] Failed to parse audio data from: " << path << "\n";
@@ -701,6 +740,7 @@ class IRReverbEffect : public EffectProcessor
         mRebuilding.store(true, std::memory_order_release);
 
         const std::size_t truncLength = GetTruncationLength();
+
         if (truncLength == 0)
         {
             mRebuilding.store(false, std::memory_order_release);
@@ -729,20 +769,24 @@ class IRReverbEffect : public EffectProcessor
             const float normGain =
                 ComputeL2NormGain(mSampleRate, processedLL, processedRR, mHasTrueStereo ? &processedLR : nullptr,
                                   mHasTrueStereo ? &processedRL : nullptr);
+
             for (float& s : processedLL)
             {
                 s *= normGain;
             }
+
             for (float& s : processedRR)
             {
                 s *= normGain;
             }
+
             if (mHasTrueStereo)
             {
                 for (float& s : processedLR)
                 {
                     s *= normGain;
                 }
+
                 for (float& s : processedRL)
                 {
                     s *= normGain;
@@ -760,6 +804,7 @@ class IRReverbEffect : public EffectProcessor
             mRebuilding.store(false, std::memory_order_release);
             return false;
         }
+
         if (!mConvolverRR.SetImpulse(processedRR, mMaxBlockSize))
         {
             mRebuilding.store(false, std::memory_order_release);
@@ -773,6 +818,7 @@ class IRReverbEffect : public EffectProcessor
                 mRebuilding.store(false, std::memory_order_release);
                 return false;
             }
+
             if (!mConvolverRL.SetImpulse(processedRL, mMaxBlockSize))
             {
                 mRebuilding.store(false, std::memory_order_release);
@@ -787,6 +833,7 @@ class IRReverbEffect : public EffectProcessor
     void ApplyPendingQuality()
     {
         const int pending = mPendingQuality.exchange(-1, std::memory_order_acq_rel);
+
         if (pending >= 0)
         {
             mQuality = static_cast<IRQuality>(pending);
@@ -796,11 +843,13 @@ class IRReverbEffect : public EffectProcessor
     void UpdateToneFilter()
     {
         const float t = mTone.load(std::memory_order_relaxed);
+
         if (t >= 1.0f)
         {
             mToneCoef.store(1.0f, std::memory_order_relaxed);
             return;
         }
+
         const float minHz = 1500.0f;
         const float maxHz = 20000.0f;
         const float cutoff = minHz + (maxHz - minHz) * t;
@@ -874,5 +923,4 @@ inline void RegisterIRReverbEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<IRReverbEffect>(); });
 }
-
 } // namespace guitarfx

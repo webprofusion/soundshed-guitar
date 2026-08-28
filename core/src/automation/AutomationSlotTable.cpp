@@ -11,13 +11,13 @@
 
 namespace guitarfx
 {
-
 namespace
 {
 bool IsBypassNodeAddress(const std::string& address)
 {
     std::string effectType;
     std::string paramId;
+
     if (!ParamRegistry::ParseNodeAddress(address, effectType, paramId))
     {
         return false;
@@ -54,6 +54,7 @@ AutomationSlot& AutomationSlot::operator=(const AutomationSlot& other)
         lastToggleGate.store(other.lastToggleGate.load());
         pendingApply.store(other.pendingApply.load());
     }
+
     return *this;
 }
 
@@ -76,6 +77,7 @@ AutomationSlotTable::~AutomationSlotTable() = default;
 void AutomationSlotTable::InitializeDefaultSlots()
 {
     mSlots.clear();
+
     for (const auto& def : kDefaultSlots)
     {
         AutomationSlot slot;
@@ -159,6 +161,7 @@ void AutomationSlotTable::InitializeRegistry(
             {
                 return 0.0;
             }
+
             const int base = mGetSetlistBankBase();
             const int cursor = static_cast<int>(std::round(mGetSetlistCursor()));
             return (cursor == base + (slotOffset - 1)) ? 1.0 : 0.0;
@@ -168,6 +171,7 @@ void AutomationSlotTable::InitializeRegistry(
             {
                 return;
             }
+
             const int base = mGetSetlistBankBase();
             mApplySetlistPresetByIndex(base + (slotOffset - 1));
         };
@@ -253,6 +257,7 @@ void AutomationSlotTable::InitializeRegistry(
             {
                 return 0.0;
             }
+
             return mGetActiveSceneIndex() == (sceneOffset - 1) ? 1.0 : 0.0;
         };
         e.apply = [this, sceneOffset](double, bool) {
@@ -274,18 +279,21 @@ nlohmann::json AutomationSlotTable::SaveToJson() const
 
     // Default slot overrides (midiMap, keyMaps, label)
     nlohmann::json overrides = nlohmann::json::object();
+
     for (const auto& slot : mSlots)
     {
         if (!slot.isDefault)
         {
             continue;
         }
+
         if (!slot.midiMap && slot.keyMaps.empty() && slot.label.empty())
         {
             continue;
         }
 
         nlohmann::json o = nlohmann::json::object();
+
         // Only store label if it differs from the default
         for (const auto& def : kDefaultSlots)
         {
@@ -295,6 +303,7 @@ nlohmann::json AutomationSlotTable::SaveToJson() const
                 break;
             }
         }
+
         if (slot.midiMap)
         {
             nlohmann::json mm = nlohmann::json::object();
@@ -306,35 +315,44 @@ nlohmann::json AutomationSlotTable::SaveToJson() const
             mm["pickupRange"] = slot.midiMap->pickupRange;
             o["midiMap"] = std::move(mm);
         }
+
         if (!slot.keyMaps.empty())
         {
             nlohmann::json km = nlohmann::json::array();
+
             for (const auto& k : slot.keyMaps)
             {
                 km.push_back({{"key", k.key}, {"mode", static_cast<int>(k.mode)}, {"value", k.value}});
             }
+
             o["keyMap"] = std::move(km);
         }
+
         overrides[slot.slotId] = std::move(o);
     }
+
     j["defaultSlotOverrides"] = std::move(overrides);
 
     // Custom slots
     nlohmann::json customs = nlohmann::json::array();
+
     for (const auto& slot : mSlots)
     {
         if (slot.isDefault)
         {
             continue;
         }
+
         nlohmann::json s = nlohmann::json::object();
         s["slotId"] = slot.slotId;
         s["label"] = slot.label;
         s["address"] = slot.address;
+
         if (!slot.nodeSelector.empty())
         {
             s["nodeSelector"] = slot.nodeSelector;
         }
+
         if (slot.midiMap)
         {
             nlohmann::json mm = nlohmann::json::object();
@@ -346,17 +364,22 @@ nlohmann::json AutomationSlotTable::SaveToJson() const
             mm["pickupRange"] = slot.midiMap->pickupRange;
             s["midiMap"] = std::move(mm);
         }
+
         if (!slot.keyMaps.empty())
         {
             nlohmann::json km = nlohmann::json::array();
+
             for (const auto& k : slot.keyMaps)
             {
                 km.push_back({{"key", k.key}, {"mode", static_cast<int>(k.mode)}, {"value", k.value}});
             }
+
             s["keyMap"] = std::move(km);
         }
+
         customs.push_back(std::move(s));
     }
+
     j["customSlots"] = std::move(customs);
 
     return j;
@@ -374,6 +397,7 @@ void AutomationSlotTable::LoadFromJson(const nlohmann::json& j)
             const auto& slotId = it.key();
             const auto& o = it.value();
             auto* slot = FindSlot(slotId);
+
             if (!slot || !slot->isDefault)
             {
                 continue;
@@ -399,6 +423,7 @@ void AutomationSlotTable::LoadFromJson(const nlohmann::json& j)
             if (o.contains("keyMap") && o["keyMap"].is_array())
             {
                 slot->keyMaps.clear();
+
                 for (const auto& k : o["keyMap"])
                 {
                     KeyboardMap km;
@@ -466,6 +491,7 @@ AutomationSlot* AutomationSlotTable::FindSlot(const std::string& slotId)
             return &s;
         }
     }
+
     return nullptr;
 }
 
@@ -478,6 +504,7 @@ const AutomationSlot* AutomationSlotTable::FindSlot(const std::string& slotId) c
             return &s;
         }
     }
+
     return nullptr;
 }
 
@@ -485,26 +512,31 @@ std::vector<std::string> AutomationSlotTable::GetSlotIds() const
 {
     std::vector<std::string> ids;
     ids.reserve(mSlots.size());
+
     for (const auto& s : mSlots)
     {
         ids.push_back(s.slotId);
     }
+
     return ids;
 }
 
 nlohmann::json AutomationSlotTable::GetSlotsJson() const
 {
     nlohmann::json slots = nlohmann::json::array();
+
     for (const auto& s : mSlots)
     {
         nlohmann::json sj = nlohmann::json::object();
         sj["slotId"] = s.slotId;
         sj["label"] = s.label;
         sj["address"] = s.address;
+
         if (!s.nodeSelector.empty())
         {
             sj["nodeSelector"] = s.nodeSelector;
         }
+
         sj["isDefault"] = s.isDefault;
         sj["value"] = s.value.load();
 
@@ -523,15 +555,18 @@ nlohmann::json AutomationSlotTable::GetSlotsJson() const
         if (!s.keyMaps.empty())
         {
             nlohmann::json km = nlohmann::json::array();
+
             for (const auto& k : s.keyMaps)
             {
                 km.push_back({{"key", k.key}, {"mode", static_cast<int>(k.mode)}, {"value", k.value}});
             }
+
             sj["keyMap"] = std::move(km);
         }
 
         slots.push_back(std::move(sj));
     }
+
     return slots;
 }
 
@@ -549,6 +584,7 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
                                         const std::optional<std::vector<KeyboardMap>>& keyMaps)
 {
     auto* slot = FindSlot(slotId);
+
     if (slot && slot->isDefault)
     {
         return false; // Can't modify address on defaults
@@ -558,6 +594,7 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
     {
         // Check max custom slots
         int customCount = 0;
+
         for (const auto& s : mSlots)
         {
             if (!s.isDefault)
@@ -565,6 +602,7 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
                 ++customCount;
             }
         }
+
         if (customCount >= kMaxCustomSlots)
         {
             return false;
@@ -573,26 +611,32 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
         AutomationSlot newSlot;
         newSlot.slotId = slotId;
         newSlot.isDefault = false;
+
         if (label)
         {
             newSlot.label = *label;
         }
+
         if (address)
         {
             newSlot.address = *address;
         }
+
         if (nodeSelector)
         {
             newSlot.nodeSelector = *nodeSelector;
         }
+
         if (midiMap)
         {
             newSlot.midiMap = *midiMap;
         }
+
         if (keyMaps)
         {
             newSlot.keyMaps = *keyMaps;
         }
+
         mSlots.push_back(std::move(newSlot));
         return true;
     }
@@ -601,22 +645,27 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
     {
         slot->label = *label;
     }
+
     if (address)
     {
         slot->address = *address;
     }
+
     if (nodeSelector)
     {
         slot->nodeSelector = *nodeSelector;
     }
+
     if (midiMap)
     {
         slot->midiMap = *midiMap;
     }
+
     if (keyMaps)
     {
         slot->keyMaps = *keyMaps;
     }
+
     return true;
 }
 
@@ -625,6 +674,7 @@ bool AutomationSlotTable::SetDefaultSlotOverrides(const std::string& slotId, con
                                                   const std::optional<std::vector<KeyboardMap>>& keyMaps)
 {
     auto* slot = FindSlot(slotId);
+
     if (!slot || !slot->isDefault)
     {
         return false;
@@ -634,14 +684,17 @@ bool AutomationSlotTable::SetDefaultSlotOverrides(const std::string& slotId, con
     {
         slot->label = *label;
     }
+
     if (midiMap)
     {
         slot->midiMap = *midiMap;
     }
+
     if (keyMaps)
     {
         slot->keyMaps = *keyMaps;
     }
+
     return true;
 }
 
@@ -655,6 +708,7 @@ bool AutomationSlotTable::RemoveCustomSlot(const std::string& slotId)
             return true;
         }
     }
+
     return false;
 }
 
@@ -663,6 +717,7 @@ bool AutomationSlotTable::RemoveCustomSlot(const std::string& slotId)
 bool AutomationSlotTable::ApplyAutomationLocked(const std::string& slotId, float normalized, AutomationSource src)
 {
     auto* slot = FindSlot(slotId);
+
     if (!slot)
     {
         return false;
@@ -685,6 +740,7 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
     if (ParamRegistry::IsNodeAddress(slot.address))
     {
         std::string effectType, paramId;
+
         if (!ParamRegistry::ParseNodeAddress(slot.address, effectType, paramId))
         {
             return false;
@@ -702,10 +758,12 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
             {
                 const bool enabled = (paramId == "enabled") ? (slot.value.load() >= 0.5f) : (slot.value.load() < 0.5f);
                 const bool ok = mMixer->SetNodeEnabledByType(effectType, enabled);
+
                 if (ok && mOnNodeBypassApplied)
                 {
                     mOnNodeBypassApplied(effectType, enabled);
                 }
+
                 return ok;
             }
 
@@ -713,12 +771,15 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
             // (the effect's SetParam already knows the parameter's native range)
             const double native = static_cast<double>(slot.value.load());
             const bool ok = mMixer->SetNodeParamByType(effectType, paramId, native);
+
             if (ok && mOnNodeParamApplied)
             {
                 mOnNodeParamApplied(effectType, paramId, native);
             }
+
             return ok;
         }
+
         return false;
     }
 
@@ -741,10 +802,12 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
         const float prev = slot.lastNormalized.load();
         slot.lastNormalized.store(normalized);
         const bool fire = (prev < 0.5f) && (normalized >= 0.5f);
+
         if (!fire)
         {
             return false;
         }
+
         // Reset both value and lastNormalized so the trigger can fire again
         // on the next rising edge. Without this, a sustained/high MIDI value
         // or repeated Test button presses would prevent retriggering.
@@ -761,6 +824,7 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
         entry->apply(native, true);
         return true;
     }
+
     return false;
 }
 
@@ -772,6 +836,7 @@ std::string AutomationSlotTable::ResolveNodeAddress(const std::string& address, 
     }
 
     std::string effectType, paramId;
+
     if (!ParamRegistry::ParseNodeAddress(address, effectType, paramId))
     {
         return {};
@@ -783,6 +848,7 @@ std::string AutomationSlotTable::ResolveNodeAddress(const std::string& address, 
     }
 
     const auto found = mMixer->FindFirstEnabledNodeOfType(effectType);
+
     if (!found)
     {
         return {};
@@ -865,10 +931,12 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
 
         const auto& mm = slot.midiMap.value();
+
         if (mm.channel != -1 && mm.channel != channel)
         {
             continue;
         }
+
         if (mm.controller != controller)
         {
             continue;
@@ -877,6 +945,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         const bool isNoteOnToggleRelease = (mm.mode == MidiControlMap::Mode::Toggle) &&
                                            (mm.eventType == MidiControlMap::EventType::NoteOn) &&
                                            (eventType == MidiControlMap::EventType::NoteOff);
+
         if (isNoteOnToggleRelease)
         {
             // NoteOn mappings receive releases as NoteOff/NoteOn(vel=0):
@@ -892,9 +961,11 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
 
         float normalized = 0.0f;
         const bool isBypassAddress = IsBypassNodeAddress(slot.address);
+
         switch (mm.mode)
         {
         case MidiControlMap::Mode::Absolute:
+
             if (isBypassAddress && (eventType == MidiControlMap::EventType::NoteOn ||
                                     eventType == MidiControlMap::EventType::ProgramChange))
             {
@@ -915,6 +986,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
             {
                 normalized = static_cast<float>(dataValue) / 127.0f;
             }
+
             break;
         case MidiControlMap::Mode::Relative: {
             const float current = slot.value.load();
@@ -924,6 +996,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
         case MidiControlMap::Mode::Toggle: {
             bool gateHigh = false;
+
             if (eventType == MidiControlMap::EventType::ProgramChange)
             {
                 // Program change events are already discrete, so every match toggles once.
@@ -940,11 +1013,13 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
                 // For NoteOn mappings, treat each NoteOn press as a discrete toggle
                 // so re-activation works even when release events are not delivered.
                 gateHigh = dataValue > 0;
+
                 if (!gateHigh)
                 {
                     slot.lastToggleGate.store(false);
                     continue;
                 }
+
                 slot.lastToggleGate.store(true);
                 normalized = (slot.value.load() < 0.5f) ? 1.0f : 0.0f;
                 break;
@@ -962,6 +1037,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
                                   ? true
                                   : (!slot.lastToggleGate.load() && gateHigh);
             slot.lastToggleGate.store(gateHigh);
+
             if (!fire)
             {
                 continue;
@@ -972,10 +1048,12 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
         case MidiControlMap::Mode::Pickup: {
             const float target = static_cast<float>(dataValue) / 127.0f;
+
             if (std::abs(slot.value.load() - target) > mm.pickupRange)
             {
                 continue; // Too far away, don't jump
             }
+
             normalized = target;
             break;
         }
@@ -998,5 +1076,4 @@ std::optional<MidiControlMap> AutomationSlotTable::PollMidiLearnCapture()
     mMidiLearnSlotId.reset();
     return result;
 }
-
 } // namespace guitarfx

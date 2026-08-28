@@ -20,6 +20,7 @@ class NoiseGateEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         mEnvelope[0] = 0.0f;
@@ -74,6 +75,7 @@ class NoiseGateEffect : public EffectProcessor
                 }
 
                 float gain = 0.0f;
+
                 if (mEnvelope[ch] > threshold)
                 {
                     mHoldSamplesRemaining[ch] = holdSamples;
@@ -120,18 +122,22 @@ class NoiseGateEffect : public EffectProcessor
         {
             return mThresholdDb;
         }
+
         if (key == "attack" || key == "attackMs")
         {
             return mAttackMs;
         }
+
         if (key == "hold" || key == "holdMs")
         {
             return mHoldMs;
         }
+
         if (key == "release" || key == "releaseMs")
         {
             return mReleaseMs;
         }
+
         return 0.0;
     }
 
@@ -169,5 +175,4 @@ inline void RegisterNoiseGateEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<NoiseGateEffect>(); });
 }
-
 } // namespace guitarfx

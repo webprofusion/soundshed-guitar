@@ -26,7 +26,6 @@ class MultiPresetMixer;
 
 namespace guitarfx::controller_detail
 {
-
 struct OfflineRenderBuffer
 {
     std::string id;
@@ -76,5 +75,4 @@ void TrimOfflineRenderBufferTrailingSilence(OfflineRenderBuffer& buffer, float t
 /// mismatched channels.
 [[nodiscard]] nlohmann::json BuildWaveformPeaks(const std::vector<float>& left, const std::vector<float>& right,
                                                 std::size_t bins);
-
 } // namespace guitarfx::controller_detail

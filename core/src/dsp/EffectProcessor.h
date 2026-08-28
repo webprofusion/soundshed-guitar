@@ -51,6 +51,7 @@ class EffectProcessor
         {
             return;
         }
+
         if (!input)
         {
             std::fill_n(output, numSamples, 0.0f);
@@ -89,6 +90,7 @@ class EffectProcessor
         {
             return LoadResource(paths.front());
         }
+
         return false;
     }
 
@@ -183,6 +185,7 @@ class PassthroughProcessor : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
     }
@@ -219,5 +222,4 @@ class PassthroughProcessor : public EffectProcessor
         return "utility";
     }
 };
-
 } // namespace guitarfx

@@ -170,6 +170,7 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
 
     // Load model
     auto model = nam::get_dsp(modelPath);
+
     if (!model)
     {
         std::cerr << "ERROR: Failed to load model: " << modelPath << "\n";
@@ -180,6 +181,7 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
 
     const int inputChannels = model->NumInputChannels();
     const int outputChannels = model->NumOutputChannels();
+
     if (inputChannels <= 0 || outputChannels <= 0)
     {
         std::cerr << "ERROR: Model has invalid channel counts (in=" << inputChannels << ", out=" << outputChannels
@@ -190,10 +192,12 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
     // Allocate buffers (NAM uses NAM_SAMPLE which is double by default)
     std::vector<std::vector<NAM_SAMPLE>> inputBuffers(static_cast<size_t>(inputChannels));
     std::vector<std::vector<NAM_SAMPLE>> outputBuffers(static_cast<size_t>(outputChannels));
+
     for (int ch = 0; ch < inputChannels; ++ch)
     {
         inputBuffers[static_cast<size_t>(ch)].resize(static_cast<size_t>(config.blockSize));
     }
+
     for (int ch = 0; ch < outputChannels; ++ch)
     {
         outputBuffers[static_cast<size_t>(ch)].resize(static_cast<size_t>(config.blockSize));
@@ -201,10 +205,12 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
 
     std::vector<NAM_SAMPLE*> inputPtrs(static_cast<size_t>(inputChannels));
     std::vector<NAM_SAMPLE*> outputPtrs(static_cast<size_t>(outputChannels));
+
     for (int ch = 0; ch < inputChannels; ++ch)
     {
         inputPtrs[static_cast<size_t>(ch)] = inputBuffers[static_cast<size_t>(ch)].data();
     }
+
     for (int ch = 0; ch < outputChannels; ++ch)
     {
         outputPtrs[static_cast<size_t>(ch)] = outputBuffers[static_cast<size_t>(ch)].data();
@@ -213,9 +219,11 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
     // Generate input signal
     std::vector<float> floatInput(static_cast<size_t>(config.blockSize));
     GenerateGuitarLikeSignal(floatInput, config.sampleRate);
+
     for (int i = 0; i < config.blockSize; ++i)
     {
         const NAM_SAMPLE sampleValue = static_cast<NAM_SAMPLE>(floatInput[i]);
+
         for (int ch = 0; ch < inputChannels; ++ch)
         {
             inputBuffers[static_cast<size_t>(ch)][static_cast<size_t>(i)] = sampleValue;
@@ -261,11 +269,13 @@ BenchmarkResult BenchmarkDirectNAM(const fs::path& modelPath, const std::string&
     result.maxBlockTimeUs = *std::max_element(blockTimesUs.begin(), blockTimesUs.end());
 
     double sumSquares = 0.0;
+
     for (double t : blockTimesUs)
     {
         double diff = t - result.averageBlockTimeUs;
         sumSquares += diff * diff;
     }
+
     result.stdDevBlockTimeUs = std::sqrt(sumSquares / blockTimesUs.size());
 
     // Check if it meets real-time requirements
@@ -385,11 +395,13 @@ BenchmarkResult BenchmarkGraphNAM(const fs::path& resourcesDir, const fs::path& 
     result.maxBlockTimeUs = *std::max_element(blockTimesUs.begin(), blockTimesUs.end());
 
     double sumSquares = 0.0;
+
     for (double t : blockTimesUs)
     {
         double diff = t - result.averageBlockTimeUs;
         sumSquares += diff * diff;
     }
+
     result.stdDevBlockTimeUs = std::sqrt(sumSquares / blockTimesUs.size());
 
     double blockBudgetUs = (static_cast<double>(config.blockSize) / config.sampleRate) * 1e6;
@@ -413,6 +425,7 @@ void RunMultiConfigBenchmark(const fs::path& resourcesDir, const fs::path& model
 
     // Print SIMD level
     std::cout << "SIMD Level: ";
+
     switch (guitarfx::simd::GetSimdLevel())
     {
     case guitarfx::simd::SimdLevel::AVX2:
@@ -431,6 +444,7 @@ void RunMultiConfigBenchmark(const fs::path& resourcesDir, const fs::path& model
         std::cout << "Scalar";
         break;
     }
+
     std::cout << "\n";
 
     // Test configurations
@@ -478,7 +492,6 @@ void RunMultiConfigBenchmark(const fs::path& resourcesDir, const fs::path& model
 
     std::cout << "└─────────────────────────────────────┴──────────────┴──────────────┴──────────┘\n";
 }
-
 } // namespace
 
 // ============================================================================

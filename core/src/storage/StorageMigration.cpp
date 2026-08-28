@@ -16,6 +16,7 @@ namespace
 std::optional<nlohmann::json> ReadJson(const std::filesystem::path& path)
 {
     std::error_code ec;
+
     if (!std::filesystem::exists(path, ec))
     {
         return std::nullopt;
@@ -24,10 +25,12 @@ std::optional<nlohmann::json> ReadJson(const std::filesystem::path& path)
     try
     {
         std::ifstream input(path);
+
         if (!input.is_open())
         {
             return std::nullopt;
         }
+
         return nlohmann::json::parse(input);
     }
     catch (const std::exception& exception)
@@ -51,6 +54,7 @@ void WriteLegacyTreeMarker(const std::filesystem::path& settingsDirectory, const
     try
     {
         std::ofstream marker(settingsDirectory / "MIGRATED-TO-soundshed-db.txt");
+
         if (!marker.is_open())
         {
             return;
@@ -114,6 +118,7 @@ struct Importer
         }
 
         const auto parsed = ReadJson(path);
+
         if (!parsed)
         {
             return;
@@ -143,6 +148,7 @@ struct Importer
         }
 
         const auto parsed = ReadJson(path);
+
         if (!parsed)
         {
             return;
@@ -164,18 +170,23 @@ struct Importer
                     ++skipped;
                     continue;
                 }
+
                 const std::string id = element.value(idField, std::string{});
+
                 if (id.empty())
                 {
                     ++skipped;
                     continue;
                 }
+
                 if (!store.Put(itemType, id, element))
                 {
                     return false;
                 }
+
                 ++imported;
             }
+
             return true;
         });
 
@@ -186,6 +197,7 @@ struct Importer
         }
 
         Note(sourceLabel, imported);
+
         if (skipped > 0)
         {
             Fail(sourceLabel, std::to_string(skipped) + " entries had no usable id and were skipped");
@@ -204,6 +216,7 @@ struct Importer
         }
 
         const auto parsed = ReadJson(path);
+
         if (!parsed)
         {
             return;
@@ -225,19 +238,24 @@ struct Importer
                     ++skipped;
                     continue;
                 }
+
                 const std::string type = element.value("type", std::string{});
                 const std::string id = element.value("id", std::string{});
+
                 if (type.empty() || id.empty())
                 {
                     ++skipped;
                     continue;
                 }
+
                 if (!store.Put(ItemType::kResource, type + ":" + id, element))
                 {
                     return false;
                 }
+
                 ++imported;
             }
+
             return true;
         });
 
@@ -248,6 +266,7 @@ struct Importer
         }
 
         Note("resources-index", imported);
+
         if (skipped > 0)
         {
             Fail("resources-index", std::to_string(skipped) + " entries had no type/id and were skipped");
@@ -267,6 +286,7 @@ struct Importer
         }
 
         std::error_code isDirEc;
+
         if (!std::filesystem::is_directory(directory, isDirEc))
         {
             return;
@@ -288,6 +308,7 @@ struct Importer
                 }
 
                 std::string stem = entry.path().stem().string();
+
                 if (!requiredStemSuffix.empty())
                 {
                     if (stem.size() <= requiredStemSuffix.size() ||
@@ -296,10 +317,12 @@ struct Importer
                     {
                         continue;
                     }
+
                     stem = stem.substr(0, stem.size() - requiredStemSuffix.size());
                 }
 
                 const auto parsed = ReadJson(entry.path());
+
                 if (!parsed || !parsed->is_object())
                 {
                     ++unreadable;
@@ -307,6 +330,7 @@ struct Importer
                 }
 
                 const std::string id = parsed->value("id", stem);
+
                 if (id.empty())
                 {
                     ++unreadable;
@@ -317,8 +341,10 @@ struct Importer
                 {
                     return false;
                 }
+
                 ++imported;
             }
+
             return true;
         });
 
@@ -329,10 +355,12 @@ struct Importer
         }
 
         Note(sourceLabel, imported);
+
         if (unreadable > 0)
         {
             Fail(sourceLabel, std::to_string(unreadable) + " files could not be read and were skipped");
         }
+
         if (iterateEc)
         {
             Fail(sourceLabel, "the folder could not be fully enumerated: " + iterateEc.message());
@@ -351,6 +379,7 @@ struct Importer
         }
 
         std::error_code isDirEc;
+
         if (!std::filesystem::is_directory(layoutsContentDir, isDirEc))
         {
             return;
@@ -367,12 +396,14 @@ struct Importer
                 }
 
                 const auto parsed = ReadJson(entry.path() / "layout.json");
+
                 if (!parsed || !parsed->is_object())
                 {
                     continue;
                 }
 
                 const std::string id = parsed->value("id", entry.path().filename().string());
+
                 if (id.empty())
                 {
                     continue;
@@ -382,8 +413,10 @@ struct Importer
                 {
                     return false;
                 }
+
                 ++imported;
             }
+
             return true;
         });
 
@@ -392,7 +425,9 @@ struct Importer
             FailHard("layouts", "write failed; nothing from this source was imported");
             return;
         }
+
         Note("layouts", imported);
+
         if (iterateEc)
         {
             Fail("layouts", "the folder could not be fully enumerated: " + iterateEc.message());
@@ -411,6 +446,7 @@ struct Importer
         }
 
         const auto parsed = ReadJson(path);
+
         if (!parsed)
         {
             return;
@@ -430,12 +466,15 @@ struct Importer
                 {
                     continue;
                 }
+
                 if (!store.Put(ItemType::kSetting, key, value))
                 {
                     return false;
                 }
+
                 ++imported;
             }
+
             return true;
         });
 
@@ -444,6 +483,7 @@ struct Importer
             FailHard("app-settings", "write failed; nothing from this source was imported");
             return;
         }
+
         Note("app-settings", imported);
     }
 };
@@ -471,9 +511,11 @@ void RunImport(Importer& importer, const std::filesystem::path& settingsDirector
     // before app settings are loaded, so read the location straight out of
     // the legacy settings file rather than assuming the default.
     std::filesystem::path riffLibraryDir = settingsDirectory / "riff-library";
+
     if (const auto legacySettings = ReadJson(legacyAppSettingsPath); legacySettings && legacySettings->is_object())
     {
         const auto configured = legacySettings->value("riffLibrary.path", std::string{});
+
         if (!configured.empty())
         {
             riffLibraryDir = util::PathFromUtf8(configured);
@@ -586,6 +628,7 @@ MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::p
     }
 
     report.succeeded = committed;
+
     if (!committed)
     {
         report.failures.push_back("the import was rolled back; it will run again next launch");
@@ -603,5 +646,4 @@ MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::p
 
     return report;
 }
-
 } // namespace guitarfx::storage

@@ -283,5 +283,4 @@ class SignalGraphExecutor
     std::vector<float> mTempLeftBuffer;
     std::vector<float> mTempRightBuffer;
 };
-
 } // namespace guitarfx

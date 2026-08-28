@@ -12,6 +12,7 @@ std::string ToUpperAscii(std::string value)
     {
         c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
     }
+
     return value;
 }
 
@@ -21,6 +22,7 @@ bool IsWindowsReservedName(const std::string& name)
     {
         return false;
     }
+
     const auto dotPos = name.find('.');
     const std::string upper = ToUpperAscii(dotPos == std::string::npos ? name : name.substr(0, dotPos));
     static const std::array<const char*, 22> kReserved = {
@@ -32,11 +34,11 @@ bool IsWindowsReservedName(const std::string& name)
 
 namespace guitarfx::util
 {
-
 std::string SanitizePathSegment(const std::string& raw, bool allowDots)
 {
     std::string result;
     result.reserve(raw.size());
+
     for (unsigned char c : raw)
     {
         if (std::isalnum(c) || c == '-' || c == '_')
@@ -52,22 +54,27 @@ std::string SanitizePathSegment(const std::string& raw, bool allowDots)
             result.push_back('_');
         }
     }
+
     while (!result.empty() && result.front() == '.')
     {
         result.erase(result.begin());
     }
+
     while (!result.empty() && result.back() == '.')
     {
         result.pop_back();
     }
+
     if (result.empty() || result == "." || result == "..")
     {
         result = "resource";
     }
+
     if (IsWindowsReservedName(result))
     {
         result = "_" + result;
     }
+
     return result;
 }
 
@@ -80,13 +87,17 @@ std::filesystem::path SanitizeSubfolderPath(const std::string& raw)
         {
             return;
         }
+
         std::string s = SanitizePathSegment(segment, true);
+
         if (!s.empty() && s != "." && s != "..")
         {
             result /= s;
         }
+
         segment.clear();
     };
+
     for (char c : raw)
     {
         if (c == '/' || c == '\\')
@@ -98,6 +109,7 @@ std::filesystem::path SanitizeSubfolderPath(const std::string& raw)
             segment.push_back(c);
         }
     }
+
     push();
     return result;
 }
@@ -106,5 +118,4 @@ std::string SanitizeFilename(const std::string& raw)
 {
     return SanitizePathSegment(raw, true);
 }
-
 } // namespace guitarfx::util

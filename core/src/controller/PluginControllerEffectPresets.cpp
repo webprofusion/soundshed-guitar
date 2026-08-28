@@ -15,7 +15,6 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 namespace
 {
 constexpr const char* kEffectPresetsFile = "effect-presets.json";
@@ -26,10 +25,12 @@ nlohmann::json NormalizeEffectPresetsDocument(nlohmann::json document)
     {
         document = nlohmann::json::object();
     }
+
     if (!document.contains("byEffectType") || !document["byEffectType"].is_object())
     {
         document["byEffectType"] = nlohmann::json::object();
     }
+
     return document;
 }
 } // namespace
@@ -53,12 +54,14 @@ void PluginController::HandleSaveEffectPresetRequest(const nlohmann::json& paylo
 {
     const std::string effectType = payload.value("effectType", "");
     const std::string name = payload.value("name", "");
+
     if (effectType.empty() || name.empty())
     {
         return;
     }
 
     const auto parameters = payload.value("parameters", nlohmann::json::object());
+
     if (!parameters.is_object())
     {
         return;
@@ -67,6 +70,7 @@ void PluginController::HandleSaveEffectPresetRequest(const nlohmann::json& paylo
     auto document = NormalizeEffectPresetsDocument(LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
 
     auto& presets = document["byEffectType"][effectType];
+
     if (!presets.is_array())
     {
         presets = nlohmann::json::array();
@@ -99,24 +103,28 @@ void PluginController::HandleDeleteEffectPresetRequest(const nlohmann::json& pay
 {
     const std::string effectType = payload.value("effectType", "");
     const std::string presetId = payload.value("presetId", "");
+
     if (effectType.empty() || presetId.empty())
     {
         return;
     }
 
     auto document = NormalizeEffectPresetsDocument(LoadUiStorageJson(kEffectPresetsFile, nlohmann::json::object()));
+
     if (!document["byEffectType"].contains(effectType))
     {
         return;
     }
 
     auto& presets = document["byEffectType"][effectType];
+
     if (!presets.is_array())
     {
         return;
     }
 
     nlohmann::json remaining = nlohmann::json::array();
+
     for (const auto& entry : presets)
     {
         if (entry.value("id", "") != presetId)
@@ -142,5 +150,4 @@ void PluginController::HandleDeleteEffectPresetRequest(const nlohmann::json& pay
     SaveUiStorageJson(kEffectPresetsFile, document);
     BroadcastEffectPresets();
 }
-
 } // namespace guitarfx

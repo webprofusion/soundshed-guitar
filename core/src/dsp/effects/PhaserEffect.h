@@ -23,6 +23,7 @@ class PhaserEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         Reset();
@@ -33,10 +34,12 @@ class PhaserEffect : public EffectProcessor
         mPhase = 0.0;
         mFeedbackL = 0.0f;
         mFeedbackR = 0.0f;
+
         for (auto& s : mStateL)
         {
             s = 0.0f;
         }
+
         for (auto& s : mStateR)
         {
             s = 0.0f;
@@ -91,12 +94,14 @@ class PhaserEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
             }
 
             mPhase += phaseInc;
+
             // Wrap phase to prevent floating-point precision drift over long runtimes
             if (mPhase >= 2.0 * kPi)
             {
@@ -147,34 +152,42 @@ class PhaserEffect : public EffectProcessor
         {
             return mBpm.load(std::memory_order_relaxed);
         }
+
         if (key == "syncMode")
         {
             return mSyncMode.load(std::memory_order_relaxed);
         }
+
         if (key == "syncDivision")
         {
             return mSyncDivision.load(std::memory_order_relaxed);
         }
+
         if (key == "effectiveRate")
         {
             return GetEffectiveRateHz();
         }
+
         if (key == "rate")
         {
             return mRateHz.load(std::memory_order_relaxed);
         }
+
         if (key == "depth")
         {
             return mDepth.load(std::memory_order_relaxed);
         }
+
         if (key == "feedback")
         {
             return mFeedback.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mMix.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -254,5 +267,4 @@ inline void RegisterPhaserEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<PhaserEffect>(); });
 }
-
 } // namespace guitarfx

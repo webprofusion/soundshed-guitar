@@ -27,6 +27,7 @@ inline double SanitizeNominalOperatingLevelDbfs(double value)
     {
         return kDefaultNominalOperatingLevelDbfs;
     }
+
     return std::clamp(value, kMinNominalOperatingLevelDbfs, kMaxNominalOperatingLevelDbfs);
 }
 
@@ -36,6 +37,7 @@ inline double SanitizeOutputProtectionCeilingDbfs(double value)
     {
         return kDefaultOutputProtectionCeilingDbfs;
     }
+
     return std::clamp(value, kMinOutputProtectionCeilingDbfs, kMaxOutputProtectionCeilingDbfs);
 }
 
@@ -66,6 +68,7 @@ inline void SetNominalOperatingLevelDbfs(double value)
 {
     const double sanitized = SanitizeNominalOperatingLevelDbfs(value);
     const double previous = NominalOperatingLevelStorage().exchange(sanitized, std::memory_order_relaxed);
+
     if (previous != sanitized)
     {
         LevelTargetsRevisionStorage().fetch_add(1, std::memory_order_relaxed);
@@ -81,6 +84,7 @@ inline void SetOutputProtectionCeilingDbfs(double value)
 {
     const double sanitized = SanitizeOutputProtectionCeilingDbfs(value);
     const double previous = OutputProtectionCeilingStorage().exchange(sanitized, std::memory_order_relaxed);
+
     if (previous != sanitized)
     {
         LevelTargetsRevisionStorage().fetch_add(1, std::memory_order_relaxed);

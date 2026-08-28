@@ -40,6 +40,7 @@ class MixerEffect : public EffectProcessor
 
         // Allocate delay buffers for each input
         const size_t maxDelaySamples = static_cast<size_t>(kMaxDelayMs * mSampleRate / 1000.0) + 1;
+
         for (int i = 0; i < kMaxInputs; ++i)
         {
             mDelayBufferL[i].assign(maxDelaySamples, 0.0f);
@@ -82,6 +83,7 @@ class MixerEffect : public EffectProcessor
             {
                 outputs[0][i] = inL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = inR;
@@ -134,6 +136,7 @@ class MixerEffect : public EffectProcessor
             {
                 outputL[i] += outL;
             }
+
             if (outputR)
             {
                 outputR[i] += outR;
@@ -154,6 +157,7 @@ class MixerEffect : public EffectProcessor
         {
             // Per-input level: level_0, level_1, etc.
             int idx = std::stoi(key.substr(6));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 mInputLevelDb[idx] = std::clamp(value, -60.0, 12.0);
@@ -164,6 +168,7 @@ class MixerEffect : public EffectProcessor
         {
             // Per-input pan: pan_0, pan_1, etc.
             int idx = std::stoi(key.substr(4));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 mInputPan[idx] = std::clamp(value, -1.0, 1.0);
@@ -174,6 +179,7 @@ class MixerEffect : public EffectProcessor
         {
             // Per-input delay: delay_0, delay_1, etc.
             int idx = std::stoi(key.substr(6));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 mInputDelayMs[idx] = std::clamp(value, 0.0, kMaxDelayMs);
@@ -184,6 +190,7 @@ class MixerEffect : public EffectProcessor
         {
             // Per-input mute: mute_0, mute_1, etc.
             int idx = std::stoi(key.substr(5));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 mInputMute[idx] = value > 0.5;
@@ -202,38 +209,47 @@ class MixerEffect : public EffectProcessor
         {
             return mMasterLevelDb;
         }
+
         if (key.rfind("level_", 0) == 0)
         {
             int idx = std::stoi(key.substr(6));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 return mInputLevelDb[idx];
             }
         }
+
         if (key.rfind("pan_", 0) == 0)
         {
             int idx = std::stoi(key.substr(4));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 return mInputPan[idx];
             }
         }
+
         if (key.rfind("delay_", 0) == 0)
         {
             int idx = std::stoi(key.substr(6));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 return mInputDelayMs[idx];
             }
         }
+
         if (key.rfind("mute_", 0) == 0)
         {
             int idx = std::stoi(key.substr(5));
+
             if (idx >= 0 && idx < kMaxInputs)
             {
                 return mInputMute[idx] ? 1.0 : 0.0;
             }
         }
+
         return 0.0;
     }
 
@@ -277,6 +293,7 @@ class MixerEffect : public EffectProcessor
     void UpdateCoefficients()
     {
         mMasterGain = static_cast<float>(std::pow(10.0, mMasterLevelDb / 20.0));
+
         for (int i = 0; i < kMaxInputs; ++i)
         {
             UpdateInputCoefficients(i);
@@ -344,5 +361,4 @@ inline void RegisterMixerEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<MixerEffect>(); });
 }
-
 } // namespace guitarfx

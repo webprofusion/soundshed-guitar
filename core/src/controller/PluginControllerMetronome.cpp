@@ -13,7 +13,6 @@
 
 namespace guitarfx
 {
-
 double PluginController::GetEffectiveTempoBpm() const
 {
     return mMetronome->EffectiveTempoBpm();
@@ -50,5 +49,4 @@ void PluginController::HandleSetMetronomeRequest(const nlohmann::json& payload)
         SaveAppSettings();
     }
 }
-
 } // namespace guitarfx

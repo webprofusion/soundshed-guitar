@@ -34,5 +34,4 @@ class PresetStorage
     [[nodiscard]] static std::vector<Preset> LoadAllFromDirectory(const std::filesystem::path& directory);
     static void SaveAllToDirectory(const std::vector<Preset>& presets, const std::filesystem::path& directory);
 };
-
 } // namespace guitarfx

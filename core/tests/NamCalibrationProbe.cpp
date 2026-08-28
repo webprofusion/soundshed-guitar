@@ -66,12 +66,14 @@ double RmsDbfs(const std::vector<float>& buffer)
     }
 
     double sumSquares = 0.0;
+
     for (const float sample : buffer)
     {
         sumSquares += static_cast<double>(sample) * static_cast<double>(sample);
     }
 
     const double rms = std::sqrt(sumSquares / static_cast<double>(buffer.size()));
+
     if (rms < 1.0e-12 || !std::isfinite(rms))
     {
         return -200.0;
@@ -83,12 +85,14 @@ double RmsDbfs(const std::vector<float>& buffer)
 DiffMetrics ComputeDiffMetrics(const std::vector<float>& a, const std::vector<float>& b)
 {
     DiffMetrics metrics;
+
     if (a.size() != b.size() || a.empty())
     {
         return metrics;
     }
 
     double sumSquares = 0.0;
+
     for (size_t i = 0; i < a.size(); ++i)
     {
         const double diff = static_cast<double>(a[i]) - static_cast<double>(b[i]);
@@ -103,6 +107,7 @@ DiffMetrics ComputeDiffMetrics(const std::vector<float>& a, const std::vector<fl
 std::vector<fs::path> DiscoverModels(const fs::path& root)
 {
     std::vector<fs::path> models;
+
     if (!fs::exists(root))
     {
         return models;
@@ -127,6 +132,7 @@ ModelMetadata ReadModelMetadata(const fs::path& modelPath)
     try
     {
         auto dsp = nam::get_dsp(modelPath);
+
         if (!dsp)
         {
             metadata.error = "nam::get_dsp returned null";
@@ -142,10 +148,12 @@ ModelMetadata ReadModelMetadata(const fs::path& modelPath)
         {
             metadata.inputLevelDbu = dsp->GetInputLevel();
         }
+
         if (metadata.hasOutputLevel)
         {
             metadata.outputLevelDbu = dsp->GetOutputLevel();
         }
+
         if (metadata.hasLoudness)
         {
             metadata.loudness = dsp->GetLoudness();
@@ -171,6 +179,7 @@ Measurement MeasureReferencePath(const fs::path& modelPath, bool useCalibration,
     try
     {
         auto dsp = nam::get_dsp(modelPath);
+
         if (!dsp)
         {
             m.error = "reference: nam::get_dsp returned null";
@@ -184,10 +193,12 @@ Measurement MeasureReferencePath(const fs::path& modelPath, bool useCalibration,
 
         double inputGainDb = 0.0;
         double outputGainDb = 0.0;
+
         if (useCalibration && modelInput.has_value())
         {
             inputGainDb += (calibrationDbu - *modelInput);
         }
+
         if (useCalibration && modelOutput.has_value())
         {
             outputGainDb += (*modelOutput - calibrationDbu);
@@ -282,11 +293,13 @@ Measurement MeasureHostedNamPath(const fs::path& modelPath, bool useCalibration,
 
         guitarfx::MultiPresetMixer mixer;
         mixer.SetHostControlledInput(true); // plugin-host signal path behavior
+
         if (!mixer.AddActivePreset(preset, preset.id, preset.name))
         {
             m.error = "hosted path: AddActivePreset failed";
             return m;
         }
+
         // Neutralize the mixer center pan law for direct per-channel level comparison.
         mixer.SetPresetPan(preset.id, -1.0);
 
@@ -334,6 +347,7 @@ Measurement MeasureHostedNamPath(const fs::path& modelPath, bool useCalibration,
 std::size_t ResolveModelLimit(std::size_t discoveredCount)
 {
     const char* env = std::getenv("GUITARFX_NAM_COMPARE_MODEL_LIMIT");
+
     if (!env || !*env)
     {
         return std::min<std::size_t>(discoveredCount, 6);
@@ -342,10 +356,12 @@ std::size_t ResolveModelLimit(std::size_t discoveredCount)
     try
     {
         const std::size_t limit = static_cast<std::size_t>(std::stoull(env));
+
         if (limit == 0)
         {
             return discoveredCount;
         }
+
         return std::min(limit, discoveredCount);
     }
     catch (...)
@@ -353,7 +369,6 @@ std::size_t ResolveModelLimit(std::size_t discoveredCount)
         return discoveredCount;
     }
 }
-
 } // namespace
 
 int main()
@@ -370,6 +385,7 @@ int main()
 
     const fs::path assetsRoot = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets";
     auto models = DiscoverModels(assetsRoot);
+
     if (models.empty())
     {
         std::cout << "NAM reference comparison: no .nam models found under " << guitarfx::util::PathToUtf8(assetsRoot)
@@ -403,6 +419,7 @@ int main()
         // PathToUtf8 rather than path::string(): model names in the test assets contain
         // characters (e.g. U+221A) with no code-page mapping, and string() throws on those.
         std::cout << "Model: " << guitarfx::util::PathToUtf8(model.lexically_relative(assetsRoot)) << "\n";
+
         if (!metadata.loadOk)
         {
             std::cout << "  metadata: FAIL (" << metadata.error << ")\n\n";
@@ -423,6 +440,7 @@ int main()
                     MeasureReferencePath(model, useCalibration, kCalibrationLevelDbu, amplitude);
 
                 const std::string modeLabel = useCalibration ? "calibrated" : "non-calibrated";
+
                 if (!ours.ok || !reference.ok)
                 {
                     std::cout << "    [" << modeLabel << " amp=" << amplitude << "] "

@@ -21,7 +21,6 @@ struct LibraryResource;
 
 namespace guitarfx::controller_detail
 {
-
 struct NamFileMetadata
 {
     std::string fileVersion;
@@ -62,5 +61,4 @@ void EnrichNamResourceMetadata(LibraryResource& resource, const std::filesystem:
 
 /// True for NAM effect types that accept interface calibration input levels.
 [[nodiscard]] bool IsNamCalibratableEffectType(const std::string& type);
-
 } // namespace guitarfx::controller_detail

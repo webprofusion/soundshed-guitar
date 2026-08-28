@@ -132,7 +132,9 @@ grows past 800 lines, or if a file already over it gets bigger. CI runs this
   This is the only check that catches an import-cycle TDZ crash; `tsc` cannot see
   those. Run it for anything that moves code between modules.
 - Tests (Debug): cd core/build && ctest -C Debug --output-on-failure
-- C++ format (core/ only; juce/ has its own config): `clang-format --style=file -i <files>`
+- C++ format (core/ only; juce/ has its own config), in this order:
+  `uncrustify -c tools/uncrustify.cfg -l CPP --no-backup <files>` then
+  `clang-format --style=file -i <files>`
 - C++ structure check: `node tools/check-cpp-file-sizes.js`
 - Skip the slow benchmarks: add `-LE benchmark`
 - The signal-chain mutation stress test (~15 min concurrency fuzzer, random seed) is not

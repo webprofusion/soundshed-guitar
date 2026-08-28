@@ -23,7 +23,6 @@
 
 namespace guitarfx::controller_detail
 {
-
 bool IsSensitiveDebugKey(std::string_view key)
 {
     if (key.empty())
@@ -56,6 +55,7 @@ void ScrubSensitiveJson(nlohmann::json& value, std::string_view currentKey)
         {
             ScrubSensitiveJson(it.value(), it.key());
         }
+
         return;
     }
 
@@ -79,6 +79,7 @@ double ToDbFS(double linear)
     {
         return -120.0;
     }
+
     return 20.0 * std::log10(linear);
 }
 
@@ -103,6 +104,7 @@ double LinearFromDb(double db)
     {
         return 0.0;
     }
+
     return std::pow(10.0, db / 20.0);
 }
 
@@ -128,18 +130,22 @@ int ComputeBarsFromFrames(std::size_t frameCount, double sampleRate, double temp
 guitarfx::BrowseFileType ResolveBrowseFileType(const std::string& resourceType)
 {
     using guitarfx::BrowseFileType;
+
     if (resourceType == "nam")
     {
         return BrowseFileType::NAMModel;
     }
+
     if (resourceType == "ir")
     {
         return BrowseFileType::IRFile;
     }
+
     if (resourceType == "plugin")
     {
         return BrowseFileType::PluginFile;
     }
+
     return BrowseFileType::Any;
 }
 
@@ -191,6 +197,7 @@ const guitarfx::GraphNode* FindNodeByIdOrType(const guitarfx::SignalGraph& graph
             return &node;
         }
     }
+
     for (const auto& node : graph.nodes)
     {
         if (node.type == type)
@@ -198,6 +205,7 @@ const guitarfx::GraphNode* FindNodeByIdOrType(const guitarfx::SignalGraph& graph
             return &node;
         }
     }
+
     return nullptr;
 }
 
@@ -205,12 +213,14 @@ int GetGlobalTransposeFromChainConfig(const guitarfx::GlobalSignalChainConfig& c
 {
     const auto* transposeNode =
         FindNodeByIdOrType(config.preChainGraph, "global_transpose", guitarfx::EffectGuids::kTranspose);
+
     if (!transposeNode || !transposeNode->enabled)
     {
         return 0;
     }
 
     const auto semitonesIt = transposeNode->params.find("semitones");
+
     if (semitonesIt == transposeNode->params.end())
     {
         return 0;
@@ -242,6 +252,7 @@ void SaveJsonFile(const guitarfx::FileSystem& fileSystem, const std::filesystem:
     {
         [[maybe_unused]] const auto ensuredParent = fileSystem.EnsureDirectory(path.parent_path());
         std::ofstream output(path);
+
         if (output.is_open())
         {
             output << payload.dump(2);
@@ -271,10 +282,12 @@ std::string MakeUniqueNodeId(const guitarfx::SignalGraph& graph, const std::stri
 {
     std::string candidate = baseId;
     int suffix = 1;
+
     while (graph.FindNode(candidate))
     {
         candidate = baseId + std::to_string(suffix++);
     }
+
     return candidate;
 }
 
@@ -297,6 +310,7 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
     }
 
     std::deque<std::string> queue;
+
     for (const auto& [id, count] : indegree)
     {
         if (count == 0)
@@ -306,6 +320,7 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
     }
 
     size_t visited = 0;
+
     while (!queue.empty())
     {
         const std::string nodeId = queue.front();
@@ -313,6 +328,7 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
         visited += 1;
 
         const auto outIt = outgoing.find(nodeId);
+
         if (outIt == outgoing.end())
         {
             continue;
@@ -321,11 +337,14 @@ bool IsGraphAcyclic(const guitarfx::SignalGraph& graph)
         for (const auto& nextId : outIt->second)
         {
             auto indegreeIt = indegree.find(nextId);
+
             if (indegreeIt == indegree.end())
             {
                 continue;
             }
+
             indegreeIt->second -= 1;
+
             if (indegreeIt->second == 0)
             {
                 queue.push_back(nextId);
@@ -373,6 +392,7 @@ std::string HashStringForLog(std::string_view value)
     constexpr std::uint64_t kFNVPrime = 1099511628211ull;
 
     std::uint64_t hash = kFNVOffsetBasis;
+
     for (const unsigned char byte : value)
     {
         hash ^= static_cast<std::uint64_t>(byte);
@@ -388,5 +408,4 @@ std::string GenerateUserPresetId()
 {
     return "user-" + GenerateGuidV4String();
 }
-
 } // namespace guitarfx::controller_detail

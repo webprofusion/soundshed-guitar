@@ -223,6 +223,7 @@ class SynthSawEffect : public EffectProcessor
 
             // Envelope follower on input signal
             const float absInput = std::abs(mono);
+
             if (absInput > mEnvelopeLevel)
             {
                 mEnvelopeLevel += mAttackCoef * (absInput - mEnvelopeLevel);
@@ -248,6 +249,7 @@ class SynthSawEffect : public EffectProcessor
             // frequency, which would slow down tracking to the new pitch.
             // ======================================================================
             const float envelopeDelta = mEnvelopeLevel - mPrevEnvelopeLevel;
+
             if (envelopeDelta > kOnsetThreshold * mEnvelopeLevel && mEnvelopeLevel > kGateThreshold)
             {
                 mOnsetDetected = true;
@@ -256,6 +258,7 @@ class SynthSawEffect : public EffectProcessor
                 std::fill(mMedianBuffer.begin(), mMedianBuffer.end(), 0.0);
                 mMedianIndex = 0;
             }
+
             mPrevEnvelopeLevel = mEnvelopeLevel;
 
             // Run pitch detection every hop size samples
@@ -267,6 +270,7 @@ class SynthSawEffect : public EffectProcessor
 
             // Frequency smoothing with adaptive rate
             double freqSmoothCoef = mGlideCoef;
+
             if (mOnsetDetected || mStableFrameCount < kStableFramesForLock)
             {
                 // Faster response during onset or unstable periods
@@ -279,6 +283,7 @@ class SynthSawEffect : public EffectProcessor
 
                 // Jump immediately if large pitch change (new note)
                 const double semitoneRatio = mSmoothedFreq / std::max(1.0, mCurrentFreq);
+
                 if (semitoneRatio > 1.5 || semitoneRatio < 0.67)
                 {
                     mCurrentFreq = mSmoothedFreq;
@@ -311,6 +316,7 @@ class SynthSawEffect : public EffectProcessor
             // that sounds clean even at high frequencies.
             // ======================================================================
             float synthOut = 0.0f;
+
             if (mCurrentFreq > kMinFrequency && mEnvelopeLevel > kGateThreshold)
             {
                 // Apply octave shift: 2^octaveShift multiplies frequency
@@ -331,6 +337,7 @@ class SynthSawEffect : public EffectProcessor
                 // When phase >= 1.0, it wraps back, creating the sawtooth cycle
                 const double phaseInc = freq / mSampleRate;
                 mOscPhase += phaseInc;
+
                 if (mOscPhase >= 1.0)
                 {
                     mOscPhase -= 1.0;
@@ -341,6 +348,7 @@ class SynthSawEffect : public EffectProcessor
 
                 // Generate 2nd voice with semitone offset
                 float voice2Out = 0.0f;
+
                 if (mVoice2Mix > 0.0f)
                 {
                     // Apply semitone shift: freq * 2^(semitones/12)
@@ -348,6 +356,7 @@ class SynthSawEffect : public EffectProcessor
                     const double freq2Clamped = std::clamp(freq2, kMinOutputFrequency, kMaxFrequency);
                     const double phaseInc2 = freq2Clamped / mSampleRate;
                     mOscPhase2 += phaseInc2;
+
                     if (mOscPhase2 >= 1.0)
                     {
                         mOscPhase2 -= 1.0;
@@ -376,6 +385,7 @@ class SynthSawEffect : public EffectProcessor
             {
                 outputs[0][i] = outL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = outR;
@@ -458,58 +468,72 @@ class SynthSawEffect : public EffectProcessor
         {
             return mMix;
         }
+
         if (key == "attack")
         {
             return mAttackMs;
         }
+
         if (key == "release")
         {
             return mReleaseMs;
         }
+
         if (key == "detune")
         {
             return mDetune;
         }
+
         if (key == "octaveShift")
         {
             return mOctaveShift;
         }
+
         if (key == "glide")
         {
             return mGlideMs;
         }
+
         if (key == "outputGain")
         {
             return 20.0 * std::log10(mOutputGain + 1e-10f);
         }
+
         if (key == "gate")
         {
             return 20.0 * std::log10(kGateThreshold + 1e-10f);
         }
+
         if (key == "voice2Semitones")
         {
             return mVoice2Semitones;
         }
+
         if (key == "voice2Mix")
         {
             return mVoice2Mix;
         }
+
         if (key == "waveShape")
         {
             return static_cast<double>(mWaveShape);
         }
+
         if (key == "pulseWidth")
         {
             return mPulseWidth;
         }
+
         if (key == "voice2WaveShape")
         {
             return static_cast<double>(mWaveShape2);
         }
+
         if (key == "voice2PulseWidth")
         {
             return mPulseWidth2;
         }
+
         return 0.0;
     }
 
@@ -535,6 +559,7 @@ class SynthSawEffect : public EffectProcessor
         {
             return -1.0;
         }
+
         // MIDI note = 69 + 12 * log2(freq / 440)
         return 69.0 + 12.0 * std::log2(mCurrentFreq / 440.0);
     }
@@ -598,6 +623,7 @@ class SynthSawEffect : public EffectProcessor
             t = (t - 1.0) / phaseInc; // Normalize t to [-1, 0] within the correction region
             return static_cast<float>(t * t + t + t + 1.0);
         }
+
         // Outside correction regions: no modification needed
         return 0.0f;
     }
@@ -627,10 +653,12 @@ class SynthSawEffect : public EffectProcessor
             float out = (phase < pulseWidth) ? 1.0f : -1.0f;
             out += PolyBLEP(phase, phaseInc); // smooth rising edge
             double phaseFall = phase - pulseWidth;
+
             if (phaseFall < 0.0)
             {
                 phaseFall += 1.0;
             }
+
             out -= PolyBLEP(phaseFall, phaseInc); // smooth falling edge
             return out;
         }
@@ -763,10 +791,12 @@ class SynthSawEffect : public EffectProcessor
 
         // Check if we have enough signal
         float maxAbs = 0.0f;
+
         for (size_t i = 0; i < windowSize; ++i)
         {
             maxAbs = std::max(maxAbs, std::abs(mYinBuffer[i]));
         }
+
         if (maxAbs < kGateThreshold)
         {
             // Too quiet, skip detection
@@ -793,11 +823,13 @@ class SynthSawEffect : public EffectProcessor
         for (size_t tau = 0; tau < halfSize; ++tau)
         {
             float sum = 0.0f;
+
             for (size_t j = 0; j < halfSize; ++j)
             {
                 const float diff = mYinBuffer[j] - mYinBuffer[j + tau];
                 sum += diff * diff;
             }
+
             mYinDiff[tau] = sum;
         }
 
@@ -821,9 +853,11 @@ class SynthSawEffect : public EffectProcessor
         // ----------------------------------------------------------------------
         mYinCumulative[0] = 1.0f;
         float runningSum = 0.0f;
+
         for (size_t tau = 1; tau < halfSize; ++tau)
         {
             runningSum += mYinDiff[tau];
+
             if (runningSum > 1e-10f)
             {
                 mYinCumulative[tau] = mYinDiff[tau] * static_cast<float>(tau) / runningSum;
@@ -882,6 +916,7 @@ class SynthSawEffect : public EffectProcessor
                 {
                     ++tau;
                 }
+
                 tauEstimate = tau;
                 minCmnd = mYinCumulative[tau];
                 break; // Stop at first valid minimum (fundamental, not harmonic)
@@ -921,7 +956,8 @@ class SynthSawEffect : public EffectProcessor
 
             // Parabolic interpolation formula: delta = (s2 - s0) / (2 * (2*s1 - s0 - s2))
             const float denom = 2.0f * s1 - s0 - s2; // Denominator = curvature
-            if (std::abs(denom) > 1e-10f)            // Avoid division by zero for flat regions
+
+            if (std::abs(denom) > 1e-10f) // Avoid division by zero for flat regions
             {
                 const float delta = (s2 - s0) / (2.0f * denom);
                 // Clamp delta to [-1, 1] to prevent wild extrapolation
@@ -986,13 +1022,16 @@ class SynthSawEffect : public EffectProcessor
             {
                 // Likely jumped up an octave - check if half frequency has better YIN
                 const double halfFreq = detectedFreq / 2.0;
+
                 if (halfFreq >= kMinFrequency)
                 {
                     const size_t halfTau = static_cast<size_t>(mSampleRate / halfFreq);
+
                     if (halfTau < halfSize)
                     {
                         // Only correct if half-freq YIN is significantly better
                         const float halfCmnd = mYinCumulative[halfTau];
+
                         if (halfCmnd < minCmnd * 0.8f && halfCmnd < kYinThresholdHigh)
                         {
                             detectedFreq = halfFreq;
@@ -1006,12 +1045,15 @@ class SynthSawEffect : public EffectProcessor
             {
                 // Likely jumped down an octave - check if double frequency has better YIN
                 const double doubleFreq = detectedFreq * 2.0;
+
                 if (doubleFreq <= kMaxFrequency)
                 {
                     const size_t doubleTau = static_cast<size_t>(mSampleRate / doubleFreq);
+
                     if (doubleTau >= minTau && doubleTau < halfSize)
                     {
                         const float doubleCmnd = mYinCumulative[doubleTau];
+
                         if (doubleCmnd < minCmnd * 0.8f && doubleCmnd < kYinThresholdHigh)
                         {
                             detectedFreq = doubleFreq;
@@ -1137,5 +1179,4 @@ inline void RegisterSynthSawEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<SynthSawEffect>(); });
 }
-
 } // namespace guitarfx

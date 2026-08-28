@@ -8,7 +8,6 @@
 
 namespace guitarfx
 {
-
 constexpr double kNamSlimmableSizeDefault = 1.0;
 constexpr double kNamSlimmableSizeMin = 0.0;
 constexpr double kNamSlimmableSizeMax = 1.0;
@@ -19,6 +18,7 @@ inline double SanitizeNamSlimmableSize(double value)
     {
         return kNamSlimmableSizeDefault;
     }
+
     return std::clamp(value, kNamSlimmableSizeMin, kNamSlimmableSizeMax);
 }
 
@@ -34,6 +34,7 @@ inline bool ApplyNamSlimmableSize(::nam::DSP* dsp, double size)
     }
 
     auto* slimmable = dynamic_cast<::nam::SlimmableModel*>(dsp);
+
     if (!slimmable)
     {
         return false;
@@ -42,5 +43,4 @@ inline bool ApplyNamSlimmableSize(::nam::DSP* dsp, double size)
     slimmable->SetSlimmableSize(SanitizeNamSlimmableSize(size));
     return true;
 }
-
 } // namespace guitarfx

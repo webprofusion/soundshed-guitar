@@ -180,5 +180,4 @@ class JsonStore
     std::filesystem::path mPath;
     int mTransactionDepth = 0;
 };
-
 } // namespace guitarfx::storage

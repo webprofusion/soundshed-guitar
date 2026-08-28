@@ -56,6 +56,7 @@ class HybridTransposeChannel
 
         const StftTransposeOptions lowOptions = BuildPitchOptions(false);
         const StftTransposeOptions highOptions = BuildPitchOptions(true);
+
         if (!mPitchPrepared)
         {
             mLowPitch.Prepare(mSampleRate, mMaxBlockSize, mConfig.semitones, lowOptions);
@@ -94,6 +95,7 @@ class HybridTransposeChannel
         mInputLowState = 0.0f;
         mDryLowState = 0.0f;
         mReconfigurationFadeRemaining = 0;
+
         if (mPitchPrepared)
         {
             mLowPitch.Reset();
@@ -177,6 +179,7 @@ class HybridTransposeChannel
     {
         HybridTransposeConfig config;
         config.semitones = std::clamp(semitones, -15, 0);
+
         if (sampleRate <= 0.0 || maxBlockSize <= 0 || config.semitones == 0)
         {
             return config;
@@ -203,24 +206,29 @@ class HybridTransposeChannel
     void EnsureBuffers()
     {
         const size_t bufferSize = static_cast<size_t>(std::max(mConfig.latencySamples + mMaxBlockSize + 8, 4096));
+
         if (mDelayBuffer.size() < bufferSize)
         {
             mDelayBuffer.resize(bufferSize, 0.0f);
         }
 
         const size_t blockSize = static_cast<size_t>(std::max(1, mMaxBlockSize));
+
         if (mLowInputBuffer.size() < blockSize)
         {
             mLowInputBuffer.resize(blockSize, 0.0f);
         }
+
         if (mHighInputBuffer.size() < blockSize)
         {
             mHighInputBuffer.resize(blockSize, 0.0f);
         }
+
         if (mLowPitchBuffer.size() < blockSize)
         {
             mLowPitchBuffer.resize(blockSize, 0.0f);
         }
+
         if (mHighPitchBuffer.size() < blockSize)
         {
             mHighPitchBuffer.resize(blockSize, 0.0f);
@@ -230,6 +238,7 @@ class HybridTransposeChannel
     void EnsureBlockBuffers(int numSamples)
     {
         const size_t blockSize = static_cast<size_t>(std::max(1, numSamples));
+
         if (blockSize <= mLowInputBuffer.size())
         {
             return;
@@ -286,6 +295,7 @@ class HybridTransposeChannel
     void AdvanceWrite()
     {
         ++mWritePos;
+
         if (mWritePos >= mDelayBuffer.size())
         {
             mWritePos = 0;
@@ -300,14 +310,17 @@ class HybridTransposeChannel
         }
 
         const double size = static_cast<double>(mDelayBuffer.size());
+
         while (position < 0.0)
         {
             position += size;
         }
+
         while (position >= size)
         {
             position -= size;
         }
+
         return position;
     }
 
@@ -435,6 +448,7 @@ class HybridTransposeEffect : public EffectProcessor
                     std::copy(source, source + numSamples, outputs[ch]);
                 }
             }
+
             return;
         }
 
@@ -455,12 +469,14 @@ class HybridTransposeEffect : public EffectProcessor
 
         const float dryMix = static_cast<float>(1.0 - mActiveMix);
         const float wetMix = static_cast<float>(mActiveMix);
+
         for (int i = 0; i < numSamples; ++i)
         {
             if (outputs[0])
             {
                 outputs[0][i] = mDryL[static_cast<size_t>(i)] * dryMix + mWetL[static_cast<size_t>(i)] * wetMix;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = mDryR[static_cast<size_t>(i)] * dryMix + mWetR[static_cast<size_t>(i)] * wetMix;
@@ -511,22 +527,27 @@ class HybridTransposeEffect : public EffectProcessor
         {
             return mRequestedSemitones.load(std::memory_order_relaxed);
         }
+
         if (key == "mix")
         {
             return mRequestedMix.load(std::memory_order_relaxed);
         }
+
         if (key == "transientAssist")
         {
             return mRequestedTransientAssist.load(std::memory_order_relaxed);
         }
+
         if (key == "transientHoldMs")
         {
             return mRequestedTransientHoldMs.load(std::memory_order_relaxed);
         }
+
         if (key == "brightness")
         {
             return mRequestedBrightness.load(std::memory_order_relaxed);
         }
+
         return 0.0;
     }
 
@@ -556,6 +577,7 @@ class HybridTransposeEffect : public EffectProcessor
         mActiveMix = std::clamp(mRequestedMix.load(std::memory_order_relaxed), 0.0, 1.0);
 
         const bool paramChanged = mParamChangePending.exchange(false, std::memory_order_acq_rel);
+
         if (!paramChanged)
         {
             return;
@@ -628,5 +650,4 @@ inline void RegisterHybridTransposeEffect()
                        {"brightness", "Brightness", 0.35, 0.0, 1.0, "amount", "", true, 0.01}};
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<HybridTransposeEffect>(); });
 }
-
 } // namespace guitarfx

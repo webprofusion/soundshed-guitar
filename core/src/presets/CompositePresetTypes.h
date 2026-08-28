@@ -41,5 +41,4 @@ struct CompositePreset
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CompositePreset, id, name, description, tags, createdAt, modifiedAt,
                                                 slots, masterGain, limiterEnabled)
 };
-
 } // namespace guitarfx

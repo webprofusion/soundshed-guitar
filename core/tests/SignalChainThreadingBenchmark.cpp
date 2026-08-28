@@ -85,6 +85,7 @@ ProcessSnapshot CaptureProcessSnapshot()
     FILETIME exitTime{};
     FILETIME kernelTime{};
     FILETIME userTime{};
+
     if (GetProcessTimes(GetCurrentProcess(), &createTime, &exitTime, &kernelTime, &userTime) != 0)
     {
         snapshot.cpuTime100ns = FileTimeToUInt64(kernelTime) + FileTimeToUInt64(userTime);
@@ -92,6 +93,7 @@ ProcessSnapshot CaptureProcessSnapshot()
 
     PROCESS_MEMORY_COUNTERS_EX pmc{};
     pmc.cb = sizeof(pmc);
+
     if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc)) != 0)
     {
         snapshot.workingSetBytes = static_cast<std::size_t>(pmc.WorkingSetSize);
@@ -167,6 +169,7 @@ NamConvAssets DiscoverNamConvAssets(const fs::path& repoRoot)
 
     std::vector<fs::path> models;
     std::vector<fs::path> irs;
+
     for (const auto& entry : fs::recursive_directory_iterator(presetsRoot))
     {
         if (!entry.is_regular_file())
@@ -175,6 +178,7 @@ NamConvAssets DiscoverNamConvAssets(const fs::path& repoRoot)
         }
 
         const fs::path file = entry.path();
+
         if (HasExtension(file, ".nam"))
         {
             models.push_back(file);
@@ -189,6 +193,7 @@ NamConvAssets DiscoverNamConvAssets(const fs::path& repoRoot)
     {
         throw std::runtime_error("Need at least 2 .nam files under resources/metal-presets for namconv profile");
     }
+
     if (irs.size() < 2)
     {
         throw std::runtime_error("Need at least 2 .wav IR files under resources/metal-presets for namconv profile");
@@ -280,6 +285,7 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
     ResourceLibrary library;
     const fs::path repoRoot = fs::current_path();
     const fs::path resourcesRoot = repoRoot / "resources";
+
     if (fs::exists(resourcesRoot))
     {
         library.LoadFromDirectory(resourcesRoot);
@@ -287,6 +293,7 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
     }
 
     std::optional<NamConvAssets> namConvAssets;
+
     if (settings.profile == kProfileNamConv)
     {
         namConvAssets = DiscoverNamConvAssets(repoRoot);
@@ -304,6 +311,7 @@ BenchmarkResult RunBenchmark(const BenchmarkSettings& settings, int presetCount,
     {
         const std::string id = "preset" + std::to_string(i + 1);
         Preset preset;
+
         if (settings.profile == kProfileNamConv)
         {
             preset = CreateNamConvPreset(id, *namConvAssets);
@@ -401,6 +409,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
+
         if (arg == "--csv")
         {
             if (i + 1 >= argc)
@@ -408,6 +417,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
                 std::cerr << "Missing path after --csv\n";
                 return false;
             }
+
             settings.csvPath = argv[++i];
             continue;
         }
@@ -421,12 +431,14 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
             }
 
             settings.profile = argv[++i];
+
             if (settings.profile != kProfileBaseline && settings.profile != kProfileNamConv)
             {
                 std::cerr << "Unsupported profile: " << settings.profile << "\n";
                 std::cerr << "Supported: " << kProfileBaseline << ", " << kProfileNamConv << "\n";
                 return false;
             }
+
             continue;
         }
 
@@ -453,6 +465,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
                 std::cerr << "Sample rate must be > 0\n";
                 return false;
             }
+
             continue;
         }
 
@@ -465,6 +478,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
             }
 
             const std::string mode = argv[++i];
+
             if (mode == "mono")
             {
                 settings.monoInput = true;
@@ -479,6 +493,7 @@ bool ParseArgs(int argc, char* argv[], BenchmarkSettings& settings, bool& showHe
                 std::cerr << "Supported: mono, stereo\n";
                 return false;
             }
+
             continue;
         }
 
@@ -507,6 +522,7 @@ bool WriteCsv(const std::string& csvPath, const std::vector<BenchmarkResult>& ro
               double onePresetSpeedup, double fourPresetSpeedup)
 {
     std::ofstream out(csvPath, std::ios::trunc);
+
     if (!out.is_open())
     {
         std::cerr << "Failed to open CSV output path: " << csvPath << '\n';
@@ -514,6 +530,7 @@ bool WriteCsv(const std::string& csvPath, const std::vector<BenchmarkResult>& ro
     }
 
     out << "profile,sample_rate,input_mode,block_size,warmup_blocks,measure_blocks,mode,presets,wall_ms,avg_block_us,cpu_pct,working_set_mb,private_mb\n";
+
     for (const auto& row : rows)
     {
         out << row.profile << ',' << static_cast<int>(std::lround(sampleRate)) << ',' << (monoInput ? "mono" : "stereo")
@@ -530,7 +547,6 @@ bool WriteCsv(const std::string& csvPath, const std::vector<BenchmarkResult>& ro
 
     return true;
 }
-
 } // namespace
 
 int main(int argc, char* argv[])
@@ -539,6 +555,7 @@ int main(int argc, char* argv[])
     {
         BenchmarkSettings settings;
         bool showHelp = false;
+
         if (!ParseArgs(argc, argv, settings, showHelp))
         {
             return showHelp ? 0 : 1;
@@ -597,6 +614,7 @@ int main(int argc, char* argv[])
             {
                 return 1;
             }
+
             std::cout << "CSV written: " << settings.csvPath << '\n';
         }
 

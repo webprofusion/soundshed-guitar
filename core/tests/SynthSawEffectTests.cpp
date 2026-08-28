@@ -24,7 +24,6 @@
 
 namespace
 {
-
 constexpr double kTestSampleRate = 48000.0;
 constexpr int kTestBlockSize = 512;
 constexpr double kPi = 3.14159265358979323846;
@@ -86,6 +85,7 @@ double FrequencyErrorCents(double detected, double expected)
     {
         return 9999.0;
     }
+
     return 1200.0 * std::log2(detected / expected);
 }
 
@@ -93,6 +93,7 @@ double FrequencyErrorCents(double detected, double expected)
 double EstimateOutputFrequency(const std::vector<float>& buffer, double sampleRate)
 {
     int crossings = 0;
+
     for (size_t i = 1; i < buffer.size(); ++i)
     {
         if ((buffer[i - 1] < 0.0f && buffer[i] >= 0.0f) || (buffer[i - 1] >= 0.0f && buffer[i] < 0.0f))
@@ -110,14 +111,17 @@ double EstimateOutputFrequency(const std::vector<float>& buffer, double sampleRa
 bool IsValidAudio(const std::vector<float>& buffer)
 {
     double sumSquares = 0.0;
+
     for (const auto& sample : buffer)
     {
         if (std::isnan(sample) || std::isinf(sample))
         {
             return false;
         }
+
         sumSquares += sample * sample;
     }
+
     double rms = std::sqrt(sumSquares / buffer.size());
     return rms > 1e-6; // Not silent
 }
@@ -159,6 +163,7 @@ TestResult TestPitchDetection(guitarfx::SynthSawEffect& effect, double targetFre
             inputL[i] = static_cast<float>(0.5 * std::sin(phase));
             inputR[i] = inputL[i];
             phase += phaseInc;
+
             if (phase >= 2.0 * kPi)
             {
                 phase -= 2.0 * kPi;
@@ -172,6 +177,7 @@ TestResult TestPitchDetection(guitarfx::SynthSawEffect& effect, double targetFre
         if (lockSample < 0 && effect.GetPitchConfidence() > 0.7f)
         {
             double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), targetFreq));
+
             if (error < 50.0) // Within 50 cents = locked
             {
                 lockSample = samplesProcessed;
@@ -232,6 +238,7 @@ TestResult TestPitchTrackingSpeed(guitarfx::SynthSawEffect& effect)
             inputR[i] = inputL[i];
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
     }
 
@@ -254,6 +261,7 @@ TestResult TestPitchTrackingSpeed(guitarfx::SynthSawEffect& effect)
             inputR[i] = inputL[i];
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
         sampleCount += kTestBlockSize;
 
@@ -266,12 +274,14 @@ TestResult TestPitchTrackingSpeed(guitarfx::SynthSawEffect& effect)
         if (samplesUntilTracked < 0)
         {
             double error = std::abs(FrequencyErrorCents(effect.GetDetectedFrequency(), kEndFreq));
+
             if (error < 30.0) // Within 30 cents
             {
                 samplesUntilTracked = sampleCount;
             }
         }
     }
+
     std::cout << "Hz\n";
 
     result.samplesUntilLock = samplesUntilTracked;
@@ -326,6 +336,7 @@ TestResult TestSilenceHandling(guitarfx::SynthSawEffect& effect)
 
     // Check output is silent (or near-silent)
     double sumSquares = 0.0;
+
     for (const auto& sample : outputL)
     {
         if (std::isnan(sample) || std::isinf(sample))
@@ -334,6 +345,7 @@ TestResult TestSilenceHandling(guitarfx::SynthSawEffect& effect)
             result.message = "FAIL: NaN or Inf in output";
             return result;
         }
+
         sumSquares += sample * sample;
     }
 
@@ -425,6 +437,7 @@ TestResult TestOutputFrequency(guitarfx::SynthSawEffect& effect)
             inputR[i] = inputL[i];
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
     }
 
@@ -488,6 +501,7 @@ TestResult TestOctaveShiftValue(guitarfx::SynthSawEffect& effect, double octaveS
             inputR[i] = inputL[i];
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
     }
 
@@ -559,12 +573,14 @@ std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect, double
             inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
     }
 
     // Collect output for analysis
     std::vector<float> collected;
     collected.reserve(collectBlocks * kTestBlockSize);
+
     for (int b = 0; b < collectBlocks; ++b)
     {
         for (int i = 0; i < kTestBlockSize; ++i)
@@ -572,12 +588,15 @@ std::vector<float> FeedAndCollectOutput(guitarfx::SynthSawEffect& effect, double
             inBuf[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * phase));
             phase += phaseInc;
         }
+
         effect.Process(inputs, outputs, kTestBlockSize);
+
         for (int i = 0; i < kTestBlockSize; ++i)
         {
             collected.push_back(outBufL[i]);
         }
     }
+
     return collected;
 }
 
@@ -603,9 +622,11 @@ TestResult TestSquareWaveOutput(guitarfx::SynthSawEffect& effect)
     // Count samples above +0.5 and below -0.5 to estimate duty cycle fractions
     int highCount = 0, lowCount = 0, totalNonZero = 0;
     float maxAbs = 0.0f;
+
     for (float s : output)
     {
         maxAbs = std::max(maxAbs, std::abs(s));
+
         if (s > 0.2f)
         {
             ++highCount;
@@ -641,6 +662,7 @@ TestResult TestSquareWaveOutput(guitarfx::SynthSawEffect& effect)
         result.passed = false;
         result.message = "FAIL " + msg.str();
     }
+
     return result;
 }
 
@@ -681,6 +703,7 @@ TestResult TestTriangleWaveOutput(guitarfx::SynthSawEffect& effect)
         result.passed = false;
         result.message = "FAIL " + msg.str();
     }
+
     return result;
 }
 
@@ -703,6 +726,7 @@ TestResult TestSineWaveOutput(guitarfx::SynthSawEffect& effect)
 
     float maxAbs = 0.0f;
     float maxDelta = 0.0f;
+
     for (size_t i = 1; i < output.size(); ++i)
     {
         maxAbs = std::max(maxAbs, std::abs(output[i]));
@@ -724,6 +748,7 @@ TestResult TestSineWaveOutput(guitarfx::SynthSawEffect& effect)
         result.passed = false;
         result.message = "FAIL " + msg.str();
     }
+
     return result;
 }
 
@@ -747,9 +772,11 @@ TestResult TestPulseWidthChange(guitarfx::SynthSawEffect& effect)
 
     float maxAbs = 0.0f;
     int highCount = 0, lowCount = 0, totalNonZero = 0;
+
     for (float s : output)
     {
         maxAbs = std::max(maxAbs, std::abs(s));
+
         if (s > 0.2f)
         {
             ++highCount;
@@ -781,6 +808,7 @@ TestResult TestPulseWidthChange(guitarfx::SynthSawEffect& effect)
         result.passed = false;
         result.message = "FAIL " + msg.str();
     }
+
     return result;
 }
 
@@ -795,12 +823,14 @@ TestResult TestWaveShapeParamReadback(guitarfx::SynthSawEffect& effect)
 
     const int shapes[] = {0, 1, 2, 3};
     const char* names[] = {"Saw", "Square", "Triangle", "Sine"};
+
     for (int i = 0; i < 4; ++i)
     {
         effect.SetParam("waveShape", static_cast<double>(shapes[i]));
         effect.SetParam("voice2WaveShape", static_cast<double>(shapes[i]));
         const int readback = static_cast<int>(std::round(effect.GetParam("waveShape")));
         const int readback2 = static_cast<int>(std::round(effect.GetParam("voice2WaveShape")));
+
         if (readback != shapes[i] || readback2 != shapes[i])
         {
             allOk = false;
@@ -813,6 +843,7 @@ TestResult TestWaveShapeParamReadback(guitarfx::SynthSawEffect& effect)
     const double pwLow = effect.GetParam("pulseWidth");
     effect.SetParam("pulseWidth", 0.95); // above max
     const double pwHigh = effect.GetParam("pulseWidth");
+
     if (pwLow < 0.095 || pwHigh > 0.905)
     {
         allOk = false;
@@ -823,7 +854,6 @@ TestResult TestWaveShapeParamReadback(guitarfx::SynthSawEffect& effect)
     result.message = allOk ? "PASS (all shapes + clamp verified)" : "FAIL " + msg.str();
     return result;
 }
-
 } // anonymous namespace
 
 int main()
@@ -844,6 +874,7 @@ int main()
 
     // Test 1: Pitch detection accuracy across guitar range
     std::cout << "--- Pitch Detection Accuracy Tests ---\n";
+
     for (double freq : kTestFrequencies)
     {
         effect->Reset();
@@ -852,6 +883,7 @@ int main()
         std::cout << std::fixed << std::setprecision(1);
         std::cout << "  " << std::setw(7) << freq << " Hz: ";
         std::cout << result.message;
+
         if (result.passed)
         {
             std::cout << " (detected=" << result.detectedFreq << " Hz, error=" << std::setprecision(1)
@@ -863,8 +895,10 @@ int main()
             std::cout << " (detected=" << result.detectedFreq << " Hz)";
             failed++;
         }
+
         std::cout << "\n";
     }
+
     std::cout << "\n";
 
     // Test 2: Pitch tracking speed
@@ -873,6 +907,7 @@ int main()
     {
         auto result = TestPitchTrackingSpeed(*effect);
         std::cout << "  Octave jump (220->440 Hz): " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -890,6 +925,7 @@ int main()
     {
         auto result = TestSilenceHandling(*effect);
         std::cout << "  Silence input: " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -905,6 +941,7 @@ int main()
     {
         auto result = TestNoiseHandling(*effect);
         std::cout << "  Noise input: " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -922,6 +959,7 @@ int main()
     {
         auto result = TestOutputFrequency(*effect);
         std::cout << "  Output frequency match: " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -935,11 +973,13 @@ int main()
     // Test 6: Octave shift (multiple values)
     std::cout << "--- Octave Shift Tests ---\n";
     const double octaveShiftValues[] = {0.0, 1.0, -1.0, 2.0, -2.0};
+
     for (double octaveVal : octaveShiftValues)
     {
         effect->Reset();
         auto result = TestOctaveShiftValue(*effect, octaveVal);
         std::cout << "  Octave shift " << std::showpos << octaveVal << std::noshowpos << ": " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -949,6 +989,7 @@ int main()
             failed++;
         }
     }
+
     std::cout << "\n";
 
     // Test 7: Wave shape variants
@@ -960,6 +1001,7 @@ int main()
     {
         auto result = TestSquareWaveOutput(*effect);
         std::cout << "  Square wave output:     " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -976,6 +1018,7 @@ int main()
     {
         auto result = TestTriangleWaveOutput(*effect);
         std::cout << "  Triangle wave output:   " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -992,6 +1035,7 @@ int main()
     {
         auto result = TestSineWaveOutput(*effect);
         std::cout << "  Sine wave output:       " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -1008,6 +1052,7 @@ int main()
     {
         auto result = TestPulseWidthChange(*effect);
         std::cout << "  Pulse width 25%:        " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;
@@ -1023,6 +1068,7 @@ int main()
     {
         auto result = TestWaveShapeParamReadback(*effect);
         std::cout << "  Param readback/clamp:   " << result.message << "\n";
+
         if (result.passed)
         {
             passed++;

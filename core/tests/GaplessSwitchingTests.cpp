@@ -88,15 +88,18 @@ float MaxAbsDelta(const std::vector<float>& samples, std::size_t& atIndex)
 {
     float worst = 0.0f;
     atIndex = 0;
+
     for (std::size_t i = 1; i < samples.size(); ++i)
     {
         const float delta = std::fabs(samples[i] - samples[i - 1]);
+
         if (delta > worst)
         {
             worst = delta;
             atIndex = i;
         }
     }
+
     return worst;
 }
 
@@ -269,6 +272,7 @@ void TestRapidSwitchingStaysBounded()
     Check(mixer.AddActivePreset(MakeGainPreset("p", 0.0), "p", "p0"), "add initial preset");
 
     std::vector<float> captured;
+
     for (int i = 0; i < 24; ++i)
     {
         mixer.PreparePresetSwap(MakeGainPreset("p", (i % 2) ? -12.0 : 0.0), "p", "p" + std::to_string(i));
@@ -310,5 +314,6 @@ int main()
     {
         std::cout << "GaplessSwitchingTests passed" << std::endl;
     }
+
     return gAllPassed ? 0 : 1;
 }

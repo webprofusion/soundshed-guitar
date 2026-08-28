@@ -12,38 +12,47 @@ namespace guitarfx
 inline nlohmann::json SerializeResourceRef(const ResourceRef& ref)
 {
     nlohmann::json json;
+
     if (!ref.resourceType.empty())
     {
         json["resourceType"] = ref.resourceType;
     }
+
     if (!ref.resourceId.empty())
     {
         json["resourceId"] = ref.resourceId;
     }
+
     if (!ref.filePath.empty())
     {
         json["filePath"] = util::PathToUtf8(ref.filePath);
     }
+
     if (!ref.embeddedId.empty())
     {
         json["embeddedId"] = ref.embeddedId;
     }
+
     if (!ref.parameterId.empty())
     {
         json["parameterId"] = ref.parameterId;
     }
+
     if (ref.parameterValue.has_value())
     {
         json["parameterValue"] = *ref.parameterValue;
     }
+
     if (!ref.parameters.empty())
     {
         json["parameters"] = nlohmann::json::object();
+
         for (const auto& [key, value] : ref.parameters)
         {
             json["parameters"][key] = value;
         }
     }
+
     return json;
 }
 
@@ -55,10 +64,12 @@ inline ResourceRef DeserializeResourceRef(const nlohmann::json& json)
     ref.filePath = util::PathFromUtf8(json.value("filePath", ""));
     ref.embeddedId = json.value("embeddedId", "");
     ref.parameterId = json.value("parameterId", "");
+
     if (json.contains("parameterValue") && json["parameterValue"].is_number())
     {
         ref.parameterValue = json["parameterValue"].get<double>();
     }
+
     if (json.contains("parameters") && json["parameters"].is_object())
     {
         for (const auto& [key, value] : json["parameters"].items())
@@ -69,6 +80,7 @@ inline ResourceRef DeserializeResourceRef(const nlohmann::json& json)
             }
         }
     }
+
     return ref;
 }
 
@@ -77,14 +89,17 @@ inline nlohmann::json SerializeNode(const GraphNode& node)
     nlohmann::json json;
     json["id"] = node.id;
     json["type"] = node.type;
+
     if (!node.category.empty())
     {
         json["category"] = node.category;
     }
+
     if (!node.label.empty())
     {
         json["label"] = node.label;
     }
+
     if (!node.enabled)
     {
         json["enabled"] = node.enabled;
@@ -93,6 +108,7 @@ inline nlohmann::json SerializeNode(const GraphNode& node)
     if (!node.params.empty())
     {
         json["params"] = nlohmann::json::object();
+
         for (const auto& [key, value] : node.params)
         {
             json["params"][key] = value;
@@ -102,6 +118,7 @@ inline nlohmann::json SerializeNode(const GraphNode& node)
     if (!node.config.empty())
     {
         json["config"] = nlohmann::json::object();
+
         for (const auto& [key, value] : node.config)
         {
             json["config"][key] = value;
@@ -111,6 +128,7 @@ inline nlohmann::json SerializeNode(const GraphNode& node)
     if (!node.resources.empty())
     {
         json["resources"] = nlohmann::json::array();
+
         for (const auto& res : node.resources)
         {
             if (res.IsValid())
@@ -191,18 +209,22 @@ inline nlohmann::json SerializeEdge(const GraphEdge& edge)
     nlohmann::json json;
     json["from"] = edge.from;
     json["to"] = edge.to;
+
     if (edge.fromPort != 0)
     {
         json["fromPort"] = edge.fromPort;
     }
+
     if (edge.toPort != 0)
     {
         json["toPort"] = edge.toPort;
     }
+
     if (std::abs(edge.gain - 1.0) > kUnityGainEpsilon)
     {
         json["gain"] = edge.gain;
     }
+
     return json;
 }
 
@@ -239,6 +261,7 @@ inline nlohmann::json SerializeSignalGraph(const SignalGraph& graph)
 inline SignalGraph DeserializeSignalGraph(const nlohmann::json& json)
 {
     SignalGraph graph;
+
     if (json.contains("nodes") && json["nodes"].is_array())
     {
         for (const auto& nodeJson : json["nodes"])
@@ -322,14 +345,17 @@ inline nlohmann::json SerializeExposedParameter(const ExposedParameter& ep)
     j["minValue"] = ep.minValue;
     j["maxValue"] = ep.maxValue;
     j["defaultValue"] = ep.defaultValue;
+
     if (!ep.unit.empty())
     {
         j["unit"] = ep.unit;
     }
+
     if (ep.curve != "linear")
     {
         j["curve"] = ep.curve;
     }
+
     return j;
 }
 
@@ -357,14 +383,17 @@ inline nlohmann::json SerializeExposedResource(const ExposedResource& er)
     j["resourceType"] = er.resourceType;
     j["resourceIndex"] = er.resourceIndex;
     j["allowBrowseFile"] = er.allowBrowseFile;
+
     if (!er.parameterId.empty())
     {
         j["parameterId"] = er.parameterId;
     }
+
     if (er.parameterValue.has_value())
     {
         j["parameterValue"] = *er.parameterValue;
     }
+
     return j;
 }
 
@@ -378,10 +407,12 @@ inline ExposedResource DeserializeExposedResource(const nlohmann::json& j)
     er.resourceIndex = j.value("resourceIndex", 0);
     er.allowBrowseFile = j.value("allowBrowseFile", true);
     er.parameterId = j.value("parameterId", "");
+
     if (j.contains("parameterValue") && j["parameterValue"].is_number())
     {
         er.parameterValue = j["parameterValue"].get<double>();
     }
+
     return er;
 }
 
@@ -391,23 +422,28 @@ inline nlohmann::json SerializeCompositeEffectDefinition(const CompositeEffectDe
     j["id"] = def.id;
     j["name"] = def.name;
     j["category"] = def.category;
+
     if (!def.description.empty())
     {
         j["description"] = def.description;
     }
+
     if (!def.author.empty())
     {
         j["author"] = def.author;
     }
+
     if (!def.tags.empty())
     {
         j["tags"] = def.tags;
     }
+
     j["version"] = def.version;
 
     j["innerGraph"] = SerializeSignalGraph(def.innerGraph);
 
     j["exposedParams"] = nlohmann::json::array();
+
     for (const auto& ep : def.exposedParams)
     {
         j["exposedParams"].push_back(SerializeExposedParameter(ep));
@@ -416,6 +452,7 @@ inline nlohmann::json SerializeCompositeEffectDefinition(const CompositeEffectDe
     if (!def.exposedResources.empty())
     {
         j["exposedResources"] = nlohmann::json::array();
+
         for (const auto& er : def.exposedResources)
         {
             j["exposedResources"].push_back(SerializeExposedResource(er));
@@ -438,6 +475,7 @@ inline nlohmann::json SerializeCompositeEffectDefinition(const CompositeEffectDe
     {
         j["createdAt"] = def.createdAt;
     }
+
     if (!def.modifiedAt.empty())
     {
         j["modifiedAt"] = def.modifiedAt;
@@ -503,5 +541,4 @@ inline CompositeEffectDefinition DeserializeCompositeEffectDefinition(const nloh
 
     return def;
 }
-
 } // namespace guitarfx

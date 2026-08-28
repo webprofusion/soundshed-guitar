@@ -28,6 +28,7 @@ bool GraphHasNodeType(const SignalGraph& graph, const std::string& type)
             return true;
         }
     }
+
     return false;
 }
 
@@ -55,11 +56,13 @@ std::string FindFirstNamNodeId(SignalGraphExecutor& executor)
          {EffectGuids::kAmpNamOptimized, EffectGuids::kAmpNamBlend, EffectGuids::kFxNam, EffectGuids::kAmpNam})
     {
         const auto nodeId = executor.FindFirstNodeOfType(effectType);
+
         if (!nodeId.empty())
         {
             return nodeId;
         }
     }
+
     return {};
 }
 
@@ -73,6 +76,7 @@ constexpr std::array<const char*, 12> kNoteNamesFlat = {"C",  "Db", "D",  "Eb", 
 MultiPresetMixer::SignalLevelStats ComputeLevelStats(const float* left, const float* right, int numSamples)
 {
     MultiPresetMixer::SignalLevelStats stats;
+
     if (numSamples <= 0)
     {
         return stats;
@@ -89,11 +93,13 @@ MultiPresetMixer::SignalLevelStats ComputeLevelStats(const float* left, const fl
             const float absValue = std::abs(value);
             stats.peak = std::max(stats.peak, static_cast<double>(absValue));
             sumSquares += static_cast<double>(value) * static_cast<double>(value);
+
             if (absValue > 1.0f)
             {
                 stats.clipCount++;
             }
         }
+
         sampleCount += static_cast<std::size_t>(numSamples);
     }
 
@@ -105,11 +111,13 @@ MultiPresetMixer::SignalLevelStats ComputeLevelStats(const float* left, const fl
             const float absValue = std::abs(value);
             stats.peak = std::max(stats.peak, static_cast<double>(absValue));
             sumSquares += static_cast<double>(value) * static_cast<double>(value);
+
             if (absValue > 1.0f)
             {
                 stats.clipCount++;
             }
         }
+
         sampleCount += static_cast<std::size_t>(numSamples);
     }
 
@@ -142,33 +150,40 @@ int ScoreNodeTypeForParallelWork(std::string_view type)
     {
         return 14;
     }
+
     if (type == EffectGuids::kCabIr || type == EffectGuids::kReverbIr)
     {
         return 12;
     }
+
     if (type == EffectGuids::kReverbAdvanced || type == EffectGuids::kReverbAmbient ||
         type == EffectGuids::kReverbRoom || type == EffectGuids::kReverbSpring)
     {
         return 6;
     }
+
     if (type == EffectGuids::kDelayDigital || type == EffectGuids::kDelayDoubler || type == EffectGuids::kEqParametric)
     {
         return 3;
     }
+
     if (type == EffectGuids::kGain)
     {
         return 1;
     }
+
     return 2;
 }
 
 int EstimateGraphComplexityScore(const std::vector<std::string>& nodeTypes)
 {
     int score = 0;
+
     for (const auto& type : nodeTypes)
     {
         score += ScoreNodeTypeForParallelWork(type);
     }
+
     return std::max(1, score);
 }
 
@@ -179,6 +194,7 @@ bool ShouldUseParallelPresetDispatch(bool multiThreadingEnabled, int activeCount
     {
         return false;
     }
+
     if (activeCount < 2)
     {
         return false;
@@ -389,6 +405,7 @@ bool MultiPresetMixer::RenameActivePreset(const std::string& oldId, const std::s
             inst->cfg.name = name;
             return true;
         }
+
         return false;
     }
 
@@ -402,6 +419,7 @@ bool MultiPresetMixer::RenameActivePreset(const std::string& oldId, const std::s
     }
 
     auto* inst = FindInstance(oldId);
+
     if (inst == nullptr)
     {
         return false;
@@ -451,6 +469,7 @@ bool MultiPresetMixer::ReplaceActivePresetInPlace(const Preset& preset, const st
         std::find_if(mInstances.begin(), mInstances.end(), [&](const std::unique_ptr<PresetInstance>& candidate) {
             return !candidate->IsRetiring() && candidate->cfg.id == presetId;
         });
+
     if (existing == mInstances.end())
     {
         return false;
@@ -502,6 +521,7 @@ bool MultiPresetMixer::ReplaceActivePresetInPlace(const Preset& preset, const st
         outgoing.cfg.solo = false;
         mInstances.push_back(std::move(inst));
     }
+
     return true;
 }
 
@@ -536,6 +556,7 @@ void MultiPresetMixer::CommitPresetSwap()
             // A retiring instance must not influence the live solo decision.
             inst.cfg.solo = false;
         }
+
         ++it;
     }
 
@@ -591,6 +612,7 @@ void MultiPresetMixer::SetPresetSolo(const std::string& presetId, bool solo)
 void MultiPresetMixer::SetMultiThreadedProcessingEnabled(bool enabled)
 {
     const bool previous = mMultiThreadedProcessingEnabled.exchange(enabled, std::memory_order_acq_rel);
+
     if (previous == enabled)
     {
         return;
@@ -609,6 +631,7 @@ void MultiPresetMixer::SetMultiThreadedProcessingEnabled(bool enabled)
 
     const unsigned int hw = std::thread::hardware_concurrency();
     const int workerCount = static_cast<int>(hw > 1 ? hw - 1 : 0);
+
     if (workerCount > 0)
     {
         StartWorkers(workerCount);
@@ -644,11 +667,13 @@ void MultiPresetMixer::RebuildGlobalChains()
     mPreChainExecutor.SetResourceLibrary(mResourceLibrary);
     mPreChainExecutor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     auto preGraph = mGlobalChainConfig.BuildPreChainGraph();
+
     if (preGraph.nodes.empty() && preGraph.edges.empty())
     {
         preGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
         mGlobalChainConfig.preChainGraph = preGraph;
     }
+
     mPreChainExecutor.SetGraph(preGraph);
     mPreChainExecutor.SetInputTrim(mGlobalChainConfig.inputGain);
     mPreChainExecutor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
@@ -657,11 +682,13 @@ void MultiPresetMixer::RebuildGlobalChains()
     mPostChainExecutor.SetResourceLibrary(mResourceLibrary);
     mPostChainExecutor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
     auto postGraph = mGlobalChainConfig.BuildPostChainGraph();
+
     if (postGraph.nodes.empty() && postGraph.edges.empty())
     {
         postGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
         mGlobalChainConfig.postChainGraph = postGraph;
     }
+
     mPostChainExecutor.SetGraph(postGraph);
     mPostChainExecutor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
     mPostChainExecutor.Prepare(mSampleRate, mMaxBlockSize);
@@ -691,6 +718,7 @@ void MultiPresetMixer::NormalizeGlobalChainConfig(GlobalSignalChainConfig& confi
     {
         config.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if ((config.postChainGraph.nodes.empty() && config.postChainGraph.edges.empty()) ||
         !GraphHasNodeType(config.postChainGraph, EffectGuids::kEqParametric) ||
         !GraphHasNodeType(config.postChainGraph, EffectGuids::kDelayDoubler))
@@ -818,6 +846,7 @@ void MultiPresetMixer::SetGlobalGateEnabled(bool enabled)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_gate", EffectGuids::kDynamicsGate))
     {
         node->enabled = enabled;
@@ -831,6 +860,7 @@ void MultiPresetMixer::SetGlobalGateThreshold(double thresholdDb)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_gate", EffectGuids::kDynamicsGate))
     {
         node->params["threshold"] = thresholdDb;
@@ -844,6 +874,7 @@ void MultiPresetMixer::SetGlobalGateAttack(double attackMs)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_gate", EffectGuids::kDynamicsGate))
     {
         node->params["attack"] = attackMs;
@@ -857,6 +888,7 @@ void MultiPresetMixer::SetGlobalGateHold(double holdMs)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_gate", EffectGuids::kDynamicsGate))
     {
         node->params["hold"] = holdMs;
@@ -870,6 +902,7 @@ void MultiPresetMixer::SetGlobalGateRelease(double releaseMs)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_gate", EffectGuids::kDynamicsGate))
     {
         node->params["release"] = releaseMs;
@@ -883,6 +916,7 @@ void MultiPresetMixer::SetGlobalTransposeEnabled(bool enabled)
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_transpose", EffectGuids::kTranspose))
     {
         node->enabled = enabled;
@@ -894,10 +928,12 @@ void MultiPresetMixer::SetGlobalTranspose(int semitones)
 {
     const double value = static_cast<double>(std::clamp(semitones, -12, 12));
     const bool enabled = (value != 0.0);
+
     if (mGlobalChainConfig.preChainGraph.nodes.empty() && mGlobalChainConfig.preChainGraph.edges.empty())
     {
         mGlobalChainConfig.preChainGraph = GlobalSignalChainConfig::BuildDefaultPreChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.preChainGraph, "global_transpose", EffectGuids::kTranspose))
     {
         node->enabled = enabled;
@@ -913,6 +949,7 @@ void MultiPresetMixer::SetGlobalEQEnabled(bool enabled)
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_eq", EffectGuids::kEqParametric))
     {
         node->enabled = enabled;
@@ -923,14 +960,17 @@ void MultiPresetMixer::SetGlobalEQEnabled(bool enabled)
 void MultiPresetMixer::SetGlobalEQBandGain(int band, double dB)
 {
     static const char* kParamNames[] = {"lowGain", "lowMidGain", "highMidGain", "highGain"};
+
     if (band < 0 || band > 3)
     {
         return;
     }
+
     if (mGlobalChainConfig.postChainGraph.nodes.empty() && mGlobalChainConfig.postChainGraph.edges.empty())
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_eq", EffectGuids::kEqParametric))
     {
         node->params[kParamNames[band]] = dB;
@@ -941,14 +981,17 @@ void MultiPresetMixer::SetGlobalEQBandGain(int band, double dB)
 void MultiPresetMixer::SetGlobalEQBandFrequency(int band, double freq)
 {
     static const char* kParamNames[] = {"lowFreq", "lowMidFreq", "highMidFreq", "highFreq"};
+
     if (band < 0 || band > 3)
     {
         return;
     }
+
     if (mGlobalChainConfig.postChainGraph.nodes.empty() && mGlobalChainConfig.postChainGraph.edges.empty())
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_eq", EffectGuids::kEqParametric))
     {
         node->params[kParamNames[band]] = freq;
@@ -959,14 +1002,17 @@ void MultiPresetMixer::SetGlobalEQBandFrequency(int band, double freq)
 void MultiPresetMixer::SetGlobalEQBandQ(int band, double q)
 {
     static const char* kParamNames[] = {"", "lowMidQ", "highMidQ", ""};
+
     if (band < 1 || band > 2)
     {
         return;
     }
+
     if (mGlobalChainConfig.postChainGraph.nodes.empty() && mGlobalChainConfig.postChainGraph.edges.empty())
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node = FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_eq", EffectGuids::kEqParametric))
     {
         node->params[kParamNames[band]] = q;
@@ -980,6 +1026,7 @@ void MultiPresetMixer::SetGlobalDoublerEnabled(bool enabled)
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node =
             FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_doubler", EffectGuids::kDelayDoubler))
     {
@@ -991,10 +1038,12 @@ void MultiPresetMixer::SetGlobalDoublerEnabled(bool enabled)
 void MultiPresetMixer::SetGlobalDoublerDelay(double delayMs)
 {
     const double clamped = std::clamp(delayMs, 0.5, 100.0);
+
     if (mGlobalChainConfig.postChainGraph.nodes.empty() && mGlobalChainConfig.postChainGraph.edges.empty())
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node =
             FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_doubler", EffectGuids::kDelayDoubler))
     {
@@ -1006,10 +1055,12 @@ void MultiPresetMixer::SetGlobalDoublerDelay(double delayMs)
 void MultiPresetMixer::SetGlobalDoublerMix(double mix)
 {
     const double clamped = std::clamp(mix, 0.0, 1.0);
+
     if (mGlobalChainConfig.postChainGraph.nodes.empty() && mGlobalChainConfig.postChainGraph.edges.empty())
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node =
             FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_doubler", EffectGuids::kDelayDoubler))
     {
@@ -1024,6 +1075,7 @@ void MultiPresetMixer::SetGlobalDoublerDetune(double cents)
     {
         mGlobalChainConfig.postChainGraph = GlobalSignalChainConfig::BuildDefaultPostChainGraph();
     }
+
     if (auto* node =
             FindNodeByIdOrType(mGlobalChainConfig.postChainGraph, "global_doubler", EffectGuids::kDelayDoubler))
     {
@@ -1090,6 +1142,7 @@ void MultiPresetMixer::SetAmpDrive(double value)
     for (auto& inst : mInstances)
     {
         const auto nodeId = FindFirstNamNodeId(inst->executor);
+
         if (!nodeId.empty())
         {
             inst->executor.SetNodeParam(nodeId, "inputGain", value);
@@ -1102,10 +1155,12 @@ void MultiPresetMixer::SetIRQuality(double value)
     for (auto& inst : mInstances)
     {
         auto nodeId = inst->executor.FindFirstNodeOfType(EffectGuids::kCabIr);
+
         if (nodeId.empty())
         {
             nodeId = inst->executor.FindFirstNodeOfType(EffectGuids::kCabIr);
         }
+
         if (!nodeId.empty())
         {
             inst->executor.SetNodeParam(nodeId, "quality", value);
@@ -1139,6 +1194,7 @@ void MultiPresetMixer::SetAmpTone(double value)
     for (auto& inst : mInstances)
     {
         const auto nodeId = FindFirstNamNodeId(inst->executor);
+
         if (!nodeId.empty())
         {
             inst->executor.SetNodeParam(nodeId, "tone", value);
@@ -1207,12 +1263,15 @@ std::optional<std::pair<std::string, std::string>> MultiPresetMixer::FindFirstEn
         {
             continue;
         }
+
         const auto nodeIds = inst->executor.FindNodesOfType(effectType, false);
+
         if (!nodeIds.empty())
         {
             return std::make_pair(inst->cfg.id, nodeIds.front());
         }
     }
+
     return std::nullopt;
 }
 
@@ -1220,6 +1279,7 @@ std::vector<MultiPresetMixer::NodeReadout> MultiPresetMixer::ReadNodeParamsForTy
     const std::string& effectType, const std::vector<std::string>& paramIds) const
 {
     std::vector<NodeReadout> readouts;
+
     if (effectType.empty() || paramIds.empty())
     {
         return readouts;
@@ -1229,24 +1289,29 @@ std::vector<MultiPresetMixer::NodeReadout> MultiPresetMixer::ReadNodeParamsForTy
         for (const auto& nodeId : executor.FindNodesOfType(effectType, true))
         {
             const auto* processor = executor.GetNodeProcessor(nodeId);
+
             if (!processor)
             {
                 continue;
             }
+
             NodeReadout readout;
             readout.scope = scope;
             readout.presetId = presetId;
             readout.nodeId = nodeId;
             readout.values.reserve(paramIds.size());
+
             for (const auto& paramId : paramIds)
             {
                 readout.values.push_back(processor->GetParam(paramId));
             }
+
             readouts.push_back(std::move(readout));
         }
     };
 
     collect(mPreChainExecutor, "pre", std::string{});
+
     for (const auto& inst : mInstances)
     {
         if (!inst->IsRetiring())
@@ -1254,6 +1319,7 @@ std::vector<MultiPresetMixer::NodeReadout> MultiPresetMixer::ReadNodeParamsForTy
             collect(inst->executor, "preset", inst->cfg.id);
         }
     }
+
     collect(mPostChainExecutor, "post", std::string{});
 
     return readouts;
@@ -1262,29 +1328,35 @@ std::vector<MultiPresetMixer::NodeReadout> MultiPresetMixer::ReadNodeParamsForTy
 bool MultiPresetMixer::SetNodeEnabledByType(const std::string& effectType, bool enabled)
 {
     bool updated = false;
+
     for (const auto& inst : mInstances)
     {
         if (inst->IsRetiring())
         {
             continue;
         }
+
         const auto nodeIds = inst->executor.FindNodesOfType(effectType, true);
+
         for (const auto& nodeId : nodeIds)
         {
             SetNodeEnabled(inst->cfg.id, nodeId, enabled);
             updated = true;
         }
     }
+
     return updated;
 }
 
 bool MultiPresetMixer::SetNodeParamByType(const std::string& effectType, const std::string& paramId, double value)
 {
     const auto found = FindFirstEnabledNodeOfType(effectType);
+
     if (!found)
     {
         return false;
     }
+
     SetNodeParam(found->first, found->second, paramId, value);
     return true;
 }
@@ -1296,6 +1368,7 @@ std::string MultiPresetMixer::GetNodeConfig(const std::string& presetId, const s
     {
         return inst->executor.GetNodeConfig(nodeId, key);
     }
+
     return {};
 }
 
@@ -1325,6 +1398,7 @@ void MultiPresetMixer::SetTempo(double bpm)
     {
         inst->executor.SetTempo(bpm);
     }
+
     mPreChainExecutor.SetTempo(bpm);
     mPostChainExecutor.SetTempo(bpm);
 }
@@ -1335,6 +1409,7 @@ bool MultiPresetMixer::LoadNodeResource(const std::string& presetId, const std::
     {
         return inst->executor.LoadNodeResource(nodeId, ref);
     }
+
     return false;
 }
 
@@ -1415,17 +1490,21 @@ void MultiPresetMixer::ReaperLoop()
             // audio thread's allocation-free retire path depends on. Destruction of the moved
             // elements happens below, outside the lock, so a producer never waits on it.
             instances.reserve(mRetireQueue.size());
+
             for (auto& inst : mRetireQueue)
             {
                 instances.push_back(std::move(inst));
             }
+
             mRetireQueue.clear();
 
             executors.reserve(mRetireExecutors.size());
+
             for (auto& exec : mRetireExecutors)
             {
                 executors.push_back(std::move(exec));
             }
+
             mRetireExecutors.clear();
         }
 
@@ -1455,10 +1534,12 @@ bool MultiPresetMixer::TryRetireInstanceRealtime(std::unique_ptr<PresetInstance>
     // out by this point, so carrying it for another block costs a silent chain and nothing
     // audible. The next block tries again.
     std::unique_lock<std::mutex> lock(mRetireMutex, std::try_to_lock);
+
     if (!lock.owns_lock())
     {
         return false;
     }
+
     if (mRetireQueue.size() >= mRetireQueue.capacity())
     {
         return false;
@@ -1549,10 +1630,12 @@ void MultiPresetMixer::TunerWorkerLoop()
         }
 
         double sumSq = 0.0;
+
         for (const auto sample : mTunerAnalysisReadBuffer)
         {
             sumSq += sample * sample;
         }
+
         const double rms = std::sqrt(sumSq / static_cast<double>(mTunerAnalysisReadBuffer.size()));
 
         const double frequency = DetectPitch(mTunerAnalysisReadBuffer);
@@ -1581,6 +1664,7 @@ void MultiPresetMixer::StartWorkers(int count)
 
     const int numWorkers = std::min(count, kMaxParallelWorkers);
     mWorkerThreads.reserve(static_cast<size_t>(numWorkers));
+
     for (int i = 0; i < numWorkers; ++i)
     {
         mWorkerThreads.emplace_back([this] { WorkerLoop(); });
@@ -1599,6 +1683,7 @@ void MultiPresetMixer::StopWorkers()
         mParallelQuit.store(true, std::memory_order_relaxed);
     }
     mParallelCv.notify_all();
+
     for (auto& t : mWorkerThreads)
     {
         if (t.joinable())
@@ -1606,12 +1691,14 @@ void MultiPresetMixer::StopWorkers()
             t.join();
         }
     }
+
     mWorkerThreads.clear();
 }
 
 void MultiPresetMixer::WorkerLoop()
 {
     uint32_t lastGen = 0;
+
     while (true)
     {
         {
@@ -1630,13 +1717,16 @@ void MultiPresetMixer::WorkerLoop()
         lastGen = mParallelGeneration.load(std::memory_order_acquire);
 
         const int total = mParallelTaskCount.load(std::memory_order_acquire);
+
         while (true)
         {
             const int idx = mParallelTaskHead.fetch_add(1, std::memory_order_acq_rel);
+
             if (idx >= total)
             {
                 break;
             }
+
             const auto& wi = mWorkItems[static_cast<size_t>(idx)];
             float* ins[2] = {wi.preChainOutL, wi.preChainOutR};
             float* outs[2] = {wi.inst->outL.data(), wi.inst->outR.data()};
@@ -1685,6 +1775,7 @@ void MultiPresetMixer::Prepare(double sampleRate, int maxBlockSize)
     {
         const unsigned int hw = std::thread::hardware_concurrency();
         const int workerCount = static_cast<int>(hw > 1 ? hw - 1 : 0);
+
         if (workerCount > 0)
         {
             StartWorkers(workerCount);
@@ -1700,6 +1791,7 @@ void MultiPresetMixer::Reset()
 {
     mPreChainExecutor.Reset();
     mPostChainExecutor.Reset();
+
     for (auto& inst : mInstances)
     {
         inst->executor.Reset();
@@ -1723,6 +1815,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         mOversizedBlockCount.fetch_add(1, std::memory_order_relaxed);
 
         int offset = 0;
+
         while (offset < numSamples)
         {
             const int chunk = std::min(mMaxBlockSize, numSamples - offset);
@@ -1733,6 +1826,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             Process(chunkIn, chunkOut, chunk);
             offset += chunk;
         }
+
         return;
     }
 
@@ -1750,10 +1844,12 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         {
             std::fill(outputs[0], outputs[0] + numSamples, 0.0f);
         }
+
         if (outputs[1])
         {
             std::fill(outputs[1], outputs[1] + numSamples, 0.0f);
         }
+
         return;
     }
 
@@ -1774,12 +1870,14 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         // Apply mono mode: produce dual-mono buffers even when only one live
         // hardware input channel is present.
         const bool standaloneInputPath = !mHostControlledInput;
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float leftSample = processInL ? processInL[i] : 0.0f;
             const float rightSample = processInR ? processInR[i] : 0.0f;
 
             float monoSample = 0.0f;
+
             if (mInputChannel == 0)
             {
                 monoSample = leftSample; // Left only
@@ -1794,9 +1892,11 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                 // sum live inputs directly (no DAW-style averaging).
                 monoSample = standaloneInputPath ? (leftSample + rightSample) : ((leftSample + rightSample) * 0.5f);
             }
+
             mTempInL[static_cast<std::size_t>(i)] = monoSample;
             mTempInR[static_cast<std::size_t>(i)] = monoSample;
         }
+
         processInL = mTempInL.data();
         processInR = mTempInR.data();
     }
@@ -1809,6 +1909,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             {
                 mTempInL[static_cast<std::size_t>(i)] = processInL[i] * mUserInputCalibrationGainLinear;
             }
+
             processInL = mTempInL.data();
         }
 
@@ -1818,6 +1919,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             {
                 mTempInR[static_cast<std::size_t>(i)] = processInR[i] * mUserInputCalibrationGainLinear;
             }
+
             processInR = mTempInR.data();
         }
     }
@@ -1827,6 +1929,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     {
         // Find peak
         float peak = 0.0f;
+
         for (int i = 0; i < numSamples; ++i)
         {
             peak = std::max(peak, std::abs(processInL[i]));
@@ -1846,6 +1949,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                 mTempInL[static_cast<std::size_t>(i)] = processInL[i] * mInputAutoLevelGain;
                 mTempInR[static_cast<std::size_t>(i)] = processInR[i] * mInputAutoLevelGain;
             }
+
             processInL = mTempInL.data();
             processInR = mTempInR.data();
         }
@@ -1872,10 +1976,12 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             {
                 std::fill(outputs[0], outputs[0] + numSamples, 0.0f);
             }
+
             if (outputs[1])
             {
                 std::fill(outputs[1], outputs[1] + numSamples, 0.0f);
             }
+
             return;
         }
     }
@@ -1898,6 +2004,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     // Detect solo mode. Instances fading out after a swap never participate in the solo
     // decision — they are on their way out and must stay audible for the whole ramp.
     bool anySolo = false;
+
     for (const auto& inst : mInstances)
     {
         if (!inst->IsRetiring() && inst->cfg.solo)
@@ -1912,12 +2019,14 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         {
             return false;
         }
+
         if (inst.IsRetiring())
         {
             // Fully faded out but not yet handed to the reaper (the queue was busy last
             // block). It contributes nothing, so skip the chain entirely.
             return inst.fadeSamplesRemaining > 0;
         }
+
         return !anySolo || inst.cfg.solo;
     };
 
@@ -1937,11 +2046,13 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                 {
                     outputs[0][i] += inst.outL[static_cast<size_t>(i)] * baseL;
                 }
+
                 if (outputs[1])
                 {
                     outputs[1][i] += inst.outR[static_cast<size_t>(i)] * baseR;
                 }
             }
+
             return;
         }
 
@@ -1953,12 +2064,14 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         const float step = (fadeEnd - fadeStart) / static_cast<float>(numSamples);
 
         float fade = fadeStart;
+
         for (int i = 0; i < numSamples; ++i, fade += step)
         {
             if (outputs[0])
             {
                 outputs[0][i] += inst.outL[static_cast<size_t>(i)] * baseL * fade;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] += inst.outR[static_cast<size_t>(i)] * baseR * fade;
@@ -1971,6 +2084,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     {
         std::fill(outputs[0], outputs[0] + numSamples, 0.0f);
     }
+
     if (outputs[1])
     {
         std::fill(outputs[1], outputs[1] + numSamples, 0.0f);
@@ -1978,6 +2092,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
 
     // Count active instances to decide whether to use parallel dispatch.
     int activeCount = 0;
+
     for (const auto& inst : mInstances)
     {
         if (isAudible(*inst))
@@ -1987,6 +2102,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     }
 
     int totalWorkUnits = 0;
+
     if (activeCount >= 2)
     {
         for (const auto& inst : mInstances)
@@ -1995,6 +2111,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             {
                 continue;
             }
+
             totalWorkUnits += inst->complexityScore * numSamples;
         }
     }
@@ -2014,9 +2131,11 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     {
         // Pack work items (up to kMaxWorkItems); any extras fall through to serial below.
         int wi = 0;
+
         for (auto& instPtr : mInstances)
         {
             auto& inst = *instPtr;
+
             if (!isAudible(inst))
             {
                 continue;
@@ -2045,6 +2164,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             mParallelGeneration.fetch_add(1, std::memory_order_relaxed);
         }
         const int workersNeeded = std::min<int>(std::max(0, wi - 1), static_cast<int>(mWorkerThreads.size()));
+
         for (int n = 0; n < workersNeeded; ++n)
         {
             mParallelCv.notify_one();
@@ -2054,10 +2174,12 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         while (true)
         {
             const int idx = mParallelTaskHead.fetch_add(1, std::memory_order_acq_rel);
+
             if (idx >= wi)
             {
                 break;
             }
+
             const auto& item = mWorkItems[static_cast<size_t>(idx)];
             float* ins[2] = {item.preChainOutL, item.preChainOutR};
             float* outs[2] = {item.inst->outL.data(), item.inst->outR.data()};
@@ -2083,6 +2205,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         for (auto& instPtr : mInstances)
         {
             auto& inst = *instPtr;
+
             if (!isAudible(inst))
             {
                 continue;
@@ -2105,12 +2228,14 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         }
 
         inst->fadeSamplesRemaining = std::max(0, inst->fadeSamplesRemaining - numSamples);
+
         if (inst->fadeSamplesRemaining == 0 && inst->phase == InstancePhase::FadingIn)
         {
             inst->phase = InstancePhase::Active;
             inst->fadeTotalSamples = 0;
         }
     }
+
     CollectFinishedFadeOuts();
 
     // ==========================================================================
@@ -2124,6 +2249,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     {
         std::copy(mPostChainOutL.begin(), mPostChainOutL.begin() + numSamples, outputs[0]);
     }
+
     if (outputs[1])
     {
         std::copy(mPostChainOutR.begin(), mPostChainOutR.begin() + numSamples, outputs[1]);
@@ -2140,6 +2266,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
 
     // Apply master gain
     const float master = static_cast<float>(mMasterGain);
+
     if (master != 1.0f)
     {
         if (outputs[0])
@@ -2149,6 +2276,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                 outputs[0][i] *= master;
             }
         }
+
         if (outputs[1])
         {
             for (int i = 0; i < numSamples; ++i)
@@ -2163,12 +2291,14 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     {
         const float outputProtectionCeilingLinear = static_cast<float>(GetOutputProtectionCeilingLinear());
         float peak = 0.0f;
+
         for (int i = 0; i < numSamples; ++i)
         {
             if (outputs[0])
             {
                 peak = std::max(peak, std::abs(outputs[0][i]));
             }
+
             if (outputs[1])
             {
                 peak = std::max(peak, std::abs(outputs[1][i]));
@@ -2188,6 +2318,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                     outputs[0][i] *= mOutputAutoLevelGain;
                 }
             }
+
             if (outputs[1])
             {
                 for (int i = 0; i < numSamples; ++i)
@@ -2216,6 +2347,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     if (mLimiterEnabled)
     {
         const float outputProtectionCeilingLinear = static_cast<float>(GetOutputProtectionCeilingLinear());
+
         if (outputs[0])
         {
             for (int i = 0; i < numSamples; ++i)
@@ -2224,6 +2356,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
                     std::clamp(outputs[0][i], -outputProtectionCeilingLinear, outputProtectionCeilingLinear);
             }
         }
+
         if (outputs[1])
         {
             for (int i = 0; i < numSamples; ++i)
@@ -2240,6 +2373,7 @@ void MultiPresetMixer::SetSignalDiagnosticsEnabled(bool enabled)
     mSignalDiagnosticsEnabled.store(enabled, std::memory_order_release);
     mPreChainExecutor.SetSignalDiagnosticsEnabled(enabled);
     mPostChainExecutor.SetSignalDiagnosticsEnabled(enabled);
+
     for (auto& inst : mInstances)
     {
         inst->executor.SetSignalDiagnosticsEnabled(enabled);
@@ -2276,6 +2410,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
         node.levels.peak = entry.peak;
         node.levels.rms = entry.rms;
         node.levels.clipCount = entry.clipCount;
+
         if (entry.analyzer)
         {
             NodeSignalLevel::AnalyzerTelemetry analyzer;
@@ -2303,6 +2438,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
             analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
             node.analyzer = std::move(analyzer);
         }
+
         snapshot.nodes.push_back(std::move(node));
     }
 
@@ -2312,7 +2448,9 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
         {
             continue;
         }
+
         const auto levels = inst->executor.GetNodeSignalLevels();
+
         for (const auto& entry : levels)
         {
             NodeSignalLevel node;
@@ -2324,6 +2462,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
             node.levels.peak = entry.peak;
             node.levels.rms = entry.rms;
             node.levels.clipCount = entry.clipCount;
+
             if (entry.analyzer)
             {
                 NodeSignalLevel::AnalyzerTelemetry analyzer;
@@ -2351,6 +2490,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
                 analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
                 node.analyzer = std::move(analyzer);
             }
+
             snapshot.nodes.push_back(std::move(node));
         }
     }
@@ -2365,6 +2505,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
         node.levels.peak = entry.peak;
         node.levels.rms = entry.rms;
         node.levels.clipCount = entry.clipCount;
+
         if (entry.analyzer)
         {
             NodeSignalLevel::AnalyzerTelemetry analyzer;
@@ -2392,6 +2533,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
             analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
             node.analyzer = std::move(analyzer);
         }
+
         snapshot.nodes.push_back(std::move(node));
     }
 
@@ -2402,6 +2544,7 @@ std::vector<std::string> MultiPresetMixer::GetActivePresetIds() const
 {
     std::vector<std::string> ids;
     ids.reserve(mInstances.size());
+
     for (const auto& inst : mInstances)
     {
         if (!inst->IsRetiring())
@@ -2409,16 +2552,19 @@ std::vector<std::string> MultiPresetMixer::GetActivePresetIds() const
             ids.push_back(inst->cfg.id);
         }
     }
+
     return ids;
 }
 
 std::vector<std::string> MultiPresetMixer::GetPresetNodeTypes(const std::string& presetId) const
 {
     const auto* inst = FindInstance(presetId);
+
     if (!inst)
     {
         return {};
     }
+
     return inst->executor.GetNodeTypes();
 }
 
@@ -2428,6 +2574,7 @@ std::optional<MultiPresetMixer::InstanceConfig> MultiPresetMixer::GetPresetConfi
     {
         return inst->cfg;
     }
+
     return std::nullopt;
 }
 
@@ -2443,6 +2590,7 @@ MultiPresetMixer::PresetInstance* MultiPresetMixer::FindInstance(const std::stri
             return inst.get();
         }
     }
+
     return nullptr;
 }
 
@@ -2455,12 +2603,14 @@ const MultiPresetMixer::PresetInstance* MultiPresetMixer::FindInstance(const std
             return inst.get();
         }
     }
+
     return nullptr;
 }
 
 size_t MultiPresetMixer::GetPresetCount() const
 {
     size_t count = 0;
+
     for (const auto& inst : mInstances)
     {
         if (!inst->IsRetiring())
@@ -2468,6 +2618,7 @@ size_t MultiPresetMixer::GetPresetCount() const
             ++count;
         }
     }
+
     return count;
 }
 
@@ -2577,6 +2728,7 @@ int MultiPresetMixer::GetTotalLatencySamples() const
     const int postChain = mPostChainExecutor.GetTotalLatencySamples();
 
     int instanceMax = 0;
+
     for (const auto& inst : mInstances)
     {
         // A fading-out instance's latency must not leak into the reported figure: it is
@@ -2594,6 +2746,7 @@ void MultiPresetMixer::SetTunerEnabled(bool enabled)
 {
     mTunerEnabled = enabled;
     const std::uint64_t generation = mTunerAnalysisGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
+
     if (enabled)
     {
         // Reset tuner state when enabled
@@ -2663,6 +2816,7 @@ void MultiPresetMixer::ProcessTuner(float** inputs, int numSamples)
         bool queuedForAnalysis = false;
         {
             std::unique_lock<std::mutex> lock(mTunerAnalysisMutex, std::try_to_lock);
+
             if (lock.owns_lock() && mTunerAnalysisWriteBuffer.size() == kTunerBufferSize)
             {
                 std::copy(mTunerOrderedBuffer.begin(), mTunerOrderedBuffer.end(), mTunerAnalysisWriteBuffer.begin());
@@ -2684,6 +2838,7 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
 {
     // Autocorrelation-based pitch detection (YIN-inspired algorithm)
     const std::size_t n = samples.size();
+
     if (n < 2)
     {
         return 0.0;
@@ -2691,10 +2846,12 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
 
     // Calculate RMS to check if there's enough signal
     double sumSquares = 0.0;
+
     for (const auto& sample : samples)
     {
         sumSquares += sample * sample;
     }
+
     const double rms = std::sqrt(sumSquares / static_cast<double>(n));
 
     // If signal is too quiet, don't try to detect pitch
@@ -2718,11 +2875,13 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
     for (int tau = minPeriod; tau <= maxPeriod; ++tau)
     {
         double sum = 0.0;
+
         for (std::size_t i = 0; i < n - static_cast<std::size_t>(tau); ++i)
         {
             const double delta = samples[i] - samples[i + tau];
             sum += delta * delta;
         }
+
         diff[static_cast<std::size_t>(tau)] = sum;
     }
 
@@ -2733,6 +2892,7 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
     for (int tau = minPeriod; tau <= maxPeriod; ++tau)
     {
         runningSum += diff[static_cast<std::size_t>(tau)];
+
         if (runningSum > 0.0)
         {
             cmndf[static_cast<std::size_t>(tau)] =
@@ -2754,6 +2914,7 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
             {
                 ++tau;
             }
+
             bestPeriod = tau;
             break;
         }
@@ -2764,6 +2925,7 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
     {
         double minVal = cmndf[static_cast<std::size_t>(minPeriod)];
         bestPeriod = minPeriod;
+
         for (int tau = minPeriod + 1; tau <= maxPeriod; ++tau)
         {
             if (cmndf[static_cast<std::size_t>(tau)] < minVal)
@@ -2772,6 +2934,7 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
                 bestPeriod = tau;
             }
         }
+
         // If the minimum is too high, no pitch detected
         if (minVal > 0.5)
         {
@@ -2781,12 +2944,14 @@ double MultiPresetMixer::DetectPitch(const std::vector<double>& samples) const
 
     // Parabolic interpolation for sub-sample accuracy (YIN step 6)
     double period = static_cast<double>(bestPeriod);
+
     if (bestPeriod > minPeriod && bestPeriod < maxPeriod)
     {
         const double s0 = cmndf[static_cast<std::size_t>(bestPeriod - 1)];
         const double s1 = cmndf[static_cast<std::size_t>(bestPeriod)];
         const double s2 = cmndf[static_cast<std::size_t>(bestPeriod + 1)];
         const double denom = 2.0 * (2.0 * s1 - s0 - s2);
+
         if (std::abs(denom) > 1e-10)
         {
             period += (s2 - s0) / denom;
@@ -2832,6 +2997,7 @@ MultiPresetMixer::TunerResult MultiPresetMixer::FrequencyToNote(double frequency
     // Handle negative semitones
     const int noteIndex = ((totalSemitones % 12) + 12) % 12;
     result.octave = (totalSemitones / 12);
+
     if (totalSemitones < 0 && totalSemitones % 12 != 0)
     {
         result.octave -= 1;
@@ -2857,5 +3023,4 @@ MultiPresetMixer::TunerResult MultiPresetMixer::FrequencyToNote(double frequency
 
     return result;
 }
-
 } // namespace guitarfx

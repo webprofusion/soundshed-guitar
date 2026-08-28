@@ -57,6 +57,7 @@ struct SignalAnalysis
 nlohmann::json LoadJson(const fs::path& path)
 {
     std::ifstream file(path, std::ios::binary);
+
     if (!file)
     {
         throw std::runtime_error("Unable to open JSON file: " + path.string());
@@ -78,6 +79,7 @@ template <typename T> void GenerateSine(std::vector<T>& buffer, double frequency
 SignalAnalysis Analyze(const std::vector<Sample>& buffer)
 {
     SignalAnalysis result;
+
     if (buffer.empty())
     {
         return result;
@@ -85,6 +87,7 @@ SignalAnalysis Analyze(const std::vector<Sample>& buffer)
 
     const double first = static_cast<double>(buffer.front());
     double sumSquares = 0.0;
+
     for (const auto& sVal : buffer)
     {
         const double s = static_cast<double>(sVal);
@@ -92,10 +95,12 @@ SignalAnalysis Analyze(const std::vector<Sample>& buffer)
         result.hasInf = result.hasInf || std::isinf(s);
 
         result.peak = std::max(result.peak, std::abs(s));
+
         if (s != 0.0)
         {
             result.allZeros = false;
         }
+
         if (s != first)
         {
             result.allSame = false;
@@ -120,6 +125,7 @@ void LoadLibraryResources(guitarfx::ResourceLibrary& library, const nlohmann::js
         res.category = entry.value("category", "");
         res.description = entry.value("description", "");
         res.filePath = baseDir / entry.value("filePath", "");
+
         if (!res.id.empty())
         {
             library.AddResource(res);
@@ -135,6 +141,7 @@ void LoadLibraryResources(guitarfx::ResourceLibrary& library, const nlohmann::js
         res.category = entry.value("category", "");
         res.description = entry.value("description", "");
         res.filePath = baseDir / entry.value("filePath", "");
+
         if (!res.id.empty())
         {
             library.AddResource(res);
@@ -185,13 +192,16 @@ PresetRunResult RunPreset(guitarfx::SignalGraphExecutor& executor, guitarfx::Res
                 fInL[j] = static_cast<float>(inL[j]);
                 fInR[j] = static_cast<float>(inR[j]);
             }
+
             executor.Process(fInputs, fOutputs, kBlockSize);
+
             for (int j = 0; j < kBlockSize; ++j)
             {
                 outL[j] = fOutL[j];
                 outR[j] = fOutR[j];
             }
         }
+
         delete[] fInL;
         delete[] fInR;
         delete[] fOutL;
@@ -209,21 +219,25 @@ PresetRunResult RunPreset(guitarfx::SignalGraphExecutor& executor, guitarfx::Res
     }
 
     const auto analysis = Analyze(outL);
+
     if (analysis.hasNaN)
     {
         result.error = "Output contains NaN";
         return result;
     }
+
     if (analysis.hasInf)
     {
         result.error = "Output contains Inf";
         return result;
     }
+
     if (analysis.allZeros)
     {
         result.error = "Output is all zeros";
         return result;
     }
+
     if (analysis.allSame)
     {
         result.error = "Output is DC";
@@ -231,11 +245,13 @@ PresetRunResult RunPreset(guitarfx::SignalGraphExecutor& executor, guitarfx::Res
     }
 
     constexpr double kMaxReasonablePeak = 10.0; // ~20 dBFS headroom
+
     if (analysis.peak <= 0.0)
     {
         result.error = "Output peak is non-positive";
         return result;
     }
+
     if (analysis.peak > kMaxReasonablePeak)
     {
         result.error = "Output peak too high: " + std::to_string(analysis.peak);
@@ -246,7 +262,6 @@ PresetRunResult RunPreset(guitarfx::SignalGraphExecutor& executor, guitarfx::Res
     result.peak = analysis.peak;
     return result;
 }
-
 } // namespace
 
 int main()
@@ -271,9 +286,11 @@ int main()
 
         std::vector<guitarfx::Preset> presets;
         presets.reserve(presetsJson.size());
+
         for (const auto& presetJson : presetsJson)
         {
             auto presetOpt = guitarfx::PresetStorage::DeserializeFromJson(presetJson.dump());
+
             if (presetOpt)
             {
                 presets.push_back(*presetOpt);
@@ -298,6 +315,7 @@ int main()
         for (const auto& preset : presets)
         {
             auto run = RunPreset(executor, library, preset);
+
             if (!run.success)
             {
                 std::cerr << "Preset '" << preset.name << "' failed: " << run.error << std::endl;
@@ -317,6 +335,7 @@ int main()
         const auto [minIt, maxIt] = std::minmax_element(peaks.begin(), peaks.end());
         const double peakSpread = *maxIt - *minIt;
         constexpr double kPeakTolerance = 1e-4;
+
         if (peakSpread < kPeakTolerance)
         {
             std::cerr << "All presets produced the same peak (" << *minIt << ")" << std::endl;

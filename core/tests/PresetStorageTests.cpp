@@ -15,7 +15,6 @@ namespace fs = std::filesystem;
 
 namespace
 {
-
 // Helper to create a test preset with signal graph
 guitarfx::Preset CreateTestPreset(const std::string& id, const std::string& name, const std::string& modelPath = "",
                                   const std::string& irPath = "")
@@ -153,6 +152,7 @@ bool TestSerializeDeserialize()
 
     // Serialize
     std::string json = guitarfx::PresetStorage::SerializeToJson(original);
+
     if (json.empty())
     {
         std::cout << "FAIL (serialization returned empty string)" << std::endl;
@@ -161,6 +161,7 @@ bool TestSerializeDeserialize()
 
     // Deserialize
     auto deserialized = guitarfx::PresetStorage::DeserializeFromJson(json);
+
     if (!deserialized)
     {
         std::cout << "FAIL (deserialization failed)" << std::endl;
@@ -232,6 +233,7 @@ bool TestSaveLoadFile()
 
     // Load
     auto loaded = guitarfx::PresetStorage::LoadFromFile(filePath);
+
     if (!loaded)
     {
         std::cout << "FAIL (load failed)" << std::endl;
@@ -330,6 +332,7 @@ bool TestLegacyGraphCreatesSingleScene()
   })JSON";
 
     auto preset = guitarfx::PresetStorage::DeserializeFromJson(json);
+
     if (!preset)
     {
         std::cout << "FAIL (deserialization failed)" << std::endl;
@@ -355,11 +358,13 @@ bool TestLegacyGraphCreatesSingleScene()
     }
 
     const auto migratedJson = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(*preset));
+
     if (migratedJson.contains("graph"))
     {
         std::cout << "FAIL (legacy graph should be removed from serialized preset once scenes exist)" << std::endl;
         return false;
     }
+
     if (!migratedJson.contains("scenes") || !migratedJson["scenes"].is_array() || migratedJson["scenes"].size() != 1)
     {
         std::cout << "FAIL (serialized preset missing migrated scene)" << std::endl;
@@ -383,6 +388,7 @@ bool TestSerializeDeserializeScenes()
     guitarfx::PresetScene leadScene = cleanScene;
     leadScene.id = "scene-lead";
     leadScene.title = "Lead";
+
     if (auto* ampNode = leadScene.graph.FindNode("amp"))
     {
         ampNode->params["drive"] = 0.9;
@@ -398,12 +404,15 @@ bool TestSerializeDeserializeScenes()
 
     const std::string json = guitarfx::PresetStorage::SerializeToJson(preset);
     const auto serializedJson = nlohmann::json::parse(json);
+
     if (serializedJson.contains("graph"))
     {
         std::cout << "FAIL (serialized scene preset should not duplicate top-level graph)" << std::endl;
         return false;
     }
+
     auto roundTripped = guitarfx::PresetStorage::DeserializeFromJson(json);
+
     if (!roundTripped)
     {
         std::cout << "FAIL (round-trip deserialize failed)" << std::endl;
@@ -417,6 +426,7 @@ bool TestSerializeDeserializeScenes()
     }
 
     const auto* lead = guitarfx::FindPresetScene(*roundTripped, "scene-lead");
+
     if (!lead)
     {
         std::cout << "FAIL (lead scene missing after round-trip)" << std::endl;
@@ -424,6 +434,7 @@ bool TestSerializeDeserializeScenes()
     }
 
     const auto* ampNode = lead->graph.FindNode("amp");
+
     if (!ampNode || ampNode->params.find("drive") == ampNode->params.end() || ampNode->params.at("drive") != 0.9)
     {
         std::cout << "FAIL (lead scene graph contents not preserved)" << std::endl;
@@ -444,6 +455,7 @@ bool TestSingleSceneNormalizationPreservesSceneGraph()
     scene.id = "scene-1";
     scene.title = "Scene 1";
     scene.graph = preset.graph;
+
     if (auto* ampNode = scene.graph.FindNode("amp"))
     {
         ampNode->params["drive"] = 0.91;
@@ -468,6 +480,7 @@ bool TestSingleSceneNormalizationPreservesSceneGraph()
     guitarfx::NormalizePresetScenes(preset);
 
     const auto* normalizedScene = guitarfx::FindPresetScene(preset, "scene-1");
+
     if (!normalizedScene)
     {
         std::cout << "FAIL (normalized scene missing)" << std::endl;
@@ -475,6 +488,7 @@ bool TestSingleSceneNormalizationPreservesSceneGraph()
     }
 
     const auto* normalizedAmpNode = normalizedScene->graph.FindNode("amp");
+
     if (!normalizedAmpNode)
     {
         std::cout << "FAIL (normalized scene amp missing)" << std::endl;
@@ -482,6 +496,7 @@ bool TestSingleSceneNormalizationPreservesSceneGraph()
     }
 
     const auto driveIt = normalizedAmpNode->params.find("drive");
+
     if (driveIt == normalizedAmpNode->params.end() || driveIt->second != 0.91)
     {
         std::cout << "FAIL (single scene graph was overwritten during normalization)" << std::endl;
@@ -535,6 +550,7 @@ bool TestGraphNodeFinding()
 
     // Find existing node
     const auto* foundNode = preset.graph.FindNode("amp");
+
     if (!foundNode)
     {
         std::cout << "FAIL (could not find 'amp' node)" << std::endl;
@@ -549,6 +565,7 @@ bool TestGraphNodeFinding()
 
     // Find non-existing node
     const auto* notFound = preset.graph.FindNode("nonexistent");
+
     if (notFound != nullptr)
     {
         std::cout << "FAIL (found non-existent node)" << std::endl;
@@ -566,6 +583,7 @@ bool TestResourceRefValidation()
 
     // Empty ref should be invalid
     guitarfx::ResourceRef emptyRef;
+
     if (emptyRef.IsValid())
     {
         std::cout << "FAIL (empty ref should be invalid)" << std::endl;
@@ -575,6 +593,7 @@ bool TestResourceRefValidation()
     // File path ref
     guitarfx::ResourceRef fileRef;
     fileRef.filePath = "path/to/model.nam";
+
     if (!fileRef.IsFilePath() || !fileRef.IsValid())
     {
         std::cout << "FAIL (file path ref should be valid)" << std::endl;
@@ -585,6 +604,7 @@ bool TestResourceRefValidation()
     guitarfx::ResourceRef libRef;
     libRef.resourceType = "nam";
     libRef.resourceId = "plexi-bright";
+
     if (!libRef.IsLibraryRef() || !libRef.IsValid())
     {
         std::cout << "FAIL (library ref should be valid)" << std::endl;
@@ -594,6 +614,7 @@ bool TestResourceRefValidation()
     // Embedded ref
     guitarfx::ResourceRef embRef;
     embRef.embeddedId = "emb-001";
+
     if (!embRef.IsEmbedded() || !embRef.IsValid())
     {
         std::cout << "FAIL (embedded ref should be valid)" << std::endl;
@@ -611,6 +632,7 @@ bool TestDeserializeInvalidJson()
 
     // Invalid JSON
     auto result1 = guitarfx::PresetStorage::DeserializeFromJson("not valid json");
+
     if (result1)
     {
         std::cout << "FAIL (should fail on invalid JSON)" << std::endl;
@@ -619,6 +641,7 @@ bool TestDeserializeInvalidJson()
 
     // Empty JSON
     auto result2 = guitarfx::PresetStorage::DeserializeFromJson("");
+
     if (result2)
     {
         std::cout << "FAIL (should fail on empty string)" << std::endl;
@@ -737,6 +760,7 @@ bool TestEmbeddedResources()
     }
 
     const auto& embRes = deserialized->embeddedResources[0];
+
     if (embRes.id != "emb-model-1" || embRes.type != "nam" || embRes.hash != "abc123def456")
     {
         std::cout << "FAIL (embedded resource data mismatch)" << std::endl;
@@ -797,6 +821,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     preset.embeddedResources.push_back(embedded);
 
     const fs::path presetPath = presetDir / "path-normalization.json";
+
     if (!guitarfx::PresetStorage::SaveToFile(preset, presetPath))
     {
         std::cout << "FAIL (save failed)" << std::endl;
@@ -806,11 +831,13 @@ bool TestPresetFilePathNormalizationOnDisk()
     nlohmann::json raw;
     {
         std::ifstream input(presetPath);
+
         if (!input)
         {
             std::cout << "FAIL (unable to open saved preset json)" << std::endl;
             return false;
         }
+
         raw = nlohmann::json::parse(input, nullptr, false);
     }
 
@@ -821,6 +848,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     }
 
     nlohmann::json nodes = nlohmann::json::array();
+
     if (raw.contains("graph") && raw["graph"].is_object())
     {
         nodes = raw["graph"].value("nodes", nlohmann::json::array());
@@ -830,6 +858,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     {
         nodes = raw["scenes"][0].value("graph", nlohmann::json::object()).value("nodes", nlohmann::json::array());
     }
+
     if (!nodes.is_array() || nodes.empty())
     {
         std::cout << "FAIL (missing serialized nodes)" << std::endl;
@@ -837,6 +866,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     }
 
     const auto resources = nodes[0].value("resources", nlohmann::json::array());
+
     if (!resources.is_array() || resources.size() != 2)
     {
         std::cout << "FAIL (serialized resources missing)" << std::endl;
@@ -845,11 +875,13 @@ bool TestPresetFilePathNormalizationOnDisk()
 
     const auto storedInside = fs::path(resources[0].value("filePath", ""));
     const auto storedOutside = fs::path(resources[1].value("filePath", ""));
+
     if (storedInside.empty() || storedInside.is_absolute())
     {
         std::cout << "FAIL (inside path should be stored as relative)" << std::endl;
         return false;
     }
+
     if (storedOutside.empty() || !storedOutside.is_absolute())
     {
         std::cout << "FAIL (outside path should remain absolute)" << std::endl;
@@ -857,6 +889,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     }
 
     const auto embeddedArray = raw.value("embeddedResources", nlohmann::json::array());
+
     if (!embeddedArray.is_array() || embeddedArray.empty())
     {
         std::cout << "FAIL (missing embedded resources)" << std::endl;
@@ -864,6 +897,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     }
 
     const auto storedOriginalPath = fs::path(embeddedArray[0].value("originalPath", ""));
+
     if (storedOriginalPath.empty() || storedOriginalPath.is_absolute())
     {
         std::cout << "FAIL (embedded originalPath should be stored as relative)" << std::endl;
@@ -871,6 +905,7 @@ bool TestPresetFilePathNormalizationOnDisk()
     }
 
     const auto loaded = guitarfx::PresetStorage::LoadFromFile(presetPath);
+
     if (!loaded)
     {
         std::cout << "FAIL (load failed)" << std::endl;
@@ -888,6 +923,7 @@ bool TestPresetFilePathNormalizationOnDisk()
         std::cout << "FAIL (inside path did not resolve back to absolute)" << std::endl;
         return false;
     }
+
     if (loaded->graph.nodes[0].resources[1].filePath != outsideFile.lexically_normal())
     {
         std::cout << "FAIL (outside path changed unexpectedly)" << std::endl;
@@ -927,6 +963,7 @@ bool TestBoundaryBypassStatePreservedDuringNormalization()
 
     const auto* normalizedInput = graph.FindNode("__input__");
     const auto* normalizedOutput = graph.FindNode("__output__");
+
     if (!normalizedInput || !normalizedOutput)
     {
         std::cout << "FAIL (boundary nodes missing after normalization)" << std::endl;
@@ -960,7 +997,6 @@ bool TestBoundaryBypassStatePreservedDuringNormalization()
     std::cout << "PASS" << std::endl;
     return true;
 }
-
 } // anonymous namespace
 
 int main()

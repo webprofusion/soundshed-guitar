@@ -123,5 +123,4 @@ constexpr size_t GetMaxReverbIRSamples(IRQuality quality, double sampleRate = 48
         return 0; // Unlimited
     }
 }
-
 } // namespace guitarfx

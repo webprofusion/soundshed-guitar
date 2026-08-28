@@ -18,6 +18,7 @@ namespace
 std::vector<std::uint8_t> ReadBinaryFile(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
+
     if (!input)
     {
         return {};
@@ -42,6 +43,7 @@ bool TestDecodeRegressionFixture()
 
     bool passed = true;
     passed &= ReportCheck(fs::exists(wavPath), "  fixture exists:");
+
     if (!passed)
     {
         return false;
@@ -49,6 +51,7 @@ bool TestDecodeRegressionFixture()
 
     const auto bytes = ReadBinaryFile(wavPath);
     passed &= ReportCheck(!bytes.empty(), "  fixture bytes loaded:");
+
     if (!passed)
     {
         return false;
@@ -56,6 +59,7 @@ bool TestDecodeRegressionFixture()
 
     const auto decoded = guitarfx::util::DecodePcmWav(bytes);
     passed &= ReportCheck(decoded.has_value(), "  DecodePcmWav accepts WAVE_FORMAT_EXTENSIBLE PCM:");
+
     if (!decoded)
     {
         return false;

@@ -125,6 +125,7 @@ std::string ToString(StressMode mode)
     {
         return "resource-rebind";
     }
+
     return "baseline";
 }
 
@@ -239,6 +240,7 @@ guitarfx::Preset CreateResourceSyntheticPreset(const int index, const guitarfx::
 nlohmann::json LoadJson(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
+
     if (!input)
     {
         throw std::runtime_error("Failed to open JSON file: " + path.string());
@@ -259,6 +261,7 @@ std::string Describe(const fs::path& path)
 int ReadEnvInt(const char* key, int fallback, int minValue, int maxValue)
 {
     const char* value = std::getenv(key);
+
     if (!value || *value == '\0')
     {
         return fallback;
@@ -278,6 +281,7 @@ int ReadEnvInt(const char* key, int fallback, int minValue, int maxValue)
 std::uint64_t ReadEnvUInt64(const char* key, std::uint64_t fallback)
 {
     const char* value = std::getenv(key);
+
     if (!value || *value == '\0')
     {
         return fallback;
@@ -305,6 +309,7 @@ void LoadLibraryResources(guitarfx::ResourceLibrary& library, const nlohmann::js
         resource.category = entry.value("category", "");
         resource.description = entry.value("description", "");
         resource.filePath = baseDir / entry.value("filePath", "");
+
         if (!resource.id.empty())
         {
             library.AddResource(resource);
@@ -320,6 +325,7 @@ void LoadLibraryResources(guitarfx::ResourceLibrary& library, const nlohmann::js
         resource.category = entry.value("category", "");
         resource.description = entry.value("description", "");
         resource.filePath = baseDir / entry.value("filePath", "");
+
         if (!resource.id.empty())
         {
             library.AddResource(resource);
@@ -332,6 +338,7 @@ ScenarioData BuildScenario(const fs::path& resourcesDir, const guitarfx::Resourc
     const fs::path dataDir = resourcesDir / "data";
 
     const auto presetsJson = LoadJson(dataDir / "default-presets.json");
+
     if (!presetsJson.is_array())
     {
         throw std::runtime_error("default-presets.json is not an array");
@@ -348,6 +355,7 @@ ScenarioData BuildScenario(const fs::path& resourcesDir, const guitarfx::Resourc
         }
 
         auto parsed = guitarfx::PresetStorage::DeserializeFromJson(presetJson.dump());
+
         if (!parsed)
         {
             continue;
@@ -368,6 +376,7 @@ ScenarioData BuildScenario(const fs::path& resourcesDir, const guitarfx::Resourc
         for (int i = 0; i < fallbackCount; ++i)
         {
             guitarfx::Preset preset;
+
             if (canUseResourceFallback)
             {
                 const auto& nam = namResources[static_cast<std::size_t>(i) % namResources.size()];
@@ -378,12 +387,14 @@ ScenarioData BuildScenario(const fs::path& resourcesDir, const guitarfx::Resourc
             {
                 preset = CreateSyntheticPreset(i + 1);
             }
+
             scenario.presetIds.push_back(preset.id);
             scenario.presets.push_back(std::move(preset));
         }
     }
 
     const auto& registry = guitarfx::EffectRegistry::Instance();
+
     for (std::size_t presetIndex = 0; presetIndex < scenario.presets.size(); ++presetIndex)
     {
         const auto& preset = scenario.presets[presetIndex];
@@ -399,6 +410,7 @@ ScenarioData BuildScenario(const fs::path& resourcesDir, const guitarfx::Resourc
             scenario.toggleTargets.push_back({presetId, node.id});
 
             const auto typeInfo = registry.GetTypeInfo(node.type);
+
             if (!typeInfo)
             {
                 continue;
@@ -451,6 +463,7 @@ RunConfig MakeRunConfig()
     cfg.mode = ParseStressMode(std::getenv("GUITARFX_STRESS_MODE"));
 
     const char* customTrace = std::getenv("GUITARFX_STRESS_TRACE_PATH");
+
     if (customTrace && *customTrace != '\0')
     {
         cfg.tracePath = fs::path(customTrace);
@@ -468,14 +481,17 @@ std::unordered_map<std::string, std::vector<guitarfx::LibraryResource>> BuildRes
 {
     std::unordered_map<std::string, std::vector<guitarfx::LibraryResource>> pool;
     const auto allResources = library.GetAllResources();
+
     for (const auto& res : allResources)
     {
         if (res.type.empty() || res.id.empty())
         {
             continue;
         }
+
         pool[res.type].push_back(res);
     }
+
     return pool;
 }
 
@@ -494,6 +510,7 @@ std::size_t PickIndex(std::size_t size, std::mt19937_64& rng)
 float NextInputSample(std::mt19937_64& rng, double phase, double amplitude, bool noisy)
 {
     const float sine = static_cast<float>(std::sin(phase) * amplitude);
+
     if (!noisy)
     {
         return sine;
@@ -506,10 +523,12 @@ float NextInputSample(std::mt19937_64& rng, double phase, double amplitude, bool
 bool HasInvalidOrExplodingSignal(const std::vector<float>& left, const std::vector<float>& right, double& peakOut)
 {
     peakOut = 0.0;
+
     for (std::size_t i = 0; i < left.size(); ++i)
     {
         const double l = static_cast<double>(left[i]);
         const double r = static_cast<double>(right[i]);
+
         if (std::isnan(l) || std::isnan(r) || std::isinf(l) || std::isinf(r))
         {
             return true;
@@ -526,11 +545,13 @@ bool HasInvalidOrExplodingSignal(const std::vector<float>& left, const std::vect
 std::string TailTrace(const std::deque<std::string>& trace)
 {
     std::string out;
+
     for (const auto& line : trace)
     {
         out += line;
         out.push_back('\n');
     }
+
     return out;
 }
 
@@ -553,11 +574,13 @@ void InstallCrashDiagnostics()
 {
     SetUnhandledExceptionFilter(StressCrashHandler);
     #ifdef _DEBUG
+
     for (const int report : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT})
     {
         _CrtSetReportMode(report, _CRTDBG_MODE_FILE);
         _CrtSetReportFile(report, _CRTDBG_FILE_STDERR);
     }
+
     #endif
 }
 #else
@@ -565,7 +588,6 @@ void InstallCrashDiagnostics()
 {
 }
 #endif
-
 } // namespace
 
 int main()
@@ -616,9 +638,11 @@ int main()
             mixer.SetPresetSolo(presetId, false);
             mixer.SetPresetPan(presetId, 0.0);
         }
+
         mixer.SetPresetMix(scenario.presetIds.front(), 1.0);
 
         std::ofstream traceFile(cfg.tracePath, std::ios::trunc);
+
         if (!traceFile)
         {
             throw std::runtime_error("Unable to open trace log: " + Describe(cfg.tracePath));
@@ -653,6 +677,7 @@ int main()
             traceFile << line << '\n';
             traceFile.flush();
             traceHistory.push_back(line);
+
             if (static_cast<int>(traceHistory.size()) > kTraceHistoryLimit)
             {
                 traceHistory.pop_front();
@@ -695,6 +720,7 @@ int main()
             else if (mutationType < 48)
             {
                 const std::size_t active = PickIndex(scenario.presetIds.size(), rng);
+
                 for (std::size_t i = 0; i < scenario.presetIds.size(); ++i)
                 {
                     const double mix = (i == active) ? 1.0 : 0.0;
@@ -702,6 +728,7 @@ int main()
                     mixer.SetPresetMute(scenario.presetIds[i], false);
                     mixer.SetPresetSolo(scenario.presetIds[i], false);
                 }
+
                 appendTrace("step=" + std::to_string(step) +
                             " action=selectPreset presetId=" + scenario.presetIds[active]);
             }
@@ -736,6 +763,7 @@ int main()
                 const auto& target = scenario.paramTargets[PickIndex(scenario.paramTargets.size(), rng)];
                 const double t = unitDist(rng);
                 double value = target.minValue + (target.maxValue - target.minValue) * t;
+
                 if (target.step > 0.0)
                 {
                     const double steps = std::round((value - target.minValue) / target.step);
@@ -752,6 +780,7 @@ int main()
             {
                 const auto& target = scenario.resourceTargets[PickIndex(scenario.resourceTargets.size(), rng)];
                 const auto poolIt = resourcePool.find(target.resourceType);
+
                 if (poolIt != resourcePool.end() && !poolIt->second.empty())
                 {
                     const auto& chosen = poolIt->second[PickIndex(poolIt->second.size(), rng)];
@@ -776,6 +805,7 @@ int main()
             }
 
             const int bursts = burstBlocksDist(rng);
+
             for (int burst = 0; burst < bursts; ++burst)
             {
                 const double frequency = freqDist(rng);
@@ -791,10 +821,12 @@ int main()
                     inR[static_cast<std::size_t>(sample)] = NextInputSample(rng, phaseR, amplitude, noisy);
                     phaseL += inc;
                     phaseR += incR;
+
                     if (phaseL > 2.0 * kPi)
                     {
                         phaseL -= 2.0 * kPi;
                     }
+
                     if (phaseR > 2.0 * kPi)
                     {
                         phaseR -= 2.0 * kPi;
@@ -821,6 +853,7 @@ int main()
                 }
 
                 double peak = 0.0;
+
                 if (HasInvalidOrExplodingSignal(outL, outR, peak))
                 {
                     std::cerr << "\nInvalid output at step " << step << " (peak=" << peak << ")" << std::endl;

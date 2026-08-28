@@ -19,7 +19,6 @@
 
 namespace guitarfx
 {
-
 class TunerService
 {
   public:
@@ -61,5 +60,4 @@ class TunerService
     Reading mReading;
     mutable std::mutex mMutex;
 };
-
 } // namespace guitarfx

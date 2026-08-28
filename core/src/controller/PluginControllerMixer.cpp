@@ -19,14 +19,15 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-
 void PluginController::ClearActivePresetMixerState()
 {
     const auto activePresetIds = mPresetMixer.GetActivePresetIds();
+
     for (const auto& presetId : activePresetIds)
     {
         mPresetMixer.RemoveActivePreset(presetId);
     }
+
     mMixerPresetJsonCache.clear();
 }
 
@@ -34,6 +35,7 @@ bool PluginController::AddActivePreset(const Preset& preset, const std::string& 
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
     const bool added = mPresetMixer.AddActivePreset(preset, presetId, name);
+
     if (added)
     {
         AttachRuntimeConfigCallbacks(presetId, preset);
@@ -46,6 +48,7 @@ bool PluginController::AddActivePreset(const Preset& preset, const std::string& 
         }
         UpdateHostLatency();
     }
+
     return added;
 }
 
@@ -76,14 +79,17 @@ bool PluginController::AddActivePresetById(const std::string& presetId)
     // Try loading from factory presets directory
     auto factoryPath = ResolveFactoryPresetDirectory(mHost, mResourceRoot) / (resolvedPresetId + ".json");
     auto presetOpt = PresetStorage::LoadFromFile(factoryPath);
+
     if (!presetOpt)
     {
         auto archiveIt = mFactoryArchivePresets.find(resolvedPresetId);
+
         if (archiveIt != mFactoryArchivePresets.end())
         {
             presetOpt = archiveIt->second;
         }
     }
+
     if (presetOpt)
     {
         return AddActivePreset(*presetOpt, resolvedPresetId, presetOpt->name);
@@ -101,11 +107,13 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
     }
 
     auto presetOpt = LoadPresetById(presetId);
+
     if (!presetOpt && mActivePreset && (mActivePreset->id == presetId || mActivePresetId == presetId))
     {
         // Unsaved/session-only preset that is already loaded — re-apply what we have.
         presetOpt = *mActivePreset;
     }
+
     if (!presetOpt)
     {
         ReportErrorToUI("Cannot load preset", "Preset '" + presetId + "' not found");
@@ -114,6 +122,7 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
 
     Preset preset = std::move(*presetOpt);
     NormalizePresetScenes(preset);
+
     if (!SetPresetActiveScene(preset, std::string{}, &mActiveSceneId))
     {
         mActiveSceneId = GetDefaultPresetSceneId(preset);
@@ -133,10 +142,12 @@ bool PluginController::ApplyActivePresetById(const std::string& presetId)
         loaded["type"] = "presetLoaded";
         loaded["preset"] = SerializePresetForUi(*mActivePreset);
         nlohmann::json activeIds = nlohmann::json::array();
+
         for (const auto& id : mPresetMixer.GetActivePresetIds())
         {
             activeIds.push_back(id);
         }
+
         loaded["activePresetIds"] = activeIds;
         loaded["sceneId"] = GetResolvedActiveSceneId();
         SendMessageToUI(loaded.dump());
@@ -174,6 +185,7 @@ void PluginController::FocusMixerPreset(const std::string& presetId)
     CaptureLiveHostedPluginStateIntoActivePreset();
 
     const auto it = mMixerPresetJsonCache.find(presetId);
+
     if (it == mMixerPresetJsonCache.end())
     {
         AppendSessionLog("FocusMixerPreset: no cached preset data for slot=" + presetId);
@@ -181,6 +193,7 @@ void PluginController::FocusMixerPreset(const std::string& presetId)
     }
 
     auto presetOpt = PresetStorage::DeserializeFromJson(it->second);
+
     if (!presetOpt)
     {
         AppendSessionLog("FocusMixerPreset: failed to deserialize cached preset for slot=" + presetId);
@@ -205,6 +218,7 @@ bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, con
 {
     std::lock_guard<std::mutex> lock(mDSPMutex);
     const bool replaced = mPresetMixer.ReplaceActivePresetInPlace(preset, presetId, name);
+
     if (replaced)
     {
         AttachRuntimeConfigCallbacks(presetId, preset);
@@ -217,6 +231,7 @@ bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, con
         }
         UpdateHostLatency();
     }
+
     return replaced;
 }
 
@@ -249,5 +264,4 @@ void PluginController::SetLimiterEnabled(bool enabled)
 {
     mPresetMixer.SetLimiterEnabled(enabled);
 }
-
 } // namespace guitarfx

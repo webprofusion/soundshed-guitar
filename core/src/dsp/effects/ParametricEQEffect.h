@@ -44,6 +44,7 @@ class ParametricEQEffect : public EffectProcessor
         {
             return;
         }
+
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         UpdateCoefficients();
@@ -99,11 +100,13 @@ class ParametricEQEffect : public EffectProcessor
                 // Left channel — Direct Form I: y = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
                 float outL = band.b0 * sampleL + band.b1 * band.z1L + band.b2 * band.z2L - band.a1 * band.x1L -
                              band.a2 * band.x2L;
+
                 if (!std::isfinite(outL))
                 {
                     ResetBandState(band); // clear both L and R state on overflow
                     outL = sampleL;
                 }
+
                 // Shift the input and output delay lines
                 band.z2L = band.z1L; // x[n-2] ← x[n-1]
                 band.z1L = sampleL;  // x[n-1] ← x[n]
@@ -114,11 +117,13 @@ class ParametricEQEffect : public EffectProcessor
                 // Right channel — identical DF-I with independent state
                 float outR = band.b0 * sampleR + band.b1 * band.z1R + band.b2 * band.z2R - band.a1 * band.x1R -
                              band.a2 * band.x2R;
+
                 if (!std::isfinite(outR))
                 {
                     ResetBandState(band);
                     outR = sampleR;
                 }
+
                 band.z2R = band.z1R;
                 band.z1R = sampleR;
                 band.x2R = band.x1R;
@@ -130,6 +135,7 @@ class ParametricEQEffect : public EffectProcessor
             {
                 outputs[0][i] = sampleL;
             }
+
             if (outputs[1])
             {
                 outputs[1][i] = sampleR;
@@ -202,50 +208,62 @@ class ParametricEQEffect : public EffectProcessor
         {
             return mBands[0].gainDb;
         }
+
         if (key == "lowFreq")
         {
             return mBands[0].freq;
         }
+
         if (key == "lowQ")
         {
             return mBands[0].q;
         }
+
         if (key == "lowMidGain")
         {
             return mBands[1].gainDb;
         }
+
         if (key == "lowMidFreq")
         {
             return mBands[1].freq;
         }
+
         if (key == "lowMidQ")
         {
             return mBands[1].q;
         }
+
         if (key == "highMidGain")
         {
             return mBands[2].gainDb;
         }
+
         if (key == "highMidFreq")
         {
             return mBands[2].freq;
         }
+
         if (key == "highMidQ")
         {
             return mBands[2].q;
         }
+
         if (key == "highGain")
         {
             return mBands[3].gainDb;
         }
+
         if (key == "highFreq")
         {
             return mBands[3].freq;
         }
+
         if (key == "highQ")
         {
             return mBands[3].q;
         }
+
         return 0.0;
     }
 
@@ -365,6 +383,7 @@ class ParametricEQEffect : public EffectProcessor
         {
             return fallback;
         }
+
         return std::clamp(value, minimum, maximum);
     }
 
@@ -458,11 +477,13 @@ class ParametricEQEffect : public EffectProcessor
 
         // a0 is the normalisation factor; guard against near-zero to avoid division explosion.
         const double a0 = 1.0 + alpha / A;
+
         if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
         {
             SetIdentity(band);
             return;
         }
+
         // Store pre-divided (normalised) coefficients.
         band.b0 = static_cast<float>((1.0 + alpha * A) / a0);
         band.b1 = static_cast<float>((-2.0 * cosw0) / a0);
@@ -515,11 +536,13 @@ class ParametricEQEffect : public EffectProcessor
         const double sqrtA = std::sqrt(A);
 
         const double a0 = (A + 1.0) + (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha;
+
         if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
         {
             SetIdentity(band);
             return;
         }
+
         band.b0 = static_cast<float>(A * ((A + 1.0) - (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha) / a0);
         band.b1 = static_cast<float>(2.0 * A * ((A - 1.0) - (A + 1.0) * cosw0) / a0);
         band.b2 = static_cast<float>(A * ((A + 1.0) - (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0);
@@ -565,11 +588,13 @@ class ParametricEQEffect : public EffectProcessor
         const double sqrtA = std::sqrt(A);
 
         const double a0 = (A + 1.0) - (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha;
+
         if (!std::isfinite(a0) || std::abs(a0) < 1.0e-9)
         {
             SetIdentity(band);
             return;
         }
+
         band.b0 = static_cast<float>(A * ((A + 1.0) + (A - 1.0) * cosw0 + 2.0 * sqrtA * alpha) / a0);
         band.b1 = static_cast<float>(-2.0 * A * ((A - 1.0) + (A + 1.0) * cosw0) / a0);
         band.b2 = static_cast<float>(A * ((A + 1.0) + (A - 1.0) * cosw0 - 2.0 * sqrtA * alpha) / a0);
@@ -613,5 +638,4 @@ inline void RegisterParametricEQEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<ParametricEQEffect>(); });
 }
-
 } // namespace guitarfx

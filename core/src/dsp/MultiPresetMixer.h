@@ -249,6 +249,7 @@ class MultiPresetMixer
     void SetHostControlledInput(bool hostControlled)
     {
         mHostControlledInput = hostControlled;
+
         if (hostControlled)
         {
             mMonoMode = false;
@@ -641,5 +642,4 @@ class MultiPresetMixer
     void StopWorkers();
     void WorkerLoop();
 };
-
 } // namespace guitarfx

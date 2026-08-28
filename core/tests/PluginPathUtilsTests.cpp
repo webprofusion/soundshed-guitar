@@ -162,6 +162,7 @@ void TestBrowseFiltersCoverEveryBundle()
     // Echoed because the payload half is platform-specific: on a failure elsewhere
     // this is the first thing you want to see.
     std::cout << "  filters: " << filters << "\n";
+
     for (const char* suffix : {"*.vst3", "*.component", "*.appex", "*.lv2", "*.vst"})
     {
         Expect(filters.find(suffix) != std::string::npos, std::string("filters offer ") + suffix);

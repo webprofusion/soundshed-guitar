@@ -15,6 +15,7 @@ bool IsRelativeOutside(const std::filesystem::path& relativePath)
     {
         return false;
     }
+
     const auto it = relativePath.begin();
     return it != relativePath.end() && *it == "..";
 }
@@ -36,6 +37,7 @@ nlohmann::json ResourceToJson(const LibraryResource& resource, const std::filesy
     {
         std::error_code relEc;
         const auto relativeToResources = std::filesystem::relative(resource.filePath, resourcesRoot, relEc);
+
         if (!relEc && !relativeToResources.empty() && relativeToResources != std::filesystem::path(".") &&
             !IsRelativeOutside(relativeToResources))
         {
@@ -53,6 +55,7 @@ nlohmann::json ResourceToJson(const LibraryResource& resource, const std::filesy
 
     item["hash"] = resource.hash;
     item["tags"] = resource.tags;
+
     if (!resource.metadata.empty())
     {
         item["metadata"] = resource.metadata;
@@ -76,6 +79,7 @@ std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
     LibraryResource resource;
     resource.type = item.value("type", "");
     resource.id = item.value("id", "");
+
     if (resource.type.empty() || resource.id.empty())
     {
         return std::nullopt;
@@ -87,24 +91,30 @@ std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
     resource.hash = item.value("hash", "");
 
     const std::string rawPath = item.value("filePath", "");
+
     if (!rawPath.empty())
     {
         std::filesystem::path resolvedPath(rawPath);
+
         if (resolvedPath.is_relative() && !relativeBases.empty())
         {
             std::filesystem::path candidate = relativeBases.back() / resolvedPath;
+
             for (const auto& base : relativeBases)
             {
                 const auto attempt = base / resolvedPath;
                 std::error_code existsEc;
+
                 if (std::filesystem::exists(attempt, existsEc))
                 {
                     candidate = attempt;
                     break;
                 }
             }
+
             resolvedPath = candidate;
         }
+
         resource.filePath = resolvedPath;
     }
 
@@ -124,6 +134,7 @@ std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
         for (const auto& entry : item["metadata"].items())
         {
             const auto& value = entry.value();
+
             if (value.is_string())
             {
                 resource.metadata[entry.key()] = value.get<std::string>();
@@ -160,6 +171,7 @@ void ResourceLibrary::AddResource(const LibraryResource& resource)
 void ResourceLibrary::UpdateResource(const std::string& type, const std::string& id, const LibraryResource& updated)
 {
     const auto key = MakeKey(type, id);
+
     if (mResources.count(key))
     {
         mResources[key] = updated;
@@ -181,6 +193,7 @@ std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string
 {
     const auto key = MakeKey(type, id);
     auto it = mResources.find(key);
+
     if (it != mResources.end())
     {
         return it->second;
@@ -189,11 +202,13 @@ std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string
     if (id.find("__") != std::string::npos)
     {
         const auto lastDoubleUnderscore = id.rfind("__");
+
         if (lastDoubleUnderscore != std::string::npos && lastDoubleUnderscore + 2 < id.length())
         {
             const auto suffix = id.substr(lastDoubleUnderscore + 2);
             const auto fallbackKey = MakeKey(type, suffix);
             auto fallbackIt = mResources.find(fallbackKey);
+
             if (fallbackIt != mResources.end())
             {
                 return fallbackIt->second;
@@ -201,6 +216,7 @@ std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string
 
             // Search for any other resource whose ID ends with "__" + suffix or is suffix
             const std::string marker = "__" + suffix;
+
             for (const auto& [resKey, resource] : mResources)
             {
                 if (resource.type == type)
@@ -219,6 +235,7 @@ std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string
     {
         // The search ID is a clean suffix, but maybe the library has it with a prefix
         const std::string marker = "__" + id;
+
         for (const auto& [resKey, resource] : mResources)
         {
             if (resource.type == type)
@@ -238,6 +255,7 @@ std::optional<LibraryResource> ResourceLibrary::LookupResource(const std::string
 std::vector<LibraryResource> ResourceLibrary::GetResourcesByType(const std::string& type) const
 {
     std::vector<LibraryResource> result;
+
     for (const auto& [key, resource] : mResources)
     {
         if (resource.type == type)
@@ -245,6 +263,7 @@ std::vector<LibraryResource> ResourceLibrary::GetResourcesByType(const std::stri
             result.push_back(resource);
         }
     }
+
     return result;
 }
 
@@ -252,6 +271,7 @@ std::vector<LibraryResource> ResourceLibrary::GetResourcesByCategory(const std::
                                                                      const std::string& category) const
 {
     std::vector<LibraryResource> result;
+
     for (const auto& [key, resource] : mResources)
     {
         if (resource.type == type && resource.category == category)
@@ -259,6 +279,7 @@ std::vector<LibraryResource> ResourceLibrary::GetResourcesByCategory(const std::
             result.push_back(resource);
         }
     }
+
     return result;
 }
 
@@ -266,10 +287,12 @@ std::vector<LibraryResource> ResourceLibrary::GetAllResources() const
 {
     std::vector<LibraryResource> result;
     result.reserve(mResources.size());
+
     for (const auto& [key, resource] : mResources)
     {
         result.push_back(resource);
     }
+
     return result;
 }
 
@@ -277,14 +300,17 @@ std::vector<std::pair<std::string, std::string>> ResourceLibrary::GetResourcePat
 {
     std::vector<std::pair<std::string, std::string>> result;
     result.reserve(mResources.size());
+
     for (const auto& [key, resource] : mResources)
     {
         if (resource.filePath.empty())
         {
             continue;
         }
+
         result.emplace_back(util::PathToUtf8(resource.filePath), resource.id);
     }
+
     return result;
 }
 
@@ -299,6 +325,7 @@ std::optional<std::filesystem::path> ResourceLibrary::ResolveResource(const Reso
     if (ref.IsLibraryRef())
     {
         auto resource = LookupResource(ref.resourceType, ref.resourceId);
+
         if (resource && std::filesystem::exists(resource->filePath))
         {
             return resource->filePath;
@@ -307,6 +334,7 @@ std::optional<std::filesystem::path> ResourceLibrary::ResolveResource(const Reso
         // If the matched resource file doesn't exist, search the library for any fallback item whose file does exist
         const std::string& id = ref.resourceId;
         std::string suffix = id;
+
         if (id.find("__") != std::string::npos)
         {
             suffix = id.substr(id.rfind("__") + 2);
@@ -323,6 +351,7 @@ std::optional<std::filesystem::path> ResourceLibrary::ResolveResource(const Reso
                 if (!isMatch)
                 {
                     auto origIdIt = res.metadata.find("originalId");
+
                     if (origIdIt != res.metadata.end() && origIdIt->second == suffix)
                     {
                         isMatch = true;
@@ -369,6 +398,7 @@ void ResourceLibrary::LoadFromDirectory(const std::filesystem::path& directory)
 
     // Look for library.json in the directory
     auto libraryFile = directory / "library.json";
+
     if (std::filesystem::exists(libraryFile))
     {
         LoadFromFile(libraryFile);
@@ -394,6 +424,7 @@ void ResourceLibrary::LoadFromStore(storage::JsonStore& store, const std::filesy
     for (const auto& item : store.List(storage::ItemType::kResource))
     {
         const auto parsed = item.Parse();
+
         if (!parsed)
         {
             continue;
@@ -455,6 +486,7 @@ void ResourceLibrary::SaveToFile(const std::filesystem::path& path) const
     }
 
     std::ofstream file(path);
+
     if (file.is_open())
     {
         file << json.dump(2);
@@ -464,6 +496,7 @@ void ResourceLibrary::SaveToFile(const std::filesystem::path& path) const
 void ResourceLibrary::LoadFromFile(const std::filesystem::path& path)
 {
     std::ifstream file(path);
+
     if (!file.is_open())
     {
         return;
@@ -496,5 +529,4 @@ void ResourceLibrary::LoadFromFile(const std::filesystem::path& path)
         // Invalid JSON, ignore
     }
 }
-
 } // namespace guitarfx

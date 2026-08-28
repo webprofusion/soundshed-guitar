@@ -5,7 +5,6 @@
 
 namespace guitarfx::util
 {
-
 [[nodiscard]] inline std::filesystem::path PathFromUtf8(const std::string& value)
 {
     return std::filesystem::u8path(value);
@@ -16,5 +15,4 @@ namespace guitarfx::util
     const auto value = path.generic_u8string();
     return std::string(value.begin(), value.end());
 }
-
 } // namespace guitarfx::util

@@ -6,7 +6,6 @@
 
 namespace guitarfx
 {
-
 std::string CompositePresetStorage::SerializeToJson(const CompositePreset& cp)
 {
     const nlohmann::json j = cp;
@@ -33,17 +32,21 @@ static std::filesystem::path SafeFilePath(const std::string& id, const std::file
     {
         return {};
     }
+
     const std::string safe = guitarfx::util::SanitizeFilename(id);
+
     if (safe.empty())
     {
         return {};
     }
+
     // Guard against path traversal: the sanitized name must not introduce separators.
     if (safe.find('/') != std::string::npos || safe.find('\\') != std::string::npos ||
         safe.find("..") != std::string::npos)
     {
         return {};
     }
+
     return dir / (safe + CompositePresetStorage::kExtension);
 }
 
@@ -53,16 +56,19 @@ bool CompositePresetStorage::SaveToFile(const CompositePreset& cp, const std::fi
     {
         std::filesystem::create_directories(dir);
         const auto path = SafeFilePath(cp.id, dir);
+
         if (path.empty())
         {
             return false;
         }
 
         std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+
         if (!ofs.is_open())
         {
             return false;
         }
+
         ofs << SerializeToJson(cp);
         return ofs.good();
     }
@@ -75,6 +81,7 @@ bool CompositePresetStorage::SaveToFile(const CompositePreset& cp, const std::fi
 std::optional<CompositePreset> CompositePresetStorage::LoadById(const std::string& id, const std::filesystem::path& dir)
 {
     const auto path = SafeFilePath(id, dir);
+
     if (path.empty() || !std::filesystem::exists(path))
     {
         return std::nullopt;
@@ -83,10 +90,12 @@ std::optional<CompositePreset> CompositePresetStorage::LoadById(const std::strin
     try
     {
         std::ifstream ifs(path);
+
         if (!ifs.is_open())
         {
             return std::nullopt;
         }
+
         const std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
         return DeserializeFromJson(content);
     }
@@ -99,6 +108,7 @@ std::optional<CompositePreset> CompositePresetStorage::LoadById(const std::strin
 std::vector<CompositePreset> CompositePresetStorage::ListAll(const std::filesystem::path& dir)
 {
     std::vector<CompositePreset> result;
+
     if (!std::filesystem::exists(dir))
     {
         return result;
@@ -112,11 +122,14 @@ std::vector<CompositePreset> CompositePresetStorage::ListAll(const std::filesyst
             {
                 continue;
             }
+
             if (entry.path().extension().string() != ".json")
             {
                 continue;
             }
+
             const std::string stem = entry.path().stem().string();
+
             // Must end with ".composite" (stem of "id.composite.json" is "id.composite")
             if (stem.size() < 10 || stem.substr(stem.size() - 10) != ".composite")
             {
@@ -124,12 +137,15 @@ std::vector<CompositePreset> CompositePresetStorage::ListAll(const std::filesyst
             }
 
             std::ifstream ifs(entry.path());
+
             if (!ifs.is_open())
             {
                 continue;
             }
+
             const std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
             auto cp = DeserializeFromJson(content);
+
             if (cp)
             {
                 result.push_back(std::move(*cp));
@@ -146,10 +162,12 @@ std::vector<CompositePreset> CompositePresetStorage::ListAll(const std::filesyst
 bool CompositePresetStorage::DeleteById(const std::string& id, const std::filesystem::path& dir)
 {
     const auto path = SafeFilePath(id, dir);
+
     if (path.empty() || !std::filesystem::exists(path))
     {
         return false;
     }
+
     try
     {
         return std::filesystem::remove(path);
@@ -174,6 +192,7 @@ std::optional<CompositePreset> CompositePresetStorage::LoadFromStore(const stora
                                                                      const std::string& id)
 {
     const auto raw = store.GetRaw(storage::ItemType::kCompositePreset, id);
+
     if (!raw)
     {
         return std::nullopt;
@@ -203,5 +222,4 @@ bool CompositePresetStorage::DeleteFromStore(storage::JsonStore& store, const st
 {
     return store.Remove(storage::ItemType::kCompositePreset, id);
 }
-
 } // namespace guitarfx

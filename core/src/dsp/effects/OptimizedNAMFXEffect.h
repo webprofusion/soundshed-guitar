@@ -19,7 +19,6 @@
 
 namespace guitarfx
 {
-
 /**
  * Optimized Neural FX effect variant.
  *
@@ -57,5 +56,4 @@ inline void RegisterOptimizedNAMFXEffect()
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<OptimizedNAMFXEffect>(); });
 }
-
 } // namespace guitarfx

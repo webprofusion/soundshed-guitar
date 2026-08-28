@@ -45,6 +45,7 @@ template <typename T> inline T SwapEndian(T value)
 template <typename T> inline T ReadLittleEndian(std::ifstream& stream)
 {
     T value;
+
     if (!ReadValue(stream, value))
     {
         return {};
@@ -61,6 +62,7 @@ template <typename T> inline T ReadLittleEndian(std::ifstream& stream)
 template <typename T> inline T ReadBigEndian(std::ifstream& stream)
 {
     T value;
+
     if (!ReadValue(stream, value))
     {
         return {};
@@ -77,10 +79,12 @@ template <typename T> inline T ReadBigEndian(std::ifstream& stream)
 inline std::uint32_t ReadFourCC(std::ifstream& stream)
 {
     std::uint32_t value;
+
     if (!ReadValue(stream, value))
     {
         return 0;
     }
+
     return value;
 }
 
@@ -97,6 +101,7 @@ inline bool LoadWavFile(const std::filesystem::path& path, IRWavData& out)
     out = {};
 
     std::ifstream file(path, std::ios::binary);
+
     if (!file)
     {
         return false;
@@ -106,7 +111,9 @@ inline bool LoadWavFile(const std::filesystem::path& path, IRWavData& out)
     {
         return false;
     }
+
     ReadLittleEndian<std::uint32_t>(file); // file size
+
     if (ReadFourCC(file) != MakeFourCC('W', 'A', 'V', 'E'))
     {
         return false;
@@ -145,6 +152,7 @@ inline bool LoadWavFile(const std::filesystem::path& path, IRWavData& out)
                 ReadLittleEndian<std::uint32_t>(file);               // channelMask
                 audioFormat = ReadLittleEndian<std::uint16_t>(file); // SubFormat
                 file.seekg(14, std::ios::cur);                       // Skip rest of GUID
+
                 if (chunkSize > 40)
                 {
                     file.seekg(chunkSize - 40, std::ios::cur);
@@ -170,12 +178,14 @@ inline bool LoadWavFile(const std::filesystem::path& path, IRWavData& out)
             }
 
             const std::size_t bytesPerSample = bitsPerSample / 8;
+
             if (bytesPerSample == 0)
             {
                 return false;
             }
 
             const std::size_t totalSamples = chunkSize / bytesPerSample;
+
             if (totalSamples == 0)
             {
                 return false;
@@ -254,6 +264,7 @@ inline bool LoadWavFile(const std::filesystem::path& path, IRWavData& out)
 inline void DownmixToMono(const IRWavData& data, std::vector<float>& mono)
 {
     mono.clear();
+
     if (data.samples.empty())
     {
         return;
@@ -267,14 +278,17 @@ inline void DownmixToMono(const IRWavData& data, std::vector<float>& mono)
 
     const std::size_t frames = data.samples.size() / data.channels;
     mono.assign(frames, 0.0f);
+
     for (std::size_t frame = 0; frame < frames; ++frame)
     {
         float sum = 0.0f;
         const std::size_t base = frame * data.channels;
+
         for (std::uint16_t channel = 0; channel < data.channels; ++channel)
         {
             sum += data.samples[base + channel];
         }
+
         mono[frame] = sum / static_cast<float>(data.channels);
     }
 }
@@ -283,6 +297,7 @@ inline void SplitToStereo(const IRWavData& data, std::vector<float>& left, std::
 {
     left.clear();
     right.clear();
+
     if (data.samples.empty())
     {
         return;
@@ -298,6 +313,7 @@ inline void SplitToStereo(const IRWavData& data, std::vector<float>& left, std::
     const std::size_t frames = data.samples.size() / data.channels;
     left.resize(frames, 0.0f);
     right.resize(frames, 0.0f);
+
     for (std::size_t frame = 0; frame < frames; ++frame)
     {
         const std::size_t base = frame * data.channels;
@@ -313,6 +329,7 @@ inline void SplitToQuad(const IRWavData& data, std::vector<float>& ll, std::vect
     lr.clear();
     rl.clear();
     rr.clear();
+
     if (data.samples.empty() || data.channels < 4)
     {
         return;
@@ -323,6 +340,7 @@ inline void SplitToQuad(const IRWavData& data, std::vector<float>& ll, std::vect
     lr.resize(frames, 0.0f);
     rl.resize(frames, 0.0f);
     rr.resize(frames, 0.0f);
+
     for (std::size_t frame = 0; frame < frames; ++frame)
     {
         const std::size_t base = frame * data.channels;
@@ -352,6 +370,7 @@ inline void ResampleLinear(std::vector<float>& samples, double sourceRate, doubl
         const double frac = sourceIndex - static_cast<double>(indexA);
         resampled[i] = static_cast<float>((1.0 - frac) * samples[indexA] + frac * samples[indexB]);
     }
+
     samples = std::move(resampled);
 }
 
@@ -374,6 +393,7 @@ inline void ResampleSinc(std::vector<float>& samples, double sourceRate, double 
     const double ratio = targetRate / sourceRate;
     const double cutoff = std::min(ratio, 1.0); // anti-alias cutoff at min(source, target) rate
     const std::size_t newSize = static_cast<std::size_t>(std::ceil(static_cast<double>(samples.size()) * ratio));
+
     if (newSize == 0)
     {
         samples.clear();
@@ -395,6 +415,7 @@ inline void ResampleSinc(std::vector<float>& samples, double sourceRate, double 
         for (int t = -kHalfTaps; t <= kHalfTaps; ++t)
         {
             const int idx = center + t;
+
             if (idx < 0 || idx >= srcLen)
             {
                 continue;
@@ -405,6 +426,7 @@ inline void ResampleSinc(std::vector<float>& samples, double sourceRate, double 
             const double xScaled = x * cutoff;
 
             double sinc;
+
             if (std::fabs(xScaled) < 1e-10)
             {
                 sinc = 1.0;
@@ -436,6 +458,7 @@ inline void ResampleSinc(std::vector<float>& samples, double sourceRate, double 
 inline double Read80BitExtendedFromStream(std::ifstream& stream)
 {
     std::array<std::uint8_t, 10> buf{};
+
     if (!stream.read(reinterpret_cast<char*>(buf.data()), 10))
     {
         return 0.0;
@@ -445,6 +468,7 @@ inline double Read80BitExtendedFromStream(std::ifstream& stream)
     const std::uint16_t biasedExp = static_cast<std::uint16_t>(((buf[0] & 0x7Fu) << 8u) | buf[1]);
 
     std::uint64_t mantissa = 0;
+
     for (int i = 0; i < 8; ++i)
     {
         mantissa = (mantissa << 8u) | buf[2 + i];
@@ -472,6 +496,7 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
     out = {};
 
     std::ifstream file(path, std::ios::binary);
+
     if (!file)
     {
         return false;
@@ -479,10 +504,12 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
 
     // FORM header (12 bytes)
     std::array<char, 4> formId{}, formType{};
+
     if (!file.read(formId.data(), 4))
     {
         return false;
     }
+
     if (std::strncmp(formId.data(), "FORM", 4) != 0)
     {
         return false;
@@ -494,7 +521,9 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
     {
         return false;
     }
+
     const bool isAifc = std::strncmp(formType.data(), "AIFC", 4) == 0;
+
     if (!isAifc && std::strncmp(formType.data(), "AIFF", 4) != 0)
     {
         return false;
@@ -525,11 +554,14 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
     while (file && !dataLoaded)
     {
         std::array<char, 4> chunkIdBuf{};
+
         if (!file.read(chunkIdBuf.data(), 4))
         {
             break;
         }
+
         const std::uint32_t chunkSize = ReadBigEndian<std::uint32_t>(file);
+
         if (!file)
         {
             break;
@@ -572,14 +604,17 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
             {
                 return false;
             }
+
             if (isLittleEndian && bitsPerSample != 16)
             {
                 return false;
             }
+
             if (isFloat32 && bitsPerSample != 32)
             {
                 return false;
             }
+
             if (isFloat64 && bitsPerSample != 64)
             {
                 return false;
@@ -589,12 +624,14 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
             ReadBigEndian<std::uint32_t>(file); // blockSize  (unused for uncompressed)
 
             const std::size_t bytesPerSample = static_cast<std::size_t>(bitsPerSample) / 8u;
+
             if (bytesPerSample == 0)
             {
                 return false;
             }
 
             const std::size_t totalSamples = static_cast<std::size_t>(numFrames) * static_cast<std::size_t>(channels);
+
             if (totalSamples == 0)
             {
                 return false;
@@ -618,11 +655,13 @@ inline bool LoadAiffFile(const std::filesystem::path& path, IRWavData& out)
                 {
                     std::array<std::uint8_t, 8> buf{};
                     file.read(reinterpret_cast<char*>(buf.data()), 8);
+
                     // Big-endian 64-bit float — swap bytes on little-endian host
                     if constexpr (std::endian::native == std::endian::little)
                     {
                         std::reverse(buf.begin(), buf.end());
                     }
+
                     double d;
                     std::memcpy(&d, buf.data(), 8);
                     samples[i] = static_cast<float>(d);
@@ -714,6 +753,5 @@ inline bool LoadAudioFile(const std::filesystem::path& path, IRWavData& out)
 
     return LoadWavFile(path, out);
 }
-
 } // namespace irwav
 } // namespace guitarfx

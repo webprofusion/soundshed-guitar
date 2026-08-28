@@ -45,6 +45,7 @@ double Read80BitExtended(const std::uint8_t* d)
     const std::uint16_t biasedExp = static_cast<std::uint16_t>(((d[0] & 0x7Fu) << 8u) | d[1]);
 
     std::uint64_t mantissa = 0;
+
     for (int i = 0; i < 8; ++i)
     {
         mantissa = (mantissa << 8u) | d[2 + i];
@@ -61,12 +62,10 @@ double Read80BitExtended(const std::uint8_t* d)
     double result = static_cast<double>(mantissa) * std::pow(2.0, exponent);
     return sign ? -result : result;
 }
-
 } // namespace
 
 namespace guitarfx::util
 {
-
 // -----------------------------------------------------------------------------
 // AIFF / AIFC decoder
 // -----------------------------------------------------------------------------
@@ -85,6 +84,7 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
     }
 
     const bool isAifc = std::memcmp(bytes.data() + 8, "AIFC", 4) == 0;
+
     if (!isAifc && std::memcmp(bytes.data() + 8, "AIFF", 4) != 0)
     {
         return std::nullopt;
@@ -122,6 +122,7 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
     bool ssndFound = false;
 
     std::size_t offset = 12;
+
     while (offset + 8 <= bytes.size())
     {
         const char* idPtr = reinterpret_cast<const char*>(bytes.data() + offset);
@@ -140,6 +141,7 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
             {
                 return std::nullopt;
             }
+
             numChannels = ReadU16BE(bytes.data() + chunkDataOff);
             numFrames = ReadU32BE(bytes.data() + chunkDataOff + 2);
             sampleSize = ReadU16BE(bytes.data() + chunkDataOff + 6);
@@ -151,12 +153,14 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
                 {
                     return std::nullopt;
                 }
+
                 comprType = ReadU32BE(bytes.data() + chunkDataOff + 18);
             }
             else
             {
                 comprType = kNONE; // plain AIFF is always big-endian PCM
             }
+
             commFound = true;
         }
         else if (chunkId == "SSND")
@@ -165,6 +169,7 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
             {
                 return std::nullopt;
             }
+
             const std::uint32_t dataOffset = ReadU32BE(bytes.data() + chunkDataOff);
             // blockSize word (chunkDataOff+4) is unused for uncompressed audio
             ssndBodyStart = chunkDataOff + 8 + dataOffset;
@@ -180,10 +185,12 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
     {
         return std::nullopt;
     }
+
     if (numChannels == 0 || numFrames == 0 || sampleSize == 0)
     {
         return std::nullopt;
     }
+
     if (sampleRate <= 0.0)
     {
         return std::nullopt;
@@ -205,16 +212,19 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
     {
         return std::nullopt;
     }
+
     if (isFloat32 && sampleSize != 32)
     {
         return std::nullopt;
     }
+
     if (isFloat64 && sampleSize != 64)
     {
         return std::nullopt;
     }
 
     const std::size_t bytesPerSample = static_cast<std::size_t>(sampleSize) / 8u;
+
     if (bytesPerSample == 0)
     {
         return std::nullopt;
@@ -239,6 +249,7 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
     for (std::size_t frame = 0; frame < numFrames; ++frame)
     {
         const std::size_t frameBase = frame * blockAlign;
+
         for (std::uint16_t ch = 0; ch < numChannels; ++ch)
         {
             const std::uint8_t* s = pcm + frameBase + ch * bytesPerSample;
@@ -275,10 +286,12 @@ std::optional<DecodedWav> DecodePcmAiff(const std::vector<std::uint8_t>& bytes)
                 case 24: {
                     std::int32_t v = (static_cast<std::int32_t>(s[0]) << 16) | (static_cast<std::int32_t>(s[1]) << 8) |
                                      static_cast<std::int32_t>(s[2]);
+
                     if (v & 0x800000)
                     {
                         v |= ~0xFFFFFF; // sign-extend
                     }
+
                     sample = static_cast<double>(v) / 8388608.0;
                     break;
                 }
@@ -320,6 +333,7 @@ std::optional<DecodedWav> DecodeMp3(const std::vector<std::uint8_t>& bytes)
         {
             free(info.buffer); // NOLINT(*-no-malloc)
         }
+
         return std::nullopt;
     }
 
@@ -381,5 +395,4 @@ std::optional<DecodedWav> DecodeAudioBytes(const std::vector<std::uint8_t>& byte
 
     return std::nullopt;
 }
-
 } // namespace guitarfx::util

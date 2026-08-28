@@ -56,6 +56,7 @@ std::filesystem::path BuildPathForStorage(const std::filesystem::path& runtimePa
 
     std::error_code ec;
     auto normalizedRuntimePath = std::filesystem::weakly_canonical(runtimePath, ec);
+
     if (ec)
     {
         normalizedRuntimePath = runtimePath.lexically_normal();
@@ -63,12 +64,14 @@ std::filesystem::path BuildPathForStorage(const std::filesystem::path& runtimePa
 
     ec.clear();
     auto normalizedBase = std::filesystem::weakly_canonical(baseDirectory.value(), ec);
+
     if (ec)
     {
         normalizedBase = baseDirectory.value().lexically_normal();
     }
 
     const auto relativePath = normalizedRuntimePath.lexically_relative(normalizedBase);
+
     if (!relativePath.empty() && !relativePath.is_absolute() && !HasUnsafeRelativeSegments(relativePath))
     {
         return relativePath;
@@ -81,38 +84,47 @@ nlohmann::json SerializePresetResourceRef(const ResourceRef& ref,
                                           const std::optional<std::filesystem::path>& baseDirectory)
 {
     nlohmann::json json;
+
     if (!ref.resourceType.empty())
     {
         json["resourceType"] = ref.resourceType;
     }
+
     if (!ref.resourceId.empty())
     {
         json["resourceId"] = ref.resourceId;
     }
+
     if (!ref.filePath.empty())
     {
         json["filePath"] = util::PathToUtf8(BuildPathForStorage(ref.filePath, baseDirectory));
     }
+
     if (!ref.embeddedId.empty())
     {
         json["embeddedId"] = ref.embeddedId;
     }
+
     if (!ref.parameterId.empty())
     {
         json["parameterId"] = ref.parameterId;
     }
+
     if (ref.parameterValue.has_value())
     {
         json["parameterValue"] = *ref.parameterValue;
     }
+
     if (!ref.parameters.empty())
     {
         json["parameters"] = nlohmann::json::object();
+
         for (const auto& [key, value] : ref.parameters)
         {
             json["parameters"][key] = value;
         }
     }
+
     return json;
 }
 
@@ -126,10 +138,12 @@ ResourceRef DeserializePresetResourceRef(const nlohmann::json& json,
     ref.filePath = ResolveStoredPathForRuntime(util::PathFromUtf8(json.value("filePath", "")), baseDirectory);
     ref.embeddedId = json.value("embeddedId", "");
     ref.parameterId = json.value("parameterId", "");
+
     if (json.contains("parameterValue") && json["parameterValue"].is_number())
     {
         ref.parameterValue = json["parameterValue"].get<double>();
     }
+
     if (json.contains("parameters") && json["parameters"].is_object())
     {
         for (const auto& [key, value] : json["parameters"].items())
@@ -140,6 +154,7 @@ ResourceRef DeserializePresetResourceRef(const nlohmann::json& json,
             }
         }
     }
+
     return ref;
 }
 
@@ -148,14 +163,17 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
     nlohmann::json json;
     json["id"] = node.id;
     json["type"] = node.type;
+
     if (!node.category.empty())
     {
         json["category"] = node.category;
     }
+
     if (!node.label.empty())
     {
         json["label"] = node.label;
     }
+
     if (!node.enabled)
     {
         json["enabled"] = node.enabled;
@@ -164,6 +182,7 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
     if (!node.params.empty())
     {
         json["params"] = nlohmann::json::object();
+
         for (const auto& [key, value] : node.params)
         {
             json["params"][key] = value;
@@ -173,6 +192,7 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
     if (!node.config.empty())
     {
         json["config"] = nlohmann::json::object();
+
         for (const auto& [key, value] : node.config)
         {
             json["config"][key] = value;
@@ -180,9 +200,11 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
     }
 
     const bool isBlendRef = node.type == EffectGuids::kAmpNamBlend && node.config.find("blendId") != node.config.end();
+
     if (!node.resources.empty() && !isBlendRef)
     {
         json["resources"] = nlohmann::json::array();
+
         for (const auto& res : node.resources)
         {
             if (res.IsValid())
@@ -191,6 +213,7 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
             }
         }
     }
+
     return json;
 }
 
@@ -203,6 +226,7 @@ GraphNode DeserializeGraphNode(const nlohmann::json& json, const std::optional<s
     node.category = json.value("category", "");
     // Support both "label" and "displayName"
     node.label = json.value("label", json.value("displayName", ""));
+
     // Support both "enabled" and "bypassed" (inverted)
     if (json.contains("enabled"))
     {
@@ -249,6 +273,7 @@ GraphNode DeserializeGraphNode(const nlohmann::json& json, const std::optional<s
             }
         }
     }
+
     return node;
 }
 
@@ -257,18 +282,22 @@ nlohmann::json SerializeGraphEdge(const GraphEdge& edge)
     nlohmann::json json;
     json["from"] = edge.from;
     json["to"] = edge.to;
+
     if (edge.fromPort != 0)
     {
         json["fromPort"] = edge.fromPort;
     }
+
     if (edge.toPort != 0)
     {
         json["toPort"] = edge.toPort;
     }
+
     if (edge.gain != 1.0)
     {
         json["gain"] = edge.gain;
     }
+
     return json;
 }
 
@@ -290,18 +319,22 @@ nlohmann::json SerializeEmbeddedResource(const EmbeddedResource& res,
     json["id"] = res.id;
     json["type"] = res.type;
     json["name"] = res.name;
+
     if (!res.hash.empty())
     {
         json["hash"] = res.hash;
     }
+
     if (!res.data.empty())
     {
         json["data"] = res.data;
     }
+
     if (!res.originalPath.empty())
     {
         json["originalPath"] = util::PathToUtf8(BuildPathForStorage(res.originalPath, baseDirectory));
     }
+
     return json;
 }
 
@@ -322,6 +355,7 @@ nlohmann::json SerializePresetScene(const PresetScene& scene, const std::optiona
 {
     nlohmann::json json;
     json["id"] = scene.id;
+
     if (!scene.title.empty())
     {
         json["title"] = scene.title;
@@ -329,15 +363,19 @@ nlohmann::json SerializePresetScene(const PresetScene& scene, const std::optiona
 
     nlohmann::json graph;
     graph["nodes"] = nlohmann::json::array();
+
     for (const auto& node : scene.graph.nodes)
     {
         graph["nodes"].push_back(SerializeGraphNode(node, baseDirectory));
     }
+
     graph["edges"] = nlohmann::json::array();
+
     for (const auto& edge : scene.graph.edges)
     {
         graph["edges"].push_back(SerializeGraphEdge(edge));
     }
+
     json["graph"] = std::move(graph);
     return json;
 }
@@ -348,9 +386,11 @@ PresetScene DeserializePresetScene(const nlohmann::json& json,
     PresetScene scene;
     scene.id = json.value("id", "");
     scene.title = json.value("title", "");
+
     if (json.contains("graph") && json["graph"].is_object())
     {
         const auto& graph = json["graph"];
+
         if (graph.contains("nodes") && graph["nodes"].is_array())
         {
             for (const auto& nodeJson : graph["nodes"])
@@ -358,6 +398,7 @@ PresetScene DeserializePresetScene(const nlohmann::json& json,
                 scene.graph.nodes.push_back(DeserializeGraphNode(nodeJson, baseDirectory));
             }
         }
+
         if (graph.contains("edges") && graph["edges"].is_array())
         {
             for (const auto& edgeJson : graph["edges"])
@@ -366,6 +407,7 @@ PresetScene DeserializePresetScene(const nlohmann::json& json,
             }
         }
     }
+
     EnsurePresetBoundaryGainNodes(scene.graph);
     return scene;
 }
@@ -382,30 +424,37 @@ std::string PresetStorage::SerializeToJson(const Preset& preset)
     json["id"] = normalizedPreset.id;
     json["name"] = normalizedPreset.name;
     json["version"] = normalizedPreset.version;
+
     if (!normalizedPreset.author.empty())
     {
         json["author"] = normalizedPreset.author;
     }
+
     if (!normalizedPreset.category.empty())
     {
         json["category"] = normalizedPreset.category;
     }
+
     if (!normalizedPreset.description.empty())
     {
         json["description"] = normalizedPreset.description;
     }
+
     if (!normalizedPreset.createdAt.empty())
     {
         json["createdAt"] = normalizedPreset.createdAt;
     }
+
     if (!normalizedPreset.modifiedAt.empty())
     {
         json["modifiedAt"] = normalizedPreset.modifiedAt;
     }
+
     if (!normalizedPreset.tags.empty())
     {
         json["tags"] = normalizedPreset.tags;
     }
+
     if (normalizedPreset.designedPeakInputDbfs.has_value())
     {
         json["designedPeakInputDbfs"] = normalizedPreset.designedPeakInputDbfs.value();
@@ -418,6 +467,7 @@ std::string PresetStorage::SerializeToJson(const Preset& preset)
     if (!normalizedPreset.scenes.empty())
     {
         json["scenes"] = nlohmann::json::array();
+
         for (const auto& scene : normalizedPreset.scenes)
         {
             json["scenes"].push_back(SerializePresetScene(scene, noBaseDirectory));
@@ -427,15 +477,19 @@ std::string PresetStorage::SerializeToJson(const Preset& preset)
     {
         nlohmann::json graph;
         graph["nodes"] = nlohmann::json::array();
+
         for (const auto& node : normalizedPreset.graph.nodes)
         {
             graph["nodes"].push_back(SerializeGraphNode(node, noBaseDirectory));
         }
+
         graph["edges"] = nlohmann::json::array();
+
         for (const auto& edge : normalizedPreset.graph.edges)
         {
             graph["edges"].push_back(SerializeGraphEdge(edge));
         }
+
         json["graph"] = graph;
     }
 
@@ -443,6 +497,7 @@ std::string PresetStorage::SerializeToJson(const Preset& preset)
     if (!normalizedPreset.embeddedResources.empty())
     {
         json["embeddedResources"] = nlohmann::json::array();
+
         for (const auto& res : normalizedPreset.embeddedResources)
         {
             json["embeddedResources"].push_back(SerializeEmbeddedResource(res, noBaseDirectory));
@@ -463,6 +518,7 @@ std::optional<Preset> PresetStorage::DeserializeFromJson(const std::string& json
         // Metadata
         preset.id = json.value("id", "");
         preset.name = json.value("name", "");
+
         // version can be an int or a string like "1.0"
         if (json.contains("version"))
         {
@@ -476,11 +532,13 @@ std::optional<Preset> PresetStorage::DeserializeFromJson(const std::string& json
                 preset.version = std::stoi(json["version"].get<std::string>());
             }
         }
+
         // Also check formatVersion as an alternative
         if (json.contains("formatVersion") && json["formatVersion"].is_number())
         {
             preset.version = json["formatVersion"].get<int>();
         }
+
         preset.author = json.value("author", "");
         preset.category = json.value("category", "");
         preset.description = json.value("description", "");
@@ -494,6 +552,7 @@ std::optional<Preset> PresetStorage::DeserializeFromJson(const std::string& json
                 preset.tags.push_back(tag.get<std::string>());
             }
         }
+
         if (json.contains("designedPeakInputDbfs") && json["designedPeakInputDbfs"].is_number())
         {
             preset.designedPeakInputDbfs = json["designedPeakInputDbfs"].get<double>();
@@ -563,10 +622,12 @@ bool PresetStorage::SaveToFile(const Preset& preset, const std::filesystem::path
     {
         std::filesystem::create_directories(path.parent_path());
         std::ofstream file(path);
+
         if (!file.is_open())
         {
             return false;
         }
+
         const std::optional<std::filesystem::path> baseDirectory = path.parent_path();
         Preset normalizedPreset = preset;
         NormalizePresetScenes(normalizedPreset);
@@ -576,26 +637,32 @@ bool PresetStorage::SaveToFile(const Preset& preset, const std::filesystem::path
         json["id"] = normalizedPreset.id;
         json["name"] = normalizedPreset.name;
         json["version"] = normalizedPreset.version;
+
         if (!normalizedPreset.author.empty())
         {
             json["author"] = normalizedPreset.author;
         }
+
         if (!normalizedPreset.category.empty())
         {
             json["category"] = normalizedPreset.category;
         }
+
         if (!normalizedPreset.description.empty())
         {
             json["description"] = normalizedPreset.description;
         }
+
         if (!normalizedPreset.createdAt.empty())
         {
             json["createdAt"] = normalizedPreset.createdAt;
         }
+
         if (!normalizedPreset.modifiedAt.empty())
         {
             json["modifiedAt"] = normalizedPreset.modifiedAt;
         }
+
         if (!normalizedPreset.tags.empty())
         {
             json["tags"] = normalizedPreset.tags;
@@ -608,6 +675,7 @@ bool PresetStorage::SaveToFile(const Preset& preset, const std::filesystem::path
         if (!normalizedPreset.scenes.empty())
         {
             json["scenes"] = nlohmann::json::array();
+
             for (const auto& scene : normalizedPreset.scenes)
             {
                 json["scenes"].push_back(SerializePresetScene(scene, baseDirectory));
@@ -617,21 +685,26 @@ bool PresetStorage::SaveToFile(const Preset& preset, const std::filesystem::path
         {
             nlohmann::json graph;
             graph["nodes"] = nlohmann::json::array();
+
             for (const auto& node : normalizedPreset.graph.nodes)
             {
                 graph["nodes"].push_back(SerializeGraphNode(node, baseDirectory));
             }
+
             graph["edges"] = nlohmann::json::array();
+
             for (const auto& edge : normalizedPreset.graph.edges)
             {
                 graph["edges"].push_back(SerializeGraphEdge(edge));
             }
+
             json["graph"] = graph;
         }
 
         if (!normalizedPreset.embeddedResources.empty())
         {
             json["embeddedResources"] = nlohmann::json::array();
+
             for (const auto& res : normalizedPreset.embeddedResources)
             {
                 json["embeddedResources"].push_back(SerializeEmbeddedResource(res, baseDirectory));
@@ -652,6 +725,7 @@ std::optional<Preset> PresetStorage::LoadFromFile(const std::filesystem::path& p
     try
     {
         std::ifstream file(path);
+
         if (!file.is_open())
         {
             return std::nullopt;
@@ -662,6 +736,7 @@ std::optional<Preset> PresetStorage::LoadFromFile(const std::filesystem::path& p
 
         preset.id = json.value("id", "");
         preset.name = json.value("name", "");
+
         if (json.contains("version"))
         {
             if (json["version"].is_number())
@@ -673,10 +748,12 @@ std::optional<Preset> PresetStorage::LoadFromFile(const std::filesystem::path& p
                 preset.version = std::stoi(json["version"].get<std::string>());
             }
         }
+
         if (json.contains("formatVersion") && json["formatVersion"].is_number())
         {
             preset.version = json["formatVersion"].get<int>();
         }
+
         preset.author = json.value("author", "");
         preset.category = json.value("category", "");
         preset.description = json.value("description", "");
@@ -695,6 +772,7 @@ std::optional<Preset> PresetStorage::LoadFromFile(const std::filesystem::path& p
         preset.globalSignalChain.reset();
 
         const std::optional<std::filesystem::path> baseDirectory = path.parent_path();
+
         if (json.contains("graph") && json["graph"].is_object())
         {
             const auto& graph = json["graph"];
@@ -760,6 +838,7 @@ bool PresetStorage::SaveToStore(storage::JsonStore& store, const Preset& preset)
 std::optional<Preset> PresetStorage::LoadFromStore(const storage::JsonStore& store, const std::string& id)
 {
     const auto raw = store.GetRaw(storage::ItemType::kPreset, id);
+
     if (!raw)
     {
         return std::nullopt;
@@ -809,6 +888,7 @@ std::vector<Preset> PresetStorage::LoadAllFromDirectory(const std::filesystem::p
         if (entry.is_regular_file() && entry.path().extension() == ".json")
         {
             auto preset = LoadFromFile(entry.path());
+
             if (preset)
             {
                 presets.push_back(*preset);
@@ -829,5 +909,4 @@ void PresetStorage::SaveAllToDirectory(const std::vector<Preset>& presets, const
         (void)SaveToFile(preset, directory / filename);
     }
 }
-
 } // namespace guitarfx
