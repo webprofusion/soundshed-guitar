@@ -1734,10 +1734,10 @@ void PluginController::HandleGetPerformanceStatsRequest()
 
 void PluginController::HandleSetSignalDiagnosticsEnabledRequest(const nlohmann::json& payload)
 {
-    // Signal diagnostics are always on; there is no preference to store. The message is
-    // kept because it is still the UI's way of asking for a fresh node roster.
+    // No preference to store: diagnostics follow UI visibility (see "uiVisibility"). The
+    // message survives as the UI's request for a fresh node roster, which implies it is up.
     (void)payload;
-    mPresetMixer.SetSignalDiagnosticsEnabled(true);
+    mPresetMixer.SetSignalDiagnosticsEnabled(mTelemetry->IsUiVisible());
     mTelemetry->MarkRosterDirty();
 }
 

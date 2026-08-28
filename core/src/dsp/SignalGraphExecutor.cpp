@@ -795,6 +795,7 @@ namespace guitarfx
         state.peak.store(0.0, std::memory_order_relaxed);
         state.rms.store(0.0, std::memory_order_relaxed);
         state.clipCount.store(0, std::memory_order_relaxed);
+        state.processingTimeUs.store(std::numeric_limits<double>::quiet_NaN(), std::memory_order_relaxed);
       }
     }
 
@@ -847,7 +848,6 @@ namespace guitarfx
       }
     }
 
-    std::mutex statsMutex;
     for (std::size_t levelIndex = 0; levelIndex < mExecutionLevels.size(); ++levelIndex)
     {
       const auto &level = mExecutionLevels[levelIndex];
@@ -868,8 +868,6 @@ namespace guitarfx
           auto &item = mWorkItems[static_cast<size_t>(i)];
           item.nodeId = &level[static_cast<size_t>(i)];
           item.numSamples = numSamples;
-          item.stats = &localStats;
-          item.statsMutex = &statsMutex;
           item.diagnosticsEnabled = diagnosticsEnabled;
         }
 
@@ -892,8 +890,6 @@ namespace guitarfx
             break;
           ProcessNodeById(*mWorkItems[static_cast<size_t>(idx)].nodeId,
                           numSamples,
-                          localStats,
-                          &statsMutex,
                           diagnosticsEnabled);
           mParallelDoneCount.fetch_add(1, std::memory_order_release);
         }
@@ -902,12 +898,12 @@ namespace guitarfx
           std::this_thread::yield();
 
         for (int i = wi; i < levelCount; ++i)
-          ProcessNodeById(level[static_cast<size_t>(i)], numSamples, localStats, nullptr, diagnosticsEnabled);
+          ProcessNodeById(level[static_cast<size_t>(i)], numSamples, diagnosticsEnabled);
       }
       else
       {
         for (const auto &nodeId : level)
-          ProcessNodeById(nodeId, numSamples, localStats, nullptr, diagnosticsEnabled);
+          ProcessNodeById(nodeId, numSamples, diagnosticsEnabled);
       }
     }
 
@@ -968,8 +964,6 @@ namespace guitarfx
 
   void SignalGraphExecutor::ProcessNodeById(const std::string &nodeId,
                                             int numSamples,
-                                            DSPPerformanceStats &stats,
-                                            std::mutex *statsMutex,
                                             bool diagnosticsEnabled)
   {
     thread_local std::vector<float> tempLeft;
@@ -1065,6 +1059,28 @@ namespace guitarfx
     if (state->hasInput)
       state->hasStereoSignal = incomingStereoSignal;
 
+    // Time the node only when diagnostics are on, and publish into the node's own atomic
+    // rather than a string-keyed map. The maps used to be filled here, on the audio thread,
+    // from a stats object rebuilt every block -- so every record was a std::map insert:
+    // a heap allocation plus a string copy, per node, per graph, per block. They are now
+    // assembled in GetPerformanceStats() on the message thread, which is where node latency
+    // has always been collected. The relaxed store needs no lock, so a node in a parallel
+    // level no longer contends with its siblings either.
+    const auto processTimed = [&](auto &&invoke)
+    {
+      if (!diagnosticsEnabled)
+      {
+        invoke();
+        return;
+      }
+
+      const auto nodeStart = std::chrono::high_resolution_clock::now();
+      invoke();
+      const auto nodeEnd = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
+      state->processingTimeUs.store(nodeDuration.count(), std::memory_order_relaxed);
+    };
+
     if (state->processor && state->hasInput)
     {
       const bool forceNamMonoByInputMode = mNamInputModeMono && IsNamNodeType(state->type);
@@ -1088,21 +1104,7 @@ namespace guitarfx
         {
           float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
           float *outPtrs[2] = {tempLeft.data(), tempRight.data()};
-          auto nodeStart = std::chrono::high_resolution_clock::now();
-          state->processor->Process(inPtrs, outPtrs, numSamples);
-          auto nodeEnd = std::chrono::high_resolution_clock::now();
-          const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-          if (statsMutex)
-          {
-            std::lock_guard<std::mutex> lock(*statsMutex);
-            stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-            stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          }
-          else
-          {
-            stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-            stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          }
+          processTimed([&]() { state->processor->Process(inPtrs, outPtrs, numSamples); });
           std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
           std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
           if (!incomingStereoSignal && !mixerHasNonCenterPan && !NodeMayProduceStereo(state->type, state->category))
@@ -1118,21 +1120,7 @@ namespace guitarfx
       }
       else if (state->processor->IsEnabled() && nodeCanMono)
       {
-        auto nodeStart = std::chrono::high_resolution_clock::now();
-        state->processor->ProcessMono(state->bufferLeft.data(), tempLeft.data(), numSamples);
-        auto nodeEnd = std::chrono::high_resolution_clock::now();
-        const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-        if (statsMutex)
-        {
-          std::lock_guard<std::mutex> lock(*statsMutex);
-          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-        }
-        else
-        {
-          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-        }
+        processTimed([&]() { state->processor->ProcessMono(state->bufferLeft.data(), tempLeft.data(), numSamples); });
         std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
         std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
         state->hasStereoSignal = false;
@@ -1141,21 +1129,7 @@ namespace guitarfx
       {
         float *inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
         float *outPtrs[2] = {tempLeft.data(), tempRight.data()};
-        auto nodeStart = std::chrono::high_resolution_clock::now();
-        state->processor->Process(inPtrs, outPtrs, numSamples);
-        auto nodeEnd = std::chrono::high_resolution_clock::now();
-        const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-        if (statsMutex)
-        {
-          std::lock_guard<std::mutex> lock(*statsMutex);
-          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-        }
-        else
-        {
-          stats.nodeProcessingTimesUs[nodeId] = nodeDuration.count();
-          stats.scopedNodeProcessingTimesUs[nodeId] = nodeDuration.count();
-        }
+        processTimed([&]() { state->processor->Process(inPtrs, outPtrs, numSamples); });
         std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
         std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
         state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category) || state->processor->ProducesStereoOutput();
@@ -1235,9 +1209,9 @@ namespace guitarfx
           break;
 
         const auto &item = mWorkItems[static_cast<size_t>(idx)];
-        if (item.nodeId && item.stats && item.statsMutex)
+        if (item.nodeId)
         {
-          ProcessNodeById(*item.nodeId, item.numSamples, *item.stats, item.statsMutex, item.diagnosticsEnabled);
+          ProcessNodeById(*item.nodeId, item.numSamples, item.diagnosticsEnabled);
         }
         mParallelDoneCount.fetch_add(1, std::memory_order_release);
       }
@@ -1248,6 +1222,10 @@ namespace guitarfx
   {
     std::lock_guard<std::mutex> lock(mPerformanceStatsMutex);
     auto stats = mLastPerformanceStats;
+    // With diagnostics off the audio thread stops both writing and clearing the per-node
+    // times, so whatever is in them is from whenever it was last on. Report none rather
+    // than stale ones; the block-level totals below are always live.
+    const bool diagnosticsEnabled = mSignalDiagnosticsEnabled.load(std::memory_order_acquire);
     for (const auto& [nodeId, state] : mNodeStates)
     {
       const int latencySamples = (state.processor && state.processor->IsEnabled())
@@ -1255,6 +1233,19 @@ namespace guitarfx
         : 0;
       stats.nodeLatencySamples[nodeId] = latencySamples;
       stats.scopedNodeLatencySamples[nodeId] = latencySamples;
+
+      if (!diagnosticsEnabled)
+        continue;
+
+      // NaN means the node did not run in the last block (bypassed, or no input); leave
+      // it out so the UI renders a blank rather than a zero. Callers scope these ids --
+      // see MultiPresetMixer::mergeStats.
+      const double nodeTimeUs = state.processingTimeUs.load(std::memory_order_relaxed);
+      if (std::isfinite(nodeTimeUs))
+      {
+        stats.nodeProcessingTimesUs[nodeId] = nodeTimeUs;
+        stats.scopedNodeProcessingTimesUs[nodeId] = nodeTimeUs;
+      }
     }
     return stats;
   }

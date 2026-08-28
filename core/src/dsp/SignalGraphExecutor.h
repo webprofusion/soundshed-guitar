@@ -171,6 +171,11 @@ namespace guitarfx
       std::atomic<double> peak{0.0};
       std::atomic<double> rms{0.0};
       std::atomic<int> clipCount{0};
+      // Last block's processing time, or NaN when the node did not run. Published here
+      // rather than into a map so the audio thread never allocates; GetPerformanceStats()
+      // collects it on the message thread, the same way node latency already works. NaN
+      // (not 0) marks "did not run" so a bypassed node stays absent from the stats map.
+      std::atomic<double> processingTimeUs{std::numeric_limits<double>::quiet_NaN()};
     };
 
     void BuildExecutionOrder();
@@ -181,8 +186,6 @@ namespace guitarfx
     [[nodiscard]] const NodeState *FindNodeState(const std::string &id) const;
     void ProcessNodeById(const std::string &nodeId,
                int numSamples,
-               DSPPerformanceStats &stats,
-               std::mutex *statsMutex,
                bool diagnosticsEnabled);
     void StartWorkers(int count);
     void StopWorkers();
@@ -222,8 +225,6 @@ namespace guitarfx
     {
       const std::string *nodeId = nullptr;
       int numSamples = 0;
-      DSPPerformanceStats *stats = nullptr;
-      std::mutex *statsMutex = nullptr;
       bool diagnosticsEnabled = false;
     };
 

@@ -43,6 +43,7 @@ public:
 
     /// Suppresses every feed while false. Set from the UI's visibility message.
     void SetUiVisible(bool visible) { mUiVisible.store(visible, std::memory_order_release); }
+    [[nodiscard]] bool IsUiVisible() const { return mUiVisible.load(std::memory_order_acquire); }
 
     /// Forces the next diagnostics send to re-emit the roster even if the node
     /// set is unchanged — what a graph edit or a reloaded UI needs.

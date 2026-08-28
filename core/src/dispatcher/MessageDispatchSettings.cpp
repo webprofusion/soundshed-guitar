@@ -97,6 +97,10 @@ bool MessageDispatcher::DispatchSettings(PluginController& c,
             ? msg["visible"].get<bool>()
             : true;
         c.mTelemetry->SetUiVisible(visible);
+        // Suppressing the feeds is only half of it: with nobody reading them, the metering
+        // and per-node timing that fill them are pure cost on the audio thread. Switch the
+        // DSP off at the source too, so a hidden editor is genuinely free.
+        c.mPresetMixer.SetSignalDiagnosticsEnabled(visible);
         return true;
     }
     return false;
