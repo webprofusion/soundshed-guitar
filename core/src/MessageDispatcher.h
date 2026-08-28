@@ -56,6 +56,9 @@ private:
     static bool DispatchAutomation(PluginController& controller,
                                    const nlohmann::json& msg,
                                    const std::string& type);
+    static bool DispatchEarPracticePlayer(PluginController& controller,
+                                    const nlohmann::json& msg,
+                                    const std::string& type);
 };
 
 } // namespace guitarfx

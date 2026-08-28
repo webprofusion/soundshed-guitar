@@ -25,6 +25,7 @@
 - Common payloads: state, presetLoaded, loadPreset, setParameter, browseModel, addSignalPathNode, removeSignalPathNode.
 - UI bridge lives in core/ui/ts/bridge.ts and core/ui/ts/messages.ts; native host glue is in juce/source/PluginProcessorAdapter.cpp and juce/source/PluginEditor.cpp.
 - Keep messages backward compatible; guard against missing fields and unknown message types.
+- **Dropped-file paths**: WebView2 is standard Chromium, so a dropped `File`'s `.path` property is always `undefined` — that's an Electron-only extension, not a web standard. Never gate a drop handler on `file.path`. To get file content into the native engine, read bytes in JS (`file.arrayBuffer()`) and send them over the bridge as base64 — see settings.ts's NAM/IR library drop (`importDroppedLibraryFile`) for the established pattern. If the native loader needs a real filesystem path (e.g. to avoid base64-inflating a large file), have the native handler write the received bytes to a temp file and hand off to the existing path-based loader, rather than trying to recover a path client-side.
 - Full spec: docs/user-interface.md
 
 ## Resource References

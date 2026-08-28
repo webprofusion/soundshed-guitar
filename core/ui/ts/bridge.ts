@@ -259,3 +259,64 @@ export function removeCompositePreset(id: string): void {
   postMessage({ type: "removeCompositePreset", id });
   appendLog(`removeCompositePreset → ${id}`);
 }
+
+// ── Ear Practice Player (Jam panel) ────────────────────────────────────────────
+// The engine has no concept of a loop library — only the currently-active
+// loop's bounds and whether looping is on. Loop add/rename/delete/select are
+// pure UI state (see earPracticePlayer.ts) and never round-trip through these.
+
+export function browseEarPracticePlayerFile(): void {
+  postMessage({ type: "browseEarPracticePlayerFile" });
+  appendLog("browseEarPracticePlayerFile");
+}
+
+export function loadEarPracticePlayerFile(path: string): void {
+  postMessage({ type: "loadEarPracticePlayerFile", path });
+  appendLog(`loadEarPracticePlayerFile → ${path}`);
+}
+
+/** For a file dropped on the waveform: WebView2 never exposes a dropped
+ * File's real path (that's Electron-only), so the caller reads its bytes
+ * via file.arrayBuffer() and sends them here as base64 instead. */
+export function loadEarPracticePlayerFileData(fileName: string, dataBase64: string): void {
+  postMessage({ type: "loadEarPracticePlayerFileData", fileName, data: dataBase64 });
+  appendLog(`loadEarPracticePlayerFileData → ${fileName} (${dataBase64.length} b64 chars)`);
+}
+
+export function setEarPracticePlayerTransport(action: "play" | "pause" | "stop"): void {
+  postMessage({ type: "setEarPracticePlayerTransport", action });
+  appendLog(`setEarPracticePlayerTransport → ${action}`);
+}
+
+export function seekEarPracticePlayerFile(seconds: number): void {
+  postMessage({ type: "seekEarPracticePlayerFile", seconds });
+}
+
+export function setEarPracticePlayerSpeed(ratio: number): void {
+  postMessage({ type: "setEarPracticePlayerSpeed", ratio });
+}
+
+export function setEarPracticePlayerPitch(semitones: number): void {
+  postMessage({ type: "setEarPracticePlayerPitch", semitones });
+}
+
+export function setEarPracticePlayerGain(gain: number): void {
+  postMessage({ type: "setEarPracticePlayerGain", gain });
+}
+
+export function setEarPracticePlayerBalance(balance: number): void {
+  postMessage({ type: "setEarPracticePlayerBalance", balance });
+}
+
+/** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
+export function setEarPracticePlayerLoopRegion(region: { startSec: number; endSec: number } | null): void {
+  if (region) {
+    postMessage({ type: "setEarPracticePlayerLoopRegion", startSec: region.startSec, endSec: region.endSec });
+  } else {
+    postMessage({ type: "setEarPracticePlayerLoopRegion" });
+  }
+}
+
+export function setEarPracticePlayerLooping(enabled: boolean): void {
+  postMessage({ type: "setEarPracticePlayerLooping", enabled });
+}

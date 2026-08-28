@@ -51,6 +51,7 @@ namespace guitarfx
 {
 
 class DemoPreviewService;
+class EarPracticePlayerService;
 
 /// How ApplySettingsToRuntime() treats settings a plugin instance owns rather than shares.
 enum class SettingsApplyMode
@@ -365,6 +366,19 @@ private:
     void HandleMarkRiffUsedRequest(const nlohmann::json& payload);
     void HandlePreviewRiffTakeRequest(const nlohmann::json& payload);
     void HandlePreviewCapturedRiffRequest(const nlohmann::json& payload);
+
+    // Ear Practice Player (Jam panel backing-track player)
+    void HandleBrowseEarPracticePlayerFileRequest();
+    void HandleLoadEarPracticePlayerFileRequest(const nlohmann::json& payload);
+    void HandleLoadEarPracticePlayerFileDataRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerTransportRequest(const nlohmann::json& payload);
+    void HandleSeekEarPracticePlayerFileRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerSpeedRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerPitchRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerGainRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerBalanceRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerLoopRegionRequest(const nlohmann::json& payload);
+    void HandleSetEarPracticePlayerLoopingRequest(const nlohmann::json& payload);
 
     // Composite presets (Multi-Rig)
     void HandleSaveCompositePresetRequest(const nlohmann::json& payload);
@@ -900,6 +914,7 @@ private:
     std::string mMetronomeBeatPattern; // e.g. "HLLL"
 
     std::unique_ptr<DemoPreviewService> mDemoPreview;
+    std::unique_ptr<EarPracticePlayerService> mEarPracticePlayer;
 
     struct RiffCaptureConfig
     {
@@ -964,6 +979,7 @@ private:
     int mDSPPerformanceUpdateCounter = 0;
     int mSignalDiagnosticsUpdateCounter = 0;
     int mSpatialPositionUpdateCounter = 0;
+    int mEarPracticePlayerUpdateCounter = 0;
     bool mSpatialPositionsWereSent = false;
     bool mPendingSignalDiagnosticsUpdate = false;
     std::chrono::steady_clock::time_point mLastSignalDiagnosticsUpdateSentAt{};
