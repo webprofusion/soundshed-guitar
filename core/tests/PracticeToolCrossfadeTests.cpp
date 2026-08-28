@@ -1,6 +1,6 @@
 /**
- * @file EarPracticePlayerCrossfadeTests.cpp
- * @brief Focused tests for EarPracticePlayerService's loop-wrap/seek crossfade
+ * @file PracticeToolCrossfadeTests.cpp
+ * @brief Focused tests for PracticeToolService's loop-wrap/seek crossfade
  * logic (ReadSourceWindow / BeginCrossfade), per the design plan's "Loop-
  * boundary handling" requirement: stretch.reset() must never be called on a
  * loop wrap or seek, so wraps are handled entirely in the source domain with
@@ -10,7 +10,7 @@
  * timing involved.
  */
 
-#include "controller/EarPracticePlayerService.h"
+#include "controller/PracticeToolService.h"
 #include "IPluginHost.h"
 
 #include <cmath>
@@ -24,15 +24,15 @@
 namespace guitarfx
 {
 
-// Friend accessor granted by EarPracticePlayerService — exposes just enough
+// Friend accessor granted by PracticeToolService — exposes just enough
 // of its private surface (ReadSourceWindow + the TrackBuffer type) to drive
 // the crossfade logic directly with a synthetic buffer.
-struct EarPracticePlayerServiceTestAccess
+struct PracticeToolServiceTestAccess
 {
-    static std::shared_ptr<EarPracticePlayerService::TrackBuffer> MakeBuffer(
+    static std::shared_ptr<PracticeToolService::TrackBuffer> MakeBuffer(
         std::vector<float> left, std::vector<float> right, double sampleRate)
     {
-        auto buffer = std::make_shared<EarPracticePlayerService::TrackBuffer>();
+        auto buffer = std::make_shared<PracticeToolService::TrackBuffer>();
         buffer->sampleRate = sampleRate;
         buffer->channels = 2;
         buffer->totalFrames = left.size();
@@ -40,8 +40,8 @@ struct EarPracticePlayerServiceTestAccess
         return buffer;
     }
 
-    static int ReadSourceWindow(EarPracticePlayerService& svc,
-                                const std::shared_ptr<EarPracticePlayerService::TrackBuffer>& buffer,
+    static int ReadSourceWindow(PracticeToolService& svc,
+                                const std::shared_ptr<PracticeToolService::TrackBuffer>& buffer,
                                 float* outL, float* outR, std::size_t& cursor, int numFrames)
     {
         return svc.ReadSourceWindow(buffer, outL, outR, cursor, numFrames);
@@ -53,13 +53,13 @@ struct EarPracticePlayerServiceTestAccess
 namespace
 {
 
-using guitarfx::EarPracticePlayerService;
-using guitarfx::EarPracticePlayerServiceTestAccess;
+using guitarfx::PracticeToolService;
+using guitarfx::PracticeToolServiceTestAccess;
 
 constexpr double kSampleRate = 48000.0;
 
 // Minimal IPluginHost stub. The crossfade logic under test never touches the
-// host; EarPracticePlayerService's constructor just requires a reference.
+// host; PracticeToolService's constructor just requires a reference.
 class NullPluginHost : public guitarfx::IPluginHost
 {
 public:
@@ -79,9 +79,9 @@ public:
     [[nodiscard]] int GetBlockSize() const override { return 512; }
 };
 
-std::unique_ptr<EarPracticePlayerService> MakeService(guitarfx::IPluginHost& host, std::mutex& mutex)
+std::unique_ptr<PracticeToolService> MakeService(guitarfx::IPluginHost& host, std::mutex& mutex)
 {
-    auto svc = std::make_unique<EarPracticePlayerService>(
+    auto svc = std::make_unique<PracticeToolService>(
         host, mutex,
         [](const std::string&, const std::string&) {},
         [](const std::string&) {});
@@ -99,9 +99,9 @@ std::unique_ptr<EarPracticePlayerService> MakeService(guitarfx::IPluginHost& hos
 // doesn't happen to start/end at matching phase. A hard cut at the wrap
 // would jump ~2.0 in a single sample; a proper crossfade should ramp
 // smoothly over the crossfade window instead.
-// Return type is deduced (rather than spelling EarPracticePlayerService::
+// Return type is deduced (rather than spelling PracticeToolService::
 // TrackBuffer) because this function is not itself a friend of
-// EarPracticePlayerService — only EarPracticePlayerServiceTestAccess is, so
+// PracticeToolService — only PracticeToolServiceTestAccess is, so
 // only that struct's members may name the private nested type directly.
 auto MakeRampLoopBuffer(std::size_t total, std::size_t regionStart, std::size_t regionEnd)
 {
@@ -115,12 +115,12 @@ auto MakeRampLoopBuffer(std::size_t total, std::size_t regionStart, std::size_t 
     for (std::size_t i = regionEnd; i < total; ++i)
         left[i] = 1.0f; // continuous with the ramp's end value
 
-    return EarPracticePlayerServiceTestAccess::MakeBuffer(left, left, kSampleRate);
+    return PracticeToolServiceTestAccess::MakeBuffer(left, left, kSampleRate);
 }
 
 bool TestLoopWrapStaysInBoundsAndBlends()
 {
-    std::cout << "\n--- EarPracticePlayerService Loop-Wrap Crossfade Tests ---\n";
+    std::cout << "\n--- PracticeToolService Loop-Wrap Crossfade Tests ---\n";
 
     NullPluginHost host;
     std::mutex dspMutex;
@@ -150,7 +150,7 @@ bool TestLoopWrapStaysInBoundsAndBlends()
 
     for (int c = 0; c < kNumChunks; ++c)
     {
-        const int written = EarPracticePlayerServiceTestAccess::ReadSourceWindow(
+        const int written = PracticeToolServiceTestAccess::ReadSourceWindow(
             *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
         if (written != kChunk)
             everyCallFullyFilled = false;
@@ -196,7 +196,7 @@ bool TestLoopWrapStaysInBoundsAndBlends()
 
 bool TestVeryShortLoopRegionStaysInBounds()
 {
-    std::cout << "\n--- EarPracticePlayerService Short-Loop Bounds Test ---\n";
+    std::cout << "\n--- PracticeToolService Short-Loop Bounds Test ---\n";
 
     NullPluginHost host;
     std::mutex dspMutex;
@@ -226,7 +226,7 @@ bool TestVeryShortLoopRegionStaysInBounds()
 
     for (int c = 0; c < kNumChunks; ++c)
     {
-        const int written = EarPracticePlayerServiceTestAccess::ReadSourceWindow(
+        const int written = PracticeToolServiceTestAccess::ReadSourceWindow(
             *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
         if (written != kChunk)
             everyCallFullyFilled = false;
@@ -251,7 +251,7 @@ bool TestVeryShortLoopRegionStaysInBounds()
 
 bool TestNonLoopingExhaustionReturnsShortAtEnd()
 {
-    std::cout << "\n--- EarPracticePlayerService Non-Looping Exhaustion Test ---\n";
+    std::cout << "\n--- PracticeToolService Non-Looping Exhaustion Test ---\n";
 
     NullPluginHost host;
     std::mutex dspMutex;
@@ -259,7 +259,7 @@ bool TestNonLoopingExhaustionReturnsShortAtEnd()
 
     constexpr std::size_t kTotalFrames = 1000;
     std::vector<float> left(kTotalFrames, 0.25f);
-    auto buffer = EarPracticePlayerServiceTestAccess::MakeBuffer(left, left, kSampleRate);
+    auto buffer = PracticeToolServiceTestAccess::MakeBuffer(left, left, kSampleRate);
 
     // Looping left disabled (the service's default) — no active loop region.
     constexpr int kChunk = 300;
@@ -267,11 +267,11 @@ bool TestNonLoopingExhaustionReturnsShortAtEnd()
     std::vector<float> outR(static_cast<std::size_t>(kChunk));
     std::size_t cursor = 800; // 200 frames of real audio remain
 
-    const int firstWritten = EarPracticePlayerServiceTestAccess::ReadSourceWindow(
+    const int firstWritten = PracticeToolServiceTestAccess::ReadSourceWindow(
         *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
     const bool firstCallShortAtEnd = firstWritten == 200 && cursor == kTotalFrames;
 
-    const int secondWritten = EarPracticePlayerServiceTestAccess::ReadSourceWindow(
+    const int secondWritten = PracticeToolServiceTestAccess::ReadSourceWindow(
         *svc, buffer, outL.data(), outR.data(), cursor, kChunk);
     const bool secondCallReturnsZero = secondWritten == 0;
 

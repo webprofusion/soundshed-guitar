@@ -259,7 +259,7 @@ export interface JamPlayerState {
 }
 
 export interface JamState {
-  activeSection: "backingTracks" | "scales" | "riffs" | "player";
+  activeSection: "backingTracks" | "scales" | "riffs" | "practiceTool";
   activeTab: "search" | "favorites";
   query: string;
   results: JamVideoSummary[];
@@ -593,7 +593,7 @@ export interface RiffLibrary {
   riffs: RiffEntry[];
 }
 
-export interface EarPracticePlayerLoopRegion {
+export interface PracticeToolLoopRegion {
   id: string;
   name: string;
   startSec: number;
@@ -601,19 +601,19 @@ export interface EarPracticePlayerLoopRegion {
 }
 
 /**
- * UI-owned Ear Practice Player (Jam panel) state. `loops` and `activeLoopId` are
+ * UI-owned Practice Tool (Jam panel) state. `loops` and `activeLoopId` are
  * pure client-side bookkeeping — the engine has no concept of a loop library,
  * it only ever knows the currently-active region's bounds and whether looping
- * is on (see setEarPracticePlayerLoopRegion/setEarPracticePlayerLooping in bridge.ts).
+ * is on (see setPracticeToolLoopRegion/setPracticeToolLooping in bridge.ts).
  */
-export interface EarPracticePlayerState {
+export interface PracticeToolState {
   filePath: string;
   title: string;
   durationSec: number;
   positionSec: number;
   waveformPeaksL: number[];
   waveformPeaksR: number[];
-  loops: EarPracticePlayerLoopRegion[];
+  loops: PracticeToolLoopRegion[];
   activeLoopId: string | null;
   looping: boolean;
   playing: boolean;
@@ -686,7 +686,7 @@ export interface UiState {
   metronome?: MetronomeState;
   riffLibrary?: RiffLibrary;
   riffCapture?: RiffCaptureState;
-  earPracticePlayer?: EarPracticePlayerState;
+  practiceTool?: PracticeToolState;
   missingNodeResources?: Array<{ nodeId: string; resourceType?: string; resourceId?: string; filePath?: string }>;
   layoutLibrary?: LayoutLibrary;
   compositeLibrary?: CompositeEffectDefinition[];

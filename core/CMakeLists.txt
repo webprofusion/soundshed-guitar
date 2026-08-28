@@ -519,11 +519,11 @@ set(GUITARFX_CORE_SOURCES
     src/dispatcher/MessageDispatchMixer.cpp
     src/dispatcher/MessageDispatchLibraryComposite.cpp
     src/dispatcher/MessageDispatchAutomation.cpp
-    src/dispatcher/MessageDispatchEarPracticePlayer.cpp
+    src/dispatcher/MessageDispatchPracticeTool.cpp
     src/controller/DemoPreviewService.h
     src/controller/DemoPreviewService.cpp
-    src/controller/EarPracticePlayerService.h
-    src/controller/EarPracticePlayerService.cpp
+    src/controller/PracticeToolService.h
+    src/controller/PracticeToolService.cpp
 
     # DSP core
     src/dsp/EffectProcessor.h

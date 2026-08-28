@@ -1,6 +1,6 @@
 #pragma once
 
-// EarPracticePlayerService — plays a local backing-track audio file, mixed
+// PracticeToolService — plays a local backing-track audio file, mixed
 // into the main output bus so a guitarist can jam along with it.
 //
 // Mirrors DemoPreviewService's structure (full-buffer-preload playback,
@@ -26,6 +26,26 @@
 // bookkeeping (see the design plan). The engine only ever knows the
 // currently *active* loop's sample bounds (or none = whole track) and an
 // on/off flag.
+//
+// COST WHEN THE FEATURE IS NOT IN USE. The service is constructed
+// unconditionally and Prepare()d with the audio device, so keep the idle
+// path free for a player who never opens the panel:
+//   - Audio thread: RenderPostChain() returns after one acquire load of
+//     mState on anything but Playing. No lock, no allocation, no branch
+//     into the mix loop.
+//   - Message thread: OnIdle() sends nothing unless playing (or a
+//     playback-end is pending) — see the note there. Reinstating an
+//     unconditional send costs ~12 msgs/sec of JSON + WebView IPC + a UI
+//     render pass, forever, for a dormant feature.
+//   - Render thread: exists but parks on a condition_variable, waking on a
+//     200ms timeout while no file is loaded. It does not spin.
+//   - signalsmith-stretch is left unconfigured (and so unallocated) until a
+//     file is actually loaded; presetCheaper() is deliberately called after
+//     the no-buffer early-continue in RenderThreadLoop().
+// The one unconditional cost is mOutputRing: ~1MiB at 48kHz (2MiB at
+// 96kHz), allocated in Prepare() whether or not a track is ever loaded,
+// because it must not be resized while the audio/render threads hold
+// references into it.
 
 #include "IPluginHost.h"
 #include "util/SpscRingBuffer.h"
@@ -48,17 +68,17 @@
 namespace guitarfx
 {
 
-class EarPracticePlayerService
+class PracticeToolService
 {
 public:
-    EarPracticePlayerService(IPluginHost& host,
-                            std::mutex& dspMutex,
-                            std::function<void(const std::string&, const std::string&)> reportError,
-                            std::function<void(const std::string&)> sendMessage);
-    ~EarPracticePlayerService();
+    PracticeToolService(IPluginHost& host,
+                        std::mutex& dspMutex,
+                        std::function<void(const std::string&, const std::string&)> reportError,
+                        std::function<void(const std::string&)> sendMessage);
+    ~PracticeToolService();
 
-    EarPracticePlayerService(const EarPracticePlayerService&) = delete;
-    EarPracticePlayerService& operator=(const EarPracticePlayerService&) = delete;
+    PracticeToolService(const PracticeToolService&) = delete;
+    PracticeToolService& operator=(const PracticeToolService&) = delete;
 
     /// Starts the background render thread (once) and creates the ring
     /// buffer (once, sized generously so it never needs to be resized while
@@ -111,18 +131,18 @@ public:
     void RenderPostChain(float** outputs, int numSamples);
 
     /// Message thread, called from the OnIdle() hub at a divided-down rate
-    /// (~10-15 Hz). Sends earPracticePlayerTransportState / earPracticePlayerPlaybackEnded.
+    /// (~10-15 Hz). Sends practiceToolTransportState / practiceToolPlaybackEnded.
     void OnIdle();
 
     [[nodiscard]] bool IsLoaded() const;
 
 private:
-    // Grants the unit test (EarPracticePlayerCrossfadeTests.cpp) direct access
+    // Grants the unit test (PracticeToolCrossfadeTests.cpp) direct access
     // to ReadSourceWindow()/BeginCrossfade() and the private TrackBuffer type
     // so the loop-wrap/seek crossfade logic can be exercised synchronously
     // with a synthetic buffer, without needing real file I/O or the
     // background render thread running.
-    friend struct EarPracticePlayerServiceTestAccess;
+    friend struct PracticeToolServiceTestAccess;
 
     struct StereoFrame
     {
@@ -167,8 +187,8 @@ private:
     /// BeginCrossfade()/DrainFadeCarry() so the stretch engine downstream
     /// always sees a continuous stream and is never reset.
     int ReadSourceWindow(const std::shared_ptr<TrackBuffer>& buffer,
-                        float* outL, float* outR,
-                        std::size_t& cursor, int numFrames);
+                         float* outL, float* outR,
+                         std::size_t& cursor, int numFrames);
 
     /// Prepares an equal-power crossfade between the track audio at
     /// [fromFrame, fromFrame+len) (fading out) and [toFrame, toFrame+len)

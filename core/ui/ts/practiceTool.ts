@@ -1,25 +1,26 @@
 import {
-  browseEarPracticePlayerFile,
-  loadEarPracticePlayerFile,
-  loadEarPracticePlayerFileData,
-  seekEarPracticePlayerFile,
+  browsePracticeToolFile,
+  loadPracticeToolFile,
+  loadPracticeToolFileData,
+  seekPracticeToolFile,
   setAppSetting,
-  setEarPracticePlayerBalance,
-  setEarPracticePlayerGain,
-  setEarPracticePlayerLoopRegion,
-  setEarPracticePlayerLooping,
-  setEarPracticePlayerPitch,
-  setEarPracticePlayerSpeed,
-  setEarPracticePlayerTransport,
+  setPracticeToolBalance,
+  setPracticeToolGain,
+  setPracticeToolLoopRegion,
+  setPracticeToolLooping,
+  setPracticeToolPitch,
+  setPracticeToolSpeed,
+  setPracticeToolTransport,
 } from "./bridge.js";
 import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
-import type { EarPracticePlayerLoopRegion, EarPracticePlayerState } from "./types.js";
+import type { PracticeToolLoopRegion, PracticeToolState } from "./types.js";
 import { arrayBufferToBase64, escapeHtml } from "./utils.js";
 
-/** Small, static, non-user-editable set of common song-section names for the loop-naming quick-pick row. */
+/** Small, static, non-user-editable set of common song-section names, offered as
+ * `<datalist>` suggestions on every loop name/rename field. */
 export const LOOP_NAME_TEMPLATES: readonly string[] = [
   "Intro",
   "Verse",
@@ -32,7 +33,7 @@ export const LOOP_NAME_TEMPLATES: readonly string[] = [
   "Breakdown",
 ];
 
-const LOCAL_AUDIO_LOOPS_SETTING = "earPracticePlayer.loops";
+const LOOPS_SETTING_KEY = "practiceTool.loops";
 const MIN_LOOP_SPAN_SEC = 0.25;
 const LOOP_REGION_SEND_DEBOUNCE_MS = 80;
 const SPEED_PITCH_SEND_DEBOUNCE_MS = 80;
@@ -59,7 +60,7 @@ const DELETE_UNDO_WINDOW_MS = 10_000;
 
 type RatioRange = { startRatio: number; endRatio: number };
 type SecondsRange = { startSec: number; endSec: number };
-type PendingDeletedLoop = { loop: EarPracticePlayerLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
+type PendingDeletedLoop = { loop: PracticeToolLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
 // "pending": mouse is down but hasn't moved past the click/drag threshold
 // yet, so it might still resolve to a plain seek-click on mouseup.
 type DragMode = "handle" | "create" | "pending" | null;
@@ -82,10 +83,7 @@ let editingLoopId: string | null = null;
 // common toast/snackbar UX (a second delete finalizes the first).
 let pendingDeletedLoop: PendingDeletedLoop | null = null;
 
-let loopRegionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let cursorHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let speedSendDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let pitchSendDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 let playheadAnimFrame: number | null = null;
 let playheadBaseSec = 0;
@@ -96,7 +94,7 @@ let playheadSpeed = 1;
  * Builds a template-derived loop name with an auto-incrementing numeric suffix, e.g.
  * "Verse" -> "Verse 1" the first time it's picked on a track, "Verse 2" the next time,
  * regardless of whether the previous suggestion was actually kept. Pure/testable in
- * isolation from the DOM — see tests/earPracticePlayerLoopNaming.test.ts.
+ * isolation from the DOM — see tests/practiceToolLoopNaming.test.ts.
  */
 export function suggestLoopTemplateName(baseName: string, existingNames: readonly string[]): string {
   const trimmedBase = baseName.trim();
@@ -122,9 +120,9 @@ function generateLoopId(): string {
   return `loop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function ensureEarPracticePlayerState(): EarPracticePlayerState {
-  if (!uiState.earPracticePlayer) {
-    uiState.earPracticePlayer = {
+function ensurePracticeToolState(): PracticeToolState {
+  if (!uiState.practiceTool) {
+    uiState.practiceTool = {
       filePath: "",
       title: "",
       durationSec: 0,
@@ -141,11 +139,23 @@ function ensureEarPracticePlayerState(): EarPracticePlayerState {
       balance: 0,
     };
   }
-  return uiState.earPracticePlayer;
+  return uiState.practiceTool;
 }
 
-function getActiveLoop(): EarPracticePlayerLoopRegion | null {
-  const player = ensureEarPracticePlayerState();
+/** True only when the Practice Tool's own Jam section is on screen. Attribute
+ * and class reads only — no geometry, so this never forces a layout the way
+ * offsetParent/getBoundingClientRect would. Mirrors isJamPanelVisible() in
+ * jam.ts, with the extra check for the active section within the panel. */
+function isPracticeToolPanelVisible(): boolean {
+  if (!document.getElementById("panel-jam")?.classList.contains("active")) {
+    return false;
+  }
+  const section = document.getElementById("jam-section-panel-practice-tool");
+  return !!section && !section.hidden;
+}
+
+function getActiveLoop(): PracticeToolLoopRegion | null {
+  const player = ensurePracticeToolState();
   if (!player.activeLoopId) {
     return null;
   }
@@ -156,7 +166,7 @@ function getFileFingerprint(filePath: string, durationSec: number): string {
   return `${filePath.trim().toLowerCase()}|${durationSec.toFixed(2)}`;
 }
 
-function isPersistedLoop(value: unknown): value is EarPracticePlayerLoopRegion {
+function isPersistedLoop(value: unknown): value is PracticeToolLoopRegion {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -167,11 +177,11 @@ function isPersistedLoop(value: unknown): value is EarPracticePlayerLoopRegion {
     && typeof record.endSec === "number";
 }
 
-function loadLoopsForFingerprint(fingerprint: string): EarPracticePlayerLoopRegion[] {
+function loadLoopsForFingerprint(fingerprint: string): PracticeToolLoopRegion[] {
   if (!fingerprint) {
     return [];
   }
-  const stored = uiState.appSettings?.[LOCAL_AUDIO_LOOPS_SETTING];
+  const stored = uiState.appSettings?.[LOOPS_SETTING_KEY];
   if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
     return [];
   }
@@ -183,22 +193,22 @@ function loadLoopsForFingerprint(fingerprint: string): EarPracticePlayerLoopRegi
 }
 
 function persistLoopsForCurrentFile(): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const fingerprint = getFileFingerprint(player.filePath, player.durationSec);
   if (!fingerprint) {
     return;
   }
-  const stored = uiState.appSettings?.[LOCAL_AUDIO_LOOPS_SETTING];
-  const map: Record<string, EarPracticePlayerLoopRegion[]> = (stored && typeof stored === "object" && !Array.isArray(stored))
-    ? { ...(stored as unknown as Record<string, EarPracticePlayerLoopRegion[]>) }
+  const stored = uiState.appSettings?.[LOOPS_SETTING_KEY];
+  const map: Record<string, PracticeToolLoopRegion[]> = (stored && typeof stored === "object" && !Array.isArray(stored))
+    ? { ...(stored as unknown as Record<string, PracticeToolLoopRegion[]>) }
     : {};
   if (player.loops.length > 0) {
     map[fingerprint] = player.loops.map((loop) => ({ ...loop }));
   } else {
     delete map[fingerprint];
   }
-  uiState.appSettings[LOCAL_AUDIO_LOOPS_SETTING] = map as unknown as import("./types.js").AppSettingValue;
-  setAppSetting(LOCAL_AUDIO_LOOPS_SETTING, map);
+  uiState.appSettings[LOOPS_SETTING_KEY] = map as unknown as import("./types.js").AppSettingValue;
+  setAppSetting(LOOPS_SETTING_KEY, map);
 }
 
 function formatClockTime(seconds: number): string {
@@ -238,19 +248,25 @@ function startPlayheadAnim(): void {
     return;
   }
   const step = () => {
-    const player = ensureEarPracticePlayerState();
+    const player = ensurePracticeToolState();
     if (!player.playing) {
       playheadAnimFrame = null;
       return;
     }
-    renderWaveform();
+    // Jamming along with a track while working in the Play view is the normal
+    // case, and the playhead is not on screen then — so keep the loop alive
+    // (it must resume the moment the panel comes back) but skip the draw,
+    // which is a full canvas repaint plus a forced layout, 60x a second.
+    if (isPracticeToolPanelVisible()) {
+      renderWaveform();
+    }
     playheadAnimFrame = requestAnimationFrame(step);
   };
   playheadAnimFrame = requestAnimationFrame(step);
 }
 
 function getInterpolatedPositionSec(): number {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   if (!player.playing) {
     return player.positionSec;
   }
@@ -263,9 +279,9 @@ function toNumberArray(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((entry): entry is number => typeof entry === "number") : [];
 }
 
-/** Called on the `earPracticePlayerFileLoaded` engine message. */
-export function applyEarPracticePlayerFileLoaded(data: { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] }): void {
-  const player = ensureEarPracticePlayerState();
+/** Called on the `practiceToolFileLoaded` engine message. */
+export function applyPracticeToolFileLoaded(data: { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] }): void {
+  const player = ensurePracticeToolState();
   const filePath = typeof data.path === "string" ? data.path : "";
   const durationSec = typeof data.durationSec === "number" && isFinite(data.durationSec) ? Math.max(0, data.durationSec) : 0;
   const fallbackTitle = filePath ? (filePath.split(/[\\/]/).pop() ?? filePath) : "";
@@ -298,13 +314,13 @@ export function applyEarPracticePlayerFileLoaded(data: { path?: string; title?: 
   playheadSpeed = player.speed;
   stopPlayheadAnim();
 
-  appendLog(`ear practice player file loaded ← ${player.title} (${durationSec.toFixed(1)}s)`);
-  renderEarPracticePlayerPanel();
+  appendLog(`practice tool file loaded ← ${player.title} (${durationSec.toFixed(1)}s)`);
+  renderPracticeToolPanel();
 }
 
-/** Called on the `earPracticePlayerTransportState` engine message. */
-export function applyEarPracticePlayerTransportState(data: { state?: string; positionSec?: number }): void {
-  const player = ensureEarPracticePlayerState();
+/** Called on the `practiceToolTransportState` engine message. */
+export function applyPracticeToolTransportState(data: { state?: string; positionSec?: number }): void {
+  const player = ensurePracticeToolState();
   const playing = data.state === "playing";
   player.playing = playing;
   if (typeof data.positionSec === "number" && isFinite(data.positionSec)) {
@@ -320,75 +336,73 @@ export function applyEarPracticePlayerTransportState(data: { state?: string; pos
     stopPlayheadAnim();
   }
 
+  // Playback continues while the user is off on another panel (that's the
+  // point — jam along with the track while working in the Play view), but
+  // there is nothing to draw then: the canvas and controls are display:none,
+  // so a redraw per transport tick is pure cost, and renderWaveform() reads
+  // canvas.clientWidth/clientHeight, forcing a synchronous layout each time.
+  // State above is still applied, so opening the panel renders it correctly.
+  if (!isPracticeToolPanelVisible()) {
+    return;
+  }
+
   renderTransportControls();
   renderWaveform();
 }
 
-/** Called on the `earPracticePlayerPlaybackEnded` engine message. */
-export function applyEarPracticePlayerPlaybackEnded(): void {
-  const player = ensureEarPracticePlayerState();
+/** Called on the `practiceToolPlaybackEnded` engine message. */
+export function applyPracticeToolPlaybackEnded(): void {
+  const player = ensurePracticeToolState();
   player.playing = false;
   player.positionSec = 0;
   playheadBaseSec = 0;
   playheadBaseMs = performance.now();
   stopPlayheadAnim();
-  appendLog("ear practice player playback ended");
+  appendLog("practice tool playback ended");
   renderTransportControls();
   renderWaveform();
 }
 
-function scheduleActiveLoopRegionSend(loop: EarPracticePlayerLoopRegion): void {
-  if (loopRegionDebounceTimer !== null) {
-    clearTimeout(loopRegionDebounceTimer);
-  }
-  loopRegionDebounceTimer = setTimeout(() => {
-    loopRegionDebounceTimer = null;
-    setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
-  }, LOOP_REGION_SEND_DEBOUNCE_MS);
+/** A debounced one-shot sender: `schedule()` coalesces rapid updates (a slider
+ * being dragged, a loop handle being dragged), `flush()` cancels any pending
+ * timer and sends straight away.
+ *
+ * Speed, pitch, and loop-region sends each flush the native render-ahead ring
+ * buffer (they must, to apply the new value promptly) — sending on every
+ * `input`/`mousemove` event during a drag would flush repeatedly and cause
+ * audible stutter, which is exactly what un-throttled sends did before this
+ * existed. The one-off end-of-gesture event (`change`, `mouseup`) calls
+ * `flush()` so the final value is never left sitting in a pending timer. */
+function debouncedSender<T>(send: (value: T) => void, delayMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+  return {
+    schedule(value: T): void {
+      cancel();
+      timer = setTimeout(() => {
+        timer = null;
+        send(value);
+      }, delayMs);
+    },
+    flush(value: T): void {
+      cancel();
+      send(value);
+    },
+  };
 }
 
-/** Debounces setEarPracticePlayerSpeed/setEarPracticePlayerPitch sends while a slider is
- * being dragged. Each of those calls flushes the native render-ahead ring
- * buffer (it must, to apply the new value promptly) — sending on every
- * `input` event during a drag would flush repeatedly and cause audible
- * stutter, which is exactly what un-throttled sends did before this existed.
- * `change` (fired once on release) still calls the flush* variant directly so
- * the final value is never lost to a pending timer. */
-function scheduleSpeedSend(ratio: number): void {
-  if (speedSendDebounceTimer !== null) {
-    clearTimeout(speedSendDebounceTimer);
-  }
-  speedSendDebounceTimer = setTimeout(() => {
-    speedSendDebounceTimer = null;
-    setEarPracticePlayerSpeed(ratio);
-  }, SPEED_PITCH_SEND_DEBOUNCE_MS);
-}
-
-function flushSpeedSend(ratio: number): void {
-  if (speedSendDebounceTimer !== null) {
-    clearTimeout(speedSendDebounceTimer);
-    speedSendDebounceTimer = null;
-  }
-  setEarPracticePlayerSpeed(ratio);
-}
-
-function schedulePitchSend(semitones: number): void {
-  if (pitchSendDebounceTimer !== null) {
-    clearTimeout(pitchSendDebounceTimer);
-  }
-  pitchSendDebounceTimer = setTimeout(() => {
-    pitchSendDebounceTimer = null;
-    setEarPracticePlayerPitch(semitones);
-  }, SPEED_PITCH_SEND_DEBOUNCE_MS);
-}
-
-function flushPitchSend(semitones: number): void {
-  if (pitchSendDebounceTimer !== null) {
-    clearTimeout(pitchSendDebounceTimer);
-    pitchSendDebounceTimer = null;
-  }
-  setEarPracticePlayerPitch(semitones);
-}
+// Note the loop sender reads startSec/endSec when the send actually fires, so a
+// scheduled send always carries the loop's latest dragged bounds.
+const loopRegionSender = debouncedSender(
+  (loop: PracticeToolLoopRegion) => setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec }),
+  LOOP_REGION_SEND_DEBOUNCE_MS);
+const speedSender = debouncedSender(setPracticeToolSpeed, SPEED_PITCH_SEND_DEBOUNCE_MS);
+const pitchSender = debouncedSender(setPracticeToolPitch, SPEED_PITCH_SEND_DEBOUNCE_MS);
 
 // ════════════════════════════════════════════════════════════════════
 // Unified faders (Volume/Balance/Speed/Pitch): one shared implementation
@@ -419,8 +433,8 @@ type FaderSpec = {
   default: number;
   format: (value: number) => string;
   parse: (text: string) => number | null;
-  getValue: (player: EarPracticePlayerState) => number;
-  setValue: (player: EarPracticePlayerState, value: number) => void;
+  getValue: (player: PracticeToolState) => number;
+  setValue: (player: PracticeToolState, value: number) => void;
   /** immediate=true on release/reset/typed-entry; false for in-progress drag
    * ticks, letting speed/pitch debounce (they flush the render-ahead ring)
    * while volume/balance (pure audio-thread mix, no flush) can ignore the
@@ -512,7 +526,7 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parsePercentText,
     getValue: (p) => p.gain,
     setValue: (p, v) => { p.gain = v; },
-    send: (v) => setEarPracticePlayerGain(v),
+    send: (v) => setPracticeToolGain(v),
   },
   balance: {
     id: "balance",
@@ -523,7 +537,7 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parseBalanceText,
     getValue: (p) => p.balance,
     setValue: (p, v) => { p.balance = v; },
-    send: (v) => setEarPracticePlayerBalance(v),
+    send: (v) => setPracticeToolBalance(v),
   },
   speed: {
     id: "speed",
@@ -534,7 +548,7 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parsePercentText,
     getValue: (p) => p.speed,
     setValue: (p, v) => { p.speed = v; },
-    send: (v, immediate) => (immediate ? flushSpeedSend(v) : scheduleSpeedSend(v)),
+    send: (v, immediate) => (immediate ? speedSender.flush(v) : speedSender.schedule(v)),
     onChange: (v) => {
       playheadSpeed = v;
       playheadBaseSec = getInterpolatedPositionSec();
@@ -550,15 +564,15 @@ const FADER_SPECS: Record<FaderId, FaderSpec> = {
     parse: parseLeadingNumber,
     getValue: (p) => p.pitchSemitones,
     setValue: (p, v) => { p.pitchSemitones = v; },
-    send: (v, immediate) => (immediate ? flushPitchSend(v) : schedulePitchSend(v)),
+    send: (v, immediate) => (immediate ? pitchSender.flush(v) : pitchSender.schedule(v)),
   },
 };
 
 /** Used when loading a new file "resets the project" (see
- * applyEarPracticePlayerFileLoaded) — pushes every fader back to its default,
+ * applyPracticeToolFileLoaded) — pushes every fader back to its default,
  * both in local state and to the native engine, mirroring exactly what a
  * double-click reset does for a single fader. */
-function resetAllFadersToDefault(player: EarPracticePlayerState): void {
+function resetAllFadersToDefault(player: PracticeToolState): void {
   Object.values(FADER_SPECS).forEach((spec) => {
     spec.setValue(player, spec.default);
     spec.onChange?.(spec.default);
@@ -566,9 +580,9 @@ function resetAllFadersToDefault(player: EarPracticePlayerState): void {
   });
 }
 
-function renderFader(spec: FaderSpec, player: EarPracticePlayerState): void {
-  const slider = document.getElementById(`ear-practice-player-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`ear-practice-player-${spec.id}-value`) as HTMLInputElement | null;
+function renderFader(spec: FaderSpec, player: PracticeToolState): void {
+  const slider = document.getElementById(`practice-tool-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`practice-tool-${spec.id}-value`) as HTMLInputElement | null;
   const value = spec.getValue(player);
   if (slider && document.activeElement !== slider) {
     slider.value = String(faderValueToSliderPos(spec, value));
@@ -579,11 +593,11 @@ function renderFader(spec: FaderSpec, player: EarPracticePlayerState): void {
 }
 
 function bindFader(spec: FaderSpec): void {
-  const slider = document.getElementById(`ear-practice-player-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`ear-practice-player-${spec.id}-value`) as HTMLInputElement | null;
+  const slider = document.getElementById(`practice-tool-${spec.id}`) as HTMLInputElement | null;
+  const valueInput = document.getElementById(`practice-tool-${spec.id}-value`) as HTMLInputElement | null;
 
   const applyValue = (value: number, immediate: boolean) => {
-    const player = ensureEarPracticePlayerState();
+    const player = ensurePracticeToolState();
     const clamped = Math.max(spec.min, Math.min(spec.max, value));
     spec.setValue(player, clamped);
     spec.onChange?.(clamped);
@@ -642,25 +656,17 @@ function bindFader(spec: FaderSpec): void {
   }
 }
 
-function flushActiveLoopRegionSend(loop: EarPracticePlayerLoopRegion): void {
-  if (loopRegionDebounceTimer !== null) {
-    clearTimeout(loopRegionDebounceTimer);
-    loopRegionDebounceTimer = null;
-  }
-  setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
-}
-
 /** Applies a ratio-space range change to whichever thing is currently being edited:
  * the active loop's bounds (dragged/nudged, live-updates engine + local state, debounced),
  * or the pending candidate selection for a not-yet-saved loop. */
 function applyRangeChange(startRatio: number, endRatio: number): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const clamped = clampRatioRange(startRatio, endRatio, player.durationSec);
   const activeLoop = getActiveLoop();
   if (activeLoop) {
     activeLoop.startSec = clamped.startRatio * player.durationSec;
     activeLoop.endSec = clamped.endRatio * player.durationSec;
-    scheduleActiveLoopRegionSend(activeLoop);
+    loopRegionSender.schedule(activeLoop);
   } else {
     candidateRange = clamped;
   }
@@ -677,7 +683,7 @@ function getCanvasRatioFromPointer(event: MouseEvent, canvas: HTMLCanvasElement)
 }
 
 function nudgeSelectedHandle(direction: -1 | 1, coarse = false): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const activeLoop = getActiveLoop();
   const current = activeLoop
     ? { startRatio: activeLoop.startSec / Math.max(0.001, player.durationSec), endRatio: activeLoop.endSec / Math.max(0.001, player.durationSec) }
@@ -694,11 +700,11 @@ function nudgeSelectedHandle(direction: -1 | 1, coarse = false): void {
 }
 
 function renderWaveform(): void {
-  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
+  const canvas = document.getElementById("practice-tool-waveform") as HTMLCanvasElement | null;
   if (!canvas) {
     return;
   }
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const peaksL = player.waveformPeaksL;
   const peaksR = player.waveformPeaksR;
   const hasAudio = peaksL.length > 0 && peaksR.length > 0 && player.durationSec > 0;
@@ -822,8 +828,8 @@ function renderWaveform(): void {
 }
 
 function renderAddLoopAffordance(): void {
-  const btn = document.getElementById("ear-practice-player-add-loop-btn") as HTMLButtonElement | null;
-  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
+  const btn = document.getElementById("practice-tool-add-loop-btn") as HTMLButtonElement | null;
+  const canvas = document.getElementById("practice-tool-waveform") as HTMLCanvasElement | null;
   if (!btn || !canvas) {
     return;
   }
@@ -838,12 +844,12 @@ function renderAddLoopAffordance(): void {
 }
 
 function renderFileInfo(): void {
-  const info = document.getElementById("ear-practice-player-file-info");
-  const browseBtn = document.getElementById("ear-practice-player-browse-btn") as HTMLButtonElement | null;
+  const info = document.getElementById("practice-tool-file-info");
+  const browseBtn = document.getElementById("practice-tool-browse-btn") as HTMLButtonElement | null;
   if (!info) {
     return;
   }
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   if (!player.filePath || player.durationSec <= 0) {
     info.textContent = "No file loaded";
   } else {
@@ -857,12 +863,12 @@ function renderFileInfo(): void {
 }
 
 function renderTransportControls(): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const hasAudio = player.durationSec > 0;
 
-  const playPauseBtn = document.getElementById("ear-practice-player-play-pause") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("ear-practice-player-stop") as HTMLButtonElement | null;
-  const loopStatus = document.getElementById("ear-practice-player-loop-status");
+  const playPauseBtn = document.getElementById("practice-tool-play-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("practice-tool-stop") as HTMLButtonElement | null;
+  const loopStatus = document.getElementById("practice-tool-loop-status");
 
   if (playPauseBtn) {
     playPauseBtn.disabled = !hasAudio;
@@ -891,7 +897,7 @@ function renderTransportControls(): void {
  * suggestion works the same whether you're naming a brand new loop or
  * renaming an existing one. */
 function ensureLoopNameTemplatesDatalist(): void {
-  const datalist = document.getElementById("ear-practice-player-loop-name-templates");
+  const datalist = document.getElementById("practice-tool-loop-name-templates");
   if (!datalist || datalist.childElementCount > 0) {
     return;
   }
@@ -901,20 +907,20 @@ function ensureLoopNameTemplatesDatalist(): void {
 }
 
 function renderLoopList(): void {
-  const list = document.getElementById("ear-practice-player-loop-list");
+  const list = document.getElementById("practice-tool-loop-list");
   if (!list) {
     return;
   }
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
 
   // No confirmation dialog on delete — this banner (shown until the undo
   // window elapses, another delete supersedes it, or undo is clicked) IS
   // the confirmation, just reversible instead of blocking.
   const undoBannerHtml = pendingDeletedLoop
     ? `
-        <div class="ear-practice-player-loop-undo-banner">
+        <div class="practice-tool-loop-undo-banner">
           <span>Deleted "${escapeHtml(pendingDeletedLoop.loop.name)}".</span>
-          <button type="button" class="ear-practice-player-loop-undo-btn">Undo</button>
+          <button type="button" class="practice-tool-loop-undo-btn">Undo</button>
         </div>
       `
     : "";
@@ -932,25 +938,25 @@ function renderLoopList(): void {
       const isEditing = loop.id === editingLoopId;
       const rowMainHtml = isEditing
         ? `
-            <input type="text" class="ear-practice-player-loop-editable ear-practice-player-loop-name-input" data-loop-id="${loop.id}" data-field="name" list="ear-practice-player-loop-name-templates" placeholder="Loop name" value="${escapeHtml(loop.name)}" />
-            <input type="number" class="ear-practice-player-loop-editable ear-practice-player-loop-time-input" data-loop-id="${loop.id}" data-field="start" min="0" max="${maxSec}" step="0.01" value="${loop.startSec.toFixed(2)}" aria-label="Start time in seconds" />
-            <span class="ear-practice-player-loop-time-sep">–</span>
-            <input type="number" class="ear-practice-player-loop-editable ear-practice-player-loop-time-input" data-loop-id="${loop.id}" data-field="end" min="0" max="${maxSec}" step="0.01" value="${loop.endSec.toFixed(2)}" aria-label="End time in seconds" />
-            <span class="ear-practice-player-loop-time-unit">s</span>
+            <input type="text" class="practice-tool-loop-editable practice-tool-loop-name-input" data-loop-id="${loop.id}" data-field="name" list="practice-tool-loop-name-templates" placeholder="Loop name" value="${escapeHtml(loop.name)}" />
+            <input type="number" class="practice-tool-loop-editable practice-tool-loop-time-input" data-loop-id="${loop.id}" data-field="start" min="0" max="${maxSec}" step="0.01" value="${loop.startSec.toFixed(2)}" aria-label="Start time in seconds" />
+            <span class="practice-tool-loop-time-sep">–</span>
+            <input type="number" class="practice-tool-loop-editable practice-tool-loop-time-input" data-loop-id="${loop.id}" data-field="end" min="0" max="${maxSec}" step="0.01" value="${loop.endSec.toFixed(2)}" aria-label="End time in seconds" />
+            <span class="practice-tool-loop-time-unit">s</span>
           `
         : `
-            <span class="ear-practice-player-loop-name">${escapeHtml(loop.name)}</span>
-            <span class="ear-practice-player-loop-range">${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}</span>
+            <span class="practice-tool-loop-name">${escapeHtml(loop.name)}</span>
+            <span class="practice-tool-loop-range">${formatClockTime(loop.startSec)}–${formatClockTime(loop.endSec)}</span>
           `;
       return `
-        <div class="ear-practice-player-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${loop.id}">
-          <button type="button" class="ear-practice-player-loop-select-btn" data-loop-id="${loop.id}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
-          <div class="ear-practice-player-loop-row-main" data-loop-id="${loop.id}">
+        <div class="practice-tool-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${loop.id}">
+          <button type="button" class="practice-tool-loop-select-btn" data-loop-id="${loop.id}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
+          <div class="practice-tool-loop-row-main" data-loop-id="${loop.id}">
             ${rowMainHtml}
           </div>
-          <div class="ear-practice-player-loop-row-actions">
-            ${isEditing ? "" : `<button type="button" class="ear-practice-player-loop-rename-btn" data-loop-id="${loop.id}" title="Edit name/time" aria-label="Edit loop name and time">✎</button>`}
-            <button type="button" class="ear-practice-player-loop-delete-btn" data-loop-id="${loop.id}" title="Delete" aria-label="Delete loop">✕</button>
+          <div class="practice-tool-loop-row-actions">
+            ${isEditing ? "" : `<button type="button" class="practice-tool-loop-rename-btn" data-loop-id="${loop.id}" title="Edit name/time" aria-label="Edit loop name and time">✎</button>`}
+            <button type="button" class="practice-tool-loop-delete-btn" data-loop-id="${loop.id}" title="Delete" aria-label="Delete loop">✕</button>
           </div>
         </div>
       `;
@@ -958,14 +964,14 @@ function renderLoopList(): void {
     .join("");
 
   if (editingLoopId) {
-    const nameInput = list.querySelector<HTMLInputElement>(`.ear-practice-player-loop-name-input[data-loop-id="${editingLoopId}"]`);
+    const nameInput = list.querySelector<HTMLInputElement>(`.practice-tool-loop-name-input[data-loop-id="${editingLoopId}"]`);
     nameInput?.focus();
     nameInput?.select();
   }
 }
 
 function selectLoop(loopId: string): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   if (!loop) {
     return;
@@ -977,10 +983,10 @@ function selectLoop(loopId: string): void {
     // since looping is implied entirely by whether a loop is selected.
     player.activeLoopId = null;
     player.looping = false;
-    setEarPracticePlayerLoopRegion(null);
-    setEarPracticePlayerLooping(false);
-    appendLog(`ear practice player loop deactivated → ${loop.name}`);
-    renderEarPracticePlayerPanel();
+    setPracticeToolLoopRegion(null);
+    setPracticeToolLooping(false);
+    appendLog(`practice tool loop deactivated → ${loop.name}`);
+    renderPracticeToolPanel();
     return;
   }
 
@@ -989,11 +995,11 @@ function selectLoop(loopId: string): void {
   candidateRange = null;
   editingLoopId = null;
   selectedHandle = "start";
-  seekEarPracticePlayerFile(loop.startSec);
-  setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
-  setEarPracticePlayerLooping(true);
-  appendLog(`ear practice player loop selected → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
-  renderEarPracticePlayerPanel();
+  seekPracticeToolFile(loop.startSec);
+  setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+  setPracticeToolLooping(true);
+  appendLog(`practice tool loop selected → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
+  renderPracticeToolPanel();
 }
 
 /** Finalizes whatever delete is currently pending (if any) — the undo
@@ -1017,12 +1023,12 @@ function undoDeleteLoop(): void {
   clearTimeout(pendingDeletedLoop.timer);
   pendingDeletedLoop = null;
 
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const insertAt = Math.min(index, player.loops.length);
   player.loops = [...player.loops.slice(0, insertAt), loop, ...player.loops.slice(insertAt)];
   persistLoopsForCurrentFile();
-  appendLog(`ear practice player loop delete undone → ${loop.name}`);
-  renderEarPracticePlayerPanel();
+  appendLog(`practice tool loop delete undone → ${loop.name}`);
+  renderPracticeToolPanel();
 }
 
 /** Deletes immediately — no confirmation dialog — and instead leaves the
@@ -1031,7 +1037,7 @@ function undoDeleteLoop(): void {
  * if it was active) the instant this runs; undo re-inserts it rather than
  * "cancelling" anything in flight. */
 function deleteLoop(loopId: string): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const index = player.loops.findIndex((entry) => entry.id === loopId);
   if (index === -1) {
     return;
@@ -1044,14 +1050,14 @@ function deleteLoop(loopId: string): void {
   if (player.activeLoopId === loopId) {
     player.activeLoopId = null;
     player.looping = false;
-    setEarPracticePlayerLoopRegion(null);
-    setEarPracticePlayerLooping(false);
+    setPracticeToolLoopRegion(null);
+    setPracticeToolLooping(false);
   }
   if (editingLoopId === loopId) {
     editingLoopId = null;
   }
   persistLoopsForCurrentFile();
-  appendLog(`ear practice player loop deleted → ${loop.name} (undo available for ${Math.round(DELETE_UNDO_WINDOW_MS / 1000)}s)`);
+  appendLog(`practice tool loop deleted → ${loop.name} (undo available for ${Math.round(DELETE_UNDO_WINDOW_MS / 1000)}s)`);
 
   pendingDeletedLoop = {
     loop,
@@ -1062,7 +1068,7 @@ function deleteLoop(loopId: string): void {
     }, DELETE_UNDO_WINDOW_MS),
   };
 
-  renderEarPracticePlayerPanel();
+  renderPracticeToolPanel();
 }
 
 /** Commits the name field only — does not touch editingLoopId, since the
@@ -1071,7 +1077,7 @@ function deleteLoop(loopId: string): void {
  * actually ends). Does not re-render the list, to avoid destroying the
  * user's in-progress Tab navigation between this row's fields. */
 function commitEditLoopName(loopId: string, rawName: string): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   const name = rawName.trim();
   if (loop && name && name !== loop.name) {
@@ -1088,7 +1094,7 @@ function commitEditLoopName(loopId: string, rawName: string): void {
  * and the waveform highlight immediately if this loop is active; does not
  * re-render the list itself, for the same Tab-navigation reason as above. */
 function commitEditLoopTime(loopId: string, field: "start" | "end", rawValue: string): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   const loop = player.loops.find((entry) => entry.id === loopId);
   if (!loop) {
     return;
@@ -1105,7 +1111,7 @@ function commitEditLoopTime(loopId: string, field: "start" | "end", rawValue: st
   }
   persistLoopsForCurrentFile();
   if (player.activeLoopId === loopId) {
-    setEarPracticePlayerLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
+    setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
   }
   renderWaveform();
   renderAddLoopAffordance();
@@ -1122,7 +1128,7 @@ function finishEditingLoop(): void {
   renderLoopList();
 }
 
-function suggestDefaultLoopName(existingLoops: readonly EarPracticePlayerLoopRegion[]): string {
+function suggestDefaultLoopName(existingLoops: readonly PracticeToolLoopRegion[]): string {
   const existingNames = existingLoops.map((loop) => loop.name);
   let n = existingLoops.length + 1;
   let candidate = `New Loop ${n}`;
@@ -1138,8 +1144,8 @@ function suggestDefaultLoopName(existingLoops: readonly EarPracticePlayerLoopReg
  * and immediately opens it for inline name/time editing — there is no
  * separate naming dialog. */
 function createLoopFromRange(range: SecondsRange): void {
-  const player = ensureEarPracticePlayerState();
-  const newLoop: EarPracticePlayerLoopRegion = {
+  const player = ensurePracticeToolState();
+  const newLoop: PracticeToolLoopRegion = {
     id: generateLoopId(),
     name: suggestDefaultLoopName(player.loops),
     startSec: range.startSec,
@@ -1151,15 +1157,15 @@ function createLoopFromRange(range: SecondsRange): void {
   editingLoopId = newLoop.id;
   candidateRange = null;
   persistLoopsForCurrentFile();
-  seekEarPracticePlayerFile(newLoop.startSec);
-  setEarPracticePlayerLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
-  setEarPracticePlayerLooping(true);
-  appendLog(`ear practice player loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
-  renderEarPracticePlayerPanel();
+  seekPracticeToolFile(newLoop.startSec);
+  setPracticeToolLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
+  setPracticeToolLooping(true);
+  appendLog(`practice tool loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
+  renderPracticeToolPanel();
 }
 
 function addNewLoop(): void {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   if (player.durationSec <= 0) {
     showNotification("Load an audio file first");
     return;
@@ -1179,14 +1185,14 @@ function addNewLoop(): void {
 }
 
 function bindWaveformInteractions(): void {
-  const canvas = document.getElementById("ear-practice-player-waveform") as HTMLCanvasElement | null;
+  const canvas = document.getElementById("practice-tool-waveform") as HTMLCanvasElement | null;
   if (!canvas || canvas.dataset.bound === "true") {
     return;
   }
   canvas.dataset.bound = "true";
 
   canvas.addEventListener("mousedown", (event) => {
-    const player = ensureEarPracticePlayerState();
+    const player = ensurePracticeToolState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1244,7 +1250,7 @@ function bindWaveformInteractions(): void {
     if (!dragMode) {
       return;
     }
-    const player = ensureEarPracticePlayerState();
+    const player = ensurePracticeToolState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1294,14 +1300,14 @@ function bindWaveformInteractions(): void {
 
     if (dragMode === "pending") {
       // Never moved past the click/drag threshold: a plain seek click.
-      const player = ensureEarPracticePlayerState();
+      const player = ensurePracticeToolState();
       if (player.durationSec > 0) {
-        seekEarPracticePlayerFile(pointerDownRatio * player.durationSec);
+        seekPracticeToolFile(pointerDownRatio * player.durationSec);
       }
     } else if (dragMode === "handle") {
       const activeLoop = getActiveLoop();
       if (activeLoop) {
-        flushActiveLoopRegionSend(activeLoop);
+        loopRegionSender.flush(activeLoop);
         persistLoopsForCurrentFile();
       }
     }
@@ -1311,7 +1317,7 @@ function bindWaveformInteractions(): void {
   });
 
   canvas.addEventListener("keydown", (event) => {
-    const player = ensureEarPracticePlayerState();
+    const player = ensurePracticeToolState();
     if (player.durationSec <= 0) {
       return;
     }
@@ -1334,16 +1340,16 @@ function bindWaveformInteractions(): void {
 }
 
 function bindTransportControls(): void {
-  const browseBtn = document.getElementById("ear-practice-player-browse-btn") as HTMLButtonElement | null;
-  const playPauseBtn = document.getElementById("ear-practice-player-play-pause") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("ear-practice-player-stop") as HTMLButtonElement | null;
+  const browseBtn = document.getElementById("practice-tool-browse-btn") as HTMLButtonElement | null;
+  const playPauseBtn = document.getElementById("practice-tool-play-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("practice-tool-stop") as HTMLButtonElement | null;
 
   if (browseBtn && browseBtn.dataset.bound !== "true") {
     browseBtn.dataset.bound = "true";
     browseBtn.addEventListener("click", () => {
       void confirmResetIfNeeded().then((proceed) => {
         if (proceed) {
-          browseEarPracticePlayerFile();
+          browsePracticeToolFile();
         }
       });
     });
@@ -1352,18 +1358,18 @@ function bindTransportControls(): void {
   if (playPauseBtn && playPauseBtn.dataset.bound !== "true") {
     playPauseBtn.dataset.bound = "true";
     playPauseBtn.addEventListener("click", () => {
-      const player = ensureEarPracticePlayerState();
+      const player = ensurePracticeToolState();
       if (player.durationSec <= 0) {
         return;
       }
-      setEarPracticePlayerTransport(player.playing ? "pause" : "play");
+      setPracticeToolTransport(player.playing ? "pause" : "play");
     });
   }
 
   if (stopBtn && stopBtn.dataset.bound !== "true") {
     stopBtn.dataset.bound = "true";
     stopBtn.addEventListener("click", () => {
-      setEarPracticePlayerTransport("stop");
+      setPracticeToolTransport("stop");
     });
   }
 
@@ -1387,7 +1393,7 @@ function commitEditableField(input: HTMLInputElement): void {
 }
 
 function bindLoopListActions(): void {
-  const list = document.getElementById("ear-practice-player-loop-list");
+  const list = document.getElementById("practice-tool-loop-list");
   if (list && list.dataset.bound !== "true") {
     list.dataset.bound = "true";
     list.addEventListener("click", (event) => {
@@ -1395,11 +1401,11 @@ function bindLoopListActions(): void {
       if (!target) {
         return;
       }
-      if (target.closest(".ear-practice-player-loop-undo-btn")) {
+      if (target.closest(".practice-tool-loop-undo-btn")) {
         undoDeleteLoop();
         return;
       }
-      const selectBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-select-btn");
+      const selectBtn = target.closest<HTMLButtonElement>(".practice-tool-loop-select-btn");
       if (selectBtn) {
         const loopId = selectBtn.dataset.loopId ?? "";
         if (loopId) {
@@ -1407,13 +1413,13 @@ function bindLoopListActions(): void {
         }
         return;
       }
-      const renameBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-rename-btn");
+      const renameBtn = target.closest<HTMLButtonElement>(".practice-tool-loop-rename-btn");
       if (renameBtn) {
         editingLoopId = renameBtn.dataset.loopId ?? null;
         renderLoopList();
         return;
       }
-      const deleteBtn = target.closest<HTMLButtonElement>(".ear-practice-player-loop-delete-btn");
+      const deleteBtn = target.closest<HTMLButtonElement>(".practice-tool-loop-delete-btn");
       if (deleteBtn) {
         const loopId = deleteBtn.dataset.loopId ?? "";
         if (loopId) {
@@ -1421,8 +1427,8 @@ function bindLoopListActions(): void {
         }
         return;
       }
-      const rowMain = target.closest<HTMLElement>(".ear-practice-player-loop-row-main");
-      if (rowMain && !target.closest(".ear-practice-player-loop-editable")) {
+      const rowMain = target.closest<HTMLElement>(".practice-tool-loop-row-main");
+      if (rowMain && !target.closest(".practice-tool-loop-editable")) {
         const loopId = rowMain.dataset.loopId ?? "";
         if (loopId && loopId !== editingLoopId) {
           selectLoop(loopId);
@@ -1436,11 +1442,11 @@ function bindLoopListActions(): void {
     // dropdown instead of a separate row of buttons.
     list.addEventListener("input", (event) => {
       const target = event.target as HTMLElement | null;
-      const nameInput = target?.closest<HTMLInputElement>(".ear-practice-player-loop-name-input");
+      const nameInput = target?.closest<HTMLInputElement>(".practice-tool-loop-name-input");
       if (!nameInput || !LOOP_NAME_TEMPLATES.includes(nameInput.value)) {
         return;
       }
-      const player = ensureEarPracticePlayerState();
+      const player = ensurePracticeToolState();
       const otherNames = player.loops
         .filter((loop) => loop.id !== nameInput.dataset.loopId)
         .map((loop) => loop.name);
@@ -1449,7 +1455,7 @@ function bindLoopListActions(): void {
 
     list.addEventListener("keydown", (event) => {
       const target = event.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".ear-practice-player-loop-editable");
+      const input = target?.closest<HTMLInputElement>(".practice-tool-loop-editable");
       if (!input) {
         return;
       }
@@ -1466,7 +1472,7 @@ function bindLoopListActions(): void {
     list.addEventListener("focusout", (event) => {
       const focusEvent = event as FocusEvent;
       const target = focusEvent.target as HTMLElement | null;
-      const input = target?.closest<HTMLInputElement>(".ear-practice-player-loop-editable");
+      const input = target?.closest<HTMLInputElement>(".practice-tool-loop-editable");
       if (!input) {
         return;
       }
@@ -1476,7 +1482,7 @@ function bindLoopListActions(): void {
       // this loop's row — e.g. Tab moving from the name field to the start-
       // time field must NOT re-render mid-tab, or the Tab destination would
       // vanish before the browser gets to focus it.
-      const row = input.closest(".ear-practice-player-loop-row");
+      const row = input.closest(".practice-tool-loop-row");
       const nextFocus = focusEvent.relatedTarget;
       const staysInRow = row && nextFocus instanceof Node && row.contains(nextFocus);
       if (!staysInRow) {
@@ -1485,13 +1491,13 @@ function bindLoopListActions(): void {
     });
   }
 
-  const newLoopBtn = document.getElementById("ear-practice-player-new-loop-btn") as HTMLButtonElement | null;
+  const newLoopBtn = document.getElementById("practice-tool-new-loop-btn") as HTMLButtonElement | null;
   if (newLoopBtn && newLoopBtn.dataset.bound !== "true") {
     newLoopBtn.dataset.bound = "true";
     newLoopBtn.addEventListener("click", () => addNewLoop());
   }
 
-  const addLoopBtn = document.getElementById("ear-practice-player-add-loop-btn") as HTMLButtonElement | null;
+  const addLoopBtn = document.getElementById("practice-tool-add-loop-btn") as HTMLButtonElement | null;
   if (addLoopBtn && addLoopBtn.dataset.bound !== "true") {
     addLoopBtn.dataset.bound = "true";
     addLoopBtn.addEventListener("click", () => addNewLoop());
@@ -1517,7 +1523,7 @@ function hasSupportedAudioExtension(fileName: string): boolean {
 }
 
 /** Loading a new file resets Volume/Balance/Speed/Pitch back to their
- * defaults (see applyEarPracticePlayerFileLoaded) — ask first, unless there's
+ * defaults (see applyPracticeToolFileLoaded) — ask first, unless there's
  * nothing currently loaded to lose. Shared by both load entry points
  * (Browse File and drag-and-drop) so neither can bypass the other's gate.
  *
@@ -1526,7 +1532,7 @@ function hasSupportedAudioExtension(fileName: string): boolean {
  * without re-importing), this reset step becomes unnecessary for a project
  * *switch* — it only still applies to importing a brand-new, unsaved file. */
 async function confirmResetIfNeeded(): Promise<boolean> {
-  const player = ensureEarPracticePlayerState();
+  const player = ensurePracticeToolState();
   if (!player.filePath) {
     return true;
   }
@@ -1537,7 +1543,7 @@ async function confirmResetIfNeeded(): Promise<boolean> {
 }
 
 function bindDropZone(): void {
-  const dropZone = document.getElementById("ear-practice-player-waveform-wrap");
+  const dropZone = document.getElementById("practice-tool-waveform-wrap");
   if (!dropZone || dropZone.dataset.bound === "true") {
     return;
   }
@@ -1569,16 +1575,16 @@ function bindDropZone(): void {
 
       const path = readDroppedFilePath(file);
       if (path) {
-        loadEarPracticePlayerFile(path);
-        appendLog(`ear practice player load requested (drop, path) → ${path}`);
+        loadPracticeToolFile(path);
+        appendLog(`practice tool load requested (drop, path) → ${path}`);
         return;
       }
 
       void file
         .arrayBuffer()
         .then((buffer) => {
-          loadEarPracticePlayerFileData(file.name, arrayBufferToBase64(buffer));
-          appendLog(`ear practice player load requested (drop, data) → ${file.name}`);
+          loadPracticeToolFileData(file.name, arrayBufferToBase64(buffer));
+          appendLog(`practice tool load requested (drop, data) → ${file.name}`);
         })
         .catch((error) => {
           showNotification("Unable to read dropped file", error instanceof Error ? error.message : String(error));
@@ -1594,7 +1600,7 @@ function bindAllActions(): void {
   bindDropZone();
 }
 
-export function renderEarPracticePlayerPanel(): void {
+export function renderPracticeToolPanel(): void {
   ensureLoopNameTemplatesDatalist();
   renderFileInfo();
   renderTransportControls();
@@ -1604,7 +1610,7 @@ export function renderEarPracticePlayerPanel(): void {
   bindAllActions();
 }
 
-export function initializeEarPracticePlayerPanel(): void {
+export function initializePracticeToolPanel(): void {
   bindAllActions();
-  renderEarPracticePlayerPanel();
+  renderPracticeToolPanel();
 }

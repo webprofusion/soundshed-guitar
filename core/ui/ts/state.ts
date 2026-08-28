@@ -285,7 +285,7 @@ export const uiState: UiState = {
     hasAudio: false,
     waveformPeaks: [],
   },
-  earPracticePlayer: {
+  practiceTool: {
     filePath: "",
     title: "",
     durationSec: 0,

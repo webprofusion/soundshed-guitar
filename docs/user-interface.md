@@ -91,9 +91,9 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `compositeDefinitionRemoved` | `{...}` | Composite effect removed |
 | `compositeEditState` | `{...}` | Composite edit mode state |
 | `compositeEditModeExited` | `{}` | Exited composite edit mode |
-| `earPracticePlayerFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Ear Practice Player: backing-track file decoded and ready |
-| `earPracticePlayerTransportState` | `{state, positionSec}` | Ear Practice Player: playback state/position, pushed periodically while loaded |
-| `earPracticePlayerPlaybackEnded` | `{}` | Ear Practice Player: playback reached the end of the file (non-looping) |
+| `practiceToolFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Practice Tool: backing-track file decoded and ready |
+| `practiceToolTransportState` | `{state, positionSec}` | Practice Tool: playback state/position, pushed periodically while loaded |
+| `practiceToolPlaybackEnded` | `{}` | Practice Tool: playback reached the end of the file (non-looping) |
 
 ### UI → Engine Messages
 
@@ -141,15 +141,17 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `getEffectCatalog` | `{}` | Request effect catalog |
 | `getPresetList` | `{}` | Request preset list from disk |
 | `openAudioPreferences` | `{}` | Open audio device settings |
-| `browseEarPracticePlayerFile` | `{}` | Ear Practice Player: open native file browser for a backing track |
-| `loadEarPracticePlayerFile` | `{path}` | Ear Practice Player: load a backing track by native path |
-| `setEarPracticePlayerTransport` | `{action}` | Ear Practice Player: `"play"`, `"pause"`, or `"stop"` |
-| `seekEarPracticePlayerFile` | `{seconds}` | Ear Practice Player: seek to a position |
-| `setEarPracticePlayerSpeed` | `{ratio}` | Ear Practice Player: time-stretch ratio, clamped `[0.25, 2.0]` |
-| `setEarPracticePlayerPitch` | `{semitones}` | Ear Practice Player: pitch shift, clamped `[-12, 12]` semitones |
-| `setEarPracticePlayerGain` | `{gain}` | Ear Practice Player: linear output gain |
-| `setEarPracticePlayerLoopRegion` | `{startSec, endSec}` or `{}` | Ear Practice Player: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
-| `setEarPracticePlayerLooping` | `{enabled}` | Ear Practice Player: enable/disable looping of the active region |
+| `browsePracticeToolFile` | `{}` | Practice Tool: open native file browser for a backing track |
+| `loadPracticeToolFile` | `{path}` | Practice Tool: load a backing track by native path |
+| `loadPracticeToolFileData` | `{fileName, data}` | Practice Tool: load a backing track from base64 bytes — used for a drag-and-drop, where WebView2 never exposes the real file path |
+| `setPracticeToolTransport` | `{action}` | Practice Tool: `"play"`, `"pause"`, or `"stop"` |
+| `seekPracticeToolFile` | `{seconds}` | Practice Tool: seek to a position |
+| `setPracticeToolSpeed` | `{ratio}` | Practice Tool: time-stretch ratio, clamped `[0.25, 2.0]` |
+| `setPracticeToolPitch` | `{semitones}` | Practice Tool: pitch shift, clamped `[-12, 12]` semitones |
+| `setPracticeToolGain` | `{gain}` | Practice Tool: linear output gain |
+| `setPracticeToolBalance` | `{balance}` | Practice Tool: stereo balance, `-1` (full left) to `+1` (full right) |
+| `setPracticeToolLoopRegion` | `{startSec, endSec}` or `{}` | Practice Tool: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
+| `setPracticeToolLooping` | `{enabled}` | Practice Tool: enable/disable looping of the active region |
 
 ## State Object
 
@@ -468,7 +470,7 @@ in app settings under `ui.neuralAmp3dView.enabled`.
 
 ## Jam Panel Notes
 
-### Ear Practice Audio Player (`core/ui/ts/earPracticePlayer.ts`)
+### Practice Tool (`core/ui/ts/practiceTool.ts`)
 
 A fourth Jam-panel section (alongside backing-track search, Scales, and the Riff
 Library) that loads a local audio file — a WAV, AIFF, or MP3 backing track — and
@@ -477,11 +479,11 @@ guitar signal path, with its own tempo (speed) and pitch controls and a set of
 named loop regions for drilling difficult passages.
 
 - **Engine has no loop library.** The engine only ever knows the *currently-active*
-  loop's bounds and an on/off flag (`setEarPracticePlayerLoopRegion`/`setEarPracticePlayerLooping`).
+  loop's bounds and an on/off flag (`setPracticeToolLoopRegion`/`setPracticeToolLooping`).
   The full named-loop list — add, rename, delete, and the section-name templates — is
   100% client-side state, persisted via `setAppSetting` under
-  `earPracticePlayer.loops`, keyed by a fingerprint of the loaded file (`path` +
-  `durationSec`, the only stable identifiers `earPracticePlayerFileLoaded` provides) so
+  `practiceTool.loops`, keyed by a fingerprint of the loaded file (`path` +
+  `durationSec`, the only stable identifiers `practiceToolFileLoaded` provides) so
   loops reappear when the same file is reopened. No message round-trips through the
   engine for loop CRUD.
 - **List, not overlay bands.** Because loops can legitimately overlap (a short lick
@@ -492,23 +494,32 @@ named loop regions for drilling difficult passages.
   the same canvas drag-handle interaction as the riff-take trim editor in
   `riffLibrary.ts`.
 - **Selecting = activating.** Clicking a loop row seeks to its start, sends
-  `setEarPracticePlayerLoopRegion`, and shows its handles on the waveform for fine-tuning;
+  `setPracticeToolLoopRegion`, and shows its handles on the waveform for fine-tuning;
   dragging a handle live-updates the loop's bounds locally and re-sends the region
   (debounced) if it is the active loop. Clicking the already-active loop's row
-  deactivates it (`setEarPracticePlayerLoopRegion` with bounds omitted).
-- **Naming.** Dragging a fresh range on the waveform (with no loop selected) shows a
-  "+ Add Loop" affordance that opens an inline naming control: free text, plus a
-  quick-pick row of common song-section templates (`LOOP_NAME_TEMPLATES` — Intro,
-  Verse, Pre-Chorus, Chorus, Bridge, Solo, Outro, Turnaround, Breakdown). Picking a
-  template auto-suffixes a number against existing loop names on the same track
-  (`suggestLoopTemplateName`: "Verse" → "Verse 1", pick it again → "Verse 2"), so a
-  whole song structure can be laid down in a few clicks.
-- **Transport.** Play/pause/stop, a speed slider (25%–200%), a pitch slider (±12
-  semitones), a loop on/off toggle, and a volume slider all send their own bridge
-  message per change (`setEarPracticePlayerSpeed`/`setEarPracticePlayerPitch`/`setEarPracticePlayerGain`/
-  `setEarPracticePlayerLooping`); playback state itself is authoritative from the engine
-  (`earPracticePlayerTransportState`), not assumed optimistically in the UI.
-- Gated behind `Features.EarPracticePlayer` (`features.earPracticePlayer.enabled`,
+  deactivates it (`setPracticeToolLoopRegion` with bounds omitted).
+- **Naming.** A new loop (dragged on the waveform then "+ Add Loop", or "+ New Loop")
+  is added to the list immediately — auto-named, auto-selected — and opens for
+  name/start/end editing inline in its own row, committed on blur/Tab/Enter. There is
+  no separate naming dialog. Common song-section templates (`LOOP_NAME_TEMPLATES` —
+  Intro, Verse, Pre-Chorus, Chorus, Bridge, Solo, Outro, Turnaround, Breakdown) are
+  offered as `<datalist>` suggestions on every name field, so the same control serves
+  both naming and renaming. A template auto-suffixes a number against existing loop
+  names on the same track (`suggestLoopTemplateName`: "Verse" → "Verse 1", pick it
+  again → "Verse 2"), so a whole song structure can be laid down in a few clicks.
+  Deleting is likewise dialog-free: the loop goes immediately and an inline
+  "Deleted *X*. [Undo]" banner keeps it reversible for `DELETE_UNDO_WINDOW_MS`.
+- **Transport.** Play/pause/stop plus four faders — Volume, Balance, Speed (25%–200%)
+  and Pitch (±12 semitones) — each sending its own bridge message per change
+  (`setPracticeToolGain`/`setPracticeToolBalance`/`setPracticeToolSpeed`/
+  `setPracticeToolPitch`). The faders share one normalized slider domain so every
+  control's default sits dead center regardless of how asymmetric its real range is;
+  each has an adjoining text field for a typed exact value, and double-clicking a
+  slider resets it. Speed/pitch sends are debounced during a drag (each one flushes
+  the engine's render-ahead ring) and flushed on release. Looping follows loop
+  selection rather than a separate toggle. Playback state itself is authoritative
+  from the engine (`practiceToolTransportState`), not assumed optimistically in the UI.
+- Gated behind `Features.PracticeTool` (`features.practiceTool.enabled`,
   default on), included in `JAM_PANEL_FEATURE_IDS` so the Jam panel experience as a
   whole still shows if only this section is enabled.
 

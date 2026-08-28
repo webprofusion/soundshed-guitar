@@ -8,7 +8,7 @@ import { getApiBaseUrl } from "./toneSharingPanel.js";
 import { isJamEnabled } from "./buildFlags.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
 import { renderRiffLibraryPanel } from "./riffLibrary.js";
-import { renderEarPracticePlayerPanel } from "./earPracticePlayer.js";
+import { renderPracticeToolPanel } from "./practiceTool.js";
 import { getXMarkSvg } from "./iconAssets.js";
 
 const API_KEY_SETTING = "jam.youtubeApiKey";
@@ -26,7 +26,7 @@ let initialized = false;
 let searchRequestId = 0;
 let initialSearchTriggered = false;
 
-type JamSectionId = "backingTracks" | "scales" | "riffs" | "player";
+type JamSectionId = "backingTracks" | "scales" | "riffs" | "practiceTool";
 type BackingTracksTabId = "search" | "favorites";
 type LegacyJamState = JamState & { activeSection?: JamSectionId; activeTab?: BackingTracksTabId | "riffs" };
 type JamSearchCache = {
@@ -63,7 +63,7 @@ function ensureJamState(): JamState {
     jam.activeSection !== "backingTracks" &&
     jam.activeSection !== "scales" &&
     jam.activeSection !== "riffs" &&
-    jam.activeSection !== "player"
+    jam.activeSection !== "practiceTool"
   ) {
     jam.activeSection = legacyActiveTab === "riffs" ? "riffs" : "backingTracks";
   }
@@ -239,8 +239,8 @@ function isRiffLibraryFeatureEnabled(): boolean {
   return isFeatureEnabled(Features.RiffLibrary);
 }
 
-function isEarPracticePlayerFeatureEnabled(): boolean {
-  return isFeatureEnabled(Features.EarPracticePlayer);
+function isPracticeToolFeatureEnabled(): boolean {
+  return isFeatureEnabled(Features.PracticeTool);
 }
 
 function isScalesFeatureEnabled(): boolean {
@@ -248,7 +248,7 @@ function isScalesFeatureEnabled(): boolean {
 }
 
 function resolveJamSection(preferredSection: JamSectionId): JamSectionId {
-  const orderedSections: JamSectionId[] = ["backingTracks", "scales", "riffs", "player"];
+  const orderedSections: JamSectionId[] = ["backingTracks", "scales", "riffs", "practiceTool"];
   const enabledSections = orderedSections.filter((sectionId) => {
     if (sectionId === "riffs") {
       return isRiffLibraryFeatureEnabled();
@@ -256,8 +256,8 @@ function resolveJamSection(preferredSection: JamSectionId): JamSectionId {
     if (sectionId === "scales") {
       return isScalesFeatureEnabled();
     }
-    if (sectionId === "player") {
-      return isEarPracticePlayerFeatureEnabled();
+    if (sectionId === "practiceTool") {
+      return isPracticeToolFeatureEnabled();
     }
     return isBackingTracksFeatureEnabled();
   });
@@ -303,8 +303,8 @@ function setActiveSection(section: JamSectionId): void {
     return;
   }
 
-  if (jam.activeSection === "player") {
-    renderEarPracticePlayerPanel();
+  if (jam.activeSection === "practiceTool") {
+    renderPracticeToolPanel();
     return;
   }
 
@@ -555,13 +555,13 @@ export function renderJamPanel(): void {
   const searchInput = document.getElementById("jam-search-input") as HTMLInputElement | null;
   const scalesSectionButton = document.getElementById("jam-section-scales");
   const riffsSectionButton = document.getElementById("jam-section-riffs");
-  const playerSectionButton = document.getElementById("jam-section-player");
+  const practiceToolSectionButton = document.getElementById("jam-section-practice-tool");
   const searchTab = document.getElementById("jam-backing-tab-search");
   const favoritesTab = document.getElementById("jam-backing-tab-favorites");
   const backingTracksPanel = document.getElementById("jam-section-panel-backing-tracks");
   const scalesPanel = document.getElementById("jam-section-panel-scales");
   const riffsPanel = document.getElementById("jam-section-panel-riffs");
-  const playerPanel = document.getElementById("jam-section-panel-player");
+  const practiceToolPanel = document.getElementById("jam-section-panel-practice-tool");
   const searchPanel = document.getElementById("jam-backing-tab-panel-search");
   const favoritesPanel = document.getElementById("jam-backing-tab-panel-favorites");
 
@@ -575,7 +575,7 @@ export function renderJamPanel(): void {
   const backingTracksEnabled = isBackingTracksFeatureEnabled();
   const scalesEnabled = isScalesFeatureEnabled();
   const riffLibraryEnabled = isRiffLibraryFeatureEnabled();
-  const earPracticePlayerEnabled = isEarPracticePlayerFeatureEnabled();
+  const practiceToolEnabled = isPracticeToolFeatureEnabled();
 
   if (searchInput && searchInput.value !== jam.query) {
     searchInput.value = jam.query;
@@ -583,13 +583,13 @@ export function renderJamPanel(): void {
 
   scalesSectionButton?.toggleAttribute("hidden", !scalesEnabled);
   riffsSectionButton?.toggleAttribute("hidden", !riffLibraryEnabled);
-  playerSectionButton?.toggleAttribute("hidden", !earPracticePlayerEnabled);
+  practiceToolSectionButton?.toggleAttribute("hidden", !practiceToolEnabled);
   searchTab?.toggleAttribute("hidden", !backingTracksEnabled);
   favoritesTab?.toggleAttribute("hidden", !backingTracksEnabled);
 
   scalesSectionButton?.classList.toggle("active", resolvedSection === "scales");
   riffsSectionButton?.classList.toggle("active", resolvedSection === "riffs");
-  playerSectionButton?.classList.toggle("active", resolvedSection === "player");
+  practiceToolSectionButton?.classList.toggle("active", resolvedSection === "practiceTool");
   searchTab?.classList.toggle("active", resolvedSection === "backingTracks" && resolvedTab === "search");
   favoritesTab?.classList.toggle("active", resolvedSection === "backingTracks" && resolvedTab === "favorites");
 
@@ -599,8 +599,8 @@ export function renderJamPanel(): void {
   scalesPanel?.toggleAttribute("hidden", resolvedSection !== "scales" || !scalesEnabled);
   riffsPanel?.classList.toggle("active", resolvedSection === "riffs" && riffLibraryEnabled);
   riffsPanel?.toggleAttribute("hidden", resolvedSection !== "riffs" || !riffLibraryEnabled);
-  playerPanel?.classList.toggle("active", resolvedSection === "player" && earPracticePlayerEnabled);
-  playerPanel?.toggleAttribute("hidden", resolvedSection !== "player" || !earPracticePlayerEnabled);
+  practiceToolPanel?.classList.toggle("active", resolvedSection === "practiceTool" && practiceToolEnabled);
+  practiceToolPanel?.toggleAttribute("hidden", resolvedSection !== "practiceTool" || !practiceToolEnabled);
   searchPanel?.classList.toggle("active", resolvedTab === "search" && backingTracksEnabled);
   searchPanel?.toggleAttribute("hidden", resolvedTab !== "search" || !backingTracksEnabled);
   favoritesPanel?.classList.toggle("active", resolvedTab === "favorites" && backingTracksEnabled);
@@ -611,8 +611,8 @@ export function renderJamPanel(): void {
     return;
   }
 
-  if (resolvedSection === "player") {
-    renderEarPracticePlayerPanel();
+  if (resolvedSection === "practiceTool") {
+    renderPracticeToolPanel();
     return;
   }
 
@@ -826,7 +826,7 @@ function bindPanelActions(): void {
 
   document.getElementById("jam-section-scales")?.addEventListener("click", () => setActiveSection("scales"));
   document.getElementById("jam-section-riffs")?.addEventListener("click", () => setActiveSection("riffs"));
-  document.getElementById("jam-section-player")?.addEventListener("click", () => setActiveSection("player"));
+  document.getElementById("jam-section-practice-tool")?.addEventListener("click", () => setActiveSection("practiceTool"));
   document.getElementById("jam-backing-tab-search")?.addEventListener("click", () => setBackingTracksTab("search"));
   document.getElementById("jam-backing-tab-favorites")?.addEventListener("click", () => setBackingTracksTab("favorites"));
 

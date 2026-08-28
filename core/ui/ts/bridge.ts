@@ -260,63 +260,63 @@ export function removeCompositePreset(id: string): void {
   appendLog(`removeCompositePreset → ${id}`);
 }
 
-// ── Ear Practice Player (Jam panel) ────────────────────────────────────────────
+// ── Practice Tool (Jam panel) ────────────────────────────────────────────
 // The engine has no concept of a loop library — only the currently-active
 // loop's bounds and whether looping is on. Loop add/rename/delete/select are
-// pure UI state (see earPracticePlayer.ts) and never round-trip through these.
+// pure UI state (see practiceTool.ts) and never round-trip through these.
 
-export function browseEarPracticePlayerFile(): void {
-  postMessage({ type: "browseEarPracticePlayerFile" });
-  appendLog("browseEarPracticePlayerFile");
+export function browsePracticeToolFile(): void {
+  postMessage({ type: "browsePracticeToolFile" });
+  appendLog("browsePracticeToolFile");
 }
 
-export function loadEarPracticePlayerFile(path: string): void {
-  postMessage({ type: "loadEarPracticePlayerFile", path });
-  appendLog(`loadEarPracticePlayerFile → ${path}`);
+export function loadPracticeToolFile(path: string): void {
+  postMessage({ type: "loadPracticeToolFile", path });
+  appendLog(`loadPracticeToolFile → ${path}`);
 }
 
 /** For a file dropped on the waveform: WebView2 never exposes a dropped
  * File's real path (that's Electron-only), so the caller reads its bytes
  * via file.arrayBuffer() and sends them here as base64 instead. */
-export function loadEarPracticePlayerFileData(fileName: string, dataBase64: string): void {
-  postMessage({ type: "loadEarPracticePlayerFileData", fileName, data: dataBase64 });
-  appendLog(`loadEarPracticePlayerFileData → ${fileName} (${dataBase64.length} b64 chars)`);
+export function loadPracticeToolFileData(fileName: string, dataBase64: string): void {
+  postMessage({ type: "loadPracticeToolFileData", fileName, data: dataBase64 });
+  appendLog(`loadPracticeToolFileData → ${fileName} (${dataBase64.length} b64 chars)`);
 }
 
-export function setEarPracticePlayerTransport(action: "play" | "pause" | "stop"): void {
-  postMessage({ type: "setEarPracticePlayerTransport", action });
-  appendLog(`setEarPracticePlayerTransport → ${action}`);
+export function setPracticeToolTransport(action: "play" | "pause" | "stop"): void {
+  postMessage({ type: "setPracticeToolTransport", action });
+  appendLog(`setPracticeToolTransport → ${action}`);
 }
 
-export function seekEarPracticePlayerFile(seconds: number): void {
-  postMessage({ type: "seekEarPracticePlayerFile", seconds });
+export function seekPracticeToolFile(seconds: number): void {
+  postMessage({ type: "seekPracticeToolFile", seconds });
 }
 
-export function setEarPracticePlayerSpeed(ratio: number): void {
-  postMessage({ type: "setEarPracticePlayerSpeed", ratio });
+export function setPracticeToolSpeed(ratio: number): void {
+  postMessage({ type: "setPracticeToolSpeed", ratio });
 }
 
-export function setEarPracticePlayerPitch(semitones: number): void {
-  postMessage({ type: "setEarPracticePlayerPitch", semitones });
+export function setPracticeToolPitch(semitones: number): void {
+  postMessage({ type: "setPracticeToolPitch", semitones });
 }
 
-export function setEarPracticePlayerGain(gain: number): void {
-  postMessage({ type: "setEarPracticePlayerGain", gain });
+export function setPracticeToolGain(gain: number): void {
+  postMessage({ type: "setPracticeToolGain", gain });
 }
 
-export function setEarPracticePlayerBalance(balance: number): void {
-  postMessage({ type: "setEarPracticePlayerBalance", balance });
+export function setPracticeToolBalance(balance: number): void {
+  postMessage({ type: "setPracticeToolBalance", balance });
 }
 
 /** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
-export function setEarPracticePlayerLoopRegion(region: { startSec: number; endSec: number } | null): void {
+export function setPracticeToolLoopRegion(region: { startSec: number; endSec: number } | null): void {
   if (region) {
-    postMessage({ type: "setEarPracticePlayerLoopRegion", startSec: region.startSec, endSec: region.endSec });
+    postMessage({ type: "setPracticeToolLoopRegion", startSec: region.startSec, endSec: region.endSec });
   } else {
-    postMessage({ type: "setEarPracticePlayerLoopRegion" });
+    postMessage({ type: "setPracticeToolLoopRegion" });
   }
 }
 
-export function setEarPracticePlayerLooping(enabled: boolean): void {
-  postMessage({ type: "setEarPracticePlayerLooping", enabled });
+export function setPracticeToolLooping(enabled: boolean): void {
+  postMessage({ type: "setPracticeToolLooping", enabled });
 }

@@ -11,7 +11,7 @@
 #include "PluginController.h"
 #include "MessageDispatcher.h"
 #include "controller/DemoPreviewService.h"
-#include "controller/EarPracticePlayerService.h"
+#include "controller/PracticeToolService.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/LevelTargets.h"
@@ -108,10 +108,9 @@ namespace
     /// enough that a moving puck looks continuous, slow enough to be negligible.
     constexpr int kSpatialPositionRateHz = 20;
 
-    /// How often the ear practice player's transport state
-    /// (position/state) is pushed to the UI. A progress readout doesn't need
-    /// more than this.
-    constexpr int kEarPracticePlayerRateHz = 12;
+    /// How often the practice tool's transport state (position/state) is pushed
+    /// to the UI. A progress readout doesn't need more than this.
+    constexpr int kPracticeToolRateHz = 12;
 
     // ── Metronome constants ─────────────────────────────────────────
 
@@ -2308,7 +2307,7 @@ PluginController::PluginController(IPluginHost& host)
         mSignalTestActive,
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
         [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mEarPracticePlayer = std::make_unique<EarPracticePlayerService>(
+    mPracticeTool = std::make_unique<PracticeToolService>(
         mHost,
         mDSPMutex,
         [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
@@ -2481,8 +2480,8 @@ void PluginController::Prepare(double sampleRate, int blockSize)
     std::lock_guard<std::mutex> lock(mDSPMutex);
     mPresetMixer.Prepare(sampleRate, blockSize);
 
-    if (mEarPracticePlayer)
-        mEarPracticePlayer->Prepare(sampleRate, blockSize);
+    if (mPracticeTool)
+        mPracticeTool->Prepare(sampleRate, blockSize);
 
     // Report initial latency to the host (e.g. IR cab partition size may be
     // known only after Prepare sets the sample rate).
@@ -2754,8 +2753,8 @@ void PluginController::ProcessAudioLocked(float** inputs, float** outputs, int n
     // metronome) — it is not the guitar signal and must never be routed
     // through the amp/cab chain. Audio-thread-safe: pops from a lock-free
     // ring only, never blocks.
-    if (mEarPracticePlayer)
-        mEarPracticePlayer->RenderPostChain(outputs, numSamples);
+    if (mPracticeTool)
+        mPracticeTool->RenderPostChain(outputs, numSamples);
 
     // Collect signal test output
     if (mSignalTestState.samplesRemaining > 0 || mSignalTestResultPending.load(std::memory_order_relaxed))
@@ -4555,13 +4554,13 @@ void PluginController::OnIdle()
     if (mDemoPreview)
         mDemoPreview->OnIdle();
 
-    if (mEarPracticePlayer)
+    if (mPracticeTool)
     {
-        mEarPracticePlayerUpdateCounter++;
-        if (mEarPracticePlayerUpdateCounter >= 60 / kEarPracticePlayerRateHz)
+        mPracticeToolUpdateCounter++;
+        if (mPracticeToolUpdateCounter >= 60 / kPracticeToolRateHz)
         {
-            mEarPracticePlayerUpdateCounter = 0;
-            mEarPracticePlayer->OnIdle();
+            mPracticeToolUpdateCounter = 0;
+            mPracticeTool->OnIdle();
         }
     }
 }
@@ -11027,9 +11026,24 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
     }
 }
 
-// ── Ear Practice Player (Jam panel backing-track player) ────────────
+// ── Practice Tool (Jam panel backing-track player) ────────────
 
-void PluginController::HandleBrowseEarPracticePlayerFileRequest()
+// Each fader sends its own field name ("ratio", "gain", ...); a generic
+// "value" is accepted as a fallback so one slider binding can drive any of
+// them. Ignores a present-but-non-numeric field rather than throwing, since
+// MessageDispatcher calls handlers outside its JSON try/catch.
+static double PracticeToolNumberField(const nlohmann::json& payload, const char* key, double fallback)
+{
+    for (const char* candidate : { key, "value" })
+    {
+        const auto it = payload.find(candidate);
+        if (it != payload.end() && it->is_number())
+            return it->get<double>();
+    }
+    return fallback;
+}
+
+void PluginController::HandleBrowsePracticeToolFileRequest()
 {
     mHost.BrowseFileAsync(BrowseFileType::AudioFile, "Select Backing Track",
         [this](const BrowseFileResult& result)
@@ -11038,13 +11052,13 @@ void PluginController::HandleBrowseEarPracticePlayerFileRequest()
                 return;
             nlohmann::json payload;
             payload["path"] = util::PathToUtf8(result.path);
-            HandleLoadEarPracticePlayerFileRequest(payload);
+            HandleLoadPracticeToolFileRequest(payload);
         });
 }
 
-void PluginController::HandleLoadEarPracticePlayerFileRequest(const nlohmann::json& payload)
+void PluginController::HandleLoadPracticeToolFileRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     const std::string path = payload.value("path", "");
     if (path.empty())
@@ -11052,16 +11066,16 @@ void PluginController::HandleLoadEarPracticePlayerFileRequest(const nlohmann::js
         ReportErrorToUI("Unable to load audio file", "No file path provided");
         return;
     }
-    mEarPracticePlayer->LoadFile(path);
+    mPracticeTool->LoadFile(path);
 }
 
 // WebView2 is standard Chromium — a dropped File's real filesystem path is
 // never available to JS (that's an Electron-only extension), so a file
 // dropped on the waveform is sent here as base64 bytes instead of a path
 // (see the "Dropped-file paths" note in .github/copilot-instructions.md).
-void PluginController::HandleLoadEarPracticePlayerFileDataRequest(const nlohmann::json& payload)
+void PluginController::HandleLoadPracticeToolFileDataRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     const std::string fileName = payload.value("fileName", "");
     const std::string dataEncoded = payload.value("data", "");
@@ -11076,82 +11090,82 @@ void PluginController::HandleLoadEarPracticePlayerFileDataRequest(const nlohmann
         ReportErrorToUI("Unable to load audio file", "Unable to decode dropped file data");
         return;
     }
-    mEarPracticePlayer->LoadFileFromBytes(decodedBytes, fileName.empty() ? "Dropped file" : fileName);
+    mPracticeTool->LoadFileFromBytes(decodedBytes, fileName.empty() ? "Dropped file" : fileName);
 }
 
-void PluginController::HandleSetEarPracticePlayerTransportRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolTransportRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     const std::string action = payload.value("action", "");
     if (action == "play")
-        mEarPracticePlayer->Play();
+        mPracticeTool->Play();
     else if (action == "pause")
-        mEarPracticePlayer->Pause();
+        mPracticeTool->Pause();
     else if (action == "stop")
-        mEarPracticePlayer->Stop();
+        mPracticeTool->Stop();
 }
 
-void PluginController::HandleSeekEarPracticePlayerFileRequest(const nlohmann::json& payload)
+void PluginController::HandleSeekPracticeToolFileRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     const double seconds = payload.value("seconds", 0.0);
-    mEarPracticePlayer->SeekSeconds(seconds);
+    mPracticeTool->SeekSeconds(seconds);
 }
 
-void PluginController::HandleSetEarPracticePlayerSpeedRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolSpeedRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
-    const double ratio = payload.contains("ratio") ? payload["ratio"].get<double>() : payload.value("value", 1.0);
-    mEarPracticePlayer->SetSpeed(ratio);
+    const double ratio = PracticeToolNumberField(payload, "ratio", 1.0);
+    mPracticeTool->SetSpeed(ratio);
 }
 
-void PluginController::HandleSetEarPracticePlayerPitchRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolPitchRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
-    const double semitones = payload.contains("semitones") ? payload["semitones"].get<double>() : payload.value("value", 0.0);
-    mEarPracticePlayer->SetPitchSemitones(semitones);
+    const double semitones = PracticeToolNumberField(payload, "semitones", 0.0);
+    mPracticeTool->SetPitchSemitones(semitones);
 }
 
-void PluginController::HandleSetEarPracticePlayerGainRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolGainRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
-    const double gain = payload.contains("gain") ? payload["gain"].get<double>() : payload.value("value", 1.0);
-    mEarPracticePlayer->SetGain(gain);
+    const double gain = PracticeToolNumberField(payload, "gain", 1.0);
+    mPracticeTool->SetGain(gain);
 }
 
-void PluginController::HandleSetEarPracticePlayerBalanceRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolBalanceRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
-    const double balance = payload.contains("balance") ? payload["balance"].get<double>() : payload.value("value", 0.0);
-    mEarPracticePlayer->SetBalance(balance);
+    const double balance = PracticeToolNumberField(payload, "balance", 0.0);
+    mPracticeTool->SetBalance(balance);
 }
 
-void PluginController::HandleSetEarPracticePlayerLoopRegionRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolLoopRegionRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     if (payload.is_null() || !payload.contains("startSec") || !payload.contains("endSec"))
     {
-        mEarPracticePlayer->ClearLoopRegion();
+        mPracticeTool->ClearLoopRegion();
         return;
     }
     const double startSec = payload.value("startSec", 0.0);
     const double endSec = payload.value("endSec", 0.0);
-    mEarPracticePlayer->SetLoopRegion(startSec, endSec);
+    mPracticeTool->SetLoopRegion(startSec, endSec);
 }
 
-void PluginController::HandleSetEarPracticePlayerLoopingRequest(const nlohmann::json& payload)
+void PluginController::HandleSetPracticeToolLoopingRequest(const nlohmann::json& payload)
 {
-    if (!mEarPracticePlayer)
+    if (!mPracticeTool)
         return;
     const bool enabled = payload.value("enabled", false);
-    mEarPracticePlayer->SetLoopingEnabled(enabled);
+    mPracticeTool->SetLoopingEnabled(enabled);
 }
 
 // ── Additional message handlers (from JUCE version) ────────────────

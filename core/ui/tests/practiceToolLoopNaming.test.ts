@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOOP_NAME_TEMPLATES, suggestLoopTemplateName } from "../ts/earPracticePlayer.js";
+import { LOOP_NAME_TEMPLATES, suggestLoopTemplateName } from "../ts/practiceTool.js";
 
 describe("suggestLoopTemplateName", () => {
   it("suffixes the first pick of a template with 1", () => {

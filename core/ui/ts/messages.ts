@@ -9,7 +9,7 @@ import { applyUiSettings } from "./windowSettings.js";
 import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.js";
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete, renderRiffLibraryPanel } from "./riffLibrary.js";
-import { applyEarPracticePlayerFileLoaded, applyEarPracticePlayerPlaybackEnded, applyEarPracticePlayerTransportState } from "./earPracticePlayer.js";
+import { applyPracticeToolFileLoaded, applyPracticeToolPlaybackEnded, applyPracticeToolTransportState } from "./practiceTool.js";
 import { getRiffLibrary, postMessage } from "./bridge.js";
 import { refreshEffectPresetsFlyout, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
@@ -975,18 +975,18 @@ export function handleIncomingMessage(message: string): void {
       refreshDemoAudioSelectors();
       break;
     }
-    case "earPracticePlayerFileLoaded": {
+    case "practiceToolFileLoaded": {
       const info = payload as { path?: string; title?: string; durationSec?: number; waveformPeaksL?: unknown[]; waveformPeaksR?: unknown[] };
-      applyEarPracticePlayerFileLoaded(info);
+      applyPracticeToolFileLoaded(info);
       break;
     }
-    case "earPracticePlayerTransportState": {
+    case "practiceToolTransportState": {
       const info = payload as { state?: string; positionSec?: number };
-      applyEarPracticePlayerTransportState(info);
+      applyPracticeToolTransportState(info);
       break;
     }
-    case "earPracticePlayerPlaybackEnded": {
-      applyEarPracticePlayerPlaybackEnded();
+    case "practiceToolPlaybackEnded": {
+      applyPracticeToolPlaybackEnded();
       break;
     }
     case "resourceCleanupResult": {

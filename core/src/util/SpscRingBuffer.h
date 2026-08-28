@@ -4,7 +4,7 @@
 //
 // No JUCE dependency (core/ is JUCE-independent) — this is deliberately a tiny
 // std::atomic-based container rather than pulling in a third-party lock-free
-// library, since the only user (EarPracticePlayerService) needs exactly this
+// library, since the only user (PracticeToolService) needs exactly this
 // shape: one background thread pushes stereo frames, the audio thread pops
 // them, and the audio thread must never block or allocate.
 //

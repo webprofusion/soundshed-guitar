@@ -11,7 +11,7 @@ set(TEST_SOURCES
     HostedPluginStateWorkflowTests.cpp
     IRConvolutionTests.cpp
     IRReverbQualityTests.cpp
-    EarPracticePlayerCrossfadeTests.cpp
+    PracticeToolCrossfadeTests.cpp
     MultiPresetMixerTests.cpp
     NamCalibrationProbe.cpp
     NamModelCacheTests.cpp

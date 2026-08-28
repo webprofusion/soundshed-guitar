@@ -27,7 +27,7 @@ import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
 import { handleDroppedRiffAudioFiles, initializeRiffLibraryPanel } from "./riffLibrary.js";
-import { initializeEarPracticePlayerPanel } from "./earPracticePlayer.js";
+import { initializePracticeToolPanel } from "./practiceTool.js";
 import { initializeGlobalFileDrop, registerGlobalFileDropHandler } from "./fileDrop.js";
 import { initMultiRigTab } from "./multiPresetMixer.js";
 import { applyBuildFlags } from "./buildFlags.js";
@@ -214,7 +214,7 @@ async function bootstrap(): Promise<void> {
   initializeMetronome();
   initializeAutomationPanel();
   initializeRiffLibraryPanel();
-  initializeEarPracticePlayerPanel();
+  initializePracticeToolPanel();
   registerGlobalFileDropHandler({
     id: "preset-pack-drop",
     priority: 200,
