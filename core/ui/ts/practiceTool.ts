@@ -1,9 +1,6 @@
 import {
   browsePracticeToolFile,
-  loadPracticeToolFile,
-  loadPracticeToolFileData,
   seekPracticeToolFile,
-  setAppSetting,
   setPracticeToolBalance,
   setPracticeToolGain,
   setPracticeToolLoopRegion,
@@ -12,12 +9,24 @@ import {
   setPracticeToolSpeed,
   setPracticeToolTransport,
 } from "./bridge.js";
-import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
-import type { AppSettingValue, PracticeToolLoopRegion, PracticeToolState } from "./types.js";
-import { arrayBufferToBase64, escapeHtml } from "./utils.js";
+import type { PracticeToolLoopRegion, PracticeToolProject, PracticeToolState } from "./types.js";
+import { escapeHtml } from "./utils.js";
+import {
+  consumePendingProjectRecall,
+  getFileFingerprint,
+  loadLoopsForFingerprint,
+  persistLoopsForCurrentFile,
+  setPracticeToolProjectApplier,
+} from "./practiceTool/projects.js";
+import { bindPracticeToolProjectActions, renderPracticeToolProjects } from "./practiceTool/projectsPanel.js";
+import { bindPracticeToolDropZone, confirmResetIfNeeded } from "./practiceTool/trackImport.js";
+
+/** Registered by main.ts, which can reach the preset library without closing an
+ * import cycle back through this module. */
+export { setPracticeToolPresetRecaller } from "./practiceTool/projects.js";
 
 /** Small, static, non-user-editable set of common song-section names, offered as
  * `<datalist>` suggestions on every loop name/rename field. */
@@ -33,7 +42,6 @@ export const LOOP_NAME_TEMPLATES: readonly string[] = [
   "Breakdown",
 ];
 
-const LOOPS_SETTING_KEY = "practiceTool.loops";
 const MIN_LOOP_SPAN_SEC = 0.25;
 const LOOP_REGION_SEND_DEBOUNCE_MS = 80;
 const SPEED_PITCH_SEND_DEBOUNCE_MS = 80;
@@ -162,55 +170,6 @@ function getActiveLoop(): PracticeToolLoopRegion | null {
   return player.loops.find((loop) => loop.id === player.activeLoopId) ?? null;
 }
 
-function getFileFingerprint(filePath: string, durationSec: number): string {
-  return `${filePath.trim().toLowerCase()}|${durationSec.toFixed(2)}`;
-}
-
-function isPersistedLoop(value: unknown): value is PracticeToolLoopRegion {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  return typeof record.id === "string"
-    && typeof record.name === "string"
-    && typeof record.startSec === "number"
-    && typeof record.endSec === "number";
-}
-
-function loadLoopsForFingerprint(fingerprint: string): PracticeToolLoopRegion[] {
-  if (!fingerprint) {
-    return [];
-  }
-  const stored = uiState.appSettings?.[LOOPS_SETTING_KEY];
-  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
-    return [];
-  }
-  const entry = (stored as unknown as Record<string, unknown>)[fingerprint];
-  if (!Array.isArray(entry)) {
-    return [];
-  }
-  return entry.filter(isPersistedLoop).map((loop) => ({ ...loop }));
-}
-
-function persistLoopsForCurrentFile(): void {
-  const player = ensurePracticeToolState();
-  const fingerprint = getFileFingerprint(player.filePath, player.durationSec);
-  if (!fingerprint) {
-    return;
-  }
-  const stored = uiState.appSettings?.[LOOPS_SETTING_KEY];
-  const map: Record<string, PracticeToolLoopRegion[]> = (stored && typeof stored === "object" && !Array.isArray(stored))
-    ? { ...(stored as unknown as Record<string, PracticeToolLoopRegion[]>) }
-    : {};
-  if (player.loops.length > 0) {
-    map[fingerprint] = player.loops.map((loop) => ({ ...loop }));
-  } else {
-    delete map[fingerprint];
-  }
-  uiState.appSettings[LOOPS_SETTING_KEY] = map as unknown as AppSettingValue;
-  setAppSetting(LOOPS_SETTING_KEY, map);
-}
-
 function formatClockTime(seconds: number): string {
   const total = Math.max(0, Math.floor(isFinite(seconds) ? seconds : 0));
   const mins = Math.floor(total / 60);
@@ -296,7 +255,7 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
   player.loops = loadLoopsForFingerprint(getFileFingerprint(filePath, durationSec));
   player.activeLoopId = null;
 
-  // Loading a new file resets the whole "project" — the loop list already
+  // Loading a new file resets the whole session — the loop list already
   // naturally follows the new file's own fingerprint (above), but Volume/
   // Balance/Speed/Pitch are otherwise global controls that would otherwise
   // silently carry a previous track's tweaks into a fresh one. The caller
@@ -304,7 +263,15 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
   // confirmResetIfNeeded() before requesting the load, so this always runs
   // unconditionally here — including harmlessly on the very first load,
   // when every fader is already at its default.
-  resetAllFadersToDefault(player);
+  //
+  // Unless this load *is* a project recall, in which case the project's own
+  // loops and fader settings replace both of the above.
+  const recalled = consumePendingProjectRecall(filePath);
+  if (recalled) {
+    applyPracticeToolProject(recalled, { rerender: false });
+  } else {
+    resetAllFadersToDefault(player);
+  }
 
   candidateRange = null;
   editingLoopId = null;
@@ -579,6 +546,63 @@ function resetAllFadersToDefault(player: PracticeToolState): void {
     spec.send(spec.default, true);
   });
 }
+
+/**
+ * Pushes a recalled project into the live player — its loops, whichever loop
+ * was active, and all four fader settings, each sent on to the engine exactly
+ * as moving that control by hand would. Getting the *track* loaded is the
+ * caller's job: either it is already open, or this runs off the back of the
+ * load it asked for (see the recall branch in applyPracticeToolFileLoaded,
+ * which renders once at the end and so passes `rerender: false`).
+ */
+function applyPracticeToolProject(project: PracticeToolProject, options: { rerender?: boolean } = {}): void {
+  const player = ensurePracticeToolState();
+
+  player.loops = project.loops.map((loop) => ({ ...loop }));
+  // The recalled set becomes this track's working set, so the per-file
+  // autosave follows it rather than resurrecting the pre-recall loops the
+  // next time the track is opened without a project.
+  persistLoopsForCurrentFile();
+
+  const projectFaderValues: Record<FaderId, number> = {
+    volume: project.gain,
+    balance: project.balance,
+    speed: project.speed,
+    pitch: project.pitchSemitones,
+  };
+  Object.values(FADER_SPECS).forEach((spec) => {
+    const value = Math.max(spec.min, Math.min(spec.max, projectFaderValues[spec.id]));
+    spec.setValue(player, value);
+    spec.onChange?.(value);
+    spec.send(value, true);
+  });
+
+  const activeLoop = project.activeLoopId
+    ? player.loops.find((loop) => loop.id === project.activeLoopId) ?? null
+    : null;
+  player.activeLoopId = activeLoop?.id ?? null;
+  player.looping = Boolean(activeLoop);
+  if (activeLoop) {
+    seekPracticeToolFile(activeLoop.startSec);
+    setPracticeToolLoopRegion({ startSec: activeLoop.startSec, endSec: activeLoop.endSec });
+    setPracticeToolLooping(true);
+  } else {
+    setPracticeToolLoopRegion(null);
+    setPracticeToolLooping(false);
+  }
+
+  candidateRange = null;
+  editingLoopId = null;
+  finalizePendingDelete();
+
+  if (options.rerender !== false) {
+    renderPracticeToolPanel();
+  }
+}
+
+// Hand the applier to the project bar, which can only *request* a recall —
+// see practiceTool/projects.ts for why the indirection exists.
+setPracticeToolProjectApplier(applyPracticeToolProject);
 
 function renderFader(spec: FaderSpec, player: PracticeToolState): void {
   const slider = document.getElementById(`practice-tool-${spec.id}`) as HTMLInputElement | null;
@@ -1504,100 +1528,12 @@ function bindLoopListActions(): void {
   }
 }
 
-// WebView2 is standard Chromium — a dropped File's real filesystem path is
-// never available to JS (that's an Electron-only extension), so this is
-// only ever populated in environments where it happens to exist; the drop
-// handler below falls back to reading bytes directly, which is what
-// actually works here. See the "Dropped-file paths" note in
-// .github/copilot-instructions.md.
-function readDroppedFilePath(file: File): string | null {
-  const withPath = file as File & { path?: string };
-  return typeof withPath.path === "string" && withPath.path ? withPath.path : null;
-}
-
-const SUPPORTED_AUDIO_DROP_EXTENSIONS = [".wav", ".aiff", ".aif", ".mp3"];
-
-function hasSupportedAudioExtension(fileName: string): boolean {
-  const lower = fileName.trim().toLowerCase();
-  return SUPPORTED_AUDIO_DROP_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-/** Loading a new file resets Volume/Balance/Speed/Pitch back to their
- * defaults (see applyPracticeToolFileLoaded) — ask first, unless there's
- * nothing currently loaded to lose. Shared by both load entry points
- * (Browse File and drag-and-drop) so neither can bypass the other's gate.
- *
- * TODO(project save/load): once the player supports saving/loading named
- * "projects" (a project = a file + its loops + fader settings, switchable
- * without re-importing), this reset step becomes unnecessary for a project
- * *switch* — it only still applies to importing a brand-new, unsaved file. */
-async function confirmResetIfNeeded(): Promise<boolean> {
-  const player = ensurePracticeToolState();
-  if (!player.filePath) {
-    return true;
-  }
-  return showConfirm(
-    "Loading a new file will reset the current project — Volume, Balance, Speed, and Pitch will return to their defaults. Continue?",
-    "Load New File"
-  );
-}
-
-function bindDropZone(): void {
-  const dropZone = document.getElementById("practice-tool-waveform-wrap");
-  if (!dropZone || dropZone.dataset.bound === "true") {
-    return;
-  }
-  dropZone.dataset.bound = "true";
-
-  dropZone.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    dropZone.classList.add("is-drag-over");
-  });
-  dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("is-drag-over");
-  });
-  dropZone.addEventListener("drop", (event) => {
-    event.preventDefault();
-    dropZone.classList.remove("is-drag-over");
-    const file = event.dataTransfer?.files?.[0];
-    if (!file) {
-      return;
-    }
-    if (!hasSupportedAudioExtension(file.name)) {
-      showNotification("Unsupported file", "Drop a WAV, AIFF, or MP3 file");
-      return;
-    }
-
-    void confirmResetIfNeeded().then((proceed) => {
-      if (!proceed) {
-        return;
-      }
-
-      const path = readDroppedFilePath(file);
-      if (path) {
-        loadPracticeToolFile(path);
-        appendLog(`practice tool load requested (drop, path) → ${path}`);
-        return;
-      }
-
-      void file
-        .arrayBuffer()
-        .then((buffer) => {
-          loadPracticeToolFileData(file.name, arrayBufferToBase64(buffer));
-          appendLog(`practice tool load requested (drop, data) → ${file.name}`);
-        })
-        .catch((error) => {
-          showNotification("Unable to read dropped file", error instanceof Error ? error.message : String(error));
-        });
-    });
-  });
-}
-
 function bindAllActions(): void {
   bindWaveformInteractions();
   bindTransportControls();
   bindLoopListActions();
-  bindDropZone();
+  bindPracticeToolProjectActions();
+  bindPracticeToolDropZone();
 }
 
 export function renderPracticeToolPanel(): void {
@@ -1607,6 +1543,7 @@ export function renderPracticeToolPanel(): void {
   renderWaveform();
   renderAddLoopAffordance();
   renderLoopList();
+  renderPracticeToolProjects();
   bindAllActions();
 }
 

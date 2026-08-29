@@ -623,6 +623,33 @@ export interface PracticeToolState {
   balance: number; // -1 (full left) .. 0 (center) .. 1 (full right)
 }
 
+/**
+ * A saved Practice Tool project: the backing track that was loaded, the loops
+ * defined on it, the fader settings, and — if the user opted in at save time —
+ * the tone preset that was selected. Purely client-side, stored via
+ * `setAppSetting` under `practiceTool.projects`; the engine knows nothing of it.
+ */
+export interface PracticeToolProject {
+  id: string;
+  name: string;
+  /** As reported by `practiceToolFileLoaded` — a real path for a browsed file,
+   * but only a bare filename for one dropped in (WebView2 never exposes the
+   * path), which is why recall falls back to matching the loaded track. */
+  filePath: string;
+  fileTitle: string;
+  durationSec: number;
+  loops: PracticeToolLoopRegion[];
+  activeLoopId: string | null;
+  gain: number;
+  balance: number;
+  speed: number;
+  pitchSemitones: number;
+  presetId?: string;
+  /** Captured at save time so the row still reads sensibly if the preset is gone. */
+  presetName?: string;
+  savedAt: number;
+}
+
 export interface RiffCaptureState {
   active: boolean;
   complete: boolean;

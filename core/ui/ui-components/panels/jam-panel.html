@@ -70,7 +70,26 @@
                   <div class="settings-section practice-tool-header">
                     <div class="practice-tool-titlebar">
                       <h3>Practice Tool</h3>
+                      <!-- Projects: the loaded track + its loops + the four
+                           fader settings, optionally with the preset that was
+                           selected, saved under a name. Entirely client-side —
+                           see practiceTool/projects.ts. -->
+                      <div class="practice-tool-project-bar">
+                        <select id="practice-tool-project-select" class="practice-tool-project-select" aria-label="Saved projects">
+                          <option value="">No saved projects</option>
+                        </select>
+                        <button id="practice-tool-project-load" type="button" class="secondary" disabled>Load</button>
+                        <button id="practice-tool-project-delete" type="button" class="secondary" title="Delete the selected project" disabled>Delete</button>
+                        <span class="practice-tool-project-divider" aria-hidden="true"></span>
+                        <input type="text" id="practice-tool-project-name" class="practice-tool-project-name" placeholder="Project name" aria-label="Project name" />
+                        <label class="practice-tool-project-preset-toggle" title="Also save the currently selected preset, and reload it with the project">
+                          <input type="checkbox" id="practice-tool-project-include-preset" />
+                          <span>Preset</span>
+                        </label>
+                        <button id="practice-tool-project-save" type="button" class="secondary" disabled>Save</button>
+                      </div>
                     </div>
+                    <div class="settings-hint practice-tool-project-hint" id="practice-tool-project-hint"></div>
                   </div>
 
                   <!-- The waveform card is also the drop target for opening a

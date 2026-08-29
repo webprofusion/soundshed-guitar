@@ -470,13 +470,20 @@ in app settings under `ui.neuralAmp3dView.enabled`.
 
 ## Jam Panel Notes
 
-### Practice Tool (`core/ui/ts/practiceTool.ts`)
+### Practice Tool (`core/ui/ts/practiceTool.ts`, `core/ui/ts/practiceTool/`)
 
 A fourth Jam-panel section (alongside backing-track search, Scales, and the Riff
 Library) that loads a local audio file — a WAV, AIFF, or MP3 backing track — and
 mixes it directly into the native audio engine post-chain, independent of the
 guitar signal path, with its own tempo (speed) and pitch controls and a set of
 named loop regions for drilling difficult passages.
+
+`practiceTool.ts` is the facade — waveform, loops, transport, faders. Behind it,
+`practiceTool/projects.ts` owns all persistence (the per-file loop store and
+saved projects) plus the seams the panel can only *request* through,
+`practiceTool/projectsPanel.ts` is the project bar's controls, and
+`practiceTool/trackImport.ts` is the drop zone and the reset confirmation the
+Browse button shares with it. None of those import the facade back.
 
 - **Engine has no loop library.** The engine only ever knows the *currently-active*
   loop's bounds and an on/off flag (`setPracticeToolLoopRegion`/`setPracticeToolLooping`).
@@ -509,6 +516,23 @@ named loop regions for drilling difficult passages.
   again → "Verse 2"), so a whole song structure can be laid down in a few clicks.
   Deleting is likewise dialog-free: the loop goes immediately and an inline
   "Deleted *X*. [Undo]" banner keeps it reversible for `DELETE_UNDO_WINDOW_MS`.
+- **Projects.** The bar on the panel's title row saves the whole practice session
+  under a name — the loaded track, its loop list, which loop was active, all four
+  fader settings, and (with the "Preset" box ticked) the preset that was selected
+  at save time. Also client-side, stored via `setAppSetting` under
+  `practiceTool.projects` (`practiceTool/projects.ts`), so nothing round-trips
+  through the engine except the file load and the settings sends a recall replays.
+  Saving under an existing name offers to overwrite it rather than accumulating
+  duplicates. Recall is the mirror of save: if the project's track is already
+  loaded its settings are applied straight away, otherwise `loadPracticeToolFile`
+  is sent and the project is parked until `practiceToolFileLoaded` answers for
+  that path (`consumePendingProjectRecall`) — which is also what lets a recall
+  override the fader reset a fresh file load otherwise performs. A track that was
+  *dragged* in has no real path to reopen (WebView2 never exposes one), so those
+  projects say so and ask for the file to be opened again first. A project's
+  preset is reloaded through `applyPresetFromLibrary`, handed in by `main.ts`
+  because the Practice Tool cannot import the preset library directly without
+  closing a cycle.
 - **Transport.** Play/pause/stop plus four faders — Volume, Balance, Speed (25%–200%)
   and Pitch (±12 semitones) — each sending its own bridge message per change
   (`setPracticeToolGain`/`setPracticeToolBalance`/`setPracticeToolSpeed`/

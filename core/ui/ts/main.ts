@@ -9,6 +9,7 @@ import {
   handleDroppedPresetPack,
   renderActivePreset,
   requestSignalPathTest,
+  applyPresetFromLibrary,
 } from "./presets.js";
 import { installFetchLogger, renderLogEntries } from "./logging.js";
 import { scheduleDSPPerformancePlotUpdate } from "./views.js";
@@ -27,7 +28,7 @@ import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
 import { handleDroppedRiffAudioFiles, initializeRiffLibraryPanel } from "./riffLibrary.js";
-import { initializePracticeToolPanel } from "./practiceTool.js";
+import { initializePracticeToolPanel, setPracticeToolPresetRecaller } from "./practiceTool.js";
 import { initializeGlobalFileDrop, registerGlobalFileDropHandler } from "./fileDrop.js";
 import { initMultiRigTab } from "./multiPresetMixer.js";
 import { applyBuildFlags } from "./buildFlags.js";
@@ -214,6 +215,11 @@ async function bootstrap(): Promise<void> {
   initializeMetronome();
   initializeAutomationPanel();
   initializeRiffLibraryPanel();
+  // A Practice Tool project can carry the preset that was selected when it was
+  // saved. The preset library can't be reached from the Practice Tool directly
+  // (presets -> navigation -> jam -> practiceTool would close the loop), so
+  // the loader is handed in from here.
+  setPracticeToolPresetRecaller(applyPresetFromLibrary);
   initializePracticeToolPanel();
   registerGlobalFileDropHandler({
     id: "preset-pack-drop",
