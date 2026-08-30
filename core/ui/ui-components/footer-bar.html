@@ -3,6 +3,32 @@
         <button class="footer-btn" id="footer-compact-pads-btn" type="button" aria-pressed="false">SETLIST</button>
         <button class="footer-btn" id="footer-compact-tuner-btn" type="button">TUNER</button>
       </div>
+      <!-- Signal-chain undo/redo and the A/B pair. Outside footer-actions-panel so
+           it stays on the bar at every width — it is a performance control, not an option. -->
+      <div id="footer-chain-history" class="footer-chain-history" aria-label="Signal chain history">
+        <button class="footer-chain-step-btn" id="footer-chain-undo" type="button" aria-label="Undo signal chain change" title="Nothing to undo (Ctrl+Z)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 7 4 12l5 5" />
+            <path d="M4 12h9a6 6 0 0 1 0 12h-1" />
+          </svg>
+        </button>
+        <button class="footer-chain-step-btn" id="footer-chain-redo" type="button" aria-label="Redo signal chain change" title="Nothing to redo (Ctrl+Shift+Z)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M15 7l5 5-5 5" />
+            <path d="M20 12h-9a6 6 0 0 0 0 12h1" />
+          </svg>
+        </button>
+        <div class="footer-ab-switch" role="group" aria-label="Signal chain A/B">
+          <button class="footer-ab-btn is-active" id="footer-chain-slot-a" type="button" aria-pressed="true" title="Chain A">A</button>
+          <button class="footer-ab-btn" id="footer-chain-slot-b" type="button" aria-pressed="false" title="Chain B">B</button>
+        </div>
+        <button class="footer-chain-step-btn footer-chain-copy-btn" id="footer-chain-copy" type="button" aria-label="Copy the live chain to the other slot" title="Copy chain A to B" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 8h13l-3.5-3.5" />
+            <path d="M20 16H7l3.5 3.5" />
+          </svg>
+        </button>
+      </div>
       <button
         id="footer-actions-toggle"
         class="footer-actions-toggle"

@@ -1,0 +1,126 @@
+/*
+ * Signal-chain undo/redo and the A/B switch, in the footer bar.
+ *
+ * Sits outside .footer-actions-panel, so unlike the tools/tempo/view groups it
+ * is never collapsed into the OPTIONS popover — the A/B switch is reached mid
+ * performance and has to stay on the bar at every width.
+ */
+
+.footer-chain-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding-right: 10px;
+  border-right: 1px solid color-mix(in srgb, var(--text-dark-disabled) 42%, transparent);
+}
+
+.footer-chain-history.is-unavailable {
+  opacity: 0.45;
+}
+
+/* Undo, redo and copy: icon-only square buttons. */
+.footer-chain-step-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dark-tertiary);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.footer-chain-step-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.footer-chain-step-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--overlay-light) 70%, transparent);
+  color: var(--text-dark-primary);
+}
+
+.footer-chain-step-btn:disabled {
+  color: var(--text-dark-disabled);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* The A/B pair reads as one switch: a shared shell with two halves. */
+.footer-ab-switch {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--border-dark-medium);
+  border-radius: 8px;
+  background: var(--bg-dark-tertiary);
+}
+
+.footer-ab-btn {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dark-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.footer-ab-btn:hover:not(:disabled):not(.is-active) {
+  background: color-mix(in srgb, var(--overlay-light) 55%, transparent);
+  color: var(--text-dark-primary);
+}
+
+.footer-ab-btn.is-active {
+  border-color: color-mix(in srgb, var(--color-accent) 62%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 30%, var(--bg-dark-secondary));
+  color: var(--text-dark-primary);
+}
+
+.footer-ab-btn:disabled {
+  color: var(--text-dark-disabled);
+  cursor: not-allowed;
+}
+
+@media (max-width: 1040px) {
+  .footer-chain-history {
+    padding-right: 8px;
+    gap: 4px;
+  }
+}
+
+/* At the compact width the footer collapses to shortcuts + OPTIONS; the copy
+   control is the one part of this group that can wait for a wider window. */
+@media (max-width: 680px) {
+  .footer-chain-copy-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) and (pointer: coarse) {
+  .footer-chain-step-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .footer-ab-btn {
+    height: 28px;
+    min-width: 32px;
+  }
+}

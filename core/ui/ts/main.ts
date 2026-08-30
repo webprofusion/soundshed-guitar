@@ -24,6 +24,10 @@ import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
 import { initializeAutomationPanel } from "./automationPanel.js";
 import { initializeBlendEditorModal, initSignalPathResize, renderSignalPathBar, createNamIrGlobalFileDropHandler } from "./signalPath.js";
+// Imported past the signalPath.ts facade on purpose: that file is at its pinned
+// size ceiling (check:sizes), and history.ts is a new sibling rather than code
+// split out of it, so there is no original module path to preserve.
+import { initSignalChainHistory } from "./signalPath/history.js";
 import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { activateTab, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
@@ -270,6 +274,9 @@ async function bootstrap(): Promise<void> {
   initFooterActionsPopup();
   initializePlayFooterPadsToggle();
   initializePerformancePads();
+  // Signal-chain undo/redo + A/B. Bound after the footer exists and before the
+  // first preset lands, so the initial chain seeds the stacks.
+  initSignalChainHistory();
 
   renderActivePreset();
   await initializePresets();

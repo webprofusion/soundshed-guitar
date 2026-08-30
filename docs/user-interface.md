@@ -345,6 +345,44 @@ writing a binding, not another panel.
 
 - To create parallel paths, add the **Splitter** effect from the Utility category. The join **Mixer** node is inserted automatically and is not user-addable.
 
+### Chain undo/redo and A/B (`core/ui/ts/signalPath/history.ts`, `historyModel.ts`)
+
+Undo/redo over the active preset's signal chain — nodes, wiring, parameters,
+bypass and per-node config — plus an A/B pair of chains in the footer
+(`#footer-chain-history`). Not to be confused with the preset **navigation**
+history in `presets.ts`, which steps between presets and restores nothing
+unsaved.
+
+- **What is recorded.** Every chain edit ends up on `uiState.activePresetDraft`
+  (or the focused mixer slot). Rather than instrument each of the ~20 senders
+  that can change it, the module listens for `presetDirtyChanged` — raised by
+  `setPresetDirty()`, which all of them call — and, after a 320 ms debounce,
+  compares the live graph's signature with the top of the stack. An unchanged
+  graph records nothing, so a broad trigger is harmless and cannot miss a path.
+  The debounce also lets a topology edit's engine round trip land first, and
+  coalesces a knob drag into one step.
+- **How a restore is applied.** Reloading the whole preset rebuilds the DSP
+  graph and every NAM model, which is audible. So a restore whose topology
+  matches the live chain is replayed as targeted
+  `updateSignalPathNodeParam` / `...Bypass` / `...Config` messages instead;
+  only a structural difference — added/removed/reordered/replaced nodes,
+  changed edges or gains, a swapped resource — falls back to a full
+  `loadPreset`. `diffNodeStates()` decides, returning `null` for anything the
+  targeted messages cannot express.
+- **A and B.** Two independent stacks, one live at a time, both seeded from the
+  preset as loaded. Switching applies the other slot's current chain and leaves
+  each cursor untouched, so A/B is a comparison rather than an undo step. The
+  ⇄ button forks the live chain into the other slot as an undoable step there.
+  Loading a different preset or scene re-seeds both and makes A live.
+- **Dirty flag.** A full restore round-trips through `loadPreset`, whose
+  `presetLoaded` echo overwrites `uiState.activePresetSnapshot` — the app's
+  record of the preset as last saved. History puts the real one back afterwards
+  and recomputes the flag, so stepping back through edits does not silently
+  look like a save and drop the discard-changes prompt.
+- **Keys.** Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y redo. Suppressed
+  while a text field has focus, while any `.modal` is open (the Layout Designer
+  has its own undo on the same chord), and in composite edit mode.
+
 ### Spatial panner (`core/ui/ts/spatialPanner.ts`)
 
 The **3D Spatial** effect gets a bespoke widget in its parameter panel, mounted the same
