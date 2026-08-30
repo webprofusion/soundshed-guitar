@@ -199,8 +199,17 @@ export function previewCapturedRiff(): void {
   postMessage({ type: "previewCapturedRiff" });
 }
 
-export function previewCapturedRiffRange(startRatio: number, endRatio: number): void {
-  postMessage({ type: "previewCapturedRiff", startRatio, endRatio });
+/** Starts the captured take playing. The engine gets the whole take plus the
+ * marker range, and does the looping itself — the UI does not re-request the
+ * clip each time round, which is what used to put an audible gap at the seam. */
+export function previewCapturedRiffRange(startRatio: number, endRatio: number, repeat: boolean): void {
+  postMessage({ type: "previewCapturedRiff", startRatio, endRatio, repeat });
+}
+
+/** Retunes the range of the preview already playing — for a marker dragged
+ * mid-preview, and for toggling Repeat without restarting. */
+export function setRiffPreviewRegion(startRatio: number, endRatio: number, repeat: boolean): void {
+  postMessage({ type: "setRiffPreviewRegion", startRatio, endRatio, repeat });
 }
 
 export function stopPreviewPlayback(): void {

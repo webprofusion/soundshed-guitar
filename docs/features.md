@@ -396,7 +396,12 @@ Built-in test signals for non-destructive preset auditioning without live guitar
 - **Source types**: Built-in guitar riff clips, white noise, frequency sweeps.
 - **Favorite riffs**: Mark clips as favorites for quick access.
 - **Playback control**: Preview any clip; stops on `stopDemoAudio` message.
+- **Region and repeat**: `StartPreview` accepts an optional `region`
+  (`{startSec, endSec, looping}`) confining playback to a slice and optionally
+  repeating it; `setRiffPreviewRegion` retunes it mid-playback. Omitted, the whole
+  clip plays once — which is what the demo/preset previews do.
 - Engine sends `previewStarted`, `previewComplete`, `previewStopped` notifications.
+  A looping preview never reports `previewComplete`: it runs until stopped.
 
 ### Riff Library
 
@@ -404,8 +409,12 @@ Record and playback of user guitar takes for offline preset editing.
 
 - **Capture**: Record live guitar input in sync with the metronome.
 - **Waveform visualization**: Rendered waveform of captured audio.
-- **Trim**: Select playback region.
-- **Playback**: Loop captured riff through current preset for editing.
+- **Trim**: Select playback region by dragging markers on the waveform (shared
+  gesture — see `core/ui/ts/waveform/`).
+- **Playback**: Play the trimmed region through the current preset, optionally
+  repeating. The repeat is done in the engine (`DemoPreviewService`), which wraps
+  the clip in place with an equal-power crossfade at the seam; the markers can be
+  dragged mid-playback and the loop follows without restarting the clip.
 - **Import WAV**: Load external audio files as riff clips.
 - **Favorites**: Mark takes for quick recall.
 - **Save/load takes**: Persistent across sessions.

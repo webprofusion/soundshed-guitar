@@ -1,4 +1,4 @@
-import { armRiffCapture, deleteRiff, getRiffLibrary, importRiffWav, loadRiffTakeForEdit, markRiffUsed, previewCapturedRiffRange, previewRiffTake, saveRiffTake, setMetronome, setRiffFavorite, setRiffLibraryPath, stopPreviewPlayback, stopRiffCapture, trimCapturedRiff } from "./bridge.js";
+import { armRiffCapture, deleteRiff, getRiffLibrary, importRiffWav, loadRiffTakeForEdit, markRiffUsed, previewCapturedRiffRange, previewRiffTake, saveRiffTake, setMetronome, setRiffFavorite, setRiffLibraryPath, setRiffPreviewRegion, stopPreviewPlayback, stopRiffCapture, trimCapturedRiff } from "./bridge.js";
 import { showConfirm } from "./dialogs.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
@@ -370,7 +370,24 @@ function startCapturedPreviewAnimation(): void {
     if (!capturedPreviewActive) {
       return;
     }
+    // The window can change under us: dragging a marker retunes the engine loop
+    // live, so re-read the length each frame rather than trusting the one
+    // captured when playback started.
+    const windowMs = getTrimWindowDurationSec() * 1000;
     const elapsed = now - capturedPreviewStartMs;
+
+    if (isCapturedRepeatEnabled()) {
+      // The engine wraps the audio in place and never reports completion, so
+      // the playhead wraps with it. This is still a wall-clock estimate and
+      // will drift from the engine over many cycles — it is an affordance for
+      // "something is playing and roughly where", not a transport position.
+      capturedPreviewProgress = windowMs > 0 ? (elapsed % windowMs) / windowMs : 0;
+      renderCapturedWaveform();
+      capturedPreviewAnimationFrame = requestAnimationFrame(step);
+      return;
+    }
+
+    capturedPreviewDurationMs = windowMs;
     capturedPreviewProgress = Math.max(0, Math.min(1, capturedPreviewDurationMs > 0 ? elapsed / capturedPreviewDurationMs : 1));
     renderCapturedWaveform();
     if (capturedPreviewProgress >= 1) {
@@ -451,12 +468,44 @@ function syncTrimControlsFromState(): void {
   updateTrimLabels();
 }
 
+// A drag emits a marker update per pointer event. Each one costs the engine a
+// region rebuild (a fresh wrap crossfade) behind the DSP lock, so coalesce them
+// the way the Practice Tool coalesces its own loop-region sends. The loop only
+// changes at the next wrap anyway, so the trailing send is imperceptible.
+const REGION_SEND_DEBOUNCE_MS = 80;
+let regionSendTimer: ReturnType<typeof setTimeout> | null = null;
+
+function sendPreviewRegionNow(): void {
+  const range = clampTrimRange(trimStartRatio, trimEndRatio);
+  setRiffPreviewRegion(range.start, range.end, isCapturedRepeatEnabled());
+}
+
+function scheduleRegionSend(): void {
+  if (regionSendTimer !== null) {
+    clearTimeout(regionSendTimer);
+  }
+  regionSendTimer = setTimeout(() => {
+    regionSendTimer = null;
+    if (capturedPreviewActive) {
+      sendPreviewRegionNow();
+    }
+  }, REGION_SEND_DEBOUNCE_MS);
+}
+
 /** Writes a range from the gesture controller into the markers. Already
- * clamped; the controller renders. */
+ * clamped; the controller renders.
+ *
+ * Every pointer and keyboard gesture funnels through here, so this is also
+ * where a preview that is already playing gets retuned — drag a marker mid
+ * playback and the loop follows, instead of the audio staying on the range it
+ * started with while the markers say something else. */
 function applyTrimRange(range: RatioRange): void {
   trimStartRatio = range.startRatio;
   trimEndRatio = range.endRatio;
   updateTrimLabels();
+  if (capturedPreviewActive) {
+    scheduleRegionSend();
+  }
 }
 
 function isCapturedRepeatEnabled(): boolean {
@@ -469,27 +518,19 @@ function isCaptureMetronomeClickEnabled(): boolean {
   return input ? input.checked : (uiState.riffCapture?.metronomeClickEnabled ?? true);
 }
 
+/** Repeat is the engine’s job now: it loops the take in place with a crossfade
+ * at the seam, so a completed preview really has finished and there is nothing
+ * for the UI to re-request. Both of these stay as no-ops rather than
+ * disappearing, because messages.ts uses the return value to decide whether a
+ * preview-stopped message means "playback ended" or "a loop cycle turned over". */
 export function handleCapturedPreviewComplete(previewId: string): boolean {
-  if (!isCapturedPreviewId(previewId)) {
-    return false;
-  }
-  if (!isCapturedRepeatEnabled() || !uiState.riffCapture?.hasAudio) {
-    return false;
-  }
-
-  const range = clampTrimRange(trimStartRatio, trimEndRatio);
-  previewCapturedRiffRange(range.start, range.end);
-  appendLog("riff preview repeat loop");
-  return true;
+  void previewId;
+  return false;
 }
 
 export function handleSavedRiffPreviewComplete(previewId: string): boolean {
-  if (!previewId || activeRiffTakePreviewId !== previewId || !isLibraryTakeId(previewId)) {
-    return false;
-  }
-  previewRiffTake(previewId);
-  appendLog(`riff preview repeat loop → ${previewId}`);
-  return true;
+  void previewId;
+  return false;
 }
 
 export function handleRiffPreviewPlayback(phase: "start" | "stop", previewId: string): void {
@@ -1145,8 +1186,24 @@ function bindRiffLibraryActions(): void {
         return;
       }
       const trimRange = clampTrimRange(trimStartRatio, trimEndRatio);
-      previewCapturedRiffRange(trimRange.start, trimRange.end);
-      appendLog("riff preview captured take");
+      previewCapturedRiffRange(trimRange.start, trimRange.end, isCapturedRepeatEnabled());
+      appendLog(`riff preview captured take${isCapturedRepeatEnabled() ? " (looping)" : ""}`);
+    });
+  }
+
+  const repeatToggle = document.getElementById("riff-capture-repeat") as HTMLInputElement | null;
+
+  if (repeatToggle && repeatToggle.dataset.bound !== "true") {
+    repeatToggle.dataset.bound = "true";
+    // Repeat is a live engine flag now rather than something consulted when a
+    // clip ends, so toggling it mid-preview takes effect on the next wrap
+    // instead of waiting for the next play.
+    repeatToggle.addEventListener("change", () => {
+      if (!capturedPreviewActive) {
+        return;
+      }
+      sendPreviewRegionNow();
+      appendLog(`riff preview repeat → ${repeatToggle.checked ? "on" : "off"}`);
     });
   }
 

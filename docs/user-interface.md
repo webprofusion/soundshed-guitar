@@ -133,6 +133,8 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `previewDemoAudio` | `{audio}` | Preview demo audio clip |
 | `renderDemoAudio` | `{audio? , takeId?, title?, suggestedName?, renderSampleRate?}` | Render selected demo audio to a WAV file using the current preset. `renderSampleRate` accepts `44100`, `48000`, `88200`, `96000`, `176400`, or `192000`; omit or pass `0` for the current device rate. The save-dialog filename appends the resolved rounded kHz rate before `.wav`. |
 | `stopDemoAudio` | `{}` | Stop demo audio playback |
+| `previewCapturedRiff` | `{startRatio, endRatio, repeat}` | Play the captured riff take. The whole take goes over once; the markers travel as a region and the engine loops it in place, so repeating costs no further messages. |
+| `setRiffPreviewRegion` | `{startRatio, endRatio, repeat}` | Retune the region/repeat of the preview already playing — for a marker dragged mid-playback. Debounced by the UI, since each one rebuilds the wrap crossfade behind the DSP lock. |
 | `importRemoteResource` | `{...}` | Import resource from remote |
 | `setSetting` | `{key, value}` | Persist and apply an app setting |
 | `setUserInputCalibrationTrainingActive` | `{active}` | Temporarily bypass the active calibration profile while training |

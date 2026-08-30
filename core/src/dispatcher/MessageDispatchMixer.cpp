@@ -229,6 +229,12 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c, const nl
         return true;
     }
 
+    if (type == "setRiffPreviewRegion")
+    {
+        c.HandleSetRiffPreviewRegionRequest(msg);
+        return true;
+    }
+
     return false;
 }
 } // namespace guitarfx

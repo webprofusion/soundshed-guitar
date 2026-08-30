@@ -412,6 +412,7 @@ class PluginController
     void HandleMarkRiffUsedRequest(const nlohmann::json& payload);
     void HandlePreviewRiffTakeRequest(const nlohmann::json& payload);
     void HandlePreviewCapturedRiffRequest(const nlohmann::json& payload);
+    void HandleSetRiffPreviewRegionRequest(const nlohmann::json& payload);
 
     // Practice Tool (Jam panel backing-track player)
     void HandleBrowsePracticeToolFileRequest();

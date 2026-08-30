@@ -949,6 +949,11 @@ void PluginController::HandlePreviewRiffTakeRequest(const nlohmann::json& payloa
                         {"title", take->value("title", std::string("Riff Take"))},
                         {"data", util::EncodeBase64(bytes)},
                         {"contentType", "audio/wav"}};
+    // Library takes repeat until the user stops them. That used to be the UI
+    // re-requesting the whole take — re-read from disk and re-encoded — every
+    // time it ended; the engine wraps it in place instead. endSec 0 means "to
+    // the end", so the whole take is the loop.
+    preview["region"] = {{"startSec", 0.0}, {"endSec", 0.0}, {"looping", true}};
 
     RiffCaptureConfig guideConfig;
     guideConfig.tempoBpm =
@@ -993,29 +998,12 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
         capture = mRiffCapture;
     }
 
-    std::vector<float> previewLeft = capture.left;
-    std::vector<float> previewRight = capture.right;
-
-    if (!previewLeft.empty() && !previewRight.empty())
-    {
-        const std::size_t totalSamples = previewLeft.size();
-        const double startRatioRaw = payload.value("startRatio", 0.0);
-        const double endRatioRaw = payload.value("endRatio", 1.0);
-        const double startRatio = std::clamp(startRatioRaw, 0.0, 1.0);
-        const double endRatio = std::clamp(endRatioRaw, 0.0, 1.0);
-
-        std::size_t startSample = static_cast<std::size_t>(std::floor(startRatio * static_cast<double>(totalSamples)));
-        std::size_t endSample = static_cast<std::size_t>(std::ceil(endRatio * static_cast<double>(totalSamples)));
-        startSample = std::min(startSample, totalSamples > 0 ? totalSamples - 1 : 0);
-        endSample = std::max(endSample, startSample + 1);
-        endSample = std::min(endSample, totalSamples);
-
-        previewLeft = std::vector<float>(previewLeft.begin() + startSample, previewLeft.begin() + endSample);
-        previewRight = std::vector<float>(previewRight.begin() + startSample, previewRight.begin() + endSample);
-    }
-
+    // The whole take goes over once; the trim markers travel as a region for
+    // the engine to honour. Slicing and re-encoding here is what made "Repeat"
+    // a retrigger — every cycle cost an engine->UI->engine round trip plus a
+    // fresh multi-megabyte encode, and the gap between cycles was audible.
     const auto wavBytes =
-        util::EncodeStereo16BitWav(previewLeft, previewRight, static_cast<int>(std::llround(capture.sampleRate)));
+        util::EncodeStereo16BitWav(capture.left, capture.right, static_cast<int>(std::llround(capture.sampleRate)));
 
     if (wavBytes.empty())
     {
@@ -1023,11 +1011,19 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
         return;
     }
 
+    const double sampleRate = capture.sampleRate > 0.0 ? capture.sampleRate : 1.0;
+    const double totalSec = static_cast<double>(capture.left.size()) / sampleRate;
+    const double startRatio = std::clamp(payload.value("startRatio", 0.0), 0.0, 1.0);
+    const double endRatio = std::clamp(payload.value("endRatio", 1.0), 0.0, 1.0);
+
     nlohmann::json preview;
     preview["audio"] = {{"id", capture.takeId.empty() ? std::string("captured-take") : capture.takeId},
                         {"title", std::string("Captured Riff")},
                         {"data", util::EncodeBase64(wavBytes)},
                         {"contentType", "audio/wav"}};
+    preview["region"] = {{"startSec", startRatio * totalSec},
+                         {"endSec", endRatio * totalSec},
+                         {"looping", payload.value("repeat", false)}};
 
     if (mDemoPreview)
     {
@@ -1037,6 +1033,36 @@ void PluginController::HandlePreviewCapturedRiffRequest(const nlohmann::json& pa
         }
         mDemoPreview->StartPreview(preview);
     }
+}
+
+/// Retunes the loop of a preview that is already playing, so dragging the trim
+/// markers mid-preview moves the loop instead of leaving the audio on the range
+/// it started with while the on-screen markers say otherwise.
+void PluginController::HandleSetRiffPreviewRegionRequest(const nlohmann::json& payload)
+{
+    if (!mDemoPreview)
+    {
+        return;
+    }
+
+    double totalSec = 0.0;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+
+        if (mRiffCapture.sampleRate > 0.0)
+        {
+            totalSec = static_cast<double>(mRiffCapture.left.size()) / mRiffCapture.sampleRate;
+        }
+    }
+
+    if (totalSec <= 0.0)
+    {
+        return;
+    }
+
+    const double startRatio = std::clamp(payload.value("startRatio", 0.0), 0.0, 1.0);
+    const double endRatio = std::clamp(payload.value("endRatio", 1.0), 0.0, 1.0);
+    mDemoPreview->SetPreviewRegion(startRatio * totalSec, endRatio * totalSec, payload.value("repeat", false));
 }
 
 std::filesystem::path PluginController::ResolveRiffLibraryPath() const
