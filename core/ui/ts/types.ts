@@ -2,6 +2,17 @@ export type AttachmentType = "audiofx" | "ir" | (string & {});
 
 import type { LayoutLibrary } from "./layoutTypes.js";
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
+import type { PracticeToolState } from "./practiceTool/types.js";
+
+// The Practice Tool's own shapes live with the feature; re-exported here so
+// every importer keeps using ./types.js, exactly as practiceTool.ts fronts its
+// runtime modules. Type-only, so nothing is imported at runtime.
+export type {
+  PracticeToolEqState,
+  PracticeToolLoopRegion,
+  PracticeToolProject,
+  PracticeToolState,
+} from "./practiceTool/types.js";
 
 export interface Attachment {
   type: AttachmentType;
@@ -591,63 +602,6 @@ export interface RiffEntry {
 export interface RiffLibrary {
   path: string;
   riffs: RiffEntry[];
-}
-
-export interface PracticeToolLoopRegion {
-  id: string;
-  name: string;
-  startSec: number;
-  endSec: number;
-}
-
-/**
- * UI-owned Practice Tool (Jam panel) state. `loops` and `activeLoopId` are
- * pure client-side bookkeeping — the engine has no concept of a loop library,
- * it only ever knows the currently-active region's bounds and whether looping
- * is on (see setPracticeToolLoopRegion/setPracticeToolLooping in bridge.ts).
- */
-export interface PracticeToolState {
-  filePath: string;
-  title: string;
-  durationSec: number;
-  positionSec: number;
-  waveformPeaksL: number[];
-  waveformPeaksR: number[];
-  loops: PracticeToolLoopRegion[];
-  activeLoopId: string | null;
-  looping: boolean;
-  playing: boolean;
-  speed: number;
-  pitchSemitones: number;
-  gain: number;
-  balance: number; // -1 (full left) .. 0 (center) .. 1 (full right)
-}
-
-/**
- * A saved Practice Tool project: the backing track that was loaded, the loops
- * defined on it, the fader settings, and — if the user opted in at save time —
- * the tone preset that was selected. Purely client-side, stored via
- * `setAppSetting` under `practiceTool.projects`; the engine knows nothing of it.
- */
-export interface PracticeToolProject {
-  id: string;
-  name: string;
-  /** As reported by `practiceToolFileLoaded` — a real path for a browsed file,
-   * but only a bare filename for one dropped in (WebView2 never exposes the
-   * path), which is why recall falls back to matching the loaded track. */
-  filePath: string;
-  fileTitle: string;
-  durationSec: number;
-  loops: PracticeToolLoopRegion[];
-  activeLoopId: string | null;
-  gain: number;
-  balance: number;
-  speed: number;
-  pitchSemitones: number;
-  presetId?: string;
-  /** Captured at save time so the row still reads sensibly if the preset is gone. */
-  presetName?: string;
-  savedAt: number;
 }
 
 export interface RiffCaptureState {

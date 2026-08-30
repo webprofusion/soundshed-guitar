@@ -23,6 +23,14 @@ import {
 } from "./practiceTool/projects.js";
 import { bindPracticeToolProjectActions, renderPracticeToolProjects } from "./practiceTool/projectsPanel.js";
 import { bindPracticeToolDropZone, confirmResetIfNeeded } from "./practiceTool/trackImport.js";
+import { createDefaultPracticeToolEq, isPracticeToolEqShaping, sanitizePracticeToolEq } from "./practiceTool/eq.js";
+import { pushPracticeToolEqToEngine } from "./practiceTool/eqSend.js";
+import {
+  bindPracticeToolEqModal,
+  openPracticeToolEqModal,
+  renderPracticeToolEqModal,
+  setPracticeToolEqChangeListener,
+} from "./practiceTool/eqModal.js";
 
 /** Registered by main.ts, which can reach the preset library without closing an
  * import cycle back through this module. */
@@ -145,6 +153,7 @@ function ensurePracticeToolState(): PracticeToolState {
       pitchSemitones: 0,
       gain: 1,
       balance: 0,
+      eq: createDefaultPracticeToolEq(),
     };
   }
   return uiState.practiceTool;
@@ -271,6 +280,8 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
     applyPracticeToolProject(recalled, { rerender: false });
   } else {
     resetAllFadersToDefault(player);
+    player.eq = createDefaultPracticeToolEq();
+    pushPracticeToolEqToEngine(player.eq);
   }
 
   candidateRange = null;
@@ -576,6 +587,12 @@ function applyPracticeToolProject(project: PracticeToolProject, options: { reren
     spec.onChange?.(value);
     spec.send(value, true);
   });
+
+  // A project saved before the EQ existed has no curve; sanitize turns that
+  // (and any other gap) into the flat default rather than leaving the previous
+  // track's EQ in place.
+  player.eq = sanitizePracticeToolEq(project.eq);
+  pushPracticeToolEqToEngine(player.eq);
 
   const activeLoop = project.activeLoopId
     ? player.loops.find((loop) => loop.id === project.activeLoopId) ?? null
@@ -909,6 +926,14 @@ function renderTransportControls(): void {
     if (activeLoop) {
       loopStatus.textContent = `Looping "${activeLoop.name}"`;
     }
+  }
+
+  const eqBtn = document.getElementById("practice-tool-eq-btn") as HTMLButtonElement | null;
+  if (eqBtn) {
+    // Lit only when the EQ is both on and actually shaping the track, so the
+    // button answers "is something happening to my audio?" rather than "is a
+    // checkbox ticked?".
+    eqBtn.classList.toggle("is-active", isPracticeToolEqShaping(player.eq));
   }
 
   Object.values(FADER_SPECS).forEach((spec) => renderFader(spec, player));
@@ -1533,8 +1558,19 @@ function bindAllActions(): void {
   bindTransportControls();
   bindLoopListActions();
   bindPracticeToolProjectActions();
+  bindPracticeToolEqModal();
   bindPracticeToolDropZone();
+
+  const eqBtn = document.getElementById("practice-tool-eq-btn") as HTMLButtonElement | null;
+  if (eqBtn && eqBtn.dataset.bound !== "true") {
+    eqBtn.dataset.bound = "true";
+    eqBtn.addEventListener("click", () => openPracticeToolEqModal());
+  }
 }
+
+// The modal changes state the panel's EQ button reflects, and it can only
+// *ask* for that redraw — see practiceTool/eqModal.ts for why.
+setPracticeToolEqChangeListener(() => renderTransportControls());
 
 export function renderPracticeToolPanel(): void {
   ensureLoopNameTemplatesDatalist();
@@ -1544,6 +1580,7 @@ export function renderPracticeToolPanel(): void {
   renderAddLoopAffordance();
   renderLoopList();
   renderPracticeToolProjects();
+  renderPracticeToolEqModal();
   bindAllActions();
 }
 

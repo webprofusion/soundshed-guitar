@@ -152,6 +152,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setPracticeToolBalance` | `{balance}` | Practice Tool: stereo balance, `-1` (full left) to `+1` (full right) |
 | `setPracticeToolLoopRegion` | `{startSec, endSec}` or `{}` | Practice Tool: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
 | `setPracticeToolLooping` | `{enabled}` | Practice Tool: enable/disable looping of the active region |
+| `setPracticeToolEq` | `{enabled?, params?}` | Practice Tool: backing-track EQ. Both fields optional and applied independently — the toggle alone, one band's `{lowGain, lowFreq, lowQ}` mid-drag, or the whole curve on a project recall. `params` keys are `ParametricEQEffect`'s own (`lowGain`/`lowFreq`/`lowQ`, `lowMid*`, `highMid*`, `high*`); unknown keys are ignored and every value is clamped by the effect |
 
 ## State Object
 
@@ -305,6 +306,40 @@ Two advanced settings affect runtime level behavior immediately:
 | Toggle | On/off states (bypass) |
 | Dropdown | Selection (effect type, category) |
 | Button | Actions (load, save, browse) |
+
+The knob widget itself is `core/ui/ts/knob.ts` (`GenericKnob`): drag to change,
+double-click to reset, double-click the value to type an exact one. It lives
+apart from `controls.ts` so any module can use one without importing that file
+and joining an import cycle with it; `controls.ts` re-exports it for the modules
+that already import it from there.
+
+### EQ panel (`core/ui/ts/eqPanel.ts`)
+
+**One EQ UI, however many EQs the app grows.** `EqPanel` is the whole four-band
+parametric control surface — the band knobs, the draggable curve, the enable
+toggle, an optional reset — and it is what both the Global EQ modal and the
+Practice Tool's Backing Track EQ render. Adding an EQ to a future feature means
+writing a binding, not another panel.
+
+- **The binding is the only thing a feature supplies.** An `EqPanelBinding` says
+  where the values live (`readParams`) and how a change reaches the engine
+  (`writeParams(changed, commit)`), plus the same pair for the enabled flag.
+  The Global EQ binds to the post-chain `global_eq` node and sends
+  `setGlobalChainParam`; the Practice Tool binds to `uiState.practiceTool.eq`
+  and sends `setPracticeToolEq`, coalescing in-progress drags (`commit: false`)
+  and flushing at the end of a gesture. Neither owns any control code.
+- **The bands come from the topology, not from markup.** Rows are generated from
+  `EQ_BAND_KEYS` / `EQ_BAND_RANGES` / `EQ_FREQ_DEFAULTS` in `eqCurve.ts`, which
+  already mirror `ParametricEQEffect`, so a band added there appears in every
+  panel. Host markup is one empty div. Knob ids are namespaced by `idPrefix` so
+  two panels can be open at once without colliding.
+- **Curve and knobs stay in step.** Dragging a band handle updates its knobs and
+  vice versa; a `syncing` guard stops a render echoing the whole curve straight
+  back to the engine. The curve is built lazily, because a canvas inside a
+  `display: none` modal measures zero and would draw nothing.
+- **Dimming is the component's.** It toggles `is-eq-enabled` on its bands host
+  whenever the flag changes, so a panel outside an `.eq-section` gets the
+  disabled affordance without the host arranging for it.
 
 ## Signal Chain Editor Notes
 
@@ -481,9 +516,15 @@ named loop regions for drilling difficult passages.
 `practiceTool.ts` is the facade — waveform, loops, transport, faders. Behind it,
 `practiceTool/projects.ts` owns all persistence (the per-file loop store and
 saved projects) plus the seams the panel can only *request* through,
-`practiceTool/projectsPanel.ts` is the project bar's controls, and
+`practiceTool/projectsPanel.ts` is the project bar's controls,
+`practiceTool/eq.ts` / `eqSend.ts` / `eqModal.ts` are the backing-track EQ's
+state, its engine sends and the binding that points the shared `EqPanel` at it,
 `practiceTool/trackImport.ts` is the drop zone and the reset confirmation the
-Browse button shares with it. None of those import the facade back.
+Browse button shares with it, and
+`practiceTool/types.ts` holds the state shapes (re-exported from `ts/types.ts`).
+None of those import the facade back. `eq.ts` additionally takes no bridge or
+DOM import at all, because `state.ts` seeds the default EQ from it and
+eq → bridge → state would otherwise close a cycle.
 
 - **Engine has no loop library.** The engine only ever knows the *currently-active*
   loop's bounds and an on/off flag (`setPracticeToolLoopRegion`/`setPracticeToolLooping`).
@@ -516,10 +557,27 @@ Browse button shares with it. None of those import the facade back.
   again → "Verse 2"), so a whole song structure can be laid down in a few clicks.
   Deleting is likewise dialog-free: the loop goes immediately and an inline
   "Deleted *X*. [Undo]" banner keeps it reversible for `DELETE_UNDO_WINDOW_MS`.
+- **Backing-track EQ.** The panel's "EQ" button (next to play/stop) opens its own
+  modal — the panel already carries a waveform, a loop list and four faders, and
+  a curve editor does not fit alongside them. Everything inside it is the shared
+  `EqPanel` component (see below), so it is the same control surface as the
+  Global EQ; all this feature adds is the binding. The DSP is likewise the same
+  four-band `ParametricEQEffect` the signal path uses, but a separate instance
+  owned by `PracticeToolService`
+  and applied in `RenderPostChain()` to the popped backing-track frames only —
+  the guitar signal never passes through it. Like gain and balance it is applied
+  at mix time rather than baked into the render-ahead ring, so it needs no flush
+  and a drag is heard immediately; the setters take `mDSPMutex`, which the audio
+  callback already `try_lock`s. UI state (`practiceTool/eq.ts`) is keyed by the
+  effect's own parameter names end to end, so nothing translates between the
+  curve, the saved project and the `setPracticeToolEq` message. Loading a new
+  file resets it to flat and off, exactly as it resets the faders. The panel
+  button lights only when the EQ is on *and* has real gain on some band, so a
+  switched-on-but-flat EQ reads as the no-op it is.
 - **Projects.** The bar on the panel's title row saves the whole practice session
   under a name — the loaded track, its loop list, which loop was active, all four
-  fader settings, and (with the "Preset" box ticked) the preset that was selected
-  at save time. Also client-side, stored via `setAppSetting` under
+  fader settings, the EQ curve, and (with the "Preset" box ticked) the preset that
+  was selected at save time. Also client-side, stored via `setAppSetting` under
   `practiceTool.projects` (`practiceTool/projects.ts`), so nothing round-trips
   through the engine except the file load and the settings sends a recall replays.
   Saving under an existing name offers to overwrite it rather than accumulating

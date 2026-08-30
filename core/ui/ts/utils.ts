@@ -221,3 +221,45 @@ export function findResourceById<T extends { id: string }>(
   }
   return undefined;
 }
+
+// ── Numeric control helpers ─────────────────────────────────────────────────
+// Shared by the knob widget (knob.ts) and the enhanced range inputs
+// (controls.ts). They were duplicated in spirit before both needed them.
+
+export function clampValue(value: number, minValue: number, maxValue: number): number {
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+export function countStepDecimals(stepValue: number): number {
+  if (!isFinite(stepValue) || stepValue <= 0) {
+    return 2;
+  }
+
+  const normalized = stepValue.toString().toLowerCase();
+  if (normalized.includes("e-")) {
+    const exponent = Number.parseInt(normalized.split("e-")[1] ?? "0", 10);
+    return Number.isFinite(exponent) ? exponent : 2;
+  }
+
+  const fractional = normalized.split(".")[1];
+  return fractional ? fractional.length : 0;
+}
+
+export function deriveRangeStep(minValue: number, maxValue: number, stepValue?: number): number {
+  if (typeof stepValue === "number" && isFinite(stepValue) && stepValue > 0) {
+    return stepValue;
+  }
+
+  const range = Math.abs(maxValue - minValue);
+  if (!isFinite(range) || range <= 0) {
+    return 0.01;
+  }
+
+  if (range <= 2) {
+    return 0.01;
+  }
+  if (range <= 24) {
+    return 0.1;
+  }
+  return Math.max(1, range / 100);
+}

@@ -3,6 +3,7 @@ import type { CompositeEffectDefinition } from "./compositeTypes.js";
 import { createEmptyLayoutLibrary } from "./layoutTypes.js";
 import { EffectGuids } from "./effectGuids.js";
 import { normalizePresetScenes } from "./presetScenes.js";
+import { createDefaultPracticeToolEq } from "./practiceTool/eq.js";
 
 export const LOG_ENTRY_LIMIT = 200;
 
@@ -300,6 +301,7 @@ export const uiState: UiState = {
     pitchSemitones: 0,
     gain: 1,
     balance: 0,
+    eq: createDefaultPracticeToolEq(),
   },
   compositeEditMode: false,
   compositeEditDefinition: null,

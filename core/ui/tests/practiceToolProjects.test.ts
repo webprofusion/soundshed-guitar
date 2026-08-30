@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { uiState } from "../ts/state.js";
+import { createDefaultPracticeToolEq } from "../ts/practiceTool/eq.js";
 import type { PracticeToolProject, PracticeToolState } from "../ts/types.js";
 import {
   capturePracticeToolProject,
@@ -34,6 +35,7 @@ function loadedTrack(overrides: Partial<PracticeToolState> = {}): PracticeToolSt
     pitchSemitones: -2,
     gain: 0.8,
     balance: 0.25,
+    eq: createDefaultPracticeToolEq(),
     ...overrides,
   };
 }
@@ -86,6 +88,17 @@ describe("capturePracticeToolProject", () => {
     expect(capturePracticeToolProject("   ", { includePreset: false })).toBeNull();
     uiState.practiceTool = loadedTrack({ filePath: "" });
     expect(capturePracticeToolProject("Song A", { includePreset: false })).toBeNull();
+  });
+
+  it("captures the backing-track EQ, detached from the live state", () => {
+    uiState.practiceTool!.eq = { enabled: true, params: { ...createDefaultPracticeToolEq().params, lowGain: 4.5 } };
+    const project = capturePracticeToolProject("Song A", { includePreset: false })!;
+
+    expect(project.eq).toMatchObject({ enabled: true });
+    expect(project.eq?.params.lowGain).toBe(4.5);
+
+    uiState.practiceTool!.eq.params.lowGain = -9;
+    expect(project.eq?.params.lowGain).toBe(4.5);
   });
 
   it("reuses the given id so saving over a project updates it in place", () => {
@@ -162,6 +175,23 @@ describe("parsePracticeToolProject", () => {
       activeLoopId: "loop-gone",
     });
     expect(parsed?.activeLoopId).toBeNull();
+  });
+
+  it("leaves eq undefined for an entry saved before the EQ existed", () => {
+    const parsed = parsePracticeToolProject({ id: "p1", name: "Song A", filePath: "C:\\Music\\backing.wav" });
+    expect(parsed?.eq).toBeUndefined();
+  });
+
+  it("repairs a stored EQ rather than dropping the whole project", () => {
+    const parsed = parsePracticeToolProject({
+      id: "p1",
+      name: "Song A",
+      filePath: "C:\\Music\\backing.wav",
+      eq: { enabled: true, params: { lowGain: 6, highFreq: "not a number" } },
+    });
+    expect(parsed?.eq?.enabled).toBe(true);
+    expect(parsed?.eq?.params.lowGain).toBe(6);
+    expect(parsed?.eq?.params.highFreq).toBe(8000); // the effect's own default fills the gap
   });
 
   it("keeps a preset name only alongside the preset id it describes", () => {

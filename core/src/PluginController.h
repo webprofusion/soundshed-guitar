@@ -425,6 +425,7 @@ class PluginController
     void HandleSetPracticeToolBalanceRequest(const nlohmann::json& payload);
     void HandleSetPracticeToolLoopRegionRequest(const nlohmann::json& payload);
     void HandleSetPracticeToolLoopingRequest(const nlohmann::json& payload);
+    void HandleSetPracticeToolEqRequest(const nlohmann::json& payload);
 
     // Composite presets (Multi-Rig)
     void HandleSaveCompositePresetRequest(const nlohmann::json& payload);

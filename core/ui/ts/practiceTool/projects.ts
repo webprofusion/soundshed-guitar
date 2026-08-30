@@ -3,7 +3,8 @@
  *
  * A project is everything the Practice Tool needs to pick a practice session
  * back up — which backing track was loaded, the loops defined on it, the four
- * fader settings, and optionally the tone preset that was selected. None of it
+ * fader settings, the backing-track EQ, and optionally the tone preset that was
+ * selected. None of it
  * exists engine-side: it all lives in app settings, exactly like the per-file
  * loop autosave this module also owns.
  *
@@ -17,6 +18,7 @@
 import { setAppSetting } from "../bridge.js";
 import { uiState } from "../state.js";
 import type { AppSettingValue, PracticeToolLoopRegion, PracticeToolProject } from "../types.js";
+import { sanitizePracticeToolEq } from "./eq.js";
 
 const LOOPS_SETTING_KEY = "practiceTool.loops";
 const PROJECTS_SETTING_KEY = "practiceTool.projects";
@@ -160,6 +162,9 @@ export function parsePracticeToolProject(value: unknown): PracticeToolProject | 
     balance: readNumber(record.balance, 0),
     speed: readNumber(record.speed, 1),
     pitchSemitones: readNumber(record.pitchSemitones, 0),
+    // Left undefined for a project saved before the EQ existed, so a recall of
+    // one can tell "no EQ was captured" apart from "a deliberately flat EQ".
+    ...(record.eq ? { eq: sanitizePracticeToolEq(record.eq) } : {}),
     ...(presetId ? { presetId } : {}),
     ...(presetId && presetName ? { presetName } : {}),
     savedAt: Math.max(0, readNumber(record.savedAt, 0)),
@@ -220,6 +225,7 @@ export function capturePracticeToolProject(
     balance: player.balance,
     speed: player.speed,
     pitchSemitones: player.pitchSemitones,
+    eq: sanitizePracticeToolEq(player.eq),
     ...(presetId ? { presetId } : {}),
     ...(presetId && presetName ? { presetName } : {}),
     savedAt: Date.now(),

@@ -125,6 +125,10 @@
                       <div class="practice-tool-transport-buttons">
                         <button id="practice-tool-play-pause" type="button" class="practice-tool-icon-btn" disabled>▶</button>
                         <button id="practice-tool-stop" type="button" class="practice-tool-icon-btn" disabled>■</button>
+                        <!-- The EQ lives in its own modal (practice-tool-eq-modal.html);
+                             this panel is already carrying a waveform, a loop list and
+                             four faders. -->
+                        <button id="practice-tool-eq-btn" type="button" class="practice-tool-eq-btn" title="Backing track EQ">EQ</button>
                         <span class="practice-tool-loop-status" id="practice-tool-loop-status" hidden></span>
                       </div>
                       <!-- All four faders share one normalized 0-1000 slider domain

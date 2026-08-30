@@ -1,0 +1,42 @@
+<!-- Backing-track EQ. Same shell (css/modals/eq.css) and the same band controls
+     as the Global EQ modal — both fill their bands host with the shared EqPanel
+     component (ts/eqPanel.ts). Only the state behind it differs: this one runs
+     on the Practice Tool's own audio stream and never touches the guitar. -->
+<div id="practice-tool-eq-modal" class="modal eq-modal" style="display: none;">
+      <div class="eq-modal-content">
+        <div class="eq-modal-header">
+          <span class="eq-modal-title">Backing Track EQ</span>
+          <div class="eq-modal-controls">
+            <label class="toggle-switch eq-modal-toggle">
+              <input type="checkbox" id="practice-tool-eq-enabled" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="eq-modal-toggle-label">Enabled</span>
+            <button id="practice-tool-eq-reset" class="practice-tool-eq-reset" type="button" title="Return every band to flat">Reset</button>
+            <button class="eq-modal-close" id="practice-tool-eq-close" title="Close EQ">×</button>
+          </div>
+        </div>
+        <div class="eq-modal-body">
+          <div class="eq-visualizer">
+            <div class="eq-visualizer-header">
+              <span>EQ Curve</span>
+              <span class="eq-visualizer-range">±12 dB</span>
+            </div>
+            <canvas class="eq-curve-canvas" id="practice-tool-eq-canvas"></canvas>
+          </div>
+
+          <div class="eq-section">
+            <div class="eq-header">
+              <span class="eq-label">PARAMETRIC EQ</span>
+            </div>
+            <div id="practice-tool-eq-bands"></div>
+          </div>
+
+          <div class="settings-hint">
+            Drag a band handle on the curve or turn a knob; double-click a knob to reset it, or
+            its value to type an exact one. Applies to the backing track only — your guitar
+            signal is untouched.
+          </div>
+        </div>
+      </div>
+    </div>

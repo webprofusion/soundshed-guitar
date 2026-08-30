@@ -322,6 +322,15 @@ export function setPracticeToolLooping(enabled: boolean): void {
 }
 
 /**
+ * Backing-track EQ. Both fields are optional and applied independently by the
+ * engine, so this carries just the toggle, just the band being dragged, or the
+ * whole curve when a project is recalled.
+ */
+export function setPracticeToolEq(update: { enabled?: boolean; params?: Record<string, number> }): void {
+  postMessage({ type: "setPracticeToolEq", ...update });
+}
+
+/**
  * Sets one parameter on the global (always-on) signal chain — input gain,
  * gate, EQ, transpose, doubler and output.
  */

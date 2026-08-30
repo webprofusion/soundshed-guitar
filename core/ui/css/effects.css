@@ -86,7 +86,11 @@
   transition: opacity 0.2s;
 }
 
-.eq-section.enabled .eq-bands {
+/* Two ways in: the Global EQ's own section chrome, and the class EqPanel puts
+   on its bands host — which is what an EQ panel outside an .eq-section (the
+   Practice Tool's) relies on. */
+.eq-section.enabled .eq-bands,
+.eq-bands.is-eq-enabled {
   opacity: 1;
 }
 

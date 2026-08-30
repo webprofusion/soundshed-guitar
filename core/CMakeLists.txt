@@ -526,6 +526,7 @@ set(GUITARFX_CORE_SOURCES
     src/controller/DemoPreviewService.cpp
     src/controller/PracticeToolService.h
     src/controller/PracticeToolService.cpp
+    src/controller/PracticeToolServiceRender.cpp
     src/controller/MetronomeService.h
     src/controller/MetronomeService.cpp
     src/controller/SignalTestService.h

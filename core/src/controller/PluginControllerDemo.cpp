@@ -407,4 +407,34 @@ void PluginController::HandleSetPracticeToolLoopingRequest(const nlohmann::json&
     const bool enabled = payload.value("enabled", false);
     mPracticeTool->SetLoopingEnabled(enabled);
 }
+
+// Both fields are optional and applied independently, so the UI can send just
+// the toggle, just the band it is dragging, or the whole block when restoring
+// a saved project — one message shape for all three rather than a per-band
+// message type each. Unknown parameter names are ignored by the effect.
+void PluginController::HandleSetPracticeToolEqRequest(const nlohmann::json& payload)
+{
+    if (!mPracticeTool)
+    {
+        return;
+    }
+
+    if (payload.contains("params") && payload["params"].is_object())
+    {
+        for (const auto& [key, value] : payload["params"].items())
+        {
+            if (!key.empty() && value.is_number())
+            {
+                mPracticeTool->SetEqParam(key, value.get<double>());
+            }
+        }
+    }
+
+    if (payload.contains("enabled") && payload["enabled"].is_boolean())
+    {
+        // After the params, so switching on never briefly runs the previous
+        // curve: a payload carrying both is one atomic-looking change.
+        mPracticeTool->SetEqEnabled(payload["enabled"].get<bool>());
+    }
+}
 } // namespace guitarfx

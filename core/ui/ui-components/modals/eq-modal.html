@@ -15,7 +15,7 @@
           <div class="eq-visualizer">
             <div class="eq-visualizer-header">
               <span>EQ Curve</span>
-              <span class="eq-visualizer-range">±18 dB</span>
+              <span class="eq-visualizer-range">±12 dB</span>
             </div>
             <canvas class="eq-curve-canvas" id="eq-curve-canvas"></canvas>
           </div>
@@ -25,119 +25,11 @@
               <span class="eq-label">PARAMETRIC EQ</span>
             </div>
 
-            <div class="eq-bands">
-              <!-- Low Shelf Band -->
-              <div class="eq-band">
-                <span class="eq-band-title">LOW</span>
-                <div class="eq-knob-group">
-                  <div class="eq-knob-control">
-                    <span class="knob-label">GAIN</span>
-                    <div class="knob" data-param="eq_low_gain" data-value="0">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-low-gain-value">0 dB</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">FREQ</span>
-                    <div class="knob" data-param="eq_low_freq" data-value="100">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-low-freq-value">100 Hz</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">Q</span>
-                    <div class="knob" data-param="eq_low_q" data-value="0.707">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-low-q-value">0.71</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Low-Mid Band -->
-              <div class="eq-band">
-                <span class="eq-band-title">LOW MID</span>
-                <div class="eq-knob-group">
-                  <div class="eq-knob-control">
-                    <span class="knob-label">GAIN</span>
-                    <div class="knob" data-param="eq_lowmid_gain" data-value="0">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-lowmid-gain-value">0 dB</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">FREQ</span>
-                    <div class="knob" data-param="eq_lowmid_freq" data-value="500">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-lowmid-freq-value">500 Hz</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">Q</span>
-                    <div class="knob" data-param="eq_lowmid_q" data-value="1">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-lowmid-q-value">1.0</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- High-Mid Band -->
-              <div class="eq-band">
-                <span class="eq-band-title">HIGH MID</span>
-                <div class="eq-knob-group">
-                  <div class="eq-knob-control">
-                    <span class="knob-label">GAIN</span>
-                    <div class="knob" data-param="eq_highmid_gain" data-value="0">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-highmid-gain-value">0 dB</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">FREQ</span>
-                    <div class="knob" data-param="eq_highmid_freq" data-value="2000">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-highmid-freq-value">2.0k</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">Q</span>
-                    <div class="knob" data-param="eq_highmid_q" data-value="1">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-highmid-q-value">1.0</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- High Shelf Band -->
-              <div class="eq-band">
-                <span class="eq-band-title">HIGH</span>
-                <div class="eq-knob-group">
-                  <div class="eq-knob-control">
-                    <span class="knob-label">GAIN</span>
-                    <div class="knob" data-param="eq_high_gain" data-value="0">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-high-gain-value">0 dB</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">FREQ</span>
-                    <div class="knob" data-param="eq_high_freq" data-value="8000">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-high-freq-value">8.0k</span>
-                  </div>
-                  <div class="eq-knob-control">
-                    <span class="knob-label">Q</span>
-                    <div class="knob" data-param="eq_high_q" data-value="0.707">
-                      <div class="knob-indicator"></div>
-                    </div>
-                    <span class="knob-value" id="eq-high-q-value">0.71</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <!-- Band knobs are rendered by the shared EqPanel component
+                 (ts/eqPanel.ts) from the band topology in eqCurve.ts, so this
+                 markup never has to list them. Same component, and so the same
+                 controls, as the Practice Tool's Backing Track EQ. -->
+            <div id="eq-modal-bands"></div>
           </div>
         </div>
       </div>

@@ -71,6 +71,12 @@ bool MessageDispatcher::DispatchPracticeTool(PluginController& c, const nlohmann
         return true;
     }
 
+    if (type == "setPracticeToolEq")
+    {
+        c.HandleSetPracticeToolEqRequest(msg);
+        return true;
+    }
+
     return false;
 }
 } // namespace guitarfx

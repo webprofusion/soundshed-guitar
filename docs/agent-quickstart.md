@@ -66,7 +66,7 @@ Prefer adding to one of these over adding another member to the controller:
 | `MetronomeService`               | Click track and riff-capture guidance click — one engine, guidance overrides it |
 | `TelemetryPublisher`             | The three metering feeds, their rate limits and the diagnostics roster |
 | `ControlSurfaceQueue`            | MIDI in, and setlist/scene requests parked for the message thread     |
-| `PracticeToolService`            | Backing-track playback with tempo/pitch shift                        |
+| `PracticeToolService`            | Backing-track playback with tempo/pitch shift and its own EQ — split across `PracticeToolService.cpp` (lifecycle, loading, transport, audio-thread mix) and `PracticeToolServiceRender.cpp` (the background render thread) |
 | `DemoPreviewService`             | Demo audio preview mixed into the input                              |
 | `SignalTestService`              | Test-tone injection and the measurement it reports                   |
 | `TunerService`                   | Pitch readings handed from the audio thread to the UI                |
@@ -186,6 +186,12 @@ keep that tractable:
 - **Senders are not receivers.** Outbound `postMessage` wrappers belong in
   `bridge.ts`, not alongside the inbound handlers. Two of them sitting in
   `messages.ts` were single-handedly responsible for a 20-module import cycle.
+- **A control surface two features need is a component with a binding, not a
+  second copy.** `ts/eqPanel.ts` is the four-band EQ — knobs, curve, toggle —
+  and the Global EQ and the Practice Tool's backing-track EQ each supply only an
+  `EqPanelBinding` saying where the values live and how a change reaches the
+  engine. `ts/knob.ts` is the same idea one level down. Before adding an EQ (or
+  any such surface) to a new feature, write a binding.
 - **Ask for a re-render, do not reach for the renderer.** A submodule that needs
   the feature redrawn calls `requestSignalPathRender()` / `requestNodeParamsRefresh()`
   / `requestPresetLibraryRefresh()`; the owning module registers the real

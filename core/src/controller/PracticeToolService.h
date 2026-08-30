@@ -48,6 +48,7 @@
 // references into it.
 
 #include "IPluginHost.h"
+#include "dsp/effects/ParametricEQEffect.h"
 #include "util/SpscRingBuffer.h"
 
 #include "signalsmith-stretch.h"
@@ -120,6 +121,19 @@ class PracticeToolService
     void SetLoopRegion(double startSec, double endSec);
     void ClearLoopRegion();
     void SetLoopingEnabled(bool enabled);
+
+    // Backing-track EQ: the same 4-band ParametricEQEffect the signal path
+    // uses, applied to this stream only (the guitar never passes through it).
+    // Both are message-thread entry points and take mDSPMutex, because the EQ
+    // runs on the audio thread in RenderPostChain() — see the members below.
+    // Neither bumps mParamGeneration: like gain and balance, the EQ is applied
+    // at mix time rather than baked into already-rendered lookahead, so a knob
+    // drag is heard immediately and no ring flush is needed.
+    void SetEqEnabled(bool enabled);
+    /// `key` is a ParametricEQEffect parameter name ("lowGain", "highFreq", …);
+    /// anything else is ignored by the effect. The effect clamps to its own
+    /// documented ranges.
+    void SetEqParam(const std::string& key, double value);
 
     /// AUDIO THREAD. Additive mix into outputs[] — never touches inputs[].
     /// Pops already-rendered frames from the ring buffer; on underrun, adds
@@ -274,6 +288,19 @@ class PracticeToolService
     // two threads never race a buffer swap.
     std::unique_ptr<util::SpscRingBuffer<StereoFrame>> mOutputRing;
     std::vector<StereoFrame> mPopScratch; // audio-thread-only; sized in Prepare()
+
+    // Backing-track EQ. Guarded by mDSPMutex rather than an atomic handoff:
+    // RenderPostChain() already runs inside that lock (ProcessAudio try_locks
+    // it before calling ProcessAudioLocked), so the message-thread setters can
+    // simply take it, exactly as Prepare() does for mMaxBlockSize.
+    //
+    // ParametricEQEffect works on planar channel pointers, so the popped
+    // interleaved frames are split into these scratch buffers, filtered in
+    // place, and mixed back — both are pre-sized in Prepare() alongside
+    // mPopScratch, keeping the audio thread allocation-free.
+    ParametricEQEffect mEq;
+    bool mEqEnabled = false;
+    std::vector<float> mEqScratchL, mEqScratchR; // audio-thread-only; sized in Prepare()
 
     std::thread mRenderThread;
     std::atomic<bool> mRenderThreadRunning{false};

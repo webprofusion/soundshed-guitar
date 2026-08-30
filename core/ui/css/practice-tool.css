@@ -394,6 +394,46 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Sits alongside play/stop but is a labelled button, not a transport icon —
+   it opens the Backing Track EQ modal rather than acting on playback. */
+.practice-tool-eq-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.practice-tool-eq-btn:hover {
+  border-color: rgba(112, 151, 255, 0.7);
+}
+
+/* Lit only while the EQ is on *and* shaping — see isPracticeToolEqShaping(). */
+.practice-tool-eq-btn.is-active {
+  background: rgba(112, 151, 255, 0.22);
+  border-color: rgba(112, 151, 255, 0.75);
+  color: rgba(226, 236, 255, 0.98);
+}
+
+.practice-tool-eq-reset {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--modal-border-medium);
+  background: var(--modal-input-bg);
+  color: var(--modal-text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.practice-tool-eq-reset:hover {
+  border-color: rgba(112, 151, 255, 0.7);
+}
+
 .practice-tool-loop-status {
   display: inline-flex;
   align-items: center;

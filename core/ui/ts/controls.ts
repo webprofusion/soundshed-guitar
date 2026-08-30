@@ -1,75 +1,19 @@
 import { appendLog } from "./logging.js";
 import { postMessage, sendGlobalChainParam, setAppSetting, setMasterGain, setParameter } from "./bridge.js";
 import { uiState } from "./state.js";
-import {
-  drawEqCurve,
-  type EqBand,
-  EqCurveInteraction,
-  type EqBandConfig,
-  EQ_BAND_LABELS,
-  buildEqBandConfigsFromParams,
-  eqBandChangeToParams,
-} from "./eqCurve.js";
 import type { GlobalSettings, GraphNode, SignalGraph } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
+import { GenericKnob } from "./knob.js";
+import { EqPanel } from "./eqPanel.js";
+import { clampValue, countStepDecimals, deriveRangeStep } from "./utils.js";
 
-export interface KnobConfig {
-  knobElement: HTMLElement;
-  paramId: string;
-  minValue: number;
-  maxValue: number;
-  defaultValue: number;
-  displayFormat: (value: number) => string;
-  valueDisplayId?: string;
-  valueDisplay?: HTMLElement | null;
-  labelElement?: HTMLElement | null;
-  sensitivity?: number;
-  stepValue?: number;
-  onValueChange?: (value: number) => void;
-  onValueCommit?: (value: number) => void;
-  sendParameter?: boolean;
-}
+// The knob widget moved to ./knob.js so the EQ panel component (and anything
+// else) can use one without importing this module. Re-exported here so the
+// modules that already import it from `./controls.js` are unaffected.
+export { GenericKnob, type KnobConfig } from "./knob.js";
 
 interface RangeInputInteractionOptions {
   onImmediateChange?: (value: number) => void;
-}
-
-function clampValue(value: number, minValue: number, maxValue: number): number {
-  return Math.max(minValue, Math.min(maxValue, value));
-}
-
-function countStepDecimals(stepValue: number): number {
-  if (!isFinite(stepValue) || stepValue <= 0) {
-    return 2;
-  }
-
-  const normalized = stepValue.toString().toLowerCase();
-  if (normalized.includes("e-")) {
-    const exponent = Number.parseInt(normalized.split("e-")[1] ?? "0", 10);
-    return Number.isFinite(exponent) ? exponent : 2;
-  }
-
-  const fractional = normalized.split(".")[1];
-  return fractional ? fractional.length : 0;
-}
-
-function deriveRangeStep(minValue: number, maxValue: number, stepValue?: number): number {
-  if (typeof stepValue === "number" && isFinite(stepValue) && stepValue > 0) {
-    return stepValue;
-  }
-
-  const range = Math.abs(maxValue - minValue);
-  if (!isFinite(range) || range <= 0) {
-    return 0.01;
-  }
-
-  if (range <= 2) {
-    return 0.01;
-  }
-  if (range <= 24) {
-    return 0.1;
-  }
-  return Math.max(1, range / 100);
 }
 
 export function enhanceRangeInput(
@@ -123,365 +67,6 @@ export function enhanceRangeInput(
     },
     { passive: false },
   );
-}
-
-export class GenericKnob {
-  private knobElement: HTMLElement;
-  private paramId: string;
-  private minValue: number;
-  private maxValue: number;
-  private defaultValue: number;
-  private currentValue: number;
-  private displayFormat: (value: number) => string;
-  private valueDisplay: HTMLElement | null;
-  private labelElement: HTMLElement | null;
-  private editableValueElement: HTMLElement | null;
-  private sensitivity: number;
-  private stepValue: number;
-  private onValueChange?: (value: number) => void;
-  private onValueCommit?: (value: number) => void;
-  private sendParameter: boolean;
-  private isDragging = false;
-  private startY = 0;
-  private startValue = 0;
-  private inlineEditor: HTMLInputElement | null = null;
-  private activePointerId: number | null = null;
-
-  constructor(config: KnobConfig) {
-    this.knobElement = config.knobElement;
-    this.paramId = config.paramId;
-    this.minValue = config.minValue;
-    this.maxValue = config.maxValue;
-    this.defaultValue = config.defaultValue;
-    this.currentValue = config.defaultValue;
-    this.displayFormat = config.displayFormat;
-    this.sensitivity = config.sensitivity ?? 0.5;
-    this.stepValue = deriveRangeStep(this.minValue, this.maxValue, config.stepValue);
-    this.onValueChange = config.onValueChange;
-    this.onValueCommit = config.onValueCommit;
-    this.sendParameter = config.sendParameter ?? true;
-    
-    this.valueDisplay = config.valueDisplay
-      ?? (config.valueDisplayId ? document.getElementById(config.valueDisplayId) : null);
-    this.labelElement = config.labelElement
-      ?? (this.knobElement.parentElement?.querySelector(
-        ".knob-label, .node-param-label, .custom-control-label",
-      ) as HTMLElement | null);
-    this.editableValueElement = this.valueDisplay;
-    if (this.editableValueElement && !this.editableValueElement.dataset.originalLabel) {
-      this.editableValueElement.dataset.originalLabel = this.editableValueElement.textContent?.trim() ?? "";
-    }
-
-    this.initialize();
-  }
-
-  private initialize(): void {
-    // Set initial value from data attribute if present
-    const dataValue = parseFloat(this.knobElement.dataset.value ?? "");
-    if (!isNaN(dataValue)) {
-      this.currentValue = dataValue;
-    }
-
-    this.knobElement.tabIndex = this.knobElement.tabIndex >= 0 ? this.knobElement.tabIndex : 0;
-    this.knobElement.setAttribute("role", "slider");
-    this.knobElement.setAttribute("aria-label", this.labelElement?.textContent?.trim() || this.paramId);
-    this.knobElement.setAttribute("aria-valuemin", this.minValue.toString());
-    this.knobElement.setAttribute("aria-valuemax", this.maxValue.toString());
-
-    this.updateDisplay(this.currentValue);
-    this.setupEventListeners();
-  }
-
-  private setupEventListeners(): void {
-    // Use pointer events for unified support of mouse, touch, and pen interactions.
-    // Attach move/up to the element; pointer capture ensures we receive events during drag
-    // even if the pointer leaves the knob. This also avoids accumulating document listeners
-    // when many effect knobs are created (e.g. node param panels).
-    this.knobElement.addEventListener("pointerdown", (e) => this.onPointerDown(e));
-    this.knobElement.addEventListener("pointermove", (e) => this.onPointerMove(e));
-    this.knobElement.addEventListener("pointerup", (e) => this.onPointerUp(e));
-    this.knobElement.addEventListener("pointercancel", (e) => this.onPointerUp(e));
-
-    this.knobElement.addEventListener("dblclick", (e) => this.onDoubleClick(e as MouseEvent));
-    this.knobElement.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
-    this.editableValueElement?.addEventListener("dblclick", (e) => this.onValueDoubleClick(e as MouseEvent));
-
-    // Legacy fallback only when PointerEvent API is unavailable (rare in modern browsers).
-    if (typeof window !== "undefined" && !("PointerEvent" in window)) {
-      this.knobElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
-      document.addEventListener("mousemove", (e) => this.onMouseMove(e));
-      document.addEventListener("mouseup", () => this.onMouseUp());
-    }
-
-    // Ensure touch interactions don't trigger scrolling/zooming while manipulating the knob.
-    if (this.knobElement.style && !this.knobElement.style.touchAction) {
-      this.knobElement.style.touchAction = "none";
-    }
-  }
-
-  private emitLiveValue(value: number): void {
-    if (this.sendParameter) {
-      setParameter(this.paramId, value);
-    }
-
-    if (this.onValueChange) {
-      this.onValueChange(value);
-    }
-  }
-
-  private commitCurrentValue(): void {
-    if (this.sendParameter) {
-      setParameter(this.paramId, this.currentValue);
-      appendLog(`${this.paramId} → ${this.currentValue.toFixed(2)}`);
-    }
-
-    if (this.onValueCommit) {
-      this.onValueCommit(this.currentValue);
-    }
-  }
-
-  private applyValue(value: number, commit = false): void {
-    this.setValue(value);
-    this.emitLiveValue(this.currentValue);
-    if (commit) {
-      this.commitCurrentValue();
-    }
-  }
-
-  private onDoubleClick(e: MouseEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    this.closeInlineEditor(true);
-    this.setValue(this.defaultValue);
-    if (this.sendParameter) {
-      setParameter(this.paramId, this.defaultValue);
-      appendLog(`${this.paramId} → ${this.defaultValue.toFixed(2)} (reset to default)`);
-    }
-    
-    if (this.onValueChange) {
-      this.onValueChange(this.defaultValue);
-    }
-
-    if (this.onValueCommit) {
-      this.onValueCommit(this.defaultValue);
-    }
-  }
-
-  private onPointerDown(e: PointerEvent): void {
-    if (e.button !== undefined && e.button !== 0) {
-      return; // Only primary button / touch
-    }
-    this.knobElement.focus();
-    this.closeInlineEditor(true);
-    this.isDragging = true;
-    this.startY = e.clientY;
-    this.startValue = this.currentValue;
-    this.activePointerId = e.pointerId ?? null;
-
-    if (typeof this.knobElement.setPointerCapture === "function") {
-      try {
-        this.knobElement.setPointerCapture(e.pointerId);
-      } catch {
-        // Capture may fail in some environments; fall back to document tracking (handled by existing mouse paths if needed)
-      }
-    }
-    e.preventDefault();
-  }
-
-  private onPointerMove(e: PointerEvent): void {
-    if (!this.isDragging) return;
-    if (this.activePointerId != null && (e.pointerId ?? null) !== this.activePointerId) return;
-
-    const deltaY = this.startY - e.clientY;
-    let newValue = this.startValue + deltaY * this.sensitivity;
-    newValue = clampValue(newValue, this.minValue, this.maxValue);
-
-    this.currentValue = newValue;
-    this.knobElement.dataset.value = newValue.toString();
-    this.updateDisplay(newValue);
-
-    this.emitLiveValue(this.currentValue);
-    // No need to preventDefault on every move for pointer (capture handles delivery)
-  }
-
-  private onPointerUp(e: PointerEvent): void {
-    if (!this.isDragging) return;
-    if (this.activePointerId != null && (e.pointerId ?? null) !== this.activePointerId) return;
-
-    if (typeof this.knobElement.releasePointerCapture === "function") {
-      try {
-        this.knobElement.releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-
-    this.isDragging = false;
-    this.activePointerId = null;
-    this.commitCurrentValue();
-  }
-
-  private onMouseDown(e: MouseEvent): void {
-    this.closeInlineEditor(true);
-    this.isDragging = true;
-    this.startY = e.clientY;
-    this.startValue = this.currentValue;
-    e.preventDefault();
-  }
-
-  private onMouseMove(e: MouseEvent): void {
-    if (!this.isDragging) return;
-
-    const deltaY = this.startY - e.clientY;
-    let newValue = this.startValue + deltaY * this.sensitivity;
-    newValue = clampValue(newValue, this.minValue, this.maxValue);
-
-    this.currentValue = newValue;
-    this.knobElement.dataset.value = newValue.toString();
-    this.updateDisplay(newValue);
-
-    this.emitLiveValue(this.currentValue);
-  }
-
-  private onMouseUp(): void {
-    if (!this.isDragging) return;
-
-    this.isDragging = false;
-    this.commitCurrentValue();
-  }
-
-  private onWheel(e: WheelEvent): void {
-    if (this.isDragging) {
-      return;
-    }
-
-    e.preventDefault();
-    this.knobElement.focus();
-    const delta = e.deltaY < 0 ? this.stepValue : -this.stepValue;
-    this.applyValue(this.currentValue + delta, true);
-  }
-
-  private onValueDoubleClick(e: MouseEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    this.openInlineEditor();
-  }
-
-  private openInlineEditor(): void {
-    if (!this.editableValueElement || this.inlineEditor) {
-      return;
-    }
-
-    const input = document.createElement("input");
-    input.type = "number";
-    input.className = "knob-inline-editor";
-    input.min = this.minValue.toString();
-    input.max = this.maxValue.toString();
-    input.step = this.stepValue.toString();
-    input.value = this.currentValue.toFixed(countStepDecimals(this.stepValue));
-
-    this.inlineEditor = input;
-    this.editableValueElement.classList.add("is-editing");
-    this.editableValueElement.textContent = "";
-    this.editableValueElement.appendChild(input);
-
-    const savedValue = this.currentValue;
-    let finishing = false;
-
-    const finish = (revertToLabel = false) => {
-      if (finishing) return;
-      finishing = true;
-      if (!revertToLabel) {
-        // Commit whatever is in the input right now
-        const parsedValue = Number.parseFloat(input.value);
-        if (Number.isFinite(parsedValue)) {
-          this.applyValue(parsedValue, true);
-        }
-      } else {
-        // Revert to the value that was set before the editor opened
-        this.applyValue(savedValue, false);
-      }
-      this.closeInlineEditor(revertToLabel);
-    };
-
-    // Only preview while typing — do NOT rewrite input.value so the user can type freely
-    input.addEventListener("input", () => {
-      const parsedValue = Number.parseFloat(input.value);
-      if (!Number.isFinite(parsedValue)) {
-        return;
-      }
-      // Live-preview the value without committing or reformatting the field
-      this.emitLiveValue(clampValue(parsedValue, this.minValue, this.maxValue));
-    });
-
-    input.addEventListener("blur", () => {
-      finish(false);
-    });
-
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        finish(false);
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        finish(true);
-      }
-    });
-
-    input.focus();
-    input.select();
-  }
-
-  private closeInlineEditor(revertToLabel = false): void {
-    if (!this.editableValueElement || !this.inlineEditor) {
-      return;
-    }
-
-    const input = this.inlineEditor;
-    this.inlineEditor = null;
-    this.editableValueElement.classList.remove("is-editing");
-    input.remove();
-
-    if (revertToLabel) {
-      this.editableValueElement.textContent = this.editableValueElement.dataset.originalLabel ?? "";
-      return;
-    }
-
-    this.updateDisplay(this.currentValue);
-  }
-
-  private updateDisplay(value: number): void {
-    if (this.valueDisplay) {
-      const formattedValue = this.displayFormat(value);
-      if (!this.inlineEditor) {
-        this.valueDisplay.textContent = formattedValue;
-        this.valueDisplay.dataset.originalLabel = formattedValue;
-      }
-    }
-
-    this.knobElement.setAttribute("aria-valuenow", value.toString());
-    this.knobElement.setAttribute("aria-valuetext", this.displayFormat(value));
-
-    const rotation = ((value - this.minValue) / (this.maxValue - this.minValue)) * 270 - 135;
-    const pct = (value - this.minValue) / (this.maxValue - this.minValue);
-    this.knobElement.style.setProperty("--knob-pct", pct.toString());
-    const indicator = this.knobElement.querySelector(".knob-indicator") as HTMLElement | null;
-    if (indicator) {
-      indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
-    }
-    const customFace = this.knobElement.querySelector(".custom-knob-face") as HTMLElement | null;
-    if (customFace) {
-      customFace.style.transform = `rotate(${rotation}deg)`;
-    }
-  }
-
-  public setValue(value: number): void {
-    this.currentValue = clampValue(value, this.minValue, this.maxValue);
-    this.knobElement.dataset.value = this.currentValue.toString();
-    this.updateDisplay(this.currentValue);
-  }
-
-  public getValue(): number {
-    return this.currentValue;
-  }
 }
 
 function updateControlDisplay(controlId: string, value: number, format: "percent" | "db" | "value" = "percent") {
@@ -1178,12 +763,6 @@ export function handleAmpCabStateChanged(newAmpEnabled: boolean, newCabEnabled: 
 // ===== Parametric EQ Controls =====
 let eqEnabled = false;
 
-type GlobalEqParamBinding = {
-  path: string;
-  read: (node: GraphNode) => number;
-  apply: (node: GraphNode, value: number) => void;
-};
-
 const findGraphNode = (graph: SignalGraph | undefined, id: string, type: string): GraphNode | undefined => {
   if (!graph) {
     return undefined;
@@ -1207,523 +786,109 @@ const getPostChainDoublerNode = (): GraphNode | undefined =>
 const getPostChainEqNode = (): GraphNode | undefined =>
   findGraphNode(uiState.globalSignalChain?.postChainGraph, "global_eq", EffectGuids.kEqParametric);
 
-const GLOBAL_EQ_PARAM_MAP: Record<string, GlobalEqParamBinding> = {
-  eq_low_gain: {
-    path: "eq.lowGain",
-    read: (node) => node.params.lowGain,
-    apply: (node, value) => { node.params.lowGain = value; },
-  },
-  eq_low_freq: {
-    path: "eq.lowFreq",
-    read: (node) => node.params.lowFreq,
-    apply: (node, value) => { node.params.lowFreq = value; },
-  },
-  eq_low_q: {
-    path: "eq.lowQ",
-    read: (node) => node.params.lowQ,
-    apply: (node, value) => { node.params.lowQ = value; },
-  },
-  eq_lowmid_gain: {
-    path: "eq.lowMidGain",
-    read: (node) => node.params.lowMidGain,
-    apply: (node, value) => { node.params.lowMidGain = value; },
-  },
-  eq_lowmid_freq: {
-    path: "eq.lowMidFreq",
-    read: (node) => node.params.lowMidFreq,
-    apply: (node, value) => { node.params.lowMidFreq = value; },
-  },
-  eq_lowmid_q: {
-    path: "eq.lowMidQ",
-    read: (node) => node.params.lowMidQ,
-    apply: (node, value) => { node.params.lowMidQ = value; },
-  },
-  eq_highmid_gain: {
-    path: "eq.highMidGain",
-    read: (node) => node.params.highMidGain,
-    apply: (node, value) => { node.params.highMidGain = value; },
-  },
-  eq_highmid_freq: {
-    path: "eq.highMidFreq",
-    read: (node) => node.params.highMidFreq,
-    apply: (node, value) => { node.params.highMidFreq = value; },
-  },
-  eq_highmid_q: {
-    path: "eq.highMidQ",
-    read: (node) => node.params.highMidQ,
-    apply: (node, value) => { node.params.highMidQ = value; },
-  },
-  eq_high_gain: {
-    path: "eq.highGain",
-    read: (node) => node.params.highGain,
-    apply: (node, value) => { node.params.highGain = value; },
-  },
-  eq_high_freq: {
-    path: "eq.highFreq",
-    read: (node) => node.params.highFreq,
-    apply: (node, value) => { node.params.highFreq = value; },
-  },
-  eq_high_q: {
-    path: "eq.highQ",
-    read: (node) => node.params.highQ,
-    apply: (node, value) => { node.params.highQ = value; },
-  },
-};
+// ── Global EQ ────────────────────────────────────────────────────────────────
+// Every control in the Global EQ modal is the shared EqPanel component
+// (ts/eqPanel.ts) — the band knobs, the draggable curve, the enable toggle.
+// What lives here is only what is specific to *this* EQ: its values are the
+// post-chain  node's params, and a change reaches the engine as a
+// global-chain param path. The Practice Tool's Backing Track EQ binds the same
+// component to its own state; neither owns any control code.
 
-let eqCurveInteraction: EqCurveInteraction | null = null;
+let globalEqPanel: EqPanel | null = null;
 
-/** Map from knob param IDs ("eq_low_gain") to canonical keys ("lowGain") per band. */
-const GLOBAL_EQ_KNOB_IDS: ReadonlyArray<{ gain: string; freq: string; q: string | null }> = [
-  { gain: "eq_low_gain", freq: "eq_low_freq", q: "eq_low_q" },
-  { gain: "eq_lowmid_gain", freq: "eq_lowmid_freq", q: "eq_lowmid_q" },
-  { gain: "eq_highmid_gain", freq: "eq_highmid_freq", q: "eq_highmid_q" },
-  { gain: "eq_high_gain", freq: "eq_high_freq", q: "eq_high_q" },
-];
-
-const GLOBAL_EQ_KNOB_TO_PARAM: ReadonlyArray<{ knobId: string; paramKey: string }> = [
-  { knobId: "eq_low_gain", paramKey: "lowGain" },
-  { knobId: "eq_low_freq", paramKey: "lowFreq" },
-  { knobId: "eq_low_q", paramKey: "lowQ" },
-  { knobId: "eq_lowmid_gain", paramKey: "lowMidGain" },
-  { knobId: "eq_lowmid_freq", paramKey: "lowMidFreq" },
-  { knobId: "eq_lowmid_q", paramKey: "lowMidQ" },
-  { knobId: "eq_highmid_gain", paramKey: "highMidGain" },
-  { knobId: "eq_highmid_freq", paramKey: "highMidFreq" },
-  { knobId: "eq_highmid_q", paramKey: "highMidQ" },
-  { knobId: "eq_high_gain", paramKey: "highGain" },
-  { knobId: "eq_high_freq", paramKey: "highFreq" },
-  { knobId: "eq_high_q", paramKey: "highQ" },
-];
-
-function getGlobalEqParams(): Record<string, number | undefined> {
-  const params: Record<string, number | undefined> = {
-    ...(getPostChainEqNode()?.params ?? {}),
-  };
-
-  for (const { knobId, paramKey } of GLOBAL_EQ_KNOB_TO_PARAM) {
-    const knob = knobInstances.get(knobId);
-    if (knob) {
-      params[paramKey] = knob.getValue();
-    }
-  }
-
-  return params;
-}
-
-function buildGlobalEqBandConfigs(): EqBandConfig[] {
-  return buildEqBandConfigsFromParams(getGlobalEqParams());
-}
-
-/** Drag handler: update eqNode, send to plugin, and sync knobs live. */
-function handleEqCurveDrag(bandIndex: number, freq: number, gainDb: number, q: number): void {
-  const changed = eqBandChangeToParams(bandIndex, freq, gainDb, q);
-
-  // 1) Apply all values to local eqNode FIRST
-  const eqNode = getPostChainEqNode();
-  if (eqNode) {
-    for (const [key, value] of Object.entries(changed)) {
-      eqNode.params[key] = value;
-    }
-  }
-
-  // 2) Send all to plugin
-  for (const [key, value] of Object.entries(changed)) {
-    sendGlobalChainParam(`eq.${key}`, value);
-  }
-
-  // 3) Sync knob displays to match dragged values
-  const knobIds = GLOBAL_EQ_KNOB_IDS[bandIndex];
-  if (knobIds) {
-    const freqKnob = knobInstances.get(knobIds.freq);
-    if (freqKnob) freqKnob.setValue(freq);
-    const gainKnob = knobInstances.get(knobIds.gain);
-    if (gainKnob) gainKnob.setValue(gainDb);
-    if (knobIds.q) {
-      const qKnob = knobInstances.get(knobIds.q);
-      if (qKnob) qKnob.setValue(q);
-    }
-  }
-}
-
-/** Full commit handler: sends params + logs the change. */
-function handleEqCurveCommit(bandIndex: number, freq: number, gainDb: number, q: number): void {
-  handleEqCurveDrag(bandIndex, freq, gainDb, q);
-
-  appendLog(`EQ ${EQ_BAND_LABELS[bandIndex]}: ${Math.round(freq)}Hz ${gainDb >= 0 ? "+" : ""}${gainDb.toFixed(1)}dB Q:${q.toFixed(1)}`);
-}
-
+/** Mirrors the modal's enable state onto the control-bar toggle and the
+ * .eq-section / .eq-control 'enabled' classes, which are Global-EQ-specific
+ * chrome the component knows nothing about. */
 function updateEQSectionState(): void {
-  const sections = document.querySelectorAll(".eq-section");
-  sections.forEach((section) => {
-    section.classList.toggle("enabled", eqEnabled);
+  document.querySelectorAll('.eq-section').forEach((section) => {
+    section.classList.toggle('enabled', eqEnabled);
   });
+  document.querySelector('.eq-control')?.classList.toggle('enabled', eqEnabled);
 
-  const eqControl = document.querySelector(".eq-control");
-  if (eqControl) {
-    eqControl.classList.toggle("enabled", eqEnabled);
+  const eqToggle = document.getElementById('eq-toggle') as HTMLInputElement | null;
+  if (eqToggle) {
+    eqToggle.checked = eqEnabled;
   }
 }
 
-function updateEqModalVisualization(): void {
-  if (eqCurveInteraction) {
-    eqCurveInteraction.updateBands(buildGlobalEqBandConfigs());
-    return;
-  }
-
-  // Fallback: non-interactive drawing
-  const canvas = document.getElementById("eq-curve-canvas") as HTMLCanvasElement | null;
-  if (!canvas) {
-    return;
-  }
-
-  const width = Math.max(1, canvas.clientWidth);
-  const height = Math.max(1, canvas.clientHeight);
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-
-  const configs = buildGlobalEqBandConfigs();
-  const bands: EqBand[] = configs.map(c => ({ freq: c.freq, gainDb: c.gainDb, q: c.q }));
-  drawEqCurve(canvas, bands);
-}
-
+/** Redraws the modal from the current node state. Called after a preset load
+ * and whenever the control bar changes the EQ. */
 export function refreshEqModalVisualization(): void {
-  updateEqModalVisualization();
+  globalEqPanel?.render();
 }
 
 function initializeEQControls(): void {
-  const eqToggle = document.getElementById("eq-toggle") as HTMLInputElement | null;
-  const eqModalToggle = document.getElementById("eq-modal-toggle") as HTMLInputElement | null;
-
-  const applyEqEnabled = (nextValue: boolean, shouldSend: boolean): void => {
-    eqEnabled = nextValue;
-    if (eqToggle) {
-      eqToggle.checked = eqEnabled;
-    }
-    if (eqModalToggle) {
-      eqModalToggle.checked = eqEnabled;
-    }
-    if (shouldSend) {
-      sendGlobalChainParam("eq.enabled", eqEnabled);
-      const eqNode = getPostChainEqNode();
-      if (eqNode) {
-        eqNode.bypassed = !eqEnabled;
+  const bandsHost = document.getElementById('eq-modal-bands');
+  if (bandsHost && !globalEqPanel) {
+    globalEqPanel = new EqPanel(
+      {
+        bandsHost,
+        canvas: document.getElementById('eq-curve-canvas') as HTMLCanvasElement | null,
+        toggle: document.getElementById('eq-modal-toggle') as HTMLInputElement | null,
+        idPrefix: 'global_eq',
+        onChanged: () => updateEQSectionState(),
+      },
+      {
+        label: 'eq',
+        readParams: () => getPostChainEqNode()?.params ?? {},
+        writeParams: (changed) => {
+          // The node is the local copy the preset is saved from, so it is
+          // written whether or not this is the end of a gesture; the send is
+          // cheap enough that the global chain has never coalesced it.
+          const eqNode = getPostChainEqNode();
+          for (const [key, value] of Object.entries(changed)) {
+            if (eqNode) {
+              eqNode.params[key] = value;
+            }
+            sendGlobalChainParam(`eq.${key}`, value);
+          }
+        },
+        readEnabled: () => eqEnabled,
+        writeEnabled: (enabled) => applyGlobalEqEnabled(enabled, true),
       }
-      appendLog(`eq.enabled → ${eqEnabled}`);
-    }
-    updateEQSectionState();
-    updateEqModalVisualization();
-  };
-
-  if (eqToggle) {
-    eqToggle.addEventListener("change", () => {
-      applyEqEnabled(eqToggle.checked, true);
-    });
-  }
-
-  if (eqModalToggle) {
-    eqModalToggle.addEventListener("change", () => {
-      applyEqEnabled(eqModalToggle.checked, true);
-    });
-  }
-
-  const onEqValueChange = (paramId: string, value: number): void => {
-    const mapping = GLOBAL_EQ_PARAM_MAP[paramId];
-    if (mapping) {
-      const eqNode = getPostChainEqNode();
-      if (eqNode) {
-        mapping.apply(eqNode, value);
-      }
-    }
-    updateEqModalVisualization();
-  };
-  const onEqValueCommit = (paramId: string, value: number): void => {
-    const mapping = GLOBAL_EQ_PARAM_MAP[paramId];
-    if (!mapping) {
-      return;
-    }
-    sendGlobalChainParam(mapping.path, value);
-    const eqNode = getPostChainEqNode();
-    if (eqNode) {
-      mapping.apply(eqNode, value);
-    }
-    appendLog(`${mapping.path} → ${value.toFixed(2)}`);
-  };
-
-  // Low Shelf Band
-  const lowGainKnob = document.querySelector('.knob[data-param="eq_low_gain"]') as HTMLElement | null;
-  if (lowGainKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: lowGainKnob,
-      paramId: "eq_low_gain",
-      minValue: -12.0,
-      maxValue: 12.0,
-      defaultValue: 0.0,
-      displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
-      valueDisplayId: "eq-low-gain-value",
-      sensitivity: 0.1,
-      onValueChange: (value) => onEqValueChange("eq_low_gain", value),
-      onValueCommit: (value) => onEqValueCommit("eq_low_gain", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_low_gain", knobInstance);
-  }
-
-  const lowFreqKnob = document.querySelector('.knob[data-param="eq_low_freq"]') as HTMLElement | null;
-  if (lowFreqKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: lowFreqKnob,
-      paramId: "eq_low_freq",
-      minValue: 20.0,
-      maxValue: 500.0,
-      defaultValue: 100.0,
-      displayFormat: (value) => `${Math.round(value)} Hz`,
-      valueDisplayId: "eq-low-freq-value",
-      sensitivity: 2.0,
-      onValueChange: (value) => onEqValueChange("eq_low_freq", value),
-      onValueCommit: (value) => onEqValueCommit("eq_low_freq", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_low_freq", knobInstance);
-  }
-
-  // Low-Mid Band
-  const lowMidGainKnob = document.querySelector('.knob[data-param="eq_lowmid_gain"]') as HTMLElement | null;
-  if (lowMidGainKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: lowMidGainKnob,
-      paramId: "eq_lowmid_gain",
-      minValue: -12.0,
-      maxValue: 12.0,
-      defaultValue: 0.0,
-      displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
-      valueDisplayId: "eq-lowmid-gain-value",
-      sensitivity: 0.1,
-      onValueChange: (value) => onEqValueChange("eq_lowmid_gain", value),
-      onValueCommit: (value) => onEqValueCommit("eq_lowmid_gain", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_lowmid_gain", knobInstance);
-  }
-
-  const lowMidFreqKnob = document.querySelector('.knob[data-param="eq_lowmid_freq"]') as HTMLElement | null;
-  if (lowMidFreqKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: lowMidFreqKnob,
-      paramId: "eq_lowmid_freq",
-      minValue: 100.0,
-      maxValue: 2000.0,
-      defaultValue: 500.0,
-      displayFormat: (value) => `${Math.round(value)} Hz`,
-      valueDisplayId: "eq-lowmid-freq-value",
-      sensitivity: 5.0,
-      onValueChange: (value) => onEqValueChange("eq_lowmid_freq", value),
-      onValueCommit: (value) => onEqValueCommit("eq_lowmid_freq", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_lowmid_freq", knobInstance);
-  }
-
-  const lowMidQKnob = document.querySelector('.knob[data-param="eq_lowmid_q"]') as HTMLElement | null;
-  if (lowMidQKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: lowMidQKnob,
-      paramId: "eq_lowmid_q",
-      minValue: 0.1,
-      maxValue: 10.0,
-      defaultValue: 1.0,
-      displayFormat: (value) => value.toFixed(1),
-      valueDisplayId: "eq-lowmid-q-value",
-      sensitivity: 0.05,
-      onValueChange: (value) => onEqValueChange("eq_lowmid_q", value),
-      onValueCommit: (value) => onEqValueCommit("eq_lowmid_q", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_lowmid_q", knobInstance);
-  }
-
-  // High-Mid Band
-  const highMidGainKnob = document.querySelector('.knob[data-param="eq_highmid_gain"]') as HTMLElement | null;
-  if (highMidGainKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highMidGainKnob,
-      paramId: "eq_highmid_gain",
-      minValue: -12.0,
-      maxValue: 12.0,
-      defaultValue: 0.0,
-      displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
-      valueDisplayId: "eq-highmid-gain-value",
-      sensitivity: 0.1,
-      onValueChange: (value) => onEqValueChange("eq_highmid_gain", value),
-      onValueCommit: (value) => onEqValueCommit("eq_highmid_gain", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_highmid_gain", knobInstance);
-  }
-
-  const highMidFreqKnob = document.querySelector('.knob[data-param="eq_highmid_freq"]') as HTMLElement | null;
-  if (highMidFreqKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highMidFreqKnob,
-      paramId: "eq_highmid_freq",
-      minValue: 500.0,
-      maxValue: 8000.0,
-      defaultValue: 2000.0,
-      displayFormat: (value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${Math.round(value)} Hz`,
-      valueDisplayId: "eq-highmid-freq-value",
-      sensitivity: 20.0,
-      onValueChange: (value) => onEqValueChange("eq_highmid_freq", value),
-      onValueCommit: (value) => onEqValueCommit("eq_highmid_freq", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_highmid_freq", knobInstance);
-  }
-
-  const highMidQKnob = document.querySelector('.knob[data-param="eq_highmid_q"]') as HTMLElement | null;
-  if (highMidQKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highMidQKnob,
-      paramId: "eq_highmid_q",
-      minValue: 0.1,
-      maxValue: 10.0,
-      defaultValue: 1.0,
-      displayFormat: (value) => value.toFixed(1),
-      valueDisplayId: "eq-highmid-q-value",
-      sensitivity: 0.05,
-      onValueChange: (value) => onEqValueChange("eq_highmid_q", value),
-      onValueCommit: (value) => onEqValueCommit("eq_highmid_q", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_highmid_q", knobInstance);
-  }
-
-  // High Shelf Band
-  const highGainKnob = document.querySelector('.knob[data-param="eq_high_gain"]') as HTMLElement | null;
-  if (highGainKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highGainKnob,
-      paramId: "eq_high_gain",
-      minValue: -12.0,
-      maxValue: 12.0,
-      defaultValue: 0.0,
-      displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
-      valueDisplayId: "eq-high-gain-value",
-      sensitivity: 0.1,
-      onValueChange: (value) => onEqValueChange("eq_high_gain", value),
-      onValueCommit: (value) => onEqValueCommit("eq_high_gain", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_high_gain", knobInstance);
-  }
-
-  const highFreqKnob = document.querySelector('.knob[data-param="eq_high_freq"]') as HTMLElement | null;
-  if (highFreqKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highFreqKnob,
-      paramId: "eq_high_freq",
-      minValue: 2000.0,
-      maxValue: 16000.0,
-      defaultValue: 8000.0,
-      displayFormat: (value) => `${(value / 1000).toFixed(1)}k`,
-      valueDisplayId: "eq-high-freq-value",
-      sensitivity: 50.0,
-      onValueChange: (value) => onEqValueChange("eq_high_freq", value),
-      onValueCommit: (value) => onEqValueCommit("eq_high_freq", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_high_freq", knobInstance);
-  }
-
-  const highQKnob = document.querySelector('.knob[data-param="eq_high_q"]') as HTMLElement | null;
-  if (highQKnob) {
-    const knobInstance = new GenericKnob({
-      knobElement: highQKnob,
-      paramId: "eq_high_q",
-      minValue: 0.1,
-      maxValue: 10.0,
-      defaultValue: 0.707,
-      displayFormat: (value) => value.toFixed(1),
-      valueDisplayId: "eq-high-q-value",
-      sensitivity: 0.05,
-      onValueChange: (value) => onEqValueChange("eq_high_q", value),
-      onValueCommit: (value) => onEqValueCommit("eq_high_q", value),
-      sendParameter: false,
-    });
-    knobInstances.set("eq_high_q", knobInstance);
-  }
-
-  // Create interactive EQ curve with draggable handles
-  const eqCanvas = document.getElementById("eq-curve-canvas") as HTMLCanvasElement | null;
-  if (eqCanvas) {
-    if (eqCurveInteraction) {
-      eqCurveInteraction.destroy();
-      eqCurveInteraction = null;
-    }
-    eqCurveInteraction = new EqCurveInteraction(
-      eqCanvas,
-      buildGlobalEqBandConfigs(),
-      handleEqCurveDrag,
-      handleEqCurveCommit
     );
   }
 
+  const eqToggle = document.getElementById('eq-toggle') as HTMLInputElement | null;
+  if (eqToggle && eqToggle.dataset.bound !== 'true') {
+    eqToggle.dataset.bound = 'true';
+    // The control-bar toggle and the modal's own toggle are two views of one
+    // flag; the modal's is owned by the component, this one mirrors it.
+    eqToggle.addEventListener('change', () => applyGlobalEqEnabled(eqToggle.checked, true));
+  }
+
   updateEQSectionState();
-  updateEqModalVisualization();
+  refreshEqModalVisualization();
 }
 
+function applyGlobalEqEnabled(nextValue: boolean, shouldSend: boolean): void {
+  eqEnabled = nextValue;
+  const modalToggle = document.getElementById('eq-modal-toggle') as HTMLInputElement | null;
+  if (modalToggle) {
+    modalToggle.checked = eqEnabled;
+  }
+  if (shouldSend) {
+    sendGlobalChainParam('eq.enabled', eqEnabled);
+    const eqNode = getPostChainEqNode();
+    if (eqNode) {
+      eqNode.bypassed = !eqEnabled;
+    }
+    appendLog(`eq.enabled → ${eqEnabled}`);
+  }
+  updateEQSectionState();
+  // The control-bar toggle is a second way in, so the panel has to be told
+  // rather than assuming its own toggle was the one that moved.
+  refreshEqModalVisualization();
+}
+
+/** Re-reads everything from the freshly-loaded preset's EQ node. */
 export function syncEQControlsFromState(): void {
   const eqNode = getPostChainEqNode();
-  const paramValues: Record<string, number> = eqNode
-    ? {
-        eq_low_gain: eqNode.params.lowGain,
-        eq_low_freq: eqNode.params.lowFreq,
-        eq_lowmid_gain: eqNode.params.lowMidGain,
-        eq_lowmid_freq: eqNode.params.lowMidFreq,
-        eq_lowmid_q: eqNode.params.lowMidQ,
-        eq_highmid_gain: eqNode.params.highMidGain,
-        eq_highmid_freq: eqNode.params.highMidFreq,
-        eq_highmid_q: eqNode.params.highMidQ,
-        eq_high_gain: eqNode.params.highGain,
-        eq_high_freq: eqNode.params.highFreq,
-      }
-    : {};
-
-  // Sync toggle
-  const eqToggle = document.getElementById("eq-toggle") as HTMLInputElement | null;
-  const eqModalToggle = document.getElementById("eq-modal-toggle") as HTMLInputElement | null;
-  if (eqToggle && eqNode) {
-    const enabled = typeof (eqNode as { enabled?: boolean }).enabled === "boolean"
-      ? (eqNode as { enabled?: boolean }).enabled === true
-      : !eqNode.bypassed;
-    eqEnabled = enabled;
-    eqToggle.checked = eqEnabled;
-    updateEQSectionState();
+  if (eqNode) {
+    const declaredEnabled = (eqNode as { enabled?: boolean }).enabled;
+    applyGlobalEqEnabled(typeof declaredEnabled === 'boolean' ? declaredEnabled : !eqNode.bypassed, false);
   }
-  if (eqModalToggle && eqNode) {
-    eqModalToggle.checked = eqEnabled;
-  }
-
-  // Sync all knobs
-  const eqKnobs = [
-    "eq_low_gain", "eq_low_freq",
-    "eq_lowmid_gain", "eq_lowmid_freq", "eq_lowmid_q",
-    "eq_highmid_gain", "eq_highmid_freq", "eq_highmid_q",
-    "eq_high_gain", "eq_high_freq"
-  ];
-
-  eqKnobs.forEach((knobId) => {
-    const knobInstance = knobInstances.get(knobId);
-    if (knobInstance && typeof paramValues[knobId] === "number") {
-      knobInstance.setValue(paramValues[knobId]);
-    }
-  });
-
-  if (eqCurveInteraction) {
-    eqCurveInteraction.updateBands(buildGlobalEqBandConfigs());
-  }
-
-  updateEqModalVisualization();
+  refreshEqModalVisualization();
 }
 
 export { initializeEQControls };
