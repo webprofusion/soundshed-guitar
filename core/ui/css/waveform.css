@@ -1,0 +1,22 @@
+/* Shared waveform range-selection styling.
+ *
+ * Both the Practice Tool's loop editor and the Riff Capture crop editor drive
+ * their handles through ts/waveform/rangeSelect.ts, which toggles .is-resizing.
+ * Keeping the cursor rule here means the two canvases cannot drift apart on it
+ * again — the Riff editor used to show the resize cursor permanently, so it was
+ * advertising a drag on a canvas the pointer was only resting over. */
+
+.waveform-range {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  /* The gesture handles panning itself; letting the WebView treat a drag as a
+     scroll/zoom would steal the pointer stream mid-selection. */
+  touch-action: none;
+}
+
+/* Applied only once a press has been held past CURSOR_HOLD_MS, so a plain
+   click or a resting hover never flashes it — only a deliberate drag. */
+.waveform-range.is-resizing {
+  cursor: ew-resize;
+}

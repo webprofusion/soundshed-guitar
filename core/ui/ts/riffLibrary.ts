@@ -6,6 +6,9 @@ import { uiState } from "./state.js";
 import type { RiffCaptureState, RiffLibrary } from "./types.js";
 import { arrayBufferToBase64, parseWavMetadata } from "./utils.js";
 import { getPlaySvg, getStopSvg } from "./iconAssets.js";
+import { clampRatioRange } from "./waveform/range.js";
+import type { RangeHandle, RatioRange } from "./waveform/range.js";
+import { bindRangeSelect } from "./waveform/rangeSelect.js";
 
 let capturedPreviewAnimationFrame: number | null = null;
 let capturedPreviewActive = false;
@@ -15,8 +18,9 @@ let capturedPreviewProgress = 0;
 let activeRiffTakePreviewId = "";
 let trimStartRatio = 0;
 let trimEndRatio = 1;
-let activeTrimHandle: "start" | "end" | null = null;
-let selectedTrimHandle: "start" | "end" = "start";
+// Mirrors the gesture controller's steered marker so renderCapturedWaveform()
+// can draw the focus ring without reaching into the controller mid-draw.
+let selectedTrimHandle: RangeHandle = "start";
 let editingRiffId = "";
 let savingFromCapture = false;
 let pendingImportedRiffTitle = "";
@@ -393,17 +397,17 @@ function isLibraryTakeId(takeId: string): boolean {
   return riffs.some((riff) => riff.takes.some((take) => take.id === takeId));
 }
 
-function clampTrimRange(start: number, end: number): { start: number; end: number } {
-  const clampedStart = Math.max(0, Math.min(1, start));
-  const clampedEnd = Math.max(0, Math.min(1, end));
-  const minSpan = 0.001;
-  if (clampedEnd - clampedStart >= minSpan) {
-    return { start: clampedStart, end: clampedEnd };
-  }
-  if (clampedStart + minSpan <= 1) {
-    return { start: clampedStart, end: clampedStart + minSpan };
-  }
-  return { start: Math.max(0, 1 - minSpan), end: 1 };
+// Arrow-key step sizes for a trim marker, in seconds. Riffs are short and the
+// markers usually land on a transient, so the fine step is far tighter than
+// the Practice Tool’s equivalent.
+const TRIM_NUDGE_STEP_SEC = { fine: 0.01, coarse: 0.1 };
+
+/** Shortest crop window the markers may describe, as a ratio of the take. */
+const MIN_TRIM_SPAN_RATIO = 0.001;
+
+function clampTrimRange(start: number, end: number): { start: number; end: number; swapped: boolean } {
+  const range = clampRatioRange(start, end, MIN_TRIM_SPAN_RATIO);
+  return { start: range.startRatio, end: range.endRatio, swapped: range.swapped };
 }
 
 function getCaptureDurationSec(): number {
@@ -447,29 +451,12 @@ function syncTrimControlsFromState(): void {
   updateTrimLabels();
 }
 
-function setTrimRange(startRatio: number, endRatio: number): void {
-  const range = clampTrimRange(startRatio, endRatio);
-  trimStartRatio = range.start;
-  trimEndRatio = range.end;
+/** Writes a range from the gesture controller into the markers. Already
+ * clamped; the controller renders. */
+function applyTrimRange(range: RatioRange): void {
+  trimStartRatio = range.startRatio;
+  trimEndRatio = range.endRatio;
   updateTrimLabels();
-  renderCapturedWaveform();
-}
-
-function getCanvasRatioFromPointer(event: MouseEvent, canvas: HTMLCanvasElement): number {
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0) {
-    return 0;
-  }
-  return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-}
-
-function nudgeSelectedTrimHandle(direction: -1 | 1, coarse = false): void {
-  const step = coarse ? 0.01 : 0.001;
-  if (selectedTrimHandle === "start") {
-    setTrimRange(trimStartRatio + direction * step, trimEndRatio);
-  } else {
-    setTrimRange(trimStartRatio, trimEndRatio + direction * step);
-  }
 }
 
 function isCapturedRepeatEnabled(): boolean {
@@ -1179,73 +1166,22 @@ function bindRiffLibraryActions(): void {
   const waveform = document.getElementById("riff-capture-waveform") as HTMLCanvasElement | null;
   if (waveform && waveform.dataset.bound !== "true") {
     waveform.dataset.bound = "true";
-
-    waveform.addEventListener("mousedown", (event) => {
-      if (!uiState.riffCapture?.hasAudio) {
-        return;
-      }
-      const pointerRatio = getCanvasRatioFromPointer(event, waveform);
-      const startDist = Math.abs(pointerRatio - trimStartRatio);
-      const endDist = Math.abs(pointerRatio - trimEndRatio);
-      activeTrimHandle = startDist <= endDist ? "start" : "end";
-      selectedTrimHandle = activeTrimHandle;
-      waveform.focus();
-      event.preventDefault();
-    });
-
-    window.addEventListener("mousemove", (event) => {
-      if (!activeTrimHandle || !uiState.riffCapture?.hasAudio) {
-        return;
-      }
-      const pointerRatio = getCanvasRatioFromPointer(event, waveform);
-      if (activeTrimHandle === "start") {
-        setTrimRange(pointerRatio, trimEndRatio);
-      } else {
-        setTrimRange(trimStartRatio, pointerRatio);
-      }
-    });
-
-    window.addEventListener("mouseup", () => {
-      activeTrimHandle = null;
-    });
-
-    waveform.addEventListener("keydown", (event) => {
-      if (!uiState.riffCapture?.hasAudio) {
-        return;
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        nudgeSelectedTrimHandle(-1, event.shiftKey);
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        nudgeSelectedTrimHandle(1, event.shiftKey);
-        return;
-      }
-      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-        event.preventDefault();
-        selectedTrimHandle = selectedTrimHandle === "start" ? "end" : "start";
-        renderCapturedWaveform();
-        return;
-      }
-      if (event.key === "Home") {
-        event.preventDefault();
-        if (selectedTrimHandle === "start") {
-          setTrimRange(0, trimEndRatio);
-        } else {
-          setTrimRange(trimStartRatio, Math.max(trimStartRatio + 0.001, 0.001));
-        }
-        return;
-      }
-      if (event.key === "End") {
-        event.preventDefault();
-        if (selectedTrimHandle === "start") {
-          setTrimRange(Math.min(trimEndRatio - 0.001, 0.999), trimEndRatio);
-        } else {
-          setTrimRange(trimStartRatio, 1);
-        }
-      }
+    bindRangeSelect({
+      canvas: waveform,
+      // Markers are meaningless mid-record: the waveform draws the recording
+      // head rather than the trim window, so dragging would move something
+      // the user cannot see.
+      isEnabled: () => Boolean(uiState.riffCapture?.hasAudio) && !uiState.riffCapture?.active,
+      getRange: () => ({ startRatio: trimStartRatio, endRatio: trimEndRatio }),
+      getMinSpanRatio: () => MIN_TRIM_SPAN_RATIO,
+      getDurationSec: getCaptureDurationSec,
+      nudgeStepSec: TRIM_NUDGE_STEP_SEC,
+      onResize: applyTrimRange,
+      onCreate: applyTrimRange,
+      onSelectedHandleChange: (handle) => {
+        selectedTrimHandle = handle;
+      },
+      render: renderCapturedWaveform,
     });
   }
 

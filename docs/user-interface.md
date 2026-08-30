@@ -341,6 +341,40 @@ writing a binding, not another panel.
   whenever the flag changes, so a panel outside an `.eq-section` gets the
   disabled affordance without the host arranging for it.
 
+### Waveform range selection (`core/ui/ts/waveform/`)
+
+**One two-handle range gesture, shared by every waveform editor.** The Practice
+Tool's loop editor and the Riff Capture crop editor present the same interaction —
+two handles dragged across a canvas — and used to implement it twice. The copies
+drifted, and each had learned a lesson the other had not: the Practice Tool had a
+handle hit radius and a click/drag threshold, the Riff editor had Home/End keys,
+and dragging one handle past the other was broken in both, differently.
+
+- **`range.ts` is the model, `rangeSelect.ts` is the gesture.** `range.ts` is
+  headless — no DOM beyond a pointer-to-ratio helper, no bridge, no state — so it
+  unit-tests directly. `rangeSelect.ts` owns which handle is being steered, when a
+  press becomes a drag, and when a gesture is finished. Hosts keep the range and
+  draw it; they never track drag state themselves.
+- **Crossing swaps and retargets.** `clampRatioRange` reports a `swapped` flag when
+  the bounds arrive inverted, and the controller flips the steered handle in
+  response. Without the flip a caller keeps writing the bound it is no longer
+  holding, so every subsequent event re-crosses — the Practice Tool's region used
+  to shrink to one pointer-step wide and slide along, and the Riff editor's
+  trailing marker was dragged onto the leading one, destroying it.
+- **Steps are seconds, not ratios.** Both editors used to nudge by a fraction of
+  the material, so the same arrow key moved 10ms on a short riff and half a second
+  on a long backing track. Hosts now declare `nudgeStepSec` and supply duration.
+- **The host decides what the gesture means.** `onCreate`/`onSeek` are optional:
+  omit `onSeek` and a click does nothing (the Riff editor has no transport to seek).
+  `onCommit` fires once at the end of a gesture — including after a burst of
+  keyboard repeats collapses — which is where a debounced send is flushed and
+  state persisted.
+- **Pointer events, with capture.** Same reasoning as `pointerDrag.ts`: touch and
+  pen work, and a drag survives the pointer leaving the canvas or the window. The
+  shared `.waveform-range` class (`css/waveform.css`) carries the cursor rules,
+  including the `is-resizing` affordance that only appears once a press is held
+  past `CURSOR_HOLD_MS`.
+
 ## Signal Chain Editor Notes
 
 - To create parallel paths, add the **Splitter** effect from the Utility category. The join **Mixer** node is inserted automatically and is not user-addable.
@@ -576,9 +610,9 @@ eq → bridge → state would otherwise close a cycle.
   nested inside a longer solo region), the saved-loop list is the source of truth
   rather than always-visible waveform bands. The waveform only ever shows one
   editable start/end handle pair at a time — whichever loop is selected in the list
-  (or, with none selected, the in-progress drag-selection for a new loop) — reusing
-  the same canvas drag-handle interaction as the riff-take trim editor in
-  `riffLibrary.ts`.
+  (or, with none selected, the in-progress drag-selection for a new loop). The
+  handle gesture itself is the shared one in `ts/waveform/rangeSelect.ts`, the same
+  controller the riff-take trim editor in `riffLibrary.ts` drives.
 - **Selecting = activating.** Clicking a loop row seeks to its start, sends
   `setPracticeToolLoopRegion`, and shows its handles on the waveform for fine-tuning;
   dragging a handle live-updates the loop's bounds locally and re-sends the region

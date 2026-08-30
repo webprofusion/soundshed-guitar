@@ -140,17 +140,7 @@
 }
 
 .practice-tool-waveform {
-  display: block;
-  width: 100%;
   height: 200px;
-  cursor: pointer;
-}
-
-/* Applied only after a mousedown has been held past a short threshold —
-   see CURSOR_HOLD_MS in practiceTool.ts — so a plain click/seek never
-   flashes the resize cursor, only a real, deliberate handle/range drag. */
-.practice-tool-waveform.is-resizing {
-  cursor: ew-resize;
 }
 
 .practice-tool-browse-btn {

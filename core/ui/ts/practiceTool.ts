@@ -14,6 +14,8 @@ import { showNotification } from "./notifications.js";
 import { uiState } from "./state.js";
 import type { PracticeToolLoopRegion, PracticeToolProject, PracticeToolState } from "./types.js";
 import { escapeHtml } from "./utils.js";
+import type { RangeHandle, RatioRange } from "./waveform/range.js";
+import { bindRangeSelect, type RangeSelectController } from "./waveform/rangeSelect.js";
 import {
   consumePendingProjectRecall,
   getFileFingerprint,
@@ -54,41 +56,23 @@ const MIN_LOOP_SPAN_SEC = 0.25;
 const LOOP_REGION_SEND_DEBOUNCE_MS = 80;
 const SPEED_PITCH_SEND_DEBOUNCE_MS = 80;
 const DEFAULT_NEW_LOOP_LENGTH_SEC = 4;
-// Below this many pixels of movement, a mousedown+mouseup on the waveform is
-// treated as a plain click (seek) rather than the start of a new selection
-// drag — otherwise the tiny jitter in every real click would constantly
-// create zero-width "ranges".
-const CLICK_DRAG_THRESHOLD_PX = 4;
-// A mousedown within this many pixels of an existing handle grabs that
-// handle; otherwise the click is free to become a seek instead. Without a
-// threshold, EVERY click anywhere near a selection/active loop would yank
-// the nearest edge to that position instead of ever allowing a seek.
-const HANDLE_HIT_PX = 10;
-// A resting hover (or a quick click/seek) should keep the normal pointer —
-// the resize cursor only makes sense once the user is genuinely holding
-// down for a drag. 150ms is long enough that a plain click/release never
-// flashes it, short enough that a real drag still feels immediate.
-const CURSOR_HOLD_MS = 150;
+// Arrow-key step sizes for a loop edge, in seconds. Backing tracks are long
+// and loop edges are usually placed by ear against a bar line, so the fine
+// step is a comfortable "just a little later" rather than sample-accurate.
+const LOOP_NUDGE_STEP_SEC = { fine: 0.05, coarse: 0.5 };
 // How long the "Undo" affordance stays available after deleting a loop
 // before the delete becomes permanent. Tune to taste — there's no dialog
 // asking "are you sure?" any more, this window IS the confirmation.
 const DELETE_UNDO_WINDOW_MS = 10_000;
 
-type RatioRange = { startRatio: number; endRatio: number };
 type SecondsRange = { startSec: number; endSec: number };
 type PendingDeletedLoop = { loop: PracticeToolLoopRegion; index: number; timer: ReturnType<typeof setTimeout> };
-// "pending": mouse is down but hasn't moved past the click/drag threshold
-// yet, so it might still resolve to a plain seek-click on mouseup.
-type DragMode = "handle" | "create" | "pending" | null;
 
 let candidateRange: RatioRange | null = null;
-let dragMode: DragMode = null;
-let activeHandle: "start" | "end" = "start";
-let selectedHandle: "start" | "end" = "start";
-let dragAnchorRatio = 0;
-let pointerDownClientX = 0;
-let pointerDownClientY = 0;
-let pointerDownRatio = 0;
+// Mirrors the gesture controller's steered handle so renderWaveform() can draw
+// the focus ring without reaching into the controller mid-draw.
+let selectedHandle: RangeHandle = "start";
+let rangeSelect: RangeSelectController | null = null;
 // The loop currently showing inline-editable name/start/end fields in the
 // list — covers both "just created, name it now" and "click the pencil on
 // an existing row." There is no separate naming dialog/popover.
@@ -98,8 +82,6 @@ let editingLoopId: string | null = null;
 // supersedes it — only one pending delete is tracked at a time, matching
 // common toast/snackbar UX (a second delete finalizes the first).
 let pendingDeletedLoop: PendingDeletedLoop | null = null;
-
-let cursorHoldTimer: ReturnType<typeof setTimeout> | null = null;
 
 let playheadAnimFrame: number | null = null;
 let playheadBaseSec = 0;
@@ -186,22 +168,10 @@ function formatClockTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-function clampRatioRange(startRatio: number, endRatio: number, durationSec: number): RatioRange {
-  const minSpanRatio = durationSec > 0 ? Math.min(0.25, MIN_LOOP_SPAN_SEC / durationSec) : 0.01;
-  let start = Math.max(0, Math.min(1, startRatio));
-  let end = Math.max(0, Math.min(1, endRatio));
-  if (start > end) {
-    [start, end] = [end, start];
-  }
-  if (end - start < minSpanRatio) {
-    if (start + minSpanRatio <= 1) {
-      end = start + minSpanRatio;
-    } else {
-      start = Math.max(0, 1 - minSpanRatio);
-      end = 1;
-    }
-  }
-  return { startRatio: start, endRatio: end };
+/** The loop-length floor is expressed in seconds, so it only becomes a ratio
+ * once a track (and therefore a duration) is loaded. */
+function minLoopSpanRatio(durationSec: number): number {
+  return durationSec > 0 ? Math.min(0.25, MIN_LOOP_SPAN_SEC / durationSec) : 0.01;
 }
 
 function stopPlayheadAnim(): void {
@@ -697,46 +667,29 @@ function bindFader(spec: FaderSpec): void {
   }
 }
 
-/** Applies a ratio-space range change to whichever thing is currently being edited:
- * the active loop's bounds (dragged/nudged, live-updates engine + local state, debounced),
- * or the pending candidate selection for a not-yet-saved loop. */
-function applyRangeChange(startRatio: number, endRatio: number): void {
+/** Whatever the gesture controller is currently editing: the active loop's
+ * bounds, or the pending candidate selection for a not-yet-saved loop. */
+function getEditableRange(): RatioRange | null {
   const player = ensurePracticeToolState();
-  const clamped = clampRatioRange(startRatio, endRatio, player.durationSec);
+  const activeLoop = getActiveLoop();
+  if (!activeLoop) {
+    return candidateRange;
+  }
+  const duration = Math.max(0.001, player.durationSec);
+  return { startRatio: activeLoop.startSec / duration, endRatio: activeLoop.endSec / duration };
+}
+
+/** Writes a range from the gesture controller back to whichever thing is being
+ * edited. Already clamped; the controller renders. */
+function applyRangeChange(range: RatioRange): void {
+  const player = ensurePracticeToolState();
   const activeLoop = getActiveLoop();
   if (activeLoop) {
-    activeLoop.startSec = clamped.startRatio * player.durationSec;
-    activeLoop.endSec = clamped.endRatio * player.durationSec;
+    activeLoop.startSec = range.startRatio * player.durationSec;
+    activeLoop.endSec = range.endRatio * player.durationSec;
     loopRegionSender.schedule(activeLoop);
   } else {
-    candidateRange = clamped;
-  }
-  renderWaveform();
-  renderAddLoopAffordance();
-}
-
-function getCanvasRatioFromPointer(event: MouseEvent, canvas: HTMLCanvasElement): number {
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0) {
-    return 0;
-  }
-  return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-}
-
-function nudgeSelectedHandle(direction: -1 | 1, coarse = false): void {
-  const player = ensurePracticeToolState();
-  const activeLoop = getActiveLoop();
-  const current = activeLoop
-    ? { startRatio: activeLoop.startSec / Math.max(0.001, player.durationSec), endRatio: activeLoop.endSec / Math.max(0.001, player.durationSec) }
-    : candidateRange;
-  if (!current) {
-    return;
-  }
-  const step = coarse ? 0.02 : 0.002;
-  if (selectedHandle === "start") {
-    applyRangeChange(current.startRatio + direction * step, current.endRatio);
-  } else {
-    applyRangeChange(current.startRatio, current.endRatio + direction * step);
+    candidateRange = { startRatio: range.startRatio, endRatio: range.endRatio };
   }
 }
 
@@ -875,7 +828,7 @@ function renderAddLoopAffordance(): void {
     return;
   }
   const activeLoop = getActiveLoop();
-  const show = !activeLoop && Boolean(candidateRange) && dragMode !== "create";
+  const show = !activeLoop && Boolean(candidateRange) && !rangeSelect?.isCreating();
   btn.hidden = !show;
   if (show && candidateRange) {
     const width = canvas.clientWidth;
@@ -1240,151 +1193,37 @@ function bindWaveformInteractions(): void {
   }
   canvas.dataset.bound = "true";
 
-  canvas.addEventListener("mousedown", (event) => {
-    const player = ensurePracticeToolState();
-    if (player.durationSec <= 0) {
-      return;
-    }
-    const rect = canvas.getBoundingClientRect();
-    const pointerRatio = getCanvasRatioFromPointer(event, canvas);
-    const activeLoop = getActiveLoop();
-    const range: RatioRange | null = activeLoop
-      ? { startRatio: activeLoop.startSec / player.durationSec, endRatio: activeLoop.endSec / player.durationSec }
-      : candidateRange;
-
-    pointerDownClientX = event.clientX;
-    pointerDownClientY = event.clientY;
-    pointerDownRatio = pointerRatio;
-
-    // Only show the resize cursor once the hold has lasted long enough to
-    // be a deliberate drag, not on a resting hover or a quick click/seek.
-    if (cursorHoldTimer !== null) {
-      clearTimeout(cursorHoldTimer);
-    }
-    cursorHoldTimer = setTimeout(() => {
-      cursorHoldTimer = null;
-      canvas.classList.add("is-resizing");
-    }, CURSOR_HOLD_MS);
-
-    // Only grab a handle if the click actually landed near one — otherwise
-    // every click anywhere on the waveform would yank the nearest edge of
-    // whatever selection/loop is active, making it impossible to ever seek
-    // and making the selection feel like it's constantly slipping.
-    const handleHitRatio = rect.width > 0 ? HANDLE_HIT_PX / rect.width : 0;
-    if (range) {
-      const startDist = Math.abs(pointerRatio - range.startRatio);
-      const endDist = Math.abs(pointerRatio - range.endRatio);
-      if (Math.min(startDist, endDist) <= handleHitRatio) {
-        dragMode = "handle";
-        activeHandle = startDist <= endDist ? "start" : "end";
-        selectedHandle = activeHandle;
-        canvas.focus();
-        event.preventDefault();
-        renderWaveform();
-        renderAddLoopAffordance();
-        return;
-      }
-    }
-
-    // Not near a handle: defer the decision. A plain click (no meaningful
-    // movement before mouseup) becomes a seek; movement past the threshold
-    // promotes this to a new range-selection drag (see mousemove below).
-    dragMode = "pending";
-    dragAnchorRatio = pointerRatio;
-    canvas.focus();
-    event.preventDefault();
-  });
-
-  window.addEventListener("mousemove", (event) => {
-    if (!dragMode) {
-      return;
-    }
-    const player = ensurePracticeToolState();
-    if (player.durationSec <= 0) {
-      return;
-    }
-
-    if (dragMode === "pending") {
-      const dx = event.clientX - pointerDownClientX;
-      const dy = event.clientY - pointerDownClientY;
-      if (Math.hypot(dx, dy) < CLICK_DRAG_THRESHOLD_PX) {
-        return;
-      }
-      dragMode = "create";
-      candidateRange = { startRatio: dragAnchorRatio, endRatio: dragAnchorRatio };
-      finishEditingLoop();
-    }
-
-    const pointerRatio = getCanvasRatioFromPointer(event, canvas);
-
-    if (dragMode === "create") {
-      candidateRange = {
-        startRatio: Math.min(dragAnchorRatio, pointerRatio),
-        endRatio: Math.max(dragAnchorRatio, pointerRatio),
-      };
-      renderWaveform();
-      return;
-    }
-
-    const activeLoop = getActiveLoop();
-    const range: RatioRange | null = activeLoop
-      ? { startRatio: activeLoop.startSec / player.durationSec, endRatio: activeLoop.endSec / player.durationSec }
-      : candidateRange;
-    if (!range) {
-      return;
-    }
-    if (activeHandle === "start") {
-      applyRangeChange(pointerRatio, range.endRatio);
-    } else {
-      applyRangeChange(range.startRatio, pointerRatio);
-    }
-  });
-
-  window.addEventListener("mouseup", () => {
-    if (cursorHoldTimer !== null) {
-      clearTimeout(cursorHoldTimer);
-      cursorHoldTimer = null;
-    }
-    canvas.classList.remove("is-resizing");
-
-    if (dragMode === "pending") {
-      // Never moved past the click/drag threshold: a plain seek click.
-      const player = ensurePracticeToolState();
-      if (player.durationSec > 0) {
-        seekPracticeToolFile(pointerDownRatio * player.durationSec);
-      }
-    } else if (dragMode === "handle") {
+  rangeSelect = bindRangeSelect({
+    canvas,
+    isEnabled: () => ensurePracticeToolState().durationSec > 0,
+    getRange: getEditableRange,
+    getMinSpanRatio: () => minLoopSpanRatio(ensurePracticeToolState().durationSec),
+    getDurationSec: () => ensurePracticeToolState().durationSec,
+    nudgeStepSec: LOOP_NUDGE_STEP_SEC,
+    onResize: applyRangeChange,
+    onCreate: (range) => {
+      candidateRange = range;
+    },
+    // A sweep replaces whatever row was mid-rename; committing it here keeps
+    // the list from re-rendering underneath the gesture.
+    onCreateStart: finishEditingLoop,
+    onSeek: (ratio) => {
+      seekPracticeToolFile(ratio * ensurePracticeToolState().durationSec);
+    },
+    onCommit: () => {
       const activeLoop = getActiveLoop();
       if (activeLoop) {
         loopRegionSender.flush(activeLoop);
         persistLoopsForCurrentFile();
       }
-    }
-    dragMode = null;
-    renderWaveform();
-    renderAddLoopAffordance();
-  });
-
-  canvas.addEventListener("keydown", (event) => {
-    const player = ensurePracticeToolState();
-    if (player.durationSec <= 0) {
-      return;
-    }
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      nudgeSelectedHandle(-1, event.shiftKey);
-      return;
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      nudgeSelectedHandle(1, event.shiftKey);
-      return;
-    }
-    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      event.preventDefault();
-      selectedHandle = selectedHandle === "start" ? "end" : "start";
+    },
+    onSelectedHandleChange: (handle) => {
+      selectedHandle = handle;
+    },
+    render: () => {
       renderWaveform();
-    }
+      renderAddLoopAffordance();
+    },
   });
 }
 
