@@ -16,6 +16,7 @@ import type { PracticeToolLoopRegion, PracticeToolProject, PracticeToolState } f
 import { escapeHtml } from "./utils.js";
 import type { RangeHandle, RatioRange } from "./waveform/range.js";
 import { bindRangeSelect, type RangeSelectController } from "./waveform/rangeSelect.js";
+import { WAVEFORM_COLORS, drawWaveform } from "./waveform/render.js";
 import {
   consumePendingProjectRecall,
   getFileFingerprint,
@@ -699,126 +700,28 @@ function renderWaveform(): void {
     return;
   }
   const player = ensurePracticeToolState();
-  const peaksL = player.waveformPeaksL;
-  const peaksR = player.waveformPeaksR;
-  const hasAudio = peaksL.length > 0 && peaksR.length > 0 && player.durationSec > 0;
-
-  const dpr = window.devicePixelRatio || 1;
-  const width = Math.max(1, Math.floor(canvas.clientWidth));
-  const height = Math.max(1, Math.floor(canvas.clientHeight));
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return;
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
-
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(0, 0, width, height);
-
-  // Divider between the L (top) and R (bottom) lanes.
-  ctx.strokeStyle = "rgba(255,255,255,0.22)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, Math.floor(height / 2));
-  ctx.lineTo(width, Math.floor(height / 2));
-  ctx.stroke();
-
-  if (!hasAudio) {
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Drop a WAV, AIFF, or MP3 file here, or use Browse File...", width / 2, Math.floor(height / 2));
-    ctx.textAlign = "left";
-    return;
-  }
-
-  // Two-lane stereo layout: L peaks centered in the top half, R peaks
-  // centered in the bottom half — a cleaner, more honest picture of the
-  // actual (genuinely stereo) audio than a single collapsed trace.
-  const laneHeight = height / 2;
-  const centerYL = laneHeight / 2;
-  const centerYR = laneHeight + laneHeight / 2;
-  const maxAmp = laneHeight / 2 - 4;
-
-  // Faint per-lane center reference lines, fainter than the L/R divider.
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, Math.floor(centerYL));
-  ctx.lineTo(width, Math.floor(centerYL));
-  ctx.moveTo(0, Math.floor(centerYR));
-  ctx.lineTo(width, Math.floor(centerYR));
-  ctx.stroke();
-
-  const drawLane = (peaks: number[], centerY: number) => {
-    const step = width / peaks.length;
-    ctx.strokeStyle = "rgba(101, 186, 255, 0.95)";
-    ctx.lineWidth = Math.max(1, step * 0.7);
-    ctx.beginPath();
-    peaks.forEach((peak, index) => {
-      const x = index * step + step / 2;
-      const amp = Math.max(1, Math.min(maxAmp, peak * maxAmp));
-      ctx.moveTo(x, centerY - amp);
-      ctx.lineTo(x, centerY + amp);
-    });
-    ctx.stroke();
-  };
-  drawLane(peaksL, centerYL);
-  drawLane(peaksR, centerYR);
-
+  const hasAudio = player.waveformPeaksL.length > 0 && player.waveformPeaksR.length > 0 && player.durationSec > 0;
   const activeLoop = getActiveLoop();
-  const range: RatioRange | null = activeLoop
-    ? { startRatio: activeLoop.startSec / player.durationSec, endRatio: activeLoop.endSec / player.durationSec }
-    : candidateRange;
+  const range = getEditableRange();
 
-  if (range) {
-    const startX = Math.max(0, Math.min(width - 1, range.startRatio * width));
-    const endX = Math.max(0, Math.min(width - 1, range.endRatio * width));
-
-    ctx.fillStyle = activeLoop ? "rgba(255, 204, 102, 0.16)" : "rgba(101, 186, 255, 0.16)";
-    ctx.fillRect(startX, 0, Math.max(1, endX - startX), height);
-
-    ctx.strokeStyle = activeLoop ? "rgba(255, 204, 102, 0.95)" : "rgba(101, 186, 255, 0.95)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash(activeLoop ? [] : [4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(startX, 0);
-    ctx.lineTo(startX, height);
-    ctx.moveTo(endX, 0);
-    ctx.lineTo(endX, height);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Handle markers sit on the L/R divider, spanning both lanes.
-    const handleY = height / 2;
-    ctx.fillStyle = ctx.strokeStyle as string;
-    ctx.beginPath();
-    ctx.arc(startX, handleY, 4, 0, Math.PI * 2);
-    ctx.arc(endX, handleY, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const selectedX = selectedHandle === "start" ? startX : endX;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(selectedX, handleY, 6, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  if (player.durationSec > 0) {
-    const positionSec = getInterpolatedPositionSec();
-    const playheadX = Math.max(0, Math.min(width, (positionSec / player.durationSec) * width));
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(playheadX, 0);
-    ctx.lineTo(playheadX, height);
-    ctx.stroke();
-  }
+  drawWaveform(canvas, {
+    // Two lanes: a backing track is genuinely stereo, and a collapsed trace
+    // hides that.
+    lanes: hasAudio ? [player.waveformPeaksL, player.waveformPeaksR] : [],
+    empty: { text: "Drop a WAV, AIFF, or MP3 file here, or use Browse File...", align: "center" },
+    range: hasAudio && range
+      ? {
+          ...range,
+          selectedHandle,
+          // Amber once the range belongs to a saved loop, blue and dashed while
+          // it is still just a selection waiting for "+ Add Loop".
+          color: activeLoop ? WAVEFORM_COLORS.rangeActive : WAVEFORM_COLORS.rangeCandidate,
+          emphasis: "tint",
+          dashed: !activeLoop,
+        }
+      : null,
+    playhead: hasAudio ? { ratio: getInterpolatedPositionSec() / player.durationSec } : null,
+  });
 }
 
 function renderAddLoopAffordance(): void {

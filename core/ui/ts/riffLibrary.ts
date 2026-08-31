@@ -9,6 +9,7 @@ import { getPlaySvg, getStopSvg } from "./iconAssets.js";
 import { clampRatioRange } from "./waveform/range.js";
 import type { RangeHandle, RatioRange } from "./waveform/range.js";
 import { bindRangeSelect } from "./waveform/rangeSelect.js";
+import { WAVEFORM_COLORS, drawWaveform } from "./waveform/render.js";
 
 let capturedPreviewAnimationFrame: number | null = null;
 let capturedPreviewActive = false;
@@ -570,134 +571,66 @@ function renderCapturedWaveform(): void {
   }
 
   const isRecording = Boolean(uiState.riffCapture?.active);
-  // During recording show live peaks; after capture show finalized peaks
+  // Live peaks while the take is being recorded, the finalized set afterwards.
   const peaks = isRecording && liveWaveformPeaks.length > 0
     ? liveWaveformPeaks
     : (uiState.riffCapture?.waveformPeaks ?? []);
   const hasAudio = peaks.length > 0 && (Boolean(uiState.riffCapture?.hasAudio) || isRecording);
-  // For live rendering, compute how far through the 16-bar max buffer we are
-  // 64 bars is the max capture buffer allocated by armRiffCapture
-  const liveFillRatio = isRecording && uiState.riffCapture && uiState.riffCapture.sampleRate > 0
-    ? Math.min(1, uiState.riffCapture.capturedSamples / Math.max(1, liveWaveformPeaks.length
-        * Math.max(1, Math.ceil((uiState.riffCapture.sampleRate
-          * (60 / Math.max(1, uiState.riffCapture.tempoBpm))
-          * (4 / Math.max(1, uiState.riffCapture.timeSigDen))
-          * uiState.riffCapture.timeSigNum * 64) / 256))))
-    : 1;
 
-  const dpr = window.devicePixelRatio || 1;
-  const width = Math.max(1, Math.floor(canvas.clientWidth));
-  const height = Math.max(1, Math.floor(canvas.clientHeight));
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
+  if (isRecording) {
+    // Recording draws a different picture: how far into the 64-bar buffer we
+    // are, with the rest darkened and a head at the write position. The trim
+    // markers are meaningless until there is a finished take to trim.
+    const recordedRatio = liveRecordingFillRatio();
+    drawWaveform(canvas, {
+      lanes: hasAudio ? [peaks] : [],
+      empty: { text: "Waiting for signal…" },
+      traceColor: WAVEFORM_COLORS.recordingTrace,
+      traceLimitRatio: recordedRatio,
+      shadeAfterRatio: recordedRatio,
+      playhead: { ratio: recordedRatio, color: WAVEFORM_COLORS.recordingHead },
+    });
     return;
   }
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
-
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.22)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, Math.floor(height / 2));
-  ctx.lineTo(width, Math.floor(height / 2));
-  ctx.stroke();
-
-  if (!hasAudio) {
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "12px sans-serif";
-    ctx.fillText(isArmed ? "Waiting for signal…" : "No capture yet", 10, Math.floor(height / 2) - 8);
-    return;
-  }
-
-  const centerY = height / 2;
-  const step = width / peaks.length;
-
-  // For live recording: shade the un-recorded portion (right side)
-  const recordedX = isRecording ? Math.max(0, Math.min(width, liveFillRatio * width)) : width;
 
   const trimRange = clampTrimRange(trimStartRatio, trimEndRatio);
-  const trimStartX = isRecording ? 0 : Math.max(0, Math.min(width - 1, trimRange.start * width));
-  const trimEndX = isRecording ? recordedX : Math.max(0, Math.min(width - 1, trimRange.end * width));
-
-  if (!isRecording) {
-    ctx.fillStyle = "rgba(0,0,0,0.20)";
-    if (trimStartX > 0) {
-      ctx.fillRect(0, 0, trimStartX, height);
-    }
-    if (trimEndX < width) {
-      ctx.fillRect(trimEndX, 0, width - trimEndX, height);
-    }
-  } else {
-    // Shade un-recorded region
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    if (recordedX < width) {
-      ctx.fillRect(recordedX, 0, width - recordedX, height);
-    }
-  }
-
-  ctx.strokeStyle = isRecording ? "rgba(255, 100, 80, 0.95)" : "rgba(101, 186, 255, 0.95)";
-  ctx.lineWidth = Math.max(1, step * 0.7);
-  ctx.beginPath();
-
-  peaks.forEach((peak, index) => {
-    const x = index * step + step / 2;
-    if (isRecording && x > recordedX) {
-      return; // don't draw unrecorded region
-    }
-    const amp = Math.max(1, Math.min(centerY - 2, peak * (centerY - 2)));
-    ctx.moveTo(x, centerY - amp);
-    ctx.lineTo(x, centerY + amp);
+  drawWaveform(canvas, {
+    lanes: hasAudio ? [peaks] : [],
+    empty: { text: isArmed ? "Waiting for signal…" : "No capture yet" },
+    range: hasAudio
+      ? {
+          startRatio: trimRange.start,
+          endRatio: trimRange.end,
+          selectedHandle: selectedTrimHandle,
+          color: WAVEFORM_COLORS.rangeActive,
+          // Darkened rather than tinted: cropping discards what falls outside
+          // the markers, and showing that directly is the whole point here.
+          emphasis: "shade",
+        }
+      : null,
+    // The preview playhead runs inside the trim window, not across the take.
+    playhead: hasAudio && capturedPreviewActive
+      ? {
+          ratio: trimRange.start + capturedPreviewProgress * (trimRange.end - trimRange.start),
+          color: WAVEFORM_COLORS.rangeActive,
+        }
+      : null,
   });
-  ctx.stroke();
+}
 
-  if (!isRecording) {
-    ctx.strokeStyle = "rgba(255, 204, 102, 0.95)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(trimStartX, 0);
-    ctx.lineTo(trimStartX, height);
-    ctx.moveTo(trimEndX, 0);
-    ctx.lineTo(trimEndX, height);
-    ctx.stroke();
+/** How far through the 64-bar capture buffer the recording has got, 0..1. */
+function liveRecordingFillRatio(): number {
+  const capture = uiState.riffCapture;
 
-    ctx.fillStyle = "rgba(255, 204, 102, 0.95)";
-    ctx.beginPath();
-    ctx.arc(trimStartX, centerY, 4, 0, Math.PI * 2);
-    ctx.arc(trimEndX, centerY, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const selectedX = selectedTrimHandle === "start" ? trimStartX : trimEndX;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(selectedX, centerY, 6, 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (capturedPreviewActive) {
-      const playheadX = Math.max(trimStartX, Math.min(trimEndX, trimStartX + capturedPreviewProgress * (trimEndX - trimStartX)));
-      ctx.strokeStyle = "rgba(255, 204, 102, 0.95)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(playheadX, 0);
-      ctx.lineTo(playheadX, height);
-      ctx.stroke();
-    }
-  } else {
-    // Draw recording head at current position
-    ctx.strokeStyle = "rgba(255, 80, 80, 0.9)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(recordedX, 0);
-    ctx.lineTo(recordedX, height);
-    ctx.stroke();
+  if (!capture || capture.sampleRate <= 0 || liveWaveformPeaks.length === 0) {
+    return 1;
   }
+
+  const secondsPerBeat = 60 / Math.max(1, capture.tempoBpm);
+  const beatsPerBar = capture.timeSigNum * (4 / Math.max(1, capture.timeSigDen));
+  const bufferSamples = capture.sampleRate * secondsPerBeat * beatsPerBar * 64;
+  const samplesPerPeak = Math.max(1, Math.ceil(bufferSamples / 256));
+  return Math.min(1, capture.capturedSamples / Math.max(1, liveWaveformPeaks.length * samplesPerPeak));
 }
 
 function renderCapturedPlayButton(): void {

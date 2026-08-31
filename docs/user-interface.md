@@ -352,11 +352,21 @@ drifted, and each had learned a lesson the other had not: the Practice Tool had 
 handle hit radius and a click/drag threshold, the Riff editor had Home/End keys,
 and dragging one handle past the other was broken in both, differently.
 
-- **`range.ts` is the model, `rangeSelect.ts` is the gesture.** `range.ts` is
-  headless — no DOM beyond a pointer-to-ratio helper, no bridge, no state — so it
-  unit-tests directly. `rangeSelect.ts` owns which handle is being steered, when a
-  press becomes a drag, and when a gesture is finished. Hosts keep the range and
-  draw it; they never track drag state themselves.
+- **Three modules: model, gesture, picture.** `range.ts` is headless — no DOM
+  beyond a pointer-to-ratio helper, no bridge, no state — so it unit-tests
+  directly. `rangeSelect.ts` owns which handle is being steered, when a press
+  becomes a drag, and when a gesture is finished. `render.ts` draws the canvas.
+  Hosts keep the range and say what it means; they track no drag state and make
+  no canvas calls of their own.
+- **One palette, two emphases.** `WAVEFORM_COLORS` is the single source for every
+  colour both editors draw. The one deliberate divergence is what a range does to
+  what it covers: a loop region *tints what it includes*, a crop range *darkens
+  what it will discard*. Those say different things, so both are kept — and they
+  sit on opposite sides of the trace to match, a shade going down before it so the
+  excluded peaks stay legible, a tint over it because it is colouring what it
+  covers. Stereo lanes are just `lanes.length`, and the Riff editor's recording
+  overlay is `traceLimitRatio` + `shadeAfterRatio` + a coloured playhead rather
+  than a second code path.
 - **Crossing swaps and retargets.** `clampRatioRange` reports a `swapped` flag when
   the bounds arrive inverted, and the controller flips the steered handle in
   response. Without the flip a caller keeps writing the bound it is no longer
