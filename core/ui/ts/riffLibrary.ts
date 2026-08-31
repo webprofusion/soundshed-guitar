@@ -9,7 +9,7 @@ import { getPlaySvg, getStopSvg } from "./iconAssets.js";
 import { clampRatioRange } from "./waveform/range.js";
 import type { RangeHandle, RatioRange } from "./waveform/range.js";
 import { bindRangeSelect } from "./waveform/rangeSelect.js";
-import { WAVEFORM_COLORS, drawWaveform } from "./waveform/render.js";
+import { drawWaveform } from "./waveform/render.js";
 
 let capturedPreviewAnimationFrame: number | null = null;
 let capturedPreviewActive = false;
@@ -585,10 +585,10 @@ function renderCapturedWaveform(): void {
     drawWaveform(canvas, {
       lanes: hasAudio ? [peaks] : [],
       empty: { text: "Waiting for signal…" },
-      traceColor: WAVEFORM_COLORS.recordingTrace,
+      mode: "recording",
       traceLimitRatio: recordedRatio,
       shadeAfterRatio: recordedRatio,
-      playhead: { ratio: recordedRatio, color: WAVEFORM_COLORS.recordingHead },
+      playhead: { ratio: recordedRatio },
     });
     return;
   }
@@ -602,7 +602,7 @@ function renderCapturedWaveform(): void {
           startRatio: trimRange.start,
           endRatio: trimRange.end,
           selectedHandle: selectedTrimHandle,
-          color: WAVEFORM_COLORS.rangeActive,
+          tone: "active",
           // Darkened rather than tinted: cropping discards what falls outside
           // the markers, and showing that directly is the whole point here.
           emphasis: "shade",
@@ -612,7 +612,9 @@ function renderCapturedWaveform(): void {
     playhead: hasAudio && capturedPreviewActive
       ? {
           ratio: trimRange.start + capturedPreviewProgress * (trimRange.end - trimRange.start),
-          color: WAVEFORM_COLORS.rangeActive,
+          // Runs inside the markers, so it wears the range's colour rather
+          // than the neutral transport cursor.
+          tone: "range",
         }
       : null,
   });
@@ -1156,6 +1158,9 @@ function bindRiffLibraryActions(): void {
   const waveform = document.getElementById("riff-capture-waveform") as HTMLCanvasElement | null;
   if (waveform && waveform.dataset.bound !== "true") {
     waveform.dataset.bound = "true";
+    // See the matching listener in practiceTool.ts — a canvas does not restyle
+    // itself when the theme changes.
+    window.addEventListener("themeChanged", () => renderCapturedWaveform());
     bindRangeSelect({
       canvas: waveform,
       // Markers are meaningless mid-record: the waveform draws the recording

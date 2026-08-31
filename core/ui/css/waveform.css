@@ -20,3 +20,59 @@
 .waveform-range.is-resizing {
   cursor: ew-resize;
 }
+
+/* ── Palette ────────────────────────────────────────────────────────────────
+ *
+ * Consumed by ts/waveform/render.ts, which resolves these once per theme.
+ *
+ * The defaults live in variables.css and are the dark theme's values, so dark
+ * needs no override here — only the two themes that genuinely differ do. They
+ * sit in this file rather than in themes/*.css (where --eq-curve-* lives)
+ * because the whole waveform component is already here, and themes/light.css
+ * is a thousand lines of component overrides that should not keep growing.
+ * This file is linked after variables.css, so these win on source order at
+ * equal specificity.
+ */
+
+/* Light sits on a white --bg-input, so every white-on-dark value inverts. The
+   shades stay a darkening — that still reads as "excluded" on white, just more
+   gently than the 0.20/0.35 a dark background needs. */
+.theme-light {
+  --waveform-bg: rgba(17, 19, 24, 0.04);
+  --waveform-lane-divider: rgba(17, 19, 24, 0.20);
+  --waveform-lane-center: rgba(17, 19, 24, 0.08);
+  --waveform-empty-text: rgba(17, 19, 24, 0.55);
+  --waveform-trace: rgba(72, 118, 168, 0.92);
+  --waveform-trace-recording: rgba(198, 60, 45, 0.92);
+  --waveform-playhead: rgba(17, 19, 24, 0.78);
+  --waveform-playhead-recording: rgba(198, 60, 45, 0.9);
+  --waveform-range-active: rgba(176, 116, 8, 0.95);
+  --waveform-range-active-tint: rgba(224, 160, 32, 0.15);
+  --waveform-range-candidate: rgba(72, 118, 168, 0.95);
+  --waveform-range-candidate-tint: rgba(72, 118, 168, 0.14);
+  --waveform-selected-handle-ring: rgba(17, 19, 24, 0.85);
+  --waveform-shade: rgba(17, 19, 24, 0.10);
+  --waveform-shade-unrecorded: rgba(17, 19, 24, 0.18);
+}
+
+/* Classic is amber-on-brown, and amber is already the theme's accent — so the
+   trace goes cream and the selection keeps the amber, rather than the two
+   fighting. A blue candidate range would be a foreign colour here, so it is a
+   paler cream instead, told apart from a committed range by its dashes. */
+.theme-classic {
+  --waveform-bg: rgba(245, 241, 232, 0.05);
+  --waveform-lane-divider: rgba(245, 241, 232, 0.20);
+  --waveform-lane-center: rgba(245, 241, 232, 0.09);
+  --waveform-empty-text: rgba(245, 241, 232, 0.55);
+  --waveform-trace: rgba(214, 205, 188, 0.92);
+  --waveform-trace-recording: rgba(224, 92, 60, 0.95);
+  --waveform-playhead: rgba(245, 241, 232, 0.85);
+  --waveform-playhead-recording: rgba(224, 92, 60, 0.9);
+  --waveform-range-active: rgba(240, 160, 16, 0.95);
+  --waveform-range-active-tint: rgba(240, 160, 16, 0.18);
+  --waveform-range-candidate: rgba(245, 241, 232, 0.85);
+  --waveform-range-candidate-tint: rgba(245, 241, 232, 0.12);
+  --waveform-selected-handle-ring: rgba(255, 255, 255, 0.95);
+  --waveform-shade: rgba(0, 0, 0, 0.24);
+  --waveform-shade-unrecorded: rgba(0, 0, 0, 0.38);
+}

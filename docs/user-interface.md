@@ -358,8 +358,17 @@ and dragging one handle past the other was broken in both, differently.
   becomes a drag, and when a gesture is finished. `render.ts` draws the canvas.
   Hosts keep the range and say what it means; they track no drag state and make
   no canvas calls of their own.
-- **One palette, two emphases.** `WAVEFORM_COLORS` is the single source for every
-  colour both editors draw. The one deliberate divergence is what a range does to
+- **One themed palette, two emphases.** Every colour resolves from CSS custom
+  properties (`--waveform-*`), the same way `eqCurve.ts` does, so the three themes
+  restyle these canvases without touching TypeScript. Callers name meanings — an
+  active range, a candidate range, a recording in progress — never colours.
+  Defaults live in `variables.css` and are the dark values, so dark needs no
+  override; light and classic override in `css/waveform.css`, alongside the rest
+  of the component (`themes/light.css` is already a thousand lines and should not
+  keep growing). The palette is resolved once per theme, not once per draw:
+  `getComputedStyle` forces a style recalc and the Practice Tool repaints every
+  animation frame while a track plays. Both editors repaint on the `themeChanged`
+  event, because a canvas does not restyle itself. The one deliberate divergence is what a range does to
   what it covers: a loop region *tints what it includes*, a crop range *darkens
   what it will discard*. Those say different things, so both are kept — and they
   sit on opposite sides of the trace to match, a shade going down before it so the

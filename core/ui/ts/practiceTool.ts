@@ -16,7 +16,7 @@ import type { PracticeToolLoopRegion, PracticeToolProject, PracticeToolState } f
 import { escapeHtml } from "./utils.js";
 import type { RangeHandle, RatioRange } from "./waveform/range.js";
 import { bindRangeSelect, type RangeSelectController } from "./waveform/rangeSelect.js";
-import { WAVEFORM_COLORS, drawWaveform } from "./waveform/render.js";
+import { drawWaveform } from "./waveform/render.js";
 import {
   consumePendingProjectRecall,
   getFileFingerprint,
@@ -713,9 +713,10 @@ function renderWaveform(): void {
       ? {
           ...range,
           selectedHandle,
-          // Amber once the range belongs to a saved loop, blue and dashed while
-          // it is still just a selection waiting for "+ Add Loop".
-          color: activeLoop ? WAVEFORM_COLORS.rangeActive : WAVEFORM_COLORS.rangeCandidate,
+          // Solid and "active" once the range belongs to a saved loop; dashed
+          // and "candidate" while it is still a selection waiting for
+          // "+ Add Loop". The theme decides what each of those looks like.
+          tone: activeLoop ? "active" : "candidate",
           emphasis: "tint",
           dashed: !activeLoop,
         }
@@ -1095,6 +1096,11 @@ function bindWaveformInteractions(): void {
     return;
   }
   canvas.dataset.bound = "true";
+
+  // Canvas colours come from the theme, and a canvas does not restyle itself —
+  // repaint so a theme switch is not stuck behind the next interaction. The
+  // palette cache keys on the theme class, so it re-resolves on its own.
+  window.addEventListener("themeChanged", () => renderWaveform());
 
   rangeSelect = bindRangeSelect({
     canvas,

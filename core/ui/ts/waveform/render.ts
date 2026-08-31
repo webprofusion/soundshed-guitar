@@ -17,14 +17,19 @@
  *     goes down before the trace (the peaks it excludes still read clearly), a
  *     tint goes over it (it is colouring what it covers).
  *
- * Colours live here as one palette so the two editors cannot drift apart on
- * them again. They are still literals rather than theme variables, matching
- * what both editors did before; `eqCurve.ts` shows the pattern to follow when
- * these are eventually themed.
+ * Callers describe what a thing *means* — an active range, a candidate range, a
+ * recording in progress — and never name a colour. Every colour is resolved
+ * here from CSS custom properties, following `eqCurve.ts`, so the three themes
+ * restyle these canvases without touching TypeScript.
  */
 
 import type { RangeHandle } from "./range.js";
 
+/**
+ * Fallbacks, used when a property is missing — a theme that has not declared
+ * the variable, and jsdom, which does not resolve custom properties at all.
+ * These are the dark theme's values, so an unstyled canvas still looks right.
+ */
 export const WAVEFORM_COLORS = {
   background: "rgba(255,255,255,0.06)",
   laneDivider: "rgba(255,255,255,0.22)",
@@ -35,27 +40,99 @@ export const WAVEFORM_COLORS = {
   recordingHead: "rgba(255, 80, 80, 0.9)",
   /** A committed range: the active loop, or the crop the user will apply. */
   rangeActive: "rgba(255, 204, 102, 0.95)",
+  rangeActiveTint: "rgba(255, 204, 102, 0.16)",
   /** A range swept but not yet committed to anything. */
   rangeCandidate: "rgba(101, 186, 255, 0.95)",
+  rangeCandidateTint: "rgba(101, 186, 255, 0.16)",
   selectedHandleRing: "rgba(255,255,255,0.95)",
   playhead: "rgba(255, 255, 255, 0.85)",
   shade: "rgba(0,0,0,0.20)",
   unrecordedShade: "rgba(0,0,0,0.35)",
 } as const;
 
-/** Opacity applied to a range colour when tinting the area it covers. */
-const TINT_ALPHA = 0.16;
+type WaveformPalette = { -readonly [K in keyof typeof WAVEFORM_COLORS]: string };
+
+const CSS_VARIABLES: Record<keyof WaveformPalette, string> = {
+  background: "--waveform-bg",
+  laneDivider: "--waveform-lane-divider",
+  laneCenter: "--waveform-lane-center",
+  emptyText: "--waveform-empty-text",
+  trace: "--waveform-trace",
+  recordingTrace: "--waveform-trace-recording",
+  recordingHead: "--waveform-playhead-recording",
+  rangeActive: "--waveform-range-active",
+  rangeActiveTint: "--waveform-range-active-tint",
+  rangeCandidate: "--waveform-range-candidate",
+  rangeCandidateTint: "--waveform-range-candidate-tint",
+  selectedHandleRing: "--waveform-selected-handle-ring",
+  playhead: "--waveform-playhead",
+  shade: "--waveform-shade",
+  unrecordedShade: "--waveform-shade-unrecorded",
+};
+
+let cachedPalette: WaveformPalette | null = null;
+let cachedThemeKey = "";
+
+/**
+ * The theme switcher swaps a `theme-*` class on `<body>` (see
+ * theme-switcher.ts), so that is the cheapest honest signal that the resolved
+ * colours may have changed.
+ */
+function currentThemeKey(): string {
+  return document.body?.className ?? "";
+}
+
+/**
+ * Resolves the palette once per theme rather than once per draw.
+ *
+ * `getComputedStyle` forces a style recalc, and the Practice Tool repaints its
+ * waveform every animation frame while a track plays — fifteen property reads
+ * per frame, forever, for values that only change when the user picks a
+ * different theme. Reading one class name per frame instead is free.
+ *
+ * All fifteen variables are declared at theme scope, so every waveform canvas
+ * in the app resolves them identically; the cache is deliberately not keyed by
+ * canvas.
+ */
+function resolvePalette(canvas: HTMLCanvasElement): WaveformPalette {
+  const themeKey = currentThemeKey();
+
+  if (cachedPalette && cachedThemeKey === themeKey) {
+    return cachedPalette;
+  }
+
+  const styles = window.getComputedStyle(canvas);
+  const resolved = {} as WaveformPalette;
+
+  for (const key of Object.keys(CSS_VARIABLES) as (keyof WaveformPalette)[]) {
+    resolved[key] = styles.getPropertyValue(CSS_VARIABLES[key]).trim() || WAVEFORM_COLORS[key];
+  }
+
+  cachedPalette = resolved;
+  cachedThemeKey = themeKey;
+  return resolved;
+}
+
+/** Drops the cached palette. For tests, and for a forced restyle. */
+export function resetWaveformPalette(): void {
+  cachedPalette = null;
+  cachedThemeKey = "";
+}
 
 const HANDLE_RADIUS = 4;
 const SELECTED_RING_RADIUS = 6;
 const LANE_PADDING = 4;
+
+/** What a range means, which is all a caller has to decide. */
+export type WaveformRangeTone = "active" | "candidate";
 
 export interface WaveformRangeOverlay {
   startRatio: number;
   endRatio: number;
   /** Which handle wears the focus ring. */
   selectedHandle: RangeHandle;
-  color: string;
+  /** Committed to something, or still just a sweep. Picks the colour pair. */
+  tone: WaveformRangeTone;
   /** `tint` colours the range; `shade` darkens everything outside it. */
   emphasis: "tint" | "shade";
   /** Dashes the boundary lines — for a range not yet committed to anything. */
@@ -65,7 +142,12 @@ export interface WaveformRangeOverlay {
 export interface WaveformSpec {
   /** One entry draws a single centred lane; two stack L over R. */
   lanes: readonly (readonly number[])[];
-  traceColor?: string;
+  /**
+   * `recording` recolours the trace and playhead for a capture in progress.
+   * Pair it with `traceLimitRatio`/`shadeAfterRatio` to show how much of the
+   * buffer has actually been filled.
+   */
+  mode?: "normal" | "recording";
   /**
    * Draw peaks only up to this ratio of the width. For a recording in
    * progress, where the rest of the canvas is buffer that has not happened yet.
@@ -74,26 +156,14 @@ export interface WaveformSpec {
   /** Darken everything right of this ratio — the not-yet-recorded tail. */
   shadeAfterRatio?: number;
   range?: WaveformRangeOverlay | null;
-  playhead?: { ratio: number; color?: string } | null;
+  /**
+   * `cursor` is the neutral transport position; `range` ties it to the range
+   * colour, for a playhead that runs inside the selection rather than across
+   * the whole clip. Ignored in `recording` mode, which owns the head colour.
+   */
+  playhead?: { ratio: number; tone?: "cursor" | "range" } | null;
   /** Shown instead of a trace when there is nothing to draw. */
   empty?: { text: string; align?: "left" | "center" };
-}
-
-/** Applies `alpha` to an `rgba(r, g, b, a)` string, leaving other formats be. */
-function withAlpha(color: string, alpha: number): string {
-  const match = /^rgba?\(([^)]+)\)$/.exec(color.trim());
-
-  if (!match) {
-    return color;
-  }
-
-  const parts = match[1].split(",").map((part) => part.trim());
-
-  if (parts.length < 3) {
-    return color;
-  }
-
-  return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
 }
 
 export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): void {
@@ -111,14 +181,17 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
     return;
   }
 
+  const colors = resolvePalette(canvas);
+  const recording = spec.mode === "recording";
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  ctx.fillStyle = WAVEFORM_COLORS.background;
+  ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
 
   const midY = Math.floor(height / 2);
-  ctx.strokeStyle = WAVEFORM_COLORS.laneDivider;
+  ctx.strokeStyle = colors.laneDivider;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, midY);
@@ -130,7 +203,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
   if (lanes.length === 0) {
     if (spec.empty) {
       const centered = spec.empty.align === "center";
-      ctx.fillStyle = WAVEFORM_COLORS.emptyText;
+      ctx.fillStyle = colors.emptyText;
       ctx.font = "12px sans-serif";
       ctx.textAlign = centered ? "center" : "left";
       ctx.fillText(spec.empty.text, centered ? width / 2 : 10, centered ? midY : midY - 8);
@@ -147,7 +220,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
   // Per-lane reference lines only make sense once a lane is not the whole
   // canvas — with one lane the divider above already sits on its centre.
   if (lanes.length > 1) {
-    ctx.strokeStyle = WAVEFORM_COLORS.laneCenter;
+    ctx.strokeStyle = colors.laneCenter;
     ctx.lineWidth = 1;
     ctx.beginPath();
     lanes.forEach((_, index) => {
@@ -165,7 +238,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
   if (spec.range && spec.range.emphasis === "shade") {
     const startX = toX(spec.range.startRatio);
     const endX = toX(spec.range.endRatio);
-    ctx.fillStyle = WAVEFORM_COLORS.shade;
+    ctx.fillStyle = colors.shade;
 
     if (startX > 0) {
       ctx.fillRect(0, 0, startX, height);
@@ -178,7 +251,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
 
   if (spec.shadeAfterRatio !== undefined && spec.shadeAfterRatio < 1) {
     const fromX = Math.max(0, Math.min(width, spec.shadeAfterRatio * width));
-    ctx.fillStyle = WAVEFORM_COLORS.unrecordedShade;
+    ctx.fillStyle = colors.unrecordedShade;
     ctx.fillRect(fromX, 0, width - fromX, height);
   }
 
@@ -187,7 +260,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
   lanes.forEach((peaks, index) => {
     const step = width / peaks.length;
     const centerY = laneCenterY(index);
-    ctx.strokeStyle = spec.traceColor ?? WAVEFORM_COLORS.trace;
+    ctx.strokeStyle = recording ? colors.recordingTrace : colors.trace;
     ctx.lineWidth = Math.max(1, step * 0.7);
     ctx.beginPath();
 
@@ -207,13 +280,14 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
   });
 
   if (spec.range) {
-    const { startRatio, endRatio, color, emphasis, dashed, selectedHandle } = spec.range;
+    const { startRatio, endRatio, tone, emphasis, dashed, selectedHandle } = spec.range;
+    const color = tone === "active" ? colors.rangeActive : colors.rangeCandidate;
     const startX = toX(startRatio);
     const endX = toX(endRatio);
 
     // A tint colours what it covers, so it goes over the trace.
     if (emphasis === "tint") {
-      ctx.fillStyle = withAlpha(color, TINT_ALPHA);
+      ctx.fillStyle = tone === "active" ? colors.rangeActiveTint : colors.rangeCandidateTint;
       ctx.fillRect(startX, 0, Math.max(1, endX - startX), height);
     }
 
@@ -235,7 +309,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
     ctx.arc(endX, midY, HANDLE_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = WAVEFORM_COLORS.selectedHandleRing;
+    ctx.strokeStyle = colors.selectedHandleRing;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(selectedHandle === "start" ? startX : endX, midY, SELECTED_RING_RADIUS, 0, Math.PI * 2);
@@ -244,7 +318,11 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
 
   if (spec.playhead) {
     const x = Math.max(0, Math.min(width, spec.playhead.ratio * width));
-    ctx.strokeStyle = spec.playhead.color ?? WAVEFORM_COLORS.playhead;
+    ctx.strokeStyle = recording
+      ? colors.recordingHead
+      : spec.playhead.tone === "range"
+        ? colors.rangeActive
+        : colors.playhead;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(x, 0);

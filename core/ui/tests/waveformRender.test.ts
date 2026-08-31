@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { WAVEFORM_COLORS, drawWaveform, type WaveformSpec } from "../ts/waveform/render.js";
+import { WAVEFORM_COLORS, drawWaveform, resetWaveformPalette, type WaveformSpec } from "../ts/waveform/render.js";
 
 /**
  * jsdom has no 2D context, so the canvas records what was asked of it. That is
@@ -71,6 +71,7 @@ const peaks = Array.from({ length: 64 }, (_, i) => (i % 8) / 8);
 beforeEach(() => {
   ops = [];
   canvas = makeCanvas();
+  resetWaveformPalette();
 });
 
 describe("empty state", () => {
@@ -125,7 +126,7 @@ describe("range emphasis", () => {
     startRatio: 0.25,
     endRatio: 0.75,
     selectedHandle: "start" as const,
-    color: WAVEFORM_COLORS.rangeActive,
+    tone: "active" as const,
   };
 
   it("shades outside the range BEFORE the trace, so excluded peaks stay legible", () => {
@@ -141,14 +142,14 @@ describe("range emphasis", () => {
   it("tints the range AFTER the trace, so it colours what it covers", () => {
     draw({ lanes: [peaks], range: { ...range, emphasis: "tint" } });
 
-    const tint = ops.findIndex((o) => o.op === "fillRect" && o.style.startsWith("rgba(255, 204, 102"));
+    const tint = ops.findIndex((o) => o.op === "fillRect" && o.style === WAVEFORM_COLORS.rangeActiveTint);
     expect(tint).toBeGreaterThan(traceIndex());
   });
 
   it("spans exactly the selected range when tinting", () => {
     draw({ lanes: [peaks], range: { ...range, emphasis: "tint" } });
 
-    const tint = ops.find((o) => o.op === "fillRect" && o.style.startsWith("rgba(255, 204, 102"));
+    const tint = ops.find((o) => o.op === "fillRect" && o.style === WAVEFORM_COLORS.rangeActiveTint);
     expect(tint).toMatchObject({ x: 250, w: 500 });
   });
 
@@ -159,7 +160,7 @@ describe("range emphasis", () => {
 });
 
 describe("handles", () => {
-  const base = { lanes: [peaks], range: { startRatio: 0.25, endRatio: 0.75, color: WAVEFORM_COLORS.rangeActive, emphasis: "tint" as const } };
+  const base = { lanes: [peaks], range: { startRatio: 0.25, endRatio: 0.75, tone: "active" as const, emphasis: "tint" as const } };
 
   it("draws both handles and rings the selected one", () => {
     draw({ ...base, range: { ...base.range, selectedHandle: "start" } });
@@ -200,10 +201,10 @@ describe("playhead and recording overlay", () => {
   it("shades the un-recorded tail and heads it in the recording colour", () => {
     draw({
       lanes: [peaks],
-      traceColor: WAVEFORM_COLORS.recordingTrace,
+      mode: "recording",
       traceLimitRatio: 0.3,
       shadeAfterRatio: 0.3,
-      playhead: { ratio: 0.3, color: WAVEFORM_COLORS.recordingHead },
+      playhead: { ratio: 0.3 },
     });
 
     const shade = ops.find((o) => o.op === "fillRect" && o.style === WAVEFORM_COLORS.unrecordedShade);
@@ -222,5 +223,88 @@ describe("backing store", () => {
     expect(canvas.width).toBe(WIDTH * 2);
     expect(canvas.height).toBe(HEIGHT * 2);
     Object.defineProperty(window, "devicePixelRatio", { value: original, configurable: true });
+  });
+});
+
+describe("range tone", () => {
+  const base = { startRatio: 0.25, endRatio: 0.75, selectedHandle: "start" as const, emphasis: "tint" as const };
+
+  it("uses the candidate colours for an uncommitted range", () => {
+    draw({ lanes: [peaks], range: { ...base, tone: "candidate" } });
+
+    expect(ops.some((o) => o.op === "fillRect" && o.style === WAVEFORM_COLORS.rangeCandidateTint)).toBe(true);
+    expect(ops.some((o) => o.op === "stroke" && o.style === WAVEFORM_COLORS.rangeCandidate)).toBe(true);
+  });
+
+  it("colours a range-toned playhead with the active range colour", () => {
+    draw({ lanes: [peaks], playhead: { ratio: 0.4, tone: "range" } });
+
+    const head = ops.find((o) => o.op === "stroke" && o.lines.length === 2 && o.lines[0] === 400);
+    expect(head?.op === "stroke" && head.style).toBe(WAVEFORM_COLORS.rangeActive);
+  });
+
+  it("lets recording mode win over the playhead tone", () => {
+    draw({ lanes: [peaks], mode: "recording", playhead: { ratio: 0.4, tone: "range" } });
+
+    const head = ops.find((o) => o.op === "stroke" && o.lines.length === 2 && o.lines[0] === 400);
+    expect(head?.op === "stroke" && head.style).toBe(WAVEFORM_COLORS.recordingHead);
+  });
+});
+
+describe("theme palette", () => {
+  /** Stubs getComputedStyle so custom properties resolve, which jsdom will not do. */
+  function stubTheme(vars: Record<string, string>): () => void {
+    const original = window.getComputedStyle.bind(window);
+    (window as unknown as { getComputedStyle: unknown }).getComputedStyle = () =>
+      ({ getPropertyValue: (name: string) => vars[name] ?? "" }) as unknown as CSSStyleDeclaration;
+    return () => {
+      (window as unknown as { getComputedStyle: unknown }).getComputedStyle = original;
+    };
+  }
+
+  it("draws with the theme's variables rather than the built-in fallbacks", () => {
+    const restore = stubTheme({ "--waveform-bg": "rgb(1, 2, 3)", "--waveform-trace": "rgb(4, 5, 6)" });
+    resetWaveformPalette();
+
+    draw({ lanes: [peaks] });
+
+    expect(ops.some((o) => o.op === "fillRect" && o.style === "rgb(1, 2, 3)")).toBe(true);
+    expect(ops[traceIndex()]).toMatchObject({ style: "rgb(4, 5, 6)" });
+    restore();
+  });
+
+  it("falls back per-property, so a partial theme still renders", () => {
+    const restore = stubTheme({ "--waveform-trace": "rgb(4, 5, 6)" });
+    resetWaveformPalette();
+
+    draw({ lanes: [peaks] });
+
+    // Only the trace was themed; the background keeps its built-in value.
+    expect(ops.some((o) => o.op === "fillRect" && o.style === WAVEFORM_COLORS.background)).toBe(true);
+    restore();
+  });
+
+  it("re-resolves when the theme class changes, and not otherwise", () => {
+    let reads = 0;
+    const original = window.getComputedStyle.bind(window);
+    (window as unknown as { getComputedStyle: unknown }).getComputedStyle = () => {
+      reads += 1;
+      return { getPropertyValue: () => "" } as unknown as CSSStyleDeclaration;
+    };
+    resetWaveformPalette();
+    document.body.className = "theme-dark";
+
+    draw({ lanes: [peaks] });
+    draw({ lanes: [peaks] });
+    draw({ lanes: [peaks] });
+    // Repainting every animation frame must not re-read the stylesheet.
+    expect(reads).toBe(1);
+
+    document.body.className = "theme-light";
+    draw({ lanes: [peaks] });
+    expect(reads).toBe(2);
+
+    (window as unknown as { getComputedStyle: unknown }).getComputedStyle = original;
+    document.body.className = "";
   });
 });

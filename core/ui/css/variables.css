@@ -232,6 +232,24 @@
   --eq-curve-tooltip-bg: rgba(0, 0, 0, 0.8);
   --eq-curve-tooltip-text: #ffffff;
 
+  /* Waveform editors (Practice Tool loops, Riff Capture crop) — see
+     ts/waveform/render.ts. Dark-theme values; each theme overrides them. */
+  --waveform-bg: rgba(255, 255, 255, 0.06);
+  --waveform-lane-divider: rgba(255, 255, 255, 0.22);
+  --waveform-lane-center: rgba(255, 255, 255, 0.10);
+  --waveform-empty-text: rgba(255, 255, 255, 0.55);
+  --waveform-trace: rgba(101, 186, 255, 0.95);
+  --waveform-trace-recording: rgba(255, 100, 80, 0.95);
+  --waveform-playhead: rgba(255, 255, 255, 0.85);
+  --waveform-playhead-recording: rgba(255, 80, 80, 0.9);
+  --waveform-range-active: rgba(255, 204, 102, 0.95);
+  --waveform-range-active-tint: rgba(255, 204, 102, 0.16);
+  --waveform-range-candidate: rgba(101, 186, 255, 0.95);
+  --waveform-range-candidate-tint: rgba(101, 186, 255, 0.16);
+  --waveform-selected-handle-ring: rgba(255, 255, 255, 0.95);
+  --waveform-shade: rgba(0, 0, 0, 0.20);
+  --waveform-shade-unrecorded: rgba(0, 0, 0, 0.35);
+
   --spatial-grid: rgba(255, 255, 255, 0.10);
   --spatial-head: rgba(255, 255, 255, 0.32);
   --spatial-label: rgba(255, 255, 255, 0.62);
