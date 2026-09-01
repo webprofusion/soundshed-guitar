@@ -78,6 +78,7 @@ Edit `core/config/GuitarFXConfig.h` to customize plugin name and manufacturer. R
 
 - **UI source**: `core/ui/ts/` (TypeScript)
 - **Build UI**: `cd core/ui && npm run build`
+- **Android**: see [docs/android-build.md](docs/android-build.md)
 - **Core tests**: Enable with `GUITARFX_CORE_BUILD_TESTS=ON`, run via CTest
 
 ## Prerequisites

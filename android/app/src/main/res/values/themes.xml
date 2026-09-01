@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- JuceActivity extends android.app.Activity, so this is a platform theme
+         rather than an AppCompat one. The dark background matches the web UI's
+         so there is no white flash before the WebView paints. -->
+    <style name="SoundshedTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/soundshed_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

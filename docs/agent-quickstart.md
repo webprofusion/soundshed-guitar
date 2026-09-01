@@ -122,6 +122,9 @@ grows past 800 lines, or if a file already over it gets bigger. CI runs this
 
 - Configure core: cmake -G "Visual Studio 18 2026" -A x64 -S core -B core/build
 - Build JUCE standalone debug: cmake --build juce/builds --config Debug --target SoundshedGuitar_Standalone
+- Android APK: `cd android && ./gradlew assembleDebug` — see `docs/android-build.md`
+  for the toolchain versions, the `-Pssg.abis` switch, and what the Android build
+  leaves out (WASM effects, plugin hosting, ASIO).
 - UI build: cd core/ui && npm run build
 - **UI checks (run this before any UI change is done): cd core/ui && npm run verify**
   Runs typecheck, eslint, vitest, the import-cycle gate, the file-size budget and

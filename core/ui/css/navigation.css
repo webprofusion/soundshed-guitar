@@ -5,8 +5,15 @@
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0 20px;
-  height: 44px;
+  /*
+    The safe-area insets are additive here rather than replacing the padding:
+    the bar keeps its own spacing and simply grows to cover the status bar (and
+    any cutout), so its background reaches the top of the screen while the title
+    and tabs sit below the system icons. Zero on every platform but Android.
+  */
+  padding: var(--ssg-safe-top) calc(20px + var(--ssg-safe-right)) 0
+    calc(20px + var(--ssg-safe-left));
+  height: calc(44px + var(--ssg-safe-top));
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-dark);
   flex-shrink: 0;

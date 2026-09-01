@@ -26,7 +26,15 @@ set(BUNDLE_ID "com.soundshed.guitar")
 
 # Change me! Set the plugin formats you want built
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone LV2
-set(FORMATS Standalone AU AAX VST3)
+#
+# Android has no plugin host to load AU/VST3/AAX into, and JUCE emits every
+# format as its own shared library, so the standalone app is the only format
+# worth building there.
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(FORMATS Standalone)
+else()
+    set(FORMATS Standalone AU AAX VST3)
+endif()
 option(GUITARFX_ENABLE_LV2 "Build the LV2 plugin target on Linux" OFF)
 option(GUITARFX_CORE_ENABLE_AVX2 "Enable AVX2 compile flags for x64 Release/RelWithDebInfo builds" ON)
 
@@ -35,6 +43,26 @@ if(LINUX AND GUITARFX_ENABLE_LV2)
 endif()
 
 set(GUITARFX_LV2_URI "urn:soundshed:guitar" CACHE STRING "Stable LV2 URI for Soundshed Guitar")
+
+# Hosting third-party plugins needs a desktop plugin format on disk. Android has
+# none, so the format manager is compiled with no formats registered and the
+# "add a plugin" paths simply find nothing.
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(GUITARFX_PLUGINHOST_ENABLED 0)
+else()
+    set(GUITARFX_PLUGINHOST_ENABLED 1)
+endif()
+
+# JUCE_FORCE_DEBUG keeps JUCE_DEBUG on in release-family builds, which is only
+# wanted so Windows release builds keep their WebView2 DevTools. It also turns on
+# JUCE's assertions and debug-only paths — including ones on the audio thread —
+# so on Android, where there is no DevTools story and every cycle in the callback
+# counts, leave it off and let release builds actually be release builds.
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(GUITARFX_JUCE_FORCE_DEBUG 0)
+else()
+    set(GUITARFX_JUCE_FORCE_DEBUG 1)
+endif()
 
 set(GUITARFX_VST3_AUTO_MANIFEST TRUE)
 
@@ -334,9 +362,11 @@ juce_add_plugin("${PROJECT_NAME}"
 # Without running into ODR violations
 add_library(SharedCode INTERFACE)
 
-clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
-    CLAP_ID "${BUNDLE_ID}"
-    CLAP_FEATURES audio-effect)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
+    clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
+        CLAP_ID "${BUNDLE_ID}"
+        CLAP_FEATURES audio-effect)
+endif()
 
 # Enable fast math, C++20 and a few other target defaults
 include(SharedCodeDefaults)
@@ -373,9 +403,9 @@ target_compile_definitions(SharedCode
     JUCE_WEB_BROWSER=1  # If you set this to 1, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
     JUCE_USE_CURL=0     # If you set this to 1, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
     JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_PLUGINHOST_VST3=1
-    JUCE_PLUGINHOST_AU=1
-    JUCE_PLUGINHOST_LV2=1
+    JUCE_PLUGINHOST_VST3=${GUITARFX_PLUGINHOST_ENABLED}
+    JUCE_PLUGINHOST_AU=${GUITARFX_PLUGINHOST_ENABLED}
+    JUCE_PLUGINHOST_LV2=${GUITARFX_PLUGINHOST_ENABLED}
     
     # Enable ASIO on Windows. JUCE 8.0.11+ uses bundled ASIO sources by default.
     JUCE_ASIO=${GUITARFX_JUCE_ASIO_ENABLED}
@@ -386,7 +416,7 @@ target_compile_definitions(SharedCode
     JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=${GUITARFX_WEBVIEW2_STATIC_LINKING}
     JUCE_WEBVIEW2_DEVTOOLS_ENABLED=1
     # JUCE disables WebView2 DevTools when JUCE_DEBUG=0; restore prior behavior in release-family Windows builds.
-    JUCE_FORCE_DEBUG=1
+    JUCE_FORCE_DEBUG=${GUITARFX_JUCE_FORCE_DEBUG}
     GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK=${GUITARFX_WKWEBVIEW_INLINE_MEDIA_PLAYBACK}
     GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION=${GUITARFX_WKWEBVIEW_DISABLE_MEDIA_USER_ACTION}
 
@@ -491,11 +521,15 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
 
 endfunction()
 
-soundshed_copy_ui_resources(${PROJECT_NAME}_Standalone)
-soundshed_copy_ui_resources(${PROJECT_NAME}_VST3)
-soundshed_copy_ui_resources(${PROJECT_NAME}_AU)
-soundshed_copy_ui_resources(${PROJECT_NAME}_CLAP)
-soundshed_copy_ui_resources(${PROJECT_NAME}_LV2)
+# On Android the UI is packaged as APK assets by Gradle (see android/), not
+# copied next to a binary, so none of these post-build steps apply.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
+    soundshed_copy_ui_resources(${PROJECT_NAME}_Standalone)
+    soundshed_copy_ui_resources(${PROJECT_NAME}_VST3)
+    soundshed_copy_ui_resources(${PROJECT_NAME}_AU)
+    soundshed_copy_ui_resources(${PROJECT_NAME}_CLAP)
+    soundshed_copy_ui_resources(${PROJECT_NAME}_LV2)
+endif()
 
 # Propagate IPP availability to the JUCE shared code and core DSP library.
 if(GUITARFX_IPP_AVAILABLE)

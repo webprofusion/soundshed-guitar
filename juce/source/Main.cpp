@@ -65,9 +65,19 @@ public:
               juce::DocumentWindow::allButtons),
           mPluginHolder (std::move (pluginHolderIn))
     {
+        // On Android this also matters for layout, not just looks: it is what
+        // stops ResizableWindow reserving a border and insetting the content by
+        // a pixel. Android peers have no decoration to draw anyway.
         setUsingNativeTitleBar (true);
+
+#if JUCE_ANDROID
+        // There is no window manager to negotiate with — the activity owns the
+        // screen, and the window fills it.
+        setResizable (false, false);
+#else
         setResizable (true, true);
         setResizeLimits (640, 400, 8192, 8192);
+#endif
 
         if (auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr)
         {
@@ -78,18 +88,40 @@ public:
             if (editor != nullptr)
             {
                 setContentOwned (editor, true);
+#if !JUCE_ANDROID
                 setResizable (editor->isResizable(), true);
+#endif
             }
         }
 
+#if !JUCE_ANDROID
         const auto state = loadWindowState();
         centreWithSize (state.width, state.height);
 
         if (state.maximized)
             setFullScreen (true);
+#endif
 
         mPluginHolder->startPlaying();
         setVisible (true);
+
+#if JUCE_ANDROID
+        // Fill the display, ignoring any persisted desktop geometry — but only
+        // now, after setVisible() has put the window on the desktop.
+        //
+        // Order matters. The editor hosts the WebView through JUCE's
+        // AndroidViewComponent, which positions a real android.webkit.WebView
+        // from the JUCE component's screen bounds, and it can only do that once
+        // the component has a peer. Size the window before it is visible and the
+        // native view stays 1x1 in the corner: the window never changes size
+        // afterwards, so resized() never fires again to correct it, and the app
+        // comes up blank with a perfectly healthy page inside a one-pixel view.
+        //
+        // Note this deliberately does not call setFullScreen(). On Android that
+        // collapses the window to 0x0 — the peer already covers the activity, so
+        // there is no separate full-screen state to ask for.
+        setBounds (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea);
+#endif
     }
 
     ~MainWindow() override
@@ -318,4 +350,25 @@ namespace juce
 }
 
 //==============================================================================
+#if JUCE_ANDROID
+
+// Android has no main(): JUCE's startup finds the app's entry point by looking
+// up "juce_CreateApplication" with dlsym at runtime (juce_Messaging_android.cpp).
+//
+// START_JUCE_APPLICATION would emit exactly this function, but without any
+// visibility attribute — and this project builds with -fvisibility=hidden, which
+// keeps the symbol out of the dynamic symbol table that dlsym searches. The
+// result is an app that loads its library and then sits on a blank screen,
+// because no JUCEApplication is ever created. Spell it out instead.
+//
+// The matching half of this is in android/CMakeLists.txt, which forces the
+// linker to keep this translation unit at all.
+extern "C" __attribute__ ((visibility ("default")))
+juce::JUCEApplicationBase* juce_CreateApplication()
+{
+    return new SoundshedGuitarApplication();
+}
+
+#else
 START_JUCE_APPLICATION (SoundshedGuitarApplication)
+#endif

@@ -1,11 +1,42 @@
 #include "FileSystem.h"
 
 #include <cstdlib>
+#include <mutex>
 
 namespace guitarfx
 {
+namespace
+{
+std::mutex& PlatformRootMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::filesystem::path& PlatformRootOverride()
+{
+    static std::filesystem::path root;
+    return root;
+}
+} // namespace
+
+void FileSystem::SetPlatformRootOverride(const std::filesystem::path& root)
+{
+    const std::lock_guard<std::mutex> lock(PlatformRootMutex());
+    PlatformRootOverride() = root;
+}
+
 std::filesystem::path FileSystem::ResolvePlatformRootDirectory() const
 {
+    {
+        const std::lock_guard<std::mutex> lock(PlatformRootMutex());
+
+        if (const auto& configured = PlatformRootOverride(); !configured.empty())
+        {
+            return configured;
+        }
+    }
+
 #ifdef _WIN32
 
     if (const char* appData = std::getenv("APPDATA"); appData != nullptr && appData[0] != '\0')

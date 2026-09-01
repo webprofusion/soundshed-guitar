@@ -264,6 +264,20 @@
   --performance-plot-line: rgba(104, 184, 104, 0.95);
   --performance-plot-fill: rgba(104, 184, 104, 0.18);
   --performance-plot-grid: rgba(255, 255, 255, 0.14);
+
+  /*
+    Safe-area insets — the screen edges the UI must keep clear.
+
+    Zero everywhere except Android, where the app draws edge to edge (enforced
+    from targetSdk 35) and the system bars would otherwise sit on top of the
+    header and footer. MainActivity reads the real insets and sets these four
+    properties on the root element; env(safe-area-inset-*) is no use here
+    because Android WebView never populates it.
+  */
+  --ssg-safe-top: 0px;
+  --ssg-safe-bottom: 0px;
+  --ssg-safe-left: 0px;
+  --ssg-safe-right: 0px;
 }
 
 /* Per-theme token overrides live in css/themes/{light,dark,classic}.css */

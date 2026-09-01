@@ -5,6 +5,36 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Soundshed Guitar</title>
+  <script>
+    /*
+      Android only: bootstrap JUCE's JavaScript integration layer.
+
+      On desktop, JUCE injects its integration script natively before any page
+      script runs — WebView2's AddScriptToExecuteOnDocumentCreated, WKUserScript
+      on Apple platforms, WebKitGTK's user content manager. android.webkit.WebView
+      has no equivalent API, so JUCE instead hands the scripts to the page through
+      window.__JUCE__.getAndroidUserScripts() and expects the page to evaluate
+      them itself (see lowLevelIntegrationsScript in juce_WebBrowserComponent.cpp).
+
+      Without this, window.__JUCE__ stays the bare Java interface object, so
+      window.__JUCE__.backend and window.IPlugSendMsg never exist and the UI
+      cannot send a single message to the engine — it loads, renders, and then
+      sits there with an empty preset library.
+
+      The inAndroidUserScriptEval flag is what JUCE's own script checks to avoid
+      recursing back into this same eval. Inert on every other platform, where
+      getAndroidUserScripts is undefined.
+    */
+    if (
+      typeof window.__JUCE__ !== "undefined" &&
+      typeof window.__JUCE__.getAndroidUserScripts !== "undefined" &&
+      typeof window.inAndroidUserScriptEval === "undefined"
+    ) {
+      window.inAndroidUserScriptEval = true;
+      eval(window.__JUCE__.getAndroidUserScripts());
+      delete window.inAndroidUserScriptEval;
+    }
+  </script>
   <script src="build-flags.js"></script>
   <script src="dist/alpine.min.js"></script>
   <!--

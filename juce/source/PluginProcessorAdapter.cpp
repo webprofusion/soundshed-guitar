@@ -12,6 +12,7 @@
 #include "UiBridge.h"
 
 #include "resources/PluginPathUtils.h"
+#include "util/FileSystem.h"
 
 #include <nlohmann/json.hpp>
 
@@ -222,6 +223,17 @@ PluginProcessorAdapter::PluginProcessorAdapter()
       mController (*this)
 {
     guitarfx::RegisterJuceHostedPluginEffect();
+#if JUCE_ANDROID
+    // Android has no HOME to derive a settings root from, so hand the core the
+    // sandbox path before anything asks it for one.  Must happen before
+    // mController.Initialize(), which reads settings.
+    guitarfx::FileSystem::SetPlatformRootOverride (
+        std::filesystem::path (
+            juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                .getChildFile ("files")
+                .getFullPathName()
+                .toStdString()));
+#endif
     mAssetRoot = locateAssetsRoot();
     mController.Initialize();
     registerAutomationParameters();
@@ -964,6 +976,18 @@ void PluginProcessorAdapter::sendMessageToUI (const juce::String& message)
 std::filesystem::path PluginProcessorAdapter::locateAssetsRoot() const
 {
     std::vector<std::filesystem::path> candidates;
+
+#if JUCE_ANDROID
+    // On Android there is no directory next to the binary: the UI ships as APK
+    // assets, and SoundshedApp unpacks them to "<dataDir>/resources" before
+    // JUCE starts.  userApplicationDataDirectory is that same dataDir.
+    const auto androidDataDir = std::filesystem::path (
+        juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+            .getFullPathName()
+            .toStdString());
+    if (!androidDataDir.empty())
+        candidates.push_back (androidDataDir / "resources");
+#endif
 
     const auto cwd = std::filesystem::path (
         juce::File::getCurrentWorkingDirectory().getFullPathName().toStdString());

@@ -88,9 +88,20 @@ namespace
 
     const char* getMimeForExtension (const juce::String& extension)
     {
+        // Android's WebResourceResponse documents that the MIME type "must not
+        // include a charset parameter" — it takes the encoding as a separate
+        // argument, which JUCE fills in for any "text" type. Handing it
+        // "text/html; charset=utf-8" makes the WebView treat the page as an
+        // unknown type and render the markup as plain text.
+#if JUCE_ANDROID
+        constexpr auto htmlMime = "text/html";
+#else
+        constexpr auto htmlMime = "text/html; charset=utf-8";
+#endif
+
         static const std::unordered_map<juce::String, const char*> mimeMap = {
-            { "htm", "text/html; charset=utf-8" },
-            { "html", "text/html; charset=utf-8" },
+            { "htm", htmlMime },
+            { "html", htmlMime },
             { "txt", "text/plain" },
             { "jpg", "image/jpeg" },
             { "jpeg", "image/jpeg" },
@@ -638,9 +649,13 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
             auto data = readFileToVector (file);
             const auto mimeType = getMimeForExtension (file.getFileExtension().substring (1));
 
+#if !JUCE_ANDROID
             // WebKitGTK ignores the charset header for custom juce:// resources.
+            // Android does not need this: JUCE passes the encoding to
+            // WebResourceResponse explicitly.
             if (juce::String (mimeType).startsWith ("text/html"))
                 prependUtf8Bom (data);
+#endif
 
             return juce::WebBrowserComponent::Resource { std::move (data),
                 mimeType };
@@ -749,6 +764,7 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     webView.setBounds (getLocalBounds());
+
 
     // Remember the size the host left us at, so reopening this editor - or this project -
     // comes back the same size. Only the size: the DAW owns where the window sits.
