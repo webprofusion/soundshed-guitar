@@ -550,6 +550,13 @@ export interface MetronomeClickTypeOption {
   label?: string;
   lowPath?: string;
   highPath?: string;
+  /** Optional quieter one-shot for subdivision ticks. */
+  subPath?: string;
+}
+
+export interface MetronomeSubdivisionOption {
+  id: string;
+  ticksPerBeat: number;
 }
 
 export interface MetronomeState {
@@ -561,7 +568,14 @@ export interface MetronomeState {
   pan: number;
   clickType: string;
   clickTypes?: MetronomeClickTypeOption[];
+  /** One character per beat: H accent, L normal, M soft, S silent. */
   beatPattern?: string;
+  timeSigNum?: number;
+  timeSigDen?: number;
+  /** Beat clusters of an odd meter, e.g. "2+2+3". Empty when it divides evenly. */
+  grouping?: string;
+  subdivision?: string;
+  subdivisions?: MetronomeSubdivisionOption[];
 }
 
 export interface RiffTake {

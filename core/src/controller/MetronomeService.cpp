@@ -3,26 +3,129 @@
 #include "IPluginHost.h"
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/MetronomeSupport.h"
-#include "util/FileIO.h"
-#include "util/Wav.h"
 
 #include <algorithm>
-#include <array>
-#include <cctype>
 #include <cmath>
-#include <iostream>
-#include <string_view>
-#include <tuple>
 #include <utility>
 
 using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
-MetronomeService::MetronomeService(IPluginHost& host, nlohmann::json& appSettings,
-                                   const std::filesystem::path& resourceRoot)
-    : mHost(host), mAppSettings(appSettings), mResourceRoot(resourceRoot)
+namespace
 {
+/// The beat pulse is one atomic word so the message thread reads a beat that
+/// actually happened rather than a mix of two. 14 bits of sequence is ~4500
+/// bars of 4/4 between polls at 60 Hz — the counter can wrap, the comparison
+/// cannot get confused by it.
+constexpr std::uint32_t kBeatPulseSeqMask = 0x3FFFu;
+
+constexpr std::uint32_t PackBeatPulse(std::uint32_t seq, int beatIndex, int beatsPerBar, BeatLevel level)
+{
+    return ((seq & kBeatPulseSeqMask) << 18) | ((static_cast<std::uint32_t>(level) & 0x3u) << 16) |
+           ((static_cast<std::uint32_t>(beatsPerBar) & 0xFFu) << 8) | (static_cast<std::uint32_t>(beatIndex) & 0xFFu);
+}
+
+const char* BeatLevelName(BeatLevel level)
+{
+    switch (level)
+    {
+    case BeatLevel::Accent:
+        return "accent";
+    case BeatLevel::Medium:
+        return "medium";
+    case BeatLevel::Silent:
+        return "silent";
+    case BeatLevel::Normal:
+    default:
+        return "normal";
+    }
+}
+
+/// Pitch offset for the synthesised fallback beep, so accents still read as
+/// accents on an install whose samples are missing.
+double FallbackClickFrequency(ClickVoice voice)
+{
+    switch (voice)
+    {
+    case ClickVoice::High:
+        return kMetronomeClickFrequencyHz * 1.5;
+    case ClickVoice::Sub:
+        return kMetronomeClickFrequencyHz * 1.25;
+    case ClickVoice::Low:
+    default:
+        return kMetronomeClickFrequencyHz;
+    }
+}
+
+/// Older builds wrote their built-in kit into `metronome.clickConfig` as a
+/// user override. The kit now comes from the bundled manifest, so that entry
+/// would show the same sounds twice under a stale label.
+void MigrateLegacyClickConfig(nlohmann::json& appSettings)
+{
+    const auto it = appSettings.find(kMetronomeClickConfigSettingKey);
+
+    if (it == appSettings.end() || !it->is_array())
+    {
+        return;
+    }
+
+    nlohmann::json kept = nlohmann::json::array();
+
+    for (const auto& entry : *it)
+    {
+        if (!entry.is_object())
+        {
+            continue;
+        }
+
+        const std::string id = entry.value("id", "");
+        const std::string lowPath = entry.value("lowPath", "");
+        const bool isLegacyDefault = (id == "drum" || id == "click") && lowPath.rfind("metronome/kit1/", 0) == 0;
+
+        if (!isLegacyDefault)
+        {
+            kept.push_back(entry);
+        }
+    }
+
+    if (kept.empty())
+    {
+        appSettings.erase(kMetronomeClickConfigSettingKey);
+    }
+    else
+    {
+        appSettings[kMetronomeClickConfigSettingKey] = std::move(kept);
+    }
+}
+} // namespace
+
+MetronomeService::MetronomeService(IPluginHost& host, nlohmann::json& appSettings,
+                                   const std::filesystem::path& resourceRoot, SendMessageFn sendMessage)
+    : mHost(host), mAppSettings(appSettings), mClickLibrary(host, resourceRoot), mSendMessage(std::move(sendMessage))
+{
+}
+
+void MetronomeService::OnIdle(bool uiVisible)
+{
+    if (!uiVisible || !mSendMessage)
+    {
+        return;
+    }
+
+    BeatPulse pulse;
+
+    if (!ConsumeBeatPulse(pulse))
+    {
+        return;
+    }
+
+    nlohmann::json msg;
+    msg["type"] = "metronomeBeat";
+    msg["beatIndex"] = pulse.beatIndex;
+    msg["beatsPerBar"] = pulse.beatsPerBar;
+    msg["level"] = BeatLevelName(pulse.level);
+    mSendMessage(msg.dump());
 }
 
 double MetronomeService::EffectiveTempoBpm() const
@@ -44,13 +147,38 @@ double MetronomeService::EffectiveTempoBpm() const
 
 void MetronomeService::ResetTransport()
 {
-    mSamplesUntilClick = 0.0;
+    mSamplesUntilTick = 0.0;
     mClickSamplesRemaining = 0;
     mClickPhase = 0.0;
     mBeatIndex = 0;
+    mTickIndex = 0;
     mClickSamplePosition = 0;
-    mClickUseHigh = false;
+    mTickVoice = ClickVoice::Low;
+    mTickGain = 1.0f;
     RequestReset();
+}
+
+bool MetronomeService::ConsumeBeatPulse(BeatPulse& pulse)
+{
+    const std::uint32_t packed = mBeatPulse.load(std::memory_order_acquire);
+
+    if (packed == 0)
+    {
+        return false;
+    }
+
+    const std::uint32_t seq = (packed >> 18) & kBeatPulseSeqMask;
+
+    if (seq == mLastBeatPulseSeq)
+    {
+        return false;
+    }
+
+    mLastBeatPulseSeq = seq;
+    pulse.beatIndex = static_cast<int>(packed & 0xFFu);
+    pulse.beatsPerBar = static_cast<int>((packed >> 8) & 0xFFu);
+    pulse.level = static_cast<BeatLevel>((packed >> 16) & 0x3u);
+    return true;
 }
 
 void MetronomeService::Render(float** outputs, int numSamples)
@@ -72,14 +200,24 @@ void MetronomeService::Render(float** outputs, int numSamples)
         return;
     }
 
+    const auto plan =
+        guidanceActive ? mGuidanceBarPlan : std::atomic_load_explicit(&mBarPlan, std::memory_order_acquire);
+
+    if (!plan || plan->beats.empty())
+    {
+        return;
+    }
+
     if (mResetPending.exchange(false, std::memory_order_acq_rel))
     {
-        mSamplesUntilClick = 0.0;
+        mSamplesUntilTick = 0.0;
         mClickSamplesRemaining = 0;
         mClickPhase = 0.0;
         mBeatIndex = 0;
+        mTickIndex = 0;
         mClickSamplePosition = 0;
-        mClickUseHigh = false;
+        mTickVoice = ClickVoice::Low;
+        mTickGain = 1.0f;
     }
 
     const double sampleRate = mHost.GetSampleRate();
@@ -91,11 +229,11 @@ void MetronomeService::Render(float** outputs, int numSamples)
 
     const double bpm =
         guidanceActive ? ClampValue(mGuidanceBpm, kMetronomeMinBpm, kMetronomeMaxBpm) : EffectiveTempoBpm();
-    const int beatsPerBar = std::max(1, guidanceActive ? mGuidanceBeatsPerBar : kMetronomeBeatsPerBar);
-    const double beatScale = guidanceActive ? std::max(0.125, mGuidanceBeatScale) : 1.0;
-    const double samplesPerBeat = sampleRate * (60.0 / std::max(1.0, bpm)) * beatScale;
+    const auto beatsPerBar = static_cast<int>(plan->beats.size());
+    const int ticksPerBeat = std::max(1, plan->ticksPerBeat);
+    const double samplesPerBeat = sampleRate * (60.0 / std::max(1.0, bpm)) * std::max(0.125, plan->beatScale);
+    const double samplesPerTick = samplesPerBeat / static_cast<double>(ticksPerBeat);
     const int clickSamples = std::max(1, static_cast<int>(sampleRate * kMetronomeClickSeconds));
-    mClickPhaseIncrement = kTwoPi * kMetronomeClickFrequencyHz / sampleRate;
 
     const double volumeDb =
         ClampValue(mVolumeDb.load(std::memory_order_relaxed), kMetronomeMinVolumeDb, kMetronomeMaxVolumeDb);
@@ -107,43 +245,52 @@ void MetronomeService::Render(float** outputs, int numSamples)
 
     const auto clickSampleSet =
         guidanceActive ? mGuidanceClickSamples : std::atomic_load_explicit(&mClickSamples, std::memory_order_acquire);
-    const bool hasSampleClick =
-        clickSampleSet && ((!clickSampleSet->low.empty() && !clickSampleSet->low.front().empty()) ||
-                           (!clickSampleSet->high.empty() && !clickSampleSet->high.front().empty()));
-
-    const std::string& activeBeatPattern = guidanceActive ? mGuidanceBeatPattern : mBeatPattern;
+    const bool hasSampleClick = clickSampleSet && !clickSampleSet->Empty();
 
     for (int frame = 0; frame < numSamples; ++frame)
     {
-        if (mSamplesUntilClick <= 0.0)
+        if (mSamplesUntilTick <= 0.0)
         {
-            const char accent = BeatAccent(activeBeatPattern, mBeatIndex);
-            const bool useHigh = (accent == 'H');
-            const bool silent = (accent == 'S');
+            const bool onBeat = (mTickIndex == 0);
+            const int beatIndex = std::min(mBeatIndex, beatsPerBar - 1);
+            const auto& beat = plan->beats[static_cast<std::size_t>(beatIndex)];
+            const bool silent = onBeat && beat.silent;
 
-            if (hasSampleClick)
+            mTickVoice = onBeat ? beat.voice : ClickVoice::Sub;
+            mTickGain = onBeat ? beat.gain : plan->subGain;
+
+            if (onBeat)
             {
-                if (!silent)
-                {
-                    const auto& preferred = useHigh ? clickSampleSet->high : clickSampleSet->low;
-                    const auto& fallback = useHigh ? clickSampleSet->low : clickSampleSet->high;
-                    const auto& selected = (!preferred.empty() && !preferred.front().empty()) ? preferred : fallback;
-                    mClickSamplesRemaining = selected.empty() ? 0 : static_cast<int>(selected.front().size());
-                    mClickSamplePosition = 0;
-                    mClickUseHigh = useHigh;
-                }
-                else
-                {
-                    mClickSamplesRemaining = 0;
-                }
+                mBeatPulse.store(PackBeatPulse(++mBeatPulseSeq, beatIndex, beatsPerBar, beat.level),
+                                 std::memory_order_release);
+            }
+
+            if (silent)
+            {
+                mClickSamplesRemaining = 0;
+            }
+            else if (hasSampleClick)
+            {
+                const auto* selected = clickSampleSet->Voice(mTickVoice);
+                mClickSamplesRemaining = selected ? static_cast<int>(selected->front().size()) : 0;
+                mClickSamplePosition = 0;
             }
             else
             {
-                mClickSamplesRemaining = silent ? 0 : clickSamples;
+                mClickSamplesRemaining = clickSamples;
+                mClickPhase = 0.0;
+                mClickPhaseIncrement = kTwoPi * FallbackClickFrequency(mTickVoice) / sampleRate;
             }
 
-            mBeatIndex = (mBeatIndex + 1) % beatsPerBar;
-            mSamplesUntilClick += samplesPerBeat;
+            ++mTickIndex;
+
+            if (mTickIndex >= ticksPerBeat)
+            {
+                mTickIndex = 0;
+                mBeatIndex = (beatIndex + 1) % beatsPerBar;
+            }
+
+            mSamplesUntilTick += samplesPerTick;
         }
 
         float clickSampleL = 0.0f;
@@ -153,19 +300,16 @@ void MetronomeService::Render(float** outputs, int numSamples)
         {
             if (hasSampleClick)
             {
-                const auto& preferred = mClickUseHigh ? clickSampleSet->high : clickSampleSet->low;
-                const auto& fallback = mClickUseHigh ? clickSampleSet->low : clickSampleSet->high;
-                const auto& selected = (!preferred.empty() && !preferred.front().empty()) ? preferred : fallback;
+                const auto* selected = clickSampleSet->Voice(mTickVoice);
 
-                if (!selected.empty() && !selected.front().empty())
+                if (selected != nullptr)
                 {
-                    const int index = mClickSamplePosition;
+                    const auto index = static_cast<std::size_t>(mClickSamplePosition);
 
-                    if (index >= 0 && static_cast<std::size_t>(index) < selected.front().size())
+                    if (mClickSamplePosition >= 0 && index < selected->front().size())
                     {
-                        clickSampleL = selected[0][static_cast<std::size_t>(index)];
-                        clickSampleR =
-                            selected.size() > 1 ? selected[1][static_cast<std::size_t>(index)] : clickSampleL;
+                        clickSampleL = (*selected)[0][index];
+                        clickSampleR = selected->size() > 1 ? (*selected)[1][index] : clickSampleL;
                     }
                 }
 
@@ -187,12 +331,59 @@ void MetronomeService::Render(float** outputs, int numSamples)
 
                 --mClickSamplesRemaining;
             }
+
+            clickSampleL *= mTickGain;
+            clickSampleR *= mTickGain;
         }
 
         outputs[0][frame] += clickSampleL * static_cast<float>(volume * panLeft);
         outputs[1][frame] += clickSampleR * static_cast<float>(volume * panRight);
-        mSamplesUntilClick -= 1.0;
+        mSamplesUntilTick -= 1.0;
     }
+}
+
+void MetronomeService::RefreshBarPlan()
+{
+    auto plan =
+        std::make_shared<const BarPlan>(BuildBarPlan(mTimeSigNum, mTimeSigDen, mGrouping, mBeatPattern, mSubdivision));
+    std::atomic_store_explicit(&mBarPlan, std::move(plan), std::memory_order_release);
+}
+
+void MetronomeService::LoadMeterFromAppSettings()
+{
+    const auto readInt = [this](const char* key, int fallback) {
+        if (mAppSettings.contains(key) && mAppSettings[key].is_number_integer())
+        {
+            return mAppSettings[key].get<int>();
+        }
+
+        return fallback;
+    };
+
+    const auto readString = [this](const char* key) {
+        if (mAppSettings.contains(key) && mAppSettings[key].is_string())
+        {
+            return mAppSettings[key].get<std::string>();
+        }
+
+        return std::string{};
+    };
+
+    mTimeSigNum = ClampBeatsPerBar(readInt(kMetronomeTimeSigNumSettingKey, kMetronomeDefaultTimeSigNum));
+    mTimeSigDen = ClampTimeSigDen(readInt(kMetronomeTimeSigDenSettingKey, kMetronomeDefaultTimeSigDen));
+    mGrouping = NormaliseGrouping(readString(kMetronomeGroupingSettingKey), mTimeSigNum);
+    mSubdivision = NormaliseSubdivisionId(readString(kMetronomeSubdivisionSettingKey));
+    mBeatPattern =
+        NormaliseBeatPattern(readString(kMetronomeBeatPatternSettingKey), mTimeSigNum, mTimeSigDen, mGrouping);
+}
+
+void MetronomeService::StoreMeterToAppSettings()
+{
+    mAppSettings[kMetronomeTimeSigNumSettingKey] = mTimeSigNum;
+    mAppSettings[kMetronomeTimeSigDenSettingKey] = mTimeSigDen;
+    mAppSettings[kMetronomeGroupingSettingKey] = mGrouping;
+    mAppSettings[kMetronomeSubdivisionSettingKey] = mSubdivision;
+    mAppSettings[kMetronomeBeatPatternSettingKey] = mBeatPattern;
 }
 
 void MetronomeService::ApplySettingsFromAppSettings()
@@ -251,6 +442,12 @@ void MetronomeService::ApplySettingsFromAppSettings()
         clickType = mAppSettings[kMetronomeLegacyClickTypeKey].get<std::string>();
     }
 
+    // The bundled kit used to be called "drum"; it is now listed by folder.
+    if (clickType == "drum" || clickType == "click")
+    {
+        clickType = kMetronomeDefaultClickType;
+    }
+
     if (!clickType.empty())
     {
         mClickType = clickType;
@@ -258,265 +455,14 @@ void MetronomeService::ApplySettingsFromAppSettings()
 
     mAppSettings[kMetronomeClickTypeSettingKey] = mClickType;
 
-    mBeatPattern.clear();
+    MigrateLegacyClickConfig(mAppSettings);
+    LoadMeterFromAppSettings();
+    StoreMeterToAppSettings();
+    RefreshBarPlan();
 
-    if (mAppSettings.contains(kMetronomeBeatPatternSettingKey) &&
-        mAppSettings[kMetronomeBeatPatternSettingKey].is_string())
-    {
-        mBeatPattern = mAppSettings[kMetronomeBeatPatternSettingKey].get<std::string>();
-    }
-
-    mAppSettings[kMetronomeBeatPatternSettingKey] = mBeatPattern;
-
-    UpdateClickConfigFromSettings();
+    const auto overrides = mAppSettings.find(kMetronomeClickConfigSettingKey);
+    mClickLibrary.Rebuild(overrides == mAppSettings.end() ? nullptr : &(*overrides));
     RefreshClickSamples(mHost.GetSampleRate());
-}
-
-void MetronomeService::UpdateClickConfigFromSettings()
-{
-    mClickConfig.clear();
-
-    auto resolveClickPath = [this](const std::string& rawPath) -> std::filesystem::path {
-        if (rawPath.empty())
-        {
-            return {};
-        }
-
-        std::filesystem::path path{rawPath};
-
-        if (path.is_absolute())
-        {
-            return path;
-        }
-
-        std::error_code ec;
-        const auto assetsRoot = mHost.GetBundledAssetsPath();
-
-        if (!assetsRoot.empty())
-        {
-            const auto candidateUi = assetsRoot / "ui" / path;
-
-            if (std::filesystem::exists(candidateUi, ec))
-            {
-                return candidateUi;
-            }
-
-            const auto candidateRoot = assetsRoot / path;
-
-            if (std::filesystem::exists(candidateRoot, ec))
-            {
-                return candidateRoot;
-            }
-        }
-
-        if (!mResourceRoot.empty())
-        {
-            const auto candidateUi = mResourceRoot / "ui" / path;
-
-            if (std::filesystem::exists(candidateUi, ec))
-            {
-                return candidateUi;
-            }
-
-            const auto candidateRoot = mResourceRoot / path;
-
-            if (std::filesystem::exists(candidateRoot, ec))
-            {
-                return candidateRoot;
-            }
-        }
-
-        return path;
-    };
-
-    const auto configIt = mAppSettings.find(kMetronomeClickConfigSettingKey);
-    bool hasValidConfig = false;
-
-    if (configIt != mAppSettings.end() && configIt->is_array())
-    {
-        for (const auto& entry : *configIt)
-        {
-            if (!entry.is_object())
-            {
-                continue;
-            }
-
-            const std::string id = entry.value("id", "");
-
-            if (id.empty())
-            {
-                continue;
-            }
-
-            ClickTypeConfig config;
-            config.id = id;
-            config.label = entry.value("label", id);
-            const std::string lowPath = entry.value("lowPath", "");
-            const std::string highPath = entry.value("highPath", "");
-
-            if (!lowPath.empty())
-            {
-                config.lowPath = resolveClickPath(lowPath);
-            }
-
-            if (!highPath.empty())
-            {
-                config.highPath = resolveClickPath(highPath);
-            }
-
-            std::error_code ec;
-            const bool lowExists = !config.lowPath.empty() && std::filesystem::exists(config.lowPath, ec);
-            const bool highExists = !config.highPath.empty() && std::filesystem::exists(config.highPath, ec);
-
-            if (!lowExists && !highExists)
-            {
-                continue;
-            }
-
-            mClickConfig.push_back(std::move(config));
-            hasValidConfig = true;
-        }
-    }
-
-    if (!hasValidConfig)
-    {
-        const std::array<std::tuple<std::string, std::string, std::string, std::string>, 1> defaults = {
-            std::make_tuple(std::string{"drum"}, std::string{"Drum"}, std::string{"metronome/kit1/low.wav"},
-                            std::string{"metronome/kit1/high.wav"}),
-        };
-
-        nlohmann::json defaultConfig = nlohmann::json::array();
-
-        for (const auto& entry : defaults)
-        {
-            const auto& id = std::get<0>(entry);
-            const auto& label = std::get<1>(entry);
-            const auto& lowPath = std::get<2>(entry);
-            const auto& highPath = std::get<3>(entry);
-            ClickTypeConfig config;
-            config.id = id;
-            config.label = label;
-            config.lowPath = resolveClickPath(lowPath);
-            config.highPath = resolveClickPath(highPath);
-            mClickConfig.push_back(config);
-
-            nlohmann::json defaultEntry;
-            defaultEntry["id"] = id;
-            defaultEntry["label"] = label;
-            defaultEntry["lowPath"] = lowPath;
-            defaultEntry["highPath"] = highPath;
-            defaultConfig.push_back(std::move(defaultEntry));
-        }
-
-        mAppSettings[kMetronomeClickConfigSettingKey] = std::move(defaultConfig);
-    }
-
-    if (mClickConfig.empty())
-    {
-        return;
-    }
-
-    if (mClickType.empty())
-    {
-        mClickType = mClickConfig.front().id;
-    }
-}
-
-const MetronomeService::ClickTypeConfig* MetronomeService::FindClickType(const std::string& id) const
-{
-    for (const auto& config : mClickConfig)
-    {
-        if (config.id == id)
-        {
-            return &config;
-        }
-    }
-
-    return mClickConfig.empty() ? nullptr : &mClickConfig.front();
-}
-
-std::shared_ptr<MetronomeService::ClickSamples> MetronomeService::BuildClickSamples(const ClickTypeConfig& config,
-                                                                                    double targetSampleRate) const
-{
-    if (targetSampleRate <= 0.0)
-    {
-        return nullptr;
-    }
-
-    auto samples = std::make_shared<ClickSamples>();
-
-    auto loadWav = [&](const std::filesystem::path& path, std::vector<std::vector<float>>& target,
-                       std::string_view label) {
-        if (path.empty())
-        {
-            return;
-        }
-
-        if (!std::filesystem::exists(path))
-        {
-            std::cerr << "[Plugin] Metronome " << label << " sample not found: " << path.generic_string() << std::endl;
-            return;
-        }
-
-        const auto bytes = util::ReadFileBytes(path);
-
-        if (bytes.empty())
-        {
-            std::cerr << "[Plugin] Metronome " << label << " sample empty: " << path.generic_string() << std::endl;
-            return;
-        }
-
-        const auto wavData = util::DecodePcmWav(bytes);
-
-        if (!wavData)
-        {
-            std::cerr << "[Plugin] Metronome " << label << " sample unsupported WAV: " << path.generic_string()
-                      << std::endl;
-            return;
-        }
-
-        auto resampled = util::ConvertToSampleRate(*wavData, targetSampleRate);
-
-        if (resampled.empty() || resampled.front().empty())
-        {
-            std::cerr << "[Plugin] Metronome " << label << " sample empty after resample: " << path.generic_string()
-                      << std::endl;
-            return;
-        }
-
-        // Channels must be the same length: Render() indexes them together.
-        std::size_t minFrames = resampled.front().size();
-
-        for (const auto& channel : resampled)
-        {
-            if (channel.empty())
-            {
-                return;
-            }
-
-            minFrames = std::min(minFrames, channel.size());
-        }
-
-        for (auto& channel : resampled)
-        {
-            if (channel.size() > minFrames)
-            {
-                channel.resize(minFrames);
-            }
-        }
-
-        target = std::move(resampled);
-    };
-
-    loadWav(config.lowPath, samples->low, "low");
-    loadWav(config.highPath, samples->high, "high");
-
-    if (samples->low.empty() && samples->high.empty())
-    {
-        return nullptr;
-    }
-
-    return samples;
 }
 
 void MetronomeService::RefreshClickSamples(double sampleRate)
@@ -526,9 +472,15 @@ void MetronomeService::RefreshClickSamples(double sampleRate)
         return;
     }
 
-    if (mClickConfig.empty())
+    if (mClickLibrary.Empty())
     {
-        UpdateClickConfigFromSettings();
+        const auto overrides = mAppSettings.find(kMetronomeClickConfigSettingKey);
+        mClickLibrary.Rebuild(overrides == mAppSettings.end() ? nullptr : &(*overrides));
+    }
+
+    if (!mBarPlan)
+    {
+        RefreshBarPlan();
     }
 
     if (sampleRate <= 0.0)
@@ -536,7 +488,7 @@ void MetronomeService::RefreshClickSamples(double sampleRate)
         return;
     }
 
-    const auto* config = FindClickType(mClickType);
+    const auto* config = mClickLibrary.Find(mClickType);
 
     if (!config)
     {
@@ -544,15 +496,15 @@ void MetronomeService::RefreshClickSamples(double sampleRate)
         return;
     }
 
-    // FindClickType falls back to the first entry when the stored id is gone;
-    // write the substitute back so the UI and settings agree with what plays.
+    // Find() falls back to the first entry when the stored id is gone; write
+    // the substitute back so the UI and settings agree with what plays.
     if (config->id != mClickType)
     {
         mClickType = config->id;
         mAppSettings[kMetronomeClickTypeSettingKey] = mClickType;
     }
 
-    auto samples = BuildClickSamples(*config, sampleRate);
+    auto samples = mClickLibrary.Load(*config, sampleRate);
     std::atomic_store_explicit(&mClickSamples, std::move(samples), std::memory_order_release);
 }
 
@@ -614,7 +566,7 @@ MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::
     if (payload.contains("clickConfig") && payload["clickConfig"].is_array())
     {
         mAppSettings[kMetronomeClickConfigSettingKey] = payload["clickConfig"];
-        UpdateClickConfigFromSettings();
+        mClickLibrary.Rebuild(&mAppSettings[kMetronomeClickConfigSettingKey]);
         RefreshClickSamples(mHost.GetSampleRate());
         outcome.stateChanged = true;
         outcome.settingsChanged = true;
@@ -634,24 +586,81 @@ MetronomeService::RequestOutcome MetronomeService::ApplyRequest(const nlohmann::
         }
     }
 
-    if (payload.contains("beatPattern") && payload["beatPattern"].is_string())
+    // The meter, its grouping, the accent pattern and the subdivision only
+    // mean anything together, so they are resolved as one and republished as a
+    // single bar plan.
+    const bool hasPattern = payload.contains("beatPattern") && payload["beatPattern"].is_string();
+    int nextNum = mTimeSigNum;
+    int nextDen = mTimeSigDen;
+    std::string nextGrouping = mGrouping;
+
+    if (payload.contains("timeSigNum") && payload["timeSigNum"].is_number_integer())
     {
-        std::string validated;
+        nextNum = ClampBeatsPerBar(payload.value("timeSigNum", mTimeSigNum));
+    }
 
-        for (const char ch : payload.value("beatPattern", std::string{}))
+    if (payload.contains("timeSigDen") && payload["timeSigDen"].is_number_integer())
+    {
+        nextDen = ClampTimeSigDen(payload.value("timeSigDen", mTimeSigDen));
+    }
+
+    if (payload.contains("grouping") && payload["grouping"].is_string())
+    {
+        nextGrouping = payload.value("grouping", std::string{});
+    }
+
+    nextGrouping = NormaliseGrouping(nextGrouping, nextNum);
+
+    const bool meterChanged = (nextNum != mTimeSigNum) || (nextDen != mTimeSigDen) || (nextGrouping != mGrouping);
+    bool planChanged = false;
+
+    if (meterChanged)
+    {
+        mTimeSigNum = nextNum;
+        mTimeSigDen = nextDen;
+        mGrouping = nextGrouping;
+
+        // A pattern is one character per beat, so it cannot survive a meter
+        // change. Re-seed it unless this same request supplies a new one.
+        if (!hasPattern)
         {
-            const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-
-            if (upper == 'H' || upper == 'L' || upper == 'S' || upper == '-' || upper == '.')
-            {
-                validated += upper;
-            }
+            mBeatPattern = DefaultBeatPattern(mTimeSigNum, mTimeSigDen, mGrouping);
         }
 
-        mBeatPattern = validated;
-        mAppSettings[kMetronomeBeatPatternSettingKey] = validated;
+        planChanged = true;
+    }
+
+    if (hasPattern)
+    {
+        mBeatPattern =
+            NormaliseBeatPattern(payload.value("beatPattern", std::string{}), mTimeSigNum, mTimeSigDen, mGrouping);
+        planChanged = true;
+    }
+
+    if (payload.contains("subdivision") && payload["subdivision"].is_string())
+    {
+        const std::string subdivision = NormaliseSubdivisionId(payload.value("subdivision", std::string{}));
+
+        if (subdivision != mSubdivision)
+        {
+            mSubdivision = subdivision;
+            planChanged = true;
+        }
+    }
+
+    if (planChanged)
+    {
+        RefreshBarPlan();
+        StoreMeterToAppSettings();
         outcome.stateChanged = true;
         outcome.settingsChanged = true;
+
+        // Restart the bar so beat one lands where the new meter says it does.
+        // Guidance owns the cursor while a take is running, so leave it alone.
+        if (meterChanged && !mGuidanceActive)
+        {
+            resetRequired = true;
+        }
     }
 
     if (outcome.stateChanged && resetRequired)
@@ -668,15 +677,29 @@ void MetronomeService::AppendStateTo(nlohmann::json& target) const
     target["volumeDb"] = mVolumeDb.load();
     target["pan"] = mPan.load();
     target["clickType"] = mClickType;
+    target["beatPattern"] = mBeatPattern;
+    target["timeSigNum"] = mTimeSigNum;
+    target["timeSigDen"] = mTimeSigDen;
+    target["grouping"] = mGrouping;
+    target["subdivision"] = mSubdivision;
 
     nlohmann::json clickTypes = nlohmann::json::array();
 
-    for (const auto& config : mClickConfig)
+    for (const auto& config : mClickLibrary.Types())
     {
         clickTypes.push_back({{"id", config.id}, {"label", config.label}});
     }
 
     target["clickTypes"] = std::move(clickTypes);
+
+    nlohmann::json subdivisions = nlohmann::json::array();
+
+    for (const auto& option : kMetronomeSubdivisions)
+    {
+        subdivisions.push_back({{"id", option.id}, {"ticksPerBeat", option.ticksPerBeat}});
+    }
+
+    target["subdivisions"] = std::move(subdivisions);
 }
 
 void MetronomeService::ActivateGuidance(const GuidanceConfig& config, bool enabled, bool forPreview)
@@ -691,7 +714,7 @@ void MetronomeService::ActivateGuidance(const GuidanceConfig& config, bool enabl
         mGuidanceActive = false;
         mGuidanceForPreview = false;
         mGuidancePreviewWasActive = false;
-        mGuidanceBeatScale = 1.0;
+        mGuidanceBarPlan.reset();
         mGuidanceClickSamples.reset();
         RequestReset();
         return;
@@ -700,19 +723,21 @@ void MetronomeService::ActivateGuidance(const GuidanceConfig& config, bool enabl
     mGuidanceActive = true;
     mGuidanceForPreview = forPreview;
     mGuidancePreviewWasActive = false;
-    mGuidanceBeatPattern = config.beatPattern;
     mGuidanceBpm =
         ClampValue(config.tempoBpm > 0.0 ? config.tempoBpm : EffectiveTempoBpm(), kMetronomeMinBpm, kMetronomeMaxBpm);
-    mGuidanceBeatsPerBar = std::max(1, config.timeSigNum);
-    mGuidanceBeatScale = 4.0 / static_cast<double>(std::max(1, config.timeSigDen));
 
-    const std::string clickType = config.clickType.empty() ? std::string{kMetronomeDefaultClickType} : config.clickType;
-    const auto* clickConfig = FindClickType(clickType);
+    // A take counts plain beats: the accents come from the capture's own
+    // pattern, and subdivisions would only fight the player's timing.
+    mGuidanceBarPlan = std::make_shared<const BarPlan>(BuildBarPlan(config.timeSigNum, config.timeSigDen, std::string{},
+                                                                    config.beatPattern, kMetronomeDefaultSubdivision));
+
+    const std::string clickType = config.clickType.empty() ? mClickType : config.clickType;
+    const auto* clickConfig = mClickLibrary.Find(clickType);
     const double sampleRate = mHost.GetSampleRate();
 
     if (clickConfig && sampleRate > 0.0)
     {
-        mGuidanceClickSamples = BuildClickSamples(*clickConfig, sampleRate);
+        mGuidanceClickSamples = mClickLibrary.Load(*clickConfig, sampleRate);
     }
     else
     {
@@ -739,7 +764,7 @@ void MetronomeService::DeactivateGuidance(bool previewOnly)
 
     mGuidanceActive = false;
     mGuidanceForPreview = false;
-    mGuidanceBeatScale = 1.0;
+    mGuidanceBarPlan.reset();
     mGuidanceClickSamples.reset();
     RequestReset();
 }

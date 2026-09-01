@@ -371,17 +371,42 @@ Real-time chromatic guitar tuner driven by DSP pitch detection.
 
 ## 16. Metronome
 
-**Key files:** `core/ui/ts/metronome.ts`
+**Key files:** `core/ui/ts/metronome.ts`, `core/ui/ts/metronomeMeters.ts`,
+`core/src/controller/MetronomeService.cpp`,
+`core/src/controller/internal/MetronomeSupport.h`
 
-Audio metronome mixed directly into the DSP output stream.
+Audio metronome mixed directly into the DSP output stream. Standalone only —
+hosted, the DAW owns the tempo and the click.
 
-- BPM control with freeform entry and ±1 nudge buttons.
-- **Tap tempo**: Calculates BPM from successive tap intervals.
+- BPM control with freeform entry, ±1 nudge buttons (Shift for 0.1) and wheel
+  over the readout.
+- **Tap tempo**: Calculates BPM from successive tap intervals; also the Space
+  bar and the footer's TAP button.
+- **Time signature**: 2/4–13/4, 3/8, 6/8, 9/8, 12/8, and the grouped odd meters
+  5/8 (3+2 · 2+3) and 7/8 (3+2+2 · 2+3+2 · 2+2+3). The grouping drives both the
+  default accents and where the beat strip breaks into clusters.
+- **Accent pattern**: one character per beat — `H` accent, `M` medium, `L`
+  normal, `S` silent — edited by clicking beats in the strip, which cycles
+  accent → medium → normal → off. Changing meter re-seeds it (beat 1 accents,
+  later group heads take a medium accent).
+- **Rhythm**: subdivisions of 1/4, 1/8, 1/8T, 1/16, 1/16T and 1/32, played from
+  the kit's quieter sub voice between beats.
+- **Click sounds**: sampled kits listed by `core/ui/metronome/kits.json`, each a
+  folder of `High`/`Low`/`Sub` WAVs. Regenerate the bundled ones with
+  `npm run build:kits`; drop in recorded samples to replace any of them. Custom
+  sounds can also be added through the `metronome.clickConfig` app setting.
 - Volume and pan controls for click track in mix.
-- Click sound selection.
-- Host sync option (locks to DAW transport BPM when available).
-- Enable/disable toggle.
+- Host sync (locks to DAW transport BPM when available).
+- Enable/disable toggle, and a live beat display driven by `metronomeBeat`.
 - Engine-side state broadcast as `metronomeState` message.
+
+**How the settings fit together.** The meter, its grouping, the accent pattern
+and the subdivision only mean anything together, so the message thread resolves
+all four into one immutable `MetronomeBarPlan` and publishes it through an
+atomic `shared_ptr`. The audio thread reads that plan and never parses a
+string, which is also what keeps a settings edit from racing the click. Riff
+capture's count-in click is the same engine with its own plan (see
+`ActivateGuidance`), so the two can never sound at once.
 
 ---
 

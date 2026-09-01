@@ -6,6 +6,7 @@
     "build": "tsc -p tsconfig.json && node scripts/assemble-html.js",
     "build:html": "node scripts/assemble-html.js",
     "build:models": "node scripts/generate-amp-models.js",
+    "build:kits": "node scripts/generate-metronome-kits.js",
     "postbuild": "node scripts/copy-vendor.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

@@ -83,7 +83,8 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `sld` | `{seq, r, i, o, d}` | Signal level frame at 20 Hz. `r`/`i`/`o` are raw input, processed input and output; `d` holds one tuple per roster node, flattened in roster order. Every tuple is `[peakDbfs, rmsDbfs, clipCount, clipped]`, rounded to 0.1 dB; `headroomDb` is derived UI-side. Frames whose `seq` does not match the held roster are dropped. |
 | `sldA` | `{seq, id, t, l, s, b}` | Analyzer telemetry for one node — levels `l`, spectrogram bins `s` and bark bands `b` in whole dBFS. Sent separately from `sld` because it is an order of magnitude larger than a level tuple. |
 | `spatialPosition` | `{nodes: [{scope, presetId?, nodeId, azimuth, elevation, distance, itdUs, ildDb, rateHz, moving}]}` | Live source position for every 3D Spatial node, ~20 Hz. Purely cosmetic: it keeps the spatial panner's puck in sync with what is being heard, and the widget falls back to the anchor position if it never arrives. Only sent while at least one such node exists. |
-| `metronomeState` | `{bpm, enabled, ...}` | Metronome state |
+| `metronomeState` | `{bpm, enabled, volumeDb, pan, clickType, clickTypes, beatPattern, timeSigNum, timeSigDen, grouping, subdivision, subdivisions}` | Metronome state. `beatPattern` is one character per beat — `H` accent, `M` medium, `L` normal, `S` silent — always exactly `timeSigNum` long. `grouping` is `"2+2+3"` for an odd meter, empty otherwise. `clickTypes` and `subdivisions` are the lists the pickers are built from. |
+| `metronomeBeat` | `{beatIndex, beatsPerBar, level}` | One per beat while the click runs and the UI is visible, for the beat display. `level` is `accent`/`medium`/`normal`/`silent`. Subdivision ticks are not sent. |
 | `layoutSaved` | `{...}` | Effect layout saved |
 | `layoutLibraryLoaded` | `{layoutLibrary}` | Layout library loaded |
 | `compositeLibrary` | `{...}` | Composite effect library |
@@ -127,7 +128,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setInputMode` | `{mode}` | Set input mode (mono/stereo) |
 | `setAmpCabState` | `{...}` | Set amp/cab enable state |
 | `setAutoLevel` | `{...}` | Legacy compatibility message; controller forces mixer-wide auto-level back off |
-| `setMetronome` | `{bpm?, enabled?, ...}` | Update metronome settings |
+| `setMetronome` | `{bpm?, enabled?, volumeDb?, pan?, clickType?, clickConfig?, beatPattern?, timeSigNum?, timeSigDen?, grouping?, subdivision?}` | Update metronome settings. The engine normalises before storing: a grouping that does not add up to the bar is dropped, and a meter change re-seeds `beatPattern` unless the same message carries one. |
 | `tuner` | `{action}` | Start/stop/configure tuner |
 | `runSignalPathTest` | `{}` | Run signal path diagnostic |
 | `previewDemoAudio` | `{audio}` | Preview demo audio clip |

@@ -25,7 +25,14 @@ void PluginController::ActivateRiffGuidance(const RiffCaptureConfig& config, boo
     guidance.timeSigNum = config.timeSigNum;
     guidance.timeSigDen = config.timeSigDen;
     guidance.beatPattern = config.beatPattern;
-    guidance.clickType = config.patternType;
+
+    // "click" and "drum" are the capture UI's own pattern kinds, not click
+    // type ids; leaving the id empty lets the take use whatever kit the
+    // metronome is set to, which is what the player just heard.
+    if (config.patternType != "click" && config.patternType != "drum")
+    {
+        guidance.clickType = config.patternType;
+    }
 
     mMetronome->ActivateGuidance(guidance, config.metronomeClickEnabled, forPreview);
 }

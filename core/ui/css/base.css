@@ -231,15 +231,6 @@ body:not(.is-standalone) .input-mode-control {
   letter-spacing: 0.06em;
 }
 
-.metronome-select {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-dark-medium);
-  background: var(--bg-dark-tertiary);
-  color: var(--text-dark-primary);
-  font-size: 12px;
-}
-
 .themed-select {
   padding: 8px 10px;
   border-radius: 8px;
@@ -249,7 +240,6 @@ body:not(.is-standalone) .input-mode-control {
   font-size: 12px;
 }
 
-.metronome-select:disabled,
 .themed-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -373,11 +363,6 @@ body:not(.is-standalone) .input-mode-control {
   -moz-appearance: textfield;
 }
 
-#metronome-bpm-slider {
-  width: 100%;
-  accent-color: var(--color-accent);
-}
-
 .metronome-play {
   width: 64px;
   height: 64px;
@@ -407,25 +392,6 @@ body:not(.is-standalone) .input-mode-control {
   font-size: 22px;
 }
 
-.metronome-pattern-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-}
-
-.metronome-pattern-input {
-  flex: 1;
-  font-family: monospace;
-  font-size: 13px;
-  padding: 4px 6px;
-  border: 1px solid var(--border-color, #444);
-  border-radius: 4px;
-  background: var(--input-bg, #2a2a2a);
-  color: var(--text-primary, #eee);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-}
 
 .metronome-footer {
   font-size: 12px;

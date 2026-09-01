@@ -75,22 +75,19 @@ namespace guitarfx
 PluginController::PluginController(IPluginHost& host) : mHost(host)
 {
     RegisterAllEffects();
-    mControlSurface =
-        std::make_unique<ControlSurfaceQueue>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mMetronome = std::make_unique<MetronomeService>(mHost, mAppSettings, mResourceRoot);
-    mTelemetry = std::make_unique<TelemetryPublisher>(
-        mHost, mPresetMixer, [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mSignalTest =
-        std::make_unique<SignalTestService>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mTuner = std::make_unique<TunerService>([this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mDemoPreview = std::make_unique<DemoPreviewService>(
-        mHost, mPresetMixer, mDSPMutex, mSignalTest->ActiveFlag(),
-        [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
-    mPracticeTool = std::make_unique<PracticeToolService>(
-        mHost, mDSPMutex,
-        [this](const std::string& message, const std::string& detail) { ReportErrorToUI(message, detail); },
-        [this](const std::string& jsonMessage) { SendMessageToUI(jsonMessage); });
+
+    // Every service publishes through these two. `this` outlives them all.
+    const auto sendToUI = [this](const std::string& json) { SendMessageToUI(json); };
+    const auto onError = [this](const std::string& msg, const std::string& detail) { ReportErrorToUI(msg, detail); };
+
+    mControlSurface = std::make_unique<ControlSurfaceQueue>(sendToUI);
+    mMetronome = std::make_unique<MetronomeService>(mHost, mAppSettings, mResourceRoot, sendToUI);
+    mTelemetry = std::make_unique<TelemetryPublisher>(mHost, mPresetMixer, sendToUI);
+    mSignalTest = std::make_unique<SignalTestService>(sendToUI);
+    mTuner = std::make_unique<TunerService>(sendToUI);
+    mDemoPreview = std::make_unique<DemoPreviewService>(mHost, mPresetMixer, mDSPMutex, mSignalTest->ActiveFlag(),
+                                                        onError, sendToUI);
+    mPracticeTool = std::make_unique<PracticeToolService>(mHost, mDSPMutex, onError, sendToUI);
 }
 
 PluginController::~PluginController()
@@ -1127,6 +1124,8 @@ void PluginController::OnIdle()
     mTuner->OnIdle();
 
     mTelemetry->OnIdle();
+
+    mMetronome->OnIdle(mUIReady && mTelemetry->IsUiVisible());
 
     if (mDemoPreview)
     {

@@ -1,0 +1,66 @@
+{
+  "kits": [
+    {
+      "id": "kit1",
+      "label": "Drum Kit",
+      "highPath": "metronome/kit1/High.wav",
+      "lowPath": "metronome/kit1/Low.wav"
+    },
+    {
+      "id": "click",
+      "label": "Click",
+      "highPath": "metronome/click/High.wav",
+      "lowPath": "metronome/click/Low.wav",
+      "subPath": "metronome/click/Sub.wav"
+    },
+    {
+      "id": "beep",
+      "label": "Beep",
+      "highPath": "metronome/beep/High.wav",
+      "lowPath": "metronome/beep/Low.wav",
+      "subPath": "metronome/beep/Sub.wav"
+    },
+    {
+      "id": "woodblock",
+      "label": "Wood Block",
+      "highPath": "metronome/woodblock/High.wav",
+      "lowPath": "metronome/woodblock/Low.wav",
+      "subPath": "metronome/woodblock/Sub.wav"
+    },
+    {
+      "id": "rim",
+      "label": "Rim",
+      "highPath": "metronome/rim/High.wav",
+      "lowPath": "metronome/rim/Low.wav",
+      "subPath": "metronome/rim/Sub.wav"
+    },
+    {
+      "id": "cowbell",
+      "label": "Cowbell",
+      "highPath": "metronome/cowbell/High.wav",
+      "lowPath": "metronome/cowbell/Low.wav",
+      "subPath": "metronome/cowbell/Sub.wav"
+    },
+    {
+      "id": "hihat",
+      "label": "Hi-Hat",
+      "highPath": "metronome/hihat/High.wav",
+      "lowPath": "metronome/hihat/Low.wav",
+      "subPath": "metronome/hihat/Sub.wav"
+    },
+    {
+      "id": "shaker",
+      "label": "Shaker",
+      "highPath": "metronome/shaker/High.wav",
+      "lowPath": "metronome/shaker/Low.wav",
+      "subPath": "metronome/shaker/Sub.wav"
+    },
+    {
+      "id": "soft",
+      "label": "Soft Kit",
+      "highPath": "metronome/soft/High.wav",
+      "lowPath": "metronome/soft/Low.wav",
+      "subPath": "metronome/soft/Sub.wav"
+    }
+  ]
+}

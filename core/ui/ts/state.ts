@@ -201,14 +201,8 @@ export const uiState: UiState = {
     "audio.nam.antiAliasPhase": 0,
     "audio.userInputCalibration.profiles": [],
     "audio.userInputCalibration.activeProfileId": null,
-    "metronome.clickConfig": [
-      {
-        id: "drum",
-        label: "Drum",
-        lowPath: "metronome/kit1/low.wav",
-        highPath: "metronome/kit1/high.wav",
-      }
-    ],
+    // The click kits come from the engine's own manifest (metronome/kits.json);
+    // this setting now only ever holds the user's own added sounds.
   },
   tone3000Session: null,
   jam: {
@@ -261,12 +255,14 @@ export const uiState: UiState = {
     source: "app",
     volumeDb: -12,
     pan: 0,
-    clickType: "click",
-    clickTypes: [
-      { id: "click", label: "Click" },
-      { id: "drum", label: "Drum" },
-      { id: "electronic", label: "Electronic" },
-    ],
+    clickType: "kit1",
+    clickTypes: [],
+    beatPattern: "HLLL",
+    timeSigNum: 4,
+    timeSigDen: 4,
+    grouping: "",
+    subdivision: "1/4",
+    subdivisions: [],
   },
   riffLibrary: {
     path: "",

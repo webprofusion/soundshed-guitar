@@ -13,6 +13,7 @@ set(TEST_SOURCES
     IRConvolutionTests.cpp
     IRReverbQualityTests.cpp
     PracticeToolCrossfadeTests.cpp
+    MetronomeServiceTests.cpp
     MultiPresetMixerTests.cpp
     NamCalibrationProbe.cpp
     NamModelCacheTests.cpp

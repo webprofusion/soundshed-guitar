@@ -4,7 +4,7 @@
           <div class="metronome-card-header">
             <span class="metronome-card-title">Metronome</span>
             <div class="metronome-header-controls">
-              <span class="metronome-source" id="metronome-source">Standalone</span>
+              <span class="metronome-source" id="metronome-source"></span>
               <button class="metronome-close-btn" id="metronome-close-btn" title="Close metronome">×</button>
             </div>
           </div>
@@ -18,19 +18,24 @@
                 <span class="metronome-value" id="metronome-volume-value">-12.0 dB</span>
               </div>
               <div class="metronome-control-block wide">
-                <span class="metronome-label">Time Signature</span>
-                <select class="metronome-select" disabled>
-                  <option selected>4/4</option>
-                  <option>3/4</option>
-                  <option>6/8</option>
-                </select>
+                <span class="metronome-label" id="metronome-timesig-label">Time Signature</span>
+                <div class="metro-select">
+                  <button type="button" class="metro-select-trigger" id="metronome-timesig-trigger" aria-labelledby="metronome-timesig-label">
+                    <span class="metro-select-label">4/4</span>
+                    <svg class="metro-select-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <div class="metro-select-panel" id="metronome-timesig-panel" hidden></div>
+                </div>
               </div>
               <div class="metronome-control-block wide">
-                <span class="metronome-label">Sound</span>
-                <select class="metronome-select" id="metronome-sound-select">
-                  <option value="click" selected>Click</option>
-                  <option value="drum">Drum</option>
-                </select>
+                <span class="metronome-label" id="metronome-sound-label">Sound</span>
+                <div class="metro-select">
+                  <button type="button" class="metro-select-trigger" id="metronome-sound-trigger" aria-labelledby="metronome-sound-label">
+                    <span class="metro-select-label">Drum Kit</span>
+                    <svg class="metro-select-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <div class="metro-select-panel" id="metronome-sound-panel" hidden></div>
+                </div>
               </div>
               <div class="metronome-control-block">
                 <span class="metronome-label knob-label">Pan</span>
@@ -48,25 +53,35 @@
                 <span class="metronome-label">BPM</span>
                 <div class="metronome-bpm-control">
                   <div class="metronome-bpm-buttons">
-                    <button class="metronome-bpm-btn" id="metronome-bpm-up">▲</button>
-                    <button class="metronome-bpm-btn" id="metronome-bpm-down">▼</button>
+                    <button class="metronome-bpm-btn" id="metronome-bpm-up" type="button" title="Faster (hold Shift for 0.1)" aria-label="Increase tempo">▲</button>
+                    <button class="metronome-bpm-btn" id="metronome-bpm-down" type="button" title="Slower (hold Shift for 0.1)" aria-label="Decrease tempo">▼</button>
                   </div>
-                  <input type="number" id="metronome-bpm" min="30" max="300" step="1" class="metronome-bpm-input" />
+                  <input type="number" id="metronome-bpm" min="30" max="300" step="0.1" class="metronome-bpm-input" title="Scroll to change, Shift for tenths" aria-label="Tempo in beats per minute" />
                 </div>
-                <input type="range" id="metronome-bpm-slider" min="30" max="300" step="1" />
               </div>
-              <button class="metronome-play" id="metronome-toggle" aria-label="Toggle metronome">
+              <button class="metronome-tap" id="metronome-tap" type="button" title="Tap tempo (or press Space)">TAP</button>
+              <div class="metronome-control-block wide metronome-rhythm-block">
+                <span class="metronome-label" id="metronome-rhythm-label">Rhythm</span>
+                <div class="metro-select">
+                  <button type="button" class="metro-select-trigger" id="metronome-rhythm-trigger" aria-labelledby="metronome-rhythm-label">
+                    <span class="metro-select-label">1/4</span>
+                    <svg class="metro-select-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <div class="metro-select-panel" id="metronome-rhythm-panel" hidden></div>
+                </div>
+              </div>
+              <button class="metronome-play" id="metronome-toggle" type="button" aria-label="Start metronome">
                 <span class="metronome-play-icon">
                   <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 </span>
               </button>
             </div>
-            <div class="metronome-pattern-row">
-              <label class="metronome-label">Beat Pattern</label>
-              <input type="text" id="metronome-accent-pattern" maxlength="16" placeholder="HLLL" class="metronome-pattern-input" title="H=High  L=Low  S=Silent" />
-            </div>
+
+            <div class="metro-beats" id="metronome-beats" role="group" aria-label="Beat accents"></div>
+
             <div class="metronome-footer">
               <span id="metronome-status">Stopped</span>
+              <span class="metronome-hint">Click a beat to cycle accent → medium → normal → off</span>
             </div>
           </div>
         </div>

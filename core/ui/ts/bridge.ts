@@ -101,7 +101,11 @@ export function setMetronome(payload: {
   pan?: number;
   clickType?: string;
   beatPattern?: string;
-  clickConfig?: Array<{ id: string; label?: string; lowPath?: string; highPath?: string }>;
+  timeSigNum?: number;
+  timeSigDen?: number;
+  grouping?: string;
+  subdivision?: string;
+  clickConfig?: Array<{ id: string; label?: string; lowPath?: string; highPath?: string; subPath?: string }>;
 }): void {
   postMessage({ type: "setMetronome", ...payload });
 }

@@ -63,7 +63,7 @@ Prefer adding to one of these over adding another member to the controller:
 
 | Service (`core/src/controller/`) | Owns                                                                 |
 | -------------------------------- | -------------------------------------------------------------------- |
-| `MetronomeService`               | Click track and riff-capture guidance click — one engine, guidance overrides it |
+| `MetronomeService`               | Click track and riff-capture guidance click — one engine, guidance overrides it. Meter/accents/subdivision are resolved into an immutable bar plan (`MetronomeSupport.h`); the sounds come from `MetronomeClickLibrary` |
 | `TelemetryPublisher`             | The three metering feeds, their rate limits and the diagnostics roster |
 | `ControlSurfaceQueue`            | MIDI in, and setlist/scene requests parked for the message thread     |
 | `PracticeToolService`            | Backing-track playback with tempo/pitch shift and its own EQ — split across `PracticeToolService.cpp` (lifecycle, loading, transport, audio-thread mix) and `PracticeToolServiceRender.cpp` (the background render thread) |
