@@ -81,15 +81,20 @@ namespace
 //  * Two bursts is Oboe's own recommendation for a low-latency stream: one
 //    playing, one being filled. Fewer invites underruns; more is latency.
 //
-// The value reaches the device two ways. As the holder's preferred setup it
-// applies to any open that has no saved setup to restore, which includes the
-// first run: there the open waits for the microphone permission and happens
-// long after MainWindow has been constructed. Once a device is open it is
-// applied directly, which covers a setup saved by a previous run, and lets the
-// value be changed for tuning without a rebuild:
+// The value reaches the device two ways. As the holder's preferred setup, the
+// default applies to any open that has no saved setup to restore, which
+// includes the first run: there the open waits for the microphone permission
+// and happens long after MainWindow has been constructed. A saved setup wins
+// over the default from then on. The audio settings dialog writes one, and so
+// does a clean exit, so a size chosen in the dialog sticks across launches.
+//
+// The property is different: while it is set it is enforced whenever a device
+// is open, saved setup or not, which is what makes tuning without a rebuild
+// possible. Clear it to hand control back to the dialog.
 //
 //     adb shell setprop debug.soundshed.audio.buffer 384
 //     adb shell am force-stop com.soundshed.guitar   (then relaunch)
+//     adb shell setprop debug.soundshed.audio.buffer '""'   (clear it again)
 //
 // Set it to 0 to keep JUCE's default.
 namespace
@@ -99,7 +104,8 @@ namespace
     // Two native bursts, see above.
     constexpr int kDefaultAndroidBufferFrames = 192;
 
-    int readRequestedBufferFrames()
+    // The tuning property, or nothing if it is not set.
+    std::optional<int> readRequestedBufferFrames()
     {
         char value[PROP_VALUE_MAX] = {};
 
@@ -111,11 +117,21 @@ namespace
                 return parsed;
         }
 
-        return kDefaultAndroidBufferFrames;
+        return std::nullopt;
     }
 
+    // Enforces the tuning property, if set, on the open device.
     void applyAndroidBufferSize (juce::StandalonePluginHolder& holder)
     {
+        // Only the property is enforced. Without it the device keeps whatever
+        // it opened with: the default from the preferred setup, or a saved
+        // setup, which is how a size chosen in the audio settings dialog is
+        // left alone rather than snapped back on the next change message.
+        const auto requested = readRequestedBufferFrames();
+
+        if (! requested.has_value() || *requested <= 0)
+            return;
+
         // Nothing to do until a device exists. On a first run the open is
         // deferred behind the microphone permission, and that open takes its
         // buffer size from the preferred setup handed to the holder instead.
@@ -123,20 +139,15 @@ namespace
         if (holder.deviceManager.getCurrentAudioDevice() == nullptr)
             return;
 
-        const auto requested = readRequestedBufferFrames();
-
-        if (requested <= 0)
-            return;
-
         auto setup = holder.deviceManager.getAudioDeviceSetup();
 
-        if (setup.bufferSize == requested)
+        if (setup.bufferSize == *requested)
             return;
 
-        juce::Logger::writeToLog ("[audio] requesting buffer size " + juce::String (requested)
+        juce::Logger::writeToLog ("[audio] requesting buffer size " + juce::String (*requested)
                                   + " (was " + juce::String (setup.bufferSize) + ")");
 
-        setup.bufferSize = requested;
+        setup.bufferSize = *requested;
 
         if (const auto error = holder.deviceManager.setAudioDeviceSetup (setup, true); error.isNotEmpty())
             juce::Logger::writeToLog ("[audio] buffer size request failed: " + error);
@@ -198,10 +209,10 @@ public:
         mPluginHolder->startPlaying();
 
 #if JUCE_ANDROID
-        // The override hangs off the device manager's change notifications so
-        // it covers every open: the one the holder's constructor already did,
-        // the deferred first-run open behind the microphone permission, and
-        // any later reopen.
+        // The tuning override hangs off the device manager's change
+        // notifications so it covers every open: the one the holder's
+        // constructor already did, the deferred first-run open behind the
+        // microphone permission, and any later reopen.
         mPluginHolder->deviceManager.addChangeListener (this);
         applyAndroidBufferSize (*mPluginHolder);
 #endif
@@ -274,7 +285,8 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override
     {
         // Also fires for MIDI device changes and for the open that happened
-        // before this window existed; applying the same size again is a no-op.
+        // before this window existed. Without the tuning property set this
+        // does nothing, and with it applying the same size again is a no-op.
         if (mPluginHolder != nullptr)
             applyAndroidBufferSize (*mPluginHolder);
     }
@@ -450,14 +462,15 @@ private:
         // Buffer size for any open that has no saved setup to restore, which
         // includes the first run: there the open waits for the microphone
         // permission and happens after MainWindow has been constructed. A saved
-        // setup takes precedence over this; the override MainWindow applies once
-        // a device is open covers that case. See the Android audio notes above.
+        // setup takes precedence over this, and only the tuning property, which
+        // MainWindow enforces once a device is open, overrides a saved one. See
+        // the Android audio notes above.
         std::optional<juce::AudioDeviceManager::AudioDeviceSetup> preferredSetup;
 
-        if (const auto requestedBufferFrames = readRequestedBufferFrames(); requestedBufferFrames > 0)
+        if (const auto bufferFrames = readRequestedBufferFrames().value_or (kDefaultAndroidBufferFrames); bufferFrames > 0)
         {
             preferredSetup.emplace();
-            preferredSetup->bufferSize = requestedBufferFrames;
+            preferredSetup->bufferSize = bufferFrames;
         }
 
         const auto* preferredSetupOptions = preferredSetup.has_value() ? &*preferredSetup : nullptr;

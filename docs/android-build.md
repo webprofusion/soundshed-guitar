@@ -13,13 +13,14 @@ android/
   settings.gradle.kts     Gradle project definition
   build.gradle.kts        Root build; pins the Android Gradle Plugin
   gradle.properties       Build-wide flags, including which ABIs to build
+  deploy.bat              Installs the APK on the first connected phone and launches it
   local.properties        Machine-local SDK path (not checked in)
   app/
     build.gradle.kts      App module: NDK/CMake wiring, JUCE Java sources, UI assets
     src/main/AndroidManifest.xml
     src/main/java/com/soundshed/guitar/
       SoundshedApp.java   Unpacks the web UI from APK assets on first run
-      MainActivity.java   JuceActivity subclass; requests microphone access
+      MainActivity.java   Plain Activity; asks for microphone access and sustained performance
 ```
 
 ## Prerequisites
@@ -105,6 +106,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.soundshed.guitar/.MainActivity
 adb logcat -s SoundshedGuitar JUCE
 ```
+
+On Windows, `deploy.bat [release|debug] [nolaunch]` does the first two steps
+against the first connected phone or tablet, skipping emulators, and finds
+`adb` from `local.properties`. The release APK is the default.
 
 ## How it differs from the desktop builds
 
@@ -404,18 +409,21 @@ device — twenty 96-frame bursts on typical hardware — which is a media-app
 default, not an amp-sim one. `juce/source/Main.cpp` asks for two bursts
 instead, 192 frames, and hands the value to the device two ways.
 
-As the holder's *preferred setup*, it applies to any open that has no saved
-setup to restore. That includes the first run, where JUCE defers the open
+As the holder's *preferred setup*, the default applies to any open that has no
+saved setup to restore. That includes the first run, where JUCE defers the open
 until the microphone permission is granted — long after the main window has
-been constructed and past any override it could apply directly.
+been constructed. A saved setup wins over the default from then on; the audio
+settings dialog writes one, and so does a clean exit, so a size chosen in the
+dialog sticks across launches.
 
-Once a device is open it is applied directly, from the device manager's change
-notifications, which covers a setup saved by a previous run and lets the value
-be changed for tuning without a rebuild:
+The property is different: while it is set it is enforced whenever a device is
+open, saved setup or not, which is what makes tuning without a rebuild
+possible. Clear it to hand control back to the dialog:
 
 ```bash
 adb shell setprop debug.soundshed.audio.buffer 384
 adb shell am force-stop com.soundshed.guitar   # then relaunch
+adb shell setprop debug.soundshed.audio.buffer '""'   # clear it again
 ```
 
 `0` keeps JUCE's default.
@@ -436,3 +444,18 @@ thread. The AAudio callback is a real-time thread while the helpers are
 ordinary ones, so a callback spinning on a helper the scheduler has parked on a
 little core, or behind the callback on its own core, is a missed deadline; and
 at one-burst blocks the hand-off costs about as much as the work.
+
+### Sustained performance mode
+
+`MainActivity` asks for Android's sustained performance mode
+(`Window.setSustainedPerformanceMode`) when the device reports support. The
+callback load is steady, and on the default governor the cores ramp up under
+it and back down between callbacks; the ramp is where two-burst deadlines get
+missed. The mode pins the clocks to a level the device can hold without
+throttling — below peak, but constant. It applies while the activity's window
+is visible. The log says which way it went:
+
+```
+SoundshedGuitar: Sustained performance mode enabled
+SoundshedGuitar: Sustained performance mode not supported on this device
+```

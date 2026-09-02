@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.util.Log;
 import android.view.View;
 
 /**
@@ -28,6 +30,8 @@ import android.view.View;
  */
 public class MainActivity extends Activity
 {
+    private static final String TAG = "SoundshedGuitar";
+
     private static final int REQUEST_RECORD_AUDIO = 1001;
 
     @Override
@@ -37,10 +41,38 @@ public class MainActivity extends Activity
 
         super.onCreate (savedInstanceState);
 
+        requestSustainedPerformance();
+
         // Without RECORD_AUDIO the audio device opens with no input and the amp
         // has nothing to process.
         if (checkSelfPermission (Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             requestPermissions (new String[] { Manifest.permission.RECORD_AUDIO }, REQUEST_RECORD_AUDIO);
+    }
+
+    /**
+     * Asks for a clock the device can hold rather than a peak it cannot.
+     *
+     * <p>The audio callback runs once per hardware burst — two milliseconds at
+     * 48 kHz — and the DSP inside it is a steady load, not a burst of work. On
+     * the default governor the cores ramp up under load and back down between
+     * callbacks, and the ramp is where deadlines get missed. Sustained
+     * performance mode pins the CPU and GPU to a level the device can hold
+     * without thermal throttling: below peak, but constant, which is what a
+     * real-time deadline wants. It applies while this window is visible, and
+     * devices that do not implement it say so up front.
+     */
+    private void requestSustainedPerformance()
+    {
+        final PowerManager power = getSystemService (PowerManager.class);
+
+        if (power == null || ! power.isSustainedPerformanceModeSupported())
+        {
+            Log.i (TAG, "Sustained performance mode not supported on this device");
+            return;
+        }
+
+        getWindow().setSustainedPerformanceMode (true);
+        Log.i (TAG, "Sustained performance mode enabled");
     }
 
     /** Mirrors com.rmsl.juce.JuceActivity.initEdgeToEdge() for minSdk 29+. */
