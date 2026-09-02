@@ -76,6 +76,21 @@ android {
         release {
             isMinifyEnabled = false
 
+            // AGP configures CMake as RelWithDebInfo for every non-debuggable
+            // variant, which is CMake's -O2 -g. JUCE attaches its LTO flags and
+            // its -O3 to the Release configuration only, so the generator
+            // expressions in juce/ never matched here and "release" shipped
+            // without LTO. CMake takes the last -D for a variable, and build
+            // type arguments come after AGP's own, so this wins.
+            //
+            // AGP still gets its symbols: the NDK toolchain adds -g to every
+            // configuration, and AGP strips the packaged library itself.
+            externalNativeBuild {
+                cmake {
+                    arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
+                }
+            }
+
             // Signed with the debug key so a release build can actually be
             // installed and played through. This is for measuring the real
             // thing on a device — a debug build compiles the DSP at -O0, which

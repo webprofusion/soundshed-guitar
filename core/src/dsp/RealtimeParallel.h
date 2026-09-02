@@ -15,6 +15,20 @@ namespace guitarfx
 {
 namespace rtparallel
 {
+/// Whether the realtime DSP may fan work out to helper threads on this platform.
+///
+/// Android: the AAudio callback runs SCHED_FIFO while the helpers are ordinary
+/// threads, so a callback spinning on a helper the scheduler has parked on a
+/// little core, or behind the callback on its own core, is a missed deadline.
+/// At one-burst blocks the hand-off also costs about as much as the work. The
+/// dual-lane executor below, the graph executor's level workers and the mixer's
+/// per-preset workers all key off this.
+#if defined(__ANDROID__)
+inline constexpr bool kParallelDspSupported = false;
+#else
+inline constexpr bool kParallelDspSupported = true;
+#endif
+
 inline void CpuRelax() noexcept
 {
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
@@ -92,6 +106,11 @@ class DualLaneExecutor
 
     DualLaneExecutor()
     {
+        if (!kParallelDspSupported)
+        {
+            return;
+        }
+
         const unsigned int hw = std::thread::hardware_concurrency();
 
         if (hw < 2)

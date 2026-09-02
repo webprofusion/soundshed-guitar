@@ -4,6 +4,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/effects/ParametricEQEffect.h"
+#include "dsp/RealtimeParallel.h"
 
 #include <algorithm>
 #include <array>
@@ -546,7 +547,7 @@ class MultiPresetMixer
     bool mPrepared = false;
     double mMasterGain = 1.0;
     bool mLimiterEnabled = false;
-    std::atomic<bool> mMultiThreadedProcessingEnabled{true};
+    std::atomic<bool> mMultiThreadedProcessingEnabled{rtparallel::kParallelDspSupported};
 
     // Global settings
     bool mAutoLevelInput = false;

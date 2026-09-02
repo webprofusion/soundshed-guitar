@@ -66,9 +66,16 @@ tone or latency from a debug build.
 cd android && ./gradlew assembleRelease -Pssg.abis=arm64-v8a
 ```
 
-That maps to `CMAKE_BUILD_TYPE=Release`, which brings `-O3`, `-ffast-math` and
+That configures CMake as `Release`, which brings `-O3`, `-ffast-math` and
 LTO, and it also drops `JUCE_FORCE_DEBUG` (see below). The APK lands in
 `android/app/build/outputs/apk/release/`.
+
+The build type is set explicitly in `app/build.gradle.kts`. Left to itself,
+AGP configures CMake as `RelWithDebInfo` for any non-debuggable variant —
+CMake's `-O2 -g` — and JUCE attaches its LTO flags and its `-O3` to the
+Release configuration only, so a release build would silently ship without
+them. AGP loses nothing by the override: the NDK toolchain adds `-g` to every
+configuration, and AGP strips the packaged library itself.
 
 The release variant is signed with the **debug** keystore so it can be installed
 and played through directly. That is a testing convenience, not a shipping
@@ -96,7 +103,7 @@ Install and launch:
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.soundshed.guitar/.MainActivity
-adb logcat -s SoundshedGuitar juce
+adb logcat -s SoundshedGuitar JUCE
 ```
 
 ## How it differs from the desktop builds
@@ -389,3 +396,43 @@ everywhere but can be filtered on capability.
 The emulator has no low-latency audio path and routes the host microphone, so
 treat it as a way to check that the app boots and the UI works, not as a way to
 judge tone or latency.
+
+### Buffer size
+
+JUCE's default on Android is 40 ms of output buffering on a "low latency"
+device — twenty 96-frame bursts on typical hardware — which is a media-app
+default, not an amp-sim one. `juce/source/Main.cpp` asks for two bursts
+instead, 192 frames, and hands the value to the device two ways.
+
+As the holder's *preferred setup*, it applies to any open that has no saved
+setup to restore. That includes the first run, where JUCE defers the open
+until the microphone permission is granted — long after the main window has
+been constructed and past any override it could apply directly.
+
+Once a device is open it is applied directly, from the device manager's change
+notifications, which covers a setup saved by a previous run and lets the value
+be changed for tuning without a rebuild:
+
+```bash
+adb shell setprop debug.soundshed.audio.buffer 384
+adb shell am force-stop com.soundshed.guitar   # then relaunch
+```
+
+`0` keeps JUCE's default.
+
+Two things about what the number means. It is the output stream's buffering
+depth, not the processing block: JUCE's Oboe device never sets
+frames-per-callback, so AAudio delivers one hardware burst per callback
+whatever is requested, and raising the value only adds jitter margin. And two
+bursts is Oboe's own recommendation for a low-latency stream — one playing,
+one being filled — so treat anything smaller as an experiment.
+
+### Parallel DSP is off
+
+The core can spread stereo work and parallel graph branches over helper
+threads. On Android that is disabled at compile time — `kParallelDspSupported`
+in `core/src/dsp/RealtimeParallel.h` — and everything runs on the audio
+thread. The AAudio callback is a real-time thread while the helpers are
+ordinary ones, so a callback spinning on a helper the scheduler has parked on a
+little core, or behind the callback on its own core, is a missed deadline; and
+at one-burst blocks the hand-off costs about as much as the work.

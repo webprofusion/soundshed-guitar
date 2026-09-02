@@ -5,6 +5,7 @@
 #include "dsp/effects/MixerEffect.h"
 #include "dsp/effects/InputAnalyzerEffect.h"
 #include "dsp/effects/CompositeEffectProcessor.h"
+#include "dsp/RealtimeParallel.h"
 #include "resources/ResourceLibrary.h"
 
 #include <algorithm>
@@ -826,7 +827,7 @@ void SignalGraphExecutor::Prepare(double sampleRate, int maxBlockSize)
     }
 
     const unsigned int hw = std::thread::hardware_concurrency();
-    const int hardwareWorkerBudget = static_cast<int>(hw > 1 ? hw - 1 : 0);
+    const int hardwareWorkerBudget = rtparallel::kParallelDspSupported ? static_cast<int>(hw > 1 ? hw - 1 : 0) : 0;
     const int graphWorkerLimit = std::max(0, static_cast<int>(maxLevelWidth) - 1);
     const int workerCount = std::min({hardwareWorkerBudget, graphWorkerLimit, kMaxParallelWorkers});
     constexpr int kMinLevelParallelWorkUnits = 1800;

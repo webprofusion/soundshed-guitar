@@ -611,6 +611,10 @@ void MultiPresetMixer::SetPresetSolo(const std::string& presetId, bool solo)
 
 void MultiPresetMixer::SetMultiThreadedProcessingEnabled(bool enabled)
 {
+    // Platforms that cannot schedule the helpers safely stay single-threaded
+    // whatever the caller asks for; see RealtimeParallel.h.
+    enabled = enabled && rtparallel::kParallelDspSupported;
+
     const bool previous = mMultiThreadedProcessingEnabled.exchange(enabled, std::memory_order_acq_rel);
 
     if (previous == enabled)
