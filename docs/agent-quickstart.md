@@ -80,8 +80,11 @@ header and definitions in the files above.
 whichever file above owns that feature. A new file needs registering in
 `core/CMakeLists.txt` (`GUITARFX_CORE_SOURCES`).
 
-**Size budget:** `node tools/check-cpp-file-sizes.js` fails if a source file
-grows past 800 lines, or if a file already over it gets bigger. CI runs this
+**Size budget:** `node tools/check-cpp-file-sizes.js` fails if an unpinned source
+file is over 800 lines, or if one of the already-listed files grows past its
+pinned ceiling. Pins sit 20% above the file as last measured, so ordinary edits
+to a known-large file pass and the check only fires on real growth — but new
+files still have to come in under 800. CI runs this
 (`.github/workflows/cpp-structure.yml`). Re-pin deliberately with `--update`.
 
 ## Common Agent Tasks

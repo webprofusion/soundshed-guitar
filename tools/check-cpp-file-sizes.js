@@ -10,6 +10,20 @@
  *   node tools/check-cpp-file-sizes.js            # verify
  *   node tools/check-cpp-file-sizes.js --update   # re-pin the allowlist
  *
+ * Two numbers, doing two different jobs:
+ *
+ *   BUDGET   what a file has to come in under to stay out of the allowlist. This
+ *            is the standard for anything new, and it does not move.
+ *   HEADROOM how much an already-listed file may grow before the check fires.
+ *            Pins used to sit exactly on the measured line count, so any edit to
+ *            an already-large file failed — which turns a review signal into a
+ *            chore, because the fix was always to re-pin, and a pin you re-pin on
+ *            sight means nothing. With headroom, ordinary edits pass and the check
+ *            only fires on real growth.
+ *
+ * So the known offenders get room to be worked on; new files still have to earn
+ * their place under the budget.
+ *
  * This is the C++ counterpart of core/ui/scripts/check-file-sizes.js.
  */
 
@@ -19,7 +33,13 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const ALLOWLIST = path.join(__dirname, 'cpp-file-size-allowlist.json');
 
+/// What a file not already in the allowlist has to come in under.
 const BUDGET = 800;
+
+/// Growth allowed above a pinned file's measured size before the check fires.
+const HEADROOM = 1.2;
+
+const ceilingFor = (lines) => Math.ceil(lines * HEADROOM);
 
 // First-party sources only. Vendored trees (juce/JUCE, juce/ASIOSDK, build
 // outputs, core/src/compat) are somebody else's problem.
@@ -66,9 +86,12 @@ function main() {
   const over = [...sizes.entries()].filter(([, lines]) => lines > BUDGET).sort((a, b) => b[1] - a[1]);
 
   if (process.argv.includes('--update')) {
-    const allowed = Object.fromEntries(over);
-    fs.writeFileSync(ALLOWLIST, `${JSON.stringify({ budget: BUDGET, allowed }, null, 2)}\n`, 'utf8');
-    console.log(`[check-cpp-file-sizes] allowlist re-pinned: ${over.length} file(s) over ${BUDGET} lines.`);
+    const allowed = Object.fromEntries(over.map(([file, lines]) => [file, ceilingFor(lines)]));
+    fs.writeFileSync(ALLOWLIST, `${JSON.stringify({ budget: BUDGET, headroom: HEADROOM, allowed }, null, 2)}\n`, 'utf8');
+    console.log(
+      `[check-cpp-file-sizes] allowlist re-pinned: ${over.length} file(s) over ${BUDGET} lines, ` +
+        `each with ${Math.round((HEADROOM - 1) * 100)}% headroom.`
+    );
     return;
   }
 
@@ -84,14 +107,23 @@ function main() {
 
   for (const [file, lines] of over) {
     const ceiling = allowed[file];
-    if (ceiling === undefined) failures.push(`${file} — ${lines} lines, budget is ${BUDGET} (new file over budget)`);
+    // Not necessarily a new file: one that was under the budget and has just crossed
+    // it lands here too, which is the point — that is the moment to split it.
+    if (ceiling === undefined) failures.push(`${file} — ${lines} lines, over the ${BUDGET}-line budget and not pinned`);
     else if (lines > ceiling) failures.push(`${file} — grew to ${lines} lines, was ${ceiling}`);
   }
 
   for (const [file, ceiling] of Object.entries(allowed)) {
     const lines = sizes.get(file);
-    if (lines === undefined) improvements.push(`${file} — gone (was ${ceiling})`);
-    else if (lines < ceiling) improvements.push(`${file} — ${ceiling} to ${lines} lines`);
+    if (lines === undefined) {
+      improvements.push(`${file} — gone (was ${ceiling})`);
+      continue;
+    }
+    // Compare against what the pin *would* be, not the raw line count: with headroom
+    // every file sits below its ceiling, so a plain `lines < ceiling` would report
+    // every pinned file as improved on every run.
+    const tightened = ceilingFor(lines);
+    if (tightened < ceiling) improvements.push(`${file} — ceiling ${ceiling} to ${tightened} (${lines} lines)`);
   }
 
   for (const note of improvements) console.log(`[check-cpp-file-sizes] improved: ${note}`);
