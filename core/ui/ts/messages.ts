@@ -10,7 +10,7 @@ import { updateDSPPerformancePlot, updateSignalDiagnosticsView } from "./views.j
 import { refreshSettingsView, handleUserInputCalibrationDiagnosticsUpdate } from "./settings.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete } from "./riffLibrary.js";
 import { applyPracticeToolFileLoaded, applyPracticeToolPlaybackEnded, applyPracticeToolTransportState } from "./practiceTool.js";
-import { getRiffLibrary, postMessage, requestGlobalChainState } from "./bridge.js";
+import { getRiffLibrary, postMessage, requestGlobalChainState, requestSignalDiagnosticsRoster } from "./bridge.js";
 import { refreshEffectPresetsFlyout, applySpatialPositionUpdate, handleHostedPluginResourceLoadFailed, handleHostedPluginResourceLoadCompleted, handleNodeResourceBrowseCancelled, refreshSelectedNodeParams, renderSignalPathBar, updateSelectedNodeAnalyzerPanel, updateSelectedNodeDspStatus, updateSelectedNodePeakMeter } from "./signalPath.js";
 import { refreshFxSelector } from "./fxSelector.js";
 import { applyEnvironmentState, applyMetronomeBeat, applyMetronomeState } from "./metronome.js";
@@ -19,7 +19,7 @@ import { applyToneSharingAppSettings, registerInstalledToneSharingPackFromImport
 import { applyJamAppSettings } from "./jam.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import type { AppSettings, AutomationRegistryEntry, AutomationSlot, BlendLibrary, CompositePreset, CustomEffectLibrary, DSPPerformanceStats, GlobalSignalChainConfig, InputAnalyzerTelemetry, LibraryResource, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, PresetFolder, ResourceLibrary, ResourceRef, RiffLibrary, Setlist, SignalDiagnosticsAnalyzerFrame, SignalDiagnosticsFrame, SignalDiagnosticsRoster, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, StoredEffectPreset, UiSettings, UiViewState } from "./types.js";
-import { SIGNAL_DIAGNOSTICS_TUPLE_LENGTH } from "./types.js";
+import { SIGNAL_DIAGNOSTICS_NODE_TUPLE_LENGTH, SIGNAL_DIAGNOSTICS_TUPLE_LENGTH } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry, migratePresetNodeTypes, setNodeParam } from "./presetV2.js";
 import { handleResourceDataMessage } from "./archiveUtils.js";
@@ -170,6 +170,19 @@ let debugSnapshotTimer: number | null = null;
 let signalDiagnosticsRoster: SignalDiagnosticsRoster | null = null;
 const signalDiagnosticsAnalyzerByNodeId = new Map<string, InputAnalyzerTelemetry>();
 
+/** Frames arrive at 20 Hz; one roster request per second is enough to recover. */
+const SIGNAL_DIAGNOSTICS_ROSTER_RETRY_MS = 1000;
+let signalDiagnosticsRosterRequestedAt = 0;
+
+function requestSignalDiagnosticsRosterThrottled(): void {
+  const now = Date.now();
+  if (now - signalDiagnosticsRosterRequestedAt < SIGNAL_DIAGNOSTICS_ROSTER_RETRY_MS) {
+    return;
+  }
+  signalDiagnosticsRosterRequestedAt = now;
+  requestSignalDiagnosticsRoster();
+}
+
 function signalDiagnosticsMetrics(values: number[], offset: number): SignalLevelMetrics {
   const peakDbfs = values[offset];
   return {
@@ -203,20 +216,28 @@ function applySignalDiagnosticsFrame(frame: SignalDiagnosticsFrame): boolean {
   // A frame that predates the roster we hold describes a different node set — drop it
   // and wait for the matching roster rather than mismapping levels onto the wrong nodes.
   if (!roster || frame?.seq !== roster.seq || !Array.isArray(frame.d)) {
+    // Nothing will arrive on its own: rosters are only sent when the node set changes,
+    // so with none held (or a stale one) this drops every frame forever. Frames are the
+    // signal that the backend is streaming and we cannot read it, so ask for a roster.
+    if (Array.isArray(frame?.d)) {
+      requestSignalDiagnosticsRosterThrottled();
+    }
     return false;
   }
-  if (frame.d.length !== roster.nodes.length * SIGNAL_DIAGNOSTICS_TUPLE_LENGTH) {
+  if (frame.d.length !== roster.nodes.length * SIGNAL_DIAGNOSTICS_NODE_TUPLE_LENGTH) {
     return false;
   }
 
   const nodes: SignalLevelNodeMetrics[] = roster.nodes.map((entry, index) => {
-    const [scope, presetId, nodeId, nodeType, channelCount] = entry;
+    const [scope, presetId, nodeId, nodeType] = entry;
+    const offset = index * SIGNAL_DIAGNOSTICS_NODE_TUPLE_LENGTH;
     const node: SignalLevelNodeMetrics = {
       scope,
       nodeId,
       nodeType,
-      channelCount,
-      levels: signalDiagnosticsMetrics(frame.d, index * SIGNAL_DIAGNOSTICS_TUPLE_LENGTH),
+      // Per-frame, not from the roster: it follows the signal, not the node set.
+      channelCount: frame.d[offset + SIGNAL_DIAGNOSTICS_TUPLE_LENGTH],
+      levels: signalDiagnosticsMetrics(frame.d, offset),
     };
     if (presetId) {
       node.presetId = presetId;

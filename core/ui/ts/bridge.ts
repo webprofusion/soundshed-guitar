@@ -89,6 +89,18 @@ export function setMasterGain(gain: number): void {
   appendLog(`setMasterGain → ${gain.toFixed(3)}`);
 }
 
+/**
+ * Asks the backend for a fresh signal-diagnostics roster.
+ *
+ * The roster is only sent when the node set changes, so a UI that loaded after it went
+ * out — a reload, or a panel opened later in the session — can be holding none at all,
+ * and then silently drops every level frame it receives. This is the way back: the
+ * backend treats the message as "the UI is up and wants a roster" and re-sends one.
+ */
+export function requestSignalDiagnosticsRoster(): void {
+  postMessage({ type: "setSignalDiagnosticsEnabled", enabled: true });
+}
+
 export function setLimiterEnabled(enabled: boolean): void {
   postMessage({ type: "setLimiterEnabled", enabled });
   appendLog(`setLimiterEnabled → ${enabled}`);

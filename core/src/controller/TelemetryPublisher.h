@@ -63,13 +63,17 @@ class TelemetryPublisher
 
   private:
     /// One node in the diagnostics roster.
+    ///
+    /// Everything here must be a property of the *node set*, not of the signal passing
+    /// through it: the roster is only re-sent when this compares unequal, and anything
+    /// that varies block to block turns that into a re-send several times a second.
+    /// Channel count is exactly such a value, so it rides in the per-frame payload.
     struct RosterEntry
     {
         std::string scope;
         std::string presetId;
         std::string nodeId;
         std::string nodeType;
-        int channelCount = 0;
         bool hasAnalyzer = false;
 
         bool operator==(const RosterEntry&) const = default;

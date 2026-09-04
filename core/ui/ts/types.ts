@@ -486,8 +486,14 @@ export interface SignalLevelDiagnostics {
  * matching `seq`. messages.ts reassembles both into SignalLevelDiagnostics.
  */
 
-/** [scope, presetId, nodeId, nodeType, channelCount, hasAnalyzer] */
-export type SignalDiagnosticsRosterNode = [string, string, string, string, number, number];
+/**
+ * [scope, presetId, nodeId, nodeType, hasAnalyzer]
+ *
+ * Only properties of the node set belong here — the roster is re-sent whenever it
+ * differs from the last one, so a value that tracks the signal would re-send it
+ * several times a second. Channel count used to sit here and did exactly that.
+ */
+export type SignalDiagnosticsRosterNode = [string, string, string, string, number];
 
 /** [minDbfs, maxDbfs, minFrequencyHz, maxFrequencyHz] */
 export type SignalDiagnosticsBandRange = [number, number, number, number];
@@ -501,6 +507,12 @@ export interface SignalDiagnosticsRoster {
 
 /** Values per level tuple: [peakDbfs, rmsDbfs, clipCount, clipped]. */
 export const SIGNAL_DIAGNOSTICS_TUPLE_LENGTH = 4;
+
+/**
+ * Values per node entry in a frame's `d`: a level tuple followed by channelCount
+ * (0 = the node did not run this block, 1 = mono, 2 = stereo).
+ */
+export const SIGNAL_DIAGNOSTICS_NODE_TUPLE_LENGTH = SIGNAL_DIAGNOSTICS_TUPLE_LENGTH + 1;
 
 export interface SignalDiagnosticsFrame {
   seq: number;

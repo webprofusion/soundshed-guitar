@@ -575,6 +575,7 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/EffectRegistry.cpp
     src/dsp/SignalGraphExecutor.h
     src/dsp/SignalGraphExecutor.cpp
+    src/dsp/SignalGraphExecutorPlan.cpp
     src/dsp/MultiPresetMixer.h
     src/dsp/MultiPresetMixer.cpp
     src/dsp/RealtimeConvolver.h

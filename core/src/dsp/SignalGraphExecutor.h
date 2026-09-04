@@ -18,6 +18,7 @@
 namespace guitarfx
 {
 class EffectProcessor;
+class MixerEffect;
 class ResourceLibrary;
 
 /**
@@ -219,13 +220,58 @@ class SignalGraphExecutor
         std::atomic<double> processingTimeUs{std::numeric_limits<double>::quiet_NaN()};
     };
 
+    /// One resolved incoming connection.
+    struct PlannedEdge
+    {
+        NodeState* source = nullptr;
+        float gain = 1.0f;
+        int toPort = 0;
+    };
+
+    /// A node with everything Process() used to re-derive per block already resolved.
+    ///
+    /// The execution order only changes when the graph does, but the hot loop was
+    /// rediscovering it every block: a std::map<std::string, NodeState> lookup per node,
+    /// another for its incoming edge list, one more per edge for the source, a handful of
+    /// string comparisons to classify the node type, and a dynamic_cast for mixers. That
+    /// was roughly a fifth of the audio thread on a light chain, all of it answering
+    /// questions whose answers had not changed since the graph was built.
+    struct PlannedNode
+    {
+        NodeState* state = nullptr;
+        std::vector<PlannedEdge> incoming;
+        /// Non-null only for mixer nodes; resolved once instead of dynamic_cast per block.
+        MixerEffect* mixer = nullptr;
+        bool isInput = false;
+        bool isOutput = false;
+        bool isSplitter = false;
+        bool isMixer = false;
+        bool mayProduceStereo = false;
+        bool isNam = false;
+        /// Mixer, or more than one incoming edge: inputs sum rather than overwrite.
+        bool accumulateInputs = false;
+    };
+
+    /// Memoises 10^(dB/20). The trim almost never changes, but std::pow was being
+    /// called twice per block per graph regardless.
+    class DbToLinear
+    {
+      public:
+        [[nodiscard]] float Get(double db);
+
+      private:
+        double mDb = std::numeric_limits<double>::quiet_NaN();
+        float mLinear = 1.0f;
+    };
+
     void BuildExecutionOrder();
     void BuildExecutionLevels();
+    void BuildExecutionPlan();
     void CreateProcessors();
     void AllocateBuffers(int maxBlockSize);
     [[nodiscard]] NodeState* FindNodeState(const std::string& id);
     [[nodiscard]] const NodeState* FindNodeState(const std::string& id) const;
-    void ProcessNodeById(const std::string& nodeId, int numSamples, bool diagnosticsEnabled);
+    void ProcessPlannedNode(PlannedNode& planned, int numSamples, bool diagnosticsEnabled, bool collectLevels);
     void StartWorkers(int count);
     void StopWorkers();
     void WorkerLoop();
@@ -238,6 +284,27 @@ class SignalGraphExecutor
     std::map<std::string, std::map<std::string, std::string>> mNodeTypeConfigDefaults;
     std::vector<std::string> mExecutionOrder;
     std::vector<std::vector<std::string>> mExecutionLevels;
+
+    // Resolved form of the above, rebuilt by BuildExecutionPlan() whenever the graph or
+    // its processors change. mExecutionLevelPlan holds indices into mPlan, so publishing
+    // work to the parallel workers costs an int rather than a string pointer.
+    std::vector<PlannedNode> mPlan;
+    std::vector<std::vector<int>> mExecutionLevelPlan;
+    PlannedNode* mInputPlanNode = nullptr;
+    /// Output candidates in id order; Process() takes the first one that ran this block.
+    std::vector<PlannedNode*> mOutputPlanNodes;
+    /// The nodes literally named "__input__"/"__output__", which carry the trim gains.
+    /// Distinct from the plan nodes above: a preset can have an input-*typed* node under
+    /// a different id, and the trim only ever came from the well-known ids.
+    const GraphNode* mInputTrimNode = nullptr;
+    const GraphNode* mOutputTrimNode = nullptr;
+    DbToLinear mInputGainCache;
+    DbToLinear mOutputGainCache;
+
+    /// Counts down to the next block that refreshes the per-node level meters. They are
+    /// read at kSignalDiagnosticsRateHz, so computing them every block just overwrote the
+    /// previous block's numbers dozens of times before anything looked at them.
+    int mMeteringCountdownSamples = 0;
     std::vector<int> mExecutionLevelScores;
     std::map<std::string, int> mIncomingEdgeCount;
     // Precomputed per-node incoming edge index lists (into mGraph.edges) for O(1) lookup in Process()
@@ -250,8 +317,17 @@ class SignalGraphExecutor
     bool mIsValid = false;
     bool mPrepared = false;
 
-    DSPPerformanceStats mLastPerformanceStats;
-    mutable std::mutex mPerformanceStatsMutex;
+    // Last block's totals, published by the audio thread and read by the message thread.
+    //
+    // Three atomics rather than a DSPPerformanceStats behind a mutex: that struct carries
+    // four std::maps, and MSVC's std::map allocates a sentinel node in its default
+    // constructor -- so building one per block put a heap allocation and a free on the
+    // audio thread, which is both a realtime-safety violation and, on a light chain,
+    // around 15% of that thread's time. The maps were never filled here in any case;
+    // GetPerformanceStats() assembles them on the message thread.
+    std::atomic<double> mLastTotalProcessingTimeUs{0.0};
+    std::atomic<double> mLastRealTimeUs{0.0};
+    std::atomic<double> mLastDspLoadPercent{0.0};
 
     std::atomic<bool> mSignalDiagnosticsEnabled{true};
     std::atomic<bool> mParallelLevelsEnabled{true};
@@ -263,9 +339,10 @@ class SignalGraphExecutor
 
     struct ParallelWorkItem
     {
-        const std::string* nodeId = nullptr;
+        int planIndex = -1;
         int numSamples = 0;
         bool diagnosticsEnabled = false;
+        bool collectLevels = false;
     };
 
     std::array<ParallelWorkItem, kMaxParallelWorkItems> mWorkItems{};

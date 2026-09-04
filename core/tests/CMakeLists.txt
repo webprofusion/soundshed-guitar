@@ -33,6 +33,8 @@ set(TEST_SOURCES
     StorageMigrationTests.cpp
     SignalChainMutationStressTest.cpp
     SignalChainThreadingBenchmark.cpp
+    SteadyStateProfiler.cpp
+    TelemetryPublisherTests.cpp
     SignalGraphExecutorTests.cpp
     Spatial3DEffectTests.cpp
     StereoProcessingTests.cpp
@@ -133,7 +135,7 @@ foreach(test_source IN LISTS TEST_SOURCES)
         add_test(NAME ${test_name} COMMAND ${test_name})
 
         # Label slow benchmarks so `ctest -LE benchmark` can skip them
-        if(test_name STREQUAL "NAMPerformanceBenchmark" OR test_name STREQUAL "DSPPerformanceTests" OR test_name STREQUAL "SignalChainThreadingBenchmark" OR test_name STREQUAL "SignalChainMutationStressTest" OR test_name STREQUAL "TransposeBenchmark" OR test_name STREQUAL "ResourceLoadBenchmark")
+        if(test_name STREQUAL "NAMPerformanceBenchmark" OR test_name STREQUAL "DSPPerformanceTests" OR test_name STREQUAL "SignalChainThreadingBenchmark" OR test_name STREQUAL "SignalChainMutationStressTest" OR test_name STREQUAL "TransposeBenchmark" OR test_name STREQUAL "ResourceLoadBenchmark" OR test_name STREQUAL "SteadyStateProfiler")
             set_tests_properties(${test_name} PROPERTIES LABELS "benchmark")
         endif()
     endif()

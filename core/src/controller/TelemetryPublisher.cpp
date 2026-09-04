@@ -132,8 +132,7 @@ void TelemetryPublisher::SendSignalDiagnostics()
 
     for (const auto& n : snapshot.nodes)
     {
-        roster.push_back(
-            RosterEntry{n.scope, n.presetId, n.nodeId, n.nodeType, n.channelCount, n.analyzer.has_value()});
+        roster.push_back(RosterEntry{n.scope, n.presetId, n.nodeId, n.nodeType, n.analyzer.has_value()});
     }
 
     if (mRosterDirty || roster != mRoster)
@@ -146,8 +145,8 @@ void TelemetryPublisher::SendSignalDiagnostics()
 
         for (const auto& entry : mRoster)
         {
-            rosterNodes.push_back(nlohmann::json::array({entry.scope, entry.presetId, entry.nodeId, entry.nodeType,
-                                                         entry.channelCount, entry.hasAnalyzer ? 1 : 0}));
+            rosterNodes.push_back(nlohmann::json::array(
+                {entry.scope, entry.presetId, entry.nodeId, entry.nodeType, entry.hasAnalyzer ? 1 : 0}));
         }
 
         // The analyzer display ranges are compile-time constants, so they ride along with
@@ -165,6 +164,10 @@ void TelemetryPublisher::SendSignalDiagnostics()
         Send(rosterMsg.dump());
     }
 
+    // Per-node entries carry one value more than the bare level tuple: the channel count,
+    // which changes with the signal (0 when the node did not run this block, 1 mono,
+    // 2 stereo) and so cannot live in the roster. The rawInput/input/output tuples below
+    // stay at the plain level width.
     nlohmann::json frameLevels = nlohmann::json::array();
 
     for (const auto& n : snapshot.nodes)
@@ -173,6 +176,8 @@ void TelemetryPublisher::SendSignalDiagnostics()
         {
             frameLevels.push_back(value);
         }
+
+        frameLevels.push_back(n.channelCount);
     }
 
     nlohmann::json frame;

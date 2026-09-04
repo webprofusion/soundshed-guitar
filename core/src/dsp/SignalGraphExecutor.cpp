@@ -1,4 +1,5 @@
 #include "dsp/SignalGraphExecutor.h"
+#include "dsp/SignalGraphExecutorInternal.h"
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
@@ -18,71 +19,10 @@
 
 namespace guitarfx
 {
+using namespace guitarfx::executor_detail;
+
 namespace
 {
-struct LevelStats
-{
-    double peak = 0.0;
-    double rms = 0.0;
-    int clipCount = 0;
-};
-
-LevelStats ComputeLevelStats(const float* left, const float* right, int numSamples)
-{
-    LevelStats stats;
-
-    if (numSamples <= 0)
-    {
-        return stats;
-    }
-
-    double sumSquares = 0.0;
-    std::size_t sampleCount = 0;
-
-    if (left)
-    {
-        for (int i = 0; i < numSamples; ++i)
-        {
-            const float value = left[i];
-            const float absValue = std::abs(value);
-            stats.peak = std::max(stats.peak, static_cast<double>(absValue));
-            sumSquares += static_cast<double>(value) * static_cast<double>(value);
-
-            if (absValue > 1.0f)
-            {
-                stats.clipCount++;
-            }
-        }
-
-        sampleCount += static_cast<std::size_t>(numSamples);
-    }
-
-    if (right)
-    {
-        for (int i = 0; i < numSamples; ++i)
-        {
-            const float value = right[i];
-            const float absValue = std::abs(value);
-            stats.peak = std::max(stats.peak, static_cast<double>(absValue));
-            sumSquares += static_cast<double>(value) * static_cast<double>(value);
-
-            if (absValue > 1.0f)
-            {
-                stats.clipCount++;
-            }
-        }
-
-        sampleCount += static_cast<std::size_t>(numSamples);
-    }
-
-    if (sampleCount > 0)
-    {
-        stats.rms = std::sqrt(sumSquares / static_cast<double>(sampleCount));
-    }
-
-    return stats;
-}
-
 ResourceRef HydrateResolvedResourceRef(const ResourceRef& ref, const ResourceLibrary* resourceLibrary)
 {
     ResourceRef hydrated = ref;
@@ -127,71 +67,58 @@ std::optional<std::filesystem::path> ResolveResourcePath(const ResourceRef& ref,
     return std::nullopt;
 }
 
-bool BuffersAreEffectivelyMono(const float* left, const float* right, int numSamples)
+/// True when the input pair is genuinely stereo: the right channel carries signal of
+/// its own, and the two channels actually differ.
+///
+/// This replaces a silence scan followed by a dual-mono scan. Both decisions are
+/// threshold-on-maximum, so folding them into one pass over the pair gives bit-identical
+/// answers for half the memory traffic -- and it can stop the moment both are decided,
+/// which for real stereo material is within the first few samples.
+bool InputPairIsStereo(const float* left, const float* right, int numSamples)
 {
-    if (!left || !right)
-    {
-        return true;
-    }
-
-    if (left == right)
-    {
-        return true;
-    }
-
-    // Treat near-identical channels as dual-mono so mono-capable effects can run once.
-    constexpr float kEpsilon = 1.0e-6f;
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        if (std::abs(left[i] - right[i]) > kEpsilon)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// Returns true when a channel carries no meaningful signal. A mono source on a
-// stereo bus (e.g. a guitar wired to input 1) leaves the second channel at
-// digital silence or just its noise floor; both sit well below this threshold,
-// while real program material is comfortably above it.
-bool BufferIsEffectivelySilent(const float* buffer, int numSamples)
-{
-    if (!buffer)
-    {
-        return true;
-    }
-
-    constexpr float kSilenceThreshold = 1.0e-4f; // ~-80 dBFS
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        if (std::abs(buffer[i]) > kSilenceThreshold)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool NodeMayProduceStereo(const std::string& type, const std::string& category)
-{
-    if (type == kNodeTypeInput || type == kNodeTypeOutput || type == kNodeTypeSplitter || type == kNodeTypeMixer)
+    // A missing channel, or both pointers aliasing one buffer, is mono by definition.
+    if (!left || !right || left == right)
     {
         return false;
     }
 
-    return category == "mod" || category == "delay" || category == "reverb";
-}
+    // ~-80 dBFS: a mono source on a stereo bus leaves the second channel at digital
+    // silence or just its noise floor, both well below this.
+    constexpr float kSilenceThreshold = 1.0e-4f;
+    constexpr float kMonoEpsilon = 1.0e-6f;
 
-bool IsNamNodeType(const std::string& type)
-{
-    return type == EffectGuids::kAmpNam || type == EffectGuids::kAmpNamOptimized || type == EffectGuids::kAmpNamBlend ||
-           type == EffectGuids::kFxNam || type == "amp_nam" || type == "amp_nam_optimized" || type == "amp_nam_blend" ||
-           type == "fx_nam";
+    // Chunked rather than sample-at-a-time: reducing to two maxima is branchless and
+    // vectorises, while testing between chunks keeps the early exit that makes genuinely
+    // stereo material cost almost nothing. Proving material is *mono* needs every sample
+    // either way, and that is the common case for a guitar on one input.
+    constexpr int kChunk = 64;
+
+    bool rightCarriesSignal = false;
+    bool channelsDiffer = false;
+
+    for (int start = 0; start < numSamples; start += kChunk)
+    {
+        const int end = std::min(start + kChunk, numSamples);
+
+        float maxRight = 0.0f;
+        float maxDiff = 0.0f;
+
+        for (int i = start; i < end; ++i)
+        {
+            maxRight = std::max(maxRight, std::abs(right[i]));
+            maxDiff = std::max(maxDiff, std::abs(left[i] - right[i]));
+        }
+
+        rightCarriesSignal = rightCarriesSignal || (maxRight > kSilenceThreshold);
+        channelsDiffer = channelsDiffer || (maxDiff > kMonoEpsilon);
+
+        if (rightCarriesSignal && channelsDiffer)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int ScoreNodeTypeForParallelWork(const std::string& type)
@@ -290,12 +217,21 @@ SignalGraphExecutor& SignalGraphExecutor::operator=(SignalGraphExecutor&& other)
     mOutputTrim = other.mOutputTrim;
     mIsValid = other.mIsValid;
     mPrepared = other.mPrepared;
-    mLastPerformanceStats = std::move(other.mLastPerformanceStats);
+    mLastTotalProcessingTimeUs.store(other.mLastTotalProcessingTimeUs.load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+    mLastRealTimeUs.store(other.mLastRealTimeUs.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    mLastDspLoadPercent.store(other.mLastDspLoadPercent.load(std::memory_order_relaxed), std::memory_order_relaxed);
     mTempLeftBuffer = std::move(other.mTempLeftBuffer);
     mTempRightBuffer = std::move(other.mTempRightBuffer);
     mSignalDiagnosticsEnabled.store(other.mSignalDiagnosticsEnabled.load(std::memory_order_acquire),
                                     std::memory_order_release);
     mUseParallelLevels = other.mUseParallelLevels;
+
+    // The plan is pointers into mNodeStates, mGraph and the processors. Moving those
+    // containers happens to preserve element addresses, but relying on that would make
+    // this a landmine for anyone who later swaps a container type. Rebuild instead --
+    // this is a message-thread operation, so it costs nothing that matters.
+    BuildExecutionPlan();
 
     return *this;
 }
@@ -382,6 +318,10 @@ void SignalGraphExecutor::SetGraph(const SignalGraph& graph)
     BuildExecutionOrder();
     BuildExecutionLevels();
     CreateProcessors();
+    // Must follow CreateProcessors(): the plan holds pointers into mNodeStates and to the
+    // processors it creates. Processors are only ever built there, and mNodeStates is only
+    // repopulated here, so this is the single place the plan can go stale.
+    BuildExecutionPlan();
 
     if (mPrepared)
     {
@@ -869,9 +809,18 @@ void SignalGraphExecutor::AllocateBuffers(int maxBlockSize)
 
 void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSamples)
 {
-    auto totalStart = std::chrono::high_resolution_clock::now();
-
     const bool diagnosticsEnabled = mSignalDiagnosticsEnabled.load(std::memory_order_acquire);
+
+    // Only clock the block when something is going to read the result. The flag follows
+    // editor visibility (see the "uiVisibility" handler), and TelemetryPublisher only
+    // sends the performance feed while the UI is visible, so with it off these totals
+    // have no consumer -- and two clock reads per block per graph is not free.
+    std::chrono::high_resolution_clock::time_point totalStart;
+
+    if (diagnosticsEnabled)
+    {
+        totalStart = std::chrono::high_resolution_clock::now();
+    }
 
     // Clamp to allocated buffer size to prevent out-of-bounds writes
     numSamples = std::min(numSamples, mMaxBlockSize);
@@ -895,16 +844,28 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
         return;
     }
 
-    // Calculate real-time for this block
-    double realTimeSeconds = static_cast<double>(numSamples) / mSampleRate;
-    double realTimeUs = realTimeSeconds * 1e6;
+    // Refresh the level meters only on the blocks something will actually read. The UI
+    // pulls them at kSignalDiagnosticsRateHz; at a 64-sample block that is one read per
+    // ~37 blocks, so metering every block was scanning every node's buffers dozens of
+    // times over to publish numbers each of which was overwritten before anyone saw it.
+    bool collectLevels = false;
 
-    DSPPerformanceStats localStats;
-    localStats.realTimeUs = realTimeUs;
+    if (diagnosticsEnabled)
+    {
+        mMeteringCountdownSamples -= numSamples;
+
+        if (mMeteringCountdownSamples <= 0)
+        {
+            collectLevels = true;
+            constexpr double kMeteringRefreshHz = 30.0; // comfortably ahead of the 20 Hz feed
+            mMeteringCountdownSamples = std::max(1, static_cast<int>(mSampleRate / kMeteringRefreshHz));
+        }
+    }
 
     // Clear all buffers and reset input flags
-    for (auto& [id, state] : mNodeStates)
+    for (auto& planned : mPlan)
     {
+        NodeState& state = *planned.state;
         std::fill(state.bufferLeft.begin(), state.bufferLeft.begin() + numSamples, 0.0f);
         std::fill(state.bufferRight.begin(), state.bufferRight.begin() + numSamples, 0.0f);
         state.hasInput = false;
@@ -912,70 +873,63 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
 
         if (diagnosticsEnabled)
         {
+            // NaN marks "did not run this block", so it has to be reset every block even
+            // when the level meters are not being refreshed.
+            state.processingTimeUs.store(std::numeric_limits<double>::quiet_NaN(), std::memory_order_relaxed);
+        }
+
+        if (collectLevels)
+        {
             state.peak.store(0.0, std::memory_order_relaxed);
             state.rms.store(0.0, std::memory_order_relaxed);
             state.clipCount.store(0, std::memory_order_relaxed);
-            state.processingTimeUs.store(std::numeric_limits<double>::quiet_NaN(), std::memory_order_relaxed);
         }
     }
 
     // Apply input trim (global + input node gain)
-    const auto* inputNode = mGraph.FindNode("__input__");
     const double inputNodeGainDb =
-        (inputNode && inputNode->params.count("gainDb")) ? inputNode->params.at("gainDb") : 0.0;
-    const float inputGain = static_cast<float>(std::pow(10.0, (mInputTrim + inputNodeGainDb) / 20.0));
+        (mInputTrimNode && mInputTrimNode->params.count("gainDb")) ? mInputTrimNode->params.at("gainDb") : 0.0;
+    const float inputGain = mInputGainCache.Get(mInputTrim + inputNodeGainDb);
 
-    // Find input node and copy input
-    for (auto& [id, state] : mNodeStates)
+    if (mInputPlanNode)
     {
-        const auto* node = mGraph.FindNode(id);
+        NodeState& state = *mInputPlanNode->state;
+        const bool inputEnabled = !state.processor || state.processor->IsEnabled();
 
-        if (node && (node->type == kNodeTypeInput || node->id == "__input__"))
+        if (inputEnabled && inputs[0])
         {
-            const bool inputEnabled = !state.processor || state.processor->IsEnabled();
-
-            if (inputEnabled && inputs[0])
+            for (int i = 0; i < numSamples; ++i)
             {
-                for (int i = 0; i < numSamples; ++i)
-                {
-                    state.bufferLeft[static_cast<size_t>(i)] = inputs[0][i] * inputGain;
-                }
+                state.bufferLeft[static_cast<size_t>(i)] = inputs[0][i] * inputGain;
             }
+        }
 
-            if (inputEnabled && inputs[1])
+        if (inputEnabled && inputs[1])
+        {
+            for (int i = 0; i < numSamples; ++i)
             {
-                for (int i = 0; i < numSamples; ++i)
-                {
-                    state.bufferRight[static_cast<size_t>(i)] = inputs[1][i] * inputGain;
-                }
+                state.bufferRight[static_cast<size_t>(i)] = inputs[1][i] * inputGain;
             }
+        }
 
-            state.hasInput = true;
-            const bool leftLive = (inputs[0] != nullptr);
-            const bool rightLive = (inputs[1] != nullptr);
-            // A mono source presented on a stereo bus (guitar on input 1, input 2 left
-            // silent) must be reported as mono so downstream mono-capable nodes (e.g. NAM
-            // amps) run a single model instead of processing a dead channel. The signal is
-            // only genuinely stereo when the right channel carries its own content.
-            const bool rightCarriesSignal = rightLive && !BufferIsEffectivelySilent(inputs[1], numSamples);
-            state.hasStereoSignal =
-                leftLive && rightCarriesSignal && !BuffersAreEffectivelyMono(inputs[0], inputs[1], numSamples);
+        state.hasInput = true;
+        // A mono source presented on a stereo bus (guitar on input 1, input 2 left
+        // silent) must be reported as mono so downstream mono-capable nodes (e.g. NAM
+        // amps) run a single model instead of processing a dead channel.
+        state.hasStereoSignal = InputPairIsStereo(inputs[0], inputs[1], numSamples);
 
-            if (diagnosticsEnabled)
-            {
-                const auto stats = ComputeLevelStats(state.bufferLeft.data(), state.bufferRight.data(), numSamples);
-                state.peak.store(stats.peak, std::memory_order_relaxed);
-                state.rms.store(stats.rms, std::memory_order_relaxed);
-                state.clipCount.store(stats.clipCount, std::memory_order_relaxed);
-            }
-
-            break;
+        if (collectLevels)
+        {
+            const auto stats = ComputeLevelStats(state.bufferLeft.data(), state.bufferRight.data(), numSamples);
+            state.peak.store(stats.peak, std::memory_order_relaxed);
+            state.rms.store(stats.rms, std::memory_order_relaxed);
+            state.clipCount.store(stats.clipCount, std::memory_order_relaxed);
         }
     }
 
-    for (std::size_t levelIndex = 0; levelIndex < mExecutionLevels.size(); ++levelIndex)
+    for (std::size_t levelIndex = 0; levelIndex < mExecutionLevelPlan.size(); ++levelIndex)
     {
-        const auto& level = mExecutionLevels[levelIndex];
+        const auto& level = mExecutionLevelPlan[levelIndex];
         const int levelCount = static_cast<int>(level.size());
         const int levelScore = (levelIndex < mExecutionLevelScores.size()) ? mExecutionLevelScores[levelIndex] : 0;
         const bool useParallelLevel = ShouldUseParallelLevel(
@@ -989,9 +943,10 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
             for (int i = 0; i < wi; ++i)
             {
                 auto& item = mWorkItems[static_cast<size_t>(i)];
-                item.nodeId = &level[static_cast<size_t>(i)];
+                item.planIndex = level[static_cast<size_t>(i)];
                 item.numSamples = numSamples;
                 item.diagnosticsEnabled = diagnosticsEnabled;
+                item.collectLevels = collectLevels;
             }
 
             {
@@ -1018,7 +973,8 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
                     break;
                 }
 
-                ProcessNodeById(*mWorkItems[static_cast<size_t>(idx)].nodeId, numSamples, diagnosticsEnabled);
+                ProcessPlannedNode(mPlan[static_cast<size_t>(mWorkItems[static_cast<size_t>(idx)].planIndex)],
+                                   numSamples, diagnosticsEnabled, collectLevels);
                 mParallelDoneCount.fetch_add(1, std::memory_order_release);
             }
 
@@ -1029,27 +985,30 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
 
             for (int i = wi; i < levelCount; ++i)
             {
-                ProcessNodeById(level[static_cast<size_t>(i)], numSamples, diagnosticsEnabled);
+                ProcessPlannedNode(mPlan[static_cast<size_t>(level[static_cast<size_t>(i)])], numSamples,
+                                   diagnosticsEnabled, collectLevels);
             }
         }
         else
         {
-            for (const auto& nodeId : level)
+            for (const int planIndex : level)
             {
-                ProcessNodeById(nodeId, numSamples, diagnosticsEnabled);
+                ProcessPlannedNode(mPlan[static_cast<size_t>(planIndex)], numSamples, diagnosticsEnabled,
+                                   collectLevels);
             }
         }
     }
 
-    // Find output node and copy to output
-    const auto* outputNode = mGraph.FindNode("__output__");
+    // Copy the output node's buffers out, applying trim.
     const double outputNodeGainDb =
-        (outputNode && outputNode->params.count("gainDb")) ? outputNode->params.at("gainDb") : 0.0;
-    const float outputGain = static_cast<float>(std::pow(10.0, (mOutputTrim + outputNodeGainDb) / 20.0));
+        (mOutputTrimNode && mOutputTrimNode->params.count("gainDb")) ? mOutputTrimNode->params.at("gainDb") : 0.0;
+    const float outputGain = mOutputGainCache.Get(mOutputTrim + outputNodeGainDb);
 
-    for (const auto& [id, state] : mNodeStates)
+    for (const PlannedNode* plannedOutput : mOutputPlanNodes)
     {
-        if ((state.type == kNodeTypeOutput || id == "__output__") && state.hasInput)
+        const NodeState& state = *plannedOutput->state;
+
+        if (state.hasInput)
         {
             const bool outputEnabled = !state.processor || state.processor->IsEnabled();
 
@@ -1083,225 +1042,17 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
         }
     }
 
-    auto totalEnd = std::chrono::high_resolution_clock::now();
-    const std::chrono::duration<double, std::micro> totalDuration(totalEnd - totalStart);
-    localStats.totalProcessingTimeUs = totalDuration.count();
-
-    if (realTimeUs > 0.0)
+    if (diagnosticsEnabled)
     {
-        localStats.dspLoadPercent = (localStats.totalProcessingTimeUs / realTimeUs) * 100.0;
-    }
+        const auto totalEnd = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double, std::micro> totalDuration(totalEnd - totalStart);
+        const double totalProcessingTimeUs = totalDuration.count();
+        const double realTimeUs = (static_cast<double>(numSamples) / mSampleRate) * 1e6;
 
-    std::unique_lock<std::mutex> lock(mPerformanceStatsMutex, std::try_to_lock);
-
-    if (lock.owns_lock())
-    {
-        mLastPerformanceStats = std::move(localStats);
-    }
-}
-
-void SignalGraphExecutor::ProcessNodeById(const std::string& nodeId, int numSamples, bool diagnosticsEnabled)
-{
-    thread_local std::vector<float> tempLeft;
-    thread_local std::vector<float> tempRight;
-
-    if (static_cast<int>(tempLeft.size()) < numSamples)
-    {
-        tempLeft.resize(static_cast<size_t>(numSamples), 0.0f);
-        tempRight.resize(static_cast<size_t>(numSamples), 0.0f);
-    }
-
-    auto* state = FindNodeState(nodeId);
-
-    if (!state)
-    {
-        return;
-    }
-
-    const std::string& nodeType = state->type;
-
-    if (nodeType == kNodeTypeInput)
-    {
-        return;
-    }
-
-    const auto inEdgesIt = mIncomingEdgesByNode.find(nodeId);
-    const int incomingCount =
-        (inEdgesIt != mIncomingEdgesByNode.end()) ? static_cast<int>(inEdgesIt->second.size()) : 0;
-    const bool isMixer = (nodeType == kNodeTypeMixer);
-    const bool shouldAccumulate = isMixer || (incomingCount > 1);
-    bool incomingStereoSignal = false;
-    bool mixerHasNonCenterPan = false;
-
-    MixerEffect* mixerEffect = nullptr;
-
-    if (isMixer && state->processor)
-    {
-        mixerEffect = dynamic_cast<MixerEffect*>(state->processor.get());
-    }
-
-    if (inEdgesIt != mIncomingEdgesByNode.end())
-    {
-        for (std::size_t edgeIdx : inEdgesIt->second)
-        {
-            const auto& edge = mGraph.edges[edgeIdx];
-            auto* sourceState = FindNodeState(edge.from);
-
-            if (sourceState && sourceState->hasInput)
-            {
-                const float edgeGain = static_cast<float>(edge.gain);
-                const int inputPort = edge.toPort;
-                incomingStereoSignal = incomingStereoSignal || sourceState->hasStereoSignal;
-
-                if (isMixer && mixerEffect)
-                {
-                    if (mixerEffect->IsInputMuted(inputPort))
-                    {
-                        state->hasInput = true;
-                        continue;
-                    }
-
-                    const float panL = mixerEffect->GetInputPanL(inputPort);
-                    const float panR = mixerEffect->GetInputPanR(inputPort);
-                    const float level = mixerEffect->GetInputLevel(inputPort);
-                    const float gainL = edgeGain * level * panL;
-                    const float gainR = edgeGain * level * panR;
-
-                    // Track whether any active input is panned off-centre; if so the
-                    // mixer output is genuinely stereo even when the input is mono.
-                    if (std::abs(gainL - gainR) > 1.0e-5f)
-                    {
-                        mixerHasNonCenterPan = true;
-                    }
-
-                    // Use ProcessInput so per-input delay is applied alongside level/pan.
-                    mixerEffect->ProcessInput(inputPort, sourceState->bufferLeft.data(),
-                                              sourceState->bufferRight.data(), state->bufferLeft.data(),
-                                              state->bufferRight.data(), numSamples, edgeGain);
-                    state->hasInput = true;
-                }
-                else if (shouldAccumulate)
-                {
-                    for (int i = 0; i < numSamples; ++i)
-                    {
-                        state->bufferLeft[static_cast<size_t>(i)] +=
-                            sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
-                        state->bufferRight[static_cast<size_t>(i)] +=
-                            sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < numSamples; ++i)
-                    {
-                        state->bufferLeft[static_cast<size_t>(i)] =
-                            sourceState->bufferLeft[static_cast<size_t>(i)] * edgeGain;
-                        state->bufferRight[static_cast<size_t>(i)] =
-                            sourceState->bufferRight[static_cast<size_t>(i)] * edgeGain;
-                    }
-                }
-
-                state->hasInput = true;
-            }
-        }
-    }
-
-    if (state->hasInput)
-    {
-        state->hasStereoSignal = incomingStereoSignal;
-    }
-
-    // Time the node only when diagnostics are on, and publish into the node's own atomic
-    // rather than a string-keyed map. The maps used to be filled here, on the audio thread,
-    // from a stats object rebuilt every block -- so every record was a std::map insert:
-    // a heap allocation plus a string copy, per node, per graph, per block. They are now
-    // assembled in GetPerformanceStats() on the message thread, which is where node latency
-    // has always been collected. The relaxed store needs no lock, so a node in a parallel
-    // level no longer contends with its siblings either.
-    const auto processTimed = [&](auto&& invoke) {
-        if (!diagnosticsEnabled)
-        {
-            invoke();
-            return;
-        }
-
-        const auto nodeStart = std::chrono::high_resolution_clock::now();
-        invoke();
-        const auto nodeEnd = std::chrono::high_resolution_clock::now();
-        const std::chrono::duration<double, std::micro> nodeDuration(nodeEnd - nodeStart);
-        state->processingTimeUs.store(nodeDuration.count(), std::memory_order_relaxed);
-    };
-
-    if (state->processor && state->hasInput)
-    {
-        const bool forceNamMonoByInputMode = mNamInputModeMono && IsNamNodeType(state->type);
-        const bool nodeCanMono =
-            state->processor->SupportsMonoProcessing() && !NodeMayProduceStereo(state->type, state->category) &&
-            !state->processor->ProducesStereoOutput() && (!incomingStereoSignal || forceNamMonoByInputMode);
-
-        if (nodeType == kNodeTypeSplitter || nodeType == kNodeTypeOutput)
-        {
-            if (nodeType == kNodeTypeOutput && !state->processor->IsEnabled())
-            {
-                std::fill(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, 0.0f);
-                std::fill(state->bufferRight.begin(), state->bufferRight.begin() + numSamples, 0.0f);
-                state->hasStereoSignal = false;
-            }
-        }
-        else if (nodeType == kNodeTypeMixer)
-        {
-            if (state->processor->IsEnabled())
-            {
-                float* inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
-                float* outPtrs[2] = {tempLeft.data(), tempRight.data()};
-                processTimed([&]() { state->processor->Process(inPtrs, outPtrs, numSamples); });
-                std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
-                std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
-
-                if (!incomingStereoSignal && !mixerHasNonCenterPan &&
-                    !NodeMayProduceStereo(state->type, state->category))
-                {
-                    std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples,
-                              state->bufferRight.begin());
-                    state->hasStereoSignal = false;
-                }
-                else
-                {
-                    state->hasStereoSignal = incomingStereoSignal || mixerHasNonCenterPan ||
-                                             NodeMayProduceStereo(state->type, state->category);
-                }
-            }
-        }
-        else if (state->processor->IsEnabled() && nodeCanMono)
-        {
-            processTimed(
-                [&]() { state->processor->ProcessMono(state->bufferLeft.data(), tempLeft.data(), numSamples); });
-            std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
-            std::copy(state->bufferLeft.begin(), state->bufferLeft.begin() + numSamples, state->bufferRight.begin());
-            state->hasStereoSignal = false;
-        }
-        else if (state->processor->IsEnabled())
-        {
-            float* inPtrs[2] = {state->bufferLeft.data(), state->bufferRight.data()};
-            float* outPtrs[2] = {tempLeft.data(), tempRight.data()};
-            processTimed([&]() { state->processor->Process(inPtrs, outPtrs, numSamples); });
-            std::copy(tempLeft.begin(), tempLeft.begin() + numSamples, state->bufferLeft.begin());
-            std::copy(tempRight.begin(), tempRight.begin() + numSamples, state->bufferRight.begin());
-            state->hasStereoSignal = incomingStereoSignal || NodeMayProduceStereo(state->type, state->category) ||
-                                     state->processor->ProducesStereoOutput();
-        }
-        else
-        {
-            state->hasStereoSignal = incomingStereoSignal;
-        }
-    }
-
-    if (diagnosticsEnabled && state->hasInput)
-    {
-        const auto levelStats = ComputeLevelStats(state->bufferLeft.data(), state->bufferRight.data(), numSamples);
-        state->peak.store(levelStats.peak, std::memory_order_relaxed);
-        state->rms.store(levelStats.rms, std::memory_order_relaxed);
-        state->clipCount.store(levelStats.clipCount, std::memory_order_relaxed);
+        mLastTotalProcessingTimeUs.store(totalProcessingTimeUs, std::memory_order_relaxed);
+        mLastRealTimeUs.store(realTimeUs, std::memory_order_relaxed);
+        mLastDspLoadPercent.store((realTimeUs > 0.0) ? (totalProcessingTimeUs / realTimeUs) * 100.0 : 0.0,
+                                  std::memory_order_relaxed);
     }
 }
 
@@ -1381,9 +1132,10 @@ void SignalGraphExecutor::WorkerLoop()
 
             const auto& item = mWorkItems[static_cast<size_t>(idx)];
 
-            if (item.nodeId)
+            if (item.planIndex >= 0 && static_cast<std::size_t>(item.planIndex) < mPlan.size())
             {
-                ProcessNodeById(*item.nodeId, item.numSamples, item.diagnosticsEnabled);
+                ProcessPlannedNode(mPlan[static_cast<std::size_t>(item.planIndex)], item.numSamples,
+                                   item.diagnosticsEnabled, item.collectLevels);
             }
 
             mParallelDoneCount.fetch_add(1, std::memory_order_release);
@@ -1393,12 +1145,20 @@ void SignalGraphExecutor::WorkerLoop()
 
 SignalGraphExecutor::DSPPerformanceStats SignalGraphExecutor::GetPerformanceStats() const
 {
-    std::lock_guard<std::mutex> lock(mPerformanceStatsMutex);
-    auto stats = mLastPerformanceStats;
-    // With diagnostics off the audio thread stops both writing and clearing the per-node
-    // times, so whatever is in them is from whenever it was last on. Report none rather
-    // than stale ones; the block-level totals below are always live.
+    DSPPerformanceStats stats;
+    // With diagnostics off the audio thread stops timing entirely -- both the block totals
+    // and the per-node times. Whatever was last published is from whenever it was last on,
+    // so report nothing rather than stale numbers. Nothing consumes these while it is off:
+    // the flag follows editor visibility, and the performance feed is only sent to a
+    // visible UI. Node latency below is read live from the processors either way.
     const bool diagnosticsEnabled = mSignalDiagnosticsEnabled.load(std::memory_order_acquire);
+
+    if (diagnosticsEnabled)
+    {
+        stats.totalProcessingTimeUs = mLastTotalProcessingTimeUs.load(std::memory_order_relaxed);
+        stats.realTimeUs = mLastRealTimeUs.load(std::memory_order_relaxed);
+        stats.dspLoadPercent = mLastDspLoadPercent.load(std::memory_order_relaxed);
+    }
 
     for (const auto& [nodeId, state] : mNodeStates)
     {
