@@ -9,7 +9,7 @@ import { isJamEnabled } from "./buildFlags.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
 import { renderRiffLibraryPanel } from "./riffLibrary.js";
 import { renderPracticeToolPanel } from "./practiceTool.js";
-import { getXMarkSvg } from "./iconAssets.js";
+import { getXMarkSvg, renderIcon } from "./iconAssets.js";
 
 const API_KEY_SETTING = "jam.youtubeApiKey";
 const FAVORITES_SETTING = "jam.favorites";
@@ -468,6 +468,11 @@ function toggleFavorite(video: JamVideoSummary): void {
   }
   persistFavorites();
   renderJamPanel();
+  // is this video currently playing?
+  if (jam.player.currentVideo?.videoId === video.videoId) {
+    // refresh player to reflect favorite state change
+    renderFloatingPlayer();
+  }
 }
 
 function openPlayer(video: JamVideoSummary): void {
@@ -741,6 +746,7 @@ export function renderFloatingPlayer(): void {
             <div class="jam-floating-player-channel" id="jam-floating-player-channel"></div>
           </div>
           <div class="jam-floating-player-actions">
+            <button type="button" id="jam-player-favorite" class="jam-favorite-toggle">${renderIcon("star", "jam-player-favorite-icon")}</button>
             <button type="button" id="jam-player-minimize"></button>
             <button type="button" id="jam-player-close" aria-label="Close player" title="Close player">${getXMarkSvg()}</button>
           </div>
@@ -764,6 +770,7 @@ export function renderFloatingPlayer(): void {
   const header = document.getElementById("jam-floating-player-header");
   const title = document.getElementById("jam-floating-player-title");
   const channel = document.getElementById("jam-floating-player-channel");
+  const favoriteButton = document.getElementById("jam-player-favorite") as HTMLButtonElement | null;
   const minimizeButton = document.getElementById("jam-player-minimize") as HTMLButtonElement | null;
   const closeButton = document.getElementById("jam-player-close") as HTMLButtonElement | null;
   const iframe = document.getElementById("jam-player-iframe") as HTMLIFrameElement | null;
@@ -807,6 +814,15 @@ export function renderFloatingPlayer(): void {
   }
   if (closeButton) {
     closeButton.onclick = () => closePlayer();
+  }
+  if (favoriteButton) {
+    const favorite = isFavorite(video.videoId);
+    const label = favorite ? "Remove from favourites" : "Add to favourites";
+    favoriteButton.classList.toggle("is-active", favorite);
+    favoriteButton.setAttribute("aria-pressed", favorite ? "true" : "false");
+    favoriteButton.title = label;
+    favoriteButton.setAttribute("aria-label", label);
+    favoriteButton.onclick = () => toggleFavorite(video);
   }
   if (panel && header) {
     bindFloatingPlayerDrag(panel, header);
