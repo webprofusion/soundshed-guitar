@@ -8,7 +8,7 @@ import { updateSignalDiagnosticsView, scheduleDSPPerformancePlotUpdate } from ".
 import { initTone3000Browser } from "./tone3000Browser.js";
 import { getAudioFxLibrary, getIrLibrary } from "./dataLibraries.js";
 import { buildArchiveFileName, requestResourceData, sanitizeFilename, arrayBufferToBase64 } from "./archiveUtils.js";
-import { escapeHtml, sha256HexFromBase64 } from "./utils.js";
+import { copyTextToClipboard, escapeHtml, sha256HexFromBase64 } from "./utils.js";
 import type { AppSettingValue, BlendDefinition, LibraryResource, Preset, ResourceRef, UserInputCalibrationProfile } from "./types.js";
 import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
 import { themeSwitcher, type ThemeName } from "./theme-switcher.js";
@@ -2615,26 +2615,6 @@ async function replaceLibraryResourceFromInput(item: LibraryItem, input: HTMLInp
   });
 
   showNotification("Resource updated", item.name || item.id);
-}
-
-async function copyTextToClipboard(value: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "readonly");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  if (!copied) {
-    throw new Error("Clipboard unavailable");
-  }
 }
 
 async function copyLibraryResourcePath(item: LibraryItem): Promise<void> {

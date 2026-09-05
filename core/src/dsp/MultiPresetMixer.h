@@ -3,6 +3,7 @@
 #include "presets/PresetTypes.h"
 #include "dsp/EffectProcessor.h"
 #include "dsp/SignalGraphExecutor.h"
+#include "dsp/SignalTelemetry.h"
 #include "dsp/effects/ParametricEQEffect.h"
 #include "dsp/RealtimeParallel.h"
 
@@ -65,31 +66,7 @@ class MultiPresetMixer
 
     struct NodeSignalLevel
     {
-        struct AnalyzerTelemetry
-        {
-            double peakPercent = 0.0;
-            double rmsPercent = 0.0;
-            double rmsDbu = 0.0;
-            double rmsDbv = 0.0;
-            double rmsVolts = 0.0;
-            bool loudnessValid = false;
-            double momentaryLufs = -std::numeric_limits<double>::infinity();
-            double shortTermLufs = -std::numeric_limits<double>::infinity();
-            double integratedLufs = -std::numeric_limits<double>::infinity();
-            bool stereo = false;
-            int activeChannelCount = 0;
-            std::vector<float> spectrogramBinsDb;
-            double spectrogramMinDbfs = -120.0;
-            double spectrogramMaxDbfs = 0.0;
-            double spectrogramMinFrequencyHz = 20.0;
-            double spectrogramMaxFrequencyHz = 20000.0;
-            std::vector<float> barkBandsDb;
-            double barkMinDbfs = -96.0;
-            double barkMaxDbfs = 0.0;
-            double barkMinFrequencyHz = 20.0;
-            double barkMaxFrequencyHz = 15500.0;
-            std::uint64_t generatedAtMs = 0;
-        };
+        using AnalyzerTelemetry = guitarfx::AnalyzerTelemetry;
 
         std::string scope; // pre, post, preset
         std::string presetId;
@@ -265,13 +242,6 @@ class MultiPresetMixer
     // Signal chain parameter routing (apply to all presets)
     void SetInputTrim(double dB);
     void SetOutputTrim(double dB);
-    void SetAmpDrive(double value);
-    void SetAmpTone(double value);
-    void SetIRQuality(double value);
-    void SetEQEnabled(bool enabled);
-    void SetEQBandGain(int band, double value);
-    void SetEQBandFrequency(int band, double value);
-    void SetEQBandQ(int band, double value);
 
     // Global signal chain configuration
     void SetGlobalChainConfig(const GlobalSignalChainConfig& config);
@@ -304,12 +274,6 @@ class MultiPresetMixer
     void SetGlobalInputGain(double dB);
     void SetGlobalOutputGain(double dB);
 
-    // Legacy global FX methods (route to global chain for backward compatibility)
-    void SetGateEnabled(bool enabled);
-    void SetGateThreshold(double thresholdDb);
-    void SetDoublerEnabled(bool enabled);
-    void SetDoublerDelay(double delayMs);
-    void SetTranspose(int semitones);
     // Node-level control (for signal chain editing)
     void SetNodeEnabled(const std::string& presetId, const std::string& nodeId, bool enabled);
     void SetNodeParam(const std::string& presetId, const std::string& nodeId, const std::string& key, double value);

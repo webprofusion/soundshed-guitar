@@ -317,7 +317,7 @@ int main()
             allPassed = false;
         }
 
-        mixer.SetTranspose(3);
+        mixer.SetGlobalTranspose(3);
 
         const auto normalized = mixer.GetGlobalChainConfig();
 

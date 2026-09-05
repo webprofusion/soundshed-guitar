@@ -11,7 +11,7 @@ import { EffectTypeRegistry, type ParameterDef } from "./presetV2.js";
 import { showNotification } from "./notifications.js";
 import { showConfirm } from "./dialogs.js";
 import { arrayBufferToBase64 } from "./utils.js";
-import { renderCustomLayoutPreviewLayers, type LayoutResourceControlDef } from "./layoutRenderer.js";
+import { colorWithAlpha, renderCustomLayoutPreviewLayers, type LayoutResourceControlDef } from "./layoutRenderer.js";
 import { ensureLayoutImagesLoaded } from "./layoutImages.js";
 import { buildDefaultParamControlsHtml } from "./signalPath.js";
 import type { GraphNode } from "./types.js";
@@ -1343,7 +1343,7 @@ export class LayoutDesignerModal {
     const borderWidth = Math.max(0, overlay.style?.borderWidth ?? 1);
     const borderRadius = Math.max(0, overlay.style?.borderRadius ?? 0);
     const toggleBypassOnClick = overlay.style?.toggleBypassOnClick === true;
-    const fill = this.colorWithAlpha(backgroundColor, backgroundOpacity);
+    const fill = colorWithAlpha(backgroundColor, backgroundOpacity);
 
     const el = document.createElement("div");
     el.className = `layout-rectangle-overlay${isSelected ? " selected" : ""}`;
@@ -1380,27 +1380,6 @@ export class LayoutDesignerModal {
     }
 
     return el;
-  }
-
-  private colorWithAlpha(hexColor: string, alpha: number): string {
-    const clampedAlpha = Math.max(0, Math.min(1, alpha));
-    const normalized = hexColor.trim();
-    const shortMatch = normalized.match(/^#([\da-fA-F]{3})$/);
-    const longMatch = normalized.match(/^#([\da-fA-F]{6})$/);
-
-    if (shortMatch) {
-      const [r, g, b] = shortMatch[1].split("").map((ch) => parseInt(ch + ch, 16));
-      return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
-    }
-    if (longMatch) {
-      const hex = longMatch[1];
-      const r = parseInt(hex.slice(0, 2), 16);
-      const g = parseInt(hex.slice(2, 4), 16);
-      const b = parseInt(hex.slice(4, 6), 16);
-      return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
-    }
-
-    return normalized;
   }
 
   private getImageUrl(imageId: string): string | null {

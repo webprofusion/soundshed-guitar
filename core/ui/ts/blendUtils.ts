@@ -1,5 +1,32 @@
 import type { BlendModelMapping, ResourceLibrary } from "./types.js";
 
+/**
+ * The blend-mappable amp parameters, in display order. Lives here rather than in
+ * either editor because blendEditor and signalPathBlend both need it and import
+ * each other — this module is the leaf they share.
+ */
+export type BlendParamSpec = {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+};
+
+export const BLEND_PARAM_SPECS: BlendParamSpec[] = [
+  { id: "gain", label: "Gain", min: 0, max: 10 },
+  { id: "drive", label: "Drive", min: 0, max: 10 },
+  { id: "contour", label: "Contour", min: 0, max: 10 },
+  { id: "treble", label: "Treble", min: 0, max: 10 },
+  { id: "middle", label: "Middle", min: 0, max: 10 },
+  { id: "bass", label: "Bass", min: 0, max: 10 },
+  { id: "presence", label: "Presence", min: 0, max: 10 },
+  { id: "tone", label: "Tone", min: 0, max: 10 },
+  { id: "level", label: "Level", min: 0, max: 10 },
+  { id: "custom_a", label: "Custom A", min: 0, max: 10 },
+  { id: "custom_b", label: "Custom B", min: 0, max: 10 },
+  { id: "custom_c", label: "Custom C", min: 0, max: 10 },
+];
+
 const PARAM_REGEX: Record<string, RegExp> = {
   gain: /(^|[^a-z0-9])g(?:ain)?\s*([-+]?\d{1,2})(?:\b|[^a-z0-9])/i,
   drive: /(^|[^a-z0-9])d(?:rive)?\s*([-+]?\d{1,2})(?:\b|[^a-z0-9])/i,

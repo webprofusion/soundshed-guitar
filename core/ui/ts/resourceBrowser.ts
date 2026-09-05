@@ -17,7 +17,7 @@ import {
 } from "./tone3000.js";
 import { showNotification } from "./notifications.js";
 import { showConfirm } from "./dialogs.js";
-import { arrayBufferToBase64, escapeHtml, findResourceById } from "./utils.js";
+import { arrayBufferToBase64, copyTextToClipboard, escapeHtml, findResourceById } from "./utils.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import type { AppSettingValue, LibraryResource } from "./types.js";
 import { deduplicateResourcesByHashAndPath, resolveResourceIdAlias } from "./resourceDedup.js";
@@ -1611,26 +1611,6 @@ export class ResourceBrowserModal {
     return "";
   }
 
-  private async copyTextToClipboard(value: string): Promise<void> {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "readonly");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand("copy");
-    document.body.removeChild(textarea);
-    if (!copied) {
-      throw new Error("Clipboard unavailable");
-    }
-  }
-
   private async copyLocalLibraryPath(resourceId: string): Promise<void> {
     if (!this.options) {
       return;
@@ -1649,7 +1629,7 @@ export class ResourceBrowserModal {
     }
 
     try {
-      await this.copyTextToClipboard(path);
+      await copyTextToClipboard(path);
       showNotification("Path copied", path);
     } catch {
       const promptResult = window.prompt("Copy local resource path", path);

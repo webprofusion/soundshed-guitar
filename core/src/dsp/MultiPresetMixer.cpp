@@ -50,22 +50,6 @@ GraphNode* FindNodeByIdOrType(SignalGraph& graph, const std::string& id, const s
     return nullptr;
 }
 
-std::string FindFirstNamNodeId(SignalGraphExecutor& executor)
-{
-    for (const auto* effectType :
-         {EffectGuids::kAmpNamOptimized, EffectGuids::kAmpNamBlend, EffectGuids::kFxNam, EffectGuids::kAmpNam})
-    {
-        const auto nodeId = executor.FindFirstNodeOfType(effectType);
-
-        if (!nodeId.empty())
-        {
-            return nodeId;
-        }
-    }
-
-    return {};
-}
-
 // Note names for pitch detection
 constexpr std::array<const char*, 12> kNoteNames = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
@@ -1100,110 +1084,6 @@ void MultiPresetMixer::SetGlobalOutputGain(double dB)
     mGlobalChainConfig.outputGain = dB;
     // Convert dB to linear for master gain
     mMasterGain = std::pow(10.0, dB / 20.0);
-}
-
-// ==========================================================================
-// Legacy global FX routing (deprecated - routes to per-preset nodes)
-// These are kept for backward compatibility but should migrate to global chain
-// ==========================================================================
-
-// Global gate control (legacy - routes to dynamics_gate nodes in signal chain)
-void MultiPresetMixer::SetGateEnabled(bool enabled)
-{
-    // Route to global chain instead
-    SetGlobalGateEnabled(enabled);
-}
-
-void MultiPresetMixer::SetGateThreshold(double thresholdDb)
-{
-    // Route to global chain instead
-    SetGlobalGateThreshold(thresholdDb);
-}
-
-// Global doubler control (legacy - routes to delay_doubler nodes in signal chain)
-void MultiPresetMixer::SetDoublerEnabled(bool enabled)
-{
-    // Route to global chain instead
-    SetGlobalDoublerEnabled(enabled);
-}
-
-void MultiPresetMixer::SetDoublerDelay(double delayMs)
-{
-    // Route to global chain instead
-    SetGlobalDoublerDelay(delayMs);
-}
-
-// Global transpose control (legacy - routes to pitch_shift nodes in signal chain)
-void MultiPresetMixer::SetTranspose(int semitones)
-{
-    // Route to global chain instead
-    SetGlobalTransposeEnabled(semitones != 0);
-    SetGlobalTranspose(semitones);
-}
-
-void MultiPresetMixer::SetAmpDrive(double value)
-{
-    for (auto& inst : mInstances)
-    {
-        const auto nodeId = FindFirstNamNodeId(inst->executor);
-
-        if (!nodeId.empty())
-        {
-            inst->executor.SetNodeParam(nodeId, "inputGain", value);
-        }
-    }
-}
-
-void MultiPresetMixer::SetIRQuality(double value)
-{
-    for (auto& inst : mInstances)
-    {
-        auto nodeId = inst->executor.FindFirstNodeOfType(EffectGuids::kCabIr);
-
-        if (nodeId.empty())
-        {
-            nodeId = inst->executor.FindFirstNodeOfType(EffectGuids::kCabIr);
-        }
-
-        if (!nodeId.empty())
-        {
-            inst->executor.SetNodeParam(nodeId, "quality", value);
-        }
-    }
-}
-
-// EQ methods now route to global post-chain (legacy compatibility)
-void MultiPresetMixer::SetEQEnabled(bool enabled)
-{
-    SetGlobalEQEnabled(enabled);
-}
-
-void MultiPresetMixer::SetEQBandGain(int band, double value)
-{
-    SetGlobalEQBandGain(band, value);
-}
-
-void MultiPresetMixer::SetEQBandFrequency(int band, double value)
-{
-    SetGlobalEQBandFrequency(band, value);
-}
-
-void MultiPresetMixer::SetEQBandQ(int band, double value)
-{
-    SetGlobalEQBandQ(band, value);
-}
-
-void MultiPresetMixer::SetAmpTone(double value)
-{
-    for (auto& inst : mInstances)
-    {
-        const auto nodeId = FindFirstNamNodeId(inst->executor);
-
-        if (!nodeId.empty())
-        {
-            inst->executor.SetNodeParam(nodeId, "tone", value);
-        }
-    }
 }
 
 // Node-level control methods
@@ -2386,18 +2266,37 @@ void MultiPresetMixer::SetSignalDiagnosticsEnabled(bool enabled)
 
 MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosticsSnapshot() const
 {
+    const auto readLevels = [](const AtomicLevelStats& source) {
+        SignalLevelStats stats;
+        stats.peak = source.peak.load(std::memory_order_relaxed);
+        stats.rms = source.rms.load(std::memory_order_relaxed);
+        stats.clipCount = source.clipCount.load(std::memory_order_relaxed);
+
+        return stats;
+    };
+
+    // One executor reading becomes one snapshot node. The analyzer payload is the shared
+    // AnalyzerTelemetry, so it moves across whole rather than field by field.
+    const auto toSnapshotNode = [](const SignalGraphExecutor::NodeSignalLevel& entry, std::string_view scope,
+                                   const std::string& presetId) {
+        NodeSignalLevel node;
+        node.scope = scope;
+        node.presetId = presetId;
+        node.nodeId = entry.nodeId;
+        node.nodeType = entry.nodeType;
+        node.channelCount = entry.channelCount;
+        node.levels.peak = entry.peak;
+        node.levels.rms = entry.rms;
+        node.levels.clipCount = entry.clipCount;
+        node.analyzer = entry.analyzer;
+
+        return node;
+    };
+
     SignalDiagnosticsSnapshot snapshot;
-    snapshot.rawInput.peak = mRawInputLevels.peak.load(std::memory_order_relaxed);
-    snapshot.rawInput.rms = mRawInputLevels.rms.load(std::memory_order_relaxed);
-    snapshot.rawInput.clipCount = mRawInputLevels.clipCount.load(std::memory_order_relaxed);
-
-    snapshot.input.peak = mInputLevels.peak.load(std::memory_order_relaxed);
-    snapshot.input.rms = mInputLevels.rms.load(std::memory_order_relaxed);
-    snapshot.input.clipCount = mInputLevels.clipCount.load(std::memory_order_relaxed);
-
-    snapshot.output.peak = mOutputLevels.peak.load(std::memory_order_relaxed);
-    snapshot.output.rms = mOutputLevels.rms.load(std::memory_order_relaxed);
-    snapshot.output.clipCount = mOutputLevels.clipCount.load(std::memory_order_relaxed);
+    snapshot.rawInput = readLevels(mRawInputLevels);
+    snapshot.input = readLevels(mInputLevels);
+    snapshot.output = readLevels(mOutputLevels);
 
     const auto preLevels = mPreChainExecutor.GetNodeSignalLevels();
     const auto postLevels = mPostChainExecutor.GetNodeSignalLevels();
@@ -2406,44 +2305,7 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
 
     for (const auto& entry : preLevels)
     {
-        NodeSignalLevel node;
-        node.scope = "pre";
-        node.nodeId = entry.nodeId;
-        node.nodeType = entry.nodeType;
-        node.channelCount = entry.channelCount;
-        node.levels.peak = entry.peak;
-        node.levels.rms = entry.rms;
-        node.levels.clipCount = entry.clipCount;
-
-        if (entry.analyzer)
-        {
-            NodeSignalLevel::AnalyzerTelemetry analyzer;
-            analyzer.peakPercent = entry.analyzer->peakPercent;
-            analyzer.rmsPercent = entry.analyzer->rmsPercent;
-            analyzer.rmsDbu = entry.analyzer->rmsDbu;
-            analyzer.rmsDbv = entry.analyzer->rmsDbv;
-            analyzer.rmsVolts = entry.analyzer->rmsVolts;
-            analyzer.loudnessValid = entry.analyzer->loudnessValid;
-            analyzer.momentaryLufs = entry.analyzer->momentaryLufs;
-            analyzer.shortTermLufs = entry.analyzer->shortTermLufs;
-            analyzer.integratedLufs = entry.analyzer->integratedLufs;
-            analyzer.stereo = entry.analyzer->stereo;
-            analyzer.activeChannelCount = entry.analyzer->activeChannelCount;
-            analyzer.spectrogramBinsDb = entry.analyzer->spectrogramBinsDb;
-            analyzer.spectrogramMinDbfs = entry.analyzer->spectrogramMinDbfs;
-            analyzer.spectrogramMaxDbfs = entry.analyzer->spectrogramMaxDbfs;
-            analyzer.spectrogramMinFrequencyHz = entry.analyzer->spectrogramMinFrequencyHz;
-            analyzer.spectrogramMaxFrequencyHz = entry.analyzer->spectrogramMaxFrequencyHz;
-            analyzer.barkBandsDb = entry.analyzer->barkBandsDb;
-            analyzer.barkMinDbfs = entry.analyzer->barkMinDbfs;
-            analyzer.barkMaxDbfs = entry.analyzer->barkMaxDbfs;
-            analyzer.barkMinFrequencyHz = entry.analyzer->barkMinFrequencyHz;
-            analyzer.barkMaxFrequencyHz = entry.analyzer->barkMaxFrequencyHz;
-            analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
-            node.analyzer = std::move(analyzer);
-        }
-
-        snapshot.nodes.push_back(std::move(node));
+        snapshot.nodes.push_back(toSnapshotNode(entry, "pre", {}));
     }
 
     for (const auto& inst : mInstances)
@@ -2453,92 +2315,15 @@ MultiPresetMixer::SignalDiagnosticsSnapshot MultiPresetMixer::GetSignalDiagnosti
             continue;
         }
 
-        const auto levels = inst->executor.GetNodeSignalLevels();
-
-        for (const auto& entry : levels)
+        for (const auto& entry : inst->executor.GetNodeSignalLevels())
         {
-            NodeSignalLevel node;
-            node.scope = "preset";
-            node.presetId = inst->cfg.id;
-            node.nodeId = entry.nodeId;
-            node.nodeType = entry.nodeType;
-            node.channelCount = entry.channelCount;
-            node.levels.peak = entry.peak;
-            node.levels.rms = entry.rms;
-            node.levels.clipCount = entry.clipCount;
-
-            if (entry.analyzer)
-            {
-                NodeSignalLevel::AnalyzerTelemetry analyzer;
-                analyzer.peakPercent = entry.analyzer->peakPercent;
-                analyzer.rmsPercent = entry.analyzer->rmsPercent;
-                analyzer.rmsDbu = entry.analyzer->rmsDbu;
-                analyzer.rmsDbv = entry.analyzer->rmsDbv;
-                analyzer.rmsVolts = entry.analyzer->rmsVolts;
-                analyzer.loudnessValid = entry.analyzer->loudnessValid;
-                analyzer.momentaryLufs = entry.analyzer->momentaryLufs;
-                analyzer.shortTermLufs = entry.analyzer->shortTermLufs;
-                analyzer.integratedLufs = entry.analyzer->integratedLufs;
-                analyzer.stereo = entry.analyzer->stereo;
-                analyzer.activeChannelCount = entry.analyzer->activeChannelCount;
-                analyzer.spectrogramBinsDb = entry.analyzer->spectrogramBinsDb;
-                analyzer.spectrogramMinDbfs = entry.analyzer->spectrogramMinDbfs;
-                analyzer.spectrogramMaxDbfs = entry.analyzer->spectrogramMaxDbfs;
-                analyzer.spectrogramMinFrequencyHz = entry.analyzer->spectrogramMinFrequencyHz;
-                analyzer.spectrogramMaxFrequencyHz = entry.analyzer->spectrogramMaxFrequencyHz;
-                analyzer.barkBandsDb = entry.analyzer->barkBandsDb;
-                analyzer.barkMinDbfs = entry.analyzer->barkMinDbfs;
-                analyzer.barkMaxDbfs = entry.analyzer->barkMaxDbfs;
-                analyzer.barkMinFrequencyHz = entry.analyzer->barkMinFrequencyHz;
-                analyzer.barkMaxFrequencyHz = entry.analyzer->barkMaxFrequencyHz;
-                analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
-                node.analyzer = std::move(analyzer);
-            }
-
-            snapshot.nodes.push_back(std::move(node));
+            snapshot.nodes.push_back(toSnapshotNode(entry, "preset", inst->cfg.id));
         }
     }
 
     for (const auto& entry : postLevels)
     {
-        NodeSignalLevel node;
-        node.scope = "post";
-        node.nodeId = entry.nodeId;
-        node.nodeType = entry.nodeType;
-        node.channelCount = entry.channelCount;
-        node.levels.peak = entry.peak;
-        node.levels.rms = entry.rms;
-        node.levels.clipCount = entry.clipCount;
-
-        if (entry.analyzer)
-        {
-            NodeSignalLevel::AnalyzerTelemetry analyzer;
-            analyzer.peakPercent = entry.analyzer->peakPercent;
-            analyzer.rmsPercent = entry.analyzer->rmsPercent;
-            analyzer.rmsDbu = entry.analyzer->rmsDbu;
-            analyzer.rmsDbv = entry.analyzer->rmsDbv;
-            analyzer.rmsVolts = entry.analyzer->rmsVolts;
-            analyzer.loudnessValid = entry.analyzer->loudnessValid;
-            analyzer.momentaryLufs = entry.analyzer->momentaryLufs;
-            analyzer.shortTermLufs = entry.analyzer->shortTermLufs;
-            analyzer.integratedLufs = entry.analyzer->integratedLufs;
-            analyzer.stereo = entry.analyzer->stereo;
-            analyzer.activeChannelCount = entry.analyzer->activeChannelCount;
-            analyzer.spectrogramBinsDb = entry.analyzer->spectrogramBinsDb;
-            analyzer.spectrogramMinDbfs = entry.analyzer->spectrogramMinDbfs;
-            analyzer.spectrogramMaxDbfs = entry.analyzer->spectrogramMaxDbfs;
-            analyzer.spectrogramMinFrequencyHz = entry.analyzer->spectrogramMinFrequencyHz;
-            analyzer.spectrogramMaxFrequencyHz = entry.analyzer->spectrogramMaxFrequencyHz;
-            analyzer.barkBandsDb = entry.analyzer->barkBandsDb;
-            analyzer.barkMinDbfs = entry.analyzer->barkMinDbfs;
-            analyzer.barkMaxDbfs = entry.analyzer->barkMaxDbfs;
-            analyzer.barkMinFrequencyHz = entry.analyzer->barkMinFrequencyHz;
-            analyzer.barkMaxFrequencyHz = entry.analyzer->barkMaxFrequencyHz;
-            analyzer.generatedAtMs = entry.analyzer->generatedAtMs;
-            node.analyzer = std::move(analyzer);
-        }
-
-        snapshot.nodes.push_back(std::move(node));
+        snapshot.nodes.push_back(toSnapshotNode(entry, "post", {}));
     }
 
     return snapshot;

@@ -14,7 +14,7 @@ import type {
   GraphNode,
   LibraryResource,
 } from "./types.js";
-import { buildBlendModelMappingsFromIds } from "./blendUtils.js";
+import { BLEND_PARAM_SPECS, buildBlendModelMappingsFromIds, type BlendParamSpec } from "./blendUtils.js";
 import { BlendEditorModal } from "./blendEditor.js";
 import { escapeHtml, findResourceById } from "./utils.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
@@ -23,27 +23,7 @@ import { Features, isFeatureEnabled } from "./featureFlags.js";
 // Blend parameter specs
 // ---------------------------------------------------------------------------
 
-export type BlendParamSpec = {
-  id: string;
-  label: string;
-  min: number;
-  max: number;
-};
-
-export const BLEND_PARAM_SPECS: BlendParamSpec[] = [
-  { id: "gain", label: "Gain", min: 0, max: 10 },
-  { id: "drive", label: "Drive", min: 0, max: 10 },
-  { id: "contour", label: "Contour", min: 0, max: 10 },
-  { id: "treble", label: "Treble", min: 0, max: 10 },
-  { id: "middle", label: "Middle", min: 0, max: 10 },
-  { id: "bass", label: "Bass", min: 0, max: 10 },
-  { id: "presence", label: "Presence", min: 0, max: 10 },
-  { id: "tone", label: "Tone", min: 0, max: 10 },
-  { id: "level", label: "Level", min: 0, max: 10 },
-  { id: "custom_a", label: "Custom A", min: 0, max: 10 },
-  { id: "custom_b", label: "Custom B", min: 0, max: 10 },
-  { id: "custom_c", label: "Custom C", min: 0, max: 10 },
-];
+export { BLEND_PARAM_SPECS, type BlendParamSpec } from "./blendUtils.js";
 
 function getBlendParamSpec(paramId: string): BlendParamSpec | null {
   if (!paramId) {

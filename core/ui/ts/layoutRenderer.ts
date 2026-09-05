@@ -184,7 +184,8 @@ function renderOverlays(node: GraphNode, overlays: LayoutRectangleOverlay[]): st
     .join("");
 }
 
-function colorWithAlpha(hexColor: string, alpha: number): string {
+/** Applies an alpha channel to a #rgb or #rrggbb colour, passing anything else through. */
+export function colorWithAlpha(hexColor: string, alpha: number): string {
   const clampedAlpha = Math.max(0, Math.min(1, alpha));
   const normalized = hexColor.trim();
   const shortMatch = normalized.match(/^#([\da-fA-F]{3})$/);

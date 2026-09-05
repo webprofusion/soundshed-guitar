@@ -10,7 +10,12 @@ import type {
 import { uiState } from "./state.js";
 import { postMessage } from "./bridge.js";
 import { GenericKnob } from "./controls.js";
-import { buildBlendModelMappingsFromIds, inferParamValueFromName } from "./blendUtils.js";
+import {
+  BLEND_PARAM_SPECS,
+  buildBlendModelMappingsFromIds,
+  inferParamValueFromName,
+  type BlendParamSpec,
+} from "./blendUtils.js";
 import { arrayBufferToBase64, buildArchiveFileName, generateResourceId, requestResourceData, sanitizeFilename } from "./archiveUtils.js";
 import { escapeHtml, sha256HexFromBase64, findResourceById } from "./utils.js";
 import { deduplicateResourcesByHashAndPath } from "./resourceDedup.js";
@@ -19,28 +24,6 @@ type BlendEditorDependencies = {
   getBlendLibrary: () => BlendLibrary;
   getResourceLibrary: () => ResourceLibrary;
 };
-
-type ParamSpec = {
-  id: string;
-  label: string;
-  min: number;
-  max: number;
-};
-
-const PARAM_SPECS: ParamSpec[] = [
-  { id: "gain", label: "Gain", min: 0, max: 10 },
-  { id: "drive", label: "Drive", min: 0, max: 10 },
-  { id: "contour", label: "Contour", min: 0, max: 10 },
-  { id: "treble", label: "Treble", min: 0, max: 10 },
-  { id: "middle", label: "Middle", min: 0, max: 10 },
-  { id: "bass", label: "Bass", min: 0, max: 10 },
-  { id: "presence", label: "Presence", min: 0, max: 10 },
-  { id: "tone", label: "Tone", min: 0, max: 10 },
-  { id: "level", label: "Level", min: 0, max: 10 },
-  { id: "custom_a", label: "Custom A", min: 0, max: 10 },
-  { id: "custom_b", label: "Custom B", min: 0, max: 10 },
-  { id: "custom_c", label: "Custom C", min: 0, max: 10 },
-];
 
 export class BlendEditorModal {
   private readonly deps: BlendEditorDependencies;
@@ -128,7 +111,7 @@ export class BlendEditorModal {
     });
 
     if (this.paramSelect) {
-      this.paramSelect.innerHTML = PARAM_SPECS.map((spec) => `<option value="${spec.id}">${spec.label}</option>`).join("");
+      this.paramSelect.innerHTML = BLEND_PARAM_SPECS.map((spec) => `<option value="${spec.id}">${spec.label}</option>`).join("");
     }
 
     this.modal?.addEventListener("mousedown", (event) => {
@@ -341,7 +324,7 @@ export class BlendEditorModal {
     const mappings: BlendModelMapping[] = modelIds.map((id) => {
       const match = resources.find((res) => res.id === id);
       const parameters: Record<string, number> = {};
-      PARAM_SPECS.forEach((spec) => {
+      BLEND_PARAM_SPECS.forEach((spec) => {
         const value = inferParamValueFromName(match?.name ?? "", spec.id);
         if (value !== null) {
           parameters[spec.id] = value;
@@ -938,7 +921,7 @@ export class BlendEditorModal {
   }
 
   private syncTestParams(node: GraphNode | null | undefined, mappings: BlendModelMapping[]): void {
-    const specs = new Map(PARAM_SPECS.map((spec) => [spec.id, spec]));
+    const specs = new Map(BLEND_PARAM_SPECS.map((spec) => [spec.id, spec]));
     const defaultNormalized = (paramId: string): number => {
       const nodeValue = node && node.params ? node.params[paramId] : undefined;
       if (typeof nodeValue === "number") {
@@ -1320,7 +1303,7 @@ function buildBlendMappedPoints(
   mappings: BlendModelMapping[],
   activeParams: string[],
   target: Record<string, number>,
-  spec: ParamSpec | null,
+  spec: BlendParamSpec | null,
 ): BlendMappedPoint[] {
   if (!paramId) {
     return [];
@@ -1517,14 +1500,14 @@ function getLibraryResourceByHash(library: ResourceLibrary, resourceType: string
   return resources.find((res) => res.hash?.toLowerCase() === normalized);
 }
 
-function getParamSpec(parameterId: string): ParamSpec | null {
+function getParamSpec(parameterId: string): BlendParamSpec | null {
   if (!parameterId) {
     return null;
   }
-  return PARAM_SPECS.find((spec) => spec.id === parameterId) ?? null;
+  return BLEND_PARAM_SPECS.find((spec) => spec.id === parameterId) ?? null;
 }
 
-function normalizeValue(value: number, spec: ParamSpec): number {
+function normalizeValue(value: number, spec: BlendParamSpec): number {
   if (value < 0) {
     return value / 10;
   }
@@ -1536,7 +1519,7 @@ function normalizeValue(value: number, spec: ParamSpec): number {
   return (clamped - spec.min) / range;
 }
 
-function denormalizeValue(value: number, spec: ParamSpec): string {
+function denormalizeValue(value: number, spec: BlendParamSpec): string {
   const range = spec.max - spec.min;
   const raw = value < 0 ? value * 10 : spec.min + value * range;
   return raw.toFixed(1);
