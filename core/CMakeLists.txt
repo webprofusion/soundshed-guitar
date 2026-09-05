@@ -538,6 +538,13 @@ set(GUITARFX_CORE_SOURCES
     src/controller/TelemetryPublisher.h
     src/controller/TelemetryPublisher.cpp
     src/controller/PluginControllerMetronome.cpp
+    src/controller/PluginControllerHostState.cpp
+    src/controller/PluginControllerStorage.cpp
+    src/controller/PluginControllerSharedSync.cpp
+    src/controller/PluginControllerDiagnostics.cpp
+    src/controller/PluginControllerGlobalChain.cpp
+    src/controller/PluginControllerNodeControl.cpp
+    src/controller/PluginControllerTuner.cpp
     src/controller/PluginControllerSettings.cpp
     src/controller/PluginControllerPresetArchive.cpp
     src/controller/PluginControllerRiffs.cpp

@@ -674,6 +674,9 @@ class PluginController
     [[nodiscard]] std::string BuildTimestampUtcIso() const;
     [[nodiscard]] std::optional<nlohmann::json> FindRiffTakeById(const std::string& takeId) const;
     void FinalizeRiffCaptureLocked(bool canceled);
+    /// Audio thread, under the DSP lock. Only reached while a capture is armed or
+    /// running — see ProcessAudioLocked. Defined in PluginControllerRiffs.cpp.
+    void ProcessRiffCaptureBlock(float** inputs, int numSamples);
 
     bool WriteFile(const std::filesystem::path& target, const std::vector<std::uint8_t>& data) const;
 

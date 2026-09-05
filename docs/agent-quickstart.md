@@ -31,12 +31,19 @@ instead of scrolling one enormous one:
 
 | File (`core/src/`)                              | Owns                                                 |
 | ----------------------------------------------- | ---------------------------------------------------- |
-| `PluginController.cpp`                          | Lifecycle, audio callback, state (de)serialisation, idle loop, tuner |
+| `PluginController.cpp`                          | Lifecycle, audio callback, idle loop, and the request handlers too small to be an area |
+| `controller/PluginControllerHostState.cpp`      | The state blob a DAW saves with its project; editor window size |
+| `controller/PluginControllerStorage.cpp`        | Document store open/migration/quarantine; UI storage documents |
+| `controller/PluginControllerSharedSync.cpp`     | Cross-instance sync: the version doc, the poll, the reload |
+| `controller/PluginControllerDiagnostics.cpp`    | Session log, debug snapshots, diagnostics and performance feeds |
+| `controller/PluginControllerGlobalChain.cpp`    | Global signal chain, `setParameter` aliases, input stage |
+| `controller/PluginControllerNodeControl.cpp`    | Live node control: enable, param, resource; model/IR loading |
+| `controller/PluginControllerTuner.cpp`          | Tuner control and the signal-path test tone |
 | `controller/PluginControllerPresets.cpp`        | Preset load/save/apply, folders, favourites, setlists |
-| `controller/PluginControllerSignalPath.cpp`     | Node graph edits, composite edit target               |
+| `controller/PluginControllerSignalPath.cpp`     | Node graph shape: add, remove, reorder; composite edit target |
 | `controller/PluginControllerResources.cpp`      | Resource library: import, edit, delete, usage index   |
 | `controller/PluginControllerCustomEffects.cpp`  | Blends, custom effects, composites                    |
-| `controller/PluginControllerRiffs.cpp`          | Riff capture, editing, playback, library index        |
+| `controller/PluginControllerRiffs.cpp`          | Riff capture (including its audio-thread block), editing, playback, library index |
 | `controller/PluginControllerBroadcast.cpp`      | `BroadcastState` and the `Send*ToUI` pushes           |
 | `controller/PluginControllerSettings.cpp`       | App settings load/apply/persist                       |
 | `controller/PluginControllerHostedPlugins.cpp`  | Third-party plugin state capture and restore          |
