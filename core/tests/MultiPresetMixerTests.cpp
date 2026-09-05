@@ -457,5 +457,74 @@ int main()
         }
     }
 
+    // Performance stats are keyed by scope, not by bare node id.
+    //
+    // Node ids only distinguish nodes within one executor. Two presets in the mixer each
+    // have an "in" and an "out", and so do the global pre- and post-chains, so merging on
+    // the bare id silently folded four nodes into one entry — summing their times and
+    // maxing their latencies. The UI looks these up per node, so it was reading a figure
+    // that belonged to no node in particular.
+    {
+        MultiPresetMixer mixer;
+        ResourceLibrary lib;
+        mixer.SetResourceLibrary(&lib);
+        mixer.SetGlobalChainConfig(GlobalSignalChainConfig::CreateDefault());
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+        mixer.SetSignalDiagnosticsEnabled(true);
+
+        auto pA = MakeLinearPreset("pA", {EffectGuids::kGain});
+        auto pB = MakeLinearPreset("pB", {EffectGuids::kGain});
+
+        if (!mixer.AddActivePreset(pA, "pA", "PresetA") || !mixer.AddActivePreset(pB, "pB", "PresetB"))
+        {
+            std::cerr << "Failed to add presets for the performance stats scoping test" << std::endl;
+            return 1;
+        }
+
+        std::vector<float> inL(static_cast<size_t>(kTestBlockSize), 0.25f);
+        std::vector<float> inR(static_cast<size_t>(kTestBlockSize), 0.25f);
+        std::vector<float> outL(static_cast<size_t>(kTestBlockSize), 0.0f);
+        std::vector<float> outR(static_cast<size_t>(kTestBlockSize), 0.0f);
+        float* inputs[2] = {inL.data(), inR.data()};
+        float* outputs[2] = {outL.data(), outR.data()};
+        mixer.Process(inputs, outputs, kTestBlockSize);
+
+        const auto stats = mixer.GetPerformanceStats();
+
+        // Every scope's copy of a shared id is its own entry, and no bare id survives.
+        const std::vector<std::string> expectedKeys = {"pA::n0", "pB::n0", "pre::__input__", "post::__input__"};
+
+        for (const auto& key : expectedKeys)
+        {
+            if (stats.nodeLatencySamples.find(key) == stats.nodeLatencySamples.end())
+            {
+                std::cerr << "Performance stats missing scoped latency key '" << key << "'" << std::endl;
+                allPassed = false;
+            }
+        }
+
+        for (const auto& [key, latencySamples] : stats.nodeLatencySamples)
+        {
+            (void)latencySamples;
+
+            if (key.find("::") == std::string::npos)
+            {
+                std::cerr << "Performance stats carry an unscoped node key '" << key << "'" << std::endl;
+                allPassed = false;
+            }
+        }
+
+        for (const auto& [key, timeUs] : stats.nodeProcessingTimesUs)
+        {
+            (void)timeUs;
+
+            if (key.find("::") == std::string::npos)
+            {
+                std::cerr << "Performance stats carry an unscoped timing key '" << key << "'" << std::endl;
+                allPassed = false;
+            }
+        }
+    }
+
     return allPassed ? 0 : 1;
 }

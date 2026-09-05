@@ -241,7 +241,7 @@ export const uiState: UiState = {
     },
   },
   dspPerformance: undefined,
-  dspPerformanceHistory: [],
+  dspLoadHistoryPercent: [],
   globalSignalChain: { ...DEFAULT_GLOBAL_SIGNAL_CHAIN },
   signalDiagnostics: null,
   signalPeakHold: null,

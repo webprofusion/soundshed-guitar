@@ -28,15 +28,21 @@ class ResourceLibrary;
 class SignalGraphExecutor
 {
   public:
+    /// What the UI's performance panel and per-node readouts are drawn from. Nothing
+    /// else consumes it, and nothing outside the app sees it.
+    ///
+    /// The per-node maps are keyed by bare node id here, which is all one executor knows.
+    /// A node id is only unique *within* an executor -- every executor has an `__input__`,
+    /// and the same preset loaded into two mixer slots repeats every id it has -- so
+    /// MultiPresetMixer::GetPerformanceStats() rewrites them to `<scope>::<nodeId>` as it
+    /// merges. That is the form the UI sees; see TelemetryPublisher.
     struct DSPPerformanceStats
     {
-        double totalProcessingTimeUs = 0.0;                        // Total time in microseconds
-        double realTimeUs = 0.0;                                   // Real-time equivalent in microseconds
-        double dspLoadPercent = 0.0;                               // % of real-time
-        std::map<std::string, double> nodeProcessingTimesUs;       // Per-node times
-        std::map<std::string, double> scopedNodeProcessingTimesUs; // Optional scoped keys for UI correlation
-        std::map<std::string, int> nodeLatencySamples;             // Per-node algorithmic latency
-        std::map<std::string, int> scopedNodeLatencySamples;       // Optional scoped keys for UI correlation
+        double totalProcessingTimeUs = 0.0;                  // Total time in microseconds
+        double realTimeUs = 0.0;                             // Real-time equivalent in microseconds
+        double dspLoadPercent = 0.0;                         // % of real-time
+        std::map<std::string, double> nodeProcessingTimesUs; // Per-node times
+        std::map<std::string, int> nodeLatencySamples;       // Per-node algorithmic latency
     };
 
     struct NodeSignalLevel

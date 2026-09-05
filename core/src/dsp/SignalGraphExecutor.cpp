@@ -1169,7 +1169,6 @@ SignalGraphExecutor::DSPPerformanceStats SignalGraphExecutor::GetPerformanceStat
         const int latencySamples =
             (state.processor && state.processor->IsEnabled()) ? state.processor->GetLatencySamples() : 0;
         stats.nodeLatencySamples[nodeId] = latencySamples;
-        stats.scopedNodeLatencySamples[nodeId] = latencySamples;
 
         if (!diagnosticsEnabled)
         {
@@ -1184,7 +1183,6 @@ SignalGraphExecutor::DSPPerformanceStats SignalGraphExecutor::GetPerformanceStat
         if (std::isfinite(nodeTimeUs))
         {
             stats.nodeProcessingTimesUs[nodeId] = nodeTimeUs;
-            stats.scopedNodeProcessingTimesUs[nodeId] = nodeTimeUs;
         }
     }
 

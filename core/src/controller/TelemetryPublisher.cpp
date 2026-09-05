@@ -281,6 +281,10 @@ void TelemetryPublisher::SendPerformanceStats()
     statsJson["realTimeUs"] = stats.realTimeUs;
     statsJson["dspLoadPercent"] = stats.dspLoadPercent;
     statsJson["totalLatencySamples"] = totalLatencySamples;
+    // Keys here are `<scope>::<nodeId>`, which is what the UI looks them up by. They used
+    // to go out twice — once scoped and once bare — and the bare copy was both redundant
+    // and wrong, since it folded every executor's `__input__` into one entry. That
+    // doubling was most of this message.
     nlohmann::json nodeTimes = nlohmann::json::object();
 
     for (const auto& [nodeId, timeUs] : stats.nodeProcessingTimesUs)
@@ -289,14 +293,6 @@ void TelemetryPublisher::SendPerformanceStats()
     }
 
     statsJson["nodeProcessingTimesUs"] = nodeTimes;
-    nlohmann::json scopedNodeTimes = nlohmann::json::object();
-
-    for (const auto& [nodeId, timeUs] : stats.scopedNodeProcessingTimesUs)
-    {
-        scopedNodeTimes[nodeId] = timeUs;
-    }
-
-    statsJson["scopedNodeProcessingTimesUs"] = scopedNodeTimes;
     nlohmann::json nodeLatencies = nlohmann::json::object();
 
     for (const auto& [nodeId, latencySamples] : stats.nodeLatencySamples)
@@ -305,14 +301,6 @@ void TelemetryPublisher::SendPerformanceStats()
     }
 
     statsJson["nodeLatencySamples"] = nodeLatencies;
-    nlohmann::json scopedNodeLatencies = nlohmann::json::object();
-
-    for (const auto& [nodeId, latencySamples] : stats.scopedNodeLatencySamples)
-    {
-        scopedNodeLatencies[nodeId] = latencySamples;
-    }
-
-    statsJson["scopedNodeLatencySamples"] = scopedNodeLatencies;
 
     nlohmann::json msg;
     msg["type"] = "dspPerformance";

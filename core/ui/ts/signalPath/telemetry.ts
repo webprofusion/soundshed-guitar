@@ -1,4 +1,5 @@
 import { uiState } from "../state.js";
+import { nodeDspLatencySamples, nodeDspProcessingTimeUs } from "../dspPerformance.js";
 import type {
   InputAnalyzerLevelTelemetry,
   SignalLevelMetrics,
@@ -106,50 +107,16 @@ export function formatDspStatusHeadroom(value: number | null | undefined): strin
   return Number.isFinite(value) ? `${value!.toFixed(1)} dB` : "—";
 }
 
-export function getSelectedNodeDspStatusPerformanceKey(
-  node: SignalLevelNodeMetrics,
-): string {
-  return node.scope === "preset"
-    ? `${node.presetId ?? uiState.activePresetId ?? ""}::${node.nodeId}`
-    : `${node.scope}::${node.nodeId}`;
-}
-
 export function getSelectedNodeDspStatusTimeUs(
   node: SignalLevelNodeMetrics | null,
 ): number | null {
-  if (!node) {
-    return null;
-  }
-
-  const performance = uiState.dspPerformance;
-  const scopedTime = performance?.scopedNodeProcessingTimesUs?.[
-    getSelectedNodeDspStatusPerformanceKey(node)
-  ];
-  if (typeof scopedTime === "number" && Number.isFinite(scopedTime)) {
-    return scopedTime;
-  }
-
-  const legacyTime = performance?.nodeProcessingTimesUs?.[node.nodeId];
-  return typeof legacyTime === "number" && Number.isFinite(legacyTime) ? legacyTime : null;
+  return node ? nodeDspProcessingTimeUs(node) : null;
 }
 
 export function getSelectedNodeDspStatusLatencySamples(
   node: SignalLevelNodeMetrics | null,
 ): number | null {
-  if (!node) {
-    return null;
-  }
-
-  const performance = uiState.dspPerformance;
-  const scopedLatency = performance?.scopedNodeLatencySamples?.[
-    getSelectedNodeDspStatusPerformanceKey(node)
-  ];
-  if (typeof scopedLatency === "number" && Number.isFinite(scopedLatency)) {
-    return scopedLatency;
-  }
-
-  const legacyLatency = performance?.nodeLatencySamples?.[node.nodeId];
-  return typeof legacyLatency === "number" && Number.isFinite(legacyLatency) ? legacyLatency : null;
+  return node ? nodeDspLatencySamples(node) : null;
 }
 
 export function formatDspStatusTime(timeUs: number | null): string {

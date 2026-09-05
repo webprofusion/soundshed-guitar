@@ -7,6 +7,7 @@ import { renderIcon, getCheckmarkSvg, getXMarkSvg, getPlaySvg } from "./iconAsse
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput } from "./controls.js";
+import { nodeDspLatencySamples, nodeDspPerformanceKey, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
 import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 
@@ -784,7 +785,7 @@ export function updateDSPPerformancePlot(): void {
   if (!ctx) return;
   const themeColors = getPerformancePlotThemeColors(canvas);
 
-  const history = uiState.dspPerformanceHistory;
+  const history = uiState.dspLoadHistoryPercent;
   if (history.length === 0) return;
 
   const displayWidth = Math.max(1, Math.floor(canvas.clientWidth));
@@ -807,12 +808,12 @@ export function updateDSPPerformancePlot(): void {
   // Set up drawing
   const width = displayWidth;
   const height = displayHeight;
-  const maxLoad = Math.max(...history.map(h => h.dspLoadPercent), 100); // At least 100% for scale
+  const maxLoad = Math.max(...history, 100); // At least 100% for scale
 
   const sampleCount = Math.max(1, history.length - 1);
-  const points = history.map((stat, index) => ({
+  const points = history.map((loadPercent, index) => ({
     x: (index / sampleCount) * width,
-    y: height - (stat.dspLoadPercent / maxLoad) * height,
+    y: height - (loadPercent / maxLoad) * height,
   }));
 
   ctx.beginPath();
@@ -858,21 +859,21 @@ export function updateDSPPerformancePlot(): void {
   ctx.setLineDash([]);
 
   // Update current values
-  const currentStat = history[history.length - 1];
+  const currentLoad = history[history.length - 1];
   const loadValue = document.getElementById("dsp-load-value");
   if (loadValue) {
-    loadValue.textContent = `${currentStat.dspLoadPercent.toFixed(1)}%`;
+    loadValue.textContent = `${currentLoad.toFixed(1)}%`;
   }
 
   const peakValue = document.getElementById("dsp-peak-value");
   if (peakValue) {
-    const peakLoad = Math.max(...history.map(h => h.dspLoadPercent));
+    const peakLoad = Math.max(...history);
     peakValue.textContent = `${peakLoad.toFixed(1)}%`;
   }
 
   const latencyValue = document.getElementById("dsp-latency-value");
   if (latencyValue) {
-    latencyValue.textContent = formatLatencyValue(currentStat);
+    latencyValue.textContent = formatLatencyValue(uiState.dspPerformance);
   }
 }
 
@@ -1062,58 +1063,6 @@ function getSignalDiagnosticsNodeLabel(node: SignalLevelNodeMetrics): string {
   return `${presetPrefix}${nodeName}${branchSuffix}`;
 }
 
-function getSignalDiagnosticsPerformanceKey(node: SignalLevelNodeMetrics): string {
-  if (node.scope === "preset") {
-    return `${node.presetId ?? uiState.activePresetId ?? ""}::${node.nodeId}`;
-  }
-  return `${node.scope}::${node.nodeId}`;
-}
-
-function getSignalDiagnosticsNodeTimeUs(node: SignalLevelNodeMetrics): number | null {
-  const performance = uiState.dspPerformance;
-  if (!performance) {
-    return null;
-  }
-
-  const scopedKey = getSignalDiagnosticsPerformanceKey(node);
-  const scopedTime = performance.scopedNodeProcessingTimesUs?.[scopedKey];
-  if (typeof scopedTime === "number" && isFinite(scopedTime)) {
-    return scopedTime;
-  }
-
-  const legacyTime = performance.nodeProcessingTimesUs?.[node.nodeId];
-  return typeof legacyTime === "number" && isFinite(legacyTime) ? legacyTime : null;
-}
-
-function getSignalDiagnosticsNodeLatencySamples(node: SignalLevelNodeMetrics): number | null {
-  const performance = uiState.dspPerformance;
-  if (!performance) {
-    return null;
-  }
-
-  const scopedKey = getSignalDiagnosticsPerformanceKey(node);
-  const scopedLatency = performance.scopedNodeLatencySamples?.[scopedKey];
-  if (typeof scopedLatency === "number" && isFinite(scopedLatency)) {
-    return scopedLatency;
-  }
-
-  const legacyLatency = performance.nodeLatencySamples?.[node.nodeId];
-  return typeof legacyLatency === "number" && isFinite(legacyLatency) ? legacyLatency : null;
-}
-
-function getSignalDiagnosticsNodeProcessingShare(timeUs: number | null | undefined): number | null {
-  if (typeof timeUs !== "number" || !isFinite(timeUs)) {
-    return null;
-  }
-
-  const totalUs = uiState.dspPerformance?.totalProcessingTimeUs ?? 0;
-  if (!(totalUs > 0)) {
-    return null;
-  }
-
-  return (timeUs / totalUs) * 100.0;
-}
-
 function formatTimeUs(value: number | null | undefined): string {
   if (typeof value !== "number" || !isFinite(value)) {
     return "—";
@@ -1127,7 +1076,7 @@ function formatTimeShare(value: number | null | undefined): string {
     return timeText;
   }
 
-  const share = getSignalDiagnosticsNodeProcessingShare(value);
+  const share = nodeDspProcessingSharePercent(value);
   if (share == null || !isFinite(share)) {
     return timeText;
   }
@@ -1204,7 +1153,7 @@ function computeGraphCriticalPathNodeIds(graph: SignalGraph | undefined, scopedP
     return new Set<string>();
   }
 
-  const scopedLatencies = uiState.dspPerformance?.scopedNodeLatencySamples ?? {};
+  const scopedLatencies = uiState.dspPerformance?.nodeLatencySamples ?? {};
   const incomingByNode = new Map<string, GraphEdge[]>();
   const outgoingByNode = new Map<string, GraphEdge[]>();
   const indegree = new Map<string, number>();
@@ -1317,7 +1266,7 @@ function getOverallCriticalPathMembership(diagnostics: SignalLevelDiagnostics | 
   let winningPresetId: string | null = null;
   let winningPresetNodes = new Set<string>();
   let winningPresetLatency = -1;
-  const scopedLatencies = uiState.dspPerformance?.scopedNodeLatencySamples ?? {};
+  const scopedLatencies = uiState.dspPerformance?.nodeLatencySamples ?? {};
 
   for (const presetId of presetIds) {
     const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((entry) => entry.id === presetId);
@@ -1343,7 +1292,7 @@ function getOverallCriticalPathMembership(diagnostics: SignalLevelDiagnostics | 
 }
 
 function isNodeOnCriticalPath(node: SignalLevelNodeMetrics, criticalPathMembership: Set<string>): boolean {
-  return criticalPathMembership.has(getSignalDiagnosticsPerformanceKey(node));
+  return criticalPathMembership.has(nodeDspPerformanceKey(node));
 }
 
 // Threshold (dBFS) for each segment, top → bottom in the DOM (rendered bottom-up via flex column-reverse).
@@ -1455,9 +1404,44 @@ let signalDiagnosticsLastOutputClipped: boolean | null = null;
 let signalDiagnosticsLastDesignedPeakText: string | null = null;
 let signalDiagnosticsLastListHtml: string | null = null;
 
+/**
+ * Applies a diagnostics frame to whatever needs it, twenty times a second.
+ *
+ * Only some of that is the Signal Diagnostics panel, and the panel is usually not on
+ * screen — it lives in Settings → DSP Performance. Rendering it regardless meant
+ * rebuilding a per-node table, recomputing every preset's critical path and escaping a
+ * few hundred cells into a container with `display: none`, on every frame, for nobody.
+ *
+ * The other two are not optional: the peak hold is state the save-preset modal reads
+ * back, and the input VU meter and the signal path's clip indicators are on the main
+ * screen. Those run whether the panel is up or not.
+ */
 export function updateSignalDiagnosticsView(): void {
   const diagnostics = uiState.signalDiagnostics;
 
+  if (diagnostics) {
+    updateSignalPeakHold(diagnostics);
+  }
+
+  if (isDSPPerformanceTabVisible()) {
+    renderSignalDiagnosticsPanel(diagnostics);
+  }
+
+  if (!diagnostics) {
+    return;
+  }
+
+  updateInputVuMeter(diagnostics.rawInput ?? diagnostics.input);
+  updateSignalPathClipIndicators();
+}
+
+/**
+ * Writes one frame into the Signal Diagnostics panel. Called only while that panel is
+ * visible, so the `signalDiagnosticsLast*` memos stay in step with the DOM: skipping a
+ * frame skips the memo update with it, and the first frame after the panel reopens sees
+ * the same difference the DOM does.
+ */
+function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null | undefined): void {
   const statusEl = document.getElementById("signal-diagnostics-status");
   if (statusEl) {
     statusEl.textContent = "Enabled";
@@ -1524,7 +1508,6 @@ export function updateSignalDiagnosticsView(): void {
     clipCount: 0,
   };
 
-  updateSignalPeakHold(diagnostics);
   const hold = uiState.signalPeakHold;
 
   // Update input metrics only if changed
@@ -1698,8 +1681,8 @@ export function updateSignalDiagnosticsView(): void {
       .map((node) => {
         const nodeLabel = escapeHtml(getSignalDiagnosticsNodeLabel(node));
         const isCriticalPath = isNodeOnCriticalPath(node, criticalPathMembership);
-        const nodeTimeUs = getSignalDiagnosticsNodeTimeUs(node);
-        const nodeLatencySamples = getSignalDiagnosticsNodeLatencySamples(node);
+        const nodeTimeUs = nodeDspProcessingTimeUs(node);
+        const nodeLatencySamples = nodeDspLatencySamples(node);
         const levels = node.levels ?? { peakDbfs: Number.NaN, headroomDb: Number.NaN, clipped: false, clipCount: 0 };
         const holdEntry = hold?.nodes[node.nodeId];
         return makeNodeRow(node.scope, nodeLabel, node.channelCount ?? null, isCriticalPath, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
@@ -1730,7 +1713,4 @@ export function updateSignalDiagnosticsView(): void {
       signalDiagnosticsLastListHtml = newListHtml;
     }
   }
-
-  updateInputVuMeter(diagnostics ? (diagnostics.rawInput ?? diagnostics.input) : null);
-  updateSignalPathClipIndicators();
 }

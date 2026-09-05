@@ -376,13 +376,14 @@ TestResult TestMultiPresetMixerPerformanceStats()
             return result;
         }
 
-        // Check that we have timing data for the gain node
-        bool hasGainTiming =
-            updatedStats.nodeProcessingTimesUs.find("gain") != updatedStats.nodeProcessingTimesUs.end();
+        // The mixer keys its aggregate by scope, because a bare node id does not identify
+        // a node across executors -- see MultiPresetMixer::GetPerformanceStats.
+        const bool hasGainTiming =
+            updatedStats.nodeProcessingTimesUs.find("preset1::gain") != updatedStats.nodeProcessingTimesUs.end();
 
         if (!hasGainTiming)
         {
-            result.message = "No timing data found for 'gain' node in MultiPresetMixer stats";
+            result.message = "No timing data found for 'preset1::gain' node in MultiPresetMixer stats";
             return result;
         }
 

@@ -401,14 +401,15 @@ export interface MixerState {
   limiterEnabled: boolean;
 }
 
+/** The engine's `dspPerformance` feed, at kDspPerformanceStatsRateHz while the UI is up.
+ *  Both node maps are keyed `<scope>::<nodeId>` — build the key with
+ *  `nodeDspPerformanceKey()` rather than assembling it at the call site. */
 export interface DSPPerformanceStats {
   totalProcessingTimeUs: number;
   realTimeUs: number;
   dspLoadPercent: number;
   nodeProcessingTimesUs: Record<string, number>;
-  scopedNodeProcessingTimesUs?: Record<string, number>;
-  nodeLatencySamples?: Record<string, number>;
-  scopedNodeLatencySamples?: Record<string, number>;
+  nodeLatencySamples: Record<string, number>;
   totalLatencySamples?: number;
   sampleRate?: number;
   blockSize?: number;
@@ -685,7 +686,10 @@ export interface UiState {
   uiSettings?: UiSettings;
   uiViewState?: UiViewState;
   dspPerformance?: DSPPerformanceStats;
-  dspPerformanceHistory: DSPPerformanceStats[];
+  /** Rolling DSP load percentages for the performance plot, oldest first. Only the load
+   *  is kept: retaining whole frames pinned a node map per point for a line that reads
+   *  one number from each. */
+  dspLoadHistoryPercent: number[];
   globalSignalChain?: GlobalSignalChainConfig;
   signalDiagnostics?: SignalLevelDiagnostics | null;
   signalPeakHold?: SignalPeakHold | null;

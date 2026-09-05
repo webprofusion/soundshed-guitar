@@ -1,4 +1,5 @@
 import { uiState, clonePreset, enterCompositeEditState, exitCompositeEditState, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, updateCompositeEditState } from "./state.js";
+import { recordDspLoadSample } from "./dspPerformance.js";
 import { renderActivePreset, populatePresetDropdown, updatePresetDropdownSelection, cachePresetInMemory, updatePresetActionButtons, applyPresetFoldersFromBackend, applyPresetFavoritesFromBackend, applyPresetRecentsFromAppSettings, applyPresetRatingsFromBackend, applySetlistsFromBackend, applySetlistCursorFromBackend, handlePresetDataMessage, recordRecentPreset, refreshSavePresetModalPeakInfoIfOpen, rejectPendingPresetRequest, applyPresetArchiveSessionState, refreshPresetCacheEntryFromBackend } from "./presets.js";
 import { syncControlsFromState, handleInputModeChanged, handleAmpCabStateChanged, syncAutoLevelControlsFromState, applyStoredInputChannel } from "./controls.js";
 import { showNotification } from "./notifications.js";
@@ -1653,11 +1654,7 @@ function onDspPerformance(payload: IncomingPayload): void {
       blockSize: stats.blockSize ?? stats.stats.blockSize,
     };
     uiState.dspPerformance = mergedStats;
-    uiState.dspPerformanceHistory.push(mergedStats);
-    if (uiState.dspPerformanceHistory.length > 100) {
-      uiState.dspPerformanceHistory.shift();
-    }
-   
+    recordDspLoadSample(mergedStats.dspLoadPercent);
     queueTelemetryUiUpdate("dsp");
   }
 }

@@ -344,6 +344,10 @@ class MultiPresetMixer
     [[nodiscard]] std::optional<InstanceConfig> GetPresetConfig(const std::string& presetId) const;
     /// Live instance count. Instances still fading out after a swap are not counted.
     [[nodiscard]] size_t GetPresetCount() const;
+    /// Every executor's stats, merged. Unlike the per-executor form, the per-node maps
+    /// here are keyed `<scope>::<nodeId>` — `pre::`, `post::`, or the preset id — because
+    /// a bare node id does not identify a node across executors. This is the form the UI
+    /// receives.
     [[nodiscard]] SignalGraphExecutor::DSPPerformanceStats GetPerformanceStats() const;
     /// Total algorithmic latency in samples: pre-chain + max(preset instances) + post-chain.
     [[nodiscard]] int GetTotalLatencySamples() const;

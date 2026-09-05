@@ -2442,6 +2442,10 @@ SignalGraphExecutor::DSPPerformanceStats MultiPresetMixer::GetPerformanceStats()
 {
     SignalGraphExecutor::DSPPerformanceStats aggregatedStats;
 
+    // Node ids only distinguish nodes inside one executor, so every id is rewritten to
+    // `<scope>::<nodeId>` on the way in. Merging them unscoped would fold every
+    // executor's `__input__` into one entry, and two mixer slots running the same preset
+    // would collide on every node it has.
     const auto mergeStats = [&aggregatedStats](const SignalGraphExecutor::DSPPerformanceStats& stats,
                                                const std::string& scopedPrefix) {
         aggregatedStats.totalProcessingTimeUs += stats.totalProcessingTimeUs;
@@ -2449,45 +2453,13 @@ SignalGraphExecutor::DSPPerformanceStats MultiPresetMixer::GetPerformanceStats()
 
         for (const auto& [nodeId, timeUs] : stats.nodeProcessingTimesUs)
         {
-            aggregatedStats.nodeProcessingTimesUs[nodeId] += timeUs;
-        }
-
-        if (stats.scopedNodeProcessingTimesUs.empty())
-        {
-            for (const auto& [nodeId, timeUs] : stats.nodeProcessingTimesUs)
-            {
-                aggregatedStats.scopedNodeProcessingTimesUs[scopedPrefix + nodeId] += timeUs;
-            }
-        }
-        else
-        {
-            for (const auto& [nodeId, timeUs] : stats.scopedNodeProcessingTimesUs)
-            {
-                aggregatedStats.scopedNodeProcessingTimesUs[scopedPrefix + nodeId] += timeUs;
-            }
+            aggregatedStats.nodeProcessingTimesUs[scopedPrefix + nodeId] += timeUs;
         }
 
         for (const auto& [nodeId, latencySamples] : stats.nodeLatencySamples)
         {
-            aggregatedStats.nodeLatencySamples[nodeId] =
-                std::max(aggregatedStats.nodeLatencySamples[nodeId], latencySamples);
-        }
-
-        if (stats.scopedNodeLatencySamples.empty())
-        {
-            for (const auto& [nodeId, latencySamples] : stats.nodeLatencySamples)
-            {
-                aggregatedStats.scopedNodeLatencySamples[scopedPrefix + nodeId] =
-                    std::max(aggregatedStats.scopedNodeLatencySamples[scopedPrefix + nodeId], latencySamples);
-            }
-        }
-        else
-        {
-            for (const auto& [nodeId, latencySamples] : stats.scopedNodeLatencySamples)
-            {
-                aggregatedStats.scopedNodeLatencySamples[scopedPrefix + nodeId] =
-                    std::max(aggregatedStats.scopedNodeLatencySamples[scopedPrefix + nodeId], latencySamples);
-            }
+            auto& slot = aggregatedStats.nodeLatencySamples[scopedPrefix + nodeId];
+            slot = std::max(slot, latencySamples);
         }
     };
 
