@@ -7,7 +7,7 @@ import { renderIcon, getCheckmarkSvg, getXMarkSvg, getPlaySvg } from "./iconAsse
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput } from "./controls.js";
-import { nodeDspLatencySamples, nodeDspPerformanceKey, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
+import { nodeDspLatencySamples, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
 import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 
@@ -1148,153 +1148,6 @@ function getGraphTopologicalOrder(graph: SignalGraph | undefined): Map<string, n
   return order;
 }
 
-function computeGraphCriticalPathNodeIds(graph: SignalGraph | undefined, scopedPrefix: string): Set<string> {
-  if (!graph || !graph.nodes.length) {
-    return new Set<string>();
-  }
-
-  const scopedLatencies = uiState.dspPerformance?.nodeLatencySamples ?? {};
-  const incomingByNode = new Map<string, GraphEdge[]>();
-  const outgoingByNode = new Map<string, GraphEdge[]>();
-  const indegree = new Map<string, number>();
-
-  for (const node of graph.nodes) {
-    indegree.set(node.id, 0);
-  }
-
-  for (const edge of graph.edges) {
-    const incoming = incomingByNode.get(edge.to);
-    if (incoming) {
-      incoming.push(edge);
-    } else {
-      incomingByNode.set(edge.to, [edge]);
-    }
-
-    const outgoing = outgoingByNode.get(edge.from);
-    if (outgoing) {
-      outgoing.push(edge);
-    } else {
-      outgoingByNode.set(edge.from, [edge]);
-    }
-
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
-  }
-
-  const queue = graph.nodes
-    .map((node) => node.id)
-    .filter((nodeId) => (indegree.get(nodeId) ?? 0) === 0);
-  const topoOrder: string[] = [];
-
-  while (queue.length) {
-    const nodeId = queue.shift() ?? "";
-    if (!nodeId) {
-      continue;
-    }
-
-    topoOrder.push(nodeId);
-    for (const edge of outgoingByNode.get(nodeId) ?? []) {
-      const remaining = (indegree.get(edge.to) ?? 0) - 1;
-      indegree.set(edge.to, remaining);
-      if (remaining === 0) {
-        queue.push(edge.to);
-      }
-    }
-  }
-
-  const score = new Map<string, number>();
-  const previous = new Map<string, string | null>();
-
-  for (const nodeId of topoOrder) {
-    let bestIncoming = 0;
-    let bestPrevious: string | null = null;
-    for (const edge of incomingByNode.get(nodeId) ?? []) {
-      const candidate = score.get(edge.from) ?? 0;
-      if (candidate >= bestIncoming) {
-        bestIncoming = candidate;
-        bestPrevious = edge.from;
-      }
-    }
-
-    const ownLatency = scopedLatencies[`${scopedPrefix}${nodeId}`] ?? 0;
-    score.set(nodeId, bestIncoming + ownLatency);
-    previous.set(nodeId, bestPrevious);
-  }
-
-  let cursor = graph.nodes.find((node) => node.id === "__output__")?.id ?? null;
-  if (!cursor) {
-    let bestNode: string | null = null;
-    let bestScore = -1;
-    for (const nodeId of topoOrder) {
-      const candidate = score.get(nodeId) ?? 0;
-      if (candidate >= bestScore) {
-        bestScore = candidate;
-        bestNode = nodeId;
-      }
-    }
-    cursor = bestNode;
-  }
-
-  const path = new Set<string>();
-  while (cursor) {
-    path.add(cursor);
-    cursor = previous.get(cursor) ?? null;
-  }
-
-  return path;
-}
-
-function getOverallCriticalPathMembership(diagnostics: SignalLevelDiagnostics | null | undefined): Set<string> {
-  const membership = new Set<string>();
-  if (!diagnostics?.nodes?.length) {
-    return membership;
-  }
-
-  for (const nodeId of computeGraphCriticalPathNodeIds(uiState.globalSignalChain?.preChainGraph, "pre::")) {
-    membership.add(`pre::${nodeId}`);
-  }
-
-  for (const nodeId of computeGraphCriticalPathNodeIds(uiState.globalSignalChain?.postChainGraph, "post::")) {
-    membership.add(`post::${nodeId}`);
-  }
-
-  const presetIds = Array.from(new Set(
-    diagnostics.nodes
-      .filter((node) => node.scope === "preset" && typeof node.presetId === "string" && node.presetId)
-      .map((node) => node.presetId as string)
-  ));
-
-  let winningPresetId: string | null = null;
-  let winningPresetNodes = new Set<string>();
-  let winningPresetLatency = -1;
-  const scopedLatencies = uiState.dspPerformance?.nodeLatencySamples ?? {};
-
-  for (const presetId of presetIds) {
-    const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((entry) => entry.id === presetId);
-    const criticalNodes = computeGraphCriticalPathNodeIds(preset?.graph, `${presetId}::`);
-    let totalLatency = 0;
-    for (const nodeId of criticalNodes) {
-      totalLatency += scopedLatencies[`${presetId}::${nodeId}`] ?? 0;
-    }
-    if (totalLatency >= winningPresetLatency) {
-      winningPresetLatency = totalLatency;
-      winningPresetId = presetId;
-      winningPresetNodes = criticalNodes;
-    }
-  }
-
-  if (winningPresetId) {
-    for (const nodeId of winningPresetNodes) {
-      membership.add(`${winningPresetId}::${nodeId}`);
-    }
-  }
-
-  return membership;
-}
-
-function isNodeOnCriticalPath(node: SignalLevelNodeMetrics, criticalPathMembership: Set<string>): boolean {
-  return criticalPathMembership.has(nodeDspPerformanceKey(node));
-}
-
 // Threshold (dBFS) for each segment, top → bottom in the DOM (rendered bottom-up via flex column-reverse).
 // Matches the data-db attributes on .vu-seg elements in index.html.
 const VU_SEGMENT_THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48] as const;
@@ -1409,8 +1262,8 @@ let signalDiagnosticsLastListHtml: string | null = null;
  *
  * Only some of that is the Signal Diagnostics panel, and the panel is usually not on
  * screen — it lives in Settings → DSP Performance. Rendering it regardless meant
- * rebuilding a per-node table, recomputing every preset's critical path and escaping a
- * few hundred cells into a container with `display: none`, on every frame, for nobody.
+ * rebuilding a per-node table and escaping a few hundred cells into a container with
+ * `display: none`, on every frame, for nobody.
  *
  * The other two are not optional: the peak hold is state the save-preset modal reads
  * back, and the input VU meter and the signal path's clip indicators are on the main
@@ -1593,13 +1446,10 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
   }
 
   if (listEl) {
-    const criticalPathMembership = getOverallCriticalPathMembership(diagnostics);
-
     const makeNodeRow = (
       scope: string,
       label: string,
       channelCount: number | null,
-      isCriticalPath: boolean,
       timeUs: number | null,
       latencySamples: number | null,
       peakDbfs: number,
@@ -1613,13 +1463,10 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
         ? "stereo-unknown"
         : (channelCount > 1 ? "stereo-on" : "stereo-off");
       const channelText = channelCount == null || channelCount <= 0 ? "n/a" : `${Math.round(channelCount)}ch`;
-      const criticalBadge = isCriticalPath
-        ? '<span class="critical-path-badge" title="Contributes to reported plugin latency">Critical</span>'
-        : "";
       return `
         <div class="signal-diagnostics-item">
           <span class="signal-diagnostics-cell scope">${escapeHtml(scope)}</span>
-          <span class="signal-diagnostics-cell node">${criticalBadge}${label}</span>
+          <span class="signal-diagnostics-cell node">${label}</span>
           <span class="signal-diagnostics-cell stereo ${channelClass}">${channelText}</span>
           <span class="signal-diagnostics-cell">${formatTimeShare(timeUs)}</span>
           <span class="signal-diagnostics-cell">${formatNodeLatencySamples(latencySamples, uiState.dspPerformance?.sampleRate)}</span>
@@ -1637,7 +1484,6 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
       "in",
       "chain input",
       null,
-      false,
       null,
       null,
       hold?.input.peakDbfs ?? input.peakDbfs,
@@ -1680,12 +1526,11 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
     const nodeRows = sortedNodes
       .map((node) => {
         const nodeLabel = escapeHtml(getSignalDiagnosticsNodeLabel(node));
-        const isCriticalPath = isNodeOnCriticalPath(node, criticalPathMembership);
         const nodeTimeUs = nodeDspProcessingTimeUs(node);
         const nodeLatencySamples = nodeDspLatencySamples(node);
         const levels = node.levels ?? { peakDbfs: Number.NaN, headroomDb: Number.NaN, clipped: false, clipCount: 0 };
         const holdEntry = hold?.nodes[node.nodeId];
-        return makeNodeRow(node.scope, nodeLabel, node.channelCount ?? null, isCriticalPath, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
+        return makeNodeRow(node.scope, nodeLabel, node.channelCount ?? null, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
       })
       .join("");
 

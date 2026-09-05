@@ -1,9 +1,9 @@
 /**
  * Reading the engine's `dspPerformance` feed.
  *
- * The feed is a UI-only diagnostic: it drives the performance panel's plot, the per-node
- * time and latency readouts, and the critical-path highlight that shows where a chain's
- * budget is going. Nothing is persisted from it and nothing outside the app sees it.
+ * The feed is a UI-only diagnostic: it drives the performance panel's plot and the
+ * per-node time and latency readouts that show where a chain's budget is going. Nothing
+ * is persisted from it and nothing outside the app sees it.
  *
  * Both per-node maps are keyed `<scope>::<nodeId>`, because a node id only identifies a
  * node within one executor — every executor has an `__input__`, and the same preset in
@@ -29,8 +29,9 @@ export function recordDspLoadSample(loadPercent: number): void {
   }
 }
 
-/** The key a node's entries live under in both `dspPerformance` node maps. */
-export function nodeDspPerformanceKey(node: SignalLevelNodeMetrics): string {
+/** The key a node's entries live under in both `dspPerformance` node maps. Private: the
+ *  two lookups below are the whole of what callers need. */
+function nodeDspPerformanceKey(node: SignalLevelNodeMetrics): string {
   if (node.scope === "preset") {
     return `${node.presetId ?? uiState.activePresetId ?? ""}::${node.nodeId}`;
   }

@@ -402,8 +402,8 @@ export interface MixerState {
 }
 
 /** The engine's `dspPerformance` feed, at kDspPerformanceStatsRateHz while the UI is up.
- *  Both node maps are keyed `<scope>::<nodeId>` — build the key with
- *  `nodeDspPerformanceKey()` rather than assembling it at the call site. */
+ *  Both node maps are keyed `<scope>::<nodeId>`; read them through `ts/dspPerformance.ts`
+ *  rather than assembling that key at the call site. */
 export interface DSPPerformanceStats {
   totalProcessingTimeUs: number;
   realTimeUs: number;

@@ -1203,20 +1203,6 @@ body.fx-dragging .signal-connector {
   opacity: 0.8;
 }
 
-.critical-path-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #ffe8a3;
-  background: rgba(156, 110, 16, 0.32);
-  border: 1px solid rgba(255, 210, 92, 0.42);
-}
-
 .signal-diagnostics-cell.clip {
   font-weight: 600;
 }
