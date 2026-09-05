@@ -2,11 +2,13 @@
  * @file ProfilerPresets.h
  * @brief Preset graphs spanning the range of chain weights the profiler measures.
  *
- * Three tiers, because the answer to "how much of a block is overhead" depends
+ * Four tiers, because the answer to "how much of a block is overhead" depends
  * entirely on how much real DSP the chain does:
  *   light    -- input, one trivial node, output: essentially pure framework overhead
  *   baseline -- delay/EQ/reverb, no model files (matches SignalChainThreadingBenchmark)
  *   namconv  -- NAM amp into IR cab into convolution reverb: a realistic amp rig
+ *   applive  -- the chain the running app actually reported: NAM, IR cab, room
+ *               reverb, delay, doubler
  */
 
 #pragma once
@@ -143,6 +145,69 @@ inline std::optional<NamConvAssets> DiscoverNamConvAssets(const fs::path& repoRo
     assets.irCab = irs[0];
     assets.reverbIr = irs[1];
     return assets;
+}
+
+/// The chain a real session actually runs, taken from the live app's telemetry:
+/// NAM amp -> IR cab -> algorithmic room reverb -> digital delay -> doubler. It
+/// differs from namconv in the tail: a factory preset reaches for the algorithmic
+/// reverb rather than a second convolver, and carries two cheap time-based nodes
+/// after it.
+inline Preset CreateAppLivePreset(const std::string& id, const NamConvAssets& assets)
+{
+    Preset preset;
+    preset.id = id;
+    preset.name = id;
+
+    SignalGraph graph;
+    graph.nodes.push_back({"in", kNodeTypeInput, "", "Input", true});
+
+    GraphNode amp;
+    amp.id = "amp";
+    amp.type = "amp_nam_optimized";
+    amp.category = "amp";
+    amp.label = "NAM Amp";
+    amp.enabled = true;
+    ResourceRef ampRef;
+    ampRef.resourceType = "nam";
+    ampRef.filePath = assets.model;
+    amp.resources.push_back(ampRef);
+    graph.nodes.push_back(std::move(amp));
+
+    GraphNode cab;
+    cab.id = "cab";
+    cab.type = "ir_cab";
+    cab.category = "cab";
+    cab.label = "IR Cab";
+    cab.enabled = true;
+    ResourceRef cabRef;
+    cabRef.resourceType = "ir";
+    cabRef.filePath = assets.irCab;
+    cab.resources.push_back(cabRef);
+    graph.nodes.push_back(std::move(cab));
+
+    graph.nodes.push_back({"rev", "reverb_room", "reverb", "Room Reverb", true});
+    graph.nodes.back().params["mix"] = 0.22;
+    graph.nodes.back().params["roomSize"] = 0.55;
+    graph.nodes.back().params["damping"] = 0.40;
+
+    graph.nodes.push_back({"delay", "delay_digital", "delay", "Delay", true});
+    graph.nodes.back().params["timeMs"] = 320.0;
+    graph.nodes.back().params["feedback"] = 0.30;
+    graph.nodes.back().params["mix"] = 0.20;
+
+    graph.nodes.push_back({"doubler", "delay_doubler", "modulation", "Doubler", true});
+
+    graph.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
+
+    graph.edges.push_back({"in", "amp", 0, 0, 1.0});
+    graph.edges.push_back({"amp", "cab", 0, 0, 1.0});
+    graph.edges.push_back({"cab", "rev", 0, 0, 1.0});
+    graph.edges.push_back({"rev", "delay", 0, 0, 1.0});
+    graph.edges.push_back({"delay", "doubler", 0, 0, 1.0});
+    graph.edges.push_back({"doubler", "out", 0, 0, 1.0});
+
+    preset.graph = std::move(graph);
+    return preset;
 }
 
 /// A realistic amp rig: NAM amp into an IR cab into a convolution reverb. This is

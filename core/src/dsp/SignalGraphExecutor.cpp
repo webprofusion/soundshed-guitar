@@ -226,6 +226,10 @@ SignalGraphExecutor& SignalGraphExecutor::operator=(SignalGraphExecutor&& other)
     mSignalDiagnosticsEnabled.store(other.mSignalDiagnosticsEnabled.load(std::memory_order_acquire),
                                     std::memory_order_release);
     mUseParallelLevels = other.mUseParallelLevels;
+    // Carried so the BuildExecutionPlan() below re-seeds the moved processors. Without it
+    // they would keep the tempo they already had and only pick a new one up when it next
+    // changed — right, but only by accident.
+    mAppliedTempoBpm = other.mAppliedTempoBpm;
 
     // The plan is pointers into mNodeStates, mGraph and the processors. Moving those
     // containers happens to preserve element addresses, but relying on that would make
@@ -1338,24 +1342,26 @@ void SignalGraphExecutor::SetNodeParam(const std::string& nodeId, const std::str
     }
 }
 
+// The host callback pushes the tempo before every block, so this runs at block rate on
+// the audio thread. Which nodes want it is a property of the graph, resolved in
+// BuildExecutionPlan(); what is left here is a compare and, on the rare block where the
+// tempo actually moved, one SetParam per tempo-aware node.
 void SignalGraphExecutor::SetTempo(double bpm)
 {
-    auto& registry = EffectRegistry::Instance();
-
-    for (auto& [id, state] : mNodeStates)
+    if (bpm == mAppliedTempoBpm)
     {
-        if (!state.processor)
-        {
-            continue;
-        }
+        return;
+    }
 
-        const auto resolvedType = registry.Resolve(state.type);
-        const auto typeInfo = registry.GetTypeInfo(resolvedType);
+    mAppliedTempoBpm = bpm;
+    ApplyTempoToProcessors();
+}
 
-        if (typeInfo && typeInfo->requiresTempo)
-        {
-            state.processor->SetParam("bpm", bpm);
-        }
+void SignalGraphExecutor::ApplyTempoToProcessors()
+{
+    for (EffectProcessor* processor : mTempoAwareProcessors)
+    {
+        processor->SetParam("bpm", mAppliedTempoBpm);
     }
 }
 

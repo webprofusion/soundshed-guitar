@@ -244,6 +244,8 @@ class SignalGraphExecutor
     void BuildExecutionOrder();
     void BuildExecutionLevels();
     void BuildExecutionPlan();
+    /// Pushes mAppliedTempoBpm to every processor in mTempoAwareProcessors.
+    void ApplyTempoToProcessors();
     void CreateProcessors();
     void AllocateBuffers(int maxBlockSize);
     [[nodiscard]] NodeState* FindNodeState(const std::string& id);
@@ -270,6 +272,15 @@ class SignalGraphExecutor
     PlannedNode* mInputPlanNode = nullptr;
     /// Output candidates in id order; Process() takes the first one that ran this block.
     std::vector<PlannedNode*> mOutputPlanNodes;
+    /// Processors whose type declares requiresTempo, resolved once per plan build.
+    /// SetTempo() runs on the audio thread every block, and asking the registry which
+    /// nodes are tempo-aware there meant a string copy and an EffectTypeInfo copy — a
+    /// deep one, parameter and preset vectors included — per node per block.
+    std::vector<EffectProcessor*> mTempoAwareProcessors;
+    /// Last tempo pushed to those processors. Tracked so an unchanged tempo — every block
+    /// but the handful where it actually moves — costs a comparison instead of a SetParam
+    /// walk through each effect's string-keyed parameter dispatch.
+    double mAppliedTempoBpm = 0.0;
     /// The nodes literally named "__input__"/"__output__", which carry the trim gains.
     /// Distinct from the plan nodes above: a preset can have an input-*typed* node under
     /// a different id, and the trim only ever came from the well-known ids.

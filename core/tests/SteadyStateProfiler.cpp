@@ -2,9 +2,10 @@
  * @file SteadyStateProfiler.cpp
  * @brief Samples the real steady-state audio path to show where audio-thread CPU goes.
  *
- * This is a profiler, not a test. It drives MultiPresetMixer::Process on a dedicated
- * thread exactly the way the host callback does, and samples that thread's call stack
- * from a second thread (see helpers/StackSampler.h). That needs no elevation, unlike
+ * This is a profiler, not a test. It drives the mixer on a dedicated thread doing the
+ * same per-block work the host callback does — the global chain in place, the tempo
+ * pushed, then Process — and samples that thread's call stack from a second thread
+ * (see helpers/StackSampler.h). That needs no elevation, unlike
  * ETW/WPR CPU sampling, and it attributes cost to real function names in the shipping
  * code rather than to a stopwatch someone had to place by hand.
  *
@@ -12,7 +13,7 @@
  * run back to back rather than at the audio device's pace.
  *
  * Usage:
- *   SteadyStateProfiler [--profile light|baseline|namconv] [--block N] [--sr N]
+ *   SteadyStateProfiler [--profile light|baseline|namconv|applive] [--block N] [--sr N]
  *                       [--seconds S] [--diagnostics on|off|both] [--presets N]
  *                       [--repeats N] [--top N] [--callers-of substr] [--csv path]
  */
@@ -127,6 +128,13 @@ ProfileReport RunProfile(const RunConfig& config, const std::optional<NamConvAss
     }
 
     mixer.SetMultiThreadedProcessingEnabled(false);
+
+    // The app always has a global chain either side of the preset graph — a gate and a
+    // transpose in front, an EQ and a doubler behind, all disabled by default. Disabled
+    // nodes still cost per-block bookkeeping, and the mixer's per-block calls fan out
+    // over them, so a profile without them understates the framework's share.
+    mixer.SetGlobalChainConfig(GlobalSignalChainConfig::CreateDefault());
+
     mixer.Prepare(settings.sampleRate, settings.blockSize);
     mixer.SetSignalDiagnosticsEnabled(config.diagnosticsEnabled);
 
@@ -138,6 +146,10 @@ ProfileReport RunProfile(const RunConfig& config, const std::optional<NamConvAss
         if (settings.profile == "namconv" && namAssets.has_value())
         {
             preset = CreateNamConvPreset(id, *namAssets);
+        }
+        else if (settings.profile == "applive" && namAssets.has_value())
+        {
+            preset = CreateAppLivePreset(id, *namAssets);
         }
         else if (settings.profile == "light")
         {
@@ -183,9 +195,19 @@ ProfileReport RunProfile(const RunConfig& config, const std::optional<NamConvAss
 
     const int warmupBlocks = 200;
 
+    // PluginController::ProcessAudioLocked pushes the tempo before every Process call, so
+    // a profile that only calls Process misses whatever that costs. Keep the two together
+    // here: this is meant to be the host callback's per-block work, not just the graph's.
+    constexpr double kTempoBpm = 120.0;
+
+    const auto processOneBlock = [&]() {
+        mixer.SetTempo(kTempoBpm);
+        mixer.Process(inputs, outputs, settings.blockSize);
+    };
+
     for (int i = 0; i < warmupBlocks; ++i)
     {
-        mixer.Process(inputs, outputs, settings.blockSize);
+        processOneBlock();
     }
 
     // Hard ceiling so a pathologically cheap chain cannot run away; the wall-clock
@@ -229,7 +251,7 @@ ProfileReport RunProfile(const RunConfig& config, const std::optional<NamConvAss
             inR[0] += nudge;
 
             const auto start = std::chrono::steady_clock::now();
-            mixer.Process(inputs, outputs, settings.blockSize);
+            processOneBlock();
             const auto end = std::chrono::steady_clock::now();
 
             blockTimesUs.push_back(std::chrono::duration<double, std::micro>(end - start).count());
@@ -521,7 +543,7 @@ bool ParseArgs(int argc, char* argv[], Settings& settings)
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::cout << "SteadyStateProfiler [--profile light|baseline|namconv] [--block N] [--sr N]\n"
+            std::cout << "SteadyStateProfiler [--profile light|baseline|namconv|applive] [--block N] [--sr N]\n"
                       << "                    [--seconds S] [--presets N] [--diagnostics on|off|both]\n"
                       << "                    [--top N] [--csv path]\n";
             return false;
@@ -561,13 +583,13 @@ int main(int argc, char* argv[])
 
     std::optional<NamConvAssets> namAssets;
 
-    if (settings.profile == "namconv")
+    if (settings.profile == "namconv" || settings.profile == "applive")
     {
         namAssets = DiscoverNamConvAssets(fs::current_path());
 
         if (!namAssets.has_value())
         {
-            std::cerr << "namconv profile needs .nam and .wav assets under resources/metal-presets; "
+            std::cerr << settings.profile << " profile needs .nam and .wav assets under resources/metal-presets; "
                       << "falling back to baseline.\n";
             settings.profile = "baseline";
         }

@@ -741,6 +741,18 @@ class ReverbEffect : public EffectProcessor
         return std::max<size_t>(1, static_cast<size_t>(samples));
     }
 
+    // Wraps a read index that is at most one buffer length past the end.
+    //
+    // `writePos + size - back` with writePos and back both in [0, size-1] lands in
+    // [1, 2*size-1], so one conditional subtract is the whole of the wrap. A `%` here
+    // would be a 64-bit integer division, and Process() takes 58 of these per sample
+    // (pre-delay, four early taps, eight combs and four allpasses, each stereo, and the
+    // fractional reads take two apiece) — enough divisions to dominate the reverb.
+    static size_t WrapReadIndex(size_t readPos, size_t size)
+    {
+        return readPos >= size ? readPos - size : readPos;
+    }
+
     static float ReadFromDelay(const std::vector<float>& buffer, size_t writePos, size_t delaySamples)
     {
         if (buffer.empty())
@@ -748,9 +760,9 @@ class ReverbEffect : public EffectProcessor
             return 0.0f;
         }
 
-        const size_t back = std::min(delaySamples, buffer.size() - 1);
-        const size_t readPos = (writePos + buffer.size() - back) % buffer.size();
-        return buffer[readPos];
+        const size_t size = buffer.size();
+        const size_t back = std::min(delaySamples, size - 1);
+        return buffer[WrapReadIndex(writePos + size - back, size)];
     }
 
     // Linear-interpolated delay read — eliminates integer-step zipper noise when delay
@@ -762,10 +774,16 @@ class ReverbEffect : public EffectProcessor
             return 0.0f;
         }
 
+        // The two taps are adjacent, so the second is the first stepped back by one —
+        // no need to redo the clamp and the wrap for it.
+        const size_t size = buffer.size();
         const size_t d0 = static_cast<size_t>(delaySamples);
         const float frac = delaySamples - static_cast<float>(d0);
-        const float s0 = ReadFromDelay(buffer, writePos, d0);
-        const float s1 = ReadFromDelay(buffer, writePos, d0 + 1);
+        const size_t back1 = std::min(d0 + 1, size - 1);
+        const size_t pos1 = WrapReadIndex(writePos + size - back1, size);
+        const size_t pos0 = WrapReadIndex(pos1 + 1, size);
+        const float s1 = buffer[pos1];
+        const float s0 = buffer[pos0];
         return s0 + frac * (s1 - s0);
     }
 

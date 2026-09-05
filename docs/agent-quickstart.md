@@ -150,6 +150,16 @@ files still have to come in under 800. CI runs this
   `clang-format --style=file -i <files>`
 - C++ structure check: `node tools/check-cpp-file-sizes.js`
 - Skip the slow benchmarks: add `-LE benchmark`
+- **Where audio-thread CPU goes:** `core/tests/SteadyStateProfiler.cpp` — build it
+  `RelWithDebInfo` (it needs symbols) and run it from the repo root, which is where it
+  looks for `resources/`:
+  `./core/build/tests/RelWithDebInfo/SteadyStateProfiler.exe --profile applive --block 64 --diagnostics both`
+  It drives the mixer on its own thread doing the host callback's per-block work and
+  samples that thread's stacks, so costs land on real function names. `--profile` picks
+  the chain: `light` (framework overhead only), `baseline` (all-DSP, no model files),
+  `namconv`, or `applive` (the chain a real session runs — NAM, IR cab, room reverb,
+  delay, doubler). `--callers-of malloc` is the one that turns "the heap is busy" into
+  the line that allocates. It is not registered with ctest.
 - The signal-chain mutation stress test (~15 min concurrency fuzzer, random seed) is not
   registered with ctest by default. Run its executable directly, or reconfigure with
   `-DGUITARFX_TEST_STRESS=ON`. It writes `SignalChainMutationStressTest-last-trace.log`

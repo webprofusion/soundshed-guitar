@@ -12,6 +12,7 @@
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/SignalGraphExecutorInternal.h"
 #include "dsp/EffectProcessor.h"
+#include "dsp/EffectRegistry.h"
 #include "dsp/effects/MixerEffect.h"
 
 #include <algorithm>
@@ -43,6 +44,7 @@ void SignalGraphExecutor::BuildExecutionPlan()
     mExecutionLevelPlan.clear();
     mInputPlanNode = nullptr;
     mOutputPlanNodes.clear();
+    mTempoAwareProcessors.clear();
     mInputTrimNode = mGraph.FindNode("__input__");
     mOutputTrimNode = mGraph.FindNode("__output__");
 
@@ -53,6 +55,8 @@ void SignalGraphExecutor::BuildExecutionPlan()
     // Index of each node's entry in mPlan, so edges can be resolved without a second
     // pass of string lookups.
     std::map<std::string, int> planIndexById;
+
+    auto& registry = EffectRegistry::Instance();
 
     for (auto& [id, state] : mNodeStates)
     {
@@ -71,6 +75,19 @@ void SignalGraphExecutor::BuildExecutionPlan()
         if (planned.isMixer && state.processor)
         {
             planned.mixer = dynamic_cast<MixerEffect*>(state.processor.get());
+        }
+
+        // Resolved here rather than in SetTempo(), which the host callback drives once
+        // per block: GetTypeInfo() returns EffectTypeInfo by value, and that is a deep
+        // copy of every parameter and preset definition the type declares.
+        if (state.processor)
+        {
+            const auto typeInfo = registry.GetTypeInfo(registry.Resolve(state.type));
+
+            if (typeInfo && typeInfo->requiresTempo)
+            {
+                mTempoAwareProcessors.push_back(state.processor.get());
+            }
         }
 
         mPlan.push_back(std::move(planned));
@@ -143,6 +160,14 @@ void SignalGraphExecutor::BuildExecutionPlan()
         }
 
         mExecutionLevelPlan.push_back(std::move(levelPlan));
+    }
+
+    // A node added to a running graph gets a freshly constructed processor that has never
+    // seen a tempo, and SetTempo() only pushes on a change — so seed the new set here.
+    // Zero means nothing has pushed a tempo yet, and there is nothing to seed with.
+    if (mAppliedTempoBpm > 0.0)
+    {
+        ApplyTempoToProcessors();
     }
 }
 

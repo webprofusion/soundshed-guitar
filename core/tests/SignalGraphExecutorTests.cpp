@@ -499,6 +499,62 @@ bool TestNodeTypeConfigDefaultReachesCompositeInterior()
     exec.SetNodeTypeConfigDefault(kConfigProbeType, "oversampling", "2");
     return wrapped->GetInnerExecutor().GetNodeConfig("probe", "oversampling") == "2";
 }
+
+guitarfx::SignalGraph MakeTempoSyncedDelayGraph()
+{
+    using namespace guitarfx;
+    SignalGraph g;
+    GraphNode in;
+    in.id = "in";
+    in.type = "input";
+    GraphNode delay;
+    delay.id = "delay";
+    delay.type = "delay_digital";
+    delay.category = "delay";
+    GraphNode out;
+    out.id = "out";
+    out.type = "output";
+    g.nodes = {in, delay, out};
+    g.edges = {{"in", "delay"}, {"delay", "out"}};
+    return g;
+}
+
+/// SetTempo runs on the audio thread once per block, so it only pushes when the tempo
+/// actually changed and it works off a node list resolved when the plan was built. Both
+/// of those are ways to silently stop delivering the tempo — this pins the delivery.
+bool TestTempoReachesTempoAwareNodes()
+{
+    using namespace guitarfx;
+    RegisterAllEffects();
+
+    SignalGraphExecutor exec;
+    exec.SetGraph(MakeTempoSyncedDelayGraph());
+    exec.Prepare(kSR, kBlock);
+    exec.SetTempo(132.0);
+
+    auto* processor = exec.GetNodeProcessor("delay");
+
+    if (!processor || std::abs(processor->GetParam("bpm") - 132.0) > 1e-6)
+    {
+        return false;
+    }
+
+    // A change still lands.
+    exec.SetTempo(90.0);
+
+    if (std::abs(processor->GetParam("bpm") - 90.0) > 1e-6)
+    {
+        return false;
+    }
+
+    // A graph rebuilt afterwards gets brand-new processors that have never seen a tempo.
+    // Nothing will push one at them until the tempo next moves, so the rebuild has to
+    // seed them with the tempo already in force.
+    exec.SetGraph(MakeTempoSyncedDelayGraph());
+    exec.Prepare(kSR, kBlock);
+    auto* rebuilt = exec.GetNodeProcessor("delay");
+    return rebuilt != nullptr && std::abs(rebuilt->GetParam("bpm") - 90.0) <= 1e-6;
+}
 } // namespace
 
 int main()
@@ -1145,6 +1201,21 @@ int main()
     {
         const bool ok = TestNodeTypeConfigDefaultReachesCompositeInterior();
         std::cout << "Node-type config default (inside composite):" << (ok ? "  PASS" : "  FAIL") << "\n";
+
+        if (ok)
+        {
+            ++passed;
+        }
+        else
+        {
+            ++failed;
+        }
+    }
+
+    // Case 14: Tempo reaches tempo-aware nodes, including after a graph rebuild
+    {
+        const bool ok = TestTempoReachesTempoAwareNodes();
+        std::cout << "Tempo delivery to tempo-aware nodes:" << (ok ? "  PASS" : "  FAIL") << "\n";
 
         if (ok)
         {

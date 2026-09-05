@@ -80,8 +80,10 @@ class ParametricEQEffect : public EffectProcessor
     {
         for (int i = 0; i < numSamples; ++i)
         {
-            float sampleL = inputs[0] ? inputs[0][i] : 0.0f;
-            float sampleR = inputs[1] ? inputs[1][i] : 0.0f;
+            // Sanitised once here, not once per band: after the first band the sample is
+            // that band's output, which the finiteness check below has already vetted.
+            float sampleL = SanitizeSample(inputs[0] ? inputs[0][i] : 0.0f);
+            float sampleR = SanitizeSample(inputs[1] ? inputs[1][i] : 0.0f);
 
             // Each band is applied serially; the output of one feeds the input of the next.
             for (auto& band : mBands)
@@ -91,11 +93,12 @@ class ParametricEQEffect : public EffectProcessor
                     continue;
                 }
 
-                // Flush denormals and NaN before feeding into the biquad to prevent
-                // the accumulator from drifting into non-finite territory.
-                sampleL = SanitizeSample(sampleL);
-                sampleR = SanitizeSample(sampleR);
-                SanitizeBandState(band);
+                // The delay lines hold nothing but finite values already — a reset writes
+                // zeros, and every value stored below is either the sanitised input or a
+                // checked output — so they are not re-checked here. They used to be, at
+                // eight std::isfinite calls per band per sample; MSVC compiles each of
+                // those into an _fdtest call, and on a four-band EQ that alone was most of
+                // this effect's cost.
 
                 // Left channel — Direct Form I: y = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
                 float outL = band.b0 * sampleL + band.b1 * band.z1L + band.b2 * band.z2L - band.a1 * band.x1L -
@@ -401,20 +404,6 @@ class ParametricEQEffect : public EffectProcessor
         band.z1R = band.z2R = 0.0f;
         band.x1L = band.x2L = 0.0f;
         band.x1R = band.x2R = 0.0f;
-    }
-
-    // Replaces any non-finite values in the delay lines with zero.  Called every
-    // sample to prevent denormal creep from eventually producing NaN output.
-    static void SanitizeBandState(Band& band)
-    {
-        band.z1L = SanitizeSample(band.z1L);
-        band.z2L = SanitizeSample(band.z2L);
-        band.z1R = SanitizeSample(band.z1R);
-        band.z2R = SanitizeSample(band.z2R);
-        band.x1L = SanitizeSample(band.x1L);
-        band.x2L = SanitizeSample(band.x2L);
-        band.x1R = SanitizeSample(band.x1R);
-        band.x2R = SanitizeSample(band.x2R);
     }
 
     // Sets the biquad to a unity-gain all-pass: H(z) = 1.  Used when gain is
