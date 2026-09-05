@@ -1,5 +1,9 @@
-/* ===== Splash Screen ===== */
+/* ===== Startup cover ===== */
 
+/* Shown from first paint until the UI is ready, then removed (see ts/splash.ts).
+   The ground is hardcoded dark rather than themed, because the theme variables are not
+   resolved yet at first paint; splash-theme-ready swaps to the real theme just before
+   the cover goes, so a light theme does not flash from dark. */
 #splash-screen {
   position: fixed;
   top: 0;
@@ -7,8 +11,10 @@
   right: 0;
   bottom: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   background:
     radial-gradient(circle at 20% 15%, rgba(44, 89, 170, 0.22) 0%, rgba(44, 89, 170, 0) 40%),
     radial-gradient(circle at 80% 85%, rgba(16, 146, 166, 0.16) 0%, rgba(16, 146, 166, 0) 42%),
@@ -30,77 +36,29 @@
   pointer-events: none;
 }
 
-.splash-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  text-align: center;
-}
-
+/* Scales with the window so it reads the same in a small plugin editor and a maximised
+   standalone one. Both dimensions are set, so there is no reflow when the image lands. */
 .splash-logo {
-  width: 120px;
-  height: 120px;
-  color: #63a4ff;
+  width: min(26vmin, 192px);
+  height: min(26vmin, 192px);
   animation: splash-fade-in 0.6s ease-out;
-  transition: color 0.26s ease;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
-.splash-logo svg {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
-}
-
-.splash-title {
-  font-size: 28px;
-  font-weight: 300;
+/* Only ever present when the boot failed — otherwise the logo sits alone. */
+.splash-error {
   margin: 0;
-  letter-spacing: -0.5px;
-  color: #f4f7ff;
-  animation: splash-fade-in 0.6s ease-out 0.1s both;
-  transition: color 0.26s ease;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  opacity: 0.92;
 }
 
-.splash-subtitle {
-  font-size: 13px;
+.splash-error-title {
   margin: 0;
-  color: #9aa9c0;
-  animation: splash-fade-in 0.6s ease-out 0.2s both;
-  transition: color 0.26s ease;
-}
-
-.splash-spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid rgba(99, 164, 255, 0.24);
-  border-top-color: #63a4ff;
-  border-radius: 50%;
-  animation: splash-spin 0.8s linear infinite, splash-fade-in 0.6s ease-out 0.3s both;
-  transition: border-color 0.26s ease;
-}
-
-#splash-screen.splash-theme-ready .splash-logo {
-  color: var(--accent-color, #cf5f36);
-}
-
-#splash-screen.splash-theme-ready .splash-title {
-  color: var(--text-primary);
-}
-
-#splash-screen.splash-theme-ready .splash-subtitle {
-  color: var(--text-secondary);
-}
-
-#splash-screen.splash-theme-ready .splash-spinner {
-  border-color: color-mix(in srgb, var(--accent-color, #4a9eff) 22%, transparent);
-  border-top-color: var(--accent-color, #4a9eff);
-}
-
-@keyframes splash-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  font-size: 14px;
+  font-weight: 600;
 }
 
 @keyframes splash-fade-in {

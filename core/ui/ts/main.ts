@@ -69,34 +69,28 @@ function describeError(error: unknown): string {
   }
 }
 
+// The startup cover is only the app logo, so a failed boot has to bring its own text --
+// otherwise the logo just sits there forever with nothing said. Both nodes are created
+// here rather than living in the markup, so the success path never carries them.
 function showBootstrapError(details: string): void {
   const splash = document.getElementById("splash-screen");
   if (!splash) return;
 
-  const subtitle = splash.querySelector(".splash-subtitle");
-  if (subtitle) {
-    subtitle.textContent = "Startup failed";
+  if (!splash.querySelector(".splash-error-title")) {
+    const title = document.createElement("p");
+    title.className = "splash-error-title";
+    title.textContent = "Startup failed";
+    splash.appendChild(title);
   }
 
   let detailNode = splash.querySelector(".splash-error") as HTMLElement | null;
   if (!detailNode) {
     detailNode = document.createElement("p");
     detailNode.className = "splash-error";
-    detailNode.style.marginTop = "10px";
-    detailNode.style.fontSize = "12px";
-    detailNode.style.maxWidth = "360px";
-    detailNode.style.textAlign = "center";
-    detailNode.style.opacity = "0.92";
-
-    const splashContent = splash.querySelector(".splash-content");
-    if (splashContent) {
-      splashContent.appendChild(detailNode);
-    }
+    splash.appendChild(detailNode);
   }
 
-  if (detailNode) {
-    detailNode.textContent = details;
-  }
+  detailNode.textContent = details;
 }
 
 function reportBootstrapFailure(source: string, error: unknown): void {

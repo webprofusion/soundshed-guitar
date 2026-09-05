@@ -1,20 +1,7 @@
-    <!-- Splash Screen - shown during initialization, hidden once app is ready -->
-    <div id="splash-screen" class="splash-screen" role="status" aria-live="polite" aria-label="Application loading">
-      <div class="splash-content">
-        <div class="splash-logo">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="100" cy="100" r="95" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/>
-            <path d="M 60 80 Q 100 50 140 80 Q 140 120 100 140 Q 60 120 60 80" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="100" cy="110" r="8" fill="currentColor"/>
-            <path d="M 100 60 L 100 50" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M 130 90 L 138 85" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M 130 130 L 138 138" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M 70 130 L 62 138" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M 70 90 L 62 85" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <h1 class="splash-title">Soundshed Guitar</h1>
-        <p class="splash-subtitle">Initializing...</p>
-        <div class="splash-spinner"></div>
-      </div>
+    <!-- Startup cover: the app logo on a plain ground, removed the moment the UI is
+         ready to render. Deliberately just the logo — no title, tagline or spinner. If
+         the boot fails, main.ts appends a .splash-error message here rather than leaving
+         the logo up with no explanation. -->
+    <div id="splash-screen" role="status" aria-live="polite" aria-label="Loading Soundshed Guitar">
+      <img class="splash-logo" src="images/icon.png" width="128" height="128" alt="Soundshed Guitar" />
     </div>
