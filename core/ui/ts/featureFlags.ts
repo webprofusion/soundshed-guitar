@@ -112,9 +112,8 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     id: Features.MultiRig,
     key: "features.multiRig.enabled",
     label: "Multi-Rig Mixer",
-    description: "Enables mixer controls, Add to Mixer actions, and Multi-Rig preset management.",
-    defaultEnabled: false,
-    legacyAdvanced: true,
+    description: "Run two or more presets at once, balance them in the signal path's Mix tab, and save the combination as a Multi-Rig preset. Adds the Add to Mixer action and the Multi-Rig tab in the preset library.",
+    defaultEnabled: true,
   },
   {
     id: Features.CompositeEffects,
@@ -179,13 +178,13 @@ export const FEATURE_GROUPS: FeatureGroupDefinition[] = [
     id: "core",
     title: "Core Features",
     description: "These are the default features enabled in the app which you can optionally switch off.",
-    featureIds: [Features.Tone3000, Features.ResourceLibrary, Features.RiffLibrary, Features.ToneSharing, Features.Jam, Features.PracticeTool],
+    featureIds: [Features.Tone3000, Features.ResourceLibrary, Features.RiffLibrary, Features.ToneSharing, Features.Jam, Features.PracticeTool, Features.MultiRig],
   },
   {
     id: "power",
     title: "Power Features",
     description: "These features are optional and may be under development or designed for advanced users.",
-    featureIds: [Features.AiToneSearch, Features.ExperimentalEffects, Features.CustomEffects, Features.MultiRig, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives, Features.DebugStateCapture, Features.EffectsPerformancePads],
+    featureIds: [Features.AiToneSearch, Features.ExperimentalEffects, Features.CustomEffects, Features.CompositeEffects, Features.BlendTools, Features.EffectLayout, Features.ResourceCleanup, Features.FactoryPresetArchives, Features.DebugStateCapture, Features.EffectsPerformancePads],
   },
 ];
 

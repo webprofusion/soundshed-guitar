@@ -1,12 +1,13 @@
 import { renderDemoAudioControls, bindDemoAudioControls } from "./demoAudio.js";
 import { uiState, setFocusedMixerPresetId } from "./state.js";
-import { addActivePreset, removeActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, focusMixerPreset } from "./bridge.js";
+import { addActivePreset, removeActivePreset, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMixGainDb, focusMixerPreset } from "./bridge.js";
 import { escapeHtml, idAccentColor } from "./utils.js";
 import { updateSignalPathClipIndicators, renderSignalPathBar } from "./signalPath.js";
 import { renderIcon, getCheckmarkSvg, getXMarkSvg, getPlaySvg } from "./iconAssets.js";
 import { EffectGuids } from "./effectGuids.js";
 import { EffectTypeRegistry } from "./presetV2.js";
-import { enhanceRangeInput } from "./controls.js";
+import { enhanceRangeInput, formatGainDb } from "./controls.js";
+import { MIX_GAIN_MAX_DB, MIX_GAIN_MIN_DB } from "./multiPresetMixerSupport.js";
 import { nodeDspLatencySamples, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
 import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
@@ -155,11 +156,8 @@ function buildMixerMarkup(): string {
     <div class="mixer-panel">
       <div class="mixer-master">
         <label class="mixer-control">
-          <span>Master Gain</span>
-          <input type="range" id="mixer-master-gain" min="0" max="2" step="0.01" value="${mixer.masterGain}"/>
-        </label>
-        <label class="toggle mini-toggle">
-          <input type="checkbox" id="mixer-limiter" ${mixer.limiterEnabled ? "checked" : ""}/> Limiter
+          <span>Mix Out ${formatGainDb(mixer.mixGainDb)}</span>
+          <input type="range" id="mixer-master-gain" min="${MIX_GAIN_MIN_DB}" max="${MIX_GAIN_MAX_DB}" step="0.1" value="${mixer.mixGainDb}"/>
         </label>
         <button class="mixer-save-multi-rig-btn secondary-btn" id="mixer-save-multi-rig" type="button" title="Save current mixer as a Multi-Rig preset">Save Multi-Rig…</button>
       </div>
@@ -175,15 +173,12 @@ function bindMixerControls(container: HTMLElement): void {
   if (masterGainSlider) {
     enhanceRangeInput(masterGainSlider);
     masterGainSlider.addEventListener("input", () => {
-      const val = parseFloat(masterGainSlider.value);
-      setMasterGain(isFinite(val) ? val : 1.0);
-    });
-  }
-
-  const limiterCheckbox = container.querySelector<HTMLInputElement>("#mixer-limiter");
-  if (limiterCheckbox) {
-    limiterCheckbox.addEventListener("change", () => {
-      setLimiterEnabled(Boolean(limiterCheckbox.checked));
+      const raw = parseFloat(masterGainSlider.value);
+      const val = isFinite(raw) ? raw : 0.0;
+      setMixGainDb(val);
+      if (uiState.mixer) uiState.mixer.mixGainDb = val;
+      const label = masterGainSlider.parentElement?.querySelector("span");
+      if (label) label.textContent = `Mix Out ${formatGainDb(val)}`;
     });
   }
 

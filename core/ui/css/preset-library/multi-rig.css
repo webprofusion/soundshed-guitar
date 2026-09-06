@@ -82,3 +82,49 @@
   gap: 6px;
   margin: 6px 0 8px;
 }
+
+/* The Multi-Rig the mixer is currently running, if any. */
+.composite-preset-chip.active {
+  border-color: var(--color-primary);
+}
+
+.composite-preset-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composite-preset-delete:hover,
+.composite-preset-delete:focus-visible {
+  border-color: var(--border-dark);
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+}
+
+/* The presets that make up the mix, so a card is recognisable without loading it. */
+.composite-preset-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.composite-preset-slot {
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -227,7 +227,7 @@ export const uiState: UiState = {
     activePresetIds: [],
     presets: {},
     masterGain: 1.0,
-    limiterEnabled: false,
+    mixGainDb: 0,
   },
   uiSettings: { zoom: 1 },
   uiViewState: {

@@ -184,7 +184,7 @@ function startNewComposite(): void {
 function openEditor(id: string): void {
   const src = getCompositeDefinition(id);
   if (!src) {
-    showNotification("Composite not found", "error");
+    showNotification("Composite not found");
     return;
   }
   // Deep clone for local metadata editing
@@ -305,7 +305,7 @@ function saveCurrentComposite(saveAsNew: boolean): void {
     },
   });
 
-  showNotification(`Composite "${editingDef.name}" saved`, "success");
+  showNotification(`Composite "${editingDef.name}" saved`);
   appendLog(`Composite saved: ${editingDef.id}`);
   closeEditorUI();
 }

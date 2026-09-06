@@ -2,13 +2,13 @@
  * multiPresetMixer.ts — Multi-Rig (Composite Preset) UI panel.
  *
  * Handles the "Multi-Rig" tab in the preset library popover:
- *   - Listing saved composite presets
+ *   - Listing saved composite presets, filtered by the library search box
  *   - Loading a composite preset (replaces active mixer slots)
- *   - Prompting to save the current mixer as a composite preset
- *   - Removing a composite preset
+ *   - Prompting to save or update the current mixer as a composite preset
+ *   - Removing a composite preset, from a list card or the mixer toolbar
  */
 
-import { uiState } from "./state.js";
+import { uiState, setPresetDirty } from "./state.js";
 import type { CompositePreset } from "./types.js";
 import {
   saveCompositePreset,
@@ -21,8 +21,15 @@ import { showNotification } from "./notifications.js";
 import { showConfirm } from "./dialogs.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { syncPresetLibraryFeatureVisibility, setSetlistPanelVisible } from "./presets.js";
+import { presetSearchElement } from "./presets/dom.js";
 import { renderSignalPathBar } from "./signalPath.js";
 import { STANDARD_TAGS } from "./presetTags.js";
+import {
+  collectCompositePresetTags,
+  compositePresetMatchesMixer,
+  filterCompositePresets,
+  resolveCompositeSlotNames,
+} from "./multiPresetMixerSupport.js";
 
 const multiRigSaveModal = document.getElementById("save-multi-rig-modal") as HTMLElement | null;
 const multiRigNameInput = document.getElementById("multi-rig-name-input") as HTMLInputElement | null;
@@ -34,26 +41,6 @@ function getMultiRigTagsPickerValue(): string[] {
   return Array.from(picker.querySelectorAll<HTMLButtonElement>(".preset-tag-chip.active"))
     .map((btn) => btn.dataset.tag ?? "")
     .filter(Boolean);
-}
-
-function normalizeCompositePresetTag(tag: string): string {
-  return tag.trim().toLowerCase();
-}
-
-function getAvailableCompositePresetTags(): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const preset of uiState.compositePresets ?? []) {
-    for (const tag of preset.tags ?? []) {
-      const normalized = normalizeCompositePresetTag(tag);
-      if (!normalized || seen.has(normalized)) continue;
-      seen.add(normalized);
-      result.push(normalized);
-    }
-  }
-
-  return result.sort((left, right) => left.localeCompare(right));
 }
 
 function ensureMultiRigTagChips(tags: readonly string[]): void {
@@ -109,6 +96,19 @@ function findActiveCompositePreset(): CompositePreset | undefined {
   return (uiState.compositePresets ?? []).find((cp) => cp.id === id);
 }
 
+function isMultiRigPanelVisible(): boolean {
+  const panel = document.getElementById("preset-library-multi-rig-panel");
+  return !!panel && !panel.hidden;
+}
+
+function lookupPresetName(): (presetId: string) => string | undefined {
+  const names = new Map<string, string>();
+  for (const preset of uiState.presets) {
+    names.set(preset.id, preset.name);
+  }
+  return (presetId) => uiState.presetCache.get(presetId)?.name ?? names.get(presetId);
+}
+
 function openSaveCompositePresetModal(): void {
   // Editing an already-saved Multi-Rig re-opens this same modal pre-filled with its
   // current name/description/tags, rather than prompting for a brand new one.
@@ -120,7 +120,7 @@ function openSaveCompositePresetModal(): void {
     return;
   }
 
-  ensureMultiRigTagChips(getAvailableCompositePresetTags());
+  ensureMultiRigTagChips(collectCompositePresetTags(uiState.compositePresets ?? []));
   multiRigNameInput.value = editing?.name ?? "";
   if (multiRigDescriptionInput) {
     multiRigDescriptionInput.value = editing?.description ?? "";
@@ -165,101 +165,167 @@ export function renderCompositePresetList(): void {
   const presets = uiState.compositePresets ?? [];
 
   if (presets.length === 0) {
-    container.innerHTML = `<p class="composite-preset-empty">No Multi-Rig presets saved yet.<br>Switch to the <strong>Presets</strong> tab, click <strong>+ Mixer</strong> on two or more presets, then click <strong>Save</strong> in the mixer toolbar.</p>`;
+    container.innerHTML = `<p class="composite-preset-empty">No Multi-Rig presets saved yet.<br>Switch to the <strong>Presets</strong> tab, click <strong>+ Mixer</strong> on two or more presets, then click <strong>Save</strong> in the mixer's <strong>Mix</strong> tab.</p>`;
     return;
   }
 
-  container.innerHTML = presets
-    .map((cp) => buildCompositePresetChip(cp))
+  const nameOf = lookupPresetName();
+  const slotNamesOf = (cp: CompositePreset) => resolveCompositeSlotNames(cp, nameOf);
+  const query = presetSearchElement?.value ?? "";
+  const visible = filterCompositePresets(presets, query, slotNamesOf);
+
+  if (visible.length === 0) {
+    container.innerHTML = `<p class="composite-preset-empty">No Multi-Rig presets match &quot;${escapeHtml(query.trim())}&quot;.</p>`;
+    return;
+  }
+
+  container.innerHTML = visible
+    .map((cp) => buildCompositePresetChip(cp, slotNamesOf(cp)))
     .join("");
 
   container.querySelectorAll<HTMLElement>(".composite-preset-chip").forEach((chip) => {
     const id = chip.dataset.id ?? "";
+    const preset = presets.find((cp) => cp.id === id);
+    if (!preset) return;
 
     // The whole card is clickable to load, matching regular preset list items.
-    // Deleting a Multi-Rig is done from the mixer toolbar's Delete button instead.
     chip.addEventListener("click", () => {
-      loadCompositePreset(id);
+      void handleLoadCompositePresetFlow(preset);
     });
     chip.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        loadCompositePreset(id);
+        void handleLoadCompositePresetFlow(preset);
+      } else if (e.key === "Delete") {
+        e.preventDefault();
+        void handleDeleteCompositePresetFlow(preset);
       }
+    });
+
+    chip.querySelector<HTMLButtonElement>(".composite-preset-delete")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void handleDeleteCompositePresetFlow(preset);
     });
   });
 }
 
-function buildCompositePresetChip(cp: CompositePreset): string {
+function buildCompositePresetChip(cp: CompositePreset, slotNames: readonly string[]): string {
   const slotCount = cp.slots?.length ?? 0;
+  const isActive = cp.id === uiState.activeCompositePresetId;
   const desc = cp.description ? `<p class="composite-preset-desc">${escapeHtml(cp.description)}</p>` : "";
+  const slots = slotNames.length
+    ? `<p class="composite-preset-slots" title="${escapeHtml(slotNames.join(", "))}">${slotNames.map((name) => `<span class="composite-preset-slot">${escapeHtml(name)}</span>`).join("")}</p>`
+    : "";
   const tags = cp.tags?.length
     ? `<div class="composite-preset-tags">${cp.tags.map((tag) => `<span class="preset-category-badge">${escapeHtml(tag)}</span>`).join("")}</div>`
     : "";
   return `
-    <article class="composite-preset-chip" data-id="${escapeHtml(cp.id)}" data-name="${escapeHtml(cp.name)}" role="button" tabindex="0" title="Load Multi-Rig &quot;${escapeHtml(cp.name)}&quot;">
+    <article class="composite-preset-chip${isActive ? " active" : ""}" data-id="${escapeHtml(cp.id)}" data-name="${escapeHtml(cp.name)}" role="button" tabindex="0" title="Load Multi-Rig &quot;${escapeHtml(cp.name)}&quot;">
       <div class="composite-preset-chip-header">
         <span class="composite-preset-name">${escapeHtml(cp.name)}</span>
         <span class="composite-preset-slot-count">${slotCount} preset${slotCount !== 1 ? "s" : ""}</span>
+        <button type="button" class="composite-preset-delete" title="Delete Multi-Rig &quot;${escapeHtml(cp.name)}&quot;" aria-label="Delete Multi-Rig ${escapeHtml(cp.name)}">×</button>
       </div>
+      ${slots}
       ${desc}
       ${tags}
     </article>`;
 }
 
-// ── Save modal ────────────────────────────────────────────────────────────────
+// ── Load / save / delete flows ────────────────────────────────────────────────
+
+/**
+ * Loading a Multi-Rig replaces every mixer slot, so unsaved edits to whichever
+ * preset is focused would be lost — ask first, the same as picking a preset.
+ */
+async function handleLoadCompositePresetFlow(preset: CompositePreset): Promise<void> {
+  if (uiState.presetDirty) {
+    const confirmDiscard = await showConfirm("Discard unsaved changes?", "Unsaved changes");
+    if (!confirmDiscard) return;
+    setPresetDirty(false);
+  }
+  loadCompositePreset(preset.id);
+}
 
 /**
  * Show an inline save dialog in the Multi-Rig tab, or a simple prompt fallback.
- * Called by the "Save Multi-Rig…" button in views.ts via a custom event.
+ * Called by the "Save" button in the mixer's Mix tab via a custom event.
  */
 export function handleSaveCompositePresetFlow(): void {
   const activeCount =
     uiState.mixer?.activePresetIds?.length ?? 0;
   if (activeCount < 2) {
-    showNotification("Add at least 2 presets to the mixer before saving a Multi-Rig.", "warning");
+    showNotification("Add at least 2 presets to the mixer before saving a Multi-Rig.");
     return;
   }
   openSaveCompositePresetModal();
+}
+
+async function handleDeleteCompositePresetFlow(preset: CompositePreset): Promise<void> {
+  const confirmed = await showConfirm(`Delete Multi-Rig "${preset.name}"? This cannot be undone.`, "Delete Multi-Rig");
+  if (!confirmed) return;
+  removeCompositePreset(preset.id);
+  if (uiState.activeCompositePresetId === preset.id) {
+    uiState.activeCompositePresetId = null;
+    renderSignalPathBar(); // the mixer toolbar's Delete button goes back to disabled
+  }
 }
 
 /**
  * "Delete" toolbar button in the mixer panel — removes the Multi-Rig preset the
  * current mixer was loaded from / last saved as. No-ops if nothing is currently linked.
  */
-async function handleDeleteCompositePresetFlow(): Promise<void> {
+async function handleDeleteActiveCompositePresetFlow(): Promise<void> {
   const editing = findActiveCompositePreset();
   if (!editing) {
-    showNotification("No Multi-Rig preset is loaded to delete.", "warning");
+    showNotification("No Multi-Rig preset is loaded to delete.");
     return;
   }
-  const confirmed = await showConfirm(`Delete Multi-Rig "${editing.name}"? This cannot be undone.`, "Delete Multi-Rig");
-  if (!confirmed) return;
-  removeCompositePreset(editing.id);
-  uiState.activeCompositePresetId = null;
-  renderSignalPathBar();
+  await handleDeleteCompositePresetFlow(editing);
+}
+
+/**
+ * Keep `activeCompositePresetId` honest against the mixer the engine reports.
+ * The UI clears it when the user adds or removes a slot here, but the mixer can
+ * also change underneath us — a setlist step, a MIDI program change, a DAW
+ * project restore — and after any of those a Save should create a new Multi-Rig
+ * rather than overwrite the one that no longer describes the mix.
+ */
+export function reconcileActiveCompositePreset(): void {
+  const active = findActiveCompositePreset();
+  if (!active) return;
+  const activePresetIds = uiState.mixer?.activePresetIds ?? [];
+  if (!compositePresetMatchesMixer(active, activePresetIds)) {
+    uiState.activeCompositePresetId = null;
+  }
 }
 
 // ── Message handlers ──────────────────────────────────────────────────────────
 
 export function handleCompositePresetList(presets: CompositePreset[]): void {
   uiState.compositePresets = presets;
-  ensureMultiRigTagChips(getAvailableCompositePresetTags());
+  ensureMultiRigTagChips(collectCompositePresetTags(presets));
+  // A Multi-Rig deleted from another window must not leave the toolbar
+  // offering to update it.
+  if (uiState.activeCompositePresetId && !presets.some((cp) => cp.id === uiState.activeCompositePresetId)) {
+    uiState.activeCompositePresetId = null;
+    renderSignalPathBar();
+  }
   renderCompositePresetList();
-  // Reveal/hide the Multi-Rig tab now that we know whether any exist.
   syncPresetLibraryFeatureVisibility();
 }
 
 export function handleCompositePresetSaved(id: string, name: string): void {
   uiState.activeCompositePresetId = id;
-  showNotification(`Multi-Rig "${name}" saved.`, "success");
+  showNotification(`Multi-Rig "${name}" saved.`);
   getCompositePresetList();
   renderSignalPathBar(); // refresh mixer toolbar (Delete becomes available)
 }
 
 export function handleCompositePresetLoaded(id: string, name: string): void {
   uiState.activeCompositePresetId = id;
-  showNotification(`Multi-Rig "${name}" loaded.`, "success");
+  showNotification(`Multi-Rig "${name}" loaded.`);
+  renderCompositePresetList(); // highlight the loaded card
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -273,7 +339,7 @@ export function initMultiRigTab(): void {
   if (!presetsTab || !multiRigTab || !presetsPanel || !multiRigPanel) return;
 
   // Fetch composite presets up front (not just on first tab click / save) so
-  // the Multi-Rig tab can appear as soon as the popover opens, for anyone who
+  // the Multi-Rig tab is populated as soon as the popover opens, for anyone who
   // already has saved Multi-Rig presets from a previous session.
   if (isFeatureEnabled(Features.MultiRig)) {
     getCompositePresetList();
@@ -284,37 +350,43 @@ export function initMultiRigTab(): void {
   // Multi-Rigs get appended on top by ensureMultiRigTagChips() elsewhere.
   ensureMultiRigTagChips(STANDARD_TAGS);
 
-  presetsTab.addEventListener("click", () => {
-    presetsTab.classList.add("active");
-    multiRigTab.classList.remove("active");
-    presetsPanel.hidden = false;
-    multiRigPanel.hidden = true;
-    setSetlistPanelVisible(true);
-  });
+  const selectTab = (multiRig: boolean): void => {
+    presetsTab.classList.toggle("active", !multiRig);
+    presetsTab.setAttribute("aria-selected", String(!multiRig));
+    multiRigTab.classList.toggle("active", multiRig);
+    multiRigTab.setAttribute("aria-selected", String(multiRig));
+    presetsPanel.hidden = multiRig;
+    multiRigPanel.hidden = !multiRig;
+    // Setlists only make sense against the regular preset list.
+    setSetlistPanelVisible(!multiRig);
+  };
+
+  presetsTab.addEventListener("click", () => selectTab(false));
 
   multiRigTab.addEventListener("click", () => {
     if (!isFeatureEnabled(Features.MultiRig)) {
-      presetsTab.click();
+      selectTab(false);
       return;
     }
-
-    multiRigTab.classList.add("active");
-    presetsTab.classList.remove("active");
-    presetsPanel.hidden = true;
-    multiRigPanel.hidden = false;
-    setSetlistPanelVisible(false);
+    selectTab(true);
     // Refresh list on open
     getCompositePresetList();
   });
 
-  // "Save" toolbar button in the mixer panel fires a custom event
+  // The library search box filters whichever tab is showing.
+  presetSearchElement?.addEventListener("input", () => {
+    if (isMultiRigPanelVisible()) {
+      renderCompositePresetList();
+    }
+  });
+
+  // "Save" toolbar button in the mixer panel fires a custom event. The save
+  // form is a modal of its own, so there is no need to switch the (possibly
+  // closed) library popover to the Multi-Rig tab first.
   document.addEventListener("mixerSaveMultiRig", () => {
     if (!isFeatureEnabled(Features.MultiRig)) {
       return;
     }
-
-    // Switch to Multi-Rig tab so the save form is visible
-    multiRigTab.click();
     handleSaveCompositePresetFlow();
   });
 
@@ -323,7 +395,7 @@ export function initMultiRigTab(): void {
     if (!isFeatureEnabled(Features.MultiRig)) {
       return;
     }
-    void handleDeleteCompositePresetFlow();
+    void handleDeleteActiveCompositePresetFlow();
   });
 
   document.getElementById("save-multi-rig-modal-close")?.addEventListener("click", closeSaveCompositePresetModal);
@@ -351,5 +423,3 @@ export function initMultiRigTab(): void {
     }
   });
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────

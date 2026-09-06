@@ -638,12 +638,11 @@ export function setSetlistPanelVisible(visible: boolean): void {
 }
 
 export function syncPresetLibraryFeatureVisibility(): void {
-  const multiRigEnabled = isFeatureEnabled(Features.MultiRig);
-  // The Multi-Rig tab only earns its place in the header once there's
-  // something to show there — otherwise it's a permanently-empty tab for
-  // users who've never saved a Multi-Rig preset.
-  const hasCompositePresets = (uiState.compositePresets?.length ?? 0) > 0;
-  const showMultiRigTab = multiRigEnabled && hasCompositePresets;
+  // The Multi-Rig tab is part of the library whenever the feature is on. Its
+  // empty state explains how to build a first mix, so it is worth showing even
+  // before anything has been saved — hiding it until then left the feature
+  // undiscoverable.
+  const showMultiRigTab = isFeatureEnabled(Features.MultiRig);
 
   presetLibraryPopover?.classList.toggle("preset-library-popover-simple", !showMultiRigTab);
 
@@ -678,6 +677,7 @@ export function syncPresetLibraryFeatureVisibility(): void {
 
 document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => {
   syncPresetLibraryFeatureVisibility();
+  filterPresets(presetSearchElement?.value ?? ""); // the "+ Mixer" buttons follow the Multi-Rig flag
 });
 
 document.addEventListener("mixerPresetTabSelected", (event) => {

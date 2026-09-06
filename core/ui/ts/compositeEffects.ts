@@ -114,14 +114,14 @@ export function saveCompositeDefinition(
   definition: CompositeEffectDefinition
 ): void {
   if (!definition.id || !definition.name) {
-    showNotification("Composite definition requires an ID and name", "error");
+    showNotification("Composite definition requires an ID and name");
     return;
   }
   if (
     !definition.innerGraph?.nodes ||
     definition.innerGraph.nodes.length === 0
   ) {
-    showNotification("Composite definition requires an inner graph", "error");
+    showNotification("Composite definition requires an inner graph");
     return;
   }
 
@@ -155,7 +155,7 @@ export function addCompositeToSignalPath(
 ): void {
   const def = getCompositeDefinition(definitionId);
   if (!def) {
-    showNotification("Composite definition not found", "error");
+    showNotification("Composite definition not found");
     return;
   }
 

@@ -33,7 +33,7 @@ import { handleCustomEffectLibrary } from "./customEffects.js";
 import { renderLayoutList } from "./layoutManager.js";
 import { ensureLayoutImagesLoaded, markLayoutImagesLoaded, areLayoutImagesLoaded } from "./layoutImages.js";
 import { renderBlendList } from "./blendManager.js";
-import { handleCompositePresetList, handleCompositePresetSaved, handleCompositePresetLoaded } from "./multiPresetMixer.js";
+import { handleCompositePresetList, handleCompositePresetSaved, handleCompositePresetLoaded, reconcileActiveCompositePreset } from "./multiPresetMixer.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { applyUiViewState } from "./navigation.js";
 import { triggerUpdateCheck } from "./updateCheck.js";
@@ -811,7 +811,7 @@ function onState(payload: IncomingPayload): void {
       activePresetIds,
       presets: resolvedPresets,
       masterGain: typeof mixer.masterGain === "number" ? mixer.masterGain : uiState.mixer?.masterGain ?? 1.0,
-      limiterEnabled: Boolean(mixer.limiterEnabled),
+      mixGainDb: typeof mixer.mixGainDb === "number" ? mixer.mixGainDb : uiState.mixer?.mixGainDb ?? 0,
     };
 
     // Populate presetCache with full graph data for each mixer slot.
@@ -833,6 +833,7 @@ function onState(payload: IncomingPayload): void {
         }
       }
     }
+    reconcileActiveCompositePreset();
   }
   uiState.signalTest = null;
   const preset = (payload as { preset?: Preset }).preset;
@@ -1025,13 +1026,14 @@ function onPresetLoaded(payload: IncomingPayload): void {
   }
   const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
   if (Array.isArray(activePresetIds)) {
-    uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, limiterEnabled: false };
+    uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, mixGainDb: 0 };
     uiState.mixer.activePresetIds = activePresetIds.slice();
     activePresetIds.forEach((id) => {
       if (!uiState.mixer!.presets[id]) {
         uiState.mixer!.presets[id] = { id, mix: 1.0, pan: 0.0, mute: false, solo: false };
       }
     });
+    reconcileActiveCompositePreset(); // a setlist step or program change reports the new mixer here, not via "state"
   }
   const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
   if (parameters) {
@@ -1708,7 +1710,7 @@ function onSignalPathNodeConfigUpdated(payload: IncomingPayload): void {
       setPresetDirty(true);
     }
     if (update.key === "pluginStateBase64" && !update.silent) {
-      showNotification("Plugin state captured", "success");
+      showNotification("Plugin state captured");
     }
   }
 }
@@ -1777,7 +1779,7 @@ function onLayoutSaved(payload: IncomingPayload): void {
   const savePayload = payload as { effectType?: string; blendId?: string; layoutId?: string; lookupKey?: string };
   const displayKey = savePayload.blendId ? `${savePayload.effectType} (blend: ${savePayload.blendId})` : savePayload.effectType;
   appendLog(`Layout saved for ${displayKey ?? "effect"}${savePayload.layoutId ? ` (${savePayload.layoutId})` : ""}`);
-  showNotification("Layout saved", "success");
+  showNotification("Layout saved");
   // layoutLibraryLoaded will follow and trigger a full refresh.
 }
 
@@ -1828,14 +1830,14 @@ function onLayoutImageSelected(payload: IncomingPayload): void {
 function onLayoutExportSaved(payload: IncomingPayload): void {
   const exportPayload = payload as { path?: string };
   if (exportPayload.path) {
-    showNotification(`Layout exported to ${exportPayload.path}`, "success");
+    showNotification(`Layout exported to ${exportPayload.path}`);
     appendLog(`Layout exported: ${exportPayload.path}`);
   }
 }
 
 function onLayoutExportFailed(payload: IncomingPayload): void {
   const failPayload = payload as { message?: string };
-  showNotification(failPayload.message ?? "Layout export failed", "error");
+  showNotification(failPayload.message ?? "Layout export failed");
   appendLog(`Layout export failed: ${failPayload.message ?? "unknown error"}`);
 }
 
@@ -2223,16 +2225,16 @@ export function handleIncomingMessage(message: string): void {
 
 // Optional: handle full mixer state sync from plugin
 export function handleMixerStateMessage(message: Record<string, unknown>): void {
-  const mixer = message as { activePresetIds?: string[]; presets?: Record<string, unknown>; masterGain?: number; limiterEnabled?: boolean };
-  uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, limiterEnabled: false };
+  const mixer = message as { activePresetIds?: string[]; presets?: Record<string, unknown>; masterGain?: number; mixGainDb?: number };
+  uiState.mixer = uiState.mixer ?? { activePresetIds: [], presets: {}, masterGain: 1.0, mixGainDb: 0 };
   if (Array.isArray(mixer.activePresetIds)) {
     uiState.mixer.activePresetIds = mixer.activePresetIds.slice();
   }
   if (typeof mixer.masterGain === "number") {
     uiState.mixer.masterGain = mixer.masterGain as number;
   }
-  if (typeof mixer.limiterEnabled === "boolean") {
-    uiState.mixer.limiterEnabled = mixer.limiterEnabled as boolean;
+  if (typeof mixer.mixGainDb === "number") {
+    uiState.mixer.mixGainDb = mixer.mixGainDb;
   }
   // Merge per-preset states if provided
   if (mixer.presets && typeof mixer.presets === "object") {

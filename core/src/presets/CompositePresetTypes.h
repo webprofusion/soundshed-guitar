@@ -24,7 +24,8 @@ struct CompositePresetSlot
 
 /**
  * A saved multi-rig preset that captures the full mixer configuration:
- * which presets are active and at what mix/pan/mute/solo settings.
+ * which presets are active, at what mix/pan/mute/solo settings, and the
+ * mix's own output level.
  */
 struct CompositePreset
 {
@@ -35,10 +36,12 @@ struct CompositePreset
     std::string createdAt;
     std::string modifiedAt;
     std::vector<CompositePresetSlot> slots;
-    double masterGain = 1.0;
-    bool limiterEnabled = false;
+    // The mix's own level in dB, applied to the summed presets ahead of the global output
+    // stage. Files written before this field carried a linear "masterGain" (a copy of the
+    // global output gain) and "limiterEnabled"; both are ignored when read.
+    double mixGainDb = 0.0;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CompositePreset, id, name, description, tags, createdAt, modifiedAt,
-                                                slots, masterGain, limiterEnabled)
+                                                slots, mixGainDb)
 };
 } // namespace guitarfx

@@ -113,6 +113,7 @@ std::string PluginController::SerializeState() const
 
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
+    mixer["mixGainDb"] = mPresetMixer.GetMixGainDb();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
 
     nlohmann::json activePresetIds = nlohmann::json::array();
@@ -342,6 +343,11 @@ void PluginController::DeserializeState(const std::string& json)
             if (mixer.contains("limiterEnabled") && mixer["limiterEnabled"].is_boolean())
             {
                 mPresetMixer.SetLimiterEnabled(mixer["limiterEnabled"].get<bool>());
+            }
+
+            if (mixer.contains("mixGainDb") && mixer["mixGainDb"].is_number())
+            {
+                mPresetMixer.SetMixGainDb(mixer["mixGainDb"].get<double>());
             }
 
             // Reset active presets before restoring mixer state

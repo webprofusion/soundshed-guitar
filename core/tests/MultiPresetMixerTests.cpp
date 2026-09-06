@@ -526,5 +526,103 @@ int main()
         }
     }
 
+    // Mix gain: the Multi-Rig's own level scales the summed preset mix, on top of the
+    // global output stage's master gain rather than instead of it.
+    {
+        MultiPresetMixer mixer;
+        ResourceLibrary lib;
+        mixer.SetResourceLibrary(&lib);
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+
+        auto preset = MakePassthroughPreset("pMix");
+
+        if (!mixer.AddActivePreset(preset, "pMix", "MixGain"))
+        {
+            std::cerr << "Failed to add mix-gain passthrough preset" << std::endl;
+            return 1;
+        }
+
+        std::vector<float> inL(static_cast<size_t>(kTestBlockSize), 0.25f);
+        std::vector<float> inR(static_cast<size_t>(kTestBlockSize), 0.25f);
+        std::vector<float> outL(static_cast<size_t>(kTestBlockSize), 0.0f);
+        std::vector<float> outR(static_cast<size_t>(kTestBlockSize), 0.0f);
+        float* inputs[2] = {inL.data(), inR.data()};
+        float* outputs[2] = {outL.data(), outR.data()};
+
+        const auto processBlock = [&]() {
+            std::fill(outL.begin(), outL.end(), 0.0f);
+            std::fill(outR.begin(), outR.end(), 0.0f);
+            mixer.Process(inputs, outputs, kTestBlockSize);
+        };
+
+        // Let any add-time ramp settle before taking the reference.
+        for (int i = 0; i < 8; ++i)
+        {
+            processBlock();
+        }
+
+        processBlock();
+        const float reference = outL[static_cast<size_t>(kTestBlockSize) - 1];
+
+        if (std::fabs(reference) < 1e-6f)
+        {
+            std::cerr << "Mix-gain reference block is silent" << std::endl;
+            allPassed = false;
+        }
+
+        mixer.SetMixGainDb(-6.0206); // half amplitude
+
+        if (std::fabs(mixer.GetMixGainDb() - (-6.0206)) > 1e-9)
+        {
+            std::cerr << "SetMixGainDb did not store the level" << std::endl;
+            allPassed = false;
+        }
+
+        processBlock();
+        const float halved = outL[static_cast<size_t>(kTestBlockSize) - 1];
+
+        if (std::fabs(halved - 0.5f * reference) > 1e-4f)
+        {
+            std::cerr << "Mix gain of -6 dB gave " << halved << " for a reference of " << reference << std::endl;
+            allPassed = false;
+        }
+
+        // The global output stage multiplies on top of the mix gain.
+        mixer.SetMasterGain(2.0);
+        processBlock();
+        const float restored = outL[static_cast<size_t>(kTestBlockSize) - 1];
+
+        if (std::fabs(restored - reference) > 1e-4f)
+        {
+            std::cerr << "Master gain x2 over mix gain -6 dB gave " << restored << ", expected " << reference
+                      << std::endl;
+            allPassed = false;
+        }
+
+        // A single-preset swap starts the mix level over.
+        mixer.PreparePresetSwap(MakePassthroughPreset("pSwap"), "pSwap", "Swap");
+        mixer.CommitPresetSwap();
+
+        if (std::fabs(mixer.GetMixGainDb()) > 1e-9)
+        {
+            std::cerr << "CommitPresetSwap left the mix gain at " << mixer.GetMixGainDb() << " dB" << std::endl;
+            allPassed = false;
+        }
+
+        // Out-of-range requests are clamped rather than applied.
+        mixer.SetMixGainDb(-200.0);
+
+        if (std::fabs(mixer.GetMixGainDb() - MultiPresetMixer::kMinMixGainDb) > 1e-9)
+        {
+            std::cerr << "SetMixGainDb did not clamp to the minimum" << std::endl;
+            allPassed = false;
+        }
+
+        if (allPassed)
+        {
+            std::cout << "MultiPresetMixer mix gain test passed" << std::endl;
+        }
+    }
+
     return allPassed ? 0 : 1;
 }

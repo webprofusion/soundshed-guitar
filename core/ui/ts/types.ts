@@ -397,8 +397,10 @@ export interface GlobalSignalChainConfig {
 export interface MixerState {
   activePresetIds: string[];
   presets: Record<string, MixerPresetState>;
-  masterGain: number; // linear
-  limiterEnabled: boolean;
+  /** Linear multiplier the engine derives from the OUT level; 0 while the output is muted. */
+  masterGain: number;
+  /** The Multi-Rig's own level in dB, applied to the preset mix ahead of the global output stage. */
+  mixGainDb: number;
 }
 
 /** The engine's `dspPerformance` feed, at kDspPerformanceStatsRateHz while the UI is up.

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <condition_variable>
 #include <functional>
@@ -145,6 +146,23 @@ class MultiPresetMixer
     void SetPresetPan(const std::string& presetId, double pan);
     void SetPresetMute(const std::string& presetId, bool mute);
     void SetPresetSolo(const std::string& presetId, bool solo);
+
+    // The Multi-Rig's own level: applied to the summed preset mix ahead of the global
+    // post-chain and the global output stage, and saved with the mix. Independent of the
+    // global output gain, which SetGlobalOutputGain()/SetMasterGain() drive.
+    void SetMixGainDb(double dB)
+    {
+        mMixGainDb = std::clamp(dB, kMinMixGainDb, kMaxMixGainDb);
+        mMixGain = std::pow(10.0, mMixGainDb / 20.0);
+    }
+
+    [[nodiscard]] double GetMixGainDb() const
+    {
+        return mMixGainDb;
+    }
+
+    static constexpr double kMinMixGainDb = -60.0;
+    static constexpr double kMaxMixGainDb = 24.0;
 
     // Master/global controls
     void SetMasterGain(double value)
@@ -513,6 +531,8 @@ class MultiPresetMixer
     double mSampleRate = 44100.0;
     int mMaxBlockSize = 512;
     bool mPrepared = false;
+    double mMixGainDb = 0.0;
+    double mMixGain = 1.0;
     double mMasterGain = 1.0;
     bool mLimiterEnabled = false;
     std::atomic<bool> mMultiThreadedProcessingEnabled{rtparallel::kParallelDspSupported};

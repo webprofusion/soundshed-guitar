@@ -308,6 +308,7 @@ class PluginController
     void SetActivePresetMute(const std::string& presetId, bool mute);
     void SetActivePresetSolo(const std::string& presetId, bool solo);
     void SetMasterGain(double value);
+    void SetMixGainDb(double dB);
     void SetLimiterEnabled(bool enabled);
     /// Switches the editing focus (mActivePreset) to an already-active mixer slot without
     /// touching the running DSP instances, so signal-chain edits target the correct preset.

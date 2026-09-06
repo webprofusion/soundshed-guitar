@@ -156,6 +156,22 @@ function toggleOutputMute(): void {
   updateOutputMuteToggleState();
 }
 
+/** "+1.5 dB" / "-6.0 dB", shared by every gain knob that reads in dB. */
+export function formatGainDb(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`;
+}
+
+function applyOutputGainDb(value: number, send: boolean): void {
+  if (send) {
+    sendGlobalChainParam("output.gain", value);
+  }
+  if (uiState.globalSignalChain) {
+    uiState.globalSignalChain.outputGain = value;
+  }
+  lastNonMutedMasterGain = Math.pow(10.0, value / 20.0);
+  preserveMuteWhileAdjustingOutput(value);
+}
+
 function setKnobControlDisabled(controlId: string, disabled: boolean): void {
   const control = document.getElementById(controlId);
   if (!control) return;
@@ -250,25 +266,12 @@ function initializeInputOutputKnobs(): void {
       minValue: -12.0,
       maxValue: 12.0,
       defaultValue: 0.0,
-      displayFormat: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(1)} dB`,
+      displayFormat: formatGainDb,
       valueDisplayId: "output-value",
       sensitivity: 0.1,
       sendParameter: false,
-      onValueChange: (value) => {
-        sendGlobalChainParam("output.gain", value);
-        if (uiState.globalSignalChain) {
-          uiState.globalSignalChain.outputGain = value;
-        }
-        lastNonMutedMasterGain = Math.pow(10.0, value / 20.0);
-        preserveMuteWhileAdjustingOutput(value);
-      },
-      onValueCommit: (value) => {
-        if (uiState.globalSignalChain) {
-          uiState.globalSignalChain.outputGain = value;
-        }
-        lastNonMutedMasterGain = Math.pow(10.0, value / 20.0);
-        preserveMuteWhileAdjustingOutput(value);
-      },
+      onValueChange: (value) => applyOutputGainDb(value, true),
+      onValueCommit: (value) => applyOutputGainDb(value, false),
     });
     knobInstances.set("output_trim", outputKnobInstance);
   }

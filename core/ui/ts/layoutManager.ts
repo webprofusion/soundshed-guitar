@@ -168,7 +168,7 @@ function openLayoutInDesigner(
   const entries = library.byEffectType[key] ?? [];
   const entry = entries.find((e) => e.layoutId === layoutId);
   if (!entry) {
-    showNotification("Layout not found", "error");
+    showNotification("Layout not found");
     return;
   }
 
@@ -220,7 +220,7 @@ async function confirmDeleteLayout(key: string, layoutId: string): Promise<void>
   }
 
   appendLog(`Layout deleted: ${layoutId}`);
-  showNotification(`Layout "${name}" deleted`, "success");
+  showNotification(`Layout "${name}" deleted`);
   renderLayoutList();
 }
 

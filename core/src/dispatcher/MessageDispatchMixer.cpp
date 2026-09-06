@@ -108,6 +108,12 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c, const nl
         return true;
     }
 
+    if (type == "setMixGain")
+    {
+        c.SetMixGainDb(msg.value("gainDb", 0.0));
+        return true;
+    }
+
     if (type == "setLimiterEnabled")
     {
         bool enabled = msg.value("enabled", false);

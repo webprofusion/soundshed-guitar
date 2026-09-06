@@ -51,3 +51,35 @@ Define a flexible preset organization model with hierarchical folders and ordere
 - Folder navigation provides a tree view.
 - Setlists display ordered slots (drag/drop reorder), allow repeated presets.
 - Bank number is edited in setlist settings and validated for uniqueness.
+
+## Multi-Rig Presets
+- A Multi-Rig preset captures the mixer: which presets are running, each slot's
+  mix, pan, mute and solo, and the mix's own output level. It references the
+  presets by `presetId` and does not copy their graphs, so editing a preset
+  changes every Multi-Rig that uses it.
+- The Master strip's Out knob is the mix's level in dB (−24 to +12), applied to
+  the summed presets ahead of the global post-chain and the header's OUT gain,
+  and independent of both. It is saved with the Multi-Rig and restored on load;
+  OUT, like every global setting, is left alone. Loading a single preset resets
+  it to 0 dB so a lone preset never plays through a leftover trim. There is no
+  per-mix limiter switch: the limiter is a global setting.
+- The feature is on by default (`features.multiRig.enabled`) and can be turned
+  off under Settings → Feature Toggles. Turning it off hides the entry points —
+  the Add to Mixer button, the Multi-Rig tab and the Save/Delete toolbar — but
+  never the mixer strips, so two presets already running can still be removed.
+- Entry points: **+ Mixer** on a preset card adds it as a slot; with two or more
+  slots the signal path shows one tab per preset plus a **Mix** tab holding the
+  strips, the mix's Out knob and the Save/Update and Delete buttons stacked beside
+  it; the library's **Multi-Rig** tab lists saved
+  mixes, filtered by the same search box as presets (name, description, tags and
+  the names of the presets in each slot).
+- Loading a Multi-Rig replaces every mixer slot. If a referenced preset no longer
+  exists that slot is skipped and reported as an error; the rest still load.
+- The mixer toolbar tracks which Multi-Rig it was loaded from or last saved as.
+  While that link holds, Save becomes **Update** (same id, original creation
+  date kept) and Delete is enabled. Adding or removing a slot — from the UI, a
+  setlist step, MIDI or a DAW project restore — breaks the link, so the next
+  Save creates a new Multi-Rig rather than overwriting one that no longer
+  describes the mix.
+- Multi-Rigs are stored in the document store (one row per id) and are not yet
+  part of preset export, tone sharing packs or setlists.

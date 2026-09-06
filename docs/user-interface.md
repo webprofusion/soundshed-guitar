@@ -92,6 +92,9 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `compositeDefinitionRemoved` | `{...}` | Composite effect removed |
 | `compositeEditState` | `{...}` | Composite edit mode state |
 | `compositeEditModeExited` | `{}` | Exited composite edit mode |
+| `compositePresetList` | `{compositePresets: [{id, name, description, tags, createdAt, modifiedAt, slots: [{slotId, presetId, mix, pan, mute, solo}], mixGainDb}]}` | Saved Multi-Rig presets; sent on request and after every save or delete. Older files' `masterGain`/`limiterEnabled` are ignored |
+| `compositePresetSaved` | `{id, name}` | Multi-Rig saved. The UI treats this id as the loaded Multi-Rig (toolbar offers Update/Delete) until the mixer's membership changes |
+| `compositePresetLoaded` | `{id, name}` | Multi-Rig applied to the mixer; a full `state` follows |
 | `practiceToolFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Practice Tool: backing-track file decoded and ready |
 | `practiceToolTransportState` | `{state, positionSec}` | Practice Tool: playback state/position, pushed periodically while loaded |
 | `practiceToolPlaybackEnded` | `{}` | Practice Tool: playback reached the end of the file (non-looping) |
@@ -123,8 +126,13 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setPresetPan` | `{presetId, pan}` | Set mixer preset pan |
 | `setPresetMute` | `{presetId, mute}` | Mute mixer preset |
 | `setPresetSolo` | `{presetId, solo}` | Solo mixer preset |
-| `setMasterGain` | `{gain}` | Set master output gain |
-| `setLimiterEnabled` | `{enabled}` | Enable/disable limiter |
+| `setMasterGain` | `{gain}` | Set the mixer's linear master multiplier directly. Only the output mute uses this (0 to mute, the previous value to restore); level changes go through `setGlobalChainParam` with path `output.gain`, since the engine derives the multiplier from that setting and re-derives it on every chain rebuild |
+| `setMixGain` | `{gainDb}` | The Multi-Rig's own level in dB, applied to the summed preset mix ahead of the global post-chain and output stage. Independent of `output.gain`; reported back as `mixer.mixGainDb`, saved with a Multi-Rig, and reset to 0 dB when a single preset is loaded |
+| `setLimiterEnabled` | `{enabled}` | Enable/disable the output limiter. Still accepted; the UI no longer sends it since the Mix tab's limiter switch was removed |
+| `saveCompositePreset` | `{name, description?, tags?, id?}` | Save the current mixer (slots, levels, mix gain) as a Multi-Rig preset; with `id`, update that one in place |
+| `loadCompositePreset` | `{id}` | Replace the mixer with a saved Multi-Rig's slots, levels and mix gain. The instance's output gain is left alone, as with any preset load |
+| `getCompositePresetList` | `{}` | Request `compositePresetList` |
+| `removeCompositePreset` | `{id}` | Delete a saved Multi-Rig preset |
 | `setInputMode` | `{mode}` | Set input mode (mono/stereo) |
 | `setAmpCabState` | `{...}` | Set amp/cab enable state |
 | `setAutoLevel` | `{...}` | Legacy compatibility message; controller forces mixer-wide auto-level back off |

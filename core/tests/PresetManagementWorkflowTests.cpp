@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -3247,6 +3248,182 @@ bool TestSetlistCursorSwitchesPresetWithoutStackingMixer()
     }
 }
 
+// A Multi-Rig owns its output level: a dB gain on the summed preset mix, saved with the
+// mix and restored on load. The global output gain is a per-instance setting and stays
+// where the player left it, and loading a single preset starts the mix level over at 0 dB.
+bool TestCompositePresetRoundTripsMixGain()
+{
+    try
+    {
+        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "multi-rig-mix-gain";
+        std::error_code ec;
+        fs::remove_all(sandbox, ec);
+        fs::create_directories(sandbox, ec);
+        SetSettingsEnvRoot(sandbox);
+
+        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        fs::create_directories(presetDir, ec);
+
+        for (const auto& [id, name] :
+             std::vector<std::pair<std::string, std::string>>{{"rig-a", "Rig A"}, {"rig-b", "Rig B"}})
+        {
+            auto preset = BuildPassthroughPreset(id, name);
+            guitarfx::NormalizePresetScenes(preset);
+
+            if (!guitarfx::PresetStorage::SaveToFile(preset, presetDir / (id + ".json")))
+            {
+                std::cerr << "Failed to write Multi-Rig preset fixture " << id << "\n";
+                return false;
+            }
+        }
+
+        TestHost host(sandbox);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+
+        // State broadcasts only start once the UI says it is live.
+        controller.HandleUIMessage(nlohmann::json{{"type", "uiReady"}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", -1.5}}.dump());
+        controller.HandleUIMessage(nlohmann::json{{"type", "addActivePreset"}, {"presetId", "rig-a"}}.dump());
+        controller.HandleUIMessage(nlohmann::json{{"type", "addActivePreset"}, {"presetId", "rig-b"}}.dump());
+        controller.HandleUIMessage(nlohmann::json{{"type", "setMixGain"}, {"gainDb", -6.0}}.dump());
+
+        if (std::abs(controller.GetMixer().GetMixGainDb() - (-6.0)) > 1e-9)
+        {
+            std::cerr << "setMixGain did not reach the mixer\n";
+            return false;
+        }
+
+        if (std::abs(controller.GetMixer().GetGlobalChainConfig().outputGain - (-1.5)) > 1e-9)
+        {
+            std::cerr << "setMixGain changed the global output gain\n";
+            return false;
+        }
+
+        controller.HandleUIMessage(nlohmann::json{{"type", "saveCompositePreset"}, {"name", "Rig Pair"}}.dump());
+
+        const auto saved = FindLatestMessageOfType(host.sentMessages, "compositePresetSaved");
+
+        if (!saved)
+        {
+            std::cerr << "saveCompositePreset did not report compositePresetSaved\n";
+            return false;
+        }
+
+        const std::string compositeId = saved->value("id", "");
+        const auto list = FindLatestMessageOfType(host.sentMessages, "compositePresetList");
+
+        if (!list)
+        {
+            std::cerr << "saveCompositePreset did not send compositePresetList\n";
+            return false;
+        }
+
+        bool found = false;
+
+        for (const auto& entry : list->value("compositePresets", nlohmann::json::array()))
+        {
+            if (entry.value("id", "") != compositeId)
+            {
+                continue;
+            }
+
+            found = true;
+
+            if (std::abs(entry.value("mixGainDb", 0.0) - (-6.0)) > 1e-9)
+            {
+                std::cerr << "Multi-Rig recorded mixGainDb " << entry.value("mixGainDb", 0.0) << " instead of -6\n";
+                return false;
+            }
+
+            if (entry.contains("masterGain") || entry.contains("limiterEnabled"))
+            {
+                std::cerr << "Multi-Rig still records the retired masterGain/limiterEnabled fields\n";
+                return false;
+            }
+        }
+
+        if (!found)
+        {
+            std::cerr << "Saved Multi-Rig " << compositeId << " is missing from compositePresetList\n";
+            return false;
+        }
+
+        // The player changes both levels between saving and recalling the mix.
+        controller.HandleUIMessage(nlohmann::json{{"type", "setMixGain"}, {"gainDb", 3.0}}.dump());
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setGlobalChainParam"}, {"path", "output.gain"}, {"value", 6.0}}.dump());
+        controller.HandleUIMessage(nlohmann::json{{"type", "loadCompositePreset"}, {"id", compositeId}}.dump());
+
+        if (controller.GetMixer().GetActivePresetIds().size() != 2)
+        {
+            std::cerr << "Loading the Multi-Rig did not restore both slots\n";
+            return false;
+        }
+
+        if (std::abs(controller.GetMixer().GetMixGainDb() - (-6.0)) > 1e-9)
+        {
+            std::cerr << "Loading the Multi-Rig did not restore its mix gain (got "
+                      << controller.GetMixer().GetMixGainDb() << ")\n";
+            return false;
+        }
+
+        const auto chain = controller.GetMixer().GetGlobalChainConfig();
+
+        if (std::abs(chain.outputGain - 6.0) > 1e-9)
+        {
+            std::cerr << "Loading a Multi-Rig changed the instance output gain to " << chain.outputGain << "\n";
+            return false;
+        }
+
+        if (std::abs(controller.GetMixer().GetMasterGain() - std::pow(10.0, 6.0 / 20.0)) > 1e-6)
+        {
+            std::cerr << "Mixer master multiplier no longer matches the OUT level after loading a Multi-Rig\n";
+            return false;
+        }
+
+        const auto stateMsg = FindLatestMessageOfType(host.sentMessages, "state");
+
+        if (!stateMsg ||
+            std::abs(stateMsg->value("mixer", nlohmann::json::object()).value("mixGainDb", 0.0) - (-6.0)) > 1e-9)
+        {
+            std::cerr << "The state broadcast does not report mixer.mixGainDb\n";
+            return false;
+        }
+
+        // Switching to a single preset starts the mix level over: a lone preset must not
+        // play through a leftover Multi-Rig trim. (Loading a preset that is already a slot
+        // rebuilds that slot in place and keeps the mix, so this one is not a slot.)
+        auto single = BuildPassthroughPreset("rig-solo", "Rig Solo");
+        nlohmann::json load;
+        load["type"] = "loadPreset";
+        load["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(single));
+        load["presetId"] = single.id;
+        controller.HandleUIMessage(load.dump());
+
+        if (controller.GetMixer().GetActivePresetIds().size() != 1)
+        {
+            std::cerr << "loadPreset did not swap the mixer down to one preset\n";
+            return false;
+        }
+
+        if (std::abs(controller.GetMixer().GetMixGainDb()) > 1e-9)
+        {
+            std::cerr << "Loading a single preset left the Multi-Rig mix gain at "
+                      << controller.GetMixer().GetMixGainDb() << " dB\n";
+            return false;
+        }
+
+        return true;
+    }
+    catch (const std::exception& ex)
+    {
+        std::cerr << "Exception in TestCompositePresetRoundTripsMixGain: " << ex.what() << "\n";
+        return false;
+    }
+}
+
 // A preset switch cannot change the resource library, riff library, app settings or effect
 // catalog, so its state broadcast must not carry them — they are ~99% of the full payload.
 bool TestPresetSwitchBroadcastsLightState()
@@ -3417,6 +3594,7 @@ int main()
     run("Optimized NAM metadata alias parsing", TestOptimizedNamMetadataAliasParsing());
     run("Reorder signal path node failures do not corrupt graph", TestReorderSignalPathNodeFailuresDoNotCorruptGraph());
     run("Setlist cursor switches preset without stacking mixer", TestSetlistCursorSwitchesPresetWithoutStackingMixer());
+    run("Multi-Rig round-trips its mix gain", TestCompositePresetRoundTripsMixGain());
     run("Preset switch broadcasts light state", TestPresetSwitchBroadcastsLightState());
 
     std::cout << "\nPreset management workflow tests: " << passed << " passed, " << failed << " failed\n";

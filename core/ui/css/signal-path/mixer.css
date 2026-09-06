@@ -251,15 +251,45 @@
   gap: 5px;
 }
 
-.iml-toolbar {
+/* Save/Update and Delete for the Multi-Rig, stacked beside the master knob. */
+.iml-master-actions {
   display: flex;
+  flex-direction: column;
   gap: 4px;
+  flex-shrink: 0;
 }
 
-.iml-toolbar-btn {
-  padding: 3px 9px;
-  font-size: 10px;
-  white-space: nowrap;
+.iml-master-action {
+  width: 26px;
+  height: 26px;
+  border-color: var(--border-medium);
+  background: var(--overlay-light);
+}
+
+.iml-master-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* renderIcon() glyph: a currentColor-filled span masked by the icon file. */
+.iml-master-action-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon-url);
+  mask-image: var(--icon-url);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.iml-master-action.is-update {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /* Preserve the mute=red / solo=amber convention from the old buttons on
@@ -287,10 +317,6 @@
   padding: 6px 14px;
   border-left: 1px solid var(--border-medium);
   background: var(--bg-secondary);
-}
-
-.iml-master .iml-save-multi-rig-btn {
-  white-space: nowrap;
 }
 
 /* ── end inline mixer ───────────────────────────────────────────────── */

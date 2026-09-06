@@ -157,6 +157,7 @@ void PluginController::BroadcastState(StateScope scope)
     // Mixer snapshot
     nlohmann::json mixer = nlohmann::json::object();
     mixer["masterGain"] = mPresetMixer.GetMasterGain();
+    mixer["mixGainDb"] = mPresetMixer.GetMixGainDb();
     mixer["limiterEnabled"] = mPresetMixer.IsLimiterEnabled();
     mixer["activePresetIds"] = activePresetIds;
     nlohmann::json presetConfigs = nlohmann::json::object();

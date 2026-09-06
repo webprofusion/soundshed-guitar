@@ -1136,8 +1136,7 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
     CompositePreset cp;
     cp.name = name;
     cp.description = description;
-    cp.masterGain = mPresetMixer.GetMasterGain();
-    cp.limiterEnabled = mPresetMixer.IsLimiterEnabled();
+    cp.mixGainDb = mPresetMixer.GetMixGainDb();
 
     for (const auto& pid : mPresetMixer.GetActivePresetIds())
     {
@@ -1195,6 +1194,12 @@ void PluginController::HandleSaveCompositePresetRequest(const nlohmann::json& pa
     if (!existingId.empty())
     {
         cp.id = existingId;
+
+        // Updating in place keeps the original creation time; only modifiedAt moves.
+        if (const auto existing = CompositePresetStorage::LoadFromStore(Store(), existingId))
+        {
+            cp.createdAt = existing->createdAt;
+        }
     }
     else
     {
@@ -1268,9 +1273,9 @@ void PluginController::HandleLoadCompositePresetRequest(const nlohmann::json& pa
         SetActivePresetSolo(slot.presetId, slot.solo);
     }
 
-    // Restore master settings
-    SetMasterGain(cp.masterGain);
-    SetLimiterEnabled(cp.limiterEnabled);
+    // The mix's own level. The global output gain is a per-instance setting and is not
+    // touched here, the same as for any preset load.
+    SetMixGainDb(cp.mixGainDb);
 
     // Notify UI
     SendMessageToUI(nlohmann::json{{"type", "compositePresetLoaded"}, {"id", cp.id}, {"name", cp.name}}.dump());

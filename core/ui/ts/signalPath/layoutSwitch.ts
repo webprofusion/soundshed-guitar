@@ -96,7 +96,7 @@ export function openLayoutDesignerForNode(
   if (layoutId) {
     existingLayout = findLayoutById(layoutId, effectType, blendId || undefined);
     if (!existingLayout) {
-      showNotification("That layout is no longer available", "error");
+      showNotification("That layout is no longer available");
       return;
     }
   }

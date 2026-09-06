@@ -260,6 +260,11 @@ void PluginController::SetMasterGain(double value)
     mPresetMixer.SetMasterGain(value);
 }
 
+void PluginController::SetMixGainDb(double dB)
+{
+    mPresetMixer.SetMixGainDb(dB);
+}
+
 void PluginController::SetLimiterEnabled(bool enabled)
 {
     mPresetMixer.SetLimiterEnabled(enabled);

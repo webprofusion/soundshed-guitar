@@ -101,9 +101,10 @@ export function requestSignalDiagnosticsRoster(): void {
   postMessage({ type: "setSignalDiagnosticsEnabled", enabled: true });
 }
 
-export function setLimiterEnabled(enabled: boolean): void {
-  postMessage({ type: "setLimiterEnabled", enabled });
-  appendLog(`setLimiterEnabled → ${enabled}`);
+/** The Multi-Rig's own level in dB, applied to the preset mix ahead of the global output stage. */
+export function setMixGainDb(gainDb: number): void {
+  postMessage({ type: "setMixGain", gainDb });
+  appendLog(`setMixGain → ${gainDb.toFixed(1)} dB`);
 }
 
 export function setMetronome(payload: {

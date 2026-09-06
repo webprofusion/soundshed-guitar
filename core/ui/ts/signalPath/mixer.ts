@@ -2,13 +2,19 @@ import { uiState, clonePreset, setActivePresetDraft, setFocusedMixerPresetId, is
 import type {
   Preset,
 } from "../types.js";
-import { postMessage, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMasterGain, setLimiterEnabled, removeActivePreset, focusMixerPreset } from "../bridge.js";
+import { postMessage, setPresetMix, setPresetPan, setPresetMute, setPresetSolo, setMixGainDb, removeActivePreset, focusMixerPreset } from "../bridge.js";
 import { escapeHtml, idAccentColor } from "../utils.js";
-import { GenericKnob } from "../controls.js";
+import { GenericKnob, formatGainDb } from "../controls.js";
+import { renderIcon } from "../iconAssets.js";
+import { MIX_GAIN_MAX_DB, MIX_GAIN_MIN_DB } from "../multiPresetMixerSupport.js";
 import { normalizePresetScenes } from "../presetScenes.js";
 import { isMixTabActive, setMixTabActive } from "./state.js";
 import { requestSignalPathRender } from "./render.js";
+import { Features, isFeatureEnabled } from "../featureFlags.js";
 export const mixerPresetTabCollator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+
+/** The same floppy glyph as the header's Save button. */
+const SAVE_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>`;
 
 export function renderMixerPresetTabs(): void {
   let tabBar = document.getElementById("mixer-preset-tabs");
@@ -210,6 +216,20 @@ export function buildInlineMixerHtml(): string {
       </div>`;
   }).join("");
 
+  // The Master strip: the Multi-Rig's own level, applied to the preset mix ahead
+  // of the global output stage and saved with the mix — independent of OUT in the
+  // header. Save/Update and Delete stack beside it. They are the Multi-Rig
+  // feature's entry points, so they follow the flag; the level control stays, so a
+  // mixer already running two presets is never left without its controls.
+  const linked = Boolean(uiState.activeCompositePresetId);
+  const multiRigActions = isFeatureEnabled(Features.MultiRig)
+    ? `
+        <div class="iml-master-actions">
+          <button type="button" id="iml-save-multi-rig" class="icon-btn iml-master-action${linked ? " is-update" : ""}" title="${linked ? "Update this Multi-Rig preset" : "Save this mix as a Multi-Rig preset"}" aria-label="${linked ? "Update Multi-Rig preset" : "Save Multi-Rig preset"}">${SAVE_ICON_SVG}</button>
+          <button type="button" id="iml-delete-multi-rig" class="icon-btn iml-master-action"${linked ? "" : " disabled"} title="Delete this Multi-Rig preset" aria-label="Delete Multi-Rig preset">${renderIcon("trash", "iml-master-action-icon")}</button>
+        </div>`
+    : "";
+
   return `
     <div class="iml-strips">${strips}</div>
     <div class="iml-master">
@@ -217,21 +237,12 @@ export function buildInlineMixerHtml(): string {
       <div class="iml-strip-row">
         <div class="iml-knobs">
           <div class="knob-control iml-knob">
-            <span class="knob-label">Gain</span>
-            <div class="knob" id="iml-master-gain-knob" data-value="${mixer.masterGain}"><div class="knob-indicator"></div></div>
-            <span class="knob-value">${formatMixerPercentValue(mixer.masterGain)}</span>
+            <span class="knob-label">Out</span>
+            <div class="knob" id="iml-mix-gain-knob" data-value="${mixer.mixGainDb}"><div class="knob-indicator"></div></div>
+            <span class="knob-value">${formatGainDb(mixer.mixGainDb)}</span>
           </div>
         </div>
-        <div class="iml-toggles">
-          <div class="toggle-control mini-toggle-control">
-            <span class="toggle-label">Limiter</span>
-            <label class="toggle-switch"><input type="checkbox" id="iml-limiter"${mixer.limiterEnabled ? " checked" : ""}/><span class="toggle-slider"></span></label>
-          </div>
-          <div class="iml-toolbar">
-            <button type="button" id="iml-save-multi-rig" class="btn btn-secondary btn-sm iml-toolbar-btn" title="Save current mixer as a Multi-Rig preset">Save</button>
-            <button type="button" id="iml-delete-multi-rig" class="btn btn-secondary btn-sm iml-toolbar-btn"${uiState.activeCompositePresetId ? "" : " disabled"} title="Delete this Multi-Rig preset">Delete</button>
-          </div>
-        </div>
+        ${multiRigActions}
       </div>
     </div>`;
 }
@@ -320,25 +331,24 @@ export function bindInlineMixerControls(panel: HTMLElement): void {
     });
   });
 
-  const masterGainKnob = panel.querySelector<HTMLElement>("#iml-master-gain-knob");
-  if (masterGainKnob) {
+  const mixGainKnob = panel.querySelector<HTMLElement>("#iml-mix-gain-knob");
+  if (mixGainKnob) {
     new GenericKnob({
-      knobElement: masterGainKnob,
-      paramId: "mixer_master_gain",
-      minValue: 0,
-      maxValue: 2,
-      defaultValue: 1,
-      displayFormat: formatMixerPercentValue,
-      valueDisplay: masterGainKnob.parentElement?.querySelector<HTMLElement>(".knob-value"),
-      sensitivity: knobSensitivity(0, 2),
+      knobElement: mixGainKnob,
+      paramId: "mixer_mix_gain",
+      minValue: MIX_GAIN_MIN_DB,
+      maxValue: MIX_GAIN_MAX_DB,
+      defaultValue: 0,
+      displayFormat: formatGainDb,
+      valueDisplay: mixGainKnob.parentElement?.querySelector<HTMLElement>(".knob-value"),
+      sensitivity: 0.1,
       sendParameter: false,
-      onValueChange: (v) => setMasterGain(v),
+      onValueChange: (v) => {
+        setMixGainDb(v);
+        if (uiState.mixer) uiState.mixer.mixGainDb = v;
+      },
     });
   }
-
-  panel.querySelector<HTMLInputElement>("#iml-limiter")?.addEventListener("change", (e) => {
-    setLimiterEnabled((e.target as HTMLInputElement).checked);
-  });
 
   panel.querySelector<HTMLButtonElement>("#iml-save-multi-rig")?.addEventListener("click", () => {
     document.dispatchEvent(new CustomEvent("mixerSaveMultiRig"));

@@ -49,7 +49,7 @@ export function handleCustomEffectLibrary(entries: CustomEffectLibrary): void {
 
 export function saveCustomEffectEntry(entry: CustomEffectLibraryEntry): void {
   if (!entry.id || !entry.name || !entry.baseEffectType || !entry.moduleResourceType || !entry.moduleResourceId) {
-    showNotification("Custom Effect entry is missing required fields", "error");
+    showNotification("Custom Effect entry is missing required fields");
     return;
   }
 

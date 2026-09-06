@@ -572,7 +572,7 @@ export class LayoutDesignerModal {
     }
 
     window.dispatchEvent(new CustomEvent(LayoutDesignerModal.LIBRARY_CHANGED_EVENT));
-    showNotification(`Layout "${layoutName}" deleted`, "success");
+    showNotification(`Layout "${layoutName}" deleted`);
     this.close(false);
   }
 
@@ -636,7 +636,7 @@ export class LayoutDesignerModal {
       this.onSaveCallback(this.layout);
     }
 
-    showNotification("Layout saved", "success");
+    showNotification("Layout saved");
     this.close(true);
   }
 
@@ -742,7 +742,7 @@ export class LayoutDesignerModal {
 
     const zipLib = window.JSZip;
     if (!zipLib) {
-      showNotification("Export failed: archive library not available", "error");
+      showNotification("Export failed: archive library not available");
       return;
     }
 
@@ -826,7 +826,7 @@ export class LayoutDesignerModal {
 
     const zipLib = window.JSZip;
     if (!zipLib) {
-      showNotification("Import failed: archive library not available", "error");
+      showNotification("Import failed: archive library not available");
       return;
     }
 
@@ -836,7 +836,7 @@ export class LayoutDesignerModal {
 
       const layoutEntry = zip.file("layout.json");
       if (!layoutEntry) {
-        showNotification("Import failed: archive is missing layout.json", "error");
+        showNotification("Import failed: archive is missing layout.json");
         return;
       }
 
@@ -848,7 +848,7 @@ export class LayoutDesignerModal {
       };
 
       if (!archive.layout) {
-        showNotification("Import failed: archive has no layout data", "error");
+        showNotification("Import failed: archive has no layout data");
         return;
       }
 
@@ -928,10 +928,10 @@ export class LayoutDesignerModal {
       this.updateDimensionInputs();
       this.renderCanvas();
       this.selectElement(null);
-      showNotification("Layout imported", "success");
+      showNotification("Layout imported");
     } catch (err) {
       console.error("[LayoutDesigner] Import failed:", err);
-      showNotification(`Import failed: ${err instanceof Error ? err.message : "unknown error"}`, "error");
+      showNotification(`Import failed: ${err instanceof Error ? err.message : "unknown error"}`);
     }
   }
 
@@ -983,7 +983,7 @@ export class LayoutDesignerModal {
     this.updateDimensionInputs();
     this.renderCanvas();
     this.renderSidebar();
-    showNotification("Layout reset to default", "info");
+    showNotification("Layout reset to default");
   }
 
   private toggleGrid(): void {
@@ -2632,7 +2632,7 @@ export class LayoutDesignerModal {
     if (!this.layout || !this.sidebarContent) return;
 
     if (this.layout.backgrounds.length >= 2) {
-      showNotification("Maximum 2 background layers", "warning");
+      showNotification("Maximum 2 background layers");
       return;
     }
 
@@ -2715,7 +2715,7 @@ export class LayoutDesignerModal {
     if (!this.layout) return;
 
     if (this.layout.backgrounds.length >= 2) {
-      showNotification("Maximum 2 background layers", "warning");
+      showNotification("Maximum 2 background layers");
       return;
     }
 
@@ -2743,7 +2743,7 @@ export class LayoutDesignerModal {
     const availableResources = this.resourceCandidates.filter((resource) => !usedKeys.has(resource.controlKey));
 
     if (availableParams.length === 0 && availableResources.length === 0) {
-      showNotification("All controls are already in the layout", "info");
+      showNotification("All controls are already in the layout");
       return;
     }
 

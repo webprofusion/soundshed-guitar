@@ -298,6 +298,8 @@ MultiPresetMixer& MultiPresetMixer::operator=(MultiPresetMixer&& other) noexcept
     mSampleRate = other.mSampleRate;
     mMaxBlockSize = other.mMaxBlockSize;
     mPrepared = other.mPrepared;
+    mMixGainDb = other.mMixGainDb;
+    mMixGain = other.mMixGain;
     mMasterGain = other.mMasterGain;
     mLimiterEnabled = other.mLimiterEnabled;
     mAutoLevelInput = other.mAutoLevelInput;
@@ -559,6 +561,10 @@ void MultiPresetMixer::CommitPresetSwap()
 
     mInstances.push_back(std::move(mPendingInstance));
     mPendingInstance.reset();
+
+    // A swap plays one preset on its own. The Multi-Rig mix level belongs to the mix that
+    // just went away, so a lone preset must not keep playing through its trim.
+    SetMixGainDb(0.0);
 }
 
 void MultiPresetMixer::SetPresetMix(const std::string& presetId, double value)
@@ -2121,6 +2127,28 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     }
 
     CollectFinishedFadeOuts();
+
+    // ==========================================================================
+    // MIX GAIN: the Multi-Rig's own level, applied to the summed preset mix ahead
+    // of the global post-chain and the global output stage.
+    // ==========================================================================
+    const float mixGain = static_cast<float>(mMixGain);
+
+    if (mixGain != 1.0f)
+    {
+        for (float* channel : {outputs[0], outputs[1]})
+        {
+            if (!channel)
+            {
+                continue;
+            }
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                channel[i] *= mixGain;
+            }
+        }
+    }
 
     // ==========================================================================
     // GLOBAL POST-CHAIN: EQ → Doubler
