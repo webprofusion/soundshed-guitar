@@ -3,14 +3,18 @@ import { EffectGuids, resolveEffectType } from "./effectGuids.js";
 
 export type IconKey =
   | "amp"
+  | "pedal"
   | "bolt"
   | "speaker"
   | "output"
   | "sliders"
   | "layout"
   | "wave"
-  | "clock"
+  | "delay"
+  | "doubler"
   | "reverb"
+  | "reverb-advanced"
+  | "reverb-ambient"
   | "wrench"
   | "door"
   | "meter"
@@ -26,7 +30,6 @@ export type IconKey =
   | "gear"
   | "folder"
   | "flask"
-  | "sparkle"
   | "microscope"
   | "link"
   | "package"
@@ -61,7 +64,7 @@ const categoryIcons: Record<string, IconKey> = {
   eq:         "sliders",
   modulation: "wave",
   pitch:      "note",
-  delay:      "clock",
+  delay:      "delay",
   reverb:     "reverb",
   synth:      "note",
   utility:    "wrench",
@@ -80,7 +83,7 @@ const effectIcons: Record<string, IconKey> = {
   [EffectGuids.kAmpBuiltin]:       "amp",
   [EffectGuids.kAmpNam]:           "amp",
   [EffectGuids.kAmpNamOptimized]:  "amp",
-  [EffectGuids.kFxNam]:            "sparkle",
+  [EffectGuids.kFxNam]:            "pedal",
   [EffectGuids.kAmpNamBlend]:      "blend",
 
   // Cabs
@@ -102,16 +105,16 @@ const effectIcons: Record<string, IconKey> = {
   [EffectGuids.kTranspose]:        "note",
 
   // Delay
-  [EffectGuids.kDelayDigital]:     "clock",
-  [EffectGuids.kDelayDoubler]:     "clock",
+  [EffectGuids.kDelayDigital]:     "delay",
+  [EffectGuids.kDelayDoubler]:     "doubler",
 
   // Reverb
   [EffectGuids.kReverbRoom]:       "reverb",
   [EffectGuids.kReverbChamber]:    "reverb",
   [EffectGuids.kReverbSpring]:     "reverb",
-  [EffectGuids.kReverbAdvanced]:   "sparkle",
+  [EffectGuids.kReverbAdvanced]:   "reverb-advanced",
   [EffectGuids.kReverbIr]:         "reverb",
-  [EffectGuids.kReverbAmbient]:    "sparkle",
+  [EffectGuids.kReverbAmbient]:    "reverb-ambient",
 
   // Synth
   [EffectGuids.kSynthSaw]:         "note",
