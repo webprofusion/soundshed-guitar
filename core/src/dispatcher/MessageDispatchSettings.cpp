@@ -39,7 +39,8 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
             c.ApplyUserInputCalibrationSettingsFromAppSettings();
         }
 
-        if (key == "audio.dsp.nominalOperatingLevelDbfs" || key == "audio.dsp.outputProtectionCeilingDbfs")
+        if (key == "audio.dsp.nominalOperatingLevelDbfs" || key == "audio.dsp.outputProtectionCeilingDbfs" ||
+            key == "audio.dsp.outputLimiterEnabled")
         {
             c.ApplyDspLevelTargetSettingsFromAppSettings();
             c.mPendingStateBroadcast = true;

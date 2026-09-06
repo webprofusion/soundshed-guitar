@@ -62,7 +62,9 @@ Define a flexible preset organization model with hierarchical folders and ordere
   and independent of both. It is saved with the Multi-Rig and restored on load;
   OUT, like every global setting, is left alone. Loading a single preset resets
   it to 0 dB so a lone preset never plays through a leftover trim. There is no
-  per-mix limiter switch: the limiter is a global setting.
+  per-mix limiter switch — the limiter applies to the whole output, so it lives
+  under Settings → General → Advanced DSP Level Targets, next to the ceiling it
+  aims at (`audio.dsp.outputLimiterEnabled`, default off).
 - The feature is on by default (`features.multiRig.enabled`) and can be turned
   off under Settings → Feature Toggles. Turning it off hides the entry points —
   the Add to Mixer button, the Multi-Rig tab and the Save/Delete toolbar — but

@@ -194,6 +194,9 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
         }
         else if (path == "limiter.enabled")
         {
+            // Not part of the global FX blob (see SerializeGlobalFxSettings): the limiter is
+            // an output-stage scalar, and its persistence is the app setting the Settings
+            // toggle writes. This path stays for host state and any existing caller.
             mPresetMixer.SetLimiterEnabled(value.get<bool>());
         }
         else if (path == "eq.lowGain")

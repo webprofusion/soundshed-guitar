@@ -21,6 +21,10 @@ inline constexpr const char* kBundledJamYouTubeApiKey = "";
 // ── DSP levels ──────────────────────────────────────────────────────
 inline constexpr const char* kNominalOperatingLevelSettingKey = "audio.dsp.nominalOperatingLevelDbfs";
 inline constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.outputProtectionCeilingDbfs";
+// The output limiter's on/off. It aims at the ceiling above, which is why it lives here
+// rather than in the global FX blob — that blob is the pre/post chains, and the limiter is
+// an output-stage scalar. Default off, as it has been since the mixer switch existed.
+inline constexpr const char* kOutputLimiterEnabledSettingKey = "audio.dsp.outputLimiterEnabled";
 inline constexpr const char* kGlobalFxSettingsKey = "globalFx.settings";
 
 // ── NAM quality ─────────────────────────────────────────────────────

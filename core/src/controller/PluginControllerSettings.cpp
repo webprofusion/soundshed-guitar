@@ -75,6 +75,20 @@ bool PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
     updateStoredSetting(kNominalOperatingLevelSettingKey, nominalLevelDbfs);
     updateStoredSetting(kOutputProtectionCeilingSettingKey, protectionCeilingDbfs);
 
+    // The limiter that aims at the ceiling just applied. Off unless the stored value says
+    // otherwise, and a missing or malformed entry is written back the same way the numeric
+    // targets above are.
+    const auto limiterIt = mAppSettings.find(kOutputLimiterEnabledSettingKey);
+    const bool limiterEnabled = limiterIt != mAppSettings.end() && limiterIt->is_boolean() && limiterIt->get<bool>();
+
+    mPresetMixer.SetLimiterEnabled(limiterEnabled);
+
+    if (limiterIt == mAppSettings.end() || !limiterIt->is_boolean())
+    {
+        mAppSettings[kOutputLimiterEnabledSettingKey] = limiterEnabled;
+        settingsChanged = true;
+    }
+
     return settingsChanged;
 }
 
@@ -126,6 +140,10 @@ void PluginController::ApplyGlobalFxSettingsFromAppSettings()
         auto config = it->get<GlobalSignalChainConfig>();
         config.autoLevelInput = false;
         config.autoLevelOutput = false;
+        // The blob does not carry the limiter, and committing the swap re-applies every
+        // scalar from the config — so carry the live value across rather than reading the
+        // stored default back over the app setting applied just above.
+        config.limiterEnabled = mPresetMixer.IsLimiterEnabled();
 
         // Build off the lock, install under it — rebuilding the global executors while the
         // audio thread is blocked on mDSPMutex is an audible dropout.

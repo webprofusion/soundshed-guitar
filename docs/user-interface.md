@@ -128,7 +128,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setPresetSolo` | `{presetId, solo}` | Solo mixer preset |
 | `setMasterGain` | `{gain}` | Set the mixer's linear master multiplier directly. Only the output mute uses this (0 to mute, the previous value to restore); level changes go through `setGlobalChainParam` with path `output.gain`, since the engine derives the multiplier from that setting and re-derives it on every chain rebuild |
 | `setMixGain` | `{gainDb}` | The Multi-Rig's own level in dB, applied to the summed preset mix ahead of the global post-chain and output stage. Independent of `output.gain`; reported back as `mixer.mixGainDb`, saved with a Multi-Rig, and reset to 0 dB when a single preset is loaded |
-| `setLimiterEnabled` | `{enabled}` | Enable/disable the output limiter. Still accepted; the UI no longer sends it since the Mix tab's limiter switch was removed |
+| `setLimiterEnabled` | `{enabled}` | Enable/disable the output limiter. Still accepted, as is `setGlobalChainParam` with path `limiter.enabled`; the UI now drives it through the `audio.dsp.outputLimiterEnabled` app setting instead, since the limiter is global rather than per-mix |
 | `saveCompositePreset` | `{name, description?, tags?, id?}` | Save the current mixer (slots, levels, mix gain) as a Multi-Rig preset; with `id`, update that one in place |
 | `loadCompositePreset` | `{id}` | Replace the mixer with a saved Multi-Rig's slots, levels and mix gain. The instance's output gain is left alone, as with any preset load |
 | `getCompositePresetList` | `{}` | Request `compositePresetList` |

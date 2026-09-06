@@ -13,8 +13,7 @@ function makeComposite(overrides: Partial<CompositePreset> & { id: string }): Co
     description: "",
     tags: [],
     slots: [],
-    masterGain: 1,
-    limiterEnabled: false,
+    mixGainDb: 0,
     ...overrides,
   } as CompositePreset;
 }

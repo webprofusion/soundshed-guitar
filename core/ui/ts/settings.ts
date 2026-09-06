@@ -42,6 +42,7 @@ const USER_INPUT_CALIBRATION_NONE_VALUE = "__none__";
 const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
+const DSP_OUTPUT_LIMITER_SETTING = "audio.dsp.outputLimiterEnabled";
 const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
 const NAM_OVERSAMPLING_SETTING = "audio.nam.oversampling";
 const NAM_ANTI_ALIAS_PHASE_SETTING = "audio.nam.antiAliasPhase";
@@ -129,6 +130,7 @@ const featureGroupsContainer = document.getElementById("settings-feature-groups"
 const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loading-toggle") as HTMLInputElement | null;
 const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") as HTMLInputElement | null;
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
+const dspOutputLimiterToggle = document.getElementById("dsp-output-limiter-toggle") as HTMLInputElement | null;
 const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
 const namOversamplingSelect = document.getElementById("nam-oversampling-select") as HTMLSelectElement | null;
 const namAntiAliasPhaseSelect = document.getElementById("nam-anti-alias-phase-select") as HTMLSelectElement | null;
@@ -1063,6 +1065,15 @@ function initDspLevelTargetControls(): void {
     });
   }
 
+  if (dspOutputLimiterToggle && dspOutputLimiterToggle.dataset.bound !== "true") {
+    dspOutputLimiterToggle.dataset.bound = "true";
+    dspOutputLimiterToggle.addEventListener("change", () => {
+      const enabled = Boolean(dspOutputLimiterToggle.checked);
+      uiState.appSettings[DSP_OUTPUT_LIMITER_SETTING] = enabled;
+      setAppSetting(DSP_OUTPUT_LIMITER_SETTING, enabled);
+    });
+  }
+
 }
 
 function updateResourceCleanupVisibility(enabled: boolean): void {
@@ -1155,6 +1166,9 @@ export function refreshSettingsView(): void {
       DSP_PROTECTION_CEILING_DEFAULT,
     );
     dspProtectionCeilingInput.value = protectionCeiling.toFixed(1);
+  }
+  if (dspOutputLimiterToggle) {
+    dspOutputLimiterToggle.checked = Boolean(getSettingValue(DSP_OUTPUT_LIMITER_SETTING));
   }
   if (namSlimmableSizeInput) {
     const slimmableSize = sanitizeNumericSetting(

@@ -297,6 +297,9 @@ export function reconcileActiveCompositePreset(): void {
   const activePresetIds = uiState.mixer?.activePresetIds ?? [];
   if (!compositePresetMatchesMixer(active, activePresetIds)) {
     uiState.activeCompositePresetId = null;
+    // Neither caller redraws the signal path, so the Mix tab would keep offering
+    // Update (and an enabled Delete) for a Multi-Rig this mixer no longer is.
+    renderSignalPathBar();
   }
 }
 

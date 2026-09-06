@@ -1620,6 +1620,66 @@ bool TestLoadPresetPreservesInstanceGlobalFxState()
     return true;
 }
 
+// The output limiter is a global setting, not per-mix: the Settings toggle writes an app
+// setting, the engine applies it to the mixer's output stage, and it survives both a
+// preset load (which rebuilds the global chain) and a restart.
+bool TestOutputLimiterIsAGlobalSetting()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "output-limiter-setting";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    {
+        TestHost host(sandbox, {}, true);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+
+        if (controller.GetMixer().IsLimiterEnabled())
+        {
+            std::cerr << "The output limiter should default to off\n";
+            return false;
+        }
+
+        controller.HandleUIMessage(
+            nlohmann::json{{"type", "setSetting"}, {"key", "audio.dsp.outputLimiterEnabled"}, {"value", true}}.dump());
+
+        if (!controller.GetMixer().IsLimiterEnabled())
+        {
+            std::cerr << "The output limiter setting did not reach the mixer\n";
+            return false;
+        }
+
+        // A preset load rebuilds the global chain and re-applies every output-stage scalar
+        // from the chain config, which is where this used to be silently reset.
+        auto preset = BuildPassthroughPreset("limiter-preset", "Limiter Preset");
+        nlohmann::json load;
+        load["type"] = "loadPreset";
+        load["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
+        load["presetId"] = preset.id;
+        controller.HandleUIMessage(load.dump());
+
+        if (!controller.GetMixer().IsLimiterEnabled())
+        {
+            std::cerr << "Loading a preset switched the output limiter back off\n";
+            return false;
+        }
+    }
+
+    TestHost reloadedHost(sandbox, {}, true);
+    guitarfx::PluginController reloaded(reloadedHost);
+    reloaded.Initialize();
+
+    if (!reloaded.GetMixer().IsLimiterEnabled())
+    {
+        std::cerr << "The output limiter setting did not survive a restart\n";
+        return false;
+    }
+
+    return true;
+}
+
 bool TestStandalonePersistsGlobalFxSettingsBetweenLaunches()
 {
     const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-global-fx";
@@ -3577,6 +3637,7 @@ int main()
     run("Load preset preserves instance global FX state", TestLoadPresetPreservesInstanceGlobalFxState());
     run("Standalone persists global FX settings between launches",
         TestStandalonePersistsGlobalFxSettingsBetweenLaunches());
+    run("Output limiter is a global setting", TestOutputLimiterIsAGlobalSetting());
     run("Load preset retires NAM input auto-leveling", TestLoadPresetRetiresNamInputAutoLeveling());
     run("Load preset preserves disabled NAM calibration toggle", TestLoadPresetPreservesDisabledNamCalibrationToggle());
     run("Load app settings applies user input calibration", TestLoadAppSettingsAppliesUserInputCalibrationProfile());

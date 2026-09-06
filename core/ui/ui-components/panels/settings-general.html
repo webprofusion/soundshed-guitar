@@ -85,6 +85,14 @@
               </div>
               <div class="settings-hint">Sets the final mixer auto-level and limiter target. </div>
               <div class="settings-row">
+                <label for="dsp-output-limiter-toggle">Output Limiter</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="dsp-output-limiter-toggle" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint">Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not to any one preset.</div>
+              <div class="settings-row">
                 <label for="nam-auto-input-calibration-toggle">NAM Auto Input Calibration</label>
                 <label class="toggle-switch">
                   <input type="checkbox" id="nam-auto-input-calibration-toggle" />

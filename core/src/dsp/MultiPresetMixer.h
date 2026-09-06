@@ -161,6 +161,9 @@ class MultiPresetMixer
         return mMixGainDb;
     }
 
+    // Engine-side safety bounds, deliberately wider than the knob's own -24..+12 dB range
+    // (MIX_GAIN_MIN_DB/MIX_GAIN_MAX_DB in multiPresetMixerSupport.ts): these only exist to
+    // reject a nonsense value arriving from a file or a message.
     static constexpr double kMinMixGainDb = -60.0;
     static constexpr double kMaxMixGainDb = 24.0;
 
@@ -170,9 +173,13 @@ class MultiPresetMixer
         mMasterGain = value;
     }
 
+    // The global output limiter. ApplyGlobalChainScalars() re-reads this out of the chain
+    // config on every rebuild, so the config has to move with it — otherwise a preset load
+    // snaps the limiter back to whatever the config was last built with.
     void SetLimiterEnabled(bool enabled)
     {
         mLimiterEnabled = enabled;
+        mGlobalChainConfig.limiterEnabled = enabled;
     }
 
     [[nodiscard]] double GetMasterGain() const

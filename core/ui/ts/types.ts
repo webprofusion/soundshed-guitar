@@ -378,8 +378,13 @@ export interface CompositePreset {
   createdAt?: string;
   modifiedAt?: string;
   slots: CompositePresetSlot[];
-  masterGain: number;
-  limiterEnabled: boolean;
+  /**
+   * The mix's own level in dB, applied to the summed presets ahead of the global
+   * output stage. Files written before this field carried a linear `masterGain`
+   * (a copy of the global output gain) and a `limiterEnabled`; the engine ignores
+   * both when reading and no longer sends either.
+   */
+  mixGainDb: number;
 }
 
 export interface GlobalSignalChainConfig {
