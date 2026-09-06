@@ -182,6 +182,21 @@
   
   /* Amp Glow */
   --amp-glow: radial-gradient(ellipse, rgba(232, 136, 80, 0.3) 0%, transparent 70%);
+
+  /*
+    Card artwork wash — the tinted corner light behind library and sharing card
+    art. Set --wash-tint on the element and both layers pick it up; stack it
+    over the card's own base fill.
+
+    This was hand-rolled at each call site with constants that drifted apart:
+    the radial sat at -20% in one and -24% in the other, faded at 64% and 56%,
+    and stopped at 72% and 66%. Same treatment, three sets of magic numbers,
+    nothing shared. The values below are the midpoint of what was there.
+  */
+  --wash-tint: var(--color-accent);
+  --card-wash:
+    radial-gradient(circle at 24% -22%, color-mix(in srgb, var(--wash-tint), transparent 60%) 0%, transparent 69%),
+    linear-gradient(135deg, color-mix(in srgb, var(--wash-tint), transparent 84%) 0%, transparent 69%);
   
   /* Signal Node Colors */
   --node-input: #68a868;

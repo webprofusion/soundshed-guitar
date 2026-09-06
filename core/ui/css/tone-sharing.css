@@ -558,9 +558,9 @@
   gap: 10px;
   padding: 9px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-medium), transparent 38%);
+  --wash-tint: var(--tone-card-accent);
   background-image:
-    radial-gradient(circle at 24% -24%, color-mix(in srgb, var(--tone-card-accent), transparent 56%) 0%, transparent 66%),
-    linear-gradient(135deg, color-mix(in srgb, var(--tone-card-accent), transparent 84%) 0%, transparent 68%),
+    var(--card-wash),
     linear-gradient(180deg, color-mix(in srgb, var(--bg-control), #fff 3%) 0%, color-mix(in srgb, var(--bg-control), #000 18%) 100%);
   background-size: cover;
 }

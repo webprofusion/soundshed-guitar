@@ -908,7 +908,8 @@
 .tone3000-item-hero {
   min-height: 88px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-browser), transparent 25%);
-  background: radial-gradient(circle at 24% -20%, color-mix(in srgb, var(--color-primary), transparent 64%) 0%, transparent 72%), linear-gradient(135deg, color-mix(in srgb, var(--color-primary), transparent 84%) 0%, transparent 70%);
+  --wash-tint: var(--color-primary);
+  background: var(--card-wash);
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
