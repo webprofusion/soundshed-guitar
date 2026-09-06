@@ -951,7 +951,7 @@ function onRiffCaptureStopped(payload: IncomingPayload): void {
 function onRiffCaptureCanceled(payload: IncomingPayload): void {
   appendLog(`riff capture cancelled ← ${(payload as { takeId?: string }).takeId ?? "take"}`);
   applyRiffCaptureState({ active: false, complete: false, takeId: "", capturedSamples: 0, sampleRate: 0, hasAudio: false, waveformPeaks: [] });
-  showNotification("Riff capture canceled");
+  showNotification("Riff capture cancelled");
 }
 
 function onRiffSaved(payload: IncomingPayload): void {

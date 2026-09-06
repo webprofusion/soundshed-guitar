@@ -1719,7 +1719,7 @@ export function initializePresetControls(): void {
       event.stopPropagation();
       const presetId = uiState.activePresetId;
       if (!presetId) {
-        showNotification("No preset", "Select a preset to favorite");
+        showNotification("No preset", "Select a preset to favourite");
         return;
       }
       toggleFavoritePreset(presetId);

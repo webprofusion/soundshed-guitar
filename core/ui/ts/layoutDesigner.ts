@@ -928,7 +928,7 @@ export class LayoutDesignerModal {
       this.updateDimensionInputs();
       this.renderCanvas();
       this.selectElement(null);
-      showNotification("Layout imported successfully", "success");
+      showNotification("Layout imported", "success");
     } catch (err) {
       console.error("[LayoutDesigner] Import failed:", err);
       showNotification(`Import failed: ${err instanceof Error ? err.message : "unknown error"}`, "error");

@@ -3,6 +3,7 @@ import { EffectGuids, resolveEffectType } from "./effectGuids.js";
 
 export type IconKey =
   | "amp"
+  | "guitar"
   | "pedal"
   | "bolt"
   | "speaker"

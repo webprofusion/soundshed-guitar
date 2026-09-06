@@ -631,7 +631,7 @@ function renderSignalPathBarContent(): void {
       <div class="signal-graph-container">
         <div class="signal-graph-row">
           <div class="signal-node input-node" data-node-id="__input__" title="Input" aria-label="Input">
-            <div class="node-icon"><span class="fx-effect-icon" style="--icon-url: url('/images/icons/guitar.svg')" aria-hidden="true"></span></div>
+            <div class="node-icon">${renderIcon("guitar", "fx-effect-icon")}</div>
             <div class="node-info">
               <div class="node-name">Input</div>
             </div>
@@ -910,7 +910,7 @@ function renderGraphSignalPath(preset: Preset): void {
     <div class="signal-graph-container">
       <div class="signal-graph-row">
         <div class="signal-node input-node" data-node-id="__input__" title="Input" aria-label="Input">
-          <div class="node-icon"><span class="fx-effect-icon" style="--icon-url: url('/images/icons/guitar.svg')" aria-hidden="true"></span></div>
+          <div class="node-icon">${renderIcon("guitar", "fx-effect-icon")}</div>
           <div class="node-info">
             <div class="node-name">Input</div>
           </div>

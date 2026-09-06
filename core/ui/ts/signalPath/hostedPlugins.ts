@@ -380,7 +380,7 @@ export function buildHostedPluginListHtml(node: GraphNode, resourceIndex: number
     const format = inferPluginFormat(res);
     const formatLabel = format ? format.toUpperCase() : "";
     const path = res.filePath || "";
-    const favoriteTitle = isFavorite ? "Remove from favorites" : "Add to favorites";
+    const favoriteTitle = isFavorite ? "Remove from favourites" : "Add to favourites";
     return `
       <div
         class="plugin-host-item${isSelected ? " is-selected" : ""}${isFavorite ? " is-favorite" : ""}"

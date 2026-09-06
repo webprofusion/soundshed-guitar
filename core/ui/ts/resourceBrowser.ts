@@ -1061,8 +1061,8 @@ export class ResourceBrowserModal {
       this.tone3000ModeFavoritesTab.classList.toggle("active", this.tone3000FavoritesOnly);
       this.tone3000ModeFavoritesTab.setAttribute("aria-pressed", this.tone3000FavoritesOnly ? "true" : "false");
       this.tone3000ModeFavoritesTab.title = enabled
-        ? "Show your Tone3000 favorites"
-        : "Favorites require your own Tone3000 API key in Settings";
+        ? "Show your Tone3000 favourites"
+        : "Favourites require your own Tone3000 API key in Settings";
     }
 
     if (this.tone3000ModeSearchTab) {
@@ -1208,7 +1208,7 @@ export class ResourceBrowserModal {
         this.renderTone3000List();
       } else {
         this.tone3000List.innerHTML = this.tone3000FavoritesOnly
-          ? `<div class="resource-browser-empty">No favorite tones found. Favorite tones on Tone3000 first, then refresh.</div>`
+          ? `<div class="resource-browser-empty">No favourite tones found. Favourite them on Tone3000 first, then refresh.</div>`
           : `<div class="resource-browser-empty">Enter a search query to browse Tone3000.</div>`;
       }
     }
@@ -1858,7 +1858,7 @@ export class ResourceBrowserModal {
           ? `<span class="resource-browser-tone-type">${escapeHtml(toneType.replace(/_/g, " "))}</span>`
           : "";
         const isFav = this.isResourceFavorite(res.id);
-        const favoriteAction = `<button class="resource-browser-action-icon-btn resource-browser-item-fav-toggle${isFav ? " is-active" : ""}" type="button" data-resource-id="${escapeHtml(res.id)}" title="${isFav ? "Remove from favourites" : "Add to favourites"}" aria-label="Toggle favorite">${isFav ? "★" : "☆"}</button>`;
+        const favoriteAction = `<button class="resource-browser-action-icon-btn resource-browser-item-fav-toggle${isFav ? " is-active" : ""}" type="button" data-resource-id="${escapeHtml(res.id)}" title="${isFav ? "Remove from favourites" : "Add to favourites"}" aria-label="Toggle favourite">${isFav ? "★" : "☆"}</button>`;
         const providerNormalized = (metadata.provider ?? "").trim().toLowerCase();
         const isBuiltIn = providerNormalized === "built-in" || providerNormalized === "builtin" || providerNormalized === "factory";
         const editAction = isBuiltIn
@@ -2367,7 +2367,7 @@ export class ResourceBrowserModal {
       
       if (!response.ok) {
         if (useFavoritesMode && (response.status === 401 || response.status === 403 || response.status === 404)) {
-          throw new Error("Favorites are only available in BYOK direct API mode.");
+          throw new Error("Favourites are only available in BYOK direct API mode.");
         }
         throw new Error(`Search failed: ${response.status}`);
       }
@@ -2424,7 +2424,7 @@ export class ResourceBrowserModal {
     
     if (!this.tone3000Tones.length) {
       const emptyLabel = this.tone3000FavoritesOnly
-        ? "No favorite tones found. Favorite tones on Tone3000 first, then refresh."
+        ? "No favourite tones found. Favourite them on Tone3000 first, then refresh."
         : "No tones found. Try a different search.";
       this.tone3000List.innerHTML = `<div class="resource-browser-empty">${escapeHtml(emptyLabel)}</div>`;
       return;

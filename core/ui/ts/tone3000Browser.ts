@@ -74,8 +74,8 @@ function syncBrowseModeUi(): void {
     favoritesModeTabEl.classList.toggle("active", favoritesMode);
     favoritesModeTabEl.setAttribute("aria-pressed", favoritesMode ? "true" : "false");
     favoritesModeTabEl.title = enabled
-      ? "Show your Tone3000 favorites"
-      : "Favorites require your own Tone3000 API key in Settings";
+      ? "Show your Tone3000 favourites"
+      : "Favourites require your own Tone3000 API key in Settings";
   }
 
   if (searchModeTabEl) {
@@ -353,7 +353,7 @@ async function runSearch(page = 1): Promise<void> {
 
     if (!response.ok) {
       if (useFavoritesMode && (response.status === 401 || response.status === 403 || response.status === 404)) {
-        throw new Error("Favorites are only available in BYOK direct API mode.");
+        throw new Error("Favourites are only available in BYOK direct API mode.");
       }
       throw new Error(`Search failed: ${response.status}`);
     }
@@ -416,7 +416,7 @@ function renderResults(tones: Tone3000Tone[]): void {
 
   if (!tones.length) {
     const emptyLabel = favoritesMode
-      ? "No favorite tones found. Favorite tones on Tone3000 first, then refresh."
+      ? "No favourite tones found. Favourite them on Tone3000 first, then refresh."
       : "No tones found in this category.";
     resultsEl.innerHTML = `<div class="tone3000-empty">${escapeHtml(emptyLabel)}</div>`;
     return;
