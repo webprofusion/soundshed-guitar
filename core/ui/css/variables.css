@@ -106,12 +106,12 @@
   --control-indicator: #5a5a6a;
   --knob-border-highlight: rgba(255, 255, 255, 0.72);
   --knob-border-shadow: rgba(41, 48, 64, 0.16);
-  /* The flat case, used by the light theme. A theme wanting a gradient ring
-     sets --knob-ring-start and --knob-ring-end instead, as dark and classic
-     both do; the fallback to this lives at the point of use in controls.css,
-     not here — a var() inside a custom property is substituted where it is
-     declared, so defaulting the stops at :root would freeze them to this
-     value and ignore any theme override. */
+  /* Stands in for whichever ring stop a theme leaves unset: dark and classic
+     set both, light sets only --knob-ring-start and so ends its arc here. The
+     fallback lives at the point of use in controls.css, not here — a var()
+     inside a custom property is substituted where it is declared, so
+     defaulting the stops at :root would freeze them to this value and ignore
+     any theme override. */
   --knob-ring-color: #2ec868;
   --knob-ring-track: rgba(0,0,0,0.18);
 

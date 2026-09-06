@@ -46,6 +46,10 @@
   --border-dark: #a8b0be;
   --border-darker: #9099a8;
 
+  /* Knob value arc fades up from white into the base ring colour; the end stop
+     is left to fall back to --knob-ring-color. */
+  --knob-ring-start: #ffffff;
+
   /* Browser Shell - Updated for cleaner look */
   --bg-browser-shell: rgba(250, 250, 251, 0.95);
   --bg-browser-header: rgba(249, 250, 251, 0.98);
