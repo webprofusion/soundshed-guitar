@@ -34,7 +34,7 @@
   flex: 1;
   padding: 6px 10px;
   border: 1px solid var(--border-browser);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-input);
   color: var(--text-primary);
   font-size: 12px;
@@ -111,7 +111,7 @@
   gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--border-browser);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-card);
   transition: border-color 0.15s ease;
   backdrop-filter: blur(8px);
@@ -171,7 +171,7 @@
 
 .composite-editor {
   border: 1px solid var(--border-browser);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-browser-card);
   overflow: hidden;
   backdrop-filter: blur(10px);
@@ -236,7 +236,7 @@
   flex: 1;
   padding: 5px 8px;
   border: 1px solid var(--border-browser);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-browser-input);
   color: var(--text-primary);
   font-size: 12px;
@@ -284,7 +284,7 @@
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--border-browser);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-shell);
   min-height: 40px;
 }
@@ -295,7 +295,7 @@
   gap: 4px;
   padding: 4px 8px;
   border: 1px solid var(--border-browser);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-browser-card);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -358,7 +358,7 @@
   flex: 1;
   padding: 5px 8px;
   border: 1px solid var(--border-browser);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-browser-input);
   color: var(--text-primary);
   font-size: 11px;
@@ -447,7 +447,7 @@
   gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--border-browser);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-card);
   transition: border-color 0.15s ease;
   backdrop-filter: blur(8px);
@@ -505,7 +505,7 @@
   width: 80px;
   height: auto;
   max-height: 50px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   flex-shrink: 0;
   align-self: center;

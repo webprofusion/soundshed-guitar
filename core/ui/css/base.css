@@ -233,7 +233,7 @@ body:not(.is-standalone) .input-mode-control {
 
 .themed-select {
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -250,7 +250,7 @@ body:not(.is-standalone) .input-mode-control {
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-dark-strong);
   background: var(--bg-dark-secondary);
   display: inline-flex;
@@ -274,7 +274,7 @@ body:not(.is-standalone) .input-mode-control {
   content: "";
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-dark-primary);
 }
 
@@ -329,7 +329,7 @@ body:not(.is-standalone) .input-mode-control {
 .metronome-bpm-btn {
   width: 28px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-secondary);
@@ -419,7 +419,7 @@ body:not(.is-standalone) .input-mode-control {
   justify-content: center;
   min-height: 28px;
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   color: var(--text-dark-primary);
@@ -701,7 +701,7 @@ body:not(.is-standalone) .input-mode-control {
 .footer-demo-select {
   min-height: 28px;
   padding: 5px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   color: var(--text-dark-primary);
@@ -773,7 +773,7 @@ body:not(.is-standalone) .input-mode-control {
   cursor: pointer;
   min-height: 28px;
   padding: 5px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   transition: background 0.2s ease, color 0.2s ease;
 }
@@ -796,7 +796,7 @@ body:not(.is-standalone) .input-mode-control {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   background: var(--bg-panel);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
@@ -819,7 +819,7 @@ body:not(.is-standalone) .input-mode-control {
 
 .footer-bpm-field input {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -896,7 +896,7 @@ body:not(.is-standalone) .input-mode-control {
     overflow: auto;
     padding: 10px;
     border: 1px solid var(--border-dark-medium);
-    border-radius: 12px;
+    border-radius: var(--radius-2xl);
     background: var(--bg-footer);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
     z-index: var(--z-popover, 900);
@@ -1007,7 +1007,7 @@ body:not(.is-standalone) .input-mode-control {
   color: var(--text-dark-primary, #ddd);
   font-size: 11px;
   padding: 7px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-color, #444);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   pointer-events: none;
@@ -1027,7 +1027,7 @@ body:not(.is-standalone) .input-mode-control {
 /* Global Drag State */
 body.fx-dragging .signal-path-nodes {
   background: var(--overlay-accent-light);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 body.fx-dragging .signal-connector {
@@ -1068,7 +1068,7 @@ body.fx-dragging .signal-connector {
 .performance-plot-container {
   margin: 20px 0;
   border: 1px solid var(--border-browser);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-browser-card);
   padding: 10px;
   backdrop-filter: blur(10px);
@@ -1079,14 +1079,14 @@ body.fx-dragging .signal-connector {
   width: 100%;
   height: 200px;
   background: #000;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .performance-details {
   margin-top: 20px;
   background: var(--bg-browser-card);
   border: 1px solid var(--border-browser);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 12px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -1161,7 +1161,7 @@ body.fx-dragging .signal-connector {
 .signal-diagnostics-item {
   background: var(--bg-browser-shell);
   border: 1px solid var(--border-browser);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 6px 8px;
   font-size: 11px;
   color: var(--text-primary);
@@ -1231,13 +1231,13 @@ body.fx-dragging .signal-connector {
 
 ::-webkit-scrollbar-track {
   background: var(--sb-track);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--sb-track-border);
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--sb-thumb);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--sb-thumb-border);
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }

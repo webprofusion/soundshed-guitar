@@ -24,7 +24,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--status-info-bg, rgba(59, 130, 246, 0.1));
   border: 1px solid var(--status-info-border, rgba(59, 130, 246, 0.35));
   box-shadow: var(--shadow-sm);
@@ -65,7 +65,7 @@
   flex: 0 0 auto;
   align-self: center;
   padding: 8px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-primary);
   color: #fff;
   font-size: 11px;
@@ -95,7 +95,7 @@
 
 .settings-disclosure {
   border: 1px solid var(--border-browser);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-browser-card);
 }
 
@@ -149,7 +149,7 @@
   justify-content: flex-start;
   text-align: left;
   padding: 9px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -214,7 +214,7 @@
 .performance-section {
   background: var(--bg-browser-card);
   border: 1px solid var(--border-browser);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 16px;
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(10px);
@@ -296,7 +296,7 @@
 .settings-row select {
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -327,7 +327,7 @@
 
 .settings-row button {
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: none;
   background: var(--color-primary);
   color: #fff;
@@ -392,7 +392,7 @@
 .equipment-library-filters select {
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -417,7 +417,7 @@
 
 .equipment-library-item-tag {
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--border-browser), transparent 18%);
   background: color-mix(in srgb, var(--bg-browser-input), transparent 18%);
   color: var(--text-secondary);
@@ -483,7 +483,7 @@
 
 .results-empty {
   padding: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-browser-card);
   border: 1px dashed var(--border-browser);
   color: var(--text-secondary);
@@ -497,7 +497,7 @@
 
 .equipment-library-create-blend {
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -518,7 +518,7 @@
   align-items: center;
   justify-content: center;
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--status-info-bg);
   border: 1px solid var(--status-info-border);
 }
@@ -531,7 +531,7 @@
 
 .equipment-library-missing {
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--status-error-bg);
   color: var(--status-error-text);
   border: 1px solid var(--status-error-border);
@@ -542,7 +542,7 @@
 
 .equipment-library-browse {
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -559,7 +559,7 @@
 .equipment-library-copy-path {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   background: var(--bg-input);
   color: var(--text-secondary);
@@ -599,7 +599,7 @@
 .riff-drop-hint {
   margin-bottom: 10px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px dashed var(--border-medium);
   background: var(--bg-browser-card);
   color: var(--text-secondary);
@@ -709,7 +709,7 @@
   color: var(--status-error-text);
   background: var(--status-error-bg, rgba(220, 60, 60, 0.15));
   border: 1px solid var(--status-error-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 7px;
   user-select: none;
   animation: riff-rec-blink 1s ease-in-out infinite;
@@ -771,7 +771,7 @@
 .riff-waveform-wrap {
   margin-top: 10px;
   border: 1px solid var(--border-medium);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-input);
   overflow: hidden;
 }
@@ -796,7 +796,7 @@
 
 .tone3000-category {
   padding: 7px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-card);
   border: 1px solid var(--border-browser);
   cursor: pointer;
@@ -836,7 +836,7 @@
 
 .tone3000-mode-tab {
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
   color: var(--text-primary);
@@ -858,7 +858,7 @@
 .tone3000-search input {
   flex: 1;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -867,7 +867,7 @@
 
 .tone3000-search select {
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -878,7 +878,7 @@
 
 .tone3000-search button {
   padding: 8px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: none;
   background: var(--color-primary);
   color: #fff;
@@ -898,7 +898,7 @@
   flex-direction: column;
   gap: 0;
   padding: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-browser);
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-browser-card), #fff 2%) 0%, color-mix(in srgb, var(--bg-browser-card), #000 8%) 100%);
   overflow: hidden;
@@ -972,7 +972,7 @@
 
 .tone3000-meta-chip {
   font-size: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 7px;
   border: 1px solid color-mix(in srgb, var(--border-browser), transparent 20%);
   color: var(--text-secondary);
@@ -996,7 +996,7 @@
   flex: 1 1 84px;
   min-width: 80px;
   padding: 7px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-input);
   color: var(--text-primary);
@@ -1012,7 +1012,7 @@
   flex: 1 1 92px;
   min-width: 88px;
   padding: 7px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: none;
   background: var(--color-primary);
   color: #fff;
@@ -1027,7 +1027,7 @@
 
 .tone3000-item .tone3000-status {
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1044,7 +1044,7 @@
 
 .tone3000-page-btn {
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
   color: var(--text-primary);
@@ -1091,6 +1091,6 @@
   color: var(--text-secondary);
   padding: 6px 10px;
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }

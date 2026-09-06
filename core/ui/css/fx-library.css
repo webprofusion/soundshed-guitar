@@ -9,7 +9,7 @@
   flex-direction: column;
   background: var(--bg-panel);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   max-height: min(48vh, 360px);
   max-width: 860px;
   width: min(94vw, 860px);
@@ -52,7 +52,7 @@
   border: 1px solid var(--border-medium);
   background: var(--bg-card);
   color: var(--text-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
@@ -123,7 +123,7 @@
   padding: 8px 12px;
   background: var(--bg-input);
   border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 12px;
   outline: none;
@@ -163,7 +163,7 @@
   cursor: pointer;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   margin: 2px 8px;
 }
@@ -205,7 +205,7 @@
   color: var(--text-secondary);
   background: var(--overlay-medium);
   padding: 2px 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-weight: 500;
 }
 
@@ -224,7 +224,7 @@
     linear-gradient(135deg, color-mix(in srgb, var(--category-color, var(--color-accent)) 10%, transparent) 0%, transparent 34%),
     var(--bg-card);
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: grab;
   /* Drags leave the panel sideways towards the chain, so keep vertical touch
      scrolling of the library list working. */
@@ -324,7 +324,7 @@
 
 .tone3000-status {
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;

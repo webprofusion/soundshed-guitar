@@ -60,7 +60,7 @@
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-dark-secondary) 92%, transparent);
   color: var(--text-secondary);
   font-size: var(--performance-meta-size);
@@ -92,7 +92,7 @@
   display: inline-flex;
   padding: 3px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   background: color-mix(in srgb, var(--bg-dark-secondary) 82%, transparent);
 }
 
@@ -100,7 +100,7 @@
   min-height: var(--performance-control-height);
   padding: 0 clamp(14px, 2.2vmin, 18px);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--performance-label-size);
@@ -231,7 +231,7 @@
   min-height: 26px;
   padding: 0 8px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-dark-primary) 80%, transparent);
   color: var(--text-secondary);
   font-size: var(--performance-meta-size);
@@ -291,7 +291,7 @@
   min-height: var(--performance-control-height);
   padding: 0 10px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--bg-dark-primary) 74%, transparent);
   color: var(--text-primary);
   font: inherit;
@@ -313,7 +313,7 @@
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--button-bg);
   color: var(--text-secondary);
   font-size: var(--performance-body-size);
@@ -405,7 +405,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--color-accent) 62%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-dark-primary) 78%, var(--color-accent) 22%);
   color: var(--text-primary);
   box-shadow: var(--shadow-md);
@@ -475,7 +475,7 @@
   align-self: flex-start;
   min-width: 34px;
   padding: 5px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255,255,255,0.08);
   color: var(--text-secondary);
   font-size: var(--performance-label-size);
@@ -555,7 +555,7 @@
   min-height: var(--performance-control-height);
   padding: 0 12px;
   border: 1px solid var(--border-dark-light);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   color: var(--text-primary);
   background: var(--button-bg);
   font-size: var(--performance-body-size);

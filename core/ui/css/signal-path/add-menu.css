@@ -16,7 +16,7 @@
   width: 14px;
   height: 14px;
   transform: translate(-50%, -50%);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-success) 32%, var(--border-medium));
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M8 3.5v9M3.5 8h9' stroke='%23d7dde9' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") center / 10px 10px no-repeat,
@@ -88,7 +88,7 @@
   position: fixed;
   background: linear-gradient(180deg, #2a2a34 0%, #1e1e24 100%);
   border: 2px solid #3a3a44;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   max-height: min(500px, calc(100vh - 16px));
   max-width: min(300px, calc(100vw - 16px));
@@ -148,7 +148,7 @@
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   color: var(--text-primary);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin: 0 8px;
 }
 

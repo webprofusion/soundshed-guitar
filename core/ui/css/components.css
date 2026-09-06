@@ -15,7 +15,7 @@
   gap: 8px;
   padding: 8px 16px;
   border: 1px solid var(--button-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--button-bg);
   color: var(--button-text);
   font-family: inherit;
@@ -134,7 +134,7 @@
   height: 36px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -202,7 +202,7 @@
   border: 1px solid transparent;
   color: var(--text-muted);
   padding: 5px 11px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -262,7 +262,7 @@
   text-align: left;
   width: 100%;
   padding: 9px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);

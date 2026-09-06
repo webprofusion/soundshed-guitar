@@ -75,7 +75,7 @@
   justify-content: center;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: #e0e0f0;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -191,7 +191,7 @@
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.18);
   border: 1px solid rgba(90, 90, 110, 0.7);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   min-width: 180px;
 }
 
@@ -219,7 +219,7 @@
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid #4a4a58;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .eq-visualizer-header {
@@ -235,7 +235,7 @@
 .eq-curve-canvas {
   width: 100%;
   height: 140px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(16, 18, 24, 0.8);
 }
 
@@ -246,7 +246,7 @@
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid #4a4a58;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .spatial-visualizer-header {
@@ -271,7 +271,7 @@
 .spatial-panner-canvas {
   width: 100%;
   height: 190px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(16, 18, 24, 0.8);
   cursor: default;
   touch-action: none;
@@ -341,7 +341,7 @@
   flex: 0 0 auto;
   padding: 6px 12px;
   border: 1px solid var(--border-medium);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text-secondary);
   font: inherit;
@@ -435,7 +435,7 @@
 .graphic-eq-gain::-webkit-slider-runnable-track {
   width: 6px;
   border: 1px solid rgba(185, 199, 228, 0.2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(to top, var(--color-accent) 0 var(--graphic-eq-gain), rgba(125, 140, 170, 0.2) var(--graphic-eq-gain) 100%);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.42);
 }
@@ -445,7 +445,7 @@
   height: 10px;
   margin-left: -6px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 60%, #dce7ff);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(180deg, #e5ebf8, #8292b2);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
   cursor: ns-resize;
@@ -454,7 +454,7 @@
 .graphic-eq-gain::-moz-range-track {
   width: 6px;
   border: 1px solid rgba(185, 199, 228, 0.2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(125, 140, 170, 0.2);
 }
 
@@ -466,7 +466,7 @@
   width: 14px;
   height: 9px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 60%, #dce7ff);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(180deg, #e5ebf8, #8292b2);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
   cursor: ns-resize;

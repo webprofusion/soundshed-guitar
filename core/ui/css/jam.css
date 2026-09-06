@@ -82,7 +82,7 @@
 .jam-search-row input {
   min-width: 0;
   padding: 11px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid rgba(112, 151, 255, 0.34);
   background: linear-gradient(180deg, rgba(16, 22, 38, 0.94), rgba(8, 12, 22, 0.96));
   color: rgba(240, 246, 255, 0.94);
@@ -101,7 +101,7 @@
 
 #jam-search-button {
   padding: 10px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid rgba(127, 186, 255, 0.36);
   background: linear-gradient(140deg, #1e75d9, #1aa3d8);
   color: #f5fbff;
@@ -134,7 +134,7 @@
 .jam-result-card {
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   border: 1px solid rgba(104, 142, 255, 0.18);
   background: linear-gradient(180deg, rgba(21, 27, 44, 0.92) 0%, rgba(10, 14, 26, 0.96) 100%);
@@ -224,7 +224,7 @@
 .jam-meta-chip {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 6px;
   font-size: 9px;
   border: 1px solid rgba(104, 142, 255, 0.24);
@@ -251,7 +251,7 @@
   width: 28px;
   height: 28px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.5);
   font-size: 1rem;
@@ -300,7 +300,7 @@
 }
 
 .jam-floating-player.is-docked {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: none;
   border-color: rgba(104, 142, 255, 0.28);
 }
@@ -334,7 +334,7 @@
 .jam-floating-player.is-docked .jam-floating-player-actions button {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .jam-floating-player-meta {
@@ -367,7 +367,7 @@
   width: 30px;
   height: 30px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: rgba(255, 255, 255, 0.08);
   color: inherit;
   cursor: pointer;

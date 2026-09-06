@@ -23,7 +23,7 @@
 
 .composite-preset-chip {
   border: 1px solid var(--border-dark);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 10px;
   margin-bottom: 8px;
   cursor: pointer;

@@ -143,6 +143,25 @@
   --sb-thumb-hover: var(--border-strong);
   --sb-thumb-hover-border: var(--border-medium);
 
+  /*
+    Corner Radii (global / theme-independent)
+
+    There was no radius scale, so every component picked its own number and the
+    stylesheets ended up with a dozen distinct pixel radii. These seven are the
+    values already in real use, named; adopting them changed no rendered corner.
+
+    Radii outside this scale (3, 5, 7, 14, 16, 18, 20px) are still literals at
+    their call sites. Snapping them would have moved pixels, which is a design
+    call rather than a cleanup, so they are left for whoever makes it.
+  */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-pill: 999px;
+
   /* Layering (global / theme-independent — controls stacking order only) */
   --z-dropdown: 120;
   --z-popover: 900;

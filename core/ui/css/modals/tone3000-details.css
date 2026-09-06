@@ -12,7 +12,7 @@
   color: var(--modal-text-muted);
   font-size: 20px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: all 0.2s;
 }
 
@@ -38,7 +38,7 @@
 .tone3000-details-image {
   width: 160px;
   height: 120px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   background: var(--modal-bg-raised);
   border: 1px solid var(--modal-border-medium);
@@ -89,7 +89,7 @@
 
 .tone3000-details-tag {
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-input);
   border: 1px solid var(--border-medium);
   font-size: 10px;
@@ -151,7 +151,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: 1px solid var(--border-medium);
   cursor: pointer;

@@ -27,7 +27,7 @@ body.signal-path-resizing .signal-path-resize-handle {
 .signal-path-resize-handle-grip {
   width: 48px;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 55%, transparent);
   pointer-events: none;
   transform: scaleX(0.75);
@@ -123,7 +123,7 @@ body.signal-path-resizing * {
   gap: 2px;
   padding: 4px;
   border: 1px solid var(--border-medium);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
 }
@@ -135,7 +135,7 @@ body.signal-path-resizing * {
 .signal-path-add-menu-options button {
   padding: 7px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   font-size: 11px;
@@ -201,7 +201,7 @@ body.signal-path-resizing * {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 88%, var(--node-accent-strong) 12%) 0%, var(--bg-card) 44%),
     var(--bg-card);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--node-accent-border);
   min-width: 72px;
   min-height:72px;
@@ -304,7 +304,7 @@ body.signal-path-resizing * {
   transform: translateY(-50%);
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--node-drag-over);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-drag-over) 24%, transparent);
 }
@@ -417,7 +417,7 @@ body.signal-path-resizing * {
   width: 40px;
   min-height: 40px;
   gap: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .signal-path-bar[data-density="compact"] .signal-node .node-info,
@@ -444,7 +444,7 @@ body.signal-path-resizing * {
   top: auto;
   width: 26px;
   height: 26px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   opacity: 1;
 }
 
@@ -527,7 +527,7 @@ body.signal-path-resizing * {
   color: color-mix(in srgb, #a2ffd8 74%, #ffffff 26%);
   border: 1px solid rgba(128, 230, 188, 0.36);
   background: rgba(56, 118, 98, 0.28);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 6px;
 }
 
@@ -572,7 +572,7 @@ body.signal-path-resizing * {
   background: rgba(232, 76, 76, 0.2);
   border: 1px solid rgba(232, 76, 76, 0.4);
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   line-height: 1;
 }
 
@@ -611,7 +611,7 @@ body.signal-path-resizing * {
   left: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(0, 0, 0, 0.25);
   color: rgba(255, 255, 255, 0.8);
@@ -630,7 +630,7 @@ body.signal-path-resizing * {
   right: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(0, 0, 0, 0.25);
   color: rgba(160, 236, 186, 0.95);
@@ -700,7 +700,7 @@ body.signal-path-resizing * {
   width: 32px;
   height: 1.5px;
   background: var(--color-success);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   position: relative;
   transition: background 0.15s ease;

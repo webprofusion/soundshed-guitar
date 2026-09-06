@@ -63,7 +63,7 @@
   padding: 2px;
   gap: 2px;
   border: 1px solid var(--border-dark-medium);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-dark-tertiary);
 }
 
@@ -72,7 +72,7 @@
   height: 22px;
   padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-dark-tertiary);
   font-size: 11px;

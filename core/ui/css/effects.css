@@ -7,7 +7,7 @@
   align-items: center;
   padding: 20px;
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--border-light);
   max-width: 500px;
   margin: 0 auto 20px auto;
@@ -55,7 +55,7 @@
   align-items: center;
   padding: 20px;
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--border-light);
   max-width: 900px;
   width: 100%;
@@ -100,7 +100,7 @@
   align-items: center;
   padding: 16px;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
   min-width: 140px;
 }

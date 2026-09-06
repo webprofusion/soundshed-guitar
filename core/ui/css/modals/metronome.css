@@ -59,7 +59,7 @@
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-primary);
@@ -113,7 +113,7 @@
   display: flex;
   gap: 2px;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   box-shadow: var(--shadow-xl);
@@ -143,7 +143,7 @@
   width: 100%;
   padding: 6px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-dark-secondary);
   font-size: 12px;

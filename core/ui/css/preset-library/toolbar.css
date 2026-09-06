@@ -11,7 +11,7 @@
   margin-left: auto;
   margin-right: auto;
   padding: 6px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 
   align-items: stretch;
   flex-direction: column;
@@ -107,7 +107,7 @@
   min-height: 28px;
   min-width: 30px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: none;
   color: var(--text-dark-primary);
   cursor: pointer;
@@ -187,7 +187,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   box-shadow: var(--shadow-xl);
@@ -200,7 +200,7 @@
 .preset-extra-action-item {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-dark-primary);
   text-align: left;
@@ -271,7 +271,7 @@
   gap: 0;
   padding: 2px 8px 2px 4px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-dark-primary);
   border: 1px solid rgba(255,255,255,0.06);
   box-shadow:
@@ -291,7 +291,7 @@
   color: var(--text-dark-muted);
   white-space: nowrap;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: none;
   background: rgba(255,255,255,0.06);
   flex-shrink: 0;
@@ -368,7 +368,7 @@
   width: 28px;
   height: 28px;
   min-height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(255,255,255,0.08) !important;
   background: rgba(255,255,255,0.05) !important;
   color: var(--text-dark-secondary) !important;

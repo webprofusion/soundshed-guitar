@@ -111,7 +111,7 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-secondary);
@@ -125,7 +125,7 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-secondary);
@@ -203,7 +203,7 @@
   width: 80px;
   appearance: none;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.15);
   outline: none;
   margin: 8px 0;

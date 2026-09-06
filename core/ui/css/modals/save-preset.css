@@ -22,7 +22,7 @@
 .save-preset-modal .form-group select {
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -60,7 +60,7 @@
   align-items: center;
   background: var(--modal-bg-raised);
   border: 1px solid var(--modal-border-medium);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 10px 14px;
 }
 
@@ -99,7 +99,7 @@
 
 .preset-advanced-json {
   background: var(--bg-dark-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-dark-medium);
   padding: 12px;
   max-height: 320px;
@@ -115,7 +115,7 @@
 .preset-json-report {
   margin: 0 0 12px 0;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   color: var(--text-dark-secondary);
@@ -187,7 +187,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-dark-secondary);
   border: 1px solid var(--border-dark-medium);
 }
@@ -200,7 +200,7 @@
 
 .blend-model-header .blend-model-browse {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-primary);
@@ -212,7 +212,7 @@
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-medium);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -243,7 +243,7 @@
 
 .blend-model-row input {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-light);
   background: var(--bg-dark-primary);
   color: var(--text-dark-primary);
@@ -271,7 +271,7 @@
 .blend-model-browser-filters input,
 .blend-model-browser-filters select {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-light);
   background: var(--bg-dark-primary);
   color: var(--text-dark-primary);
@@ -292,7 +292,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-medium);
   background: var(--bg-dark-secondary);
   color: var(--text-dark-primary);
@@ -325,7 +325,7 @@
 
 .blend-model-browser-empty {
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px dashed var(--border-dark-medium);
   color: var(--text-dark-muted);
   font-size: 12px;

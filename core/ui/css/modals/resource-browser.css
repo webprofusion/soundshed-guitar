@@ -52,7 +52,7 @@
 
 .resource-browser-edit-popover-card {
   width: min(420px, 92%);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-browser);
   background: var(--modal-bg-raised);
   box-shadow: var(--shadow-lg);
@@ -80,7 +80,7 @@
 
 .resource-browser-edit-popover-body input {
   border: 1px solid var(--border-browser);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-input);
   color: var(--modal-text);
   padding: 7px 9px;
@@ -118,7 +118,7 @@
 .resource-browser-filters input,
 .resource-browser-filters select {
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-input);
   color: var(--modal-text);
@@ -139,7 +139,7 @@
   align-items: center;
   gap: 0;
   border: 1px solid var(--border-browser);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--bg-browser-input);
 }
@@ -216,7 +216,7 @@
 .resource-browser-empty,
 .resource-browser-modal .results-empty {
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px dashed var(--border-browser);
   color: var(--modal-text-muted);
   font-size: 12px;
@@ -231,7 +231,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: none;
   background: var(--bg-browser-card);
   cursor: pointer;
@@ -294,7 +294,7 @@
   color: color-mix(in srgb, #a2ffd8 74%, #ffffff 26%);
   border: 1px solid rgba(128, 230, 188, 0.36);
   background: rgba(56, 118, 98, 0.28);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 6px;
 }
 
@@ -310,7 +310,7 @@
 .resource-browser-tone-type {
   font-size: 9px;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(80, 100, 160, 0.28);
   border: 1px solid rgba(120, 140, 220, 0.36);
   color: color-mix(in srgb, #b0c4ff 80%, #ffffff 20%);
@@ -322,7 +322,7 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-input);
   color: var(--modal-text-muted);
@@ -430,7 +430,7 @@
 .resource-browser-tone3000-mode-tab {
   height: 30px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-input);
   color: var(--modal-text);
@@ -540,7 +540,7 @@
 }
 
 .resource-browser-tone {
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
   
@@ -566,7 +566,7 @@
 .resource-browser-tone-image {
   width: 48px;
   height: 48px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   object-fit: cover;
   background: var(--bg-browser-input);
 }
@@ -574,7 +574,7 @@
 .resource-browser-tone-image-placeholder {
   width: 48px;
   height: 48px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-input);
 }
 
@@ -602,7 +602,7 @@
 
 .resource-browser-tone-expand {
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: none;
   background: var(--bg-browser-input);
   color: var(--modal-text);
@@ -647,7 +647,7 @@
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
   color: var(--modal-text-muted);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 5px 12px;
   font-size: 10px;
   font-weight: 600;
@@ -682,7 +682,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
 }
@@ -713,7 +713,7 @@
 
 .resource-browser-tone-details-tag {
   border: 1px solid var(--border-browser);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px 8px;
   font-size: 10px;
   color: var(--modal-text-muted);
@@ -729,7 +729,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-browser-card);
   border: 1px solid var(--border-browser);
   transition: all 0.2s;
@@ -836,7 +836,7 @@
 
 .resource-browser-page-btn {
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-browser);
   background: var(--bg-browser-card);
   color: var(--modal-text);
@@ -907,7 +907,7 @@
 
 .resource-browser-tag-pill {
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--border-browser), transparent 14%);
   background: color-mix(in srgb, var(--bg-browser-input), transparent 20%);
   color: var(--modal-text-secondary);
@@ -917,7 +917,7 @@
 
 .blend-model-row button {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: none;
   background: var(--bg-dark-tertiary);
   color: var(--text-dark-primary);
@@ -941,7 +941,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-dark-secondary);
   border: 1px solid var(--border-dark-medium);
   color: var(--text-dark-primary);
@@ -965,7 +965,7 @@
 .blend-parameter-controls select {
   flex: 1;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-light);
   background: var(--bg-dark-primary);
   color: var(--text-dark-primary);
@@ -977,7 +977,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-light);
   background: var(--bg-dark-secondary);
   color: var(--text-dark-primary);
@@ -998,7 +998,7 @@
 .blend-test-controls .knob-control {
   background: var(--bg-dark-secondary);
   border: 1px solid var(--border-dark-medium);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 10px 8px;
 }
 

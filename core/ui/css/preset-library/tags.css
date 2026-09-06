@@ -10,7 +10,7 @@
 .preset-tag-filter-chip {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--border-dark);
   background: transparent;
   color: var(--text-secondary);
@@ -39,7 +39,7 @@
 .preset-item-tag {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--overlay-medium, rgba(255,255,255,0.08));
   color: var(--text-secondary);
   letter-spacing: 0.02em;
@@ -57,7 +57,7 @@
 .preset-tag-chip {
   font-size: 11px;
   padding: 3px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--border-dark);
   background: transparent;
   color: var(--text-secondary);

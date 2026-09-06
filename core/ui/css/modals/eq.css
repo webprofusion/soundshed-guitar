@@ -54,7 +54,7 @@
   color: var(--modal-text-muted);
   font-size: 20px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: all 0.2s ease;
 }
 

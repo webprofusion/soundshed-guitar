@@ -36,7 +36,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--modal-border-medium);
   background: var(--modal-bg-raised);
 }
@@ -72,7 +72,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   background: color-mix(in srgb, var(--modal-bg-raised) 88%, var(--color-primary) 12%);
   border: 1px solid var(--modal-border-medium);
 }
@@ -85,7 +85,7 @@
 
 .input-calibration-training-row button {
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color, #444);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -109,7 +109,7 @@
 .input-calibration-form textarea {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--modal-border-medium);
   background: var(--bg-input);
   color: var(--modal-text);

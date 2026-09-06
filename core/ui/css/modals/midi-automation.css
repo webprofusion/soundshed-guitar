@@ -100,7 +100,7 @@
 .automation-remove-btn {
   padding: 4px 10px;
   border: 1px solid var(--modal-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--modal-text-secondary);
   font-size: 11px;
@@ -132,7 +132,7 @@
   margin-top: 8px;
   padding: 8px 16px;
   border: 1px dashed var(--modal-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--modal-text-muted);
   font-size: 12px;
@@ -149,7 +149,7 @@
 .automation-target-btn {
   padding: 4px 10px;
   border: 1px solid var(--modal-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--modal-text-secondary);
   font-size: 11px;
@@ -168,7 +168,7 @@
 .automation-test-btn {
   padding: 4px 10px;
   border: 1px solid var(--modal-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--modal-text-secondary);
   font-size: 11px;
@@ -200,7 +200,7 @@
   margin-top: 4px;
   background: var(--modal-bg);
   border: 1px solid var(--color-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 12px;
 }
 
@@ -223,7 +223,7 @@
 .automation-target-field select {
   padding: 6px 8px;
   border: 1px solid var(--modal-border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--modal-bg-raised);
   color: var(--modal-text);
   font-size: 12px;
@@ -247,7 +247,7 @@
 .automation-target-cancel {
   padding: 6px 12px;
   border: 1px solid var(--modal-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--modal-text-secondary);
   font-size: 11px;
@@ -297,7 +297,7 @@
 .midi-log-output {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--modal-border-medium);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 12px;
   font-family: var(--font-mono, "Courier New", monospace);
   font-size: 11px;
@@ -381,7 +381,7 @@
 .automation-key-clear-btn {
   padding: 4px 10px;
   border: 1px solid var(--modal-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--modal-text-secondary);
   font-size: 11px;

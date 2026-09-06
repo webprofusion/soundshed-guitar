@@ -16,7 +16,7 @@
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.16));
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated, #1b1f2a);
   color: var(--text-primary, #e8ecf6);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
@@ -33,7 +33,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
@@ -49,7 +49,7 @@
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
 }
@@ -58,7 +58,7 @@
 .effect-presets-popover-delete {
   padding: 6px 10px;
   border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-weight: 700;
@@ -90,7 +90,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.16));
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated, #1b1f2a);
   color: var(--text-primary, #e8ecf6);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
@@ -125,7 +125,7 @@
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font-size: 15px;
@@ -241,7 +241,7 @@
   gap: 8px;
   padding: 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
 }
 
@@ -261,7 +261,7 @@
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -270,7 +270,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   list-style: none;
 }
@@ -322,7 +322,7 @@
   gap: 8px;
   padding: 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -359,7 +359,7 @@
   height: 26px;
   padding: 0;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.06);
   color: inherit;
   opacity: 0.7;
@@ -389,7 +389,7 @@
   display: block;
   width: 44px;
   height: 30px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
@@ -429,7 +429,7 @@
 
 .layout-picker-badge {
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.12);
   font-size: 8px;
   font-weight: 700;
@@ -456,7 +456,7 @@
   margin-top: 6px;
   padding: 5px 8px;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.24);
   color: inherit;
   font-size: 11px;
@@ -472,7 +472,7 @@
 .layout-picker-suggestion {
   padding: 2px 7px;
   border: 1px solid var(--border-light, rgba(255, 255, 255, 0.14));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   font-size: 9px;
@@ -497,7 +497,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   font-size: 10px;
 }
@@ -524,7 +524,7 @@
   height: 18px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   font-size: 13px;
@@ -553,7 +553,7 @@
 .layout-picker-btn {
   padding: 5px 12px;
   border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.18));
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.06);
   color: inherit;
   font-size: 11px;

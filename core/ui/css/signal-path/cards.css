@@ -11,7 +11,7 @@
   gap: 12px;
   padding: 14px 16px;
   background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-primary) 100%);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--bg-secondary);
   transition: all 0.2s;
 }
@@ -28,7 +28,7 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, #f0f2f8 0%, #e0e4ec 100%);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .attachment-icon .attachment-icon-img {
@@ -86,7 +86,7 @@
   align-items: center;
   padding: 10px 14px;
   background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-primary) 100%);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--bg-secondary);
 }
 
@@ -119,7 +119,7 @@
   gap: 14px;
   padding: 16px;
   background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-primary) 100%);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--bg-secondary);
 }
 
@@ -131,7 +131,7 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, #f0f2f8 0%, #e0e4ec 100%);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 
 .path-info {
@@ -174,7 +174,7 @@
   width: 40px;
   height: 40px;
   border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
   color: var(--text-primary);
   font-size: 16px;
@@ -204,7 +204,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-medium);
   background: var(--bg-secondary);
   box-shadow: var(--shadow-xl);
@@ -240,7 +240,7 @@
 .demo-audio-action-item {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   text-align: left;
@@ -270,7 +270,7 @@
 .test-results {
   margin-top: 16px;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--bg-secondary);
 }
 
@@ -309,7 +309,7 @@
   font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
 }
 
 .test-results.passed .test-status {
@@ -334,7 +334,7 @@
   gap: 2px;
   padding: 8px 10px;
   background: rgba(255,255,255,0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .stat-label {
@@ -359,7 +359,7 @@
   margin: 12px 0 0 0;
   padding: 10px;
   background: rgba(255,255,255,0.5);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-secondary);
 }

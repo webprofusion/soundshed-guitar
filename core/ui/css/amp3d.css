@@ -366,7 +366,7 @@ body.theme-light .amp3d-dock-models + .amp3d-dock-controls {
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(8, 10, 14, 0.78);
   color: #f4f6fa;
   border: 1px solid rgba(255, 255, 255, 0.14);

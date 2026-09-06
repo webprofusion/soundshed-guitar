@@ -3,7 +3,7 @@
   margin-bottom: 16px;
   padding: 12px;
   background: var(--bg-dark-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-dark-light);
 }
 
@@ -22,7 +22,7 @@
   margin-bottom: 12px;
   padding: 10px;
   background: var(--bg-dark-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-dark-light);
 }
 
