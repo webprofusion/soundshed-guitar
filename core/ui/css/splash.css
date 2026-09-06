@@ -3,7 +3,9 @@
 /* Shown from first paint until the UI is ready, then removed (see ts/splash.ts).
    The ground is hardcoded dark rather than themed, because the theme variables are not
    resolved yet at first paint; splash-theme-ready swaps to the real theme just before
-   the cover goes, so a light theme does not flash from dark. */
+   the cover goes, so a light theme does not flash from dark. The two literals below are
+   the dark theme's own --bg-primary and --text-dark-primary, so for a dark-theme user
+   that swap is a no-op rather than a visible step. */
 #splash-screen {
   position: fixed;
   top: 0;
@@ -15,11 +17,8 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(44, 89, 170, 0.22) 0%, rgba(44, 89, 170, 0) 40%),
-    radial-gradient(circle at 80% 85%, rgba(16, 146, 166, 0.16) 0%, rgba(16, 146, 166, 0) 42%),
-    #0a0f16;
-  color: #e8eef8;
+  background: #111116;
+  color: #e0e0f0;
   color-scheme: dark;
   z-index: 10000;
   transition: opacity 0.3s ease-out;
@@ -64,10 +63,8 @@
 @keyframes splash-fade-in {
   from {
     opacity: 0;
-    transform: scale(0.95);
   }
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
