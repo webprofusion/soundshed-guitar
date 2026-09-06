@@ -432,15 +432,15 @@
   overflow-y: auto;
 }
 
+/* No backdrop blur here: the row has no surface of its own until :hover, so a
+   blur only smeared the list behind it, once per row in a scrolling list. */
 .results-item {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   transition: border-color 0.2s ease, background 0.2s ease;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .results-item:hover {
