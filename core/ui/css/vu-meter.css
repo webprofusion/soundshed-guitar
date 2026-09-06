@@ -1,0 +1,84 @@
+/* ===== Segmented peak meters =====
+ *
+ * Two of these sit in the control bar: one on the input, one on the output. The
+ * markup is identical (ui-components/input-control-group.html and
+ * output-control-group.html) and both are driven by ts/vuMeter.ts.
+ *
+ * The segment geometry below is load-bearing: the peak-hold tick is positioned in
+ * JavaScript from a pixels-per-segment constant that must match .vu-seg's height
+ * plus .vu-segments' gap. Change one, change VU_SEGMENT_HEIGHT_PX with it.
+ */
+
+.vu-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  /* Sized by the readout, not by the 14px ladder it sits above — the ladder centres itself
+   * in whatever this is. The widest label the meter can produce is "-59 dB", 32px at 9px
+   * Inter; the couple of px spare is headroom for a fallback face with wider digits. */
+  width: 36px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  overflow: visible;
+}
+
+/* Held peak in whole dB, sitting directly above the ladder. Quiet by design — the
+ * segments are what you read at a glance, this is the number you go looking for. It is
+ * the same 9px --text-muted as .control-stack-label rather than something dimmer still:
+ * anything below that token loses the light theme, where it lands on a near-white bar.
+ * tabular-nums keeps the label from shuffling width as the digits change. */
+.vu-readout {
+  font-size: 9px;
+  line-height: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* Sits to the right of the OUT knob and its mute button, inside .output-control-row. */
+.output-vu-meter {
+  margin-left: 6px;
+}
+
+.vu-segments {
+  display: flex;
+  flex-direction: column; /* top = loud (red), bottom = quiet (green) */
+  gap: 2px;
+  width: 14px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.vu-seg {
+  width: 14px;
+  height: 5px;
+  border-radius: var(--radius-xs);
+  background: var(--vu-seg-off, rgb(139 138 138 / 18%));
+  transition: background 60ms linear;
+}
+
+/* Segment colours when active */
+.vu-seg.active.vu-seg-green  { background: #3cdb6e; box-shadow: 0 0 4px rgba(60,219,110,0.6); }
+.vu-seg.active.vu-seg-yellow { background: #f0c040; box-shadow: 0 0 4px rgba(240,192,64,0.6); }
+.vu-seg.active.vu-seg-red    { background: #f05050; box-shadow: 0 0 4px rgba(240,80,80,0.7); }
+
+/* Peak-hold tick — positioned inside .vu-segments (position: relative) */
+.vu-peak-hold {
+  position: absolute;
+  left: 0;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: #f9f9f9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+  z-index: 1;
+}
+
+.vu-peak-hold.visible {
+  opacity: 0.85;
+}

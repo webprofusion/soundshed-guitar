@@ -55,6 +55,9 @@
 * A preset or scene change now sends the UI a small state update instead of the entire app state including the resource library, which was around fifty times larger.
 * DSP performance and signal-level telemetry are suppressed while the UI is hidden, and the signal-level messages themselves are far more compact.
 
+### UI & Workflow
+* The control bar has an OUT meter beside the OUT knob, matching the IN meter on the other side, so you can see what is leaving the app as well as what is arriving. It reads the mix after master gain and auto-level, which means it follows the OUT knob and drops to silence when the output is muted. Both meters gained a held-peak readout in dB above the ladder — useful resolution the eight segments cannot show, and the only way to see how far past full scale a hot output actually goes.
+
 ### Platform & Reliability
 * Linux: fixed signal-chain node reordering and drag-and-drop from the FX Library panel, and improved leftward reordering (#27).
 * Linux: the standalone app now explains what to install when the WebKit WebView is missing instead of failing to start (#21).

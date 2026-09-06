@@ -9,8 +9,9 @@ import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput, formatGainDb } from "./controls.js";
 import { MIX_GAIN_MAX_DB, MIX_GAIN_MIN_DB } from "./multiPresetMixerSupport.js";
 import { nodeDspLatencySamples, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
-import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelMetrics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
+import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
+import { createVuMeter } from "./vuMeter.js";
 
 const presetListElement = document.getElementById("preset-list");
 const presetDetailsElement = document.getElementById("preset-details");
@@ -1143,102 +1144,11 @@ function getGraphTopologicalOrder(graph: SignalGraph | undefined): Map<string, n
   return order;
 }
 
-// Threshold (dBFS) for each segment, top → bottom in the DOM (rendered bottom-up via flex column-reverse).
-// Matches the data-db attributes on .vu-seg elements in index.html.
-const VU_SEGMENT_THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48] as const;
-
-// Cached DOM references for the VU meter (populated on first call).
-let vuSegments: HTMLElement[] | null = null;
-let vuPeakHold: HTMLElement | null = null;
-let vuPeakHoldDbfs = -Infinity;
-let vuPeakHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let vuLastPeakDbfs: number | null = null;
-let vuLastActiveStates: boolean[] | null = null;
-let vuLastPeakHoldVisible = false;
-let vuLastPeakHoldTop: string | null = null;
-
-function updateInputVuMeter(levels: SignalLevelMetrics | null): void {
-  if (!vuSegments) {
-    const container = document.getElementById("vu-segments");
-    vuSegments = container
-      ? Array.from(container.querySelectorAll<HTMLElement>(".vu-seg"))
-      : [];
-    vuPeakHold = document.getElementById("vu-peak-hold");
-    vuLastActiveStates = new Array(vuSegments.length).fill(false);
-  }
-
-  if (!vuSegments.length) return;
-
-  const dbfs = levels && isFinite(levels.peakDbfs) ? levels.peakDbfs : null;
-
-  // Check if the value actually changed before updating
-  if (dbfs === vuLastPeakDbfs && dbfs === null) {
-    return; // Already null, no update needed
-  }
-
-  if (dbfs === null) {
-    // Fade out: update only if we had active segments
-    if (vuLastActiveStates?.some((active) => active)) {
-      vuSegments.forEach((s) => s.classList.remove("active"));
-      vuLastActiveStates.fill(false);
-    }
-    if (vuLastPeakHoldVisible && vuPeakHold) {
-      vuPeakHold.classList.remove("visible");
-      vuLastPeakHoldVisible = false;
-    }
-    vuLastPeakDbfs = null;
-    return;
-  }
-
-  // Update segment indicators only if peak value changed significantly (rounded to 0.5 dB to reduce updates)
-  const roundedDbfs = Math.round(dbfs * 2) / 2;
-  const lastRoundedDbfs = vuLastPeakDbfs !== null ? Math.round(vuLastPeakDbfs * 2) / 2 : null;
-
-  if (roundedDbfs !== lastRoundedDbfs) {
-    // Compute new active states
-    const newActiveStates = VU_SEGMENT_THRESHOLDS.map((threshold) => dbfs >= threshold);
-
-    // Update only segments that changed state
-    vuSegments.forEach((seg, i) => {
-      const isNowActive = newActiveStates[i];
-      const wasActive = vuLastActiveStates?.[i] ?? false;
-      if (isNowActive !== wasActive) {
-        seg.classList.toggle("active", isNowActive);
-      }
-    });
-
-    vuLastActiveStates = newActiveStates;
-    vuLastPeakDbfs = dbfs;
-  }
-
-  // Peak-hold tick: update if new peak is higher
-  if (dbfs >= vuPeakHoldDbfs) {
-    vuPeakHoldDbfs = dbfs;
-
-    if (vuPeakHoldTimer !== null) clearTimeout(vuPeakHoldTimer);
-    vuPeakHoldTimer = setTimeout(() => {
-      vuPeakHoldDbfs = -Infinity;
-      if (vuPeakHold) vuPeakHold.classList.remove("visible");
-      vuLastPeakHoldVisible = false;
-    }, 2000);
-
-    // Position peak-hold tick at the top of the topmost lit segment.
-    // With top-to-bottom DOM order (red at top), firstLitIdx is the loudest lit segment.
-    const segHeight = 7; // px per segment (5px height + 2px gap)
-    const firstLitIdx = vuSegments.findIndex((s) => s.classList.contains("active"));
-    if (firstLitIdx >= 0 && vuPeakHold) {
-      const newTop = `${firstLitIdx * segHeight}px`;
-      if (newTop !== vuLastPeakHoldTop) {
-        vuPeakHold.style.top = newTop;
-        vuLastPeakHoldTop = newTop;
-      }
-      if (!vuLastPeakHoldVisible) {
-        vuPeakHold.classList.add("visible");
-        vuLastPeakHoldVisible = true;
-      }
-    }
-  }
-}
+// The control bar carries two of these. The input meter shows the raw signal ahead of
+// the IN knob; the output meter shows the final mix after master gain and auto-level,
+// so it tracks the OUT knob and reads silence while the output is muted.
+const inputVuMeter = createVuMeter({ segmentsId: "vu-segments", peakHoldId: "vu-peak-hold", readoutId: "input-vu-readout" });
+const outputVuMeter = createVuMeter({ segmentsId: "output-vu-segments", peakHoldId: "output-vu-peak-hold", readoutId: "output-vu-readout" });
 
 // Cache for signal diagnostics view to prevent unnecessary DOM updates.
 let signalDiagnosticsLastInputPeakText: string | null = null;
@@ -1279,7 +1189,8 @@ export function updateSignalDiagnosticsView(): void {
     return;
   }
 
-  updateInputVuMeter(diagnostics.rawInput ?? diagnostics.input);
+  inputVuMeter.update(diagnostics.rawInput ?? diagnostics.input);
+  outputVuMeter.update(diagnostics.output);
   updateSignalPathClipIndicators();
 }
 

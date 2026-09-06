@@ -808,63 +808,6 @@ input[type="range"]:focus-visible {
   gap: 2px;
 }
 
-/* ===== Input VU Meter ===== */
-.input-vu-meter {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  position: relative;
-  width: 24px;
-  flex-shrink: 0;
-  margin-top: 8px;
-  overflow: visible;
-}
-
-.vu-segments {
-  display: flex;
-  flex-direction: column; /* top = loud (red), bottom = quiet (green) */
-  gap: 2px;
-  width: 14px;
-  margin: 0 auto;
-  position: relative;
-}
-
-.vu-seg {
-  width: 14px;
-  height: 5px;
-  border-radius: var(--radius-xs);
-  background: var(--vu-seg-off, rgb(139 138 138 / 18%)); 
-  transition: background 60ms linear;
-}
-
-/* Segment colours when active */
-.vu-seg.active.vu-seg-green  { background: #3cdb6e; box-shadow: 0 0 4px rgba(60,219,110,0.6); }
-.vu-seg.active.vu-seg-yellow { background: #f0c040; box-shadow: 0 0 4px rgba(240,192,64,0.6); }
-.vu-seg.active.vu-seg-red    { background: #f05050; box-shadow: 0 0 4px rgba(240,80,80,0.7); }
-
-/* Peak-hold tick — positioned inside .vu-segments (position: relative) */
-.vu-peak-hold {
-  position: absolute;
-  left: 0;
-  width: 14px;
-  height: 2px;
-  border-radius: 1px;
-  background: #f9f9f9;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s;
-  z-index: 1;
-}
-.vu-peak-hold.visible {
-  opacity: 0.85;
-}
-
-/* dB readout below segments */
-.vu-db-value {
-  display: none;
-}
-
 .input-vu-meter-dropdown-trigger {
   display: inline-flex;
   align-items: center;

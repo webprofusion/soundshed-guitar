@@ -42,6 +42,20 @@
                 <path class="output-quick-mute-slash" d="M5 5l14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
+            <div class="vu-meter output-vu-meter" id="output-vu-meter" title="Output peak level in dBFS, after master volume">
+              <span class="vu-readout" id="output-vu-readout">-∞ dB</span>
+              <div class="vu-segments" id="output-vu-segments">
+                <div class="vu-seg vu-seg-red" data-db="-3"></div>
+                <div class="vu-seg vu-seg-red" data-db="-6"></div>
+                <div class="vu-seg vu-seg-yellow" data-db="-9"></div>
+                <div class="vu-seg vu-seg-yellow" data-db="-12"></div>
+                <div class="vu-seg vu-seg-yellow" data-db="-18"></div>
+                <div class="vu-seg vu-seg-green" data-db="-24"></div>
+                <div class="vu-seg vu-seg-green" data-db="-36"></div>
+                <div class="vu-seg vu-seg-green" data-db="-48"></div>
+                <div class="vu-peak-hold" id="output-vu-peak-hold"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

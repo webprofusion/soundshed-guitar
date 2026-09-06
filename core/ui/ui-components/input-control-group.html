@@ -1,5 +1,6 @@
       <div class="control-bar-group">
-        <div class="input-vu-meter" id="input-vu-meter" title="Raw input peak level">
+        <div class="vu-meter" id="input-vu-meter" title="Raw input peak level (dBFS)">
+          <span class="vu-readout" id="input-vu-readout">-∞ dB</span>
           <div class="vu-segments" id="vu-segments">
             <div class="vu-seg vu-seg-red" data-db="-3"></div>
             <div class="vu-seg vu-seg-red" data-db="-6"></div>
@@ -11,7 +12,6 @@
             <div class="vu-seg vu-seg-green" data-db="-48"></div>
             <div class="vu-peak-hold" id="vu-peak-hold"></div>
           </div>
-          <span class="vu-db-value" id="vu-db-value">--</span>
           <button
             id="user-input-calibration-toolbar-trigger"
             class="input-vu-meter-dropdown-trigger"
