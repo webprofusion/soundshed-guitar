@@ -32,11 +32,14 @@
   position: relative;
   cursor: pointer;
   touch-action: none;
-  /* Ring = conic-gradient from 7 o'clock (225°) spanning 270° */
+  /* Ring = conic-gradient from 7 o'clock (225°) spanning 270°. The filled arc
+     runs --knob-ring-start to --knob-ring-end across whatever it currently
+     spans, so the full sweep is always visible however far round the value is.
+     Themes that want a flat ring set both stops to the same colour. */
   background: conic-gradient(
     from 225deg,
-    var(--knob-ring-color) 0deg,
-    var(--knob-ring-color) calc(var(--knob-pct, 0) * 270deg),
+    var(--knob-ring-start, var(--knob-ring-color)) 0deg,
+    var(--knob-ring-end, var(--knob-ring-color)) calc(var(--knob-pct, 0) * 270deg),
     var(--knob-ring-track) calc(var(--knob-pct, 0) * 270deg),
     var(--knob-ring-track) 270deg,
     transparent 270deg

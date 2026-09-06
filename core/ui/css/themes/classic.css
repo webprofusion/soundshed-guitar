@@ -72,9 +72,11 @@
   --knob-border-highlight: rgba(245, 241, 232, 0.24);
   --knob-border-shadow: rgba(42, 31, 21, 0.34);
 
-  /* Knob styling - solid studio-metal surface with amber indicator */
+  /* Knob styling - solid studio-metal surface; the value arc fades from dark
+     wood up into a warm yellow-green. */
   --control-knob-bg: #8a7a6a;
-  --knob-ring-color: #f0a010;
+  --knob-ring-start: #5b3d21;
+  --knob-ring-end: #b9c500;
   --knob-ring-track: rgba(255, 244, 220, 0.15);
 
   /* Toggle */
