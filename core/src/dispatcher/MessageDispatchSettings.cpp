@@ -46,6 +46,13 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
             c.mPendingStateBroadcast = true;
         }
 
+        if (key == "audio.presetSwitch.tailBars")
+        {
+            // Sanitises and restores the default on an "unset"; the value itself reaches
+            // the mixer at the next preset switch, resolved against the tempo then.
+            c.ApplyPresetSwitchSettingsFromAppSettings();
+        }
+
         if (PluginController::IsNamQualitySettingKey(key))
         {
             c.ApplyNamQualitySettings();

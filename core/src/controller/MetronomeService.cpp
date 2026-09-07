@@ -145,6 +145,19 @@ double MetronomeService::EffectiveTempoBpm() const
     return kMetronomeDefaultBpm;
 }
 
+double MetronomeService::BarSeconds() const
+{
+    const auto plan = std::atomic_load_explicit(&mBarPlan, std::memory_order_acquire);
+
+    // beatScale is the beat length relative to a quarter note, so a 6/8 bar comes out as
+    // six eighth notes rather than six quarters.
+    const double beats = (plan && !plan->beats.empty()) ? static_cast<double>(plan->beats.size())
+                                                        : static_cast<double>(kMetronomeDefaultTimeSigNum);
+    const double beatScale = plan ? std::max(0.125, plan->beatScale) : 1.0;
+
+    return beats * beatScale * (60.0 / EffectiveTempoBpm());
+}
+
 void MetronomeService::ResetTransport()
 {
     mSamplesUntilTick = 0.0;

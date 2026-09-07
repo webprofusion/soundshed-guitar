@@ -27,6 +27,16 @@ inline constexpr const char* kOutputProtectionCeilingSettingKey = "audio.dsp.out
 inline constexpr const char* kOutputLimiterEnabledSettingKey = "audio.dsp.outputLimiterEnabled";
 inline constexpr const char* kGlobalFxSettingsKey = "globalFx.settings";
 
+// ── Preset switching ────────────────────────────────────────────────
+// How much of the outgoing preset's delay/reverb is allowed to ring on over a preset or
+// scene switch, in bars of the current tempo and meter. Bars rather than seconds because
+// what a player wants is for the tail to die out over the phrase, not over a fixed stretch
+// of clock time. 0 turns the spill off and restores the plain declick crossfade.
+inline constexpr const char* kPresetSwitchTailBarsSettingKey = "audio.presetSwitch.tailBars";
+inline constexpr int kPresetSwitchTailBarsDefault = 2;
+inline constexpr int kPresetSwitchTailBarsMin = 0;
+inline constexpr int kPresetSwitchTailBarsMax = 4;
+
 // ── NAM quality ─────────────────────────────────────────────────────
 // Each setting has a matching per-node config key: the app-wide setting is
 // pushed down onto every NAM node, and a node may then carry its own value.

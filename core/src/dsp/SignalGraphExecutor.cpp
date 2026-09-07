@@ -691,6 +691,25 @@ std::vector<std::string> SignalGraphExecutor::GetNodeTypes() const
     return types;
 }
 
+std::vector<std::string> SignalGraphExecutor::GetNodeTypesDeep() const
+{
+    std::vector<std::string> types;
+    types.reserve(mNodeStates.size());
+
+    for (const auto& entry : mNodeStates)
+    {
+        types.push_back(entry.second.type);
+
+        if (const auto* composite = dynamic_cast<const CompositeEffectProcessor*>(entry.second.processor.get()))
+        {
+            const auto inner = composite->GetInnerExecutor().GetNodeTypesDeep();
+            types.insert(types.end(), inner.begin(), inner.end());
+        }
+    }
+
+    return types;
+}
+
 const SignalGraphExecutor::NodeState* SignalGraphExecutor::FindNodeState(const std::string& id) const
 {
     auto it = mNodeStates.find(id);

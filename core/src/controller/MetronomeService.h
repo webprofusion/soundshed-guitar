@@ -83,6 +83,11 @@ class MetronomeService
     /// decision is made.
     [[nodiscard]] double EffectiveTempoBpm() const;
 
+    /// One bar at that tempo and the user's meter, in seconds. This is what "two bars"
+    /// means to anything outside the click — the preset-switch tail, for one. Guidance is
+    /// deliberately not consulted: its meter belongs to a riff take, not to the song.
+    [[nodiscard]] double BarSeconds() const;
+
     // ── Audio thread ────────────────────────────────────────────────
 
     /// Mixes the click on top of already-processed audio. No-op when hosted,

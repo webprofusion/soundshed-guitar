@@ -117,6 +117,11 @@ class SignalGraphExecutor
     [[nodiscard]] std::string FindFirstNodeOfTypes(const std::vector<std::string>& types) const;
     [[nodiscard]] std::vector<std::string> GetNodeTypes() const;
 
+    /// The same, plus every node type inside any composite this graph contains. A composite
+    /// is one node from the outside, so anything asking "does this graph contain an X" has
+    /// to look through it. Walks processors, so message thread only.
+    [[nodiscard]] std::vector<std::string> GetNodeTypesDeep() const;
+
     /// True if any node in this graph must be loaded and prepared on the main thread
     /// (plugin hosts marshalling through JUCE's MessageManager). Lets a composite that
     /// wraps such a node report the same requirement to its parent graph, so it is never

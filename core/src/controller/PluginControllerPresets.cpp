@@ -696,6 +696,11 @@ void PluginController::ApplyPreset(const Preset& preset)
     // This is the expensive step: effect processors are created, resources loaded
     // (e.g. NAM model weights read from disk), and Prepare() called on each node.
     // The audio thread continues processing the current preset uninterrupted.
+    //
+    // How long the outgoing preset may ring on is resolved here rather than once at
+    // startup: it is a bar count, so it only becomes a number of seconds against the
+    // tempo the player is on right now.
+    UpdatePresetSwapTailBudget();
     mPresetMixer.PreparePresetSwap(normalizedPreset, initialSlotId, normalizedPreset.name);
 
     // Global chains are staged the same way. This is almost always a no-op: global FX are

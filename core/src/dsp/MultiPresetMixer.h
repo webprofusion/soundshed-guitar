@@ -124,12 +124,41 @@ class MultiPresetMixer
 
     // Seamless preset swap: build the new executor off the DSP lock, then commit atomically.
     // PreparePresetSwap does the expensive work (effect creation, resource loading, Prepare).
-    // CommitPresetSwap installs the pre-built instance, fades it in, and fades the outgoing
-    // instance out over the same window so the transition has no step discontinuity.
+    // CommitPresetSwap installs the pre-built instance, fades it in, and hands the outgoing
+    // instance to the tail spill (or, with spill off, fades it out over the same window) so
+    // the transition has no step discontinuity.
     // Pattern: call PreparePresetSwap() without holding the DSP lock, then hold the lock
     // and call CommitPresetSwap().
     void PreparePresetSwap(const Preset& preset, const std::string& id, const std::string& name);
     void CommitPresetSwap();
+
+    // ── Tail spill ──────────────────────────────────────────────────────────────────
+    // How long an outgoing preset may keep ringing after a swap, in seconds. The outgoing
+    // chain has its *input* ramped to zero over the declick window and its output left
+    // alone, so nothing new enters it but whatever is already circulating in its delay
+    // lines and reverb tanks rings out over the top of the incoming preset. Only a graph
+    // that could still sound with its input cut is offered a ring-out at all (see
+    // PresetInstance::canRingOut), and it is dropped early the moment it goes quiet — so
+    // an ordinary preset costs no more than the plain crossfade did.
+    //
+    // The trade-off, deliberate: for the length of that input ramp the outgoing output is not
+    // attenuated, so a chain that compresses hard does not fall away as fast as its input does
+    // and the two presets can briefly sum a little above unity. On a linear chain they sum to
+    // unity exactly. A shorter ramp trades that against the click the ramp exists to prevent.
+    //
+    // 0 disables the whole thing and restores the plain declick crossfade. The caller sets
+    // this from the user's setting and the current tempo before every swap, which is what
+    // keeps "two bars" meaning two bars at the tempo the player is actually on.
+    void SetPresetSwapTailSeconds(double seconds);
+
+    [[nodiscard]] double GetPresetSwapTailSeconds() const noexcept
+    {
+        return mTailSpillSeconds;
+    }
+
+    // Ceiling on the above. A runaway feedback delay never decays on its own, so the hold
+    // is what stops one ringing under the next three songs.
+    static constexpr double kMaxPresetSwapTailSeconds = 20.0;
 
     // Global chain swap, same two-phase pattern as the preset swap above.
     // PrepareGlobalChainSwap normalizes the config and — only if it actually differs from the
@@ -369,6 +398,11 @@ class MultiPresetMixer
     [[nodiscard]] std::optional<InstanceConfig> GetPresetConfig(const std::string& presetId) const;
     /// Live instance count. Instances still fading out after a swap are not counted.
     [[nodiscard]] size_t GetPresetCount() const;
+
+    /// Instances that are on their way out — ringing out their tail or fading — and so are
+    /// hidden from every other query while still costing a whole chain per block. This is
+    /// what a switch's CPU cost is actually made of.
+    [[nodiscard]] size_t GetRetiringPresetCount() const;
     /// Every executor's stats, merged. Unlike the per-executor form, the per-node maps
     /// here are keyed `<scope>::<nodeId>` — `pre::`, `post::`, or the preset id — because
     /// a bare node id does not identify a node across executors. This is the form the UI
@@ -429,7 +463,8 @@ class MultiPresetMixer
     {
         Active,    ///< Normal: full gain.
         FadingIn,  ///< Just installed, ramping 0 -> 1.
-        FadingOut, ///< Superseded, ramping 1 -> 0; retired to the reaper when the ramp ends.
+        Tailing,   ///< Superseded, input ramped to zero, output held while the tail rings out.
+        FadingOut, ///< On its way out, ramping to 0; retired to the reaper when the ramp ends.
     };
 
     struct PresetInstance
@@ -438,11 +473,40 @@ class MultiPresetMixer
         SignalGraphExecutor executor;
         std::vector<float> outL;
         std::vector<float> outR;
+        /// The ramped-to-zero input a tailing instance is fed, in place of the shared
+        /// pre-chain output every live instance reads. Per instance rather than one shared
+        /// buffer because several may be tailing from different ramp positions at once,
+        /// and the parallel dispatch runs them on different threads.
+        std::vector<float> tailInL;
+        std::vector<float> tailInR;
         int complexityScore = 1;
+        /// Whether this graph has anything that could still sound once its input is cut —
+        /// a delay, a reverb, or an opaque plugin/WASM node that might be either. Decided
+        /// once when the instance is built; a graph with none of them is cut on the declick
+        /// ramp as before rather than being run on in the hope that it decays.
+        bool canRingOut = false;
 
         InstancePhase phase = InstancePhase::Active;
         int fadeSamplesRemaining = 0;
         int fadeTotalSamples = 0;
+
+        // ── Tail spill state, all meaningful only while phase == Tailing ──
+        /// Output gain held flat for the whole tail. Frozen at whatever the instance was
+        /// at when the tail began, so an instance superseded mid-fade-in does not step up
+        /// to unity on its way out.
+        float tailGain = 1.0f;
+        /// Input ramp 1 -> 0, so nothing new enters the chain but its state decays smoothly
+        /// rather than being cut.
+        int inputFadeSamplesRemaining = 0;
+        int inputFadeTotalSamples = 0;
+        /// What is left of the hold budget.
+        int tailSamplesRemaining = 0;
+        /// Consecutive samples the output has stayed under the silence floor. The tail is
+        /// dropped early once this passes the mixer's quiet window.
+        int quietSamples = 0;
+
+        /// Sizes the per-block buffers. Not on the audio thread.
+        void ResizeBuffers(int maxBlockSize);
 
         /// Gain multiplier at the start of a block of numSamples, and at its end.
         /// Linear (equal-gain) ramp: the outgoing and incoming chains carry the same source
@@ -457,9 +521,19 @@ class MultiPresetMixer
         /// snap it back to full gain — that step is exactly the click being designed out.
         void BeginFadeOut(int fadeSamples);
 
+        /// Switch to ringing out: hold the current output gain for up to `holdSamples`
+        /// while the input ramps away over `inputFadeSamples`.
+        void BeginTail(int inputFadeSamples, int holdSamples);
+
+        /// Writes this block's ramped-down input into tailInL/tailInR. Audio thread.
+        void FillTailInput(const float* inL, const float* inR, int numSamples);
+
+        /// Folds this block's output into the run of consecutive quiet samples.
+        void ObserveTailDecay(int numSamples, float silencePeak);
+
         [[nodiscard]] bool IsRetiring() const
         {
-            return phase == InstancePhase::FadingOut;
+            return phase == InstancePhase::FadingOut || phase == InstancePhase::Tailing;
         }
 
         PresetInstance() = default;
@@ -498,6 +572,18 @@ class MultiPresetMixer
     [[nodiscard]] bool TryRetireInstanceRealtime(std::unique_ptr<PresetInstance>& inst);
     /// Drop every finished fade-out. Audio thread, end of Process().
     void CollectFinishedFadeOuts();
+
+    // ---- Tail spill ----------------------------------------------------------------
+    /// Retires a superseded instance the way the current settings say to: ringing out when
+    /// the tail spill is on, plain declick fade otherwise. Nothing here asks whether the
+    /// preset has anything to ring — that is what the silence floor answers, and it answers
+    /// it for composites and hosted plugins too, which no graph inspection could.
+    void RetireSupersededInstance(PresetInstance& inst);
+    /// Pushes the oldest tails into their release once more than kMaxTailingInstances are
+    /// ringing at once, so a run of fast switches cannot stack full chains without bound.
+    void LimitTailingInstances();
+    /// The hold budget a new tail starts with, in samples.
+    [[nodiscard]] int TailHoldSamples() const;
     // Tuner processing (YIN-based pitch detection)
     void ProcessTuner(float** inputs, int numSamples);
     [[nodiscard]] double DetectPitch(const std::vector<double>& samples) const;
@@ -526,6 +612,22 @@ class MultiPresetMixer
     // hard-drop the oldest rather than stacking unbounded CPU cost.
     static constexpr std::size_t kMaxFadingOutInstances = 3;
 
+    // ── Tail spill tuning ────────────────────────────────────────────────────────────
+    // How many outgoing presets may ring at once. A ringing instance is a whole chain still
+    // being processed on the audio thread, so this is a CPU budget before it is a musical
+    // choice — one, so a switch can never more than double the DSP load. A second switch
+    // does not hard-drop the first tail, it starts its release early.
+    static constexpr std::size_t kMaxTailingInstances = 1;
+    // Release once the hold runs out. Long enough that cutting a still-loud feedback delay
+    // reads as an ending rather than a chop — the 21 ms declick would be audible there.
+    static constexpr double kTailReleaseSeconds = 0.25;
+    // How long the output has to stay under the floor before the tail is called finished.
+    // Long enough to ride over the zero crossings of a low note decaying underneath it.
+    static constexpr double kTailQuietSeconds = 0.15;
+    // The floor itself, ~-70 dBFS. Below anything a tail is audible at, and above the DC
+    // trickle an amp model can settle on when its input goes to zero.
+    static constexpr float kTailSilencePeak = 3.0e-4f;
+
     // Retired instances awaiting destruction on the reaper thread.
     std::vector<std::unique_ptr<PresetInstance>> mRetireQueue;
     std::vector<SignalGraphExecutor> mRetireExecutors;
@@ -538,6 +640,11 @@ class MultiPresetMixer
     double mSampleRate = 44100.0;
     int mMaxBlockSize = 512;
     bool mPrepared = false;
+    // Tail spill: off until somebody sets a length. Prepare() resolves the two sample
+    // counts below from the constants above, so they follow the sample rate.
+    double mTailSpillSeconds = 0.0;
+    int mTailReleaseSamples = kPresetFadeSamples;
+    int mTailQuietSamples = 0;
     double mMixGainDb = 0.0;
     double mMixGain = 1.0;
     double mMasterGain = 1.0;

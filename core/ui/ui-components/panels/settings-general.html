@@ -13,7 +13,22 @@
                 <button id="run-signal-test" type="button">Run Signal Path Test</button>
               </div>
             </div>
-           
+
+            <div class="settings-section">
+              <h3>Preset Switching</h3>
+              <div class="settings-row">
+                <label for="preset-switch-tail-select">Carry Delay &amp; Reverb Tails</label>
+                <select id="preset-switch-tail-select">
+                  <option value="0">Off</option>
+                  <option value="1">1 bar</option>
+                  <option value="2">2 bars</option>
+                  <option value="3">3 bars</option>
+                  <option value="4">4 bars</option>
+                </select>
+              </div>
+              <div class="settings-hint">Lets the preset you just left keep ringing out over the new one instead of being cut off. Nothing you play afterwards goes into it, and it stops as soon as it falls silent — the bar count is only the limit for a tail that never would, like a runaway feedback delay. Bars are counted at the current tempo, and each preset still ringing costs CPU.</div>
+            </div>
+
             <h2 id="settings-tone3000-heading">Tone3000</h2>
             <div class="settings-section" id="settings-tone3000-section">
               <h3>Tone3000 API</h3>

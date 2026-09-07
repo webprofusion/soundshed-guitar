@@ -559,6 +559,14 @@ class PluginController
     /// Return true when sanitising changed mAppSettings, and never persist — see above.
     /// Advisory: a caller that saves unconditionally anyway can ignore it.
     bool ApplyDspLevelTargetSettingsFromAppSettings();
+    /// Sanitises the tail-spill length and writes back a missing or malformed entry, so the
+    /// settings UI reads the same default the engine does. Nothing is pushed to the mixer
+    /// here: the length is tempo-relative, so it is resolved per swap by
+    /// UpdatePresetSwapTailBudget() against the tempo the player is on at that moment.
+    bool ApplyPresetSwitchSettingsFromAppSettings();
+    /// Tells the mixer how long the outgoing preset may ring after the swap it is about to
+    /// be asked for: the stored bar count at the current tempo and meter.
+    void UpdatePresetSwapTailBudget();
     bool ApplyNamQualitySettings();
     bool ApplyUserInputCalibrationSettingsFromAppSettings();
     void PushNamQualityToDsp();

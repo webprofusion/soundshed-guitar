@@ -1,8 +1,9 @@
 # Gapless Preset & Scene Switching
 
-Status: **Phases 1–2 implemented**; Phases 3–5 proposed. Covers crossfaded preset switching,
-optional delay/reverb tail preservation, and the resource-loading work needed to make
-instance construction fast enough that switching is perceptually instant.
+Status: **Phases 1–2 implemented**, plus the ring-out half of Phase 4 (see below); Phases 3
+and 5 proposed. Covers crossfaded preset switching, optional delay/reverb tail preservation,
+and the resource-loading work needed to make instance construction fast enough that switching
+is perceptually instant.
 
 ## Goal
 
@@ -237,7 +238,7 @@ from presets). Compare the config and skip. This removes a full rebuild plus its
 |---|---|---|
 | Default switch mode | `crossfade`, 150 ms | Hard cut stays available for players who want an abrupt channel-switch feel |
 | Default curve | **Linear (equal-gain)** | Both slots carry the same source and are strongly correlated at the fundamental; equal-power overshoots ~3 dB. Equal-power offered as an option for long, character-changing swells |
-| Tail preservation default | **On**, `tailMaxMs` 5000 | Matches how hardware multi-FX behave; the silence-bypass keeps it cheap |
+| Tail preservation default | **On**, two bars at the current tempo | Matches how hardware multi-FX behave. Shipped as a bar count rather than `tailMaxMs`: the cap only has to catch a tail that never decays on its own, and retire-on-silence ends every other one long before it |
 | Where settings live | App settings, not presets | Matches the existing treatment of global chain config; per-scene overrides are additive and optional |
 | Scene switch default | Diff-and-apply when topology matches | Preserves state; strictly better than any crossfade |
 | Instance cap | 8 slots, ≤1 ringing by default | Bounds worst-case CPU |
@@ -251,14 +252,25 @@ New app settings (additive, all defaulted):
 switching.mode              "hard" | "crossfade"       (default "crossfade")
 switching.crossfadeMs       0..2000                    (default 150)
 switching.curve             "linear" | "equalPower"    (default "linear")
-switching.preserveTails     bool                       (default true)
-switching.tailInputFadeMs   5..200                     (default 25)
-switching.tailMaxMs         0..15000                   (default 5000)
 switching.alignLatency      bool                       (default true)
 switching.prebuildScenes    bool                       (default true)
 switching.prebuildSetlist   bool                       (default true)
 resourceCache.budgetMb      64..4096                   (default 512)
 ```
+
+Shipped, superseding the three `switching.tail*` keys this originally proposed:
+
+```
+audio.presetSwitch.tailBars 0..4                       (default 2, 0 = off)
+```
+
+One key rather than three. Bars rather than milliseconds because the point is musical — the
+tail should die out over the phrase, so the number only becomes seconds when the switch
+happens, resolved against the tempo and meter the player is on then
+(`PluginController::UpdatePresetSwapTailBudget()` → `MetronomeService::BarSeconds()` →
+`MultiPresetMixer::SetPresetSwapTailSeconds()`). There is no separate on/off or input-fade
+setting: 0 bars is off, and the input fade is the declick window the crossfade already uses.
+Surfaced under Settings → General → Preset Switching.
 
 Optional additive `PresetScene` fields — `crossfadeMs`, `preserveTails` — so a solo-boost scene
 can be instant while an ambient scene swells. Older builds ignore unknown fields.
@@ -392,8 +404,47 @@ path, which raises its priority relative to Phase 3.
 10. Latency alignment (L1–L3) and `UpdateHostLatency()` coalescing.
 
 **Phase 4 — tails**
-11. `EffectProcessor::ProducesTail()` and the executor's silence-bypass.
-12. Ring-out lifecycle, retire-on-silence, `maxRingingInstances`.
+11. `EffectProcessor::ProducesTail()` and the executor's silence-bypass. **Still open**, and
+    now the main lever left: a ringing instance runs its whole chain, NAM and IR included,
+    for as long as it rings. `canRingOut` (item 12) bounds *which* presets pay that and
+    `kMaxTailingInstances` bounds how many at once, so the worst case is 2× the DSP load of
+    one preset for the length of one tail — but the silence-bypass is what would make it
+    approximately free, and it would also stop the amp contributing sustain of its own.
+12. ✅ Ring-out lifecycle, retire-on-silence, `maxRingingInstances`. **DONE**, ahead of
+    Phase 3 — it needed only a new instance phase, not the command-ring rework.
+
+    A superseded instance enters `Tailing`: its *input* ramps to zero over the same 1024-sample
+    declick window while its output gain is held flat at whatever it was at, so nothing new
+    enters the chain and what is already circulating in it rings over the incoming preset.
+    Only a graph that can actually still sound with its input cut is offered that at all —
+    the build-time `canRingOut` check looks for a delay or reverb node, through composites,
+    and treats a plugin or WASM host as a maybe. Everything else is cut on the declick ramp
+    exactly as before. Without that check a preset whose chain does not decay — a synth voice,
+    anything self-oscillating — kept playing under the new one for the whole budget, which is
+    not a tail, it is the old preset refusing to leave.
+
+    A ring-out is then dropped as soon as its own output stays under −70 dBFS for 150 ms,
+    which is what ends an ordinary reverb long before the budget does. The budget is the
+    backstop for a tail that never decays, and it releases over 250 ms rather than the
+    declick, so cutting a live feedback delay at the end reads as an ending rather than a
+    chop. One rings at a time (`kMaxTailingInstances`), so a switch can never more than
+    double the DSP load; a second switch starts the first one's release rather than cutting it.
+
+    A ring-out is also kept out of the parallel-dispatch decision, which counts live
+    instances only. Letting it count put a single-preset session on the parallel path after
+    every switch, and that path spin-waits on normal-priority workers **while holding the DSP
+    lock** — a worker that is not scheduled promptly hangs the audio thread, and every
+    message-thread handler behind it. That spin-wait is still a latent risk for a Multi-Rig
+    session that legitimately fans out, and is worth removing on its own merits.
+
+    Known trade-off, deliberate: for the ~21 ms of the input ramp the outgoing chain's output
+    is not attenuated, so a chain that compresses hard (a high-gain amp) does not fall away as
+    fast as its input does and the two presets can briefly sum above unity. On a linear chain
+    they sum to unity exactly. A shorter input ramp trades that against the click it exists to
+    prevent; 21 ms is the same window the crossfade already uses.
+
+    Not done, from the design above: latency alignment during the ring-out (Phase 3's L1), and
+    the per-scene `preserveTails` override.
 
 **Phase 5 — scenes and prebuild**
 13. Graph diff for same-topology scene switches; `SetParamRamp` for the click-prone params.
@@ -411,8 +462,10 @@ New suite `GaplessSwitchingTests` (add to `core/tests/CMakeLists.txt`), all offl
   no all-zero block and no first-difference discontinuity above threshold across the transition.
 - **Crossfade law**: switch between two known-gain passthrough graphs; assert the summed output
   tracks the configured curve within tolerance.
-- **Tail preservation**: preset A contains a 500 ms delay at 100% feedback-free mix; switch away;
-  assert energy is still present at t+400 ms, and zero after `tailMaxMs`.
+- ✅ **Tail preservation**: preset A is a fully wet delay with heavy feedback; switch away to
+  something silent; assert energy is still present at t+400 ms with the spill on and none with
+  it off, that a preset with no tail is dropped inside a quarter of its budget, and that a
+  runaway feedback delay is gone once the budget and its release expire.
 - **Latency alignment**: crossfade two chains with different declared latency; assert the
   spectral null depth at the fade midpoint stays above a threshold (i.e. no comb).
 - **Silence bypass**: assert a `!ProducesTail()` node stops being processed after silent input

@@ -66,6 +66,37 @@ Preset MakeGainPreset(const std::string& id, double gainDb)
     return preset;
 }
 
+/// input -> delay(mix 1.0, heavy feedback) -> output. The wet signal keeps circulating long
+/// after the input stops, which is exactly the thing a preset switch must not cut off.
+Preset MakeDelayPreset(const std::string& id, double timeMs, double feedback)
+{
+    Preset preset;
+    preset.id = id;
+    preset.name = id;
+
+    GraphNode in;
+    in.id = "in";
+    in.type = kNodeTypeInput;
+    in.enabled = true;
+
+    GraphNode delay;
+    delay.id = "d";
+    delay.type = EffectGuids::kDelayDigital;
+    delay.enabled = true;
+    delay.params["time"] = timeMs;
+    delay.params["feedback"] = feedback;
+    delay.params["mix"] = 1.0;
+
+    GraphNode out;
+    out.id = "out";
+    out.type = kNodeTypeOutput;
+    out.enabled = true;
+
+    preset.graph.nodes = {in, delay, out};
+    preset.graph.edges = {{in.id, delay.id, 0, 0, 1.0}, {delay.id, out.id, 0, 0, 1.0}};
+    return preset;
+}
+
 /// Runs blocks of DC input through the mixer and appends the left output to `captured`.
 void PumpDc(MultiPresetMixer& mixer, int blocks, std::vector<float>& captured, float dc = 1.0f)
 {
@@ -82,6 +113,44 @@ void PumpDc(MultiPresetMixer& mixer, int blocks, std::vector<float>& captured, f
         mixer.Process(inputs, outputs, kTestBlockSize);
         captured.insert(captured.end(), outL.begin(), outL.end());
     }
+}
+
+/// Same, with a 440 Hz sine instead. `phase` carries across calls so the tone is continuous.
+void PumpSine(MultiPresetMixer& mixer, int blocks, double& phase, float amplitude = 0.5f)
+{
+    constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
+    const double increment = kTwoPi * 440.0 / kTestSampleRate;
+
+    std::vector<float> inL(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> inR(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> outL(static_cast<size_t>(kTestBlockSize), 0.0f);
+    std::vector<float> outR(static_cast<size_t>(kTestBlockSize), 0.0f);
+
+    float* inputs[2] = {inL.data(), inR.data()};
+    float* outputs[2] = {outL.data(), outR.data()};
+
+    for (int b = 0; b < blocks; ++b)
+    {
+        for (int i = 0; i < kTestBlockSize; ++i, phase += increment)
+        {
+            inL[static_cast<size_t>(i)] = amplitude * static_cast<float>(std::sin(phase));
+            inR[static_cast<size_t>(i)] = inL[static_cast<size_t>(i)];
+        }
+
+        mixer.Process(inputs, outputs, kTestBlockSize);
+    }
+}
+
+float MaxAbs(const std::vector<float>& samples, std::size_t from)
+{
+    float peak = 0.0f;
+
+    for (std::size_t i = from; i < samples.size(); ++i)
+    {
+        peak = std::max(peak, std::fabs(samples[i]));
+    }
+
+    return peak;
 }
 
 float MaxAbsDelta(const std::vector<float>& samples, std::size_t& atIndex)
@@ -296,6 +365,157 @@ void TestRapidSwitchingStaysBounded()
           "mixer converges on the final preset after the ramps drain (got " + std::to_string(settled.back()) +
               ", want " + std::to_string(expected) + ")");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tail spill: the preset you just left keeps ringing over the new one. Same switch,
+// run twice, and the only difference is the tail budget.
+// ─────────────────────────────────────────────────────────────────────────────
+std::vector<float> SwitchAwayFromDelay(double tailSeconds)
+{
+    MultiPresetMixer mixer;
+    ResourceLibrary lib;
+    mixer.SetResourceLibrary(&lib);
+    mixer.Prepare(kTestSampleRate, kTestBlockSize);
+    Check(mixer.AddActivePreset(MakeDelayPreset("echo", 120.0, 0.85), "echo", "echo"), "add the delay preset");
+
+    // Half a second of playing: several repeats are circulating by the time we switch.
+    double phase = 0.0;
+    PumpSine(mixer, 400, phase);
+
+    mixer.SetPresetSwapTailSeconds(tailSeconds);
+    // Switch to something that makes no sound of its own, so whatever comes out afterwards
+    // is the outgoing preset's tail and nothing else.
+    mixer.PreparePresetSwap(MakeGainPreset("silent", -80.0), "silent", "silent");
+    mixer.CommitPresetSwap();
+
+    // ...and the player stops. 400 ms of silence in.
+    std::vector<float> after;
+    PumpDc(mixer, 300, after, 0.0f);
+    return after;
+}
+
+void TestTailSpillCarriesTheDelayPastTheSwap()
+{
+    {
+        MultiPresetMixer mixer;
+        mixer.SetPresetSwapTailSeconds(-1.0);
+        Check(mixer.GetPresetSwapTailSeconds() == 0.0, "a negative tail length reads as off");
+        mixer.SetPresetSwapTailSeconds(1e6);
+        Check(mixer.GetPresetSwapTailSeconds() == MultiPresetMixer::kMaxPresetSwapTailSeconds,
+              "an absurd tail length is clamped to the ceiling");
+    }
+
+    // Everything past the 1024-sample declick ramp, which both runs share.
+    constexpr std::size_t kPastTheCrossfade = 2048;
+
+    const float withSpill = MaxAbs(SwitchAwayFromDelay(1.0), kPastTheCrossfade);
+    const float withoutSpill = MaxAbs(SwitchAwayFromDelay(0.0), kPastTheCrossfade);
+
+    Check(withSpill > 0.05f,
+          "the delay keeps ringing for 400 ms after the switch (peak " + std::to_string(withSpill) + ")");
+    Check(withoutSpill < 1e-4f,
+          "with the spill off the same switch cuts it dead (peak " + std::to_string(withoutSpill) + ")");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A preset with nothing to ring must not sit there costing a chain. It never enters
+// the ring-out at all — the graph says up front that it has no tail to keep — and one
+// that does ring is dropped as soon as it falls silent, long before the budget ends.
+// ─────────────────────────────────────────────────────────────────────────────
+void TestTailSpillOnlyKeepsWhatCanRing()
+{
+    const auto retiringAfter = [](const Preset& outgoing, int blocks) {
+        MultiPresetMixer mixer;
+        ResourceLibrary lib;
+        mixer.SetResourceLibrary(&lib);
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+        Check(mixer.AddActivePreset(outgoing, outgoing.id, outgoing.name), "add the outgoing preset");
+
+        double phase = 0.0;
+        PumpSine(mixer, 400, phase);
+
+        mixer.SetPresetSwapTailSeconds(2.0);
+        mixer.PreparePresetSwap(MakeGainPreset("next", 0.0), "next", "next");
+        mixer.CommitPresetSwap();
+
+        std::vector<float> after;
+        PumpDc(mixer, blocks, after, 0.0f);
+        return mixer.GetRetiringPresetCount();
+    };
+
+    // 40 blocks is ~53 ms: past the 1024-sample declick, nowhere near the 2 s budget or
+    // even the silence window, so only an up-front decision can have retired it.
+    Check(retiringAfter(MakeGainPreset("dry", 0.0), 40) == 0,
+          "a preset with no delay or reverb is cut on the declick ramp, not run on");
+    Check(retiringAfter(MakeDelayPreset("echo", 120.0, 0.85), 40) == 1, "a preset with a delay is kept ringing");
+    // ...and the one that does ring still ends itself early once it decays, rather than
+    // riding the whole budget.
+    Check(retiringAfter(MakeDelayPreset("shortecho", 40.0, 0.2), 375) == 0,
+          "a tail that has decayed is dropped well before the budget runs out");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The budget is the backstop for a tail that never decays on its own.
+// ─────────────────────────────────────────────────────────────────────────────
+void TestTailSpillStopsAtTheEndOfTheBudget()
+{
+    MultiPresetMixer mixer;
+    ResourceLibrary lib;
+    mixer.SetResourceLibrary(&lib);
+    mixer.Prepare(kTestSampleRate, kTestBlockSize);
+    // Feedback at the top of the range: this one is still going when the budget runs out.
+    Check(mixer.AddActivePreset(MakeDelayPreset("runaway", 120.0, 0.95), "runaway", "runaway"),
+          "add the runaway delay preset");
+
+    double phase = 0.0;
+    PumpSine(mixer, 400, phase);
+
+    mixer.SetPresetSwapTailSeconds(0.25);
+    mixer.PreparePresetSwap(MakeGainPreset("next", 0.0), "next", "next");
+    mixer.CommitPresetSwap();
+
+    std::vector<float> during;
+    PumpDc(mixer, 150, during, 0.0f); // 200 ms: inside the budget
+    Check(mixer.GetRetiringPresetCount() == 1, "the tail is still running inside its budget");
+
+    std::vector<float> after;
+    PumpDc(mixer, 450, after, 0.0f); // a further 600 ms: budget plus the 250 ms release
+    Check(mixer.GetRetiringPresetCount() == 0, "the tail is gone once the budget and its release run out");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tails cost a whole chain each. Hammering the switch must not stack them up.
+// ─────────────────────────────────────────────────────────────────────────────
+void TestTailSpillStaysBoundedUnderRapidSwitching()
+{
+    MultiPresetMixer mixer;
+    ResourceLibrary lib;
+    mixer.SetResourceLibrary(&lib);
+    mixer.Prepare(kTestSampleRate, kTestBlockSize);
+    Check(mixer.AddActivePreset(MakeDelayPreset("echo0", 120.0, 0.85), "echo0", "echo0"), "add the first preset");
+
+    mixer.SetPresetSwapTailSeconds(4.0);
+
+    double phase = 0.0;
+    std::size_t worstRetiring = 0;
+
+    for (int i = 1; i <= 24; ++i)
+    {
+        const auto id = "echo" + std::to_string(i);
+        mixer.PreparePresetSwap(MakeDelayPreset(id, 120.0, 0.85), id, id);
+        mixer.CommitPresetSwap();
+        PumpSine(mixer, 2, phase); // switch again long before any tail has decayed
+        Check(mixer.GetPresetCount() == 1, "live instance count stays at one while switching");
+        worstRetiring = std::max(worstRetiring, mixer.GetRetiringPresetCount());
+    }
+
+    Check(worstRetiring <= 3, "simultaneous tails stay bounded (worst " + std::to_string(worstRetiring) + ")");
+
+    std::vector<float> captured;
+    PumpDc(mixer, 40, captured, 0.0f);
+    const bool allFinite = std::all_of(captured.begin(), captured.end(), [](float v) { return std::isfinite(v); });
+    Check(allFinite, "rapid switching with tails keeps the output finite");
+}
 } // namespace
 
 int main()
@@ -309,6 +529,10 @@ int main()
     TestUnchangedGlobalChainSkipsRebuild();
     TestInPlaceReplaceCrossfadesAndKeepsOtherSlots();
     TestRapidSwitchingStaysBounded();
+    TestTailSpillCarriesTheDelayPastTheSwap();
+    TestTailSpillOnlyKeepsWhatCanRing();
+    TestTailSpillStopsAtTheEndOfTheBudget();
+    TestTailSpillStaysBoundedUnderRapidSwitching();
 
     if (gAllPassed)
     {

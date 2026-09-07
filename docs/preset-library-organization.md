@@ -33,9 +33,11 @@ Define a flexible preset organization model with hierarchical folders and ordere
 6. **Selecting a slot switches presets**: stepping the setlist cursor (`setSetlistCursor`
    from the UI, or a footswitch/MIDI `setlist.presetN` trigger) makes that slot's preset
    *the* active preset — the mixer swaps down to a single instance using the gapless
-   crossfade. It never stacks another instance on top, which is the separate Multi-Rig
-   "add preset to the mix" action. The backend performs the load and reports it with
-   `presetLoaded`; the UI must not issue its own `loadPreset` for the same step.
+   crossfade, and the outgoing preset's delay and reverb keep ringing over the new one for
+   up to `audio.presetSwitch.tailBars` bars at the current tempo (default 2, 0 = off). It
+   never stacks another instance on top, which is the separate Multi-Rig "add preset to the
+   mix" action. The backend performs the load and reports it with `presetLoaded`; the UI must
+   not issue its own `loadPreset` for the same step.
 
 ## Import Behavior
 - **Default imports**: presets without folder paths remain unassigned and appear in `All Presets` until the user moves them into a folder.

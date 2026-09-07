@@ -92,6 +92,36 @@ bool PluginController::ApplyDspLevelTargetSettingsFromAppSettings()
     return settingsChanged;
 }
 
+bool PluginController::ApplyPresetSwitchSettingsFromAppSettings()
+{
+    const auto it = mAppSettings.find(kPresetSwitchTailBarsSettingKey);
+    const bool stored = it != mAppSettings.end() && it->is_number();
+    const int bars = stored ? static_cast<int>(std::lround(it->get<double>())) : kPresetSwitchTailBarsDefault;
+    const int sanitized = std::clamp(bars, kPresetSwitchTailBarsMin, kPresetSwitchTailBarsMax);
+
+    if (!stored || sanitized != bars)
+    {
+        // Write the default back rather than leaving the key absent: the settings UI reads
+        // an absent numeric entry as zero, which here means "off" — the opposite of the
+        // default the engine is running.
+        mAppSettings[kPresetSwitchTailBarsSettingKey] = sanitized;
+        return true;
+    }
+
+    return false;
+}
+
+void PluginController::UpdatePresetSwapTailBudget()
+{
+    const auto it = mAppSettings.find(kPresetSwitchTailBarsSettingKey);
+    const int bars =
+        std::clamp(it != mAppSettings.end() && it->is_number() ? static_cast<int>(std::lround(it->get<double>()))
+                                                               : kPresetSwitchTailBarsDefault,
+                   kPresetSwitchTailBarsMin, kPresetSwitchTailBarsMax);
+
+    mPresetMixer.SetPresetSwapTailSeconds(static_cast<double>(bars) * mMetronome->BarSeconds());
+}
+
 void PluginController::ApplyInputModeSettingsFromAppSettings()
 {
     // Only applies in standalone mode; in plugin mode the DAW owns the input config.
@@ -335,6 +365,7 @@ bool PluginController::ApplySettingsToRuntime(SettingsApplyMode mode)
 
     mMetronome->ApplySettingsFromAppSettings();
     settingsChanged |= ApplyDspLevelTargetSettingsFromAppSettings();
+    settingsChanged |= ApplyPresetSwitchSettingsFromAppSettings();
     ApplyInputModeSettingsFromAppSettings();
     ApplyGlobalFxSettingsFromAppSettings();
 

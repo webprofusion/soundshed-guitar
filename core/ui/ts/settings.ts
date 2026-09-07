@@ -43,6 +43,7 @@ const FACTORY_ARCHIVE_LOADING_SETTING = "factoryPresets.archiveLoadingEnabled";
 const DSP_NOMINAL_LEVEL_SETTING = "audio.dsp.nominalOperatingLevelDbfs";
 const DSP_PROTECTION_CEILING_SETTING = "audio.dsp.outputProtectionCeilingDbfs";
 const DSP_OUTPUT_LIMITER_SETTING = "audio.dsp.outputLimiterEnabled";
+const PRESET_SWITCH_TAIL_SETTING = "audio.presetSwitch.tailBars";
 const NAM_SLIMMABLE_SIZE_SETTING = "audio.nam.slimmableSize";
 const NAM_OVERSAMPLING_SETTING = "audio.nam.oversampling";
 const NAM_ANTI_ALIAS_PHASE_SETTING = "audio.nam.antiAliasPhase";
@@ -54,6 +55,11 @@ const DSP_NOMINAL_LEVEL_MAX = -6.0;
 const DSP_PROTECTION_CEILING_DEFAULT = -1.0;
 const DSP_PROTECTION_CEILING_MIN = -6.0;
 const DSP_PROTECTION_CEILING_MAX = 0.0;
+// Bars of delay/reverb tail carried over a preset switch; 0 is off. The option values are
+// the bar count itself, and the engine clamps to the same range.
+const PRESET_SWITCH_TAIL_DEFAULT = 2;
+const PRESET_SWITCH_TAIL_MIN = 0;
+const PRESET_SWITCH_TAIL_MAX = 4;
 const NAM_SLIMMABLE_SIZE_DEFAULT = 1.0;
 const NAM_SLIMMABLE_SIZE_MIN = 0.0;
 const NAM_SLIMMABLE_SIZE_MAX = 1.0;
@@ -131,6 +137,7 @@ const factoryArchiveLoadingToggle = document.getElementById("factory-archive-loa
 const dspNominalLevelInput = document.getElementById("dsp-nominal-level-input") as HTMLInputElement | null;
 const dspProtectionCeilingInput = document.getElementById("dsp-protection-ceiling-input") as HTMLInputElement | null;
 const dspOutputLimiterToggle = document.getElementById("dsp-output-limiter-toggle") as HTMLInputElement | null;
+const presetSwitchTailSelect = document.getElementById("preset-switch-tail-select") as HTMLSelectElement | null;
 const namSlimmableSizeInput = document.getElementById("nam-slimmable-size-input") as HTMLInputElement | null;
 const namOversamplingSelect = document.getElementById("nam-oversampling-select") as HTMLSelectElement | null;
 const namAntiAliasPhaseSelect = document.getElementById("nam-anti-alias-phase-select") as HTMLSelectElement | null;
@@ -197,6 +204,7 @@ export function initSettingsPanel(): void {
   initUserInputCalibrationControls();
   initFeatureToggles();
   initDspLevelTargetControls();
+  initPresetSwitchControls();
   initFactoryArchiveLoadingToggle();
   initTone3000UseSoundshedApiToggle();
   initTone3000ProxyHealthCheck();
@@ -1002,6 +1010,16 @@ function restoreIndexSelectSetting(
   select.value = String(sanitized);
 }
 
+function initPresetSwitchControls(): void {
+  bindIndexSelectSetting(
+    presetSwitchTailSelect,
+    PRESET_SWITCH_TAIL_SETTING,
+    PRESET_SWITCH_TAIL_MIN,
+    PRESET_SWITCH_TAIL_MAX,
+    PRESET_SWITCH_TAIL_DEFAULT,
+  );
+}
+
 function initDspLevelTargetControls(): void {
   if (dspLevelTargetsInitialized) {
     return;
@@ -1179,6 +1197,13 @@ export function refreshSettingsView(): void {
     );
     namSlimmableSizeInput.value = slimmableSize.toFixed(2);
   }
+  restoreIndexSelectSetting(
+    presetSwitchTailSelect,
+    PRESET_SWITCH_TAIL_SETTING,
+    PRESET_SWITCH_TAIL_MIN,
+    PRESET_SWITCH_TAIL_MAX,
+    PRESET_SWITCH_TAIL_DEFAULT,
+  );
   restoreIndexSelectSetting(
     namOversamplingSelect,
     NAM_OVERSAMPLING_SETTING,
