@@ -419,8 +419,7 @@ void TestTailSpillCarriesTheDelayPastTheSwap()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A preset with nothing to ring must not sit there costing a chain. It never enters
-// the ring-out at all — the graph says up front that it has no tail to keep — and one
-// that does ring is dropped as soon as it falls silent, long before the budget ends.
+// the ring-out at all. A graph with delay state must keep it even between repeats.
 // ─────────────────────────────────────────────────────────────────────────────
 void TestTailSpillOnlyKeepsWhatCanRing()
 {
@@ -448,10 +447,8 @@ void TestTailSpillOnlyKeepsWhatCanRing()
     Check(retiringAfter(MakeGainPreset("dry", 0.0), 40) == 0,
           "a preset with no delay or reverb is cut on the declick ramp, not run on");
     Check(retiringAfter(MakeDelayPreset("echo", 120.0, 0.85), 40) == 1, "a preset with a delay is kept ringing");
-    // ...and the one that does ring still ends itself early once it decays, rather than
-    // riding the whole budget.
-    Check(retiringAfter(MakeDelayPreset("shortecho", 40.0, 0.2), 375) == 0,
-          "a tail that has decayed is dropped well before the budget runs out");
+    Check(retiringAfter(MakeDelayPreset("shortecho", 40.0, 0.2), 375) == 1,
+          "a quiet tail retains its state until the budget expires");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -516,6 +513,139 @@ void TestTailSpillStaysBoundedUnderRapidSwitching()
     const bool allFinite = std::all_of(captured.begin(), captured.end(), [](float v) { return std::isfinite(v); });
     Check(allFinite, "rapid switching with tails keeps the output finite");
 }
+
+void TestLongDelaySurvivesSilentGaps()
+{
+    const auto render = [](bool swap) {
+        ResourceLibrary lib;
+        MultiPresetMixer mixer;
+        mixer.SetResourceLibrary(&lib);
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+        mixer.SetLimiterEnabled(false);
+        mixer.AddActivePreset(MakeDelayPreset("echo", 500.0, 0.8), "echo", "echo");
+        std::vector<float> note;
+        PumpDc(mixer, 4, note, 0.5f);
+
+        if (swap)
+        {
+            mixer.SetPresetSwapTailSeconds(2.0);
+            mixer.PreparePresetSwap(MakeGainPreset("next", -80.0), "next", "next");
+            mixer.CommitPresetSwap();
+        }
+
+        std::vector<float> output;
+        PumpDc(mixer, 900, output, 0.0f); // Includes first and second repeats, 500 ms apart.
+        return output;
+    };
+    const auto control = render(false);
+    const auto switched = render(true);
+    Check(MaxAbs(control, 30000) > 0.05f, "control contains a second audible repeat");
+    Check(control == switched, "switch preserves long-delay repeats across silent gaps");
+}
+
+void TestTailReleaseNeverReconnectsInput()
+{
+    // Budget expiry and another switch both start a release. Feeding new playing must
+    // leave the old tail identical to the silent-input control, including dry/wet output.
+    for (bool interrupted : {false, true})
+    {
+        const auto render = [interrupted](float playing) {
+            ResourceLibrary lib;
+            MultiPresetMixer mixer;
+            mixer.SetResourceLibrary(&lib);
+            mixer.Prepare(kTestSampleRate, kTestBlockSize);
+            mixer.SetLimiterEnabled(false);
+            auto delay = MakeDelayPreset("echo", 40.0, 0.85);
+            delay.graph.nodes[1].params["mix"] = 0.5;
+            mixer.AddActivePreset(delay, "echo", "echo");
+            std::vector<float> warm;
+            PumpDc(mixer, 400, warm, 0.2f);
+            mixer.SetPresetSwapTailSeconds(interrupted ? 2.0 : 0.25);
+            auto silent = MakeDelayPreset("next", 40.0, 0.85);
+            // Zero mix keeps this tail-capable slot eligible for retirement, but inaudible.
+            mixer.PreparePresetSwap(silent, "next", "next");
+            mixer.CommitPresetSwap();
+            mixer.SetPresetMix("next", 0.0);
+            std::vector<float> ramp;
+            PumpDc(mixer, 20, ramp, 0.0f);
+
+            if (interrupted)
+            {
+                mixer.PreparePresetSwap(MakeGainPreset("third", 0.0), "third", "third");
+                mixer.CommitPresetSwap();
+                mixer.SetPresetMute("third", true);
+            }
+
+            std::vector<float> output;
+            PumpDc(mixer, 400, output, playing);
+            return output;
+        };
+        const auto quiet = render(0.0f);
+        const auto playing = render(0.2f);
+        float difference = 0.0f;
+
+        for (std::size_t i = 0; i < quiet.size(); ++i)
+        {
+            difference = std::max(difference, std::fabs(quiet[i] - playing[i]));
+        }
+
+        Check(difference < 1e-6f, "tail release never feeds live input back into the outgoing chain");
+    }
+}
+
+void TestReverbPredelaySurvivesSwitch()
+{
+    const auto render = [](bool swap) {
+        ResourceLibrary lib;
+        MultiPresetMixer mixer;
+        mixer.SetResourceLibrary(&lib);
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+        mixer.SetLimiterEnabled(false);
+        auto reverb = MakeDelayPreset("reverb", 0.0, 0.0);
+        reverb.graph.nodes[1].type = EffectGuids::kReverbRoom;
+        reverb.graph.nodes[1].params = {{"preDelay", 220.0}, {"mix", 1.0}};
+        mixer.AddActivePreset(reverb, "reverb", "reverb");
+        std::vector<float> note;
+        PumpDc(mixer, 4, note, 0.5f);
+
+        if (swap)
+        {
+            mixer.SetPresetSwapTailSeconds(2.0);
+            mixer.PreparePresetSwap(MakeGainPreset("next", -80.0), "next", "next");
+            mixer.CommitPresetSwap();
+        }
+
+        std::vector<float> output;
+        PumpDc(mixer, 450, output, 0.0f);
+        return output;
+    };
+    const auto control = render(false);
+    Check(MaxAbs(control, 10000) > 1e-4f, "control contains audible predelayed reverb");
+    Check(control == render(true), "switch preserves reverb state during its predelay");
+}
+
+void TestInPlaceRetireesStayBounded()
+{
+    ResourceLibrary lib;
+    MultiPresetMixer mixer;
+    mixer.SetResourceLibrary(&lib);
+    mixer.Prepare(kTestSampleRate, kTestBlockSize);
+    mixer.SetPresetSwapTailSeconds(2.0);
+    auto delay = MakeDelayPreset("echo", 40.0, 0.85);
+    mixer.AddActivePreset(MakeGainPreset("untouched", -20.0), "untouched", "untouched");
+    mixer.AddActivePreset(delay, "echo", "echo");
+    std::vector<float> output;
+    PumpDc(mixer, 20, output, 0.2f);
+
+    for (int i = 0; i < 24; ++i)
+    {
+        Check(mixer.ReplaceActivePresetInPlace(delay, "echo", "echo"), "in-place swap succeeds");
+        PumpDc(mixer, 2, output, 0.2f);
+        Check(mixer.GetRetiringPresetCount() <= 3, "in-place replacements cap all retirees at three");
+        Check(mixer.GetPresetCount() == 2 && mixer.GetPresetConfig("untouched").has_value(),
+              "retirement cap preserves every live slot");
+    }
+}
 } // namespace
 
 int main()
@@ -533,6 +663,10 @@ int main()
     TestTailSpillOnlyKeepsWhatCanRing();
     TestTailSpillStopsAtTheEndOfTheBudget();
     TestTailSpillStaysBoundedUnderRapidSwitching();
+    TestLongDelaySurvivesSilentGaps();
+    TestTailReleaseNeverReconnectsInput();
+    TestReverbPredelaySurvivesSwitch();
+    TestInPlaceRetireesStayBounded();
 
     if (gAllPassed)
     {

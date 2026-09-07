@@ -8,6 +8,7 @@ set(TEST_SOURCES
     DSPPerformanceTests.cpp
     EffectProcessorTests.cpp
     GaplessSwitchingTests.cpp
+    PresetRetirementTests.cpp
     DemoPreviewLoopTests.cpp
     HostedPluginStateWorkflowTests.cpp
     IRConvolutionTests.cpp

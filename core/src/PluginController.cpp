@@ -59,6 +59,9 @@ PluginController::PluginController(IPluginHost& host) : mHost(host)
 
 PluginController::~PluginController()
 {
+    // Release retired hosted processors while their callbacks' controller services still exist.
+    mPresetMixer.CollectRetiredMainThread();
+
     if (mPresetArchiveSession)
     {
         std::error_code ec;
@@ -375,6 +378,7 @@ void PluginController::HandleUIMessage(const std::string& jsonMessage)
 
 void PluginController::OnIdle()
 {
+    mPresetMixer.CollectRetiredMainThread();
     PollSharedSyncState();
 
     // Has the editor's reported size settled? Commit it as the remembered size and tell

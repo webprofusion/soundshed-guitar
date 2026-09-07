@@ -238,7 +238,7 @@ from presets). Compare the config and skip. This removes a full rebuild plus its
 |---|---|---|
 | Default switch mode | `crossfade`, 150 ms | Hard cut stays available for players who want an abrupt channel-switch feel |
 | Default curve | **Linear (equal-gain)** | Both slots carry the same source and are strongly correlated at the fundamental; equal-power overshoots ~3 dB. Equal-power offered as an option for long, character-changing swells |
-| Tail preservation default | **On**, two bars at the current tempo | Matches how hardware multi-FX behave. Shipped as a bar count rather than `tailMaxMs`: the cap only has to catch a tail that never decays on its own, and retire-on-silence ends every other one long before it |
+| Tail preservation default | **On**, two bars at the current tempo | Tail state is retained for the budget, including silent gaps between delay repeats. Output silence alone cannot prove a chain is empty |
 | Where settings live | App settings, not presets | Matches the existing treatment of global chain config; per-scene overrides are additive and optional |
 | Scene switch default | Diff-and-apply when topology matches | Preserves state; strictly better than any crossfade |
 | Instance cap | 8 slots, ≤1 ringing by default | Bounds worst-case CPU |
@@ -407,10 +407,10 @@ path, which raises its priority relative to Phase 3.
 11. `EffectProcessor::ProducesTail()` and the executor's silence-bypass. **Still open**, and
     now the main lever left: a ringing instance runs its whole chain, NAM and IR included,
     for as long as it rings. `canRingOut` (item 12) bounds *which* presets pay that and
-    `kMaxTailingInstances` bounds how many at once, so the worst case is 2× the DSP load of
-    one preset for the length of one tail — but the silence-bypass is what would make it
+    `kMaxTailingInstances` bounds how many hold at once. Up to three retirees, including
+    releases, can run alongside the live slots — the silence-bypass is what would make it
     approximately free, and it would also stop the amp contributing sustain of its own.
-12. ✅ Ring-out lifecycle, retire-on-silence, `maxRingingInstances`. **DONE**, ahead of
+12. ✅ Ring-out lifecycle and bounded retirement. **DONE**, ahead of
     Phase 3 — it needed only a new instance phase, not the command-ring rework.
 
     A superseded instance enters `Tailing`: its *input* ramps to zero over the same 1024-sample
@@ -423,12 +423,22 @@ path, which raises its priority relative to Phase 3.
     anything self-oscillating — kept playing under the new one for the whole budget, which is
     not a tail, it is the old preset refusing to leave.
 
-    A ring-out is then dropped as soon as its own output stays under −70 dBFS for 150 ms,
-    which is what ends an ordinary reverb long before the budget does. The budget is the
-    backstop for a tail that never decays, and it releases over 250 ms rather than the
-    declick, so cutting a live feedback delay at the end reads as an ending rather than a
-    chop. One rings at a time (`kMaxTailingInstances`), so a switch can never more than
-    double the DSP load; a second switch starts the first one's release rather than cutting it.
+    A ring-out keeps its state until the budget expires, then releases over 250 ms.
+    The former 150 ms output-silence cutoff was unsafe: it discarded 500 ms delay repeats
+    before they sounded. Early retirement needs an actual empty-tail-state API; until then
+    quiet tail-capable graphs cost CPU for the whole budget. Input remains ramped to zero
+    through the release, including releases caused by another switch.
+
+    One tail holds at a time (`kMaxTailingInstances`). Another switch starts the oldest
+    tail's release, and both regular swaps and Multi-Rig replacements cap all retirees at
+    three, dropping the oldest if necessary. Live slots never count toward that cap.
+
+    Multi-Rig replacement now uses `PreparePresetSwap` outside `mDSPMutex`, followed by
+    `CommitPresetReplacement` under it. Commit reads the slot's current mixer controls.
+    Processors with main-thread load affinity (including nested hosted plugins) retire to
+    a separate queue drained by `CollectRetiredMainThread` during controller idle and teardown,
+    outside the DSP lock. Neither they nor hosted global chains enter the background reaper,
+    avoiding the reaper-join / synchronous editor-cleanup shutdown deadlock.
 
     A ring-out is also kept out of the parallel-dispatch decision, which counts live
     instances only. Letting it count put a single-preset session on the parallel path after

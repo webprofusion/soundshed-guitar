@@ -290,13 +290,13 @@ void MultiPresetMixer::PresetInstance::BeginTail(int inputFadeSamples, int holdS
     // Hold whatever gain the instance is at rather than snapping to unity: an instance
     // superseded halfway through its own fade-in must not get louder on its way out.
     tailGain = CurrentFadeGain();
+    tailInput = true;
     phase = InstancePhase::Tailing;
     fadeTotalSamples = 0;
     fadeSamplesRemaining = 0;
     inputFadeTotalSamples = std::max(1, inputFadeSamples);
     inputFadeSamplesRemaining = inputFadeTotalSamples;
     tailSamplesRemaining = std::max(0, holdSamples);
-    quietSamples = 0;
 }
 
 void MultiPresetMixer::PresetInstance::FillTailInput(const float* inL, const float* inR, int numSamples)
@@ -316,21 +316,6 @@ void MultiPresetMixer::PresetInstance::FillTailInput(const float* inL, const flo
         tailInL[index] = (inL != nullptr) ? inL[index] * gain : 0.0f;
         tailInR[index] = (inR != nullptr) ? inR[index] * gain : 0.0f;
     }
-}
-
-void MultiPresetMixer::PresetInstance::ObserveTailDecay(int numSamples, float silencePeak)
-{
-    float peak = 0.0f;
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        const auto index = static_cast<size_t>(i);
-        peak = std::max({peak, std::fabs(outL[index]), std::fabs(outR[index])});
-    }
-
-    // Whole blocks, not samples: one block above the floor restarts the run, which is what
-    // stops a slow tremolo or a decaying low note being called finished between peaks.
-    quietSamples = (peak <= silencePeak) ? (quietSamples + numSamples) : 0;
 }
 
 void MultiPresetMixer::PresetInstance::BeginFadeOut(int fadeSamples)
@@ -401,7 +386,6 @@ MultiPresetMixer& MultiPresetMixer::operator=(MultiPresetMixer&& other) noexcept
     mPrepared = other.mPrepared;
     mTailSpillSeconds = other.mTailSpillSeconds;
     mTailReleaseSamples = other.mTailReleaseSamples;
-    mTailQuietSamples = other.mTailQuietSamples;
     mMixGainDb = other.mMixGainDb;
     mMixGain = other.mMixGain;
     mMasterGain = other.mMasterGain;
@@ -555,41 +539,33 @@ void MultiPresetMixer::PreparePresetSwap(const Preset& preset, const std::string
 bool MultiPresetMixer::ReplaceActivePresetInPlace(const Preset& preset, const std::string& presetId,
                                                   const std::string& name)
 {
+    // Convenience for callers without concurrent audio. The controller uses the two
+    // phases directly so preparation never holds its DSP lock.
+    if (!FindInstance(presetId))
+    {
+        return false;
+    }
+
+    PreparePresetSwap(preset, presetId, name);
+    return CommitPresetReplacement(presetId);
+}
+
+bool MultiPresetMixer::CommitPresetReplacement(const std::string& presetId)
+{
     auto existing =
         std::find_if(mInstances.begin(), mInstances.end(), [&](const std::unique_ptr<PresetInstance>& candidate) {
             return !candidate->IsRetiring() && candidate->cfg.id == presetId;
         });
 
-    if (existing == mInstances.end())
+    if (!mPendingInstance || mPendingInstance->cfg.id != presetId || existing == mInstances.end())
     {
         return false;
     }
 
-    // Preserve this slot's mixer-level settings across the rebuild.
-    const InstanceConfig savedCfg = (*existing)->cfg;
-
-    auto inst = std::make_unique<PresetInstance>();
-    inst->cfg = savedCfg;
-    inst->cfg.name = name;
-
-    Preset normalizedPreset = preset;
-    EnsurePresetBoundaryGainNodes(normalizedPreset);
-
-    inst->executor.SetResourceLibrary(mResourceLibrary);
-    inst->executor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
-    inst->executor.SetGraph(normalizedPreset.graph);
-    inst->executor.SetSignalDiagnosticsEnabled(mSignalDiagnosticsEnabled.load(std::memory_order_acquire));
-    inst->executor.SetNamInputModeMono(mMonoMode);
-    inst->complexityScore = EstimateGraphComplexityScore(inst->executor.GetNodeTypes());
-    inst->canRingOut = GraphCanRingOut(inst->executor.GetNodeTypesDeep());
-
-    if (mPrepared)
-    {
-        inst->executor.Prepare(mSampleRate, mMaxBlockSize);
-        AllocateInstanceBuffers(*inst, mMaxBlockSize);
-    }
-
-    inst->ResizeBuffers(mMaxBlockSize);
+    auto inst = std::move(mPendingInstance);
+    auto name = std::move(inst->cfg.name);
+    inst->cfg = (*existing)->cfg;
+    inst->cfg.name = std::move(name);
 
     // Crossfade rather than cutting: leave the old slot in place, ramping down, and add
     // the replacement alongside it ramping up. Lookups skip retiring instances, so the
@@ -610,6 +586,7 @@ bool MultiPresetMixer::ReplaceActivePresetInPlace(const Preset& preset, const st
         RetireSupersededInstance(outgoing);
         mInstances.push_back(std::move(inst));
         LimitTailingInstances();
+        LimitRetiringInstances();
     }
 
     return true;
@@ -675,6 +652,25 @@ void MultiPresetMixer::LimitTailingInstances()
     }
 }
 
+void MultiPresetMixer::LimitRetiringInstances()
+{
+    auto retiring = GetRetiringPresetCount();
+
+    for (auto it = mInstances.begin(); it != mInstances.end() && retiring > kMaxFadingOutInstances;)
+    {
+        if ((*it)->IsRetiring())
+        {
+            RetireInstance(std::move(*it));
+            it = mInstances.erase(it);
+            --retiring;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
 void MultiPresetMixer::CommitPresetSwap()
 {
     // Fast swap: install the pre-built instance and start fading the old ones out.
@@ -716,11 +712,7 @@ void MultiPresetMixer::CommitPresetSwap()
     // oldest rather than stacking a full chain's CPU cost per switch. Oldest is also the
     // one furthest through its ramp, or the tail that has had longest to decay, so it is
     // the least likely to be heard going.
-    while (mInstances.size() > kMaxFadingOutInstances)
-    {
-        RetireInstance(std::move(mInstances.front()));
-        mInstances.erase(mInstances.begin());
-    }
+    LimitRetiringInstances();
 
     mPendingInstance->phase = InstancePhase::FadingIn;
     mPendingInstance->fadeTotalSamples = kPresetFadeSamples;
@@ -984,8 +976,12 @@ void MultiPresetMixer::CommitGlobalChainSwap()
         // workers. Preset instances avoid this entirely by being held via unique_ptr.
         {
             std::lock_guard<std::mutex> lock(mRetireMutex);
-            mRetireExecutors.push_back(std::move(mPreChainExecutor));
-            mRetireExecutors.push_back(std::move(mPostChainExecutor));
+
+            for (auto* executor : {&mPreChainExecutor, &mPostChainExecutor})
+            {
+                auto& queue = executor->AnyNodeRequiresMainThreadLoad() ? mMainThreadRetireExecutors : mRetireExecutors;
+                queue.push_back(std::move(*executor));
+            }
         }
         mRetireCv.notify_one();
 
@@ -1498,6 +1494,8 @@ void MultiPresetMixer::StartReaper()
         // Reserve up front so the audio thread's retire path never reallocates.
         mRetireQueue.reserve(kRetireQueueCapacity);
         mRetireExecutors.reserve(kRetireQueueCapacity);
+        mMainThreadRetireQueue.reserve(kRetireQueueCapacity);
+        mMainThreadRetireExecutors.reserve(kRetireQueueCapacity);
     }
 
     mReaperThread = std::thread([this] { ReaperLoop(); });
@@ -1518,9 +1516,38 @@ void MultiPresetMixer::StopReaper()
     mReaperThread.join();
 
     // Destroy anything still queued now that the worker is gone.
-    std::lock_guard<std::mutex> lock(mRetireMutex);
-    mRetireQueue.clear();
-    mRetireExecutors.clear();
+    {
+        std::lock_guard<std::mutex> lock(mRetireMutex);
+        mRetireQueue.clear();
+        mRetireExecutors.clear();
+    }
+    CollectRetiredMainThread();
+}
+
+void MultiPresetMixer::CollectRetiredMainThread()
+{
+    std::vector<std::unique_ptr<PresetInstance>> instances;
+    std::vector<SignalGraphExecutor> executors;
+    {
+        std::lock_guard<std::mutex> lock(mRetireMutex);
+        instances.reserve(mMainThreadRetireQueue.size());
+
+        for (auto& inst : mMainThreadRetireQueue)
+        {
+            instances.push_back(std::move(inst));
+        }
+
+        mMainThreadRetireQueue.clear(); // Keep capacity for audio-thread retirement.
+        executors.reserve(mMainThreadRetireExecutors.size());
+
+        for (auto& executor : mMainThreadRetireExecutors)
+        {
+            executors.push_back(std::move(executor));
+        }
+
+        mMainThreadRetireExecutors.clear();
+    }
+    // Hosted editor/plugin destruction is on the message thread, outside both locks.
 }
 
 void MultiPresetMixer::ReaperLoop()
@@ -1579,7 +1606,8 @@ void MultiPresetMixer::RetireInstance(std::unique_ptr<PresetInstance> inst)
     StartReaper();
     {
         std::lock_guard<std::mutex> lock(mRetireMutex);
-        mRetireQueue.push_back(std::move(inst));
+        auto& queue = inst->executor.AnyNodeRequiresMainThreadLoad() ? mMainThreadRetireQueue : mRetireQueue;
+        queue.push_back(std::move(inst));
     }
     mRetireCv.notify_one();
 }
@@ -1597,12 +1625,16 @@ bool MultiPresetMixer::TryRetireInstanceRealtime(std::unique_ptr<PresetInstance>
         return false;
     }
 
-    if (mRetireQueue.size() >= mRetireQueue.capacity())
+    // Re-evaluate after live graph/config edits too. This query only walks processors;
+    // it allocates nothing, and composites propagate their inner thread affinity.
+    auto& queue = inst->executor.AnyNodeRequiresMainThreadLoad() ? mMainThreadRetireQueue : mRetireQueue;
+
+    if (queue.size() >= queue.capacity())
     {
         return false;
     }
 
-    mRetireQueue.push_back(std::move(inst));
+    queue.push_back(std::move(inst));
     return true;
 }
 
@@ -1805,7 +1837,6 @@ void MultiPresetMixer::Prepare(double sampleRate, int maxBlockSize)
     // Tail spill windows follow the sample rate; the hold itself is resolved per swap from
     // whatever length the caller last set.
     mTailReleaseSamples = std::max(1, static_cast<int>(std::lround(kTailReleaseSeconds * sampleRate)));
-    mTailQuietSamples = std::max(1, static_cast<int>(std::lround(kTailQuietSeconds * sampleRate)));
 
     // Bring the reaper up before any swap can happen, so retiring never has to spawn a
     // thread while the DSP lock is held.
@@ -2105,7 +2136,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     // tailing instance gets its own copy, ramped to zero, so no new playing enters a chain
     // the player has already switched away from — only what is still circulating in it.
     const auto instanceInputs = [&](PresetInstance& inst) -> std::array<float*, 2> {
-        if (inst.phase != InstancePhase::Tailing)
+        if (!inst.tailInput)
         {
             return {mPreChainOutL.data(), mPreChainOutR.data()};
         }
@@ -2121,13 +2152,6 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         ComputePanGains(inst.cfg.pan, gL, gR);
         const float baseL = static_cast<float>(inst.cfg.mix) * gL;
         const float baseR = static_cast<float>(inst.cfg.mix) * gR;
-
-        if (inst.phase == InstancePhase::Tailing)
-        {
-            // Watched here rather than after the chain runs so it costs nothing on the
-            // ordinary path, and so it sees the same block that was just mixed.
-            inst.ObserveTailDecay(numSamples, kTailSilencePeak);
-        }
 
         if (inst.phase == InstancePhase::Active)
         {
@@ -2344,19 +2368,18 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             continue;
         }
 
-        if (inst->phase == InstancePhase::Tailing)
+        if (inst->tailInput)
         {
             inst->inputFadeSamplesRemaining = std::max(0, inst->inputFadeSamplesRemaining - numSamples);
+        }
+
+        if (inst->phase == InstancePhase::Tailing)
+        {
             inst->tailSamplesRemaining = std::max(0, inst->tailSamplesRemaining - numSamples);
 
-            // Gone quiet on its own: end it now on the declick ramp, which is inaudible at
-            // this level and hands the CPU back. Otherwise ride the hold out and release
-            // over a window long enough that cutting a still-ringing delay is not a chop.
-            if (mTailQuietSamples > 0 && inst->quietSamples >= mTailQuietSamples)
-            {
-                inst->BeginFadeOut(kPresetFadeSamples);
-            }
-            else if (inst->tailSamplesRemaining == 0)
+            // Output silence cannot prove a delay line is empty: repeats and predelays
+            // can be arbitrarily far apart. Keep state until the configured budget ends.
+            if (inst->tailSamplesRemaining == 0)
             {
                 inst->BeginFadeOut(mTailReleaseSamples);
             }

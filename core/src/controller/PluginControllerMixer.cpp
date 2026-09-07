@@ -217,9 +217,10 @@ bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, con
                                                        const std::string& name)
 {
     UpdatePresetSwapTailBudget();
+    mPresetMixer.PreparePresetSwap(preset, presetId, name);
 
     std::lock_guard<std::mutex> lock(mDSPMutex);
-    const bool replaced = mPresetMixer.ReplaceActivePresetInPlace(preset, presetId, name);
+    const bool replaced = mPresetMixer.CommitPresetReplacement(presetId);
 
     if (replaced)
     {
