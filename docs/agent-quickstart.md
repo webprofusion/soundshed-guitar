@@ -197,7 +197,12 @@ merging, and verification of both saved data and the audio path.
   it into the Standalone artefact, launches the app and asserts it booted clean.
   This is the only check that catches an import-cycle TDZ crash; `tsc` cannot see
   those. Run it for anything that moves code between modules.
-- Tests (Debug): cd core/build && ctest -C Debug --output-on-failure
+- Tests (Debug): cd core/build && ctest -C Debug -j 8 --output-on-failure
+  About a minute here. The slowest tests set the pace, so a test that renders seconds of
+  audio per case is worth trimming before it is added. If `MixerInstanceLockTests` fails,
+  rerun its exe alone first: its riff-trim check counts missed blocks and can trip under
+  `-j 8` load. NAM is built optimised even in Debug (`GUITARFX_OPTIMISE_NAM_IN_DEBUG`, see
+  docs/neural-amp-modeler-core-integration.md); unoptimised it made this run several times slower.
 - **Host validators:** `node tools/validate-plugins.mjs` runs pluginval at strictness 10
   on the VST3 (and the AU on macOS) and clap-validator on the CLAP, after
   `cmake --build juce/builds --config Release --target SoundshedGuitar_VST3 SoundshedGuitar_CLAP`.
@@ -240,7 +245,11 @@ merging, and verification of both saved data and the audio path.
   `uncrustify -c tools/uncrustify.cfg -l CPP --no-backup <files>` then
   `clang-format --style=file -i <files>`
 - C++ structure check: `node tools/check-cpp-file-sizes.js`
-- Skip the slow benchmarks: add `-LE benchmark`
+- Benchmarks (`NAMPerformanceBenchmark`, `ResourceLoadBenchmark`, `SignalChainThreadingBenchmark`,
+  `TransposeBenchmark`) print measurements and assert nothing about them, so ctest only
+  registers them when configured with `-DGUITARFX_TEST_BENCHMARKS=ON`; then `ctest -L benchmark`
+  runs them and `-LE benchmark` skips them. Or run an executable directly. Their numbers mean
+  something in Release, not Debug.
 - **Where audio-thread CPU goes:** `core/tests/SteadyStateProfiler.cpp` — build it
   `RelWithDebInfo` (it needs symbols) and run it from the repo root, which is where it
   looks for `resources/`:
@@ -250,7 +259,7 @@ merging, and verification of both saved data and the audio path.
   the chain: `light` (framework overhead only), `baseline` (all-DSP, no model files),
   `namconv`, or `applive` (the chain a real session runs — NAM, IR cab, room reverb,
   delay, doubler). `--callers-of malloc` is the one that turns "the heap is busy" into
-  the line that allocates. ctest runs it too, labelled `benchmark`, but only as a smoke
+  the line that allocates. ctest runs it too, unlabelled, but only as a smoke
   check of the sampler: one half-second pass per mode on the `baseline` chain, failing
   if a sampling pass captures nothing, with a 120 s timeout. What it prints there is
   not a profile.

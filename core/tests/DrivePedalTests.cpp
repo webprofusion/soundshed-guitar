@@ -99,6 +99,11 @@ void TestLoudnessMatchesBypass()
 
             for (double drive : {0.0, 0.5, 1.0})
             {
+                if (IsBoost(pedal, model) && drive == 1.0)
+                {
+                    continue; // nothing below reads the boost at full drive
+                }
+
                 auto effect = Make(pedal, model, {{"drive", drive}});
                 const double difference = KWeightedDb(Render(*effect, phrase)) - bypass;
                 worst = std::max(worst, std::fabs(IsBoost(pedal, model) && drive > 0.0 ? 0.0 : difference));
@@ -335,7 +340,7 @@ void TestMonoMatchesStereo()
         {
             auto stereo = Make(pedal, model, {{"mix", 0.7}});
             auto mono = Make(pedal, model, {{"mix", 0.7}});
-            const auto expected = Render(*stereo, phrase);
+            const auto expected = Render(*stereo, phrase, true);
             std::vector<float> input(phrase);
             std::vector<float> actual(phrase.size());
 
@@ -527,6 +532,7 @@ void PrintCalibration()
     }
 }
 
+/// `DrivePedalTests --cost` runs the checks, then times each model. Build it Release to read it.
 void ReportCost()
 {
     std::cout << "\nCost per 64-sample block at 48 kHz, mono (for information)" << std::endl;
@@ -579,7 +585,12 @@ int main(int argc, char** argv)
     TestSampleRates();
     TestNonFiniteRecovery();
     TestHalfBand();
-    ReportCost();
+
+    // Timings only, and meaningless in the Debug build ctest runs, so on request.
+    if (argc > 1 && std::string(argv[1]) == "--cost")
+    {
+        ReportCost();
+    }
 
     std::cout << "\n" << (gChecks - gFailures) << "/" << gChecks << " checks passed" << std::endl;
     return gFailures == 0 ? 0 : 1;

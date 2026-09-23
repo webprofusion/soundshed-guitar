@@ -25,6 +25,7 @@ else()
     option(GUITARFX_CORE_FETCH_DEPS "Fetch third-party dependencies automatically" OFF)
 endif()
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
+option(GUITARFX_OPTIMISE_NAM_IN_DEBUG "Build the fetched NAM core optimised in Debug too (off to step through it)" ON)
 option(GUITARFX_CORE_ENABLE_WASM_EFFECTS "Build the generic WASM effect host" ON)
 # Declares GUITARFX_CORE_SIMD_LEVEL (avx2/avx/sse2), the deprecated
 # GUITARFX_CORE_ENABLE_AVX2 shim, and guitarfx_apply_simd_arch_flags().
@@ -399,24 +400,9 @@ if(GUITARFX_CORE_FETCH_DEPS AND NOT TARGET NeuralAmpModelerCore AND NOT TARGET n
     endif()
 
     if(NOT TARGET NeuralAmpModelerCore AND NOT TARGET nam AND DEFINED NeuralAmpModelerCore_SOURCE_DIR)
-        file(GLOB_RECURSE NAM_SOURCES CONFIGURE_DEPENDS "${NeuralAmpModelerCore_SOURCE_DIR}/NAM/*.cpp")
-        add_library(NeuralAmpModelerCore STATIC ${NAM_SOURCES})
-        set_target_properties(NeuralAmpModelerCore PROPERTIES
-            POSITION_INDEPENDENT_CODE ON)
-        guitarfx_enforce_nam_a2_fast(NeuralAmpModelerCore)
-        guitarfx_disable_linux_gnu_unique(NeuralAmpModelerCore)
-        target_compile_features(NeuralAmpModelerCore PUBLIC cxx_std_17)
-        guitarfx_apply_release_optimizations(NeuralAmpModelerCore)
-        target_include_directories(NeuralAmpModelerCore PUBLIC
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/compat"
-            "${NeuralAmpModelerCore_SOURCE_DIR}"
-            "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/eigen")
-        if(TARGET nlohmann_json::nlohmann_json)
-            target_link_libraries(NeuralAmpModelerCore PUBLIC nlohmann_json::nlohmann_json)
-        else()
-            target_include_directories(NeuralAmpModelerCore PUBLIC
-                "${NeuralAmpModelerCore_SOURCE_DIR}/Dependencies/nlohmann")
-        endif()
+        # Its own directory scope, so its Debug build can be optimised; see the file.
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NeuralAmpModelerCore"
+                         "${CMAKE_CURRENT_BINARY_DIR}/NeuralAmpModelerCore")
     endif()
 endif()
 

@@ -68,6 +68,20 @@ struct PhraseNote
     double pickDecay = std::exp(-1.0 / (kPickSeconds * sampleRate));
     double muteDecay = std::exp(-1.0 / (kMuteSeconds * sampleRate));
 
+    // What the per-sample loop needs, worked out once: a test renders tens of millions of
+    // samples, and in Debug every sqrt, std::min and checked vector[] there is a call.
+    double stretch[kMaxHarmonics];
+
+    for (int k = 1; k <= kMaxHarmonics; ++k)
+    {
+        stretch[k - 1] = std::sqrt(1.0 + kInharmonicity * k * k);
+    }
+
+    const double ceiling = std::min(0.45 * sampleRate, 9000.0);
+    double* const phases = phase.data();
+    double* const amplitudes = amplitude.data();
+    const double* const decays = decay.data();
+
     std::size_t next = 0;
     const PhraseNote* current = nullptr;
     double noteTime = 0.0;
@@ -154,17 +168,17 @@ struct PhraseNote
 
         for (int k = 1; k <= kMaxHarmonics; ++k)
         {
-            const auto index = static_cast<std::size_t>(k - 1);
-            const double fk = k * f0 * std::sqrt(1.0 + kInharmonicity * k * k);
+            const int index = k - 1;
+            const double fk = k * f0 * stretch[index];
 
-            if (fk < std::min(0.45 * sampleRate, 9000.0))
+            if (fk < ceiling)
             {
-                phase[index] += fk / sampleRate;
-                phase[index] -= std::floor(phase[index]);
-                sample += amplitude[index] * std::sin(2.0 * kPi * phase[index]);
+                phases[index] += fk / sampleRate;
+                phases[index] -= std::floor(phases[index]);
+                sample += amplitudes[index] * std::sin(2.0 * kPi * phases[index]);
             }
 
-            amplitude[index] *= muting ? muteDecay : decay[index];
+            amplitudes[index] *= muting ? muteDecay : decays[index];
         }
 
         noise = noise * 1664525u + 1013904223u;

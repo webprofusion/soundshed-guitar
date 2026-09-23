@@ -40,7 +40,7 @@ In `core/CMakeLists.txt`:
 - Preferred: `NeuralAmpModelerCore`
 - Fallback: `nam`
 
-If upstream does not define `NeuralAmpModelerCore`, `core/CMakeLists.txt` creates a local static `NeuralAmpModelerCore` target from NAM `*.cpp` sources and sets include/link requirements.
+If upstream does not define `NeuralAmpModelerCore`, `core/CMakeLists.txt` creates a local static `NeuralAmpModelerCore` target from NAM `*.cpp` sources and sets include/link requirements. It does so in `core/cmake/NeuralAmpModelerCore/`, a directory scope of its own, so that Debug builds can compile NAM optimised (`/O2` without `/RTC1` on MSVC, `-O2` elsewhere) while the rest of the core stays unoptimised. Unoptimised Eigen ran a model load, prewarm and 8 blocks in 2.6 s against 72 ms optimised, with identical output, and made every Debug test and Debug app session that touches NAM crawl. Configure with `-DGUITARFX_OPTIMISE_NAM_IN_DEBUG=OFF` to step through NAM itself.
 
 `SoundshedGuitarCore` then links:
 

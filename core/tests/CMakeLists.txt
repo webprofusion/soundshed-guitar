@@ -96,6 +96,18 @@ endif()
 # invoke the executable directly (see GUITARFX_STRESS_* env vars in its header comment).
 option(GUITARFX_TEST_STRESS "Register the signal-chain mutation stress test with ctest" OFF)
 
+# The benchmarks print measurements and assert nothing about them, so under ctest they only
+# catch a crash, yet they were over three minutes of a Debug run (TransposeBenchmark alone about
+# three, and it leaves ~36 MB of WAVs under the build tree each time). They are always built;
+# this registers them, labelled `benchmark`, for `ctest -L benchmark`.
+set(GUITARFX_TEST_BENCHMARK_NAMES
+    NAMPerformanceBenchmark
+    ResourceLoadBenchmark
+    SignalChainThreadingBenchmark
+    TransposeBenchmark
+)
+option(GUITARFX_TEST_BENCHMARKS "Register the benchmarks with ctest" OFF)
+
 option(GUITARFX_TEST_EXTENDED_DSP "Build extended DSP diagnostic tests" OFF)
 if(GUITARFX_TEST_EXTENDED_DSP)
     list(APPEND TEST_SOURCES
@@ -167,9 +179,12 @@ foreach(test_source IN LISTS TEST_SOURCES)
     # Reuse core library's precompiled header
     target_precompile_headers(${test_name} REUSE_FROM SoundshedGuitarCore)
 
-    # The stress test is opt-in; everything else is registered normally.
+    # The stress test and the benchmarks are opt-in; everything else is registered normally.
     set(_register_test TRUE)
     if(test_name STREQUAL "SignalChainMutationStressTest" AND NOT GUITARFX_TEST_STRESS)
+        set(_register_test FALSE)
+    endif()
+    if(test_name IN_LIST GUITARFX_TEST_BENCHMARK_NAMES AND NOT GUITARFX_TEST_BENCHMARKS)
         set(_register_test FALSE)
     endif()
 
@@ -186,8 +201,10 @@ foreach(test_source IN LISTS TEST_SOURCES)
             add_test(NAME ${test_name} COMMAND ${test_name})
         endif()
 
-        # Label slow benchmarks so `ctest -LE benchmark` can skip them
-        if(test_name STREQUAL "NAMPerformanceBenchmark" OR test_name STREQUAL "DSPPerformanceTests" OR test_name STREQUAL "SignalChainThreadingBenchmark" OR test_name STREQUAL "SignalChainMutationStressTest" OR test_name STREQUAL "TransposeBenchmark" OR test_name STREQUAL "ResourceLoadBenchmark" OR test_name STREQUAL "SteadyStateProfiler")
+        # Label the slow opt-in runs so `ctest -LE benchmark` can skip them once registered. Not
+        # DSPPerformanceTests, whose five checks (stats, limiter ceiling) are real and take 0.1 s,
+        # nor SteadyStateProfiler, whose registered form is a quick smoke check.
+        if(test_name IN_LIST GUITARFX_TEST_BENCHMARK_NAMES OR test_name STREQUAL "SignalChainMutationStressTest")
             set_tests_properties(${test_name} PROPERTIES LABELS "benchmark")
         endif()
     endif()

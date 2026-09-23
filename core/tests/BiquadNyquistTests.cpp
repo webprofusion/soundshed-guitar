@@ -69,14 +69,15 @@ std::string RateLabel(double sampleRate)
     return out.str();
 }
 
-// Empty when the sample is finite and bounded, else what is wrong with it.
-std::string BadSample(float y, int index)
+// A test and a separate message: this runs on every sample, and in Debug even an empty
+// std::string allocates its iterator-debugging proxy.
+bool IsBadSample(float y)
 {
-    if (IsFinite(y) && std::abs(y) <= kMaxMagnitude)
-    {
-        return {};
-    }
+    return !(IsFinite(y) && std::abs(y) <= kMaxMagnitude);
+}
 
+std::string DescribeBadSample(float y, int index)
+{
     std::ostringstream out;
     out << "sample " << index << " is " << y;
     return out.str();
@@ -145,11 +146,11 @@ void TestNamAmpToneStack()
 
                 for (int i = 0; i < count; ++i)
                 {
-                    if (const auto bad = BadSample(filter.Process(noise.Next()), i); !bad.empty())
+                    if (const float y = filter.Process(noise.Next()); IsBadSample(y))
                     {
                         std::ostringstream what;
                         what << filterCase.name << " at " << (gainDb > 0.0 ? "+" : "") << gainDb << " dB, "
-                             << RateLabel(sampleRate) << ": " << bad;
+                             << RateLabel(sampleRate) << ": " << DescribeBadSample(y, i);
                         Fail(what.str());
                         break;
                     }
@@ -206,11 +207,11 @@ void RunEffect(const char* effectName, EffectProcessor& effect, const ParamSet& 
             {
                 const float y = outputs[ch][i];
 
-                if (const auto bad = BadSample(y, processed + i); !bad.empty())
+                if (IsBadSample(y))
                 {
                     std::ostringstream what;
                     what << effectName << " (" << paramsLabel << "), " << RateLabel(sampleRate) << ", channel " << ch
-                         << ": " << bad;
+                         << ": " << DescribeBadSample(y, processed + i);
                     Fail(what.str());
                     return;
                 }

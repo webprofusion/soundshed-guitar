@@ -125,18 +125,21 @@ inline std::unique_ptr<guitarfx::EffectProcessor> Make(const Pedal& pedal, std::
     return effect;
 }
 
-inline std::vector<float> Render(guitarfx::EffectProcessor& effect, const std::vector<float>& input)
+/// The left output of `input` fed to both channels. The right one is only rendered when
+/// `stereo` asks for it: the pedals skip a channel with no output, and each channel runs on its
+/// own state, so the left is the same either way at half the cost (8x oversampled, in Debug).
+inline std::vector<float> Render(guitarfx::EffectProcessor& effect, const std::vector<float>& input,
+                                 bool stereo = false)
 {
-    std::vector<float> left(input);
-    std::vector<float> right(input);
+    std::vector<float> in(input);
     std::vector<float> outLeft(input.size());
-    std::vector<float> outRight(input.size());
+    std::vector<float> outRight(stereo ? input.size() : 0);
 
     for (std::size_t start = 0; start < input.size(); start += kBlockSize)
     {
         const int count = static_cast<int>(std::min<std::size_t>(kBlockSize, input.size() - start));
-        float* inputs[2] = {left.data() + start, right.data() + start};
-        float* outputs[2] = {outLeft.data() + start, outRight.data() + start};
+        float* inputs[2] = {in.data() + start, in.data() + start};
+        float* outputs[2] = {outLeft.data() + start, stereo ? outRight.data() + start : nullptr};
         effect.Process(inputs, outputs, count);
     }
 

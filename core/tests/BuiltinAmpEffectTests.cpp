@@ -42,9 +42,8 @@ std::vector<float> Render(double sampleRate, double amplitude, double frequency,
     for (int start = 0; start < frames; start += blockSize)
     {
         const int count = std::min(blockSize, frames - start);
-        float* in[2] = {input.data() + start, input.data() + start};
-        float* out[2] = {output.data() + start, nullptr};
-        amp.Process(in, out, count);
+        // The left of a stereo render bit for bit (TestMonoPath), without running the right.
+        amp.ProcessMono(input.data() + start, output.data() + start, count);
     }
     return output;
 }
@@ -121,7 +120,7 @@ void TestGainRange()
     double previous = 0.0;
     for (int stages = 1; stages <= 4; ++stages)
     {
-        const double thd = DriveThd(1.0, stages);
+        const double thd = stages == 2 ? full : DriveThd(1.0, stages);
         std::cout << "  stages=" << stages << " THD " << 100.0 * thd << "%\n";
         Check(thd > previous, "each added preamp stage adds saturation");
         previous = thd;
@@ -187,9 +186,8 @@ std::vector<float> RenderVoicing(const Voicing& v, Signal signal, double level =
     for (int start = 0; start < frames; start += 256)
     {
         const int count = std::min(256, frames - start);
-        float* in[2] = {input.data() + start, input.data() + start};
-        float* out[2] = {output.data() + start, nullptr};
-        amp.Process(in, out, count);
+        // The left of a stereo render bit for bit (TestMonoPath), without running the right.
+        amp.ProcessMono(input.data() + start, output.data() + start, count);
     }
     return output;
 }
@@ -253,7 +251,7 @@ void TestLevelTracksGain()
 {
     for (const double voice : {0.0, 1.0})
     {
-        double reference = 0.0;
+        double atHalfGain[5] = {}; // by stage count
         for (const int stages : {1, 2, 4})
         {
             double lowest = 1.0e9, highest = -1.0e9;
@@ -262,9 +260,9 @@ void TestLevelTracksGain()
                 const double level = HeardLevel({gain, voice, 0.5, stages});
                 lowest = std::min(lowest, level);
                 highest = std::max(highest, level);
-                if (stages == 2 && gain == 0.5)
+                if (gain == 0.5)
                 {
-                    reference = level;
+                    atHalfGain[stages] = level;
                 }
             }
             std::cout << "Heard level span across gain, voice " << voice << ", " << stages
@@ -275,7 +273,7 @@ void TestLevelTracksGain()
         // Adding stages is also a distortion control, not a volume control.
         for (const int stages : {1, 4})
         {
-            Check(std::abs(HeardLevel({0.5, voice, 0.5, stages}) - reference) < 1.5,
+            Check(std::abs(atHalfGain[stages] - atHalfGain[2]) < 1.5,
                   "the stage count changes the distortion, not the loudness");
         }
     }

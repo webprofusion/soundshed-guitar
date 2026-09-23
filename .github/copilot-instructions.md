@@ -52,7 +52,7 @@
 
 ## Testing
 - From core/build (Debug only):
-	powershell: ctest -C Debug --output-on-failure
+	powershell: ctest -C Debug -j 8 --output-on-failure
 - Key suites are defined in core/tests/CMakeLists.txt; common targets include PresetDSPLoadingTests, PresetManagementWorkflowTests, ResourcePreviewWorkflowTests, and SignalGraphExecutorTests.
 - For UI-facing changes, a clean build/typecheck is not sufficient proof of correctness — layout/DOM regressions (e.g. insertBefore() against a node that moved parent) throw at runtime with no compile error. Verify against the live, backend-connected app: launch the Standalone build with WebView2's remote-debugging port and drive it via Chrome DevTools Protocol (browser-automation tools cannot see this native window). See tools/agent-ui-debug/README.md and docs/agent-quickstart.md ("Live UI Testing").
 
