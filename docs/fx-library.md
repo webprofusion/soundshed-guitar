@@ -337,6 +337,11 @@ follow the per-instance NAM quality above.
 ### IR Cabinet (`cab_ir`)
 Impulse response convolution for cabinet simulation.
 
+A preset's IRs load before its node is prepared (`SignalGraphExecutor::CreateProcessors`, then
+`Prepare`), while the effect has only the default rate and block size. So a load before the first
+`Prepare` only keeps the impulses, and `Prepare` builds the convolvers once, for the host. An IR
+loaded into a prepared node is built straight away. The Convolution Reverb works the same way.
+
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `mix` | 0.0–1.0 | 1.0 | — |

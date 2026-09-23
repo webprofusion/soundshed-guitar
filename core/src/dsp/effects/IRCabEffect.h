@@ -35,6 +35,7 @@ class IRCabEffect : public EffectProcessor
     {
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
+        mPrepared = true;
         mResourceTransitionSamplesTotal = std::max(1, static_cast<int>(std::round(mSampleRate * 0.03))); // 30 ms
 
         // CRITICAL: Clear filter state BEFORE updating coefficients to prevent transients
@@ -875,7 +876,7 @@ class IRCabEffect : public EffectProcessor
         mConvolverBR.Reset();
         ApplyPendingQuality();
         ApplyPendingRebuildSettings();
-        const bool loaded = InitializeConvolverA();
+        const bool loaded = !mPrepared || InitializeConvolverA(); // else Prepare() builds it (see mPrepared)
 
         if (!loaded)
         {
@@ -946,7 +947,7 @@ class IRCabEffect : public EffectProcessor
             {
                 mIRPath = paths[slotAIdx];
                 ApplyPendingQuality();
-                loadedA = InitializeConvolverA();
+                loadedA = !mPrepared || InitializeConvolverA(); // else Prepare() builds it (see mPrepared)
 
                 if (!loadedA)
                 {
@@ -992,7 +993,7 @@ class IRCabEffect : public EffectProcessor
                     mIRBlend = std::clamp(*refs[slotBIdx].parameterValue, 0.0, 1.0);
                 }
 
-                loadedB = InitializeConvolverB();
+                loadedB = !mPrepared || InitializeConvolverB();
 
                 if (!loadedB)
                 {
@@ -1919,6 +1920,10 @@ class IRCabEffect : public EffectProcessor
     std::atomic<int> mPendingLowLatency{-1};
     // Counts builds of the live convolvers, so a deferred rebuild taken before one is dropped.
     std::uint64_t mBuildGeneration = 0;
+    // Until the first Prepare() a build would be at the default rate and block size, and
+    // Prepare() would throw it away and build again at the host's. An executor loads a new node's
+    // IRs before it prepares it, so before then a load only keeps the impulses.
+    bool mPrepared = false;
     bool mHasLoadedResource = false;
     bool mPrevHasSlotA = false;
     bool mPrevHasSlotB = false;

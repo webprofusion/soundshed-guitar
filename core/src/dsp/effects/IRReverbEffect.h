@@ -31,6 +31,7 @@ class IRReverbEffect : public EffectProcessor
     {
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
+        mPrepared = true;
 
         mInputBufferL.resize(static_cast<std::size_t>(maxBlockSize));
         mInputBufferR.resize(static_cast<std::size_t>(maxBlockSize));
@@ -342,6 +343,12 @@ class IRReverbEffect : public EffectProcessor
 
         mIRPath = resourcePath;
         ApplyPendingRebuildSettings();
+
+        // Prepare() builds them (see mPrepared).
+        if (!mPrepared)
+        {
+            return true;
+        }
 
         if (!InitializeConvolvers())
         {
@@ -904,6 +911,10 @@ class IRReverbEffect : public EffectProcessor
     std::atomic<int> mPendingLowLatency{-1};
     // Counts builds of the live convolvers, so a deferred rebuild taken before one is dropped.
     std::uint64_t mBuildGeneration = 0;
+    // Until the first Prepare() a build would be at the default rate and block size, and
+    // Prepare() would throw it away and build again at the host's. An executor loads a new node's
+    // IR before it prepares it, so before then LoadResource() only keeps the impulses.
+    bool mPrepared = false;
     std::atomic<float> mTone{1.0f};
     std::atomic<float> mToneCoef{1.0f};
     float mToneStateL = 0.0f;
