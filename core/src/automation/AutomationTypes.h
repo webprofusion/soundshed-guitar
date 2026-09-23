@@ -7,10 +7,13 @@
  * grammar used to address any automatable parameter via a generic string.
  */
 
+#include "dsp/ParamTaper.h"
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -73,6 +76,35 @@ struct KeyboardMap
     float value = 0.0f; ///< Normalized 0..1 for SetValue; ignored for Trigger
 };
 
+/// A `node.<effectType>.<paramId>` address, resolved on the message thread when a slot is given it
+/// (AutomationSlotTable::BindNodeAddress). MIDI and DAW automation apply slots on the audio
+/// thread, so everything that needs parsing or a registry lookup is worked out here, once.
+struct NodeAddressBinding
+{
+    /// The canonical type (EffectRegistry::Resolve), whichever form the address names it in:
+    /// nodes are matched by it, so an alias finds a node stored under the UUID and vice versa.
+    std::string effectType;
+    std::string paramId;
+
+    /// "bypassed", "bypass" or "enabled": switches every node of the type rather than setting a
+    /// parameter. For "enabled" a high value enables, for the others it bypasses.
+    bool isBypass = false;
+    bool highMeansEnabled = false;
+
+    /// The range a slot's 0..1 value maps onto, snapped to `step` (or to a whole index for an
+    /// enum) along `taper`. Without one, the parameter is one its effect does not declare, and
+    /// it gets the 0..1 value as it is.
+    bool hasRange = false;
+    double minValue = 0.0;
+    double maxValue = 1.0;
+    double step = 0.0;
+    bool isEnum = false;
+    ParamTaper taper = ParamTaper::Linear;
+    /// The effect declares the range, so the node driven may narrow it with its own settings
+    /// (EffectProcessor::GetAutomationRange), as a pitch shift does.
+    bool nodeMayNarrowRange = false;
+};
+
 /// A single automation slot (default or custom).
 struct AutomationSlot
 {
@@ -85,6 +117,11 @@ struct AutomationSlot
 
     std::optional<MidiControlMap> midiMap;
     std::vector<KeyboardMap> keyMaps;
+
+    /// `address` resolved, when it is a node.* one; null otherwise. Replaced whenever the address
+    /// is, on the message thread under mDSPMutex. Shared and never changed once made, so a
+    /// notification of what the slot changed can hold it past the slot's own lifetime.
+    std::shared_ptr<const NodeAddressBinding> nodeBinding;
 
     // Runtime state (audio-thread accessible via atomics). Write `value` through StoreValue()
     // or SetValue(), never directly, so a DAW parameter's copy of it stays current.

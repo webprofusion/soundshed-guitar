@@ -5,8 +5,10 @@
  */
 
 #include "automation/AutomationSlotTable.h"
+#include "dsp/EffectProcessor.h"
 #include "dsp/MultiPresetMixer.h"
 #include "dsp/EffectRegistry.h"
+#include "dsp/SignalGraphExecutor.h"
 #include "presets/PresetTypes.h"
 
 #include <algorithm>
@@ -16,16 +18,8 @@ namespace guitarfx
 {
 namespace
 {
-bool IsBypassNodeAddress(const std::string& address)
+bool IsBypassParam(const std::string& paramId)
 {
-    std::string effectType;
-    std::string paramId;
-
-    if (!ParamRegistry::ParseNodeAddress(address, effectType, paramId))
-    {
-        return false;
-    }
-
     return paramId == "bypassed" || paramId == "bypass" || paramId == "enabled";
 }
 
@@ -76,8 +70,9 @@ bool ListensTo(const MidiControlMap& map, MidiControlMap::EventType eventType, i
 AutomationSlot::AutomationSlot(const AutomationSlot& other)
     : slotId(other.slotId), label(other.label), address(other.address), nodeSelector(other.nodeSelector),
       isDefault(other.isDefault), presetId(other.presetId), midiMap(other.midiMap), keyMaps(other.keyMaps),
-      value(other.value.load()), lastSource(other.lastSource.load()), lastNormalized(other.lastNormalized.load()),
-      lastToggleGate(other.lastToggleGate.load()), pendingApply(other.pendingApply.load())
+      nodeBinding(other.nodeBinding), value(other.value.load()), lastSource(other.lastSource.load()),
+      lastNormalized(other.lastNormalized.load()), lastToggleGate(other.lastToggleGate.load()),
+      pendingApply(other.pendingApply.load())
 {
 }
 
@@ -93,6 +88,7 @@ AutomationSlot& AutomationSlot::operator=(const AutomationSlot& other)
         presetId = other.presetId;
         midiMap = other.midiMap;
         keyMaps = other.keyMaps;
+        nodeBinding = other.nodeBinding;
         StoreValue(other.value.load());
         lastSource.store(other.lastSource.load());
         lastNormalized.store(other.lastNormalized.load());
@@ -497,6 +493,7 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
         if (address)
         {
             newSlot.address = *address;
+            newSlot.nodeBinding = BindNodeAddress(*address);
         }
 
         if (nodeSelector)
@@ -527,6 +524,7 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
     if (address)
     {
         slot->address = *address;
+        slot->nodeBinding = BindNodeAddress(*address);
     }
 
     if (nodeSelector)
@@ -625,6 +623,7 @@ bool AutomationSlotTable::SetPresetSlot(const std::string& slotId, const std::st
     if (address)
     {
         slot->address = *address;
+        slot->nodeBinding = BindNodeAddress(*address);
     }
 
     if (midiMap)
@@ -683,71 +682,15 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
         return false; // Unmapped slot
     }
 
-    const auto* entry = mRegistry.Find(slot.address);
-
-    // Node.* address — lazy resolution via the single prefix handler
-    if (ParamRegistry::IsNodeAddress(slot.address))
+    if (slot.nodeBinding)
     {
-        std::string effectType, paramId;
-
-        if (!ParamRegistry::ParseNodeAddress(slot.address, effectType, paramId))
-        {
-            return false;
-        }
-
-        // Resolve alias to canonical UUID via EffectRegistry
-        if (mEffectRegistry)
-        {
-            effectType = mEffectRegistry->Resolve(effectType);
-        }
-
-        if (mMixer)
-        {
-            if (IsBypassNodeAddress(slot.address))
-            {
-                const bool enabled = (paramId == "enabled") ? (slot.value.load() >= 0.5f) : (slot.value.load() < 0.5f);
-                const bool ok = mMixer->SetNodeEnabledByType(effectType, enabled);
-
-                if (ok && mOnNodeBypassApplied)
-                {
-                    mOnNodeBypassApplied(effectType, enabled);
-                }
-
-                return ok;
-            }
-
-            // Every source hands a slot a 0..1 value, but an effect takes its parameters in
-            // native units. A parameter the effect does not declare has no range to map onto,
-            // so it keeps the 0..1 value. The node may narrow the declared range with its own
-            // settings, as a pitch shift does to bound an expression pedal's sweep; the declared
-            // taper then applies across the narrowed range.
-            double native = static_cast<double>(slot.value.load());
-
-            if (const auto* def = mEffectRegistry ? mEffectRegistry->FindParameter(effectType, paramId) : nullptr)
-            {
-                ParamRange range{def->minValue, def->maxValue, def->step};
-                mMixer->GetNodeAutomationRangeByType(effectType, paramId, range);
-                native = DenormalizeNodeParam(range, !def->labels.empty(), native, def->taper);
-            }
-            else if (IsBoundaryGainNodeParam(effectType, paramId))
-            {
-                native = DenormalizeNodeParam({kBoundaryGainMinDb, kBoundaryGainMaxDb, 0.0}, false, native);
-            }
-
-            const bool ok = mMixer->SetNodeParamByType(effectType, paramId, native);
-
-            if (ok && mOnNodeParamApplied)
-            {
-                mOnNodeParamApplied(effectType, paramId, native);
-            }
-
-            return ok;
-        }
-
-        return false;
+        return ApplyNodeSlotLocked(slot);
     }
 
-    // Static registry entry (global.* / setlist.*)
+    // Static registry entry (global.* / setlist.*). A node.* address with no binding did not
+    // parse, and the registry holds none.
+    const auto* entry = mRegistry.Find(slot.address);
+
     if (!entry)
     {
         return false;
@@ -790,6 +733,157 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
     }
 
     return false;
+}
+
+bool AutomationSlotTable::ApplyNodeSlotLocked(AutomationSlot& slot)
+{
+    if (!mMixer)
+    {
+        return false;
+    }
+
+    const NodeAddressBinding& binding = *slot.nodeBinding;
+    const float normalized = slot.value.load();
+
+    if (binding.isBypass)
+    {
+        const bool enabled = binding.highMeansEnabled ? normalized >= 0.5f : normalized < 0.5f;
+
+        if (!mMixer->SetAutomatedNodesEnabled(binding.effectType, enabled))
+        {
+            return false;
+        }
+
+        mNodeChanges.Post(slot.nodeBinding, nullptr, enabled ? 1.0 : 0.0);
+        return true;
+    }
+
+    const auto target = mMixer->FindAutomationTarget(binding.effectType);
+
+    if (!target)
+    {
+        return false;
+    }
+
+    // Every source hands a slot a 0..1 value, but an effect takes its parameters in native
+    // units. A parameter the effect does not declare has no range to map onto, so it keeps the
+    // 0..1 value. The node may narrow the declared range with its own settings, as a pitch shift
+    // does to bound an expression pedal's sweep; the declared taper then applies across the
+    // narrowed range.
+    double native = static_cast<double>(normalized);
+
+    if (binding.hasRange)
+    {
+        ParamRange range{binding.minValue, binding.maxValue, binding.step};
+
+        if (binding.nodeMayNarrowRange && target.processor)
+        {
+            (void)target.processor->GetAutomationRange(binding.paramId, range); // Leaves it alone if not
+        }
+
+        native = DenormalizeNodeParam(range, binding.isEnum, native, binding.taper);
+    }
+
+    SignalGraphExecutor::SetAutomationTargetParam(target, binding.paramId, native);
+    mNodeChanges.Post(slot.nodeBinding, target.id, native);
+    return true;
+}
+
+// ── node.* address binding ───────────────────────────────────────────────
+
+const EffectRegistry& AutomationSlotTable::TypeRegistry() const
+{
+    // Without one of its own, the table resolves types as the executor matches them.
+    return mEffectRegistry ? *mEffectRegistry : EffectRegistry::Instance();
+}
+
+void AutomationSlotTable::SetEffectRegistry(const EffectRegistry* registry)
+{
+    mEffectRegistry = registry;
+
+    for (auto& slot : mSlots)
+    {
+        slot.nodeBinding = BindNodeAddress(slot.address);
+    }
+
+    mNodeBindingsGeneration = TypeRegistry().GetGeneration();
+}
+
+std::shared_ptr<const NodeAddressBinding> AutomationSlotTable::BindNodeAddress(const std::string& address) const
+{
+    std::string effectType;
+    std::string paramId;
+
+    if (!ParamRegistry::ParseNodeAddress(address, effectType, paramId))
+    {
+        return nullptr;
+    }
+
+    auto binding = std::make_shared<NodeAddressBinding>();
+    binding->effectType = TypeRegistry().Resolve(effectType);
+    binding->paramId = paramId;
+
+    if (IsBypassParam(paramId))
+    {
+        binding->isBypass = true;
+        binding->highMeansEnabled = paramId == "enabled";
+        return binding;
+    }
+
+    if (const auto* def = mEffectRegistry ? mEffectRegistry->FindParameter(binding->effectType, paramId) : nullptr)
+    {
+        binding->hasRange = true;
+        binding->minValue = def->minValue;
+        binding->maxValue = def->maxValue;
+        binding->step = def->step;
+        binding->isEnum = !def->labels.empty();
+        binding->taper = def->taper;
+        binding->nodeMayNarrowRange = true;
+    }
+    else if (IsBoundaryGainNodeParam(binding->effectType, paramId))
+    {
+        binding->hasRange = true;
+        binding->minValue = kBoundaryGainMinDb;
+        binding->maxValue = kBoundaryGainMaxDb;
+    }
+
+    return binding;
+}
+
+bool AutomationSlotTable::NodeBindingsStale() const
+{
+    return TypeRegistry().GetGeneration() != mNodeBindingsGeneration;
+}
+
+AutomationSlotTable::NodeBindings AutomationSlotTable::ResolveNodeBindings() const
+{
+    NodeBindings bindings;
+    bindings.registryGeneration = TypeRegistry().GetGeneration();
+    bindings.bySlot.reserve(mSlots.size());
+
+    for (const auto& slot : mSlots)
+    {
+        bindings.bySlot.push_back(BindNodeAddress(slot.address));
+    }
+
+    return bindings;
+}
+
+void AutomationSlotTable::CommitNodeBindings(NodeBindings& bindings)
+{
+    // The message thread is the only one that changes the slots, so this only guards against
+    // a caller that changed them in between.
+    if (bindings.bySlot.size() != mSlots.size())
+    {
+        return;
+    }
+
+    for (std::size_t i = 0; i < mSlots.size(); ++i)
+    {
+        mSlots[i].nodeBinding.swap(bindings.bySlot[i]);
+    }
+
+    mNodeBindingsGeneration = bindings.registryGeneration;
 }
 
 std::string AutomationSlotTable::ResolveNodeAddress(const std::string& address, const std::string& nodeSelector) const
@@ -939,7 +1033,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
 
         float normalized = 0.0f;
-        const bool isBypassAddress = IsBypassNodeAddress(slot.address);
+        const bool isBypassAddress = slot.nodeBinding && slot.nodeBinding->isBypass;
 
         switch (mm.mode)
         {

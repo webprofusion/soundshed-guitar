@@ -333,11 +333,14 @@ class MultiPresetMixer
     [[nodiscard]] std::optional<std::pair<std::string, std::string>> FindFirstEnabledNodeOfType(
         const std::string& effectType) const;
 
-    /// Narrows `range` to what the node SetNodeParamByType would drive allows for `paramId`,
-    /// when that node's own settings constrain it (EffectProcessor::GetAutomationRange).
-    /// Returns whether they did; `range` is left alone otherwise.
-    bool GetNodeAutomationRangeByType(const std::string& effectType, const std::string& paramId,
-                                      ParamRange& range) const;
+    /// The node by-type automation drives: FindFirstEnabledNodeOfType's choice, for a type
+    /// already resolved (EffectRegistry::Resolve). Allocates nothing, since MIDI and DAW
+    /// automation apply on the audio thread. Under the DSP lock, and good for as long as it is
+    /// held; set its parameter with SignalGraphExecutor::SetAutomationTargetParam.
+    [[nodiscard]] SignalGraphExecutor::AutomationTarget FindAutomationTarget(const std::string& canonicalType);
+
+    /// SetNodeEnabledByType for a type already resolved, without allocating.
+    bool SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled);
 
     /// A node's identity plus a snapshot of some of its parameters.
     struct NodeReadout

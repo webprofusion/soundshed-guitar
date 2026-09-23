@@ -215,6 +215,25 @@ void PluginController::SyncAutomationActivePreset()
     }
 }
 
+void PluginController::RefreshAutomationBindings()
+{
+    // A node.* slot keeps the range its effect type declared when the address was set, so the
+    // audio thread has nothing to look up. Composites register their types as they are saved
+    // and removed, which can change that range; the check is an atomic load when nothing has.
+    if (!mAutomationSlots.NodeBindingsStale())
+    {
+        return;
+    }
+
+    auto bindings = mAutomationSlots.ResolveNodeBindings();
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mAutomationSlots.CommitNodeBindings(bindings);
+    }
+
+    // `bindings` now holds the replaced ones, released here, after the lock.
+}
+
 void PluginController::SyncControllerDisplay()
 {
     // Every tick, but the feed compares the name with the one it last queued, so only a

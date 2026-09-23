@@ -18,6 +18,8 @@ void EffectRegistry::Register(const std::string& type, const EffectTypeInfo& inf
     {
         mAliases[alias] = type;
     }
+
+    mGeneration.fetch_add(1, std::memory_order_acq_rel);
 }
 
 void EffectRegistry::Unregister(const std::string& type)
@@ -37,6 +39,7 @@ void EffectRegistry::Unregister(const std::string& type)
 
     mTypeInfo.erase(type);
     mFactories.erase(type);
+    mGeneration.fetch_add(1, std::memory_order_acq_rel);
 }
 
 std::string EffectRegistry::Resolve(const std::string& type) const

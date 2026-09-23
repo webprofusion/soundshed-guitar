@@ -128,6 +128,35 @@ class SignalGraphExecutor
     [[nodiscard]] EffectProcessor* GetNodeProcessor(const std::string& nodeId);
     [[nodiscard]] const EffectProcessor* GetNodeProcessor(const std::string& nodeId) const;
 
+    // By-type automation. MIDI and DAW automation apply on the audio thread, under the DSP lock,
+    // so none of these allocate. Each takes a type already resolved (EffectRegistry::Resolve).
+
+    /// A node automation drives, as FindAutomationTarget found it. Valid until the graph changes.
+    struct AutomationTarget
+    {
+        EffectProcessor* processor = nullptr;
+        /// This executor's own copy of the node.
+        GraphNode* node = nullptr;
+        /// The node's id, shared so that a notification naming the node can outlive the graph.
+        const std::shared_ptr<const std::string>* id = nullptr;
+
+        explicit operator bool() const
+        {
+            return id != nullptr;
+        }
+    };
+
+    /// The first enabled node of the type, in execution order: FindNodesOfType(type, false).front().
+    [[nodiscard]] AutomationTarget FindAutomationTarget(const std::string& canonicalType);
+
+    /// SetNodeParam on a found target. The executor's copy of the graph only takes the value for a
+    /// key the node already holds, since inserting one allocates. Nothing reads a value back from
+    /// that copy except the Input and Output nodes' gain, which SetGraph makes sure they hold.
+    static void SetAutomationTargetParam(const AutomationTarget& target, const std::string& key, double value);
+
+    /// SetNodeEnabled on every node of the type, enabled or not. Returns whether there was one.
+    bool SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled);
+
     // Queries
     [[nodiscard]] std::string FindFirstNodeOfType(const std::string& type) const;
     [[nodiscard]] std::vector<std::string> FindNodesOfType(const std::string& type, bool includeDisabled = true) const;
@@ -225,6 +254,10 @@ class SignalGraphExecutor
         std::string id;
         std::string type;
         std::string category;
+        /// `type` resolved from any alias, for by-type automation to compare without resolving.
+        std::string canonicalType;
+        /// `id` again, shared, for AutomationTarget.
+        std::shared_ptr<const std::string> sharedId;
         std::unique_ptr<EffectProcessor> processor;
         std::vector<float> bufferLeft;
         std::vector<float> bufferRight;
@@ -346,6 +379,16 @@ class SignalGraphExecutor
     PlannedNode* mInputPlanNode = nullptr;
     /// Output candidates in id order; Process() takes the first one that ran this block.
     std::vector<PlannedNode*> mOutputPlanNodes;
+
+    /// Every node in execution order with its entry in mGraph, for by-type automation, which
+    /// otherwise found them with a map lookup by id and resolved each one's type as it went.
+    struct AutomationNode
+    {
+        NodeState* state = nullptr;
+        GraphNode* node = nullptr;
+    };
+
+    std::vector<AutomationNode> mAutomationNodes;
     /// Processors whose type declares requiresTempo, resolved once per plan build.
     /// SetTempo() runs on the audio thread every block, and asking the registry which
     /// nodes are tempo-aware there meant a string copy and an EffectTypeInfo copy — a

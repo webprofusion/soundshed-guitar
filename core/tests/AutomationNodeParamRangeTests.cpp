@@ -210,10 +210,18 @@ int main()
     table.SetMixer(&mixer);
     table.SetEffectRegistry(&EffectRegistry::Instance());
 
-    // The value handed on to the UI (signalPathNodeParamUpdated) must be native too.
-    std::optional<double> notifiedValue;
-    table.SetOnNodeParamApplied(
-        [&notifiedValue](const std::string&, const std::string&, double value) { notifiedValue = value; });
+    // The value handed on to the UI (signalPathNodeParamUpdated) must be native too: the latest
+    // change to `paramId` the message thread would take.
+    const auto takeNotified = [&table](const std::string& paramId) {
+        std::optional<double> latest;
+        table.TakeNodeChanges([&](NodeChangeQueue::Change&& change) {
+            if (change.binding->paramId == paramId)
+            {
+                latest = change.value;
+            }
+        });
+        return latest;
+    };
 
     MidiControlMap midiMap;
     midiMap.eventType = MidiControlMap::EventType::CC;
@@ -235,7 +243,8 @@ int main()
 
     table.HandleMidi(MidiEvent{0xB0, 7, 127, 0});
     allPassed &= ExpectGainDb(mixer, gainDb->maxValue, "CC 127 should reach the top of the range");
-    allPassed &= Expect(notifiedValue.has_value() && std::abs(*notifiedValue - gainDb->maxValue) < kToleranceDb,
+    const auto gainNotified = takeNotified("gainDb");
+    allPassed &= Expect(gainNotified.has_value() && std::abs(*gainNotified - gainDb->maxValue) < kToleranceDb,
                         "The UI notification should carry the native value");
 
     table.HandleMidi(MidiEvent{0xB0, 7, 64, 0});
@@ -262,7 +271,8 @@ int main()
 
     table.HandleMidi(MidiEvent{0xB0, 11, 127, 0});
     allPassed &= ExpectSemitones(mixer, kPitchRangeMax, "Toe down should reach Range Max");
-    allPassed &= Expect(notifiedValue.has_value() && std::abs(*notifiedValue - kPitchRangeMax) < kToleranceDb,
+    const auto pitchNotified = takeNotified("semitones");
+    allPassed &= Expect(pitchNotified.has_value() && std::abs(*pitchNotified - kPitchRangeMax) < kToleranceDb,
                         "The pitch notification should carry semitones");
 
     table.HandleMidi(MidiEvent{0xB0, 11, 64, 0});
@@ -308,7 +318,8 @@ int main()
 
     table.HandleMidi(MidiEvent{0xB0, 12, 64, 0});
     allPassed &= ExpectParam(mixer, "ring_mod", "frequency", hzAt(64.0 / 127.0), "CC 64 should land mid-way by ratio");
-    allPassed &= Expect(notifiedValue.has_value() && std::abs(*notifiedValue - hzAt(64.0 / 127.0)) < kToleranceDb,
+    const auto ringNotified = takeNotified("frequency");
+    allPassed &= Expect(ringNotified.has_value() && std::abs(*ringNotified - hzAt(64.0 / 127.0)) < kToleranceDb,
                         "The frequency notification should carry Hz");
 
     table.ApplyAutomationLocked("custom.ring", 0.5f, AutomationSource::DAW);

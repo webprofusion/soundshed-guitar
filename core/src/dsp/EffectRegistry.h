@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -128,9 +130,16 @@ class EffectRegistry
     [[nodiscard]] std::optional<EffectTypeInfo> GetTypeInfo(const std::string& type) const;
 
     /// The parameter `type` declares under `paramId`, or nullptr. Points into the registry
-    /// rather than copying, so it allocates nothing and automation can call it on the audio
-    /// thread. `type` may be a canonical id or an alias.
+    /// rather than copying, so it allocates nothing. `type` may be a canonical id or an alias.
     [[nodiscard]] const ParameterDef* FindParameter(const std::string& type, const std::string& paramId) const;
+
+    /// Counts Register and Unregister calls. Types come and go at run time (a composite is
+    /// registered when it is saved), so anything that keeps what it looked up here, such as an
+    /// automation slot's resolved address, compares this to know when to look again.
+    [[nodiscard]] std::uint64_t GetGeneration() const
+    {
+        return mGeneration.load(std::memory_order_acquire);
+    }
 
   private:
     EffectRegistry() = default;
@@ -139,6 +148,7 @@ class EffectRegistry
     std::map<std::string, EffectFactory> mFactories;
     // Maps legacy/alias IDs → canonical type ID
     std::map<std::string, std::string> mAliases;
+    std::atomic<std::uint64_t> mGeneration{0};
 };
 
 /**

@@ -493,6 +493,9 @@ class PluginController
     void ReplaceAutomationSlots(const nlohmann::json& automation, const nlohmann::json* values);
     /// Hands the automation table the active preset id when it has changed (idle tick).
     void SyncAutomationActivePreset();
+    /// Re-resolves the slots' node.* addresses when effect types have come or gone since (idle
+    /// tick). Built off the DSP lock and swapped in under it.
+    void RefreshAutomationBindings();
     /// Hands the controller-display feed the active preset's name (idle tick).
     void SyncControllerDisplay();
     void HandleGetThemeRequest();
@@ -913,17 +916,6 @@ class PluginController
 
     // Whether the editor UI is on screen. Set from the UI's "uiVisibility" message; gates
     // the periodic telemetry feeds, which exist only to drive visible meters.
-
-    // Deferred node-param notifications (populated on audio/UI thread, drained in OnIdle)
-    struct PendingNodeParamNotify
-    {
-        std::string nodeId;
-        std::string paramKey;
-        double value = 0.0;
-    };
-
-    std::mutex mPendingNodeParamMutex;
-    std::vector<PendingNodeParamNotify> mPendingNodeParamNotifies;
 
     // App settings
     nlohmann::json mAppSettings = nlohmann::json::object();

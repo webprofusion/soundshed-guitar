@@ -652,8 +652,24 @@ std::vector<MultiPresetMixer::NodeReadout> MultiPresetMixer::ReadNodeParamsForTy
 
 bool MultiPresetMixer::SetNodeEnabledByType(const std::string& effectType, bool enabled)
 {
-    bool updated = false;
+    return SetAutomatedNodesEnabled(EffectRegistry::Instance().Resolve(effectType), enabled);
+}
 
+bool MultiPresetMixer::SetNodeParamByType(const std::string& effectType, const std::string& paramId, double value)
+{
+    const auto target = FindAutomationTarget(EffectRegistry::Instance().Resolve(effectType));
+
+    if (!target)
+    {
+        return false;
+    }
+
+    SignalGraphExecutor::SetAutomationTargetParam(target, paramId, value);
+    return true;
+}
+
+SignalGraphExecutor::AutomationTarget MultiPresetMixer::FindAutomationTarget(const std::string& canonicalType)
+{
     for (const auto& inst : mVoices.Instances())
     {
         if (inst->IsRetiring())
@@ -661,43 +677,28 @@ bool MultiPresetMixer::SetNodeEnabledByType(const std::string& effectType, bool 
             continue;
         }
 
-        const auto nodeIds = inst->executor.FindNodesOfType(effectType, true);
-
-        for (const auto& nodeId : nodeIds)
+        if (const auto target = inst->executor.FindAutomationTarget(canonicalType))
         {
-            SetNodeEnabled(inst->cfg.id, nodeId, enabled);
-            updated = true;
+            return target;
+        }
+    }
+
+    return {};
+}
+
+bool MultiPresetMixer::SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled)
+{
+    bool updated = false;
+
+    for (const auto& inst : mVoices.Instances())
+    {
+        if (!inst->IsRetiring())
+        {
+            updated = inst->executor.SetAutomatedNodesEnabled(canonicalType, enabled) || updated;
         }
     }
 
     return updated;
-}
-
-bool MultiPresetMixer::SetNodeParamByType(const std::string& effectType, const std::string& paramId, double value)
-{
-    const auto found = FindFirstEnabledNodeOfType(effectType);
-
-    if (!found)
-    {
-        return false;
-    }
-
-    SetNodeParam(found->first, found->second, paramId, value);
-    return true;
-}
-
-bool MultiPresetMixer::GetNodeAutomationRangeByType(const std::string& effectType, const std::string& paramId,
-                                                    ParamRange& range) const
-{
-    const auto found = FindFirstEnabledNodeOfType(effectType);
-
-    if (!found)
-    {
-        return false;
-    }
-
-    const auto* processor = GetNodeProcessor(found->first, found->second);
-    return processor && processor->GetAutomationRange(paramId, range);
 }
 
 std::string MultiPresetMixer::GetNodeConfig(const std::string& presetId, const std::string& nodeId,

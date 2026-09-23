@@ -292,6 +292,11 @@ std::vector<AutomationSlot> AutomationSlotTable::BuildSlotsFromJson(const nlohma
         }
     }
 
+    for (auto& slot : slots)
+    {
+        slot.nodeBinding = BindNodeAddress(slot.address);
+    }
+
     return slots;
 }
 

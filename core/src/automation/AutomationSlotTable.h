@@ -14,14 +14,21 @@
  * A host reads its parameters on any thread, the audio thread included, so it never
  * walks the slots: each DAW parameter reads a cell of its own that mirrors its slot's
  * value (BindDawParameters, GetDawParameterValue).
+ *
+ * Applying a node.* slot on the audio thread allocates and locks nothing. The address is
+ * resolved when it is set (BindNodeAddress), the node it drives is found without allocating
+ * (MultiPresetMixer::FindAutomationTarget), and what it changed is posted to a NodeChangeQueue
+ * for the message thread to take (TakeNodeChanges).
  */
 
 #include "automation/AutomationTypes.h"
+#include "automation/NodeChangeQueue.h"
 #include "automation/ParamRegistry.h"
 
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -165,24 +172,45 @@ class AutomationSlotTable
         mMixer = mixer;
     }
 
-    /// Set the effect registry for node.* type resolution.
-    void SetEffectRegistry(const EffectRegistry* registry)
+    /// Set the effect registry for node.* type resolution, and resolve every slot's address with
+    /// it. At initialisation, before any other thread reads the slots.
+    void SetEffectRegistry(const EffectRegistry* registry);
+
+    /// Message thread: `address` resolved for applying (see NodeAddressBinding), or null when it
+    /// is not a well-formed node.* address.
+    [[nodiscard]] std::shared_ptr<const NodeAddressBinding> BindNodeAddress(const std::string& address) const;
+
+    /// Every slot's binding, in slot order, and the registry generation they were resolved at.
+    struct NodeBindings
     {
-        mEffectRegistry = registry;
+        std::uint64_t registryGeneration = 0;
+        std::vector<std::shared_ptr<const NodeAddressBinding>> bySlot;
+    };
+
+    /// Message thread: whether effect types have been registered or removed since the slots were
+    /// last resolved, which a composite does when it is saved, so a slot may map onto a range its
+    /// type no longer declares. ResolveNodeBindings and CommitNodeBindings bring them up to date.
+    [[nodiscard]] bool NodeBindingsStale() const;
+
+    /// Message thread: every slot's address resolved afresh, without touching the table.
+    [[nodiscard]] NodeBindings ResolveNodeBindings() const;
+
+    /// Message thread, under mDSPMutex: makes `bindings` the slots' own, unless the slots have
+    /// changed since they were resolved. The replaced ones are left in `bindings`, to be released
+    /// once the lock is.
+    void CommitNodeBindings(NodeBindings& bindings);
+
+    /// Message thread: hands `take` each NodeChangeQueue::Change node.* automation has made since
+    /// the last call, the latest for each node parameter and each bypassed effect type.
+    template <typename Fn> void TakeNodeChanges(Fn&& take)
+    {
+        mNodeChanges.Take(std::forward<Fn>(take));
     }
 
-    /// Callback invoked after a node.* param is successfully applied.
-    /// Receives (effectType, paramId, nativeValue). Called under mDSPMutex.
-    void SetOnNodeParamApplied(std::function<void(const std::string&, const std::string&, double)> cb)
+    /// Message thread: how many node changes found the queue full since the last call.
+    [[nodiscard]] std::size_t TakeDroppedNodeChangeCount()
     {
-        mOnNodeParamApplied = std::move(cb);
-    }
-
-    /// Callback invoked after a node.* bypass target is applied.
-    /// Receives (effectType, enabled). Called under mDSPMutex.
-    void SetOnNodeBypassApplied(std::function<void(const std::string&, bool)> cb)
-    {
-        mOnNodeBypassApplied = std::move(cb);
+        return mNodeChanges.TakeDroppedCount();
     }
 
     /// Handle a MIDI event — matches against slot MIDI maps and applies.
@@ -216,6 +244,12 @@ class AutomationSlotTable
 
     /// Apply a slot's value to its target address. Called under lock.
     bool ApplySlotLocked(AutomationSlot& slot);
+
+    /// ApplySlotLocked for a slot with a node.* binding. Allocates nothing.
+    bool ApplyNodeSlotLocked(AutomationSlot& slot);
+
+    /// The registry node.* addresses are resolved with.
+    [[nodiscard]] const EffectRegistry& TypeRegistry() const;
 
     /// Joins `slot` to its DAW parameter's cell, if it has one, and publishes its value there.
     void AttachDawValue(AutomationSlot& slot);
@@ -255,8 +289,10 @@ class AutomationSlotTable
     // Per-preset mappings answer MIDI only while this preset is active
     std::string mActivePresetId;
 
-    // Callback fired after a node.* param apply succeeds
-    std::function<void(const std::string&, const std::string&, double)> mOnNodeParamApplied;
-    std::function<void(const std::string&, bool)> mOnNodeBypassApplied;
+    /// The EffectRegistry generation the slots' bindings were last all resolved at.
+    std::uint64_t mNodeBindingsGeneration = 0;
+
+    /// What node.* slots changed, for the message thread (TakeNodeChanges).
+    NodeChangeQueue mNodeChanges;
 };
 } // namespace guitarfx

@@ -314,6 +314,17 @@ void SignalGraphExecutor::SetGraph(const SignalGraph& graph)
         mGraph.nodes.push_back(outputNode);
     }
 
+    // Process() reads the Input and Output nodes' gain from here, and automation can only write
+    // it without allocating to a key already held (SetAutomationTargetParam). 0 dB is what a
+    // missing key reads as anyway.
+    for (auto& node : mGraph.nodes)
+    {
+        if (node.type == kNodeTypeInput || node.type == kNodeTypeOutput)
+        {
+            node.params.try_emplace(kBoundaryGainParam, 0.0);
+        }
+    }
+
     // Track incoming edge counts and precompute per-node incoming edge index lists
     mIncomingEdgesByNode.clear();
 
@@ -510,6 +521,7 @@ void SignalGraphExecutor::CreateProcessors()
             mNodeStates.emplace(std::piecewise_construct, std::forward_as_tuple(node.id), std::forward_as_tuple());
         NodeState& state = it->second;
         state.id = node.id;
+        state.sharedId = std::make_shared<const std::string>(node.id);
         state.type = node.type;
         state.category = node.category;
 
@@ -1628,6 +1640,70 @@ std::vector<std::string> SignalGraphExecutor::FindNodesOfType(const std::string&
     }
 
     return result;
+}
+
+SignalGraphExecutor::AutomationTarget SignalGraphExecutor::FindAutomationTarget(const std::string& canonicalType)
+{
+    for (const auto& [state, node] : mAutomationNodes)
+    {
+        if (state->canonicalType != canonicalType)
+        {
+            continue;
+        }
+
+        // FindNodesOfType's test of whether a node is enabled.
+        const bool enabled = state->processor ? state->processor->IsEnabled() : (node == nullptr || node->enabled);
+
+        if (enabled)
+        {
+            return {state->processor.get(), node, &state->sharedId};
+        }
+    }
+
+    return {};
+}
+
+void SignalGraphExecutor::SetAutomationTargetParam(const AutomationTarget& target, const std::string& key, double value)
+{
+    if (target.node)
+    {
+        if (const auto recorded = target.node->params.find(key); recorded != target.node->params.end())
+        {
+            recorded->second = value;
+        }
+    }
+
+    if (target.processor)
+    {
+        target.processor->SetParam(key, value);
+    }
+}
+
+bool SignalGraphExecutor::SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled)
+{
+    bool found = false;
+
+    for (const auto& [state, node] : mAutomationNodes)
+    {
+        if (state->canonicalType != canonicalType)
+        {
+            continue;
+        }
+
+        if (node)
+        {
+            node->enabled = enabled;
+        }
+
+        if (state->processor)
+        {
+            state->processor->SetEnabled(enabled);
+        }
+
+        found = true;
+    }
+
+    return found;
 }
 
 std::string SignalGraphExecutor::FindFirstNodeOfTypes(const std::vector<std::string>& types) const

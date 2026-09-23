@@ -59,6 +59,8 @@ void SignalGraphExecutor::BuildExecutionPlan()
 
     for (auto& [id, state] : mNodeStates)
     {
+        state.canonicalType = registry.Resolve(state.type);
+
         const auto planIndex = static_cast<int>(mPlan.size());
         planIndexById[id] = planIndex;
 
@@ -87,7 +89,7 @@ void SignalGraphExecutor::BuildExecutionPlan()
         // copy of every parameter and preset definition the type declares.
         if (state.processor)
         {
-            const auto typeInfo = registry.GetTypeInfo(registry.Resolve(state.type));
+            const auto typeInfo = registry.GetTypeInfo(state.canonicalType);
 
             if (typeInfo && typeInfo->requiresTempo)
             {
@@ -167,6 +169,17 @@ void SignalGraphExecutor::BuildExecutionPlan()
         }
 
         mExecutionLevelPlan.push_back(std::move(levelPlan));
+    }
+
+    mAutomationNodes.clear();
+    mAutomationNodes.reserve(mExecutionOrder.size());
+
+    for (const auto& nodeId : mExecutionOrder)
+    {
+        if (auto* state = FindNodeState(nodeId))
+        {
+            mAutomationNodes.push_back({state, mGraph.FindNode(nodeId)});
+        }
     }
 
     // A node added to a running graph gets a freshly constructed processor that has never

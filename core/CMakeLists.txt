@@ -665,6 +665,7 @@ set(GUITARFX_CORE_SOURCES
 
     # Automation
     src/automation/AutomationTypes.h
+    src/automation/NodeChangeQueue.h
     src/automation/ParamRegistry.h
     src/automation/ParamRegistry.cpp
     src/automation/AutomationSlotTable.h

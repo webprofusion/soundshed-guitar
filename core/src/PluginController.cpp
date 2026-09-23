@@ -162,85 +162,6 @@ void PluginController::Initialize()
         [this]() { return GetSetlistBankNumber(); }, [this](int index) { SelectSceneByIndex(index); },
         [this]() { return GetActiveSceneIndex(); });
 
-    // Wire node-param-applied callback so the UI can reflect automation-driven changes.
-    mAutomationSlots.SetOnNodeParamApplied(
-        [this](const std::string& effectType, const std::string& paramId, double value) {
-            // Resolve the concrete nodeId from the mixer's runtime graph.
-            const auto found = mPresetMixer.FindFirstEnabledNodeOfType(effectType);
-
-            if (!found)
-            {
-                return;
-            }
-
-            const auto& nodeId = found->second;
-
-            // Patch mActivePreset so a subsequent state broadcast is consistent.
-            if (mActivePreset)
-            {
-                auto* node = mActivePreset->graph.FindNode(nodeId);
-
-                if (node)
-                {
-                    node->params[paramId] = value;
-                }
-            }
-
-            // Queue a lightweight UI notification (safe from audio or UI thread).
-            {
-                std::lock_guard<std::mutex> lock(mPendingNodeParamMutex);
-                mPendingNodeParamNotifies.push_back({nodeId, paramId, value});
-            }
-        });
-
-    mAutomationSlots.SetOnNodeBypassApplied([this](const std::string& effectType, bool enabled) {
-        if (!mActivePreset)
-        {
-            return;
-        }
-
-        const auto resolvedType = EffectRegistry::Instance().Resolve(effectType);
-        bool updated = false;
-        const auto applyBypassToGraph = [&](SignalGraph& graph) {
-            for (auto& node : graph.nodes)
-            {
-                if (EffectRegistry::Instance().Resolve(node.type) != resolvedType)
-                {
-                    continue;
-                }
-
-                node.enabled = enabled;
-                updated = true;
-            }
-        };
-
-        // Keep both the active scene graph and mActivePreset->graph in sync.
-        // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
-        // active scene graph into mActivePreset->graph.
-        const std::string activeSceneId = GetResolvedActiveSceneId();
-
-        if (auto* scene = FindPresetScene(*mActivePreset, activeSceneId))
-        {
-            applyBypassToGraph(scene->graph);
-        }
-
-        applyBypassToGraph(mActivePreset->graph);
-
-        if (!updated)
-        {
-            return;
-        }
-
-        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
-
-        if (!mActivePresetId.empty())
-        {
-            mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
-        }
-
-        mPendingStateBroadcast = true;
-    });
-
     // Load automation.json
     const auto automationData = LoadUiStorageJson("automation.json", nlohmann::json::object());
 
@@ -513,22 +434,95 @@ void PluginController::OnIdle()
         RememberHostStateFromWorkingCopy();
     }
 
-    // Drain deferred node-param notifications (from MIDI/keyboard automation)
+    RefreshAutomationBindings();
+
+    // Fold the node changes MIDI, keyboard and DAW automation made into the working copy, which
+    // only this thread may change, then tell the UI. The latest for each node parameter and each
+    // bypassed type, however long since the last tick (see NodeChangeQueue).
     {
-        std::vector<PendingNodeParamNotify> notifies;
+        std::vector<NodeChangeQueue::Change> changes;
+        mAutomationSlots.TakeNodeChanges(
+            [&changes](NodeChangeQueue::Change&& change) { changes.push_back(std::move(change)); });
+
+        if (const auto dropped = mAutomationSlots.TakeDroppedNodeChangeCount(); dropped > 0)
         {
-            std::lock_guard<std::mutex> lock(mPendingNodeParamMutex);
-            notifies = std::move(mPendingNodeParamNotifies);
-            mPendingNodeParamNotifies.clear();
+            AppendSessionLog("[Automation] " + std::to_string(dropped) +
+                             " node changes arrived with no room to report them; the editor may show old values");
         }
 
-        for (const auto& n : notifies)
+        if (mActivePreset)
         {
+            for (const auto& change : changes)
+            {
+                if (!change.nodeId)
+                {
+                    continue; // A bypass, below
+                }
+
+                if (auto* node = mActivePreset->graph.FindNode(*change.nodeId))
+                {
+                    node->params[change.binding->paramId] = change.value;
+                }
+            }
+
+            bool bypassChanged = false;
+
+            for (const auto& change : changes)
+            {
+                if (change.nodeId)
+                {
+                    continue;
+                }
+
+                const bool enabled = change.value != 0.0;
+                const auto& resolvedType = change.binding->effectType;
+                const auto applyBypassToGraph = [&](SignalGraph& graph) {
+                    for (auto& node : graph.nodes)
+                    {
+                        if (EffectRegistry::Instance().Resolve(node.type) == resolvedType)
+                        {
+                            node.enabled = enabled;
+                            bypassChanged = true;
+                        }
+                    }
+                };
+
+                // Keep both the active scene graph and mActivePreset->graph in sync.
+                // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
+                // active scene graph into mActivePreset->graph.
+                if (auto* scene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
+                {
+                    applyBypassToGraph(scene->graph);
+                }
+
+                applyBypassToGraph(mActivePreset->graph);
+            }
+
+            if (bypassChanged)
+            {
+                mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+
+                if (!mActivePresetId.empty())
+                {
+                    mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
+                }
+
+                mPendingStateBroadcast = true;
+            }
+        }
+
+        for (const auto& change : changes)
+        {
+            if (!change.nodeId)
+            {
+                continue;
+            }
+
             nlohmann::json msg;
             msg["type"] = "signalPathNodeParamUpdated";
-            msg["nodeId"] = n.nodeId;
-            msg["key"] = n.paramKey;
-            msg["value"] = n.value;
+            msg["nodeId"] = *change.nodeId;
+            msg["key"] = change.binding->paramId;
+            msg["value"] = change.value;
             SendMessageToUI(msg.dump());
         }
     }

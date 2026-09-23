@@ -5,6 +5,7 @@ set(TEST_SOURCES
     AudioDeviceRequestTests.cpp
     AutomationBypassEndToEndTests.cpp
     AutomationNodeParamRangeTests.cpp
+    AutomationNodeRealtimeTests.cpp
     AutomationPresetMappingTests.cpp
     AutomationSlotMidiToggleTests.cpp
     AutomationSlotThreadTests.cpp
