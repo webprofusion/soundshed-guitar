@@ -177,8 +177,9 @@ private:
    #endif
 
     // Applies the setlist steps, bank changes and scene switches that MIDI and DAW automation
-    // park for the message thread. The editor's idle loop does too, but it only runs while the
-    // editor is open. Last, so it is stopped before anything its callback uses is destroyed.
+    // park for the message thread, and folds the node changes they made into the working copy.
+    // The editor's idle loop does too, but it only runs while the editor is open. Last, so it is
+    // stopped before anything its callback uses is destroyed.
     static constexpr int kControlSurfaceDrainHz = 30;
     juce::TimedCallback mControlSurfaceDrain { [this] { mController.DrainControlSurfaceRequests(); } };
 

@@ -15,6 +15,8 @@
  *  - A DAW parameter's scene switch goes the same way.
  *  - A restore the host left queued from another thread is applied before a parked switch, so
  *    the switch lands on the restored preset instead of being overwritten by it.
+ *  - A node parameter and a bypass moved by MIDI reach the working copy through the drain, in the
+ *    active scene's graph as well as the preset's, and so reach what the host saves.
  *  - OnIdle still drains them too.
  */
 
@@ -48,6 +50,10 @@ constexpr int kSceneTwoCc = 21;
 constexpr int kSetlistTwoCc = 22;
 constexpr int kBankUpCc = 23;
 constexpr int kBankDownCc = 24;
+// An expression pedal on the gain node, and a footswitch bypassing it.
+constexpr int kGainCc = 25;
+constexpr int kGainBypassCc = 26;
+constexpr const char* kGainNodeId = "gain";
 
 bool Check(bool condition, const std::string& what)
 {
@@ -67,12 +73,17 @@ Preset BuildPreset(const std::string& id, int sceneCount)
     in.id = "in";
     in.type = kNodeTypeInput;
 
+    GraphNode gain;
+    gain.id = kGainNodeId;
+    gain.type = "gain";
+    gain.params["gainDb"] = 0.0;
+
     GraphNode out;
     out.id = "out";
     out.type = kNodeTypeOutput;
 
-    preset.graph.nodes = {in, out};
-    preset.graph.edges = {{"in", "out", 0, 0, 1.0}};
+    preset.graph.nodes = {in, gain, out};
+    preset.graph.edges = {{"in", kGainNodeId, 0, 0, 1.0}, {kGainNodeId, "out", 0, 0, 1.0}};
     NormalizePresetScenes(preset);
 
     for (int i = 2; i <= sceneCount; ++i)
@@ -103,6 +114,60 @@ void MapFootswitch(PluginController& controller, const std::string& slotId, int 
     map.channel = -1;
     map.controller = cc;
     (void)controller.GetAutomationSlots().SetDefaultSlotOverrides(slotId, std::nullopt, map, std::nullopt);
+}
+
+void MapNodeSlot(PluginController& controller, const std::string& slotId, const std::string& address, int cc)
+{
+    MidiControlMap map;
+    map.eventType = MidiControlMap::EventType::CC;
+    map.channel = -1;
+    map.controller = cc;
+    (void)controller.GetAutomationSlots().SetCustomSlot(slotId, slotId, address, std::nullopt, map, std::nullopt);
+}
+
+/// The gain node's value and bypass in `graph`, as "gainDb/enabled", or "missing".
+std::string GainNodeState(const SignalGraph& graph)
+{
+    const auto* node = graph.FindNode(kGainNodeId);
+
+    if (!node)
+    {
+        return "missing";
+    }
+
+    const auto gainDb = node->params.find("gainDb");
+    return (gainDb == node->params.end() ? std::string{"none"} : std::to_string(gainDb->second)) + "/" +
+           (node->enabled ? "on" : "bypassed");
+}
+
+/// The same, from the state the host would save. A preset with scenes is saved as its scenes
+/// alone, so this reads the active one's graph.
+std::string SavedGainNodeState(const PluginController& controller)
+{
+    const auto state = nlohmann::json::parse(controller.SerializeState());
+    const auto& active = *controller.GetActivePreset();
+    const auto& sceneId = active.scenes[static_cast<std::size_t>(controller.GetActiveSceneIndex())].id;
+    const auto preset = state.value("preset", nlohmann::json::object());
+
+    for (const auto& scene : preset.value("scenes", nlohmann::json::array()))
+    {
+        if (scene.value("id", "") != sceneId)
+        {
+            continue;
+        }
+
+        for (const auto& node : scene.value("graph", nlohmann::json::object()).value("nodes", nlohmann::json::array()))
+        {
+            if (node.value("id", "") == kGainNodeId)
+            {
+                const auto params = node.value("params", nlohmann::json::object());
+                return std::to_string(params.value("gainDb", -1.0)) + "/" +
+                       (node.value("enabled", true) ? "on" : "bypassed");
+            }
+        }
+    }
+
+    return "missing";
 }
 
 /// A press and release, handed over in one audio block the way the plugin's processBlock does.
@@ -214,6 +279,41 @@ bool Run(const fs::path& sandbox)
     passed = Check(controller.GetSetlistBankNumber() == 1, "MIDI bank up: parked") && passed;
     Drain(controller);
     passed = Check(controller.GetSetlistBankNumber() == 2, "MIDI bank up: the drain applies it") && passed;
+
+    // A pedal on the gain node and a footswitch bypassing it, with the editor closed. The audio
+    // pass applies both to the engine; the drain folds them into the working copy.
+    MapNodeSlot(controller, "custom.gain", "node.gain.gainDb", kGainCc);
+    MapNodeSlot(controller, "custom.gainBypass", "node.gain.bypassed", kGainBypassCc);
+    const auto sceneGraph = [&controller]() -> const SignalGraph& {
+        return controller.GetActivePreset()->scenes[static_cast<std::size_t>(controller.GetActiveSceneIndex())].graph;
+    };
+    const std::string before = "0.000000/on";
+    const std::string after = "24.000000/bypassed";
+
+    const auto pedal = static_cast<std::uint8_t>(kGainCc);
+    const auto bypass = static_cast<std::uint8_t>(kGainBypassCc);
+    controller.EnqueueMidi(MidiEvent{0xB0, pedal, 127, 0});
+    controller.EnqueueMidi(MidiEvent{0xB0, bypass, 127, 0});
+    controller.ProcessQueuedMidi();
+    host.Pump();
+    passed = Check(controller.GetAutomationSlots().HasNodeChanges() &&
+                       GainNodeState(controller.GetActivePreset()->graph) == before,
+                   "MIDI node changes: waiting for the message thread, the working copy as it was") &&
+             passed;
+    Drain(controller);
+    passed = Check(GainNodeState(controller.GetActivePreset()->graph) == after,
+                   "MIDI node changes: the drain folds them into the preset's graph (" +
+                       GainNodeState(controller.GetActivePreset()->graph) + ")") &&
+             passed;
+    passed = Check(GainNodeState(sceneGraph()) == after,
+                   "MIDI node changes: and into the active scene's, which a broadcast copies over it (" +
+                       GainNodeState(sceneGraph()) + ")") &&
+             passed;
+    passed = Check(SavedGainNodeState(controller) == after,
+                   "MIDI node changes: the host's save carries them (" + SavedGainNodeState(controller) + ")") &&
+             passed;
+    passed =
+        Check(!controller.GetAutomationSlots().HasNodeChanges(), "MIDI node changes: nothing left waiting") && passed;
 
     // With the editor open, OnIdle drains them as before.
     PressFootswitch(controller, kBankDownCc);

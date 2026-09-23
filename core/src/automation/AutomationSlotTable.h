@@ -207,6 +207,12 @@ class AutomationSlotTable
         mNodeChanges.Take(std::forward<Fn>(take));
     }
 
+    /// Any thread, one atomic load: whether TakeNodeChanges may have anything to hand over.
+    [[nodiscard]] bool HasNodeChanges() const
+    {
+        return mNodeChanges.HasChanges();
+    }
+
     /// Message thread: how many node changes found the queue full since the last call.
     [[nodiscard]] std::size_t TakeDroppedNodeChangeCount()
     {

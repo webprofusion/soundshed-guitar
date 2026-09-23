@@ -437,96 +437,7 @@ void PluginController::OnIdle()
 
     RefreshAutomationBindings();
 
-    // Fold the node changes MIDI, keyboard and DAW automation made into the working copy, which
-    // only this thread may change, then tell the UI. The latest for each node parameter and each
-    // bypassed type, however long since the last tick (see NodeChangeQueue).
-    {
-        std::vector<NodeChangeQueue::Change> changes;
-        mAutomationSlots.TakeNodeChanges(
-            [&changes](NodeChangeQueue::Change&& change) { changes.push_back(std::move(change)); });
-
-        if (const auto dropped = mAutomationSlots.TakeDroppedNodeChangeCount(); dropped > 0)
-        {
-            AppendSessionLog("[Automation] " + std::to_string(dropped) +
-                             " node changes arrived with no room to report them; the editor may show old values");
-        }
-
-        if (mActivePreset)
-        {
-            for (const auto& change : changes)
-            {
-                if (!change.nodeId)
-                {
-                    continue; // A bypass, below
-                }
-
-                if (auto* node = mActivePreset->graph.FindNode(*change.nodeId))
-                {
-                    node->params[change.binding->paramId] = change.value;
-                }
-            }
-
-            bool bypassChanged = false;
-
-            for (const auto& change : changes)
-            {
-                if (change.nodeId)
-                {
-                    continue;
-                }
-
-                const bool enabled = change.value != 0.0;
-                const auto& resolvedType = change.binding->effectType;
-                const auto applyBypassToGraph = [&](SignalGraph& graph) {
-                    for (auto& node : graph.nodes)
-                    {
-                        if (EffectRegistry::Instance().Resolve(node.type) == resolvedType)
-                        {
-                            node.enabled = enabled;
-                            bypassChanged = true;
-                        }
-                    }
-                };
-
-                // Keep both the active scene graph and mActivePreset->graph in sync.
-                // BroadcastState calls SyncActivePresetSceneGraph(), which copies the
-                // active scene graph into mActivePreset->graph.
-                if (auto* scene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId()))
-                {
-                    applyBypassToGraph(scene->graph);
-                }
-
-                applyBypassToGraph(mActivePreset->graph);
-            }
-
-            if (bypassChanged)
-            {
-                mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
-
-                if (!mActivePresetId.empty())
-                {
-                    mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
-                }
-
-                mPendingStateBroadcast = true;
-            }
-        }
-
-        for (const auto& change : changes)
-        {
-            if (!change.nodeId)
-            {
-                continue;
-            }
-
-            nlohmann::json msg;
-            msg["type"] = "signalPathNodeParamUpdated";
-            msg["nodeId"] = *change.nodeId;
-            msg["key"] = change.binding->paramId;
-            msg["value"] = change.value;
-            SendMessageToUI(msg.dump());
-        }
-    }
+    FoldAutomationNodeChanges();
 
     mControlSurface->PublishMidiLog();
 
@@ -557,10 +468,110 @@ void PluginController::OnIdle()
     }
 }
 
+void PluginController::FoldAutomationNodeChanges()
+{
+    // The latest for each node parameter and each bypassed type, however long since the last call
+    // (see NodeChangeQueue).
+    std::vector<NodeChangeQueue::Change> changes;
+    mAutomationSlots.TakeNodeChanges(
+        [&changes](NodeChangeQueue::Change&& change) { changes.push_back(std::move(change)); });
+
+    if (const auto dropped = mAutomationSlots.TakeDroppedNodeChangeCount(); dropped > 0)
+    {
+        AppendSessionLog("[Automation] " + std::to_string(dropped) +
+                         " node changes arrived with no room to report them; the editor may show old values");
+    }
+
+    if (changes.empty())
+    {
+        return;
+    }
+
+    if (mActivePreset)
+    {
+        // Into the active scene's graph as well as the preset's: BroadcastState copies the scene's
+        // over the preset's (SyncActivePresetSceneGraph), which would put the old values back.
+        auto* scene = FindPresetScene(*mActivePreset, GetResolvedActiveSceneId());
+        const auto forEachGraph = [&](const auto& apply) {
+            if (scene)
+            {
+                apply(scene->graph);
+            }
+
+            apply(mActivePreset->graph);
+        };
+        bool bypassChanged = false;
+
+        for (const auto& change : changes)
+        {
+            if (change.nodeId)
+            {
+                forEachGraph([&](SignalGraph& graph) {
+                    if (auto* node = graph.FindNode(*change.nodeId))
+                    {
+                        node->params[change.binding->paramId] = change.value;
+                    }
+                });
+                continue;
+            }
+
+            const bool enabled = change.value != 0.0;
+            forEachGraph([&](SignalGraph& graph) {
+                for (auto& node : graph.nodes)
+                {
+                    if (EffectRegistry::Instance().Resolve(node.type) == change.binding->effectType)
+                    {
+                        node.enabled = enabled;
+                        bypassChanged = true;
+                    }
+                }
+            });
+        }
+
+        if (bypassChanged)
+        {
+            mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+
+            if (!mActivePresetId.empty())
+            {
+                mMixerPresetJsonCache[mActivePresetId] = mActivePresetJson;
+            }
+
+            mPendingStateBroadcast = true;
+        }
+    }
+
+    // A host's save is built from the working copy. What it is answered with when it asks from
+    // another thread while this one is busy (see HostStateRelay) catches up at most once a second.
+    mHostStateRelay->MarkStale();
+
+    if (mHostStateRelay->TakeRefreshDue(std::chrono::steady_clock::now()))
+    {
+        RememberHostStateFromWorkingCopy();
+    }
+
+    for (const auto& change : changes)
+    {
+        if (!change.nodeId)
+        {
+            continue;
+        }
+
+        nlohmann::json msg;
+        msg["type"] = "signalPathNodeParamUpdated";
+        msg["nodeId"] = *change.nodeId;
+        msg["key"] = change.binding->paramId;
+        msg["value"] = change.value;
+        SendMessageToUI(msg.dump());
+    }
+}
+
 void PluginController::DrainControlSurfaceRequests()
 {
-    // Polled off the plugin's own timer, so the common case, nothing parked, costs an atomic load.
-    if (!mControlSurface->HasPending())
+    // Polled off the plugin's own timer, so the common case, nothing to do, costs two atomic loads.
+    const bool nodeChanges = mAutomationSlots.HasNodeChanges();
+
+    if (!nodeChanges && !mControlSurface->HasPending())
     {
         return;
     }
@@ -568,6 +579,19 @@ void PluginController::DrainControlSurfaceRequests()
     // Anything the host queued earlier goes first, a restore especially: it would replace the
     // preset a parked step or scene switch is about to change.
     mHostStateRelay->ApplyQueued();
+
+    // Automation's node changes reach the working copy, and so what a host saves, from here as
+    // well as from OnIdle, which only an open editor drives. Before a parked preset load replaces
+    // the preset they were made to.
+    if (nodeChanges)
+    {
+        FoldAutomationNodeChanges();
+    }
+
+    if (!mControlSurface->HasPending())
+    {
+        return;
+    }
 
     // These all load presets or rewrite the setlist, which needs the DSP lock the audio thread
     // was holding when it asked.

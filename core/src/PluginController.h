@@ -127,8 +127,10 @@ class PluginController
 
     /// Message thread: applies the setlist steps, bank changes and scene switches that MIDI and
     /// DAW automation parked (see ControlSurfaceQueue), after anything the host queued before
-    /// them. OnIdle does this too, but only an open editor drives OnIdle, so the plugin also
-    /// calls this off a timer of its own. Returns at once when nothing is parked.
+    /// them, and folds the node changes automation made into the working copy first
+    /// (FoldAutomationNodeChanges). OnIdle does this too, but only an open editor drives OnIdle,
+    /// so the plugin also calls this off a timer of its own. Returns at once when there is nothing
+    /// to do.
     void DrainControlSurfaceRequests();
 
     /// Called when the WebView content has finished loading.
@@ -504,6 +506,10 @@ class PluginController
     /// Re-resolves the slots' node.* addresses when effect types have come or gone since (idle
     /// tick). Built off the DSP lock and swapped in under it.
     void RefreshAutomationBindings();
+    /// Message thread: folds the node parameter and bypass changes automation made into the
+    /// working copy and tells the UI. OnIdle calls it, and so does DrainControlSurfaceRequests,
+    /// which the plugin's own timer runs while no editor is open.
+    void FoldAutomationNodeChanges();
     /// Hands the controller-display feed the active preset's name (idle tick).
     void SyncControllerDisplay();
     void HandleGetThemeRequest();

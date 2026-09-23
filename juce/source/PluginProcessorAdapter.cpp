@@ -251,10 +251,11 @@ PluginProcessorAdapter::PluginProcessorAdapter()
     mController.Initialize();
     registerAutomationParameters();
 
-    // A footswitch mapped to a setlist preset or scene must work with the editor closed. The
-    // audio thread cannot hand the request over itself (callAsync allocates), so it is parked
-    // and polled for here; a tick with nothing parked is one atomic load. Without a message
-    // manager there is no loop to run it on (see IsMessageThread).
+    // A footswitch mapped to a setlist preset or scene must work with the editor closed, and a
+    // node parameter automation moves must reach the working copy a save is built from. The
+    // audio thread cannot hand either over itself (callAsync allocates), so they wait for the
+    // message thread and are polled for here; a tick with nothing waiting is two atomic loads.
+    // Without a message manager there is no loop to run it on (see IsMessageThread).
     if (juce::MessageManager::getInstanceWithoutCreating() != nullptr)
         mControlSurfaceDrain.startTimerHz (kControlSurfaceDrainHz);
 }

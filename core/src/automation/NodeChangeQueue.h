@@ -22,6 +22,9 @@
  * read a change the other is writing. A change posted while the taker holds its predecessor lands
  * in another cell; the taker delivers that one after the predecessor, whether later in the same
  * pass or on the next, so the last value is always the last delivered.
+ *
+ * A poll that finds nothing to take costs one atomic load (HasChanges), so the plugin can check
+ * from a timer that runs whether or not an editor is open.
  */
 
 #include "automation/AutomationTypes.h"
@@ -72,6 +75,7 @@ class NodeChangeQueue
 
             if (same)
             {
+                mPosted.store(true, std::memory_order_release);
                 return true;
             }
         }
@@ -93,16 +97,31 @@ class NodeChangeQueue
 
             cell.change.value = value;
             cell.state.store(kPending, std::memory_order_release);
+            mPosted.store(true, std::memory_order_release);
             return true;
         }
 
+        // Flagged too, so the drop is reported.
         mDropped.fetch_add(1, std::memory_order_relaxed);
+        mPosted.store(true, std::memory_order_release);
         return false;
+    }
+
+    /// Any thread: whether anything has been posted, or dropped, since the last Take began. A
+    /// change posted while Take runs may be taken by it and still leave this set, so the next
+    /// Take can find nothing; it never leaves a change behind with this clear.
+    [[nodiscard]] bool HasChanges() const
+    {
+        return mPosted.load(std::memory_order_acquire);
     }
 
     /// Message thread: hands `take` each change posted since the last call, and forgets it.
     template <typename Fn> void Take(Fn&& take)
     {
+        // Cleared first, so a change posted from here on sets it again. An exchange, so that when it
+        // reads a poster's flag this pass also sees the cell that poster filled.
+        (void)mPosted.exchange(false, std::memory_order_acq_rel);
+
         for (auto& cell : mCells)
         {
             if (!Acquire(cell, kPending, kTaking))
@@ -164,5 +183,6 @@ class NodeChangeQueue
 
     std::array<Cell, kCapacity> mCells;
     std::atomic<std::size_t> mDropped{0};
+    std::atomic<bool> mPosted{false};
 };
 } // namespace guitarfx
