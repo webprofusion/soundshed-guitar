@@ -181,7 +181,7 @@ public:
         setResizable (false, false);
 #else
         setResizable (true, true);
-        setResizeLimits (640, 400, 8192, 8192);
+        setResizeLimits (minWindowWidth, minWindowHeight, maxWindowSize, maxWindowSize);
 #endif
 
         if (auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr)
@@ -312,6 +312,10 @@ private:
     }
 #endif
 
+    static constexpr int minWindowWidth = 640;
+    static constexpr int minWindowHeight = 400;
+    static constexpr int maxWindowSize = 8192;
+
     struct WindowState
     {
         int width = 1200;
@@ -358,16 +362,18 @@ private:
             }
         }
 
-        // Clamp to the primary display's usable area.
+        // The window's own limits first, then the primary display's usable area last, so
+        // the display always wins: on a screen smaller than the minimum (an 800x480 touch
+        // panel, say) the window fits the screen rather than hanging off it.
+        state.width = juce::jlimit (minWindowWidth, maxWindowSize, state.width);
+        state.height = juce::jlimit (minWindowHeight, maxWindowSize, state.height);
+
         if (auto* primary = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
         {
             const auto userArea = primary->userArea;
             state.width = juce::jmin (state.width, userArea.getWidth());
             state.height = juce::jmin (state.height, userArea.getHeight());
         }
-
-        state.width = juce::jlimit (1024, 8192, state.width);
-        state.height = juce::jlimit (768, 8192, state.height);
 
         return state;
     }
