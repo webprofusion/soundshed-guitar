@@ -312,6 +312,14 @@ class PluginController
     /// Apply a normalized 0..1 value from the DAW host to a slot. Takes DSP lock.
     void ApplyAutomationFromDAW(const std::string& slotId, float normalized);
 
+    /// Applies queued DAW parameter changes, each a parameter index into `slotIds` and a
+    /// normalized value, under the DSP lock. With `mayBlock` false, as on the audio thread, the
+    /// lock is only taken if it is free right now; otherwise nothing is applied and it returns
+    /// false, and the caller keeps the changes for its next block, as MIDI waits in
+    /// ProcessQueuedMidi.
+    bool ApplyAutomationFromDAW(std::span<const std::pair<int, float>> changes, std::span<const std::string> slotIds,
+                                bool mayBlock);
+
     /// Message thread, once, as the host adapter registers its parameters: the slot behind each
     /// DAW parameter, in parameter order (see AutomationSlotTable::BindDawParameters).
     void BindDawParameters(const std::vector<std::string>& slotIds);

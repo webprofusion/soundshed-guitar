@@ -64,12 +64,10 @@ namespace guitarfx
         /**
          * Holds off auto-capture for the duration of a scope.
          *
-         * Required around every region that holds mPluginProcessLock while calling into the
+         * Used around every region that holds mPluginProcessLock while calling into the
          * hosted plugin. Plugins notify the host from inside prepareToPlay, reset and editor
-         * lifecycle, and a notification reaches CapturePluginStateBase64, which takes that
-         * same lock — juce::SpinLock is not recursive, so the re-entry would spin forever.
-         * Captures raised during those regions are also worthless: the state is mid-change,
-         * and the operation that owns the region restores or re-reads it on the way out.
+         * lifecycle, and a capture raised there is worthless: the state is mid-change, and
+         * the operation that owns the region restores or re-reads it on the way out.
          */
         class AutoCaptureSuppressionScope
         {
@@ -1437,11 +1435,11 @@ namespace guitarfx
             if (!mPlugin)
                 return mPluginStateBase64;
 
-            // getStateInformation() must not race processBlock(). Every other message-thread
-            // path that reaches into the hosted plugin (state restore, prepare, editor
-            // lifecycle) takes this lock; capture was the one that did not, leaving plugins
-            // free to serialise internals the audio thread was concurrently mutating.
-            const juce::SpinLock::ScopedLockType lock (mPluginProcessLock);
+            // Deliberately without mPluginProcessLock. Holding it here would pass the audio
+            // through unprocessed (Process() only try-locks) for as long as the plugin takes
+            // to serialise, on every capture: each parameter change, chain edit and host
+            // save. Every host asks for state while processBlock() runs, and plugins are
+            // written to cope with that. mPlugin itself is only swapped on this thread.
             const auto snapshot = CaptureHostedPluginStateSnapshot (*mPlugin);
             return EncodeHostedPluginStateBase64 (snapshot);
         };
@@ -1632,8 +1630,8 @@ namespace guitarfx
                     return;
                 }
 
-                // Taken before the process lock: the baseline capture reaches into the
-                // plugin under that same lock, and it is not recursive.
+                // Taken before the process lock, so the plugin is not asked for its state
+                // while its editor is being built.
                 EnsurePluginStateBaseline();
 
                 // Plugin editor/view creation can touch state shared with the audio

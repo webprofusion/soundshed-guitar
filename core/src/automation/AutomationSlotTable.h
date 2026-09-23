@@ -222,10 +222,20 @@ class AutomationSlotTable
         return mMidiLearnSlotId.has_value();
     }
 
-    /// Arm MIDI learn for a slot. Empty string disarms.
+    /// Arm MIDI learn for a slot. Empty string disarms. Either way a capture made for the slot
+    /// armed before is dropped, so it cannot land on this one.
     void ArmMidiLearn(const std::string& slotId)
     {
-        mMidiLearnSlotId = slotId;
+        if (slotId.empty())
+        {
+            mMidiLearnSlotId.reset();
+        }
+        else
+        {
+            mMidiLearnSlotId = slotId;
+        }
+
+        mMidiLearnCapture.reset();
     }
 
     /// Get the slot ID currently armed for MIDI learn (empty if none).

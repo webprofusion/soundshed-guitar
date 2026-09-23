@@ -349,21 +349,46 @@ namespace
     // Builds before September 2026 left one profile per launch under %TEMP%. Once per
     // process, off the message thread; a profile another process still holds is left
     // for a later pass (sweepLegacyProfileFolders).
+    //
+    // A thread JUCE deletes at shutdown rather than a detached one: in a plugin, JUCE's
+    // singletons go when the last instance does, before the host can unload the DLL, and
+    // this one stops the sweep at the next folder and waits for it there. A detached sweep
+    // still deleting gigabytes of profiles would run on into unmapped code.
+    class LegacyWebView2Sweep final : public juce::DeletedAtShutdown, private juce::Thread
+    {
+    public:
+        LegacyWebView2Sweep() : juce::Thread ("Legacy WebView2 profile sweep")
+        {
+            startThread();
+        }
+
+        ~LegacyWebView2Sweep() override
+        {
+            stopThread (-1);
+            clearSingletonInstance();
+        }
+
+        JUCE_DECLARE_SINGLETON_INLINE (LegacyWebView2Sweep, true)
+
+    private:
+        void run() override
+        {
+            const auto swept = guitarfx::webview2::sweepLegacyProfileFolders (
+                juce::File::getSpecialLocation (juce::File::tempDirectory),
+                [this] { return threadShouldExit(); });
+
+            if (swept.removed > 0 || swept.skipped > 0)
+                writeStartupLog ("[PluginEditor] Legacy WebView2 profiles: removed "
+                                 + juce::String (swept.removed) + ", still in use "
+                                 + juce::String (swept.skipped));
+        }
+    };
+
     void sweepLegacyWebView2ProfilesOnce()
     {
         static std::once_flag once;
 
-        std::call_once (once, [] {
-            juce::Thread::launch ([] {
-                const auto swept = guitarfx::webview2::sweepLegacyProfileFolders (
-                    juce::File::getSpecialLocation (juce::File::tempDirectory));
-
-                if (swept.removed > 0 || swept.skipped > 0)
-                    writeStartupLog ("[PluginEditor] Legacy WebView2 profiles: removed "
-                                     + juce::String (swept.removed) + ", still in use "
-                                     + juce::String (swept.skipped));
-            });
-        });
+        std::call_once (once, [] { (void) LegacyWebView2Sweep::getInstance(); });
     }
 #endif
 

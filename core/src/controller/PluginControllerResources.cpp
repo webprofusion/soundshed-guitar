@@ -227,7 +227,8 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     msg["name"] = name;
     msg["filePath"] = util::PathToUtf8(targetPath);
     SendMessageToUI(msg.dump());
-    AppendSessionLog("Imported resource " + resourceType + ":" + resourceId + " (" + targetPath.string() + ")");
+    AppendSessionLog("Imported resource " + resourceType + ":" + resourceId + " (" + util::PathToUtf8(targetPath) +
+                     ")");
 }
 
 std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const nlohmann::json& payload,
@@ -354,9 +355,9 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         {
             std::filesystem::path sanitizedSubfolder;
 
-            for (const auto& part : std::filesystem::path(subfolder))
+            for (const auto& part : util::PathFromUtf8(subfolder))
             {
-                const std::string segment = util::SanitizePathSegment(part.string(), true);
+                const std::string segment = util::SanitizePathSegment(util::PathToUtf8(part), true);
 
                 if (segment.empty() || segment == "." || segment == "..")
                 {
@@ -417,13 +418,20 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
                 const std::filesystem::path stem = resolvedPath.stem();
                 const std::filesystem::path ext = resolvedPath.extension();
                 const std::string hashSuffix = resolvedHash.substr(0, std::min<std::size_t>(12, resolvedHash.size()));
-                std::filesystem::path candidate = targetDir / (stem.string() + "-" + hashSuffix + ext.string());
+                // Appended as path parts, not through path::string() and back: that is the
+                // ANSI code page on Windows.
+                const auto candidateNamed = [&](const std::string& suffixText) {
+                    std::filesystem::path named = targetDir / stem;
+                    named += suffixText;
+                    named += ext;
+                    return named;
+                };
+                std::filesystem::path candidate = candidateNamed("-" + hashSuffix);
                 std::size_t suffix = 2;
 
                 while (std::filesystem::exists(candidate))
                 {
-                    candidate =
-                        targetDir / (stem.string() + "-" + hashSuffix + "-" + std::to_string(suffix++) + ext.string());
+                    candidate = candidateNamed("-" + hashSuffix + "-" + std::to_string(suffix++));
                 }
 
                 resolvedPath = candidate;
@@ -442,10 +450,12 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         }
     }
 
-    auto normalizedPathString = resolvedPath.lexically_normal().generic_string();
+    // UTF-8 on both sides: generic_string() is the ANSI code page on Windows, and throws for a
+    // path it cannot hold, which stopped a model named with "√" from importing at all.
+    auto normalizedPathString = util::PathToUtf8(resolvedPath.lexically_normal());
     auto existingByPath = std::find_if(allResources.begin(), allResources.end(), [&](const LibraryResource& resource) {
         return resource.type == resourceType && !resource.filePath.empty() &&
-               resource.filePath.lexically_normal().generic_string() == normalizedPathString;
+               util::PathToUtf8(resource.filePath.lexically_normal()) == normalizedPathString;
     });
 
     if (resourceId.empty() && existingByPath != allResources.end())
@@ -488,7 +498,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
 
         if (pluginName.empty())
         {
-            pluginName = resolvedPath.stem().string();
+            pluginName = util::PathToUtf8(resolvedPath.stem());
         }
 
         std::string pluginManufacturer = payloadPluginManufacturer;
@@ -555,7 +565,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         else
         {
             baseId = std::string{kLocalResourceProvider} + ":" +
-                     util::SanitizePathSegment(resolvedPath.stem().string(), true);
+                     util::SanitizePathSegment(util::PathToUtf8(resolvedPath.stem()), true);
         }
 
         if (baseId == std::string{kLocalResourceProvider} + ":")
@@ -594,7 +604,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     resource.type = resourceType;
     resource.id = resourceId;
     const std::string resolvedName =
-        !name.empty() ? name : (!resource.name.empty() ? resource.name : resolvedPath.stem().string());
+        !name.empty() ? name : (!resource.name.empty() ? resource.name : util::PathToUtf8(resolvedPath.stem()));
     const std::string resolvedCategory =
         !category.empty() ? category : (!resource.category.empty() ? resource.category : std::string{"Local"});
     resource.name = resolvedName.empty() ? resourceId : resolvedName;
@@ -608,7 +618,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     resource.filePath = resolvedPath;
     resource.hash = resolvedHash;
     upsertMetadata(resource);
-    resource.metadata["sourceFileName"] = resolvedPath.filename().string();
+    resource.metadata["sourceFileName"] = util::PathToUtf8(resolvedPath.filename());
 
     if (payload.contains("tags"))
     {
@@ -646,7 +656,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         const std::string pluginName = payloadPluginName.empty()
                                            ? (resource.metadata.contains(kHostedPluginNameConfigKey)
                                                   ? resource.metadata[kHostedPluginNameConfigKey]
-                                                  : resolvedPath.stem().string())
+                                                  : util::PathToUtf8(resolvedPath.stem()))
                                            : payloadPluginName;
 
         if (!pluginName.empty())
@@ -858,10 +868,11 @@ void PluginController::HandleDeleteLibraryResourceRequest(const nlohmann::json& 
 
         if (ec)
         {
-            SendMessageToUI(nlohmann::json{{"type", "resourceDeleteFailed"},
-                                           {"message", "Resource delete failed"},
-                                           {"detail", "Failed to delete stored file: " + resourcePath.string()}}
-                                .dump());
+            SendMessageToUI(
+                nlohmann::json{{"type", "resourceDeleteFailed"},
+                               {"message", "Resource delete failed"},
+                               {"detail", "Failed to delete stored file: " + util::PathToUtf8(resourcePath)}}
+                    .dump());
             return;
         }
     }
@@ -1192,7 +1203,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
 
         if (!filePathValue.empty())
         {
-            std::filesystem::path updatedPath(filePathValue);
+            std::filesystem::path updatedPath = util::PathFromUtf8(filePathValue);
 
             // Same normalization as SaveLocalLibraryResource: a plugin is stored
             // under its bundle root whichever route the path arrived by.
@@ -1209,7 +1220,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
 
             updated.filePath = updatedPath;
             updated.hash = ShouldHashResourceFile(updatedPath) ? mHasher.HashFile(updatedPath) : std::string{};
-            updated.metadata["sourceFileName"] = updatedPath.filename().string();
+            updated.metadata["sourceFileName"] = util::PathToUtf8(updatedPath.filename());
         }
     }
 
@@ -1279,7 +1290,7 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
         const std::filesystem::path previousPath = updated.filePath;
         updated.filePath = targetPath;
         updated.hash = mHasher.HashFile(targetPath);
-        updated.metadata["sourceFileName"] = targetPath.filename().string();
+        updated.metadata["sourceFileName"] = util::PathToUtf8(targetPath.filename());
 
         if (previousPath != targetPath && !previousPath.empty() && isUnderDirectory(previousPath, settingsResourcesDir))
         {
@@ -1340,9 +1351,9 @@ void PluginController::HandleBrowseResourceFolderRequest()
         if (result.success && std::filesystem::is_directory(result.path, ec) && !ec)
         {
             msg["success"] = true;
-            msg["path"] = result.path.generic_string();
+            msg["path"] = util::PathToUtf8(result.path);
             const auto leaf = result.path.filename();
-            msg["name"] = leaf.empty() ? result.path.generic_string() : leaf.string();
+            msg["name"] = leaf.empty() ? util::PathToUtf8(result.path) : util::PathToUtf8(leaf);
         }
         else
         {
@@ -1366,7 +1377,7 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto importsDir = settingsDir / "imports" / "tone-sharing";
-    const auto requestedPath = std::filesystem::path(rawPath);
+    const auto requestedPath = util::PathFromUtf8(rawPath);
 
     std::error_code ec;
     const auto canonicalImports = std::filesystem::weakly_canonical(importsDir, ec);
@@ -1425,11 +1436,11 @@ void PluginController::HandleDeleteImportedToneSharingPackRequest(const nlohmann
 
     nlohmann::json result;
     result["type"] = "toneSharingPackDeleted";
-    result["path"] = canonicalRequested.generic_string();
+    result["path"] = util::PathToUtf8(canonicalRequested);
     result["removed"] = removed;
     SendMessageToUI(result.dump());
 
-    AppendSessionLog("Deleted imported tone sharing pack -> " + canonicalRequested.generic_string());
+    AppendSessionLog("Deleted imported tone sharing pack -> " + util::PathToUtf8(canonicalRequested));
 }
 
 void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& payload)
@@ -1536,7 +1547,7 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
         std::filesystem::remove(replacedTempFile, ec);
     }
 
-    AppendSessionLog("Preview started: " + resourceType + " at " + tempPath.string());
+    AppendSessionLog("Preview started: " + resourceType + " at " + util::PathToUtf8(tempPath));
 }
 
 void PluginController::HandleCancelPreviewResourceRequest(const nlohmann::json& payload)
@@ -1623,7 +1634,7 @@ void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& pa
     response["requestId"] = requestId;
     response["resourceType"] = resourceType;
     response["resourceId"] = resourceId;
-    response["fileName"] = resolvedPath->filename().string();
+    response["fileName"] = util::PathToUtf8(resolvedPath->filename());
     response["data"] = encoded;
     SendMessageToUI(response.dump());
 }
@@ -1665,8 +1676,8 @@ void PluginController::HandleSaveLibraryArchiveRequest(const nlohmann::json& pay
             }
 
             SendMessageToUI(
-                nlohmann::json{{"type", "libraryExportSaved"}, {"path", result.path.generic_string()}}.dump());
-            AppendSessionLog("Library export saved: " + result.path.generic_string());
+                nlohmann::json{{"type", "libraryExportSaved"}, {"path", util::PathToUtf8(result.path)}}.dump());
+            AppendSessionLog("Library export saved: " + util::PathToUtf8(result.path));
         });
 }
 
@@ -1959,7 +1970,7 @@ void PluginController::LoadResourceLibraries()
     mResourceLibrary.LoadFromStore(Store(), ResolveResourcesRoot());
     CleanupResourceLibraryCategoriesOnStartup();
     std::cout << "[Plugin] Loaded " << mResourceLibrary.GetAllResources().size() << " resources from "
-              << ResolveDocumentStorePath().string() << std::endl;
+              << util::PathToUtf8(ResolveDocumentStorePath()) << std::endl;
 }
 
 void PluginController::CleanupResourceLibraryCategoriesOnStartup()

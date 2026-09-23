@@ -177,7 +177,7 @@ public:
         }
 
         std::lock_guard<std::mutex> lock(mOwner.mPendingDAWParamMutex);
-        mOwner.mPendingDAWParamChanges.emplace_back(mParamID.toStdString(), newValue);
+        mOwner.mPendingDAWParamChanges.emplace_back(mParameterIndex, newValue);
     }
 
     [[nodiscard]] float getDefaultValue() const override { return 0.0f; }
@@ -277,26 +277,23 @@ void PluginProcessorAdapter::releaseResources()
     // or it would sit unapplied until the next prepare while getValue() reports stale
     // values. The flag goes first so a setValue racing this applies directly.
     mAudioActive.store (false, std::memory_order_release);
-    applyPendingDAWParamChanges();
+    applyPendingDAWParamChanges (true);
     mController.Reset();
 }
 
-void PluginProcessorAdapter::applyPendingDAWParamChanges()
+void PluginProcessorAdapter::applyPendingDAWParamChanges (bool mayBlock)
 {
-    std::vector<std::pair<std::string, float>> changes;
-    {
-        std::lock_guard<std::mutex> lock (mPendingDAWParamMutex);
+    // The queue stays locked while its changes apply (a few slot updates), and is cleared in
+    // place rather than swapped out, so it keeps its capacity and the audio thread frees
+    // nothing. If the DSP lock is busy the changes stay queued for the next block rather than
+    // the audio thread waiting on the message thread for it.
+    std::lock_guard<std::mutex> lock (mPendingDAWParamMutex);
 
-        // Swapping an empty queue would hand its capacity to this local and free it on
-        // the audio thread every block.
-        if (mPendingDAWParamChanges.empty())
-            return;
+    if (mPendingDAWParamChanges.empty())
+        return;
 
-        changes.swap (mPendingDAWParamChanges);
-    }
-
-    for (const auto& [slotId, value] : changes)
-        mController.ApplyAutomationFromDAW (slotId, value);
+    if (mController.ApplyAutomationFromDAW (mPendingDAWParamChanges, mSlotIdsByParameter, mayBlock))
+        mPendingDAWParamChanges.clear();
 }
 
 bool PluginProcessorAdapter::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -350,8 +347,9 @@ void PluginProcessorAdapter::processBlock (juce::AudioBuffer<float>& buffer,
     // events deferred by lock contention on a previous block are retried).
     mController.ProcessQueuedMidi();
 
-    // Drain pending DAW parameter changes (collected by AutomationSlotParameter::setValue)
-    applyPendingDAWParamChanges();
+    // Drain pending DAW parameter changes (collected by AutomationSlotParameter::setValue),
+    // non-blocking like the MIDI above: a block that finds the DSP lock held retries next time.
+    applyPendingDAWParamChanges (false);
 
     // Set up float** for the core ProcessAudio
     float* inputs[2] = {
@@ -513,6 +511,11 @@ void PluginProcessorAdapter::registerAutomationParameters()
 
     // Before the host has the plugin, so before any thread can call getValue().
     mController.BindDawParameters(slotIdsByParameter);
+
+    // The DAW queue resolves parameter indices through this, and is sized for a burst of
+    // changes to every parameter several times over before it would have to grow.
+    mSlotIdsByParameter = std::move(slotIdsByParameter);
+    mPendingDAWParamChanges.reserve(mSlotIdsByParameter.size() * 8);
 }
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()

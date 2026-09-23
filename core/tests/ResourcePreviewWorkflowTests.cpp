@@ -709,6 +709,56 @@ bool TestFolderListingSurvivesUnreadableNamMetadata()
 
     return ok;
 }
+
+/// A model named outside plain ASCII keeps its name, imported and downloaded back. Both went through
+/// path::string(), the ANSI code page on Windows: "é" came out as bytes JSON rejects, and "√" threw.
+bool TestLocalImportPreservesUtf8Filename()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preview-workflow-tests" / "utf8-import";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    const std::string stem = "\xC3\x9C"
+                             "berdrive \xE2\x88\x9A \xE2\x80\x94 Caf\xC3\xA9";
+    const fs::path source = fs::path(GUITARFX_TEST_RESOURCES_DIR) / "assets" / "amps" / "Guitar" / "A2" /
+                            guitarfx::util::PathFromUtf8("A2 -wth space an \xE2\x80\x94 _emdash.nam");
+    const fs::path model = sandbox / guitarfx::util::PathFromUtf8(stem + ".nam");
+
+    if (!fs::copy_file(source, model, fs::copy_options::overwrite_existing, ec))
+    {
+        return false;
+    }
+
+    TestHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    controller.HandleUIMessage(nlohmann::json{
+        {"type", "saveLocalLibraryResource"}, {"resourceType", "nam"}, {"filePath", guitarfx::util::PathToUtf8(model)}}
+                                   .dump());
+
+    for (const auto& resource : controller.GetResourceLibrary().GetResourcesByType("nam"))
+    {
+        if (resource.filePath != model)
+        {
+            continue;
+        }
+
+        const nlohmann::json download{{"type", "requestResourceData"},
+                                      {"requestId", "utf8"},
+                                      {"resourceType", "nam"},
+                                      {"resourceId", resource.id}};
+        controller.HandleUIMessage(download.dump());
+        const auto data = host.LastMessageOfType("resourceData");
+        const auto sourceFileName = resource.metadata.find("sourceFileName");
+        return resource.name == stem && sourceFileName != resource.metadata.end() &&
+               sourceFileName->second == stem + ".nam" && data && data->value("fileName", "") == stem + ".nam";
+    }
+
+    std::cerr << "The model was not imported\n";
+    return false;
+}
 } // namespace
 
 int main()
@@ -738,6 +788,7 @@ int main()
     run("Cancel without preview is no-op", TestCancelWithoutActivePreviewNoMutation());
     run("Folder enumeration preserves UTF-8 filename", TestFolderEnumerationPreservesUtf8Filename());
     run("Folder listing survives unreadable NAM metadata", TestFolderListingSurvivesUnreadableNamMetadata());
+    run("Local import preserves a UTF-8 filename", TestLocalImportPreservesUtf8Filename());
 
     std::cout << "\nResource preview workflow tests: " << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;

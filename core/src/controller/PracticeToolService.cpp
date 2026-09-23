@@ -5,6 +5,7 @@
 
 #include "controller/PracticeToolService.h"
 
+#include "controller/internal/OfflineRenderSupport.h"
 #include "controller/internal/PracticeToolSupport.h"
 #include "util/AudioDecoder.h"
 #include "util/FileIO.h"
@@ -27,46 +28,12 @@ namespace
 constexpr double kMinPitchSemitones = -12.0;
 constexpr double kMaxPitchSemitones = 12.0;
 
-// Duplicated from PluginController.cpp's anonymous-namespace helper of the
-// same name (used there for riff-capture/demo-preview waveform previews).
-// Kept as a small local copy rather than a shared header so this file has
-// no dependency on PluginController's internals — the two are trivial pure
-// functions that are easy to keep in sync if the peak algorithm ever needs
-// to change.
 // Per-channel peaks (not combined) so the UI can draw a real stereo (two-lane
-// L/R) waveform instead of a single collapsed trace.
+// L/R) waveform instead of a single collapsed trace: the shared two-channel
+// helper, handed the same channel twice.
 [[nodiscard]] nlohmann::json BuildChannelPeaks(const std::vector<float>& channel, std::size_t bins)
 {
-    nlohmann::json peaks = nlohmann::json::array();
-
-    if (channel.empty() || bins == 0)
-    {
-        return peaks;
-    }
-
-    const std::size_t totalSamples = channel.size();
-    const std::size_t binCount = std::min<std::size_t>(bins, totalSamples);
-
-    for (std::size_t b = 0; b < binCount; ++b)
-    {
-        const std::size_t start = (b * totalSamples) / binCount;
-        const std::size_t end = std::max(start + 1, ((b + 1) * totalSamples) / binCount);
-        float peak = 0.0f;
-
-        for (std::size_t i = start; i < end && i < totalSamples; ++i)
-        {
-            const float p = std::fabs(channel[i]);
-
-            if (p > peak)
-            {
-                peak = p;
-            }
-        }
-
-        peaks.push_back(static_cast<double>(std::clamp(peak, 0.0f, 1.0f)));
-    }
-
-    return peaks;
+    return BuildWaveformPeaks(channel, channel, bins);
 }
 } // namespace
 
@@ -220,7 +187,9 @@ void PracticeToolService::LoadDecodedBytes(const std::vector<std::uint8_t>& byte
 
     auto buffer = std::make_shared<TrackBuffer>();
     buffer->path = displayPath;
-    buffer->title = util::PathFromUtf8(displayPath).filename().string();
+    // UTF-8, not path::string(): that is the ANSI code page on Windows, which the JSON
+    // serialiser rejects ("Beyoncé") or cannot even convert to (a Japanese title).
+    buffer->title = util::PathToUtf8(util::PathFromUtf8(displayPath).filename());
     buffer->sampleRate = targetSampleRate;
     buffer->channels = static_cast<int>(resampled.size());
     buffer->totalFrames = minFrames;

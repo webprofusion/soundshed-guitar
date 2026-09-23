@@ -28,6 +28,38 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
+namespace
+{
+/// The parameters a node of this effect starts with, whether it was added or replaced one:
+/// every declared default, then the factory preset the effect nominates as its starting
+/// point, or the first factory preset for an effect that marks none.
+void SeedNewNodeParams(std::map<std::string, double>& params, const EffectTypeInfo& info)
+{
+    for (const auto& p : info.parameters)
+    {
+        params[p.id] = p.defaultValue;
+    }
+
+    auto factoryPreset =
+        std::find_if(info.presets.begin(), info.presets.end(),
+                     [](const EffectPresetDefinition& preset) { return preset.isFactory && preset.isDefault; });
+
+    if (factoryPreset == info.presets.end())
+    {
+        factoryPreset = std::find_if(info.presets.begin(), info.presets.end(),
+                                     [](const EffectPresetDefinition& preset) { return preset.isFactory; });
+    }
+
+    if (factoryPreset != info.presets.end())
+    {
+        for (const auto& [key, value] : factoryPreset->parameters)
+        {
+            params[key] = value;
+        }
+    }
+}
+} // namespace
+
 void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::json& payload)
 {
     // Updates a single DSP parameter on a graph node by nodeId/paramKey
@@ -768,31 +800,7 @@ void PluginController::HandleAddSignalPathNodeRequest(const nlohmann::json& payl
     {
         newNode.category = effectInfoOpt->category;
         newNode.label = effectInfoOpt->displayName;
-
-        for (const auto& p : effectInfoOpt->parameters)
-        {
-            newNode.params[p.id] = p.defaultValue;
-        }
-
-        // Prefer the preset the effect nominates as its starting point; fall back
-        // to the first factory preset for effects that don't mark one.
-        auto factoryPreset =
-            std::find_if(effectInfoOpt->presets.begin(), effectInfoOpt->presets.end(),
-                         [](const EffectPresetDefinition& preset) { return preset.isFactory && preset.isDefault; });
-
-        if (factoryPreset == effectInfoOpt->presets.end())
-        {
-            factoryPreset = std::find_if(effectInfoOpt->presets.begin(), effectInfoOpt->presets.end(),
-                                         [](const EffectPresetDefinition& preset) { return preset.isFactory; });
-        }
-
-        if (factoryPreset != effectInfoOpt->presets.end())
-        {
-            for (const auto& [key, value] : factoryPreset->parameters)
-            {
-                newNode.params[key] = value;
-            }
-        }
+        SeedNewNodeParams(newNode.params, *effectInfoOpt);
     }
     else
     {
@@ -1129,11 +1137,9 @@ void PluginController::HandleReplaceSignalPathNodeRequest(const nlohmann::json& 
     node->params.clear();
     node->resources.clear();
     node->config.clear();
-
-    for (const auto& p : newEffectInfoOpt->parameters)
-    {
-        node->params[p.id] = p.defaultValue;
-    }
+    // As an added node starts, so an effect dropped on a node sounds as it does dropped on a
+    // connection.
+    SeedNewNodeParams(node->params, *newEffectInfoOpt);
 
     if (paramsPayload.is_object())
     {

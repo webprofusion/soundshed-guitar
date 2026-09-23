@@ -66,10 +66,11 @@ void ResourceFolderScanner::Shutdown()
 
 void ResourceFolderScanner::ReleaseWorker()
 {
-    {
-        std::lock_guard<std::mutex> lock(mScanDoneMutex);
-        mActiveScans.fetch_sub(1, std::memory_order_relaxed);
-    }
+    // Notified under the lock: once the count reaches 0, Shutdown() may return and the
+    // scanner be destroyed, so a detached worker must not touch the condition variable after
+    // it has let go of the mutex.
+    const std::lock_guard<std::mutex> lock(mScanDoneMutex);
+    mActiveScans.fetch_sub(1, std::memory_order_relaxed);
     mScanDoneCv.notify_all();
 }
 

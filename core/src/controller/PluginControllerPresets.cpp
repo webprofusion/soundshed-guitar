@@ -692,7 +692,7 @@ void PluginController::ApplyPreset(const Preset& preset)
     normalizedPreset.globalSignalChain = chainConfig;
 
     const std::string initialSlotId = normalizedPreset.id.empty() ? "p1" : normalizedPreset.id;
-    const std::string newPresetJson = PresetStorage::SerializeToJson(normalizedPreset);
+    std::string newPresetJson = PresetStorage::SerializeToJson(normalizedPreset); // moved in under the lock
 
     // === Phase 2: Build the new executors off the DSP lock. ===
     // This is the expensive step: effect processors are created, resources loaded
@@ -711,8 +711,16 @@ void PluginController::ApplyPreset(const Preset& preset)
     mPresetMixer.PrepareGlobalChainSwap(chainConfig);
 
     // === Phase 3: Atomic swap under the DSP lock (fast). ===
-    // The lock is held only for lightweight state updates and the instance swap.
-    // No allocations or I/O occur inside this block.
+    // The lock is held only for lightweight state updates and the instance swap. The new
+    // preset, its JSON and the slot cache (keyed by the real preset ID so the UI can map the
+    // mixer tab to its presetCache entry) are built above and moved in, and what they replace
+    // is moved out into these, to be freed after the lock is released: a preset carrying
+    // hosted-plugin state can run to megabytes, and copying or freeing that under the lock
+    // silences the audio thread.
+    std::map<std::string, std::string> presetJsonCache{{initialSlotId, newPresetJson}};
+    std::optional<Preset> replacedPreset;
+    std::string replacedPresetJson;
+
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
 
@@ -722,15 +730,11 @@ void PluginController::ApplyPreset(const Preset& preset)
         // lock; this is a pointer-level swap plus the scalar input/output settings.
         mPresetMixer.CommitGlobalChainSwap();
 
-        mActivePreset = normalizedPreset;
-        mActivePresetJson = newPresetJson;
-
-        // Use the real preset ID so the UI can map the mixer tab to the presetCache entry.
-        // Fall back to "p1" only for presets without an id (should not happen in practice).
-        mMixerPresetJsonCache.clear();
+        replacedPreset = std::exchange(mActivePreset, std::move(normalizedPreset));
+        replacedPresetJson = std::exchange(mActivePresetJson, std::move(newPresetJson));
+        mMixerPresetJsonCache.swap(presetJsonCache);
         mPresetMixer.CommitPresetSwap(); // Fast: swap mPendingInstance into mInstances + schedule fade-in
-        mMixerPresetJsonCache[initialSlotId] = mActivePresetJson;
-        AttachRuntimeConfigCallbacks(initialSlotId, normalizedPreset);
+        AttachRuntimeConfigCallbacks(initialSlotId, *mActivePreset);
 
         // Register tuner callback
         mPresetMixer.SetTunerCallback([this](const MultiPresetMixer::TunerResult& result) {
@@ -747,7 +751,7 @@ void PluginController::ApplyPreset(const Preset& preset)
         // Apply global interface calibration level to all calibratable NAM
         // effect nodes (overrides preset params; calibrationInputLevel is not
         // stored in preset data).
-        InjectNamInterfaceCalibrationIntoSlot(initialSlotId, normalizedPreset);
+        InjectNamInterfaceCalibrationIntoSlot(initialSlotId, *mActivePreset);
     }
 
     NotifyHostStateChanged();

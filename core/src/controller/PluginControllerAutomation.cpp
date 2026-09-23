@@ -266,6 +266,32 @@ void PluginController::ApplyAutomationFromDAW(const std::string& slotId, float n
     mAutomationSlots.ApplyAutomationLocked(slotId, normalized, AutomationSource::DAW);
 }
 
+bool PluginController::ApplyAutomationFromDAW(std::span<const std::pair<int, float>> changes,
+                                              std::span<const std::string> slotIds, bool mayBlock)
+{
+    std::unique_lock<std::mutex> lock(mDSPMutex, std::defer_lock);
+
+    if (mayBlock)
+    {
+        lock.lock();
+    }
+    else if (!lock.try_lock())
+    {
+        return false;
+    }
+
+    for (const auto& [index, normalized] : changes)
+    {
+        if (index >= 0 && static_cast<std::size_t>(index) < slotIds.size())
+        {
+            mAutomationSlots.ApplyAutomationLocked(slotIds[static_cast<std::size_t>(index)], normalized,
+                                                   AutomationSource::DAW);
+        }
+    }
+
+    return true;
+}
+
 void PluginController::BindDawParameters(const std::vector<std::string>& slotIds)
 {
     // Joins the live slots to their parameters' cells, which the audio thread writes through.

@@ -96,6 +96,12 @@ public class SoundshedApp extends JuceApp
 
         copyAssetTree (UI_ASSET_DIR, uiDir);
 
+        // The stamp goes last, once everything else is in place: copied with the tree, an
+        // unpack that failed or was killed part way would leave a stamp that matches, and
+        // every later launch would skip the unpack and run on a partial UI.
+        if (packagedStamp != null)
+            copyAssetFile (UI_ASSET_DIR + "/" + STAMP_NAME, uiDir);
+
         Log.i (TAG, "Unpacked UI assets in " + (System.currentTimeMillis() - startedAt) + " ms");
     }
 
@@ -114,6 +120,10 @@ public class SoundshedApp extends JuceApp
 
         for (String entry : entries)
         {
+            // Written separately, after the rest (see unpackUiAssetsIfStale).
+            if (assetPath.equals (UI_ASSET_DIR) && entry.equals (STAMP_NAME))
+                continue;
+
             final String childAsset = assetPath + "/" + entry;
             final String[] grandChildren = assets.list (childAsset);
 

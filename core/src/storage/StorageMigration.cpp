@@ -37,9 +37,26 @@ std::optional<nlohmann::json> ReadJson(const std::filesystem::path& path)
     }
     catch (const std::exception& exception)
     {
-        std::cerr << "[StorageMigration] Could not parse " << path.string() << ": " << exception.what() << std::endl;
+        std::cerr << "[StorageMigration] Could not parse " << util::PathToUtf8(path) << ": " << exception.what()
+                  << std::endl;
         return std::nullopt;
     }
+}
+
+/// `object[key]` when it is a string, `fallback` when there is no such key, and empty (so the
+/// item is skipped as unreadable) when it holds anything else. json::value() throws for that,
+/// and a throw inside an import's transaction reads as a failed write: the whole migration
+/// rolls back, on every launch, rather than one item being skipped.
+std::string StringField(const nlohmann::json& object, const char* key, const std::string& fallback = {})
+{
+    const auto it = object.find(key);
+
+    if (it == object.end())
+    {
+        return fallback;
+    }
+
+    return it->is_string() ? it->get<std::string>() : std::string{};
 }
 
 std::int64_t NowMillis()
@@ -170,7 +187,7 @@ struct Importer
                     continue;
                 }
 
-                const std::string id = element.value(idField, std::string{});
+                const std::string id = StringField(element, idField);
 
                 if (id.empty())
                 {
@@ -238,8 +255,8 @@ struct Importer
                     continue;
                 }
 
-                const std::string type = element.value("type", std::string{});
-                const std::string id = element.value("id", std::string{});
+                const std::string type = StringField(element, "type");
+                const std::string id = StringField(element, "id");
 
                 if (type.empty() || id.empty())
                 {
@@ -306,7 +323,9 @@ struct Importer
                     continue;
                 }
 
-                std::string stem = entry.path().stem().string();
+                // UTF-8, not path::string(): that is the ANSI code page on Windows, and throws
+                // for a name it cannot hold.
+                std::string stem = util::PathToUtf8(entry.path().stem());
 
                 if (!requiredStemSuffix.empty())
                 {
@@ -328,7 +347,7 @@ struct Importer
                     continue;
                 }
 
-                const std::string id = parsed->value("id", stem);
+                const std::string id = StringField(*parsed, "id", stem);
 
                 if (id.empty())
                 {
@@ -401,7 +420,7 @@ struct Importer
                     continue;
                 }
 
-                const std::string id = parsed->value("id", entry.path().filename().string());
+                const std::string id = StringField(*parsed, "id", util::PathToUtf8(entry.path().filename()));
 
                 if (id.empty())
                 {
@@ -513,7 +532,7 @@ void RunImport(Importer& importer, const std::filesystem::path& settingsDirector
 
     if (const auto legacySettings = ReadJson(legacyAppSettingsPath); legacySettings && legacySettings->is_object())
     {
-        const auto configured = legacySettings->value("riffLibrary.path", std::string{});
+        const auto configured = StringField(*legacySettings, "riffLibrary.path");
 
         if (!configured.empty())
         {

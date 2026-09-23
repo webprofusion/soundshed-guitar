@@ -107,7 +107,9 @@ echo [0/5] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
 echo       Architecture: %ARCH_LABEL% ^(CMake platform: %ARCH%^)
 echo       SIMD baseline: %CORE_SIMD_LEVEL%
-cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%" -DGUITARFX_CORE_SIMD_LEVEL=%CORE_SIMD_LEVEL%
+:: GUITARFX_CORE_ENABLE_AVX2 is passed ON so a build tree last configured by the old
+:: --no-avx2 (which cached it OFF) cannot force this level down to sse2.
+cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%" -DGUITARFX_CORE_SIMD_LEVEL=%CORE_SIMD_LEVEL% -DGUITARFX_CORE_ENABLE_AVX2=ON
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail

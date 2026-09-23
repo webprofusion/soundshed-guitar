@@ -2,6 +2,8 @@
 
 #include <juce_core/juce_core.h>
 
+#include <functional>
+
 // Where the Windows editor keeps its WebView2 profile (the Chromium "user data
 // folder": cache, storage, and the browser process's lock), and the clean-up of
 // the profiles older builds left behind.
@@ -60,10 +62,15 @@ namespace guitarfx::webview2
         the in-use test: a profile that an older build (or a crashed instance whose
         browser process is still up) holds is skipped and picked up by a later
         pass. Nothing is ever deleted from under a running browser.
+
+        `shouldStop`, when given, is asked before each folder: a sweep that has to stop
+        early leaves the rest for a later pass.
     */
-    inline LegacySweepResult sweepLegacyProfileFolders (const juce::File& tempDir)
+    inline LegacySweepResult sweepLegacyProfileFolders (const juce::File& tempDir,
+        const std::function<bool()>& shouldStop = {})
     {
         LegacySweepResult result;
+        const auto stopping = [&shouldStop] { return shouldStop && shouldStop(); };
 
         const auto removeIfIdle = [&result] (const juce::File& dir) {
             if (!dir.isDirectory())
@@ -95,7 +102,12 @@ namespace guitarfx::webview2
         if (root.isDirectory())
         {
             for (const auto& child : root.findChildFiles (juce::File::findDirectories, false))
+            {
+                if (stopping())
+                    return result;
+
                 removeIfIdle (child);
+            }
 
             if (root.getNumberOfChildFiles (juce::File::findFilesAndDirectories) == 0)
                 root.deleteFile();
@@ -103,7 +115,7 @@ namespace guitarfx::webview2
 
         const auto probe = tempDir.getChildFile (kLegacyProbeFolder);
 
-        if (probe.isDirectory())
+        if (probe.isDirectory() && !stopping())
             removeIfIdle (probe);
 
         return result;

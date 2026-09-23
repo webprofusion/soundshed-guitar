@@ -136,7 +136,8 @@ public:
 private:
     [[nodiscard]] std::filesystem::path locateAssetsRoot() const;
     void ensureStandaloneProtocolHandlerRegistration();
-    void applyPendingDAWParamChanges();
+    /// `mayBlock` false on the audio thread: see PluginController::ApplyAutomationFromDAW.
+    void applyPendingDAWParamChanges (bool mayBlock);
     /// After a restore has been applied: tells the host that the parameters it reads back
     /// may have changed.
     void notifyHostOfRestoredState();
@@ -154,9 +155,13 @@ private:
     bool mStandaloneProtocolRegistrationAttempted = false;
 
     // Pending DAW parameter changes, drained under the DSP lock by processBlock, or by
-    // releaseResources for a block that is not coming. Each entry: (slotId, normalized 0..1).
+    // releaseResources for a block that is not coming. Each entry: (parameter index,
+    // normalized 0..1), an index into mSlotIdsByParameter, so queuing one allocates nothing.
+    // The queue is reserved up front and cleared in place, never swapped out, so the audio
+    // thread neither grows nor frees it in the usual case.
     std::mutex mPendingDAWParamMutex;
-    std::vector<std::pair<std::string, float>> mPendingDAWParamChanges;
+    std::vector<std::pair<int, float>> mPendingDAWParamChanges;
+    std::vector<std::string> mSlotIdsByParameter; ///< fixed once the parameters are registered
 
     // True from prepareToPlay to releaseResources. Only then does anything drain the
     // queue above, so only then does AutomationSlotParameter::setValue use it.
