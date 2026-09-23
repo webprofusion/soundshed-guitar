@@ -317,6 +317,18 @@ namespace
 #endif
     }
 
+    // Tell the controller whether an editor is on screen, as the page's own "uiVisibility"
+    // message would. The page reports minimise and hide itself, but it cannot report its
+    // own teardown, and without this the metering and per-node timing it gates would keep
+    // running on the audio thread after the editor closes.
+    void reportUiVisibility (PluginProcessorAdapter& processor, bool visible)
+    {
+        nlohmann::json msg;
+        msg["type"] = "uiVisibility";
+        msg["visible"] = visible;
+        processor.getController().HandleUIMessage (msg.dump());
+    }
+
     // The WebView2 profile: one stable per-user folder, shared by the support probe
     // and the editor itself (WebView2UserData.h says why it is keyed on the runtime's
     // extra browser arguments). Empty elsewhere, where the option is ignored anyway.
@@ -616,6 +628,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     writeStartupLog ("[PluginEditor] opening at " + juce::String (initialWidth) + "x" + juce::String (initialHeight)
                      + (rememberedSize.IsValid() ? " (remembered)" : " (default for this display)"));
 
+    // A previous editor's close switched the telemetry off; turn it back on now rather than
+    // when the page finishes booting. The page still reports its real visibility then.
+    reportUiVisibility (processorRef, true);
+
     // Start periodic idle timer (~60 fps) for controller maintenance tasks.
     // This drives state broadcasts, DSP performance updates, tuner data, etc.
     startTimerHz (60);
@@ -633,6 +649,9 @@ PluginEditor::~PluginEditor()
                      + (remembered.IsValid() ? juce::String (remembered.width) + "x" + juce::String (remembered.height)
                                              : juce::String ("nothing")));
     processorRef.setWebMessageCallback (nullptr);
+
+    // After the callback is gone, so nothing this triggers can reach the dying page.
+    reportUiVisibility (processorRef, false);
 }
 
 void PluginEditor::timerCallback()

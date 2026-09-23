@@ -247,7 +247,9 @@ Rules for anyone touching this:
 - A full request queued in the same idle window wins over a preset-scoped one.
 - The periodic telemetry feeds (`sld` at 20 Hz, `dspPerformance`) only
   drive on-screen meters and are suppressed while the UI reports itself hidden via
-  `uiVisibility`.
+  `uiVisibility`, which also switches the DSP's signal diagnostics off. The page cannot
+  report its own teardown, so the JUCE editor sends `uiVisibility {visible:false}` to the
+  controller itself when it is destroyed, and `{visible:true}` when a new one opens.
 
 ## JavaScript Bridge
 

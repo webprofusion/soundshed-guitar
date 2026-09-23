@@ -264,7 +264,8 @@
   "sentButUnhandled": {
     "debugSnapshot": "Not a message: the type tag inside the debug snapshot file written to disk. The UI is told with debugSnapshotWritten.",
     "riffCaptureArmed": "Confirms armRiffCapture; the UI enters the armed state itself when it sends the request.",
-    "toneSharingPackDeleted": "Confirms deleteImportedToneSharingPack; the UI removes the pack from its list before asking, so there is nothing to update."
+    "toneSharingPackDeleted": "Confirms deleteImportedToneSharingPack; the UI removes the pack from its list before asking, so there is nothing to update.",
+    "uiVisibility": "Not sent to the UI: the JUCE editor hands it straight to the controller when it opens and closes (PluginEditor.cpp), standing in for a page that cannot report its own teardown."
   },
   "handledButNeverSent": {},
   "undocumented": [
