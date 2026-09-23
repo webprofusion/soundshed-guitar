@@ -232,10 +232,10 @@ export interface LogEntry {
   message: string;
 }
 
-export interface DemoSample {
+/** A demo audio clip as the engine lists it (state.demoClips, from ui/demo/clips.json). */
+export interface DemoClip {
   id: string;
   title: string;
-  path: string;
 }
 
 export type AppSettingPrimitive = string | number | boolean | null;

@@ -37,7 +37,22 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
         Preset preset;
         std::optional<Preset> presetOpt;
 
-        if (payload.contains("preset"))
+        // By id alone ({presetId, sceneId?}): the stored preset, read here rather than sent
+        // back by the UI, so no UI can load a preset differently from how the engine reads it.
+        const bool loadById = !payload.contains("preset") && payload.contains("presetId") &&
+                              !payload.contains("graph") && !payload.contains("scenes");
+
+        if (loadById)
+        {
+            presetOpt = LoadPresetById(payload.value("presetId", std::string{}));
+
+            if (!presetOpt)
+            {
+                ReportErrorToUI("Preset not found", payload.value("presetId", std::string{}));
+                return;
+            }
+        }
+        else if (payload.contains("preset"))
         {
             presetOpt = PresetStorage::DeserializeFromJson(payload["preset"].dump());
         }
@@ -123,15 +138,17 @@ void PluginController::HandlePresetLoadRequest(const nlohmann::json& payload)
 
         mPendingPresetStateBroadcast = true;
 
-        // Send explicit "presetLoaded" confirmation to the UI
+        // A load by id discards unsaved edits, even of the preset already playing; a preset body
+        // for the one being edited (a scene or undo step from the web UI) keeps them.
+        if (loadById)
         {
-            nlohmann::json loaded;
-            loaded["type"] = "presetLoaded";
-            loaded["preset"] = SerializePresetForUi(*mActivePreset);
-            loaded["activePresetIds"] = SnapshotActivePresetIds();
-            loaded["sceneId"] = GetResolvedActiveSceneId();
-            SendMessageToUI(loaded.dump());
+            ResetActivePresetBaseline();
         }
+
+        UpdateActivePresetDirty();
+
+        // Send explicit "presetLoaded" confirmation to the UI
+        SendActivePresetLoaded();
 
         if (mHost.IsStandalone() && !IsPresetArchiveSessionActive())
         {
@@ -385,6 +402,7 @@ void PluginController::HandleSavePresetRequest(const nlohmann::json& payload)
 
         TouchSharedSyncState({"presetLibrary"});
         InvalidateResourceUsageIndex();
+        ResetActivePresetBaseline();
 
         nlohmann::json reply;
         reply["type"] = "presetSaved";
@@ -422,6 +440,9 @@ void PluginController::HandleDeletePresetRequest(const nlohmann::json& payload)
     InvalidateResourceUsageIndex();
     ForgetPresetAutomation(presetId);
     TouchSharedSyncState({"presetLibrary"});
+
+    // Shared sync only reaches other instances; the UI that asked gets the new list too.
+    SendPresetListToUI();
 }
 
 void PluginController::HandleGetPresetByIdRequest(const nlohmann::json& payload)

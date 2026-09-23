@@ -16,12 +16,18 @@ on:
       - "core/ui/**"
       - "core/protocol/**"
       - "tools/check-protocol.mjs"
+      - "tools/gen-effect-presentation.mjs"
+      - "tools/check-effect-presentation.mjs"
+      - "core/src/dsp/EffectGuids.h"
       - ".github/workflows/ui-checks.yml"
   pull_request:
     paths:
       - "core/ui/**"
       - "core/protocol/**"
       - "tools/check-protocol.mjs"
+      - "tools/gen-effect-presentation.mjs"
+      - "tools/check-effect-presentation.mjs"
+      - "core/src/dsp/EffectGuids.h"
       - ".github/workflows/ui-checks.yml"
   workflow_dispatch:
 
@@ -68,6 +74,9 @@ jobs:
 
       - name: UI/engine protocol
         run: npm run check:protocol
+
+      - name: Effect presentation table
+        run: npm run check:presentation
 
       - name: File size budget
         run: npm run check:sizes

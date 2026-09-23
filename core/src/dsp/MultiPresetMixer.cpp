@@ -207,6 +207,7 @@ MultiPresetMixer& MultiPresetMixer::operator=(MultiPresetMixer&& other) noexcept
     mMixGainDb = other.mMixGainDb;
     mMixGain = other.mMixGain;
     mMasterGain = other.mMasterGain;
+    mOutputMuted.store(other.mOutputMuted.load(std::memory_order_relaxed), std::memory_order_relaxed);
     mLimiterEnabled = other.mLimiterEnabled;
     mUserInputCalibrationGainDb = other.mUserInputCalibrationGainDb;
     mUserInputCalibrationGainLinear = other.mUserInputCalibrationGainLinear;
@@ -1444,7 +1445,7 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     // ==========================================================================
 
     // Apply master gain
-    const float master = static_cast<float>(mMasterGain);
+    const float master = mOutputMuted.load(std::memory_order_relaxed) ? 0.0f : static_cast<float>(mMasterGain);
 
     if (master != 1.0f)
     {

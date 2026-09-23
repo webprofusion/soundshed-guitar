@@ -56,9 +56,16 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | Type | Payload | Description |
 |------|---------|-------------|
 | `state` | Full or preset-scoped state object | Complete sync on startup/major changes; preset/scene switches send a preset-scoped subset (see below) |
-| `presetLoaded` | `{preset, sceneId, activePresetIds, parameters}` | Preset load notification |
+| `presetLoaded` | `{preset, sceneId, activePresetIds, activePresetDirty?, created?, parameters?}` | The active preset as the engine now holds it: after a load, a scene switch or a scene edit (`selectScene`, `addScene`, `renameScene`, `removeScene` all answer with it), a new preset, a setlist step or a program change. `activePresetDirty` is the engine's unsaved-changes flag (see `presetDirtyChanged`); a footswitch scene switch and a setlist step leave it out, and neither changes it. `created: true` marks the answer to `newPreset`: the UI files the unsaved preset in its library |
+| `presetDirtyChanged` | `{dirty}` | The active preset's unsaved-changes flag changed. The engine compares its working copy (the scenes; not the live state of a hosted plugin) with the preset as it was when it became the active one (a load of another preset, any load by id, `newPreset`) or was last saved, re-checking at most every 0.4 s while a UI is ready, so an edit put back clears it. A scene switch is not an edit. The engine owns this flag: the web UI may flag an edit at once, but only this message, or a different preset arriving, clears it |
+| `presetFavorites` | `{favorites: [presetId]}` | The favourite presets; the reply to `getPresetFavorites` and `setPresetFavorite` |
+| `presetRatings` | `{ratings: {presetId: 1-5}}` | Preset star ratings; the reply to `getPresetRatings` and `setPresetRating` |
+| `presetRecents` | `{presetIds}` | The recently played presets, newest first, four at most. The engine records a preset when it becomes the active one (a new id goes first; one already listed keeps its place) and keeps the list in the UI settings as `presetRecents`, where the web UI used to keep it; sent on every change and in reply to `getPresetRecents` |
+| `outputMutedChanged` | `{muted}` | The output mute changed (`setOutputMuted`) |
+| `appSettingChanged` | `{key, value}` | The engine changed one app setting itself, answering an edit command (`setResourceFavorite` changes `resources.favorites`). `value` is the setting's whole new value; the UI records it without sending it back |
+| `setlistCursorChanged` | `{activeSetlistId, cursorIndex, presetId?}` | The active setlist or its cursor moved: a slot step, a bank change, or `selectSetlist` (cursor 0, no `presetId`) |
 | `presetSaved` | `{preset, sceneId}` | Preset saved to disk confirmation |
-| `presetList` | `{presets: [{id, name, category, source}]}` | Factory/user presets from disk |
+| `presetList` | `{presets: [{id, name, category, source}]}` | Factory/user presets from disk: the reply to `getPresetList`, and to `deletePreset`. These are the presets `loadPreset {presetId}` can load. The UI keeps its folder, tag and search filter, and a new preset it has not saved yet, when the list arrives |
 | `error` | `{message, detail}` | Error notification |
 | `signalPathTestResult` | `{frequency, duration, elapsed, ...}` | Signal test completed |
 | `previewStarted` | `{id, title}` | Demo audio playback started |
@@ -117,7 +124,20 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `uiReady` | `{}` | WebView loaded and ready |
 | `requestState` | `{}` | Request full state sync |
 | `setParameter` | `{name, value}` | Set one global FX value by flat name; alias for `setGlobalChainParam` |
-| `loadPreset` | `{preset, sceneId?}` | Load preset with full object and optionally select a scene |
+| `loadPreset` | `{presetId, sceneId?}` or `{preset, presetId?, sceneId?}` | Load a preset, on `sceneId` when it has a scene of that id (else its first). By id alone the engine reads the stored preset (user store, factory file or factory archive; an unknown id is refused with an `error`) and a load discards unsaved edits, even of the preset already playing. With a body, the body is loaded: for a preset the engine does not store (shared, tone-sharing, a new unsaved one), and for chain undo putting back an earlier graph of the preset being edited, which keeps its unsaved state. Answered by `presetLoaded` |
+| `newPreset` | `{}` | Make a new, unsaved preset from the default template (input, bypassed gate and Neural FX, Neural Amp, bypassed IR cab, output), with a new `user-` id, named "New Preset" in category User, and load it; answered by `presetLoaded` with `created: true` |
+| `selectScene` | `{sceneId}` | Switch the active preset's scene, as a footswitch does (the outgoing scene's hosted-plugin state is banked first); answered by `presetLoaded`, an unknown scene by an `error`. When the preset shares a multi-preset mix, only its own slot is rebuilt and the other presets keep playing |
+| `addScene` | `{fromSceneId?, title?}` | Add a scene to the active preset: a copy of `fromSceneId` (the playing scene when omitted), id `scene-N` with N counting up from the scene count plus one until the id is free, titled `title` or "Scene <count+1>". It becomes the active scene; answered by `presetLoaded` |
+| `renameScene` | `{sceneId, title}` | Rename a scene; the title is trimmed, and an empty one becomes "Scene". Answered by `presetLoaded` |
+| `removeScene` | `{sceneId}` | Remove a scene. The last one is refused with an `error`. If it was playing, the scene now in its place (else the new last one) becomes active and is applied, rebuilding only the preset's own slot when it shares a multi-preset mix, as `selectScene` does. Answered by `presetLoaded` |
+| `setPresetFavorite` | `{presetId, favorite}` | Mark or unmark one preset as a favourite, leaving the rest of the list alone; answered by `presetFavorites` |
+| `setPresetRating` | `{presetId, rating}` | Rate one preset 1-5 (clamped); `0` clears its rating. Answered by `presetRatings` |
+| `getPresetRecents` | `{}` | Request `presetRecents` |
+| `selectSetlist` | `{setlistId}` | Make a setlist the active one with its cursor on the first slot, as a bank select does, and store it; nothing is loaded. An unknown or already-active setlist is ignored. Answered by `setlistCursorChanged`. Edits to the setlists themselves still go whole with `setSetlists` |
+| `setResourceFavorite` | `{resourceId, favorite}` | Add or remove one id in the `resources.favorites` app setting; answered by `appSettingChanged` |
+| `setOutputMuted` | `{muted}` | Mute or unmute the output. The mixer applies it after the output gain, so an output level change or a chain rebuild leaves it alone. Not saved: it is reported as `outputMuted` in `state`, and answered by `outputMutedChanged` |
+| `uiSettingsChanged` | `{settings}` or `{patch}` | The UI settings blob (zoom, window bounds, signal-path height, `presetRecents`), saved with the app settings. `settings` replaces the blob, keeping the engine's `native` key (Soundshed Guitar Nano's part) when the new blob has none; the web UI only ever sends back the `native` it was given. `patch` is a JSON merge patch (a `null` removes a key), which is how Nano writes its own part. Because the engine keeps `presetRecents` there itself, a UI sending the whole blob must carry the list the engine last reported |
+| `uiViewStateChanged` | `{viewState}` or `{patch}` | Which panels and tabs are showing, saved with the host state. Replaced or merge-patched as `uiSettingsChanged` is, with the same `native` rule |
 | `savePreset` | `{name, category, description}` | Save current state as preset to disk |
 | `loadModel` | `{filePath}` | Load NAM model by path |
 | `loadIR` | `{filePath}` | Load IR cab by path |
@@ -137,7 +157,6 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setPresetPan` | `{presetId, pan}` | Set mixer preset pan |
 | `setPresetMute` | `{presetId, mute}` | Mute mixer preset |
 | `setPresetSolo` | `{presetId, solo}` | Solo mixer preset |
-| `setMasterGain` | `{gain}` | Set the mixer's linear master multiplier directly. Only the output mute uses this (0 to mute, the previous value to restore); level changes go through `setGlobalChainParam` with path `output.gain`, since the engine derives the multiplier from that setting and re-derives it on every chain rebuild |
 | `setMixGain` | `{gainDb}` | The Multi-Rig's own level in dB, applied to the summed preset mix ahead of the global post-chain and output stage. Independent of `output.gain`; reported back as `mixer.mixGainDb`, saved with a Multi-Rig, and reset to 0 dB when a single preset is loaded |
 | `saveCompositePreset` | `{name, description?, tags?, id?}` | Save the current mixer (slots, levels, mix gain) as a Multi-Rig preset; with `id`, update that one in place |
 | `loadCompositePreset` | `{id}` | Replace the mixer with a saved Multi-Rig's slots, levels and mix gain. The instance's output gain is left alone, as with any preset load |
@@ -148,8 +167,8 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `setMetronome` | `{bpm?, enabled?, volumeDb?, pan?, clickType?, clickConfig?, beatPattern?, timeSigNum?, timeSigDen?, grouping?, subdivision?}` | Update metronome settings. The engine normalises before storing: a grouping that does not add up to the bar is dropped, and a meter change re-seeds `beatPattern` unless the same message carries one. |
 | `tuner` | `{action}` | Start/stop/configure tuner |
 | `runSignalPathTest` | `{}` | Run signal path diagnostic |
-| `previewDemoAudio` | `{audio}` | Preview demo audio clip |
-| `renderDemoAudio` | `{audio? , takeId?, title?, suggestedName?, renderSampleRate?}` | Render selected demo audio to a WAV file using the current preset. `renderSampleRate` accepts `44100`, `48000`, `88200`, `96000`, `176400`, or `192000`; omit or pass `0` for the current device rate. The save-dialog filename appends the resolved rounded kHz rate before `.wav`. |
+| `previewDemoAudio` | `{clipId, repeat?}` or `{audio, region?}` | Play audio into the input as a demo. By `clipId` the engine reads the clip from `ui/demo/clips.json` itself (the ids the full `state` lists as `demoClips`; an unknown one is refused with an `error`), and with `repeat` it loops the whole clip in place until stopped, so no `previewComplete` comes between passes. `audio` is the older form: the file's bytes as base64 `{id, title, data, contentType}` |
+| `renderDemoAudio` | `{clipId? , takeId?, audio?, title?, suggestedName?, renderSampleRate?}` | Render a demo clip (`clipId`, read by the engine), a riff take (`takeId`) or sent audio (`audio`, the older form) to a WAV file using the current preset. `renderSampleRate` accepts `44100`, `48000`, `88200`, `96000`, `176400`, or `192000`; omit or pass `0` for the current device rate. The save-dialog filename appends the resolved rounded kHz rate before `.wav`. |
 | `stopDemoAudio` | `{}` | Stop demo audio playback |
 | `setSpectrumWatch` | `{scope, nodeId, presetId?}` or `{}` | Start, move or renew the spectrum tap on one node's input (`scope` is `pre`, `post` or `preset`; a preset node without `presetId` is looked up in the active preset). The watch lapses 5 s after the last renewal, so the UI re-sends it every 2 s while an EQ curve is on screen; `{}` stops it. See `core/ui/ts/eqSpectrum.ts`. |
 | `getEffectResponse` | `{requestId, effectType, params, points?}` | Ask for an effect's response curve with these parameters (`points` 2-1024, default 160); answered by `effectResponse`. Built from a fresh instance at 48 kHz rather than the running node, so it needs no DSP lock and works for a node in no running graph. See `core/ui/ts/effectResponse.ts`. |
@@ -191,6 +210,7 @@ The engine also answers a few requests the UI itself never sends:
 | `getPerformanceStats` | `{}` | Publish a `dspPerformance` frame now rather than on the next tick. A pull for tests and scripted debugging; the UI takes the pushed feed |
 | `getSignalDiagnostics` | `{}` | Publish the next signal-level frame with its `sldRoster`, for a client that has no roster yet. Tests and scripted debugging only |
 | `splitSignalPathEdge` | `{edge: {from, to, fromPort, toPort}}` | Insert a splitter/mixer pair on one edge of the edited graph, making two parallel lanes. The engine supports it; the UI has no gesture for it yet, though it can show and collapse (`collapseSignalPathSplit`) a split a preset already has |
+| `setMasterGain` | `{gain}` | Set the mixer's linear master multiplier directly. Kept for older UIs and scripted use; the UI mutes with `setOutputMuted`. Level changes go through `setGlobalChainParam` with path `output.gain`, since the engine derives the multiplier from that setting and re-derives it on every chain rebuild, which also undoes a mute made this way |
 
 Retired on 19 September 2026, and now ignored: `setAutoLevel` (mixer-wide auto-level), `openAudioPreferences` (JUCE's audio dialog; use `audioDevice`), `setLimiterEnabled` (use the `audio.dsp.outputLimiterEnabled` app setting), `setGlobalChain` (use `setGlobalChainParam`), `setNodeEnabled`/`setNodeParam` (use `updateSignalPathNodeBypass`/`updateSignalPathNodeParam`), `setTunerEnabled`/`setTunerReference` (use `tuner`), `removePreset` (use `removeActivePreset`), `removeLocalLibraryResource` (use `deleteLibraryResource`, which also checks the resource is unused) and `importToneSharingPack` (packs are imported in the UI).
 
@@ -224,6 +244,15 @@ Sent via `state` message on startup and major changes:
 }
 ```
 
+Fields for what the engine owns rather than the UI:
+
+| Field | Scope | Meaning |
+|-------|-------|---------|
+| `activePresetDirty` | Both, with `preset` | The active preset's unsaved-changes flag, as `presetDirtyChanged` reports it |
+| `outputMuted` | Both | The output mute (`setOutputMuted`) |
+| `demoClips` | Full | `[{id, title}]`, the demo clips from `ui/demo/clips.json`, for `previewDemoAudio {clipId}` and `renderDemoAudio {clipId}` |
+| `uiSettings.presetRecents` | Full | The recently played presets the engine records (`presetRecents`) |
+
 ### Broadcast scope
 
 `state` comes in two scopes (`PluginController::StateScope`):
@@ -248,7 +277,7 @@ Rules for anyone touching this:
 - The periodic telemetry feeds (`sld` at 20 Hz, `dspPerformance`) only
   drive on-screen meters and are suppressed while the UI reports itself hidden via
   `uiVisibility`, which also switches the DSP's signal diagnostics off. The page cannot
-  report its own teardown, so the JUCE editor sends `uiVisibility {visible:false}` to the
+  report its own teardown, so the JUCE editor (`SoundshedEditorBase`, for Nano too) sends `uiVisibility {visible:false}` to the
   controller itself when it is destroyed, and `{visible:true}` when a new one opens.
 
 ## JavaScript Bridge
@@ -305,6 +334,19 @@ Engine value is authoritative. If UI receives a state broadcast with a different
 Presets can expose multiple named scenes. The UI edits one scene at a time in the signal-path bar,
 while the engine keeps the full preset definition synchronized. Existing single-graph presets are
 treated as a one-scene preset automatically.
+
+### Edits the engine makes
+
+Some edits used to be made by the web UI to its own copy of a preset or document, which it then
+sent back whole. So that Soundshed Guitar and Soundshed Guitar Nano cannot make the same edit two
+different ways, the engine now makes them, asked by name (docs/plans/native-ui.md, "Engine-owned
+edits"): the scene commands, `newPreset`, `loadPreset` by id, `setPresetFavorite`,
+`setPresetRating`, `selectSetlist`, `setResourceFavorite` and `setOutputMuted`. The engine also
+records the recently played presets and tracks unsaved changes itself. The web UI may still draw
+the result before the answer arrives (a scene tab, a favourite star), but the engine's answer is
+what stands. The older whole-document forms (`setPresetFavorites`, `setPresetRatings`,
+`setSetlists`, a `loadPreset` body) still work, and the web UI uses them for real bulk edits and for
+presets the engine does not store.
 
 ## UI Views
 
@@ -511,6 +553,30 @@ and dragging one handle past the other was broken in both, differently.
   shared `.waveform-range` class (`css/waveform.css`) carries the cursor rules,
   including the `is-resizing` affordance that only appears once a press is held
   past `CURSOR_HOLD_MS`.
+
+## Effect presentation (`core/ui/data/effect-presentation.json`)
+
+How each effect and category looks is one data file, shared with Soundshed Guitar Nano so the
+two UIs cannot drift: the FX library's categories (order, name, colour), the icon for each
+category and effect, the chain node's colour class, the gear categories shown as amps, the FX
+library category a blend is listed under, and the effect view's background gradient and stock
+artwork. Effects are keyed by their `EffectGuids` constant, with the guid alongside.
+
+- **Web UI:** `node tools/gen-effect-presentation.mjs` writes it as typed constants to
+  `core/ui/ts/generated/effectPresentation.ts` (never edit that by hand). `fxSelector.ts`
+  (`CATEGORY_METADATA`, the blend categories), `iconAssets.ts`, `signalPath/nodeTypes.ts` (node
+  classes, `getNodeCategory`) and `signalPath/visualization.ts` build their tables from it. The
+  file's images are relative to `core/ui`; the web UI prefixes them with `../`, and turns each
+  `visualBackground` pair into `linear-gradient(145deg, <first> 0%, <second> 100%)`.
+- **Nano:** `core/src/uiclient/EffectPresentation.cpp` reads the file at run time.
+- **Checks:** `npm run check:presentation` (part of `npm run verify`, and in CI) runs
+  `tools/check-effect-presentation.mjs`. It fails when an effect's name or guid is not in
+  `core/src/dsp/EffectGuids.h`, a category the file refers to is not defined, a colour is not
+  `#rgb`, `#rrggbb`, `rgb()` or `rgba()`, an icon or image file is missing, or the generated
+  module is out of date. An icon the file names must also be an `IconKey` in `iconAssets.ts`,
+  or the typecheck fails.
+
+To change an effect's look, edit the JSON, then run the generator.
 
 ## Signal Chain Editor Notes
 

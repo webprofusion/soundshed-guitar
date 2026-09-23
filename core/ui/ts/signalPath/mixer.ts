@@ -145,6 +145,10 @@ export function getEditableSignalPathPreset(sourcePreset: Preset): Preset {
   return uiState.activePresetDraft ?? draft;
 }
 
+/**
+ * Loads the edited preset as a whole body. Only chain undo uses it, to put back an earlier
+ * graph; scene edits are engine commands (selectScene, addScene, renameScene, removeScene).
+ */
 export function pushScenePresetToBackend(preset: Preset): void {
   const sceneId = normalizePresetScenes(preset, uiState.activePresetSceneId ?? undefined);
   setActivePresetSceneId(sceneId);

@@ -1,16 +1,17 @@
-import { DEMO_AUDIO_SAMPLES, getActivePresetForRender, uiState } from "./state.js";
-import { arrayBufferToBase64, parseWavMetadata, resolveDemoSamplePath } from "./utils.js";
+import { getActivePresetForRender, uiState } from "./state.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { postMessage, renderDemoAudio, requestCaptureDebugSnapshot } from "./bridge.js";
 import { updateAppSetting } from "./appSettingsStore.js";
 import { sanitizeFilename } from "./archiveUtils.js";
-import type { DemoSample } from "./types.js";
+import type { DemoClip } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { getPlaySvg, getStopSvg } from "./iconAssets.js";
 
 // Track whether demo audio is currently playing
 let demoAudioPlaying = false;
+/** The engine's demo clips (state.demoClips). It reads, plays and renders them itself, by id. */
+let demoClips: DemoClip[] = [];
 let openDemoActionsButton: HTMLButtonElement | null = null;
 let openDemoActionsMenu: HTMLElement | null = null;
 
@@ -27,15 +28,14 @@ const DEMO_RENDER_SAMPLE_RATE_OPTIONS = [
 ] as const;
 
 type DemoAudioSource =
-  | { id: string; title: string; kind: "builtin"; path: string }
+  | { id: string; title: string; kind: "builtin" }
   | { id: string; title: string; kind: "riff"; takeId: string };
 
 function getDemoAudioSources(): DemoAudioSource[] {
-  const builtins: DemoAudioSource[] = DEMO_AUDIO_SAMPLES.map((sample) => ({
-    id: sample.id,
-    title: sample.title,
+  const builtins: DemoAudioSource[] = demoClips.map((clip) => ({
+    id: clip.id,
+    title: clip.title,
     kind: "builtin",
-    path: sample.path,
   }));
 
   const riffs = uiState.riffLibrary?.riffs ?? [];
@@ -256,46 +256,6 @@ function buildDemoRenderSuggestedName(sample: DemoAudioSource): string {
   return `${sanitizeFilename(presetName, "current-preset")}-${sanitizeFilename(sourceName || "demo-audio", "demo-audio")}.wav`;
 }
 
-async function buildBuiltinDemoAudioPayload(sample: Extract<DemoAudioSource, { kind: "builtin" }>): Promise<Record<string, unknown>> {
-  const demoSample = sample as DemoSample;
-  const resolvedPath = resolveDemoSamplePath(sample.path);
-  if (!resolvedPath) {
-    throw new Error("Demo audio path is not set");
-  }
-
-  appendLog(`preview start → ${resolvedPath}`);
-  const response = await fetch(resolvedPath);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  const base64 = arrayBufferToBase64(buffer);
-  const metadata = parseWavMetadata(buffer);
-
-  const lowerPath = (sample.path ?? "").toLowerCase();
-  const contentType = lowerPath.endsWith(".mp3") ? "audio/mpeg"
-    : lowerPath.endsWith(".aif") || lowerPath.endsWith(".aiff") ? "audio/aiff"
-    : "audio/wav";
-
-  const audioPayload: Record<string, unknown> = {
-    id: demoSample.id,
-    title: demoSample.title,
-    path: demoSample.path,
-    size: buffer.byteLength,
-    contentType,
-    data: base64,
-  };
-
-  if (metadata) {
-    audioPayload.sampleRate = metadata.sampleRate;
-    audioPayload.channels = metadata.channels;
-    audioPayload.bitsPerSample = metadata.bitsPerSample;
-  }
-
-  return audioPayload;
-}
-
 function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
   const selectElement = document.getElementById(config.selectId) as HTMLSelectElement | null;
   if (selectElement) {
@@ -407,7 +367,7 @@ function bindDemoAudioControlsSet(config: DemoAudioBindConfig): void {
  * Renders compact demo audio controls for the footer bar.
  * Returns an HTML string with select, play, and repeat controls.
  */
-export function renderFooterDemoAudioControls(): string {
+function renderFooterDemoAudioControls(): string {
   if (!getDemoAudioSources().length) {
     return "";
   }
@@ -481,10 +441,42 @@ export function renderFooterDemoAudioControls(): string {
 }
 
 /**
+ * Draws the footer's demo audio controls into their container and binds them. Called at
+ * startup, and again when the engine's clip list arrives if the footer was drawn without one.
+ */
+export function renderFooterDemoAudio(): void {
+  const container = document.getElementById("footer-demo-audio-container");
+  if (!container) {
+    return;
+  }
+  container.innerHTML = renderFooterDemoAudioControls();
+  bindFooterDemoAudioControls();
+}
+
+/**
+ * Takes the engine's demo clip list (state.demoClips), then redraws what shows it. The
+ * footer is drawn at startup, before the first state arrives, so it may still be empty.
+ */
+export function applyDemoClips(clips: unknown): void {
+  if (!Array.isArray(clips)) {
+    return;
+  }
+  demoClips = clips.flatMap((clip): DemoClip[] => {
+    const { id, title } = (clip ?? {}) as { id?: unknown; title?: unknown };
+    return typeof id === "string" && id ? [{ id, title: typeof title === "string" && title ? title : id }] : [];
+  });
+
+  if (!document.getElementById("footer-demo-audio-select")) {
+    renderFooterDemoAudio();
+  }
+  refreshDemoAudioSelectors();
+}
+
+/**
  * Binds event listeners for the footer demo audio controls.
  * Should be called after the footer HTML is rendered.
  */
-export function bindFooterDemoAudioControls(): void {
+function bindFooterDemoAudioControls(): void {
   bindDemoAudioControlsSet({
     selectId: "footer-demo-audio-select",
     playId: "footer-play-demo-audio",
@@ -594,38 +586,32 @@ export async function renderSelectedDemoAudio(): Promise<void> {
     return;
   }
 
-  try {
-    const suggestedName = buildDemoRenderSuggestedName(sample);
-    const renderSampleRate = getDemoRenderSampleRate();
-    const renderRatePayload = renderSampleRate > 0 ? { renderSampleRate } : {};
-    const renderRateLabel = formatDemoRenderSampleRate(renderSampleRate);
+  const suggestedName = buildDemoRenderSuggestedName(sample);
+  const renderSampleRate = getDemoRenderSampleRate();
+  const renderRatePayload = renderSampleRate > 0 ? { renderSampleRate } : {};
+  const renderRateLabel = formatDemoRenderSampleRate(renderSampleRate);
 
-    if (sample.kind === "riff") {
-      renderDemoAudio({
-        takeId: sample.takeId,
-        title: sample.title.replace(/^★\s*/, ""),
-        suggestedName,
-        ...renderRatePayload,
-      });
-      showNotification("Choose export location", sample.title.replace(/^★\s*/, ""));
-      appendLog(`render demo audio requested → ${sample.takeId} @ ${renderRateLabel}`);
-      return;
-    }
-
-    const audioPayload = await buildBuiltinDemoAudioPayload(sample);
+  if (sample.kind === "riff") {
     renderDemoAudio({
-      audio: audioPayload,
-      title: sample.title,
+      takeId: sample.takeId,
+      title: sample.title.replace(/^★\s*/, ""),
       suggestedName,
       ...renderRatePayload,
     });
-    showNotification("Choose export location", sample.title);
-    appendLog(`render demo audio requested → ${sample.title} @ ${renderRateLabel}`);
-  } catch (error) {
-    console.error("Failed to render demo audio", error);
-    appendLog(`render error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
-    showNotification("Failed to render demo audio", error instanceof Error ? error.message : String(error));
+    showNotification("Choose export location", sample.title.replace(/^★\s*/, ""));
+    appendLog(`render demo audio requested → ${sample.takeId} @ ${renderRateLabel}`);
+    return;
   }
+
+  // The engine reads the clip itself; a failure comes back as "demoAudioRenderFailed".
+  renderDemoAudio({
+    clipId: sample.id,
+    title: sample.title,
+    suggestedName,
+    ...renderRatePayload,
+  });
+  showNotification("Choose export location", sample.title);
+  appendLog(`render demo audio requested → ${sample.title} @ ${renderRateLabel}`);
 }
 
 export async function previewSelectedDemoAudio(): Promise<void> {
@@ -635,32 +621,28 @@ export async function previewSelectedDemoAudio(): Promise<void> {
     return;
   }
 
-  try {
-    if (sample.kind === "riff") {
-      postMessage({
-        type: "previewRiffTake",
-        takeId: sample.takeId,
-        enableGuidance: false,
-      });
-      showNotification("Starting riff preview", sample.title);
-      appendLog(`riff preview sent → ${sample.takeId}`);
-      return;
-    }
-
-    const audioPayload = await buildBuiltinDemoAudioPayload(sample);
-
+  if (sample.kind === "riff") {
+    // A library take always loops in the engine until it is stopped.
     postMessage({
-      type: "previewDemoAudio",
-      audio: audioPayload,
+      type: "previewRiffTake",
+      takeId: sample.takeId,
+      enableGuidance: false,
     });
-
-    showNotification("Starting demo preview", sample.title);
-    appendLog(`preview sent → ${sample.title}`);
-  } catch (error) {
-    console.error("Failed to preview demo audio", error);
-    appendLog(`preview error ← ${sample.title}: ${error instanceof Error ? error.message : String(error)}`);
-    showNotification("Failed to preview demo audio", error instanceof Error ? error.message : String(error));
+    showNotification("Starting riff preview", sample.title);
+    appendLog(`riff preview sent → ${sample.takeId}`);
+    return;
   }
+
+  // The engine reads the clip itself and, with repeat, loops it in place until it is
+  // stopped; Repeat is taken when playback starts. A failure comes back as an "error".
+  postMessage({
+    type: "previewDemoAudio",
+    clipId: sample.id,
+    repeat: uiState.demoAudioRepeat,
+  });
+
+  showNotification("Starting demo preview", sample.title);
+  appendLog(`preview sent → ${sample.title}`);
 }
 
 export function refreshDemoAudioSelectors(): void {

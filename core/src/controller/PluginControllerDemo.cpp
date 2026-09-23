@@ -13,21 +13,110 @@
 #include "controller/SignalTestService.h"
 #include "controller/internal/OfflineRenderSupport.h"
 #include "util/Base64.h"
+#include "util/PathEncoding.h"
 #include "util/Wav.h"
 
 #include <algorithm>
+#include <fstream>
+#include <iterator>
 #include <cmath>
 
 using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
+nlohmann::json PluginController::LoadDemoClipManifest() const
+{
+    nlohmann::json clips = nlohmann::json::array();
+    const auto root = mHost.GetBundledAssetsPath();
+
+    if (root.empty())
+    {
+        return clips;
+    }
+
+    std::ifstream stream(root / "ui" / "demo" / "clips.json", std::ios::binary);
+    const auto manifest = stream ? nlohmann::json::parse(stream, nullptr, false) : nlohmann::json();
+
+    if (!manifest.is_object() || !manifest.contains("clips") || !manifest["clips"].is_array())
+    {
+        return clips;
+    }
+
+    for (const auto& clip : manifest["clips"])
+    {
+        if (clip.is_object() && !clip.value("id", std::string{}).empty())
+        {
+            clips.push_back({{"id", clip.value("id", std::string{})}, {"title", clip.value("title", std::string{})}});
+        }
+    }
+
+    return clips;
+}
+
+std::filesystem::path PluginController::FindDemoClipFile(const std::string& clipId, std::string* title) const
+{
+    const auto root = mHost.GetBundledAssetsPath();
+
+    if (root.empty() || clipId.empty())
+    {
+        return {};
+    }
+
+    const auto folder = root / "ui" / "demo";
+    std::ifstream stream(folder / "clips.json", std::ios::binary);
+    const auto manifest = stream ? nlohmann::json::parse(stream, nullptr, false) : nlohmann::json();
+
+    if (!manifest.is_object() || !manifest.contains("clips") || !manifest["clips"].is_array())
+    {
+        return {};
+    }
+
+    for (const auto& clip : manifest["clips"])
+    {
+        if (clip.is_object() && clip.value("id", std::string{}) == clipId)
+        {
+            if (title != nullptr)
+            {
+                *title = clip.value("title", clipId);
+            }
+
+            // A manifest names files in its own folder, never a path out of it.
+            const auto file = std::filesystem::path(util::PathFromUtf8(clip.value("file", std::string{}))).filename();
+            return file.empty() ? std::filesystem::path{} : folder / file;
+        }
+    }
+
+    return {};
+}
+
 void PluginController::HandlePreviewDemoRequest(const nlohmann::json& payload)
 {
-    if (mDemoPreview)
+    if (!mDemoPreview)
     {
-        mDemoPreview->StartPreview(payload);
+        return;
     }
+
+    // By id: the engine reads the clip itself, rather than the UI sending its bytes.
+    if (payload.contains("clipId"))
+    {
+        std::string title;
+        const auto clipId = payload.value("clipId", std::string{});
+        const auto file = FindDemoClipFile(clipId, &title);
+        std::ifstream input(file, std::ios::binary);
+
+        if (file.empty() || !input)
+        {
+            ReportErrorToUI("Demo preview unavailable", "Unknown demo clip: " + clipId);
+            return;
+        }
+
+        const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        mDemoPreview->StartPreviewFromBytes(bytes, clipId, title, payload.value("repeat", false));
+        return;
+    }
+
+    mDemoPreview->StartPreview(payload);
 }
 
 void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payload)
@@ -121,6 +210,32 @@ void PluginController::HandleRenderDemoAudioRequest(const nlohmann::json& payloa
                 if (!prepared)
                 {
                     sendRenderFailure(error.empty() ? "Unable to prepare riff take audio" : error);
+                    return;
+                }
+
+                source = std::move(*prepared);
+            }
+            else if (payloadCopy.contains("clipId"))
+            {
+                std::string title;
+                const auto clipId = payloadCopy.value("clipId", std::string{});
+                const auto file = FindDemoClipFile(clipId, &title);
+                std::ifstream input(file, std::ios::binary);
+
+                if (file.empty() || !input)
+                {
+                    sendRenderFailure("Unknown demo clip: " + clipId);
+                    return;
+                }
+
+                const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)),
+                                                      std::istreambuf_iterator<char>());
+                auto prepared = PrepareOfflineRenderBuffer(bytes, renderSampleRate, clipId,
+                                                           payloadCopy.value("title", title), error);
+
+                if (!prepared)
+                {
+                    sendRenderFailure(error.empty() ? "Unable to prepare demo audio" : error);
                     return;
                 }
 

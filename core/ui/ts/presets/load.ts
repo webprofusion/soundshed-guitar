@@ -12,8 +12,8 @@ import { setFavoriteToggleState } from "../presets/favorites.js";
 import { requestPresetFromBackend } from "../presets/fetch.js";
 import { stripLegacyGlobals } from "../presets/sanitize.js";
 import { normalizePresetScenes } from "../presetScenes.js";
-import { clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
-import { cachePreset, resetLibrary, setActivePresetId, setActivePresetSceneId, setPresetLoadingId } from "../presetLibraryStore.js";
+import { clonePreset, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
+import { cachePreset, isStoredPreset, resetLibrary, setActivePresetId, setActivePresetSceneId, setPresetLoadingId } from "../presetLibraryStore.js";
 import type { Attachment, GlobalSignalChainConfig, Preset } from "../types.js";
 import { arrayBufferToBase64, isRemoteUrl, resolveAttachmentUrl } from "../utils.js";
 import { recordPresetInHistory } from "./history.js";
@@ -131,6 +131,42 @@ export async function enrichAttachment(attachment: Attachment): Promise<Attachme
   return { ...attachment, data: arrayBufferToBase64(buffer) };
 }
 
+/**
+ * Loads a preset the engine stores (user, factory or factory archive) by id alone: the engine
+ * reads it and answers with "presetLoaded", which carries the preset for the cache, the draft
+ * and the render. With a full copy cached it is drawn at once, loading, as a body load drew it;
+ * with only the library's summary, the preset playing stays on screen, the new one shown
+ * loading, until the engine's copy arrives.
+ */
+function loadStoredPreset(presetId: string): void {
+  clearNotification();
+  const cached = uiState.presetCache.get(presetId) ?? null;
+  if (cached && hasGraphNodes(cached)) {
+    const draft = stripLegacyGlobals(cached);
+    setActivePresetSceneId(normalizePresetScenes(draft, uiState.activePresetSceneId ?? undefined));
+    setActivePresetId(presetId);
+    setActivePresetIsNew(false);
+    setActivePresetSnapshot(draft);
+    setActivePresetDraft(draft);
+    setFavoriteToggleState(presetId);
+    updatePresetDropdownSelection();
+  }
+  // Set loading state BEFORE rendering so all render functions (list, details,
+  // signal path bar) see it and bake the loading class/overlay into their output.
+  setPresetLoadingId(presetId);
+  requestPresetUIRender(clonePreset(getActivePresetForRender()));
+  updatePresetActionButtons();
+  // The scene playing now is kept when the preset has one of the same id, as a body load
+  // does; the engine falls back to the preset's first scene.
+  const sceneId = uiState.activePresetSceneId;
+  postMessage({ type: "loadPreset", presetId, ...(sceneId ? { sceneId } : {}) });
+  recordPresetInHistory(presetId);
+}
+
+/**
+ * Loads a preset chosen in the library. One the engine stores goes by id; one it does not (a
+ * new unsaved preset, or a shared one that arrived as a body) is sent with its body.
+ */
 export async function applyPresetFromLibrary(presetId: string): Promise<void> {
   // Loading the preset being edited reloads its saved copy, so it discards the edits just as
   // surely as switching away does.
@@ -140,6 +176,10 @@ export async function applyPresetFromLibrary(presetId: string): Promise<void> {
       return;
     }
     setPresetDirty(false);
+  }
+  if (isStoredPreset(presetId)) {
+    loadStoredPreset(presetId);
+    return;
   }
   try {
     clearNotification();

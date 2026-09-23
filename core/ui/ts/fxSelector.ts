@@ -11,6 +11,7 @@ import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { uiState, setPresetDirty } from "./state.js";
 import { postMessage } from "./bridge.js";
 import { getBadgeIcon, getFxCategoryIcon, getFxEffectIcon } from "./iconAssets.js";
+import { BLEND_CATEGORIES, CATEGORIES, CATEGORY_ORDER, DEFAULT_BLEND_CATEGORY } from "./generated/effectPresentation.js";
 import { getCompositeEffectEntries } from "./compositeEffects.js";
 import { getCustomEffectLibrary } from "./customEffects.js";
 import { getCustomLayout } from "./layoutRenderer.js";
@@ -98,22 +99,12 @@ export function focusFxSelectorCategory(
   }
 }
 
-// Category display metadata — id → { name, color }.
-// This is the only UI-side definition needed; the actual category list
-// is derived at render time from what the effect registry contains.
-export const CATEGORY_METADATA: Record<string, { name: string; color: string }> = {
-  amp:        { name: "Amplifiers",  color: "#e07848" },
-  cab:        { name: "Cabinets",    color: "#a86830" },
-  drive:      { name: "Drive",       color: "#e04848" },
-  dynamics:   { name: "Dynamics",    color: "#e08030" },
-  eq:         { name: "Equalizers",  color: "#48a8e0" },
-  modulation: { name: "Modulation",  color: "#9048e0" },
-  pitch:      { name: "Pitch",       color: "#c040e0" },
-  delay:      { name: "Delay",       color: "#48e0a8" },
-  reverb:     { name: "Reverb",      color: "#4878e0" },
-  synth:      { name: "Synth",       color: "#7a8a02" },
-  utility:    { name: "Utility",     color: "#808080" },
-};
+// Category display metadata — id → { name, color }, in the FX library's order. It comes from
+// core/ui/data/effect-presentation.json, which Soundshed Guitar Nano reads too; the actual
+// category list is derived at render time from what the effect registry contains.
+export const CATEGORY_METADATA: Record<string, { name: string; color: string }> = Object.fromEntries(
+  CATEGORY_ORDER.map((id) => [id, { name: CATEGORIES[id].name, color: CATEGORIES[id].color }]),
+);
 
 export type FxLibraryItem = EffectTypeInfo & {
   blendId?: string;
@@ -480,16 +471,9 @@ type BlendFxItem = EffectTypeInfo & { blendId: string; blendCategory: string };
 
 function getBlendFxItems(): BlendFxItem[] {
   const blends = uiState.blendLibrary ?? [];
-  const categoryMap: Record<string, string> = {
-    pedal: "utility",
-    preamp: "amp",
-    amp: "amp",
-    "full-rig": "amp",
-    cab: "cab",
-  };
 
   return blends.map((blend) => {
-    const mappedCategory = categoryMap[blend.category] ?? "amp";
+    const mappedCategory = BLEND_CATEGORIES[blend.category] ?? DEFAULT_BLEND_CATEGORY;
     return {
       type: EffectGuids.kAmpNamBlend,
       displayName: blend.name || "Custom Blend",

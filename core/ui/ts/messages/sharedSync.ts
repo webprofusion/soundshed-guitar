@@ -13,7 +13,7 @@ import { applyStoredDemoAudioSelection } from "../demoAudio.js";
 import { refreshFxSelector } from "../fxSelector.js";
 import { applyJamAppSettings } from "../jam.js";
 import { applyPerformancePadAppSettings, refreshPerformancePads } from "../performancePads.js";
-import { applyPresetArchiveSessionState, applyPresetRecentsFromAppSettings } from "../presets.js";
+import { applyPresetArchiveSessionState, applyPresetRecentsFromAppSettings, applyPresetRecentsFromBackend } from "../presets.js";
 import { refreshSettingsView } from "../settings.js";
 import { uiState } from "../state.js";
 import { applyToneSharingAppSettings } from "../toneSharingPanel.js";
@@ -82,6 +82,8 @@ export function onSharedSyncState(payload: IncomingPayload): void {
 
   if (sharedPayload.uiSettings) {
     uiState.uiSettings = sharedPayload.uiSettings;
+    // The engine keeps the recents there; the blob this UI sends back must carry them.
+    applyPresetRecentsFromBackend(sharedPayload.uiSettings.presetRecents);
   }
 
   if (sharedPayload.resourceLibrary) {

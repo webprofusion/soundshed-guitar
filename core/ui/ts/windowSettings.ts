@@ -146,6 +146,15 @@ export function startUiSettingsTracking(): void {
   });
 }
 
+/**
+ * Takes values the engine keeps in the UI settings itself (presetRecents) into the blob this
+ * module sends back whole, without sending it. uiSettingsChanged replaces the engine's copy,
+ * so the blob must carry the engine's current list, never an older one.
+ */
+export function adoptEngineUiSettings(patch: Partial<UiSettings>): void {
+  currentSettings = { ...currentSettings, ...patch };
+}
+
 export function getCurrentUiSettings(): UiSettings {
   return currentSettings;
 }

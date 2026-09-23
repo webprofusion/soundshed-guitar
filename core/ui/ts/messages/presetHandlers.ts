@@ -1,6 +1,6 @@
 /**
  * Everything the host says about presets: loads, saves, the library index,
- * folders, favourites, ratings, setlists and archive sessions.
+ * folders, favourites, ratings, recents, unsaved changes, setlists and archive sessions.
  */
 
 import { syncControlsFromState } from "../controls.js";
@@ -8,37 +8,48 @@ import { appendLog } from "../logging.js";
 import { reconcileActiveCompositePreset } from "../multiPresetMixer.js";
 import { showNotification } from "../notifications.js";
 import { refreshPerformancePads } from "../performancePads.js";
-import { applyPresetArchiveSessionState, applyPresetFavoritesFromBackend, applyPresetFoldersFromBackend, applyPresetRatingsFromBackend, applySetlistCursorFromBackend, applySetlistsFromBackend, cachePresetInMemory, handlePresetDataMessage, populatePresetDropdown, recordRecentPreset, refreshPresetCacheEntryFromBackend, renderActivePreset, updatePresetActionButtons, updatePresetDropdownSelection } from "../presets.js";
+import { adoptCreatedPreset, applyPresetArchiveSessionState, applyPresetFavoritesFromBackend, applyPresetFoldersFromBackend, applyPresetRatingsFromBackend, applyPresetRecentsFromBackend, applySetlistCursorFromBackend, applySetlistsFromBackend, cachePresetInMemory, handlePresetDataMessage, populatePresetDropdown, refilterPresets, refreshPresetCacheEntryFromBackend, renderActivePreset, setFavoriteToggleState, updatePresetActionButtons, updatePresetDropdownSelection } from "../presets.js";
 import { normalizePresetScenes } from "../presetScenes.js";
 import { migratePresetNodeTypes } from "../presetV2.js";
 import { refreshEffectPresetsFlyout, refreshSelectedNodeParams } from "../signalPath.js";
-import { clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
+import { applyEnginePresetDirty, clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
 import { setMixerSlots } from "../mixerStore.js";
-import { cachePreset, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setLibraryPresets, setPresetLoadingId, showAllLibraryPresets } from "../presetLibraryStore.js";
+import { cachePreset, markPresetStored, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setLibraryPresets, setPresetLoadingId, setStoredPresetIds, showAllLibraryPresets } from "../presetLibraryStore.js";
 import type { Preset, PresetFolder, Setlist, StoredEffectPreset } from "../types.js";
 import { markIgnoreNextStatePreset } from "./echoGuard.js";
 import { normalizePresetResources } from "./normalize.js";
 import { takePendingSharedPresetHydration } from "./sharedSync.js";
 import type { IncomingPayload } from "./types.js";
 
+/**
+ * The engine has a (possibly) different active preset: a load, a scene switch or a scene edit
+ * (the engine owns those and answers each with this), a new preset (`created`), a setlist
+ * step. Its copy replaces the UI's draft.
+ */
 export function onPresetLoaded(payload: IncomingPayload): void {
-  const preset = (payload as { preset?: Preset }).preset;
+  const loaded = payload as { preset?: Preset; sceneId?: string; created?: boolean; activePresetDirty?: boolean };
+  const preset = loaded.preset;
   if (preset) {
     // Clear loading state before re-rendering — the re-render below removes
     // all loading classes and overlays baked into the DOM by the render functions.
     setPresetLoadingId(null);
     migratePresetNodeTypes(preset);
     normalizePresetResources(preset);
-    const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
-    setActivePresetSceneId(normalizePresetScenes(preset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined));
-    recordRecentPreset(preset.id);
+    const presetChanged = uiState.activePresetId !== preset.id;
+    const created = loaded.created === true;
+    const preserveNewDraft = created || Boolean(uiState.activePresetIsNew && !presetChanged);
+    setActivePresetSceneId(normalizePresetScenes(preset, loaded.sceneId ?? uiState.activePresetSceneId ?? undefined));
     setActivePresetId(preset.id);
     setActivePresetIsNew(preserveNewDraft);
     cachePreset(clonePreset(preset));
     setActivePresetSnapshot(preset);
     setActivePresetDraft(preset);
-    setPresetDirty(false);
+    applyEnginePresetDirty(loaded.activePresetDirty, presetChanged);
+    setFavoriteToggleState(preset.id);
     updatePresetDropdownSelection();
+    if (created) {
+      adoptCreatedPreset(preset);
+    }
   }
   const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
   if (Array.isArray(activePresetIds)) {
@@ -53,16 +64,23 @@ export function onPresetLoaded(payload: IncomingPayload): void {
         : uiState.parameters.values,
     };
   }
-  if (preset) {
-    cachePreset(clonePreset(preset));
-    setActivePresetSnapshot(preset);
-    setActivePresetDraft(preset);
-    setPresetDirty(false);
-  }
   renderActivePreset();
   refreshPerformancePads();
   syncControlsFromState();
   updatePresetActionButtons();
+}
+
+/**
+ * The engine's unsaved-changes flag moved. It compares its working copy with the preset as
+ * loaded or saved, so it is the word on the matter: an edit put back clears it here too.
+ */
+export function onPresetDirtyChanged(payload: IncomingPayload): void {
+  setPresetDirty((payload as { dirty?: boolean }).dirty === true);
+}
+
+/** The engine's recently-played list changed, or was asked for ("getPresetRecents"). */
+export function onPresetRecents(payload: IncomingPayload): void {
+  applyPresetRecentsFromBackend((payload as { presetIds?: unknown }).presetIds);
 }
 
 export function onPresetExportSaved(payload: IncomingPayload): void {
@@ -83,6 +101,7 @@ export function onPresetSaved(payload: IncomingPayload): void {
   );
   if (savedPreset) {
     normalizePresetResources(savedPreset);
+    markPresetStored(savedPreset.id);
     setActivePresetSceneId(normalizePresetScenes(savedPreset, (payload as { sceneId?: string }).sceneId ?? uiState.activePresetSceneId ?? undefined));
     cachePresetInMemory(savedPreset);
     setActivePresetId(savedPreset.id);
@@ -147,6 +166,15 @@ export function onPresetList(payload: IncomingPayload): void {
       nextPresets.push(nextPreset);
     }
     setLibraryPresets(nextPresets);
+    setStoredPresetIds(nextPresets.map((entry) => entry.id));
+    // A new preset stays this UI's own, and listed, until it is saved.
+    const unsaved = uiState.activePresetIsNew && uiState.activePresetId ? uiState.presetCache.get(uiState.activePresetId) : undefined;
+    if (unsaved && !nextPresets.some((entry) => entry.id === unsaved.id)) {
+      putLibraryPresetFirst(unsaved);
+    }
+    // The list also arrives unasked (after a delete, or another instance's change), so keep
+    // the folder, tags and search the library is showing rather than listing everything.
+    refilterPresets();
     populatePresetDropdown();
     renderActivePreset();
 

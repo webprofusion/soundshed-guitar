@@ -65,7 +65,10 @@ void PluginController::BroadcastState(StateScope scope)
         state["preset"] = SerializePresetForUi(*mActivePreset);
         state["activePresetId"] = mActivePresetId;
         state["activeSceneId"] = GetResolvedActiveSceneId();
+        state["activePresetDirty"] = mActivePresetDirty;
     }
+
+    state["outputMuted"] = mOutputMuted;
 
     // App settings — UI reads "appSettings". Applying them re-runs the demo-audio, recents,
     // tone-sharing and update-check passes and echoes an input-mode message back to us, so
@@ -227,6 +230,9 @@ void PluginController::BroadcastState(StateScope scope)
             {"cpu", "Unknown"},
 #endif
         };
+
+        // The demo audio clips (ui/demo/clips.json), for every UI's clip picker.
+        state["demoClips"] = LoadDemoClipManifest();
 
         // Blend library
         state["blendLibrary"] = mBlendLibrary;

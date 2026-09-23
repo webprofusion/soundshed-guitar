@@ -542,7 +542,9 @@ void PluginController::SelectSceneByIndexDirect(int index)
     }
 
     SyncActivePresetSceneGraph();
-    ApplyPreset(*mActivePreset);
+
+    // In a multi-preset mix only this preset's slot changes; the others keep playing.
+    ApplyActivePresetInItsSlot();
 
     // Report the switch on the same "presetLoaded" channel a UI-driven scene change
     // uses, so an open editor tracks the change and a closed one simply misses a

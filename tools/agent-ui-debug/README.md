@@ -101,3 +101,34 @@ See `docs/agent-quickstart.md` → "Live UI testing" for when to reach for this.
   assuming a feature is hidden/broken.
 - Mixer/session state persists across app restarts too; a fresh launch is
   not necessarily a clean slate.
+
+## Soundshed Guitar Nano (native UI)
+
+Nano has no WebView, so CDP cannot see it. It has its own debug port instead, opened only
+when `SOUNDSHED_NANO_DEBUG_PORT` is set, and `native/nano-tool.mjs` drives it:
+
+```powershell
+$env:SOUNDSHED_NANO_DEBUG_PORT = "9444"
+Start-Process "juce\builds\SoundshedGuitarNano_artefacts\Debug\Standalone\Soundshed Guitar Nano.exe"
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 state
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 tree --ids
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 resize 800 480
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 click nav-chain
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 longpress node:amp_0
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 menu "Move later"
+node tools/agent-ui-debug/native/nano-tool.mjs 9444 screenshot C:\t\nano.png
+```
+
+The script's header lists every command (`type`, `combo`, `slider`, `theme`, `send`, ...).
+
+- **Ids** are component ids, plus the targets a view paints itself: `node:<id>`,
+  `bypass:<id>` and `add:<id>` on the chain, `fx:<effect name>` in the effect picker,
+  `preset:<name>` and `slot:<n>` in the Rigs lists.
+- **Menus:** JUCE closes a popup menu as soon as the app is not in front, which it never is
+  while a terminal drives it. `menu` falls back to the copy `NanoContext::showMenu` keeps of
+  the last menu, so open it (`click`, `longpress`) and then choose from it.
+- **`send`** goes straight to the engine, so the client's copy of a setting does not change
+  (the engine does not echo `setSetting`); use the control (`slider`, `combo`) instead.
+- It shares the real profile, and only one of the two standalones runs at a time. Back up
+  and restore the profile as for the WebView app, and `Stop-Process -Name "Soundshed Guitar Nano"`
+  when done.

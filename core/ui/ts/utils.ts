@@ -55,29 +55,6 @@ export async function sha256HexFromBase64(base64: string): Promise<string> {
     .join("");
 }
 
-export function resolveDemoSamplePath(rawPath: string | null | undefined): string | null {
-  if (!rawPath || typeof rawPath !== "string") {
-    return null;
-  }
-
-  if (/^https?:\/\//i.test(rawPath)) {
-    return rawPath;
-  }
-
-  const normalized = rawPath.replace(/\\/g, "/");
-  if (!normalized.includes(":") && !normalized.startsWith("/")) {
-    return normalized;
-  }
-
-  const uiIndex = normalized.toLowerCase().indexOf("/resources/ui/");
-  if (uiIndex >= 0) {
-    return normalized.slice(uiIndex + "/resources/ui/".length);
-  }
-
-  const lastSlash = normalized.lastIndexOf("/");
-  return lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
-}
-
 export interface WavMetadata {
   channels: number;
   sampleRate: number;

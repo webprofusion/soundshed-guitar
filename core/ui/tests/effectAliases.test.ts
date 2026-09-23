@@ -8,7 +8,7 @@ import {
   migrateLegacyEffectType,
   resolveEffectType,
 } from "../ts/effectGuids.js";
-import { EffectTypeRegistry, createEmptyPresetV2, getNodeEffectInfo, migratePresetNodeTypes } from "../ts/presetV2.js";
+import { EffectTypeRegistry, getNodeEffectInfo, migratePresetNodeTypes } from "../ts/presetV2.js";
 import type { Preset } from "../ts/types.js";
 
 /**
@@ -90,9 +90,6 @@ describe("the retired kAmpNam type", () => {
     expect(info?.parameters.map((param) => param.key)).toEqual(["inputGain"]);
   });
 
-  it("is not used for a new preset's amp", () => {
-    const types = createEmptyPresetV2().graph?.nodes.map((node) => node.type) ?? [];
-    expect(types).toContain(EffectGuids.kAmpNamOptimized);
-    expect(types).not.toContain(EffectGuids.kAmpNam);
-  });
+  // A new preset's amp is kAmpNamOptimized too: the engine builds new presets
+  // (newPreset), and core/tests/PresetEditCommandsTests.cpp checks that.
 });

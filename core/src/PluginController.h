@@ -363,6 +363,10 @@ class PluginController
     /// that is one of several active mixer presets) without disturbing any other slot.
     /// Returns false if presetId is not currently an active mixer slot.
     bool ReplaceActiveMixerPresetInPlace(const Preset& preset, const std::string& presetId, const std::string& name);
+    /// Applies the working copy after a scene change: only its own slot when it is one of
+    /// several presets in the mix (ApplyPreset() would swap the mixer down to it alone),
+    /// otherwise through ApplyPreset().
+    void ApplyActivePresetInItsSlot();
 
     // ── Signal path test ───────────────────────────────────────────
     /// Injects a test tone and reports what reached the output. Returns false
@@ -481,6 +485,30 @@ class PluginController
     void HandleDeleteEffectPresetRequest(const nlohmann::json& payload);
     void BroadcastEffectPresets();
     void HandleSetSetlistsRequest(const nlohmann::json& payload);
+
+    // Engine-owned preset edits (controller/PluginControllerPresetEdits.cpp): what every UI asks
+    // for instead of editing a copy and sending it back whole (docs/plans/native-ui.md, rule C3).
+    void HandleSelectSceneRequest(const nlohmann::json& payload);
+    void HandleAddSceneRequest(const nlohmann::json& payload);
+    void HandleRenameSceneRequest(const nlohmann::json& payload);
+    void HandleRemoveSceneRequest(const nlohmann::json& payload);
+    void HandleNewPresetRequest(const nlohmann::json& payload);
+    void HandleSetPresetFavoriteRequest(const nlohmann::json& payload);
+    void HandleSetPresetRatingRequest(const nlohmann::json& payload);
+    void HandleGetPresetRecentsRequest();
+    void HandleSelectSetlistRequest(const nlohmann::json& payload);
+    void HandleSetResourceFavoriteRequest(const nlohmann::json& payload);
+    void HandleSetOutputMutedRequest(const nlohmann::json& payload);
+    void SendActivePresetLoaded(bool created = false);
+    /// The demo clips in ui/demo/clips.json as [{id, title}]; a clip's file (empty if unknown).
+    [[nodiscard]] nlohmann::json LoadDemoClipManifest() const;
+    [[nodiscard]] std::filesystem::path FindDemoClipFile(const std::string& clipId, std::string* title) const;
+    void RecordPresetRecent(const std::string& presetId);
+    /// Unsaved-changes tracking: the working copy against a baseline taken when a preset is
+    /// loaded or saved, compared in ActivePresetComparisonForm(); checked from OnIdle.
+    void ResetActivePresetBaseline();
+    void UpdateActivePresetDirty();
+    [[nodiscard]] std::string ActivePresetComparisonForm() const;
 
     // Effect analysis (controller/PluginControllerEffectAnalysis.cpp): an effect's response
     // curve, exporting it as an IR, and matching the Simple Cabinet to a library IR.
@@ -919,6 +947,13 @@ class PluginController
     std::string mActivePresetJson;
     std::string mActivePresetId;
     std::string mActiveSceneId;
+
+    // Unsaved changes (UpdateActivePresetDirty) and the output mute (setOutputMuted).
+    std::string mActivePresetBaseline;
+    std::string mActivePresetBaselineId;
+    double mNextDirtyCheckSeconds = 0.0;
+    bool mActivePresetDirty = false;
+    bool mOutputMuted = false;
 
     // Per-slot preset JSON cache, kept in sync with MultiPresetMixer instances.
     // Used by BroadcastState to send full graph data to the UI for each mixer slot.

@@ -18,7 +18,8 @@ vi.mock("../ts/presets/filter.js", () => ({
 }));
 
 const { uiState } = await import("../ts/state.js");
-const { applySetlistCursorFromBackend, selectSetlistSlot } = await import("../ts/presets/setlists.js");
+const { setStoredPresetIds } = await import("../ts/presetLibraryStore.js");
+const { applySetlistCursorFromBackend, selectSetlistSlot, setActiveSetlist } = await import("../ts/presets/setlists.js");
 const { applyPresetFromLibrary } = await import("../ts/presets/load.js");
 
 function preset(id: string): Preset {
@@ -45,6 +46,8 @@ beforeEach(() => {
   uiState.presetDirty = true;
   uiState.presetLoadingId = null;
   uiState.presetCache = new Map([["wah-tone", preset("wah-tone")], ["clean", preset("clean")]]);
+  uiState.activePresetSceneId = null;
+  setStoredPresetIds([]);
 });
 
 describe("setlist slots", () => {
@@ -115,5 +118,54 @@ describe("loading a preset from the library", () => {
 
     expect(showConfirm).not.toHaveBeenCalled();
     expect(sent("loadPreset")).toHaveLength(1);
+  });
+});
+
+describe("loading a preset the engine stores", () => {
+  beforeEach(() => {
+    uiState.presetDirty = false;
+    setStoredPresetIds(["wah-tone", "clean", "listed-only"]);
+    uiState.presetCache.set("listed-only", { id: "listed-only", name: "Listed only", category: "Factory" } as Preset);
+    uiState.presetCache.set("shared", preset("shared"));
+    uiState.activePresetSceneId = "scene-2";
+  });
+
+  it("sends only its id, drawing the cached copy at once", async () => {
+    await applyPresetFromLibrary("clean");
+
+    // "clean" has no scene-2, so it opens on its first scene, as a body load would.
+    expect(sent("loadPreset")).toEqual([{ type: "loadPreset", presetId: "clean", sceneId: "scene-1" }]);
+    expect(uiState.activePresetId).toBe("clean");
+    expect(uiState.activePresetDraft?.id).toBe("clean");
+    expect(uiState.presetLoadingId).toBe("clean");
+  });
+
+  it("with only the library's summary, keeps the playing preset on screen until the engine answers", async () => {
+    await applyPresetFromLibrary("listed-only");
+
+    expect(sent("loadPreset")).toEqual([{ type: "loadPreset", presetId: "listed-only", sceneId: "scene-2" }]);
+    expect(uiState.activePresetId).toBe("wah-tone");
+    expect(uiState.presetLoadingId).toBe("listed-only");
+  });
+
+  it("still sends the body of a preset the engine does not store", async () => {
+    await applyPresetFromLibrary("shared");
+
+    const [message] = sent("loadPreset") as Array<{ presetId?: string; preset?: Preset }>;
+    expect(message.preset?.id).toBe("shared");
+  });
+});
+
+describe("choosing a setlist", () => {
+  it("asks the engine to activate it, without re-sending the setlists", () => {
+    uiState.setlists = [...uiState.setlists, { id: "set-2", name: "Set 2", slots: [] }] as never;
+    uiState.setlistCursorIndex = 1;
+
+    setActiveSetlist("set-2");
+
+    expect(sent("selectSetlist")).toEqual([{ type: "selectSetlist", setlistId: "set-2" }]);
+    expect(sent("setSetlists")).toHaveLength(0);
+    expect(uiState.activeSetlistId).toBe("set-2");
+    expect(uiState.setlistCursorIndex).toBe(0);
   });
 });

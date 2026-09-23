@@ -184,12 +184,9 @@ function setActiveSetlist(setlist: Setlist): void {
   uiState.activeSetlistId = setlist.id;
   uiState.setlistCursorIndex = 0;
   editingSetlistId = null;
-  postMessage({
-    type: "setSetlists",
-    setlists: uiState.setlists ?? [],
-    activeSetlistId: setlist.id,
-    cursorIndex: 0,
-  });
+  // The engine stores the choice and answers with "setlistCursorChanged"; the setlists
+  // themselves are unchanged, so they are not re-sent.
+  postMessage({ type: "selectSetlist", setlistId: setlist.id });
   renderPerformancePads();
 }
 

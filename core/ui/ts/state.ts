@@ -1,4 +1,4 @@
-import type { DemoSample, GlobalSignalChainConfig, Preset, SignalGraph, UiState } from "./types.js";
+import type { GlobalSignalChainConfig, Preset, SignalGraph, UiState } from "./types.js";
 import type { CompositeEffectDefinition } from "./compositeTypes.js";
 import { createEmptyLayoutLibrary } from "./layoutTypes.js";
 import { EffectGuids } from "./effectGuids.js";
@@ -6,34 +6,6 @@ import { normalizePresetScenes } from "./presetScenes.js";
 import { createDefaultPracticeToolEq } from "./practiceTool/eq.js";
 
 export const LOG_ENTRY_LIMIT = 200;
-
-export const DEMO_AUDIO_SAMPLES: DemoSample[] = [
-  {
-    id: "di-riff-01",
-    title: "Guitar Riff 01",
-    path: "demo/guitar-riff-01.wav",
-  },
-  {
-    id: "di-riff-02",
-    title: "Guitar Riff 02",
-    path: "demo/guitar-riff-02.wav",
-  },
-     {
-    id: "di-riff-03",
-    title: "Guitar Riff 03",
-    path: "demo/DI_Guitar_L.wav"
-     },
-   {
-    id: "di-audiocheck-whitenoise",
-    title: "White Noise (Gaussian)",
-    path: "demo/audiocheck.net_whitenoisegaussian.wav",
-  },
-    {
-    id: "di-audiocheck-sweep20-20klog",
-    title: "Sweep 20-20kHz (Logarithmic)",
-    path: "demo/audiocheck.net_sweep20-20klog.wav",
-  },
-];
 
 const DEFAULT_PRE_CHAIN_GRAPH: SignalGraph = {
   nodes: [
@@ -187,7 +159,8 @@ export const uiState: UiState = {
     values: [],
   },
   signalTest: null,
-  demoAudioSelectedId: DEMO_AUDIO_SAMPLES.length ? DEMO_AUDIO_SAMPLES[0].id : null,
+  // The engine sends the clip list (state.demoClips); until then nothing is chosen.
+  demoAudioSelectedId: null,
   demoAudioRepeat: false,
   logs: [],
   resourceLibrary: {},
@@ -386,6 +359,21 @@ export function setPresetDirty(isDirty: boolean): void {
   uiState.presetDirty = isDirty;
   if (typeof document !== "undefined") {
     document.dispatchEvent(new CustomEvent("presetDirtyChanged"));
+  }
+}
+
+/**
+ * The engine's unsaved-changes flag as "presetLoaded" and "state" carry it (`activePresetDirty`).
+ * The engine owns the flag and re-checks it on idle, so for the preset already on screen a
+ * `false` can be older than an edit the UI has just flagged: it clears nothing, and the
+ * engine's "presetDirtyChanged" does that instead. For a preset that has just replaced
+ * another, the engine's value stands, and a message without it means clean.
+ */
+export function applyEnginePresetDirty(dirty: unknown, presetChanged: boolean): void {
+  if (presetChanged) {
+    setPresetDirty(dirty === true);
+  } else if (dirty === true && !uiState.presetDirty) {
+    setPresetDirty(true);
   }
 }
 

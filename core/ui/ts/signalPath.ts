@@ -1,4 +1,4 @@
-import { uiState, getActivePresetForRender, getSignalPathPreset, setPresetDirty, isCompositeEditMode } from "./state.js";
+import { uiState, getActivePresetForRender, getSignalPathPreset, isCompositeEditMode } from "./state.js";
 import { setActivePresetSceneId } from "./presetLibraryStore.js";
 import { buildBlendModelMappingsFromIds, findBlendForToneGroup } from "./blendUtils.js";
 import type {
@@ -6,10 +6,9 @@ import type {
   GraphNode,
   Preset,
 } from "./types.js";
-import { postMessage } from "./bridge.js";
+import { addScene, postMessage, removeScene, renameScene, selectScene } from "./bridge.js";
 import { revealCompactNodeDetail } from "./compactStage.js";
 import { escapeHtml } from "./utils.js";
-import { showNotification } from "./notifications.js";
 import { EffectTypeRegistry, getNodeEffectInfo } from "./presetV2.js";
 import { EffectGuids } from "./effectGuids.js";
 import { renderIcon } from "./iconAssets.js";
@@ -27,7 +26,7 @@ import { resolveNodeDropAction, type NodeDropTarget } from "./signalPathDropTarg
 import { resolveLayoutForNode } from "./layoutPreferences.js";
 import { layoutDesigner } from "./layoutDesigner.js";
 import { closeLayoutPicker } from "./layoutPicker.js";
-import { createPresetScene, findPresetScene, normalizePresetScenes, removePresetScene, selectPresetScene } from "./presetScenes.js";
+import { findPresetScene, normalizePresetScenes, selectPresetScene } from "./presetScenes.js";
 import { isNodeBypassed } from "./graphNodes.js";
 import {
   getLastSelectedNodeCategory,
@@ -47,7 +46,7 @@ import { getSelectedSignalPathNode } from "./signalPath/nodeResources.js";
 import { getEffectVisualizationEquipmentImage, showVisualizerPanel, updateEffectVisualization } from "./signalPath/visualization.js";
 import { expectAddedNode, forgetExpectedAddedNode, takeAddedNode } from "./signalPath/addedNode.js";
 import { getCategoryClass, getNodeCategory, getNodeIcon, handleNamIrFileDrop, inferResourceTypeFromFile, isNamOrCabIrNode, nodeAcceptsResourceType } from "./signalPath/nodeTypes.js";
-import { getEditableSignalPathPreset, pushScenePresetToBackend, removeInlineMixer, renderInlineMixer, renderMixerPresetTabs } from "./signalPath/mixer.js";
+import { getEditableSignalPathPreset, removeInlineMixer, renderInlineMixer, renderMixerPresetTabs } from "./signalPath/mixer.js";
 import { isMixTabActive } from "./signalPath/state.js";
 import { setNodeParamsRefresher, setSignalPathRenderer } from "./signalPath/render.js";
 import { SIGNAL_PATH_FULL_HEIGHT, scheduleSignalPathLayoutAdapt } from "./signalPath/layout.js";
@@ -1324,18 +1323,18 @@ function buildPresetScenePanelMarkup(preset: Preset, activeSceneId: string): str
   `;
 }
 
+// Scene edits are engine commands: the engine changes its working copy and answers with
+// "presetLoaded", which re-renders this bar, and reports the unsaved change itself.
+
 function addSceneFromToolbar(): void {
   const activePreset = getSignalPathPreset();
   if (!activePreset) {
     return;
   }
 
-  const editablePreset = getEditableSignalPathPreset(activePreset);
-  const newScene = createPresetScene(editablePreset, uiState.activePresetSceneId ?? undefined);
-  setActivePresetSceneId(newScene.id);
-  setPresetDirty(true);
-  pushScenePresetToBackend(editablePreset);
-  renderSignalPathBar();
+  // Makes sure the engine is editing the preset on screen (a focused mixer slot).
+  getEditableSignalPathPreset(activePreset);
+  addScene(uiState.activePresetSceneId);
 }
 
 function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void {
@@ -1345,41 +1344,27 @@ function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void 
       if (!nextSceneId || nextSceneId === uiState.activePresetSceneId) {
         return;
       }
+      // Draw the switch now; the engine's reply confirms it once the scene is built. In a
+      // multi-preset mix the engine rebuilds only this preset's slot.
       const editablePreset = getEditableSignalPathPreset(renderedPreset);
       setActivePresetSceneId(selectPresetScene(editablePreset, nextSceneId));
-      pushScenePresetToBackend(editablePreset);
+      selectScene(nextSceneId);
       renderSignalPathBar();
     });
   });
 
   const titleInput = panel.querySelector<HTMLInputElement>(".preset-scene-title-input");
   titleInput?.addEventListener("change", () => {
-    const editablePreset = getEditableSignalPathPreset(renderedPreset);
-    const selectedScene = findPresetScene(editablePreset, uiState.activePresetSceneId ?? undefined);
-    if (!selectedScene) {
-      return;
+    const sceneId = uiState.activePresetSceneId;
+    if (sceneId) {
+      renameScene(sceneId, titleInput.value);
     }
-    const nextTitle = titleInput.value.trim() || "Scene";
-    if (selectedScene.title === nextTitle) {
-      return;
-    }
-    selectedScene.title = nextTitle;
-    setPresetDirty(true);
-    pushScenePresetToBackend(editablePreset);
-    renderSignalPathBar();
   });
 
   panel.querySelector<HTMLButtonElement>("[data-scene-action='remove']")?.addEventListener("click", () => {
-    const editablePreset = getEditableSignalPathPreset(renderedPreset);
-    if ((editablePreset.scenes?.length ?? 0) <= 1) {
-      showNotification("A preset must keep at least one scene");
-      return;
-    }
-    const nextSceneId = removePresetScene(editablePreset, uiState.activePresetSceneId ?? "");
-    setActivePresetSceneId(nextSceneId);
-    setPresetDirty(true);
-    pushScenePresetToBackend(editablePreset);
-    renderSignalPathBar();
+    // Makes sure the engine is editing the preset on screen (a focused mixer slot).
+    getEditableSignalPathPreset(renderedPreset);
+    removeScene(uiState.activePresetSceneId ?? "");
   });
 }
 

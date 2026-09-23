@@ -8,7 +8,14 @@
 
 #include "PluginProcessorAdapter.h"
 #include "JuceHostedPluginEffect.h"
-#include "PluginEditor.h" // existing editor, unchanged
+#include "ProductInfo.h"
+#include "ProfileFolder.h"
+
+#if SOUNDSHED_NATIVE_UI
+ #include "nativeui/NanoEditor.h"
+#else
+ #include "PluginEditor.h"
+#endif
 #include "UiBridge.h"
 
 #include "controller/ControllerDisplayFeed.h"
@@ -521,7 +528,9 @@ void PluginProcessorAdapter::registerAutomationParameters()
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
 {
-    ensureStandaloneProtocolHandlerRegistration();
+    // Only Soundshed Guitar owns soundshed:// links (they open tone sharing).
+    if constexpr (soundshed::product::registersProtocolHandler)
+        ensureStandaloneProtocolHandlerRegistration();
 
 #if JUCE_LINUX
     // JUCE's LV2 manifest helper instantiates the editor in headless CI just to query
@@ -530,7 +539,11 @@ juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
         return new HeadlessLv2ManifestEditor (*this);
 #endif
 
+#if SOUNDSHED_NATIVE_UI
+    return new soundshed::nano::NanoEditor (*this);
+#else
     return new PluginEditor (*this);
+#endif
 }
 
 bool PluginProcessorAdapter::hasEditor() const { return true; }
@@ -937,8 +950,8 @@ bool PluginProcessorAdapter::IsMessageThread() const
 
 std::filesystem::path PluginProcessorAdapter::GetUserDataPath() const
 {
-    const auto dataDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                             .getChildFile ("Soundshed Guitar");
+    // The shared profile, whichever product this is (ProfileFolder.h).
+    const auto dataDir = soundshed::profileFolder();
 
 #if JUCE_MAC
     // Runs at most once per process; every consumer of the user data path funnels

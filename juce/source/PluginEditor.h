@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessorAdapter.h"
+#include "editor/SoundshedEditorBase.h"
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include <functional>
@@ -28,8 +29,9 @@ private:
 };
 
 //==============================================================================
-class PluginEditor : public juce::AudioProcessorEditor,
-                     private juce::Timer
+/// The Soundshed Guitar editor: the WebView UI in core/ui. What every editor does regardless of
+/// how it draws (idle tick, sizing, DPI, visibility) lives in SoundshedEditorBase.
+class PluginEditor : public soundshed::editor::SoundshedEditorBase
 {
 public:
     explicit PluginEditor (PluginProcessorAdapter&);
@@ -38,15 +40,12 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
-    void setScaleFactor (float newScale) override;
-    void parentHierarchyChanged() override;
 
     // Handle deep link from another instance of the app
-    void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery);
+    void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery) override;
 
 private:
-    void timerCallback() override;
-    void applyHostScaleWorkaround();
+    void idleTick() override;
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     juce::String getResourceRootUrl() const;
 
@@ -56,19 +55,9 @@ private:
     void showLinuxWebViewDependencyMessage (const juce::String& reason);
    #endif
 
-    PluginProcessorAdapter& processorRef;
-
     juce::File resourceRoot;
 
-    // Set once a host has pushed its DPI scale at us via setScaleFactor(). Of the formats we
-    // build, only the CLAP wrapper does that - see applyHostScaleWorkaround() for why it matters.
-    bool hostSuppliedScaleFactor = false;
-
     SinglePageBrowser webView;
-
-    // Last off-screen size we logged as not-remembered, so a host that keeps re-reporting
-    // one does not fill the log with it. See resized().
-    juce::Point<int> lastIgnoredResize { -1, -1 };
 
    #if JUCE_LINUX
     juce::Label linuxWebViewStatusLabel;

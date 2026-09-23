@@ -191,7 +191,8 @@ and builds, and `clean --all` removes the renders and reports as well.
 - Composites and blends from the user's library, and factory presets that need resources
   outside `core/tests/testdata/assets`.
 - UI-side defaults beyond what `snapshot.json` spells out. The New Preset chain copies
-  `createEmptyPresetV2` by hand, so keep it in step.
+  the engine's `BuildNewPreset` (`controller/PluginControllerPresetEdits.cpp`) by hand, so
+  keep it in step.
 - Controller policy in the effects pass. That pass mirrors the controller's defaults (the
   12 dBu NAM calibration) rather than running the controller. The chains pass runs the real
   controller, so a policy change shows up there.

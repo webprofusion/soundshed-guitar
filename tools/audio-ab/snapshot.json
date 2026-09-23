@@ -14,7 +14,7 @@
     {
       "id": "new-preset",
       "name": "New Preset with an amp model",
-      "description": "The New Preset template (createEmptyPresetV2 in core/ui/ts/presetV2.ts) exactly as the UI sends it, with a model loaded into the Neural Amp. The gate, Neural FX and IR Cab are bypassed.",
+      "description": "The New Preset template (BuildNewPreset in core/src/controller/PluginControllerPresetEdits.cpp, which newPreset loads), with a model loaded into the Neural Amp. The gate, Neural FX and IR Cab are bypassed.",
       "nodes": [
         { "type": "dynamics_gate", "enabled": false, "freshParams": false, "params": { "threshold": -40, "attack": 0.5, "hold": 50, "release": 100 } },
         { "type": "fx_nam", "enabled": false, "freshParams": false, "params": { "inputGain": 0, "outputGain": 0, "useCalibration": 1 } },

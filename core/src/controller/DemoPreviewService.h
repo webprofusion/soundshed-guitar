@@ -29,6 +29,11 @@ class DemoPreviewService
     /// (`{startSec, endSec, looping}`) confines playback to a sub-range and
     /// optionally repeats it.
     void StartPreview(const nlohmann::json& payload);
+
+    /// Plays audio file bytes (WAV, AIFF or MP3) into the input; with `loop` it repeats
+    /// seamlessly until stopped, rather than completing.
+    void StartPreviewFromBytes(const std::vector<std::uint8_t>& bytes, const std::string& id,
+                               const std::string& title, bool loop);
     void StopPreview();
     void OnIdle();
     [[nodiscard]] bool IsPreviewActive() const;
@@ -81,6 +86,9 @@ class DemoPreviewService
     /// the caller treats that as "play the whole thing once" rather than an
     /// error, because it is reachable just by dragging a marker past its
     /// partner.
+    void StartDecodedPreview(const std::vector<std::uint8_t>& bytes, const std::string& id, const std::string& title,
+                             const nlohmann::json* region, bool loopWhole);
+
     [[nodiscard]] static std::shared_ptr<const PreviewRegion>
     BuildRegion(const std::shared_ptr<DemoAudioBuffer>& buffer, double startSec, double endSec, bool looping);
 

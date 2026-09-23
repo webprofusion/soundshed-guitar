@@ -362,7 +362,7 @@ UI for the multi-preset parallel mixing engine.
 - Per-preset mix level fader, pan control, mute button, solo button.
 - Master gain fader and limiter toggle.
 - DSP load and signal-level meters displayed per preset.
-- Messages: `addActivePreset`, `removeActivePreset`, `setPresetMix`, `setPresetPan`, `setPresetMute`, `setPresetSolo`, `setMasterGain`. The limiter follows the `audio.dsp.outputLimiterEnabled` app setting.
+- Messages: `addActivePreset`, `removeActivePreset`, `setPresetMix`, `setPresetPan`, `setPresetMute`, `setPresetSolo`, `setMixGain`. The limiter follows the `audio.dsp.outputLimiterEnabled` app setting.
 
 ---
 
@@ -538,7 +538,7 @@ Bidirectional JSON messages over the WebView bridge:
 
 **Key engine→UI messages**: `state`, `presetLoaded`, `presetSaved`, `presetList`, `error`, `tunerUpdate`, `dspPerformance`, `sldRoster`/`sld`, `globalChain`, `effectCatalog`, `compositeLibrary`, `metronomeState`, `previewStarted`, `previewComplete`, `resourceImported`, `layoutLibraryLoaded`.
 
-**Key UI→engine messages**: `uiReady`, `requestState`, `setGlobalChainParam`, `setParameter`, `loadPreset`, `savePreset`, `addSignalPathNode`, `deleteSignalPathNode`, `replaceSignalPathNode`, `reorderSignalPathNode`, `updateSignalPathNodeParam`, `updateSignalPathNodeBypass`, `updateNodeResource`, `addActivePreset`, `setPresetMix`, `setPresetMute`, `setPresetSolo`, `setMasterGain`, `tuner`, `setMetronome`, `runSignalPathTest`, `previewDemoAudio`, `importRemoteResource`, `saveCompositeDefinition`, `getEffectCatalog`, `getPresetList`.
+**Key UI→engine messages**: `uiReady`, `requestState`, `setGlobalChainParam`, `setParameter`, `loadPreset`, `savePreset`, `addSignalPathNode`, `deleteSignalPathNode`, `replaceSignalPathNode`, `reorderSignalPathNode`, `updateSignalPathNodeParam`, `updateSignalPathNodeBypass`, `updateNodeResource`, `addActivePreset`, `setPresetMix`, `setPresetMute`, `setPresetSolo`, `setOutputMuted`, `tuner`, `setMetronome`, `runSignalPathTest`, `previewDemoAudio`, `importRemoteResource`, `saveCompositeDefinition`, `getEffectCatalog`, `getPresetList`.
 
 ### Message Dispatching (C++)
 

@@ -10,49 +10,12 @@
 #include <nlohmann/json.hpp>
 
 #include "UiBridge.h"
+#include "editor/StartupLog.h"
 #include "WebView2UserData.h"
 
 namespace
 {
     const juce::String kResourceOrigin = "http://soundshed.local/";
-
-    // Editor window size limits, in the units the wrapper works in. Those are logical
-    // units in every path: under CLAP on a scaled Windows desktop the peer is pinned to
-    // 1.0 and the host scale arrives as an editor transform instead, which cancels out
-    // to the same thing (see applyHostScaleWorkaround).
-    constexpr int minEditorWidth = 640;
-    constexpr int minEditorHeight = 400;
-    constexpr int maxEditorWidth = 8192;
-    constexpr int maxEditorHeight = 8192;
-
-    // What a brand-new instance opens at, when there is no remembered size to restore
-    // (PluginController::GetEditorWindowSize). A share of the display rather than a fixed
-    // pixel size, because no fixed pair works on both ends of the range: 1200x900 is only
-    // half the width of a 4K desktop running at 175%, while 1600x1000 is wider than a
-    // 1366x768 laptop screen. The preferred size is the cap - past it the extra pixels
-    // stop buying anything.
-    constexpr double defaultEditorDisplayFraction = 0.8;
-    constexpr int preferredEditorWidth = 1600;
-    constexpr int preferredEditorHeight = 1100;
-
-    juce::Point<int> getDefaultEditorSize()
-    {
-        auto width = preferredEditorWidth;
-        auto height = preferredEditorHeight;
-
-        // There is no peer yet while the editor is being constructed, so this is the
-        // primary display rather than the one the host's window will end up on. userArea
-        // excludes the taskbar and is in the same logical units the editor is sized in.
-        if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
-        {
-            const auto usable = display->userArea;
-            width = juce::jmin (width, juce::roundToInt ((double) usable.getWidth() * defaultEditorDisplayFraction));
-            height = juce::jmin (height, juce::roundToInt ((double) usable.getHeight() * defaultEditorDisplayFraction));
-        }
-
-        return { juce::jlimit (minEditorWidth, maxEditorWidth, width),
-                 juce::jlimit (minEditorHeight, maxEditorHeight, height) };
-    }
 
     bool isYouTubeUrl (const juce::String& url)
     {
@@ -294,40 +257,7 @@ void SinglePageBrowser::newWindowAttemptingToLoad (const juce::String& newURL)
 
 namespace
 {
-    // Write a line to a persistent startup log file sitting next to the executable.
-    // This survives after the process exits and works in release builds where
-    // OutputDebugString is the only other option.
-    void writeStartupLog (const juce::String& message)
-    {
-        const auto logDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                                .getChildFile ("Soundshed Guitar")
-                                .getChildFile ("logs");
-        logDir.createDirectory();
-        const auto logFile = logDir.getChildFile ("soundshed-startup.log");
-        juce::FileOutputStream stream (logFile);
-        if (stream.openedOk())
-        {
-            stream.setPosition (stream.getFile().getSize()); // append
-            const auto line = juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S") + "  " + message + "\n";
-            stream.writeText (line, false, false, nullptr);
-        }
-
-#if !JUCE_LINUX
-        juce::Logger::writeToLog (message);
-#endif
-    }
-
-    // Tell the controller whether an editor is on screen, as the page's own "uiVisibility"
-    // message would. The page reports minimise and hide itself, but it cannot report its
-    // own teardown, and without this the metering and per-node timing it gates would keep
-    // running on the audio thread after the editor closes.
-    void reportUiVisibility (PluginProcessorAdapter& processor, bool visible)
-    {
-        nlohmann::json msg;
-        msg["type"] = "uiVisibility";
-        msg["visible"] = visible;
-        processor.getController().HandleUIMessage (msg.dump());
-    }
+    using soundshed::editor::writeStartupLog;
 
     // The WebView2 profile: one stable per-user folder, shared by the support probe
     // and the editor itself (WebView2UserData.h says why it is keyed on the runtime's
@@ -429,8 +359,7 @@ namespace
 }
 
 PluginEditor::PluginEditor (PluginProcessorAdapter& p)
-    : AudioProcessorEditor (&p),
-      processorRef (p),
+    : SoundshedEditorBase (p, {}),
       resourceRoot ([&p] {
           const auto exeFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
           const auto exeDir = std::filesystem::path (exeFile.getParentDirectory().getFullPathName().toStdString());
@@ -634,55 +563,22 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 #endif
     }
 
-    setResizable (true, true);
-    setResizeLimits (minEditorWidth, minEditorHeight, maxEditorWidth, maxEditorHeight);
-
-    // Reopen at the size this instance was last left at. The size is restored from the
-    // DAW project (host state), so it survives both closing the editor window and
-    // reopening the project; a brand-new instance falls back to the default. Clamped to
-    // the resize limits, which setSize() itself does not enforce.
-    const auto rememberedSize = processorRef.getController().GetEditorWindowSize();
-    const auto defaultSize = getDefaultEditorSize();
-    const auto initialWidth = rememberedSize.IsValid()
-                                  ? juce::jlimit (minEditorWidth, maxEditorWidth, rememberedSize.width)
-                                  : defaultSize.x;
-    const auto initialHeight = rememberedSize.IsValid()
-                                   ? juce::jlimit (minEditorHeight, maxEditorHeight, rememberedSize.height)
-                                   : defaultSize.y;
-    setSize (initialWidth, initialHeight);
-    writeStartupLog ("[PluginEditor] opening at " + juce::String (initialWidth) + "x" + juce::String (initialHeight)
-                     + (rememberedSize.IsValid() ? " (remembered)" : " (default for this display)"));
+    applyInitialEditorSize();
 
     // A previous editor's close switched the telemetry off; turn it back on now rather than
     // when the page finishes booting. The page still reports its real visibility then.
-    reportUiVisibility (processorRef, true);
-
-    // Start periodic idle timer (~60 fps) for controller maintenance tasks.
-    // This drives state broadcasts, DSP performance updates, tuner data, etc.
-    startTimerHz (60);
+    reportUiVisible (true);
 }
 
 PluginEditor::~PluginEditor()
 {
-    stopTimer();
-
-    // One line per editor lifetime, and the pair that matters when a window comes back at
-    // the wrong size: what the editor was last laid out at, and what was actually kept.
-    const auto remembered = processorRef.getController().GetEditorWindowSize();
-    writeStartupLog ("[PluginEditor] closing at " + juce::String (getWidth()) + "x" + juce::String (getHeight())
-                     + "; remembered "
-                     + (remembered.IsValid() ? juce::String (remembered.width) + "x" + juce::String (remembered.height)
-                                             : juce::String ("nothing")));
+    // The base destructor then reports the editor hidden (switching the audio thread's
+    // metering off), after the page's callback is gone so nothing reaches the dying page.
     processorRef.setWebMessageCallback (nullptr);
-
-    // After the callback is gone, so nothing this triggers can reach the dying page.
-    reportUiVisibility (processorRef, false);
 }
 
-void PluginEditor::timerCallback()
+void PluginEditor::idleTick()
 {
-    processorRef.getController().OnIdle();
-
 #if JUCE_LINUX
     if (!linuxWebViewLoadCompleted && !linuxWebViewFallbackShown)
     {
@@ -846,83 +742,10 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     webView.setBounds (getLocalBounds());
-
-
-    // Remember the size the host left us at, so reopening this editor - or this project -
-    // comes back the same size. Only the size: the DAW owns where the window sits.
-    //
-    // Only while we are actually on screen, though. A host resizes the editor on its way
-    // to closing the window as well as while the user drags it, and setResizeLimits means
-    // a degenerate rect arrives here already clamped up to the minimum size - a plausible
-    // looking size nobody chose. Remembering that is what makes the next open come up
-    // tiny. The controller drops anything that does not then survive an idle tick.
-    if (isShowing())
-    {
-        processorRef.getController().SetEditorWindowSize (getWidth(), getHeight());
-    }
-    else if (getWidth() != lastIgnoredResize.x || getHeight() != lastIgnoredResize.y)
-    {
-        lastIgnoredResize = { getWidth(), getHeight() };
-        writeStartupLog ("[PluginEditor] not remembering off-screen resize to "
-                         + juce::String (getWidth()) + "x" + juce::String (getHeight()));
-    }
+    rememberEditorSize();
 
 #if JUCE_LINUX
     linuxWebViewStatusLabel.setBounds (getLocalBounds().reduced (24));
-#endif
-}
-
-void PluginEditor::setScaleFactor (float newScale)
-{
-    hostSuppliedScaleFactor = true;
-    juce::AudioProcessorEditor::setScaleFactor (newScale);
-    applyHostScaleWorkaround();
-}
-
-void PluginEditor::parentHierarchyChanged()
-{
-    // The peer is created when the wrapper calls addToDesktop(), which happens after the host
-    // has already pushed its scale factor at us, so re-apply the workaround against the new peer.
-    applyHostScaleWorkaround();
-}
-
-// Works around double DPI scaling under CLAP on Windows.
-//
-// CLAP's win32 window API is defined in *physical* pixels, and the clap-juce-extensions wrapper
-// is written on that basis: it applies the host's DPI scale as a JUCE editor transform via
-// setScaleFactor(), then reports the resulting JUCE bounds straight back to the host from
-// guiGetSize()/guiRequestResize(). That is only correct while JUCE logical units and physical
-// pixels are the same thing.
-//
-// They are not. The wrapper attaches us with addToDesktop(0, hostHwnd), and a per-monitor
-// DPI-aware HWNDComponentPeer inherits its platform scale from the parent window, so the peer is
-// already scaling by the monitor DPI. The host scale then lands on top as a transform and the UI
-// renders at scale squared - 2.25x on a 150% display - while the host sizes its window for only
-// one factor, so the UI is both oversized and clipped.
-//
-// JUCE's own VST3 wrapper sidesteps this by routing the host scale through
-// ComponentPeer::setCustomPlatformScaleFactor(), which replaces the platform scale instead of
-// compounding with it. We can't reach that path from CLAP, so do the equivalent from this side:
-// pin the peer to 1.0 so JUCE units are physical pixels again, which is the contract the wrapper
-// assumes, and let the host-supplied transform be the only scale in play.
-//
-// Only Windows is affected. On macOS the wrapper never calls setScaleFactor(), and X11 peers
-// report a platform scale of 1.0 already, so the host scale is the only one applied there too.
-void PluginEditor::applyHostScaleWorkaround()
-{
-#if JUCE_WINDOWS && JUCE_WIN_PER_MONITOR_DPI_AWARE
-    if (! hostSuppliedScaleFactor)
-        return;
-
-    auto* peer = getPeer();
-    if (peer == nullptr || peer->getCustomPlatformScaleFactor().has_value())
-        return;
-
-    writeStartupLog ("[PluginEditor] pinning peer platform scale to 1.0 (was "
-                     + juce::String (peer->getPlatformScaleFactor(), 3)
-                     + "); host scale factor is applied as an editor transform");
-
-    peer->setCustomPlatformScaleFactor (1.0);
 #endif
 }
 
@@ -941,6 +764,5 @@ void PluginEditor::handleDeepLinkFromAnotherInstance (const juce::String& deepLi
     processorRef.SendMessageToUI (jsonStr);
 
     // Also bring the window to focus
-    if (auto* window = getTopLevelComponent())
-        window->toFront (true);
+    SoundshedEditorBase::handleDeepLinkFromAnotherInstance (deepLinkQuery);
 }

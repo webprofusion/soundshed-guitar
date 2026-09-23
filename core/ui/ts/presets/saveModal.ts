@@ -13,7 +13,7 @@ import { findFolderForPreset, isVirtualPresetFolderId } from "../presets/folders
 import { stripLegacyGlobals } from "../presets/sanitize.js";
 import { normalizePresetScenes } from "../presetScenes.js";
 import { STANDARD_TAGS, renderTagChips } from "../presetTags.js";
-import { createEmptyPresetV2, generateUserPresetId } from "../presetV2.js";
+import { generateUserPresetId } from "../presetV2.js";
 import { clonePreset, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
 import { cachePreset, putLibraryPresetFirst, replaceLibraryPreset, setActivePresetId, setActivePresetSceneId, showAllLibraryPresets } from "../presetLibraryStore.js";
 import type { Preset } from "../types.js";
@@ -128,32 +128,41 @@ export function closeSavePresetModal(): void {
   }
 }
 
-export function createDefaultPreset(): void {
-  const newPreset = createEmptyPresetV2();
-  setActivePresetSceneId(normalizePresetScenes(newPreset));
-  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
-  const selectedFolderId = isVirtualPresetFolderId(activeFolderId) ? PRESET_FOLDER_ALL_ID : activeFolderId;
+/** The real folder the library had open when New was pressed, for the preset it creates. */
+let newPresetFolderId: string | null = null;
 
-  putLibraryPresetFirst(newPreset);
+function resolveNewPresetFolderId(): string {
+  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  return isVirtualPresetFolderId(activeFolderId) ? PRESET_FOLDER_ALL_ID : activeFolderId;
+}
+
+/**
+ * New: the engine builds the default preset and loads it unsaved, answering with
+ * "presetLoaded" marked `created`, which adoptCreatedPreset files in the library.
+ */
+export function createDefaultPreset(): void {
+  newPresetFolderId = resolveNewPresetFolderId();
+  postMessage({ type: "newPreset" });
+}
+
+/**
+ * The engine's new preset has arrived (presetHandlers.ts has made it the active, clean
+ * preset): put it first in the library and in the folder that was open, as unsaved.
+ */
+export function adoptCreatedPreset(preset: Preset): void {
+  const folderId = newPresetFolderId ?? resolveNewPresetFolderId();
+  newPresetFolderId = null;
+
+  putLibraryPresetFirst(clonePreset(preset));
   showAllLibraryPresets();
-  cachePreset(newPreset);
-  if (selectedFolderId) {
-    movePresetToFolder(newPreset.id, selectedFolderId);
+  if (folderId) {
+    movePresetToFolder(preset.id, folderId);
   }
-  setActivePresetId(newPreset.id);
   setActivePresetIsNew(true);
-  setActivePresetSnapshot(newPreset);
-  setActivePresetDraft(newPreset);
-  setPresetDirty(false);
   populatePresetDropdown();
-  requestPresetUIRender(clonePreset(newPreset));
-  showNotification("Preset created", newPreset.name);
+  requestPresetUIRender(clonePreset(preset));
+  showNotification("Preset created", preset.name);
   updatePresetActionButtons();
-  postMessage({
-    type: "loadPreset",
-    preset: newPreset,
-    ...(uiState.activePresetSceneId ? { sceneId: uiState.activePresetSceneId } : {}),
-  });
 }
 
 export function saveCurrentPreset(): void {

@@ -23,11 +23,20 @@ export function getAppSetting(key: string): AppSettingValue {
 
 /** Changes a setting: records it here and persists it through the engine. */
 export function updateAppSetting(key: string, value: AppSettingValue): void {
+  recordAppSetting(key, value);
+  setAppSetting(key, value);
+}
+
+/**
+ * Records a setting's value without sending it: one the engine changed itself and reported
+ * with "appSettingChanged", or one a command the caller has just sent will change there
+ * (`setResourceFavorite`), drawn before the engine's answer arrives.
+ */
+export function recordAppSetting(key: string, value: AppSettingValue): void {
   if (!uiState.appSettings) {
     uiState.appSettings = {};
   }
   uiState.appSettings[key] = value;
-  setAppSetting(key, value);
 }
 
 /** Changes several settings at once, in order. */

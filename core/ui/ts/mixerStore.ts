@@ -86,11 +86,6 @@ export function updateMixerSlot(presetId: string, change: Partial<SlotMix>): voi
   if (slot) Object.assign(slot, change);
 }
 
-/** The linear output multiplier, 0 while the output is muted. Does nothing before the mixer exists. */
-export function setMixerMasterGain(gain: number): void {
-  if (uiState.mixer) uiState.mixer.masterGain = gain;
-}
-
 /** The Multi-Rig's own level in dB. Does nothing before the mixer exists. */
 export function setMixerMixGainDb(gainDb: number): void {
   if (uiState.mixer) uiState.mixer.mixGainDb = gainDb;

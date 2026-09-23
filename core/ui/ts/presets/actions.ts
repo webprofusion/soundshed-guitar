@@ -14,7 +14,7 @@ import { showNotification } from "../notifications.js";
 import { exportCurrentPresetArchive, exportPresetArchiveSession, getToneSharingOriginMetadata, importPackWithConfirmation } from "../presets/archive.js";
 import { cachePresetInMemory } from "../presets/cache.js";
 import { presetSearchElement } from "../presets/dom.js";
-import { loadFavoritePresetIds, saveFavoritePresetIds } from "../presets/favorites.js";
+import { isPresetFavorite, setPresetFavorite } from "../presets/favorites.js";
 import { persistPresetFolders, removePresetFromFolders } from "../presets/folders.js";
 import { requestPresetUIRender, setPresetLibraryRefresher } from "../presets/refresh.js";
 import { clonePreset, getActivePresetForRender, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
@@ -85,9 +85,8 @@ export async function deleteCurrentPreset(): Promise<void> {
     removeLibraryPresets([activePresetId]);
     removePresetFromFolders(uiState.presetFolders ?? [], activePresetId);
     persistPresetFolders();
-    const favorites = loadFavoritePresetIds();
-    if (favorites.delete(activePresetId)) {
-      saveFavoritePresetIds(favorites);
+    if (isPresetFavorite(activePresetId)) {
+      setPresetFavorite(activePresetId, false);
     }
     setFilteredPresets(getFilteredPresets(presetSearchElement?.value ?? ""));
 

@@ -32,7 +32,7 @@
  */
 
 import type { Preset, SignalGraph } from "../types.js";
-import { clonePreset, getSignalPathPreset, setPresetDirty, uiState } from "../state.js";
+import { clonePreset, getSignalPathPreset, uiState } from "../state.js";
 import { findPresetScene, normalizePresetScenes } from "../presetScenes.js";
 import { showNotification } from "../notifications.js";
 import {
@@ -65,9 +65,6 @@ const COMMIT_DEBOUNCE_MS = 320;
  * always byte-identical to the one that went out.
  */
 const RESTORE_SETTLE_MS = 1500;
-
-/** Long enough for the `presetLoaded` echo to have landed, short enough to stay inside the settle window. */
-const DIRTY_RESYNC_MS = 700;
 
 const history = new ChainHistory();
 
@@ -221,23 +218,9 @@ function applyWholeGraph(preset: Preset, sceneId: string | null, graph: SignalGr
   }
   restored.graph = graphCopy;
 
-  // `activePresetSnapshot` is the app's record of the preset as last saved, and
-  // it is what "are there unsaved changes?" is measured against. Reloading a
-  // preset overwrites it — reasonable for a real load, wrong for a restore,
-  // which would make stepping back through edits quietly look like a save and
-  // drop the discard-changes prompt. Hold onto it and put it back.
-  const savedBeforeRestore = uiState.activePresetSnapshot ?? null;
+  // A body load of the preset being edited keeps its unsaved state: the engine compares the
+  // restored graph with the preset as loaded or saved, and says whether it is still dirty.
   pushScenePresetToBackend(restored);
-  setTimeout(() => resyncDirtyFlagAfterRestore(savedBeforeRestore), DIRTY_RESYNC_MS);
-}
-
-function resyncDirtyFlagAfterRestore(saved: Preset | null): void {
-  const context = readChainContext();
-  if (!context || !saved || saved.id !== context.preset.id) {
-    return;
-  }
-  uiState.activePresetSnapshot = saved;
-  setPresetDirty(graphSignature(context.graph) !== graphSignature(saved.graph));
 }
 
 function applySnapshot(target: ChainSnapshot): void {

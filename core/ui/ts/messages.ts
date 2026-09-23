@@ -15,11 +15,11 @@ import { DEBUG_SNAPSHOT_SKIP_TYPES, onCaptureDebugSnapshot, onDebugSnapshotWritt
 import { onCompositeDefinitionAdded, onCompositeDefinitionRemoved, onCompositeEditModeExited, onCompositeEditState, onCompositeLibrary, onCompositePresetList, onCompositePresetLoaded, onCompositePresetSaved, onCustomEffectLibrary, onCustomEffectSaved, onEffectCatalog, onEffectResponse, onGeneratedCustomEffectBundleExportFailed, onGeneratedCustomEffectBundleExportSaved, onSimpleCabIrMatch } from "./messages/effectHandlers.js";
 import { onLayoutExportFailed, onLayoutExportSaved, onLayoutImageSelected, onLayoutImagesLoaded, onLayoutLibraryLoaded, onLayoutSaved } from "./messages/layoutHandlers.js";
 import { onNavigateToToneSharingDeepLink } from "./messages/mixerHandlers.js";
-import { onEffectPresets, onPresetArchiveSessionEnded, onPresetArchiveSessionFailed, onPresetArchiveSessionStarted, onPresetData, onPresetExportFailed, onPresetExportSaved, onPresetFavorites, onPresetFolders, onPresetList, onPresetLoaded, onPresetRatings, onPresetSaved, onSetlistCursorChanged, onSetlists } from "./messages/presetHandlers.js";
+import { onEffectPresets, onPresetArchiveSessionEnded, onPresetArchiveSessionFailed, onPresetArchiveSessionStarted, onPresetData, onPresetDirtyChanged, onPresetExportFailed, onPresetExportSaved, onPresetFavorites, onPresetFolders, onPresetList, onPresetLoaded, onPresetRatings, onPresetRecents, onPresetSaved, onSetlistCursorChanged, onSetlists } from "./messages/presetHandlers.js";
 import { onBlendExportFailed, onBlendExportSaved, onHostedPluginResourceLoadCompleted, onHostedPluginResourceLoadFailed, onIrLoaded, onLibraryExportFailed, onLibraryExportSaved, onModelLoaded, onNodeResourceBrowseCancelled, onResourceCleanupResult, onResourceData, onResourceDataFailed, onResourceDeleteFailed, onResourceFolderListing, onResourceFolderListingFailed, onResourceFolderMetadata, onResourceFolderPicked, onResourceImported, onResourceImportFailed, onResourceRemoved, onResourceUsageInfo, onToneSharingPackDeleteFailed } from "./messages/resourceHandlers.js";
 import { onSharedSyncState, onSharedSyncUpdated } from "./messages/sharedSync.js";
 import { onGlobalSignalChainChanged, onSignalPathNodeConfigUpdated, onSignalPathNodeParamUpdated, onSignalPathTestResult, onSpatialPosition } from "./messages/signalPathHandlers.js";
-import { onAmpCabStateChanged, onAppInfo, onError, onInputModeChanged, onState, onTheme } from "./messages/stateHandlers.js";
+import { onAmpCabStateChanged, onAppInfo, onAppSettingChanged, onError, onInputModeChanged, onOutputMutedChanged, onState, onTheme } from "./messages/stateHandlers.js";
 import { onDspPerformance, onSld, onSldA, onSldRoster, onSldS } from "./messages/telemetry.js";
 import { onTunerLiveModeChanged, onTunerReferenceChanged, onTunerStarted, onTunerStopped, onTunerUpdate } from "./messages/tunerHandlers.js";
 import type { MessageHandler } from "./messages/types.js";
@@ -46,6 +46,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "practiceToolPlaybackEnded": onPracticeToolPlaybackEnded,
   "resourceCleanupResult": onResourceCleanupResult,
   "presetLoaded": onPresetLoaded,
+  "presetDirtyChanged": onPresetDirtyChanged,
   "signalPathTestResult": onSignalPathTestResult,
   "previewStarted": onPreviewStarted,
   "previewComplete": onPreviewComplete,
@@ -82,6 +83,8 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "presetArchiveSessionFailed": onPresetArchiveSessionFailed,
   "presetList": onPresetList,
   "appInfo": onAppInfo,
+  "appSettingChanged": onAppSettingChanged,
+  "outputMutedChanged": onOutputMutedChanged,
   "audioDeviceState": onAudioDeviceState,
   "audioDeviceLevels": onAudioDeviceLevels,
   "sharedSyncUpdated": onSharedSyncUpdated,
@@ -90,6 +93,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "presetFolders": onPresetFolders,
   "presetFavorites": onPresetFavorites,
   "presetRatings": onPresetRatings,
+  "presetRecents": onPresetRecents,
   "setlists": onSetlists,
   "effectPresets": onEffectPresets,
   "setlistCursorChanged": onSetlistCursorChanged,

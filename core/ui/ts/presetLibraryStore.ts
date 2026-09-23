@@ -17,6 +17,14 @@
 import { uiState } from "./state.js";
 import type { Preset } from "./types.js";
 
+/**
+ * The presets the engine's own list names ("presetList") or has just saved: user, factory
+ * and factory-archive presets, which `loadPreset {presetId}` loads without a body. Anything
+ * else in the library (a new unsaved preset, a shared or tone-sharing preset that arrived
+ * as a body) still has to be loaded with its body. See "What the engine can load by id".
+ */
+const storedPresetIds = new Set<string>();
+
 // ── The list ─────────────────────────────────────────────────────────────────
 
 /** Replaces the library list, and shows all of it until the next filter. */
@@ -72,7 +80,27 @@ export function removeLibraryPresets(ids: Iterable<string>): void {
   uiState.filteredPresets = uiState.filteredPresets.filter((preset) => !removed.has(preset.id));
   for (const id of removed) {
     uiState.presetCache.delete(id);
+    storedPresetIds.delete(id);
   }
+}
+
+// ── What the engine can load by id ───────────────────────────────────────────
+
+/** Replaces the set with the ids of the engine's preset list. */
+export function setStoredPresetIds(ids: Iterable<string>): void {
+  storedPresetIds.clear();
+  for (const id of ids) {
+    storedPresetIds.add(id);
+  }
+}
+
+/** The engine has saved this preset, so it can load it by id from now on. */
+export function markPresetStored(presetId: string): void {
+  storedPresetIds.add(presetId);
+}
+
+export function isStoredPreset(presetId: string): boolean {
+  return storedPresetIds.has(presetId);
 }
 
 // ── The filtered view ────────────────────────────────────────────────────────

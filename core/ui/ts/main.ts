@@ -24,7 +24,7 @@ import { initializeTuner } from "./tuner.js";
 import { initFxSelector, refreshFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
-import { renderFooterDemoAudioControls, bindFooterDemoAudioControls } from "./demoAudio.js";
+import { renderFooterDemoAudio } from "./demoAudio.js";
 import { initDensitySelect, initDiagnosticsToggle, initThemeSelect, initZoomControls, initUserInputCalibrationControls } from "./settings.js";
 import { postMessage } from "./bridge.js";
 import { initializeMetronome } from "./metronome.js";
@@ -296,11 +296,7 @@ async function bootstrap(): Promise<void> {
   });
 
   // Initialize footer demo audio controls
-  const footerDemoContainer = document.getElementById("footer-demo-audio-container");
-  if (footerDemoContainer) {
-    footerDemoContainer.innerHTML = renderFooterDemoAudioControls();
-    bindFooterDemoAudioControls();
-  }
+  renderFooterDemoAudio();
   initFooterActionsPopup();
   initializePlayFooterPadsToggle();
   initializePerformancePads();

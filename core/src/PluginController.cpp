@@ -148,6 +148,11 @@ void PluginController::Initialize()
     LoadLastSessionState();
     ApplyInputModeSettingsFromAppSettings();
 
+    // What was playing when the app started is the unsaved-changes baseline, not a preset
+    // just played: as in the web UI before, Recents gets only what is played from here on.
+    mActivePresetBaselineId = mActivePresetId;
+    mActivePresetBaseline = ActivePresetComparisonForm();
+
     // Initialize automation system
     mAutomationSlots.SetMixer(&mPresetMixer);
     mAutomationSlots.SetEffectRegistry(&EffectRegistry::Instance());
@@ -356,6 +361,12 @@ void PluginController::OnIdle()
 
     SyncAutomationActivePreset();
     SyncControllerDisplay();
+
+    // Only while a UI is ticking this: the flag exists to be drawn.
+    if (mUIReady)
+    {
+        UpdateActivePresetDirty();
+    }
 
     // MIDI learn capture polling
     if (mAutomationSlots.IsMidiLearnArmed())

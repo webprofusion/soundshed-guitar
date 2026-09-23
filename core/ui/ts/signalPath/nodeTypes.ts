@@ -9,28 +9,16 @@ import { arrayBufferToBase64 } from "../utils.js";
 import { EffectTypeRegistry, getNodeEffectInfo } from "../presetV2.js";
 import { EffectGuids } from "../effectGuids.js";
 import { getFxEffectIcon } from "../iconAssets.js";
+import { DEFAULT_NODE_CLASS, NODE_CATEGORY_ALIASES, NODE_CLASSES } from "../generated/effectPresentation.js";
 import { deduplicateResourcesByHashAndPath, resolveResourceIdAlias } from "../resourceDedup.js";
 import { getLibraryResource } from "../resourceLibrary.js";
 export function getNodeIcon(nodeType: string): string {
   return getFxEffectIcon(nodeType);
 }
 
+/** The chain node's colour class (core/ui/data/effect-presentation.json, shared with Nano). */
 export function getCategoryClass(category: string): string {
-  const categoryMap: Record<string, string> = {
-    "dynamics": "dynamics",
-    "amp": "amp",
-    "pedal": "amp",
-    "preamp": "amp",
-    "full-rig": "amp",
-    "channel": "amp",
-    "cab": "cab",
-    "eq": "eq",
-    "modulation": "modulation",
-    "delay": "delay",
-    "reverb": "reverb",
-    "utility": "utility",
-  };
-  return categoryMap[category] || "utility";
+  return NODE_CLASSES[category] || DEFAULT_NODE_CLASS;
 }
 
 export function getDeduplicatedLibraryResources(
@@ -159,8 +147,6 @@ export function getNodeCategory(node: GraphNode): string {
   if (explicit) return explicit;
   const typeInfo = getNodeEffectInfo(node);
   const category = typeInfo?.category || "utility";
-  if (category === "pedal" || category === "preamp" || category === "full-rig") {
-    return "amp";
-  }
-  return category;
+  // Gear categories an effect can declare (pedal, preamp, full-rig) show as amps.
+  return NODE_CATEGORY_ALIASES[category] ?? category;
 }

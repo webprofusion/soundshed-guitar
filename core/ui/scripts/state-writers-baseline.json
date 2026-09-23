@@ -24,7 +24,6 @@
     "state.ts"
   ],
   "activePresetSnapshot": [
-    "signalPath/history.ts",
     "state.ts"
   ],
   "activeSetlistId": [
@@ -185,7 +184,6 @@
   "uiSettings": [
     "messages/sharedSync.ts",
     "messages/stateHandlers.ts",
-    "presets/favorites.ts",
     "presets/recents.ts",
     "settings/appearance.ts"
   ]

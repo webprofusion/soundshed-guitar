@@ -173,6 +173,9 @@ Log-taper parameters: `ring_mod` `frequency`; `delay_digital` `highCut` and `low
 | `utility` | Utility processing | Gain, splitter, mixer, signal analyzer |
 | `synth` | Synthesized tones, and notes for them | Synth saw, Guitar to MIDI (experimental) |
 
+How each category looks in both UIs (the FX library's order, name and colour, its icon, the
+effect view's background and artwork) is defined in `core/ui/data/effect-presentation.json`.
+
 ## Effect Processor Interface
 
 ```cpp
@@ -1335,6 +1338,10 @@ For portable preset sharing, resources can be embedded:
 6. Place in `core/src/dsp/effects/`.
 7. Call the registration function from `RegisterAllEffects()` in `BuiltinEffects.h`.
 8. Effect appears in UI automatically via registry queries.
+9. Give it an icon (and, if it wants one, stock artwork) under `effects` in
+   `core/ui/data/effect-presentation.json`, keyed by its `EffectGuids` constant with its guid,
+   then run `node tools/gen-effect-presentation.mjs`. Both UIs read that file; without an entry
+   the effect shows its category's icon. See [user-interface.md](user-interface.md#effect-presentation-coreuidataeffect-presentationjson).
 
 Framework-specific effects, such as the JUCE plugin host, may live in the adapter layer instead. They should still use a stable UUID from `EffectGuids.h` and register with `EffectRegistry` before presets or the effect catalog are loaded.
 

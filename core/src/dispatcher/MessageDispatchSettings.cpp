@@ -71,9 +71,35 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
 
     if (type == "uiSettingsChanged")
     {
+        // "native" is Soundshed Guitar Nano's part of the blob. The web UI sends the whole
+        // blob it knows, which never includes it, so a replace keeps it; Nano sends a merge
+        // patch of its own part (docs/plans/native-ui.md, rule C4).
+        if (msg.contains("patch") && msg["patch"].is_object())
+        {
+            if (!c.mUiSettings.is_object())
+            {
+                c.mUiSettings = nlohmann::json::object();
+            }
+
+            c.mUiSettings.merge_patch(msg["patch"]);
+            c.mAppSettings["uiSettings"] = c.mUiSettings;
+            c.SaveAppSettings();
+            c.NotifyHostStateChanged();
+            return true;
+        }
+
         if (msg.contains("settings") && msg["settings"].is_object())
         {
+            const auto native = c.mUiSettings.is_object() && c.mUiSettings.contains("native")
+                                    ? c.mUiSettings["native"]
+                                    : nlohmann::json();
             c.mUiSettings = msg["settings"];
+
+            if (!native.is_null() && !c.mUiSettings.contains("native"))
+            {
+                c.mUiSettings["native"] = native;
+            }
+
             c.mAppSettings["uiSettings"] = c.mUiSettings;
 
             // Legacy flattened aliases, kept so an older build reading this store still
@@ -111,9 +137,30 @@ bool MessageDispatcher::DispatchSettings(PluginController& c, const nlohmann::js
 
     if (type == "uiViewStateChanged")
     {
+        if (msg.contains("patch") && msg["patch"].is_object())
+        {
+            if (!c.mUiViewState.is_object())
+            {
+                c.mUiViewState = nlohmann::json::object();
+            }
+
+            c.mUiViewState.merge_patch(msg["patch"]);
+            c.NotifyHostStateChanged();
+            return true;
+        }
+
         if (msg.contains("viewState") && msg["viewState"].is_object())
         {
+            const auto native = c.mUiViewState.is_object() && c.mUiViewState.contains("native")
+                                    ? c.mUiViewState["native"]
+                                    : nlohmann::json();
             c.mUiViewState = msg["viewState"];
+
+            if (!native.is_null() && !c.mUiViewState.contains("native"))
+            {
+                c.mUiViewState["native"] = native;
+            }
+
             c.NotifyHostStateChanged();
             return true;
         }

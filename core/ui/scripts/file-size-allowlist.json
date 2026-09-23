@@ -1,9 +1,9 @@
 {
   "budget": 800,
   "allowed": {
-    "ts/resourceBrowser.ts": 2197,
+    "ts/resourceBrowser.ts": 2196,
     "ts/layoutDesigner.ts": 2036,
-    "ts/signalPath.ts": 1597,
+    "ts/signalPath.ts": 1582,
     "ts/presets/archive.ts": 1542,
     "ts/blendEditor.ts": 1500,
     "css/tone-sharing.css": 1484,
@@ -15,8 +15,7 @@
     "css/modals/resource-browser.css": 1028,
     "css/controls.css": 1016,
     "css/themes/light.css": 998,
-    "ts/performancePads.ts": 963,
-    "ts/presetV2.ts": 884,
+    "ts/performancePads.ts": 960,
     "css/layout-designer.css": 845
   }
 }

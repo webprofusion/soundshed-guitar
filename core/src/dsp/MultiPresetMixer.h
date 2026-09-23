@@ -195,6 +195,19 @@ class MultiPresetMixer
         mGlobalChain.Config().limiterEnabled = enabled;
     }
 
+    /// The UI's output mute. Applied after the output gain rather than by zeroing it, because
+    /// every global-chain rebuild re-derives the gain from the output setting and so undid a
+    /// mute made through SetMasterGain.
+    void SetOutputMuted(bool muted)
+    {
+        mOutputMuted.store(muted, std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] bool IsOutputMuted() const
+    {
+        return mOutputMuted.load(std::memory_order_relaxed);
+    }
+
     [[nodiscard]] double GetMasterGain() const
     {
         return mMasterGain;
@@ -510,6 +523,7 @@ class MultiPresetMixer
     double mMixGainDb = 0.0;
     double mMixGain = 1.0;
     double mMasterGain = 1.0;
+    std::atomic<bool> mOutputMuted{false};
     bool mLimiterEnabled = false;
     std::atomic<bool> mMultiThreadedProcessingEnabled{rtparallel::kParallelDspSupported};
 

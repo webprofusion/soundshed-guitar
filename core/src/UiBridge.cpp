@@ -67,8 +67,12 @@ bool IsValidResourceRoot(const std::filesystem::path& root)
         return false;
     }
 
+    // Soundshed Guitar ships the whole web UI; Soundshed Guitar Nano ships only the data the
+    // engine reads from under ui/ (factory presets, layouts, metronome clicks, demo audio,
+    // icons), so a root is valid with either its page or its factory presets.
     const auto indexPath = root / "ui" / "index.html";
-    return std::filesystem::exists(indexPath, ec);
+    const auto factoryPresetsPath = root / "ui" / "presets" / "factory";
+    return std::filesystem::exists(indexPath, ec) || std::filesystem::is_directory(factoryPresetsPath, ec);
 }
 
 std::filesystem::path ResolveResourceRoot(const std::vector<std::filesystem::path>& extraCandidates)

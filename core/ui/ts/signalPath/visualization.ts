@@ -3,7 +3,7 @@ import type {
   GraphNode,
 } from "../types.js";
 import { EffectTypeRegistry, getNodeEffectInfo } from "../presetV2.js";
-import { EffectGuids } from "../effectGuids.js";
+import { CATEGORIES, EFFECTS, LEGACY_EFFECT_EQUIPMENT_IMAGES } from "../generated/effectPresentation.js";
 import { getLibraryResource } from "../resourceLibrary.js";
 import {
   effectVisualizationElement,
@@ -13,37 +13,32 @@ import { getCanonicalLibraryResourceId, getNodeCategory, handleNamIrFileDrop, in
 
 export let effectVisualizationDropCleanup: (() => void) | null = null;
 
-export const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = {
-  amp: "linear-gradient(145deg, rgba(44, 62, 94, 0.92) 0%, rgba(15, 20, 32, 0.96) 100%)",
-  cab: "linear-gradient(145deg, rgba(62, 76, 96, 0.92) 0%, rgba(16, 20, 30, 0.96) 100%)",
-  eq: "linear-gradient(145deg, rgba(56, 96, 132, 0.95) 0%, rgba(18, 24, 44, 0.95) 100%)",
-  dynamics: "linear-gradient(145deg, rgba(132, 64, 64, 0.95) 0%, rgba(38, 18, 24, 0.95) 100%)",
-  modulation: "linear-gradient(145deg, rgba(88, 64, 132, 0.95) 0%, rgba(26, 18, 44, 0.95) 100%)",
-  delay: "linear-gradient(145deg, rgba(64, 132, 112, 0.95) 0%, rgba(18, 34, 38, 0.95) 100%)",
-  reverb: "linear-gradient(145deg, rgba(64, 92, 132, 0.95) 0%, rgba(18, 24, 38, 0.95) 100%)",
-  channel: "linear-gradient(145deg, rgba(148, 108, 48, 0.95) 0%, rgba(38, 28, 12, 0.95) 100%)",
-  utility: "linear-gradient(145deg, rgba(86, 86, 96, 0.95) 0%, rgba(26, 26, 30, 0.95) 100%)",
-};
+// Backgrounds and stock artwork come from core/ui/data/effect-presentation.json, which
+// Soundshed Guitar Nano reads too. Its images are relative to core/ui; the web UI has always
+// addressed them one level up.
+const WEB_IMAGE_PREFIX = "../";
 
-export const EFFECT_VISUAL_EQUIPMENT_IMAGES: Record<string, string> = {
-  amp: "../images/equipment/amps/full-rig-1.jpg",
-  cab: "../images/equipment/cabs/cab-02.png",
-  delay: "../images/equipment/fx/studio-rack-delay.png",
-  reverb: "../images/equipment/fx/studio-rack-reverb.png",
-};
+/** The effect view's background for each category: the table's two colours as a 145deg gradient. */
+export const EFFECT_VISUAL_BACKGROUNDS: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORIES).flatMap(([id, category]) => category.visualBackground
+    ? [[id, `linear-gradient(145deg, ${category.visualBackground[0]} 0%, ${category.visualBackground[1]} 100%)`]]
+    : []),
+);
 
-export const EFFECT_VISUAL_EQUIPMENT_IMAGES_BY_TYPE: Record<string, string> = {
-  [EffectGuids.kPluginHost]:"../images/equipment/fx/studio-rack-multifx.png",
-  [EffectGuids.kDelayDigital]: "../images/equipment/fx/studio-rack-delay.png",
-  [EffectGuids.kDelayTape]: "../images/equipment/fx/studio-rack-delay.png",
-  [EffectGuids.kDelayAnalog]: "../images/equipment/fx/studio-rack-delay.png",
-  [EffectGuids.kDelayDoubler]: "../images/equipment/fx/studio-rack-delay.png",
-  [EffectGuids.kFxNam]: "../images/equipment/pedals/colourful-pedal2.png",
-  fx_nam: "../images/equipment/pedals/colourful-pedal2.png",
-  [EffectGuids.kWasmHost]: "../images/equipment/pedals/colourful-pedal2.png",
-  wasm_host: "../images/equipment/pedals/colourful-pedal2.png",
-  
-};
+/** Stock artwork by category. */
+export const EFFECT_VISUAL_EQUIPMENT_IMAGES: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORIES).flatMap(([id, category]) => category.equipmentImage
+    ? [[id, `${WEB_IMAGE_PREFIX}${category.equipmentImage}`]]
+    : []),
+);
+
+/** Stock artwork by effect type, and by the legacy ids presets may still carry. */
+export const EFFECT_VISUAL_EQUIPMENT_IMAGES_BY_TYPE: Record<string, string> = Object.fromEntries([
+  ...Object.entries(EFFECTS).flatMap(([type, effect]) => effect.equipmentImage
+    ? [[type, `${WEB_IMAGE_PREFIX}${effect.equipmentImage}`]]
+    : []),
+  ...Object.entries(LEGACY_EFFECT_EQUIPMENT_IMAGES).map(([id, image]) => [id, `${WEB_IMAGE_PREFIX}${image}`]),
+]);
 
 export /**
  * Artwork the capture author supplied for the loaded model (Tone3000 tones ship

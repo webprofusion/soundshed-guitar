@@ -15,9 +15,10 @@
     "check:cycles": "node scripts/check-cycles.js",
     "check:state-writes": "node scripts/check-state-writes.js",
     "check:protocol": "node ../../tools/check-protocol.mjs",
+    "check:presentation": "node ../../tools/check-effect-presentation.mjs",
     "check:sizes": "node scripts/check-file-sizes.js",
     "check:smoke": "node ../../tools/agent-ui-debug/smoke-test.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run check:cycles && npm run check:state-writes && npm run check:protocol && npm run check:sizes && npm run check:stylesheets",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run check:cycles && npm run check:state-writes && npm run check:protocol && npm run check:presentation && npm run check:sizes && npm run check:stylesheets",
     "check:stylesheets": "node scripts/check-stylesheets.js"
   },
   "dependencies": {

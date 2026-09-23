@@ -4,7 +4,7 @@
  */
 
 import { getRiffLibrary } from "../bridge.js";
-import { onDemoAudioStarted, onDemoAudioStopped, previewSelectedDemoAudio, refreshDemoAudioSelectors, syncDemoAudioSelectionFromPreview } from "../demoAudio.js";
+import { onDemoAudioStarted, onDemoAudioStopped, refreshDemoAudioSelectors, syncDemoAudioSelectionFromPreview } from "../demoAudio.js";
 import { appendLog } from "../logging.js";
 import { applyMetronomeBeat } from "../metronome.js";
 import { showNotification } from "../notifications.js";
@@ -147,12 +147,9 @@ export function onPreviewComplete(payload: IncomingPayload): void {
   if (capturedLooped) {
     return;
   }
+  // A repeating demo clip loops in the engine and never completes, so this is the end.
   onDemoAudioStopped();
-  if (uiState.demoAudioRepeat) {
-    void previewSelectedDemoAudio();
-  } else {
-    showNotification("Demo playback finished", (payload as { title?: string }).title ?? "Demo");
-  }
+  showNotification("Demo playback finished", (payload as { title?: string }).title ?? "Demo");
 }
 
 export function onPreviewStopped(payload: IncomingPayload): void {

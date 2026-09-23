@@ -21,14 +21,15 @@ import { resetLibrary, setFilteredPresets } from "./presetLibraryStore.js";
 export { deleteCurrentPreset, deletePresetFromBackend, initializePresetActionButtons, openEditPresetModal, saveOverwriteCurrentPreset } from "./presets/actions.js";
 export { initializePresetControls, selectNextPreset, selectPreviousPreset } from "./presets/controls.js";
 export { registerPresetDropZone } from "./presets/drag.js";
+export { setFavoriteToggleState } from "./presets/favorites.js";
 export { applyPresetFoldersFromBackend } from "./presets/folderControls.js";
-export { filterPresets, populatePresetDropdown, renderActivePreset, updatePresetDropdownSelection } from "./presets/filter.js";
+export { filterPresets, populatePresetDropdown, refilterPresets, renderActivePreset, updatePresetDropdownSelection } from "./presets/filter.js";
 export { initializePresetTagFilterBar } from "./presets/library.js";
 export { applyPresetFromLibrary, bindLoadButtons, loadIRFromPath, loadModelFromPath, loadPresetIndex, requestSignalPathTest } from "./presets/load.js";
 export { openPresetChooserForSelection, syncPresetLibraryFeatureVisibility } from "./presets/popover.js";
-export { applyPresetFavoritesFromBackend, applyPresetRatingsFromBackend, applyPresetRecentsFromAppSettings, recordRecentPreset } from "./presets/recents.js";
+export { applyPresetFavoritesFromBackend, applyPresetRatingsFromBackend, applyPresetRecentsFromAppSettings, applyPresetRecentsFromBackend } from "./presets/recents.js";
 export { isUserPreset, updatePresetActionButtons } from "./presets/toolbar.js";
-export { closeSavePresetModal, createDefaultPreset, initializeSaveAsButton, initializeSavePresetModal, openSavePresetModal, refreshSavePresetModalPeakInfoIfOpen, saveCurrentPreset } from "./presets/saveModal.js";
+export { adoptCreatedPreset, closeSavePresetModal, createDefaultPreset, initializeSaveAsButton, initializeSavePresetModal, openSavePresetModal, refreshSavePresetModalPeakInfoIfOpen, saveCurrentPreset } from "./presets/saveModal.js";
 export { applySetlistCursorFromBackend, applySetlistsFromBackend, assignPresetToActiveSetlistSlot, clearActiveSetlistSlot, createSetlist, deleteActiveSetlist, isOnlyPlayingPreset, setSetlistPanelVisible, updateActiveSetlistDetails } from "./presets/setlists.js";
 
 export { handlePresetDataMessage, refreshPresetCacheEntryFromBackend, rejectPendingPresetRequest } from "./presets/fetch.js";
@@ -52,6 +53,8 @@ export async function initializePresets(): Promise<void> {
   postMessage({ type: "getPresetFolders" });
   postMessage({ type: "getPresetFavorites" });
   postMessage({ type: "getPresetRatings" });
+  // The engine keeps the recently-played list, and re-sends it whenever it changes.
+  postMessage({ type: "getPresetRecents" });
   postMessage({ type: "getSetlists" });
   postMessage({ type: "getEffectPresets" });
 

@@ -23,7 +23,7 @@
 
     <application
         android:name="com.soundshed.guitar.SoundshedApp"
-        android:label="@string/app_name"
+        android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
@@ -34,7 +34,7 @@
         <activity
             android:name="com.soundshed.guitar.MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="${appLabel}"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"

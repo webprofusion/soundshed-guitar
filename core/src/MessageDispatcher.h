@@ -46,5 +46,6 @@ class MessageDispatcher
     static bool DispatchLibraryAndComposite(PluginController& controller, const nlohmann::json& msg,
                                             const std::string& type);
     static bool DispatchAutomation(PluginController& controller, const nlohmann::json& msg, const std::string& type);
+    static bool DispatchPresetEdits(PluginController& controller, const nlohmann::json& msg, const std::string& type);
 };
 } // namespace guitarfx

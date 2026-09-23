@@ -60,7 +60,9 @@ set(TEST_SOURCES
     PitchTrackerTests.cpp
     PluginPathUtilsTests.cpp
     PresetDSPLoadingTests.cpp
+    PresetEditCommandsTests.cpp
     PresetManagementWorkflowTests.cpp
+    UiClientTests.cpp
     PresetStorageTests.cpp
     PresetVoicePoolTests.cpp
     JsonStoreConcurrencyTests.cpp
@@ -217,6 +219,9 @@ endforeach()
 
 # Shared harness for the riff/audio-lock regression without growing the main test past its size budget.
 target_sources(MixerInstanceLockTests PRIVATE MixerInstanceLockSupport.cpp MixerInstanceLockSupport.h)
+
+# Soundshed Guitar Nano's client library (core/src/uiclient) against a real headless controller.
+target_link_libraries(UiClientTests PRIVATE SoundshedUiClient)
 
 # Builds real (deflated) zips to preview, as Tone3000 serves them; the core links miniz privately.
 target_link_libraries(Tone3000ResourceWorkflowTests PRIVATE guitarfx_miniz)

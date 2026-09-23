@@ -38,9 +38,15 @@ export function persistSetlists(): void {
   });
 }
 
-export function setActiveSetlist(id: string | null): void {
+/**
+ * Makes a setlist the active one, its cursor on the first slot, as a bank select does. The
+ * engine stores the choice (`selectSetlist`) and answers with "setlistCursorChanged"; the
+ * setlists themselves are not re-sent.
+ */
+export function setActiveSetlist(id: string): void {
   uiState.activeSetlistId = id;
-  persistSetlists();
+  uiState.setlistCursorIndex = 0;
+  postMessage({ type: "selectSetlist", setlistId: id });
   renderSetlistPanel();
 }
 
@@ -263,8 +269,10 @@ export function renderSetlistPanel(): void {
 
   setlistListElement.querySelectorAll<HTMLElement>(".setlist-item").forEach((item) => {
     item.addEventListener("click", () => {
-      const id = item.dataset.setlistId ?? null;
-      setActiveSetlist(id);
+      const id = item.dataset.setlistId ?? "";
+      if (id && id !== uiState.activeSetlistId) {
+        setActiveSetlist(id);
+      }
     });
   });
 

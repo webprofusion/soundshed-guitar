@@ -16,7 +16,7 @@ import { getActivePresetForRender, uiState } from "../state.js";
 import { setFilteredPresets } from "../presetLibraryStore.js";
 import type { Preset } from "../types.js";
 import { renderMixerPanel } from "../views.js";
-import { presetChooserLabel } from "./dom.js";
+import { presetChooserLabel, presetSearchElement } from "./dom.js";
 import { requestPresetUIRender } from "./refresh.js";
 
 export const activeTagFilters = new Set<string>();
@@ -61,6 +61,11 @@ export function getFilteredPresets(query: string): Preset[] {
   });
 
   return preserveOrder ? filteredPresets : sortPresetsAlphabetically(filteredPresets);
+}
+
+/** Re-applies the folder, tag and search filter to the list, without redrawing. */
+export function refilterPresets(): void {
+  setFilteredPresets(getFilteredPresets(presetSearchElement?.value ?? ""));
 }
 
 export function renderActivePreset(): void {

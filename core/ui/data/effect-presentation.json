@@ -1,0 +1,326 @@
+{
+  "$comment": "How each effect and category looks, for both UIs: Soundshed Guitar's web UI (through core/ui/ts/generated/effectPresentation.ts, which node tools/gen-effect-presentation.mjs writes from this file) and Soundshed Guitar Nano (core/src/uiclient/EffectPresentation.cpp). Effects are keyed by their EffectGuids constant, each with its guid; tools/check-effect-presentation.mjs holds the guids to core/src/dsp/EffectGuids.h, the icons and images to the files, and the generated module to this file. categoryOrder is the FX library's categories, in order; a category not in it (channel) only styles chain nodes. nodeCategoryAliases fold a category into another for backgrounds and images; nodeClasses give the chain node's colour class (defaultNodeClass otherwise); blendCategories put a blend's gear category into an FX library category (defaultBlendCategory otherwise). visualBackground is the effect view's gradient, first colour to second. Icons name files in images/icons (no extension); images are relative to core/ui.",
+  "categoryOrder": [
+    "amp",
+    "cab",
+    "drive",
+    "dynamics",
+    "eq",
+    "modulation",
+    "pitch",
+    "delay",
+    "reverb",
+    "synth",
+    "utility"
+  ],
+  "nodeCategoryAliases": {
+    "pedal": "amp",
+    "preamp": "amp",
+    "full-rig": "amp"
+  },
+  "nodeClasses": {
+    "dynamics": "dynamics",
+    "amp": "amp",
+    "pedal": "amp",
+    "preamp": "amp",
+    "full-rig": "amp",
+    "channel": "amp",
+    "cab": "cab",
+    "eq": "eq",
+    "modulation": "modulation",
+    "delay": "delay",
+    "reverb": "reverb",
+    "utility": "utility"
+  },
+  "blendCategories": {
+    "pedal": "utility",
+    "preamp": "amp",
+    "amp": "amp",
+    "full-rig": "amp",
+    "cab": "cab"
+  },
+  "defaultNodeClass": "utility",
+  "defaultIcon": "gear",
+  "defaultBlendCategory": "amp",
+  "categories": {
+    "amp": {
+      "name": "Amplifiers",
+      "color": "#e07848",
+      "icon": "amp",
+      "visualBackground": [
+        "rgba(44, 62, 94, 0.92)",
+        "rgba(15, 20, 32, 0.96)"
+      ],
+      "equipmentImage": "images/equipment/amps/full-rig-1.jpg"
+    },
+    "cab": {
+      "name": "Cabinets",
+      "color": "#a86830",
+      "icon": "speaker",
+      "visualBackground": [
+        "rgba(62, 76, 96, 0.92)",
+        "rgba(16, 20, 30, 0.96)"
+      ],
+      "equipmentImage": "images/equipment/cabs/cab-02.png"
+    },
+    "drive": {
+      "name": "Drive",
+      "color": "#e04848",
+      "icon": "flame"
+    },
+    "dynamics": {
+      "name": "Dynamics",
+      "color": "#e08030",
+      "icon": "bolt",
+      "visualBackground": [
+        "rgba(132, 64, 64, 0.95)",
+        "rgba(38, 18, 24, 0.95)"
+      ]
+    },
+    "eq": {
+      "name": "Equalizers",
+      "color": "#48a8e0",
+      "icon": "sliders",
+      "visualBackground": [
+        "rgba(56, 96, 132, 0.95)",
+        "rgba(18, 24, 44, 0.95)"
+      ]
+    },
+    "modulation": {
+      "name": "Modulation",
+      "color": "#9048e0",
+      "icon": "wave",
+      "visualBackground": [
+        "rgba(88, 64, 132, 0.95)",
+        "rgba(26, 18, 44, 0.95)"
+      ]
+    },
+    "pitch": {
+      "name": "Pitch",
+      "color": "#c040e0",
+      "icon": "note"
+    },
+    "delay": {
+      "name": "Delay",
+      "color": "#48e0a8",
+      "icon": "delay",
+      "visualBackground": [
+        "rgba(64, 132, 112, 0.95)",
+        "rgba(18, 34, 38, 0.95)"
+      ],
+      "equipmentImage": "images/equipment/fx/studio-rack-delay.png"
+    },
+    "reverb": {
+      "name": "Reverb",
+      "color": "#4878e0",
+      "icon": "reverb",
+      "visualBackground": [
+        "rgba(64, 92, 132, 0.95)",
+        "rgba(18, 24, 38, 0.95)"
+      ],
+      "equipmentImage": "images/equipment/fx/studio-rack-reverb.png"
+    },
+    "synth": {
+      "name": "Synth",
+      "color": "#7a8a02",
+      "icon": "note"
+    },
+    "utility": {
+      "name": "Utility",
+      "color": "#808080",
+      "icon": "wrench",
+      "visualBackground": [
+        "rgba(86, 86, 96, 0.95)",
+        "rgba(26, 26, 30, 0.95)"
+      ]
+    },
+    "channel": {
+      "name": "channel",
+      "color": "#808080",
+      "icon": "gear",
+      "visualBackground": [
+        "rgba(148, 108, 48, 0.95)",
+        "rgba(38, 28, 12, 0.95)"
+      ]
+    }
+  },
+  "effects": {
+    "kDynamicsGate": {
+      "guid": "e8388de1-d262-4123-a123-8dbc56f657bc",
+      "icon": "door"
+    },
+    "kCompressorVca": {
+      "guid": "72af3541-2408-4a5c-a2dc-ba164f17eac9",
+      "icon": "meter"
+    },
+    "kCompressorOpto": {
+      "guid": "9651c79e-6530-4c23-9150-aa4c0ff2f1d8",
+      "icon": "bulb"
+    },
+    "kOverdrive": {
+      "guid": "fa9e05a8-168a-4293-aa91-6b770de3da1d",
+      "icon": "flame"
+    },
+    "kDistortion": {
+      "guid": "686773c9-30ac-4f33-b0f8-9222146d45b1",
+      "icon": "flame"
+    },
+    "kFuzz": {
+      "guid": "3a38b19c-1d97-4989-b5bb-12bcc59d1e6b",
+      "icon": "flame"
+    },
+    "kAmpBuiltin": {
+      "guid": "1460a632-6690-4fef-ac6d-6432e3b983f8",
+      "icon": "amp"
+    },
+    "kAmpNamOptimized": {
+      "guid": "49ea214c-91e6-41f9-bd27-ad6eec0ae90a",
+      "icon": "amp"
+    },
+    "kFxNam": {
+      "guid": "c3263344-65e4-4b7e-b102-ea625700e12f",
+      "icon": "pedal",
+      "equipmentImage": "images/equipment/pedals/colourful-pedal2.png"
+    },
+    "kAmpNamBlend": {
+      "guid": "8a22c0f8-413b-42c1-b9ba-d543cf011d9e",
+      "icon": "blend"
+    },
+    "kCabIr": {
+      "guid": "94fa2577-e904-43b8-968b-9c569c511160",
+      "icon": "speaker"
+    },
+    "kCabSimple": {
+      "guid": "27e0eaa3-b023-4b5a-b783-cce65254c0d3",
+      "icon": "speaker"
+    },
+    "kEqParametric": {
+      "guid": "4b4025ca-64cd-4180-be79-81873b618dba",
+      "icon": "sliders"
+    },
+    "kEqGraphic": {
+      "guid": "ef8240ba-c973-4e09-ab65-4faf56a8ecbf",
+      "icon": "sliders"
+    },
+    "kChorus": {
+      "guid": "decdd132-029a-46a5-a362-edcde007a450",
+      "icon": "wave"
+    },
+    "kFlanger": {
+      "guid": "1a3f3793-7e80-4e3d-ab7b-3ce3ce032fe7",
+      "icon": "wave"
+    },
+    "kPhaser": {
+      "guid": "3aa9dc81-31c2-40d5-9b1b-b0b9d1295e9b",
+      "icon": "wave"
+    },
+    "kTremolo": {
+      "guid": "c9debb02-d7e7-43e3-8330-b387be46dcf4",
+      "icon": "wave"
+    },
+    "kRingMod": {
+      "guid": "c13068c1-9c50-4c7c-be9e-eef808990651",
+      "icon": "wave"
+    },
+    "kAutoWah": {
+      "guid": "b06c6d84-01b3-4d0a-ad98-40eecb64438e",
+      "icon": "mixer"
+    },
+    "kWah": {
+      "guid": "8ae7a185-8075-466f-a83b-72f8dfa50af0",
+      "icon": "mixer"
+    },
+    "kOctave": {
+      "guid": "2e4d5380-5a79-412f-bfc0-bf84ef74d561",
+      "icon": "note"
+    },
+    "kPitchShift": {
+      "guid": "0c15f065-8335-4932-9d2f-366d436ec30a",
+      "icon": "note"
+    },
+    "kTranspose": {
+      "guid": "9b89cc46-e05b-4f06-981e-1d74d1f628cf",
+      "icon": "note"
+    },
+    "kDelayDigital": {
+      "guid": "673d3e7a-e9ef-4c5d-a4c4-619dff3355ed",
+      "icon": "delay",
+      "equipmentImage": "images/equipment/fx/studio-rack-delay.png"
+    },
+    "kDelayTape": {
+      "guid": "c46cecdc-d800-416e-a9cf-b9a13bd3ab35",
+      "icon": "delay",
+      "equipmentImage": "images/equipment/fx/studio-rack-delay.png"
+    },
+    "kDelayAnalog": {
+      "guid": "5c3965fc-cf52-4d14-9e5a-8a7120a9aae4",
+      "icon": "delay",
+      "equipmentImage": "images/equipment/fx/studio-rack-delay.png"
+    },
+    "kDelayDoubler": {
+      "guid": "778aaef4-40e3-4efa-8782-6a8bfa1d1661",
+      "icon": "doubler",
+      "equipmentImage": "images/equipment/fx/studio-rack-delay.png"
+    },
+    "kReverbRoom": {
+      "guid": "7467cbf1-6c7f-4f07-b5dd-a303d25b475c",
+      "icon": "reverb"
+    },
+    "kReverbChamber": {
+      "guid": "4ef25e86-9763-40bc-aca6-636b542df60b",
+      "icon": "reverb"
+    },
+    "kReverbSpring": {
+      "guid": "0df83b32-23d0-4530-a50e-e0824a5ccf01",
+      "icon": "reverb"
+    },
+    "kReverbAdvanced": {
+      "guid": "92558944-f0da-4d97-ab75-bed8b63abc31",
+      "icon": "reverb-advanced"
+    },
+    "kReverbIr": {
+      "guid": "497d3c9d-ed6b-4c71-8e6d-0f9d61564dbc",
+      "icon": "reverb"
+    },
+    "kReverbAmbient": {
+      "guid": "b3f5445e-0cb9-43a3-ac2f-9216fb8e42dc",
+      "icon": "reverb-ambient"
+    },
+    "kSynthSaw": {
+      "guid": "608e846e-0e60-4064-9c83-37c0df573c38",
+      "icon": "note"
+    },
+    "kGain": {
+      "guid": "0bcd895e-5d36-4247-a351-6bed1fcb37a8",
+      "icon": "megaphone"
+    },
+    "kSplitter": {
+      "guid": "f5f2541b-fcea-4cfd-9e62-eeddf583ef4e",
+      "icon": "split"
+    },
+    "kMixer": {
+      "guid": "d7d1e40f-9c79-4582-9a82-d5fa5bbbfb97",
+      "icon": "mixer"
+    },
+    "kInputAnalyzer": {
+      "guid": "2ea17ea3-8f2a-4eea-8e14-babf0d8be5a6",
+      "icon": "microscope"
+    },
+    "kLimiterBrickwall": {
+      "guid": "f4094126-b5de-4c5d-8d05-d56bd8c312d1",
+      "icon": "bolt"
+    },
+    "kPluginHost": {
+      "guid": "7ebf3f9a-bf7d-4f1c-b11c-73a4b3c27546",
+      "equipmentImage": "images/equipment/fx/studio-rack-multifx.png"
+    },
+    "kWasmHost": {
+      "guid": "b96693c3-b1f4-44f8-99b4-016620f89d95",
+      "equipmentImage": "images/equipment/pedals/colourful-pedal2.png"
+    }
+  },
+  "legacyEffectEquipmentImages": {
+    "fx_nam": "images/equipment/pedals/colourful-pedal2.png",
+    "wasm_host": "images/equipment/pedals/colourful-pedal2.png"
+  }
+}

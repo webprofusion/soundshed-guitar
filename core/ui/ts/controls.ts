@@ -1,8 +1,7 @@
 import { appendLog } from "./logging.js";
-import { postMessage, sendGlobalChainParam, setMasterGain, setParameter } from "./bridge.js";
+import { postMessage, sendGlobalChainParam, setOutputMuted, setParameter } from "./bridge.js";
 import { updateAppSetting } from "./appSettingsStore.js";
 import { uiState } from "./state.js";
-import { setMixerMasterGain } from "./mixerStore.js";
 import type { GraphNode, SignalGraph } from "./types.js";
 import { EffectGuids } from "./effectGuids.js";
 import { GenericKnob } from "./knob.js";
@@ -93,8 +92,8 @@ function updateControlDisplay(controlId: string, value: number, format: "percent
 // Store knob instances globally for sync
 const knobInstances: Map<string, GenericKnob> = new Map();
 const outputMuteToggle = document.getElementById("output-mute-toggle") as HTMLButtonElement | null;
+/** The engine's output mute (setOutputMuted), applied after the output gain. */
 let outputMuted = false;
-let lastNonMutedMasterGain = 1.0;
 
 function updateOutputMuteToggleState(): void {
   if (!outputMuteToggle) {
@@ -107,50 +106,20 @@ function updateOutputMuteToggleState(): void {
   outputMuteToggle.setAttribute("aria-label", outputMuted ? "Output muted. Click to unmute" : "Mute output");
 }
 
-function getCurrentMasterGain(): number {
-  const gain = uiState.mixer?.masterGain;
-  return typeof gain === "number" && isFinite(gain) ? gain : 1.0;
-}
-
-function syncOutputMuteFromState(): void {
-  const masterGain = getCurrentMasterGain();
-  outputMuted = masterGain <= 1.0e-4;
-  if (!outputMuted && masterGain > 1.0e-4) {
-    lastNonMutedMasterGain = masterGain;
-  }
-  updateOutputMuteToggleState();
-}
-
-function preserveMuteWhileAdjustingOutput(outputGainDb: number): void {
-  if (!outputMuted) {
-    return;
-  }
-
-  lastNonMutedMasterGain = Math.pow(10.0, outputGainDb / 20.0);
-  setMasterGain(0.0);
-  setMixerMasterGain(0.0);
+/**
+ * The engine's word on the output mute: "outputMutedChanged", or `outputMuted` in the state.
+ * The mute sits after the output gain in the engine, so an output level change or a chain
+ * rebuild leaves it alone and there is nothing to re-apply here.
+ */
+export function applyOutputMuted(muted: boolean): void {
+  outputMuted = muted;
   updateOutputMuteToggleState();
 }
 
 function toggleOutputMute(): void {
-  if (!outputMuted) {
-    const currentMasterGain = getCurrentMasterGain();
-    if (currentMasterGain > 1.0e-4) {
-      lastNonMutedMasterGain = currentMasterGain;
-    }
-    setMasterGain(0.0);
-    setMixerMasterGain(0.0);
-    outputMuted = true;
-    appendLog("output muted");
-  } else {
-    const restoreGain = lastNonMutedMasterGain > 1.0e-4 ? lastNonMutedMasterGain : 1.0;
-    setMasterGain(restoreGain);
-    setMixerMasterGain(restoreGain);
-    outputMuted = false;
-    appendLog(`output unmuted → ${restoreGain.toFixed(3)}`);
-  }
-
-  updateOutputMuteToggleState();
+  const muted = !outputMuted;
+  setOutputMuted(muted);
+  applyOutputMuted(muted);
 }
 
 /** "+1.5 dB" / "-6.0 dB", shared by every gain knob that reads in dB. */
@@ -165,8 +134,6 @@ function applyOutputGainDb(value: number, send: boolean): void {
   if (uiState.globalSignalChain) {
     uiState.globalSignalChain.outputGain = value;
   }
-  lastNonMutedMasterGain = Math.pow(10.0, value / 20.0);
-  preserveMuteWhileAdjustingOutput(value);
 }
 
 function setKnobControlDisabled(controlId: string, disabled: boolean): void {
@@ -352,7 +319,7 @@ export function initializeControls(): void {
     outputMuteToggle.dataset.bound = "true";
     outputMuteToggle.addEventListener("click", toggleOutputMute);
   }
-  syncOutputMuteFromState();
+  updateOutputMuteToggleState();
 }
 
 export function syncDoublerControlsFromState(): void {
@@ -441,7 +408,7 @@ export function syncControlsFromState(): void {
   syncDoublerControlsFromState();
   syncGateControlsFromState();
   syncEQControlsFromState();
-  syncOutputMuteFromState();
+  updateOutputMuteToggleState();
 }
 
 // Input mode state

@@ -146,7 +146,9 @@ merging, and verification of both saved data and the audio path.
    responses, TDF-II state, coefficient ramps) rather than another copy of the cookbook. An effect
    with a fixed, linear response should override `GetFrequencyResponse`: the engine can then answer
    `getEffectResponse` for its curve and render it as an IR (`core/src/dsp/EffectAnalysis.h`).
-6. Update docs/fx-library.md if behavior changes.
+6. Give it an icon in `core/ui/data/effect-presentation.json` (both UIs read it) and run
+   `node tools/gen-effect-presentation.mjs`; `npm run check:presentation` checks the entry.
+7. Update docs/fx-library.md if behavior changes.
 
 ### Add or Change a UI Message
 
@@ -194,7 +196,8 @@ merging, and verification of both saved data and the audio path.
 - UI build: cd core/ui && npm run build
 - **UI checks (run this before any UI change is done): cd core/ui && npm run verify**
   Runs typecheck, eslint, vitest, the import-cycle gate, the uiState write-ownership
-  gate, the file-size budget and the stylesheet-reachability check. The same set runs in CI
+  gate, the protocol check, the effect presentation check, the file-size budget and the
+  stylesheet-reachability check. The same set runs in CI
   (`.github/workflows/ui-checks.yml`).
 - UI boot check: `node tools/agent-ui-debug/smoke-test.mjs` — builds the UI, syncs
   it into the Standalone artefact, launches the app and asserts it booted clean.

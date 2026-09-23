@@ -9,6 +9,11 @@
  * the two together, so routes outlived the UI code that used them, replies went to
  * handlers that no longer existed, and the protocol doc fell behind.
  *
+ * Soundshed Guitar Nano's native UI is a second client of the same protocol: it sends through
+ * UiClient::Send("type", ...) (and its editors through sendUiMessage(processor, "type", ...))
+ * and handles replies registered with On("type", ...), in core/src/uiclient and
+ * juce/source/{nativeui,editor}. "The UI" below means both clients together.
+ *
  * core/protocol/ui-messages.json is the list. This check reads what each side
  * actually does and fails when either disagrees with it:
  *
@@ -113,6 +118,30 @@ function uiHandles() {
   return new Map([...table.matchAll(/^\s*"([A-Za-z0-9_]+)"\s*:/gm)].map((m) => [m[1], rel(file)]));
 }
 
+/** Soundshed Guitar Nano's client: what it sends, and what it registers handlers for. */
+function nativeClientFiles() {
+  return [
+    ...walk(path.join(ROOT, 'core/src/uiclient'), /\.cpp$/),
+    ...walk(path.join(ROOT, 'juce/source/nativeui'), /\.cpp$/),
+    ...walk(path.join(ROOT, 'juce/source/editor'), /\.cpp$/),
+  ];
+}
+
+function nativeSends() {
+  return collect(nativeClientFiles(), [/\bSend\(\s*"([A-Za-z0-9_]+)"/g, /\bsendUiMessage\s*\([^,]+,\s*"([A-Za-z0-9_]+)"/g]);
+}
+
+function nativeHandles() {
+  return collect(walk(path.join(ROOT, 'core/src/uiclient'), /\.cpp$/), [/\bOn\(\s*"([A-Za-z0-9_]+)"/g]);
+}
+
+/** Both clients' entries in one map, the web UI's location first. */
+function union(web, native) {
+  const merged = new Map(web);
+  for (const [type, where] of native) if (!merged.has(type)) merged.set(type, where);
+  return merged;
+}
+
 function documentedTypes() {
   const documented = new Set();
   for (const line of fs.readFileSync(path.join(ROOT, 'docs/user-interface.md'), 'utf8').split('\n')) {
@@ -140,8 +169,8 @@ const sorted = (items) => [...items].sort((a, b) => a.localeCompare(b));
 function main() {
   const routes = engineRoutes();
   const sends = engineSends();
-  const uiSent = uiSends();
-  const handled = uiHandles();
+  const uiSent = union(uiSends(), nativeSends());
+  const handled = union(uiHandles(), nativeHandles());
   const documented = documentedTypes();
 
   const code = {

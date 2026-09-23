@@ -459,6 +459,7 @@ set(GUITARFX_CORE_SOURCES
     src/dispatcher/MessageDispatchMixer.cpp
     src/dispatcher/MessageDispatchLibraryComposite.cpp
     src/dispatcher/MessageDispatchAutomation.cpp
+    src/dispatcher/MessageDispatchPresetEdits.cpp
     src/controller/ControlSurfaceQueue.h
     src/controller/ControlSurfaceQueue.cpp
     src/controller/ControllerDisplayFeed.h
@@ -504,6 +505,7 @@ set(GUITARFX_CORE_SOURCES
     src/controller/PluginControllerResources.cpp
     src/controller/PluginControllerCustomEffects.cpp
     src/controller/PluginControllerPresets.cpp
+    src/controller/PluginControllerPresetEdits.cpp
     src/controller/PluginControllerMixer.cpp
     src/controller/PluginControllerDemo.cpp
     src/controller/internal/BlendSupport.h
@@ -857,6 +859,29 @@ target_precompile_headers(SoundshedGuitarCore PRIVATE
     <functional>
     <cmath>
     <nlohmann/json.hpp>
+)
+
+# ---------------------------------------------------------------------------
+# UI client library
+# ---------------------------------------------------------------------------
+# What Soundshed Guitar Nano's native UI knows about the engine: the message protocol from
+# the UI's side, the state it mirrors, and the presentation logic that is not drawing
+# (docs/plans/native-ui.md). JUCE-free, so ctest covers it against a real headless
+# PluginController; the views that use it live in juce/source/nativeui. A library of its own
+# so the engine does not carry it.
+file(GLOB GUITARFX_UICLIENT_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/uiclient/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/uiclient/*.h")
+
+add_library(SoundshedUiClient STATIC ${GUITARFX_UICLIENT_SOURCES})
+target_link_libraries(SoundshedUiClient PUBLIC SoundshedGuitarCore)
+target_include_directories(SoundshedUiClient PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_options(SoundshedUiClient PRIVATE $<TARGET_PROPERTY:SoundshedGuitarCore,COMPILE_OPTIONS>)
+guitarfx_apply_release_optimizations(SoundshedUiClient)
+set_target_properties(SoundshedUiClient PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    FOLDER "GuitarFX"
 )
 
 # ---------------------------------------------------------------------------

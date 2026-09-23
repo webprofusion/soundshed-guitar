@@ -96,57 +96,6 @@ export function removeResourceFromUiState(info: { id?: string; resourceType?: st
   };
 }
 
-export function presetSignature(preset?: Preset | null): string {
-  if (!preset) return "";
-
-  const normalize = (value: unknown): unknown => {
-    if (Array.isArray(value)) {
-      return value.map(normalize);
-    }
-    if (value && typeof value === "object") {
-      const obj = value as Record<string, unknown>;
-      const cleaned: Record<string, unknown> = { ...obj };
-      if (typeof cleaned.resourceType === "string" || typeof cleaned.type === "string") {
-        cleaned.resourceType = typeof cleaned.resourceType === "string" ? cleaned.resourceType : cleaned.type;
-        delete cleaned.type;
-      }
-      if (typeof cleaned.resourceId === "string" || typeof cleaned.id === "string") {
-        cleaned.resourceId = typeof cleaned.resourceId === "string" ? cleaned.resourceId : cleaned.id;
-        delete cleaned.id;
-      }
-      if (cleaned.filePath === "") {
-        delete cleaned.filePath;
-      }
-      if (cleaned.embeddedId === "") {
-        delete cleaned.embeddedId;
-      }
-      if (cleaned.parameterId === "") {
-        delete cleaned.parameterId;
-      }
-      if (cleaned.parameters && typeof cleaned.parameters === "object" && cleaned.parameters !== null) {
-        if (Object.keys(cleaned.parameters as Record<string, unknown>).length === 0) {
-          delete cleaned.parameters;
-        }
-      }
-      if (cleaned.params && typeof cleaned.params === "object" && cleaned.params !== null) {
-        const params = cleaned.params as Record<string, unknown>;
-        const cleanedParams: Record<string, unknown> = { ...params };
-        delete cleanedParams.calibrationInputLevel;
-        delete cleanedParams.calibrationOutputLevel;
-        cleaned.params = cleanedParams;
-      }
-      const sorted: Record<string, unknown> = {};
-      Object.keys(cleaned).sort().forEach((key) => {
-        sorted[key] = normalize(cleaned[key]);
-      });
-      return sorted;
-    }
-    return value;
-  };
-
-  return JSON.stringify(normalize(preset));
-}
-
 export function normalizeGlobalSignalChain(chain?: GlobalSignalChainConfig | null): GlobalSignalChainConfig | null {
   if (!chain) {
     return null;

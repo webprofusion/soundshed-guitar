@@ -7,8 +7,8 @@
  * - Tone3000 tab (browse and preview remote items)
  * - Preview/temporary loading before import
  */
-import { postMessage } from "./bridge.js";
-import { updateAppSetting } from "./appSettingsStore.js";
+import { postMessage, sendResourceFavorite } from "./bridge.js";
+import { recordAppSetting } from "./appSettingsStore.js";
 import { showConfirm } from "./dialogs.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { getPlaySvg } from "./iconAssets.js";
@@ -1118,17 +1118,16 @@ export class ResourceBrowserModal {
   }
 
   private setResourceFavorite(resourceId: string, isFavorite: boolean): void {
-    const raw = uiState.appSettings?.[RESOURCE_FAVORITES_SETTING];
-    let favorites: string[] = Array.isArray(raw) ? (raw.filter((val): val is string => typeof val === "string")) : [];
-
-    const alreadyFavorite = favorites.includes(resourceId);
-    if (isFavorite && !alreadyFavorite) {
-      favorites.push(resourceId);
-    } else if (!isFavorite && alreadyFavorite) {
-      favorites = favorites.filter((id) => id !== resourceId);
+    if (this.isResourceFavorite(resourceId) === isFavorite) {
+      return;
     }
 
-    updateAppSetting(RESOURCE_FAVORITES_SETTING, favorites);
+    // The engine edits the one entry and answers with the whole setting ("appSettingChanged");
+    // the local copy changes now so the star redraws without waiting for it.
+    const raw = uiState.appSettings?.[RESOURCE_FAVORITES_SETTING];
+    const favorites = Array.isArray(raw) ? raw.filter((val): val is string => typeof val === "string") : [];
+    recordAppSetting(RESOURCE_FAVORITES_SETTING, isFavorite ? [...favorites, resourceId] : favorites.filter((id) => id !== resourceId));
+    sendResourceFavorite(resourceId, isFavorite);
   }
 
   private toggleResourceFavorite(resourceId: string): void {

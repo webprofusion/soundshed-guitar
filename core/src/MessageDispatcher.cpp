@@ -92,6 +92,11 @@ void MessageDispatcher::DispatchByType(PluginController& c, const nlohmann::json
         return;
     }
 
+    if (DispatchPresetEdits(c, msg, type))
+    {
+        return;
+    }
+
     // Unknown message type — silently ignored
 }
 } // namespace guitarfx

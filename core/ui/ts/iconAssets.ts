@@ -1,5 +1,6 @@
 const ICON_BASE = "/images/icons";
-import { EffectGuids, resolveEffectType } from "./effectGuids.js";
+import { resolveEffectType } from "./effectGuids.js";
+import { CATEGORIES, DEFAULT_ICON, EFFECTS } from "./generated/effectPresentation.js";
 
 export type IconKey =
   | "amp"
@@ -57,87 +58,17 @@ export function renderIcon(icon: IconKey, className: string, title?: string): st
   return `<span class="${className}" style="--icon-url: url('${ICON_BASE}/${icon}.svg')" aria-hidden="true"${titleAttr}></span>`;
 }
 
-const categoryIcons: Record<string, IconKey> = {
-  amp:        "amp",
-  cab:        "speaker",
-  drive:      "flame",
-  dynamics:   "bolt",
-  eq:         "sliders",
-  modulation: "wave",
-  pitch:      "note",
-  delay:      "delay",
-  reverb:     "reverb",
-  synth:      "note",
-  utility:    "wrench",
-};
-
-const effectIcons: Record<string, IconKey> = {
-  // Dynamics
-  [EffectGuids.kDynamicsGate]:     "door",
-  [EffectGuids.kCompressorVca]:    "meter",
-  [EffectGuids.kCompressorOpto]:   "bulb",
-  [EffectGuids.kOverdrive]:        "flame",
-  [EffectGuids.kDistortion]:       "flame",
-  [EffectGuids.kFuzz]:             "flame",
-
-  // Amps
-  [EffectGuids.kAmpBuiltin]:       "amp",
-  [EffectGuids.kAmpNamOptimized]:  "amp",
-  [EffectGuids.kFxNam]:            "pedal",
-  [EffectGuids.kAmpNamBlend]:      "blend",
-
-  // Cabs
-  [EffectGuids.kCabIr]:            "speaker",
-  [EffectGuids.kCabSimple]:        "speaker",
-
-  // EQ
-  [EffectGuids.kEqParametric]:     "sliders",
-  [EffectGuids.kEqGraphic]:        "sliders",
-
-  // Modulation
-  [EffectGuids.kChorus]:           "wave",
-  [EffectGuids.kFlanger]:          "wave",
-  [EffectGuids.kPhaser]:           "wave",
-  [EffectGuids.kTremolo]:          "wave",
-  [EffectGuids.kRingMod]:          "wave",
-  [EffectGuids.kAutoWah]:          "mixer",
-  [EffectGuids.kWah]:              "mixer",
-  [EffectGuids.kOctave]:           "note",
-  [EffectGuids.kPitchShift]:       "note",
-  [EffectGuids.kTranspose]:        "note",
-
-  // Delay
-  [EffectGuids.kDelayDigital]:     "delay",
-  [EffectGuids.kDelayTape]:        "delay",
-  [EffectGuids.kDelayAnalog]:      "delay",
-  [EffectGuids.kDelayDoubler]:     "doubler",
-
-  // Reverb
-  [EffectGuids.kReverbRoom]:       "reverb",
-  [EffectGuids.kReverbChamber]:    "reverb",
-  [EffectGuids.kReverbSpring]:     "reverb",
-  [EffectGuids.kReverbAdvanced]:   "reverb-advanced",
-  [EffectGuids.kReverbIr]:         "reverb",
-  [EffectGuids.kReverbAmbient]:    "reverb-ambient",
-
-  // Synth
-  [EffectGuids.kSynthSaw]:         "note",
-
-  // Utility
-  [EffectGuids.kGain]:             "megaphone",
-  [EffectGuids.kSplitter]:         "split",
-  [EffectGuids.kMixer]:            "mixer",
-  [EffectGuids.kInputAnalyzer]:    "microscope",
-  [EffectGuids.kLimiterBrickwall]: "bolt",
-};
+// Which icon each category and effect shows comes from core/ui/data/effect-presentation.json,
+// shared with Soundshed Guitar Nano. Typing the icons as IconKey here is what makes the
+// compiler catch an icon named in the table that renderIcon does not know.
 
 export function getFxCategoryIcon(categoryId: string): string {
-  const icon = categoryIcons[categoryId] ?? "gear";
+  const icon: IconKey = CATEGORIES[categoryId]?.icon ?? DEFAULT_ICON;
   return renderIcon(icon, "fx-category-icon");
 }
 
 export function getFxEffectIcon(effectType: string): string {
-  const icon = effectIcons[resolveEffectType(effectType)] ?? "gear";
+  const icon: IconKey = EFFECTS[resolveEffectType(effectType)]?.icon ?? DEFAULT_ICON;
   return renderIcon(icon, "fx-effect-icon");
 }
 

@@ -1,6 +1,8 @@
 #include "PluginProcessorAdapter.h"
-#include "PluginEditor.h"
+#include "ProductInfo.h"
+#include "ProfileFolder.h"
 #include "StandaloneAudioSettings.h"
+#include "editor/SoundshedEditorBase.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -203,8 +205,13 @@ public:
         const auto state = loadWindowState();
         centreWithSize (state.width, state.height);
 
-        if (state.maximized)
+        if (state.maximized || hasCommandLineFlag ("--fullscreen"))
             setFullScreen (true);
+
+        // For a dedicated device (a small board with a touch screen): no title bar, no
+        // desktop, just the app.
+        if (hasCommandLineFlag ("--kiosk"))
+            juce::Desktop::getInstance().setKioskModeComponent (this, false);
 #endif
 
         mPluginHolder->startPlaying();
@@ -312,16 +319,22 @@ private:
     }
 #endif
 
-    static constexpr int minWindowWidth = 640;
-    static constexpr int minWindowHeight = 400;
+    // The product's own limits (ProductInfo.h): Nano goes smaller than Soundshed Guitar.
+    static constexpr int minWindowWidth = soundshed::product::minEditorWidth;
+    static constexpr int minWindowHeight = soundshed::product::minEditorHeight;
     static constexpr int maxWindowSize = 8192;
 
     struct WindowState
     {
-        int width = 1200;
-        int height = 900;
+        int width = soundshed::product::defaultWindowWidth;
+        int height = soundshed::product::defaultWindowHeight;
         bool maximized = false;
     };
+
+    static bool hasCommandLineFlag (const juce::String& flag)
+    {
+        return juce::JUCEApplicationBase::getCommandLineParameterArray().contains (flag);
+    }
 
     PluginProcessorAdapter* getAdapter() const
     {
@@ -335,7 +348,7 @@ private:
         if (adapter == nullptr)
             return {};
 
-        const auto path = adapter->GetUserDataPath() / "data" / "v1" / "settings" / "ui" / "window-state.json";
+        const auto path = adapter->GetUserDataPath() / "data" / "v1" / "settings" / "ui" / soundshed::product::windowStateFileName;
         return juce::File (path.string());
     }
 
@@ -398,7 +411,7 @@ private:
     // After the holder, so it goes first: it listens to the holder's device manager.
     std::unique_ptr<StandaloneAudioSettings> mAudioSettings;
 
-    juce::Rectangle<int> mLastNonMaximizedBounds { 0, 0, 1200, 900 };
+    juce::Rectangle<int> mLastNonMaximizedBounds { 0, 0, soundshed::product::defaultWindowWidth, soundshed::product::defaultWindowHeight };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
 };
 
@@ -408,8 +421,11 @@ class SoundshedGuitarApplication : public juce::JUCEApplication
 public:
     SoundshedGuitarApplication()
     {
+        // The audio device setup and the standalone's saved plugin state live here. Named for
+        // the shared profile rather than the product, so both products open the same device
+        // and come back to the same rig.
         juce::PropertiesFile::Options options;
-        options.applicationName = PRODUCT_NAME_WITHOUT_VERSION;
+        options.applicationName = soundshed::kProfileFolderName;
         options.filenameSuffix = ".settings";
         options.osxLibrarySubFolder = "Application Support";
 #if JUCE_LINUX || JUCE_BSD
@@ -431,6 +447,24 @@ public:
             jassertfalse;
             return;
         }
+
+#if ! JUCE_ANDROID
+        mStandaloneLock = std::make_unique<juce::InterProcessLock> (soundshed::product::standaloneLockName);
+
+        if (! mStandaloneLock->enter (0))
+        {
+            // Not systemRequestedQuit(): there is no window or plugin state to save yet.
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                                                    getApplicationName(),
+                                                    "Soundshed Guitar or Soundshed Guitar Nano is already running.\n\n"
+                                                    "They share one profile and one audio device, so only one can run at a "
+                                                    "time. Close the other one, then start this again.",
+                                                    "OK",
+                                                    nullptr,
+                                                    juce::ModalCallbackFunction::create ([] (int) { quit(); }));
+            return;
+        }
+#endif
 
         mMainWindow = std::make_unique<MainWindow> (getApplicationName(), createPluginHolder());
     }
@@ -466,7 +500,7 @@ public:
         const auto deepLink = extractToneSharingDeepLinkQuery (commandLine);
         if (deepLink.isNotEmpty() && mMainWindow != nullptr)
         {
-            if (auto* editor = dynamic_cast<PluginEditor*> (mMainWindow->getContentComponent()))
+            if (auto* editor = dynamic_cast<soundshed::editor::SoundshedEditorBase*> (mMainWindow->getContentComponent()))
             {
                 juce::MessageManager::callAsync ([editor, deepLink]() {
                     editor->handleDeepLinkFromAnotherInstance (deepLink);
@@ -521,6 +555,7 @@ private:
     }
 
     juce::ApplicationProperties mAppProperties;
+    std::unique_ptr<juce::InterProcessLock> mStandaloneLock;
     std::unique_ptr<MainWindow> mMainWindow;
 };
 

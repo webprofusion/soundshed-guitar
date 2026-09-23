@@ -265,6 +265,29 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
         return;
     }
 
+    const auto id = audioIter->value("id", "");
+    const auto regionIter = payload.find("region");
+    const nlohmann::json* region =
+        regionIter != payload.end() && regionIter->is_object() ? &*regionIter : nullptr;
+    StartDecodedPreview(decodedBytes, id, audioIter->value("title", id), region, false);
+}
+
+void DemoPreviewService::StartPreviewFromBytes(const std::vector<std::uint8_t>& bytes, const std::string& id,
+                                               const std::string& title, bool loop)
+{
+    if (mSignalTestActive.load(std::memory_order_acquire))
+    {
+        mReportError("Demo preview unavailable", "Signal path test is currently running");
+        return;
+    }
+
+    StartDecodedPreview(bytes, id, title, nullptr, loop);
+}
+
+void DemoPreviewService::StartDecodedPreview(const std::vector<std::uint8_t>& decodedBytes, const std::string& id,
+                                             const std::string& title, const nlohmann::json* regionJson,
+                                             bool loopWhole)
+{
     const auto wavData = util::DecodeAudioBytes(decodedBytes);
 
     if (!wavData)
@@ -318,8 +341,8 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
     }
 
     auto buffer = std::make_shared<DemoAudioBuffer>();
-    buffer->id = audioIter->value("id", "");
-    buffer->title = audioIter->value("title", buffer->id);
+    buffer->id = id;
+    buffer->title = title.empty() ? id : title;
     buffer->sampleRate = targetSampleRate;
     buffer->channels = static_cast<int>(resampled.size());
     buffer->channelSamples = std::move(resampled);
@@ -327,12 +350,17 @@ void DemoPreviewService::StartPreview(const nlohmann::json& payload)
     // An optional sub-range. Absent (the demo/preset previews) means the whole
     // clip plays once and completes, exactly as before.
     std::shared_ptr<const PreviewRegion> region;
-    const auto regionIter = payload.find("region");
 
-    if (regionIter != payload.end() && regionIter->is_object())
+    if (regionJson != nullptr)
     {
-        region = BuildRegion(buffer, regionIter->value("startSec", 0.0), regionIter->value("endSec", 0.0),
-                             regionIter->value("looping", false));
+        region = BuildRegion(buffer, regionJson->value("startSec", 0.0), regionJson->value("endSec", 0.0),
+                             regionJson->value("looping", false));
+    }
+    else if (loopWhole)
+    {
+        // Repeat is the whole clip as a looping region: the engine wraps it in place, so the
+        // clip goes round without the gap a restart after "previewComplete" left.
+        region = BuildRegion(buffer, 0.0, static_cast<double>(minFrames) / targetSampleRate, true);
     }
 
     {

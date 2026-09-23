@@ -5,15 +5,15 @@
 
 import { applyAutomationState } from "../automationPanel.js";
 import { renderBlendList } from "../blendManager.js";
-import { replaceAppSettings } from "../appSettingsStore.js";
+import { recordAppSetting, replaceAppSettings } from "../appSettingsStore.js";
 import { requestGlobalChainState } from "../bridge.js";
 import { applyDensityAppSettings } from "../compactMode.js";
 import { renderCompositeList } from "../compositeEditor.js";
 import { handleCompositeLibrary } from "../compositeEffects.js";
 import type { CompositeEffectDefinition } from "../compositeTypes.js";
-import { applyStoredInputChannel, handleAmpCabStateChanged, handleInputModeChanged, syncControlsFromState } from "../controls.js";
+import { applyOutputMuted, applyStoredInputChannel, handleAmpCabStateChanged, handleInputModeChanged, syncControlsFromState } from "../controls.js";
 import { handleCustomEffectLibrary } from "../customEffects.js";
-import { applyStoredDemoAudioSelection, refreshDemoAudioSelectors } from "../demoAudio.js";
+import { applyDemoClips, applyStoredDemoAudioSelection, refreshDemoAudioSelectors } from "../demoAudio.js";
 import { refreshFxSelector } from "../fxSelector.js";
 import { applyJamAppSettings } from "../jam.js";
 import { appendLog } from "../logging.js";
@@ -28,16 +28,16 @@ import { normalizePresetScenes } from "../presetScenes.js";
 import { migratePresetNodeTypes } from "../presetV2.js";
 import { applyRiffLibraryState } from "../riffLibrary.js";
 import { refreshSettingsView } from "../settings.js";
-import { clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
+import { applyEnginePresetDirty, clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, uiState } from "../state.js";
 import { replaceMixerState } from "../mixerStore.js";
 import { cachePreset, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setPresetLoadingId, showAllLibraryPresets } from "../presetLibraryStore.js";
 import { themeSwitcher } from "../theme-switcher.js";
 import { applyToneSharingAppSettings } from "../toneSharingPanel.js";
-import type { AppSettings, AutomationSlot, BlendLibrary, CustomEffectLibrary, GlobalSignalChainConfig, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, ResourceLibrary, RiffLibrary, UiSettings, UiViewState } from "../types.js";
+import type { AppSettings, AppSettingValue, AutomationSlot, BlendLibrary, CustomEffectLibrary, GlobalSignalChainConfig, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, ResourceLibrary, RiffLibrary, UiSettings, UiViewState } from "../types.js";
 import { triggerUpdateCheck } from "../updateCheck.js";
 import { applyUiSettings } from "../windowSettings.js";
 import { shouldIgnoreStatePreset } from "./echoGuard.js";
-import { normalizeGlobalSignalChain, normalizePresetResources, presetSignature } from "./normalize.js";
+import { normalizeGlobalSignalChain, normalizePresetResources } from "./normalize.js";
 import type { IncomingPayload } from "./types.js";
 
 export function onState(payload: IncomingPayload): void {
@@ -138,6 +138,12 @@ export function onState(payload: IncomingPayload): void {
     applyRiffLibraryState(riffLibrary);
     refreshDemoAudioSelectors();
   }
+  // The demo clips the engine reads, plays and renders itself (ui/demo/clips.json).
+  applyDemoClips((payload as { demoClips?: unknown }).demoClips);
+  const outputMuted = (payload as { outputMuted?: unknown }).outputMuted;
+  if (typeof outputMuted === "boolean") {
+    applyOutputMuted(outputMuted);
+  }
   const automation = (payload as { automation?: AutomationSlot[] }).automation;
   if (automation) {
     applyAutomationState({ slots: automation });
@@ -203,19 +209,15 @@ export function onState(payload: IncomingPayload): void {
       setActivePresetIsNew(preserveNewDraft);
       const snapshot = uiState.activePresetSnapshot;
       const isNewPreset = !snapshot || snapshot.id !== preset.id;
+      // The engine owns the unsaved-changes flag (activePresetDirty).
+      applyEnginePresetDirty((payload as { activePresetDirty?: unknown }).activePresetDirty, isNewPreset);
       if (isNewPreset) {
         setActivePresetSnapshot(preset);
-        setPresetDirty(false);
         cachePreset(clonePreset(preset));
         if (!uiState.presets.some((p) => p.id === preset.id)) {
           putLibraryPresetFirst(clonePreset(preset));
           showAllLibraryPresets();
           populatePresetDropdown();
-        }
-      } else {
-        if (!uiState.presetDirty) {
-          const dirty = presetSignature(snapshot) !== presetSignature(preset);
-          setPresetDirty(dirty);
         }
       }
       setActivePresetDraft(preset);
@@ -243,6 +245,22 @@ export function onError(payload: IncomingPayload): void {
     // "presetLoaded" that would clear the loading state is never coming.
     setPresetLoadingId(null);
     renderActivePreset();
+  }
+}
+
+/** The output mute changed: the engine's answer to "setOutputMuted". */
+export function onOutputMutedChanged(payload: IncomingPayload): void {
+  applyOutputMuted((payload as { muted?: unknown }).muted === true);
+}
+
+/**
+ * The engine changed one app setting itself, as the answer to an edit command
+ * ("setResourceFavorite"). It is recorded as it stands, and not sent back.
+ */
+export function onAppSettingChanged(payload: IncomingPayload): void {
+  const change = payload as { key?: unknown; value?: AppSettingValue };
+  if (typeof change.key === "string" && change.key) {
+    recordAppSetting(change.key, change.value ?? null);
   }
 }
 

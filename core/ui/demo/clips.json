@@ -1,0 +1,10 @@
+{
+  "$comment": "The demo audio clips every UI offers. The engine reads this (PluginController::LoadDemoClipManifest), sends the list in the full state as demoClips, and plays or renders a clip by id; files are relative to this folder.",
+  "clips": [
+    { "id": "di-riff-01", "title": "Guitar Riff 01", "file": "guitar-riff-01.wav" },
+    { "id": "di-riff-02", "title": "Guitar Riff 02", "file": "guitar-riff-02.wav" },
+    { "id": "di-riff-03", "title": "Guitar Riff 03", "file": "DI_Guitar_L.wav" },
+    { "id": "di-audiocheck-whitenoise", "title": "White Noise (Gaussian)", "file": "audiocheck.net_whitenoisegaussian.wav" },
+    { "id": "di-audiocheck-sweep20-20klog", "title": "Sweep 20-20kHz (Logarithmic)", "file": "audiocheck.net_sweep20-20klog.wav" }
+  ]
+}

@@ -1,12 +1,11 @@
 import { clonePreset, uiState } from "../state.js";
 import type { Preset } from "../types.js";
-import { postMessage } from "../bridge.js";
+import { sendPresetFavorite, sendPresetRating } from "../bridge.js";
 import { syncToneSharingFavoriteForPreset, syncToneSharingRatingForPreset } from "../toneSharingPanel.js";
-import { updateUiSettings } from "../windowSettings.js";
 import { PRESET_FOLDER_FAVORITES_ID } from "./sorting.js";
 import { presetFavoriteToggle } from "./dom.js";
 import { requestPresetLibraryRefresh } from "./refresh.js";
-/** How many recently-loaded presets the Recents folder keeps. */
+/** How many recently-loaded presets the Recents folder keeps (the engine keeps the list). */
 const MAX_RECENT_PRESETS = 4;
 
 export function loadFavoritePresetIds(): Set<string> {
@@ -37,42 +36,11 @@ export function loadRecentPresetIds(): string[] {
   return normalizeRecentPresetIds(uiState.uiSettings?.presetRecents);
 }
 
-export function saveRecentPresetIds(ids: string[]): void {
-  const normalized = normalizeRecentPresetIds(ids);
-  const current = loadRecentPresetIds();
-  const unchanged = normalized.length === current.length && normalized.every((id, index) => current[index] === id);
-  if (unchanged) {
-    return;
-  }
-  uiState.uiSettings = {
-    ...(uiState.uiSettings ?? { zoom: 1 }),
-    presetRecents: normalized,
-  };
-  updateUiSettings({ presetRecents: normalized });
-}
-
 export function getRecentPresets(): Preset[] {
   return loadRecentPresetIds()
     .map((presetId) => uiState.presetCache.get(presetId) ?? uiState.presets.find((preset) => preset.id === presetId) ?? null)
     .filter((preset): preset is Preset => Boolean(preset))
     .map((preset) => clonePreset(preset));
-}
-
-export function trackRecentPreset(presetId: string | null | undefined): void {
-  const id = typeof presetId === "string" ? presetId.trim() : "";
-  if (!id) {
-    return;
-  }
-  const current = loadRecentPresetIds();
-  if (current.includes(id)) {
-    return;
-  }
-  saveRecentPresetIds([id, ...current]);
-}
-
-export function saveFavoritePresetIds(ids: Set<string>): void {
-  uiState.presetFavorites = new Set(ids);
-  postMessage({ type: "setPresetFavorites", favorites: Array.from(ids) });
 }
 
 export function isPresetFavorite(presetId: string): boolean {
@@ -88,16 +56,26 @@ export function setFavoriteToggleState(presetId: string | null): void {
   presetFavoriteToggle.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
-export function toggleFavoritePreset(presetId: string): void {
+/**
+ * Marks or unmarks one preset as a favourite. The engine changes the one entry and answers
+ * with the whole list ("presetFavorites"); the local copy changes now so the UI redraws at once.
+ */
+export function setPresetFavorite(presetId: string, favorite: boolean): void {
   const favorites = loadFavoritePresetIds();
-  if (favorites.has(presetId)) {
-    favorites.delete(presetId);
-  } else {
+  if (favorite) {
     favorites.add(presetId);
+  } else {
+    favorites.delete(presetId);
   }
-  saveFavoritePresetIds(favorites);
+  uiState.presetFavorites = favorites;
+  sendPresetFavorite(presetId, favorite);
+}
+
+export function toggleFavoritePreset(presetId: string): void {
+  const favorite = !isPresetFavorite(presetId);
+  setPresetFavorite(presetId, favorite);
   const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((candidate) => candidate.id === presetId) ?? null;
-  void syncToneSharingFavoriteForPreset(preset, favorites.has(presetId)).catch((error) => {
+  void syncToneSharingFavoriteForPreset(preset, favorite).catch((error) => {
     console.warn("Tone Sharing favorite sync failed", error);
   });
   setFavoriteToggleState(presetId);
@@ -110,17 +88,16 @@ export function loadPresetRatings(): Record<string, number> {
   return uiState.presetRatings ? { ...uiState.presetRatings } : {};
 }
 
-export function savePresetRatings(ratings: Record<string, number>): void {
-  uiState.presetRatings = { ...ratings };
-  postMessage({ type: "setPresetRatings", ratings });
-}
-
 export function getPresetRating(presetId: string): number | null {
   const ratings = loadPresetRatings();
   const rating = ratings[presetId];
   return typeof rating === "number" && rating >= 1 && rating <= 5 ? rating : null;
 }
 
+/**
+ * Rates one preset, or clears its rating with null. The engine changes the one entry and
+ * answers with the whole map ("presetRatings"); the local copy changes now.
+ */
 export function setPresetRating(presetId: string, rating: number | null): void {
   const ratings = loadPresetRatings();
   if (rating === null) {
@@ -128,7 +105,8 @@ export function setPresetRating(presetId: string, rating: number | null): void {
   } else {
     ratings[presetId] = rating;
   }
-  savePresetRatings(ratings);
+  uiState.presetRatings = ratings;
+  sendPresetRating(presetId, rating ?? 0);
   const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((candidate) => candidate.id === presetId) ?? null;
   void syncToneSharingRatingForPreset(preset, rating).catch((error) => {
     console.warn("Tone Sharing rating sync failed", error);

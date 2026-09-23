@@ -380,17 +380,27 @@ include(SharedCodeDefaults)
 
 # JUCE-specific source files.  Shared DSP, presets, resources, models, network
 # and utility code are now provided by the SoundshedGuitarCore library.
-# Only the JUCE adapter and editor sources are compiled here.
-set(SourceFiles
+# Only the JUCE adapter and editor sources are compiled here. The common set goes into
+# both products (Soundshed Guitar and Soundshed Guitar Nano, below); each adds its editor.
+set(CommonSourceFiles
     "${CMAKE_CURRENT_SOURCE_DIR}/source/Main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessorAdapter.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessorAdapter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/ProductInfo.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/ProfileFolder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/StandaloneAudioSettings.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/StandaloneAudioSettings.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/SoundshedEditorBase.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/SoundshedEditorBase.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/StartupLog.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/StartupLog.cpp"
+)
+set(SourceFiles
+    ${CommonSourceFiles}
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.cpp"
 )
 target_sources(SharedCode INTERFACE ${SourceFiles})
 
@@ -438,6 +448,9 @@ target_compile_definitions(SharedCode
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
     PRODUCT_NAME_WITHOUT_VERSION="Soundshed Guitar"
+
+    # The WebView editor (juce/source/ProductInfo.h)
+    SOUNDSHED_NATIVE_UI=0
 )
 
 if(GUITARFX_JUCE_ASIO_USE_EXTERNAL_SDK)
@@ -544,6 +557,8 @@ if(GUITARFX_IPP_AVAILABLE)
     guitarfx_enable_ipp_for_target(SharedCode)
     guitarfx_enable_ipp_for_target(SoundshedGuitarCore)
 endif()
+
+include(SoundshedNano)
 
 # Everything related to the tests target
 if(WIN32)

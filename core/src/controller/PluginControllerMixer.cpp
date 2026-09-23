@@ -296,6 +296,26 @@ bool PluginController::ReplaceActiveMixerPresetInPlace(const Preset& preset, con
     return replaced;
 }
 
+void PluginController::ApplyActivePresetInItsSlot()
+{
+    if (!mActivePreset)
+    {
+        return;
+    }
+
+    const auto activeMixerIds = SnapshotActivePresetIds();
+    const bool sharesTheMix = activeMixerIds.size() > 1 &&
+                              std::find(activeMixerIds.begin(), activeMixerIds.end(), mActivePresetId) != activeMixerIds.end();
+
+    if (sharesTheMix && ReplaceActiveMixerPresetInPlace(*mActivePreset, mActivePresetId, mActivePreset->name))
+    {
+        mActivePresetJson = PresetStorage::SerializeToJson(*mActivePreset);
+        return;
+    }
+
+    ApplyPreset(*mActivePreset);
+}
+
 // The slot lookups behind these walk instances the audio thread erases, and Process() reads
 // what they write.
 void PluginController::SetActivePresetMix(const std::string& presetId, double value)

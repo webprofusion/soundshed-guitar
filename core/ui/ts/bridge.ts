@@ -85,9 +85,53 @@ export function setPresetSolo(presetId: string, solo: boolean): void {
   appendLog(`setPresetSolo(${presetId}) → ${solo}`);
 }
 
-export function setMasterGain(gain: number): void {
-  postMessage({ type: "setMasterGain", gain });
-  appendLog(`setMasterGain → ${gain.toFixed(3)}`);
+// ── Edits the engine makes itself ─────────────────────────────────────────────
+// Each names one change and the engine applies it to its own copy, replying with the
+// result (docs/user-interface.md), so the web UI and Soundshed Guitar Nano cannot make
+// the same edit two different ways.
+
+/** Switches the active preset's scene; answered by "presetLoaded". */
+export function selectScene(sceneId: string): void {
+  postMessage({ type: "selectScene", sceneId });
+  appendLog(`selectScene → ${sceneId}`);
+}
+
+/** Adds a scene copied from `fromSceneId` (the playing scene when omitted) and selects it. */
+export function addScene(fromSceneId?: string | null): void {
+  postMessage({ type: "addScene", ...(fromSceneId ? { fromSceneId } : {}) });
+  appendLog("addScene");
+}
+
+/** Renames a scene; the engine trims the title, and an empty one becomes "Scene". */
+export function renameScene(sceneId: string, title: string): void {
+  postMessage({ type: "renameScene", sceneId, title });
+}
+
+/** Removes a scene; the engine refuses the last one with an "error". */
+export function removeScene(sceneId: string): void {
+  postMessage({ type: "removeScene", sceneId });
+  appendLog(`removeScene → ${sceneId}`);
+}
+
+/** Marks or unmarks one preset as a favourite; answered by the whole "presetFavorites" list. */
+export function sendPresetFavorite(presetId: string, favorite: boolean): void {
+  postMessage({ type: "setPresetFavorite", presetId, favorite });
+}
+
+/** Rates one preset 1-5, or clears its rating with 0; answered by the whole "presetRatings" map. */
+export function sendPresetRating(presetId: string, rating: number): void {
+  postMessage({ type: "setPresetRating", presetId, rating });
+}
+
+/** Mutes or unmutes the output after the output gain; answered by "outputMutedChanged". */
+export function setOutputMuted(muted: boolean): void {
+  postMessage({ type: "setOutputMuted", muted });
+  appendLog(`setOutputMuted → ${muted}`);
+}
+
+/** Marks or unmarks one library resource as a favourite; answered by "appSettingChanged". */
+export function sendResourceFavorite(resourceId: string, favorite: boolean): void {
+  postMessage({ type: "setResourceFavorite", resourceId, favorite });
 }
 
 /**
@@ -244,8 +288,9 @@ export function previewRiffTake(takeId: string, enableGuidance = true): void {
   postMessage({ type: "previewRiffTake", takeId, enableGuidance });
 }
 
+/** Renders a demo clip (by `clipId`, from the engine's own list) or a riff take through the current preset. */
 export function renderDemoAudio(payload: {
-  audio?: Record<string, unknown>;
+  clipId?: string;
   takeId?: string;
   title?: string;
   suggestedName?: string;

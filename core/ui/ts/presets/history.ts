@@ -74,9 +74,10 @@ export async function stepPresetHistory(offset: -1 | 1, applyPreset: (presetId: 
     replayingPresetHistory = false;
   }
 
-  // Only advance the cursor once the load actually succeeded — applyPresetFromLibrary
-  // swallows failures and can also be cancelled by the unsaved-changes prompt.
-  if (uiState.activePresetId === targetId) {
+  // Only advance the cursor once the load actually went ahead — applyPresetFromLibrary
+  // swallows failures and can also be cancelled by the unsaved-changes prompt. A load by id
+  // may still be in flight, the preset shown loading until the engine answers.
+  if (uiState.activePresetId === targetId || uiState.presetLoadingId === targetId) {
     presetHistoryIndex = targetIndex;
   }
   updatePresetHistoryButtons();

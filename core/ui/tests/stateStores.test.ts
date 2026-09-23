@@ -6,7 +6,7 @@ vi.mock("../ts/bridge.js", () => ({
   setAppSetting: (key: string, value: unknown) => postMessage({ type: "setSetting", key, value }),
 }));
 
-const { uiState } = await import("../ts/state.js");
+const { applyEnginePresetDirty, uiState } = await import("../ts/state.js");
 const library = await import("../ts/presetLibraryStore.js");
 const mixer = await import("../ts/mixerStore.js");
 const settings = await import("../ts/appSettingsStore.js");
@@ -67,6 +67,40 @@ describe("preset library store", () => {
     library.cachePreset(preset("a"), "slot-1");
     expect(uiState.presetCache.get("slot-1")?.id).toBe("a");
   });
+
+  it("knows which presets the engine can load by id: its list, what it saved, less what is deleted", () => {
+    library.setStoredPresetIds(["factory-1", "user-1"]);
+    library.markPresetStored("user-2");
+    expect(["factory-1", "user-1", "user-2", "shared-1"].map(library.isStoredPreset)).toEqual([true, true, true, false]);
+
+    library.resetLibrary([preset("user-1")]);
+    library.removeLibraryPresets(["user-1"]);
+    expect(library.isStoredPreset("user-1")).toBe(false);
+
+    library.setStoredPresetIds(["factory-1"]);
+    expect(library.isStoredPreset("user-2")).toBe(false);
+  });
+});
+
+describe("unsaved changes", () => {
+  beforeEach(() => {
+    uiState.presetDirty = false;
+  });
+
+  it("takes the engine's flag for a preset that has just replaced another, absent meaning clean", () => {
+    applyEnginePresetDirty(true, true);
+    expect(uiState.presetDirty).toBe(true);
+    applyEnginePresetDirty(undefined, true);
+    expect(uiState.presetDirty).toBe(false);
+  });
+
+  it("lets the engine flag the preset on screen dirty, but not clear an edit the UI has just flagged", () => {
+    applyEnginePresetDirty(true, false);
+    expect(uiState.presetDirty).toBe(true);
+    // The engine re-checks on idle, so this false can predate the edit; presetDirtyChanged clears it.
+    applyEnginePresetDirty(false, false);
+    expect(uiState.presetDirty).toBe(true);
+  });
 });
 
 describe("mixer store", () => {
@@ -94,7 +128,7 @@ describe("mixer store", () => {
   });
 
   it("does nothing to levels or slots before the engine has sent a mixer", () => {
-    mixer.setMixerMasterGain(0);
+    mixer.setMixerMixGainDb(-6);
     mixer.addMixerSlot("a", "A");
     expect(uiState.mixer).toBeUndefined();
   });
@@ -111,6 +145,12 @@ describe("app settings store", () => {
     settings.replaceAppSettings({ a: 1 });
     expect(settings.getAppSetting("a")).toBe(1);
     expect(settings.getAppSetting("missing")).toBeNull();
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("records one setting the engine changed itself without sending it back", () => {
+    settings.recordAppSetting("resources.favorites", ["ir-2"]);
+    expect(settings.getAppSetting("resources.favorites")).toEqual(["ir-2"]);
     expect(postMessage).not.toHaveBeenCalled();
   });
 });
