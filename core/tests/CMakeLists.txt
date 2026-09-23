@@ -40,6 +40,7 @@ set(TEST_SOURCES
     IRConvolutionTests.cpp
     IRReverbAutomationRealtimeTests.cpp
     IRReverbQualityTests.cpp
+    ImpulseResamplerTests.cpp
     PracticeToolCrossfadeTests.cpp
     MessageDispatchTypeErrorTests.cpp
     MessageHandlerRegistryTests.cpp

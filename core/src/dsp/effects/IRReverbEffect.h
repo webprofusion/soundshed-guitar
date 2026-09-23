@@ -5,6 +5,7 @@
 #include "dsp/EffectGuids.h"
 #include "dsp/IRTypes.h"
 #include "dsp/IRWavLoader.h"
+#include "dsp/ImpulseResampler.h"
 #include "dsp/RealtimeParallel.h"
 #include "dsp/RealtimeConvolver.h"
 #include <algorithm>
@@ -563,84 +564,11 @@ class IRReverbEffect : public EffectProcessor
         return static_cast<float>(rateCompensation / std::sqrt(sumSq));
     }
 
-    static double Sinc(double x)
-    {
-        if (std::fabs(x) < 1e-9)
-        {
-            return 1.0;
-        }
-
-        const double px = 3.14159265358979323846 * x;
-        return std::sin(px) / px;
-    }
-
-    static double BlackmanWindow(double distance)
-    {
-        constexpr double kPi = 3.14159265358979323846;
-        constexpr int kHalfTaps = 64;
-        const double normalizedDistance = std::abs(distance) / static_cast<double>(kHalfTaps);
-
-        if (normalizedDistance >= 1.0)
-        {
-            return 0.0;
-        }
-
-        return 0.42 + 0.5 * std::cos(kPi * normalizedDistance) + 0.08 * std::cos(2.0 * kPi * normalizedDistance);
-    }
-
-    static void ResampleImpulseForConvolution(std::vector<float>& samples, double sourceRate, double targetRate)
-    {
-        if (samples.empty() || sourceRate <= 0.0 || targetRate <= 0.0 || std::abs(sourceRate - targetRate) <= 1.0)
-        {
-            return;
-        }
-
-        constexpr int kHalfTaps = 64;
-        const double ratio = targetRate / sourceRate;
-        const double cutoff = std::min(ratio, 1.0);
-        const std::size_t newSize = static_cast<std::size_t>(std::ceil(static_cast<double>(samples.size()) * ratio));
-
-        if (newSize == 0)
-        {
-            samples.clear();
-            return;
-        }
-
-        std::vector<float> resampled(newSize, 0.0f);
-        const int sourceLength = static_cast<int>(samples.size());
-        const double coefficientScale = sourceRate / targetRate;
-
-        for (std::size_t outputIndex = 0; outputIndex < newSize; ++outputIndex)
-        {
-            const double sourcePosition = static_cast<double>(outputIndex) / ratio;
-            const int center = static_cast<int>(std::floor(sourcePosition));
-            double sum = 0.0;
-
-            for (int tapOffset = -kHalfTaps; tapOffset <= kHalfTaps; ++tapOffset)
-            {
-                const int sourceIndex = center + tapOffset;
-
-                if (sourceIndex < 0 || sourceIndex >= sourceLength)
-                {
-                    continue;
-                }
-
-                const double distance = sourcePosition - static_cast<double>(sourceIndex);
-                const double tap = cutoff * Sinc(distance * cutoff) * BlackmanWindow(distance);
-                sum += static_cast<double>(samples[static_cast<std::size_t>(sourceIndex)]) * tap;
-            }
-
-            resampled[outputIndex] = static_cast<float>(sum * coefficientScale);
-        }
-
-        samples = std::move(resampled);
-    }
-
-    // Resampling a long reverb IR costs ~130 sinc taps per output sample per channel --
-    // seconds of work for a multi-second true-stereo IR. Quality only changes where the
-    // tail is truncated, not the impulse itself, so the resampled copy is built once per
-    // (IR, playback rate) and reused. Without this, every quality change re-resampled the
-    // whole IR while holding the DSP lock, which silences the audio thread for the duration.
+    // Resampling a long reverb IR costs 128 taps per output sample per channel -- tens of
+    // milliseconds for a multi-second true-stereo IR (ImpulseResampler.h). Quality only changes
+    // where the tail is truncated, not the impulse itself, so the resampled copy is built once per
+    // (IR, playback rate) and reused. A quality change never repeats it, which matters because
+    // TakeDeferredRebuild calls this under the DSP lock and expects to find the cache current.
     void EnsurePlaybackImpulses()
     {
         if (mPlaybackImpulses && mPlaybackCacheRate == mSampleRate && mPlaybackCacheIRRate == mIRSampleRate)

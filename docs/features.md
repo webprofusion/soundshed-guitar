@@ -158,7 +158,7 @@ All types share `decay`, `mix`, and `preDelay`. Each has tuned internals for its
 - **Algorithm**: Uniformly Partitioned Overlap-Save (UPOLS) — zero heap allocation in audio callback.
 - **SIMD FFT**: `simd/SimdFFT.h` for accelerated frequency-domain convolution.
 - **Quality presets**: 0=Economy, 1=Standard, 2=High, 3=Full — trades block size and IR length for CPU vs quality.
-- **IR resampling**: Handles sample-rate mismatch between IR and session (linear interpolation; cubic is a known improvement in TODO).
+- **IR resampling**: An IR not at the session's rate is resampled with a 128-tap Blackman-windowed sinc that keeps its gain (`core/src/dsp/ImpulseResampler.h`, shared with the convolution reverb). For whole-number rates the filter's few distinct kernels are built once, so a 6 s true-stereo IR takes tens of milliseconds.
 - Also used for **convolution reverb** (`IRReverbEffect.h`).
 
 ---
