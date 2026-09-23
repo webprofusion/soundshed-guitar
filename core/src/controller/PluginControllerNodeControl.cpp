@@ -209,4 +209,45 @@ void PluginController::ClearNamCalibrationParams(GraphNode& node) const
     node.params.erase("calibrationInputLevelEnabled");
     node.params.erase("calibrationOutputLevel");
 }
+
+void PluginController::ApplyDeferredNodeRebuilds()
+{
+    // SetParam can run on the audio thread (MIDI and DAW automation apply there), so a parameter
+    // whose change needs a rebuild, like the IR cab's Normalize and Low Latency, is only recorded
+    // there. The rebuild is built here, off the DSP lock, and swapped in under it: the audio thread
+    // outputs silence for any block that finds the lock held, so nothing holds it for the build.
+    // The request count spares idle ticks with nothing requested from taking the lock at all.
+    const auto requests = DeferredRebuild::RequestCount();
+
+    if (requests == mDeferredRebuildRequestsSeen)
+    {
+        return;
+    }
+
+    mDeferredRebuildRequestsSeen = requests;
+    std::vector<MultiPresetMixer::GraphRebuildWork> rebuilds;
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.TakeDeferredRebuilds(rebuilds);
+    }
+
+    if (rebuilds.empty())
+    {
+        return;
+    }
+
+    for (auto& rebuild : rebuilds)
+    {
+        rebuild.work->Build();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.CommitDeferredRebuilds(rebuilds);
+    }
+
+    // Frees what the rebuilds replaced, after the lock. Low Latency changes the chain's length.
+    rebuilds.clear();
+    UpdateHostLatency();
+}
 } // namespace guitarfx

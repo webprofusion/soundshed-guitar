@@ -64,6 +64,10 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
         mPresetMixer.SetNodeParam(presetId, nodeId, paramKey, value);
     }
 
+    // A change SetParam left for this thread (the IR cab's Normalize and Low Latency) is built
+    // now, rather than at the next idle tick.
+    ApplyDeferredNodeRebuilds();
+
     // Some parameters (e.g. the convolution low-latency toggle) change a node's
     // processing latency. Re-report total plugin latency so the host updates PDC.
     if (paramKey == "lowLatency")

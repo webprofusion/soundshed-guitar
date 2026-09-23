@@ -36,6 +36,7 @@ set(TEST_SOURCES
     HostedPluginStateWorkflowTests.cpp
     HostRestoreThreadTests.cpp
     HostStateThreadTests.cpp
+    IRCabAutomationRealtimeTests.cpp
     IRConvolutionTests.cpp
     IRReverbQualityTests.cpp
     PracticeToolCrossfadeTests.cpp

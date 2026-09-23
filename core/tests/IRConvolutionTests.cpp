@@ -469,9 +469,18 @@ class IRConvolutionTester
     void SetCabParam(const std::string& key, double value)
     {
         mExecutor.SetNodeParam("cab", key, value);
-        // Parameters that rebuild the impulse (normalizeIR, lowLatency) start a 30 ms
-        // crossfade from the previous convolver. Reset so the first rendered samples
-        // reflect the new setting rather than the tail of the old one.
+
+        // Parameters that rebuild the impulse (normalizeIR, lowLatency) only record the change
+        // in SetParam, which can run on the audio thread; the message thread builds it. Do its
+        // part here, as PluginController::ApplyDeferredNodeRebuilds does.
+        if (auto rebuild = mExecutor.TakeDeferredRebuilds())
+        {
+            rebuild->Build();
+            mExecutor.CommitDeferredRebuilds(*rebuild);
+        }
+
+        // The rebuild starts a 30 ms crossfade from the previous convolver. Reset so the first
+        // rendered samples reflect the new setting rather than the tail of the old one.
         mExecutor.Reset();
     }
 

@@ -188,6 +188,27 @@ class EffectProcessor {
 };
 ```
 
+### Where SetParam runs
+
+`SetParam` can run on the audio thread. MIDI and DAW automation apply there, under the DSP lock
+(`PluginController::ProcessQueuedMidi`), and any node parameter can be bound to an automation
+slot. So `SetParam` must not allocate, lock or rebuild. Nor can a rebuild move to the message thread
+under the lock: the audio thread outputs silence for any block that finds the lock held.
+
+A parameter whose change needs a rebuild records the new value in `SetParam` and calls
+`DeferredRebuild::NoteRequested()` (`core/src/dsp/DeferredRebuild.h`). The message thread finishes
+it in `PluginController::ApplyDeferredNodeRebuilds`, which the node-param handler and the idle loop
+call:
+
+1. Under the lock, `TakeDeferredRebuild()` returns the work, with what the build reads copied into it.
+2. Off the lock, `DeferredRebuild::Build()` does the expensive part.
+3. Under the lock again, `CommitDeferredRebuild()` swaps the result in, in O(1). It drops the work
+   if the effect was rebuilt in between, and leaves what it replaces in the work, to be freed after
+   the lock is released.
+
+A composite forwards both calls to its inner graph. The IR Cabinet's Normalize and Low Latency work
+this way.
+
 ## Built-in Effect Types
 
 ### NAM Amp (`amp_nam`)
@@ -323,6 +344,19 @@ Impulse response convolution for cabinet simulation.
 | `quality` | 0–3 | 1 | — |
 
 Quality levels: 0=Economy, 1=Standard, 2=High, 3=Full
+
+**Normalize and Low Latency** (`normalizeIR` and `lowLatency`, both on by default) are built into
+the convolvers: the normalisation gain into the coefficients, and the latency into the partition
+layout. A preset sets them before its IRs load, so loading one rebuilds nothing extra. A change
+once IRs are loaded, from the node panel or from MIDI or DAW automation, is not built in `SetParam`
+(see *Where SetParam runs*). The message thread builds it off the DSP lock from copies of the
+impulses, and swaps it in under the lock with the same 30 ms crossfade an IR change uses. The
+outgoing side of that crossfade is the convolvers that were playing, history and all. A change from
+the node panel is built before its message returns, and one from automation at the next idle tick.
+`GetParam` reports the requested value straight away. The rebuild also applies a Quality change
+still waiting for the next IR load. The host hears about the new latency once the rebuild is in.
+Normalize is not a declared parameter, so the node panel has no control for it. Presets set it,
+and so can a slot address that names it (`node.cab_ir.normalizeIR`).
 
 Speaker Drive is the Simple Cabinet's level-dependent speaker stage (`SpeakerDrive.h`) in front
 of the convolution: what an IR, being a linear snapshot, cannot capture. It bends only what

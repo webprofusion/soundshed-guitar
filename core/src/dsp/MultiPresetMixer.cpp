@@ -753,6 +753,54 @@ bool MultiPresetMixer::LoadNodeResource(const std::string& presetId, const std::
     return false;
 }
 
+void MultiPresetMixer::TakeDeferredRebuilds(std::vector<GraphRebuildWork>& out)
+{
+    for (auto& inst : mVoices.Instances())
+    {
+        if (inst->IsRetiring())
+        {
+            continue;
+        }
+
+        if (auto work = inst->executor.TakeDeferredRebuilds())
+        {
+            out.push_back({&inst->executor, std::move(work)});
+        }
+    }
+
+    for (SignalGraphExecutor* executor : {&mGlobalChain.Pre(), &mGlobalChain.Post()})
+    {
+        if (auto work = executor->TakeDeferredRebuilds())
+        {
+            out.push_back({executor, std::move(work)});
+        }
+    }
+}
+
+void MultiPresetMixer::CommitDeferredRebuilds(std::vector<GraphRebuildWork>& rebuilds)
+{
+    // Slots are only installed and retired by the message thread, which is the thread doing this,
+    // so a graph is still running unless it started retiring. Each node checks it still runs the
+    // processor its work came from.
+    const auto isRunning = [this](const SignalGraphExecutor* executor) {
+        if (executor == &mGlobalChain.Pre() || executor == &mGlobalChain.Post())
+        {
+            return true;
+        }
+
+        return std::any_of(mVoices.Instances().begin(), mVoices.Instances().end(),
+                           [executor](const auto& inst) { return &inst->executor == executor && !inst->IsRetiring(); });
+    };
+
+    for (auto& rebuild : rebuilds)
+    {
+        if (isRunning(rebuild.executor))
+        {
+            rebuild.executor->CommitDeferredRebuilds(*rebuild.work);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Destructor / parallel worker lifecycle
 // ---------------------------------------------------------------------------

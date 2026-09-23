@@ -178,6 +178,9 @@ merging, and verification of both saved data and the audio path.
 ## Realtime Safety and Validation
 
 - Audio thread: no allocations, no locks, no blocking I/O.
+- `SetParam` runs on the audio thread too, since MIDI and DAW automation apply there. A parameter
+  whose change needs a rebuild records it and leaves the build to the message thread
+  (`DeferredRebuild`, docs/fx-library.md "Where SetParam runs").
 - Validate parameter ranges and resource presence; fail fast with clear errors.
 - Graphs must be acyclic; invalid graphs should not reach Process().
 

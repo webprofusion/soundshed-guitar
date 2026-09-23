@@ -23,6 +23,29 @@ using namespace guitarfx::executor_detail;
 
 namespace
 {
+/// A graph's deferred rebuilds (SignalGraphExecutor::TakeDeferredRebuilds), one per node that has
+/// one, built together.
+class GraphRebuild final : public DeferredRebuild
+{
+  public:
+    struct Node
+    {
+        std::string nodeId;
+        EffectProcessor* processor = nullptr;
+        std::unique_ptr<DeferredRebuild> work;
+    };
+
+    void Build() override
+    {
+        for (auto& node : nodes)
+        {
+            node.work->Build();
+        }
+    }
+
+    std::vector<Node> nodes;
+};
+
 ResourceRef HydrateResolvedResourceRef(const ResourceRef& ref, const ResourceLibrary* resourceLibrary)
 {
     ResourceRef hydrated = ref;
@@ -1594,6 +1617,52 @@ bool SignalGraphExecutor::LoadNodeResource(const std::string& nodeId, const Reso
     }
 
     return false;
+}
+
+std::unique_ptr<DeferredRebuild> SignalGraphExecutor::TakeDeferredRebuilds()
+{
+    auto graphWork = std::make_unique<GraphRebuild>();
+
+    for (auto& [nodeId, state] : mNodeStates)
+    {
+        if (!state.processor)
+        {
+            continue;
+        }
+
+        if (auto work = state.processor->TakeDeferredRebuild())
+        {
+            graphWork->nodes.push_back({nodeId, state.processor.get(), std::move(work)});
+        }
+    }
+
+    if (graphWork->nodes.empty())
+    {
+        return nullptr;
+    }
+
+    return graphWork;
+}
+
+void SignalGraphExecutor::CommitDeferredRebuilds(DeferredRebuild& work)
+{
+    auto* graphWork = dynamic_cast<GraphRebuild*>(&work);
+
+    if (!graphWork)
+    {
+        return;
+    }
+
+    for (auto& node : graphWork->nodes)
+    {
+        // A graph rebuilt in between has new processors, which asked for nothing.
+        const auto* state = FindNodeState(node.nodeId);
+
+        if (state && state->processor.get() == node.processor)
+        {
+            node.processor->CommitDeferredRebuild(*node.work);
+        }
+    }
 }
 
 std::string SignalGraphExecutor::FindFirstNodeOfType(const std::string& type) const

@@ -45,6 +45,18 @@ class CompositeEffectProcessor : public EffectProcessor
     [[nodiscard]] std::string GetConfig(const std::string& key) const override;
     bool LoadResources(const std::vector<ResourceRef>& refs, const std::vector<std::filesystem::path>& paths) override;
 
+    /// An exposed parameter reaches an inner node's SetParam, so the inner nodes' deferred
+    /// rebuilds are this node's.
+    [[nodiscard]] std::unique_ptr<DeferredRebuild> TakeDeferredRebuild() override
+    {
+        return mInnerExecutor.TakeDeferredRebuilds();
+    }
+
+    void CommitDeferredRebuild(DeferredRebuild& work) override
+    {
+        mInnerExecutor.CommitDeferredRebuilds(work);
+    }
+
     [[nodiscard]] std::string GetType() const override;
     [[nodiscard]] std::string GetCategory() const override;
 

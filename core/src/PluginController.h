@@ -546,6 +546,10 @@ class PluginController
     /// calls are held (see RunHostChangeOnMessageThread).
     void UpdateHostLatency();
     int mLastReportedLatency = -1; ///< Guards against redundant host latency notifications. mDSPMutex.
+    /// Message thread, without mDSPMutex: builds the rebuilds effects' SetParam left waiting (see
+    /// DeferredRebuild) off the lock, and installs them under it.
+    void ApplyDeferredNodeRebuilds();
+    std::uint64_t mDeferredRebuildRequestsSeen = 0; ///< DeferredRebuild::RequestCount() at the last pass.
     /**
      * Runs `change` on the message thread for a host call made on another thread, through
      * HostStateRelay::ApplyOnMessageThread, and returns whether it ran before this returned.

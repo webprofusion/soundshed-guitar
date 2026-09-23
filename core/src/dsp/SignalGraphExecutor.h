@@ -1,6 +1,7 @@
 #pragma once
 
 #include "presets/PresetTypes.h"
+#include "dsp/DeferredRebuild.h"
 #include "dsp/SignalTelemetry.h"
 #include "dsp/SpectrumTap.h"
 #include <map>
@@ -124,6 +125,16 @@ class SignalGraphExecutor
     /// Copy another executor's type defaults wholesale (does not touch existing nodes).
     void SeedNodeTypeConfigDefaults(const std::map<std::string, std::map<std::string, std::string>>& defaults);
     bool LoadNodeResource(const std::string& nodeId, const ResourceRef& ref);
+
+    /// Under the DSP lock, message thread: the deferred rebuilds (see DeferredRebuild) this graph's
+    /// nodes have waiting, composites' inner nodes included, as one piece of work to build off the
+    /// lock, or nullptr when there are none.
+    [[nodiscard]] std::unique_ptr<DeferredRebuild> TakeDeferredRebuilds();
+
+    /// Under the DSP lock, message thread: hands each node its built rebuild back, if the node
+    /// still runs the processor it was taken from. `work` is what TakeDeferredRebuilds returned.
+    void CommitDeferredRebuilds(DeferredRebuild& work);
+
     [[nodiscard]] std::string GetNodeConfig(const std::string& nodeId, const std::string& key) const;
     [[nodiscard]] EffectProcessor* GetNodeProcessor(const std::string& nodeId);
     [[nodiscard]] const EffectProcessor* GetNodeProcessor(const std::string& nodeId) const;

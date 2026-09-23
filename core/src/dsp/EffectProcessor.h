@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "dsp/DeferredRebuild.h"
 #include "presets/PresetTypes.h"
 
 namespace guitarfx
@@ -94,6 +95,21 @@ class EffectProcessor
     }
 
     virtual void SetRuntimeConfigChangedCallback(RuntimeConfigChangedCallback /*callback*/)
+    {
+    }
+
+    /// A parameter change SetParam recorded but could not build where it ran (see
+    /// DeferredRebuild). Under the DSP lock, message thread: the work, with what it will read
+    /// copied into it, or nullptr when nothing is waiting.
+    [[nodiscard]] virtual std::unique_ptr<DeferredRebuild> TakeDeferredRebuild()
+    {
+        return nullptr;
+    }
+
+    /// Under the DSP lock, message thread: installs `work`, which this processor's
+    /// TakeDeferredRebuild() returned and which has since been built, in O(1). Drops it if the
+    /// effect was rebuilt in between, and moves what it replaces into `work` to be freed later.
+    virtual void CommitDeferredRebuild(DeferredRebuild& /*work*/)
     {
     }
 

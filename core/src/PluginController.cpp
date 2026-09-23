@@ -328,6 +328,7 @@ void PluginController::OnIdle()
     mHostStateRelay->ApplyQueued();
 
     mPresetMixer.CollectRetiredMainThread();
+    ApplyDeferredNodeRebuilds();
     PollSharedSyncState();
 
     // Has the editor's reported size settled? Commit it as the remembered size and tell

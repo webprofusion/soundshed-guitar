@@ -13,8 +13,11 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace guitarfx
@@ -57,6 +60,7 @@ class IRCabEffect : public EffectProcessor
         mPrevOutputBufferBR.resize(static_cast<size_t>(maxBlockSize));
 
         ApplyPendingQuality();
+        ApplyPendingRebuildSettings();
 
         // Reinitialize convolvers if we have IRs loaded
         if (!mImpulseL.empty())
@@ -583,31 +587,8 @@ class IRCabEffect : public EffectProcessor
         }
         else if (key == "normalizeIR")
         {
-            const bool nv = value > 0.5;
-
-            if (nv != mNormalizeIR)
-            {
-                // The normalisation gain is baked into the convolver coefficients at load
-                // time, so the flag only takes effect if the impulses are rebuilt here.
-                // Same locking rationale as "lowLatency" below.
-                if (HasResource())
-                {
-                    CapturePreviousConvolvers(); // capture with the old normalisation for the crossfade
-                    mNormalizeIR = nv;
-                    InitializeConvolverA();
-
-                    if (!mImpulseBL.empty())
-                    {
-                        InitializeConvolverB();
-                    }
-
-                    BeginResourceTransition();
-                }
-                else
-                {
-                    mNormalizeIR = nv;
-                }
-            }
+            // The normalisation gain is baked into the convolver coefficients.
+            RequestRebuildSetting(mPendingNormalizeIR, mNormalizeIR, value > 0.5);
         }
         else if (key == "outputGain")
         {
@@ -624,34 +605,8 @@ class IRCabEffect : public EffectProcessor
         }
         else if (key == "lowLatency")
         {
-            const bool nv = value > 0.5;
-
-            if (nv != mLowLatency)
-            {
-                // Rebuild immediately so the latency change takes effect without a reload.
-                // Safe because parameter updates run under the controller's DSP lock while
-                // the audio thread only renders under a try-lock (it bypasses meanwhile).
-                if (HasResource())
-                {
-                    // Capture the currently-playing convolvers (old mode) for the crossfade,
-                    // THEN switch the mode and rebuild the live convolvers in the new mode.
-                    CapturePreviousConvolvers();
-                    mLowLatency = nv;
-                    ApplyPendingQuality();
-                    InitializeConvolverA();
-
-                    if (!mImpulseBL.empty())
-                    {
-                        InitializeConvolverB();
-                    }
-
-                    BeginResourceTransition();
-                }
-                else
-                {
-                    mLowLatency = nv;
-                }
-            }
+            // The partition layout is fixed when a convolver is built.
+            RequestRebuildSetting(mPendingLowLatency, mLowLatency, value > 0.5);
         }
         else if (key == "air")
         {
@@ -696,6 +651,71 @@ class IRCabEffect : public EffectProcessor
 
     void SetConfig(const std::string&, const std::string&) override
     {
+    }
+
+    /// A Normalize or Low Latency change SetParam recorded (see RequestRebuildSetting), with copies
+    /// of the impulses to build from: an IR load could replace them while the build runs.
+    [[nodiscard]] std::unique_ptr<DeferredRebuild> TakeDeferredRebuild() override
+    {
+        if (mPendingNormalizeIR.load(std::memory_order_acquire) < 0 &&
+            mPendingLowLatency.load(std::memory_order_acquire) < 0)
+        {
+            return nullptr;
+        }
+
+        // The build takes the quality GetParam reports, as the Low Latency rebuild always has.
+        const int pendingQuality = mPendingQuality.load(std::memory_order_acquire);
+        auto work = std::make_unique<ConvolverRebuild>();
+        work->generation = mBuildGeneration;
+        work->settings = {
+            mSampleRate, mMaxBlockSize, pendingQuality >= 0 ? static_cast<IRQuality>(pendingQuality) : mQuality,
+            EffectiveSetting(mPendingNormalizeIR, mNormalizeIR), EffectiveSetting(mPendingLowLatency, mLowLatency)};
+        work->slotA = {mImpulseL, mImpulseR, mIsStereo, mIRSampleRate};
+        work->slotB = {mImpulseBL, mImpulseBR, mIsStereoB, mIRSampleRateB};
+        return work;
+    }
+
+    void CommitDeferredRebuild(DeferredRebuild& taken) override
+    {
+        auto* work = dynamic_cast<ConvolverRebuild*>(&taken);
+
+        // An IR load or a Prepare since the work was taken rebuilt the convolvers itself, with the
+        // waiting settings folded in. A change requested while it was built supersedes it, and
+        // that SetParam has already asked for another pass.
+        if (!work || work->generation != mBuildGeneration ||
+            EffectiveSetting(mPendingNormalizeIR, mNormalizeIR) != work->settings.normalize ||
+            EffectiveSetting(mPendingLowLatency, mLowLatency) != work->settings.lowLatency)
+        {
+            return;
+        }
+
+        // What is playing becomes the outgoing side of the crossfade as it stands, history and
+        // all, and the rebuilt convolvers go live. Swaps rather than assignments, so the outgoing
+        // convolvers they displace end up in the work and are freed off the lock.
+        mPrevHasSlotA = false;
+        mPrevHasSlotB = false;
+
+        if (!work->slotA.left.empty())
+        {
+            mPrevHasSlotA = mConvolverL.IsInitialized() && mConvolverR.IsInitialized();
+            SwapIn(mConvolverL, mPrevConvolverL, work->convolverL);
+            SwapIn(mConvolverR, mPrevConvolverR, work->convolverR);
+        }
+
+        if (!work->slotB.left.empty())
+        {
+            mPrevHasSlotB = mConvolverBL.IsInitialized() && mConvolverBR.IsInitialized();
+            SwapIn(mConvolverBL, mPrevConvolverBL, work->convolverBL);
+            SwapIn(mConvolverBR, mPrevConvolverBR, work->convolverBR);
+        }
+
+        mNormalizeIR = work->settings.normalize;
+        mLowLatency = work->settings.lowLatency;
+        mQuality = work->settings.quality;
+        ClearPendingIf(mPendingNormalizeIR, mNormalizeIR ? 1 : 0);
+        ClearPendingIf(mPendingLowLatency, mLowLatency ? 1 : 0);
+        ClearPendingIf(mPendingQuality, static_cast<int>(mQuality));
+        BeginResourceTransition();
     }
 
     [[nodiscard]] double GetParam(const std::string& key) const override
@@ -762,7 +782,7 @@ class IRCabEffect : public EffectProcessor
 
         if (key == "normalizeIR")
         {
-            return mNormalizeIR ? 1.0 : 0.0;
+            return EffectiveSetting(mPendingNormalizeIR, mNormalizeIR) ? 1.0 : 0.0;
         }
 
         if (key == "outputGain")
@@ -783,7 +803,7 @@ class IRCabEffect : public EffectProcessor
 
         if (key == "lowLatency")
         {
-            return mLowLatency ? 1.0 : 0.0;
+            return EffectiveSetting(mPendingLowLatency, mLowLatency) ? 1.0 : 0.0;
         }
 
         if (key == "air")
@@ -853,6 +873,7 @@ class IRCabEffect : public EffectProcessor
         mConvolverBL.Reset();
         mConvolverBR.Reset();
         ApplyPendingQuality();
+        ApplyPendingRebuildSettings();
         const bool loaded = InitializeConvolverA();
 
         if (!loaded)
@@ -909,6 +930,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         CapturePreviousConvolvers();
+        ApplyPendingRebuildSettings();
 
         // --- Slot A ---
         bool loadedA = false;
@@ -1123,7 +1145,8 @@ class IRCabEffect : public EffectProcessor
     }
 
     // Get processed (potentially truncated) IR based on quality setting
-    std::vector<float> GetProcessedImpulse(const std::vector<float>& samples, double impulseSampleRate) const
+    static std::vector<float> GetProcessedImpulse(const std::vector<float>& samples, double impulseSampleRate,
+                                                  IRQuality quality, double hostSampleRate)
     {
         if (samples.empty())
         {
@@ -1131,13 +1154,13 @@ class IRCabEffect : public EffectProcessor
         }
 
         // For Full quality, return the complete IR
-        if (mQuality == IRQuality::Full)
+        if (quality == IRQuality::Full)
         {
             return samples;
         }
 
-        const double qualitySampleRate = impulseSampleRate > 0.0 ? impulseSampleRate : mSampleRate;
-        const size_t maxSamples = GetMaxIRSamples(mQuality, qualitySampleRate);
+        const double qualitySampleRate = impulseSampleRate > 0.0 ? impulseSampleRate : hostSampleRate;
+        const size_t maxSamples = GetMaxIRSamples(quality, qualitySampleRate);
 
         if (maxSamples == 0 || samples.size() <= maxSamples)
         {
@@ -1337,20 +1360,41 @@ class IRCabEffect : public EffectProcessor
         return LoadWavFileInto(path, mImpulseL, mImpulseR, mIRSampleRate, mIsStereo);
     }
 
+    /// What building a convolver pair reads from the effect, so a deferred rebuild can build from a
+    /// copy, off the DSP lock.
+    struct ConvolverBuildSettings
+    {
+        double hostSampleRate = 48000.0;
+        int maxBlockSize = 0;
+        IRQuality quality = IRQuality::Standard;
+        bool normalize = true;
+        bool lowLatency = true;
+    };
+
     bool InitializeConvolverFromImpulse(const std::vector<float>& impulseL, const std::vector<float>& impulseR,
                                         bool isStereo, double impulseSampleRate, RealtimeConvolver& convolverL,
-                                        RealtimeConvolver& convolverR)
+                                        RealtimeConvolver& convolverR) const
     {
-        if (impulseL.empty() || mMaxBlockSize == 0)
+        const ConvolverBuildSettings settings{mSampleRate, mMaxBlockSize, mQuality, mNormalizeIR, mLowLatency};
+        return BuildConvolverPair(settings, impulseL, impulseR, isStereo, impulseSampleRate, convolverL, convolverR);
+    }
+
+    static bool BuildConvolverPair(const ConvolverBuildSettings& settings, const std::vector<float>& impulseL,
+                                   const std::vector<float>& impulseR, bool isStereo, double impulseSampleRate,
+                                   RealtimeConvolver& convolverL, RealtimeConvolver& convolverR)
+    {
+        const double hostRate = settings.hostSampleRate;
+
+        if (impulseL.empty() || settings.maxBlockSize == 0)
         {
             return false;
         }
 
         if (isStereo && !impulseR.empty())
         {
-            const double sourceRate = impulseSampleRate > 0.0 ? impulseSampleRate : mSampleRate;
-            std::vector<float> processedL = GetProcessedImpulse(impulseL, sourceRate);
-            std::vector<float> processedR = GetProcessedImpulse(impulseR, sourceRate);
+            const double sourceRate = impulseSampleRate > 0.0 ? impulseSampleRate : hostRate;
+            std::vector<float> processedL = GetProcessedImpulse(impulseL, sourceRate, settings.quality, hostRate);
+            std::vector<float> processedR = GetProcessedImpulse(impulseR, sourceRate, settings.quality, hostRate);
 
             if (processedL.empty() || processedR.empty())
             {
@@ -1361,19 +1405,19 @@ class IRCabEffect : public EffectProcessor
             processedL.resize(length);
             processedR.resize(length);
 
-            if (std::abs(sourceRate - mSampleRate) > 1.0)
+            if (std::abs(sourceRate - hostRate) > 1.0)
             {
                 // Cabinet IR samples are FIR coefficients, so resampling needs to
                 // preserve coefficient area rather than audio-waveform peak level.
-                ResampleImpulseForConvolution(processedL, sourceRate, mSampleRate);
-                ResampleImpulseForConvolution(processedR, sourceRate, mSampleRate);
+                ResampleImpulseForConvolution(processedL, sourceRate, hostRate);
+                ResampleImpulseForConvolution(processedR, sourceRate, hostRate);
             }
 
-            if (mNormalizeIR)
+            if (settings.normalize)
             {
                 // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
                 // Uses combined L+R L2 norm so stereo and mono IRs normalize consistently.
-                const float normGain = ComputeL2NormGain(mSampleRate, processedL, processedR);
+                const float normGain = ComputeL2NormGain(hostRate, processedL, processedR);
 
                 for (auto& s : processedL)
                 {
@@ -1386,10 +1430,11 @@ class IRCabEffect : public EffectProcessor
                 }
             }
 
-            convolverL.SetLowLatencyMode(mLowLatency);
-            convolverR.SetLowLatencyMode(mLowLatency);
+            convolverL.SetLowLatencyMode(settings.lowLatency);
+            convolverR.SetLowLatencyMode(settings.lowLatency);
 
-            if (!convolverL.SetImpulse(processedL, mMaxBlockSize) || !convolverR.SetImpulse(processedR, mMaxBlockSize))
+            if (!convolverL.SetImpulse(processedL, settings.maxBlockSize) ||
+                !convolverR.SetImpulse(processedR, settings.maxBlockSize))
             {
                 convolverL.Reset();
                 convolverR.Reset();
@@ -1399,25 +1444,25 @@ class IRCabEffect : public EffectProcessor
             return true;
         }
 
-        const double sourceRate = impulseSampleRate > 0.0 ? impulseSampleRate : mSampleRate;
-        std::vector<float> processedIR = GetProcessedImpulse(impulseL, sourceRate);
+        const double sourceRate = impulseSampleRate > 0.0 ? impulseSampleRate : hostRate;
+        std::vector<float> processedIR = GetProcessedImpulse(impulseL, sourceRate, settings.quality, hostRate);
 
         if (processedIR.empty())
         {
             return false;
         }
 
-        if (std::abs(sourceRate - mSampleRate) > 1.0)
+        if (std::abs(sourceRate - hostRate) > 1.0)
         {
             // Cabinet IR samples are FIR coefficients, so resampling needs to
             // preserve coefficient area rather than audio-waveform peak level.
-            ResampleImpulseForConvolution(processedIR, sourceRate, mSampleRate);
+            ResampleImpulseForConvolution(processedIR, sourceRate, hostRate);
         }
 
-        if (mNormalizeIR)
+        if (settings.normalize)
         {
             // Scale IR samples so convolution preserves signal energy (unity-gain normalization).
-            const float normGain = ComputeL2NormGain(mSampleRate, processedIR);
+            const float normGain = ComputeL2NormGain(hostRate, processedIR);
 
             for (auto& s : processedIR)
             {
@@ -1425,10 +1470,11 @@ class IRCabEffect : public EffectProcessor
             }
         }
 
-        convolverL.SetLowLatencyMode(mLowLatency);
-        convolverR.SetLowLatencyMode(mLowLatency);
+        convolverL.SetLowLatencyMode(settings.lowLatency);
+        convolverR.SetLowLatencyMode(settings.lowLatency);
 
-        if (!convolverL.SetImpulse(processedIR, mMaxBlockSize) || !convolverR.SetImpulse(processedIR, mMaxBlockSize))
+        if (!convolverL.SetImpulse(processedIR, settings.maxBlockSize) ||
+            !convolverR.SetImpulse(processedIR, settings.maxBlockSize))
         {
             convolverL.Reset();
             convolverR.Reset();
@@ -1577,6 +1623,101 @@ class IRCabEffect : public EffectProcessor
             mQuality = static_cast<IRQuality>(pending);
         }
     }
+
+    /// Normalize and Low Latency are baked into the convolvers when they are built. With nothing
+    /// built yet (a preset sets its params before its IRs load) the first build picks the value up.
+    /// Otherwise the rebuild is left to the message thread (DeferredRebuild): SetParam can run on
+    /// the audio thread, and the rebuild allocates.
+    void RequestRebuildSetting(std::atomic<int>& pending, bool& setting, bool requested)
+    {
+        if (!HasResource())
+        {
+            setting = requested;
+            pending.store(-1, std::memory_order_release);
+            return;
+        }
+
+        // Asking for what is built cancels a change still waiting.
+        const int target = requested == setting ? -1 : (requested ? 1 : 0);
+
+        if (pending.exchange(target, std::memory_order_acq_rel) != target)
+        {
+            DeferredRebuild::NoteRequested();
+        }
+    }
+
+    [[nodiscard]] static bool EffectiveSetting(const std::atomic<int>& pending, bool setting)
+    {
+        const int value = pending.load(std::memory_order_acquire);
+        return value >= 0 ? value != 0 : setting;
+    }
+
+    /// Every build of the live convolvers starts here: a Normalize or Low Latency change still
+    /// waiting for the message thread is folded into the build, and any rebuild already taken for
+    /// it is dropped when it comes back.
+    void ApplyPendingRebuildSettings()
+    {
+        ++mBuildGeneration;
+        mNormalizeIR = EffectiveSetting(mPendingNormalizeIR, mNormalizeIR);
+        mLowLatency = EffectiveSetting(mPendingLowLatency, mLowLatency);
+        mPendingNormalizeIR.store(-1, std::memory_order_release);
+        mPendingLowLatency.store(-1, std::memory_order_release);
+    }
+
+    /// A pending value the commit just built is no longer pending; a different one still is.
+    static void ClearPendingIf(std::atomic<int>& pending, int built)
+    {
+        pending.compare_exchange_strong(built, -1, std::memory_order_acq_rel);
+    }
+
+    /// `previous` takes what is playing, `live` takes what was built, and `built` is left with the
+    /// convolvers `previous` held, to be freed with the work. Moves between these steal buffers,
+    /// so nothing is allocated or freed here.
+    static void SwapIn(RealtimeConvolver& live, RealtimeConvolver& previous, RealtimeConvolver& built)
+    {
+        std::swap(previous, live);
+        std::swap(live, built);
+    }
+
+    /// One IR slot's impulse, as a deferred rebuild copies it.
+    struct SlotImpulse
+    {
+        std::vector<float> left;
+        std::vector<float> right;
+        bool isStereo = false;
+        double sampleRate = 48000.0;
+    };
+
+    /// The convolver rebuild a Normalize or Low Latency change needs, built by the message thread
+    /// off the DSP lock from copies of the impulses and settings.
+    class ConvolverRebuild final : public DeferredRebuild
+    {
+      public:
+        void Build() override
+        {
+            // Same slots as the rebuild SetParam used to do: A always, B only when it has an IR.
+            if (!slotA.left.empty())
+            {
+                BuildConvolverPair(settings, slotA.left, slotA.right, slotA.isStereo, slotA.sampleRate, convolverL,
+                                   convolverR);
+            }
+
+            if (!slotB.left.empty())
+            {
+                BuildConvolverPair(settings, slotB.left, slotB.right, slotB.isStereo, slotB.sampleRate, convolverBL,
+                                   convolverBR);
+            }
+        }
+
+        std::uint64_t generation = 0;
+        ConvolverBuildSettings settings;
+        SlotImpulse slotA;
+        SlotImpulse slotB;
+        RealtimeConvolver convolverL;
+        RealtimeConvolver convolverR;
+        RealtimeConvolver convolverBL;
+        RealtimeConvolver convolverBR;
+    };
 
     enum class AirMode
     {
@@ -1843,6 +1984,12 @@ class IRCabEffect : public EffectProcessor
     bool mNormalizeIR = true;
     bool mAutoGainCompEnabled = true;
     bool mLowLatency = true; // non-uniform (low-latency) convolution mode
+    // Normalize and Low Latency as SetParam last asked for them, while the convolvers are still
+    // built the other way (-1 when they match). See RequestRebuildSetting.
+    std::atomic<int> mPendingNormalizeIR{-1};
+    std::atomic<int> mPendingLowLatency{-1};
+    // Counts builds of the live convolvers, so a deferred rebuild taken before one is dropped.
+    std::uint64_t mBuildGeneration = 0;
     bool mHasLoadedResource = false;
     bool mPrevHasSlotA = false;
     bool mPrevHasSlotB = false;

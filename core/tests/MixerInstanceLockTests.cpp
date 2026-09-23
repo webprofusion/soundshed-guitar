@@ -7,8 +7,8 @@
  * one-off walks (latency, adding a slot, a failed plugin load's report, project save, state
  * broadcast, mixer levels) take the DSP lock for it. The periodic telemetry reads cannot take
  * it 20-30 times a second without silencing a block whenever one lands on a callback, so they
- * hold the erase off instead. Nothing tells the host, builds a slot or asks a hosted plugin
- * with the lock held.
+ * hold the erase off instead. Nothing tells the host, builds a slot, builds a node's deferred
+ * rebuild or asks a hosted plugin with the lock held.
  *
  * An audio thread calls PluginController::ProcessAudio throughout, as a host callback does.
  * Probe effects, a stand-in hosted plugin and the host's NotifyLatencyChanged() hold a window
@@ -733,6 +733,7 @@ bool Run()
             passed = TestWalksUnderChurn(controller, audio) && passed;
             passed = TestLoadFailureReport(controller, host, sandbox) && passed;
             passed = TestRiffTrimKeepsAudioRunning(controller, gAudioBlocks, gAudioLockMisses, kSampleRate) && passed;
+            passed = TestDeferredRebuildBuiltOffLock(controller, gAudioBlocks) && passed;
         }
     }
 

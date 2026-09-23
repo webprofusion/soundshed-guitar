@@ -327,6 +327,21 @@ class MultiPresetMixer
     [[nodiscard]] const EffectProcessor* GetNodeProcessor(const std::string& presetId, const std::string& nodeId) const;
     bool LoadNodeResource(const std::string& presetId, const std::string& nodeId, const ResourceRef& ref);
 
+    /// One running graph's deferred rebuilds (see DeferredRebuild).
+    struct GraphRebuildWork
+    {
+        SignalGraphExecutor* executor = nullptr;
+        std::unique_ptr<DeferredRebuild> work;
+    };
+
+    /// Under the DSP lock, message thread: the deferred rebuilds waiting in every running slot and
+    /// the global chain, appended to `out`. A retiring slot's go with it.
+    void TakeDeferredRebuilds(std::vector<GraphRebuildWork>& out);
+
+    /// Under the DSP lock, message thread: hands what TakeDeferredRebuilds took back, once built,
+    /// to each graph that is still running.
+    void CommitDeferredRebuilds(std::vector<GraphRebuildWork>& rebuilds);
+
     /// Find the first enabled node of the given effect type across all active preset instances
     /// (topological order within each instance, instances in insertion order).
     /// Returns (presetId, nodeId) or empty optional if not found.
