@@ -32,8 +32,10 @@ function getAdjacentNotes(noteName: string): { left: string; right: string } {
 // Tuner state
 interface TunerState {
   isOpen: boolean;
+  // Whether the rig's output keeps playing while the tuner runs. The engine's live mode
+  // is the only muting there is: the Live toggle shows it and the mute button is its
+  // inverse, so the two controls cannot disagree.
   isLive: boolean;
-  isMuted: boolean;
   displayMode: "cents" | "hz";
   referenceFrequency: number;
   lastDetection: TunerData | null;
@@ -57,7 +59,6 @@ interface TunerSample {
 const tunerState: TunerState = {
   isOpen: false,
   isLive: true,
-  isMuted: false,
   displayMode: "cents",
   referenceFrequency: 440.0,
   lastDetection: null,
@@ -154,6 +155,7 @@ export function initializeTuner(): void {
   if (tunerLiveToggle) {
     tunerLiveToggle.addEventListener("change", toggleLive);
   }
+  syncLiveModeControls();
 
   if (tunerCentsBtn) {
     tunerCentsBtn.addEventListener("click", () => setDisplayMode("cents"));
@@ -250,33 +252,44 @@ function stopTuner(): void {
   postMessage(message);
 }
 
-function toggleMute(): void {
-  tunerState.isMuted = !tunerState.isMuted;
-  
-  if (tunerMuteBtn) {
-    tunerMuteBtn.classList.toggle("muted", tunerState.isMuted);
+// Show the live mode on both controls: the toggle checked while output plays through,
+// the mute button pressed while it is silenced.
+function syncLiveModeControls(): void {
+  if (tunerLiveToggle) {
+    tunerLiveToggle.checked = tunerState.isLive;
   }
-  
-  // Note: The actual mute functionality would need to be implemented
-  // in the DSP/plugin layer if we want to mute audio while tuning
-  appendLog(`Tuner mute: ${tunerState.isMuted}`);
+
+  if (tunerMuteBtn) {
+    const muted = !tunerState.isLive;
+    tunerMuteBtn.classList.toggle("muted", muted);
+    tunerMuteBtn.setAttribute("aria-pressed", String(muted));
+    tunerMuteBtn.title = muted ? "Unmute output" : "Mute output while tuning";
+  }
+}
+
+// When live mode is ON: audio passes through DSP while tuning.
+// When live mode is OFF: output is silent while tuning (just tuner display).
+function setLiveMode(liveMode: boolean): void {
+  tunerState.isLive = liveMode;
+  syncLiveModeControls();
+
+  postMessage({
+    type: "tuner",
+    action: "setLiveMode",
+    liveMode,
+  });
+
+  appendLog(`Tuner live mode: ${liveMode ? "ON (audio through)" : "OFF (silent)"}`);
+}
+
+function toggleMute(): void {
+  setLiveMode(!tunerState.isLive);
 }
 
 function toggleLive(): void {
   if (!tunerLiveToggle) return;
 
-  tunerState.isLive = tunerLiveToggle.checked;
-
-  // Send live mode change to plugin
-  // When live mode is ON: audio passes through DSP while tuning
-  // When live mode is OFF: output is silent while tuning (just tuner display)
-  postMessage({
-    type: "tuner",
-    action: "setLiveMode",
-    liveMode: tunerState.isLive,
-  });
-
-  appendLog(`Tuner live mode: ${tunerState.isLive ? "ON (audio through)" : "OFF (silent)"}`);
+  setLiveMode(tunerLiveToggle.checked);
 }
 
 function setDisplayMode(mode: "cents" | "hz"): void {
@@ -452,8 +465,6 @@ export function handleTunerReferenceChanged(referenceFrequency: number): void {
 
 export function handleTunerLiveModeChanged(liveMode: boolean): void {
   tunerState.isLive = liveMode;
-  if (tunerLiveToggle) {
-    tunerLiveToggle.checked = liveMode;
-  }
+  syncLiveModeControls();
   appendLog(`Tuner live mode: ${liveMode ? "ON (audio through)" : "OFF (silent)"}`);
 }
