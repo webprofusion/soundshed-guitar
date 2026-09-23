@@ -38,6 +38,7 @@ set(TEST_SOURCES
     HostStateThreadTests.cpp
     IRCabAutomationRealtimeTests.cpp
     IRConvolutionTests.cpp
+    IRReverbAutomationRealtimeTests.cpp
     IRReverbQualityTests.cpp
     PracticeToolCrossfadeTests.cpp
     MessageDispatchTypeErrorTests.cpp

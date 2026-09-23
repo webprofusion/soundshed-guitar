@@ -2,12 +2,12 @@
  * @file IRReverbQualityTests.cpp
  * @brief Guards the IR reverb "quality" parameter against blocking the DSP lock.
  *
- * Changing quality rebuilds the convolvers synchronously inside SetParam(), which the
- * controller calls while holding mDSPMutex. The audio thread only try_locks that mutex
- * and outputs silence when it fails, so a slow rebuild silences the entire plugin --
- * not just the reverb. These tests measure the rebuild and verify the effect is still
- * producing wet output afterwards (a rebuild that bails out leaving mRebuilding raised
- * would bypass forever).
+ * Changing quality rebuilds the convolvers. The controller holds mDSPMutex for anything it
+ * calls into the chain, and the audio thread only try_locks that mutex and outputs silence
+ * when it fails, so a rebuild under the lock silences the entire plugin -- not just the
+ * reverb. SetParam() only records the change, and the message thread builds it off the lock
+ * and swaps it in under it (DeferredRebuild). These tests measure both halves and verify the
+ * effect is producing wet output at the new quality afterwards.
  */
 
 #include <algorithm>
@@ -36,9 +36,16 @@ constexpr double kHostSampleRate = 48000.0;
 constexpr int kBlockSize = 512;
 constexpr double kPi = 3.14159265358979323846;
 
-// Budget for a single quality change. The audio thread is starved for this whole time,
-// so anything approaching a second is audible as a dropout.
-constexpr double kRebuildBudgetMs = 250.0;
+// Budget for building a quality change off the DSP lock, on the message thread. The resampled
+// IR is cached, so a change only re-truncates it; resampling it again would take seconds.
+constexpr double kRebuildBudgetMs = 1000.0;
+
+// What the quality changes hold the DSP lock for, as a share of what building them costs off it.
+// The audio thread outputs silence for as long as the lock is held. Taking the work and swapping
+// it in take microseconds; rebuilding under the lock, as SetParam used to, holds it for the
+// whole build. A share rather than a time, so a busy machine stalling the thread for a moment
+// cannot fail it.
+constexpr double kLockedShareBudget = 0.1;
 
 std::vector<fs::path> gTempFiles;
 
@@ -118,6 +125,7 @@ struct RenderResult
 {
     double rms = 0.0;
     bool hasNonFinite = false;
+    bool wet = false; // differs from the input, which a bypassed reverb copies to its output
 };
 
 RenderResult RenderBlocks(guitarfx::EffectProcessor& effect, int blocks)
@@ -152,6 +160,11 @@ RenderResult RenderBlocks(guitarfx::EffectProcessor& effect, int blocks)
                 result.hasNonFinite = true;
             }
 
+            if (std::abs(v - inL[static_cast<std::size_t>(i)]) > 1e-4f)
+            {
+                result.wet = true;
+            }
+
             sumSquares += static_cast<double>(v) * v;
             ++count;
         }
@@ -181,15 +194,46 @@ std::unique_ptr<guitarfx::EffectProcessor> MakeReverb(const fs::path& irPath)
     return effect;
 }
 
-double TimeQualityChange(guitarfx::EffectProcessor& effect, double quality)
+struct QualityChange
 {
-    const auto start = std::chrono::steady_clock::now();
-    effect.SetParam("quality", quality);
-    const auto end = std::chrono::steady_clock::now();
-    return std::chrono::duration<double, std::milli>(end - start).count();
+    bool rebuilt = false;  // the change waited for the message thread, which built it
+    double lockedMs = 0.0; // taking the work and committing it: both hold the DSP lock
+    double buildMs = 0.0;  // off the lock
+};
+
+double MsSince(std::chrono::steady_clock::time_point start)
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 }
 
-// Each quality change blocks the DSP lock for its whole duration.
+/// A quality change as the controller makes it: SetParam, then the message thread's part
+/// (PluginController::ApplyDeferredNodeRebuilds), with no lock since nothing else runs here.
+QualityChange ChangeQuality(guitarfx::EffectProcessor& effect, double quality)
+{
+    QualityChange change;
+    effect.SetParam("quality", quality);
+
+    auto start = std::chrono::steady_clock::now();
+    auto work = effect.TakeDeferredRebuild();
+    change.lockedMs = MsSince(start);
+
+    if (!work)
+    {
+        return change;
+    }
+
+    start = std::chrono::steady_clock::now();
+    work->Build();
+    change.buildMs = MsSince(start);
+
+    start = std::chrono::steady_clock::now();
+    effect.CommitDeferredRebuild(*work);
+    change.lockedMs += MsSince(start);
+    change.rebuilt = true;
+    return change;
+}
+
+// Each quality change holds the DSP lock only to take the work and swap the result in.
 bool TestQualityChangeIsNotBlocking()
 {
     std::cout << "Test: quality change does not stall the DSP lock... ";
@@ -199,8 +243,7 @@ bool TestQualityChangeIsNotBlocking()
     const auto irPath = MakeReverbIR(8.0, 44100.0, "reverb_8s_44k.wav");
     const auto loadStart = std::chrono::steady_clock::now();
     auto effect = MakeReverb(irPath);
-    const double loadMs =
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count();
+    const double loadMs = MsSince(loadStart);
 
     if (!effect)
     {
@@ -211,34 +254,40 @@ bool TestQualityChangeIsNotBlocking()
     RenderBlocks(*effect, 4);
 
     bool ok = true;
-    double worstMs = 0.0;
+    double lockedMs = 0.0;
+    double buildMs = 0.0;
+    double worstLockedMs = 0.0;
+    double worstBuildMs = 0.0;
     std::string worstLabel;
     const std::pair<const char*, double> tiers[] = {
-        {"Full", 3.0}, {"Economy", 0.0}, {"High", 2.0}, {"Standard", 1.0}, {"Full", 3.0}};
+        {"Economy", 0.0}, {"High", 2.0}, {"Standard", 1.0}, {"Full", 3.0}, {"Economy", 0.0}};
 
     for (const auto& [label, value] : tiers)
     {
-        const double elapsedMs = TimeQualityChange(*effect, value);
+        const QualityChange change = ChangeQuality(*effect, value);
+        ok = ok && change.rebuilt && change.buildMs <= kRebuildBudgetMs;
+        lockedMs += change.lockedMs;
+        buildMs += change.buildMs;
+        worstLockedMs = std::max(worstLockedMs, change.lockedMs);
 
-        if (elapsedMs > worstMs)
+        if (change.buildMs > worstBuildMs)
         {
-            worstMs = elapsedMs;
+            worstBuildMs = change.buildMs;
             worstLabel = label;
-        }
-
-        if (elapsedMs > kRebuildBudgetMs)
-        {
-            ok = false;
         }
     }
 
-    std::cout << (ok ? "OK" : "FAILED") << " (worst=" << std::fixed << std::setprecision(1) << worstMs << " ms on "
-              << worstLabel << ", budget=" << kRebuildBudgetMs << " ms; load=" << loadMs << " ms)\n";
+    ok = ok && lockedMs <= buildMs * kLockedShareBudget;
+    std::cout << (ok ? "OK" : "FAILED") << " (under the lock: " << std::fixed << std::setprecision(3) << lockedMs
+              << " ms in all, worst=" << worstLockedMs << " ms, budget=" << std::setprecision(0)
+              << kLockedShareBudget * 100.0 << "% of the " << std::setprecision(1) << buildMs
+              << " ms built off it; build: worst=" << worstBuildMs << " ms on " << worstLabel
+              << ", budget=" << kRebuildBudgetMs << " ms; load=" << loadMs << " ms)\n";
     return ok;
 }
 
-// A rebuild that returns early without lowering mRebuilding leaves the effect
-// permanently bypassed, which reads as "the reverb stopped working".
+// A rebuild that fails or is never installed leaves the reverb at the old quality, or with no
+// convolvers at all, which bypasses it and reads as "the reverb stopped working".
 bool TestReverbStillWetAfterQualityChanges()
 {
     std::cout << "Test: reverb still produces wet output after quality changes... ";
@@ -256,7 +305,14 @@ bool TestReverbStillWetAfterQualityChanges()
 
     for (const double quality : {0.0, 3.0, 1.0, 2.0})
     {
-        effect->SetParam("quality", quality);
+        const bool rebuilt = ChangeQuality(*effect, quality).rebuilt;
+
+        if (!rebuilt || effect->GetParam("quality") != quality || effect->TakeDeferredRebuild())
+        {
+            std::cout << "FAILED (quality " << quality << " was not built in)\n";
+            return false;
+        }
+
         const RenderResult after = RenderBlocks(*effect, 8);
 
         if (after.hasNonFinite)
@@ -265,12 +321,12 @@ bool TestReverbStillWetAfterQualityChanges()
             return false;
         }
 
-        // Convolving a sine with a dense noise IR should not collapse the level; a
-        // stuck-bypassed reverb would land far from the reference render.
-        if (after.rms < before.rms * 0.1)
+        // Convolving a sine with a dense noise IR should not collapse the level, and a reverb
+        // left without convolvers would pass its input straight through.
+        if (after.rms < before.rms * 0.1 || !after.wet)
         {
-            std::cout << "FAILED (output collapsed at quality " << quality << ": rms " << before.rms << " -> "
-                      << after.rms << ")\n";
+            std::cout << "FAILED (output " << (after.wet ? "collapsed" : "dry") << " at quality " << quality << ": rms "
+                      << before.rms << " -> " << after.rms << ")\n";
             return false;
         }
     }
@@ -279,9 +335,8 @@ bool TestReverbStillWetAfterQualityChanges()
     return true;
 }
 
-// Rebuilding drops the effect to dry until the new convolvers are ready. A write that
-// does not actually change the quality must not trigger that, or preset re-applies and
-// automation resending a held value click.
+// A write that does not actually change the quality must not rebuild, or preset re-applies
+// and automation resending a held value would restart the reverb's tail.
 bool TestRedundantQualityWriteIsIgnored()
 {
     std::cout << "Test: redundant quality write does not rebuild... ";
@@ -295,16 +350,21 @@ bool TestRedundantQualityWriteIsIgnored()
         return false;
     }
 
-    effect->SetParam("quality", 2.0);
+    const bool changed = ChangeQuality(*effect, 2.0).rebuilt;
     RenderBlocks(*effect, 4);
 
-    // The first write changes nothing, so it should be far cheaper than a real rebuild.
-    const double redundantMs = TimeQualityChange(*effect, 2.0);
-    const double realMs = TimeQualityChange(*effect, 1.0);
+    // The same value again asks for nothing; a different one does, and changing back to the
+    // built value before the message thread gets to it cancels it.
+    effect->SetParam("quality", 2.0);
+    const bool redundantIgnored = !effect->TakeDeferredRebuild();
+    effect->SetParam("quality", 1.0);
+    const bool realWaits = effect->TakeDeferredRebuild() != nullptr;
+    effect->SetParam("quality", 2.0);
+    const bool revertCancels = !effect->TakeDeferredRebuild();
 
-    const bool ok = redundantMs < std::max(1.0, realMs * 0.25);
-    std::cout << (ok ? "OK" : "FAILED") << " (redundant=" << std::fixed << std::setprecision(3) << redundantMs
-              << " ms vs real change=" << realMs << " ms)\n";
+    const bool ok = changed && redundantIgnored && realWaits && revertCancels;
+    std::cout << (ok ? "OK" : "FAILED") << " (change rebuilt=" << changed << ", redundant ignored=" << redundantIgnored
+              << ", real change waits=" << realWaits << ", revert cancels=" << revertCancels << ")\n";
     return ok;
 }
 

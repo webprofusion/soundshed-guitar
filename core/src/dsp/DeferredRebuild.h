@@ -12,12 +12,13 @@ namespace guitarfx
  * (PluginController::ProcessQueuedMidi). The message thread holds the same lock for anything it
  * calls into the chain, and the audio thread outputs silence for any block that finds it held.
  * So a parameter whose change needs a rebuild that allocates (the IR cab's Normalize and Low
- * Latency, which rebuild its convolvers) is only recorded by SetParam, which then calls
- * NoteRequested(). The message thread finishes it in three steps
- * (PluginController::ApplyDeferredNodeRebuilds):
+ * Latency, the convolution reverb's Quality and Low Latency, which rebuild their convolvers) is
+ * only recorded by SetParam, which then calls NoteRequested(). The message thread finishes it in
+ * three steps (PluginController::ApplyDeferredNodeRebuilds):
  *
  *   1. Under the DSP lock, EffectProcessor::TakeDeferredRebuild() hands over the work, with what
- *      it will read copied into it, or nullptr when nothing is waiting.
+ *      it will read copied into it (or shared, if it is never changed in place), or nullptr when
+ *      nothing is waiting.
  *   2. Off the lock, Build() does the expensive part.
  *   3. Under the lock again, EffectProcessor::CommitDeferredRebuild() swaps the result in, in
  *      O(1), unless something rebuilt the effect in between. What it replaces moves into the

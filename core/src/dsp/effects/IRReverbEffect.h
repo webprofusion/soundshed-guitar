@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace guitarfx
@@ -41,10 +43,10 @@ class IRReverbEffect : public EffectProcessor
         mToneStateL = 0.0f;
         mToneStateR = 0.0f;
 
-        ApplyPendingQuality();
+        ApplyPendingRebuildSettings();
         UpdateToneFilter();
 
-        if (!mImpulseLL.empty())
+        if (HasImpulses())
         {
             InitializeConvolvers();
         }
@@ -95,8 +97,7 @@ class IRReverbEffect : public EffectProcessor
   private:
     void ProcessChunk(float** inputs, float** outputs, int numSamples)
     {
-        if (!mEnabled || !mConvolverLL.IsInitialized() || !mConvolverRR.IsInitialized() ||
-            mRebuilding.load(std::memory_order_acquire))
+        if (!mEnabled || !mConvolverLL.IsInitialized() || !mConvolverRR.IsInitialized())
         {
             // Bypass: copy input to output, falling back L→R if R is null
             if (outputs[0])
@@ -225,49 +226,68 @@ class IRReverbEffect : public EffectProcessor
         }
         else if (key == "quality")
         {
-            const int q = static_cast<int>(std::clamp(value, 0.0, 3.0));
-            const int pending = mPendingQuality.load(std::memory_order_acquire);
-            const int effective = pending >= 0 ? pending : static_cast<int>(mQuality);
-
-            // Rebuilding drops the effect to dry until the new convolvers are ready, so a
-            // redundant write (preset re-apply, automation resending the same value) would
-            // be audible as a click for no reason. Match the lowLatency handler and ignore it.
-            if (q == effective)
-            {
-                return;
-            }
-
-            mPendingQuality.store(q, std::memory_order_release);
-
-            // Reinitialise immediately so quality changes take effect without requiring
-            // a prepareToPlay() call. Only safe when called from non-audio thread (UI interaction).
-            if (HasResource())
-            {
-                ApplyPendingQuality();
-                InitializeConvolvers();
-            }
+            // Where the IR is truncated, and so its normalisation gain, is built into the convolvers.
+            RequestRebuildSetting(mPendingQuality, static_cast<int>(mQuality),
+                                  static_cast<int>(std::clamp(value, 0.0, 3.0)));
         }
         else if (key == "lowLatency")
         {
-            const bool nv = value > 0.5;
-
-            if (nv != mLowLatency)
-            {
-                mLowLatency = nv;
-
-                // Rebuild immediately so the latency change takes effect without a reload.
-                // Safe from the non-audio (UI/controller) thread; InitializeConvolvers raises
-                // mRebuilding so the audio thread bypasses while convolvers are swapped.
-                if (HasResource())
-                {
-                    InitializeConvolvers();
-                }
-            }
+            // The partition layout is fixed when a convolver is built.
+            RequestRebuildSetting(mPendingLowLatency, mLowLatency ? 1 : 0, value > 0.5 ? 1 : 0);
         }
     }
 
     void SetConfig(const std::string&, const std::string&) override
     {
+    }
+
+    /// A Quality or Low Latency change SetParam recorded (see RequestRebuildSetting), sharing the
+    /// playback-rate impulses to build from rather than copying them: a reverb IR runs to seconds,
+    /// and this runs under the DSP lock.
+    [[nodiscard]] std::unique_ptr<DeferredRebuild> TakeDeferredRebuild() override
+    {
+        if ((mPendingQuality.load(std::memory_order_acquire) < 0 &&
+             mPendingLowLatency.load(std::memory_order_acquire) < 0) ||
+            !HasResource() || !HasImpulses() || mMaxBlockSize == 0)
+        {
+            return nullptr;
+        }
+
+        // The live convolvers were built from this cache, so it is already current.
+        EnsurePlaybackImpulses();
+
+        auto work = std::make_unique<ConvolverRebuild>();
+        work->generation = mBuildGeneration;
+        work->settings = {mSampleRate, mMaxBlockSize, EffectiveQuality(), EffectiveLowLatency()};
+        work->hasTrueStereo = mHasTrueStereo;
+        work->playback = mPlaybackImpulses;
+        return work;
+    }
+
+    void CommitDeferredRebuild(DeferredRebuild& taken) override
+    {
+        auto* work = dynamic_cast<ConvolverRebuild*>(&taken);
+
+        // An IR load or a Prepare since the work was taken rebuilt the convolvers itself, with the
+        // waiting settings folded in. A change requested while it was built supersedes it, and
+        // that SetParam has already asked for another pass.
+        if (!work || !work->convolvers || work->generation != mBuildGeneration ||
+            EffectiveQuality() != work->settings.quality || EffectiveLowLatency() != work->settings.lowLatency)
+        {
+            return;
+        }
+
+        // The new convolvers start with no history, so the tail of what was playing stops here.
+        // Swaps rather than assignments, so the convolvers they displace end up in the work and
+        // are freed off the lock.
+        std::swap(mConvolverLL, work->convolvers->ll);
+        std::swap(mConvolverRR, work->convolvers->rr);
+        std::swap(mConvolverLR, work->convolvers->lr);
+        std::swap(mConvolverRL, work->convolvers->rl);
+        mQuality = work->settings.quality;
+        mLowLatency = work->settings.lowLatency;
+        ClearPendingIf(mPendingQuality, static_cast<int>(mQuality));
+        ClearPendingIf(mPendingLowLatency, mLowLatency ? 1 : 0);
     }
 
     [[nodiscard]] double GetParam(const std::string& key) const override
@@ -294,13 +314,12 @@ class IRReverbEffect : public EffectProcessor
 
         if (key == "quality")
         {
-            const int pending = mPendingQuality.load(std::memory_order_acquire);
-            return pending >= 0 ? static_cast<double>(pending) : static_cast<double>(mQuality);
+            return static_cast<double>(EffectiveQuality());
         }
 
         if (key == "lowLatency")
         {
-            return mLowLatency ? 1.0 : 0.0;
+            return EffectiveLowLatency() ? 1.0 : 0.0;
         }
 
         return 0.0;
@@ -321,7 +340,7 @@ class IRReverbEffect : public EffectProcessor
         }
 
         mIRPath = resourcePath;
-        ApplyPendingQuality();
+        ApplyPendingRebuildSettings();
 
         if (!InitializeConvolvers())
         {
@@ -360,6 +379,60 @@ class IRReverbEffect : public EffectProcessor
   private:
     // Host rate the IR normalisation gain is anchored to (see ComputeL2NormGain).
     static constexpr double kNormalizationReferenceRate = 48000.0;
+
+    /// One IR's impulses at one sample rate. Never changed once built, and shared rather than
+    /// copied: a deferred rebuild reads them off the DSP lock while an IR load may replace the
+    /// effect's own.
+    struct ImpulseSet
+    {
+        std::vector<float> ll;
+        std::vector<float> lr;
+        std::vector<float> rl;
+        std::vector<float> rr;
+    };
+
+    /// What building the convolvers reads from the effect besides the impulses, so a deferred
+    /// rebuild can build from a copy, off the DSP lock.
+    struct ConvolverBuildSettings
+    {
+        double sampleRate = 48000.0;
+        int maxBlockSize = 0;
+        IRQuality quality = IRQuality::Standard;
+        bool lowLatency = true;
+    };
+
+    /// The convolvers a deferred rebuild builds, allocated by the build rather than when the work
+    /// is taken under the DSP lock.
+    struct ConvolverSet
+    {
+        RealtimeConvolver ll;
+        RealtimeConvolver rr;
+        RealtimeConvolver lr;
+        RealtimeConvolver rl;
+    };
+
+    /// The convolver rebuild a Quality or Low Latency change needs, built by the message thread off
+    /// the DSP lock.
+    class ConvolverRebuild final : public DeferredRebuild
+    {
+      public:
+        void Build() override
+        {
+            convolvers = std::make_unique<ConvolverSet>();
+
+            if (!BuildConvolvers(settings, *playback, hasTrueStereo, convolvers->ll, convolvers->rr, convolvers->lr,
+                                 convolvers->rl))
+            {
+                convolvers.reset();
+            }
+        }
+
+        std::uint64_t generation = 0;
+        ConvolverBuildSettings settings;
+        bool hasTrueStereo = false;
+        std::shared_ptr<const ImpulseSet> playback;
+        std::unique_ptr<ConvolverSet> convolvers; // null until built, and if the build failed
+    };
 
     static size_t FindEnergyTruncationPoint(const std::vector<float>& a, const std::vector<float>& b,
                                             const std::vector<float>* c, const std::vector<float>* d,
@@ -570,109 +643,82 @@ class IRReverbEffect : public EffectProcessor
     // whole IR while holding the DSP lock, which silences the audio thread for the duration.
     void EnsurePlaybackImpulses()
     {
-        const bool needsResample = std::abs(mIRSampleRate - mSampleRate) > 1.0;
-
-        if (mPlaybackCacheValid && mPlaybackCacheRate == mSampleRate && mPlaybackCacheIRRate == mIRSampleRate)
+        if (mPlaybackImpulses && mPlaybackCacheRate == mSampleRate && mPlaybackCacheIRRate == mIRSampleRate)
         {
             return;
         }
 
-        mPlaybackLL.clear();
-        mPlaybackRR.clear();
-        mPlaybackLR.clear();
-        mPlaybackRL.clear();
-        mPlaybackCacheResampled = needsResample;
-
-        if (needsResample)
+        // When no resampling is needed the playback set is the loaded one, so a matched-rate IR
+        // costs no extra memory.
+        if (std::abs(mIRSampleRate - mSampleRate) > 1.0)
         {
-            mPlaybackLL = mImpulseLL;
-            mPlaybackRR = mImpulseRR;
-            ResampleImpulseForConvolution(mPlaybackLL, mIRSampleRate, mSampleRate);
-            ResampleImpulseForConvolution(mPlaybackRR, mIRSampleRate, mSampleRate);
+            auto resampled = std::make_shared<ImpulseSet>();
+            resampled->ll = mImpulses->ll;
+            resampled->rr = mImpulses->rr;
+            ResampleImpulseForConvolution(resampled->ll, mIRSampleRate, mSampleRate);
+            ResampleImpulseForConvolution(resampled->rr, mIRSampleRate, mSampleRate);
 
             if (mHasTrueStereo)
             {
-                mPlaybackLR = mImpulseLR;
-                mPlaybackRL = mImpulseRL;
-                ResampleImpulseForConvolution(mPlaybackLR, mIRSampleRate, mSampleRate);
-                ResampleImpulseForConvolution(mPlaybackRL, mIRSampleRate, mSampleRate);
+                resampled->lr = mImpulses->lr;
+                resampled->rl = mImpulses->rl;
+                ResampleImpulseForConvolution(resampled->lr, mIRSampleRate, mSampleRate);
+                ResampleImpulseForConvolution(resampled->rl, mIRSampleRate, mSampleRate);
             }
+
+            mPlaybackImpulses = std::move(resampled);
+        }
+        else
+        {
+            mPlaybackImpulses = mImpulses;
         }
 
-        mPlaybackCacheValid = true;
         mPlaybackCacheRate = mSampleRate;
         mPlaybackCacheIRRate = mIRSampleRate;
     }
 
-    void InvalidatePlaybackImpulses()
+    [[nodiscard]] bool HasImpulses() const
     {
-        mPlaybackCacheValid = false;
-        mPlaybackCacheResampled = false;
-        mPlaybackLL.clear();
-        mPlaybackRR.clear();
-        mPlaybackLR.clear();
-        mPlaybackRL.clear();
+        return mImpulses && !mImpulses->ll.empty() && !mImpulses->rr.empty();
     }
 
-    // The impulses at playback rate. When no resampling is needed these are the raw
-    // impulses, so a matched-rate IR costs no extra memory.
-    const std::vector<float>& PlaybackLL() const
+    static std::size_t GetMinimumImpulseLength(const ImpulseSet& playback, bool trueStereo)
     {
-        return mPlaybackCacheResampled ? mPlaybackLL : mImpulseLL;
-    }
-
-    const std::vector<float>& PlaybackRR() const
-    {
-        return mPlaybackCacheResampled ? mPlaybackRR : mImpulseRR;
-    }
-
-    const std::vector<float>& PlaybackLR() const
-    {
-        return mPlaybackCacheResampled ? mPlaybackLR : mImpulseLR;
-    }
-
-    const std::vector<float>& PlaybackRL() const
-    {
-        return mPlaybackCacheResampled ? mPlaybackRL : mImpulseRL;
-    }
-
-    std::size_t GetMinimumImpulseLength() const
-    {
-        if (mHasTrueStereo)
+        if (trueStereo)
         {
-            return std::min({PlaybackLL().size(), PlaybackLR().size(), PlaybackRL().size(), PlaybackRR().size()});
+            return std::min({playback.ll.size(), playback.lr.size(), playback.rl.size(), playback.rr.size()});
         }
 
-        return std::min(PlaybackLL().size(), PlaybackRR().size());
+        return std::min(playback.ll.size(), playback.rr.size());
     }
 
-    // Call only after EnsurePlaybackImpulses(): lengths are in playback-rate samples.
-    std::size_t GetTruncationLength() const
+    // Lengths are in playback-rate samples, the rate `playback` is at.
+    static std::size_t GetTruncationLength(const ImpulseSet& playback, bool trueStereo, IRQuality quality,
+                                           double playbackRate)
     {
-        const std::size_t minLength = GetMinimumImpulseLength();
+        const std::size_t minLength = GetMinimumImpulseLength(playback, trueStereo);
 
         if (minLength == 0)
         {
             return 0;
         }
 
-        if (mQuality == IRQuality::Full)
+        if (quality == IRQuality::Full)
         {
             return minLength;
         }
 
         // GetMaxReverbIRSamples returns a limit expressed in playback-rate samples, which is
         // the domain the cached impulses are already in.
-        const size_t maxSamples = GetMaxReverbIRSamples(mQuality, mSampleRate);
+        const size_t maxSamples = GetMaxReverbIRSamples(quality, playbackRate);
 
         if (maxSamples == 0 || minLength <= maxSamples)
         {
             return minLength;
         }
 
-        const std::size_t energyTrunc =
-            FindEnergyTruncationPoint(PlaybackLL(), PlaybackRR(), mHasTrueStereo ? &PlaybackLR() : nullptr,
-                                      mHasTrueStereo ? &PlaybackRL() : nullptr, 0.001f);
+        const std::size_t energyTrunc = FindEnergyTruncationPoint(
+            playback.ll, playback.rr, trueStereo ? &playback.lr : nullptr, trueStereo ? &playback.rl : nullptr, 0.001f);
 
         return std::min({minLength, maxSamples, energyTrunc});
     }
@@ -695,12 +741,15 @@ class IRReverbEffect : public EffectProcessor
 
         mIRSampleRate = data.sampleRate;
         mIRChannels = data.channels;
-        InvalidatePlaybackImpulses(); // new impulse data; the cached playback copy is stale
+        mPlaybackImpulses.reset(); // new impulse data; the cached playback copy is stale
+
+        auto impulses = std::make_shared<ImpulseSet>();
 
         if (data.channels >= 4)
         {
-            irwav::SplitToQuad(data, mImpulseLL, mImpulseLR, mImpulseRL, mImpulseRR);
-            mHasTrueStereo = !mImpulseLL.empty() && !mImpulseLR.empty() && !mImpulseRL.empty() && !mImpulseRR.empty();
+            irwav::SplitToQuad(data, impulses->ll, impulses->lr, impulses->rl, impulses->rr);
+            mHasTrueStereo =
+                !impulses->ll.empty() && !impulses->lr.empty() && !impulses->rl.empty() && !impulses->rr.empty();
 
             if (!mHasTrueStereo)
             {
@@ -709,13 +758,13 @@ class IRReverbEffect : public EffectProcessor
         }
         else
         {
-            irwav::SplitToStereo(data, mImpulseLL, mImpulseRR);
-            mImpulseLR.clear();
-            mImpulseRL.clear();
+            irwav::SplitToStereo(data, impulses->ll, impulses->rr);
             mHasTrueStereo = false;
         }
 
-        if (mImpulseLL.empty() || mImpulseRR.empty())
+        mImpulses = std::move(impulses);
+
+        if (!HasImpulses())
         {
             std::cerr << "[IRReverbEffect] ERROR: IR file missing required stereo channels: " << path << "\n";
             return false;
@@ -726,36 +775,41 @@ class IRReverbEffect : public EffectProcessor
 
     bool InitializeConvolvers()
     {
-        if (mImpulseLL.empty() || mImpulseRR.empty() || mMaxBlockSize == 0)
+        if (!HasImpulses() || mMaxBlockSize == 0)
         {
             return false;
         }
 
         // Resample once per (IR, playback rate); a quality change only re-truncates.
-        // Done before raising mRebuilding so a cache rebuild cannot leave the effect
-        // bypassed if anything below bails out.
         EnsurePlaybackImpulses();
+        return BuildConvolvers({mSampleRate, mMaxBlockSize, mQuality, mLowLatency}, *mPlaybackImpulses, mHasTrueStereo,
+                               mConvolverLL, mConvolverRR, mConvolverLR, mConvolverRL);
+    }
 
-        // Signal the audio thread to bypass (dry copy) while convolvers are being rebuilt.
-        mRebuilding.store(true, std::memory_order_release);
-
-        const std::size_t truncLength = GetTruncationLength();
+    /// Truncates the playback-rate impulses for the quality, normalises them and builds the
+    /// convolvers from them, reading nothing from the effect, so a deferred rebuild can run it off
+    /// the DSP lock. LR and RL are only built for a true-stereo IR.
+    static bool BuildConvolvers(const ConvolverBuildSettings& settings, const ImpulseSet& playback, bool trueStereo,
+                                RealtimeConvolver& convolverLL, RealtimeConvolver& convolverRR,
+                                RealtimeConvolver& convolverLR, RealtimeConvolver& convolverRL)
+    {
+        const std::size_t truncLength =
+            GetTruncationLength(playback, trueStereo, settings.quality, settings.sampleRate);
 
         if (truncLength == 0)
         {
-            mRebuilding.store(false, std::memory_order_release);
             return false;
         }
 
-        std::vector<float> processedLL = TruncateAndFade(PlaybackLL(), truncLength);
-        std::vector<float> processedRR = TruncateAndFade(PlaybackRR(), truncLength);
+        std::vector<float> processedLL = TruncateAndFade(playback.ll, truncLength);
+        std::vector<float> processedRR = TruncateAndFade(playback.rr, truncLength);
         std::vector<float> processedLR;
         std::vector<float> processedRL;
 
-        if (mHasTrueStereo)
+        if (trueStereo)
         {
-            processedLR = TruncateAndFade(PlaybackLR(), truncLength);
-            processedRL = TruncateAndFade(PlaybackRL(), truncLength);
+            processedLR = TruncateAndFade(playback.lr, truncLength);
+            processedRL = TruncateAndFade(playback.rl, truncLength);
         }
 
         // Energy (L2-norm) normalisation for unity-gain convolution, mirroring the IR cab path.
@@ -767,8 +821,8 @@ class IRReverbEffect : public EffectProcessor
         // playback-rate impulse so the level is independent of the source IR sample rate.
         {
             const float normGain =
-                ComputeL2NormGain(mSampleRate, processedLL, processedRR, mHasTrueStereo ? &processedLR : nullptr,
-                                  mHasTrueStereo ? &processedRL : nullptr);
+                ComputeL2NormGain(settings.sampleRate, processedLL, processedRR, trueStereo ? &processedLR : nullptr,
+                                  trueStereo ? &processedRL : nullptr);
 
             for (float& s : processedLL)
             {
@@ -780,7 +834,7 @@ class IRReverbEffect : public EffectProcessor
                 s *= normGain;
             }
 
-            if (mHasTrueStereo)
+            if (trueStereo)
             {
                 for (float& s : processedLR)
                 {
@@ -794,50 +848,80 @@ class IRReverbEffect : public EffectProcessor
             }
         }
 
-        mConvolverLL.SetLowLatencyMode(mLowLatency);
-        mConvolverRR.SetLowLatencyMode(mLowLatency);
-        mConvolverLR.SetLowLatencyMode(mLowLatency);
-        mConvolverRL.SetLowLatencyMode(mLowLatency);
+        convolverLL.SetLowLatencyMode(settings.lowLatency);
+        convolverRR.SetLowLatencyMode(settings.lowLatency);
+        convolverLR.SetLowLatencyMode(settings.lowLatency);
+        convolverRL.SetLowLatencyMode(settings.lowLatency);
 
-        if (!mConvolverLL.SetImpulse(processedLL, mMaxBlockSize))
+        if (!convolverLL.SetImpulse(processedLL, settings.maxBlockSize))
         {
-            mRebuilding.store(false, std::memory_order_release);
             return false;
         }
 
-        if (!mConvolverRR.SetImpulse(processedRR, mMaxBlockSize))
+        if (!convolverRR.SetImpulse(processedRR, settings.maxBlockSize))
         {
-            mRebuilding.store(false, std::memory_order_release);
             return false;
         }
 
-        if (mHasTrueStereo)
+        if (trueStereo)
         {
-            if (!mConvolverLR.SetImpulse(processedLR, mMaxBlockSize))
+            if (!convolverLR.SetImpulse(processedLR, settings.maxBlockSize))
             {
-                mRebuilding.store(false, std::memory_order_release);
                 return false;
             }
 
-            if (!mConvolverRL.SetImpulse(processedRL, mMaxBlockSize))
+            if (!convolverRL.SetImpulse(processedRL, settings.maxBlockSize))
             {
-                mRebuilding.store(false, std::memory_order_release);
                 return false;
             }
         }
 
-        mRebuilding.store(false, std::memory_order_release);
         return true;
     }
 
-    void ApplyPendingQuality()
+    /// Quality and Low Latency are built into the convolvers, so SetParam only records a change
+    /// and the next build picks it up. With nothing built yet (a preset sets its params before its
+    /// IR loads) that is the first build. Otherwise the rebuild is left to the message thread
+    /// (DeferredRebuild): SetParam can run on the audio thread, and the rebuild allocates.
+    void RequestRebuildSetting(std::atomic<int>& pending, int built, int requested)
     {
-        const int pending = mPendingQuality.exchange(-1, std::memory_order_acq_rel);
+        // Asking for what is built cancels a change still waiting.
+        const int target = requested == built ? -1 : requested;
 
-        if (pending >= 0)
+        if (pending.exchange(target, std::memory_order_acq_rel) != target && HasResource())
         {
-            mQuality = static_cast<IRQuality>(pending);
+            DeferredRebuild::NoteRequested();
         }
+    }
+
+    [[nodiscard]] IRQuality EffectiveQuality() const
+    {
+        const int pending = mPendingQuality.load(std::memory_order_acquire);
+        return pending >= 0 ? static_cast<IRQuality>(pending) : mQuality;
+    }
+
+    [[nodiscard]] bool EffectiveLowLatency() const
+    {
+        const int pending = mPendingLowLatency.load(std::memory_order_acquire);
+        return pending >= 0 ? pending != 0 : mLowLatency;
+    }
+
+    /// Every build of the live convolvers starts here: a Quality or Low Latency change still
+    /// waiting is folded into the build, and any rebuild already taken for it is dropped when it
+    /// comes back.
+    void ApplyPendingRebuildSettings()
+    {
+        ++mBuildGeneration;
+        mQuality = EffectiveQuality();
+        mLowLatency = EffectiveLowLatency();
+        mPendingQuality.store(-1, std::memory_order_release);
+        mPendingLowLatency.store(-1, std::memory_order_release);
+    }
+
+    /// A pending value the commit just built is no longer pending; a different one still is.
+    static void ClearPendingIf(std::atomic<int>& pending, int built)
+    {
+        pending.compare_exchange_strong(built, -1, std::memory_order_acq_rel);
     }
 
     void UpdateToneFilter()
@@ -862,22 +946,13 @@ class IRReverbEffect : public EffectProcessor
     RealtimeConvolver mConvolverLR;
     RealtimeConvolver mConvolverRL;
 
-    std::vector<float> mImpulseLL;
-    std::vector<float> mImpulseLR;
-    std::vector<float> mImpulseRL;
-    std::vector<float> mImpulseRR;
+    std::shared_ptr<const ImpulseSet> mImpulses; // as loaded, at mIRSampleRate
 
-    // Impulses resampled to the playback rate (see EnsurePlaybackImpulses). Populated only
-    // when the IR rate differs from the host rate; otherwise the raw impulses are used and
-    // these stay empty.
-    std::vector<float> mPlaybackLL;
-    std::vector<float> mPlaybackLR;
-    std::vector<float> mPlaybackRL;
-    std::vector<float> mPlaybackRR;
+    // The impulses at the playback rate (see EnsurePlaybackImpulses): mImpulses itself when the IR
+    // rate matches the host rate.
+    std::shared_ptr<const ImpulseSet> mPlaybackImpulses;
     double mPlaybackCacheRate = 0.0;   // host rate the cache was built for
     double mPlaybackCacheIRRate = 0.0; // IR rate it was built from
-    bool mPlaybackCacheValid = false;
-    bool mPlaybackCacheResampled = false;
 
     std::filesystem::path mIRPath;
     double mIRSampleRate = 48000.0;
@@ -894,12 +969,15 @@ class IRReverbEffect : public EffectProcessor
     std::atomic<double> mMix{0.3};
     std::atomic<double> mOutputGain{1.0};
     IRQuality mQuality = IRQuality::Standard;
-    std::atomic<int> mPendingQuality{-1};
     bool mLowLatency = true; // non-uniform (low-latency) convolution mode
+    // Quality and Low Latency as SetParam last asked for them, while the convolvers are built
+    // another way or not built yet (-1 when they match). See RequestRebuildSetting.
+    std::atomic<int> mPendingQuality{-1};
+    std::atomic<int> mPendingLowLatency{-1};
+    // Counts builds of the live convolvers, so a deferred rebuild taken before one is dropped.
+    std::uint64_t mBuildGeneration = 0;
     std::atomic<float> mTone{1.0f};
     std::atomic<float> mToneCoef{1.0f};
-    // Set true during convolver rebuild to let the audio thread bypass safely.
-    std::atomic<bool> mRebuilding{false};
     float mToneStateL = 0.0f;
     float mToneStateR = 0.0f;
 };

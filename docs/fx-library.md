@@ -200,14 +200,15 @@ A parameter whose change needs a rebuild records the new value in `SetParam` and
 it in `PluginController::ApplyDeferredNodeRebuilds`, which the node-param handler and the idle loop
 call:
 
-1. Under the lock, `TakeDeferredRebuild()` returns the work, with what the build reads copied into it.
+1. Under the lock, `TakeDeferredRebuild()` returns the work, with what the build reads copied into
+   it, or shared with it when it is large and never changed in place (the reverb's impulses).
 2. Off the lock, `DeferredRebuild::Build()` does the expensive part.
 3. Under the lock again, `CommitDeferredRebuild()` swaps the result in, in O(1). It drops the work
    if the effect was rebuilt in between, and leaves what it replaces in the work, to be freed after
    the lock is released.
 
-A composite forwards both calls to its inner graph. The IR Cabinet's Normalize and Low Latency work
-this way.
+A composite forwards both calls to its inner graph. The IR Cabinet's Normalize and Low Latency, and
+the Convolution Reverb's Quality and Low Latency, work this way.
 
 ## Built-in Effect Types
 
@@ -546,6 +547,34 @@ real pedal's does.
   only the device rail bounds it, and a runaway at 1.15 reaches about +6 dBFS.
 - `clockHz` can be read with `GetParam` for the resolved BBD clock.
 - Factory presets: DM-2 (default), Memory Man, Short Analog, Clean Analog, Runaway.
+
+### Convolution Reverb (`reverb_ir`)
+Impulse response reverb (`IRReverbEffect.h`). Takes a mono, stereo or true-stereo (4-channel) IR.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `mix` | 0.0–1.0 | 0.3 | — |
+| `outputGain` | -24..+24 | 0.0 | dB |
+| `tone` | 0.0–1.0 | 1.0 | — |
+| `lowLatency` | 0/1 | 1 | toggle |
+| `quality` | 0–3 | 3 | — |
+
+Quality sets how much of the IR is kept: 0=Economy (1.5 s), 1=Standard (3 s), 2=High (6 s),
+3=Full (all of it). A tier shorter than the IR cuts it 256 samples after 99.9% of its energy
+instead, when that comes first. The last 2048 samples kept are faded out. The IR is resampled to
+the host rate once per IR and rate, and normalised by its L2 norm, anchored to 48 kHz so the level
+does not change with the host rate.
+
+**Quality and Low Latency** are built into the convolvers: where the IR is cut, and so its
+normalisation gain, into the coefficients, and the latency into the partition layout. A preset sets
+them before its IR loads, so loading one rebuilds nothing extra. A change once the IR is loaded,
+from the node panel or from MIDI or DAW automation, is not built in `SetParam` (see *Where SetParam
+runs*). The message thread builds it off the DSP lock and swaps it in under the lock. The work
+shares the resampled impulses rather than copying them, since a reverb IR runs to seconds and the
+work is taken under the lock. There is no crossfade: the new convolvers start with no history, so
+the tail of what was playing stops at the swap. A change from the node panel is built before its
+message returns, and one from automation at the next idle tick. `GetParam` reports the requested
+value straight away, and the host hears about the new latency once the rebuild is in.
 
 ### Algorithmic Reverbs
 Room, chamber, and advanced reverb share a common algorithmic engine. Spring and ambient use dedicated processors because their topology and voicing diverge more strongly from the shared room/chamber design:
