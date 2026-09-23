@@ -1794,11 +1794,9 @@ export class ResourceBrowserModal {
       return;
     }
     
-    // Keep the currently previewed model active while the next preview downloads.
-    if (this.previewState?.active) {
-      this.cancelPreview(false);
-    }
-    
+    // The current preview keeps playing while the next one downloads, and is not cancelled here:
+    // the engine replaces it and keeps the node's original for close to restore. Cancelling first
+    // left the node on a deleted temp file that the next preview then took for the original.
     if (!isTone3000AuthReady()) {
       showNotification("Preview failed", "No Tone3000 session");
       return;

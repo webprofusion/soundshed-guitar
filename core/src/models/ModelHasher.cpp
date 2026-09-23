@@ -7,6 +7,28 @@
 
 namespace guitarfx
 {
+namespace
+{
+constexpr std::uint64_t kFnvOffset = 14695981039346656037ull;
+constexpr std::uint64_t kFnvPrime = 1099511628211ull;
+
+void Fnv1aUpdate(std::uint64_t& hash, const std::uint8_t* data, std::size_t size)
+{
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        hash ^= data[i];
+        hash *= kFnvPrime;
+    }
+}
+
+std::string ToHex(std::uint64_t hash)
+{
+    std::ostringstream stream;
+    stream << std::hex << hash;
+    return stream.str();
+}
+} // namespace
+
 /// Computes a 64-bit FNV-1a hash of the file contents.
 /// Reads the file in 4KB chunks, XORs each byte into the hash, and multiplies by
 /// the FNV prime using the standard FNV-1a offset basis. Returns the hash as a
@@ -22,25 +44,22 @@ std::string ModelHasher::HashFile(const std::filesystem::path& filePath) const
         return {};
     }
 
-    constexpr std::uint64_t kFnvOffset = 14695981039346656037ull;
-    constexpr std::uint64_t kFnvPrime = 1099511628211ull;
-
     std::uint64_t hash = kFnvOffset;
     std::array<char, 4096> buffer{};
 
     while (input.read(buffer.data(), buffer.size()) || input.gcount() > 0)
     {
-        const std::streamsize bytesRead = input.gcount();
-
-        for (std::streamsize i = 0; i < bytesRead; ++i)
-        {
-            hash ^= static_cast<std::uint8_t>(buffer[static_cast<std::size_t>(i)]);
-            hash *= kFnvPrime;
-        }
+        Fnv1aUpdate(hash, reinterpret_cast<const std::uint8_t*>(buffer.data()),
+                    static_cast<std::size_t>(input.gcount()));
     }
 
-    std::ostringstream stream;
-    stream << std::hex << hash;
-    return stream.str();
+    return ToHex(hash);
+}
+
+std::string ModelHasher::HashBytes(std::span<const std::uint8_t> bytes) const
+{
+    std::uint64_t hash = kFnvOffset;
+    Fnv1aUpdate(hash, bytes.data(), bytes.size());
+    return ToHex(hash);
 }
 } // namespace guitarfx

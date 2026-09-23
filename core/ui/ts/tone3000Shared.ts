@@ -4,7 +4,7 @@ import { tone3000AuthenticatedFetch } from "./tone3000.js";
 import { buildBlendModelMappingsFromNames } from "./blendUtils.js";
 import { arrayBufferToBase64 } from "./utils.js";
 import type { Tone3000Architecture, Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
-import { buildTone3000ModelsUrl, extractTone3000Models, sortTone3000ModelsByName } from "./tone3000Api.js";
+import { fetchAllTone3000ModelPages, sortTone3000ModelsByName } from "./tone3000Api.js";
 
 interface JSZipObject {
   name: string;
@@ -91,13 +91,14 @@ export async function fetchTone3000Models(
   tone: Tone3000Tone,
   architecture?: Tone3000Architecture,
 ): Promise<Tone3000Model[]> {
-  const response = await tone3000AuthenticatedFetch(buildTone3000ModelsUrl(tone.id, 1, 100, architecture));
-  if (!response.ok) {
-    throw new Error(`Model fetch failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return sortTone3000ModelsByName(extractTone3000Models(data));
+  const models = await fetchAllTone3000ModelPages(async (url) => {
+    const response = await tone3000AuthenticatedFetch(url);
+    if (!response.ok) {
+      throw new Error(`Model fetch failed: ${response.status}`);
+    }
+    return response.json();
+  }, tone.id, architecture);
+  return sortTone3000ModelsByName(models);
 }
 
 export async function importTone3000Models(

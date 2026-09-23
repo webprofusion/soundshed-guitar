@@ -24,7 +24,10 @@
 #include "util/PathSanitizer.h"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
+#include <span>
+#include <string_view>
 #include <unordered_set>
 
 using namespace guitarfx::controller_detail;
@@ -43,7 +46,6 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     const std::string subfolder = payload.value("subfolder", "");
     const std::string data = payload.value("data", "");
     const std::string fileName = payload.value("fileName", "");
-    const std::string hash = payload.value("hash", "");
     const nlohmann::json metadataPayload = payload.value("metadata", nlohmann::json::object());
     const nlohmann::json tagsPayload = payload.value("tags", nlohmann::json::array());
 
@@ -76,7 +78,6 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
         resolvedName += resourceType == "ir" ? ".wav" : ".nam";
     }
 
-    const auto targetPath = targetDir / resolvedName;
     const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
 
     if (bytes.empty())
@@ -86,6 +87,66 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
             {"type", "resourceImportFailed"}, {"requestId", requestId}, {"message", "Import failed"}, {"detail", "Invalid base64 payload"}}
                             .dump());
         return;
+    }
+
+    // Hashed here whatever the payload says: a caller's `hash` can be another algorithm (the
+    // browser's SHA-256) or stale, and the UI's de-duplication and the library's missing-file
+    // fallback both match on this one.
+    const std::string contentHash = mHasher.HashBytes(bytes);
+
+    // Two of a tone's models, or two entries of a zip, can share a file name. A file already there
+    // is overwritten only when it is this resource's own (a re-import) or nothing owns it and it
+    // holds these bytes already. Another resource's file is never touched, even an identical one:
+    // deleting either entry deletes its file. This one goes beside it under a hash-suffixed name,
+    // as local saves do.
+    const auto canWriteTo = [&](const std::filesystem::path& candidate) {
+        std::error_code ec;
+
+        if (!std::filesystem::exists(candidate, ec))
+        {
+            return true;
+        }
+
+        const std::string candidateKey = util::PathToUtf8(candidate.lexically_normal());
+        bool ownedByThisResource = false;
+
+        for (const auto& resource : mResourceLibrary.GetAllResources())
+        {
+            if (resource.filePath.empty() || util::PathToUtf8(resource.filePath.lexically_normal()) != candidateKey)
+            {
+                continue;
+            }
+
+            if (resource.type != resourceType || resource.id != resourceId)
+            {
+                return false;
+            }
+
+            ownedByThisResource = true;
+        }
+
+        return ownedByThisResource || mHasher.HashFile(candidate) == contentHash;
+    };
+
+    const std::filesystem::path requestedPath = targetDir / util::PathFromUtf8(resolvedName);
+    std::filesystem::path targetPath = requestedPath;
+
+    if (!canWriteTo(targetPath))
+    {
+        const auto candidateNamed = [&](const std::string& suffixText) {
+            std::filesystem::path named = targetDir / requestedPath.stem();
+            named += suffixText;
+            named += requestedPath.extension();
+            return named;
+        };
+        const std::string hashSuffix = "-" + contentHash.substr(0, std::min<std::size_t>(12, contentHash.size()));
+        targetPath = candidateNamed(hashSuffix);
+        std::size_t suffix = 2;
+
+        while (!canWriteTo(targetPath))
+        {
+            targetPath = candidateNamed(hashSuffix + "-" + std::to_string(suffix++));
+        }
     }
 
     if (!WriteFile(targetPath, bytes))
@@ -104,7 +165,7 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     resource.category = category;
     resource.description = description;
     resource.filePath = targetPath;
-    resource.hash = hash;
+    resource.hash = contentHash;
 
     if (metadataPayload.is_object())
     {
@@ -155,6 +216,8 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     mResourceLibrary.AddResource(resource);
     AppendUserLibraryResource(resource);
     BroadcastState();
+    // As local saves and deletes do: other instances reload the library on it.
+    TouchSharedSyncState({"resourceLibrary"});
 
     nlohmann::json msg;
     msg["type"] = "resourceImported";
@@ -1392,6 +1455,18 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
         return;
     }
 
+    // A preview on the slot already previewing replaces that one and keeps its original. The slot
+    // holds the earlier temp file by now, which is deleted below, so taking that as the original
+    // would make closing the browser restore a missing file. A preview anywhere else first puts
+    // the previewing slot back.
+    const bool replacesActivePreview =
+        mPreviewState.active && mPreviewState.nodeId == nodeId && mPreviewState.resourceIndex == resourceIndex;
+
+    if (mPreviewState.active && !replacesActivePreview)
+    {
+        HandleCancelPreviewResourceRequest(nlohmann::json{{"restoreOriginal", true}});
+    }
+
     const auto tempDir = mFileSystem.ResolveSettingsDirectory() / "temp";
     [[maybe_unused]] const auto ensuredTempDir = mFileSystem.EnsureDirectory(tempDir);
 
@@ -1404,6 +1479,8 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
         if (!ExtractFirstResourceFromZip(bytes, resourceType, tempPath))
         {
             AppendSessionLog("Preview failed: no matching resource in zip");
+            ReportErrorToUI("Preview failed",
+                            resourceType == "ir" ? "No IR in the archive" : "No NAM model in the archive");
             return;
         }
     }
@@ -1416,21 +1493,29 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
         }
     }
 
+    const std::filesystem::path replacedTempFile =
+        replacesActivePreview ? mPreviewState.tempFilePath : std::filesystem::path{};
+
+    if (!replacesActivePreview)
+    {
+        mPreviewState = PreviewState{};
+
+        if (mActivePreset)
+        {
+            GraphNode* node = mActivePreset->graph.FindNode(nodeId);
+
+            if (node && resourceIndex >= 0 && static_cast<size_t>(resourceIndex) < node->resources.size())
+            {
+                mPreviewState.originalResourceRef = node->resources[resourceIndex];
+            }
+        }
+    }
+
     mPreviewState.active = true;
     mPreviewState.nodeId = nodeId;
     mPreviewState.resourceIndex = resourceIndex;
     mPreviewState.resourceType = resourceType;
     mPreviewState.tempFilePath = tempPath;
-
-    if (mActivePreset)
-    {
-        GraphNode* node = mActivePreset->graph.FindNode(nodeId);
-
-        if (node && resourceIndex >= 0 && static_cast<size_t>(resourceIndex) < node->resources.size())
-        {
-            mPreviewState.originalResourceRef = node->resources[resourceIndex];
-        }
-    }
 
     if (!nodeId.empty())
     {
@@ -1441,6 +1526,14 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
         updatePayload["filePath"] = util::PathToUtf8(tempPath);
         updatePayload["resourceIndex"] = resourceIndex;
         HandleUpdateNodeResourceRequest(updatePayload);
+    }
+
+    // Only once the slot has moved on to the new file. The same model previewed again reuses
+    // its path, which is then the file now playing.
+    if (!replacedTempFile.empty() && replacedTempFile != tempPath)
+    {
+        std::error_code ec;
+        std::filesystem::remove(replacedTempFile, ec);
     }
 
     AppendSessionLog("Preview started: " + resourceType + " at " + tempPath.string());
@@ -1825,14 +1918,38 @@ void PluginController::RemoveUserLibraryResource(const std::string& type, const 
     ResourceLibrary::RemoveFromStore(Store(), type, id);
 }
 
-bool PluginController::ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& /*zipData*/,
-                                                   const std::string& /*resourceType*/,
-                                                   const std::filesystem::path& /*outputPath*/)
+bool PluginController::ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& zipData,
+                                                   const std::string& resourceType,
+                                                   const std::filesystem::path& outputPath)
 {
-    // Zip extraction not yet supported — would require adding miniz or similar dependency.
-    // Preview only works with non-zip model downloads.
-    AppendSessionLog("Preview from zip not supported - select a non-zip model");
-    return false;
+    // The entries the UI's own zip import takes (tone3000Shared.ts), in the same order, so a
+    // preview plays the model that importing the zip would select.
+    static constexpr std::array<std::string_view, 2> kNamExtensions = {".nam", ".json"};
+    static constexpr std::array<std::string_view, 2> kIrExtensions = {".wav", ".ir"};
+
+    if (resourceType != "nam" && resourceType != "ir")
+    {
+        AppendSessionLog("Preview from zip: unsupported resource type " + resourceType);
+        return false;
+    }
+
+    const auto entry = ExtractFirstZipEntryWithExtension(
+        zipData, resourceType == "ir" ? std::span<const std::string_view>(kIrExtensions)
+                                      : std::span<const std::string_view>(kNamExtensions));
+
+    if (!entry || entry->bytes.empty())
+    {
+        return false;
+    }
+
+    if (!WriteFile(outputPath, entry->bytes))
+    {
+        AppendSessionLog("Preview from zip: could not write " + util::PathToUtf8(outputPath));
+        return false;
+    }
+
+    AppendSessionLog("Preview from zip: using " + entry->name);
+    return true;
 }
 
 // ── NAM level-state normalization ─────────────────────────────────

@@ -164,6 +164,65 @@ export function buildTone3000ModelsUrl(
   return buildTone3000ApiUrl("models", params);
 }
 
+/** Models asked for per page when listing a tone's models (the API allows up to 300). */
+export const TONE3000_MODELS_PAGE_SIZE = 100;
+
+/**
+ * How many pages one listing follows at most: a guard against an API (or proxy) that ignores
+ * `page`, not a limit any real tone reaches.
+ */
+const TONE3000_MODELS_MAX_PAGES = 50;
+
+function reportsPageCount(data: Tone3000PaginatedLike | null): boolean {
+  return [data?.total_pages, data?.totalPages, data?.pages, data?.total, data?.total_count, data?.count]
+    .some((value) => typeof value === "number");
+}
+
+/**
+ * All of a tone's models, following `/models` pagination: one page holds at most
+ * `page_size` of them, so a tone with more was cut off at the first page. `fetchJson`
+ * fetches one page URL and returns its parsed body, throwing on failure.
+ *
+ * Paging stops at the reported page count, or where none is reported at a short page. A
+ * page that adds no model not already seen also ends it.
+ */
+export async function fetchAllTone3000ModelPages(
+  fetchJson: (url: string) => Promise<unknown>,
+  toneId: string | number,
+  architecture?: Tone3000Architecture,
+): Promise<Tone3000Model[]> {
+  const models: Tone3000Model[] = [];
+  const seenIds = new Set<string>();
+
+  for (let page = 1; page <= TONE3000_MODELS_MAX_PAGES; page += 1) {
+    const data = await fetchJson(buildTone3000ModelsUrl(toneId, page, TONE3000_MODELS_PAGE_SIZE, architecture));
+    const pageModels = extractTone3000Models(data);
+    const added = pageModels.filter((model) => {
+      const id = String(model.id);
+      if (seenIds.has(id)) {
+        return false;
+      }
+      seenIds.add(id);
+      return true;
+    });
+    models.push(...added);
+
+    if (!added.length) {
+      break;
+    }
+
+    const pagination = asRecord(data) as Tone3000PaginatedLike | null;
+    const lastPage = reportsPageCount(pagination)
+      ? page >= parseTone3000Pagination(pagination ?? undefined, page, TONE3000_MODELS_PAGE_SIZE).totalPages
+      : pageModels.length < TONE3000_MODELS_PAGE_SIZE;
+    if (lastPage) {
+      break;
+    }
+  }
+
+  return models;
+}
+
 export function buildTone3000SearchUrl(params: URLSearchParams): string {
   return buildTone3000ApiUrl("tones/search", params);
 }

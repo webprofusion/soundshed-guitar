@@ -14,7 +14,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -104,6 +106,19 @@ void UpdateFactoryPresetFolders(storage::JsonStore& store, const std::string& ar
 
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> ExtractZipEntry(const std::vector<std::uint8_t>& zipBytes,
                                                                        const std::string& entryName);
+
+struct ZipEntryContent
+{
+    std::string name;
+    std::vector<std::uint8_t> bytes;
+};
+
+/// The first file, in the zip's own entry order, whose name ends with one of `extensions`
+/// (given in lower case; names are compared without regard to case). Folders are skipped. Only
+/// that first match is tried: nullopt when the bytes are not a zip, nothing matches, or the match
+/// will not extract.
+[[nodiscard]] std::optional<ZipEntryContent> ExtractFirstZipEntryWithExtension(
+    const std::vector<std::uint8_t>& zipBytes, std::span<const std::string_view> extensions);
 
 /// Parses an archive's manifest and payload. On failure returns nullopt and
 /// sets `error` to a message suitable for the UI.

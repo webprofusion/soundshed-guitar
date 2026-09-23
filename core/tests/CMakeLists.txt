@@ -80,6 +80,7 @@ set(TEST_SOURCES
     StereoProcessingTests.cpp
     SynthSawEffectTests.cpp
     TestWavLoad.cpp
+    Tone3000ResourceWorkflowTests.cpp
     TransposeBenchmark.cpp
     WahEffectTests.cpp
 )
@@ -194,6 +195,9 @@ endforeach()
 
 # Shared harness for the riff/audio-lock regression without growing the main test past its size budget.
 target_sources(MixerInstanceLockTests PRIVATE MixerInstanceLockSupport.cpp MixerInstanceLockSupport.h)
+
+# Builds real (deflated) zips to preview, as Tone3000 serves them; the core links miniz privately.
+target_link_libraries(Tone3000ResourceWorkflowTests PRIVATE guitarfx_miniz)
 
 # The default-settings audio snapshot tools/audio-ab compares between versions. Built, not registered.
 include(AudioSnapshot.cmake)

@@ -4,8 +4,7 @@ import { updateAppSetting } from "./appSettingsStore.js";
 import type { AppSettingValue, Tone3000Session } from "./types.js";
 import type { Tone3000ApiSession, Tone3000Architecture } from "./tone3000ApiTypes.js";
 import {
-  buildTone3000ModelsUrl,
-  extractTone3000Models,
+  fetchAllTone3000ModelPages,
   getTone3000ApiClientConfig,
   getTone3000SessionUrl,
   TONE3000_OFFICIAL_API_BASE,
@@ -322,14 +321,14 @@ async function fetchTone3000ModelsByToneId(
   toneId: string,
   architecture?: Tone3000Architecture,
 ): Promise<Tone3000ModelLookup[]> {
-  const response = await tone3000AuthenticatedFetch(buildTone3000ModelsUrl(toneId, 1, 100, architecture));
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Tone3000 model lookup failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
-  }
-
-  const data = await response.json();
-  return extractTone3000Models(data) as Tone3000ModelLookup[];
+  return fetchAllTone3000ModelPages(async (url) => {
+    const response = await tone3000AuthenticatedFetch(url);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`Tone3000 model lookup failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+    }
+    return response.json();
+  }, toneId, architecture);
 }
 
 export async function saveTone3000ApiKey(apiKey: string): Promise<boolean> {

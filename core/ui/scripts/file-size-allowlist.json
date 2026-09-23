@@ -1,7 +1,7 @@
 {
   "budget": 800,
   "allowed": {
-    "ts/resourceBrowser.ts": 2204,
+    "ts/resourceBrowser.ts": 2197,
     "ts/layoutDesigner.ts": 2036,
     "ts/signalPath.ts": 1597,
     "ts/presets/archive.ts": 1542,

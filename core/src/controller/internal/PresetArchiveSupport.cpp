@@ -355,6 +355,55 @@ std::optional<std::vector<std::uint8_t>> ExtractZipEntry(const std::vector<std::
     return bytes;
 }
 
+std::optional<ZipEntryContent> ExtractFirstZipEntryWithExtension(const std::vector<std::uint8_t>& zipBytes,
+                                                                 std::span<const std::string_view> extensions)
+{
+    mz_zip_archive archive{};
+
+    if (zipBytes.empty() || !mz_zip_reader_init_mem(&archive, zipBytes.data(), zipBytes.size(), 0))
+    {
+        return std::nullopt;
+    }
+
+    std::optional<ZipEntryContent> found;
+    const mz_uint entryCount = mz_zip_reader_get_num_files(&archive);
+
+    for (mz_uint index = 0; index < entryCount; ++index)
+    {
+        mz_zip_archive_file_stat stat{};
+
+        if (mz_zip_reader_is_file_a_directory(&archive, index) || !mz_zip_reader_file_stat(&archive, index, &stat))
+        {
+            continue;
+        }
+
+        std::string lowerName = stat.m_filename;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (std::none_of(extensions.begin(), extensions.end(),
+                         [&](std::string_view extension) { return lowerName.ends_with(extension); }))
+        {
+            continue;
+        }
+
+        std::size_t extractedSize = 0;
+        void* extracted = mz_zip_reader_extract_to_heap(&archive, index, &extractedSize, 0);
+
+        if (extracted)
+        {
+            const auto* data = static_cast<const std::uint8_t*>(extracted);
+            found = ZipEntryContent{stat.m_filename, std::vector<std::uint8_t>(data, data + extractedSize)};
+            mz_free(extracted);
+        }
+
+        break;
+    }
+
+    mz_zip_reader_end(&archive);
+    return found;
+}
+
 std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::filesystem::path& archivePath,
                                                                     const std::vector<std::uint8_t>& zipBytes,
                                                                     std::string& error)
