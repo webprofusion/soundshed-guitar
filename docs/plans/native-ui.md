@@ -1,8 +1,8 @@
 # Soundshed Guitar Nano: a native, WebView-free UI for small displays
 
-Status: **phases 0–3 built, 2026-09-23** (see [Progress](#progress)); phase 4 onwards not
-started. Packaging, scope, Android, platforms and the drift policy were decided when the plan
-was written (see [Decisions](#decisions)). Only the scope switches are still open.
+Status: **proposed, 2026-09-23. Nothing built.** Packaging, scope, Android, platforms and
+the drift policy were decided the same day (see [Decisions](#decisions)). Only the scope
+switches are still open.
 
 **Soundshed Guitar Nano** is a second product. It ships its own plugin and standalone builds
 and its own installers, and its front end is written in JUCE Components with no WebView. It
@@ -251,7 +251,7 @@ core/src/uiclient/                   JUCE-free, ctest-covered; files under the 8
                                      TelemetryDecoder, NodeLabels
 core/src/net/IHttpClient.h           async GET/POST, headers, cancel, size cap
 core/src/controller/Tone3000Service.{h,cpp}   answers its own messages
-core/ui/data/effect-presentation.json        icons, colours, images, category remap
+core/protocol/effect-presentation.json        icons, colours, images, category remap
 juce/source/editor/SoundshedEditorBase.{h,cpp}  shared by both editors
 juce/source/editor/WebEditor.{h,cpp}            today's PluginEditor, renamed; Soundshed Guitar only
 juce/source/nativeui/                NativeEditor, Shell, TopBar, NodeStrip, ChainView,
@@ -432,7 +432,7 @@ backward compatibility.
 
 ### 6. Shared presentation data and theme (phase 3)
 
-- **`core/ui/data/effect-presentation.json`** holds the tables that are TypeScript-only today:
+- **`core/protocol/effect-presentation.json`** holds the tables that are TypeScript-only today:
   - icons by effect type and category (`iconAssets.ts:60-132`);
   - node colour classes and the category remap (`nodeTypes.ts:18-34, 156-166`);
   - stock images and background gradients (`visualization.ts:16-46`).
@@ -519,69 +519,6 @@ Sizes are rough estimates for one engineer who knows JUCE.
 The total is roughly 19–21 engineer-weeks, including moving the web UI onto each shared
 capability as it lands. Phases 2, 4 and 5 each improve Soundshed Guitar on their own, and
 can ship before Soundshed Guitar Nano does.
-
-## Progress
-
-Phases 0 to 3 were built on the `nano-ui` branch on 2026-09-23 (uncommitted at the time of
-writing). Phase 4 onwards has not started.
-
-**Phase 0, measured on the development PC (Windows, Debug build), not on the slowest device:**
-
-- **SVG icons through `Drawable`:** all 49 icons in `images/icons` render. 15 of them stroke
-  with `currentColor`, which JUCE's parser leaves transparent; `IconCache` substitutes a solid
-  colour before parsing and tints the alpha, so no icon needed changing.
-- **Parse cost of the full `state`:** 31–38 ms to parse and apply in a Debug build
-  (`UiClient::LastFullStateApplyMs`, shown by `nano-tool state`). Handing the JSON object over
-  in process is not needed on desktop; re-measure on the SBC and a cheap phone.
-- **Android safe-area insets:** JUCE does read the activity's window insets, but only when it
-  refreshes its display list, which happens after the editor's first layout; at that point it
-  reports none (and `userArea` equals `totalArea`). `NanoEditor` re-checks the insets on its
-  idle tick and re-lays out when they change, and the status bar and gesture bar are then
-  clear (checked on the `Medium_Phone_API_35` emulator, landscape).
-- **Software renderer vs OpenGL:** not measured yet. It needs the SBC and a cheap phone, so
-  it moves to the start of phase 4. `juce_opengl` is already linked.
-
-**Phase 1:** the `SoundshedGuitarNano` target (`juce/cmake/SoundshedNano.cmake`) builds and
-runs on the shared profile. The editor base (`juce/source/editor/SoundshedEditorBase`), the
-shared single-instance lock, the resource-root check, the client library
-(`core/src/uiclient`, `SoundshedUiClient`, `UiClientTests`), check-protocol coverage of native
-code, and the live driving tool (`tools/agent-ui-debug/native/nano-tool.mjs`) are in. The
-Android build takes `-Pssg.product=nano`, which builds `SoundshedGuitarNano_Standalone`,
-installs as `com.soundshed.guitar.nano` with the label "Soundshed Guitar Nano", and stages
-only the engine's assets and the fonts.
-
-**Phase 2:** every command in part 2 exists (`PluginControllerPresetEdits.cpp`,
-`PresetEditCommandsTests`) and the web UI uses them, with its TypeScript copies deleted. Scene
-switches and removing the playing scene rebuild only that preset's slot in a multi-preset mix
-(`ApplyActivePresetInItsSlot`), for the UIs, footswitches and MIDI alike. `deletePreset` now
-answers with the preset list.
-
-**Phase 3:** the Play MVP is built and was driven end to end through `nano-tool` at 800×480,
-640×360 and 360×640, at 100% and 125% UI scale, in all three themes: preset stepping, the
-library, favourites, save, save as, rename and delete, new preset, scenes, the chain (bypass,
-move, add through the picker, remove), effect controls, tuner, metronome, demo audio, output
-mute, input/output controls, setlist stepping, settings and the audio device page.
-
-On Android, a debug x86_64 build ran on the emulator next to the WebView app: it loaded the
-factory library into its own `.nano` profile, and taps switched pages and loaded a preset.
-
-Not yet checked: a real touch screen, a real phone (audio latency, portrait rotation), and
-the manual cross-product checklist with Soundshed Guitar (the single-instance lock keeps the
-two standalones apart, so this needs the plugin in a DAW next to Nano).
-
-Differences from the plan found while building:
-
-- **Menus under test.** JUCE closes a popup menu as soon as its app is not in front, which is
-  where a test drives it from. Every Nano menu goes through `NanoContext::showMenu`, which
-  keeps a copy that `nano-tool menu` chooses from.
-- **Painted rows and cards** (the chain, the picker and preset lists) name themselves through
-  `NamedTargets`, so `nano-tool` can tap `node:<id>`, `bypass:<id>`, `add:<id>`, `fx:<name>`,
-  `preset:<name>` and `slot:<n>`.
-- **Short screens.** Under 440 logical pixels high, a preset with one scene hides the scene
-  row ("Add scene" is in the more menu), and the effect page drops its visual when there is
-  no room for it, keeping the chain strip as the reminder of which effect is shown.
-- **Recents.** The preset restored at startup is the unsaved-changes baseline and does not go
-  into Recents, as in the web UI before.
 
 ## Risks
 

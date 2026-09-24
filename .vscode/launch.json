@@ -40,6 +40,46 @@
       "command": "open \"${workspaceFolder}/juce/builds/SoundshedGuitar_artefacts/Release/Standalone/Soundshed Guitar.app\"",
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "Build SoundshedGuitar (JUCE) Standalone Release"
+    },
+    {
+      "name": "Debug SoundshedGuitarNano Standalone (JUCE Debug)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Debug/Standalone/Soundshed Guitar Nano.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Debug/Standalone",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build SoundshedGuitarNano (JUCE) Debug"
+    },
+    {
+      "name": "Run SoundshedGuitarNano (JUCE) Release",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Release/Standalone/Soundshed Guitar Nano.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Release/Standalone",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build SoundshedGuitarNano (JUCE) Standalone Release"
+    },
+    {
+      "name": "Run SoundshedGuitarNano (JUCE) Release (No Debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "& \"${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Release/Standalone/Soundshed Guitar Nano.exe\"",
+      "cwd": "${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Release/Standalone",
+      "preLaunchTask": "Build SoundshedGuitarNano (JUCE) Standalone Release"
+    },
+    {
+      "name": "Run SoundshedGuitarNano (JUCE) Release (macOS)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "open \"${workspaceFolder}/juce/builds/SoundshedGuitarNano_artefacts/Release/Standalone/Soundshed Guitar Nano.app\"",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Build SoundshedGuitarNano (JUCE) Standalone Release"
     }
   ]
 }
