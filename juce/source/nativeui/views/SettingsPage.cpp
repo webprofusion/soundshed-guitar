@@ -15,6 +15,7 @@ constexpr const char* kNamSlimmableSizeSetting = "audio.nam.slimmableSize";
 constexpr const char* kNamOversamplingSetting = "audio.nam.oversampling";
 constexpr const char* kNamAntiAliasPhaseSetting = "audio.nam.antiAliasPhase";
 constexpr const char* kUiScaleSetting = "nativeUi.scale";
+constexpr const char* kChainWrapSetting = "nativeUi.chainWrap";
 
 constexpr const char* kWebsite = "https://soundshed.com";
 
@@ -209,6 +210,10 @@ SettingsPage::SettingsPage (NanoContext& contextIn, ShellActions& actionsIn)
             context.commands.SetSetting (kUiScaleSetting, scaleSlider.getValue() / 100.0);
     };
 
+    chainWrapToggle.setComponentID ("settings-chain-wrap");
+    chainWrapToggle.setButtonText ("Wrap the chain to fit the page");
+    chainWrapToggle.onClick = [this] { context.commands.SetSetting (kChainWrapSetting, chainWrapToggle.getToggleState()); };
+
     devicesButton.onClick = [this] {
         if (actions.showPage)
             actions.showPage (Page::Device);
@@ -285,6 +290,7 @@ void SettingsPage::rebuild()
     addHeading ("Appearance");
     addRow ("Theme", themeRow);
     addRow ("Size", scaleSlider);
+    addRow ("Signal chain", chainWrapToggle);
 
     if (builtWithDevices)
     {
@@ -326,6 +332,7 @@ void SettingsPage::refresh()
     if (! scaleSlider.isMouseButtonDown())
         scaleSlider.setValue (juce::jlimit (80.0, 150.0, numberSetting (settings, kUiScaleSetting, 1.0) * 100.0), juce::dontSendNotification);
 
+    chainWrapToggle.setToggleState (boolSetting (settings, kChainWrapSetting, false), juce::dontSendNotification);
     limiterToggle.setToggleState (boolSetting (settings, kOutputLimiterSetting, false), juce::dontSendNotification);
     selectById (tailsBox, juce::jlimit (0, 4, (int) numberSetting (settings, kPresetSwitchTailSetting, kPresetSwitchTailDefault)) + 1);
 

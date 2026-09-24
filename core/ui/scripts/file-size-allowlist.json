@@ -3,8 +3,8 @@
   "allowed": {
     "ts/resourceBrowser.ts": 2196,
     "ts/layoutDesigner.ts": 2036,
-    "ts/signalPath.ts": 1582,
     "ts/presets/archive.ts": 1542,
+    "ts/signalPath.ts": 1532,
     "ts/blendEditor.ts": 1500,
     "css/tone-sharing.css": 1484,
     "ts/views.ts": 1443,

@@ -139,7 +139,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `selectSetlist` | `{setlistId}` | Make a setlist the active one with its cursor on the first slot, as a bank select does, and store it; nothing is loaded. An unknown or already-active setlist is ignored. Answered by `setlistCursorChanged`. Edits to the setlists themselves still go whole with `setSetlists` |
 | `setResourceFavorite` | `{resourceId, favorite}` | Add or remove one id in the `resources.favorites` app setting; answered by `appSettingChanged` |
 | `setOutputMuted` | `{muted}` | Mute or unmute the output. The mixer applies it after the output gain, so an output level change or a chain rebuild leaves it alone. Not saved: it is reported as `outputMuted` in `state`, and answered by `outputMutedChanged` |
-| `uiSettingsChanged` | `{settings}` or `{patch}` | The UI settings blob (zoom, window bounds, signal-path height, `presetRecents`), saved with the app settings. `settings` replaces the blob, keeping the engine's `native` key (Soundshed Guitar Nano's part) when the new blob has none; the web UI only ever sends back the `native` it was given. `patch` is a JSON merge patch (a `null` removes a key), which is how Nano writes its own part. Because the engine keeps `presetRecents` there itself, a UI sending the whole blob must carry the list the engine last reported |
+| `uiSettingsChanged` | `{settings}` or `{patch}` | The UI settings blob (zoom, window bounds, signal-path height and wrap, `presetRecents`), saved with the app settings. `settings` replaces the blob, keeping the engine's `native` key (Soundshed Guitar Nano's part) when the new blob has none; the web UI only ever sends back the `native` it was given. `patch` is a JSON merge patch (a `null` removes a key), which is how Nano writes its own part. Because the engine keeps `presetRecents` there itself, a UI sending the whole blob must carry the list the engine last reported |
 | `uiViewStateChanged` | `{viewState}` or `{patch}` | Which panels and tabs are showing, saved with the host state. Replaced or merge-patched as `uiSettingsChanged` is, with the same `native` rule |
 | `savePreset` | `{name, category, description}` | Save current state as preset to disk |
 | `loadModel` | `{filePath}` | Load NAM model by path |
@@ -586,6 +586,33 @@ To change an effect's look, edit the JSON, then run the generator.
 ## Signal Chain Editor Notes
 
 - To create parallel paths, add the **Splitter** effect from the Utility category. The join **Mixer** node is inserted automatically and is not user-addable.
+
+### Wrapping the chain (`core/ui/ts/signalPath/chainRow.ts`, `css/signal-path/wrap.css`)
+
+The toggle in the chain bar's top-right corner (`#signal-path-wrap-btn`) wraps the chain onto
+more lines instead of scrolling it sideways. The choice is `uiSettings.signalPathWrap`, so it
+is the web UI's own; Soundshed Guitar Nano's chain page has `nativeUi.chainWrap`.
+
+- **Segments.** The main row is built from `.signal-chain-segment`s: the input, then each
+  connector with what it leads into. A splitter's segment also carries its parallel block and
+  join mixer, because the branch routes reach under both. Unwrapped, a segment is
+  `display: contents`, so the row lays out as the flat list it always was; wrapped, the row
+  breaks only between segments. A line never ends on a connector, and each later line starts
+  with the connector (and "+") leading into its first node.
+- **Return routes.** After layout, `updateSignalChainWrapRoutes` groups the segments into the
+  lines the browser made and draws an SVG path from each line's end, round under it, to the
+  next line's start. It also narrows the row to its widest line, which keeps every line break,
+  so the container centres the block. A `ResizeObserver` on the rendered chain redraws the
+  routes when the bar's width or a segment's size changes; it is re-armed only for a newly
+  rendered chain, because observing always reports once.
+- **Height.** The bar grows to show every line, up to half the window, and scrolls beyond
+  that. On the compact chain stage the chain has the whole stage and scrolls within it.
+- **Dragging between lines.** Moving a node to another line is a vertical drag, which is also
+  the bypass flick. A drag released on a different line with no drop target does nothing
+  (`releasedOnAnotherLine` in `signalPathDropTargets.ts`); a flick that ends on its own line,
+  between lines or off the chain still toggles bypass.
+- **What still scrolls sideways.** A single segment wider than the bar, in practice a
+  parallel block on a phone, cannot be split.
 
 ### Chain undo/redo and A/B (`core/ui/ts/signalPath/history.ts`, `historyModel.ts`)
 

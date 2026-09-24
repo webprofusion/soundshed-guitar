@@ -21,7 +21,9 @@ namespace soundshed::nano
 ///  - Strip: one row of small chips above the effect controls, so the chain stays in view
 ///    while an effect is edited; a tap selects.
 ///  - Full: the chain page, with bigger cards, parallel branches stacked, the input and
-///    output at the ends and a "+" between every pair to add an effect there.
+///    output at the ends and a "+" between every pair to add an effect there. With the
+///    nativeUi.chainWrap setting on, the chain wraps onto more lines to fit the page's width
+///    instead of scrolling sideways; a route runs from the end of each line round to the next.
 ///
 /// Gestures: tap a card to select it (on the chain page that also opens its controls); tap a
 /// card's LED to bypass it; long-press (or right-click) a card for its menu.
@@ -48,8 +50,12 @@ public:
     /// Re-reads the per-node clip lights (20 Hz), repainting only when one changed.
     void updateMeters (double nowSeconds);
 
-    /// The size the content wants; the owner puts it in a viewport.
-    [[nodiscard]] juce::Point<int> contentSize (int availableHeight);
+    /// The size the content wants in the space the owner's viewport shows; the owner puts it
+    /// in that viewport. A wrapping chain page fits the width; otherwise only the height counts.
+    [[nodiscard]] juce::Point<int> contentSize (juce::Point<int> available);
+
+    /// True when the chain page wraps its lines to the width it is given.
+    [[nodiscard]] bool wrapsToWidth() const noexcept { return mode == Mode::Full && wrap; }
 
     /// Scrolls the owning viewport so the selected node is in view.
     void revealSelected();
@@ -79,20 +85,26 @@ private:
         juce::Rectangle<float> bounds;
     };
 
+    using Wire = std::pair<juce::Point<float>, juce::Point<float>>;
+
     void layoutStrip (int height);
-    void layoutFull (int height);
+    void layoutFull (juce::Point<int> available);
     void timerCallback() override;
     [[nodiscard]] const Item* itemAt (juce::Point<float> position) const;
     [[nodiscard]] bool nodeMissingResource (const guitarfx::GraphNode& node) const;
+    [[nodiscard]] bool wrapSetting() const;
 
     NanoContext& context;
     ShellActions& actions;
     Mode mode;
+    bool wrap = false;
     std::vector<Item> items;
-    std::vector<std::pair<juce::Point<float>, juce::Point<float>>> wires;
+    std::vector<Wire> wires;
+    std::vector<juce::Path> routes; // a wrapped chain's turns from one line to the next
     std::vector<std::string> clipping;
     std::map<std::string, double> clipUntil;
-    int laidOutHeight = -1;
+    bool laidOut = false;
+    juce::Point<int> laidOutFor { -1, -1 };
     juce::Point<int> laidOutSize;
 
     // A copy, not a pointer: an engine message can re-lay out the items mid-press.
@@ -102,8 +114,10 @@ private:
     guitarfx::uiclient::Subscription presetSubscription;
     guitarfx::uiclient::Subscription catalogSubscription;
     guitarfx::uiclient::Subscription resourcesSubscription;
+    guitarfx::uiclient::Subscription sessionSubscription;
 };
-/// The chain in a viewport: horizontally scrolling for the strip, both ways for the page.
+/// The chain in a viewport: horizontally scrolling for the strip, both ways for the page
+/// (vertically only when it wraps, unless one parallel block is wider than the page).
 class ChainPanel final : public juce::Component
 {
 public:

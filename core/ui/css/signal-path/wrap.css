@@ -1,0 +1,93 @@
+/* Wrapping the chain onto more lines instead of scrolling it sideways.
+   The segments, the setting and the return routes: ts/signalPath/chainRow.ts. */
+
+/* Unwrapped, a segment is not a box: the row lays out its nodes and connectors
+   as the one flat list it always was. */
+.signal-chain-segment {
+  display: contents;
+}
+
+.signal-path-bar.chain-wrap .signal-path-scroll {
+  /* The bar stops growing at half the window; the rest of a long chain scrolls. */
+  overflow-y: auto;
+}
+
+.signal-path-bar.chain-wrap .signal-path-nodes {
+  min-width: 0;
+}
+
+.signal-path-bar.chain-wrap .signal-graph-container {
+  /* Room beside the lines for the route to turn down and back. */
+  --signal-wrap-gutter: 14px;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A chain that fits keeps to its own width, centred as before; one that does not
+   takes the full width and breaks its lines between segments. */
+.signal-path-bar.chain-wrap .signal-graph-row {
+  flex-wrap: wrap;
+  row-gap: 28px;
+  max-width: 100%;
+  padding-inline: var(--signal-wrap-gutter);
+  box-sizing: border-box;
+}
+
+.signal-path-bar.chain-wrap[data-density="compact"] .signal-graph-row {
+  row-gap: 16px;
+}
+
+.signal-path-bar.chain-wrap .signal-chain-segment {
+  display: flex;
+  align-items: center;
+}
+
+.signal-chain-wrap-routes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.signal-chain-wrap-routes path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--signal-route-main) 72%, transparent);
+  stroke-width: var(--signal-route-width);
+  stroke-linecap: round;
+}
+
+/* The toggle, in the corner opposite the collapse chevron and styled like it. */
+.signal-path-wrap-btn {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  opacity: 0.38;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.signal-path-wrap-btn:hover,
+.signal-path-wrap-btn:focus-visible {
+  opacity: 0.75;
+}
+
+.signal-path-wrap-btn[aria-pressed="true"] {
+  color: var(--color-accent);
+  opacity: 0.85;
+}
+
+.signal-path-bar.is-collapsed .signal-path-wrap-btn,
+.signal-path-bar.mix-tab-active .signal-path-wrap-btn {
+  display: none;
+}

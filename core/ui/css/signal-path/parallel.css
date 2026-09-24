@@ -11,7 +11,7 @@
   gap: 0;
 }
 
-.signal-graph-row > .signal-node {
+.signal-chain-segment > .signal-node {
   z-index: 1;
 }
 

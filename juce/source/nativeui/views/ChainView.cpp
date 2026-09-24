@@ -3,6 +3,8 @@
 #include "nativeui/views/NodeCard.h"
 #include "uiclient/ChainLayout.h"
 
+#include <limits>
+
 namespace soundshed::nano
 {
 using namespace guitarfx::uiclient;
@@ -21,6 +23,16 @@ constexpr float kCardHeight = 92.0f;
 constexpr float kConnector = 34.0f;
 constexpr float kBranchGap = 14.0f;
 constexpr float kMargin = 12.0f;
+
+// A wrapped chain page: the space between lines, and the room beside them for the route
+// from one line's end round to the next line's start to turn in.
+constexpr float kLineGap = 28.0f;
+constexpr float kWrapGutter = 16.0f;
+constexpr float kRouteReach = 10.0f;
+constexpr float kRouteRadius = 8.0f;
+
+// Nano's own, beside nativeUi.scale; the web UI keeps its choice in its part of uiSettings.
+constexpr const char* kChainWrapSetting = "nativeUi.chainWrap";
 } // namespace
 
 ChainView::ChainView (NanoContext& contextIn, ShellActions& actionsIn, Mode modeIn)
@@ -31,13 +43,33 @@ ChainView::ChainView (NanoContext& contextIn, ShellActions& actionsIn, Mode mode
     presetSubscription = context.client.Subscribe (Topic::ActivePreset, [this] { refresh(); });
     catalogSubscription = context.client.Subscribe (Topic::Catalog, [this] { refresh(); });
     resourcesSubscription = context.client.Subscribe (Topic::Resources, [this] { repaint(); });
+
+    // The strip is one row by design: it sits above the effect's controls.
+    if (mode == Mode::Full)
+    {
+        wrap = wrapSetting();
+        sessionSubscription = context.client.Subscribe (Topic::Session, [this] {
+            if (wrapSetting() != wrap)
+            {
+                wrap = ! wrap;
+                refresh();
+            }
+        });
+    }
 }
 
 ChainView::~ChainView() = default;
 
+bool ChainView::wrapSetting() const
+{
+    const auto& settings = context.state().appSettings;
+    const auto it = settings.find (kChainWrapSetting);
+    return it != settings.end() && it->is_boolean() && it->get<bool>();
+}
+
 void ChainView::refresh()
 {
-    laidOutHeight = -1;
+    laidOut = false;
 
     if (onContentChanged)
         onContentChanged();
@@ -45,16 +77,21 @@ void ChainView::refresh()
     repaint();
 }
 
-juce::Point<int> ChainView::contentSize (int availableHeight)
+juce::Point<int> ChainView::contentSize (juce::Point<int> available)
 {
-    if (laidOutHeight != availableHeight)
+    // Only a wrapping page lays out to the width; the rest ignore a width change.
+    if (! wrapsToWidth())
+        available.x = laidOutFor.x;
+
+    if (! laidOut || available != laidOutFor)
     {
-        laidOutHeight = availableHeight;
+        laidOut = true;
+        laidOutFor = available;
 
         if (mode == Mode::Strip)
-            layoutStrip (availableHeight);
+            layoutStrip (available.y);
         else
-            layoutFull (availableHeight);
+            layoutFull (available);
     }
 
     return laidOutSize;
@@ -109,63 +146,79 @@ void ChainView::layoutStrip (int height)
     laidOutSize = { (int) std::ceil (x), height };
 }
 
-void ChainView::layoutFull (int height)
+void ChainView::layoutFull (juce::Point<int> available)
 {
     items.clear();
     wires.clear();
+    routes.clear();
     const auto& state = context.state();
 
     if (! state.activePreset)
     {
-        laidOutSize = { 0, height };
+        laidOutSize = { 0, available.y };
         return;
     }
 
+    // The chain as segments, the way the web UI wraps it: the input, then each connector with
+    // what it leads into (a node, or a parallel block up to its join), then the output. Each
+    // is laid out on its own from x = 0 along a centre line at y = 0; lines then take whole
+    // segments, so a line never ends on a connector.
+    struct Segment
+    {
+        std::vector<Item> items;
+        std::vector<Wire> wires;
+        float width = 0.0f;
+        float halfHeight = kCardHeight * 0.5f;
+    };
+
     const auto layout = BuildChainLayout (state.activePreset->graph);
-    std::size_t lanes = 1;
-
-    for (const auto& item : layout.items)
-        if (item.kind == ChainItem::Kind::Parallel)
-            lanes = std::max (lanes, item.branches.size());
-
-    const float rowY = kMargin + 0.5f * ((float) (lanes - 1) * (kCardHeight + kBranchGap));
-    float x = kMargin;
+    std::vector<Segment> segments;
+    float x = 0.0f;
 
     const auto cardAt = [&] (Item::Kind kind, const std::string& id, float y) {
-        items.push_back ({ kind, id, {}, {}, { x, y, kCardWidth, kCardHeight } });
+        segments.back().items.push_back ({ kind, id, {}, {}, { x, y - kCardHeight * 0.5f, kCardWidth, kCardHeight } });
     };
 
     const auto connectorAfter = [&] (const std::string& afterId, float y) {
-        items.push_back ({ Item::Kind::Add, {}, afterId, "plus",
-                           { x + (kConnector - 24.0f) * 0.5f, y + (kCardHeight - 24.0f) * 0.5f, 24.0f, 24.0f } });
-        wires.push_back ({ { x - 2.0f, y + kCardHeight * 0.5f }, { x + kConnector + 2.0f, y + kCardHeight * 0.5f } });
+        segments.back().items.push_back ({ Item::Kind::Add, {}, afterId, "plus",
+                                           { x + (kConnector - 24.0f) * 0.5f, y - 12.0f, 24.0f, 24.0f } });
+        segments.back().wires.push_back ({ { x - 2.0f, y }, { x + kConnector + 2.0f, y } });
         x += kConnector;
     };
 
-    cardAt (Item::Kind::Boundary, kInputNodeId, rowY);
+    const auto beginSegment = [&] {
+        segments.emplace_back();
+        x = 0.0f;
+    };
+
+    beginSegment();
+    cardAt (Item::Kind::Boundary, kInputNodeId, 0.0f);
     x += kCardWidth;
+    segments.back().width = x;
     std::string last = kInputNodeId;
 
     for (const auto& item : layout.items)
     {
+        beginSegment();
+        connectorAfter (last, 0.0f);
+
         if (item.kind == ChainItem::Kind::Node)
         {
-            connectorAfter (last, rowY);
-            cardAt (Item::Kind::Node, item.nodeId, rowY);
+            cardAt (Item::Kind::Node, item.nodeId, 0.0f);
             x += kCardWidth;
+            segments.back().width = x;
             last = item.nodeId;
             continue;
         }
 
         // Parallel: the branches stacked, each with its own "+" at its start.
-        connectorAfter (last, rowY);
         const float blockX = x;
         float blockWidth = 0.0f;
-        const float firstY = rowY - 0.5f * ((float) (item.branches.size() - 1) * (kCardHeight + kBranchGap));
+        const float spread = 0.5f * ((float) (item.branches.size() - 1) * (kCardHeight + kBranchGap));
 
         for (std::size_t b = 0; b < item.branches.size(); ++b)
         {
-            const float y = firstY + (float) b * (kCardHeight + kBranchGap);
+            const float y = (float) b * (kCardHeight + kBranchGap) - spread;
             x = blockX;
             std::string branchLast = item.splitNodeId;
 
@@ -174,41 +227,109 @@ void ChainView::layoutFull (int height)
                 if (branchLast != item.splitNodeId)
                     connectorAfter (branchLast, y);
                 else
-                    wires.push_back ({ { x - kConnector * 0.5f, rowY + kCardHeight * 0.5f }, { x, y + kCardHeight * 0.5f } });
+                    segments.back().wires.push_back ({ { x - kConnector * 0.5f, 0.0f }, { x, y } });
 
                 cardAt (Item::Kind::Node, id, y);
                 x += kCardWidth;
                 branchLast = id;
             }
 
-            wires.push_back ({ { x, y + kCardHeight * 0.5f }, { x + kConnector * 0.5f, rowY + kCardHeight * 0.5f } });
+            segments.back().wires.push_back ({ { x, y }, { x + kConnector * 0.5f, 0.0f } });
             blockWidth = std::max (blockWidth, x - blockX);
         }
 
         x = blockX + blockWidth + kConnector * 0.5f;
+        segments.back().width = x;
+        segments.back().halfHeight = spread + kCardHeight * 0.5f;
         last = item.splitNodeId;
     }
 
-    connectorAfter (last, rowY);
-    cardAt (Item::Kind::Boundary, kOutputNodeId, rowY);
-    x += kCardWidth + kMargin;
+    beginSegment();
+    connectorAfter (last, 0.0f);
+    cardAt (Item::Kind::Boundary, kOutputNodeId, 0.0f);
+    x += kCardWidth;
+    segments.back().width = x;
 
-    const float contentHeight = rowY * 2.0f + kCardHeight;
-    laidOutSize = { (int) std::ceil (x), juce::jmax (height, (int) std::ceil (contentHeight)) };
-
-    // Centre a short chain vertically on a tall page.
-    if (contentHeight < (float) height)
+    // Fill each line with as many whole segments as fit. Unwrapped, that is all of them.
+    struct Line
     {
-        const float offset = std::floor (((float) height - contentHeight) * 0.5f);
+        std::size_t first = 0, count = 0;
+        float width = 0.0f, halfHeight = 0.0f, top = 0.0f;
+    };
 
-        for (auto& item : items)
-            item.bounds.translate (0.0f, offset);
+    const float gutter = wrap ? kWrapGutter : 0.0f;
+    const float lineRoom = wrap ? (float) available.x - 2.0f * (kMargin + gutter) : std::numeric_limits<float>::max();
+    std::vector<Line> lines;
 
-        for (auto& wire : wires)
+    for (std::size_t i = 0; i < segments.size(); ++i)
+    {
+        if (lines.empty() || lines.back().width + segments[i].width > lineRoom)
+            lines.push_back ({ i, 0, 0.0f, 0.0f, 0.0f });
+
+        auto& line = lines.back();
+        ++line.count;
+        line.width += segments[i].width;
+        line.halfHeight = std::max (line.halfHeight, segments[i].halfHeight);
+    }
+
+    float widest = 0.0f;
+    float y = kMargin;
+
+    for (auto& line : lines)
+    {
+        line.top = y;
+        y += 2.0f * line.halfHeight + kLineGap;
+        widest = std::max (widest, line.width);
+    }
+
+    const float contentWidth = widest + 2.0f * (kMargin + gutter);
+    const float contentHeight = y - kLineGap + kMargin;
+    laidOutSize = { (int) std::ceil (contentWidth), juce::jmax (available.y, (int) std::ceil (contentHeight)) };
+
+    // Centre a short chain vertically on a tall page, and a wrapped one across the page.
+    const float left = kMargin + gutter + (wrap ? std::max (0.0f, std::floor (((float) available.x - contentWidth) * 0.5f)) : 0.0f);
+    const float top = std::max (0.0f, std::floor (((float) available.y - contentHeight) * 0.5f));
+
+    for (const auto& line : lines)
+    {
+        const juce::Point<float> origin { left, top + line.top + line.halfHeight };
+        float lineX = 0.0f;
+
+        for (std::size_t i = line.first; i < line.first + line.count; ++i)
         {
-            wire.first.y += offset;
-            wire.second.y += offset;
+            const auto offset = origin.translated (lineX, 0.0f);
+
+            for (auto item : segments[i].items)
+            {
+                item.bounds += offset;
+                items.push_back (std::move (item));
+            }
+
+            for (const auto& wire : segments[i].wires)
+                wires.push_back ({ wire.first + offset, wire.second + offset });
+
+            lineX += segments[i].width;
         }
+    }
+
+    // From the end of each line out, down, back under it, down and into the next line's start.
+    for (std::size_t i = 0; i + 1 < lines.size(); ++i)
+    {
+        const auto& from = lines[i];
+        const auto& to = lines[i + 1];
+        const float y1 = top + from.top + from.halfHeight;
+        const float y2 = top + to.top + to.halfHeight;
+        const float gap = top + from.top + 2.0f * from.halfHeight + kLineGap * 0.5f;
+        const float x1 = left + from.width;
+
+        juce::Path turn;
+        turn.startNewSubPath (x1, y1);
+        turn.lineTo (x1 + kRouteReach, y1);
+        turn.lineTo (x1 + kRouteReach, gap);
+        turn.lineTo (left - kRouteReach, gap);
+        turn.lineTo (left - kRouteReach, y2);
+        turn.lineTo (left, y2);
+        routes.push_back (turn.createPathWithRoundedCorners (kRouteRadius));
     }
 }
 
@@ -317,7 +438,9 @@ std::vector<std::pair<juce::String, juce::Rectangle<int>>> ChainView::namedTarge
 
 void ChainView::paint (juce::Graphics& g)
 {
-    juce::ignoreUnused (contentSize (getHeight())); // lays the items out if this height is new
+    // Lays the items out if nothing has since a refresh. The size the owner last asked about,
+    // not this component's: a chain wider than its page is bigger than the page it fits to.
+    juce::ignoreUnused (contentSize (laidOutFor.y >= 0 ? laidOutFor : juce::Point<int> (getWidth(), getHeight())));
     const auto& state = context.state();
     const auto& theme = context.theme;
 
@@ -333,6 +456,9 @@ void ChainView::paint (juce::Graphics& g)
 
     for (const auto& wire : wires)
         g.drawLine ({ wire.first, wire.second }, 1.5f);
+
+    for (const auto& route : routes)
+        g.strokePath (route, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     const auto selected = actions.selectedNode ? actions.selectedNode() : std::string {};
 
@@ -520,8 +646,12 @@ void ChainPanel::resized()
 {
     viewport.setBounds (getLocalBounds());
     const auto view = viewport.getMaximumVisibleWidth() > 0 ? viewport.getLocalBounds() : getLocalBounds();
-    const auto content = chain.contentSize (view.getHeight());
-    chain.setSize (juce::jmax (content.x, view.getWidth()), juce::jmax (content.y, view.getHeight()));
+
+    // A wrapping page keeps clear of the vertical scroll bar its extra lines can bring, so
+    // that bar never pushes the lines it fits into a horizontal scroll as well.
+    const int width = chain.wrapsToWidth() ? juce::jmax (0, view.getWidth() - viewport.getScrollBarThickness()) : view.getWidth();
+    const auto content = chain.contentSize ({ width, view.getHeight() });
+    chain.setSize (juce::jmax (content.x, width), juce::jmax (content.y, view.getHeight()));
     chain.revealSelected();
 }
 } // namespace soundshed::nano

@@ -69,6 +69,7 @@ private:
     std::array<std::unique_ptr<IconButton>, 3> themeButtons;
     EvenRow themeRow;
     juce::Slider scaleSlider;
+    juce::ToggleButton chainWrapToggle;
     IconButton devicesButton;
     juce::ToggleButton limiterToggle;
     juce::ComboBox tailsBox;

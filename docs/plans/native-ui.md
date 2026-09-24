@@ -123,6 +123,10 @@ The rules come from Soundshed Guitar's compact mode (`core/ui/ts/compactMode.ts`
   small screens and as side sheets on large ones.
 - **Global UI scale** from 80% to 150% (`nativeUi.scale`), the counterpart of the web UI's
   zoom setting.
+- **Wrapping chain page** (`nativeUi.chainWrap`, Settings → Appearance): the chain page wraps
+  onto more lines to fit its width instead of scrolling sideways, breaking only between a
+  connector's segments as the web UI does (`uiSettings.signalPathWrap` there, a choice of its
+  own). The mini strip stays one row.
 
 ### Landscape, 800×480 (Play, effect selected)
 

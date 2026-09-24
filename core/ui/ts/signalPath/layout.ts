@@ -5,6 +5,7 @@ import {
   signalPathNodesElement,
 } from "./state.js";
 import { isMixTabActive } from "./state.js";
+import { applySignalChainWrapState, isSignalChainWrapEnabled, updateSignalChainWrapRoutes } from "./chainRow.js";
 export const SIGNAL_PATH_FULL_HEIGHT = 96;
 
 export const SIGNAL_PATH_COMPACT_HEIGHT = 48;
@@ -12,6 +13,9 @@ export const SIGNAL_PATH_COMPACT_HEIGHT = 48;
 export const SIGNAL_PATH_LEGACY_COMPACT_HEIGHT_THRESHOLD = 80;
 
 export const SIGNAL_PATH_MODE_GESTURE_THRESHOLD = 12;
+
+/** The most of the window a wrapped chain takes before it scrolls instead. */
+const SIGNAL_PATH_WRAP_MAX_SHARE = 0.5;
 
 export type SignalPathDensity = "compact" | "full";
 
@@ -61,6 +65,7 @@ export function updateSignalPathLayoutAdapt(): void {
   const bar = getSignalPathBarElement();
   const scroll = getSignalPathScrollElement();
   const nodes = signalPathNodesElement;
+  const wrap = applySignalChainWrapState(bar);
 
   if (!bar || !scroll || !nodes || scroll.hidden || isMixTabActive()) {
     bar?.removeAttribute("data-density");
@@ -74,8 +79,13 @@ export function updateSignalPathLayoutAdapt(): void {
 
   const minimumHeight = heightForSignalPathDensity(density);
   bar.style.setProperty("--signal-path-scroll-height", `${minimumHeight}px`);
-  const viewportHeight = Math.max(minimumHeight, Math.ceil(scroll.scrollHeight));
+  const contentHeight = Math.max(minimumHeight, Math.ceil(scroll.scrollHeight));
+  // A wrapped chain grows to show every line, up to half the window; past that it scrolls.
+  const viewportHeight = wrap
+    ? Math.min(contentHeight, Math.max(minimumHeight, Math.floor(window.innerHeight * SIGNAL_PATH_WRAP_MAX_SHARE)))
+    : contentHeight;
   bar.style.setProperty("--signal-path-scroll-height", `${viewportHeight}px`);
+  updateSignalChainWrapRoutes(nodes, scheduleSignalPathLayoutAdapt);
 }
 
 export function scheduleSignalPathLayoutAdapt(): void {
@@ -241,8 +251,14 @@ export function initSignalPathResize(): void {
   handle.addEventListener("keydown", onSignalPathResizeKeyDown);
   handle.addEventListener("dblclick", onSignalPathResizeDoubleClick);
 
+  // Applying the setting goes through uiSettingsApplied, below, like a restored one.
+  document.getElementById("signal-path-wrap-btn")?.addEventListener("click", () => {
+    updateUiSettings({ signalPathWrap: !isSignalChainWrapEnabled() });
+  });
+
   window.addEventListener("uiSettingsApplied", () => {
     applySignalPathHeightFromSettings();
+    scheduleSignalPathLayoutAdapt();
   });
 
   window.addEventListener("densityChanged", () => {

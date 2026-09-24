@@ -75,6 +75,15 @@ describe("resolveNodeDropAction", () => {
     })).toEqual({ kind: "toggleBypass", nodeId: "amp" });
   });
 
+  it("does not toggle bypass when a wrapped chain's node is dragged to another line and misses", () => {
+    expect(resolveNodeDropAction({
+      draggedNodeId: "amp",
+      target: null,
+      gesture: { deltaX: 4, deltaY: -120 },
+      releasedOnAnotherLine: true,
+    })).toEqual({ kind: "none" });
+  });
+
   it("does nothing when released away from a target without a flick", () => {
     expect(resolveNodeDropAction({
       draggedNodeId: "amp",

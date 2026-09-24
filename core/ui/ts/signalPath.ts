@@ -50,6 +50,7 @@ import { getEditableSignalPathPreset, removeInlineMixer, renderInlineMixer, rend
 import { isMixTabActive } from "./signalPath/state.js";
 import { setNodeParamsRefresher, setSignalPathRenderer } from "./signalPath/render.js";
 import { SIGNAL_PATH_FULL_HEIGHT, scheduleSignalPathLayoutAdapt } from "./signalPath/layout.js";
+import { renderBoundaryNode, renderConnectorWrapper, renderSignalChainRow, signalChainLineAt } from "./signalPath/chainRow.js";
 import type { EdgeRef } from "./signalPath/graph.js";
 import { buildGraphMaps, normalizeEdge, parseEdgeFromDataset, pickPrimaryOutgoingEdge, sortEdgesByPort } from "./signalPath/graph.js";
 import { showNodeParamsPanel } from "./signalPath/paramsPanel.js";
@@ -282,8 +283,9 @@ function applyNodeDrop(
   draggedNodeId: string,
   target: NodeDropTarget<EdgeRef> | null,
   gesture: PointerDragGesture,
+  releasedOnAnotherLine: boolean,
 ): void {
-  const action = resolveNodeDropAction({ draggedNodeId, target, gesture });
+  const action = resolveNodeDropAction({ draggedNodeId, target, gesture, releasedOnAnotherLine });
   switch (action.kind) {
     case "reorderToEdge":
       sendMoveSignalPathNodeToEdge(action.nodeId, action.edge);
@@ -319,6 +321,7 @@ function beginNodePointerDrag(event: PointerEvent, source: HTMLElement): void {
   // Captured up front: a re-render mid-drag detaches the source, and a detached
   // element reports a zero rect.
   const sourceLeft = source.getBoundingClientRect().left;
+  const sourceLine = signalChainLineAt(signalPathNodesElement, event.clientY);
 
   beginPointerDrag<NodeDragTarget>(event, {
     source,
@@ -328,7 +331,10 @@ function beginNodePointerDrag(event: PointerEvent, source: HTMLElement): void {
     resolveTarget: (moveEvent) => resolveNodeDragTarget(moveEvent, nodeId, sourceLeft),
     setTargetHighlight: (target, highlighted) =>
       setSignalPathDropHighlight(target.element, target.drop.kind, highlighted),
-    onDrop: (target, gesture) => applyNodeDrop(nodeId, target?.drop ?? null, gesture),
+    onDrop: (target, gesture) => {
+      const releaseLine = sourceLine === null ? null : signalChainLineAt(signalPathNodesElement, event.clientY + gesture.deltaY);
+      applyNodeDrop(nodeId, target?.drop ?? null, gesture, releaseLine !== null && releaseLine !== sourceLine);
+    },
   });
 }
 
@@ -622,34 +628,13 @@ function renderSignalPathBarContent(): void {
     renderGraphSignalPath(editablePreset);
   } else {
     // Empty preset - show only input/output
-    signalPathNodesElement.innerHTML = `
-      <div class="signal-graph-container">
-        <div class="signal-graph-row">
-          <div class="signal-node input-node" data-node-id="__input__" title="Input" aria-label="Input">
-            <div class="node-icon">${renderIcon("guitar", "fx-effect-icon")}</div>
-            <div class="node-info">
-              <div class="node-name">Input</div>
-            </div>
-            <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
-          </div>
-          <div class="signal-connector-wrapper">
-            <div class="signal-connector"></div>
-            <button class="signal-add-btn" 
-                    data-insert-after="__input__"
-                    title="Add Effect">
-              <span class="add-icon">+</span>
-            </button>
-          </div>
-          <div class="signal-node output-node" data-node-id="__output__" title="Output" aria-label="Output">
-            <div class="node-icon">🔈</div>
-            <div class="node-info">
-              <div class="node-name">Output</div>
-            </div>
-            <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
-          </div>
-        </div>
-      </div>
-    `;
+    signalPathNodesElement.innerHTML = renderSignalChainRow([`
+      <div class="signal-connector-wrapper">
+        <div class="signal-connector"></div>
+        <button class="signal-add-btn" data-insert-after="__input__" title="Add Effect">
+          <span class="add-icon">+</span>
+        </button>
+      </div>${renderBoundaryNode("output")}`]);
 
     // Bind minimal handlers (legacy fallback uses insertAfter=__input__)
     bindAddButtonHandlers();
@@ -689,28 +674,6 @@ export function refreshSelectedNodeParams(): void {
 }
 
 setNodeParamsRefresher(refreshSelectedNodeParams);
-
-function renderConnectorWrapper(edge: EdgeRef): string {
-  return `
-    <div class="signal-connector-wrapper"
-         data-edge-from="${edge.from}"
-         data-edge-to="${edge.to}"
-         data-edge-from-port="${edge.fromPort}"
-         data-edge-to-port="${edge.toPort}"
-         data-edge-gain="${edge.gain}">
-      <div class="signal-connector"></div>
-      <button class="signal-add-btn"
-              data-edge-from="${edge.from}"
-              data-edge-to="${edge.to}"
-              data-edge-from-port="${edge.fromPort}"
-              data-edge-to-port="${edge.toPort}"
-              data-edge-gain="${edge.gain}"
-              title="Add Effect">
-        <span class="add-icon">+</span>
-      </button>
-    </div>
-  `;
-}
 
 /**
  * Renders the signal path graph with support for parallel branches.
@@ -856,8 +819,14 @@ function renderGraphSignalPath(preset: Preset): void {
     return { html, mixerId: joinId };
   };
 
-  const renderMainChain = (): string => {
-    let html = "";
+  // One segment per connector and what it leads into (see signalPath/chainRow.ts):
+  // a wrapped chain breaks its lines only between segments.
+  const renderMainChain = (): string[] => {
+    const segments: string[] = [];
+    const appendToSegment = (html: string): void => {
+      if (segments.length) segments[segments.length - 1] += html;
+      else segments.push(html);
+    };
     let currentId = "__input__";
     let guard = 0;
 
@@ -870,7 +839,7 @@ function renderGraphSignalPath(preset: Preset): void {
         if (node && (node.type === EffectGuids.kSplitter || isSplitPoint(currentId))) {
           const { html: parallelHtml, mixerId } = renderParallelForSplitter(currentId);
           if (parallelHtml && mixerId) {
-            html += parallelHtml;
+            appendToSegment(parallelHtml);
             currentId = mixerId;
             continue;
           }
@@ -882,46 +851,27 @@ function renderGraphSignalPath(preset: Preset): void {
         break;
       }
 
-      html += renderConnectorWrapper(edge);
+      segments.push(renderConnectorWrapper(edge));
 
       if (edge.to === "__output__") {
-        break;
+        appendToSegment(renderBoundaryNode("output"));
+        return segments;
       }
 
       const nextNode = nodeById.get(edge.to);
       if (!nextNode) {
         break;
       }
-      html += renderNodeElement(nextNode);
+      appendToSegment(renderNodeElement(nextNode));
       currentId = nextNode.id;
     }
 
-    return html;
+    // The walk never reached the output: it stands alone, as it always did.
+    segments.push(renderBoundaryNode("output"));
+    return segments;
   };
 
-  const segmentsHtml = renderMainChain();
-
-  signalPathNodesElement.innerHTML = `
-    <div class="signal-graph-container">
-      <div class="signal-graph-row">
-        <div class="signal-node input-node" data-node-id="__input__" title="Input" aria-label="Input">
-          <div class="node-icon">${renderIcon("guitar", "fx-effect-icon")}</div>
-          <div class="node-info">
-            <div class="node-name">Input</div>
-          </div>
-          <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
-        </div>
-        ${segmentsHtml}
-        <div class="signal-node output-node" data-node-id="__output__" title="Output" aria-label="Output">
-          <div class="node-icon">🔈</div>
-          <div class="node-info">
-            <div class="node-name">Output</div>
-          </div>
-          <span class="node-clip-indicator clip-inactive" aria-hidden="true"></span>
-        </div>
-      </div>
-    </div>
-  `;
+  signalPathNodesElement.innerHTML = renderSignalChainRow(renderMainChain());
 
   // Bind click handlers
   bindNodeClickHandlers(preset);

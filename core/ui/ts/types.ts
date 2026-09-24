@@ -149,6 +149,8 @@ export interface UiSettings {
   };
   /** Height in CSS pixels of the signal-path scroll / visualisation area. */
   signalPathHeight?: number;
+  /** Wrap the signal chain onto more lines instead of scrolling it sideways. */
+  signalPathWrap?: boolean;
   presetRecents?: string[];
 }
 

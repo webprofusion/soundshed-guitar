@@ -58,12 +58,16 @@ export function resolveNodeDropAction<TEdge extends SignalPathDropEdge>(input: {
   draggedNodeId: string;
   target: NodeDropTarget<TEdge> | null;
   gesture: { deltaX: number; deltaY: number };
+  /** Released over a different line of a wrapped chain than the node sits on. */
+  releasedOnAnotherLine?: boolean;
 }): NodeDropAction<TEdge> {
   const { draggedNodeId, target, gesture } = input;
   if (!draggedNodeId) return { kind: "none" };
 
   if (!target) {
-    return isBypassToggleGesture(gesture.deltaX, gesture.deltaY)
+    // A wrapped chain puts a move to another line straight up or down: one that
+    // misses its target there is a missed move, not a flick.
+    return !input.releasedOnAnotherLine && isBypassToggleGesture(gesture.deltaX, gesture.deltaY)
       ? { kind: "toggleBypass", nodeId: draggedNodeId }
       : { kind: "none" };
   }
