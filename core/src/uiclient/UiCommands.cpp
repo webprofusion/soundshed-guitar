@@ -401,4 +401,27 @@ void UiCommands::OpenUrl(const std::string& url)
 {
     mClient.Send("openUrl", {{"url", url}});
 }
+
+// ── Tone sharing ─────────────────────────────────────────────────────────────
+
+void UiCommands::InstallPresetArchives(const nlohmann::json& entry, const std::string& folder, nlohmann::json archives)
+{
+    const auto entryId = entry.value("id", std::string{});
+    mClient.MutableState().toneInstalls[entryId] = ToneInstall{};
+    mClient.Notify(Topic::Tones);
+
+    nlohmann::json payload = {{"requestId", entryId}, {"entry", entry}, {"archives", std::move(archives)}};
+
+    if (!folder.empty())
+    {
+        payload["folder"] = folder;
+    }
+
+    mClient.Send("installPresetArchives", std::move(payload));
+}
+
+void UiCommands::DeleteInstalledPresetArchive(const std::string& entryId)
+{
+    mClient.Send("deleteInstalledPresetArchive", {{"id", entryId}});
+}
 } // namespace guitarfx::uiclient

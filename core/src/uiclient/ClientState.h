@@ -217,6 +217,22 @@ struct Notification
     std::string detail;
 };
 
+/// A tone being installed from tone sharing ("installPresetArchives"), by the installedPacks
+/// entry id it is recorded under. What is installed already is the setting itself.
+struct ToneInstall
+{
+    enum class Status
+    {
+        Installing,
+        Installed,
+        Failed
+    };
+
+    Status status = Status::Installing;
+    std::string detail;                  // why it failed
+    std::vector<std::string> presetIds; // what it installed
+};
+
 struct ClientState
 {
     bool haveState = false;
@@ -259,6 +275,8 @@ struct ClientState
     MetronomeState metronome;
     DeviceState device;
     DemoState demo;
+
+    std::map<std::string, ToneInstall> toneInstalls;
 
     [[nodiscard]] const EffectTypeInfo* FindEffectType(const std::string& type) const;
     [[nodiscard]] const PresetSummary* FindPresetSummary(const std::string& id) const;

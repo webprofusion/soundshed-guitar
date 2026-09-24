@@ -52,6 +52,7 @@ instead of scrolling one enormous one:
 | `controller/PluginControllerSettings.cpp`       | App settings load/apply/persist                       |
 | `controller/PluginControllerHostedPlugins.cpp`  | Third-party plugin state capture and restore          |
 | `controller/PluginControllerPresetArchive.cpp`  | Factory archives and archive sessions                 |
+| `controller/PluginControllerArchiveInstall.cpp` | Installing tones downloaded from tone sharing (`installPresetArchives`) and removing them; the `toneSharing.installedPacks` record |
 | `controller/PluginControllerLayouts.cpp`        | Custom effect layouts and their images                |
 | `controller/PluginControllerAutomation.cpp`     | Automation slots, MIDI learn, setlist/scene switching |
 | `controller/PluginControllerMixer.cpp`          | Mixer slots and levels                                |

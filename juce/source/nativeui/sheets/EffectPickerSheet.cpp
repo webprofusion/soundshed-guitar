@@ -60,7 +60,9 @@ EffectPickerContent::EffectPickerContent (NanoContext& contextIn, std::string af
     setComponentID ("effect-picker");
     search.setComponentID ("effect-search");
     search.setTextToShowWhenEmpty ("Search effects", context.theme.textMuted());
-    search.setFont (context.font (15.0f));
+    search.setFont (context.font (NanoTheme::textBody));
+    search.setIndents (12, 0);
+    search.setJustification (juce::Justification::centredLeft);
     search.onTextChange = [this] { rebuild(); };
     addAndMakeVisible (search);
 
@@ -111,17 +113,18 @@ EffectPickerContent::EffectPickerContent (NanoContext& contextIn, std::string af
 
         if (pressed)
         {
-            g.setColour (theme.text().withAlpha (0.08f));
-            g.fillRoundedRectangle (area.toFloat(), 8.0f);
+            g.setColour (theme.pressedFill());
+            g.fillRoundedRectangle (area.toFloat(), (float) NanoTheme::controlRadius);
         }
 
         area.reduce (10, 0);
         const auto colour = juce::Colour (context.presentation.CategoryColour (effect->category));
         context.icons->draw (g, context.presentation.IconFor (effect->type, effect->category),
-                             area.removeFromLeft (30).toFloat().withSizeKeepingCentre (22.0f, 22.0f), colour);
+                             area.removeFromLeft (28).toFloat().withSizeKeepingCentre (NanoTheme::iconSize, NanoTheme::iconSize),
+                             colour.interpolatedWith (theme.text(), 0.25f));
         area.removeFromLeft (8);
         g.setColour (theme.text());
-        g.setFont (context.font (15.5f));
+        g.setFont (context.font (NanoTheme::textBody + 1.0f));
         g.drawFittedText (juce::String::fromUTF8 (effect->name.c_str()), area, juce::Justification::centredLeft, 1);
     };
     list.rowName = [this] (int row) { return "fx:" + juce::String::fromUTF8 (shown[(std::size_t) row]->name.c_str()); };

@@ -126,6 +126,7 @@ void MetronomeContent::rebuildBeats()
         {
             auto beat = std::make_unique<IconButton> (context, "metronome-beat-" + juce::String ((int) i + 1));
             beat->setClickingTogglesState (false);
+            beat->setAccentWhenOn (true); // the beat that is sounding
             beat->onClick = [this, i] {
                 auto next = context.state().metronome.beatPattern;
 
@@ -193,12 +194,12 @@ void MetronomeContent::paint (juce::Graphics& g)
 {
     const auto& metronome = context.state().metronome;
     g.setColour (context.theme.text());
-    g.setFont (context.font (juce::jmin (56.0f, (float) bpmArea.getHeight() * 0.7f)));
+    g.setFont (context.font (juce::jmin (48.0f, (float) bpmArea.getHeight() * 0.58f), FontWeight::semibold));
     g.drawText (juce::String (metronome.bpm, metronome.bpm == std::round (metronome.bpm) ? 0 : 1), bpmArea,
                 juce::Justification::centred);
 
     g.setColour (context.theme.textMuted());
-    g.setFont (context.font (12.0f));
+    g.setFont (context.font (NanoTheme::textOverline, FontWeight::semibold));
     g.drawText (metronome.editable ? "BPM" : "BPM (from the host)", bpmArea.withTrimmedTop (bpmArea.getHeight() - 16),
                 juce::Justification::centred);
 }

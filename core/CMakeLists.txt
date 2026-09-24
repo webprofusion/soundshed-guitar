@@ -493,6 +493,7 @@ set(GUITARFX_CORE_SOURCES
     src/controller/PluginControllerNodeControl.cpp
     src/controller/PluginControllerTuner.cpp
     src/controller/PluginControllerSettings.cpp
+    src/controller/PluginControllerArchiveInstall.cpp
     src/controller/PluginControllerPresetArchive.cpp
     src/controller/PluginControllerRiffs.cpp
     src/controller/PluginControllerLayouts.cpp

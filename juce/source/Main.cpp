@@ -292,6 +292,21 @@ public:
             mLastNonMaximizedBounds = getBounds();
     }
 
+#if JUCE_ANDROID
+    // A rotation. JUCE refreshes its display list when the window's insets change and then
+    // tells each peer the screen changed, which arrives here. The window is not full screen
+    // as JUCE counts it (see the constructor), so ResizableWindow leaves its size alone and
+    // the UI would keep the old orientation's size; follow the display instead.
+    void parentSizeChanged() override
+    {
+        juce::DocumentWindow::parentSizeChanged();
+
+        if (const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+            if (isVisible() && getBounds() != display->userArea)
+                setBounds (display->userArea);
+    }
+#endif
+
     void closeButtonPressed() override
     {
         saveWindowState();

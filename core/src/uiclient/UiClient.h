@@ -54,6 +54,7 @@ enum class Topic
     DeviceLevels,
     Demo,
     Notifications,
+    Tones, // tone sharing installs (what is installed is the toneSharing.installedPacks setting: Session)
     Count
 };
 

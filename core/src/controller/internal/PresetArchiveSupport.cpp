@@ -520,6 +520,7 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
 
     if (root.contains("tone3000Resources") && root["tone3000Resources"].is_array())
     {
+        parsed.tone3000Resources = root["tone3000Resources"];
         parsed.tone3000ResourceCount = root["tone3000Resources"].size();
     }
 

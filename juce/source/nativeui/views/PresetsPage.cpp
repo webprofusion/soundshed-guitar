@@ -72,12 +72,12 @@ void PresetsPage::deleteWithConfirm (NanoContext& context, ShellActions& actions
 PresetsPage::PresetsPage (NanoContext& contextIn, ShellActions& actionsIn)
     : context (contextIn),
       actions (actionsIn),
-      presetsTab (contextIn, "rigs-tab-presets", {}, "Presets"),
-      setlistsTab (contextIn, "rigs-tab-setlists", {}, "Setlists"),
-      allChip (contextIn, "rigs-all", {}, "All"),
-      favouritesChip (contextIn, "rigs-favourites", "heart", "Favourites"),
-      recentsChip (contextIn, "rigs-recents", {}, "Recent"),
-      foldersChip (contextIn, "rigs-folders", "folder", "Folders"),
+      presetsTab (contextIn, "presets-tab-library", {}, "Presets"),
+      setlistsTab (contextIn, "presets-tab-setlists", {}, "Setlists"),
+      allChip (contextIn, "presets-all", {}, "All"),
+      favouritesChip (contextIn, "presets-favourites", "heart", "Favourites"),
+      recentsChip (contextIn, "presets-recents", {}, "Recent"),
+      foldersChip (contextIn, "presets-folders", "folder", "Folders"),
       previousSlot (contextIn, "setlist-prev", "chevron-left", "Previous"),
       nextSlot (contextIn, "setlist-next", "chevron-right", "Next")
 {
@@ -90,7 +90,11 @@ PresetsPage::PresetsPage (NanoContext& contextIn, ShellActions& actionsIn)
 
     search.setComponentID ("preset-search");
     search.setTextToShowWhenEmpty ("Search presets", context.theme.textMuted());
-    search.setFont (context.font (15.0f));
+    search.setFont (context.font (NanoTheme::textBody));
+    search.setIndents (12, 0);
+    search.setJustification (juce::Justification::centredLeft);
+    presetsTab.setFlat (true);
+    setlistsTab.setFlat (true);
     search.onTextChange = [this] {
         query.text = search.getText().toStdString();
         refresh();
@@ -228,26 +232,19 @@ void PresetsPage::paintPresetRow (juce::Graphics& g, int row, juce::Rectangle<in
     const auto& theme = context.theme;
     const auto& preset = filtered[(std::size_t) row];
     const bool active = preset.id == context.state().activePresetId;
-    auto area = bounds.reduced (4, 2);
-
-    if (active || pressed)
-    {
-        g.setColour (active ? theme.accent().withAlpha (0.18f) : theme.text().withAlpha (0.06f));
-        g.fillRoundedRectangle (area.toFloat(), 8.0f);
-    }
-
-    area.reduce (12, 4);
+    paintListRowBackground (g, bounds, active, pressed, row + 1 < (int) filtered.size());
+    auto area = bounds.reduced (16, 5);
 
     if (IsPresetFavorite (context.state(), preset.id))
-        context.icons->draw (g, "heart-filled", area.removeFromRight (22).toFloat().withSizeKeepingCentre (18.0f, 18.0f), theme.accent());
+        context.icons->draw (g, "heart-filled", area.removeFromRight (22).toFloat().withSizeKeepingCentre (14.0f, 14.0f), theme.accent());
 
-    g.setColour (active ? theme.accent() : theme.text());
-    g.setFont (context.font (16.0f));
-    g.drawFittedText (utf8 (preset.name.empty() ? preset.id : preset.name), area.removeFromTop (area.getHeight() * 3 / 5),
-                      juce::Justification::bottomLeft, 1, 0.8f);
+    g.setColour (theme.text());
+    g.setFont (context.font (15.0f, active ? FontWeight::semibold : FontWeight::regular));
+    g.drawFittedText (utf8 (preset.name.empty() ? preset.id : preset.name), area.removeFromTop (area.getHeight() * 11 / 20),
+                      juce::Justification::bottomLeft, 1);
 
     g.setColour (theme.textMuted());
-    g.setFont (context.font (12.0f));
+    g.setFont (context.font (NanoTheme::textCaption));
     // "Factory" once, when the category already says so.
     const auto category = utf8 (preset.category);
     const bool markFactory = preset.source == "factory" && ! category.equalsIgnoreCase ("factory");
@@ -270,24 +267,43 @@ void PresetsPage::paintSlotRow (juce::Graphics& g, int row, juce::Rectangle<int>
     const auto& theme = context.theme;
     const auto& presetId = active->presetIds[(std::size_t) row];
     const bool atCursor = row == state.setlistCursor;
-    auto area = bounds.reduced (4, 2);
+    paintListRowBackground (g, bounds, atCursor, pressed, row + 1 < (int) active->presetIds.size());
+    auto area = bounds.reduced (16, 0);
 
-    if (atCursor || pressed)
-    {
-        g.setColour (atCursor ? theme.accent().withAlpha (0.2f) : theme.text().withAlpha (0.06f));
-        g.fillRoundedRectangle (area.toFloat(), 8.0f);
-    }
-
-    area.reduce (12, 0);
     g.setColour (theme.textMuted());
-    g.setFont (context.font (14.0f));
+    g.setFont (context.font (NanoTheme::textLabel, FontWeight::medium));
     g.drawText (juce::String (row + 1), area.removeFromLeft (32), juce::Justification::centredLeft);
 
     const auto* summary = state.FindPresetSummary (presetId);
-    g.setColour (atCursor ? theme.accent() : theme.text());
-    g.setFont (context.font (16.0f));
+    g.setColour (theme.text());
+    g.setFont (context.font (15.0f, atCursor ? FontWeight::semibold : FontWeight::regular));
     g.drawFittedText (summary != nullptr ? utf8 (summary->name) : (presetId.empty() ? juce::String ("(empty)") : utf8 (presetId)),
-                      area, juce::Justification::centredLeft, 1, 0.8f);
+                      area, juce::Justification::centredLeft, 1);
+}
+
+void PresetsPage::paintListRowBackground (juce::Graphics& g, juce::Rectangle<int> bounds, bool current, bool pressed, bool divider)
+{
+    // The loaded preset (or the setlist's cursor): a lifted row with an accent mark at its
+    // edge. Other rows are divided by a hairline, inset to the text.
+    const auto& theme = context.theme;
+    const auto row = bounds.toFloat().reduced (4.0f, 1.0f);
+
+    if (current || pressed)
+    {
+        g.setColour (pressed ? theme.pressedFill() : theme.selectedFill());
+        g.fillRoundedRectangle (row, (float) NanoTheme::controlRadius);
+    }
+
+    if (current)
+    {
+        g.setColour (theme.accent());
+        g.fillRoundedRectangle (row.withWidth (3.0f).reduced (0.0f, 8.0f), 1.5f);
+    }
+    else if (divider)
+    {
+        g.setColour (theme.border().withAlpha (0.7f));
+        g.fillRect (juce::Rectangle<float> (row.getX() + 12.0f, (float) bounds.getBottom() - 1.0f, row.getWidth() - 24.0f, 1.0f));
+    }
 }
 
 void PresetsPage::showFolderMenu()

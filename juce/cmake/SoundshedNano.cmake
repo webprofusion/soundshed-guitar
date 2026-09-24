@@ -106,7 +106,9 @@ endif()
 # ── Runtime data next to the built artefacts ────────────────────────────────────
 # The engine reads factory presets, layouts, composites, metronome clicks and demo audio
 # from resources/ui/, and the native UI reads the icons, the effect presentation table and
-# the font from there too. None of the web UI (TypeScript, CSS, HTML) ships with Nano.
+# the fonts from there too: static cuts of the web UI's Inter (tools/gen-nano-fonts.mjs), since
+# JUCE cannot choose a variable font's weight. None of the web UI (TypeScript, CSS, HTML)
+# ships with Nano.
 set(_NANO_UI_DATA_DIRS presets assets metronome demo data images)
 
 function(soundshed_copy_nano_resources FORMAT_TARGET)
@@ -129,7 +131,7 @@ function(soundshed_copy_nano_resources FORMAT_TARGET)
     add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
         COMMENT "Copying runtime data for ${FORMAT_TARGET}"
         ${_copy_commands}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/css/fonts" "${_dst_base}/fonts")
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/source/nativeui/theme/fonts" "${_dst_base}/fonts")
 endfunction()
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")

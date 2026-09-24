@@ -20,15 +20,29 @@ public:
 
     void setIcon (const juce::String& newIcon);
     void setText (const juce::String& newText);
+    [[nodiscard]] const juce::String& getText() const noexcept { return text; }
 
-    /// Draws a filled accent background while on, as the web UI's active state.
+    /// Whether the on state is drawn at all (a faint neutral fill and brighter content).
     void setHighlightWhenOn (bool shouldHighlight) { highlightWhenOn = shouldHighlight; }
+
+    /// Draws the on state in the accent's tint instead: for the one thing in a group that is
+    /// playing (the scene), where the neutral selection would not read from a pedalboard away.
+    void setAccentWhenOn (bool shouldUseAccent) { accentWhenOn = shouldUseAccent; repaint(); }
+
+    /// The button that confirms (OK, Save, Delete): filled with the accent, whatever its state.
+    void setPrimary (bool shouldBePrimary) { primary = shouldBePrimary; repaint(); }
 
     /// A plain, frameless button (toolbars) rather than a bordered one.
     void setFlat (bool shouldBeFlat) { flat = shouldBeFlat; repaint(); }
 
     /// The icon above a small label (navigation), rather than beside it.
     void setStacked (bool shouldStack) { stacked = shouldStack; repaint(); }
+
+    /// Sets the icon's size instead of the theme's for this kind of button.
+    void setIconSize (float size) { iconSize = size; repaint(); }
+
+    /// Puts the icon and text at the left, as a row in a list, rather than centred.
+    void setAlignLeft (bool shouldAlignLeft) { alignLeft = shouldAlignLeft; repaint(); }
 
     void setIconColour (std::optional<juce::Colour> colour) { iconColour = colour; repaint(); }
     void setBadge (const juce::String& newBadge) { badge = newBadge; repaint(); }
@@ -50,7 +64,11 @@ private:
     juce::String text;
     juce::String badge;
     std::optional<juce::Colour> iconColour;
+    std::optional<float> iconSize;
     bool highlightWhenOn = true;
+    bool accentWhenOn = false;
+    bool primary = false;
+    bool alignLeft = false;
     bool flat = false;
     bool stacked = false;
     bool longPressFired = false;

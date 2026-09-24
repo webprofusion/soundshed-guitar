@@ -13,11 +13,11 @@ constexpr int kLongPressMs = 550;
 constexpr double kClipHoldSeconds = 1.5;
 
 // Strip chips and full-page cards, in logical pixels.
-constexpr float kChipWidth = 74.0f;
+constexpr float kChipWidth = 82.0f;
 constexpr float kChipGap = 6.0f;
 constexpr float kGlyphWidth = 22.0f;
 constexpr float kCardWidth = 132.0f;
-constexpr float kCardHeight = 88.0f;
+constexpr float kCardHeight = 92.0f;
 constexpr float kConnector = 34.0f;
 constexpr float kBranchGap = 14.0f;
 constexpr float kMargin = 12.0f;
@@ -104,8 +104,8 @@ void ChainView::layoutStrip (int height)
     }
 
     // "+" adds after the selected effect, or at the end.
-    items.push_back ({ Item::Kind::Add, {}, last, "plus", { x, 4.0f + h * 0.2f, 40.0f, h * 0.6f } });
-    x += 46.0f;
+    items.push_back ({ Item::Kind::Add, {}, last, "plus", { x + 4.0f, 4.0f + h * 0.5f - 16.0f, 32.0f, 32.0f } });
+    x += 42.0f;
     laidOutSize = { (int) std::ceil (x), height };
 }
 
@@ -137,7 +137,7 @@ void ChainView::layoutFull (int height)
 
     const auto connectorAfter = [&] (const std::string& afterId, float y) {
         items.push_back ({ Item::Kind::Add, {}, afterId, "plus",
-                           { x + (kConnector - 26.0f) * 0.5f, y + (kCardHeight - 26.0f) * 0.5f, 26.0f, 26.0f } });
+                           { x + (kConnector - 24.0f) * 0.5f, y + (kCardHeight - 24.0f) * 0.5f, 24.0f, 24.0f } });
         wires.push_back ({ { x - 2.0f, y + kCardHeight * 0.5f }, { x + kConnector + 2.0f, y + kCardHeight * 0.5f } });
         x += kConnector;
     };
@@ -329,10 +329,10 @@ void ChainView::paint (juce::Graphics& g)
         return;
     }
 
-    g.setColour (theme.borderStrong());
+    g.setColour (theme.textMuted().withAlpha (0.3f));
 
     for (const auto& wire : wires)
-        g.drawLine ({ wire.first, wire.second }, 2.0f);
+        g.drawLine ({ wire.first, wire.second }, 1.5f);
 
     const auto selected = actions.selectedNode ? actions.selectedNode() : std::string {};
 
@@ -370,11 +370,11 @@ void ChainView::paint (juce::Graphics& g)
                 break;
 
             case Item::Kind::Add:
-                g.setColour (theme.card());
+                g.setColour (theme.background());
                 g.fillEllipse (item.bounds);
-                g.setColour (theme.border());
-                g.drawEllipse (item.bounds, 1.0f);
-                context.icons->draw (g, "plus", item.bounds.reduced (item.bounds.getWidth() * 0.25f), theme.textSecondary());
+                g.setColour (theme.textMuted().withAlpha (0.35f));
+                g.drawEllipse (item.bounds.reduced (0.5f), 1.0f);
+                context.icons->draw (g, "plus", item.bounds.withSizeKeepingCentre (12.0f, 12.0f), theme.textSecondary());
                 break;
         }
     }

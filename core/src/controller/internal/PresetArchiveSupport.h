@@ -61,6 +61,8 @@ struct ParsedFactoryPresetArchive
     std::vector<nlohmann::json> blends;
     std::vector<FactoryArchiveResourceEntry> resources;
     nlohmann::json presetFolders = nlohmann::json::array();
+    /// Models shared as Tone3000 references rather than files: {id, name, type, toneId, modelId, ...}.
+    nlohmann::json tone3000Resources = nlohmann::json::array();
     std::size_t tone3000ResourceCount = 0;
 };
 

@@ -10,7 +10,7 @@ TunerContent::TunerContent (NanoContext& contextIn)
     setComponentID ("tuner");
     muteToggle.setComponentID ("tuner-mute");
     referenceLabel.setJustificationType (juce::Justification::centred);
-    referenceLabel.setFont (context.font (15.0f));
+    referenceLabel.setFont (context.font (NanoTheme::textBody));
 
     muteToggle.onClick = [this] { context.commands.SetTunerLiveMode (! muteToggle.getToggleState()); };
     referenceDown.onClick = [this] {
@@ -53,9 +53,9 @@ void TunerContent::paint (juce::Graphics& g)
 
     // The note, with its neighbours either side.
     auto noteArea = area.removeFromTop (area.getHeight() * 0.55f);
-    const float noteSize = juce::jlimit (40.0f, 140.0f, noteArea.getHeight() * 0.8f);
+    const float noteSize = juce::jlimit (34.0f, 116.0f, noteArea.getHeight() * 0.66f);
     g.setColour (noteColour);
-    g.setFont (context.font (noteSize));
+    g.setFont (context.font (noteSize, FontWeight::semibold));
     g.drawText (reading.detected ? juce::String (reading.note) : juce::String ("-"), noteArea, juce::Justification::centred);
 
     g.setColour (theme.textMuted());
@@ -85,7 +85,7 @@ void TunerContent::paint (juce::Graphics& g)
     }
 
     g.setColour (theme.textSecondary());
-    g.setFont (context.font (16.0f));
+    g.setFont (context.font (NanoTheme::textBody, FontWeight::medium));
     const auto detail = reading.detected ? juce::String (reading.cents >= 0 ? "+" : "") + juce::String (reading.cents, 1) + " cents   "
                                                + juce::String (reading.frequency, 1) + " Hz"
                                          : juce::String ("Play a string");

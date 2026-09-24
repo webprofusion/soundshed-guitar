@@ -29,6 +29,9 @@ TransportBar::TransportBar (NanoContext& contextIn, ShellActions& actionsIn)
         addAndMakeVisible (*button);
     }
 
+    // The play triangle is solid, so it reads larger than the stroked icons beside it.
+    playButton.setIconSize (14.0f);
+    metronomeButton.setIconSize (12.0f);
     playButton.setTooltip ("Play the demo clip through this preset");
     repeatButton.setTooltip ("Repeat");
     bpmButton.setTooltip ("Metronome");
@@ -138,7 +141,7 @@ void TransportBar::refresh()
     metronomeButton.setToggleState (state.metronome.enabled, juce::dontSendNotification);
 
     muteButton.setToggleState (state.outputMuted, juce::dontSendNotification);
-    muteButton.setIconColour (state.outputMuted ? std::optional<juce::Colour> (juce::Colours::white) : std::nullopt);
+    muteButton.setIconColour (state.outputMuted ? std::optional<juce::Colour> (context.theme.error()) : std::nullopt);
 }
 
 void TransportBar::paint (juce::Graphics& g)

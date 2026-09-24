@@ -9,7 +9,7 @@ using namespace guitarfx::uiclient;
 
 juce::Rectangle<float> nodeCardBypassArea (juce::Rectangle<float> bounds, bool compact)
 {
-    const float size = compact ? 18.0f : 26.0f;
+    const float size = compact ? 18.0f : 24.0f;
     return { bounds.getRight() - size - 2.0f, bounds.getY() + 2.0f, size, size };
 }
 
@@ -32,7 +32,7 @@ void paintNodeCard (juce::Graphics& g, NanoContext& context, const guitarfx::Gra
     const bool bypassed = ! node.enabled && ! boundary;
     const float radius = look.compact ? 8.0f : 10.0f;
 
-    g.setColour (theme.card());
+    g.setColour (look.selected ? theme.card().overlaidWith (theme.selectedFill()) : theme.card());
     g.fillRoundedRectangle (bounds, radius);
 
     // The category's colour as a band along the top, as the web UI's node classes tint cards.
@@ -45,8 +45,9 @@ void paintNodeCard (juce::Graphics& g, NanoContext& context, const guitarfx::Gra
         g.fillRect (bounds.withHeight (look.compact ? 3.0f : 4.0f));
     }
 
-    g.setColour (look.selected ? theme.accent() : theme.border());
-    g.drawRoundedRectangle (bounds.reduced (0.5f), radius, look.selected ? 2.0f : 1.0f);
+    // The effect being edited: a fine accent outline over a lifted card.
+    g.setColour (look.selected ? theme.accent().withAlpha (0.85f) : theme.border());
+    g.drawRoundedRectangle (bounds.reduced (look.selected ? 0.75f : 0.5f), radius, look.selected ? 1.5f : 1.0f);
 
     const auto contentAlpha = bypassed ? 0.45f : 1.0f;
     auto area = bounds.reduced (look.compact ? 4.0f : 8.0f, look.compact ? 5.0f : 8.0f);
@@ -56,16 +57,17 @@ void paintNodeCard (juce::Graphics& g, NanoContext& context, const guitarfx::Gra
 
     if (look.compact)
     {
-        const float iconSize = juce::jmin (22.0f, area.getHeight() * 0.5f);
-        context.icons->draw (g, icon, area.removeFromTop (iconSize + 2.0f).withSizeKeepingCentre (iconSize, iconSize),
+        const float iconSize = juce::jmin (NanoTheme::iconSize, area.getHeight() * 0.45f);
+        area.removeFromTop (2.0f);
+        context.icons->draw (g, icon, area.removeFromTop (iconSize).withSizeKeepingCentre (iconSize, iconSize),
                              categoryColour.interpolatedWith (theme.text(), 0.35f).withMultipliedAlpha (contentAlpha));
-        g.setColour (theme.text().withMultipliedAlpha (contentAlpha));
-        g.setFont (context.font (11.5f));
-        g.drawFittedText (name, area.toNearestInt(), juce::Justification::centred, 1, 0.7f);
+        g.setColour ((look.selected ? theme.text() : theme.textSecondary()).withMultipliedAlpha (contentAlpha));
+        g.setFont (context.font (NanoTheme::textOverline, FontWeight::medium));
+        g.drawFittedText (name, area.reduced (2.0f, 0.0f).toNearestInt(), juce::Justification::centred, 1);
     }
     else
     {
-        const float iconSize = 26.0f;
+        const float iconSize = 20.0f;
         auto top = area.removeFromTop (iconSize);
         context.icons->draw (g, icon, top.removeFromLeft (iconSize),
                              categoryColour.interpolatedWith (theme.text(), 0.35f).withMultipliedAlpha (contentAlpha));
@@ -74,26 +76,26 @@ void paintNodeCard (juce::Graphics& g, NanoContext& context, const guitarfx::Gra
 
         if (! badge.empty())
         {
-            g.setFont (context.font (11.0f));
-            const auto badgeArea = top.removeFromLeft (30.0f).reduced (4.0f, 5.0f);
-            g.setColour (theme.textMuted().withAlpha (0.25f));
+            g.setFont (context.font (10.0f, FontWeight::semibold));
+            const auto badgeArea = top.removeFromLeft (32.0f).reduced (5.0f, 3.0f);
+            g.setColour (theme.textMuted().withAlpha (0.2f));
             g.fillRoundedRectangle (badgeArea, 3.0f);
             g.setColour (theme.textSecondary());
             g.drawText (juce::String (badge), badgeArea, juce::Justification::centred);
         }
 
-        area.removeFromTop (4.0f);
+        area.removeFromTop (6.0f);
+        auto typeLine = area.removeFromBottom (15.0f);
         g.setColour (theme.text().withMultipliedAlpha (contentAlpha));
-        g.setFont (context.font (14.0f));
-        g.drawFittedText (name, area.removeFromTop (area.getHeight() * 0.6f).toNearestInt(),
-                          juce::Justification::topLeft, 2, 0.8f);
+        g.setFont (context.font (NanoTheme::textLabel, FontWeight::medium));
+        g.drawFittedText (name, area.toNearestInt(), juce::Justification::topLeft, 2);
 
         const auto* type = state.FindEffectType (node.type);
         const auto typeName = boundary ? juce::String() : juce::String::fromUTF8 (type != nullptr ? type->name.c_str() : node.type.c_str());
 
         g.setColour (theme.textMuted().withMultipliedAlpha (contentAlpha));
-        g.setFont (context.font (11.5f));
-        g.drawFittedText (bypassed ? "OFF" : typeName, area.toNearestInt(), juce::Justification::bottomLeft, 1, 0.8f);
+        g.setFont (context.font (NanoTheme::textOverline));
+        g.drawFittedText (bypassed ? "Off" : typeName, typeLine.toNearestInt(), juce::Justification::bottomLeft, 1);
     }
 
     if (! boundary)

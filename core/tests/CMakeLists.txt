@@ -60,6 +60,7 @@ set(TEST_SOURCES
     PitchTrackerTests.cpp
     PluginPathUtilsTests.cpp
     PresetDSPLoadingTests.cpp
+    PresetArchiveInstallTests.cpp
     PresetEditCommandsTests.cpp
     PresetManagementWorkflowTests.cpp
     UiClientTests.cpp
@@ -225,6 +226,7 @@ target_link_libraries(UiClientTests PRIVATE SoundshedUiClient)
 
 # Builds real (deflated) zips to preview, as Tone3000 serves them; the core links miniz privately.
 target_link_libraries(Tone3000ResourceWorkflowTests PRIVATE guitarfx_miniz)
+target_link_libraries(PresetArchiveInstallTests PRIVATE guitarfx_miniz)
 
 # The default-settings audio snapshot tools/audio-ab compares between versions. Built, not registered.
 include(AudioSnapshot.cmake)

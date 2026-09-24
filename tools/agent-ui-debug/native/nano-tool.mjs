@@ -20,7 +20,8 @@
  *
  * Ids are component ids, or targets a view draws itself (NamedTargets): "node:amp_0",
  * "bypass:amp_0", "add:amp_0" on the chain, "fx:<effect name>" in the effect picker,
- * "preset:<name>" and "slot:<n>" in the Rigs lists.
+ * "preset:<name>" and "slot:<n>" in the preset and setlist lists, "tone:<title>", "installed:<title>"
+ * and "action:<text>" on the Tones page.
  *   node tools/agent-ui-debug/native/nano-tool.mjs 9444 send '{"type":"selectScene","sceneId":"scene-2"}'
  *   node tools/agent-ui-debug/native/nano-tool.mjs 9444 raw '{"cmd":"tree"}'
  */

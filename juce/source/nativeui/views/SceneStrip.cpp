@@ -8,6 +8,7 @@ SceneStrip::SceneStrip (NanoContext& contextIn, ShellActions& actionsIn)
     setComponentID ("scene-strip");
     addButton.setTooltip ("Add a scene");
     addButton.setFlat (true);
+    addButton.setIconSize (NanoTheme::iconSmall);
     addButton.onClick = [this] { context.commands.AddScene(); };
     addAndMakeVisible (addButton);
     presetSubscription = context.client.Subscribe (guitarfx::uiclient::Topic::ActivePreset, [this] { refresh(); });
@@ -39,6 +40,7 @@ void SceneStrip::refresh()
             auto tab = std::make_unique<IconButton> (context, juce::String ("scene:" + scene.id), juce::String(),
                                                      juce::String::fromUTF8 (scene.title.c_str()));
             tab->setTooltip (juce::String::fromUTF8 (scene.title.c_str()));
+            tab->setAccentWhenOn (true); // the playing scene reads from a pedalboard away
             const auto id = scene.id;
             tab->onClick = [this, id] { context.commands.SelectScene (id); };
             tab->onLongPress = [this, id, raw = tab.get()] { showSceneMenu (id, raw); };
@@ -81,16 +83,18 @@ void SceneStrip::showSceneMenu (const std::string& sceneId, juce::Component* tar
 
 void SceneStrip::resized()
 {
+    // The scenes, then "+" beside the last of them rather than stranded at the far end.
     auto area = getLocalBounds().reduced (4, 2);
-    const int addWidth = juce::jmin (area.getHeight() + 8, 44);
-    addButton.setBounds (area.removeFromRight (addWidth));
+    const int addWidth = juce::jmin (area.getHeight(), 40);
 
-    if (tabs.empty())
-        return;
+    if (! tabs.empty())
+    {
+        const int width = juce::jlimit (56, 128, (area.getWidth() - addWidth) / (int) tabs.size());
 
-    const int width = juce::jlimit (56, 140, area.getWidth() / (int) tabs.size());
+        for (auto& tab : tabs)
+            tab->setBounds (area.removeFromLeft (width).reduced (2, 0));
+    }
 
-    for (auto& tab : tabs)
-        tab->setBounds (area.removeFromLeft (width).reduced (2, 0));
+    addButton.setBounds (area.removeFromLeft (addWidth));
 }
 } // namespace soundshed::nano

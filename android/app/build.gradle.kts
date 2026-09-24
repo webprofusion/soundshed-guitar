@@ -23,6 +23,9 @@ plugins {
 val juceModules = rootProject.file("../juce/JUCE/modules")
 val uiSrcDir = rootProject.file("../core/ui")
 
+/** Nano's fonts: static cuts of the web UI's Inter (tools/gen-nano-fonts.mjs). */
+val nanoFontsDir = rootProject.file("../juce/source/nativeui/theme/fonts")
+
 /** ABIs to build, from the ssg.abis property (see gradle.properties). */
 val targetAbis: List<String> =
     (project.findProperty("ssg.abis") as String? ?: "arm64-v8a")
@@ -68,6 +71,11 @@ android {
 
         // The launcher name, so the two installs can be told apart side by side.
         manifestPlaceholders["appLabel"] = if (nanoProduct) "Soundshed Guitar Nano" else "@string/app_name"
+
+        // Nano lays itself out for portrait as well (a tab bar and slider rows), so it turns
+        // with the phone, following the user's auto-rotate setting. Soundshed Guitar's web UI
+        // is built for landscape and stays there.
+        manifestPlaceholders["screenOrientation"] = if (nanoProduct) "user" else "landscape"
 
         externalNativeBuild {
             cmake {
@@ -180,7 +188,7 @@ android {
 /**
  * Subdirectories of core/ui that ship with the app. Nano has no web UI: it takes what the
  * engine and the native views read (as juce/cmake/SoundshedNano.cmake copies on desktop),
- * plus the Inter fonts, staged as ui/fonts.
+ * plus its static Inter fonts, staged as ui/fonts.
  */
 val uiAssetDirs = if (nanoProduct) {
     listOf("images", "data", "assets", "metronome", "presets", "demo")
@@ -203,6 +211,10 @@ abstract class StageUiAssets @Inject constructor(
      */
     @get:Internal
     abstract val uiSource: DirectoryProperty
+
+    /** Nano's fonts (not the web UI's variable ones); covered by [sourceFiles]. */
+    @get:Internal
+    abstract val fontsSource: DirectoryProperty
 
     /** The subset of core/ui that is packaged — the real up-to-date inputs. */
     @get:InputFiles
@@ -236,7 +248,7 @@ abstract class StageUiAssets @Inject constructor(
             if (web) {
                 from(src) { include("index.html") }
             } else {
-                from(File(src, "css/fonts")) { into("fonts") }
+                from(fontsSource.get().asFile) { into("fonts") }
             }
             subdirectories.get().forEach { dir ->
                 from(File(src, dir)) { into(dir) }
@@ -319,11 +331,12 @@ val stageUiAssets = tasks.register<StageUiAssets>("stageUiAssets") {
         dependsOn(buildUiBundle)
     }
     uiSource.set(uiSrcDir)
+    fontsSource.set(nanoFontsDir)
     subdirectories.set(uiAssetDirs)
     webUi.set(!nanoProduct)
     // Mirrors GUITARFX_ENABLE_JAM, which defaults to ON in juce/CMakeLists.txt.
     jamEnabled.set((project.findProperty("ssg.jam") as String? ?: "true").toBoolean())
-    sourceFiles.from(File(uiSrcDir, if (nanoProduct) "css/fonts" else "index.html"))
+    sourceFiles.from(if (nanoProduct) nanoFontsDir else File(uiSrcDir, "index.html"))
     uiAssetDirs.forEach { sourceFiles.from(File(uiSrcDir, it)) }
     // Version-derived so an upgrade forces a re-extract on device.
     stamp.set("$appVersionName-${uiAssetDirs.size}")

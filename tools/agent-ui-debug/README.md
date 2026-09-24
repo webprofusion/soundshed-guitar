@@ -123,7 +123,10 @@ The script's header lists every command (`type`, `combo`, `slider`, `theme`, `se
 
 - **Ids** are component ids, plus the targets a view paints itself: `node:<id>`,
   `bypass:<id>` and `add:<id>` on the chain, `fx:<effect name>` in the effect picker,
-  `preset:<name>` and `slot:<n>` in the Rigs lists.
+  `preset:<name>` and `slot:<n>` in the preset and setlist lists, and on the Tones page
+  `tone:<title>`, `installed:<title>` and `action:<text>` ("Load more"). The Tones page talks to
+  the real tone sharing service and installs into the real profile: back the profile up first,
+  and remove what a test installs from its Installed tab.
 - **Menus:** JUCE closes a popup menu as soon as the app is not in front, which it never is
   while a terminal drives it. `menu` falls back to the copy `NanoContext::showMenu` keeps of
   the last menu, so open it (`click`, `longpress`) and then choose from it.

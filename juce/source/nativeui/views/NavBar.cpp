@@ -9,8 +9,8 @@ NavBar::NavBar (NanoContext& contextIn, ShellActions& actions) : context (contex
 
     const std::array<std::array<const char*, 3>, 4> entries { { { "nav-chain", "link", "Chain" },
                                                                 { "nav-effect", "pedal", "Effect" },
-                                                                { "nav-rigs", "folder", "Rigs" },
-                                                                { "nav-settings", "settings", "Settings" } } };
+                                                                { "nav-tones", "note", "Tones" },
+                                                                { "nav-settings", "gear", "Settings" } } };
 
     for (std::size_t i = 0; i < entries.size(); ++i)
     {
@@ -41,6 +41,8 @@ void NavBar::setCurrent (Page page)
 
     for (std::size_t i = 0; i < pages.size(); ++i)
         buttons[i]->setToggleState (pages[i] == shown, juce::dontSendNotification);
+
+    repaint();
 }
 
 void NavBar::paint (juce::Graphics& g)
@@ -49,6 +51,20 @@ void NavBar::paint (juce::Graphics& g)
     g.fillRect (getLocalBounds());
     g.setColour (context.theme.border());
     g.fillRect (vertical ? getLocalBounds().removeFromRight (1) : getLocalBounds().removeFromTop (1));
+
+    // The current page: a short accent mark at the rail's edge (the tab bar's top), so the
+    // button itself can stay a quiet neutral.
+    for (const auto& button : buttons)
+    {
+        if (! button->getToggleState())
+            continue;
+
+        const auto b = button->getBounds().toFloat();
+        const auto mark = vertical ? juce::Rectangle<float> (0.0f, b.getCentreY() - 12.0f, 3.0f, 24.0f)
+                                   : juce::Rectangle<float> (b.getCentreX() - 14.0f, 1.0f, 28.0f, 3.0f);
+        g.setColour (context.theme.accent());
+        g.fillRoundedRectangle (mark, 1.5f);
+    }
 }
 
 void NavBar::resized()
@@ -57,7 +73,7 @@ void NavBar::resized()
 
     if (vertical)
     {
-        const int height = juce::jmin (72, area.getHeight() / (int) buttons.size());
+        const int height = juce::jmin (64, area.getHeight() / (int) buttons.size());
 
         for (auto& button : buttons)
             button->setBounds (area.removeFromTop (height).reduced (0, 2));

@@ -12,7 +12,8 @@
 namespace soundshed::nano
 {
 /// The top-level navigation: a rail down the left in landscape, a tab bar along the bottom in
-/// portrait (the web UI's compact rail/stack). Chain, Effect, Rigs, Settings.
+/// portrait (the web UI's compact rail/stack). Chain, Effect, Tones, Settings. The preset library
+/// has no tab: the preset's name in the top bar opens it.
 class NavBar final : public juce::Component
 {
 public:
@@ -28,6 +29,6 @@ private:
     NanoContext& context;
     bool vertical = true;
     std::array<std::unique_ptr<IconButton>, 4> buttons;
-    std::array<Page, 4> pages { Page::Chain, Page::Effect, Page::Presets, Page::Settings };
+    std::array<Page, 4> pages { Page::Chain, Page::Effect, Page::Tones, Page::Settings };
 };
 } // namespace soundshed::nano

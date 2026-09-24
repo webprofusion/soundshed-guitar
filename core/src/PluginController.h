@@ -431,6 +431,9 @@ class PluginController
     void HandleSaveBlendArchiveRequest(const nlohmann::json& payload);
     void HandleSavePresetArchiveRequest(const nlohmann::json& payload);
     void HandleSaveLibraryArchiveRequest(const nlohmann::json& payload);
+    // controller/PluginControllerArchiveInstall.cpp: tones downloaded from tone sharing
+    void HandleInstallPresetArchivesRequest(const nlohmann::json& payload);
+    void HandleDeleteInstalledPresetArchiveRequest(const nlohmann::json& payload);
     void HandleSaveEffectLayoutRequest(const nlohmann::json& payload);
     void HandleExportEffectLayoutRequest(const nlohmann::json& payload);
     void HandleBrowseLayoutImageRequest(const nlohmann::json& payload);
@@ -783,6 +786,14 @@ class PluginController
     void EnsureResourceUsageDiskIndex() const;
     void InvalidateResourceUsageIndex();
     void AppendUserLibraryResource(const LibraryResource& resource);
+    /// Writes a model or IR into the library's content folder and adds it to the user library,
+    /// for importRemoteResource and archive installs alike. Does not broadcast. On failure
+    /// returns nullopt with `error` set.
+    [[nodiscard]] std::optional<LibraryResource> ImportResourceFile(LibraryResource resource, const std::string& provider,
+                                                                    const std::string& subfolder,
+                                                                    const std::string& fileName,
+                                                                    const std::vector<std::uint8_t>& bytes,
+                                                                    std::string& error);
     void RemoveUserLibraryResource(const std::string& type, const std::string& id);
     void EnsureBasicGraph();
     bool ExtractFirstResourceFromZip(const std::vector<std::uint8_t>& zipData, const std::string& resourceType,

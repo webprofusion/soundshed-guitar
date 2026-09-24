@@ -14,12 +14,15 @@
 
 namespace soundshed::nano
 {
+class ToneSharingService;
+
 /// What every Nano view needs: the engine client and its commands, the theme, the icons and
 /// the effect presentation table. Owned by the editor and outlives every view.
 class NanoContext
 {
 public:
     explicit NanoContext (PluginProcessorAdapter& processor);
+    ~NanoContext();
 
     PluginProcessorAdapter& processor;
     guitarfx::uiclient::UiClient client;
@@ -30,12 +33,17 @@ public:
     std::unique_ptr<NanoLookAndFeel> lookAndFeel;
     std::unique_ptr<IconCache> icons;
 
+    /// Soundshed's tone sharing service (the Tones page). Declared after the client, which it
+    /// listens to, so it goes first.
+    std::unique_ptr<ToneSharingService> tones;
+
     /// Whether the primary input is touch (phones, tablets, touch screens): bigger targets.
     bool touch = false;
 
     [[nodiscard]] const guitarfx::uiclient::ClientState& state() const { return client.State(); }
 
-    [[nodiscard]] juce::Font font (float height, bool bold = false) const { return lookAndFeel->font (height, bold); }
+    /// Inter at an em size (as CSS gives it) and weight.
+    [[nodiscard]] juce::Font font (float size, FontWeight weight = FontWeight::regular) const { return lookAndFeel->font (size, weight); }
 
     /// A monotonic clock in seconds, for leases, tap tempo and animations.
     [[nodiscard]] static double now();

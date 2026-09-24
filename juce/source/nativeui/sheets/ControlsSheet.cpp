@@ -135,7 +135,7 @@ ControlsContent::Section& ControlsContent::addSection (const juce::String& title
     auto section = std::make_unique<Section>();
     section->heading = std::make_unique<juce::Label>();
     section->heading->setText (title.toUpperCase(), juce::dontSendNotification);
-    section->heading->setFont (context.font (12.0f));
+    section->heading->setFont (context.font (NanoTheme::textOverline, FontWeight::semibold).withExtraKerningFactor (0.06f));
     section->heading->setColour (juce::Label::textColourId, context.theme.textMuted());
     content.addAndMakeVisible (*section->heading);
     sections.push_back (std::move (section));

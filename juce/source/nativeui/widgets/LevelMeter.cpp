@@ -46,7 +46,7 @@ void LevelMeter::paint (juce::Graphics& g)
     if (label.isNotEmpty())
     {
         g.setColour (theme.textMuted());
-        g.setFont (context.font (11.0f));
+        g.setFont (context.font (10.0f, FontWeight::semibold));
 
         if (vertical)
             g.drawText (label, bounds.removeFromBottom (14.0f), juce::Justification::centred);

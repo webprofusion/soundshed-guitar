@@ -27,9 +27,11 @@ public:
 
         if (isMouseOverOrDragging())
         {
-            g.setColour (theme.text().withAlpha (0.06f));
+            g.setColour (theme.hoverFill());
             g.fillRoundedRectangle (bounds, (float) NanoTheme::radius);
         }
+
+        bounds.reduce (6.0f, 0.0f);
 
         const auto name = state.activePreset ? juce::String::fromUTF8 (state.activePreset->name.c_str()) : juce::String ("No preset");
         juce::String subtitle;
@@ -43,26 +45,30 @@ public:
                     subtitle << (subtitle.isEmpty() ? juce::String() : juce::String::fromUTF8 ("  \xc2\xb7  ")) << juce::String::fromUTF8 (scene->title.c_str());
         }
 
-        const bool showSubtitle = subtitle.isNotEmpty() && bounds.getHeight() >= 34.0f;
-        auto nameArea = showSubtitle ? bounds.removeFromTop (bounds.getHeight() * 0.58f) : bounds;
+        const bool showSubtitle = subtitle.isNotEmpty() && bounds.getHeight() >= 36.0f;
+        auto nameArea = showSubtitle ? bounds.removeFromTop (bounds.getHeight() * 0.56f) : bounds;
+        const auto nameFont = context.font (juce::jmin (NanoTheme::textTitle, nameArea.getHeight() * 0.72f), FontWeight::semibold);
 
         if (state.activePresetDirty)
         {
             // The web UI's unsaved-changes dot.
-            const auto dot = nameArea.removeFromRight (12.0f).withSizeKeepingCentre (8.0f, 8.0f);
+            // After the name, where the eye is, not at the far end of the bar.
+            const float nameWidth = juce::jmin (nameArea.getWidth() - 14.0f, juce::GlyphArrangement::getStringWidth (nameFont, name));
+            const auto dot = juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ nameArea.getX() + nameWidth + 9.0f, nameArea.getCentreY() + 1.0f });
+            nameArea.removeFromRight (14.0f);
             g.setColour (theme.accent());
             g.fillEllipse (dot);
         }
 
         g.setColour (theme.text());
-        g.setFont (context.font (juce::jmin (19.0f, nameArea.getHeight() * 0.72f)));
-        g.drawFittedText (name, nameArea.toNearestInt(), juce::Justification::centredLeft, 1, 0.75f);
+        g.setFont (nameFont);
+        g.drawFittedText (name, nameArea.toNearestInt(), showSubtitle ? juce::Justification::bottomLeft : juce::Justification::centredLeft, 1);
 
         if (showSubtitle)
         {
             g.setColour (theme.textMuted());
-            g.setFont (context.font (juce::jmin (13.0f, bounds.getHeight() * 0.8f)));
-            g.drawFittedText (subtitle, bounds.toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
+            g.setFont (context.font (NanoTheme::textCaption));
+            g.drawFittedText (subtitle, bounds.withTrimmedTop (2.0f).toNearestInt(), juce::Justification::topLeft, 1);
         }
     }
 
@@ -88,7 +94,7 @@ TopBar::TopBar (NanoContext& contextIn)
       rigsChip (contextIn, "rigs-chip", {}, "Rigs"),
       inputMeter (contextIn, "IN"),
       outputMeter (contextIn, "OUT"),
-      tunerButton (contextIn, "tuner-button", "note"),
+      tunerButton (contextIn, "tuner-button", "tuning-fork"),
       moreButton (contextIn, "more-button", {}, juce::String::fromUTF8 ("\xe2\x80\xa2\xe2\x80\xa2\xe2\x80\xa2"))
 {
     for (auto* button : { &prevButton, &nextButton, &favouriteButton, &tunerButton, &moreButton })

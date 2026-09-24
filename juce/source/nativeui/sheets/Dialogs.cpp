@@ -8,9 +8,11 @@ PromptContent::PromptContent (NanoContext& contextIn, const juce::String& initia
 {
     editor.setComponentID ("prompt-text");
     editor.setText (initial, false);
-    editor.setFont (context.font (17.0f));
+    editor.setFont (context.font (NanoTheme::textHeading));
+    editor.setIndents (12, 0);
+    editor.setJustification (juce::Justification::centredLeft);
     editor.setSelectAllWhenFocused (true);
-    okButton.setToggleState (true, juce::dontSendNotification);
+    okButton.setPrimary (true);
     okButton.setClickingTogglesState (false);
 
     const auto accept = [this, onOk, onDone] {
@@ -57,7 +59,7 @@ ConfirmContent::ConfirmContent (NanoContext& contextIn, const juce::String& mess
       confirmButton (contextIn, "confirm-ok", {}, confirmText),
       cancelButton (contextIn, "confirm-cancel", {}, "Cancel")
 {
-    confirmButton.setToggleState (true, juce::dontSendNotification);
+    confirmButton.setPrimary (true);
     confirmButton.setClickingTogglesState (false);
     confirmButton.onClick = [onConfirm, onDone] {
         onDone();
@@ -70,8 +72,8 @@ ConfirmContent::ConfirmContent (NanoContext& contextIn, const juce::String& mess
 
 void ConfirmContent::paint (juce::Graphics& g)
 {
-    g.setColour (context.theme.text());
-    g.setFont (context.font (15.0f));
+    g.setColour (context.theme.textSecondary());
+    g.setFont (context.font (NanoTheme::textBody));
     g.drawFittedText (message, getLocalBounds().withTrimmedBottom (context.touch ? 64 : 52), juce::Justification::topLeft, 5);
 }
 

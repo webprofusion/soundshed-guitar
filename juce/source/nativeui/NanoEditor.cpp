@@ -36,6 +36,7 @@ NanoEditor::NanoEditor (PluginProcessorAdapter& processor)
 
     shell = std::make_unique<NanoShell> (*context);
     addAndMakeVisible (*shell);
+    shell->sendLookAndFeelChange(); // built before it had this editor's look to inherit
     shell->onScaleChanged = [this] { resized(); };
 
     if (const auto port = juce::SystemStats::getEnvironmentVariable ("SOUNDSHED_NANO_DEBUG_PORT", {}).getIntValue(); port > 0)

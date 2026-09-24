@@ -36,7 +36,7 @@
             android:exported="true"
             android:label="${appLabel}"
             android:launchMode="singleTask"
-            android:screenOrientation="landscape"
+            android:screenOrientation="${screenOrientation}"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
             android:windowSoftInputMode="adjustResize">
 

@@ -39,24 +39,102 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     const std::string resourceType = payload.value("resourceType", "");
     const std::string resourceId = payload.value("resourceId", "");
     const std::string requestId = payload.value("requestId", "");
-    const std::string name = payload.value("name", resourceId);
-    const std::string description = payload.value("description", "");
-    const std::string category = payload.value("category", "");
-    const std::string provider = payload.value("provider", "remote");
-    const std::string subfolder = payload.value("subfolder", "");
     const std::string data = payload.value("data", "");
-    const std::string fileName = payload.value("fileName", "");
     const nlohmann::json metadataPayload = payload.value("metadata", nlohmann::json::object());
     const nlohmann::json tagsPayload = payload.value("tags", nlohmann::json::array());
 
+    const auto fail = [&](const std::string& detail) {
+        ReportErrorToUI("Import failed", detail);
+        SendMessageToUI(nlohmann::json{
+            {"type", "resourceImportFailed"}, {"requestId", requestId}, {"message", "Import failed"}, {"detail", detail}}
+                            .dump());
+    };
+
     if (resourceType.empty() || resourceId.empty() || data.empty())
     {
-        ReportErrorToUI("Import failed", "Missing resource metadata");
-        SendMessageToUI(nlohmann::json{
-            {"type", "resourceImportFailed"}, {"requestId", requestId}, {"message", "Import failed"}, {"detail", "Missing resource metadata"}}
-                            .dump());
+        fail("Missing resource metadata");
         return;
     }
+
+    const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
+
+    if (bytes.empty())
+    {
+        fail("Invalid base64 payload");
+        return;
+    }
+
+    LibraryResource resource;
+    resource.type = resourceType;
+    resource.id = resourceId;
+    resource.name = payload.value("name", resourceId);
+    resource.category = payload.value("category", "");
+    resource.description = payload.value("description", "");
+
+    if (metadataPayload.is_object())
+    {
+        for (const auto& entry : metadataPayload.items())
+        {
+            const auto& value = entry.value();
+
+            if (value.is_string())
+            {
+                resource.metadata[entry.key()] = value.get<std::string>();
+            }
+            else if (value.is_number())
+            {
+                resource.metadata[entry.key()] = value.dump();
+            }
+            else if (value.is_boolean())
+            {
+                resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
+            }
+        }
+    }
+
+    if (tagsPayload.is_array())
+    {
+        for (const auto& tagValue : tagsPayload)
+        {
+            if (tagValue.is_string() && !tagValue.get<std::string>().empty())
+            {
+                resource.tags.push_back(tagValue.get<std::string>());
+            }
+        }
+    }
+
+    std::string error;
+    const auto imported = ImportResourceFile(std::move(resource), payload.value("provider", "remote"),
+                                             payload.value("subfolder", ""), payload.value("fileName", ""), bytes, error);
+
+    if (!imported)
+    {
+        fail(error);
+        return;
+    }
+
+    BroadcastState();
+    // As local saves and deletes do: other instances reload the library on it.
+    TouchSharedSyncState({"resourceLibrary"});
+
+    nlohmann::json msg;
+    msg["type"] = "resourceImported";
+    msg["requestId"] = requestId;
+    msg["resourceType"] = imported->type;
+    msg["id"] = imported->id;
+    msg["name"] = imported->name;
+    msg["filePath"] = util::PathToUtf8(imported->filePath);
+    SendMessageToUI(msg.dump());
+}
+
+std::optional<LibraryResource> PluginController::ImportResourceFile(LibraryResource resource, const std::string& provider,
+                                                                    const std::string& subfolder,
+                                                                    const std::string& fileName,
+                                                                    const std::vector<std::uint8_t>& bytes,
+                                                                    std::string& error)
+{
+    const std::string resourceType = resource.type;
+    const std::string resourceId = resource.id;
 
     const auto settingsDir = mFileSystem.ResolveSettingsDirectory();
     const auto sanitizedProvider = util::SanitizePathSegment(provider, true);
@@ -76,17 +154,6 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
     if (resolvedName.find('.') == std::string::npos)
     {
         resolvedName += resourceType == "ir" ? ".wav" : ".nam";
-    }
-
-    const std::vector<std::uint8_t> bytes = util::DecodeBase64(data);
-
-    if (bytes.empty())
-    {
-        ReportErrorToUI("Import failed", "Invalid base64 payload");
-        SendMessageToUI(nlohmann::json{
-            {"type", "resourceImportFailed"}, {"requestId", requestId}, {"message", "Import failed"}, {"detail", "Invalid base64 payload"}}
-                            .dump());
-        return;
     }
 
     // Hashed here whatever the payload says: a caller's `hash` can be another algorithm (the
@@ -110,14 +177,14 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
         const std::string candidateKey = util::PathToUtf8(candidate.lexically_normal());
         bool ownedByThisResource = false;
 
-        for (const auto& resource : mResourceLibrary.GetAllResources())
+        for (const auto& existing : mResourceLibrary.GetAllResources())
         {
-            if (resource.filePath.empty() || util::PathToUtf8(resource.filePath.lexically_normal()) != candidateKey)
+            if (existing.filePath.empty() || util::PathToUtf8(existing.filePath.lexically_normal()) != candidateKey)
             {
                 continue;
             }
 
-            if (resource.type != resourceType || resource.id != resourceId)
+            if (existing.type != resourceType || existing.id != resourceId)
             {
                 return false;
             }
@@ -151,60 +218,12 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
 
     if (!WriteFile(targetPath, bytes))
     {
-        ReportErrorToUI("Import failed", "Failed to write file");
-        SendMessageToUI(nlohmann::json{
-            {"type", "resourceImportFailed"}, {"requestId", requestId}, {"message", "Import failed"}, {"detail", "Failed to write file"}}
-                            .dump());
-        return;
+        error = "Failed to write file";
+        return std::nullopt;
     }
 
-    LibraryResource resource;
-    resource.type = resourceType;
-    resource.id = resourceId;
-    resource.name = name;
-    resource.category = category;
-    resource.description = description;
     resource.filePath = targetPath;
     resource.hash = contentHash;
-
-    if (metadataPayload.is_object())
-    {
-        for (const auto& entry : metadataPayload.items())
-        {
-            const auto& value = entry.value();
-
-            if (value.is_string())
-            {
-                resource.metadata[entry.key()] = value.get<std::string>();
-            }
-            else if (value.is_number())
-            {
-                resource.metadata[entry.key()] = value.dump();
-            }
-            else if (value.is_boolean())
-            {
-                resource.metadata[entry.key()] = value.get<bool>() ? "true" : "false";
-            }
-        }
-    }
-
-    if (tagsPayload.is_array())
-    {
-        for (const auto& tagValue : tagsPayload)
-        {
-            if (!tagValue.is_string())
-            {
-                continue;
-            }
-
-            const auto tag = tagValue.get<std::string>();
-
-            if (!tag.empty())
-            {
-                resource.tags.push_back(tag);
-            }
-        }
-    }
 
     if (resourceType == "nam")
     {
@@ -215,20 +234,8 @@ void PluginController::HandleImportRemoteResourceRequest(const nlohmann::json& p
 
     mResourceLibrary.AddResource(resource);
     AppendUserLibraryResource(resource);
-    BroadcastState();
-    // As local saves and deletes do: other instances reload the library on it.
-    TouchSharedSyncState({"resourceLibrary"});
-
-    nlohmann::json msg;
-    msg["type"] = "resourceImported";
-    msg["requestId"] = requestId;
-    msg["resourceType"] = resourceType;
-    msg["id"] = resourceId;
-    msg["name"] = name;
-    msg["filePath"] = util::PathToUtf8(targetPath);
-    SendMessageToUI(msg.dump());
-    AppendSessionLog("Imported resource " + resourceType + ":" + resourceId + " (" + util::PathToUtf8(targetPath) +
-                     ")");
+    AppendSessionLog("Imported resource " + resourceType + ":" + resourceId + " (" + util::PathToUtf8(targetPath) + ")");
+    return resource;
 }
 
 std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const nlohmann::json& payload,

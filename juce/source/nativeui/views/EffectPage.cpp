@@ -94,18 +94,19 @@ public:
 
         const bool bypassed = ! node->enabled && ! IsBoundaryNode (*node);
         auto area = bounds.reduced (16.0f, 12.0f).withTrimmedRight (22.0f);
-        const float iconSize = juce::jlimit (28.0f, 72.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.4f);
+        const float iconSize = juce::jlimit (24.0f, 48.0f, juce::jmin (area.getWidth(), area.getHeight()) * 0.3f);
+        area.removeFromTop (juce::jmax (0.0f, area.getHeight() * 0.08f));
         const auto icon = IsBoundaryNode (*node) ? juce::String (node->id == kInputNodeId ? "guitar" : "output")
                                                  : juce::String (context.presentation.IconFor (node->type, category));
         const auto onDark = juce::Colours::white.withAlpha (bypassed ? 0.45f : 0.92f);
         context.icons->draw (g, icon, area.removeFromTop (iconSize).withSizeKeepingCentre (iconSize, iconSize), onDark);
 
-        area.removeFromTop (8.0f);
+        area.removeFromTop (10.0f);
         g.setColour (onDark);
-        g.setFont (context.font (juce::jmin (20.0f, area.getHeight() * 0.3f)));
+        g.setFont (context.font (juce::jmin (NanoTheme::textHeading, area.getHeight() * 0.3f), FontWeight::semibold));
         g.drawFittedText (juce::String::fromUTF8 (NodeDisplayName (state, *node).c_str()),
                           area.removeFromTop (juce::jmin (48.0f, area.getHeight() * 0.5f)).toNearestInt(),
-                          juce::Justification::centredTop, 2, 0.8f);
+                          juce::Justification::centredTop, 2);
 
         const auto* type = state.FindEffectType (node->type);
         juce::String detail = bypassed ? "Bypassed" : juce::String::fromUTF8 (type != nullptr ? type->name.c_str() : "");
@@ -113,8 +114,8 @@ public:
         if (processingUs >= 0.0)
             detail << (detail.isEmpty() ? juce::String() : juce::String::fromUTF8 ("  \xc2\xb7  ")) << juce::String (processingUs, 0) << juce::String::fromUTF8 (" \xc2\xb5s");
 
-        g.setColour (juce::Colours::white.withAlpha (0.65f));
-        g.setFont (context.font (12.5f));
+        g.setColour (juce::Colours::white.withAlpha (0.6f));
+        g.setFont (context.font (NanoTheme::textCaption));
         g.drawFittedText (detail, area.toNearestInt(), juce::Justification::centredTop, 1);
     }
 
@@ -147,7 +148,7 @@ public:
             {
                 auto heading = std::make_unique<juce::Label>();
                 heading->setText (juce::String::fromUTF8 (param.group.c_str()).toUpperCase(), juce::dontSendNotification);
-                heading->setFont (context.font (11.5f));
+                heading->setFont (context.font (NanoTheme::textOverline, FontWeight::semibold).withExtraKerningFactor (0.06f));
                 heading->setColour (juce::Label::textColourId, context.theme.textMuted());
                 addAndMakeVisible (*heading);
                 order.push_back ({ heading.get(), true });
@@ -191,7 +192,7 @@ public:
         }
 
         // Knobs flow in rows; a group heading starts a new row.
-        const int cellWidth = context.touch ? 104 : 92;
+        const int cellWidth = context.touch ? 84 : 74;
         const int columns = juce::jmax (1, (width - 8) / cellWidth);
         const int cell = (width - 8) / columns;
         int column = 0;
@@ -257,13 +258,15 @@ EffectPage::EffectPage (NanoContext& contextIn, ShellActions& actionsIn)
       controls (std::make_unique<Controls> (contextIn))
 {
     setComponentID ("effect-page");
-    titleLabel.setFont (context.font (18.0f));
+    titleLabel.setFont (context.font (16.0f, FontWeight::semibold));
     titleLabel.setComponentID ("effect-title");
-    subtitleLabel.setFont (context.font (12.5f));
+    subtitleLabel.setFont (context.font (NanoTheme::textCaption));
     subtitleLabel.setColour (juce::Label::textColourId, context.theme.textMuted());
     bypassSwitch.setComponentID ("effect-bypass");
     bypassSwitch.setTooltip ("On / bypassed");
     menuButton.setFlat (true);
+    mainTab.setFlat (true);
+    advancedTab.setFlat (true);
 
     for (auto* component : std::initializer_list<juce::Component*> { &titleLabel, &subtitleLabel, &bypassSwitch, &presetsButton,
                                                                       &menuButton, &mainTab, &advancedTab, visual.get(), &controlsViewport })

@@ -12,7 +12,8 @@ enum class Page
 {
     Chain,    // the whole signal chain, for structural edits
     Effect,   // the selected effect's controls and visual
-    Presets,  // the preset library and setlists ("Rigs")
+    Presets,  // the preset library and setlists, opened from the preset's name
+    Tones,    // the community's presets and packs (tone sharing)
     Settings, // appearance, audio, engine
     Device    // audio and MIDI devices (standalone), under Settings
 };

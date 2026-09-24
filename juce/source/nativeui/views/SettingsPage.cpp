@@ -73,8 +73,8 @@ SettingsColumn::SettingsColumn (NanoContext& contextIn) : context (contextIn)
 
 void SettingsColumn::addHeading (const juce::String& heading)
 {
-    auto label = std::make_unique<juce::Label> (juce::String(), heading);
-    label->setFont (context.font (13.0f, true));
+    auto label = std::make_unique<juce::Label> (juce::String(), heading.toUpperCase());
+    label->setFont (context.font (NanoTheme::textOverline, FontWeight::semibold).withExtraKerningFactor (0.06f));
     label->setColour (juce::Label::textColourId, context.theme.textMuted());
     content.addAndMakeVisible (*label);
     rows.push_back ({ std::move (label), nullptr, 0, true });
@@ -87,7 +87,7 @@ void SettingsColumn::addRow (const juce::String& labelText, juce::Component& con
     if (labelText.isNotEmpty())
     {
         label = std::make_unique<juce::Label> (juce::String(), labelText);
-        label->setFont (context.font (14.0f));
+        label->setFont (context.font (NanoTheme::textBody));
         label->setColour (juce::Label::textColourId, context.theme.text());
         content.addAndMakeVisible (*label);
     }
@@ -99,7 +99,7 @@ void SettingsColumn::addRow (const juce::String& labelText, juce::Component& con
 void SettingsColumn::addNote (const juce::String& note)
 {
     auto label = std::make_unique<juce::Label> (juce::String(), note);
-    label->setFont (context.font (12.5f));
+    label->setFont (context.font (NanoTheme::textCaption));
     label->setColour (juce::Label::textColourId, context.theme.textMuted());
     label->setJustificationType (juce::Justification::topLeft);
     content.addAndMakeVisible (*label);
@@ -144,10 +144,10 @@ void SettingsColumn::relayout()
         if (row.control == nullptr)
         {
             // A note wraps over as many lines as it needs.
-            const auto font = context.font (12.5f);
+            const auto font = context.font (NanoTheme::textCaption);
             const int lines = juce::jmax (1, (int) std::ceil (juce::GlyphArrangement::getStringWidth (font, row.label->getText())
                                                           / juce::jmax (1.0f, (float) inner.getWidth() - 8.0f)));
-            const int height = lines * 18 + 6;
+            const int height = lines * 17 + 6;
             row.label->setBounds (inner.withHeight (height));
             y += height + 2;
             continue;
@@ -182,7 +182,7 @@ void SettingsColumn::relayout()
 SettingsPage::SettingsPage (NanoContext& contextIn, ShellActions& actionsIn)
     : SettingsColumn (contextIn),
       actions (actionsIn),
-      devicesButton (contextIn, "settings-devices", "settings", "Audio & MIDI devices"),
+      devicesButton (contextIn, "settings-devices", "speaker", "Audio & MIDI devices"),
       websiteButton (contextIn, "settings-website", {}, "soundshed.com")
 {
     setComponentID ("page-settings");
@@ -248,11 +248,13 @@ SettingsPage::SettingsPage (NanoContext& contextIn, ShellActions& actionsIn)
 
     for (auto* label : { &dspLabel, &aboutLabel })
     {
-        label->setFont (context.font (13.0f));
+        label->setFont (context.font (NanoTheme::textLabel));
         label->setColour (juce::Label::textColourId, context.theme.textMuted());
     }
 
+    devicesButton.setAlignLeft (true);
     websiteButton.setFlat (true);
+    websiteButton.setAlignLeft (true);
     websiteButton.onClick = [this] { context.commands.OpenUrl (kWebsite); };
 
     rebuild();
@@ -406,7 +408,7 @@ DevicePage::DevicePage (NanoContext& contextIn, ShellActions& actionsIn)
     };
     permissionButton.onClick = [this] { context.commands.AudioDevice ("requestInputPermission"); };
 
-    statusLabel.setFont (context.font (13.0f));
+    statusLabel.setFont (context.font (NanoTheme::textLabel));
     statusLabel.setColour (juce::Label::textColourId, context.theme.textMuted());
     inputMeter.setVertical (false);
 

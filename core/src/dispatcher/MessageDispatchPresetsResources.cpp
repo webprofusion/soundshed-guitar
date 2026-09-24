@@ -24,6 +24,18 @@ bool MessageDispatcher::DispatchPresetsAndResources(PluginController& c, const n
         return true;
     }
 
+    if (type == "installPresetArchives")
+    {
+        c.HandleInstallPresetArchivesRequest(msg);
+        return true;
+    }
+
+    if (type == "deleteInstalledPresetArchive")
+    {
+        c.HandleDeleteInstalledPresetArchiveRequest(msg);
+        return true;
+    }
+
     if (type == "startPresetArchiveSession")
     {
         c.HandleStartPresetArchiveSessionRequest(msg);

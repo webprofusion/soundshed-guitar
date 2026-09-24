@@ -29,6 +29,7 @@
 #include "uiclient/NodeLabels.h"
 #include "uiclient/ParamFormat.h"
 #include "uiclient/PresetBrowse.h"
+#include "uiclient/ToneSharing.h"
 #include "uiclient/UiClient.h"
 #include "uiclient/UiCommands.h"
 
@@ -222,6 +223,109 @@ void TestClientMirrorsTheEngine()
     Expect(sessionCalls == 1, "an unsubscribed listener is not called");
 }
 
+/// The tone sharing service as the web UI reads it (core/ui/ts/toneSharingPanel/).
+void TestToneSharing()
+{
+    using namespace guitarfx::uiclient::tones;
+
+    // The envelope, and a session handed out by sign-in.
+    const auto signedIn = ParseResponse(200, R"({"ok":true,"data":{"sessionId":"s-1","user":{"id":"u1","email":"a@b.c","displayName":"Ann"}}})");
+    Expect(signedIn.ok && signedIn.sessionId == "s-1", "a sign-in answer's session is found in its data");
+    Expect(ParseUser(signedIn.data) && ParseUser(signedIn.data)->Label() == "Ann", "the user reads by display name");
+    Expect(ParseResponse(200, "{}", "s-2").sessionId == "s-2", "the x-session-id header wins");
+
+    const auto refused = ParseResponse(401, R"({"ok":false,"error":{"code":"INVALID_TOKEN","message":"Invalid code"}})");
+    Expect(!refused.ok && refused.error == "Invalid code", "an error reads as the service's message");
+    Expect(ParseResponse(409, "").error == "Request failed (409)", "a bodiless error reads as its status");
+    Expect(!ParseResponse(200, R"({"ok":false})").ok, "ok:false is a failure whatever the status");
+    Expect(ParseResponse(0, "").error.find("connection") != std::string::npos, "no answer at all says so");
+
+    // The featured page: presets and packs mixed.
+    const auto home = ParseHome(nlohmann::json::parse(R"({"rows":[
+        {"id":"r1","title":"Featured","items":[
+            {"id":"i1","kind":"item","title":" Crunch ","type":"preset","downloadCount":1250,
+             "creatorDisplayName":"Ann","creatorProfileHandle":"ann_b","creatorAvatarUrl":"/v1/auth/avatar/a1",
+             "tags":["preset","crunch"]},
+            {"id":"p1","kind":"pack","title":"Pack","thumbnailUrl":"/v1/packs/p1/thumbnail"}]},
+        {"id":"r2","title":"Empty","items":[]}]})"));
+    Expect(home.size() == 1, "an empty row is left out");
+
+    if (!home.empty() && home[0].tones.size() == 2)
+    {
+        const auto& preset = home[0].tones[0];
+        Expect(preset.title == "Crunch" && !preset.IsPack(), "a preset card, title trimmed");
+        Expect(preset.downloads == 1250 && FormatCount(preset.downloads) == "1.3K", "downloads, compact");
+        Expect(preset.creatorHandle == "@ann_b", "the creator's handle gets its @");
+        Expect(preset.creatorAvatarUrl == "https://api-guitar.soundshed.com/v1/auth/avatar/a1", "and the avatar a full URL");
+        Expect(preset.tags == std::vector<std::string>{"crunch"}, "\"preset\" is not shown as a tag");
+
+        const auto& pack = home[0].tones[1];
+        Expect(pack.IsPack() && pack.thumbnailUrl == "https://api-guitar.soundshed.com/v1/packs/p1/thumbnail",
+               "a pack card, its thumbnail without a doubled /v1");
+    }
+    else
+    {
+        Expect(false, "the featured row has its two cards");
+    }
+
+    // A pack list: a thumbnail only where the pack has one.
+    const auto packs = ParsePacks(nlohmann::json::parse(
+        R"({"packs":[{"id":"p2","title":"With","thumbnailAssetId":"legacy_available"},{"id":"p3","title":"Without","thumbnailAssetId":null}]})"));
+    Expect(packs.size() == 2 && !packs[0].thumbnailUrl.empty() && packs[1].thumbnailUrl.empty(),
+           "a pack without a picture is not asked for one");
+
+    const auto detail = ParsePackDetail(nlohmann::json::parse(
+        R"({"pack":{"id":"p1","title":"Pack"},"items":[{"itemId":"b","title":"Second","sortOrder":2},{"itemId":"a","title":"First","sortOrder":1}]})"));
+    Expect(detail && detail->items.size() == 2 && detail->items[0].itemId == "a", "a pack's presets come in its order");
+
+    Expect(ItemsPath(2, " high gain ", "high-gain") == "/items?page=2&pageSize=36&q=high%20gain&tag=high-gain",
+           "the preset search path, encoded");
+    Expect(ShareLink(packs[0]) == "https://api-guitar.soundshed.com/share/pack/p2", "a pack's share link");
+    Expect(NormalizeHandle("@@x") == "", "a handle is at least two characters");
+    Expect(FormatCount(999) == "999" && FormatCount(12'400) == "12K" && FormatCount(2'000'000) == "2M",
+           "counts read as the web UI writes them");
+
+    // What is installed: the setting both UIs keep.
+    nlohmann::json settings = {{kInstalledSettingKey,
+                                {{{"id", "tone-sharing-api:item:i1"}, {"title", "Crunch"}, {"presetIds", {"user-1"}},
+                                  {"resources", {{{"type", "nam"}, {"id", "r1"}}}}},
+                                 {{"id", "tone-sharing-api:p1"}, {"packId", "p1"}, {"presetIds", {"user-2", "user-3"}}}}}};
+    Expect(InstalledEntries(settings).size() == 2, "installed entries are read from the setting");
+    Expect(FindInstalled(settings, EntryIdFor(home.empty() ? Tone{} : home[0].tones[0])).has_value(),
+           "a preset is installed under its item entry id");
+    Expect(FindInstalled(settings, PackEntryId("p1")) && FindInstalled(settings, PackEntryId("p1"))->IsPack(),
+           "a pack under its pack entry id");
+
+    // The install replies.
+    UiClient client([](const std::string&) {});
+    guitarfx::uiclient::UiCommands commands(client);
+    std::vector<std::string> sent;
+    UiClient sending([&sent](const std::string& json) { sent.push_back(json); });
+    guitarfx::uiclient::UiCommands sendingCommands(sending);
+    sendingCommands.InstallPresetArchives({{"id", "tone-sharing-api:item:i1"}, {"title", "Crunch"}}, {},
+                                          nlohmann::json::array({{{"title", "Crunch"}, {"data", "UEsFBg=="}}}));
+    const auto request = sent.empty() ? nlohmann::json() : nlohmann::json::parse(sent.back());
+    Expect(request.value("type", "") == "installPresetArchives" && request.value("requestId", "") == "tone-sharing-api:item:i1",
+           "an install is sent with its entry id as the request id");
+    Expect(sending.State().toneInstalls.count("tone-sharing-api:item:i1") == 1 &&
+               sending.State().toneInstalls.at("tone-sharing-api:item:i1").status == guitarfx::uiclient::ToneInstall::Status::Installing,
+           "and is shown installing until it is answered");
+
+    client.Enqueue(R"({"type":"presetArchivesInstalled","entryId":"e1","presetIds":["user-9"]})");
+    client.Enqueue(R"({"type":"presetArchivesInstallFailed","entryId":"e2","message":"Install failed","detail":"Needs Tone3000 models"})");
+    client.DrainPending();
+    const auto& installs = client.State().toneInstalls;
+    Expect(installs.count("e1") && installs.at("e1").status == guitarfx::uiclient::ToneInstall::Status::Installed &&
+               installs.at("e1").presetIds == std::vector<std::string>{"user-9"},
+           "an install that succeeded knows its presets");
+    Expect(installs.count("e2") && installs.at("e2").detail == "Needs Tone3000 models", "one that failed knows why");
+
+    client.Enqueue(R"({"type":"installedPresetArchiveDeleted","id":"e1","presetIds":["user-9"]})");
+    client.DrainPending();
+    Expect(client.State().toneInstalls.count("e1") == 0, "a removed install is forgotten");
+    (void) commands;
+}
+
 void TestTelemetryDecoding()
 {
     UiClient client([](const std::string&) {});
@@ -379,6 +483,7 @@ int main()
     TestInstruments();
     TestEffectPresentationTable();
     TestLayoutDecisions();
+    TestToneSharing();
 
     if (gFailures > 0)
     {

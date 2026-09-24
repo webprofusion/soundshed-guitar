@@ -15,6 +15,15 @@ namespace
 {
 constexpr int kLongPressMs = 550;
 constexpr int kDragPixelsForFullRange = 200;
+
+// A knob cell: the name over the knob, the value under it.
+constexpr int kNameHeight = 17;
+constexpr int kValueHeight = 17;
+
+int knobSize (const NanoContext& context, int cellWidth)
+{
+    return juce::jlimit (36, context.touch ? 64 : 54, cellWidth - 16);
+}
 } // namespace
 
 /// A juce::Slider whose travel follows the parameter's taper, and which opens the value menu
@@ -224,6 +233,7 @@ void ParamControl::showValueMenu()
                                                       "Between " + juce::String (info.minValue) + " and " + juce::String (info.maxValue)
                                                           + (info.unit.empty() || info.unit == "amount" ? juce::String() : " " + juce::String (info.unit)),
                                                       juce::MessageBoxIconType::NoIcon, this);
+                window->setLookAndFeel (&getLookAndFeel());
                 window->addTextEditor ("value", juce::String (value, 3));
                 window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
                 window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
@@ -248,7 +258,8 @@ int ParamControl::preferredHeight (int width) const
     if (style == Style::SliderRow || toggle != nullptr)
         return context.touch ? 48 : 40;
 
-    return juce::jlimit (72, 140, width) + 34;
+    // A knob sized for a thumb, not for the cell: name, knob, value.
+    return kNameHeight + knobSize (context, width) + kValueHeight + 4; // + resized()'s margin
 }
 
 void ParamControl::resized()
@@ -263,7 +274,7 @@ void ParamControl::resized()
 
     if (style == Style::Knob)
     {
-        nameLabel.setBounds (area.removeFromTop (16));
+        nameLabel.setBounds (area.removeFromTop (kNameHeight));
 
         if (picker != nullptr)
         {
@@ -271,10 +282,10 @@ void ParamControl::resized()
             return;
         }
 
-        valueLabel.setBounds (area.removeFromBottom (16));
+        valueLabel.setBounds (area.removeFromBottom (kValueHeight));
 
         if (slider != nullptr)
-            slider->setBounds (area);
+            slider->setBounds (area.withSizeKeepingCentre (knobSize (context, area.getWidth()), area.getHeight()));
 
         return;
     }
@@ -300,9 +311,10 @@ void ParamControl::paint (juce::Graphics&) {}
 void ParamControl::lookAndFeelChanged()
 {
     const auto& theme = context.theme;
-    nameLabel.setFont (context.font (13.0f));
+    const bool knob = style == Style::Knob;
+    nameLabel.setFont (context.font (knob ? NanoTheme::textCaption : NanoTheme::textLabel));
     nameLabel.setColour (juce::Label::textColourId, theme.textSecondary());
-    valueLabel.setFont (context.font (13.0f));
+    valueLabel.setFont (context.font (knob ? NanoTheme::textCaption : NanoTheme::textLabel, FontWeight::medium));
     valueLabel.setColour (juce::Label::textColourId, theme.text());
 }
 } // namespace soundshed::nano

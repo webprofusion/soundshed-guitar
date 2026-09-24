@@ -4,6 +4,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <array>
+
 namespace soundshed::nano
 {
 /// JUCE's stock widgets drawn in the Soundshed look: Inter, the theme's colours, rounded
@@ -16,7 +18,7 @@ public:
     /// Re-reads the theme's colours into JUCE's colour ids.
     void refreshColours();
 
-    [[nodiscard]] juce::Font font (float height, bool bold = false) const;
+    [[nodiscard]] juce::Font font (float height, FontWeight weight = FontWeight::regular) const;
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& font) override;
 
@@ -26,6 +28,8 @@ public:
     void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
                            float minSliderPos, float maxSliderPos, juce::Slider::SliderStyle, juce::Slider&) override;
 
+    juce::Label* createSliderTextBox (juce::Slider&) override;
+
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
                                bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
@@ -33,6 +37,16 @@ public:
     juce::Font getLabelFont (juce::Label&) override;
     juce::Font getComboBoxFont (juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
+    juce::Font getAlertWindowTitleFont() override;
+    juce::Font getAlertWindowMessageFont() override;
+    juce::Font getAlertWindowFont() override;
+
+    void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown, int buttonX, int buttonY,
+                       int buttonW, int buttonH, juce::ComboBox&) override;
+    void positionComboBoxText (juce::ComboBox&, juce::Label&) override;
+
+    void fillTextEditorBackground (juce::Graphics&, int width, int height, juce::TextEditor&) override;
+    void drawTextEditorOutline (juce::Graphics&, int width, int height, juce::TextEditor&) override;
 
     void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool shouldDrawButtonAsHighlighted,
                            bool shouldDrawButtonAsDown) override;
@@ -44,6 +58,8 @@ public:
 
 private:
     const NanoTheme& theme;
-    juce::Typeface::Ptr regular;
+
+    /// Regular, Medium, SemiBold (FontWeight order); null where a file is missing.
+    std::array<juce::Typeface::Ptr, 3> typefaces;
 };
 } // namespace soundshed::nano

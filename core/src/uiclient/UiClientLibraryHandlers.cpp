@@ -116,6 +116,36 @@ void UiClient::RegisterLibraryHandlers()
         PostNotification({Notification::Kind::Error, m.value("message", "Error"), m.value("detail", "")});
     });
 
+    // Tone sharing installs. A failure's reason also arrives as the engine's own error.
+    On("presetArchivesInstalled", [this](const nlohmann::json& m) {
+        auto& install = mState.toneInstalls[m.value("entryId", std::string{})];
+        install.status = ToneInstall::Status::Installed;
+        install.detail.clear();
+        install.presetIds.clear();
+
+        for (const auto& id : m.value("presetIds", nlohmann::json::array()))
+        {
+            if (id.is_string())
+            {
+                install.presetIds.push_back(id.get<std::string>());
+            }
+        }
+
+        Notify(Topic::Tones);
+    });
+
+    On("presetArchivesInstallFailed", [this](const nlohmann::json& m) {
+        auto& install = mState.toneInstalls[m.value("entryId", std::string{})];
+        install.status = ToneInstall::Status::Failed;
+        install.detail = m.value("detail", m.value("message", std::string{}));
+        Notify(Topic::Tones);
+    });
+
+    On("installedPresetArchiveDeleted", [this](const nlohmann::json& m) {
+        mState.toneInstalls.erase(m.value("id", std::string{}));
+        Notify(Topic::Tones);
+    });
+
     On("resourceImportFailed", [this](const nlohmann::json& m) {
         PostNotification({Notification::Kind::Error, "Import failed", m.value("message", "")});
     });

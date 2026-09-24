@@ -20,6 +20,7 @@ Sheet::Sheet (NanoContext& contextIn, const juce::String& titleIn, std::unique_p
     setTitle (titleIn);
     setWantsKeyboardFocus (true);
     closeButton.setFlat (true);
+    closeButton.setIconSize (NanoTheme::iconSmall);
     closeButton.setTooltip ("Close");
     closeButton.onClick = [this] { requestClose(); };
     addAndMakeVisible (*content);
@@ -59,7 +60,7 @@ void Sheet::paint (juce::Graphics& g)
     g.drawRoundedRectangle (panel, 12.0f, 1.0f);
 
     g.setColour (context.theme.text());
-    g.setFont (context.font (17.0f));
+    g.setFont (context.font (NanoTheme::textHeading + 1.0f, FontWeight::semibold));
     g.drawText (title, panel.toNearestInt().removeFromTop (kTitleHeight).reduced (16, 0), juce::Justification::centredLeft);
 }
 
@@ -127,7 +128,7 @@ void ToastOverlay::paint (juce::Graphics& g)
 
     auto text = bounds.reduced (16.0f, 6.0f).toNearestInt();
     g.setColour (theme.text());
-    g.setFont (context.font (15.0f));
+    g.setFont (context.font (NanoTheme::textBody, FontWeight::medium));
 
     if (detail.isEmpty())
     {
@@ -137,7 +138,7 @@ void ToastOverlay::paint (juce::Graphics& g)
 
     g.drawFittedText (title, text.removeFromTop (text.getHeight() / 2), juce::Justification::bottomLeft, 1);
     g.setColour (theme.textSecondary());
-    g.setFont (context.font (13.0f));
+    g.setFont (context.font (NanoTheme::textLabel));
     g.drawFittedText (detail, text, juce::Justification::topLeft, 1);
 }
 } // namespace soundshed::nano

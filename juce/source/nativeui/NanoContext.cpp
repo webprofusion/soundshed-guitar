@@ -1,5 +1,7 @@
 #include "nativeui/NanoContext.h"
 
+#include "nativeui/tones/ToneSharingService.h"
+
 #include "util/PathEncoding.h"
 
 namespace soundshed::nano
@@ -26,6 +28,7 @@ NanoContext::NanoContext (PluginProcessorAdapter& processorIn)
         guitarfx::util::PathFromUtf8 (uiRoot.getChildFile ("data").getChildFile ("effect-presentation.json").getFullPathName().toStdString()));
     lookAndFeel = std::make_unique<NanoLookAndFeel> (theme, uiRoot.getChildFile ("fonts"));
     icons = std::make_unique<IconCache> (uiRoot.getChildFile ("images").getChildFile ("icons"));
+    tones = std::make_unique<ToneSharingService> (*this);
 
 #if JUCE_ANDROID || JUCE_IOS
     touch = true;
@@ -33,6 +36,8 @@ NanoContext::NanoContext (PluginProcessorAdapter& processorIn)
     touch = juce::Desktop::getInstance().getMainMouseSource().isTouch();
 #endif
 }
+
+NanoContext::~NanoContext() = default;
 
 double NanoContext::now()
 {
@@ -47,6 +52,8 @@ void NanoContext::showMenu (juce::PopupMenu menu, juce::Component* target)
 
 void NanoContext::showMenu (juce::PopupMenu menu, juce::PopupMenu::Options options)
 {
+    // A menu without a target component would otherwise take JUCE's default look.
+    menu.setLookAndFeel (lookAndFeel.get());
     lastMenu = menu;
     menu.showMenuAsync (options);
 }

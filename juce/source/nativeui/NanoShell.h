@@ -23,6 +23,7 @@ class SceneStrip;
 class SettingsPage;
 class Sheet;
 class ToastOverlay;
+class TonesPage;
 class TopBar;
 class TransportBar;
 
@@ -83,6 +84,7 @@ private:
     std::unique_ptr<ChainPanel> chainPage;
     std::unique_ptr<EffectPage> effectPage;
     std::unique_ptr<PresetsPage> presetsPage;
+    std::unique_ptr<TonesPage> tonesPage;
     std::unique_ptr<SettingsPage> settingsPage;
     std::unique_ptr<DevicePage> devicePage;
     std::unique_ptr<TransportBar> transport;

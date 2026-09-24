@@ -11,6 +11,7 @@
 #include "nativeui/views/PresetsPage.h"
 #include "nativeui/views/SceneStrip.h"
 #include "nativeui/views/SettingsPage.h"
+#include "nativeui/views/TonesPage.h"
 #include "nativeui/views/TopBar.h"
 #include "nativeui/views/TransportBar.h"
 #include "nativeui/widgets/Sheet.h"
@@ -35,6 +36,7 @@ const char* pageName (Page page)
         case Page::Chain: return "chain";
         case Page::Effect: return "effect";
         case Page::Presets: return "presets";
+        case Page::Tones: return "tones";
         case Page::Settings: return "settings";
         case Page::Device: return "device";
     }
@@ -44,7 +46,7 @@ const char* pageName (Page page)
 
 Page pageFromName (const std::string& name)
 {
-    for (const auto page : { Page::Chain, Page::Effect, Page::Presets, Page::Settings })
+    for (const auto page : { Page::Chain, Page::Effect, Page::Presets, Page::Tones, Page::Settings })
         if (name == pageName (page))
             return page;
 
@@ -117,6 +119,7 @@ void NanoShell::buildViews()
     chainPage = std::make_unique<ChainPanel> (context, actions, ChainView::Mode::Full);
     effectPage = std::make_unique<EffectPage> (context, actions);
     presetsPage = std::make_unique<PresetsPage> (context, actions);
+    tonesPage = std::make_unique<TonesPage> (context, actions);
     settingsPage = std::make_unique<SettingsPage> (context, actions);
     devicePage = std::make_unique<DevicePage> (context, actions);
     transport = std::make_unique<TransportBar> (context, actions);
@@ -133,7 +136,8 @@ void NanoShell::buildViews()
     transport->onOpenControls = [this] { openControls(); };
 
     for (juce::Component* child : std::initializer_list<juce::Component*> { topBar.get(), chainStrip.get(), chainPage.get(), effectPage.get(),
-                                                                            presetsPage.get(), settingsPage.get(), transport.get(), navBar.get() })
+                                                                            presetsPage.get(), tonesPage.get(), settingsPage.get(), transport.get(),
+                                                                            navBar.get() })
         addChildComponent (child);
 
     // The scene strip is placed by resized(), in the top bar or on a row of its own.
@@ -142,6 +146,10 @@ void NanoShell::buildViews()
     topBar->setVisible (true);
     transport->setVisible (true);
     navBar->setVisible (true);
+
+    // The views were made before they had a parent, so JUCE widgets that take their look at
+    // construction (a slider's value box) took JUCE's default one. Hand them Nano's.
+    sendLookAndFeelChange();
 
     ensureSelection();
     showPage (page);
@@ -307,12 +315,16 @@ void NanoShell::showPage (Page newPage)
     chainStrip->setVisible (page == Page::Effect);
     chainPage->setVisible (page == Page::Chain);
     presetsPage->setVisible (page == Page::Presets);
+    tonesPage->setVisible (page == Page::Tones);
     settingsPage->setVisible (page == Page::Settings);
     devicePage->setVisible (page == Page::Device);
     navBar->setCurrent (page);
 
     if (page == Page::Presets)
         presetsPage->refresh();
+
+    if (page == Page::Tones)
+        tonesPage->activate();
 
     if (changed && pageRestored && page != Page::Device)
         context.commands.PatchNativeUiSettings ({ { "page", pageName (page) } });
@@ -326,6 +338,7 @@ void NanoShell::openSheet (const juce::String& title, std::unique_ptr<juce::Comp
     sheet = std::make_unique<Sheet> (context, title, std::move (content), size);
     sheet->onClose = [this] { closeSheet(); };
     addAndMakeVisible (*sheet);
+    sheet->sendLookAndFeelChange(); // its content was built before it had Nano's look
     sheet->setBounds (getLocalBounds());
     toasts->toFront (false);
     sheet->grabKeyboardFocus();
@@ -452,7 +465,7 @@ void NanoShell::resized()
     if (page == Page::Effect)
         chainStrip->setBounds (area.removeFromTop (NanoTheme::stripHeight + 4));
 
-    for (juce::Component* pageView : std::initializer_list<juce::Component*> { effectPage.get(), chainPage.get(), presetsPage.get(),
+    for (juce::Component* pageView : std::initializer_list<juce::Component*> { effectPage.get(), chainPage.get(), presetsPage.get(), tonesPage.get(),
                                                                                settingsPage.get(), devicePage.get() })
         pageView->setBounds (area);
 

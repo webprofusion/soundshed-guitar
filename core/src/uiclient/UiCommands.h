@@ -89,6 +89,15 @@ public:
     void AudioDevice(const std::string& action, nlohmann::json payload = nlohmann::json::object());
     void OpenUrl(const std::string& url);
 
+    // ── Tone sharing ────────────────────────────────────────────────────────────
+    /// Installs downloaded tone sharing archives as one entry of the installedPacks setting.
+    /// `entry` is {id, title, source, packId?}; each archive is {title, data: base64 zip}; a
+    /// pack's presets go in a folder named `folder`. Answered by presetArchivesInstalled or
+    /// presetArchivesInstallFailed.
+    void InstallPresetArchives(const nlohmann::json& entry, const std::string& folder, nlohmann::json archives);
+    /// Takes an install out again: its presets, folder, and the models only it used.
+    void DeleteInstalledPresetArchive(const std::string& entryId);
+
 private:
     UiClient& mClient;
 };

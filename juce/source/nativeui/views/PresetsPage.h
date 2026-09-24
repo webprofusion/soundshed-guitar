@@ -13,7 +13,7 @@
 
 namespace soundshed::nano
 {
-/// The preset library ("Rigs") and the setlists.
+/// The preset library and the setlists, opened from the preset's name in the top bar.
 ///
 /// Presets: a search, the All / Favourites / Recents views and the user's folders, filtered
 /// and ordered as the web UI's library (uiclient::FilterPresets). A tap loads (asking first
@@ -38,6 +38,7 @@ public:
     static void deleteWithConfirm (NanoContext& context, ShellActions& actions, const std::string& presetId);
 
 private:
+    void paintListRowBackground (juce::Graphics& g, juce::Rectangle<int> bounds, bool current, bool pressed, bool divider);
     void showFolderMenu();
     void showPresetMenu (const guitarfx::uiclient::PresetSummary& preset, juce::Rectangle<int> screenBounds);
     void paintPresetRow (juce::Graphics& g, int row, juce::Rectangle<int> bounds, bool pressed);
