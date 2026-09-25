@@ -384,30 +384,33 @@ if [[ "$BUILD_PKG" == true ]]; then
         <line choice="choice-aax"/>
     </choices-outline>
 
-    <!-- Optional formats: user can deselect any of these -->
+    <!-- Optional formats: user can deselect any of these. Use start_selected,
+         not selected: Installer re-evaluates selected on every click, so
+         selected="true" re-ticks each earlier choice and only one can stay
+         deselected. -->
     <choice id="choice-standalone" title="Standalone App"
             description="Soundshed Guitar standalone application."
-            selected="true">
+            start_selected="true">
         <pkg-ref id="com.soundshed.guitar.standalone"/>
     </choice>
     <choice id="choice-vst3" title="VST3 Plugin"
             description="VST3 plugin for use in a DAW."
-            selected="true">
+            start_selected="true">
         <pkg-ref id="com.soundshed.guitar.vst3"/>
     </choice>
     <choice id="choice-au" title="Audio Unit (AU) Plugin"
             description="Audio Unit plugin for Logic Pro and other AU hosts."
-            selected="true">
+            start_selected="true">
         <pkg-ref id="com.soundshed.guitar.au"/>
     </choice>
     <choice id="choice-clap" title="CLAP Plugin"
             description="CLAP plugin for CLAP-compatible DAWs."
-            selected="true">
+            start_selected="true">
         <pkg-ref id="com.soundshed.guitar.clap"/>
     </choice>
     <choice id="choice-aax" title="AAX Plugin"
             description="AAX plugin for Avid Pro Tools."
-            selected="true">
+            start_selected="true">
         <pkg-ref id="com.soundshed.guitar.aax"/>
     </choice>
 
