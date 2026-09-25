@@ -176,6 +176,13 @@ html[data-density="compact"] .default-effect-shell-meta .effect-visualization-to
   border-radius: var(--radius-md);
 }
 
+/* The desktop row shrinks these icons to 13px for its 20px buttons; at 26px they
+   return to the toolbar's usual 15px. */
+html[data-density="compact"] .default-effect-shell-meta .effect-visualization-toolbar-icon {
+  width: 15px;
+  height: 15px;
+}
+
 /* ── Resource picker ────────────────────────────────────────────────────────── */
 
 /*

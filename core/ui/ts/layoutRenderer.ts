@@ -19,7 +19,6 @@ import type {
   LayoutRectangleOverlay,
 } from "./layoutTypes.js";
 import { layoutLookupKey } from "./layoutTypes.js";
-import { areEffectLayoutsEnabled } from "./layoutPreferences.js";
 import type { GraphNode } from "./types.js";
 import { isNodeBypassed } from "./graphNodes.js";
 
@@ -43,7 +42,6 @@ export interface LayoutResourceControlDef {
  * When blendId is provided, checks for a per-blend layout first.
  */
 export function hasCustomLayout(effectType: string, blendId?: string): boolean {
-  if (!areEffectLayoutsEnabled()) return false;
   if (!uiState.layoutLibrary) return false;
   const key = layoutLookupKey(effectType, blendId);
   const defaultId = uiState.layoutLibrary.defaults[key];
@@ -57,8 +55,6 @@ export function hasCustomLayout(effectType: string, blendId?: string): boolean {
  * When blendId is provided, looks up the per-blend layout.
  */
 export function getCustomLayout(effectType: string, blendId?: string): EffectLayout | null {
-  // Master switch off: no layout backdrops or thumbnails anywhere.
-  if (!areEffectLayoutsEnabled()) return null;
   if (!uiState.layoutLibrary) return null;
   const key = layoutLookupKey(effectType, blendId);
   const defaultId = uiState.layoutLibrary.defaults[key];

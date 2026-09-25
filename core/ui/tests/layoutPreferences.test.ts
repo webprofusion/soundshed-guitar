@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  LAYOUT_ENABLED_SETTING,
   LAYOUT_PREFERENCES_SETTING,
   STANDARD_LAYOUT_ID,
-  areEffectLayoutsEnabled,
   buildLayoutMatchText,
   clearLayoutPreferencesForKeys,
   getAvailableLayoutEntries,
@@ -12,7 +10,7 @@ import {
   removeLayoutPreference,
   resolveLayoutForNode,
   resolveLayoutSelection,
-  setEffectLayoutsEnabled,
+  selectStandardControls,
   setLayoutPreference,
   suggestLayoutKeywords,
 } from "../ts/layoutPreferences.js";
@@ -76,32 +74,6 @@ describe("getAvailableLayoutEntries", () => {
 
   it("returns an empty list for effects with no layouts", () => {
     expect(getAvailableLayoutEntries("delay_digital")).toEqual([]);
-  });
-});
-
-describe("master switch", () => {
-  it("is on when the setting has never been written", () => {
-    expect(areEffectLayoutsEnabled()).toBe(true);
-  });
-
-  it("persists the off state and forces the standard controls everywhere", () => {
-    setLayoutPreference({ lookupKey: "amp_nam", scope: "effectType", layoutId: "modern" });
-    setEffectLayoutsEnabled(false);
-
-    expect(uiState.appSettings?.[LAYOUT_ENABLED_SETTING]).toBe(false);
-    expect(areEffectLayoutsEnabled()).toBe(false);
-    expect(resolveLayoutSelection({ effectType: "amp_nam" }))
-      .toMatchObject({ layoutId: STANDARD_LAYOUT_ID, source: "disabled" });
-    expect(resolveLayoutForNode({ effectType: "amp_nam" })).toBeNull();
-  });
-
-  it("keeps the saved rules so turning it back on restores them", () => {
-    setLayoutPreference({ lookupKey: "amp_nam", scope: "effectType", layoutId: "modern" });
-    setEffectLayoutsEnabled(false);
-    expect(getLayoutPreferenceRules()).toHaveLength(1);
-
-    setEffectLayoutsEnabled(true);
-    expect(resolveLayoutForNode({ effectType: "amp_nam" })?.name).toBe("Modern Face");
   });
 });
 
@@ -187,6 +159,53 @@ describe("resolveLayoutSelection", () => {
   it("ignores rules pointing at a layout that no longer exists", () => {
     setLayoutPreference({ lookupKey: "amp_nam", scope: "effectType", layoutId: "deleted-layout" });
     expect(resolveLayoutForNode({ effectType: "amp_nam" })).toBeNull();
+  });
+});
+
+describe("selectStandardControls", () => {
+  it("overrides the library default with an effect-type rule", () => {
+    expect(selectStandardControls({ effectType: "amp_nam" })).toBe(true);
+    expect(resolveLayoutForNode({ effectType: "amp_nam" })).toBeNull();
+    expect(getLayoutPreferenceRules()).toMatchObject([
+      { lookupKey: "amp_nam", scope: "effectType", layoutId: STANDARD_LAYOUT_ID },
+    ]);
+  });
+
+  it("does nothing when the standard controls are already showing", () => {
+    setLayoutPreference({ lookupKey: "amp_nam", scope: "effectType", layoutId: STANDARD_LAYOUT_ID });
+    expect(selectStandardControls({ effectType: "amp_nam" })).toBe(false);
+    expect(selectStandardControls({ effectType: "delay_digital" })).toBe(false);
+    expect(getLayoutPreferenceRules()).toHaveLength(1);
+  });
+
+  it("replaces the keyword rule that chose the layout, leaving other matches alone", () => {
+    setLayoutPreference({ lookupKey: "amp_nam", scope: "keyword", layoutId: "modern", keyword: "rectifier" });
+    setLayoutPreference({ lookupKey: "amp_nam", scope: "effectType", layoutId: "tweed" });
+
+    expect(selectStandardControls({ effectType: "amp_nam", matchText: "mesa rectifier lead" })).toBe(true);
+    expect(resolveLayoutSelection({ effectType: "amp_nam", matchText: "mesa rectifier lead" }))
+      .toMatchObject({ layoutId: STANDARD_LAYOUT_ID, source: "keyword" });
+    expect(resolveLayoutForNode({ effectType: "amp_nam", matchText: "vox ac30" })?.name).toBe("Tweed Face");
+    expect(getLayoutPreferenceRules()).toHaveLength(2);
+  });
+
+  it("replaces the preset rule that chose the layout", () => {
+    setLayoutPreference({ lookupKey: "amp_nam", scope: "preset", layoutId: "modern", presetId: "preset-7", presetName: "Lead" });
+
+    expect(selectStandardControls({ effectType: "amp_nam", presetId: "preset-7" })).toBe(true);
+    expect(resolveLayoutSelection({ effectType: "amp_nam", presetId: "preset-7" }))
+      .toMatchObject({ layoutId: STANDARD_LAYOUT_ID, source: "preset" });
+    expect(resolveLayoutForNode({ effectType: "amp_nam", presetId: "preset-8" })?.name).toBe("Tweed Face");
+  });
+
+  it("records a blend's choice on the blend key", () => {
+    setLayoutPreference({ lookupKey: "amp_nam_blend::blend-1", scope: "effectType", layoutId: "blend-face" });
+
+    expect(selectStandardControls({ effectType: "amp_nam_blend", blendId: "blend-1" })).toBe(true);
+    expect(resolveLayoutForNode({ effectType: "amp_nam_blend", blendId: "blend-1" })).toBeNull();
+    expect(getLayoutPreferenceRules()).toMatchObject([
+      { lookupKey: "amp_nam_blend::blend-1", scope: "effectType", layoutId: STANDARD_LAYOUT_ID },
+    ]);
   });
 });
 

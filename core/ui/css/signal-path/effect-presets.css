@@ -137,27 +137,6 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Master "Use Effect Layouts" switch — sits above the tabs and governs everything below. */
-.layout-picker-master {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.layout-picker-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.layout-picker-switch input {
-  margin: 0;
-  cursor: pointer;
-}
-
 .layout-picker-tabs {
   display: flex;
   gap: 2px;
@@ -575,6 +554,67 @@
   background: color-mix(in srgb, var(--accent-primary, #6ea8ff) 26%, transparent);
 }
 
-.effect-visualization-toolbar-btn.node-layout-switch-btn.is-active {
+/*
+  The effect header's layout split toggle: standard controls on the left, the layout
+  picker on the right, joined into one control with whichever is showing lit. Both
+  halves are .effect-visualization-toolbar-btn, so they keep each theme's surface and
+  take the header row's height (20px, or the compact sheet's 26px) like the chips and
+  bypass switch beside them. These chained selectors outweigh the compact sheet's
+  square width and all-round corners.
+*/
+.node-layout-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.default-effect-shell-meta .node-layout-split .effect-visualization-toolbar-btn.node-layout-split-btn {
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.default-effect-shell-meta .node-layout-split .effect-visualization-toolbar-btn.node-layout-split-btn:hover {
+  color: var(--text-primary);
+  transform: none;
+}
+
+.default-effect-shell-meta .node-layout-split .effect-visualization-toolbar-btn.node-layout-standard-btn {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.default-effect-shell-meta .node-layout-split .effect-visualization-toolbar-btn.node-layout-switch-btn {
+  width: auto;
+  gap: 2px;
+  margin-left: -1px;
+  padding: 0 5px 0 6px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+/* Lit half: raised over its neighbour so its accent border is not hidden by the
+   1px overlap. */
+.default-effect-shell-meta .node-layout-split .effect-visualization-toolbar-btn.node-layout-split-btn.is-active {
+  position: relative;
+  z-index: 1;
   border-color: color-mix(in srgb, var(--accent-primary, #6ea8ff) 55%, var(--border-medium, rgba(255, 255, 255, 0.18)));
+  background: color-mix(in srgb, var(--accent-primary, #6ea8ff) 16%, transparent);
+  color: var(--text-primary);
+}
+
+.node-layout-split-caret {
+  width: 8px;
+  height: 8px;
+  opacity: 0.75;
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon-url);
+  mask-image: var(--icon-url);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  transition: transform 0.15s ease;
+}
+
+.node-layout-switch-btn[aria-expanded="true"] .node-layout-split-caret {
+  transform: rotate(180deg);
 }

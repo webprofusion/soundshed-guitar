@@ -8,9 +8,9 @@ import { escapeHtml } from "../utils.js";
 import { showNotification } from "../notifications.js";
 import { getNodeEffectInfo } from "../presetV2.js";
 import { renderIcon } from "../iconAssets.js";
-import { areEffectLayoutsEnabled, findLayoutById } from "../layoutPreferences.js";
+import { findLayoutById, selectStandardControls } from "../layoutPreferences.js";
 import type { EffectLayout } from "../layoutTypes.js";
-import { hasSelectableLayouts, openLayoutPicker } from "../layoutPicker.js";
+import { closeLayoutPicker, hasSelectableLayouts, openLayoutPicker } from "../layoutPicker.js";
 import { layoutDesigner } from "../layoutDesigner.js";
 import {
   BLEND_PARAM_SPECS,
@@ -22,38 +22,68 @@ import {
 import { buildNodeLayoutMatchText, getNodeDisplayName } from "./nodeLabels.js";
 import { requestNodeParamsRefresh, requestSignalPathRender } from "./render.js";
 /**
- * Header control for choosing how this effect is presented: the standard
- * auto-generated controls or one of the custom layouts available for it. Also the
- * only route into the layout designer, so it stays available while the layout
- * feature is on even before the effect has any layouts of its own.
+ * Header control for choosing how this effect is presented, as a split toggle: the
+ * left half selects the standard auto-generated controls in one click, the right half
+ * opens the layout picker for the custom layouts available for it. Whichever is
+ * showing is lit. The picker is also the only route into the layout designer, so the
+ * control stays available while the layout feature is on even before the effect has
+ * any layouts of its own.
  */
 export function renderLayoutSwitchButtonHtml(node: GraphNode, blendId: string, usingCustomLayout: boolean): string {
   const canDesign = isFeatureEnabled(Features.EffectLayout);
   if (!canDesign && !hasSelectableLayouts(node.type, blendId || undefined)) {
     return "";
   }
-  const state = !areEffectLayoutsEnabled()
-    ? "standard controls (custom layouts turned off)"
-    : usingCustomLayout ? "custom layout" : "standard controls";
-  const label = `Effect layout: ${state}`;
+  const label = `Effect layout: ${usingCustomLayout ? "custom layout" : "standard controls"}`;
+  const standardTitle = usingCustomLayout ? "Show the standard controls" : "Showing the standard controls";
   return `
-    <button
-      class="effect-visualization-toolbar-btn node-layout-switch-btn${usingCustomLayout ? " is-active" : ""}"
-      data-node-id="${escapeHtml(node.id)}"
-      data-effect-type="${escapeHtml(node.type)}"
-      data-blend-id="${escapeHtml(blendId)}"
-      type="button"
-      aria-haspopup="dialog"
-      aria-expanded="false"
-      title="${label} — choose layout"
-      aria-label="${label}. Choose effect layout"
-    >
-      ${renderIcon("layout", "effect-visualization-toolbar-icon layout-switch-icon")}
-    </button>
+    <div class="node-layout-split" role="group" aria-label="${label}">
+      <button
+        class="effect-visualization-toolbar-btn node-layout-split-btn node-layout-standard-btn${usingCustomLayout ? "" : " is-active"}"
+        type="button"
+        aria-pressed="${usingCustomLayout ? "false" : "true"}"
+        title="${standardTitle}"
+        aria-label="Standard controls"
+      >
+        ${renderIcon("sliders", "effect-visualization-toolbar-icon")}
+      </button>
+      <button
+        class="effect-visualization-toolbar-btn node-layout-split-btn node-layout-switch-btn${usingCustomLayout ? " is-active" : ""}"
+        data-node-id="${escapeHtml(node.id)}"
+        data-effect-type="${escapeHtml(node.type)}"
+        data-blend-id="${escapeHtml(blendId)}"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        title="${label} — choose layout"
+        aria-label="${label}. Choose effect layout"
+      >
+        ${renderIcon("layout", "effect-visualization-toolbar-icon layout-switch-icon")}
+        ${renderIcon("chevron-down", "node-layout-split-caret")}
+      </button>
+    </div>
   `;
 }
 
 export function bindLayoutSwitchButton(node: GraphNode, preset: Preset): void {
+  const standardButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".node-layout-standard-btn");
+  standardButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeLayoutPicker();
+    const blendId = getBlendState(node)?.blend?.id || "";
+    const changed = selectStandardControls({
+      effectType: node.type,
+      blendId: blendId || undefined,
+      matchText: buildNodeLayoutMatchText(node),
+      presetId: uiState.activePresetId,
+    });
+    if (changed) {
+      requestNodeParamsRefresh();
+      requestSignalPathRender();
+    }
+  });
+
   const button = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".node-layout-switch-btn");
   if (!button) {
     return;

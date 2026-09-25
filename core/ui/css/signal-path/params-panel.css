@@ -121,8 +121,9 @@
 
 .default-effect-shell-subtitle {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
   font-size: 8px;
   font-weight: 700;
@@ -131,12 +132,45 @@
   color: rgba(198, 206, 225, 0.68);
 }
 
+.default-effect-shell-subtitle-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The loaded NAM model's architecture (A1, A2), read as part of the effect type rather
+   than as one more control-sized chip among the header's buttons. Tinted from the
+   subtitle's own colour so it follows every theme. */
+.default-effect-shell-architecture-badge {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent);
+  border-radius: var(--radius-xs);
+  line-height: 11px;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--color-success) 65%, currentColor);
+}
+
 .default-effect-shell-meta {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* Icon buttons in the header row (DSP stats, the layout split toggle) stand as tall as the
+   20px chips and bypass switch beside them. The compact sheet raises all of them to 26px
+   together, and its selector outweighs this one. */
+.default-effect-shell-meta .effect-visualization-toolbar-btn {
+  width: 24px;
+  height: 20px;
+  border-radius: var(--radius-md);
+}
+
+.default-effect-shell-meta .effect-visualization-toolbar-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .default-effect-shell-chip {
@@ -155,7 +189,6 @@
   letter-spacing: 0.1em;
 }
 
-.default-effect-shell-chip-architecture,
 .default-effect-shell-chip-calibration-complete {
   border-color: rgba(128, 230, 188, 0.32);
   color: #c8f5e6;
@@ -163,29 +196,26 @@
   border-radius: var(--radius-sm);
 }
 
-/* DSP stats toggle badge */
-.default-effect-shell-chip-dsp {
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
-  user-select: none;
+/* DSP stats toggle: a gauge icon with no frame of its own until it is hovered or the
+   stats are open, so it does not add another outlined shape to the header. The chained
+   selector outweighs the themes' .effect-visualization-toolbar-btn surfaces. */
+.default-effect-shell-meta .effect-visualization-toolbar-btn.default-effect-shell-dsp-toggle {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
 }
 
-.default-effect-shell-chip-dsp:hover,
-.default-effect-shell-chip-dsp:focus-visible {
-  border-color: rgba(140, 185, 235, 0.35);
-  color: rgba(225, 231, 244, 1);
+.default-effect-shell-meta .effect-visualization-toolbar-btn.default-effect-shell-dsp-toggle:hover {
+  border-color: var(--border-light);
+  color: var(--text-primary);
+  transform: none;
 }
 
-.default-effect-shell-chip-dsp:focus-visible {
-  outline: 2px solid rgba(255, 190, 120, 0.8);
-  outline-offset: 2px;
-}
-
-.default-effect-shell-chip-dsp.is-active {
-  border-color: rgba(100, 175, 230, 0.55);
-  color: #c4ddf7;
-  background: linear-gradient(180deg, rgba(18, 38, 68, 0.78) 0%, rgba(8, 16, 38, 0.92) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 8px rgba(80, 145, 215, 0.2);
+.default-effect-shell-meta .effect-visualization-toolbar-btn.default-effect-shell-dsp-toggle.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: var(--text-primary);
 }
 
 .default-effect-shell-toggle {

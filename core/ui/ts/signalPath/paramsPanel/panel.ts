@@ -473,7 +473,10 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
             <span class="default-effect-shell-led" aria-hidden="true"></span>
             <div class="default-effect-shell-titles">
               <div class="default-effect-shell-title">${shellTitle}</div>
-              <div class="default-effect-shell-subtitle">${shellCategoryLabel} · ${shellTypeLabel}</div>
+              <div class="default-effect-shell-subtitle">
+                <span class="default-effect-shell-subtitle-text">${shellCategoryLabel} · ${shellTypeLabel}</span>
+                ${architectureBadge ? `<span class="default-effect-shell-architecture-badge" title="Loaded model architecture">${escapeHtml(architectureBadge)}</span>` : ""}
+              </div>
             </div>
           </div>
           <div class="default-effect-shell-rail">
@@ -490,10 +493,9 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
             </div>
           </div>
           <div class="default-effect-shell-meta" aria-label="Module status">
+            <button class="effect-visualization-toolbar-btn default-effect-shell-dsp-toggle dsp-badge-toggle${isDspStatusVisible() ? " is-active" : ""}" type="button" aria-expanded="${isDspStatusVisible()}" title="${isDspStatusVisible() ? "Hide DSP status" : "Show DSP status"}" aria-label="Toggle DSP status">${renderIcon("meter", "effect-visualization-toolbar-icon")}</button>
             ${effectPresetsButton}
-            ${architectureBadge ? `<span class="default-effect-shell-chip default-effect-shell-chip-architecture" title="Loaded model architecture">${architectureBadge}</span>` : ""}
             ${calibrationMetadataChip}
-            <button class="default-effect-shell-chip default-effect-shell-chip-dsp dsp-badge-toggle${isDspStatusVisible() ? " is-active" : ""}" type="button" aria-expanded="${isDspStatusVisible()}" title="${isDspStatusVisible() ? "Hide DSP status" : "Show DSP status"}" aria-label="Toggle DSP status">DSP</button>
             <button
               class="default-effect-shell-toggle node-bypass-btn ${nodeIsBypassed ? "bypassed" : ""}"
               data-node-id="${node.id}"

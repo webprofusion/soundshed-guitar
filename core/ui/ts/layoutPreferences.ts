@@ -18,10 +18,9 @@
  *   4. layout library default for the effect type
  *   5. standard controls
  *
- * Above all of that sits a single master switch (`ui.effectLayoutsEnabled`, on by
- * default): when the user turns custom layouts off, every effect renders the
- * standard controls and the rules below are left untouched, ready for when it is
- * turned back on.
+ * There is no global off switch: the header's split toggle picks the standard
+ * controls per effect. (A master `ui.effectLayoutsEnabled` setting was added after
+ * the 1.5.0 release and removed before any other; it is no longer read.)
  */
 
 import { updateAppSetting } from "./appSettingsStore.js";
@@ -31,9 +30,6 @@ import type { EffectLayout, LayoutLibraryEntry } from "./layoutTypes.js";
 
 /** App-settings key holding the serialized rule list. */
 export const LAYOUT_PREFERENCES_SETTING = "ui.effectLayoutPreferences";
-
-/** App-settings key for the master "Use Effect Layouts" switch. Absent means on. */
-export const LAYOUT_ENABLED_SETTING = "ui.effectLayoutsEnabled";
 
 /** Sentinel layout id meaning "render the standard auto-generated controls". */
 export const STANDARD_LAYOUT_ID = "__standard__";
@@ -61,7 +57,7 @@ export interface LayoutPreferenceRule {
 }
 
 /** Where a resolved layout selection came from — drives the picker's UI hints. */
-export type LayoutSelectionSource = "preset" | "keyword" | "effectType" | "libraryDefault" | "none" | "disabled";
+export type LayoutSelectionSource = "preset" | "keyword" | "effectType" | "libraryDefault" | "none";
 
 export interface LayoutSelection {
   /** Resolved layout id, STANDARD_LAYOUT_ID, or null when nothing is defined. */
@@ -78,27 +74,6 @@ export interface LayoutResolutionContext {
   matchText?: string;
   /** Active preset id, for preset-scoped rules. */
   presetId?: string | null;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Master switch
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Whether custom effect layouts are used at all. On unless the user has explicitly
- * turned them off, so existing installs and fresh ones both keep showing layouts.
- */
-export function areEffectLayoutsEnabled(): boolean {
-  return uiState.appSettings?.[LAYOUT_ENABLED_SETTING] !== false;
-}
-
-/**
- * Flips the master switch. Rules are deliberately left in place: turning layouts
- * back on restores every previous choice.
- */
-export function setEffectLayoutsEnabled(enabled: boolean): void {
-  updateAppSetting(LAYOUT_ENABLED_SETTING, enabled);
-  window.dispatchEvent(new CustomEvent(LAYOUT_PREFERENCES_CHANGED_EVENT));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -275,11 +250,6 @@ function findKeywordRule(rules: readonly LayoutPreferenceRule[], matchText: stri
  * Returns `layoutId: null` when nothing is configured at all.
  */
 export function resolveLayoutSelection(context: LayoutResolutionContext): LayoutSelection {
-  // Master switch off: everything renders the standard controls, rules and all.
-  if (!areEffectLayoutsEnabled()) {
-    return { layoutId: STANDARD_LAYOUT_ID, source: "disabled" };
-  }
-
   const keys = layoutLookupKeysFor(context.effectType, context.blendId);
   const matchText = (context.matchText ?? "").toLowerCase();
   const presetId = context.presetId ?? "";
@@ -321,6 +291,30 @@ export function resolveLayoutSelection(context: LayoutResolutionContext): Layout
   }
 
   return { layoutId: null, source: "none" };
+}
+
+/**
+ * Switches a node that is showing a custom layout to the standard controls, for the
+ * header's one-click toggle. The choice is recorded at the scope that picked the custom
+ * layout (the same preset or keyword rule, else the effect type), since a broader rule
+ * would lose to the one that decided it. Returns false when the node already shows the
+ * standard controls.
+ */
+export function selectStandardControls(context: LayoutResolutionContext): boolean {
+  if (!resolveLayoutForNode(context)) {
+    return false;
+  }
+  const decidingRule = resolveLayoutSelection(context).rule;
+  setLayoutPreference({
+    // Blend-specific layouts are keyed on the blend, like the picker's Apply.
+    lookupKey: layoutLookupKeysFor(context.effectType, context.blendId)[0],
+    scope: decidingRule?.scope ?? "effectType",
+    layoutId: STANDARD_LAYOUT_ID,
+    keyword: decidingRule?.keyword,
+    presetId: decidingRule?.presetId,
+    presetName: decidingRule?.presetName,
+  });
+  return true;
 }
 
 /**

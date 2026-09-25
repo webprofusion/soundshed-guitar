@@ -684,22 +684,22 @@ way the EQ curve is (see `updateSpatialVisualization` in `signalPath.ts`).
 ### Effect layout selection (`core/ui/ts/layoutPreferences.ts`, `layoutPicker.ts`)
 
 Every effect renders either the **standard** auto-generated controls or a **custom
-layout** from the layout library. A layout button (`.node-layout-switch-btn`) in the
-effect shell's meta rail opens the layout picker popover; it is the single entry point
-for both choosing and designing layouts, so it stays visible whenever the `EffectLayout`
-feature flag is on — even before the effect has any layouts — and otherwise only when
-the effect has layouts to switch between. (The separate gear button that used to open
-the designer was removed once the picker covered it.)
+layout** from the layout library. A split toggle (`.node-layout-split`) in the effect
+shell's meta rail shows which is on screen by lighting one half. Its left half
+(`.node-layout-standard-btn`) switches to the standard controls in one click:
+`selectStandardControls()` records `STANDARD_LAYOUT_ID` at the scope of the rule that
+chose the custom layout (that preset or keyword, else the effect type), since a broader
+rule would lose to it. Its right half (`.node-layout-switch-btn`) opens the layout picker
+popover, the single entry point for both choosing and designing layouts, so the control
+stays visible whenever the `EffectLayout` feature flag is on — even before the effect has
+any layouts — and otherwise only when the effect has layouts to switch between. (The
+separate gear button that used to open the designer was removed once the picker covered
+it.)
 
-- **Master switch** — a *Use Effect Layouts* checkbox sits at the top of the popover,
-  above the tabs, backed by `ui.effectLayoutsEnabled` (absent = on, so existing installs
-  are unaffected). Turned off, every effect renders the standard controls regardless of
-  rules or library defaults — `resolveLayoutSelection()` short-circuits to
-  `{ layoutId: STANDARD_LAYOUT_ID, source: "disabled" }` and `getCustomLayout()` /
-  `hasCustomLayout()` return nothing, which also drops the layout thumbnails from the
-  chain nodes and the FX browser — and the popover collapses to just the toggle and an
-  explanation. Saved rules are deliberately *not* cleared, so turning it back on restores
-  every previous choice. The toggle applies immediately; there is nothing to Apply.
+- **No global off switch** — the split toggle's standard half replaced the popover's
+  *Use Effect Layouts* checkbox (`ui.effectLayoutsEnabled`), which was added after 1.5.0
+  and removed before it shipped. The setting is no longer read, so a profile that had it
+  off shows its layouts again.
 - **Picker** — two radio options, "Standard controls" and "Custom layout". Because an
   effect type can accumulate many layouts, the custom ones sit behind a `<details>`
   dropdown rather than one radio each: the trigger shows the selected layout (thumbnail,
@@ -721,7 +721,7 @@ the designer was removed once the picker covered it.)
   and the active tab is held in `openLayoutPicker`'s scope so deleting a rule (which
   re-renders) leaves the user on the Rules tab. *Apply* is hidden outside the Layout
   tab, since it commits that tab's selection.
-- **Resolution order** — master switch → preset rule → keyword rule (longest matching
+- **Resolution order** — preset rule → keyword rule (longest matching
   keyword wins) → effect-type rule → layout library default → standard controls. With no rules
   saved the behaviour is identical to the library default, so existing installs are
   unaffected. `STANDARD_LAYOUT_ID` (`__standard__`) is a valid rule target, which is

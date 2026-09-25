@@ -254,14 +254,14 @@ input[type="range"]:focus-visible {
   align-items: center;
 }
 
+/* Sits under the output meter's ladder, sized like the calibration trigger under the input
+   meter (.input-vu-meter-dropdown-trigger) so the two meters read as a pair. */
 .output-quick-mute-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-top: calc(var(--control-stack-header-height, 22px) + var(--control-stack-gap, 8px) + 4px);
-  margin-left: 6px;
+  width: 18px;
+  height: 16px;
   padding: 0;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-pill);
@@ -283,8 +283,8 @@ input[type="range"]:focus-visible {
 }
 
 .output-quick-mute-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 11px;
+  height: 11px;
 }
 
 .output-quick-mute-wave,

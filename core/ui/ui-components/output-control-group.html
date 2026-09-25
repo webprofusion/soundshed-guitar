@@ -28,20 +28,6 @@
                 <span class="knob-value" id="output-value">+0.0 dB</span>
               </div>
             </div>
-            <button
-              id="output-mute-toggle"
-              class="output-quick-mute-btn"
-              type="button"
-              aria-label="Mute output"
-              aria-pressed="false"
-              title="Mute output"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 9v6h4l5 4V5L8 9H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                <path class="output-quick-mute-wave" d="M16.5 9.5c1.6 1 2.5 2.6 2.5 4.5s-.9 3.5-2.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                <path class="output-quick-mute-slash" d="M5 5l14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
             <div class="vu-meter output-vu-meter" id="output-vu-meter" title="Output peak level in dBFS, after master volume">
               <span class="vu-readout" id="output-vu-readout">-∞ dB</span>
               <div class="vu-segments" id="output-vu-segments">
@@ -55,6 +41,20 @@
                 <div class="vu-seg vu-seg-green" data-db="-48"></div>
                 <div class="vu-peak-hold" id="output-vu-peak-hold"></div>
               </div>
+              <button
+                id="output-mute-toggle"
+                class="output-quick-mute-btn"
+                type="button"
+                aria-label="Mute output"
+                aria-pressed="false"
+                title="Mute output"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 9v6h4l5 4V5L8 9H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path class="output-quick-mute-wave" d="M16.5 9.5c1.6 1 2.5 2.6 2.5 4.5s-.9 3.5-2.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path class="output-quick-mute-slash" d="M5 5l14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>

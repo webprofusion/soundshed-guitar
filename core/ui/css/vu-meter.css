@@ -38,7 +38,8 @@
   white-space: nowrap;
 }
 
-/* Sits to the right of the OUT knob and its mute button, inside .output-control-row. */
+/* Sits to the right of the OUT knob, inside .output-control-row, with the mute button
+ * under its ladder where the input meter has its calibration trigger. */
 .output-vu-meter {
   margin-left: 6px;
 }

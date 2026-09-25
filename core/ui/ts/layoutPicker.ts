@@ -9,22 +9,19 @@
  * The popover is appended to <body> with fixed positioning because the effect
  * shell clips its own overflow.
  *
- * A master "Use Effect Layouts" toggle sits above everything. With it off every
- * effect falls back to the standard controls and the popover collapses to just the
- * toggle plus an explanation — the saved rules are kept, not cleared.
+ * It opens from the right half of the header's layout split toggle; the left half
+ * switches straight to the standard controls without it.
  */
 
 import { escapeHtml } from "./utils.js";
 import { showNotification } from "./notifications.js";
 import {
   STANDARD_LAYOUT_ID,
-  areEffectLayoutsEnabled,
   getAvailableLayoutEntries,
   getLayoutPreferenceRulesForKeys,
   layoutLookupKeysFor,
   removeLayoutPreference,
   resolveLayoutSelection,
-  setEffectLayoutsEnabled,
   setLayoutPreference,
   suggestLayoutKeywords,
   type LayoutPreferenceRule,
@@ -145,44 +142,17 @@ function renderDropdownItemHtml(entry: LayoutLibraryEntry, isSelected: boolean, 
   `;
 }
 
-/** Header + master switch: the only part of the popover that renders unconditionally. */
-function renderHeaderHtml(context: LayoutPickerContext, layoutsEnabled: boolean): string {
+function renderHeaderHtml(context: LayoutPickerContext): string {
   return `
     <div class="layout-picker-header">
       <div class="layout-picker-title">Effect layout</div>
       <div class="layout-picker-subtitle">${escapeHtml(context.nodeLabel)}</div>
       <button type="button" class="layout-picker-close" aria-label="Close">×</button>
     </div>
-    <div class="layout-picker-master">
-      <label class="layout-picker-switch" title="When off, every effect uses the standard controls">
-        <input type="checkbox" class="layout-picker-enable"${layoutsEnabled ? " checked" : ""} />
-        <span>Use Effect Layouts</span>
-      </label>
-    </div>
-  `;
-}
-
-/** The whole popover when the master switch is off — nothing to choose until it is back on. */
-function renderDisabledInner(context: LayoutPickerContext): string {
-  return `
-    ${renderHeaderHtml(context, false)}
-    <div class="layout-picker-body">
-      <div class="layout-picker-note">
-        Graphical effect layouts are turned off. Every effect will show the standard controls instead of graphical amp/effect visualisations.
-      </div>
-      <div class="layout-picker-note">
-        Turn <strong>Use Effect Layouts</strong> back on to pick layouts again — your
-        saved layout rules are kept.
-      </div>
-    </div>
   `;
 }
 
 function renderPopoverInner(context: LayoutPickerContext, activeTab: LayoutPickerTab): string {
-  if (!areEffectLayoutsEnabled()) {
-    return renderDisabledInner(context);
-  }
-
   const { effectType, blendId } = context;
   const entries = getAvailableLayoutEntries(effectType, blendId);
   const lookupKeys = layoutLookupKeysFor(effectType, blendId);
@@ -301,7 +271,7 @@ function renderPopoverInner(context: LayoutPickerContext, activeTab: LayoutPicke
   const onLayoutTab = activeTab === "layout";
 
   return `
-    ${renderHeaderHtml(context, true)}
+    ${renderHeaderHtml(context)}
     <div class="layout-picker-tabs" role="tablist" aria-label="Effect layout sections">
       <button
         type="button"
@@ -534,16 +504,6 @@ export function openLayoutPicker(anchor: HTMLElement, context: LayoutPickerConte
 
   function bind(): void {
     popover.querySelector<HTMLButtonElement>(".layout-picker-close")?.addEventListener("click", () => close());
-
-    // The master switch takes effect immediately — it decides what the rest of the
-    // popover (and every effect on screen) shows, so there is nothing to Apply.
-    popover.querySelector<HTMLInputElement>(".layout-picker-enable")?.addEventListener("change", (event) => {
-      const enabled = (event.currentTarget as HTMLInputElement).checked;
-      setEffectLayoutsEnabled(enabled);
-      showNotification(enabled ? "Effect layouts enabled" : "Effect layouts disabled — using standard controls");
-      context.onApplied();
-      rerender();
-    });
 
     popover.querySelectorAll<HTMLButtonElement>(".layout-picker-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
