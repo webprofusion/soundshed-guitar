@@ -471,6 +471,12 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
         }
 
         RefreshWasmNodeDescriptor(*target);
+
+        // ApplyPreset replaces the working copy, so nothing may read `target` after it.
+        const bool resetNamLevels =
+            IsNamEffectType(target->type) && !target->resources.empty() && target->resources.front().IsValid();
+        target = nullptr;
+        targetGraph = nullptr;
         bool appliedPreset = false;
 
         if (IsCompositeEditMode())
@@ -485,8 +491,7 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             appliedPreset = true;
         }
 
-        if (!IsCompositeEditMode() && IsNamEffectType(target->type) && !target->resources.empty() &&
-            target->resources.front().IsValid())
+        if (!IsCompositeEditMode() && resetNamLevels)
         {
             ResetNamNodeLevelState(nodeId);
         }
@@ -523,6 +528,12 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             }
 
             RefreshWasmNodeDescriptor(*node);
+
+            // ApplyPreset replaces the working copy, so nothing may read `node` after it.
+            const bool resetNamLevels =
+                IsNamEffectType(node->type) && !node->resources.empty() && node->resources.front().IsValid();
+            node = nullptr;
+            fpGraph = nullptr;
             bool appliedPreset = false;
 
             if (IsCompositeEditMode())
@@ -537,10 +548,9 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
                 appliedPreset = true;
             }
 
-            if (!IsCompositeEditMode() && IsNamEffectType(node->type) && !node->resources.empty() &&
-                node->resources.front().IsValid())
+            if (!IsCompositeEditMode() && resetNamLevels)
             {
-                ResetNamNodeLevelState(node->id);
+                ResetNamNodeLevelState(nodeId);
             }
 
             if (appliedPreset && ReportHostedPluginResourceLoadFailure(nodeId, selectedRef))
