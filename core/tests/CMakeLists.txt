@@ -24,6 +24,7 @@ set(TEST_SOURCES
     DrivePedalTests.cpp
     DSPPerformanceTests.cpp
     EffectAliasParityTests.cpp
+    EffectPresetWorkflowTests.cpp
     EffectProcessorTests.cpp
     FastMathNanTests.cpp
     GaplessSwitchingTests.cpp

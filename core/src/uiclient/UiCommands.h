@@ -54,8 +54,10 @@ public:
     void RemoveNode(const std::string& nodeId);
     void MoveNode(const std::string& nodeId, const std::string& afterNodeId);
     void CollapseSplit(const std::string& splitterId);
+    /// A factory preset is sent as parameter changes; a saved one is applied by the engine,
+    /// which restores its resources and config as well.
     void ApplyEffectPreset(const std::string& nodeId, const EffectPresetInfo& preset);
-    /// Saves a node's current parameters as a user preset for its effect type.
+    /// Saves a node's current settings as a user preset for its effect type.
     void SaveEffectPreset(const std::string& nodeId, const std::string& name);
 
     // ── Global chain and output ─────────────────────────────────────────────

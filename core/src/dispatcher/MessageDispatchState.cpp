@@ -131,6 +131,12 @@ bool MessageDispatcher::DispatchStateAndLists(PluginController& c, const nlohman
         return true;
     }
 
+    if (type == "applyEffectPreset")
+    {
+        c.HandleApplyEffectPresetRequest(msg);
+        return true;
+    }
+
     if (type == "deleteEffectPreset")
     {
         c.HandleDeleteEffectPresetRequest(msg);

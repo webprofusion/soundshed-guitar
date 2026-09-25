@@ -219,6 +219,22 @@ void UiCommands::CollapseSplit(const std::string& splitterId)
 
 void UiCommands::ApplyEffectPreset(const std::string& nodeId, const EffectPresetInfo& preset)
 {
+    // A saved preset can carry a model, an IR, a plugin and its state as well as parameters,
+    // and only the engine holds all of that, so it applies those itself.
+    if (preset.source == "custom")
+    {
+        const auto& state = mClient.State();
+        const auto* node = state.activePreset ? state.activePreset->graph.FindNode(nodeId) : nullptr;
+
+        if (node != nullptr)
+        {
+            mClient.Send("applyEffectPreset",
+                         {{"nodeId", nodeId}, {"effectType", node->type}, {"presetId", preset.id}});
+        }
+
+        return;
+    }
+
     for (const auto& [key, value] : preset.parameters)
     {
         SetNodeParam(nodeId, key, value);
@@ -242,7 +258,10 @@ void UiCommands::SaveEffectPreset(const std::string& nodeId, const std::string& 
         parameters[key] = value;
     }
 
-    mClient.Send("saveEffectPreset", {{"effectType", node->type}, {"name", name}, {"parameters", parameters}});
+    // The engine snapshots its own copy of the node (resources and config too); the
+    // parameters are what it falls back on if it cannot find it.
+    mClient.Send("saveEffectPreset",
+                 {{"effectType", node->type}, {"nodeId", nodeId}, {"name", name}, {"parameters", parameters}});
 }
 
 // ── Global chain and output ───────────────────────────────────────────────

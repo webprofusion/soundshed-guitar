@@ -485,6 +485,7 @@ class PluginController
     void HandleGetSetlistsRequest();
     void HandleGetEffectPresetsRequest();
     void HandleSaveEffectPresetRequest(const nlohmann::json& payload);
+    void HandleApplyEffectPresetRequest(const nlohmann::json& payload);
     void HandleDeleteEffectPresetRequest(const nlohmann::json& payload);
     void BroadcastEffectPresets();
     void HandleSetSetlistsRequest(const nlohmann::json& payload);

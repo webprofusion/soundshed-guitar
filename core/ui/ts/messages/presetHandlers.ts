@@ -11,7 +11,7 @@ import { refreshPerformancePads } from "../performancePads.js";
 import { adoptCreatedPreset, applyPresetArchiveSessionState, applyPresetFavoritesFromBackend, applyPresetFoldersFromBackend, applyPresetRatingsFromBackend, applyPresetRecentsFromBackend, applySetlistCursorFromBackend, applySetlistsFromBackend, cachePresetInMemory, handlePresetDataMessage, populatePresetDropdown, refilterPresets, refreshPresetCacheEntryFromBackend, renderActivePreset, setFavoriteToggleState, updatePresetActionButtons, updatePresetDropdownSelection } from "../presets.js";
 import { normalizePresetScenes } from "../presetScenes.js";
 import { migratePresetNodeTypes } from "../presetV2.js";
-import { refreshEffectPresetsFlyout, refreshSelectedNodeParams } from "../signalPath.js";
+import { refreshEffectPresetsFlyout } from "../signalPath.js";
 import { applyEnginePresetDirty, clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
 import { setMixerSlots } from "../mixerStore.js";
 import { cachePreset, markPresetStored, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setLibraryPresets, setPresetLoadingId, setStoredPresetIds, showAllLibraryPresets } from "../presetLibraryStore.js";
@@ -222,9 +222,8 @@ export function onSetlists(payload: IncomingPayload): void {
 export function onEffectPresets(payload: IncomingPayload): void {
   const effectPresetsPayload = payload as { byEffectType?: Record<string, StoredEffectPreset[]> };
   uiState.effectPresets = effectPresetsPayload.byEffectType ?? {};
-  // The backend re-broadcasts after each save/delete, so both the params panel
-  // and an open presets flyout need to pick up the new list.
-  refreshSelectedNodeParams();
+  // The backend re-broadcasts after each save/delete. Only the presets flyout shows
+  // the list; re-rendering the params panel too would rebuild the button it hangs from.
   refreshEffectPresetsFlyout();
 }
 

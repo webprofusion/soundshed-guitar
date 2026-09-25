@@ -12,7 +12,7 @@ import { EffectTypeRegistry, getNodeEffectInfo } from "../presetV2.js";
 import {
   nodeParamsPanelElement,
 } from "./state.js";
-import { sendSignalPathNodeParamUpdate } from "./commands.js";
+import { sendApplyEffectPreset, sendSignalPathNodeParamUpdate } from "./commands.js";
 import { requestNodeParamsRefresh } from "./render.js";
 /**
  * Storage key for a node's user presets. Resolved to the canonical effect type so
@@ -60,9 +60,29 @@ export function applyEffectPresetParams(
   requestNodeParamsRefresh();
 }
 
+/**
+ * Load one of the user's saved presets into a node. The engine applies it, since only
+ * it holds everything the preset restores (a hosted plugin's state never reaches the
+ * UI), and echoes the node back; the parameters are set here as well so the knobs move
+ * without waiting for that.
+ */
+export function applyUserEffectPreset(node: GraphNode, entry: StoredEffectPreset): void {
+  const known = new Set((getNodeEffectInfo(node)?.parameters ?? []).map((def) => def.key));
+  for (const [key, value] of Object.entries(entry.parameters ?? {})) {
+    if (known.has(key) && typeof value === "number" && Number.isFinite(value)) {
+      node.params[key] = value;
+    }
+  }
+  sendApplyEffectPreset(node.id, effectPresetStorageKey(node), entry.id);
+  requestNodeParamsRefresh();
+}
+
 export let effectPresetsPopover: HTMLElement | null = null;
 
 export let closeEffectPresetsPopover: (() => void) | null = null;
+
+/** Points the open flyout at a re-rendered Presets button for the same node. */
+let reanchorEffectPresetsPopover: ((button: HTMLElement) => void) | null = null;
 
 /** Closes the presets flyout if it is open. Safe to call at any time. */
 export function closeEffectPresetsFlyout(): void {
@@ -81,13 +101,21 @@ export function parseEffectPresetOptionValue(value: string): { kind: string; id:
   return { kind: value.slice(0, separator), id: value.slice(separator + 1) };
 }
 
-export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): void {
+export function openEffectPresetsFlyout(initialAnchor: HTMLElement, nodeId: string): void {
   // Re-clicking the same anchor closes, matching the layout picker.
   if (effectPresetsPopover) {
     const sameAnchor = effectPresetsPopover.dataset.anchorId === nodeId;
     closeEffectPresetsFlyout();
     if (sameAnchor) return;
   }
+
+  // The params panel rebuilds its header whenever the node's state comes back from the
+  // engine, replacing this button; bindEffectPresetsButton hands the new one over.
+  let anchor = initialAnchor;
+  /** The picker's value, kept across re-renders so the list does not reset under the user. */
+  let selectedValue = "";
+  /** A name just saved, to select once the engine's re-broadcast brings its entry in. */
+  let pendingSelectName: string | null = null;
 
   /** Resolve the node fresh each render: a preset switch can invalidate it. */
   const resolveTarget = (): { node: GraphNode; preset: Preset } | null => {
@@ -107,6 +135,12 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
   effectPresetsPopover = popover;
 
   const position = (): void => {
+    // A detached anchor measures as a zero rect, which would throw the flyout into the
+    // window's corner. It is only left detached when the panel now shows something else.
+    if (!anchor.isConnected) {
+      close();
+      return;
+    }
     const rect = anchor.getBoundingClientRect();
     const margin = 8;
     let left = rect.right - popover.offsetWidth;
@@ -142,6 +176,7 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
     if (effectPresetsPopover === popover) {
       effectPresetsPopover = null;
       closeEffectPresetsPopover = null;
+      reanchorEffectPresetsPopover = null;
     }
     anchor.setAttribute("aria-expanded", "false");
   }
@@ -178,6 +213,21 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
       </div>
       ${userPresets.length ? `<button class="effect-presets-popover-delete" type="button" disabled>Delete selected</button>` : ""}
     `;
+
+    if (pendingSelectName !== null) {
+      const saved = userPresets.find((entry) => entry.name === pendingSelectName);
+      if (saved) {
+        selectedValue = `user:${saved.id}`;
+        pendingSelectName = null;
+      }
+    }
+    const picker = popover.querySelector<HTMLSelectElement>(".effect-presets-picker");
+    if (picker && Array.from(picker.options).some((option) => option.value === selectedValue)) {
+      picker.value = selectedValue;
+    } else {
+      selectedValue = "";
+    }
+
     bind();
     position();
   }
@@ -189,9 +239,12 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
     const deleteBtn = popover.querySelector<HTMLButtonElement>(".effect-presets-popover-delete");
     if (!nameInput || !saveBtn) return;
 
+    // Only the user's own presets can be deleted; factory ones are read-only.
+    if (deleteBtn) deleteBtn.disabled = parseEffectPresetOptionValue(selectedValue)?.kind !== "user";
+
     picker?.addEventListener("change", () => {
+      selectedValue = picker.value;
       const selection = parseEffectPresetOptionValue(picker.value);
-      // Only the user's own presets can be deleted; factory ones are read-only.
       if (deleteBtn) deleteBtn.disabled = selection?.kind !== "user";
 
       const target = resolveTarget();
@@ -202,7 +255,7 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
         if (entry) applyEffectPresetParams(target.node, target.preset, entry.parameters, entry.parameterOrder);
       } else {
         const entry = getUserEffectPresets(target.node).find((c) => c.id === selection.id);
-        if (entry) applyEffectPresetParams(target.node, target.preset, entry.parameters);
+        if (entry) applyUserEffectPreset(target.node, entry);
       }
     });
 
@@ -219,10 +272,14 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
         const confirmed = await showConfirm(`Replace the saved settings named "${name}"?`, "Overwrite preset");
         if (!confirmed) return;
       }
-      // The backend owns the store and re-broadcasts, which re-renders this flyout.
+      // The backend owns the store and re-broadcasts, which re-renders this flyout. It
+      // snapshots its own copy of the node, resources and config included; `parameters`
+      // is the fallback it uses when it cannot find the node.
+      pendingSelectName = name;
       postMessage({
         type: "saveEffectPreset",
         effectType: effectPresetStorageKey(target.node),
+        nodeId: target.node.id,
         name,
         parameters: { ...target.node.params },
       });
@@ -260,6 +317,12 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
   popover.addEventListener("effect-presets-refresh", () => render());
 
   closeEffectPresetsPopover = close;
+  reanchorEffectPresetsPopover = (button) => {
+    if (button === anchor) return;
+    anchor = button;
+    anchor.setAttribute("aria-expanded", "true");
+    position();
+  };
   anchor.setAttribute("aria-expanded", "true");
   document.addEventListener("pointerdown", onDocumentPointerDown, true);
   document.addEventListener("keydown", onKeyDown, true);
@@ -271,6 +334,15 @@ export function openEffectPresetsFlyout(anchor: HTMLElement, nodeId: string): vo
 
 export function bindEffectPresetsButton(node: GraphNode): void {
   const button = nodeParamsPanelElement?.querySelector<HTMLButtonElement>("[data-effect-presets-open]");
+  // The panel has just been rebuilt, so an open flyout's button is gone: follow the new
+  // one if the panel still shows that node, and close if it has moved on to another.
+  if (effectPresetsPopover) {
+    if (button && effectPresetsPopover.dataset.anchorId === node.id) {
+      reanchorEffectPresetsPopover?.(button);
+    } else {
+      closeEffectPresetsFlyout();
+    }
+  }
   if (!button) return;
   button.addEventListener("click", (event) => {
     event.preventDefault();

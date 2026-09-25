@@ -107,15 +107,20 @@ export interface SetlistSlot {
 }
 
 /**
- * A user-saved parameter snapshot for one effect type. The factory equivalent is
+ * A user-saved snapshot of one effect's settings. The factory equivalent is
  * EffectPresetDefinition on EffectTypeInfo (source: "factory"); these are the
  * "custom" half of the same idea, persisted in UI storage so they are available
- * to every preset rather than baked into one.
+ * to every preset rather than baked into one. The engine snapshots and applies
+ * them (`applyEffectPreset`), resources and config included; entries saved
+ * before that have `parameters` only.
  */
 export interface StoredEffectPreset {
   id: string;
   name: string;
   parameters: Record<string, number>;
+  resources?: ResourceRef[];
+  /** Hosted plugin state is scrubbed out, as it is from graphs. */
+  config?: Record<string, string>;
 }
 
 export interface Setlist {

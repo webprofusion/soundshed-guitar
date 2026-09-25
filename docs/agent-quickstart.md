@@ -58,7 +58,7 @@ instead of scrolling one enormous one:
 | `controller/PluginControllerMixer.cpp`          | Mixer slots and levels                                |
 | `controller/PluginControllerMetronome.cpp`      | Click track                                           |
 | `controller/PluginControllerDemo.cpp`           | Demo preview and offline render                       |
-| `controller/PluginControllerEffectPresets.cpp`  | Per-effect user parameter presets                     |
+| `controller/PluginControllerEffectPresets.cpp`  | Per-effect user presets: parameters, resources, config |
 
 Free functions shared between those files live in `core/src/controller/internal/`
 in namespace `guitarfx::controller_detail` — settings keys, NAM metadata

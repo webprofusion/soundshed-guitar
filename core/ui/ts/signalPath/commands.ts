@@ -64,6 +64,20 @@ export function sendNodeResourceUpdate(
   setPresetDirty(true);
 }
 
+/**
+ * Asks the engine to load a user effect preset into a node: its parameters, resources
+ * and config, rebuilding the chain only when a resource or config changes.
+ */
+export function sendApplyEffectPreset(nodeId: string, effectType: string, presetId: string): void {
+  postMessage({
+    type: "applyEffectPreset",
+    nodeId,
+    effectType,
+    presetId,
+  });
+  setPresetDirty(true);
+}
+
 export function sendBrowseNodeResource(
   nodeId: string,
   resourceType: string,
