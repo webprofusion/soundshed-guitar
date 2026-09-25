@@ -268,6 +268,28 @@
   max-width: 100%;
 }
 
+/*
+  A knob's readout can be the widest thing in its column, and then a readout that grows
+  as the value gains a digit or a sign ("+0.0 dB" to "-12.0 dB") nudges every control
+  after it. These hold the width of the longest value the knob can show, measured at
+  10px Inter with tabular digits and rounded up with a pixel or two to spare, in em so
+  they follow the font size. The delay and transpose readouts need none: the DOUBLER
+  and TRANSPOSE headers above them are wider than any value they show.
+*/
+.control-bar .knob-value {
+  text-align: center;
+  white-space: nowrap;
+}
+
+#input-value,
+#output-value {
+  min-width: 4.6em; /* "-12.0 dB", 44.0px */
+}
+
+#gate-threshold-value {
+  min-width: 3.7em; /* "-80 dB", 34.8px */
+}
+
 .control-bar-controls-panel>.control-bar-group:first-of-type {
   grid-column: 1;
   justify-self: start;
