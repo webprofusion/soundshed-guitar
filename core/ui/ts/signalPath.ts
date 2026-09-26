@@ -13,7 +13,6 @@ import { EffectTypeRegistry, getNodeEffectInfo } from "./presetV2.js";
 import { EffectGuids } from "./effectGuids.js";
 import { renderIcon } from "./iconAssets.js";
 import {
-  expandFxSelector,
   focusFxSelectorCategory,
   sendAddSignalPathNode,
   sendAddSignalPathNodeOnEdge,
@@ -35,10 +34,6 @@ import {
   nodeParamsPanelElement,
   setLastSelectedNode,
   setSelectedNodeId,
-  signalPathAddMenu,
-  signalPathAddMenuOptions,
-  signalPathAddMenuTrigger,
-  signalPathAddSceneButton,
   signalPathNodesElement,
 } from "./signalPath/state.js";
 import { sendCollapseParallelSplit, sendMoveSignalPathNodeToEdge, sendReplaceSignalPathNode, sendSignalPathNodeDelete, sendSignalPathNodeReorder } from "./signalPath/commands.js";
@@ -58,6 +53,7 @@ import { buildMissingResourceTooltip, buildNodeLayoutMatchText, getMissingResour
 import { isProtectedSignalPathNode, isToggleableSignalPathNode, toggleSignalPathNodeBypass } from "./signalPath/bypass.js";
 import { updateSignalPathClipIndicators } from "./signalPath/telemetry.js";
 import { reanchorAddEffectDropdown, showAddEffectDropdown } from "./signalPath/addEffectDropdown.js";
+import { initSignalPathAddMenu, updateSignalPathAddMenuAvailability } from "./signalPath/addMenu.js";
 export { applySignalPathNodeBypassState, isToggleableSignalPathNode } from "./signalPath/bypass.js";
 export { applySpatialPositionUpdate, buildDefaultParamControlsHtml } from "./signalPath/paramsPanel.js";
 export { closeEffectPresetsFlyout, refreshEffectPresetsFlyout } from "./signalPath/effectPresets.js";
@@ -1318,59 +1314,7 @@ function bindPresetScenePanel(panel: HTMLElement, renderedPreset: Preset): void 
   });
 }
 
-function setSignalPathAddMenuOpen(open: boolean): void {
-  if (!signalPathAddMenu || !signalPathAddMenuTrigger || !signalPathAddMenuOptions) {
-    return;
-  }
-  signalPathAddMenuOptions.hidden = !open;
-  signalPathAddMenuTrigger.setAttribute("aria-expanded", String(open));
-  if (open) {
-    const triggerRect = signalPathAddMenuTrigger.getBoundingClientRect();
-    signalPathAddMenuOptions.style.right = `${Math.max(8, window.innerWidth - triggerRect.right)}px`;
-    signalPathAddMenuOptions.style.bottom = `${Math.max(8, window.innerHeight - triggerRect.top + 8)}px`;
-  } else {
-    signalPathAddMenuOptions.style.removeProperty("right");
-    signalPathAddMenuOptions.style.removeProperty("bottom");
-  }
-}
-
-function updateSignalPathAddMenuAvailability(available: boolean): void {
-  signalPathAddMenu?.classList.toggle("is-disabled", !available);
-  if (signalPathAddMenuTrigger) {
-    signalPathAddMenuTrigger.disabled = !available;
-  }
-  if (!available) {
-    setSignalPathAddMenuOpen(false);
-  }
-}
-
-signalPathAddMenuTrigger?.addEventListener("click", (event) => {
-  event.stopPropagation();
-  setSignalPathAddMenuOpen(signalPathAddMenuOptions?.hidden ?? true);
-});
-
-document.getElementById("signal-path-floating-add-fx")?.addEventListener("click", () => {
-  setSignalPathAddMenuOpen(false);
-  expandFxSelector({ focusSearch: true });
-});
-
-signalPathAddSceneButton?.addEventListener("click", () => {
-  setSignalPathAddMenuOpen(false);
-  addSceneFromToolbar();
-});
-
-document.addEventListener("click", (event) => {
-  if (!signalPathAddMenu?.contains(event.target as Node)) {
-    setSignalPathAddMenuOpen(false);
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && signalPathAddMenuOptions && !signalPathAddMenuOptions.hidden) {
-    setSignalPathAddMenuOpen(false);
-    signalPathAddMenuTrigger?.focus();
-  }
-});
+initSignalPathAddMenu({ onAddScene: addSceneFromToolbar });
 
 /**
  * Bind click handlers for + buttons between nodes.

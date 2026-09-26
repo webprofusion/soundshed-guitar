@@ -369,6 +369,32 @@ presets the engine does not store.
 | **Resource Browser** | NAM model and IR selection |
 | **Settings** | Audio preferences, storage, theme |
 
+### Small displays (compact density)
+
+`core/ui/ts/compactMode.ts` decides the shell for the window, UI zoom included, and stamps it
+on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-paint script in
+`index.template.html` applies the same tests so the first frame is already right.
+
+- **Density** (`data-density="compact"`): width ≤ 980 or height ≤ 620, or pinned by the
+  Auto/Compact/Full setting (`ui.density`).
+- **Layout** (`data-compact-layout`): `rail` when wider than tall (every Android phone, which
+  runs landscape, and short desktop windows) puts navigation in a rail down the left edge;
+  `stack` keeps the bars on top.
+- **Stage.** The chain and the selected effect take turns on the stage (`compactStage.ts`,
+  the Chain/Effect tabs, or the rail's buttons). A stacked window at least 600x800
+  (`data-compact-split`, for example an app snapped to half a monitor) shows both at once, the
+  chain over the effect as in the full shell.
+- **The chain wraps** onto more lines by default here (below).
+- **Adding an effect.** With the chain on its own stage, the floating + menu's Add FX… opens
+  the effect chooser at the end of the chain, the list a + between two nodes opens, instead of
+  the FX library, whose effects can only be dragged (`signalPath/addMenu.ts`). The library
+  would have to open over the chain it drops onto, and on a touch screen a drag that starts
+  upwards scrolls its list instead.
+- **Narrow (≤ 540px).** The preset name takes the whole first line of the top strip, and
+  Controls and the preset actions share the second. Below 600px the effect header, the preset
+  library (folders over presets), the FX library (category chips over two columns) and the
+  Tones sidebar stack their parts instead of placing them side by side.
+
 ## Settings → Audio & MIDI
 
 The Settings panel's own tab strip (`core/ui/ts/settings/tabs.ts`, markup in
@@ -595,8 +621,12 @@ To change an effect's look, edit the JSON, then run the generator.
 ### Wrapping the chain (`core/ui/ts/signalPath/chainRow.ts`, `css/signal-path/wrap.css`)
 
 The toggle in the chain bar's top-right corner (`#signal-path-wrap-btn`) wraps the chain onto
-more lines instead of scrolling it sideways. The choice is `uiSettings.signalPathWrap`, so it
-is the web UI's own; Soundshed Guitar Nano's chain page has `nativeUi.chainWrap`.
+more lines instead of scrolling it sideways. The choice is remembered per display density: at
+full density it is `uiSettings.signalPathWrap`, off unless set; at compact density (small
+displays) it is `uiSettings.signalPathWrapCompact`, on unless set to false. The toggle changes
+the one for the density on screen, and the chain follows as a window crosses the compact
+threshold. Both are the web UI's own; Soundshed Guitar Nano's chain page has
+`nativeUi.chainWrap`.
 
 - **Segments.** The main row is built from `.signal-chain-segment`s: the input, then each
   connector with what it leads into. A splitter's segment also carries its parallel block and

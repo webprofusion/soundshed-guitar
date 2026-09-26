@@ -77,17 +77,24 @@ html[data-density="compact"] .control-bar-body-inner {
   min-height: 36px;
 }
 
-/* Collapse chevron: still there, just out of the way of the preset name. */
+/*
+  No collapse chevron. The strip is the preset row and nothing else, and the
+  preset row is a performance control, so there is nothing here to put away. The
+  chevron floated over the corner of the Previous button — a 23x15 target on top
+  of the one a player reaches for between songs — and a bar collapsed at full
+  density only garbled the strip here. A collapse chosen at full density comes
+  back when the window does.
+*/
 html[data-density="compact"] .control-bar-collapse-btn {
-  position: absolute;
-  top: 2px;
-  left: calc(2px + var(--ssg-safe-left));
-  z-index: 2;
-  padding: 2px 4px;
+  display: none;
 }
 
-html[data-density="compact"] .control-bar-collapsed-label > span {
-  font-size: 9px;
+html[data-density="compact"] .control-bar.is-collapsed {
+  grid-template-rows: auto 1fr;
+}
+
+html[data-density="compact"] .control-bar.is-collapsed.has-open-popover .control-bar-body {
+  overflow: visible;
 }
 
 /* The Preset/Controls tab pair becomes a single toggle for the trims sheet. */
@@ -106,14 +113,34 @@ html[data-density="compact"] .control-bar-tab[data-control-bar-tab="preset"] {
   display: none;
 }
 
+/* Styled in full here rather than on top of the narrow control bar's tab rules:
+   those sit behind max-width: 980px, and a short window wider than that (1024x600)
+   is compact too — there the button fell back to the browser's own. */
 html[data-density="compact"] .control-bar-tab[data-control-bar-tab="controls"] {
   min-width: 0;
   min-height: 28px;
   padding: 0 10px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
   font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+html[data-density="compact"] .control-bar-tab[data-control-bar-tab="controls"]:hover {
+  color: var(--text-primary);
+  background: var(--overlay-light);
+}
+
+html[data-density="compact"] .control-bar-tab[data-control-bar-tab="controls"]:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 html[data-density="compact"] .control-bar[data-compact-controls="open"]
@@ -135,12 +162,21 @@ html[data-density="compact"] .control-bar-preset-panel[hidden] {
   display: flex;
 }
 
+/*
+  One line where it fits, two where it does not. The toolbar needs ~215px and the
+  selector row wants 220px (a 150px name between its arrows), so a phone held
+  upright (390px, less the Controls button) cannot have both on one line: kept on
+  one, the name was squeezed to a single letter or the toolbar was pushed off the
+  right edge, taking its overflow menu with it. So the toolbar wraps under the name
+  instead, centred by its auto margins when it is alone on its line. Upright is
+  also where the height for a second line is. A landscape phone keeps one line.
+*/
 html[data-density="compact"] .preset-group {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   width: 100%;
   min-width: 0;
 }
@@ -157,7 +193,7 @@ html[data-density="compact"] .preset-row {
 }
 
 html[data-density="compact"] .preset-selector-row {
-  flex: 1 1 auto;
+  flex: 1 1 220px;
   min-width: 0;
   gap: 4px;
 }
@@ -205,6 +241,46 @@ html[data-density="compact"] .preset-toolbar-row {
   flex: 0 0 auto;
   order: 3;
   align-items: center;
+  /* Alone on the second line, it sits under the name rather than off to one side.
+     On the first line the name's row takes all the free space, so this does nothing. */
+  margin-inline: auto;
+}
+
+/*
+  Narrower than one line of name, toolbar and Controls (~520px), the name gets the
+  whole first line and Controls joins the toolbar on the second. Wrapping inside
+  the preset panel alone kept Controls in a column beside both lines, which cost
+  the name 80px it could not spare: "31 Jeff Beck - V…" at 360px. The preset panel
+  and group stop being boxes so their rows and the Controls toggle share one line
+  box; neither is anything's containing block (the library popover hangs from the
+  bar, the overflow menu from its own button). Controls starts the second line
+  under the Previous arrow, and the actions end it under Next.
+*/
+@media (max-width: 540px) {
+  html[data-density="compact"] .control-bar-body-inner {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  html[data-density="compact"] .control-bar-preset-panel,
+  html[data-density="compact"] .control-bar-preset-panel[hidden],
+  html[data-density="compact"] .preset-group {
+    display: contents;
+  }
+
+  html[data-density="compact"] .preset-selector-row {
+    order: 1;
+    flex: 1 1 100%;
+  }
+
+  html[data-density="compact"] .control-bar-tabs {
+    order: 2;
+  }
+
+  html[data-density="compact"] .preset-toolbar-row {
+    order: 3;
+    margin-inline: auto 0;
+  }
 }
 
 html[data-density="compact"] .preset-toolbar {
@@ -231,9 +307,15 @@ html[data-density="compact"] .tone-sharing-preview-indicator {
 }
 
 /* The trims sheet. Absolute so it costs the layout nothing when closed and
-   overlays the chain when open. */
+   overlays the chain when open.
+
+   The column is pinned to the bar's width. Opening the sheet lets the body stop
+   clipping (overflow: visible), and a grid item that does not clip is at least
+   as wide as its min-content, so the implicit column grew to the strip's full
+   single-line width, 439px on a 390px phone, and pushed Controls off the edge. */
 html[data-density="compact"] .control-bar {
   position: relative;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 html[data-density="compact"] .control-bar-controls-panel {
@@ -244,6 +326,13 @@ html[data-density="compact"] .control-bar[data-compact-controls="open"] .control
   overflow: visible;
 }
 
+/*
+  The input and output groups sit side by side where they fit and stack where they
+  do not, and each wraps its own controls rather than shrinking below them. Held
+  to one line, a 390px sheet squeezed each group to half its width and the knobs
+  inside overlapped, and a 740px one centred groups wider than their share, which
+  pushed the input meter off the left edge, where no scrolling reaches.
+*/
 html[data-density="compact"] .control-bar[data-compact-controls="open"] .control-bar-controls-panel,
 html[data-density="compact"] .control-bar[data-compact-controls="open"] .control-bar-controls-panel[hidden] {
   position: absolute;
@@ -252,11 +341,12 @@ html[data-density="compact"] .control-bar[data-compact-controls="open"] .control
   left: 6px;
   z-index: var(--z-popover, 900);
   display: flex;
-  flex-wrap: nowrap;
-  gap: 16px;
-  justify-content: space-between;
-  max-height: min(60vh, 320px);
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  justify-content: space-evenly;
+  max-height: min(70vh, 360px);
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 10px 12px;
   border: 1px solid var(--border-dark-medium);
   border-radius: var(--radius-lg);
@@ -265,15 +355,19 @@ html[data-density="compact"] .control-bar[data-compact-controls="open"] .control
 }
 
 html[data-density="compact"] .control-bar[data-compact-controls="open"] .control-bar-group {
-  flex: 1 1 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 10px 12px;
   min-width: 0;
 }
 
 /* ── Signal chain bar ─────────────────────────────────────────────────────────
  *
- * signalPath/layout.ts pins the scroll area to its compact 48px at this density,
- * so all that is left is the chrome around it.
+ * The chain has a stage of its own at this density (see the Play stage tabs,
+ * below), with full-size nodes, and it wraps onto more lines unless the user
+ * turned that off here (signalPath/chainRow.ts). What is left is the chrome
+ * around it.
  */
 
 /*
@@ -373,6 +467,13 @@ html[data-density="compact"] .footer-actions-panel {
 html[data-density="compact"] .footer-bar:not(.footer-actions-open) .footer-actions-panel,
 html[data-density="compact"] .footer-actions-panel[aria-hidden="true"] {
   display: none;
+}
+
+/* The footer's own stacking level (20) is below the chain's floating add button
+   (120), which is where the open panel lands on a chain stage, so the button drew
+   over the panel's theme select. Open, the footer rises to the popover level. */
+html[data-density="compact"] .footer-bar.footer-actions-open {
+  z-index: var(--z-popover, 900);
 }
 
 html[data-density="compact"] .footer-group {
@@ -482,6 +583,25 @@ html[data-density="compact"] .footer-ab-btn {
     height: 32px !important;
     min-height: 32px !important;
   }
+
+  /* The chain's add button is how a new effect goes in on a touch screen, where
+     the "+" between nodes only shows on hover. 24px was the desktop size. */
+  html[data-density="compact"] .signal-path-add-menu-trigger {
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
+  }
+
+  html[data-density="compact"] .signal-path-add-menu-options button {
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  /* The wrap toggle keeps its small glyph; the padding is the target. */
+  html[data-density="compact"] .signal-path-wrap-btn {
+    padding: 8px 8px 10px 12px;
+    right: 0;
+  }
 }
 
 /* ── Play stage tabs ──────────────────────────────────────────────────────────
@@ -491,6 +611,11 @@ html[data-density="compact"] .footer-ab-btn {
  * themselves cost 30px and hand back 45px to the detail view and 180px to the
  * chain, which is the difference between icon-only nodes and nodes with labels.
  *
+ * A stacked window tall and wide enough to give both a useful share — a window
+ * snapped to half a monitor — is stamped data-compact-split (ts/compactMode.ts),
+ * and every rule that makes them take turns steps aside for it: the chain sits
+ * over the effect as it does in the full shell.
+ *
  * The component exists only for this density, so its base rules live here rather
  * than in a components sheet that would carry a permanently hidden element.
  */
@@ -499,7 +624,7 @@ html[data-density="compact"] .footer-ab-btn {
   display: none;
 }
 
-html[data-density="compact"][data-main-panel="visualizer"] .compact-stage-tabs {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"] .compact-stage-tabs {
   display: flex;
   flex: none;
   justify-content: center;
@@ -545,37 +670,57 @@ html[data-density="compact"] .compact-stage-tab.is-active {
 /* Chain tab: the chain takes the whole stage. .signal-path-visualizer is pinned
    to --signal-path-scroll-height by default, which is what keeps it at node
    height when it shares the screen; here it should grow instead. */
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="chain"] .main-content {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .main-content {
   display: none;
 }
 
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-stage {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-stage {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
 }
 
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-bar,
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-body {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-bar,
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-body {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-visualizer {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-visualizer {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
 }
 
+/* Upright, the stage is far taller than a wrapped chain, and centred the chain
+   floated in the middle of it. It starts at the top instead, under the tabs, as
+   the effect stage and every list in the app do. On the landscape rail the stage
+   is about as tall as the chain, and centred still reads best. */
+html[data-density="compact"]:not([data-compact-split])[data-compact-layout="stack"][data-main-panel="visualizer"][data-compact-stage="chain"] .signal-path-nodes {
+  align-items: flex-start;
+  padding-top: 14px;
+}
+
 /* Detail tab: the chain steps aside, taking the FX flyout anchored to it. */
-html[data-density="compact"][data-main-panel="visualizer"][data-compact-stage="detail"] .signal-path-stage {
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="detail"] .signal-path-stage {
   display: none;
 }
 
-/* The chevron that collapsed the chain is what the tabs now do. */
-html[data-density="compact"][data-main-panel="visualizer"] .signal-path-collapse-btn {
+/* The chevron that collapsed the chain is what the tabs now do. So a chain
+   collapsed at full density (the choice persists) is not collapsed here: with the
+   chevron gone, the Chain tab would open on an empty stage with no way back. */
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"] .signal-path-collapse-btn {
   display: none;
+}
+
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"] .signal-path-bar.is-collapsed {
+  grid-template-rows: auto;
+  min-height: 0;
+}
+
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"] .signal-path-bar.is-collapsed .signal-path-wrap-btn {
+  display: flex;
 }
 
 @media (pointer: coarse) {

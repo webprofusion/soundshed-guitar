@@ -216,8 +216,16 @@ const CHECKS = [
     expression: `(() => {
       const panel = document.getElementById('panel-visualizer');
       if (!panel) return 'panel-visualizer missing';
-      const visible = panel.getClientRects().length > 0;
-      return visible ? null : 'the default panel rendered but is not visible';
+      if (panel.getClientRects().length > 0) return null;
+      // In a small window the chain and the effect can take turns on the stage
+      // (ts/compactStage.ts), and the choice persists. With the Chain tab up, Play's
+      // panel is hidden on purpose, and the chain's stage is what must be on screen.
+      const root = document.documentElement.dataset;
+      if (root.density === 'compact' && root.compactStage === 'chain' && !('compactSplit' in root)) {
+        const stage = document.querySelector('.signal-path-stage');
+        return stage && stage.getClientRects().length > 0 ? null : 'the chain stage is up but not visible';
+      }
+      return 'the default panel rendered but is not visible';
     })()`,
   },
   {

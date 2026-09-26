@@ -68,6 +68,42 @@ html[data-density="compact"] .tone-sharing-nav-btn {
   white-space: nowrap;
 }
 
+html[data-density="compact"] .tone-sharing-create-pack-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* A finger scrolls a strip of chips sideways without a scrollbar, and on a phone
+   the thin one drew a grey bar under the chips that read as a tab underline. A
+   mouse keeps it: without one, a strip that overflows has no visible way along.
+   (Settings' tab strip has the same rule, after its own below.) */
+@media (pointer: coarse) {
+  html[data-density="compact"] .tone-sharing-browse-nav {
+    scrollbar-width: none;
+  }
+}
+
+/*
+  A phone held upright: the account chip, the chips and Create Pack on one line
+  left the chips about 150px, two sections' worth, and wrapped Create Pack onto
+  three lines. The chips get a full-width line of their own under the other two.
+*/
+@media (max-width: 600px) {
+  html[data-density="compact"] .tone-sharing-sidebar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  html[data-density="compact"] .tone-sharing-browse-nav {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  html[data-density="compact"] .tone-sharing-create-pack-btn {
+    margin-left: auto;
+  }
+}
+
 /*
   Search field and button side by side, not stacked.
 
@@ -140,6 +176,12 @@ html[data-density="compact"] .equipment-tabs .equipment-tab-btn {
   white-space: nowrap;
 }
 
+@media (pointer: coarse) {
+  html[data-density="compact"] .equipment-tabs {
+    scrollbar-width: none;
+  }
+}
+
 html[data-density="compact"] .equipment-library-filters-primary,
 html[data-density="compact"] .equipment-library-filters-advanced {
   grid-template-columns: minmax(0, 1fr);
@@ -157,4 +199,63 @@ html[data-density="compact"] .settings-hint {
 html[data-density="compact"] .performance-pad-panel,
 html[data-density="compact"] #panel-performance {
   padding: 8px;
+}
+
+/*
+  At 740x360 the stage is ~280px, and the header, a 90px bank strip and their
+  gaps took 155px of it: one row of pads — two songs — was all a setlist showed.
+  A shorter bank strip, tighter gaps and shorter pads put two rows on screen.
+*/
+html[data-density="compact"] .performance-pad-view {
+  --performance-shell-padding: 8px;
+  --performance-section-gap: 8px;
+  --performance-bank-height: 48px;
+  --performance-card-height: 72px;
+  padding: var(--performance-shell-padding);
+}
+
+html[data-density="compact"] .performance-bank-btn,
+html[data-density="compact"] .performance-bank-current {
+  padding-block: 6px;
+}
+
+html[data-density="compact"] .performance-pad {
+  padding: 8px 10px;
+}
+
+html[data-density="compact"] .performance-pad-number {
+  min-width: 28px;
+  padding: 3px 7px;
+}
+
+/* Which paths the bank shows is a detail; its name is what matters mid-set. */
+html[data-density="compact"] .performance-bank-current small {
+  display: none;
+}
+
+/*
+  Edit sits in the bank's corner, over its centred name. In a narrow middle
+  column that put the button on the name, so the column keeps the button's width
+  clear on both sides, which keeps the name centred.
+*/
+html[data-density="compact"] .performance-bank-current:has(> .performance-bank-inline-action) {
+  padding-inline: 50px;
+}
+
+html[data-density="compact"] .performance-bank-inline-action {
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+}
+
+/* A phone held upright: the neighbouring banks' arrows are all the side columns
+   need, and the current bank gets the width. */
+@media (max-width: 600px) {
+  html[data-density="compact"] .performance-bank-strip {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+  }
+
+  html[data-density="compact"] .performance-bank-nav-btn small {
+    display: none;
+  }
 }

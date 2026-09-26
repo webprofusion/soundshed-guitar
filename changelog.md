@@ -65,7 +65,8 @@ A big update: five new effects, fifteen classic drive pedals, a Practice Tool fo
 * Fixed effects that use both an amp model and a cab IR, such as Supercharged Neural Amp, losing one when you pick the other.
 
 ### Look & Feel
-* **Compact layout** for small windows, chosen automatically. You can override it with Layout Density in Settings.
+* **Compact layout** for small windows, chosen automatically. You can override it with Layout Density in Settings. A tall, narrow window (the app snapped to half your screen, say) shows the signal chain and the selected effect together, and on a phone the preset bar, controls, preset library, FX list and setlist pads all fit the screen.
+* The signal chain can wrap onto more lines instead of scrolling sideways (the toggle in its top-right corner), and does so automatically on small screens.
 * The Global, Parametric and Graphic EQs show a live spectrum of your signal behind the curve.
 * A new OUT meter beside the OUT knob, and both meters now show a peak level in dB.
 * Effect artwork fills its panel and appears on the signal chain.

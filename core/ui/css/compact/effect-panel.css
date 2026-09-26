@@ -118,8 +118,11 @@ html[data-density="compact"] .default-effect-shell-title {
   font-size: 12px;
 }
 
+/* Clipped as it gives way: squeezed to nothing, its NAM architecture badge still
+   drew at full size over the DSP button beside it. The chain node shows it too. */
 html[data-density="compact"] .default-effect-shell-subtitle {
   flex: 0 50 auto;
+  overflow: hidden;
 }
 
 /*
@@ -149,6 +152,28 @@ html[data-density="compact"] .default-effect-shell-meta {
   flex: none;
   flex-wrap: nowrap;
   gap: 6px;
+}
+
+/*
+  A phone held upright. The header's controls take ~230px, which left an amp's
+  name eight letters ("Marshall 1…") at 360px wide. Below 160px of name the
+  controls move to a line of their own, right-aligned as they are on one line.
+*/
+@media (max-width: 600px) {
+  html[data-density="compact"] .default-effect-shell-header,
+  html[data-density="compact"] .default-effect-shell:has(.default-effect-shell-content.has-equipment-image) .default-effect-shell-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  html[data-density="compact"] .default-effect-shell-identity {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  html[data-density="compact"] .default-effect-shell-meta {
+    margin-left: auto;
+  }
 }
 
 html[data-density="compact"] .default-effect-shell-chip {

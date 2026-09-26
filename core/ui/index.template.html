@@ -45,17 +45,23 @@
       first frame is already laid out at the right density instead of painting
       the desktop shell and reflowing to the compact one a moment later.
 
-      The two thresholds must match COMPACT_MAX_WIDTH / COMPACT_MAX_HEIGHT, and the
-      landscape test must match compactLayoutForViewport: a wrong guess at the
-      layout paints the navigation on the wrong edge for a frame, which is the
-      reflow this is here to prevent.
+      The two thresholds must match COMPACT_MAX_WIDTH / COMPACT_MAX_HEIGHT, the
+      landscape test must match compactLayoutForViewport, and the split test must
+      match compactSplitForViewport: a wrong guess at the layout paints the
+      navigation on the wrong edge for a frame, which is the reflow this is here
+      to prevent.
     */
     (function () {
       var root = document.documentElement;
-      var compact = window.innerWidth <= 980 || window.innerHeight <= 620;
+      var width = window.innerWidth;
+      var height = window.innerHeight;
+      var compact = width <= 980 || height <= 620;
       root.dataset.density = compact ? "compact" : "full";
       if (compact) {
-        root.dataset.compactLayout = window.innerWidth > window.innerHeight ? "rail" : "stack";
+        root.dataset.compactLayout = width > height ? "rail" : "stack";
+        if (width <= height && width >= 600 && height >= 800) {
+          root.dataset.compactSplit = "";
+        }
       }
     })();
   </script>
@@ -141,6 +147,7 @@
   <link rel="stylesheet" href="css/compact/panels.css" />
   <link rel="stylesheet" href="css/compact/effect-panel.css" />
   <link rel="stylesheet" href="css/compact/modals.css" />
+  <link rel="stylesheet" href="css/compact/overlays.css" />
 </head>
 
 <body>

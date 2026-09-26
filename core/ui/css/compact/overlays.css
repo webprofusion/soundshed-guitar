@@ -1,0 +1,132 @@
+/* ===== Compact density: flyouts over the stage =====
+ *
+ * The FX library and the preset library both drop over the content from a bar
+ * above it, sized for a desktop window with a params panel below the chain. On a
+ * small display that geometry fails in two ways: there is no "below" to drop
+ * into (the chain can have the whole stage), and a two-column body built for
+ * 760px does not fit a phone held upright. These rules re-seat both.
+ */
+
+/* ── FX library ───────────────────────────────────────────────────────────────
+ *
+ * The flyout hangs from the bottom edge of the chain stage (top: 100%). On the
+ * compact chain stage that edge is the footer, so it opened below the window,
+ * with only its title showing. There it rises from the bottom of the stage
+ * instead, over the chain, and may take all of the stage's height.
+ */
+
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .fx-selector-panel {
+  top: auto;
+  bottom: 8px;
+  margin-top: 0;
+  max-height: calc(100% - 16px);
+  transform-origin: bottom center;
+}
+
+html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualizer"][data-compact-stage="chain"] .fx-selector-panel.collapsed {
+  transform: translateX(-50%) translateY(10px) scaleY(0.92);
+  clip-path: inset(100% 0 0 0 round 12px);
+}
+
+/*
+  On a phone held upright, a 208px category column beside the effects left the
+  effects one card wide. The categories become a row of chips that scrolls
+  sideways over the effects, and the effects fill two columns. A tablet held
+  upright is compact too, but has the width for the columns, so this goes by
+  width rather than by layout.
+*/
+@media (max-width: 600px) {
+  html[data-density="compact"] .fx-selector-content {
+    flex-direction: column;
+  }
+
+  html[data-density="compact"] .fx-selector-categories {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    width: auto;
+    padding: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--border-light);
+    scrollbar-width: none;
+  }
+
+  html[data-density="compact"] .fx-category {
+    flex: none;
+    margin: 0;
+    padding: 7px 10px;
+    white-space: nowrap;
+  }
+
+  html[data-density="compact"] .fx-selector-effects-list {
+    padding: 8px;
+  }
+
+  html[data-density="compact"] .fx-item {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+  }
+}
+
+/* ── Preset library ───────────────────────────────────────────────────────────
+ *
+ * The popover scrolled as a whole, with the folder tree and the preset list each
+ * scrolling again inside it at up to 420px — two nested scrollers on a window
+ * shorter than one of them. Here the popover is a column that fits the window,
+ * and the folder tree and the list are the only scrollers, each filling the
+ * height it is given.
+ */
+
+html[data-density="compact"] .preset-library-popover.open {
+  padding: 10px;
+  overflow: hidden;
+}
+
+/* On the rail the popover opens under a single 36px strip, so it can take nearly
+   the whole window, footer included: it is the thing being used. */
+html[data-density="compact"][data-compact-layout="rail"] .preset-library-popover.open {
+  top: calc(100% + 6px);
+  max-height: calc(100vh - 56px - var(--ssg-safe-top) - var(--ssg-safe-bottom));
+}
+
+html[data-density="compact"] .preset-library-popover.open > .preset-library {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+html[data-density="compact"] .preset-library-popover.open .preset-library-body {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+html[data-density="compact"] .preset-library-popover.open .preset-list-column {
+  min-height: 0;
+}
+
+html[data-density="compact"] .preset-library-popover.open .preset-folder-tree,
+html[data-density="compact"] .preset-library-popover.open .preset-list {
+  max-height: none;
+  min-height: 0;
+}
+
+/*
+  On a phone held upright, the 220px folder tree beside the list left the list
+  250px, less than a preset card, and pushed the cards off the right edge. The
+  tree goes above the list, limited to a few rows, and the list gets the rest.
+*/
+@media (max-width: 600px) {
+  html[data-density="compact"] .preset-library-popover.open .preset-library-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  html[data-density="compact"] .preset-library-popover.open .preset-folder-tree {
+    max-height: min(28vh, 180px);
+    padding: 4px;
+    border-bottom: 1px solid var(--border-dark);
+  }
+}

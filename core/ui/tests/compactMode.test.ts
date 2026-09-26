@@ -36,6 +36,22 @@ describe("compactLayoutForViewport", () => {
   });
 });
 
+describe("compactSplitForViewport", () => {
+  it("shows the chain and the effect together in a tall, wide enough stacked window", async () => {
+    const { compactSplitForViewport } = await loadCompactMode();
+    expect(compactSplitForViewport(960, 1040)).toBe(true);
+    expect(compactSplitForViewport(768, 1024)).toBe(true);
+    expect(compactSplitForViewport(600, 800)).toBe(true);
+  });
+
+  it("keeps the tabs on a phone held upright, a short window and the rail", async () => {
+    const { compactSplitForViewport } = await loadCompactMode();
+    expect(compactSplitForViewport(390, 844)).toBe(false);
+    expect(compactSplitForViewport(700, 780)).toBe(false);
+    expect(compactSplitForViewport(900, 820)).toBe(false);
+  });
+});
+
 describe("initCompactMode", () => {
   const root = document.documentElement;
 
@@ -43,6 +59,33 @@ describe("initCompactMode", () => {
     delete root.dataset.density;
     delete root.dataset.densityPref;
     delete root.dataset.compactLayout;
+    delete root.dataset.compactSplit;
+  });
+
+  it("stamps the split on a window snapped to half a monitor, and drops it when it gets short", async () => {
+    setViewport(960, 1040);
+    const { initCompactMode, isCompactSplit, isCompactStaged } = await loadCompactMode();
+    initCompactMode();
+    expect(root.dataset.compactLayout).toBe("stack");
+    expect(root.dataset.compactSplit).toBe("");
+    expect(isCompactSplit()).toBe(true);
+    expect(isCompactStaged()).toBe(false);
+
+    const seen = captureNextDensityChange();
+    setViewport(960, 760);
+    initCompactMode();
+    expect(root.dataset.compactSplit).toBeUndefined();
+    expect(isCompactStaged()).toBe(true);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("never splits at full density", async () => {
+    setViewport(1280, 1040);
+    const { initCompactMode, isCompactSplit, isCompactStaged } = await loadCompactMode();
+    initCompactMode();
+    expect(root.dataset.compactSplit).toBeUndefined();
+    expect(isCompactSplit()).toBe(false);
+    expect(isCompactStaged()).toBe(false);
   });
 
   it("stamps the rail on a phone held landscape", async () => {

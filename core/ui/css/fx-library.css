@@ -23,12 +23,18 @@
   margin-top: 10px;
 }
 
+/* Hidden once the fold has played, so Tab cannot land on a search field or an
+   effect nobody can see (and scroll the shell to reach it). Opening shows it at
+   once: the delay is only on this rule. */
 .fx-selector-panel.collapsed {
   border-bottom-color: transparent;
   pointer-events: none;
   transform: translateX(-50%) translateY(-10px) scaleY(0.92);
   clip-path: inset(0 0 100% 0 round 12px);
   opacity: 0;
+  visibility: hidden;
+  transition: border-color 0.18s ease, transform 0.18s ease, opacity 0.18s ease, clip-path 0.18s ease,
+    visibility 0s linear 0.18s;
 }
 
 .fx-selector-header {

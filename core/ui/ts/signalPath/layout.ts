@@ -5,7 +5,7 @@ import {
   signalPathNodesElement,
 } from "./state.js";
 import { isMixTabActive } from "./state.js";
-import { applySignalChainWrapState, isSignalChainWrapEnabled, updateSignalChainWrapRoutes } from "./chainRow.js";
+import { applySignalChainWrapState, toggleSignalChainWrap, updateSignalChainWrapRoutes } from "./chainRow.js";
 export const SIGNAL_PATH_FULL_HEIGHT = 96;
 
 export const SIGNAL_PATH_COMPACT_HEIGHT = 48;
@@ -252,9 +252,7 @@ export function initSignalPathResize(): void {
   handle.addEventListener("dblclick", onSignalPathResizeDoubleClick);
 
   // Applying the setting goes through uiSettingsApplied, below, like a restored one.
-  document.getElementById("signal-path-wrap-btn")?.addEventListener("click", () => {
-    updateUiSettings({ signalPathWrap: !isSignalChainWrapEnabled() });
-  });
+  document.getElementById("signal-path-wrap-btn")?.addEventListener("click", toggleSignalChainWrap);
 
   window.addEventListener("uiSettingsApplied", () => {
     applySignalPathHeightFromSettings();

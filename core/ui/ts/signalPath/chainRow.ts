@@ -11,10 +11,20 @@
  * connector (and its "+") that leads into its first node. The route from the end
  * of one line round to the start of the next is drawn here, over the row, once
  * the browser has laid the lines out.
+ *
+ * Whether it wraps is remembered per display density. A small display wraps by
+ * default: there the chain has a stage of its own with height to spare and little
+ * width, so one line means scrolling sideways past most of the rig, while wrapped
+ * the whole chain is usually on screen at once. A full-size window keeps one line
+ * unless the user asks. The toggle changes the choice for the density on screen,
+ * so turning wrap off on a phone leaves the desktop's choice alone, and the chain
+ * follows as a window crosses the compact threshold.
  */
 
+import { isCompact } from "../compactMode.js";
 import { renderIcon } from "../iconAssets.js";
-import { getCurrentUiSettings } from "../windowSettings.js";
+import type { UiSettings } from "../types.js";
+import { getCurrentUiSettings, updateUiSettings } from "../windowSettings.js";
 import type { EdgeRef } from "./graph.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -25,8 +35,21 @@ const ROUTE_REACH = 10;
 
 const ROUTE_RADIUS = 8;
 
+/** The setting that holds the wrap choice for the density on screen. */
+function wrapSettingKey(): "signalPathWrap" | "signalPathWrapCompact" {
+  return isCompact() ? "signalPathWrapCompact" : "signalPathWrap";
+}
+
+/** Wrap unless the user turned it off on a small display; one line unless they turned it on on a large one. */
 export function isSignalChainWrapEnabled(): boolean {
-  return getCurrentUiSettings().signalPathWrap === true;
+  const settings = getCurrentUiSettings();
+  return isCompact() ? settings.signalPathWrapCompact !== false : settings.signalPathWrap === true;
+}
+
+/** Flips the wrap choice for the density on screen. Applying it goes through uiSettingsApplied. */
+export function toggleSignalChainWrap(): void {
+  const patch: Partial<UiSettings> = { [wrapSettingKey()]: !isSignalChainWrapEnabled() };
+  updateUiSettings(patch);
 }
 
 export function renderBoundaryNode(kind: "input" | "output"): string {

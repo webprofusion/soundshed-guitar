@@ -12,7 +12,8 @@
  * stack; the detail tab gets the same space for the params panel. Selecting a
  * node hands over automatically, so the common path is still one tap.
  *
- * Inert at full density, and on every panel but Play — `navigation.ts` stamps
+ * Inert at full density, in a compact window tall enough to show both halves
+ * (`isCompactSplit`), and on every panel but Play — `navigation.ts` stamps
  * `data-main-panel` on the root, and the CSS only shows the tabs for `visualizer`.
  * On the landscape rail the tabs are hidden and the rail's Chain and Effect
  * buttons stand in for them; `navigation.ts` binds those, because they switch
@@ -23,7 +24,7 @@
  * `navigation.ts`, which owns the view state, writes it down.
  */
 
-import { isCompact } from "./compactMode.js";
+import { isCompactStaged } from "./compactMode.js";
 
 export type CompactStage = "chain" | "detail";
 
@@ -84,7 +85,7 @@ export function setCompactStage(next: CompactStage): void {
  * restore a selection must not yank the user off the chain mid-edit.
  */
 export function revealCompactNodeDetail(): void {
-  if (!isCompact()) {
+  if (!isCompactStaged()) {
     return;
   }
   setCompactStage("detail");

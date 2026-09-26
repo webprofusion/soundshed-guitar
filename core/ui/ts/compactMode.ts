@@ -72,11 +72,35 @@ export function compactLayoutForViewport(width: number, height: number): Compact
   return width > height ? "rail" : "stack";
 }
 
+/**
+ * The smallest stacked compact viewport that shows the signal chain and the
+ * selected effect together, as the full shell does, instead of taking turns on
+ * the Chain/Effect tabs (ts/compactStage.ts).
+ *
+ * The tabs exist because a short window cannot give both a useful share. A tall
+ * narrow one can: an app window snapped to half of a 1920x1080 monitor is about
+ * 960x1040, compact by width alone, and with the tabs it showed a two-line chain
+ * above 700px of nothing. Width matters too, since a narrow window wraps the
+ * chain onto more lines: a phone held upright needs the chain's whole stage.
+ *
+ * Stamped on the root as `data-compact-split`. The pre-paint bootstrap in
+ * `index.template.html` applies the same test.
+ */
+export const COMPACT_SPLIT_MIN_WIDTH = 600;
+
+export const COMPACT_SPLIT_MIN_HEIGHT = 800;
+
+export function compactSplitForViewport(width: number, height: number): boolean {
+  return compactLayoutForViewport(width, height) === "stack"
+    && width >= COMPACT_SPLIT_MIN_WIDTH && height >= COMPACT_SPLIT_MIN_HEIGHT;
+}
+
 const DENSITY_PREFERENCES: readonly DensityPreference[] = ["auto", "compact", "full"];
 
 let preference: DensityPreference = "auto";
 let density: Density = "full";
 let layout: CompactLayout | null = null;
+let split = false;
 let initialized = false;
 let evaluateRaf = 0;
 
@@ -129,6 +153,16 @@ export function getCompactLayout(): CompactLayout | null {
   return layout;
 }
 
+/** Whether a compact viewport is tall enough to show the chain and the effect together. */
+export function isCompactSplit(): boolean {
+  return split;
+}
+
+/** At compact density, whether the chain and the effect take turns on the stage. */
+export function isCompactStaged(): boolean {
+  return density === "compact" && !split;
+}
+
 export function getDensityPreference(): DensityPreference {
   return preference;
 }
@@ -137,26 +171,35 @@ function applyResolvedDensity(): void {
   const next = resolveDensity();
   const { width, height } = effectiveViewport();
   const nextLayout = next === "compact" ? compactLayoutForViewport(width, height) : null;
+  const nextSplit = next === "compact" && compactSplitForViewport(width, height);
   const root = document.documentElement;
   root.dataset.densityPref = preference;
 
   const unchanged = next === density && root.dataset.density === next
-    && nextLayout === layout && (root.dataset.compactLayout ?? null) === nextLayout;
+    && nextLayout === layout && (root.dataset.compactLayout ?? null) === nextLayout
+    && nextSplit === split && ("compactSplit" in root.dataset) === nextSplit;
   if (unchanged) {
     return;
   }
 
   density = next;
   layout = nextLayout;
+  split = nextSplit;
   root.dataset.density = next;
   if (nextLayout) {
     root.dataset.compactLayout = nextLayout;
   } else {
     delete root.dataset.compactLayout;
   }
+  if (nextSplit) {
+    root.dataset.compactSplit = "";
+  } else {
+    delete root.dataset.compactSplit;
+  }
   // A layout change on its own is announced too: turning a compact window from
-  // portrait to landscape moves the navigation to another edge, and anything that
-  // sizes itself off the shell needs to hear that as much as a density change.
+  // portrait to landscape moves the navigation to another edge, and a stacked one
+  // growing tall enough puts the chain and the effect on screen together. Anything
+  // that sizes itself off the shell needs to hear that as much as a density change.
   window.dispatchEvent(new CustomEvent("densityChanged", { detail: { density: next, layout: nextLayout, preference } }));
 }
 
