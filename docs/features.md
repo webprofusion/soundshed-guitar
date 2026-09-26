@@ -93,7 +93,7 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 
 | Type ID | Name | Key Parameters |
 |---------|------|----------------|
-| `pitch_shift` | Pitch Shift | `semitones` (-12..+12 st), `mix`, `stepMode` (snap to semitone, 0/1), `minSemitones`/`maxSemitones` (-12..+12, the range automation and an expression pedal sweep) — uses Signalsmith Stretch |
+| `pitch_shift` | Pitch Shift | `semitones` (-12..+12 st), `mix`, `engine` (0 High Quality: Signalsmith Stretch, 80 ms; 1 Low Latency: time domain, ~10 ms, follows a pedal instantly), `stepMode` (snap to semitone, 0/1), `minSemitones`/`maxSemitones` (-12..+12, the range automation and an expression pedal sweep) |
 | `transpose` | Transpose | `semitones` (-24..+12 st), `mix` — optimized for integer steps, uses Signalsmith Stretch |
 | `transpose_hybrid` | Transpose (Hybrid) | `semitones` (-15..0 st), `mix`, `transientAssist`, `transientHoldMs`, `brightness` — dual-band hybrid path with medium/deep-shift quality STFT sustain shifting, latency-aligned transient assist, and smoothed live reconfiguration |
 | `transpose_stft` | Transpose (STFT) | `semitones` (-12..+12 st), `mix` — STFT phase-vocoder alternative for A/B comparison |

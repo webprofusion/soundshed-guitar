@@ -714,6 +714,14 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     fuzz.Prepare(kSampleRate, kBlock);
     fuzz.SetParam("model", 3.0);
 
+    // Not recursive, but its splices are chosen by correlating the input history, where a NaN
+    // would sit for as long as the search reaches back. Wet only.
+    PitchShiftEffect pitchShift;
+    pitchShift.Prepare(kSampleRate, kBlock);
+    pitchShift.SetParam("engine", 1.0);
+    pitchShift.SetParam("semitones", -5.0);
+    pitchShift.Reset();
+
     bool passed = ExpectRecoversFromNonFiniteInput("parametric EQ", parametric);
     passed = ExpectRecoversFromNonFiniteInput("graphic EQ", graphic) && passed;
     passed = ExpectRecoversFromNonFiniteInput("flanger", flanger) && passed;
@@ -724,6 +732,7 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     passed = ExpectRecoversFromNonFiniteInput("overdrive", overdrive) && passed;
     passed = ExpectRecoversFromNonFiniteInput("distortion (Metal Zone)", distortion) && passed;
     passed = ExpectRecoversFromNonFiniteInput("fuzz (Fuzz-Tone)", fuzz) && passed;
+    passed = ExpectRecoversFromNonFiniteInput("pitch shift (Low Latency)", pitchShift) && passed;
     return passed;
 }
 

@@ -58,6 +58,7 @@ set(TEST_SOURCES
     NoiseGateTests.cpp
     NotePlayerTests.cpp
     NoteTrackerTests.cpp
+    PitchShiftEngineTests.cpp
     PitchTrackerTests.cpp
     PluginPathUtilsTests.cpp
     PresetDSPLoadingTests.cpp

@@ -34,7 +34,8 @@ Global pre-chain node `global_transpose` (`EffectGuids::kTranspose`) is still **
 
 | Effect | Engine | Range (st) | Latency @48 kHz (measured) | Notes |
 |---|---|---|---|---|
-| `pitch_shift` | Signalsmith `ConfigureSignalsmithLive` (3840/960) | -12..+12 (continuous) | 3840 samples (80 ms) when shifting | Tonality limit 8 kHz |
+| `pitch_shift` (High Quality) | Signalsmith `ConfigureSignalsmithLive` (3840/960) | -12..+12 (continuous) | 3840 samples (80 ms) when shifting | Tonality limit 8 kHz; a new shift heard ~40 ms after it is set |
+| `pitch_shift` (Low Latency) | `TimeDomainPitchShifter`: resampling tap + correlation-matched splices | -12..+12 (continuous) | reports 10 ms; tap 5-13 ms mean by shift | Added 2026-09 for expression pedals: a shift is heard within 3 ms; faint flutter on chords |
 | `transpose` | same | -36..+12 (integer); global clamp +/-12 | 80 ms when shifting | Tonality limit 16 kHz; **this is the live global path today** |
 | `transpose_stft` | STFT phase vocoder (`stftPitchShift`) | -12..+12 | LL ~6.7-14 ms; poly ~13-26 ms | Profiles by `abs(st)` + mode; experimental |
 | `transpose_hybrid` | Dual-band **dual STFT** (900 Hz split) + dry transient assist | -15..0 | ~7-29 ms; **~2.1-2.5 ms/block** | Auto poly STFT at >=4 st depth; experimental; research only |
@@ -194,7 +195,7 @@ Keep one global node id (`global_transpose`) and the existing UI knob. Route ins
 | Max quality / offline | Signalsmith HQ |
 | FX library `transpose_stft` / `transpose_hybrid` | Stay experimental until the live path wins A/B |
 
-`pitch_shift` remains the continuous FX-library shifter (Signalsmith); do not silently swap its engine for STFT.
+`pitch_shift` remains the continuous FX-library shifter, with Signalsmith as its default engine; do not silently swap that engine for STFT. Its Low Latency engine (`TimeDomainPitchShifter`, 2026-09) is the first time-domain engine in the family, built for control response rather than deep drop: a candidate starting point for the time-domain lows of the live -12 path, not yet measured against those gates.
 
 ## Validation: Transpose Benchmark Harness
 

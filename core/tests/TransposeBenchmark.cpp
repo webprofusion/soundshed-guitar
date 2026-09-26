@@ -96,6 +96,7 @@ struct ExternalPluginVariant
 
 const std::vector<EffectVariant> kVariants = {
     {"pitch_shift", "Pitch Shift (Signalsmith)", {}},
+    {"pitch_shift", "Pitch Shift (Low Latency, time domain)", {{"engine", 1.0}}},
     {"transpose", "Transpose (Signalsmith)", {}},
     {"transpose_stft", "Transpose (STFT, low latency)", {{"mode", 0.0}}},
     {"transpose_stft", "Transpose (STFT, polyphonic)", {{"mode", 1.0}}},

@@ -1183,12 +1183,13 @@ It is monophonic: a chord comes out as one of its notes, not always the same one
 only to hosted plugins: it is not sent out of the app or to a DAW.
 
 ### Pitch Shift (`pitch_shift`)
-Pitch shift effect using Signalsmith Stretch, free or snapped to whole semitones, within a range an expression pedal sweeps.
+Pitch shift, free or snapped to whole semitones, within a range an expression pedal sweeps, on one of two engines.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
 | `semitones` | -12..+12 | 0.0 | st |
 | `mix` | 0.0–1.0 | 1.0 | — |
+| `engine` (Engine) | 0 High Quality / 1 Low Latency | 0 | enum |
 | `stepMode` (Snap to Semitone) | 0/1 toggle | 1 | — |
 | `minSemitones` (Range Min) | -12..+12 | -12.0 | st |
 | `maxSemitones` (Range Max) | -12..+12 | 12.0 | st |
@@ -1201,6 +1202,35 @@ in either order. The node reports that range and step to automation
 params panel gives the Semitones knob the same range and step. At an applied shift of 0 st the
 effect is transparent and reports no latency, so a pedal range that includes 0 changes the
 reported latency as it passes through it.
+
+**Engines.** The two trade sound against how quickly a shift is heard:
+
+| Engine | Latency while shifting | A new shift is heard after | Character |
+|--------|------------------------|----------------------------|-----------|
+| High Quality (default) | 80 ms | ~40 ms | Signalsmith Stretch: clean on chords and big intervals |
+| Low Latency | 10 ms reported; 5–15 ms actual, by shift | under 3 ms | Time domain: faint flutter on chords, the classic whammy sound |
+
+High Quality is Signalsmith Stretch (`SignalsmithSupport.h`). It takes a new shift at its next
+analysis frame and fades it in over its synthesis window, so the delay before a pedal move is
+heard is its output latency, half the 80 ms total. Shortening the analysis interval does not
+change that (only its jitter), and every smaller or asymmetric window measured traded tone
+for it. It stays the default so presets saved before the switch sound as they did.
+
+Low Latency is `TimeDomainPitchShifter` (`core/src/dsp/`). A tap reads a delay line at the pitch
+ratio, so a new shift changes the pitch on the next sample, and the tap jumps back (shifting
+up) or forward (shifting down) when it drifts too far. Each jump is crossfaded over 6 ms and
+lands where the waveform matches, by correlation on a 12 kHz copy refined at the full rate, so on
+a single note it joins whole periods. Pitch is exact (within about a cent), and it costs about
+1.5 µs per 64-sample block. With Snap off it follows the target with a 4 ms glide, which smooths
+a 7-bit controller's steps; with Snap on each semitone lands at once. The latency it reports is a
+fixed 10 ms whatever the shift, so a sweep does not keep changing the host's delay compensation;
+the tap's actual delay averages 5-13 ms depending on the shift.
+
+**Path changes crossfade.** Entering and leaving the 0 st bypass, and switching engine, fade
+over 10 ms, with both engines running until the fade ends. The engines' latencies differ from the
+bypass's, so a hard switch used to jump the audio in time (80 ms on High Quality) with a click;
+now it is a short blend. Both engines record their input history on every sample, so either
+starts on current audio. Tests: `core/tests/PitchShiftEngineTests.cpp`.
 
 ### Transpose (`transpose`)
 High-quality transpose effect optimized for integer semitone steps using Signalsmith Stretch.
