@@ -147,9 +147,11 @@ endif()
 if(NOT DEFINED signalsmith_linear_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     include(FetchContent)
     FetchContent_Declare(signalsmith_linear
-        # Pinned to main as of 2026-09-15; bump deliberately (tools/check-dependency-pins.mjs --upstream).
+        # Pinned to release 0.6.4 (2026-09-25), the version Signalsmith Stretch 1.4.0 pins. It frees
+        # Temporary's buffer on destruction; only Linear::reserve() allocates that buffer, and
+        # nothing here calls it. Bump deliberately (tools/check-dependency-pins.mjs --upstream).
         GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
-        GIT_TAG 547f4a6c55b4243191a9180f39849d67cc66aa0d)
+        GIT_TAG de55e6a50ffcf6f8f43f649692d94691c7025151)
     FetchContent_MakeAvailable(signalsmith_linear)
 endif()
 
