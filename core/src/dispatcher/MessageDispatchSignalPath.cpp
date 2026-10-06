@@ -53,6 +53,12 @@ bool MessageDispatcher::DispatchSignalPath(PluginController& c, const nlohmann::
         return true;
     }
 
+    if (type == "setSplitBranchCount")
+    {
+        c.HandleSetSplitBranchCountRequest(msg);
+        return true;
+    }
+
     if (type == "replaceSignalPathNode")
     {
         c.HandleReplaceSignalPathNodeRequest(msg);

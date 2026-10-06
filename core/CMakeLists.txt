@@ -531,6 +531,8 @@ set(GUITARFX_CORE_SOURCES
     src/controller/internal/RiffSupport.h
     src/controller/internal/RiffSupport.cpp
     src/controller/internal/SettingsKeys.h
+    src/controller/internal/SplitBranchSupport.h
+    src/controller/internal/SplitBranchSupport.cpp
 
     # DSP core
     src/dsp/EffectProcessor.h

@@ -13,6 +13,7 @@
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/HostedPluginSupport.h"
 #include "controller/internal/NamResourceMetadata.h"
+#include "controller/internal/SplitBranchSupport.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #if defined(GUITARFX_ENABLE_WASM_EFFECTS)
@@ -1024,7 +1025,13 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
     }
 
     const std::string splitterId = payload.value("splitterId", "");
-    const std::string mixerId = payload.value("mixerId", "");
+    std::string mixerId = payload.value("mixerId", "");
+
+    // Soundshed Guitar Nano names only the splitter; the graph says where it joins.
+    if (mixerId.empty() && !splitterId.empty())
+    {
+        mixerId = FindSplitJoinMixerId(*targetGraph, splitterId);
+    }
 
     if (splitterId.empty() || mixerId.empty())
     {
@@ -1083,6 +1090,53 @@ void PluginController::HandleCollapseSignalPathSplitRequest(const nlohmann::json
     targetGraph->nodes.erase(std::remove_if(targetGraph->nodes.begin(), targetGraph->nodes.end(),
                                             [&](const GraphNode& n) { return n.id == splitterId || n.id == mixerId; }),
                              targetGraph->nodes.end());
+
+    if (IsCompositeEditMode())
+    {
+        BroadcastCompositeEditState();
+    }
+    else if (mActivePreset)
+    {
+        SyncActivePresetSceneGraph();
+        ApplyActivePresetInItsSlot();
+        BroadcastState();
+    }
+}
+
+void PluginController::HandleSetSplitBranchCountRequest(const nlohmann::json& payload)
+{
+    CaptureLiveHostedPluginStateIntoActivePreset();
+
+    SignalGraph* targetGraph = ResolveEditTarget();
+
+    if (!targetGraph)
+    {
+        ReportErrorToUI("Change branches failed", "No active preset or composite");
+        return;
+    }
+
+    const auto splitterIt = payload.find("splitterId");
+    const auto countIt = payload.find("count");
+
+    if (splitterIt == payload.end() || !splitterIt->is_string() || countIt == payload.end() ||
+        !countIt->is_number_integer())
+    {
+        ReportErrorToUI("Change branches failed", "Missing splitterId/count");
+        return;
+    }
+
+    const auto change = SetSplitBranchCount(*targetGraph, splitterIt->get<std::string>(), countIt->get<int>());
+
+    if (!change.error.empty())
+    {
+        ReportErrorToUI("Change branches failed", change.error);
+        return;
+    }
+
+    if (!change.changed)
+    {
+        return;
+    }
 
     if (IsCompositeEditMode())
     {

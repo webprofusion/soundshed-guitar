@@ -134,6 +134,16 @@ describe("describeGraphChange", () => {
     expect(describeGraphChange(baseGraph(), next)).toBe("drive off");
   });
 
+  it("names a split gaining or losing a branch, which only its edges show", () => {
+    const branch = (fromPort: number) => ({ from: "split", to: "mix", fromPort, toPort: fromPort, gain: 1 });
+    const split = (branches: number): SignalGraph => ({
+      nodes: [node("split", { type: "splitter", params: {} }), node("mix", { type: "mixer", params: {} })],
+      edges: Array.from({ length: branches }, (_, port) => branch(port)),
+    });
+    expect(describeGraphChange(split(2), split(3))).toBe("split: 3 branches");
+    expect(describeGraphChange(split(3), split(2))).toBe("split: 2 branches");
+  });
+
   it("calls a same-node different-type edit a replace", () => {
     const next = JSON.parse(JSON.stringify(baseGraph())) as SignalGraph;
     next.nodes[0].type = "drive_fuzz";

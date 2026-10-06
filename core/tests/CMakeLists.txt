@@ -96,6 +96,7 @@ set(TEST_SOURCES
     SimpleCabEffectTests.cpp
     SpectrumTapTests.cpp
     SpliceTransposerTests.cpp
+    SplitBranchTests.cpp
     Spatial3DEffectTests.cpp
     StereoProcessingTests.cpp
     SynthSawEffectTests.cpp

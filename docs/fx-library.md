@@ -1689,6 +1689,7 @@ Creates parallel paths by inserting a splitter and an auto-join mixer.
 
 **Notes**:
 - The `splitter` effect is user-addable.
+- A split has 2 to 4 branches (one per mixer input). It starts with two; the splitter's **Branches** control adds empty ones or removes empty ones (`setSplitBranchCount`). The count is the splitter's outgoing edges, so there is no parameter to keep in step with the graph.
 - The `mixer` node is inserted automatically to rejoin branches and is not shown in the FX list.
 
 ### Signal Analyzer (`input_analyzer`)

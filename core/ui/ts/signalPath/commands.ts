@@ -139,6 +139,16 @@ export function sendMoveSignalPathNodeToEdge(nodeId: string, edge: SignalPathEdg
   setPresetDirty(true);
 }
 
+/** Give a split 2 to 4 branches; the engine adds empty ones or removes only empty ones. */
+export function sendSetSplitBranchCount(splitterId: string, count: number): void {
+  postMessage({
+    type: "setSplitBranchCount",
+    splitterId,
+    count,
+  });
+  setPresetDirty(true);
+}
+
 export function sendCollapseParallelSplit(splitterId: string, mixerId: string): void {
   postMessage({
     type: "collapseSignalPathSplit",

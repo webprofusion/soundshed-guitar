@@ -31,6 +31,7 @@ import { bindGraphicEqControls } from "./eq.js";
 import { bindHostedPluginActionControls, bindHostedPluginListControls } from "./hostedPlugins.js";
 import { applyCustomLayoutScaling, bindLayoutOverlayBypassToggles } from "./layoutOverlay.js";
 import { buildMixerInputControlsHtml } from "./mixerInput.js";
+import { bindSplitBranchControls, buildSplitBranchControlsHtml } from "./splitBranches.js";
 import { bindBlendModeOverride, bindBypassButton, bindCustomEffectActionControls } from "./nodeActions.js";
 import { bindNodeParamControls, bindParamTabs, formatParamLabel, isToggleParam } from "./paramControls.js";
 import { isPitchShiftType, semitoneKnobRange } from "./pitchShiftRange.js";
@@ -294,6 +295,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   const cabResponseSection = buildCabResponseSectionHtml(node);
   const mixerInputControls = buildMixerInputControlsHtml(node, preset);
+  const splitBranchControls = buildSplitBranchControlsHtml(node, preset);
 
   preloadResourceNavigationCaches(node, preset, typeInfo);
 
@@ -401,6 +403,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     ${graphicEqControls}
     ${cabResponseSection}
     ${mixerInputControls}
+    ${splitBranchControls}
     <div class="default-effect-section default-effect-section-controls default-effect-section-custom-layout">
       ${cabIrResourceSelectors}
       ${customLayoutHtml}
@@ -449,6 +452,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       ${graphicEqControls}
       ${cabResponseSection}
       ${mixerInputControls}
+      ${splitBranchControls}
       <div class="default-effect-section default-effect-section-controls">
         ${cabIrResourceSelectors}
         ${renderedControls}
@@ -525,6 +529,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindEffectPresetsButton(node);
   bindGraphicEqControls(node, preset);
   bindCabResponseControls(node, preset);
+  bindSplitBranchControls(node, preset);
   bindLayoutOverlayBypassToggles(node, preset);
   bindResourceControls(node, preset);
   bindEquipmentImageFallback();

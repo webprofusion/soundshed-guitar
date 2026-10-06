@@ -150,6 +150,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `addSignalPathNode` | `{node, afterNodeId}` | Add effect to graph |
 | `deleteSignalPathNode` | `{nodeId}` | Remove effect from graph |
 | `replaceSignalPathNode` | `{nodeId, newNode}` | Replace effect in graph |
+| `setSplitBranchCount` | `{splitterId, count}` | Give a split 2 to 4 parallel branches. A new branch is empty, from the splitter straight to a free input of the mixer the branches join at; only empty branches are removed (the last first), so effects are never deleted. The mixer input a branch leaves or takes has its `level_N`/`pan_N`/`delay_N`/`mute_N` cleared. The count is the splitter's outgoing edges, not a stored param. Answered by `state`; refused with an error toast |
 | `reorderSignalPathNode` | `{nodeId, newIndex}` | Reorder effect in graph |
 | `updateSignalPathNodeParam` | `{nodeId, paramId, value}` | Update effect parameter |
 | `updateSignalPathNodeBypass` | `{nodeId, bypassed}` | Bypass/enable effect |
@@ -220,7 +221,7 @@ The engine also answers a few requests the UI itself never sends:
 |------|---------|-------------|
 | `getPerformanceStats` | `{}` | Publish a `dspPerformance` frame now rather than on the next tick. A pull for tests and scripted debugging; the UI takes the pushed feed |
 | `getSignalDiagnostics` | `{}` | Publish the next signal-level frame with its `sldRoster`, for a client that has no roster yet. Tests and scripted debugging only |
-| `splitSignalPathEdge` | `{edge: {from, to, fromPort, toPort}}` | Insert a splitter/mixer pair on one edge of the edited graph, making two parallel lanes. The engine supports it; the UI has no gesture for it yet, though it can show and collapse (`collapseSignalPathSplit`) a split a preset already has |
+| `splitSignalPathEdge` | `{edge: {from, to, fromPort, toPort}}` | Insert a splitter/mixer pair on one edge of the edited graph, making two parallel lanes. The engine supports it; the UI has no gesture for it yet, though it can show, resize (`setSplitBranchCount`) and collapse (`collapseSignalPathSplit`) a split a preset already has. `collapseSignalPathSplit` takes `{splitterId, mixerId?}`; without `mixerId` the engine finds the mixer the branches join at |
 | `setMasterGain` | `{gain}` | Set the mixer's linear master multiplier directly. Kept for older UIs and scripted use; the UI mutes with `setOutputMuted`. Level changes go through `setGlobalChainParam` with path `output.gain`, since the engine derives the multiplier from that setting and re-derives it on every chain rebuild, which also undoes a mute made this way |
 
 Retired on 19 September 2026, and now ignored: `setAutoLevel` (mixer-wide auto-level), `openAudioPreferences` (JUCE's audio dialog; use `audioDevice`), `setLimiterEnabled` (use the `audio.dsp.outputLimiterEnabled` app setting), `setGlobalChain` (use `setGlobalChainParam`), `setNodeEnabled`/`setNodeParam` (use `updateSignalPathNodeBypass`/`updateSignalPathNodeParam`), `setTunerEnabled`/`setTunerReference` (use `tuner`), `removePreset` (use `removeActivePreset`), `removeLocalLibraryResource` (use `deleteLibraryResource`, which also checks the resource is unused) and `importToneSharingPack` (packs are imported in the UI).
@@ -622,6 +623,7 @@ To change an effect's look, edit the JSON, then run the generator.
 ## Signal Chain Editor Notes
 
 - To create parallel paths, add the **Splitter** effect from the Utility category. The join **Mixer** node is inserted automatically and is not user-addable.
+- A split starts with two branches. Selecting the splitter shows a **Branches** control (2, 3 or 4, one per mixer input), built by `signalPath/paramsPanel/splitBranches.ts`; it sends `setSplitBranchCount`. A count below the number of branches holding effects is disabled. The chain draws each branch's route from the splitter and into the mixer for any count (`css/signal-path/parallel.css`): elbows on the outer branches, a T on the middle ones.
 
 ### The FX library and replacing an effect (`core/ui/ts/fxSelector.ts`, `signalPath/replaceChooser.ts`)
 

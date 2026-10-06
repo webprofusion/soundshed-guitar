@@ -239,6 +239,20 @@ function labelFor(node: GraphNode | undefined, resolve: NodeLabelResolver): stri
   return node ? resolve(node) : "effect";
 }
 
+/** A split gaining or losing branches: an edit to its edges, which no node state shows. */
+function describeBranchCountChange(from: SignalGraph, to: SignalGraph, resolve: NodeLabelResolver): string | null {
+  const branchCount = (graph: SignalGraph, nodeId: string): number =>
+    (graph.edges ?? []).filter((edge) => edge.from === nodeId).length;
+  for (const node of to.nodes ?? []) {
+    const before = branchCount(from, node.id);
+    const after = branchCount(to, node.id);
+    if (before > 1 && after > 1 && before !== after) {
+      return `${labelFor(node, resolve)}: ${after} branches`;
+    }
+  }
+  return null;
+}
+
 /**
  * A short description of what one edit did, shown on the undo/redo buttons.
  * Best effort: it reads the difference, it is not told what happened.
@@ -273,6 +287,11 @@ export function describeGraphChange(
   }
   if (fromNodes.some((node, index) => toNodes[index]?.id !== node.id)) {
     return "Reorder chain";
+  }
+
+  const branches = describeBranchCountChange(from, to, resolveLabel);
+  if (branches) {
+    return branches;
   }
 
   const changes = diffNodeStates(from, to);

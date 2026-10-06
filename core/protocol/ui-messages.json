@@ -144,6 +144,7 @@
     "setSetting",
     "setSignalDiagnosticsEnabled",
     "setSpectrumWatch",
+    "setSplitBranchCount",
     "setTheme",
     "setUserInputCalibrationTrainingActive",
     "startPresetArchiveSession",

@@ -88,17 +88,24 @@
   pointer-events: none;
 }
 
-/* A two-way split gets continuous, branch-coloured elbow paths. The height is
-   derived from each branch, so the curves follow density and node-size changes. */
-.parallel-branch:first-child:nth-last-child(2)::before,
-.parallel-branch:first-child:nth-last-child(2)::after,
-.parallel-branch:last-child:nth-child(2)::before,
-.parallel-branch:last-child:nth-child(2)::after {
+/* Branch-coloured routes from the splitter and into the mixer, for any number of
+   branches. The outer two are elbows that meet their neighbour halfway across the gap;
+   a middle branch is a T: the trunk down its full height (and half of each gap), with
+   a stub across at its centre. Heights derive from each branch, so the routes follow
+   density and node-size changes. */
+.parallel-branch:not(:only-child)::before,
+.parallel-branch:not(:only-child)::after {
   display: block;
+}
+
+.parallel-branch:first-child:not(:only-child)::before,
+.parallel-branch:first-child:not(:only-child)::after,
+.parallel-branch:last-child:not(:only-child)::before,
+.parallel-branch:last-child:not(:only-child)::after {
   height: calc(50% + var(--parallel-route-half-gap) + var(--signal-route-half-width));
 }
 
-.parallel-branch:first-child:nth-last-child(2)::before {
+.parallel-branch:first-child:not(:only-child)::before {
   left: calc(0px - var(--parallel-route-reach));
   top: calc(50% - var(--signal-route-half-width));
   border-top: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
@@ -106,7 +113,7 @@
   border-top-left-radius: 12px;
 }
 
-.parallel-branch:first-child:nth-last-child(2)::after {
+.parallel-branch:first-child:not(:only-child)::after {
   right: calc(0px - var(--parallel-route-reach));
   top: calc(50% - var(--signal-route-half-width));
   border-top: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
@@ -114,7 +121,7 @@
   border-top-right-radius: 12px;
 }
 
-.parallel-branch:last-child:nth-child(2)::before {
+.parallel-branch:last-child:not(:only-child)::before {
   left: calc(0px - var(--parallel-route-reach));
   bottom: calc(50% - var(--signal-route-half-width));
   border-bottom: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
@@ -122,12 +129,35 @@
   border-bottom-left-radius: 12px;
 }
 
-.parallel-branch:last-child:nth-child(2)::after {
+.parallel-branch:last-child:not(:only-child)::after {
   right: calc(0px - var(--parallel-route-reach));
   bottom: calc(50% - var(--signal-route-half-width));
   border-right: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
   border-bottom: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
   border-bottom-right-radius: 12px;
+}
+
+.parallel-branch:not(:first-child):not(:last-child)::before,
+.parallel-branch:not(:first-child):not(:last-child)::after {
+  top: calc(0px - var(--parallel-route-half-gap) - var(--signal-route-half-width));
+  height: calc(100% + 2 * (var(--parallel-route-half-gap) + var(--signal-route-half-width)));
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent),
+    color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent)
+  );
+  background-repeat: no-repeat;
+  background-size: 100% var(--signal-route-width);
+  background-position: 0 50%;
+}
+
+.parallel-branch:not(:first-child):not(:last-child)::before {
+  left: calc(0px - var(--parallel-route-reach));
+  border-left: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
+}
+
+.parallel-branch:not(:first-child):not(:last-child)::after {
+  right: calc(0px - var(--parallel-route-reach));
+  border-right: var(--signal-route-width) solid color-mix(in srgb, var(--parallel-branch-accent) 72%, transparent);
 }
 
 .parallel-branch:nth-child(1) { --parallel-branch-accent: #f0a06b; }

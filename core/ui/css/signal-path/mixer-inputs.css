@@ -102,3 +102,43 @@
   text-align: center;
   font-style: italic;
 }
+
+/* A splitter's Branches control (signalPath/paramsPanel/splitBranches.ts) */
+.split-branch-options {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.split-branch-option {
+  min-width: 36px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-dark-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.split-branch-option:hover:not(:disabled):not(.is-selected) {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--border-dark-light));
+}
+
+.split-branch-option.is-selected {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--color-primary) 22%, var(--bg-dark-secondary));
+  border-color: var(--color-primary);
+}
+
+.split-branch-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.split-branch-hint {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}

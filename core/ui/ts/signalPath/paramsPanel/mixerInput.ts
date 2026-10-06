@@ -91,7 +91,7 @@ export function buildMixerInputControlsHtml(node: GraphNode, preset: Preset): st
                        data-value="${delayValue}"
                        data-default="0"
                        data-min="0"
-                       data-max="500"
+                       data-max="60"
                        data-unit="ms">
                     <div class="knob-indicator"></div>
                   </div>

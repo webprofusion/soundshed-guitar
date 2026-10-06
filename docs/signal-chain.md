@@ -87,7 +87,7 @@ input → amp → split   → mixer → output
             └→ cab2 →┘
 ```
 
-**UI note**: Create this topology by inserting a **Splitter** effect from the Utility category. The mixer node is inserted automatically to rejoin the branches.
+**UI note**: Create this topology by inserting a **Splitter** effect from the Utility category. The mixer node is inserted automatically to rejoin the branches. A split has 2 to 4 branches, each on its own mixer input (`toPort`, which the mixer's `level_N`, `pan_N`, `delay_N` and `mute_N` params belong to); the splitter's Branches control changes the count. A splitter's `fromPort` only orders its branches: every output carries the same signal.
 
 Mixers sum incoming edges with per-edge `gain` for blend control.
 
