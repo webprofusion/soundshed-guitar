@@ -216,6 +216,25 @@ class SpliceTransposer
         }
     }
 
+    /// Starts the tap `delaySamples` behind the newest input instead, held inside the range a
+    /// splice could land in: for a voice that has waited to learn its shift, so a note that began
+    /// that long ago is still heard from its pick. The tap catches up as it splices, and the next
+    /// attack moves it to the newest audio as usual.
+    void EngageAt(double delaySamples) noexcept
+    {
+        mSemitones = mTargetSemitones;
+        mRate = std::exp2(mSemitones / 12.0);
+        UpdateGeometry();
+        mFading = false;
+        mOutgoingPair = false;
+        mSearch = {};
+        mAttackPending = false;
+
+        const double lowest = mRate > 1.0 ? mLandLow : mFloor;
+        const double delay = IsFinite(delaySamples) ? delaySamples : lowest;
+        mDelay = std::clamp(delay, lowest, std::max(lowest, mLandHigh));
+    }
+
     /// One sample of shifted output, from the input written so far.
     void Process(float& outLeft, float& outRight) noexcept
     {

@@ -141,6 +141,7 @@ export const EFFECTS: Readonly<Record<string, EffectPresentation>> = {
   [EffectGuids.kRingMod]: { icon: "wave" },
   [EffectGuids.kWah]: { icon: "mixer" },
   [EffectGuids.kOctave]: { icon: "note" },
+  [EffectGuids.kHarmonizer]: { icon: "note" },
   [EffectGuids.kPitchShift]: { icon: "note" },
   [EffectGuids.kTranspose]: { icon: "note" },
   [EffectGuids.kDelayDigital]: { icon: "delay", equipmentImage: "images/equipment/fx/studio-rack-delay.png" },

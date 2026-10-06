@@ -96,6 +96,7 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 | `transpose` | Transpose | `semitones` (-24..+12 st), `mix` — optimized for integer steps, uses Signalsmith Stretch |
 | `transpose_hybrid` | Transpose (Hybrid) | `semitones` (-15..0 st), `mix`, `transientAssist`, `transientHoldMs`, `brightness` — dual-band hybrid path with medium/deep-shift quality STFT sustain shifting, latency-aligned transient assist, and smoothed live reconfiguration |
 | `transpose_stft` | Transpose (STFT) | `semitones` (-12..+12 st), `mix` — STFT phase-vocoder alternative for A/B comparison |
+| `harmonizer` | Harmonizer | `mode` (Scale: intervals in scale steps that follow the notes played, in `key` and `scale`; Fixed: semitones, works on chords), `tracking` (Clean / Fast), four voices each with `On`, `Interval`, `Semitones`, `Level`, `Pan`, `Detune`, `Delay`; `dry`, `harmonyLevel`, `highCut`, `glide`, `humanize` — four SpliceTransposer voices, the guitar undelayed |
 | `octave` | Octave Effect | `octaveUp`, `octaveDown`, `tone`, `mix` — uses Signalsmith Stretch for fixed +/-12 semitone voices |
 
 ### 2.7 Delay

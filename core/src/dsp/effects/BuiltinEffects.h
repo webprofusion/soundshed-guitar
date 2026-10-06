@@ -11,6 +11,7 @@
 #include "dsp/effects/TapeDelayEffect.h"
 #include "dsp/effects/AnalogDelayEffect.h"
 #include "dsp/effects/DoublerEffect.h"
+#include "dsp/effects/HarmonizerEffect.h"
 #include "dsp/effects/HybridTransposeEffect.h"
 #include "dsp/effects/PitchShiftEffect.h"
 #include "dsp/effects/StftTransposeEffect.h"
@@ -143,6 +144,7 @@ inline void RegisterAllEffects()
     RegisterWahEffect();
     RegisterSpatial3DEffect();
     RegisterOctaveEffect();
+    RegisterHarmonizerEffect();
     RegisterAutoArpEffect();
 
     // Synth effects

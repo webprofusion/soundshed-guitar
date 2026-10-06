@@ -357,6 +357,7 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kTranspose },
   { type: EffectGuids.kTransposeStft },
   { type: EffectGuids.kOctave },
+  { type: EffectGuids.kHarmonizer },
   // Synth
   { type: EffectGuids.kSynthSaw },
 ];

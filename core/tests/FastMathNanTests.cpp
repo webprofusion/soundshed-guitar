@@ -731,6 +731,16 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     pitchShift.SetParam("semitones", -5.0);
     pitchShift.Reset();
 
+    // Four voices of the same splicer, with delay lines and a high cut on the harmony. Fixed
+    // mode, so the voices play from the first sample. Wet only.
+    HarmonizerEffect harmonizer;
+    harmonizer.SetParam("mode", 1.0);
+    harmonizer.SetParam("dry", 0.0);
+    harmonizer.SetParam("voice2On", 1.0);
+    harmonizer.SetParam("voice1Delay", 10.0);
+    harmonizer.SetParam("highCut", 5000.0);
+    harmonizer.Prepare(kSampleRate, kBlock);
+
     bool passed = ExpectRecoversFromNonFiniteInput("parametric EQ", parametric);
     passed = ExpectRecoversFromNonFiniteInput("graphic EQ", graphic) && passed;
     passed = ExpectRecoversFromNonFiniteInput("flanger", flanger) && passed;
@@ -742,6 +752,7 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     passed = ExpectRecoversFromNonFiniteInput("distortion (Metal Zone)", distortion) && passed;
     passed = ExpectRecoversFromNonFiniteInput("fuzz (Fuzz-Tone)", fuzz) && passed;
     passed = ExpectRecoversFromNonFiniteInput("pitch shift (Low Latency)", pitchShift) && passed;
+    passed = ExpectRecoversFromNonFiniteInput("harmonizer (Fixed)", harmonizer) && passed;
     passed = ExpectRecoversFromNonFiniteInput("VCA compressor", vcaCompressor) && passed;
     passed = ExpectRecoversFromNonFiniteInput("Opto compressor", optoCompressor) && passed;
     return passed;

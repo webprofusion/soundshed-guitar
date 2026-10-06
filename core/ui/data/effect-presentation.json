@@ -230,6 +230,10 @@
       "guid": "2e4d5380-5a79-412f-bfc0-bf84ef74d561",
       "icon": "note"
     },
+    "kHarmonizer": {
+      "guid": "dc741ddb-1224-46a9-8256-39977d8953cb",
+      "icon": "note"
+    },
     "kPitchShift": {
       "guid": "0c15f065-8335-4932-9d2f-366d436ec30a",
       "icon": "note"

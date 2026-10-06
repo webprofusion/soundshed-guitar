@@ -24,9 +24,8 @@ namespace guitar_to_midi
 inline constexpr const char* kModeLabels[] = {"Notes", "Notes + Bend"};
 inline constexpr const char* kBendRangeLabels[] = {"2 semitones", "12 semitones", "24 semitones", "48 semitones"};
 inline constexpr double kBendRanges[] = {2.0, 12.0, 24.0, 48.0};
-inline constexpr const char* kLowestNoteLabels[] = {"E2 (standard)", "D2 (drop D)", "B1 (7-string)", "F#1 (8-string)"};
-/// A little under each string, so a flat guitar or a bend down still tracks.
-inline constexpr double kLowestNoteHz[] = {78.0, 70.0, 58.0, 45.0};
+/// Shared with the other note-following effects (dsp/PitchTracker.h).
+using pitch_tracker::kLowestNoteLabels;
 
 enum Param : std::size_t
 {
@@ -57,7 +56,6 @@ static_assert(kParams[kMode].maxValue == static_cast<double>(std::size(kModeLabe
 static_assert(kParams[kBendRange].maxValue == static_cast<double>(std::size(kBendRangeLabels) - 1));
 static_assert(std::size(kBendRanges) == std::size(kBendRangeLabels));
 static_assert(kParams[kLowestNote].maxValue == static_cast<double>(std::size(kLowestNoteLabels) - 1));
-static_assert(std::size(kLowestNoteHz) == std::size(kLowestNoteLabels));
 
 /// In Notes mode the pitch has to move this far past halfway to the next note before it switches,
 /// so vibrato on a note that is a little out of tune does not flicker between two.
@@ -278,8 +276,7 @@ class GuitarToMidiEffect : public EffectProcessor
 
     [[nodiscard]] double LowestNoteHz() const
     {
-        return guitar_to_midi::kLowestNoteHz[static_cast<std::size_t>(std::clamp(
-            Choice(guitar_to_midi::kLowestNote), 0, static_cast<int>(std::size(guitar_to_midi::kLowestNoteHz)) - 1))];
+        return pitch_tracker::LowestNoteHz(Choice(guitar_to_midi::kLowestNote));
     }
 
     [[nodiscard]] float ThruTarget() const

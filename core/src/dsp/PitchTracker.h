@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 // Keeps the YIN difference loop a function of its own. Inlined into Detect()'s lag loop, MSVC
@@ -21,6 +22,22 @@
 
 namespace guitarfx
 {
+namespace pitch_tracker
+{
+/// The Lowest Note choices an effect offers for SetLowestFrequency(), as an enum parameter's labels.
+inline constexpr const char* kLowestNoteLabels[] = {"E2 (standard)", "D2 (drop D)", "B1 (7-string)", "F#1 (8-string)"};
+/// A little under each string, so a flat guitar or a bend down still tracks.
+inline constexpr double kLowestNoteHz[] = {78.0, 70.0, 58.0, 45.0};
+static_assert(std::size(kLowestNoteHz) == std::size(kLowestNoteLabels));
+
+/// The frequency for a Lowest Note choice, held to the list.
+[[nodiscard]] inline double LowestNoteHz(int choice) noexcept
+{
+    return kLowestNoteHz[static_cast<std::size_t>(
+        std::clamp(choice, 0, static_cast<int>(std::size(kLowestNoteHz)) - 1))];
+}
+} // namespace pitch_tracker
+
 /**
  * Real-time monophonic pitch tracker, for guitar: YIN on a decimated copy of the input, refined
  * at the full sample rate.

@@ -68,6 +68,7 @@ export const EffectGuids = {
   kTransposeStft:        "66b3a43a-72eb-4c7a-9c47-50e9ab24b718",
   kTransposeHybrid:      "1e14d6b1-16b3-49fe-9a43-60dbd7f8cc0f",
   kOctave:               "2e4d5380-5a79-412f-bfc0-bf84ef74d561",
+  kHarmonizer:           "dc741ddb-1224-46a9-8256-39977d8953cb",
 
   // Utility
   kGain:                 "0bcd895e-5d36-4247-a351-6bed1fcb37a8",
@@ -132,6 +133,7 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   transpose_stft:        EffectGuids.kTransposeStft,
   transpose_hybrid:      EffectGuids.kTransposeHybrid,
   octave:                EffectGuids.kOctave,
+  harmonizer:            EffectGuids.kHarmonizer,
   gain:                  EffectGuids.kGain,
   wasm_host:             EffectGuids.kWasmHost,
   plugin_host:           EffectGuids.kPluginHost,

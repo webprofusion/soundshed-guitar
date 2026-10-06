@@ -81,6 +81,7 @@ constexpr const char* kTranspose = "9b89cc46-e05b-4f06-981e-1d74d1f628cf";
 constexpr const char* kTransposeStft = "66b3a43a-72eb-4c7a-9c47-50e9ab24b718";
 constexpr const char* kTransposeHybrid = "1e14d6b1-16b3-49fe-9a43-60dbd7f8cc0f";
 constexpr const char* kOctave = "2e4d5380-5a79-412f-bfc0-bf84ef74d561";
+constexpr const char* kHarmonizer = "dc741ddb-1224-46a9-8256-39977d8953cb";
 
 // ── Utility ───────────────────────────────────────────────────────────
 constexpr const char* kGain = "0bcd895e-5d36-4247-a351-6bed1fcb37a8";

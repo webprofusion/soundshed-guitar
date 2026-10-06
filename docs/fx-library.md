@@ -89,6 +89,7 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kTranspose` | `9b89cc46-e05b-4f06-981e-1d74d1f628cf` | `transpose` |
 | `kTransposeStft` | `66b3a43a-72eb-4c7a-9c47-50e9ab24b718` | `transpose_stft` |
 | `kOctave` | `2e4d5380-5a79-412f-bfc0-bf84ef74d561` | `octave` |
+| `kHarmonizer` | `dc741ddb-1224-46a9-8256-39977d8953cb` | `harmonizer` |
 | `kGain` | `0bcd895e-5d36-4247-a351-6bed1fcb37a8` | `gain` |
 | `kSynthSaw` | `608e846e-0e60-4064-9c83-37c0df573c38` | `synth_saw` |
 | `kAutoArp` | `e4a7c9d0-3b52-4f16-8a9e-2c7f1d0e5b83` | `arp_auto` |
@@ -1627,6 +1628,118 @@ Range. Full Range (default), Octave Down, Octave Up Blend (High Quality, for cho
 Fifth Harmony (at 50%), Whammy Up (heel dry, toe an octave up, gliding), Dive Bomb (rests at the
 toe, rock back to dive) and Step Whammy (in semitones). Everything a pedal moves uses Low Latency.
 The two blends sit 3 dB under the default, as Mix is a linear crossfade.
+
+### Harmonizer (`harmonizer`)
+Up to four pitch-shifted voices played alongside the guitar: intelligent harmony in a key and
+scale, or fixed intervals that work on chords. `core/src/dsp/effects/HarmonizerEffect.h`, with
+its parameter table and presets in `HarmonizerSupport.h`.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `mode` (Mode) | 0 Scale / 1 Fixed | 0 | enum |
+| `key` (Key) | 0 C .. 11 B | 0 (C) | enum |
+| `scale` (Scale) | Major, Minor, Harmonic Minor, Melodic Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Phrygian Dominant | 0 (Major) | enum |
+| `tracking` (Tracking) | 0 Clean / 1 Fast | 0 | enum |
+| `glide` (Glide, advanced) | 0–500 | 0 | ms |
+| `lowestNote` (Lowest Note, advanced) | E2 / D2 / B1 / F#1 | 1 (D2) | enum |
+| `voiceNOn` (N = 1–4) | 0/1 toggle | voice 1 on | — |
+| `voiceNInterval` (Interval) | -14..+14 scale steps (2 Octaves Down .. 2 Octaves Up) | 3rd Up, 5th Up, Octave Down, Octave Up | enum |
+| `voiceNSemitones` (Semitones) | -24..+24 | +4, +7, -12, +12 | st |
+| `voiceNLevel` (Level) | -40..+6 | 0 | dB |
+| `voiceNPan` (Pan) | -1..+1 | 0 | — |
+| `voiceNDetune` (Detune, advanced) | -50..+50 | 0 | cents |
+| `voiceNDelay` (Delay, advanced) | 0–100 | 0 | ms |
+| `dry` (Dry) | 0.0–1.0 | 1.0 | — |
+| `harmonyLevel` (Harmony) | -24..+6 | 0 | dB |
+| `highCut` (High Cut, log taper) | 1000–20000; 19.5 kHz and up is off | 20000 | Hz |
+| `humanize` (Humanize, advanced) | 0.0–1.0 | 0.0 | — |
+
+Each voice is its own `SpliceTransposer`, the Low Latency engine of Pitch Shift and Transpose
+(`docs/transpose-engine.md`): a new interval is heard on the next sample, bass notes stay in
+tune and chords shift cleanly. Its window is 40 ms rather than Transpose's 30, so a Clean voice
+can start from a pick that far back, and the voices play about 21 ms behind the guitar on
+average, as a second player would. The dry signal is never delayed and the effect reports no latency, so a harmony
+never makes the guitar itself late or moves the host's delay compensation.
+
+**Modes.**
+- **Scale**: each voice is a number of scale steps from the note being played, in Key and Scale.
+  `core/src/dsp/MusicalScale.h` does the arithmetic: a 3rd up is two steps, so in C major it is a
+  major third above C, F and G and a minor third above D, E, A and B. A note outside the scale
+  moves as the scale note nearest it (the lower one on a tie), so a chromatic run is harmonised
+  in parallel rather than stalling. Only seven-note scales are offered, since a 3rd or a 6th is
+  defined by counting a seven-note scale's notes. The note comes from `ScaleNoteFollower`
+  (below). Scale mode follows single-note lines. A chord or a palm-muted chug often has no pitch
+  to find, and keeps the interval the last note had. Until a first note has been found the voices
+  are silent.
+- **Fixed**: each voice moves by its own Semitones whatever is played, chords included. Interval
+  is ignored.
+
+**Following the notes** (`core/src/dsp/ScaleNoteFollower.h`). The first version used
+`NoteTracker`, and on real playing it sounded discordant and warbling. Its pitch comes from
+`PitchTracker`'s fixed 28 ms window, which after a pick still holds the note before. On the demo
+riffs a new note was confirmed 50-75 ms after its pick, and 8 of 18 picks were never confirmed.
+Clean then waited out a 50 ms timeout and came back without the pick, a stutter several times a
+second, and Fast played most of each note at the old interval. Notes 35-60 cents sharp (low
+strings after a hard pick) were rounded to the wrong semitone and flipped. The follower now:
+- finds picks with `PickAttackDetector`, as each voice's SpliceTransposer does;
+- after each pick, estimates the new note from the audio since the pick alone
+  (`core/src/dsp/OnsetPitchEstimator.h`, YIN over what has arrived, a period found once two have):
+  confirmed by two estimates in a row on the same scale note, in 10-13 ms from E4 up, 18 ms on an
+  E3 and 30 ms on a low E2. Until an estimate has searched far enough to rule out a lower
+  fundamental, it only counts within 19 semitones of the note before: right after a low note's
+  pick a strong fifth harmonic reads two octaves and more too high;
+- between picks, follows legato notes, slides and bends with `PitchTracker`, once its window lies
+  wholly after the pick, on two readings in a row;
+- snaps every pitch to the nearest note of the scale (`music::NearestScaleNote`), with 0.3
+  semitones of hysteresis (`music::FollowScaleNote`), not to the nearest semitone. Scale notes are
+  one or two semitones apart, so a sharp note is still clearly nearest its own.
+
+**Tracking** (Scale mode). Until a pick's note is known, a voice would play the new note at the
+old note's interval, a short wrong harmony at every note that changes it.
+- **Clean** (default) ducks the voices under each pick (a 2 ms fade) and, once the note is known,
+  starts them again from 3 ms before the pick (`SpliceTransposer::EngageAt`). The harmony enters
+  with its own pick, at the level Fast plays it, 10-30 ms behind the guitar's (lower notes later),
+  and never at a wrong interval. A pick whose note is not found within 35 ms (a strum, a muted
+  chug) starts the voices from the pick at the intervals they had, so the harmony is never more
+  than that late and never cut short.
+- **Fast** never ducks. The voices play the pick at the old interval and move when the note is
+  known.
+
+On the demo riffs (low, palm-muted single notes and power chords, which few picks of have a pitch
+to find), in their own keys, voice 1 a 3rd up: Clean plays a wrong interval 3.5% of the time on
+the single-note riffs, and is late 35 ms on most picks; Fast is on time and wrong 7% of the time.
+Power chords are the hard case for either: about 20%.
+
+In both, a legato note (a hammer-on or slide, with no pick) moves the voices when it is found. A
+bend moves the harmony once it is nearer the next scale note than its own by 0.3 semitones, so
+vibrato does not flicker between two harmony notes. Glide
+slides a voice to its new interval rather than jumping, which suits slow legato lines. Key and
+Scale can be changed while playing, or mapped to MIDI for a song's key changes; the voices then
+glide to their new intervals.
+
+**Per voice.** Level and Pan (the voice's mid at equal power, centre at unity on both sides; any
+side the input already had narrows as it moves off centre). Detune adds cents to the interval,
+and Delay plays the voice up to 100 ms late. A unison voice detuned a few cents and 20-30 ms late
+is a double-tracked part. A voice panned off centre makes the node stereo
+(`ProducesStereoOutput`), so a mono rig carries the spread on downstream. Humanize gives every
+voice a slow random drift of its own, up to 8 cents in pitch and 3 ms in timing at 1, the timing
+rate-limited so it never bends the pitch by more than 7 cents. High Cut is a 12 dB/octave
+low-pass on the harmony only, to soften the voices against the guitar.
+
+Every voice's input history is written on every sample, on or off, so a voice that is switched
+on plays what is coming in now; switching, ducking and the first note fade over 5 ms. SetParam
+only stores the value, and Process takes it up at the start of the next block, so it is safe on
+the audio thread (no allocation, no locks). The output is bit-identical in any block size.
+CPU at 48 kHz in 64-sample blocks, Release, on a picked line from E2 up: one voice 8 µs mean and
+30 µs p99, four voices 20 and 52 µs (the same in Fixed mode; Humanize adds about 2 µs), against a
+1333 µs deadline. Each voice is a whole SpliceTransposer with its own copy of the input history,
+written on every sample; one history shared by the four would save three of those writes.
+
+**Factory presets** (`HarmonizerSupport.h`) leave Key alone, as it is the song's, and Lowest Note,
+the guitar's. 3rd Up (default), Twin Leads (a 3rd up in minor, right of centre and 12 ms late),
+Thirds and Fifths, Neo-Classical (harmonic minor), Country Sixths (a 6th below, gliding), Choir
+(four voices, humanised and darkened), and, in Fixed mode, Octave Stack, Power Fifths and Double
+Tracked (two detuned, delayed unison voices panned wide). Tests: `core/tests/HarmonizerEffectTests.cpp`.
 
 ### Transpose (`transpose`)
 Shifts the whole input by whole semitones, for playing in another tuning. Two engines:

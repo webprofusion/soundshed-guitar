@@ -34,6 +34,7 @@
 #include "dsp/effects/CompressorEffect.h"
 #include "dsp/effects/DelayEffect.h"
 #include "dsp/effects/FlangerEffect.h"
+#include "dsp/effects/HarmonizerEffect.h"
 #include "dsp/effects/NoiseGateEffect.h"
 #include "dsp/effects/ParametricEQEffect.h"
 #include "dsp/effects/PitchShiftEffect.h"
@@ -101,6 +102,8 @@ const std::vector<Effect>& Effects()
         {"Synth Voice", EffectGuids::kSynthSaw, {"outputGain", "gate"}, {}},
         {"Auto Arpeggiator", EffectGuids::kAutoArp, {"pitchMode", "pitchThreshold"}, {}},
         {"Pitch Shift", EffectGuids::kPitchShift, {}, {}},
+        // Key is the song's and Lowest Note the guitar's.
+        {"Harmonizer", EffectGuids::kHarmonizer, {"key", "lowestNote"}, {}},
         // Output is set, to take out what each preset's tone controls add to the amp's level.
         {"Heavy American", EffectGuids::kAmpBuiltin, {}, {}, 3.0},
         // The bass cab sits lowest on a guitar DI, about 5 dB under the default.
@@ -349,6 +352,7 @@ int main()
     guitarfx::RegisterSynthSawEffect();
     guitarfx::RegisterAutoArpEffect();
     guitarfx::RegisterPitchShiftEffect();
+    guitarfx::RegisterHarmonizerEffect();
     guitarfx::RegisterBuiltinAmpEffect();
     guitarfx::RegisterSimpleCabEffect();
 
