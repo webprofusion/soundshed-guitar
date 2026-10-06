@@ -310,6 +310,16 @@
   --performance-plot-fill: rgba(104, 184, 104, 0.18);
   --performance-plot-grid: rgba(255, 255, 255, 0.14);
 
+  /* Effect parameter group panels, recessed into the faceplate like a panel
+     cut into real equipment: darker than the section around them, shadowed
+     under the top edge, with light catching the lip below. */
+  --panel-inset-bg: linear-gradient(180deg, rgba(4, 6, 11, 0.62) 0%, rgba(9, 11, 18, 0.42) 100%);
+  --panel-inset-border: rgba(0, 0, 0, 0.42);
+  --panel-inset-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+
   /*
     Safe-area insets — the screen edges the UI must keep clear.
 

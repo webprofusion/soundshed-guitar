@@ -108,6 +108,12 @@
   /* misc */
   --color-preset-favorite: #c27c7c;
 
+  --panel-inset-bg: linear-gradient(180deg, #e9edf3 0%, #f1f4f8 100%);
+  --panel-inset-border: rgba(17, 24, 39, 0.14);
+  --panel-inset-shadow:
+    inset 0 2px 5px rgba(17, 24, 39, 0.12),
+    inset 0 1px 1px rgba(17, 24, 39, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .theme-light select {
@@ -657,11 +663,7 @@
   color: var(--text-primary);
 }
 
-.theme-light .default-effect-shell .default-effect-section,
-.theme-light .default-effect-shell .node-param-group-block,
-.theme-light .default-effect-shell .eq-visualizer,
-.theme-light .default-effect-shell .mixer-inputs-section,
-.theme-light .default-effect-shell .node-resource-selector {
+.theme-light .default-effect-shell .default-effect-section {
   background: #ffffff;
   border-color: var(--border-light);
 }
@@ -795,18 +797,13 @@
   color: rgba(69, 83, 110, 0.72);
 }
 
-.theme-light .node-param-group-block {
-  background: #ffffff;
-  border-color: var(--border-light);
-}
-
 .theme-light .node-param-group-title {
   color: var(--text-secondary);
 }
 
 .theme-light .eq-visualizer {
-  background: #ffffff;
-  border-color: var(--border-light);
+  background: var(--panel-inset-bg);
+  border-color: var(--panel-inset-border);
 }
 
 .theme-light .eq-visualizer-header {
