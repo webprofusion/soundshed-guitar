@@ -4,8 +4,10 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/FiniteCheck.h"
+#include "dsp/PickAttackDetector.h"
 #include "dsp/effects/DynamicsPresets.h"
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 
@@ -30,6 +32,12 @@ namespace guitarfx
  * Hysteresis is what keeps a decaying note from chattering: the level that opens the gate
  * is above the level that lets it close again, so a signal hovering at the threshold
  * settles into one state instead of oscillating between them.
+ *
+ * Mode Swell turns it into a volume swell: every note fades in over the Swell time instead of
+ * starting with its pick, the violin-like attack of rolling the volume knob up after each
+ * note. A note picked while the last still rings dips the level in a few milliseconds and
+ * swells again, so legato lines swell note by note; between detached notes the gate closes as
+ * usual. Attack does nothing in Swell; Release, Hold, Range and the thresholds work as in Gate.
  */
 class NoiseGateEffect : public EffectProcessor
 {
@@ -40,6 +48,11 @@ class NoiseGateEffect : public EffectProcessor
         // coefficients from it now, so a gate asked to process before Prepare still gates:
         // left at zero, the detector would never move and the gate would never open.
         UpdateCoefficients();
+
+        for (auto& pick : mPick)
+        {
+            pick.Prepare(mSampleRate);
+        }
     }
 
     void Prepare(double sampleRate, int maxBlockSize) override
@@ -52,6 +65,12 @@ class NoiseGateEffect : public EffectProcessor
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         UpdateCoefficients();
+
+        for (auto& pick : mPick)
+        {
+            pick.Prepare(sampleRate);
+        }
+
         Reset();
     }
 
@@ -64,6 +83,9 @@ class NoiseGateEffect : public EffectProcessor
             mOpen[channel] = false;
             mHoldSamplesRemaining[channel] = 0;
             mHighPassState[channel] = 0.0f;
+            mSwell[channel] = 0.0f;
+            mDucking[channel] = false;
+            mPick[static_cast<std::size_t>(channel)].Reset();
         }
     }
 
@@ -100,13 +122,16 @@ class NoiseGateEffect : public EffectProcessor
             {
                 // One detector, one gain: whichever channel is loudest decides for both, so a
                 // stereo signal cannot end up with one side open and the other shut.
-                leftGain = NextGain(std::max(leftLevel, rightLevel), coefficients, 0);
+                const bool pick = coefficients.swell && mPick[0].Process(0.5f * (left + right));
+                leftGain = NextGain(std::max(leftLevel, rightLevel), coefficients, 0, pick);
                 rightGain = leftGain;
             }
             else
             {
-                leftGain = NextGain(leftLevel, coefficients, 0);
-                rightGain = NextGain(rightLevel, coefficients, 1);
+                const bool leftPick = coefficients.swell && mPick[0].Process(left);
+                const bool rightPick = coefficients.swell && mPick[1].Process(right);
+                leftGain = NextGain(leftLevel, coefficients, 0, leftPick);
+                rightGain = NextGain(rightLevel, coefficients, 1, rightPick);
             }
 
             if (outputLeft)
@@ -141,7 +166,8 @@ class NoiseGateEffect : public EffectProcessor
         for (int i = 0; i < numSamples; ++i)
         {
             const float key = HighPassedLevel(input[i], 0, coefficients.highPassCoef);
-            output[i] = input[i] * NextGain(key, coefficients, 0);
+            const bool pick = coefficients.swell && mPick[0].Process(input[i]);
+            output[i] = input[i] * NextGain(key, coefficients, 0, pick);
         }
     }
 
@@ -160,6 +186,8 @@ class NoiseGateEffect : public EffectProcessor
     static constexpr double kMaxHysteresisDb = 24.0;
     static constexpr double kMinRangeDb = -90.0;
     static constexpr double kMaxRangeDb = 0.0;
+    static constexpr double kMinSwellMs = 50.0;
+    static constexpr double kMaxSwellMs = 4000.0;
 
     void SetParam(const std::string& key, double value) override
     {
@@ -201,6 +229,14 @@ class NoiseGateEffect : public EffectProcessor
         else if (key == "stereoLink")
         {
             mStereoLink.store(static_cast<float>(std::clamp(value, 0.0, 1.0)), std::memory_order_relaxed);
+        }
+        else if (key == "mode")
+        {
+            mMode.store(static_cast<float>(std::round(std::clamp(value, 0.0, 1.0))), std::memory_order_relaxed);
+        }
+        else if (key == "swell")
+        {
+            mSwellMs.store(static_cast<float>(std::clamp(value, kMinSwellMs, kMaxSwellMs)), std::memory_order_relaxed);
         }
         else
         {
@@ -251,6 +287,16 @@ class NoiseGateEffect : public EffectProcessor
             return mStereoLink.load(std::memory_order_relaxed);
         }
 
+        if (key == "mode")
+        {
+            return mMode.load(std::memory_order_relaxed);
+        }
+
+        if (key == "swell")
+        {
+            return mSwellMs.load(std::memory_order_relaxed);
+        }
+
         return 0.0;
     }
 
@@ -283,6 +329,13 @@ class NoiseGateEffect : public EffectProcessor
     /// asked to remove, which a full-band detector would instead treat as reasons to open.
     static constexpr double kSidechainHighPassHz = 120.0;
 
+    /// Swell: a pick only restarts the swell once the last one has got this far, so the pick
+    /// that opened the gate cannot restart its own swell.
+    static constexpr float kRetriggerAbove = 0.3f;
+    /// How fast a retrigger dips the level, and how far before it swells again.
+    static constexpr double kDuckMs = 2.0;
+    static constexpr float kDuckFloor = 0.03f;
+
     struct Coefficients
     {
         float attackCoef = 0.0f;
@@ -295,6 +348,9 @@ class NoiseGateEffect : public EffectProcessor
         float floorGain = 0.0f;
         int holdSamples = 0;
         bool stereoLink = true;
+        bool swell = false;
+        float swellStep = 0.0f;
+        float duckCoef = 0.0f;
     };
 
     [[nodiscard]] Coefficients LoadCoefficients() const
@@ -310,6 +366,9 @@ class NoiseGateEffect : public EffectProcessor
         coefficients.floorGain = mFloorGain.load(std::memory_order_relaxed);
         coefficients.holdSamples = mHoldSamples.load(std::memory_order_relaxed);
         coefficients.stereoLink = mStereoLink.load(std::memory_order_relaxed) >= 0.5f;
+        coefficients.swell = mMode.load(std::memory_order_relaxed) >= 0.5f;
+        coefficients.swellStep = mSwellStep.load(std::memory_order_relaxed);
+        coefficients.duckCoef = mDuckCoef.load(std::memory_order_relaxed);
         return coefficients;
     }
 
@@ -320,7 +379,8 @@ class NoiseGateEffect : public EffectProcessor
     {
         for (int channel = 0; channel < 2; ++channel)
         {
-            if (!IsFinite(mDetector[channel]) || !IsFinite(mGain[channel]) || !IsFinite(mHighPassState[channel]))
+            if (!IsFinite(mDetector[channel]) || !IsFinite(mGain[channel]) || !IsFinite(mHighPassState[channel]) ||
+                !IsFinite(mSwell[channel]))
             {
                 Reset();
                 return;
@@ -337,7 +397,7 @@ class NoiseGateEffect : public EffectProcessor
         return std::abs(sample - mHighPassState[channel]);
     }
 
-    [[nodiscard]] float NextGain(float level, const Coefficients& coefficients, int channel)
+    [[nodiscard]] float NextGain(float level, const Coefficients& coefficients, int channel, bool pick)
     {
         float& detector = mDetector[channel];
         detector += (level > detector ? coefficients.detectorAttackCoef : coefficients.detectorReleaseCoef) *
@@ -366,12 +426,49 @@ class NoiseGateEffect : public EffectProcessor
             }
         }
 
+        if (coefficients.swell)
+        {
+            return NextSwellGain(coefficients, channel, pick);
+        }
+
         // Ramp the gain rather than stepping it. The target is the floor, not silence, so the
         // close is an attenuation the ear reads as the noise dropping away instead of the
         // signal being cut -- and the ramp never has to converge on exact zero.
         const float target = mOpen[channel] ? 1.0f : coefficients.floorGain;
         float& gain = mGain[channel];
         gain += (target > gain ? coefficients.attackCoef : coefficients.releaseCoef) * (target - gain);
+        return gain;
+    }
+
+    /// Swell's gain: a position that climbs from 0 to 1 over the Swell time while the gate is
+    /// open and falls at the Release rate once it shuts, squared so the fade sounds even
+    /// rather than rushing up at the start, and lifted onto the floor Range sets.
+    [[nodiscard]] float NextSwellGain(const Coefficients& coefficients, int channel, bool pick)
+    {
+        float& position = mSwell[channel];
+        bool& ducking = mDucking[channel];
+
+        if (pick && mOpen[channel] && position > kRetriggerAbove)
+        {
+            ducking = true;
+        }
+
+        if (ducking)
+        {
+            position -= coefficients.duckCoef * position;
+            ducking = position > kDuckFloor;
+        }
+        else if (mOpen[channel])
+        {
+            position = std::min(1.0f, position + coefficients.swellStep);
+        }
+        else
+        {
+            position -= coefficients.releaseCoef * position;
+        }
+
+        float& gain = mGain[channel];
+        gain = coefficients.floorGain + (1.0f - coefficients.floorGain) * position * position;
         return gain;
     }
 
@@ -402,6 +499,9 @@ class NoiseGateEffect : public EffectProcessor
                          std::memory_order_relaxed);
         mHoldSamples.store(static_cast<int>(mHoldMs.load(std::memory_order_relaxed) * 0.001 * mSampleRate),
                            std::memory_order_relaxed);
+        mSwellStep.store(static_cast<float>(1000.0 / (mSwellMs.load(std::memory_order_relaxed) * mSampleRate)),
+                         std::memory_order_relaxed);
+        mDuckCoef.store(onePole(kDuckMs), std::memory_order_relaxed);
     }
 
     static constexpr double kPi = 3.14159265358979323846;
@@ -414,6 +514,8 @@ class NoiseGateEffect : public EffectProcessor
     std::atomic<float> mHysteresisDb{4.0f};
     std::atomic<float> mRangeDb{-80.0f};
     std::atomic<float> mStereoLink{1.0f};
+    std::atomic<float> mMode{0.0f};
+    std::atomic<float> mSwellMs{800.0f};
 
     // Derived from the parameters and the sample rate by UpdateCoefficients().
     std::atomic<float> mAttackCoef{0.0f};
@@ -425,6 +527,8 @@ class NoiseGateEffect : public EffectProcessor
     std::atomic<float> mCloseThreshold{0.0f};
     std::atomic<float> mFloorGain{0.0f};
     std::atomic<int> mHoldSamples{0};
+    std::atomic<float> mSwellStep{0.0f};
+    std::atomic<float> mDuckCoef{0.0f};
 
     // State, audio thread only. Linked detection uses index 0 for both channels.
     float mDetector[2] = {0.0f, 0.0f};
@@ -432,6 +536,10 @@ class NoiseGateEffect : public EffectProcessor
     float mHighPassState[2] = {0.0f, 0.0f};
     int mHoldSamplesRemaining[2] = {0, 0};
     bool mOpen[2] = {false, false};
+    // Swell's position through its fade, and whether a retrigger is dipping it.
+    float mSwell[2] = {0.0f, 0.0f};
+    bool mDucking[2] = {false, false};
+    std::array<PickAttackDetector, 2> mPick;
 };
 
 inline void RegisterNoiseGateEffect()
@@ -480,7 +588,13 @@ inline void RegisterNoiseGateEffect()
     ParameterDef stereoLink{"stereoLink", "Stereo Link", 1.0, 0.0, 1.0, "", "", true, 1.0};
     stereoLink.labels = {"Independent", "Linked"};
 
-    info.parameters = {threshold, attack, hold, release, hysteresis, range, stereoLink};
+    // Swell fades each note in rather than gating it: see the class comment.
+    ParameterDef mode{"mode", "Mode", 0.0, 0.0, 1.0, "enum", "", false, 1.0};
+    mode.labels = {"Gate", "Swell"};
+    const ParameterDef swell = WithLogTaper(
+        {"swell", "Swell", 800.0, NoiseGateEffect::kMinSwellMs, NoiseGateEffect::kMaxSwellMs, "ms", "Swell"});
+
+    info.parameters = {threshold, attack, hold, release, hysteresis, range, stereoLink, mode, swell};
     info.presets = dynamics_presets::Gate(info.parameters);
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<NoiseGateEffect>(); });

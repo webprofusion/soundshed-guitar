@@ -68,6 +68,8 @@ constexpr const char* kChorus = "decdd132-029a-46a5-a362-edcde007a450";
 constexpr const char* kFlanger = "1a3f3793-7e80-4e3d-ab7b-3ce3ce032fe7";
 constexpr const char* kPhaser = "3aa9dc81-31c2-40d5-9b1b-b0b9d1295e9b";
 constexpr const char* kTremolo = "c9debb02-d7e7-43e3-8330-b387be46dcf4";
+constexpr const char* kRotary = "b1d69469-4d71-47df-8404-d25bdc29a577";
+constexpr const char* kVibe = "fa81f9aa-5bd6-4726-baff-bb3df65a77da";
 constexpr const char* kRingMod = "c13068c1-9c50-4c7c-be9e-eef808990651";
 // Retired: an alias of kWah, whose Envelope control replaced it. Presets still store it, so it stays.
 constexpr const char* kAutoWah = "b06c6d84-01b3-4d0a-ad98-40eecb64438e";

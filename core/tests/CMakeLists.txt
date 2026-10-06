@@ -28,6 +28,7 @@ set(TEST_SOURCES
     DSPPerformanceTests.cpp
     EffectAliasParityTests.cpp
     EffectFactoryPresetTests.cpp
+    EffectModeTests.cpp
     EffectPresetWorkflowTests.cpp
     EffectProcessorTests.cpp
     FastMathNanTests.cpp
@@ -85,6 +86,7 @@ set(TEST_SOURCES
     ResourceLoadBenchmark.cpp
     ReverbPresetTests.cpp
     RingModEffectTests.cpp
+    RotaryVibeEffectTests.cpp
     SampleRateConverterTests.cpp
     StorageMigrationTests.cpp
     SignalChainMutationStressTest.cpp

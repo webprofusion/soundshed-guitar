@@ -36,14 +36,16 @@ enum class Model
     Timmy,
     Fulldrive,
     Lpb1,
+    TrebleBooster,
     Count
 };
 
-inline constexpr const char* kModelLabels[] = {"TS-808", "Centaur", "Bluesbreaker", "Timmy", "Fulldrive", "LPB-1"};
+inline constexpr const char* kModelLabels[] = {"TS-808",    "Centaur", "Bluesbreaker", "Timmy",
+                                               "Fulldrive", "LPB-1",   "Rangemaster"};
 static_assert(std::size(kModelLabels) == static_cast<std::size_t>(Model::Count));
 
 inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
-    {"model", "Model", 0.0, 0.0, 5.0, "enum", "Pedal", false, 1.0, kModelLabels},
+    {"model", "Model", 0.0, 0.0, 6.0, "enum", "Pedal", false, 1.0, kModelLabels},
     {"drive", "Drive", 0.5, 0.0, 1.0, "amount", "Pedal", false, 0.0},
     {"tone", "Tone", 0.5, 0.0, 1.0, "amount", "Pedal", false, 0.0},
     {"bass", "Bass", 0.5, 0.0, 1.0, "amount", "Voicing", false, 0.0},
@@ -95,6 +97,13 @@ enum class ToneStyle
  *   roll-off in place of the TS tone stage.
  * - LPB-1: one transistor, up to +24 dB of full-range boost. It only clips, asymmetrically,
  *   when pushed near its 9 V supply. Drive is the boost; there is no makeup.
+ * - Rangemaster: a germanium treble booster. Its small input capacitor feeds the transistor
+ *   only the upper mids and treble, which it boosts by up to 26 dB, so the bass passes at
+ *   about its own level while the top end is pushed into the amp, and into the transistor's
+ *   soft, lopsided germanium saturation. Modelled as the clean signal plus that boosted,
+ *   clipped treble, so at Drive 0 it is the bypass sound. Bass moves the treble corner two
+ *   octaves either way about 1.8 kHz, as the common "range" modification does. A boost, so
+ *   there is no makeup.
  */
 struct Voicing
 {
@@ -139,6 +148,9 @@ inline constexpr std::array<Voicing, static_cast<std::size_t>(Model::Count)> kVo
      ToneStyle::LowPass, 900.0, 14.0, 0.0, {-7.0, -7.3, -7.5, -7.7, -7.8, -7.9, -8.0, -8.0, -8.0}},
     // LPB-1
     {0.0, 24.0, 1.0, 25.0, 60000.0, 60000.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, {4.0, 3.2, drive::Knee::Soft, drive::Knee::Soft}, 0.46,
+     ToneStyle::Tilt, 1000.0, 6.0, 0.0, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
+    // Rangemaster
+    {-30.0, 26.0, 0.35, 1800.0, 14000.0, 9000.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, {1.6, 0.9, drive::Knee::Gradual, drive::Knee::Gradual}, 0.3,
      ToneStyle::Tilt, 1000.0, 6.0, 0.0, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
 }};
 // *INDENT-ON*
@@ -270,14 +282,15 @@ struct Traits
 } // namespace overdrive
 
 /**
- * Overdrive pedal with six classic circuits behind its Model switch. See overdrive::Voicing
+ * Overdrive pedal with seven classic circuits behind its Model switch. See overdrive::Voicing
  * for what each one models.
  *
  * Drive, Tone and Level are the pedal's own knobs. Bass moves the gain path's bass cut two
  * octaves either way, so noon is the stock pedal. Clipping swaps the diodes where they sit:
  * silicon, the SD-1's asymmetric pair, LEDs, germanium, MOSFETs, or none (the Fulldrive's
  * "comp cut"). Level is calibrated so the pedal at default drive is about as loud as bypass
- * for a guitar at the nominal operating level (the LPB-1 excepted: boosting is its job).
+ * for a guitar at the nominal operating level (the LPB-1 and the Rangemaster excepted: boosting
+ * is their job).
  */
 class OverdriveEffect : public drive::DrivePedal<overdrive::Traits>
 {
@@ -290,7 +303,8 @@ inline void RegisterOverdriveEffect()
     info.aliases = {"overdrive"};
     info.displayName = "Overdrive";
     info.category = "drive";
-    info.description = "Classic overdrives: TS-808, Centaur, Bluesbreaker, Timmy, Fulldrive and LPB-1 boost";
+    info.description =
+        "Classic overdrives: TS-808, Centaur, Bluesbreaker, Timmy, Fulldrive, LPB-1 boost and Rangemaster treble booster";
     info.requiresResource = false;
     info.parameters = BuildParameterDefs(overdrive::kParams);
 

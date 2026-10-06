@@ -3,6 +3,8 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
+#include "dsp/effects/GrainPitchShifter.h"
 #include "dsp/effects/ReverbPresets.h"
 
 #include <algorithm>
@@ -13,6 +15,19 @@
 
 namespace guitarfx
 {
+/**
+ * Long, diffuse reverb: six modulated combs into four allpass diffusers, with early
+ * reflections off a pre-delay line.
+ *
+ * Shimmer feeds the late reverb back into the combs through a pitch shifter, an octave up by
+ * default, so each pass round the tank comes back higher and the tail climbs into a halo.
+ * Shimmer is how much goes round. The loop is band-limited and soft-limited, so even at full
+ * Shimmer and Decay it settles rather than running away.
+ *
+ * Freeze holds the tail: the combs stop losing energy (feedback to one, damping off) and stop
+ * taking new input, so what was ringing rings on, unchanged, under whatever is played next.
+ * Turning it off lets the tail decay from there at the Decay setting.
+ */
 class AmbientReverbEffect : public EffectProcessor
 {
   public:
@@ -65,6 +80,8 @@ class AmbientReverbEffect : public EffectProcessor
         mSmoothCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (std::max(1.0, mSampleRate) * 0.015)));
         mSizeSmoothCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (std::max(1.0, mSampleRate) * 0.18)));
         mLateGain = static_cast<float>(std::pow(10.0, kLateMakeupDb / 20.0) / static_cast<double>(kCombCount));
+        mFreezeCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (std::max(1.0, mSampleRate) * kFreezeFadeS)));
+        mShimmerReturn.Prepare(mSampleRate);
 
         for (size_t index = 0; index < kCombCount; ++index)
         {
@@ -81,6 +98,8 @@ class AmbientReverbEffect : public EffectProcessor
         mMixSmoothed = static_cast<float>(mMix);
         mWidthSmoothed = static_cast<float>(mWidth);
         mOutputGainSmoothed = mOutputGainTarget;
+        mFreezeSmoothed = mFreeze ? 1.0f : 0.0f;
+        mShimmerSmoothed = mShimmerTarget;
 
         Reset();
     }
@@ -117,6 +136,7 @@ class AmbientReverbEffect : public EffectProcessor
         mInputHpStateR = 0.0f;
         mLfoSin = 0.0f;
         mLfoCos = 1.0f;
+        mShimmerReturn.Reset();
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -153,6 +173,11 @@ class AmbientReverbEffect : public EffectProcessor
             mMixSmoothed += (static_cast<float>(mMix) - mMixSmoothed) * mSmoothCoeff;
             mWidthSmoothed += (static_cast<float>(mWidth) - mWidthSmoothed) * mSmoothCoeff;
             mOutputGainSmoothed += (mOutputGainTarget - mOutputGainSmoothed) * mSmoothCoeff;
+            mFreezeSmoothed += ((mFreeze ? 1.0f : 0.0f) - mFreezeSmoothed) * mFreezeCoeff;
+            mShimmerSmoothed += (mShimmerTarget - mShimmerSmoothed) * mSmoothCoeff;
+            // Frozen, the tank takes nothing new: not the input, and not the shimmer, which
+            // would otherwise keep adding to a loop that no longer loses anything.
+            const float intake = 1.0f - mFreezeSmoothed;
 
             const float wetMix = mMixSmoothed;
             const float dryMix = 1.0f - wetMix;
@@ -176,6 +201,7 @@ class AmbientReverbEffect : public EffectProcessor
 
             float earlyL = preL * 0.38f;
             float earlyR = preR * 0.38f;
+            const float shimmerFeed = mShimmerSmoothed * intake;
 
             for (size_t tap = 0; tap < kEarlyTapCount; ++tap)
             {
@@ -200,8 +226,8 @@ class AmbientReverbEffect : public EffectProcessor
             const float cosPhi = mLfoCos;
             AdvanceLfo();
 
-            const float feedL = preL + earlyL * 0.24f + preR * 0.08f;
-            const float feedR = preR + earlyR * 0.24f + preL * 0.08f;
+            const float feedL = (preL + earlyL * 0.24f + preR * 0.08f) * intake + mShimmerReturn.Left() * shimmerFeed;
+            const float feedR = (preR + earlyR * 0.24f + preL * 0.08f) * intake + mShimmerReturn.Right() * shimmerFeed;
 
             float combSumL = 0.0f;
             float combSumR = 0.0f;
@@ -269,8 +295,17 @@ class AmbientReverbEffect : public EffectProcessor
                                        mDiffusion);
             }
 
-            float wetL = earlyL * 0.22f + lateL * 0.78f;
-            float wetR = earlyR * 0.22f + lateR * 0.78f;
+            if (shimmerFeed > 0.0f)
+            {
+                mShimmerReturn.Process(lateL, lateR);
+            }
+            else if (!mShimmerReturn.Silent())
+            {
+                mShimmerReturn.Reset();
+            }
+
+            float wetL = earlyL * 0.22f * intake + lateL * 0.78f;
+            float wetR = earlyR * 0.22f * intake + lateR * 0.78f;
 
             mWetToneStateL = FlushNearZero(mWetToneStateL + (wetL - mWetToneStateL) * mToneCoeff);
             mWetToneStateR = FlushNearZero(mWetToneStateR + (wetR - mWetToneStateR) * mToneCoeff);
@@ -292,6 +327,12 @@ class AmbientReverbEffect : public EffectProcessor
             {
                 outputs[1][sampleIndex] = inR * dryMix + wetR * wetMix;
             }
+        }
+
+        // The shimmer loop is the one place a value too large to be audio could circulate.
+        if (!IsFinite(mShimmerReturn.Left()) || !IsFinite(mShimmerReturn.Right()))
+        {
+            Reset();
         }
     }
 
@@ -336,6 +377,19 @@ class AmbientReverbEffect : public EffectProcessor
         else if (key == "outputGain")
         {
             mOutputGainDb = std::clamp(value, -18.0, 12.0);
+        }
+        else if (key == "shimmer")
+        {
+            mShimmer = std::clamp(value, 0.0, 1.0);
+        }
+        else if (key == "shimmerPitch")
+        {
+            mShimmerPitch = static_cast<int>(
+                std::lround(std::clamp(value, 0.0, static_cast<double>(kShimmerSemitones.size() - 1))));
+        }
+        else if (key == "freeze")
+        {
+            mFreeze = value >= 0.5;
         }
         else
         {
@@ -401,6 +455,21 @@ class AmbientReverbEffect : public EffectProcessor
             return mOutputGainDb;
         }
 
+        if (key == "shimmer")
+        {
+            return mShimmer;
+        }
+
+        if (key == "shimmerPitch")
+        {
+            return mShimmerPitch;
+        }
+
+        if (key == "freeze")
+        {
+            return mFreeze ? 1.0 : 0.0;
+        }
+
         return 0.0;
     }
 
@@ -438,6 +507,16 @@ class AmbientReverbEffect : public EffectProcessor
     // is where the diffusers sit, so the early reflections keep their old balance against it. It
     // follows no control, so Diffusion stays out of the level.
     static constexpr double kLateMakeupDb = 12.4;
+
+    /// The shimmer's intervals, in the order Shimmer Pitch lists them.
+    static constexpr std::array<double, 4> kShimmerSemitones = {12.0, 7.0, 19.0, -12.0};
+    /// Each interval's loop gain at full Shimmer, the most that still lets the tail die away
+    /// with every other control at its maximum. A fifth climbs out of the damped band more
+    /// slowly than an octave, so it needs the least. The comb sum carries kLateMakeupDb, so the
+    /// return is scaled back by that as well.
+    static constexpr std::array<double, 4> kShimmerLoopGain = {1.5, 1.0, 1.5, 1.5};
+    /// How long Freeze takes to close the tank to new input, and to open it again.
+    static constexpr double kFreezeFadeS = 0.06;
 
     size_t DelayMsToSamples(double ms) const
     {
@@ -574,6 +653,15 @@ class AmbientReverbEffect : public EffectProcessor
         mInputHpAlpha = static_cast<float>(rc / (rc + dt));
         mModDepthSamples = DelayMsToSamplesFloat(0.08 + mModDepth * (1.2 + mSpace * 1.8));
         mOutputGainTarget = static_cast<float>(std::pow(10.0, mOutputGainDb / 20.0));
+        mShimmerTarget = static_cast<float>(mShimmer * kShimmerLoopGain[static_cast<size_t>(mShimmerPitch)] *
+                                            std::pow(10.0, -kLateMakeupDb / 20.0));
+        mShimmerReturn.SetSemitones(kShimmerSemitones[static_cast<size_t>(mShimmerPitch)]);
+
+        if (mFreeze)
+        {
+            mFeedbackTarget = 1.0f;
+            mDampTarget = 0.0f;
+        }
     }
 
     std::vector<float> mPreDelayL;
@@ -606,6 +694,9 @@ class AmbientReverbEffect : public EffectProcessor
     double mModDepth = 0.38;
     double mMix = 0.28;
     double mOutputGainDb = 0.0;
+    double mShimmer = 0.0;
+    int mShimmerPitch = 0;
+    bool mFreeze = false;
 
     float mFeedback = 0.82f;
     float mFeedbackTarget = 0.82f;
@@ -641,6 +732,12 @@ class AmbientReverbEffect : public EffectProcessor
     float mInputHpStateL = 0.0f;
     float mInputHpStateR = 0.0f;
 
+    ShimmerReturn mShimmerReturn;
+    float mShimmerTarget = 0.0f;
+    float mShimmerSmoothed = 0.0f;
+    float mFreezeSmoothed = 0.0f;
+    float mFreezeCoeff = 1.0f;
+
     // Precomputed sin/cos of per-comb LFO phase offsets — avoids kCombCount sin() calls per sample.
     std::array<float, kCombCount> mCombPrecompSinOffsets{};
     std::array<float, kCombCount> mCombPrecompCosOffsets{};
@@ -664,7 +761,19 @@ inline void RegisterAmbientReverbEffect()
                        {"modRate", "Mod Rate", 0.18, 0.02, 2.0, "Hz", "modulation"},
                        {"modDepth", "Mod Depth", 0.38, 0.0, 1.0, "", "modulation"},
                        {"mix", "Mix", 0.28, 0.0, 1.0, "", "tone"},
-                       {"outputGain", "Output", 0.0, -18.0, 12.0, "dB", "tone", true}};
+                       {"outputGain", "Output", 0.0, -18.0, 12.0, "dB", "tone", true},
+                       {"shimmer", "Shimmer", 0.0, 0.0, 1.0, "", "shimmer"},
+                       {"shimmerPitch",
+                        "Shimmer Pitch",
+                        0.0,
+                        0.0,
+                        3.0,
+                        "enum",
+                        "shimmer",
+                        false,
+                        1.0,
+                        {"Octave Up", "Fifth Up", "Octave + Fifth", "Octave Down"}},
+                       {"freeze", "Freeze", 0.0, 0.0, 1.0, "toggle", "space", false, 1.0}};
     info.presets = reverb_presets::Ambient(info.parameters);
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<AmbientReverbEffect>(); });

@@ -132,11 +132,17 @@ bool TestRegisteredTapers()
         }
     }
 
-    const std::pair<const char*, const char*> expectedLog[] = {
-        {EffectGuids::kRingMod, "frequency"},      {EffectGuids::kDelayDigital, "highCut"},
-        {EffectGuids::kDelayDigital, "lowCut"},    {EffectGuids::kCabIr, "lowCutHz"},
-        {EffectGuids::kCabIr, "highCutHz"},        {EffectGuids::kReverbAdvanced, "lowCut"},
-        {EffectGuids::kReverbAdvanced, "highCut"}, {EffectGuids::kHarmonizer, "highCut"}};
+    const std::pair<const char*, const char*> expectedLog[] = {{EffectGuids::kRingMod, "frequency"},
+                                                               {EffectGuids::kDelayDigital, "highCut"},
+                                                               {EffectGuids::kDelayDigital, "lowCut"},
+                                                               {EffectGuids::kCabIr, "lowCutHz"},
+                                                               {EffectGuids::kCabIr, "highCutHz"},
+                                                               {EffectGuids::kReverbAdvanced, "lowCut"},
+                                                               {EffectGuids::kReverbAdvanced, "highCut"},
+                                                               {EffectGuids::kHarmonizer, "highCut"},
+                                                               {EffectGuids::kVibe, "rate"},
+                                                               {EffectGuids::kTremolo, "crossover"},
+                                                               {EffectGuids::kDynamicsGate, "swell"}};
 
     for (const auto& [type, paramId] : expectedLog)
     {

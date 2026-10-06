@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-A big update: six new effects, fifteen classic drive pedals, a Practice Tool for learning songs, undo/redo and A/B for your signal chain, gapless preset switching with ringing tails, and right-click MIDI Learn on nearly every control.
+A big update: eight new effects, fifteen classic drive pedals, a Practice Tool for learning songs, undo/redo and A/B for your signal chain, gapless preset switching with ringing tails, and right-click MIDI Learn on nearly every control.
 
 ### New Effects
 * **Wah**: a real pedal wah for your expression pedal or MIDI controller, with 34 factory voicings covering classic, boutique and artist signature wahs. It can switch itself off when you rock back to the heel. Set Control to Auto Wah and your playing sweeps it instead, through any of the voicings. This replaces the old Auto-Wah effect: one already in your presets becomes a wah on Auto Wah with the same sweep and level.
@@ -11,6 +11,8 @@ A big update: six new effects, fifteen classic drive pedals, a Practice Tool for
 * **3D Spatial**: place your guitar anywhere around you on headphones, or set it moving with seven motion modes, optionally in time with the song.
 * **Ring Modulator**: metallic, bell-like and robotic tones. Tracking mode follows the notes you play so the effect stays in tune with you, and an LFO sweep can sync to tempo.
 * **Harmonizer**: up to four harmony voices. Pick a key and scale and each voice follows your playing a 3rd, 5th, 6th or octave away, major or minor as the key needs, or set fixed intervals that work on chords too. Each voice has its own level, pan, detune and delay, for twin leads, choirs or a double-tracked part, and the harmony comes in with its own pick instead of a wrong note.
+* **Rotary**: a rotating speaker cabinet, horn and drum, heard through two mics in stereo. Switch between Slow and Fast (or Brake) from a footswitch and hear the rotors spin up and slow down at their own pace, the horn in about a second and the heavy drum over several. Drive the cabinet's amp for grit, and set how far apart and how close the mics are.
+* **Vibe**: the throbbing, lopsided swirl of a photocell vibe, in Chorus or Vibrato mode. Four unequal phase stages swept by a lamp give it the pulse a plain phaser does not have, and the sweep can sync to tempo.
 
 ### Experimental
 * **Guitar to MIDI** (turn on Settings → Experimental Effects to find it): play a virtual instrument from your guitar. Put it anywhere before a Plugin Host holding an instrument plugin, and the single notes you play are played on it, as hard as you picked them, with hammer-ons played legato and bends and vibrato followed. It plays one note at a time, so chords come out as one of their notes.
@@ -31,6 +33,11 @@ A big update: six new effects, fifteen classic drive pedals, a Practice Tool for
 * **Graphic EQ**: starts flat, has a Reset button, and its band layouts now sit in the Presets dropdown alongside your own curves.
 * **Synth Voice**: follows your playing more closely, reaching new notes up to twice as fast and tracking down to low F# on an eight-string. It also uses far less CPU, so it no longer crackles at small buffers, and its Square wave no longer thumps on every note when Pulse Width is set away from the middle.
 * **Auto Arpeggiator**: each step's note now lands right on the beat instead of about 40 ms late, stays in tune on the low strings, and comes through with far less delay. After a chord change it plays the new chord rather than the old one, steps no longer click with the gate fully open, and it uses about a quarter of the CPU. The pitch trigger now fires at the pitch you set, not a semitone or two below it, and the Steps control shows the number you chose.
+* **Tremolo** has three new modes: Harmonic, where the lows and highs pulse against each other for the swirl of an early-60s brown amp; Pan, an auto-panner that turns a mono guitar stereo; and Slicer, which chops your playing to one of eight rhythm patterns, in time with the song if you like.
+* **Digital Delay** can play in reverse: each slice of your playing comes back backwards, swelling in behind the note. Two new presets, Reverse and Reverse Wash.
+* **Ambient Reverb** adds Shimmer, which sends the tail back round an octave (or a fifth) higher each time so it climbs into a halo, and Freeze, which holds the reverb ringing under whatever you play next, ready for a footswitch. Three new shimmer presets.
+* **Noise Gate** has a Swell mode: every note fades in, as if you rolled the volume knob up after each pick, for violin-like swells. Two new presets, Volume Swell and Slow Swell.
+* **Overdrive** adds a Rangemaster-style treble booster: it pushes the treble into your amp while leaving the bass alone, for the classic cranked-amp lead sound.
 * **Chorus and Flanger** now come out in stereo from a mono guitar input. Their two sides were being merged back into one at the output, or at the next amp, drive pedal or noise gate. An amp after them now processes both sides, so a NAM amp there uses about twice the CPU while the chorus or flanger is on.
 * **Global Doubler** now actually widens a mono guitar. It was coming out the same on both sides, so it coloured the tone instead.
 * **Composite effects** with a chorus, flanger or stereo delay inside now come out in stereo too, instead of being merged back into one side by the rest of the chain.

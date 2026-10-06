@@ -38,8 +38,11 @@
 #include "dsp/effects/NoiseGateEffect.h"
 #include "dsp/effects/ParametricEQEffect.h"
 #include "dsp/effects/PitchShiftEffect.h"
+#include "dsp/effects/RotaryEffect.h"
 #include "dsp/effects/SimpleCabEffect.h"
 #include "dsp/effects/SynthSawEffect.h"
+#include "dsp/effects/TremoloEffect.h"
+#include "dsp/effects/VibeEffect.h"
 
 #ifndef GUITARFX_DEMO_AUDIO_DIR
     #error "GUITARFX_DEMO_AUDIO_DIR must be defined"
@@ -94,11 +97,15 @@ const std::vector<Effect>& Effects()
     static const std::vector<Effect> effects = {
         {"VCA Compressor", EffectGuids::kCompressorVca, {"stereoLink"}, {}},
         {"Opto Compressor", EffectGuids::kCompressorOpto, {"stereoLink"}, {}},
-        {"Noise Gate", EffectGuids::kDynamicsGate, {"threshold", "stereoLink"}, {}},
+        // The Swell presets fade every note in, so on the busy DI riffs they sit lowest.
+        {"Noise Gate", EffectGuids::kDynamicsGate, {"threshold", "stereoLink"}, {}, 12.0},
         {"Parametric EQ", EffectGuids::kEqParametric, {}, {}},
         {"Digital Delay", EffectGuids::kDelayDigital, {"syncDivision"}, {kDivisionWhenSynced}},
         {"Chorus", EffectGuids::kChorus, {"syncDivision"}, {kDivisionWhenSynced}},
         {"Flanger", EffectGuids::kFlanger, {"syncDivision"}, {kDivisionWhenSynced}},
+        {"Tremolo", EffectGuids::kTremolo, {"syncDivision"}, {kDivisionWhenSynced}},
+        {"Rotary", EffectGuids::kRotary, {}, {}},
+        {"Vibe", EffectGuids::kVibe, {"syncDivision"}, {kDivisionWhenSynced}},
         {"Synth Voice", EffectGuids::kSynthSaw, {"outputGain", "gate"}, {}},
         {"Auto Arpeggiator", EffectGuids::kAutoArp, {"pitchMode", "pitchThreshold"}, {}},
         {"Pitch Shift", EffectGuids::kPitchShift, {}, {}},
@@ -349,6 +356,9 @@ int main()
     guitarfx::RegisterDelayEffect();
     guitarfx::RegisterChorusEffect();
     guitarfx::RegisterFlangerEffect();
+    guitarfx::RegisterTremoloEffect();
+    guitarfx::RegisterRotaryEffect();
+    guitarfx::RegisterVibeEffect();
     guitarfx::RegisterSynthSawEffect();
     guitarfx::RegisterAutoArpEffect();
     guitarfx::RegisterPitchShiftEffect();

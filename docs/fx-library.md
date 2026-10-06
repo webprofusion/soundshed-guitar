@@ -81,6 +81,8 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kFlanger` | `1a3f3793-7e80-4e3d-ab7b-3ce3ce032fe7` | `flanger` |
 | `kPhaser` | `3aa9dc81-31c2-40d5-9b1b-b0b9d1295e9b` | `phaser` |
 | `kTremolo` | `c9debb02-d7e7-43e3-8330-b387be46dcf4` | `tremolo` |
+| `kRotary` | `b1d69469-4d71-47df-8404-d25bdc29a577` | `rotary` |
+| `kVibe` | `fa81f9aa-5bd6-4726-baff-bb3df65a77da` | `vibe` |
 | `kRingMod` | `c13068c1-9c50-4c7c-be9e-eef808990651` | `ring_mod` |
 | `kAutoWah` | `b06c6d84-01b3-4d0a-ad98-40eecb64438e` | `auto_wah` (retired: runs as `kWah`) |
 | `kWah` | `8ae7a185-8075-466f-a83b-72f8dfa50af0` | `wah` |
@@ -157,7 +159,8 @@ Over a range it cannot map (a node narrowing it, a composite declaring one), a l
 back to linear on both sides.
 
 Log-taper parameters: `ring_mod` `frequency`; `delay_digital` `highCut` and `lowCut`; `cab_ir`
-`lowCutHz` and `highCutHz`; `reverb_advanced` `lowCut` and `highCut`.
+`lowCutHz` and `highCutHz`; `reverb_advanced` `lowCut` and `highCut`; `harmonizer` `highCut`;
+`vibe` `rate`; `tremolo` `crossover`; `dynamics_gate` `swell`.
 
 ### Effect presets
 Every effect's Presets menu draws on three lists:
@@ -512,6 +515,8 @@ Input noise reduction.
 | `hysteresis` | 0–24 | 4.0 | dB |
 | `range` | -90..0 | -80 | dB |
 | `stereoLink` | 0–1 | 1 | Independent / Linked |
+| `mode` | Gate / Swell | Gate | — |
+| `swell` | 50–4000, log | 800 | ms |
 
 `thresholdDb`, `attackMs`, `holdMs` and `releaseMs` are accepted as legacy spellings and are
 declared as `ParameterDef::aliases`, so `CanonicalizeNodeParams` folds them onto the ids above
@@ -538,6 +543,15 @@ stops a decaying note chattering it open and shut. `range` is the attenuation wh
 than a full mute. `stereoLink` keys one detector off the louder channel so a stereo signal cannot
 half-close; turning it off gates each channel on its own level.
 
+**Swell** turns the gate into a volume swell, the rolled-up volume knob of a violin-like
+attack. When the gate opens, the gain climbs to unity over `swell` along a squared curve (so it
+sounds even rather than rushing up at the start) instead of over `attack`, which Swell ignores.
+A note picked while the last still rings would otherwise come in at full level, so a pick
+detector (`PickAttackDetector`, the one the harmonizer and transposer use) dips the gain in a
+few milliseconds and the swell starts again; a pick only retriggers once the last swell is past
+30%. It has no look-ahead, so the first millisecond or two of a pick over a ringing note can
+still be heard. Between detached notes the gate closes at `release` as usual.
+
 **Factory presets** (`DynamicsPresets.h`) set how the gate opens and closes, and leave out
 `threshold` and `stereoLink`: the threshold belongs to the player's pickups and how much noise
 their rig makes, and choosing how a gate closes should not move where it closes.
@@ -550,6 +564,8 @@ their rig makes, and choosing how a gate closes should not move where it closes.
 | Staccato Chug | 0.2 / 5 / 10 ms | 8 dB | -90 dB |
 | Natural Decay | 2 / 150 / 300 ms | 10 dB | -60 dB |
 | Ambient Friendly | 5 / 250 / 500 ms | 12 dB | -30 dB, so tails into a delay or reverb fade, not stop |
+| Volume Swell | Swell, 600 ms; hold 80, release 250 ms | 10 dB | -80 dB |
+| Slow Swell | Swell, 1100 ms; hold 150, release 500 ms | 12 dB | -80 dB |
 
 ### Parametric EQ (`eq_parametric`)
 4-band parametric equalizer (low/high shelves + 2 parametric mids).
@@ -593,15 +609,26 @@ Clean stereo digital delay, with its tone filters and drive inside the feedback 
 | `modRate` | 0–10 | 0 | Hz (advanced) |
 | `modDepth` | 0–20 | 0 | ms either way (advanced) |
 | `ducking` | 0.0–1.0 | 0.0 | — (advanced; the wet dips while you play) |
+| `direction` | Forward / Reverse | Forward | — |
 
 Time is not smoothed, so changing it (or choosing a preset) jumps the read head; the tape and
 analog delays glide.
+
+**Reverse** plays each Time-long slice of the input backwards. Two read heads half a slice
+apart each read twice as far back as they are into their slice, so each runs backwards through
+the last slice at normal speed, from now to a slice ago; each is faded in and out with a sin²
+window and the two windows sum to one, so no slice starts or ends with a click. Slices shorter
+than 10 ms are held at 10 ms. Spread lengthens the right channel's slices. The repeats that
+Feedback sends round are reversed again, so they alternate between backwards and forwards, as
+most reverse pedals' do. The line holds 4.2 s, two of the longest slices. On a guitar phrase,
+Reverse sits about 1.3 dB under Forward.
 
 **Factory presets** set every control, the advanced ones too, and leave out Division unless the
 preset is tempo-synced: DD-3 (default), Slapback (100 ms, one repeat), Dotted Eighth (1/8 dotted
 at the song's tempo, 375 ms when Sync is off), Ping-Pong, Ducked Lead (the echoes bloom in the
 gaps), Ambient Wash (650 ms, long and dark, modulated and spread) and Lo-Fi Echo (telephone-band
-repeats, driven and warbling). On the demo DI each is within 1.1 dB of the default.
+repeats, driven and warbling), Reverse (550 ms slices swelling in behind the note) and Reverse
+Wash (800 ms, longer feedback, darker and spread).
 
 ### Tape Echo (`delay_tape`)
 
@@ -848,8 +875,27 @@ Long, diffuse late reverb with soft early reflections, slow modulation, and a wi
 | `modDepth` | 0.0–1.0 | 0.38 | — |
 | `mix` | 0.0–1.0 | 0.28 | — |
 | `outputGain` | -18..+12 | 0.0 | dB |
+| `shimmer` | 0.0–1.0 | 0.0 | — |
+| `shimmerPitch` | Octave Up / Fifth Up / Octave + Fifth / Octave Down | Octave Up | — |
+| `freeze` | Off / On | Off | — |
 
-Factory presets: Wide Bloom (default), Tight Ambience, Lead Halo, Dark Swell, Cloud, Infinite Wash.
+**Shimmer** feeds the late reverb back into the combs through a pitch shifter
+(`GrainPitchShifter.h`: two sin²-windowed taps sweeping a 70 ms line, cheap and with no latency
+of its own, and smooth enough on a reverb's wash), so each pass round the tank comes back
+`shimmerPitch` higher and the tail climbs into a halo. The return is band-limited (120 Hz to
+7 kHz) and soft-limited, and each interval's loop gain at full Shimmer is the most that still
+lets the tail die away with every other control at its maximum: a fifth climbs out of the damped
+band more slowly than an octave, so it gets two-thirds of the octave's. With Shimmer at full and
+everything else up, the tail is still 17 dB down 18 s later. At the default Mix, Shimmer adds
+under 1 dB to the level on a guitar.
+
+**Freeze** holds the tail: the combs' feedback goes to one and their damping off, and the tank
+stops taking input (the shimmer return and the early reflections too), over 60 ms. What was
+ringing rings on unchanged under whatever is played next; turning it off lets the tail decay
+from there at the Decay setting. Map it to a footswitch.
+
+Factory presets: Wide Bloom (default), Tight Ambience, Lead Halo, Dark Swell, Cloud, Infinite Wash,
+Shimmer (an octave up), Fifth Halo and Deep Shimmer (an octave down, an organ-like swell).
 
 ### Cybercab - Cab Sim (`cab_simple`)
 Filter-based cabinet with no IR required: five cabinet types, a mic with type, position and
@@ -918,7 +964,7 @@ What all three share:
 - **Level is calibrated.** With Level at 0 dB, every model at every Drive setting is as loud
   as bypass (K-weighted) for a guitar at the nominal level, so switching a pedal on changes
   the tone, not the volume. To push an amp, raise Level, as you would on a real pedal. The
-  LPB-1 is the exception: it is a boost, and Drive is how much.
+  LPB-1 and the Rangemaster are the exceptions: they are boosts, and Drive is how much.
 - **Oversampled and antialiased.** The clipping runs near 384 kHz: 8x at 44.1 or 48 kHz, 4x
   at 88.2 or 96, 2x above. Every clipping curve has a closed-form integral, and is
   antialiased with it (ADAA). On a 1.3 kHz note at full drive, audible aliasing is at least
@@ -953,6 +999,7 @@ the clipping two octaves either way; `clipping` swaps the diodes.
 | Timmy | Transparent: a low-gain stage into silicon diodes to ground, flat mids; Tone is the cut-only Treble |
 | Fulldrive | A TS with more gain and fuller bass ("flat mids"); a treble roll-off tone |
 | LPB-1 | One transistor, up to +24 dB of full-range boost. Clips only when pushed near its 9 V supply |
+| Rangemaster | Germanium treble booster: up to +26 dB of the upper mids and treble, added to the clean signal, so the bass passes at its own level while the top end is pushed into the amp and into soft, lopsided germanium saturation. Unity at Drive 0, about +9 dB at half. Bass moves the treble corner two octaves either way about 1.8 kHz, the "range" modification |
 
 **Distortion** — `drive`, `tone` (the RAT's Filter, bright clockwise), `level`; `tight` sets
 how much bass reaches the gain stage (clockwise is tighter); `clipping`; and a three-band EQ,
@@ -1128,6 +1175,116 @@ Depth and Mix are both above zero.
 bar): Classic Flanger (default), MXR 117 (a slow, wide jet), BF-2, Electric Mistress, Metallic
 Comb (a near-static ring), Fast Swirl and Tempo Sweep. Within 2.1 dB of the default on the demo
 DI; the high-feedback ones run a little hotter when played softly.
+
+### Tremolo (`tremolo`)
+The level moved by an LFO, four ways, chosen by **Mode**. Classic is the tremolo it always was.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `mode` | Classic / Harmonic / Pan / Slicer | Classic | — |
+| `rate` | 0.1–12 | 4.0 | Hz |
+| `syncMode` / `syncDivision` | Free / Tempo, 1/1 … 1/32T | Free, 1/4 | — |
+| `depth` | 0.0–1.0 | 0.7 | — |
+| `shape` | 0.0–1.0 | 0.0 | — (sine to near-square; a Slicer step's edge) |
+| `mix` | 0.0–1.0 | 1.0 | — |
+| `pattern` | Pulse, Gallop, Reverse Gallop, Offbeat, Tresillo, Syncopated, Half Time, Build | Pulse | — (Slicer) |
+| `crossover` | 200–2000, log | 650 | Hz (Harmonic; advanced) |
+
+- **Harmonic** splits the signal at Crossover (a Butterworth low-pass, the highs being what it
+  leaves, so the two always add back exactly) and moves the lows and the highs in opposite
+  phase, as the early-60s brown amps did. The level barely moves (3 dB where Classic swings
+  60 at full Depth); the tone sweeps instead.
+- **Pan** moves the signal between the sides at constant power: centred, both at unity; hard
+  over, one at +3 dB and the other silent. It is the one mode that makes a mono input stereo,
+  and it says so (`ProducesStereoOutput`), so the nodes after it keep both sides; the others
+  leave a following amp on its mono path.
+- **Slicer** steps through a sixteen-step pattern, one step per LFO cycle, so with Sync on,
+  Division is the step length (1/16 for sixteenths). Played steps pass at unity and cut ones
+  drop by Depth; Shape softens the edges from 1.5 ms up to a third of the step. A synced step
+  may run up to 40 Hz (a 1/32 at 300 bpm); the other modes stay under 12. The pattern starts
+  when the effect does: there is no song position to align it to.
+
+**Factory presets** (`ModulationPresets.h`) set every control but Division unless tempo-synced:
+Classic Tremolo (default), Slow Throb, Surf (fast and near-square), Brown Harmonic, Deep
+Harmonic, Auto-Pan, Tempo Pan (a pan each beat), and three sixteenth-note Slicers: Gallop
+Slicer, Half-Time Chop and Tresillo Pulse.
+
+### Rotary (`rotary`)
+A rotating speaker cabinet (`RotaryEffect.h`): a horn above, a drum below, two mics.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `speed` | Slow / Fast / Brake | Slow | — |
+| `slowRate` | 0.3–2.0 | 0.8 | Hz (the horn; the drum turns at 0.85 of it) |
+| `fastRate` | 4–9 | 6.7 | Hz (the drum at 0.88 of it) |
+| `ramp` | 0.0–1.0 | 0.5 | — (how long the rotors take to change speed) |
+| `drive` | 0.0–1.0 | 0.2 | — (the cabinet's tube amp) |
+| `balance` | -1..+1 | 0 | — (Horn/Drum: turns one down, never up) |
+| `spread` | 0.0–1.0 | 0.8 | — (Mic Spread: 0 one mic, 1 opposite sides) |
+| `depth` | 0.0–1.0 | 0.7 | — (how close the mics are) |
+| `level` | -12..+12 | 0 | dB |
+| `mix` | 0.0–1.0 | 1.0 | — |
+
+The input is summed to mono, through the amp's soft saturation, and split at 800 Hz by a
+Linkwitz-Riley crossover, so horn and drum add back flat. Each rotor reaches each mic along a
+path that lengthens and shortens as it turns: a delay swung by the rotor's radius over the speed
+of sound (0.15 m for the horn, 0.05 m for the drum's baffle) is the Doppler, and a gain that
+follows where it points is the tremolo. The horn also darkens pointing away, and a reflection
+off the back of the cabinet fills its troughs. Horn and drum turn in opposite directions.
+
+**Speed never changes at once.** The horn takes about 0.8 s to spin up and 1.2 s to slow down,
+the drum 3.5 and 4.5 s (95% of the way, at Ramp's noon; Ramp scales them from a fifth to 1.8
+times). That lag, the two rotors drifting apart and back, is the sound of a rotary switching.
+A fresh node starts at its speed rather than spinning up from rest, and Brake brings both to a
+stop. Map Speed to a footswitch.
+
+At the defaults the horn's pitch swings about 70 cents peak to peak at Fast and 9 at Slow, and
+its level 10 dB; the mics hear it at different points of its turn, so a mono input comes out
+stereo whenever Spread, Depth and Mix are all above zero, and the effect says so. Level is
+calibrated: Drive's saturation and Depth's tremolo each take level away (up to 4.9 and 2.6 dB),
+and a makeup that follows both keeps the cabinet within 0.2 dB of bypass on the demo riffs as
+Drive, Depth, Spread or Speed move. Horn/Drum only ever turns a rotor down, so it is quieter
+away from the middle, the drum carrying most of a guitar. Mix below one combs the dry against
+the wet's crossover and delay, a hollow sound, so the presets stay fully wet. About 4 µs per
+64-sample block at 48 kHz.
+
+**Factory presets** set every control: Cabinet 122 (default), Chorale (Slow, deep), Tremolo
+Rotor (Fast), Bright Horn (the drum down), Dirty Cabinet (the amp driven), Slow Ramp (long
+spin-ups between speeds) and Guitar Rotor (lighter, slower and narrower).
+
+### Vibe (`vibe`)
+A photocell vibe in the Uni-Vibe style (`VibeEffect.h`): four phase-shift stages swept by a lamp.
+
+| Parameter | Range | Default | Unit |
+|-----------|-------|---------|------|
+| `mode` | Chorus / Vibrato | Chorus | — |
+| `rate` | 0.3–12, log | 2.0 | Hz (Speed) |
+| `syncMode` / `syncDivision` | Free / Tempo, 1/1 … 1/32T | Free, 1/4 | — |
+| `intensity` | 0.0–1.0 | 0.75 | — |
+| `throb` | 0.0–1.0 | 0.5 | — (advanced) |
+| `level` | -12..+12 | 0 | dB |
+
+An LFO lights a lamp; four light-dependent resistors facing it each set the corner of one
+first-order all-pass stage. Two things make it a vibe and not a phaser:
+
+- **The capacitors are wildly unequal**: 15 nF, 220 nF, 470 pF and 4.7 nF, so each stage sweeps
+  its own part of the spectrum (the 220 nF one in the bass, the 470 pF one high up) and the
+  notches move unevenly. The cells run from 4 kΩ in full light up as light^-0.7.
+- **The lamp and the cells lag.** The filament heats in 6 ms and cools in 18; the cells brighten
+  in 3 ms and darken in 10–90 ms (Throb). So the sweep is lopsided: the light rises for about a
+  third of each cycle and falls for the rest, the pulse the pedal is known for.
+
+Intensity is how far the lamp swings above its glow; at 0 the stages stand still. **Chorus**
+mixes the stages with the dry signal, so the notches move; where they cancel the level drops,
+by up to 6.6 dB at full Intensity, and a makeup that follows Intensity puts it back (Speed and
+Throb still move it a couple of dB). **Vibrato** is the stages alone: the moving phase is a
+pitch wobble, about 16 cents at full Intensity on a 1 kHz tone, at constant level. It moves
+both channels together, keeps a mono input mono and runs on one channel in a mono chain. About
+1.3 µs per 64-sample block at 48 kHz.
+
+**Factory presets** set every control but Division unless tempo-synced: Classic Vibe (default),
+Slow Throb, Fast Chorus, Vibrato, Seasick (slow and deep vibrato), Subtle Shimmer and Tempo
+Vibe (a sweep a beat).
 
 ### Doubler (`delay_doubler`)
 Creates stereo width by mixing a delayed copy of the signal in: added on the left, subtracted

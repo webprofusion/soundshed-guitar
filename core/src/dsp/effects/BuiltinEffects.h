@@ -28,6 +28,8 @@
 #include "dsp/effects/FlangerEffect.h"
 #include "dsp/effects/PhaserEffect.h"
 #include "dsp/effects/TremoloEffect.h"
+#include "dsp/effects/RotaryEffect.h"
+#include "dsp/effects/VibeEffect.h"
 #include "dsp/effects/RingModEffect.h"
 #include "dsp/effects/WahEffect.h"
 #include "dsp/effects/Spatial3DEffect.h"
@@ -140,6 +142,8 @@ inline void RegisterAllEffects()
     RegisterFlangerEffect();
     RegisterPhaserEffect();
     RegisterTremoloEffect();
+    RegisterRotaryEffect();
+    RegisterVibeEffect();
     RegisterRingModEffect();
     RegisterWahEffect();
     RegisterSpatial3DEffect();

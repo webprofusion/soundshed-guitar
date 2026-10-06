@@ -55,7 +55,7 @@ All effects register via `EffectRegistry` (singleton factory). Effect type IDs, 
 
 | Type ID | Name | Key Parameters |
 |---------|------|----------------|
-| `dynamics_gate` | Noise Gate | `thresholdDb` (-80..0), `attackMs` (0.1–50), `releaseMs` (1–500) |
+| `dynamics_gate` | Noise Gate | `thresholdDb` (-80..0), `attackMs` (0.1–50), `releaseMs` (1–500), `mode` (Gate / Swell: each note fades in over `swell`, 50–4000 ms) |
 | `compressor_vca` | VCA Compressor | `threshold` (-60..0 dB), `ratio` (1–20:1), `attack` (0.1–500 ms), `release` (10–2000 ms), `knee` (0–24 dB), `makeup` (0–24 dB), `mix` |
 | `compressor_opto` | Opto Compressor | `threshold`, `ratio` (1–20:1), `attack` (5–200 ms), `release` (50–3000 ms), `makeup`, `mix` |
 
@@ -66,7 +66,7 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 
 | Type ID | Models | Character controls |
 |---------|--------|--------------------|
-| `overdrive` | TS-808, Centaur, Bluesbreaker, Timmy, Fulldrive, LPB-1 boost | `bass`, `clipping` |
+| `overdrive` | TS-808, Centaur, Bluesbreaker, Timmy, Fulldrive, LPB-1 boost, Rangemaster treble booster | `bass`, `clipping` |
 | `distortion` | RAT, DS-1, Distortion+, Metal Zone | `tight`, `clipping`, `low` / `mid` / `midFreq` / `high` EQ |
 | `fuzz` | Fuzz Face, Big Muff, Tone Bender, Fuzz-Tone, Super-Fuzz | `bias`, `bass` |
 
@@ -84,7 +84,9 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 | `chorus` | Chorus |
 | `flanger` | Flanger |
 | `phaser` | Phaser |
-| `tremolo` | Tremolo |
+| `tremolo` | Tremolo (Classic, Harmonic, Pan or a tempo-synced rhythm Slicer) |
+| `rotary` | Rotary (horn and drum cabinet with real spin-up and slow-down, two mics) |
+| `vibe` | Vibe (photocell phaser in the Uni-Vibe style, Chorus or Vibrato) |
 | `ring_mod` | Ring Modulator (fixed or pitch-tracking carrier) |
 | `wah` | Wah (swept by a pedal or by the playing level; the former `auto_wah` runs as its Auto Wah control) |
 
@@ -103,7 +105,7 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 
 | Type ID | Name | Key Parameters |
 |---------|------|----------------|
-| `delay_digital` | Digital Delay | `timeMs` (1–2000), `feedback` (0–0.95), `mix` (0–1) |
+| `delay_digital` | Digital Delay | `timeMs` (1–2000), `feedback` (0–0.95), `mix` (0–1), `direction` (Forward / Reverse) |
 | `delay_tape` | Tape Echo | `time` (20–1500 ms), `glide`, `feedback` (0–1.10), `headMode`, `wow`, `flutter`, `age`, `saturation`, `mix` — time changes bend pitch; one to three playback heads |
 | `delay_analog` | Analog Delay | `time` (20–800 ms), `feedback` (0–1.15), `stages`, `tone`, `compander`, `saturation`, `modRate`/`modDepth`, `mix` — bandwidth follows the BBD clock, so repeats darken as Time rises |
 | `delay_doubler` | Stereo Doubler | `time` (0–100 ms), `mix` (0–1) |
@@ -118,6 +120,7 @@ All types share `decay`, `mix`, and `preDelay`. Each has tuned internals for its
 | `reverb_chamber` | Chamber | `size`, `tone` |
 | `reverb_spring` | Spring | `tone`, `drive` |
 | `reverb_advanced` | Advanced | Full control: `diffusion`, `lowCut`, `highCut`, `modRate`, `modDepth`, `ducking`, `drive`, `tone`, `width` |
+| `reverb_ambient` | Ambient | `space`, `diffusion`, `tone`, `width`, `modRate`, `modDepth`, `shimmer` with `shimmerPitch` (an octave or a fifth up, both, or an octave down, fed back through the tank), `freeze` (holds the tail) |
 
 ### 2.9 Synthesis
 

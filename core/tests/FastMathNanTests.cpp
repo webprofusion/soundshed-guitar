@@ -741,6 +741,20 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     harmonizer.SetParam("highCut", 5000.0);
     harmonizer.Prepare(kSampleRate, kBlock);
 
+    // The rotary's crossover biquads, the vibe's all-pass stages and the harmonic tremolo's
+    // split are all recursive. Wet only: Vibrato is the stages alone.
+    RotaryEffect rotary;
+    rotary.SetParam("speed", 1.0);
+    rotary.Prepare(kSampleRate, kBlock);
+
+    VibeEffect vibe;
+    vibe.SetParam("mode", 1.0);
+    vibe.Prepare(kSampleRate, kBlock);
+
+    TremoloEffect harmonicTremolo;
+    harmonicTremolo.SetParam("mode", 1.0);
+    harmonicTremolo.Prepare(kSampleRate, kBlock);
+
     bool passed = ExpectRecoversFromNonFiniteInput("parametric EQ", parametric);
     passed = ExpectRecoversFromNonFiniteInput("graphic EQ", graphic) && passed;
     passed = ExpectRecoversFromNonFiniteInput("flanger", flanger) && passed;
@@ -753,6 +767,9 @@ bool TestRecursiveEffectsRecoverFromNonFiniteInput()
     passed = ExpectRecoversFromNonFiniteInput("fuzz (Fuzz-Tone)", fuzz) && passed;
     passed = ExpectRecoversFromNonFiniteInput("pitch shift (Low Latency)", pitchShift) && passed;
     passed = ExpectRecoversFromNonFiniteInput("harmonizer (Fixed)", harmonizer) && passed;
+    passed = ExpectRecoversFromNonFiniteInput("rotary (Fast)", rotary) && passed;
+    passed = ExpectRecoversFromNonFiniteInput("vibe (Vibrato)", vibe) && passed;
+    passed = ExpectRecoversFromNonFiniteInput("tremolo (Harmonic)", harmonicTremolo) && passed;
     passed = ExpectRecoversFromNonFiniteInput("VCA compressor", vcaCompressor) && passed;
     passed = ExpectRecoversFromNonFiniteInput("Opto compressor", optoCompressor) && passed;
     return passed;

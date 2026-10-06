@@ -14,6 +14,12 @@ namespace guitarfx
 /**
  * Digital delay with high/low cut filtering, stereo spread, ping-pong,
  * LFO modulation, drive saturation, and ducking.
+ *
+ * Direction Reverse plays each slice of the input backwards: every Time, the last Time of
+ * input is played from its end to its start. Two read heads half a slice apart, each faded in
+ * and out with a sin^2 window, cover each other's ends, so the windows sum to one and no slice
+ * starts with a click. The repeats fed back through Feedback are reversed again, so they
+ * alternate between backwards and forwards, as most reverse pedals' do.
  */
 class DelayEffect : public EffectProcessor
 {
@@ -23,8 +29,9 @@ class DelayEffect : public EffectProcessor
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
 
-        // 2.1 s headroom covers 2 s delay + worst-case LFO modulation
-        const size_t maxSamples = static_cast<size_t>(sampleRate * 2.1);
+        // A reverse head reaches back two slices, and a slice is up to 2 s plus 50 ms of Spread
+        // and 20 ms of modulation. Forward needs only half of this.
+        const size_t maxSamples = static_cast<size_t>(sampleRate * 4.2);
         mBufferL.assign(maxSamples, 0.0f);
         mBufferR.assign(maxSamples, 0.0f);
 
@@ -41,6 +48,8 @@ class DelayEffect : public EffectProcessor
         mLfoPhase = 0.0f;
         mEnvelopeL = 0.0f;
         mEnvelopeR = 0.0f;
+        mReversePosL = 0.0;
+        mReversePosR = 0.0;
         mLpStateL = mLpStateR = 0.0f;
         mHpStateL = mHpStateR = 0.0f;
         mHpPrevInL = mHpPrevInR = 0.0f;
@@ -61,6 +70,7 @@ class DelayEffect : public EffectProcessor
         const float lfoStep = static_cast<float>(mModRate / mSampleRate);
         const float modAmp = static_cast<float>(mModDepth * 0.001 * mSampleRate);
         const bool pingPong = (mStereoMode == 1);
+        const bool reverse = (mDirection == 1);
         const bool hasRightInput = (inputs[1] != nullptr);
         bool dualMonoInput = false;
 
@@ -97,6 +107,8 @@ class DelayEffect : public EffectProcessor
 
             const double delayL = std::clamp(mDelaySamples + lfoVal * modAmp, 1.0, maxDelay);
             const double delayR = std::clamp(mDelaySamples + mSpreadSamples + lfoVal * modAmp, 1.0, maxDelay);
+            const double sliceL = std::max(kMinReverseSlice, mDelaySamples);
+            const double sliceR = std::max(kMinReverseSlice, mDelaySamples + mSpreadSamples);
 
             const float inL = inputs[0] ? inputs[0][i] : 0.0f;
             const float inR = hasRightInput ? inputs[1][i] : inL;
@@ -138,8 +150,10 @@ class DelayEffect : public EffectProcessor
             const float duckGainR = 1.0f - ducking * std::min(mEnvelopeR * 4.0f, 1.0f);
 
             // Read with linear interpolation
-            float delayedL = ReadInterp(mBufferL, bufSize, delayL);
-            float delayedR = ReadInterp(mBufferR, bufSize, delayR);
+            float delayedL = reverse ? ReadReverse(mBufferL, bufSize, mReversePosL, sliceL, lfoVal * modAmp, maxDelay)
+                                     : ReadInterp(mBufferL, bufSize, delayL);
+            float delayedR = reverse ? ReadReverse(mBufferR, bufSize, mReversePosR, sliceR, lfoVal * modAmp, maxDelay)
+                                     : ReadInterp(mBufferR, bufSize, delayR);
 
             // Tone shaping on delayed signal (shapes feedback colour on each repeat)
             delayedL = ApplyLP(mLpStateL, mLpCoeff, delayedL);
@@ -253,6 +267,10 @@ class DelayEffect : public EffectProcessor
         {
             mDucking = std::clamp(value, 0.0, 1.0);
         }
+        else if (key == "direction")
+        {
+            mDirection = static_cast<int>(std::round(std::clamp(value, 0.0, 1.0)));
+        }
     }
 
     void SetConfig(const std::string&, const std::string&) override
@@ -336,6 +354,11 @@ class DelayEffect : public EffectProcessor
             return mDucking;
         }
 
+        if (key == "direction")
+        {
+            return mDirection;
+        }
+
         return 0.0;
     }
 
@@ -373,6 +396,31 @@ class DelayEffect : public EffectProcessor
         const size_t posA = (mWritePos + bufSize - intD) % bufSize;
         const size_t posB = (mWritePos + bufSize - intD - 1) % bufSize;
         return buf[posA] * (1.0f - frac) + buf[posB] * frac;
+    }
+
+    /// Reverse slices shorter than this (about 10 ms at 48 kHz) are a buzz, not a reversal.
+    static constexpr double kMinReverseSlice = 480.0;
+
+    /// One sample from a reverse head pair. `position` counts samples into the current slice
+    /// and is advanced here. A head that is `k` samples into its slice reads `2k` back, so it
+    /// moves backwards through the input at normal speed, from now to a slice ago; the second
+    /// head runs half a slice behind, and each is faded by sin^2 of its place in the slice.
+    [[nodiscard]] float ReadReverse(const std::vector<float>& buf, size_t bufSize, double& position, double slice,
+                                    double modulation, double maxDelay) const
+    {
+        if (position >= slice)
+        {
+            position = std::fmod(position, slice);
+        }
+
+        const double second = (position + 0.5 * slice >= slice) ? position - 0.5 * slice : position + 0.5 * slice;
+        const auto window = static_cast<float>(std::sin(3.14159265358979323846 * position / slice));
+        const float firstGain = window * window;
+
+        const float first = ReadInterp(buf, bufSize, std::clamp(2.0 * position + modulation, 1.0, maxDelay));
+        const float other = ReadInterp(buf, bufSize, std::clamp(2.0 * second + modulation, 1.0, maxDelay));
+        position += 1.0;
+        return first * firstGain + other * (1.0f - firstGain);
     }
 
     // One-pole low-pass
@@ -432,6 +480,7 @@ class DelayEffect : public EffectProcessor
     double mLowCutHz = 20.0;
     double mBpm = tempo_sync::kDefaultBpm;
     int mStereoMode = 0;
+    int mDirection = 0;
     int mSyncMode = tempo_sync::kSyncModeOff;
     int mSyncDivision = 4;
     double mSpreadMs = 0.0;
@@ -451,6 +500,9 @@ class DelayEffect : public EffectProcessor
     float mLfoPhase = 0.0f;
     float mEnvelopeL = 0.0f;
     float mEnvelopeR = 0.0f;
+    // Samples into the current reverse slice, per channel.
+    double mReversePosL = 0.0;
+    double mReversePosR = 0.0;
 };
 
 namespace digital_delay
@@ -512,6 +564,19 @@ namespace digital_delay
                 {"drive", 1.0},
                 {"modRate", 1.2},
                 {"modDepth", 0.4}}),
+        // Each slice played backwards, swelling in behind the note.
+        b.Make("reverse", "Reverse",
+               {{"time", 550.0}, {"feedback", 0.25}, {"mix", 0.45}, {"highCut", 7000.0}, {"direction", 1.0}}),
+        b.Make("reverse-wash", "Reverse Wash",
+               {{"time", 800.0},
+                {"feedback", 0.55},
+                {"mix", 0.4},
+                {"highCut", 4500.0},
+                {"lowCut", 150.0},
+                {"spread", 20.0},
+                {"modRate", 0.4},
+                {"modDepth", 1.5},
+                {"direction", 1.0}}),
     };
 }
 } // namespace digital_delay
@@ -539,7 +604,8 @@ inline void RegisterDelayEffect()
         {"spread", "Spread", 0.0, 0.0, 50.0, "ms", "", true},
         {"modRate", "Mod Rate", 0.0, 0.0, 10.0, "Hz", "", true},
         {"modDepth", "Mod Depth", 0.0, 0.0, 20.0, "ms", "", true},
-        {"ducking", "Ducking", 0.0, 0.0, 1.0, "amount", "", true}};
+        {"ducking", "Ducking", 0.0, 0.0, 1.0, "amount", "", true},
+        {"direction", "Direction", 0.0, 0.0, 1.0, "enum", "", false, 1.0, {"Forward", "Reverse"}}};
     info.presets = digital_delay::FactoryPresets(info.parameters);
 
     EffectRegistry::Instance().Register(info.type, info, []() { return std::make_unique<DelayEffect>(); });

@@ -37,7 +37,9 @@ using guitarfx::EffectGuids::kDelayDoubler;
 using guitarfx::EffectGuids::kFlanger;
 using guitarfx::EffectGuids::kOverdrive;
 using guitarfx::EffectGuids::kPhaser;
+using guitarfx::EffectGuids::kRotary;
 using guitarfx::EffectGuids::kTremolo;
+using guitarfx::EffectGuids::kVibe;
 using guitarfx::EffectGuids::kWah;
 
 constexpr double kSampleRate = 48000.0;
@@ -342,6 +344,16 @@ void TestEffectsDeclareWhatTheyDo()
         {kPhaser, {{"depth", 1.0}, {"feedback", 0.95}, {"mix", 1.0}, {"rate", 8.0}}, false, "phaser pushed hard"},
         {kTremolo, {}, false, "tremolo at defaults"},
         {kTremolo, {{"depth", 1.0}, {"shape", 1.0}, {"rate", 12.0}}, false, "tremolo pushed hard"},
+        {kTremolo, {{"mode", 1.0}, {"depth", 1.0}}, false, "tremolo on Harmonic"},
+        {kTremolo, {{"mode", 3.0}, {"depth", 1.0}}, false, "tremolo on Slicer"},
+        {kTremolo, {{"mode", 2.0}}, true, "tremolo on Pan"},
+        {kTremolo, {{"mode", 2.0}, {"depth", 0.0}}, false, "tremolo on Pan with Depth at zero"},
+        {kRotary, {}, true, "rotary at defaults"},
+        {kRotary, {{"spread", 0.0}}, false, "rotary with Mic Spread at zero"},
+        {kRotary, {{"depth", 0.0}}, false, "rotary with Depth at zero"},
+        {kRotary, {{"mix", 0.0}}, false, "rotary with Mix at zero"},
+        {kVibe, {}, false, "vibe at defaults"},
+        {kVibe, {{"mode", 1.0}, {"intensity", 1.0}}, false, "vibe on Vibrato"},
         {kWah, {}, false, "wah at defaults"},
         {kWah, {{"control", 1.0}}, false, "wah on its Auto Wah control"},
     };

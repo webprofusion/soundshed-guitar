@@ -128,6 +128,14 @@
       "guid": "c9debb02-d7e7-43e3-8330-b387be46dcf4",
       "aliases": ["tremolo"]
     },
+    "kRotary": {
+      "guid": "b1d69469-4d71-47df-8404-d25bdc29a577",
+      "aliases": ["rotary"]
+    },
+    "kVibe": {
+      "guid": "fa81f9aa-5bd6-4726-baff-bb3df65a77da",
+      "aliases": ["vibe"]
+    },
     "kRingMod": {
       "guid": "c13068c1-9c50-4c7c-be9e-eef808990651",
       "aliases": ["ring_mod"]

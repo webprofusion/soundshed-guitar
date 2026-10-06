@@ -107,7 +107,8 @@ inline const std::vector<Pedal>& Pedals()
 inline bool IsBoost(const Pedal& pedal, std::size_t model)
 {
     return std::string(pedal.type) == guitarfx::EffectGuids::kOverdrive &&
-           model == static_cast<std::size_t>(guitarfx::overdrive::Model::Lpb1);
+           (model == static_cast<std::size_t>(guitarfx::overdrive::Model::Lpb1) ||
+            model == static_cast<std::size_t>(guitarfx::overdrive::Model::TrebleBooster));
 }
 
 inline std::unique_ptr<guitarfx::EffectProcessor> Make(const Pedal& pedal, std::size_t model, const Params& params = {},

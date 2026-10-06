@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * ModulationPresets.h — Factory presets for the chorus and the flanger.
+ * ModulationPresets.h — Factory presets for the chorus, the flanger and the tremolo.
  *
  * Division is left out of a preset with Sync off, so the player's own division survives and
  * comes back when they turn Sync on; a tempo-synced preset names its division, and its Rate is
@@ -62,6 +62,52 @@ namespace guitarfx::modulation_presets
                 {"delay", 0.3},
                 {"feedback", 0.6},
                 {"mix", 0.5}}),
+    };
+}
+
+/// Mode is in every preset, so picking one always lands in its mode. Pattern and Crossover keep
+/// their defaults outside the mode that uses them.
+[[nodiscard]] inline std::vector<EffectPresetDefinition> Tremolo(const std::vector<ParameterDef>& params)
+{
+    const factory_presets::Builder b(params, {"syncDivision"});
+
+    return {
+        b.Defaults("classic-tremolo", "Classic Tremolo"),
+        b.Make("slow-throb", "Slow Throb", {{"rate", 2.2}, {"depth", 0.8}, {"shape", 0.3}}),
+        // Near-square and fast: the surf amps' tremolo.
+        b.Make("surf", "Surf", {{"rate", 7.0}, {"depth", 0.9}, {"shape", 0.7}}),
+        b.Make("brown-harmonic", "Brown Harmonic", {{"mode", 1.0}, {"rate", 5.0}, {"depth", 0.85}}),
+        b.Make("deep-harmonic", "Deep Harmonic",
+               {{"mode", 1.0}, {"rate", 3.0}, {"depth", 1.0}, {"shape", 0.25}, {"crossover", 900.0}}),
+        b.Make("auto-pan", "Auto-Pan", {{"mode", 2.0}, {"rate", 0.8}, {"depth", 0.9}, {"shape", 0.2}}),
+        // A pan each beat.
+        b.Make("tempo-pan", "Tempo Pan",
+               {{"mode", 2.0}, {"rate", 1.0}, {"syncMode", 1.0}, {"syncDivision", 1.0}, {"depth", 1.0}}),
+        // Sixteenth-note steps; the cut steps are silent.
+        b.Make("gallop-slicer", "Gallop Slicer",
+               {{"mode", 3.0},
+                {"rate", 8.0},
+                {"syncMode", 1.0},
+                {"syncDivision", 10.0},
+                {"depth", 1.0},
+                {"shape", 0.15},
+                {"pattern", 1.0}}),
+        b.Make("half-time-chop", "Half-Time Chop",
+               {{"mode", 3.0},
+                {"rate", 8.0},
+                {"syncMode", 1.0},
+                {"syncDivision", 10.0},
+                {"depth", 1.0},
+                {"shape", 0.1},
+                {"pattern", 6.0}}),
+        b.Make("tresillo-pulse", "Tresillo Pulse",
+               {{"mode", 3.0},
+                {"rate", 8.0},
+                {"syncMode", 1.0},
+                {"syncDivision", 10.0},
+                {"depth", 0.8},
+                {"shape", 0.4},
+                {"pattern", 4.0}}),
     };
 }
 } // namespace guitarfx::modulation_presets

@@ -351,6 +351,8 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kFlanger },
   { type: EffectGuids.kPhaser },
   { type: EffectGuids.kTremolo },
+  { type: EffectGuids.kRotary },
+  { type: EffectGuids.kVibe },
   { type: EffectGuids.kRingMod },
   // Pitch
   { type: EffectGuids.kPitchShift },

@@ -118,6 +118,11 @@ namespace guitarfx::dynamics_presets
                {{"attack", 2.0}, {"hold", 150.0}, {"release", 300.0}, {"hysteresis", 10.0}, {"range", -60.0}}),
         b.Make("ambient-friendly", "Ambient Friendly",
                {{"attack", 5.0}, {"hold", 250.0}, {"release", 500.0}, {"hysteresis", 12.0}, {"range", -30.0}}),
+        // Every note fades in, as if the volume knob were rolled up after each pick.
+        b.Make("volume-swell", "Volume Swell",
+               {{"mode", 1.0}, {"hold", 80.0}, {"release", 250.0}, {"hysteresis", 10.0}, {"swell", 600.0}}),
+        b.Make("slow-swell", "Slow Swell",
+               {{"mode", 1.0}, {"hold", 150.0}, {"release", 500.0}, {"hysteresis", 12.0}, {"swell", 1100.0}}),
     };
 }
 } // namespace guitarfx::dynamics_presets
