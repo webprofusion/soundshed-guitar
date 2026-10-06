@@ -57,7 +57,8 @@ function getNodeResourceSummary(node: GraphNode): string {
 export function buildNodeLayoutMatchText(node: GraphNode): string {
   const typeInfo = getNodeEffectInfo(node) ?? EffectTypeRegistry.get(node.type);
   return buildLayoutMatchText([
-    getNodeDisplayName(node),
+    getNodeAutomaticName(node),
+    getNodeUserTitle(node),
     getNodeResourceSummary(node),
     typeInfo?.displayName,
   ]);
@@ -339,6 +340,16 @@ export function buildMissingResourceTooltip(entries: Array<{ resourceType?: stri
   return `Missing resource file: ${details.join(", ")}`;
 }
 
+/** The name the user gave a node, or "" while it shows its automatic name. */
+export function getNodeUserTitle(node: GraphNode): string {
+  return typeof node.title === "string" ? node.title.trim() : "";
+}
+
+/** The name a node shows when the user has not given it one. */
+export function getNodeAutomaticName(node: GraphNode): string {
+  return getNodeDisplayName({ ...node, title: "" });
+}
+
 export function getNodeDisplayName(node: GraphNode): string {
   // Support backend presets that use label/enabled instead of displayName/bypassed.
   const anyNode = node as unknown as { id?: unknown; type?: unknown; displayName?: unknown; label?: unknown };
@@ -347,6 +358,10 @@ export function getNodeDisplayName(node: GraphNode): string {
 
   if (nodeId === "__input__" || nodeType === "input") return "Input";
   if (nodeId === "__output__" || nodeType === "output") return "Output";
+
+  // A name the user gave the node outranks every automatic one below.
+  const userTitle = getNodeUserTitle(node);
+  if (userTitle) return userTitle;
 
   const explicit = typeof anyNode.displayName === "string" && anyNode.displayName.trim()
     ? anyNode.displayName.trim()

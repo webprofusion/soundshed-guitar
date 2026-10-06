@@ -175,6 +175,11 @@ nlohmann::json SerializeGraphNode(const GraphNode& node, const std::optional<std
         json["label"] = node.label;
     }
 
+    if (!node.title.empty())
+    {
+        json["title"] = node.title;
+    }
+
     if (!node.enabled)
     {
         json["enabled"] = node.enabled;
@@ -228,6 +233,11 @@ GraphNode DeserializeGraphNode(const nlohmann::json& json, const std::optional<s
     node.category = json.value("category", "");
     // Support both "label" and "displayName"
     node.label = json.value("label", json.value("displayName", ""));
+
+    if (json.contains("title") && json["title"].is_string())
+    {
+        node.title = json["title"].get<std::string>();
+    }
 
     // Support both "enabled" and "bypassed" (inverted)
     if (json.contains("enabled"))

@@ -109,8 +109,9 @@
 
 .default-effect-shell-title {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   white-space: nowrap;
   font-family: inherit;
   font-size: 11px;

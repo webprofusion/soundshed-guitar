@@ -148,6 +148,70 @@ void PluginController::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::j
     mPendingStateBroadcast = true;
 }
 
+void PluginController::HandleRenameSignalPathNodeRequest(const nlohmann::json& payload)
+{
+    const std::string nodeId = payload.value("nodeId", "");
+    std::string title = payload.contains("title") && payload["title"].is_string() ? payload["title"].get<std::string>() : "";
+
+    // Surrounding whitespace is dropped, and an empty title hands the node back its automatic name.
+    const auto first = title.find_first_not_of(" \t\r\n");
+    title = first == std::string::npos ? std::string{} : title.substr(first, title.find_last_not_of(" \t\r\n") - first + 1);
+    constexpr std::size_t kMaxTitleBytes = 128;
+
+    if (title.size() > kMaxTitleBytes)
+    {
+        // Cut on a UTF-8 character boundary, never inside one.
+        std::size_t end = kMaxTitleBytes;
+
+        while (end > 0 && (static_cast<unsigned char>(title[end]) & 0xC0) == 0x80)
+        {
+            --end;
+        }
+
+        title.resize(end);
+    }
+
+    auto* graph = ResolveEditTarget();
+    auto* node = graph && !nodeId.empty() ? graph->FindNode(nodeId) : nullptr;
+
+    if (!node)
+    {
+        return;
+    }
+
+    node->title = title;
+
+    if (IsCompositeEditMode())
+    {
+        BroadcastCompositeEditState();
+        return;
+    }
+
+    if (!mActivePreset)
+    {
+        return;
+    }
+
+    // A name belongs to the node, not to a scene: every scene, and the working graph, carry it.
+    for (auto& scene : mActivePreset->scenes)
+    {
+        if (auto* sceneNode = scene.graph.FindNode(nodeId))
+        {
+            sceneNode->title = title;
+        }
+    }
+
+    if (auto* workingNode = mActivePreset->graph.FindNode(nodeId))
+    {
+        workingNode->title = title;
+    }
+
+    SyncActivePresetSceneGraph();
+    MirrorActivePresetJson();
+    mPendingStateBroadcast = true;
+    NotifyHostStateChanged();
+}
+
 std::string PluginController::ReadLiveNodeConfig(const std::string& presetId, const std::string& nodeId,
                                                  const std::string& key) const
 {

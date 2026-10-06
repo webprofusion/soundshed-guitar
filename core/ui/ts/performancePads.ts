@@ -390,10 +390,8 @@ function getNodeTypeLabel(node: GraphNode): string {
 
 function getNodeLabel(node: GraphNode): string {
   const typeLabel = getNodeTypeLabel(node);
-  if (node.displayName && node.displayName !== typeLabel) {
-    return `${node.displayName} · ${typeLabel}`;
-  }
-  return typeLabel;
+  const name = node.title?.trim() || node.displayName;
+  return name && name !== typeLabel ? `${name} · ${typeLabel}` : typeLabel;
 }
 
 function getAssignableNodes(preset: Preset | null): GraphNode[] {

@@ -14,4 +14,16 @@ describe("default parameter control markup", () => {
     expect(html).toContain("-3.0dB");
     expect(html).toContain('data-param-key="enabled" checked disabled');
   });
+
+  it("puts ungrouped controls in one untitled inset panel", () => {
+    const html = buildDefaultParamControlsHtml([
+      { key: "drive", name: "Drive", default: 0.5, min: 0, max: 1, unit: "amount" },
+      { key: "level", name: "Level", default: 0.5, min: 0, max: 1, unit: "amount" },
+    ]);
+
+    expect(html.match(/node-param-group-block node-param-group-block-untitled/g)).toHaveLength(1);
+    expect(html).not.toContain("node-param-group-title");
+    expect(html.match(/node-param-knob/g)).toHaveLength(2);
+    expect(buildDefaultParamControlsHtml([])).toBe("");
+  });
 });

@@ -48,7 +48,7 @@ import { renderBoundaryNode, renderConnectorWrapper, renderSignalChainRow, signa
 import type { EdgeRef } from "./signalPath/graph.js";
 import { buildGraphMaps, normalizeEdge, parseEdgeFromDataset, pickPrimaryOutgoingEdge, sortEdgesByPort } from "./signalPath/graph.js";
 import { showNodeParamsPanel } from "./signalPath/paramsPanel.js";
-import { buildMissingResourceTooltip, buildNodeLayoutMatchText, getMissingResourceEntries, getNodeArchitectureBadge, getNodeDisplayName, getNodeResourceDisplayName } from "./signalPath/nodeLabels.js";
+import { buildMissingResourceTooltip, buildNodeLayoutMatchText, getMissingResourceEntries, getNodeArchitectureBadge, getNodeDisplayName, getNodeResourceDisplayName, getNodeUserTitle } from "./signalPath/nodeLabels.js";
 import { isProtectedSignalPathNode, isToggleableSignalPathNode, toggleSignalPathNodeBypass } from "./signalPath/bypass.js";
 import { updateSignalPathClipIndicators } from "./signalPath/telemetry.js";
 import { reanchorAddEffectDropdown, showAddEffectDropdown } from "./signalPath/addEffectDropdown.js";
@@ -919,9 +919,9 @@ function renderNodeElement(node: GraphNode, options?: RenderNodeElementOptions):
     (node.type !== EffectGuids.kSplitter && node.type !== EffectGuids.kMixer) || canCollapseParallel;
   const nodeTypeInfo = getNodeEffectInfo(node);
   const firstResourceTitle = nodeTypeInfo?.requiresResource ? getNodeResourceDisplayName(node, 0) : "";
-  const displayName = firstResourceTitle || getNodeDisplayName(node);
+  const displayName = getNodeUserTitle(node) || firstResourceTitle || getNodeDisplayName(node);
   const effectTypeName = firstResourceTitle
-    ? (nodeTypeInfo?.displayName || "")
+    ? (getNodeUserTitle(node) ? firstResourceTitle : (nodeTypeInfo?.displayName || ""))
     : (nodeTypeInfo?.displayName && nodeTypeInfo.displayName !== displayName
       ? nodeTypeInfo.displayName
       : "");

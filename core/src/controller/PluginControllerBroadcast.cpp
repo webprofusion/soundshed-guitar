@@ -298,6 +298,12 @@ void PluginController::BroadcastCompositeEditState()
         nj["id"] = node.id;
         nj["type"] = node.type;
         nj["displayName"] = node.label;
+
+        if (!node.title.empty())
+        {
+            nj["title"] = node.title;
+        }
+
         nj["category"] = node.category;
         nj["bypassed"] = !node.enabled;
         nj["params"] = nlohmann::json::object();

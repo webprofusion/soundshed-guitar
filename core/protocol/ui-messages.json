@@ -82,6 +82,7 @@
     "removeCompositePreset",
     "removeScene",
     "renameScene",
+    "renameSignalPathNode",
     "renderDemoAudio",
     "reorderSignalPathNode",
     "replaceSignalPathNode",

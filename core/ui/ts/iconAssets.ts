@@ -40,6 +40,7 @@ export type IconKey =
   | "close"
   | "plus"
   | "trash"
+  | "pencil"
   | "star"
   | "heart"
   | "heart-filled"

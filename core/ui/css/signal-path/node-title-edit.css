@@ -1,0 +1,51 @@
+/* The effect panel's title row: the title, the rename pencil beside it, and the
+   field that stands in for the title while it is being renamed. */
+
+.default-effect-shell-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The rename pencil: quiet beside the title until pointed at. It takes the title's
+   colour, so every theme's title override covers it too. */
+.default-effect-shell-title-edit {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+.default-effect-shell-title-edit:hover,
+.default-effect-shell-title-edit:focus-visible {
+  opacity: 1;
+  color: var(--color-accent);
+}
+
+.default-effect-shell-title-edit-icon {
+  width: 11px;
+  height: 11px;
+  background-color: currentColor;
+  -webkit-mask: var(--icon-url) center / contain no-repeat;
+  mask: var(--icon-url) center / contain no-repeat;
+}
+
+.default-effect-shell-title-input {
+  min-width: 0;
+  width: min(260px, 100%);
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 60%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--panel-inset-bg);
+  color: inherit;
+  font: inherit;
+  outline: none;
+}

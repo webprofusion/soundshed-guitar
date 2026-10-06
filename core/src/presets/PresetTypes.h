@@ -81,6 +81,10 @@ struct GraphNode
 
     std::vector<ResourceRef> resources; // For effects needing multiple external files
 
+    // Name the user gave the node; empty shows the automatic name. Last, so positional
+    // initialisers written before it still line up.
+    std::string title;
+
     bool operator==(const GraphNode&) const = default;
 };
 

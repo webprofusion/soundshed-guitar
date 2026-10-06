@@ -70,7 +70,13 @@ export function buildDefaultParamControlsHtml(paramDefs: ParameterDef[], nodeId 
 
   const hasGroups = paramDefs.some((p) => typeof p.group === "string" && p.group.trim().length > 0);
   if (!hasGroups) {
-    return paramDefs.map(renderOne).join("");
+    // Ungrouped controls sit in one untitled inset panel, as the live panel draws them.
+    return paramDefs.length === 0 ? "" : `
+    <div class="node-param-group-block node-param-group-block-untitled">
+      <div class="node-param-group-items">
+        ${paramDefs.map(renderOne).join("")}
+      </div>
+    </div>`;
   }
 
   const groupOrder: string[] = [];

@@ -111,6 +111,14 @@ describe("diffNodeStates", () => {
     expect(diffNodeStates(baseGraph(), next)).toBeNull();
   });
 
+  it("gives up when a node was renamed — only a whole-preset reload restores a name", () => {
+    const next = JSON.parse(JSON.stringify(baseGraph())) as SignalGraph;
+    next.nodes[0].title = "Lead Boost";
+    expect(diffNodeStates(baseGraph(), next)).toBeNull();
+    expect(graphSignature(next)).not.toBe(graphSignature(baseGraph()));
+    expect(describeGraphChange(baseGraph(), next)).toBe("Rename Lead Boost");
+  });
+
   it("gives up when a parameter key appears, since there is no way to unset it", () => {
     const next = withParam(baseGraph(), "drive", "tone", 0.4);
     expect(diffNodeStates(baseGraph(), next)).toBeNull();

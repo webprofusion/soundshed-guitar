@@ -200,6 +200,7 @@ export interface GraphNode {
   id: string;
   type: string;
   displayName: string;
+  title?: string; // The name the user gave this node; absent or empty shows the automatic one
   category: string;
   bypassed: boolean;
   params: Record<string, number>;

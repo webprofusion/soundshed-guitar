@@ -295,6 +295,38 @@ void TestAddRenameRemoveSceneFollowWebRules()
     Expect(Latest(host, "error").has_value(), "removing the last scene is refused with an error");
 }
 
+void TestRenameNodeNamesItInEveryScene()
+{
+    TestHost host(Sandbox("node-rename"));
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+    LoadBody(controller, BuildTwoScenePreset("p-rename"), "scene-2");
+
+    Send(controller, "renameSignalPathNode", {{"nodeId", "gain_1"}, {"title", "  Lead Boost  "}});
+    auto scenes = Scenes(controller);
+    Expect(scenes[0]["graph"]["nodes"][1].value("title", std::string{}) == "Lead Boost",
+           "renameSignalPathNode names the node in a scene that is not playing");
+    Expect(scenes[1]["graph"]["nodes"][1].value("title", std::string{}) == "Lead Boost",
+           "and in the scene that is, trimmed");
+    Expect(controller.GetActivePreset()->graph.nodes[1].title == "Lead Boost", "the working graph carries it too");
+    Expect(controller.GetActivePreset()->graph.nodes[1].params.at("gain") == -6.0,
+           "a rename leaves the scene's parameters alone");
+
+    const auto reloaded = guitarfx::PresetStorage::DeserializeFromJson(PresetJson(*controller.GetActivePreset()).dump());
+    Expect(reloaded && reloaded->graph.nodes[1].title == "Lead Boost", "the title survives a save and load");
+
+    Send(controller, "renameSignalPathNode", {{"nodeId", "gain_1"}, {"title", std::string(200, 'x')}});
+    Expect(controller.GetActivePreset()->graph.nodes[1].title.size() == 128, "a long title is capped");
+
+    Send(controller, "renameSignalPathNode", {{"nodeId", "gain_1"}, {"title", "   "}});
+    scenes = Scenes(controller);
+    Expect(!scenes[0]["graph"]["nodes"][1].contains("title") && !scenes[1]["graph"]["nodes"][1].contains("title"),
+           "an empty title gives the node back its automatic name in every scene");
+
+    Send(controller, "renameSignalPathNode", {{"nodeId", "missing"}, {"title", "Nobody"}});
+    Expect(controller.GetActivePreset()->graph.nodes[1].title.empty(), "an unknown node renames nothing");
+}
+
 void TestLoadByIdMatchesLoadWithBody()
 {
     TestHost host(Sandbox("load-by-id"));
@@ -650,6 +682,7 @@ int main()
 {
     TestSelectSceneMatchesLoadWithSceneId();
     TestAddRenameRemoveSceneFollowWebRules();
+    TestRenameNodeNamesItInEveryScene();
     TestLoadByIdMatchesLoadWithBody();
     TestDirtyFlagFollowsTheWorkingCopy();
     TestAutomationIsNotAnEdit();

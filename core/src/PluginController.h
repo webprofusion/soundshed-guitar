@@ -411,6 +411,7 @@ class PluginController
     void HandleSetMetronomeRequest(const nlohmann::json& payload);
     void HandleUpdateSignalPathNodeParamRequest(const nlohmann::json& payload);
     void HandleUpdateSignalPathNodeBypassRequest(const nlohmann::json& payload);
+    void HandleRenameSignalPathNodeRequest(const nlohmann::json& payload);
     void HandleUpdateSignalPathNodeConfigRequest(const nlohmann::json& payload);
     void HandleUpdateNodeResourceRequest(const nlohmann::json& payload);
     void HandleBrowseNodeResourceRequest(const nlohmann::json& payload);

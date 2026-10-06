@@ -226,6 +226,11 @@
   min-width: 180px;
 }
 
+/* Controls with no groups share one untitled panel, which takes the whole row. */
+.node-param-group-block-untitled {
+  flex: 1 1 auto;
+}
+
 .node-param-group-title {
   font-size: 10px;
   font-weight: 700;

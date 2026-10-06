@@ -20,7 +20,7 @@ import { clampValue, escapeHtml } from "../../utils.js";
 import { shouldShowFullRigCabModelNote } from "../chainRules.js";
 import { bindEffectPresetsButton } from "../effectPresets.js";
 import { bindLayoutSwitchButton, renderLayoutSwitchButtonHtml } from "../layoutSwitch.js";
-import { buildCustomEffectActions, buildNodeLayoutMatchText, getNodeArchitectureBadge, getNodeDisplayName, getNodeNamCalibrationMetadataChip } from "../nodeLabels.js";
+import { buildCustomEffectActions, buildNodeLayoutMatchText, getNodeArchitectureBadge, getNodeAutomaticName, getNodeDisplayName, getNodeNamCalibrationMetadataChip, getNodeUserTitle } from "../nodeLabels.js";
 import { getNodeCategory, isNeuralModelNode } from "../nodeTypes.js";
 import { bindEquipmentImageFallback, bindResourceControls } from "../resourceControls.js";
 import { analyzerSpectrogramHistoryByNode, getSelectedNodeDspStatusNodeId, nodeParamsPanelElement, setLastSelectedNode, setSelectedNodeDspStatusNodeId } from "../state.js";
@@ -32,7 +32,7 @@ import { bindHostedPluginActionControls, bindHostedPluginListControls } from "./
 import { applyCustomLayoutScaling, bindLayoutOverlayBypassToggles } from "./layoutOverlay.js";
 import { buildMixerInputControlsHtml } from "./mixerInput.js";
 import { bindSplitBranchControls, buildSplitBranchControlsHtml } from "./splitBranches.js";
-import { bindBlendModeOverride, bindBypassButton, bindCustomEffectActionControls } from "./nodeActions.js";
+import { bindBlendModeOverride, bindBypassButton, bindCustomEffectActionControls, bindNodeTitleEdit } from "./nodeActions.js";
 import { bindNodeParamControls, bindParamTabs, formatParamLabel, isToggleParam } from "./paramControls.js";
 import { isPitchShiftType, semitoneKnobRange } from "./pitchShiftRange.js";
 import { buildNodeResourceSelector, preloadResourceNavigationCaches } from "./resourceSelector.js";
@@ -208,7 +208,14 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   const buildParamControls = (defs: BlendParamDef[]): string => {
     const hasGroups = defs.some((paramDef) => typeof paramDef.group === "string" && paramDef.group.trim().length > 0);
     if (!hasGroups) {
-      return defs.map(renderParamControl).join("");
+      // Ungrouped controls sit in one untitled inset panel, recessed like the grouped ones.
+      return defs.length === 0 ? "" : `
+      <div class="node-param-group-block node-param-group-block-untitled">
+        <div class="node-param-group-items">
+          ${defs.map(renderParamControl).join("")}
+        </div>
+      </div>
+    `;
     }
 
     const groupOrder: string[] = [];
@@ -331,6 +338,13 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     ? `<div class="effect-inline-resource-selectors cab-ir-resource-selectors">${resourceSelector}</div>`
     : "";
   const shellTitle = escapeHtml(getNodeDisplayName(node));
+  // A renamed node keeps its automatic name to hand, on hover.
+  const shellUserTitle = getNodeUserTitle(node);
+  const shellTitleTooltip = shellUserTitle ? ` title="${escapeHtml(getNodeAutomaticName(node))}"` : "";
+  const canRenameNode = node.id !== "__input__" && node.id !== "__output__";
+  const shellTitleEditButton = canRenameNode
+    ? `<button class="default-effect-shell-title-edit" type="button" title="Rename" aria-label="Rename effect">${renderIcon("pencil", "default-effect-shell-title-edit-icon")}</button>`
+    : "";
   const isNeuralModel = isNeuralModelNode(node);
   const shellCategoryLabel = escapeHtml(
     getNodeCategory(node)
@@ -476,7 +490,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
           <div class="default-effect-shell-identity">
             <span class="default-effect-shell-led" aria-hidden="true"></span>
             <div class="default-effect-shell-titles">
-              <div class="default-effect-shell-title">${shellTitle}</div>
+              <div class="default-effect-shell-title"><span class="default-effect-shell-title-text"${shellTitleTooltip}>${shellTitle}</span>${shellTitleEditButton}</div>
               <div class="default-effect-shell-subtitle">
                 <span class="default-effect-shell-subtitle-text">${shellCategoryLabel} · ${shellTypeLabel}</span>
                 ${architectureBadge ? `<span class="default-effect-shell-architecture-badge" title="Loaded model architecture">${escapeHtml(architectureBadge)}</span>` : ""}
@@ -539,6 +553,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindBlendEditorControls(nodeParamsPanelElement, node);
   bindBlendModeOverride(node);
   bindBypassButton(node, preset);
+  bindNodeTitleEdit(node);
   bindSelectedNodeDspStatusToggle();
   bindLayoutSwitchButton(node, preset);
   bindParamTabs();

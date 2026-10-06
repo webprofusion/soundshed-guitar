@@ -154,6 +154,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `reorderSignalPathNode` | `{nodeId, newIndex}` | Reorder effect in graph |
 | `updateSignalPathNodeParam` | `{nodeId, paramId, value}` | Update effect parameter |
 | `updateSignalPathNodeBypass` | `{nodeId, bypassed}` | Bypass/enable effect |
+| `renameSignalPathNode` | `{nodeId, title}` | Give a node a name of the user's own, stored as the node's `title` in every scene. The title is trimmed and capped at 128 bytes; an empty one hands the node back its automatic name. Answered by `state` |
 | `updateNodeResource` | `{nodeId, resource}` | Change node resource |
 | `browseNodeResource` | `{nodeId}` | Browse for node resource |
 | `addActivePreset` | `{presetId}` | Add preset to multi-mixer |

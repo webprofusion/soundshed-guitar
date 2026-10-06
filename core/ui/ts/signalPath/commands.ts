@@ -26,6 +26,16 @@ export function sendSignalPathNodeBypassUpdate(nodeId: string, presetId: string,
   setPresetDirty(true);
 }
 
+/** Name a node; an empty title gives it back its automatic name. */
+export function sendSignalPathNodeRename(nodeId: string, title: string): void {
+  postMessage({
+    type: "renameSignalPathNode",
+    nodeId,
+    title,
+  });
+  setPresetDirty(true);
+}
+
 export function sendSignalPathNodeConfigUpdate(nodeId: string, key: string, value: string, persist = true, capture = false): void {
   postMessage({
     type: "updateSignalPathNodeConfig",

@@ -17,6 +17,12 @@ bool MessageDispatcher::DispatchSignalPath(PluginController& c, const nlohmann::
         return true;
     }
 
+    if (type == "renameSignalPathNode")
+    {
+        c.HandleRenameSignalPathNodeRequest(msg);
+        return true;
+    }
+
     if (type == "updateSignalPathNodeConfig")
     {
         c.HandleUpdateSignalPathNodeConfigRequest(msg);

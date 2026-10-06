@@ -103,6 +103,7 @@ function nodeForCompare(node: GraphNode): Record<string, unknown> {
     id: node.id,
     type: node.type,
     displayName: node.displayName ?? "",
+    title: node.title ?? "",
     bypassed: isNodeBypassed(node),
     params: node.params ?? {},
     config: comparableConfig(node.config),
@@ -186,7 +187,7 @@ export function diffNodeStates(from: SignalGraph, to: SignalGraph): NodeStateCha
     if (!previous) {
       return null;
     }
-    if ((previous.displayName ?? "") !== (target.displayName ?? "")) {
+    if ((previous.displayName ?? "") !== (target.displayName ?? "") || (previous.title ?? "") !== (target.title ?? "")) {
       return null;
     }
     if (stableStringify(previous.resources ?? []) !== stableStringify(target.resources ?? [])) {
@@ -233,7 +234,7 @@ export function diffNodeStates(from: SignalGraph, to: SignalGraph): NodeStateCha
  */
 export type NodeLabelResolver = (node: GraphNode) => string;
 
-const fallbackNodeLabel: NodeLabelResolver = (node) => node.displayName?.trim() || node.type || "effect";
+const fallbackNodeLabel: NodeLabelResolver = (node) => node.title?.trim() || node.displayName?.trim() || node.type || "effect";
 
 function labelFor(node: GraphNode | undefined, resolve: NodeLabelResolver): string {
   return node ? resolve(node) : "effect";
@@ -292,6 +293,11 @@ export function describeGraphChange(
   const branches = describeBranchCountChange(from, to, resolveLabel);
   if (branches) {
     return branches;
+  }
+
+  const renamed = toNodes.find((node) => (fromById.get(node.id)?.title ?? "") !== (node.title ?? ""));
+  if (renamed) {
+    return `Rename ${labelFor(renamed, resolveLabel)}`;
   }
 
   const changes = diffNodeStates(from, to);
