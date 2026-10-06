@@ -1,12 +1,8 @@
 import {
   browsePracticeToolFile,
   seekPracticeToolFile,
-  setPracticeToolBalance,
-  setPracticeToolGain,
   setPracticeToolLoopRegion,
   setPracticeToolLooping,
-  setPracticeToolPitch,
-  setPracticeToolSpeed,
   setPracticeToolTransport,
 } from "./bridge.js";
 import { appendLog } from "./logging.js";
@@ -24,7 +20,19 @@ import {
   persistLoopsForCurrentFile,
   setPracticeToolProjectApplier,
 } from "./practiceTool/projects.js";
-import { bindPracticeToolProjectActions, renderPracticeToolProjects } from "./practiceTool/projectsPanel.js";
+import {
+  bindPracticeToolProjectActions,
+  renderPracticeToolProjects,
+  suggestPracticeToolProjectName,
+} from "./practiceTool/projectsPanel.js";
+import {
+  applyFaderSettings,
+  bindPracticeToolFaders,
+  captureFaderSettings,
+  debouncedSender,
+  type FaderId,
+  renderPracticeToolFaders,
+} from "./practiceTool/faders.js";
 import { bindPracticeToolDropZone, confirmResetIfNeeded } from "./practiceTool/trackImport.js";
 import { createDefaultPracticeToolEq, isPracticeToolEqShaping, sanitizePracticeToolEq } from "./practiceTool/eq.js";
 import { pushPracticeToolEqToEngine } from "./practiceTool/eqSend.js";
@@ -55,7 +63,6 @@ export const LOOP_NAME_TEMPLATES: readonly string[] = [
 
 const MIN_LOOP_SPAN_SEC = 0.25;
 const LOOP_REGION_SEND_DEBOUNCE_MS = 80;
-const SPEED_PITCH_SEND_DEBOUNCE_MS = 80;
 const DEFAULT_NEW_LOOP_LENGTH_SEC = 4;
 // Arrow-key step sizes for a loop edge, in seconds. Backing tracks are long
 // and loop edges are usually placed by ear against a bar line, so the fine
@@ -250,9 +257,10 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
   if (recalled) {
     applyPracticeToolProject(recalled, { rerender: false });
   } else {
-    resetAllFadersToDefault(player);
+    applyFaderSettings(player, null, onFaderChange);
     player.eq = createDefaultPracticeToolEq();
     pushPracticeToolEqToEngine(player.eq);
+    suggestPracticeToolProjectName(player.title);
   }
 
   candidateRange = null;
@@ -297,6 +305,7 @@ export function applyPracticeToolTransportState(data: { state?: string; position
 
   renderTransportControls();
   renderWaveform();
+  renderLoopPlayButtons();
 }
 
 /** Called on the `practiceToolPlaybackEnded` engine message. */
@@ -310,254 +319,104 @@ export function applyPracticeToolPlaybackEnded(): void {
   appendLog("practice tool playback ended");
   renderTransportControls();
   renderWaveform();
-}
-
-/** A debounced one-shot sender: `schedule()` coalesces rapid updates (a slider
- * being dragged, a loop handle being dragged), `flush()` cancels any pending
- * timer and sends straight away.
- *
- * Speed, pitch, and loop-region sends each flush the native render-ahead ring
- * buffer (they must, to apply the new value promptly) — sending on every
- * `input`/`mousemove` event during a drag would flush repeatedly and cause
- * audible stutter, which is exactly what un-throttled sends did before this
- * existed. The one-off end-of-gesture event (`change`, `mouseup`) calls
- * `flush()` so the final value is never left sitting in a pending timer. */
-function debouncedSender<T>(send: (value: T) => void, delayMs: number) {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const cancel = () => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-  return {
-    schedule(value: T): void {
-      cancel();
-      timer = setTimeout(() => {
-        timer = null;
-        send(value);
-      }, delayMs);
-    },
-    flush(value: T): void {
-      cancel();
-      send(value);
-    },
-  };
+  renderLoopPlayButtons();
 }
 
 // Note the loop sender reads startSec/endSec when the send actually fires, so a
-// scheduled send always carries the loop's latest dragged bounds.
+// scheduled send always carries the loop's latest dragged bounds — and drops
+// it if another loop was selected in the meantime, whose own restart has
+// already told the engine where to loop.
 const loopRegionSender = debouncedSender(
-  (loop: PracticeToolLoopRegion) => setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec }),
-  LOOP_REGION_SEND_DEBOUNCE_MS);
-const speedSender = debouncedSender(setPracticeToolSpeed, SPEED_PITCH_SEND_DEBOUNCE_MS);
-const pitchSender = debouncedSender(setPracticeToolPitch, SPEED_PITCH_SEND_DEBOUNCE_MS);
-
-// ════════════════════════════════════════════════════════════════════
-// Unified faders (Volume/Balance/Speed/Pitch): one shared implementation
-// instead of four near-duplicated sliders, so they all look, feel, and
-// reset the same way.
-//
-// Every fader's default value sits at the exact visual center regardless
-// of how asymmetric its real min/max range is (e.g. Volume's 0-150% with
-// a 100% default, or Speed's 25%-200% with a 100% default) — the
-// underlying <input type=range> always uses a normalized 0..FADER_SLIDER_STEPS
-// domain split into two independently-scaled linear halves (min..default,
-// default..max), converted to/from the real value on every read/write. A
-// plain <input type=range> can't express that piecewise mapping itself, so
-// this conversion layer is what makes "100%" (or "0 st", or center balance)
-// always land in the middle of the track, and what makes double-clicking
-// anywhere on the slider a well-defined "reset to default" regardless of
-// the range's shape.
-// ════════════════════════════════════════════════════════════════════
-
-const FADER_SLIDER_STEPS = 1000;
-
-type FaderId = "volume" | "balance" | "speed" | "pitch";
-
-type FaderSpec = {
-  id: FaderId;
-  min: number;
-  max: number;
-  default: number;
-  format: (value: number) => string;
-  parse: (text: string) => number | null;
-  getValue: (player: PracticeToolState) => number;
-  setValue: (player: PracticeToolState, value: number) => void;
-  /** immediate=true on release/reset/typed-entry; false for in-progress drag
-   * ticks, letting speed/pitch debounce (they flush the render-ahead ring)
-   * while volume/balance (pure audio-thread mix, no flush) can ignore the
-   * flag and always send right away. */
-  send: (value: number, immediate: boolean) => void;
-  /** Extra side effects beyond the field write itself — currently only
-   * Speed needs this, to keep the client-side playhead dead-reckoning in
-   * sync with the newly-dragged rate. */
-  onChange?: (value: number) => void;
-};
-
-function faderValueToSliderPos(spec: FaderSpec, value: number): number {
-  const half = FADER_SLIDER_STEPS / 2;
-  if (value <= spec.default) {
-    if (spec.default === spec.min) {
-      return half;
+  (loop: PracticeToolLoopRegion) => {
+    if (loop.id === ensurePracticeToolState().activeLoopId) {
+      setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
     }
-    const t = (value - spec.min) / (spec.default - spec.min);
-    return Math.round(t * half);
-  }
-  if (spec.max === spec.default) {
-    return half;
-  }
-  const t = (value - spec.default) / (spec.max - spec.default);
-  return Math.round(half + t * half);
-}
-
-function faderSliderPosToValue(spec: FaderSpec, pos: number): number {
-  const half = FADER_SLIDER_STEPS / 2;
-  if (pos <= half) {
-    return spec.min + (pos / half) * (spec.default - spec.min);
-  }
-  return spec.default + ((pos - half) / half) * (spec.max - spec.default);
-}
-
-/** Extracts a leading signed number from free-typed text (tolerating a
- * trailing unit like "%" or "st"); returns null if nothing parseable. */
-function parseLeadingNumber(text: string): number | null {
-  const match = text.trim().match(/^[+-]?\d*\.?\d+/);
-  if (!match) {
-    return null;
-  }
-  const n = parseFloat(match[0]);
-  return isFinite(n) ? n : null;
-}
-
-function parsePercentText(text: string): number | null {
-  const n = parseLeadingNumber(text);
-  return n === null ? null : n / 100;
-}
-
-function formatPitchText(value: number): string {
-  return `${value > 0 ? "+" : ""}${value.toFixed(1)} st`;
-}
-
-function formatBalanceText(value: number): string {
-  const pct = Math.round(value * 100);
-  if (pct === 0) {
-    return "C";
-  }
-  return pct < 0 ? `L${Math.abs(pct)}` : `R${pct}`;
-}
-
-function parseBalanceText(text: string): number | null {
-  const trimmed = text.trim();
-  if (/^c(enter)?$/i.test(trimmed)) {
-    return 0;
-  }
-  const sided = /^([lr])\s*(\d+(?:\.\d+)?)$/i.exec(trimmed);
-  if (sided) {
-    const magnitude = parseFloat(sided[2]) / 100;
-    return sided[1].toLowerCase() === "l" ? -magnitude : magnitude;
-  }
-  const n = parseLeadingNumber(trimmed);
-  if (n === null) {
-    return null;
-  }
-  // Accept both "35"/"-35" (percent-style) and "0.35"/"-0.35" (raw fraction).
-  return Math.abs(n) > 1 ? n / 100 : n;
-}
-
-const FADER_SPECS: Record<FaderId, FaderSpec> = {
-  volume: {
-    id: "volume",
-    min: 0,
-    max: 1.5,
-    default: 1,
-    format: (v) => `${Math.round(v * 100)}%`,
-    parse: parsePercentText,
-    getValue: (p) => p.gain,
-    setValue: (p, v) => { p.gain = v; },
-    send: (v) => setPracticeToolGain(v),
   },
-  balance: {
-    id: "balance",
-    min: -1,
-    max: 1,
-    default: 0,
-    format: formatBalanceText,
-    parse: parseBalanceText,
-    getValue: (p) => p.balance,
-    setValue: (p, v) => { p.balance = v; },
-    send: (v) => setPracticeToolBalance(v),
-  },
-  speed: {
-    id: "speed",
-    min: 0.25,
-    max: 2,
-    default: 1,
-    format: (v) => `${Math.round(v * 100)}%`,
-    parse: parsePercentText,
-    getValue: (p) => p.speed,
-    setValue: (p, v) => { p.speed = v; },
-    send: (v, immediate) => (immediate ? speedSender.flush(v) : speedSender.schedule(v)),
-    onChange: (v) => {
-      playheadSpeed = v;
-      playheadBaseSec = getInterpolatedPositionSec();
-      playheadBaseMs = performance.now();
-    },
-  },
-  pitch: {
-    id: "pitch",
-    min: -12,
-    max: 12,
-    default: 0,
-    format: formatPitchText,
-    parse: parseLeadingNumber,
-    getValue: (p) => p.pitchSemitones,
-    setValue: (p, v) => { p.pitchSemitones = v; },
-    send: (v, immediate) => (immediate ? pitchSender.flush(v) : pitchSender.schedule(v)),
-  },
-};
+  LOOP_REGION_SEND_DEBOUNCE_MS);
 
-/** Used when loading a new file "resets the project" (see
- * applyPracticeToolFileLoaded) — pushes every fader back to its default,
- * both in local state and to the native engine, mirroring exactly what a
- * double-click reset does for a single fader. */
-function resetAllFadersToDefault(player: PracticeToolState): void {
-  Object.values(FADER_SPECS).forEach((spec) => {
-    spec.setValue(player, spec.default);
-    spec.onChange?.(spec.default);
-    spec.send(spec.default, true);
-  });
+/** Every fader write lands here, by hand or not. Speed keeps the playhead's
+ * dead-reckoning in step, and the active loop takes the new values as its own
+ * settings — saved on release, not on every tick of a drag. */
+function onFaderChange(id: FaderId, value: number, immediate: boolean): void {
+  if (id === "speed") {
+    playheadBaseSec = getInterpolatedPositionSec(); // at the old rate, up to now
+    playheadBaseMs = performance.now();
+    playheadSpeed = value;
+  }
+  const activeLoop = getActiveLoop();
+  if (activeLoop) {
+    activeLoop.settings = captureFaderSettings(ensurePracticeToolState());
+    if (immediate) {
+      persistLoopsForCurrentFile();
+    }
+  }
+}
+
+/** Moves the client-side playhead straight to `sec` rather than waiting for
+ * the engine's next transport report, which never comes while paused. */
+function resetPlayheadTo(sec: number): void {
+  const player = ensurePracticeToolState();
+  player.positionSec = sec;
+  playheadBaseSec = sec;
+  playheadBaseMs = performance.now();
 }
 
 /**
- * Pushes a recalled project into the live player — its loops, whichever loop
- * was active, and all four fader settings, each sent on to the engine exactly
- * as moving that control by hand would. Getting the *track* loaded is the
- * caller's job: either it is already open, or this runs off the back of the
- * load it asked for (see the recall branch in applyPracticeToolFileLoaded,
- * which renders once at the end and so passes `rerender: false`).
+ * Makes `loop` the active one and puts playback at its very start. Its own
+ * track settings go first — Speed among them, which the engine's restart is
+ * computed at — then the region, looping and the jump to its start travel as
+ * one engine change (`restart`), so nothing of the previous position or the
+ * previous loop's bounds can leak into the top of this one.
+ */
+function activateLoop(loop: PracticeToolLoopRegion): void {
+  const player = ensurePracticeToolState();
+  // Cleared first: applying this loop's settings must not record them onto
+  // whichever loop is being left (see onFaderChange).
+  player.activeLoopId = null;
+  if (loop.settings) {
+    applyFaderSettings(player, loop.settings, onFaderChange);
+  }
+  player.activeLoopId = loop.id;
+  player.looping = true;
+  if (!loop.settings) {
+    // A loop from before loops had settings adopts the current ones.
+    loop.settings = captureFaderSettings(player);
+    persistLoopsForCurrentFile();
+  }
+  candidateRange = null;
+  selectedHandle = "start";
+  setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec }, { restart: true });
+  resetPlayheadTo(loop.startSec);
+}
+
+function deactivateActiveLoop(): void {
+  const player = ensurePracticeToolState();
+  player.activeLoopId = null;
+  player.looping = false;
+  setPracticeToolLoopRegion(null);
+  setPracticeToolLooping(false);
+}
+
+/**
+ * Pushes a recalled project into the live player — its loops, all four fader
+ * settings and the EQ, each sent on to the engine exactly as moving that
+ * control by hand would, then whichever loop was active (with its own
+ * settings). Getting the *track* loaded is the caller's job: either it is
+ * already open, or this runs off the back of the load it asked for (see the
+ * recall branch in applyPracticeToolFileLoaded, which renders once at the end
+ * and so passes `rerender: false`).
  */
 function applyPracticeToolProject(project: PracticeToolProject, options: { rerender?: boolean } = {}): void {
   const player = ensurePracticeToolState();
 
   player.loops = project.loops.map((loop) => ({ ...loop }));
+  player.activeLoopId = null;
   // The recalled set becomes this track's working set, so the per-file
   // autosave follows it rather than resurrecting the pre-recall loops the
   // next time the track is opened without a project.
   persistLoopsForCurrentFile();
 
-  const projectFaderValues: Record<FaderId, number> = {
-    volume: project.gain,
-    balance: project.balance,
-    speed: project.speed,
-    pitch: project.pitchSemitones,
-  };
-  Object.values(FADER_SPECS).forEach((spec) => {
-    const value = Math.max(spec.min, Math.min(spec.max, projectFaderValues[spec.id]));
-    spec.setValue(player, value);
-    spec.onChange?.(value);
-    spec.send(value, true);
-  });
+  applyFaderSettings(player, project, onFaderChange);
 
   // A project saved before the EQ existed has no curve; sanitize turns that
   // (and any other gap) into the flat default rather than leaving the previous
@@ -568,15 +427,10 @@ function applyPracticeToolProject(project: PracticeToolProject, options: { reren
   const activeLoop = project.activeLoopId
     ? player.loops.find((loop) => loop.id === project.activeLoopId) ?? null
     : null;
-  player.activeLoopId = activeLoop?.id ?? null;
-  player.looping = Boolean(activeLoop);
   if (activeLoop) {
-    seekPracticeToolFile(activeLoop.startSec);
-    setPracticeToolLoopRegion({ startSec: activeLoop.startSec, endSec: activeLoop.endSec });
-    setPracticeToolLooping(true);
+    activateLoop(activeLoop);
   } else {
-    setPracticeToolLoopRegion(null);
-    setPracticeToolLooping(false);
+    deactivateActiveLoop();
   }
 
   candidateRange = null;
@@ -592,80 +446,14 @@ function applyPracticeToolProject(project: PracticeToolProject, options: { reren
 // see practiceTool/projects.ts for why the indirection exists.
 setPracticeToolProjectApplier(applyPracticeToolProject);
 
-function renderFader(spec: FaderSpec, player: PracticeToolState): void {
-  const slider = document.getElementById(`practice-tool-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`practice-tool-${spec.id}-value`) as HTMLInputElement | null;
-  const value = spec.getValue(player);
-  if (slider && document.activeElement !== slider) {
-    slider.value = String(faderValueToSliderPos(spec, value));
+/** True when a loop is active and `ratio` (a point on the waveform) is not in it. */
+function isOutsideActiveLoop(ratio: number): boolean {
+  const activeLoop = getActiveLoop();
+  if (!activeLoop) {
+    return false;
   }
-  if (valueInput && document.activeElement !== valueInput) {
-    valueInput.value = spec.format(value);
-  }
-}
-
-function bindFader(spec: FaderSpec): void {
-  const slider = document.getElementById(`practice-tool-${spec.id}`) as HTMLInputElement | null;
-  const valueInput = document.getElementById(`practice-tool-${spec.id}-value`) as HTMLInputElement | null;
-
-  const applyValue = (value: number, immediate: boolean) => {
-    const player = ensurePracticeToolState();
-    const clamped = Math.max(spec.min, Math.min(spec.max, value));
-    spec.setValue(player, clamped);
-    spec.onChange?.(clamped);
-    renderTransportControls();
-    spec.send(clamped, immediate);
-  };
-
-  if (slider && slider.dataset.bound !== "true") {
-    slider.dataset.bound = "true";
-    slider.addEventListener("input", () => {
-      const pos = parseFloat(slider.value);
-      if (isFinite(pos)) {
-        applyValue(faderSliderPosToValue(spec, pos), false);
-      }
-    });
-    // Fires once on release (mouseup/keyup) — always commit the final
-    // value immediately even if speed/pitch were mid-debounce.
-    slider.addEventListener("change", () => {
-      const pos = parseFloat(slider.value);
-      if (isFinite(pos)) {
-        applyValue(faderSliderPosToValue(spec, pos), true);
-      }
-    });
-    slider.addEventListener("dblclick", () => {
-      applyValue(spec.default, true);
-      // The two clicks that make up a dblclick each jump the native thumb
-      // to the click position first (and focus the slider) before this
-      // handler runs — renderFader() then skips redrawing it because it
-      // deliberately never overwrites the focused element mid-drag. Force
-      // the visual thumb back to center explicitly so it doesn't end up
-      // stuck at the click position while the value/text already reset.
-      slider.value = String(faderValueToSliderPos(spec, spec.default));
-    });
-  }
-
-  if (valueInput && valueInput.dataset.bound !== "true") {
-    valueInput.dataset.bound = "true";
-    const commit = () => {
-      const parsed = spec.parse(valueInput.value);
-      if (parsed === null) {
-        renderTransportControls(); // invalid text — revert to the last real value
-        return;
-      }
-      applyValue(parsed, true);
-    };
-    valueInput.addEventListener("focus", () => valueInput.select());
-    valueInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        valueInput.blur();
-      } else if (event.key === "Escape") {
-        renderTransportControls();
-        valueInput.blur();
-      }
-    });
-    valueInput.addEventListener("focusout", commit);
-  }
+  const sec = ratio * ensurePracticeToolState().durationSec;
+  return sec < activeLoop.startSec || sec > activeLoop.endSec;
 }
 
 /** Whatever the gesture controller is currently editing: the active loop's
@@ -793,7 +581,7 @@ function renderTransportControls(): void {
     eqBtn.classList.toggle("is-active", isPracticeToolEqShaping(player.eq));
   }
 
-  Object.values(FADER_SPECS).forEach((spec) => renderFader(spec, player));
+  renderPracticeToolFaders(player);
 
   renderFileInfo();
 }
@@ -857,6 +645,7 @@ function renderLoopList(): void {
       return `
         <div class="practice-tool-loop-row${isActive ? " is-active" : ""}${isEditing ? " is-editing" : ""}" data-loop-id="${escapeHtml(loop.id)}">
           <button type="button" class="practice-tool-loop-select-btn" data-loop-id="${escapeHtml(loop.id)}" aria-pressed="${isActive}" title="${isActive ? "Active loop — click to deactivate" : "Select loop"}">${isActive ? "●" : "○"}</button>
+          <button type="button" class="practice-tool-loop-play-btn" data-loop-id="${escapeHtml(loop.id)}"></button>
           <div class="practice-tool-loop-row-main" data-loop-id="${escapeHtml(loop.id)}">
             ${rowMainHtml}
           </div>
@@ -874,6 +663,43 @@ function renderLoopList(): void {
     nameInput?.focus();
     nameInput?.select();
   }
+  renderLoopPlayButtons();
+}
+
+/** Each row's play/stop button follows the transport, which reports several
+ * times a second while playing — so it is updated in place rather than by
+ * rebuilding the list, which would also tear down a row mid-rename. */
+function renderLoopPlayButtons(): void {
+  const player = ensurePracticeToolState();
+  document.querySelectorAll<HTMLButtonElement>("#practice-tool-loop-list .practice-tool-loop-play-btn").forEach((btn) => {
+    const playingThis = player.playing && btn.dataset.loopId === player.activeLoopId;
+    const label = playingThis ? "Stop this loop" : "Play this loop from its start";
+    if (btn.textContent !== (playingThis ? "■" : "▶")) {
+      btn.textContent = playingThis ? "■" : "▶";
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+      btn.classList.toggle("is-playing", playingThis);
+    }
+  });
+}
+
+/** A row's ▶: select the loop and play it from the top, whatever was playing
+ * before. Its ■: stop, which the engine rewinds to the loop's start. */
+function toggleLoopPlayback(loopId: string): void {
+  const player = ensurePracticeToolState();
+  const loop = player.loops.find((entry) => entry.id === loopId);
+  if (!loop || player.durationSec <= 0) {
+    return;
+  }
+  if (loop.id === player.activeLoopId && player.playing) {
+    setPracticeToolTransport("stop");
+    return;
+  }
+  editingLoopId = null;
+  activateLoop(loop);
+  setPracticeToolTransport("play");
+  appendLog(`practice tool loop played → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
+  renderPracticeToolPanel();
 }
 
 function selectLoop(loopId: string): void {
@@ -887,23 +713,14 @@ function selectLoop(loopId: string): void {
     // Clicking the already-active loop deactivates it — this is the only
     // "unselect"/stop-looping affordance; there is no separate Loop toggle,
     // since looping is implied entirely by whether a loop is selected.
-    player.activeLoopId = null;
-    player.looping = false;
-    setPracticeToolLoopRegion(null);
-    setPracticeToolLooping(false);
+    deactivateActiveLoop();
     appendLog(`practice tool loop deactivated → ${loop.name}`);
     renderPracticeToolPanel();
     return;
   }
 
-  player.activeLoopId = loopId;
-  player.looping = true;
-  candidateRange = null;
   editingLoopId = null;
-  selectedHandle = "start";
-  seekPracticeToolFile(loop.startSec);
-  setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec });
-  setPracticeToolLooping(true);
+  activateLoop(loop);
   appendLog(`practice tool loop selected → ${loop.name} (${loop.startSec.toFixed(2)}-${loop.endSec.toFixed(2)}s)`);
   renderPracticeToolPanel();
 }
@@ -954,10 +771,7 @@ function deleteLoop(loopId: string): void {
 
   player.loops = player.loops.filter((entry) => entry.id !== loopId);
   if (player.activeLoopId === loopId) {
-    player.activeLoopId = null;
-    player.looping = false;
-    setPracticeToolLoopRegion(null);
-    setPracticeToolLooping(false);
+    deactivateActiveLoop();
   }
   if (editingLoopId === loopId) {
     editingLoopId = null;
@@ -1056,16 +870,13 @@ function createLoopFromRange(range: SecondsRange): void {
     name: suggestDefaultLoopName(player.loops),
     startSec: range.startSec,
     endSec: range.endSec,
+    // A new loop starts out with the track settings it was made under.
+    settings: captureFaderSettings(player),
   };
   player.loops = [...player.loops, newLoop];
-  player.activeLoopId = newLoop.id;
-  player.looping = true;
+  activateLoop(newLoop);
   editingLoopId = newLoop.id;
-  candidateRange = null;
   persistLoopsForCurrentFile();
-  seekPracticeToolFile(newLoop.startSec);
-  setPracticeToolLoopRegion({ startSec: newLoop.startSec, endSec: newLoop.endSec });
-  setPracticeToolLooping(true);
   appendLog(`practice tool loop created → ${newLoop.name} (${newLoop.startSec.toFixed(2)}-${newLoop.endSec.toFixed(2)}s)`);
   renderPracticeToolPanel();
 }
@@ -1111,13 +922,41 @@ function bindWaveformInteractions(): void {
     nudgeStepSec: LOOP_NUDGE_STEP_SEC,
     onResize: applyRangeChange,
     onCreate: (range) => {
-      candidateRange = range;
+      // Still set only when the sweep began inside the active loop, which
+      // keeps it: a drag there is not a request for a new one.
+      if (!getActiveLoop()) {
+        candidateRange = range;
+      }
     },
     // A sweep replaces whatever row was mid-rename; committing it here keeps
-    // the list from re-rendering underneath the gesture.
-    onCreateStart: finishEditingLoop,
+    // the list from re-rendering underneath the gesture. One begun outside
+    // the active loop lets go of it and marks out a new loop instead.
+    onCreateStart: (anchorRatio) => {
+      finishEditingLoop();
+      if (isOutsideActiveLoop(anchorRatio)) {
+        deactivateActiveLoop();
+        renderLoopList();
+        renderTransportControls();
+      }
+    },
     onSeek: (ratio) => {
-      seekPracticeToolFile(ratio * ensurePracticeToolState().durationSec);
+      const player = ensurePracticeToolState();
+      const sec = ratio * player.durationSec;
+      // A click outside the active loop starts a new one there: the loop is
+      // let go, playback moves to the click, and a default-length selection
+      // waits on "+ Add Loop" with its handles ready to drag. A click inside
+      // the loop (or with none active) is just a seek.
+      if (isOutsideActiveLoop(ratio)) {
+        deactivateActiveLoop();
+        const end = Math.min(player.durationSec, sec + DEFAULT_NEW_LOOP_LENGTH_SEC);
+        const start = Math.max(0, Math.min(sec, end - MIN_LOOP_SPAN_SEC));
+        candidateRange = { startRatio: start / player.durationSec, endRatio: end / player.durationSec };
+        renderLoopList();
+        renderTransportControls();
+      }
+      seekPracticeToolFile(sec);
+      resetPlayheadTo(sec);
+      renderFileInfo();
     },
     onCommit: () => {
       const activeLoop = getActiveLoop();
@@ -1170,7 +1009,7 @@ function bindTransportControls(): void {
     });
   }
 
-  Object.values(FADER_SPECS).forEach(bindFader);
+  bindPracticeToolFaders(ensurePracticeToolState, onFaderChange, renderTransportControls);
 }
 
 /** Commits whichever editable field (name/start/end) `input` represents.
@@ -1207,6 +1046,14 @@ function bindLoopListActions(): void {
         const loopId = selectBtn.dataset.loopId ?? "";
         if (loopId) {
           selectLoop(loopId);
+        }
+        return;
+      }
+      const playBtn = target.closest<HTMLButtonElement>(".practice-tool-loop-play-btn");
+      if (playBtn) {
+        const loopId = playBtn.dataset.loopId ?? "";
+        if (loopId) {
+          toggleLoopPlayback(loopId);
         }
         return;
       }

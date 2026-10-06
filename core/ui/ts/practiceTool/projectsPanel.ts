@@ -49,7 +49,7 @@ function describeProjectOption(project: PracticeToolProject): string {
   return project.presetId ? `${project.name} ♪` : project.name;
 }
 
-/** The one line under the bar that explains what Load will actually do — which
+/** The one line under the bar that explains what the selection loaded — which
  * track and preset the selection carries, and whether its file can be reopened. */
 function buildHintText(projects: readonly PracticeToolProject[]): string {
   const player = uiState.practiceTool;
@@ -63,7 +63,7 @@ function buildHintText(projects: readonly PracticeToolProject[]): string {
       parts.push("a saved preset");
     }
     if (getProjectTrackAvailability(selected) === "unavailable") {
-      return `${parts.join(" · ")} — this track was dragged in, so its file can't be reopened automatically. Open it again, then load this project.`;
+      return `${parts.join(" · ")} — this track was dragged in, so its file can't be reopened automatically. Open it again, then pick this project again.`;
     }
     return parts.join(" · ");
   }
@@ -73,14 +73,27 @@ function buildHintText(projects: readonly PracticeToolProject[]): string {
       ? "Save the loaded track, its loops and the Volume/Balance/Speed/Pitch settings as a project you can recall later."
       : "Load a track to save it, its loops and its settings as a project.";
   }
-  return "Pick a saved project to load it, or type a name and save the current one.";
+  return "Pick a saved project to load it, or save the current one under the name shown.";
+}
+
+/**
+ * A freshly opened track (not a project recall) names the project after its
+ * file — "Another Day.mp3" offers "Another Day" — and lets go of whichever
+ * saved project the bar was pointing at, which is about a different track.
+ */
+export function suggestPracticeToolProjectName(fileTitle: string): void {
+  selectedProjectId = null;
+  const nameInput = getNameInput();
+  if (nameInput) {
+    nameInput.value = fileTitle.replace(/\.[^./\\]+$/, "").trim();
+  }
+  renderPracticeToolProjects();
 }
 
 export function renderPracticeToolProjects(): void {
   const select = getSelect();
   const nameInput = getNameInput();
   const includePreset = getIncludePresetToggle();
-  const loadBtn = document.getElementById("practice-tool-project-load") as HTMLButtonElement | null;
   const deleteBtn = document.getElementById("practice-tool-project-delete") as HTMLButtonElement | null;
   const saveBtn = document.getElementById("practice-tool-project-save") as HTMLButtonElement | null;
   const hint = document.getElementById("practice-tool-project-hint");
@@ -111,9 +124,6 @@ export function renderPracticeToolProjects(): void {
   const hasTrack = Boolean(player?.filePath);
   const typedName = nameInput?.value.trim() ?? "";
 
-  if (loadBtn) {
-    loadBtn.disabled = !selectedProjectId;
-  }
   if (deleteBtn) {
     deleteBtn.disabled = !selectedProjectId;
   }
@@ -186,7 +196,7 @@ function loadSelectedProject(): void {
   if (availability === "unavailable") {
     showNotification(
       "Track file unavailable",
-      `"${project.fileTitle}" was dragged in, so only its name was recorded — open the file again, then load this project`
+      `"${project.fileTitle}" was dragged in, so only its name was recorded — open the file again, then pick this project again`
     );
     return;
   }
@@ -247,6 +257,8 @@ export function bindPracticeToolProjectActions(): void {
         includePreset.checked = Boolean(project.presetId);
       }
       renderPracticeToolProjects();
+      // Picking a project is asking for it: there is no separate Load step.
+      loadSelectedProject();
     });
   }
 
@@ -265,12 +277,6 @@ export function bindPracticeToolProjectActions(): void {
   if (saveBtn && saveBtn.dataset.bound !== "true") {
     saveBtn.dataset.bound = "true";
     saveBtn.addEventListener("click", () => void saveCurrentProject());
-  }
-
-  const loadBtn = document.getElementById("practice-tool-project-load") as HTMLButtonElement | null;
-  if (loadBtn && loadBtn.dataset.bound !== "true") {
-    loadBtn.dataset.bound = "true";
-    loadBtn.addEventListener("click", () => loadSelectedProject());
   }
 
   const deleteBtn = document.getElementById("practice-tool-project-delete") as HTMLButtonElement | null;

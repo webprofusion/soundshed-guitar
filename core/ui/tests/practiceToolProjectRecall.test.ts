@@ -35,11 +35,11 @@ vi.mock("../ts/practiceTool/projects.js", () => ({
 const { uiState } = await import("../ts/state.js");
 const { bindPracticeToolProjectActions, renderPracticeToolProjects } = await import("../ts/practiceTool/projectsPanel.js");
 
+// Picking a project from the list loads it — there is no Load button.
 function loadProject(): void {
   const select = document.getElementById("practice-tool-project-select") as HTMLSelectElement;
   select.value = project.id;
   select.dispatchEvent(new Event("change"));
-  (document.getElementById("practice-tool-project-load") as HTMLButtonElement).click();
 }
 
 beforeEach(() => {
@@ -48,7 +48,6 @@ beforeEach(() => {
   document.body.innerHTML = `
     <select id="practice-tool-project-select"></select>
     <input id="practice-tool-project-name" />
-    <button id="practice-tool-project-load"></button>
   `;
   bindPracticeToolProjectActions();
   renderPracticeToolProjects();

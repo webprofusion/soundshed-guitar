@@ -116,11 +116,14 @@ class PracticeToolService
     void SetGain(double linearGain);          // applied on the audio thread — instant, no flush needed
     void SetBalance(double balance);          // clamped to [-1 (full left), 1 (full right)]; instant, no flush needed
 
-    // The active loop region. No bounds set = loop the whole track. These
-    // only change which bounds a *future* wrap respects; they do not move
-    // the play cursor (the UI issues a separate seek alongside activating a
-    // loop chip, per the message contract).
-    void SetLoopRegion(double startSec, double endSec);
+    // The active loop region. No bounds set = loop the whole track. Without
+    // `restart` these only change which bounds a *future* wrap respects and
+    // leave the play cursor alone (a loop handle being dragged). With it, the
+    // region, looping on and a seek to its start land as one change, so the
+    // render thread can never act on half of them: as three separate messages
+    // it could seek to the new start while the previous loop's bounds were
+    // still live, wrap straight back into that loop, and play from there.
+    void SetLoopRegion(double startSec, double endSec, bool restart = false);
     void ClearLoopRegion();
     void SetLoopingEnabled(bool enabled);
 
@@ -223,6 +226,14 @@ class PracticeToolService
     /// to a hard cut, which is the best available option in that corner
     /// case.
     void BeginCrossfade(const std::shared_ptr<TrackBuffer>& buffer, std::size_t fromFrame, std::size_t toFrame);
+    /// A deliberate jump (a seek, a loop selected, a new file): restarts the
+    /// stretch engine at `target` with its output pre-rolled, so the next
+    /// frame out is the target itself. Streaming the jump through instead
+    /// left ~120 ms of the stretcher's history (the audio from before the
+    /// jump) to play out first, heard as a glitch at the top of a loop.
+    /// Leaves `cursor` past the pre-roll it consumed, and arms a short
+    /// fade-in, since the jump itself is a cut.
+    void JumpTo(const std::shared_ptr<TrackBuffer>& buffer, std::size_t& cursor, std::size_t target);
     /// Drains up to maxCount frames from the fade-carry buffer into
     /// outL/outR (written at index 0). Returns the count drained.
     std::size_t DrainFadeCarry(float* outL, float* outR, std::size_t maxCount);
@@ -259,6 +270,16 @@ class PracticeToolService
     std::atomic<double> mBalance{0.0}; // -1 = full left, 0 = center, +1 = full right
     std::atomic<bool> mLoopingEnabled{false};
     std::shared_ptr<ActiveLoopBounds> mActiveLoop; // null = whole track; atomic load/store
+
+    // Fade-in after a JumpTo(), in output frames. Render-thread only.
+    std::size_t mJumpFadeLen = 0;
+    std::size_t mJumpFadePos = 0;
+
+    // The stretch engine's own delay (input frames, output frames), published
+    // by the render thread for the position readout: the audible frame trails
+    // the read cursor by this as well as by the ring's lookahead.
+    std::atomic<int> mStretchInputLatency{0};
+    std::atomic<int> mStretchOutputLatency{0};
 
     std::atomic<bool> mSeekPending{false};
     std::atomic<double> mPendingSeekSeconds{0.0};

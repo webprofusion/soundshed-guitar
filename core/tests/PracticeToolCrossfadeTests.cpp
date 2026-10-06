@@ -1,10 +1,12 @@
 /**
  * @file PracticeToolCrossfadeTests.cpp
- * @brief Focused tests for PracticeToolService's loop-wrap/seek crossfade
- * logic (ReadSourceWindow / BeginCrossfade), per the design plan's "Loop-
- * boundary handling" requirement: stretch.reset() must never be called on a
- * loop wrap or seek, so wraps are handled entirely in the source domain with
- * a short equal-power crossfade. These tests exercise that source-domain
+ * @brief Focused tests for PracticeToolService's loop-wrap crossfade logic
+ * (ReadSourceWindow / BeginCrossfade), per the design plan's "Loop-boundary
+ * handling" requirement: stretch.reset() must never be called on a loop wrap,
+ * so wraps are handled entirely in the source domain with a short
+ * equal-power crossfade. A jump (seek, loop selected) is the opposite case:
+ * JumpTo() restarts the stretcher so none of the old position plays, and the
+ * last test holds it to that. These tests exercise that source-domain
  * logic directly and synchronously (via a friend test-access struct), with a
  * synthetic in-memory buffer — no file I/O, no background render thread
  * timing involved.
@@ -13,6 +15,7 @@
 #include "controller/PracticeToolService.h"
 #include "IPluginHost.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
@@ -45,6 +48,52 @@ struct PracticeToolServiceTestAccess
     {
         return svc.ReadSourceWindow(buffer, outL, outR, cursor, numFrames);
     }
+
+    // The render thread configures the stretcher once it has a buffer; these
+    // tests never hand it one, so it stays idle and the test thread owns it.
+    static void ConfigureStretch(PracticeToolService& svc)
+    {
+        svc.mStretch.presetDefault(2, static_cast<float>(kTestSampleRate), false);
+        svc.mStretch.reset();
+        svc.mStretchConfigured = true;
+    }
+
+    static void JumpTo(PracticeToolService& svc, const std::shared_ptr<PracticeToolService::TrackBuffer>& buffer,
+                       std::size_t& cursor, std::size_t target)
+    {
+        svc.JumpTo(buffer, cursor, target);
+    }
+
+    /// Runs the render path (source read, stretch, ring) for `frames` output
+    /// frames and returns the left channel as the audio thread would pop it.
+    static std::vector<float> Render(PracticeToolService& svc,
+                                     const std::shared_ptr<PracticeToolService::TrackBuffer>& buffer,
+                                     std::size_t& cursor, std::size_t frames)
+    {
+        std::vector<float> left;
+        std::vector<PracticeToolService::StereoFrame> popped(1024);
+
+        while (left.size() < frames)
+        {
+            svc.RenderChunk(buffer, cursor);
+            const std::size_t n = svc.mOutputRing->Pop(popped.data(), popped.size());
+
+            if (n == 0)
+            {
+                break;
+            }
+
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                left.push_back(popped[i].l);
+            }
+        }
+
+        left.resize(std::min(left.size(), frames));
+        return left;
+    }
+
+    static constexpr double kTestSampleRate = 48000.0;
 };
 } // namespace guitarfx
 
@@ -330,6 +379,90 @@ bool TestNonLoopingExhaustionReturnsShortAtEnd()
 
     return firstCallShortAtEnd && secondCallReturnsZero;
 }
+
+// 2 s of a loud 220 Hz tone, then 2 s of silence: where the audio came from is
+// then plain from its level alone.
+auto MakeToneThenSilenceBuffer()
+{
+    const auto total = static_cast<std::size_t>(kSampleRate * 4.0);
+    const auto toneEnd = static_cast<std::size_t>(kSampleRate * 2.0);
+    std::vector<float> left(total, 0.0f);
+
+    for (std::size_t i = 0; i < toneEnd; ++i)
+    {
+        left[i] =
+            0.5f * static_cast<float>(std::sin(2.0 * 3.141592653589793 * 220.0 * static_cast<double>(i) / kSampleRate));
+    }
+
+    return PracticeToolServiceTestAccess::MakeBuffer(left, left, kSampleRate);
+}
+
+float PeakOf(const std::vector<float>& samples, std::size_t from, std::size_t to)
+{
+    float peak = 0.0f;
+
+    for (std::size_t i = from; i < std::min(to, samples.size()); ++i)
+    {
+        peak = std::max(peak, std::abs(samples[i]));
+    }
+
+    return peak;
+}
+
+// Selecting a loop jumps playback. The stretcher holds ~120 ms of whatever it
+// was last fed, so a jump streamed through it played that history first — the
+// glitch heard at the top of a loop. JumpTo() must leave none of it, and must
+// start the target immediately rather than after the stretcher's latency.
+bool TestJumpLeavesNothingOfTheOldPositionBehind()
+{
+    std::cout << "\n--- PracticeToolService Jump Alignment Tests ---\n";
+
+    NullPluginHost host;
+    std::mutex dspMutex;
+    auto svc = MakeService(host, dspMutex);
+    auto buffer = MakeToneThenSilenceBuffer();
+    PracticeToolServiceTestAccess::ConfigureStretch(*svc);
+
+    const auto ms = [](double v) { return static_cast<std::size_t>(kSampleRate * v / 1000.0); };
+    const auto silenceAt = static_cast<std::size_t>(kSampleRate * 3.0);
+
+    // Control: the old way, moving the cursor and streaming on. The tone the
+    // stretcher was full of must still come out, or this test proves nothing.
+    std::size_t cursor = 0;
+    PracticeToolServiceTestAccess::Render(*svc, buffer, cursor, ms(500));
+    cursor = silenceAt;
+    const auto streamed = PracticeToolServiceTestAccess::Render(*svc, buffer, cursor, ms(200));
+    const float streamedLeak = PeakOf(streamed, 0, ms(200));
+    const bool controlLeaks = streamedLeak > 0.1f;
+
+    // Tone → silence: nothing of the tone after the jump.
+    PracticeToolServiceTestAccess::ConfigureStretch(*svc);
+    cursor = 0;
+    PracticeToolServiceTestAccess::Render(*svc, buffer, cursor, ms(500));
+    PracticeToolServiceTestAccess::JumpTo(*svc, buffer, cursor, silenceAt);
+    const auto jumped = PracticeToolServiceTestAccess::Render(*svc, buffer, cursor, ms(200));
+    const float jumpLeak = PeakOf(jumped, 0, ms(200));
+    const bool noLeak = jumpLeak < 0.01f;
+
+    // Silence → tone: the tone is there from the first frames (past the 5 ms
+    // fade-in), not after the stretcher's latency.
+    PracticeToolServiceTestAccess::JumpTo(*svc, buffer, cursor, static_cast<std::size_t>(kSampleRate * 1.0));
+    const auto started = PracticeToolServiceTestAccess::Render(*svc, buffer, cursor, ms(50));
+    const float earlyPeak = PeakOf(started, ms(6), ms(20));
+    const bool startsAtOnce = earlyPeak > 0.3f;
+
+    std::cout << "  " << std::left << std::setw(48)
+              << "Control: a streamed jump plays old audio:" << (controlLeaks ? "PASS" : "FAIL")
+              << " (peak=" << streamedLeak << ")\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "JumpTo leaves none of the old position:" << (noLeak ? "PASS" : "FAIL") << " (peak=" << jumpLeak
+              << ")\n";
+    std::cout << "  " << std::left << std::setw(48)
+              << "JumpTo starts the target at once:" << (startsAtOnce ? "PASS" : "FAIL")
+              << " (peak 6-20 ms=" << earlyPeak << ")\n";
+
+    return controlLeaks && noLeak && startsAtOnce;
+}
 } // namespace
 
 int main()
@@ -347,6 +480,11 @@ int main()
     }
 
     if (!TestNonLoopingExhaustionReturnsShortAtEnd())
+    {
+        allPassed = false;
+    }
+
+    if (!TestJumpLeavesNothingOfTheOldPositionBehind())
     {
         allPassed = false;
     }

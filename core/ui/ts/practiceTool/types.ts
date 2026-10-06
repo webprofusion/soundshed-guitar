@@ -4,11 +4,23 @@
  * split — the same facade rule the runtime modules follow.
  */
 
+/** The track settings a loop plays with — the four faders. */
+export interface PracticeToolLoopSettings {
+  gain: number;
+  balance: number;
+  speed: number;
+  pitchSemitones: number;
+}
+
 export interface PracticeToolLoopRegion {
   id: string;
   name: string;
   startSec: number;
   endSec: number;
+  /** Applied whenever the loop is selected, and kept up to date as the faders
+   * move while it is active. Absent on loops saved before loops had their own
+   * settings: those take on whatever is current the first time they're picked. */
+  settings?: PracticeToolLoopSettings;
 }
 
 /**

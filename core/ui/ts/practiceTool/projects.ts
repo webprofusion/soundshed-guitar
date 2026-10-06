@@ -77,6 +77,25 @@ function isPersistedLoop(value: unknown): value is PracticeToolLoopRegion {
     && typeof record.endSec === "number";
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && isFinite(value);
+}
+
+/** Copies a stored loop, keeping its settings only when all four are real
+ * numbers — a partial set would apply a mix of this loop's values and
+ * whatever happened to be on the faders. */
+function copyPersistedLoop(loop: PracticeToolLoopRegion): PracticeToolLoopRegion {
+  const { settings, ...rest } = loop;
+  const valid = settings
+    && isFiniteNumber(settings.gain)
+    && isFiniteNumber(settings.balance)
+    && isFiniteNumber(settings.speed)
+    && isFiniteNumber(settings.pitchSemitones);
+  return valid
+    ? { ...rest, settings: { gain: settings.gain, balance: settings.balance, speed: settings.speed, pitchSemitones: settings.pitchSemitones } }
+    : rest;
+}
+
 export function loadLoopsForFingerprint(fingerprint: string): PracticeToolLoopRegion[] {
   if (!fingerprint) {
     return [];
@@ -89,7 +108,7 @@ export function loadLoopsForFingerprint(fingerprint: string): PracticeToolLoopRe
   if (!Array.isArray(entry)) {
     return [];
   }
-  return entry.filter(isPersistedLoop).map((loop) => ({ ...loop }));
+  return entry.filter(isPersistedLoop).map(copyPersistedLoop);
 }
 
 /** Autosaves the loop list against the loaded file's fingerprint, so loops
@@ -141,7 +160,7 @@ export function parsePracticeToolProject(value: unknown): PracticeToolProject | 
   if (!id || !name || !filePath) {
     return null;
   }
-  const loops = Array.isArray(record.loops) ? record.loops.filter(isPersistedLoop).map((loop) => ({ ...loop })) : [];
+  const loops = Array.isArray(record.loops) ? record.loops.filter(isPersistedLoop).map(copyPersistedLoop) : [];
   const activeLoopId = typeof record.activeLoopId === "string" && loops.some((loop) => loop.id === record.activeLoopId)
     ? record.activeLoopId
     : null;

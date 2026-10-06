@@ -87,8 +87,9 @@ export interface RangeSelectSpec {
    */
   onCreate?(range: RatioRange): void;
 
-  /** Fires once when a press is promoted to a create sweep. */
-  onCreateStart?(): void;
+  /** Fires once when a press is promoted to a create sweep, with where the
+   * press landed (the sweep's fixed edge). */
+  onCreateStart?(anchorRatio: number): void;
 
   /** A press with no meaningful movement. Omit to opt out. */
   onSeek?(ratio: number): void;
@@ -235,7 +236,7 @@ export function bindRangeSelect(spec: RangeSelectSpec): RangeSelectController {
         return; // host does not support sweeping out a new range
       }
       dragMode = "create";
-      spec.onCreateStart?.();
+      spec.onCreateStart?.(anchorRatio);
     }
 
     const ratio = ratioFromPointer(event, canvas);

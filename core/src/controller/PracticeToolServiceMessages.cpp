@@ -136,7 +136,7 @@ void PracticeToolService::RegisterMessageHandlers(MessageHandlerRegistry& regist
             return;
         }
 
-        SetLoopRegion(payload.value("startSec", 0.0), payload.value("endSec", 0.0));
+        SetLoopRegion(payload.value("startSec", 0.0), payload.value("endSec", 0.0), payload.value("restart", false));
     });
 
     registry.Register("setPracticeToolLooping",

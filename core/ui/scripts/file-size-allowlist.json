@@ -9,14 +9,13 @@
     "ts/signalPath.ts": 1468,
     "ts/views.ts": 1443,
     "ts/riffLibrary.ts": 1355,
-    "ts/practiceTool.ts": 1339,
     "css/base.css": 1247,
+    "ts/practiceTool.ts": 1186,
     "css/settings.css": 1086,
     "css/modals/resource-browser.css": 1028,
     "css/controls.css": 1016,
     "css/themes/light.css": 994,
     "ts/performancePads.ts": 958,
-    "css/layout-designer.css": 845,
-    "ts/types.ts": 801
+    "css/layout-designer.css": 845
   }
 }

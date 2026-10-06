@@ -246,8 +246,20 @@ void PracticeToolService::Pause()
 
 void PracticeToolService::Stop()
 {
+    // Stop rewinds to the top of whatever is playing: the loop when one is
+    // on, otherwise the track. Rewinding to 0 under a loop left the next Play
+    // running through everything before the loop to reach it.
+    double rewindToSec = 0.0;
+    auto buffer = std::atomic_load_explicit(&mBuffer, std::memory_order_acquire);
+    auto loop = std::atomic_load_explicit(&mActiveLoop, std::memory_order_acquire);
+
+    if (buffer && buffer->sampleRate > 0.0 && loop && mLoopingEnabled.load(std::memory_order_relaxed))
+    {
+        rewindToSec = static_cast<double>(loop->startFrame) / buffer->sampleRate;
+    }
+
     mState.store(static_cast<int>(PlaybackState::Stopped), std::memory_order_release);
-    mPendingSeekSeconds.store(0.0, std::memory_order_relaxed);
+    mPendingSeekSeconds.store(rewindToSec, std::memory_order_relaxed);
     mSeekPending.store(true, std::memory_order_release);
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
@@ -291,7 +303,7 @@ void PracticeToolService::SetBalance(double balance)
     mBalance.store(std::clamp(balance, -1.0, 1.0), std::memory_order_relaxed);
 }
 
-void PracticeToolService::SetLoopRegion(double startSec, double endSec)
+void PracticeToolService::SetLoopRegion(double startSec, double endSec, bool restart)
 {
     auto buffer = std::atomic_load_explicit(&mBuffer, std::memory_order_acquire);
     const double sr = mSampleRate.load(std::memory_order_relaxed);
@@ -312,6 +324,16 @@ void PracticeToolService::SetLoopRegion(double startSec, double endSec)
     }
 
     std::atomic_store_explicit(&mActiveLoop, std::shared_ptr<ActiveLoopBounds>(bounds), std::memory_order_release);
+
+    if (restart)
+    {
+        // All before the one generation bump below, which is what the render
+        // thread resyncs on: it sees the bounds, looping and the seek together.
+        mLoopingEnabled.store(true, std::memory_order_relaxed);
+        mPendingSeekSeconds.store(std::max(0.0, startSec), std::memory_order_relaxed);
+        mSeekPending.store(true, std::memory_order_release);
+    }
+
     mParamGeneration.fetch_add(1, std::memory_order_release);
     mRenderWake.notify_all();
 }
@@ -481,12 +503,22 @@ void PracticeToolService::SendTransportStateToUI()
 
     double positionSec = 0.0;
 
-    if (buffer && buffer->sampleRate > 0.0)
+    if (buffer && buffer->sampleRate > 0.0 && mSeekPending.load(std::memory_order_acquire))
+    {
+        // A seek (or Stop's rewind) the render thread has not picked up yet:
+        // the cursor still says where playback was, so report where it is going.
+        positionSec = std::min(mPendingSeekSeconds.load(std::memory_order_relaxed),
+                               static_cast<double>(buffer->totalFrames) / buffer->sampleRate);
+    }
+    else if (buffer && buffer->sampleRate > 0.0)
     {
         const double speed = mSpeed.load(std::memory_order_relaxed);
         const double cursorFrames = static_cast<double>(mReadCursorFrames.load(std::memory_order_relaxed));
         const double aheadOutFrames = mOutputRing ? static_cast<double>(mOutputRing->AvailableToRead()) : 0.0;
-        const double aheadInFrames = aheadOutFrames * speed;
+        // The stretcher holds audio too: what comes out trails what went in by
+        // its input latency plus its output latency (the latter in output frames).
+        const double aheadInFrames = (aheadOutFrames + mStretchOutputLatency.load(std::memory_order_relaxed)) * speed +
+                                     mStretchInputLatency.load(std::memory_order_relaxed);
         // The render-thread cursor is ahead of what's actually audible by
         // however much lookahead currently sits in the ring; back that out
         // (converted from output-domain frames to source-domain via the

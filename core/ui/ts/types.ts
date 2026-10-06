@@ -6,13 +6,9 @@ import type { PracticeToolState } from "./practiceTool/types.js";
 
 // The Practice Tool's own shapes live with the feature; re-exported here so
 // every importer keeps using ./types.js, exactly as practiceTool.ts fronts its
-// runtime modules. Type-only, so nothing is imported at runtime.
-export type {
-  PracticeToolEqState,
-  PracticeToolLoopRegion,
-  PracticeToolProject,
-  PracticeToolState,
-} from "./practiceTool/types.js";
+// runtime modules. Type-only, so nothing is imported at runtime, and a new
+// shape there is exported here without touching this list.
+export type * from "./practiceTool/types.js";
 
 export interface Attachment {
   type: AttachmentType;

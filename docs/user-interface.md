@@ -206,13 +206,13 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `browsePracticeToolFile` | `{}` | Practice Tool: open native file browser for a backing track |
 | `loadPracticeToolFile` | `{path}` | Practice Tool: load a backing track by native path |
 | `loadPracticeToolFileData` | `{fileName, data}` | Practice Tool: load a backing track from base64 bytes — used for a drag-and-drop, where WebView2 never exposes the real file path |
-| `setPracticeToolTransport` | `{action}` | Practice Tool: `"play"`, `"pause"`, or `"stop"` |
+| `setPracticeToolTransport` | `{action}` | Practice Tool: `"play"`, `"pause"`, or `"stop"`. Stop rewinds to the active loop's start while looping, otherwise to the top of the track |
 | `seekPracticeToolFile` | `{seconds}` | Practice Tool: seek to a position |
 | `setPracticeToolSpeed` | `{ratio}` | Practice Tool: time-stretch ratio, clamped `[0.25, 2.0]` |
 | `setPracticeToolPitch` | `{semitones}` | Practice Tool: pitch shift, clamped `[-12, 12]` semitones |
 | `setPracticeToolGain` | `{gain}` | Practice Tool: linear output gain |
 | `setPracticeToolBalance` | `{balance}` | Practice Tool: stereo balance, `-1` (full left) to `+1` (full right) |
-| `setPracticeToolLoopRegion` | `{startSec, endSec}` or `{}` | Practice Tool: set (or, with bounds omitted, clear) the active loop region. Sent only when the UI activates/deactivates a loop — the engine has no concept of the loop library itself |
+| `setPracticeToolLoopRegion` | `{startSec, endSec, restart?}` or `{}` | Practice Tool: set (or, with bounds omitted, clear) the active loop region — the engine has no concept of the loop library itself. With `restart: true` it also turns looping on and jumps to the region's start, all as one change: what selecting a loop sends. Without it the bounds move and playback carries on (a handle being dragged) |
 | `setPracticeToolLooping` | `{enabled}` | Practice Tool: enable/disable looping of the active region |
 | `setPracticeToolEq` | `{enabled?, params?}` | Practice Tool: backing-track EQ. Both fields optional and applied independently — the toggle alone, one band's `{lowGain, lowFreq, lowQ}` mid-drag, or the whole curve on a project recall. `params` keys are `ParametricEQEffect`'s own (`lowGain`/`lowFreq`/`lowQ`, `lowMid*`, `highMid*`, `high*`); unknown keys are ignored and every value is clamped by the effect |
 
@@ -824,6 +824,7 @@ named loop regions for drilling difficult passages.
 `practiceTool/projects.ts` owns all persistence (the per-file loop store and
 saved projects) plus the seams the panel can only *request* through,
 `practiceTool/projectsPanel.ts` is the project bar's controls,
+`practiceTool/faders.ts` is the four faders and the debounced sends they share,
 `practiceTool/eq.ts` / `eqSend.ts` / `eqModal.ts` are the backing-track EQ's
 state, its engine sends and the binding that points the shared `EqPanel` at it,
 `practiceTool/trackImport.ts` is the drop zone and the reset confirmation the
@@ -848,11 +849,31 @@ eq → bridge → state would otherwise close a cycle.
   (or, with none selected, the in-progress drag-selection for a new loop). The
   handle gesture itself is the shared one in `ts/waveform/rangeSelect.ts`, the same
   controller the riff-take trim editor in `riffLibrary.ts` drives.
-- **Selecting = activating.** Clicking a loop row seeks to its start, sends
-  `setPracticeToolLoopRegion`, and shows its handles on the waveform for fine-tuning;
-  dragging a handle live-updates the loop's bounds locally and re-sends the region
-  (debounced) if it is the active loop. Clicking the already-active loop's row
-  deactivates it (`setPracticeToolLoopRegion` with bounds omitted).
+- **Selecting = activating.** Clicking a loop row applies the loop's own track
+  settings, then sends `setPracticeToolLoopRegion` with `restart` — region, looping
+  and the jump to its start as one engine change — and shows its handles on the
+  waveform for fine-tuning. Sent as three messages (seek, region, looping) the render
+  thread could act on the seek while the previous loop's bounds were still live and
+  wrap straight back into that loop. Engine-side every jump (seek, loop selected, new
+  file) restarts the time-stretcher pre-rolled at the target (`JumpTo`): streamed
+  through, a jump played ~120 ms of the stretcher's history — the audio from before
+  it — at the top of every loop. Dragging a handle live-updates the loop's bounds
+  locally and re-sends the region (debounced, no `restart`) if it is the active loop.
+  Clicking the already-active loop's row deactivates it (`setPracticeToolLoopRegion`
+  with bounds omitted). Each row also has its own ▶, which selects the loop and plays
+  it from its start, and turns into ■ (stop, back to the loop's start) while that
+  loop plays; it is updated in place from the transport reports, never by rebuilding
+  the list.
+- **Each loop keeps its own track settings.** A loop records Volume, Balance, Speed and
+  Pitch (`settings` on the loop): a new loop takes the current ones, moving a fader
+  while a loop is active updates that loop (saved on release), and selecting a loop
+  puts its settings back. A loop saved before this existed adopts whatever is current
+  the first time it is selected. The EQ stays per track.
+- **Starting a new loop from the waveform.** With a loop active, a press outside it
+  lets the loop go: a drag sweeps out a new selection, and a plain click moves
+  playback there and drops a default-length (`DEFAULT_NEW_LOOP_LENGTH_SEC`) selection
+  at that point, waiting on "+ Add Loop". A press inside the active loop seeks (click)
+  or does nothing (drag); with no loop active a click is just a seek.
 - **Naming.** A new loop (dragged on the waveform then "+ Add Loop", or "+ New Loop")
   is added to the list immediately — auto-named, auto-selected — and opens for
   name/start/end editing inline in its own row, committed on blur/Tab/Enter. There is
@@ -888,7 +909,9 @@ eq → bridge → state would otherwise close a cycle.
   `practiceTool.projects` (`practiceTool/projects.ts`), so nothing round-trips
   through the engine except the file load and the settings sends a recall replays.
   Saving under an existing name offers to overwrite it rather than accumulating
-  duplicates. Recall is the mirror of save: if the project's track is already
+  duplicates. Opening a track (not by recall) fills the name field with the file's
+  name, extension dropped. Picking a project in the list loads it — there is no Load
+  button. Recall is the mirror of save: if the project's track is already
   loaded its settings are applied straight away, otherwise `loadPracticeToolFile`
   is sent and the project is parked until `practiceToolFileLoaded` answers for
   that path (`consumePendingProjectRecall`) — which is also what lets a recall

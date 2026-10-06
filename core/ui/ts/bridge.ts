@@ -426,9 +426,20 @@ export function setPracticeToolBalance(balance: number): void {
 }
 
 /** Pass null (or omit bounds) to clear the active loop region — looping the whole track. */
-export function setPracticeToolLoopRegion(region: { startSec: number; endSec: number } | null): void {
+/** `restart` also turns looping on and jumps to the region's start, as one
+ * change engine-side — what selecting a loop wants. Without it the bounds move
+ * and playback carries on wherever it is (a loop handle being dragged). */
+export function setPracticeToolLoopRegion(
+  region: { startSec: number; endSec: number } | null,
+  options: { restart?: boolean } = {}
+): void {
   if (region) {
-    postMessage({ type: "setPracticeToolLoopRegion", startSec: region.startSec, endSec: region.endSec });
+    postMessage({
+      type: "setPracticeToolLoopRegion",
+      startSec: region.startSec,
+      endSec: region.endSec,
+      ...(options.restart ? { restart: true } : {}),
+    });
   } else {
     postMessage({ type: "setPracticeToolLoopRegion" });
   }

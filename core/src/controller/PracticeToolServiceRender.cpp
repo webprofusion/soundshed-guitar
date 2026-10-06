@@ -30,6 +30,7 @@ namespace
 constexpr double kTonalityLimitHz = 8000.0;                // matches PitchShiftEffect's convention
 constexpr double kCrossfadeSeconds = 0.008;                // ~8ms, within the plan's 5-10ms guidance
 constexpr std::size_t kMaxCrossfadeCapacityFrames = 16384; // safety ceiling (~340ms @ 48kHz)
+constexpr double kJumpFadeInSeconds = 0.005;               // a jump is a cut; ramp the new audio in
 constexpr int kRenderChunkOutFrames = 1024;
 constexpr double kHalfPi = 1.5707963267948966;
 } // namespace
@@ -120,6 +121,46 @@ void PracticeToolService::BeginCrossfade(const std::shared_ptr<TrackBuffer>& buf
 
     mFadeCarryCount = fadeLen;
     mFadeCarryPos = 0;
+}
+
+void PracticeToolService::JumpTo(const std::shared_ptr<TrackBuffer>& buffer, std::size_t& cursor, std::size_t target)
+{
+    // Nothing of the old position may reach the stretcher: no loop-wrap blend
+    // in flight, and the read starts cleanly at the target.
+    mFadeCarryCount = 0;
+    mFadeCarryPos = 0;
+    cursor = target;
+
+    if (!mStretchConfigured)
+    {
+        return;
+    }
+
+    // outputSeek() resets the engine, then uses the input past its own input
+    // latency to pre-roll the output, so the first frame process() returns is
+    // `target`. It infers the playback rate from how much input it is handed,
+    // hence outputSeekLength(speed). Read through ReadSourceWindow so a loop
+    // shorter than the pre-roll wraps exactly as playback will.
+    const double speed =
+        std::clamp(mSpeed.load(std::memory_order_relaxed), kPracticeToolMinSpeed, kPracticeToolMaxSpeed);
+    const int seekLength = std::max(1, mStretch.outputSeekLength(static_cast<float>(speed)));
+
+    EnsureRenderScratchCapacity(seekLength, 0);
+
+    const int read = ReadSourceWindow(buffer, mSourceScratchL.data(), mSourceScratchR.data(), cursor, seekLength);
+
+    if (read < seekLength) // the end of a track that is not looping
+    {
+        std::fill(mSourceScratchL.begin() + read, mSourceScratchL.begin() + seekLength, 0.0f);
+        std::fill(mSourceScratchR.begin() + read, mSourceScratchR.begin() + seekLength, 0.0f);
+    }
+
+    float* inPtrs[2] = {mSourceScratchL.data(), mSourceScratchR.data()};
+    mStretch.outputSeek(inPtrs, seekLength);
+
+    const double sr = mSampleRate.load(std::memory_order_relaxed);
+    mJumpFadeLen = static_cast<std::size_t>(std::max(1.0, sr * kJumpFadeInSeconds));
+    mJumpFadePos = 0;
 }
 
 std::size_t PracticeToolService::DrainFadeCarry(float* outL, float* outR, std::size_t maxCount)
@@ -258,6 +299,14 @@ void PracticeToolService::RenderChunk(const std::shared_ptr<TrackBuffer>& buffer
     // pitch-only, as used by PitchShiftEffect/TransposeEffect.
     mStretch.process(inPtrs, numInFrames, outPtrs, numOutFrames);
 
+    for (int i = 0; i < numOutFrames && mJumpFadePos < mJumpFadeLen; ++i, ++mJumpFadePos)
+    {
+        const float ramp = static_cast<float>(
+            std::sin((static_cast<double>(mJumpFadePos) + 0.5) / static_cast<double>(mJumpFadeLen) * kHalfPi));
+        mStretchOutL[static_cast<std::size_t>(i)] *= ramp;
+        mStretchOutR[static_cast<std::size_t>(i)] *= ramp;
+    }
+
     mPushScratch.resize(static_cast<std::size_t>(numOutFrames));
 
     for (int i = 0; i < numOutFrames; ++i)
@@ -315,6 +364,8 @@ void PracticeToolService::RenderThreadLoop()
             mStretch.reset();
             configuredSampleRate = sr;
             mStretchConfigured = true;
+            mStretchInputLatency.store(mStretch.inputLatency(), std::memory_order_relaxed);
+            mStretchOutputLatency.store(mStretch.outputLatency(), std::memory_order_relaxed);
             ApplyPitchToStretch(mPitchSemitones.load(std::memory_order_relaxed));
         }
 
@@ -327,43 +378,30 @@ void PracticeToolService::RenderThreadLoop()
             const bool seekReq = mSeekPending.exchange(false, std::memory_order_acq_rel);
             const double seekSecs = mPendingSeekSeconds.load(std::memory_order_relaxed);
 
-            if (isNewBuffer)
+            if (isNewBuffer || seekReq)
             {
                 lastSeenBuffer = buffer;
-                mFadeCarryCount = 0;
-                mFadeCarryPos = 0;
-                localCursor = seekReq ? PracticeToolSecondsToFrames(seekSecs, buffer->sampleRate) : 0;
-
-                // A new file is a deliberate, hard discontinuity — unlike a
-                // loop wrap or seek within the same track (which must stay
-                // click-free via the crossfade), there is no musical reason
-                // to blend the outgoing track's spectral history into the
-                // new one. Reset so the previous track's overlap-add state
-                // can't bleed into the first block of the new one.
-                if (mStretchConfigured)
-                {
-                    mStretch.reset();
-                }
-            }
-            else if (seekReq)
-            {
                 const std::size_t target =
-                    buffer->totalFrames > 0
+                    seekReq && buffer->totalFrames > 0
                         ? std::min(PracticeToolSecondsToFrames(seekSecs, buffer->sampleRate), buffer->totalFrames - 1)
                         : std::size_t{0};
-                // Crossfade from wherever we were about to play next into the
-                // new target — the same click-free transition a loop wrap
-                // gets, per the plan ("The same crossfade-on-read approach
-                // handles manual seeks and loop-selection jumps").
-                BeginCrossfade(buffer, localCursor, target);
-                localCursor = target + mFadeCarryCount;
+
+                // A new file, a seek and a loop being selected are all jumps,
+                // and none of them may carry the stretcher's history across:
+                // it is the audio from before the jump, and streaming the
+                // jump through let ~120 ms of it play before the target did.
+                // The ring is flushed below, so what was audible is cut there
+                // regardless; JumpTo() fades the new audio in over that cut.
+                // Loop *wraps* never come through here — they stay a
+                // crossfade in ReadSourceWindow, inside one continuous stream.
+                JumpTo(buffer, localCursor, target);
             }
 
-            // else: generation bumped for a non-seek reason (loop
-            // region/enable toggle, speed, pitch) — the UI issues a separate
-            // seek when it wants the cursor to actually move (e.g. jumping to
-            // a newly-activated loop chip), so leave localCursor untouched;
-            // only the stale ring lookahead needs discarding below.
+            // else: generation bumped for a non-seek reason (a loop handle
+            // dragged, looping toggled, speed, pitch) — leave localCursor
+            // untouched; only the stale ring lookahead needs discarding below.
+            // Selecting a loop asks for its seek in the same change (see
+            // SetLoopRegion's `restart`), so it always arrives as a seek.
 
             if (buffer->totalFrames > 0)
             {
@@ -376,6 +414,10 @@ void PracticeToolService::RenderThreadLoop()
 
             ApplyPitchToStretch(mPitchSemitones.load(std::memory_order_relaxed));
             mOutputRing->RequestFlush();
+            // Publish the jump now rather than after the next chunk: while
+            // paused there is no next chunk, and the position readout would
+            // keep reporting where playback used to be.
+            mReadCursorFrames.store(localCursor, std::memory_order_relaxed);
         }
 
         // Only actually produce audio while playing. Rendering ahead while

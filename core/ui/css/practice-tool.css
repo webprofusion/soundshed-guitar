@@ -290,6 +290,26 @@
   cursor: pointer;
 }
 
+/* Plays the row's loop from its start; becomes a stop while that loop plays. */
+.practice-tool-loop-play-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.practice-tool-loop-play-btn.is-playing {
+  border-color: rgba(255, 204, 102, 0.55);
+  color: rgba(255, 204, 102, 0.95);
+}
+
 .practice-tool-loop-row-main {
   flex: 1 1 auto;
   min-width: 0;

@@ -177,6 +177,23 @@ describe("parsePracticeToolProject", () => {
     expect(parsed?.activeLoopId).toBeNull();
   });
 
+  it("keeps each loop's own track settings, and drops a set with a gap rather than half-applying it", () => {
+    const settings = { gain: 0.6, balance: -0.5, speed: 0.7, pitchSemitones: 2 };
+    const parsed = parsePracticeToolProject({
+      id: "p1",
+      name: "Song A",
+      filePath: "C:\\Music\\backing.wav",
+      loops: [
+        { id: "loop-a", name: "Verse 1", startSec: 1, endSec: 2, settings },
+        { id: "loop-b", name: "Solo 1", startSec: 3, endSec: 4, settings: { ...settings, speed: "slow" } },
+        { id: "loop-c", name: "Outro 1", startSec: 5, endSec: 6 },
+      ],
+    });
+    expect(parsed?.loops[0].settings).toEqual(settings);
+    expect(parsed?.loops[1]).not.toHaveProperty("settings");
+    expect(parsed?.loops[2]).not.toHaveProperty("settings");
+  });
+
   it("leaves eq undefined for an entry saved before the EQ existed", () => {
     const parsed = parsePracticeToolProject({ id: "p1", name: "Song A", filePath: "C:\\Music\\backing.wav" });
     expect(parsed?.eq).toBeUndefined();
