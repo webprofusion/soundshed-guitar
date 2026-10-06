@@ -43,6 +43,13 @@ namespace juce
  *  - It saves the device setup as soon as it changes. JUCE writes it on a clean
  *    exit, which a phone rarely gives an app.
  *
+ * And one the device manager gets wrong on desktop: MIDI ports that come and go.
+ * It reopens a returning port only if the setup it loaded at startup named it, and
+ * a port that goes away leaves a dead connection behind that it still counts as
+ * enabled, so the port coming back is never reopened. Here the MIDI ports the user
+ * chose are remembered on their own, and the open ports are matched to them
+ * whenever the device list changes.
+ *
  * The UI sends {"type": "audioDevice", "action": ...}. Every request is answered
  * with a whole "audioDeviceState" snapshot, and so is every change the device
  * manager broadcasts (a device unplugged, a driver panel edit), so the UI keeps
@@ -100,6 +107,11 @@ private:
     [[nodiscard]] std::optional<bool> rememberedMute (const juce::String& pairKey) const;
     void rememberMute (const juce::String& pairKey, bool muted);
 
+    // The MIDI ports the user chose (see the class comment).
+    void loadWantedMidiDevices();
+    void saveWantedMidiDevices();
+    void reconcileMidiDevices();
+
     // The level meter lease. The UI renews it every couple of seconds while the
     // meter is on screen; it lapses on its own, so a page that went away without
     // saying so does not leave the feed running.
@@ -119,6 +131,14 @@ private:
     // Android: the holder opened the device without input because record
     // permission was refused. Set until the input has been opened again.
     bool mInputNeedsReopen = false;
+
+    // The MIDI inputs and output the user turned on, whether or not they are
+    // plugged in now, by the identifier they were last opened under. Off on
+    // mobile, where the holder opens every MIDI input that appears by itself.
+    bool mManageMidiDevices = false;
+    juce::Array<juce::MidiDeviceInfo> mWantedMidiInputs;
+    juce::MidiDeviceInfo mWantedMidiOutput;
+    juce::MidiDeviceListConnection mMidiDeviceListConnection;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (StandaloneAudioSettings)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StandaloneAudioSettings)

@@ -19,6 +19,11 @@ namespace
     // JUCE saves this one on desktop only (StandalonePluginHolder::saveAudioDeviceState).
     constexpr auto kJuceShouldMuteInputKey = "shouldMuteInput";
 
+    // The MIDI ports the user chose, as JSON {inputs: [{name, identifier}], output},
+    // kept apart from JUCE's "audioSetup", which forgets a port that is unplugged.
+    constexpr auto kMidiDevicesKey = "soundshedMidiDevices";
+    constexpr auto kJuceAudioSetupKey = "audioSetup";
+
     // The meter lease: how long one renewal keeps the feed alive, and how often it sends.
     constexpr juce::uint32 kLevelWatchLeaseMs = 5000;
     constexpr int kLevelFeedHz = 15;
@@ -122,6 +127,39 @@ namespace
         return ! juce::RuntimePermissions::isRequired (juce::RuntimePermissions::recordAudio)
                || juce::RuntimePermissions::isGranted (juce::RuntimePermissions::recordAudio);
     }
+
+    nlohmann::json toJson (const juce::MidiDeviceInfo& info)
+    {
+        return { { "name", toStd (info.name) }, { "identifier", toStd (info.identifier) } };
+    }
+
+    juce::MidiDeviceInfo midiDeviceFromJson (const nlohmann::json& json)
+    {
+        return json.is_object() ? juce::MidiDeviceInfo (stringArg (json, "name"), stringArg (json, "identifier"))
+                                : juce::MidiDeviceInfo();
+    }
+
+    bool isEmpty (const juce::MidiDeviceInfo& info)
+    {
+        return info.identifier.isEmpty() && info.name.isEmpty();
+    }
+
+    // The port a remembered one is now, matched as JUCE matches a saved setup: by
+    // identifier, else by name, since an identifier can change with the USB socket.
+    std::optional<juce::MidiDeviceInfo> findMidiDevice (const juce::Array<juce::MidiDeviceInfo>& available,
+        const juce::MidiDeviceInfo& wanted)
+    {
+        for (const auto& device : available)
+            if (device.identifier == wanted.identifier)
+                return device;
+
+        if (wanted.name.isNotEmpty())
+            for (const auto& device : available)
+                if (device.name == wanted.name)
+                    return device;
+
+        return std::nullopt;
+    }
 } // namespace
 
 //==============================================================================
@@ -131,6 +169,27 @@ StandaloneAudioSettings::StandaloneAudioSettings (juce::StandalonePluginHolder& 
       mSendToUI (std::move (sendToUI))
 {
     mDeviceManager.addChangeListener (this);
+
+    mManageMidiDevices = ! holder.autoOpenMidiDevices;
+
+    if (mManageMidiDevices)
+    {
+        loadWantedMidiDevices();
+
+        // The device manager has opened what its saved setup named; a port turned on
+        // in a session that ended while it was unplugged is not among them.
+        reconcileMidiDevices();
+
+        // Deferred, so it runs after the device manager's own handler for the same
+        // change, which reopens the ports its startup setup named whether or not
+        // they are still wanted.
+        mMidiDeviceListConnection = juce::MidiDeviceListConnection::make ([this] {
+            juce::MessageManager::callAsync ([weakThis = juce::WeakReference<StandaloneAudioSettings> (this)] {
+                if (auto* self = weakThis.get())
+                    self->reconcileMidiDevices();
+            });
+        });
+    }
 
     // On a first run the device is not open yet: the holder waits for the record
     // permission before opening anything. The change message that open sends
@@ -574,6 +633,19 @@ juce::String StandaloneAudioSettings::setMidiInputEnabled (const juce::String& i
         return "No MIDI input given.";
 
     mDeviceManager.setMidiInputDeviceEnabled (identifier, enabled);
+
+    if (mManageMidiDevices)
+    {
+        mWantedMidiInputs.removeIf ([&] (const auto& wanted) { return wanted.identifier == identifier; });
+
+        // Only a port that opened, so what is remembered matches what the UI shows.
+        if (enabled && mDeviceManager.isMidiInputDeviceEnabled (identifier))
+            if (const auto device = findMidiDevice (juce::MidiInput::getAvailableDevices(), { {}, identifier }))
+                mWantedMidiInputs.add (*device);
+
+        saveWantedMidiDevices();
+    }
+
     saveDeviceSetup();
     return {};
 }
@@ -583,8 +655,158 @@ juce::String StandaloneAudioSettings::setMidiOutput (const juce::String& identif
     // Empty is "none". The holder's player picks the new output up when the device
     // manager restarts its callbacks, which this does.
     mDeviceManager.setDefaultMidiOutputDevice (identifier);
+
+    if (mManageMidiDevices)
+    {
+        auto* output = mDeviceManager.getDefaultMidiOutput();
+        mWantedMidiOutput = output != nullptr ? output->getDeviceInfo() : juce::MidiDeviceInfo();
+        saveWantedMidiDevices();
+    }
+
     saveDeviceSetup();
     return {};
+}
+
+//==============================================================================
+void StandaloneAudioSettings::loadWantedMidiDevices()
+{
+    auto* settings = mHolder.settings.get();
+
+    if (settings != nullptr && settings->containsKey (kMidiDevicesKey))
+    {
+        const auto saved = nlohmann::json::parse (toStd (settings->getValue (kMidiDevicesKey)), nullptr, false);
+
+        if (saved.is_object())
+        {
+            if (const auto inputs = saved.find ("inputs"); inputs != saved.end() && inputs->is_array())
+                for (const auto& input : *inputs)
+                    if (const auto info = midiDeviceFromJson (input); ! isEmpty (info))
+                        mWantedMidiInputs.add (info);
+
+            if (const auto output = saved.find ("output"); output != saved.end())
+                mWantedMidiOutput = midiDeviceFromJson (*output);
+
+            return;
+        }
+    }
+
+    // The first run with this in place: start from JUCE's saved setup, which still
+    // names inputs that were enabled but unplugged, and add what it has open now.
+    if (settings != nullptr)
+    {
+        if (const auto xml = settings->getXmlValue (kJuceAudioSetupKey))
+        {
+            for (auto* input : xml->getChildWithTagNameIterator ("MIDIINPUT"))
+                mWantedMidiInputs.addIfNotAlreadyThere ({ input->getStringAttribute ("name"), input->getStringAttribute ("identifier") });
+
+            mWantedMidiOutput = { xml->getStringAttribute ("defaultMidiOutput"), xml->getStringAttribute ("defaultMidiOutputDevice") };
+        }
+    }
+
+    for (const auto& input : juce::MidiInput::getAvailableDevices())
+        if (mDeviceManager.isMidiInputDeviceEnabled (input.identifier))
+            mWantedMidiInputs.addIfNotAlreadyThere (input);
+
+    if (auto* output = mDeviceManager.getDefaultMidiOutput())
+        mWantedMidiOutput = output->getDeviceInfo();
+
+    saveWantedMidiDevices();
+}
+
+void StandaloneAudioSettings::saveWantedMidiDevices()
+{
+    auto* settings = mHolder.settings.get();
+
+    if (settings == nullptr)
+        return;
+
+    auto inputs = nlohmann::json::array();
+
+    for (const auto& input : mWantedMidiInputs)
+        inputs.push_back (toJson (input));
+
+    nlohmann::json saved;
+    saved["inputs"] = std::move (inputs);
+    saved["output"] = toJson (mWantedMidiOutput);
+
+    settings->setValue (kMidiDevicesKey, juce::String (saved.dump()));
+}
+
+void StandaloneAudioSettings::reconcileMidiDevices()
+{
+    bool wantedChanged = false;
+
+    const auto inputs = juce::MidiInput::getAvailableDevices();
+    juce::StringArray openInputs;
+
+    for (auto& wanted : mWantedMidiInputs)
+    {
+        if (const auto device = findMidiDevice (inputs, wanted))
+        {
+            // Found by name under a new identifier: remember that one, so the dead
+            // connection can be found under it once this port goes away.
+            if (device->identifier != wanted.identifier)
+            {
+                wanted = *device;
+                wantedChanged = true;
+            }
+
+            openInputs.addIfNotAlreadyThere (device->identifier);
+        }
+        else if (mDeviceManager.isMidiInputDeviceEnabled (wanted.identifier))
+        {
+            // Gone. Drop the dead connection, or the port coming back looks open already.
+            juce::Logger::writeToLog ("[audio] MIDI input went away: " + wanted.name);
+            mDeviceManager.setMidiInputDeviceEnabled (wanted.identifier, false);
+        }
+    }
+
+    for (const auto& input : inputs)
+    {
+        const bool open = mDeviceManager.isMidiInputDeviceEnabled (input.identifier);
+        const bool wanted = openInputs.contains (input.identifier);
+
+        if (wanted && ! open)
+        {
+            juce::Logger::writeToLog ("[audio] reopening MIDI input " + input.name);
+            mDeviceManager.setMidiInputDeviceEnabled (input.identifier, true);
+        }
+        else if (open && ! wanted)
+        {
+            // One the device manager reopened from its startup setup after the user
+            // turned it off.
+            mDeviceManager.setMidiInputDeviceEnabled (input.identifier, false);
+        }
+    }
+
+    // The output: the remembered one if it is plugged in, else none, which also
+    // releases the dead connection of one that went away. Changing it restarts the
+    // audio callbacks, so only when it differs.
+    juce::String output;
+
+    if (! isEmpty (mWantedMidiOutput))
+    {
+        if (const auto device = findMidiDevice (juce::MidiOutput::getAvailableDevices(), mWantedMidiOutput))
+        {
+            if (device->identifier != mWantedMidiOutput.identifier)
+            {
+                mWantedMidiOutput = *device;
+                wantedChanged = true;
+            }
+
+            output = device->identifier;
+        }
+    }
+
+    if (output != mDeviceManager.getDefaultMidiOutputIdentifier())
+    {
+        juce::Logger::writeToLog (output.isNotEmpty() ? "[audio] reopening MIDI output " + mWantedMidiOutput.name
+                                                      : "[audio] MIDI output went away: " + mWantedMidiOutput.name);
+        mDeviceManager.setDefaultMidiOutputDevice (output);
+    }
+
+    if (wantedChanged)
+        saveWantedMidiDevices();
 }
 
 //==============================================================================

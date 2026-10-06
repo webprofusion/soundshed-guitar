@@ -447,6 +447,13 @@ A list the device offers only one entry for is shown disabled, with a line sayin
 - *Android record permission.* If it was refused, an alert offers to ask again, and the input
   side is reopened once it is granted — including when it is granted from the system settings
   while the app keeps running.
+- *MIDI ports that come and go.* The MIDI inputs and output turned on here are remembered
+  (`soundshedMidiDevices` in the settings file) and reopened whenever they appear: switched
+  on or plugged in while the app runs, or present at the next launch. JUCE's device manager
+  reopens a returning port only if the setup it loaded at startup named it, and keeps a dead
+  connection to a port that went away, which it still reports as enabled. A port is matched
+  by identifier, else by name. Desktop only: on Android the holder opens every MIDI input
+  that appears.
 - *Latency and dropouts.* The driver's reported input and output latency, and its dropout
   count while the section is on screen.
 
