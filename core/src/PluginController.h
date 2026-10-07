@@ -406,6 +406,12 @@ class PluginController
     void HandleBrowseIRRequest();
     void HandleAudioDeviceRequest(const nlohmann::json& payload);
     void HandleSetInputModeRequest(const nlohmann::json& payload);
+    /// setSignalPathNodeChannelMode {nodeId, channelMode}: "" follows the input, "mono" folds a
+    /// stereo input by summing, "monoLeft"/"monoRight" take one side. Rebuilds the chain.
+    void HandleSetSignalPathNodeChannelModeRequest(const nlohmann::json& payload);
+    /// Pushes inputModeChanged: the chosen mode, what is in force, and what the input and
+    /// output can carry. After a setInputMode, and whenever the channel counts change.
+    void SendInputModeToUI();
     void HandleSetAmpCabStateRequest(const nlohmann::json& payload);
     void HandleDeleteLayoutRequest(const nlohmann::json& payload);
     void HandleSetMetronomeRequest(const nlohmann::json& payload);

@@ -26,6 +26,16 @@ export function sendSignalPathNodeBypassUpdate(nodeId: string, presetId: string,
   setPresetDirty(true);
 }
 
+/** How a node takes a stereo input: "" follows it, "mono"/"monoLeft"/"monoRight" fold it. */
+export function sendSignalPathNodeChannelMode(nodeId: string, channelMode: string): void {
+  postMessage({
+    type: "setSignalPathNodeChannelMode",
+    nodeId,
+    channelMode,
+  });
+  setPresetDirty(true);
+}
+
 /** Name a node; an empty title gives it back its automatic name. */
 export function sendSignalPathNodeRename(nodeId: string, title: string): void {
   postMessage({

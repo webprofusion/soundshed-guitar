@@ -88,6 +88,12 @@ namespace guitarfx
 class SynthSawEffect : public EffectProcessor
 {
   public:
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         mSampleRate = sampleRate;

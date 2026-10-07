@@ -646,6 +646,8 @@ bool TestBypassedMixerKeepsItsPan()
     for (const bool enabled : {true, false})
     {
         SignalGraphExecutor exec;
+        // A mono input: the mixer, which can pan, is what makes the output stereo.
+        exec.SetInputLayout(ChannelLayout::Mono);
         exec.SetGraph(graph);
         exec.Prepare(kSR, kBlock);
         exec.SetNodeEnabled("mix", enabled);
@@ -658,7 +660,7 @@ bool TestBypassedMixerKeepsItsPan()
 
         // Input 0 hard left at full level, input 1 hard right 12 dB down: the channels differ,
         // and the output node must not have copied left over right.
-        if (!exec.LastOutputWasStereo() || peakOf(outL) < 0.4 || peakOf(outL) <= 2.0 * peakOf(outR))
+        if (!exec.OutputIsStereo() || peakOf(outL) < 0.4 || peakOf(outL) <= 2.0 * peakOf(outR))
         {
             return false;
         }
@@ -1036,11 +1038,10 @@ int main()
         }
     }
 
-    // Case 7b-2: A mono source on a stereo bus must run a single NAM model.
-    // A guitar wired to input 1 with input 2 left silent must not be treated as a
-    // stereo signal; the executor should route it through the mono path so both
-    // output channels are identical (one model instance) rather than running a
-    // second model on the dead channel.
+    // Case 7b-2: The layout is the caller's word, never read off the samples. A stereo input
+    // keeps its right side even while it is silent: a guitar on the left must not reach the
+    // right through a NAM amp. A mono input runs one model on the left channel and puts it on
+    // both sides, whatever the right channel holds.
     {
         using namespace guitarfx;
         ResourceLibrary lib;
@@ -1048,146 +1049,112 @@ int main()
 
         LibraryResource namRes;
         namRes.type = "nam";
-        namRes.id = "test-nam-mono-bus";
-        namRes.name = "Mono Bus NAM";
+        namRes.id = "test-nam-layout";
+        namRes.name = "Layout NAM";
         namRes.filePath = base / "amps" / "Guitar" / "TimR" / "JCM800 2203 1985" / "JCM800 Hi P6 B8 M4 T7 G6.nam";
         lib.AddResource(namRes);
 
         SignalGraph g;
         g.nodes.push_back({"in", kNodeTypeInput, "", "Input", true});
         GraphNode nam{"amp", "amp_nam", "amp", "NAM", true};
-        nam.resources = {ResourceRef{"nam", "test-nam-mono-bus", {}, ""}};
+        nam.resources = {ResourceRef{"nam", "test-nam-layout", {}, ""}};
         g.nodes.push_back(nam);
         g.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
         g.edges.push_back({"in", "amp", 0, 0, 1.0});
         g.edges.push_back({"amp", "out", 0, 0, 1.0});
 
         RegisterAllEffects();
-        SignalGraphExecutor exec;
-        exec.SetResourceLibrary(&lib);
-        exec.SetGraph(g);
-        exec.Prepare(kSR, kBlock);
-
-        std::vector<float> inL(static_cast<size_t>(kBlock), 0.0f), inR(static_cast<size_t>(kBlock), 0.0f);
-        std::vector<float> outL(static_cast<size_t>(kBlock), 0.0f), outR(static_cast<size_t>(kBlock), 0.0f);
-        // Program-level signal on the left only; right channel stays at digital silence.
         constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
 
-        for (int i = 0; i < kBlock; ++i)
-        {
-            inL[static_cast<size_t>(i)] =
-                static_cast<float>(0.15 * std::sin(kTwoPi * 220.0 * (static_cast<double>(i) / kSR)));
-        }
+        // Four blocks through a fresh executor; returns the last block's two output channels.
+        const auto run = [&](ChannelLayout layout, double rightHz) {
+            SignalGraphExecutor exec;
+            exec.SetResourceLibrary(&lib);
+            exec.SetInputLayout(layout);
+            exec.SetGraph(g);
+            exec.Prepare(kSR, kBlock);
 
-        float* in[2] = {inL.data(), inR.data()};
-        float* outBuf[2] = {outL.data(), outR.data()};
+            std::vector<float> inL(static_cast<size_t>(kBlock)), inR(static_cast<size_t>(kBlock), 0.0f);
+            std::vector<float> outL(static_cast<size_t>(kBlock)), outR(static_cast<size_t>(kBlock));
 
-        // Warm up so the model's latency buffer is primed before we inspect output.
-        for (int block = 0; block < 4; ++block)
-        {
-            exec.Process(in, outBuf, kBlock);
-        }
+            for (int i = 0; i < kBlock; ++i)
+            {
+                const double t = static_cast<double>(i) / kSR;
+                inL[static_cast<size_t>(i)] = static_cast<float>(0.15 * std::sin(kTwoPi * 220.0 * t));
+                inR[static_cast<size_t>(i)] =
+                    rightHz > 0.0 ? static_cast<float>(0.09 * std::sin(kTwoPi * rightHz * t)) : 0.0f;
+            }
 
-        double peakL = 0.0;
-        double maxLRDiff = 0.0;
+            float* in[2] = {inL.data(), inR.data()};
+            float* outBuf[2] = {outL.data(), outR.data()};
 
-        for (int i = 0; i < kBlock; ++i)
-        {
-            const double l = static_cast<double>(outL[static_cast<size_t>(i)]);
-            const double r = static_cast<double>(outR[static_cast<size_t>(i)]);
-            peakL = std::max(peakL, std::abs(l));
-            maxLRDiff = std::max(maxLRDiff, std::abs(l - r));
-        }
+            for (int block = 0; block < 4; ++block)
+            {
+                exec.Process(in, outBuf, kBlock);
+            }
 
-        const bool active = peakL > 1e-4;        // model actually produced output
-        const bool dualMono = maxLRDiff <= 1e-6; // single model duplicated to both channels
-        const bool ok = active && dualMono;
-        std::cout << "Mono source on stereo bus -> single NAM model: peakL=" << std::fixed << std::setprecision(4)
-                  << peakL << ", maxLRdiff=" << std::setprecision(8) << maxLRDiff << (ok ? "  PASS" : "  FAIL") << "\n";
+            return std::pair{outL, outR};
+        };
 
-        if (ok)
-        {
-            ++passed;
-        }
-        else
-        {
-            ++failed;
-        }
-    }
+        const auto maxDiff = [](const std::vector<float>& a, const std::vector<float>& b) {
+            double worst = 0.0;
 
-    // Case 7b-3: When input mode is explicitly mono, NAM nodes must run mono
-    // regardless of channel-content detection.
-    {
-        using namespace guitarfx;
-        ResourceLibrary lib;
-        const std::filesystem::path base = std::filesystem::path(GUITARFX_TEST_RESOURCES_DIR) / "assets";
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                worst = std::max(worst, static_cast<double>(std::abs(a[i] - b[i])));
+            }
 
-        LibraryResource namRes;
-        namRes.type = "nam";
-        namRes.id = "test-nam-forced-mono";
-        namRes.name = "Forced Mono NAM";
-        namRes.filePath = base / "amps" / "Guitar" / "TimR" / "JCM800 2203 1985" / "JCM800 Hi P6 B8 M4 T7 G6.nam";
-        lib.AddResource(namRes);
+            return worst;
+        };
 
-        SignalGraph g;
-        g.nodes.push_back({"in", kNodeTypeInput, "", "Input", true});
-        GraphNode nam{"amp", "amp_nam", "amp", "NAM", true};
-        nam.resources = {ResourceRef{"nam", "test-nam-forced-mono", {}, ""}};
-        g.nodes.push_back(nam);
-        g.nodes.push_back({"out", kNodeTypeOutput, "", "Output", true});
-        g.edges.push_back({"in", "amp", 0, 0, 1.0});
-        g.edges.push_back({"amp", "out", 0, 0, 1.0});
+        const auto peak = [](const std::vector<float>& a) {
+            double worst = 0.0;
 
-        RegisterAllEffects();
-        SignalGraphExecutor exec;
-        exec.SetResourceLibrary(&lib);
-        exec.SetGraph(g);
-        exec.SetNamInputModeMono(true);
-        exec.Prepare(kSR, kBlock);
+            for (const float v : a)
+            {
+                worst = std::max(worst, static_cast<double>(std::abs(v)));
+            }
 
-        std::vector<float> inL(static_cast<size_t>(kBlock), 0.0f), inR(static_cast<size_t>(kBlock), 0.0f);
-        std::vector<float> outL(static_cast<size_t>(kBlock), 0.0f), outR(static_cast<size_t>(kBlock), 0.0f);
-        constexpr double kTwoPi = 2.0 * 3.14159265358979323846;
+            return worst;
+        };
 
-        for (int i = 0; i < kBlock; ++i)
-        {
-            const double t = static_cast<double>(i) / kSR;
-            inL[static_cast<size_t>(i)] = static_cast<float>(0.16 * std::sin(kTwoPi * 220.0 * t));
-            inR[static_cast<size_t>(i)] = static_cast<float>(0.09 * std::sin(kTwoPi * 493.88 * t));
-        }
-
-        float* in[2] = {inL.data(), inR.data()};
-        float* outBuf[2] = {outL.data(), outR.data()};
+        // Stereo, right input silent: the right output is exactly what the amp makes of silence.
+        const auto [stereoL, stereoR] = run(ChannelLayout::Stereo, 0.0);
+        SignalGraphExecutor silentExec;
+        silentExec.SetResourceLibrary(&lib);
+        silentExec.SetGraph(g);
+        silentExec.Prepare(kSR, kBlock);
+        std::vector<float> zeros(static_cast<size_t>(kBlock), 0.0f), silentL(zeros), silentR(zeros);
+        float* silentIn[2] = {zeros.data(), zeros.data()};
+        float* silentOut[2] = {silentL.data(), silentR.data()};
 
         for (int block = 0; block < 4; ++block)
         {
-            exec.Process(in, outBuf, kBlock);
+            silentExec.Process(silentIn, silentOut, kBlock);
         }
 
-        double peakL = 0.0;
-        double maxLRDiff = 0.0;
+        const bool stereoKeepsSides = peak(stereoL) > 1e-4 && maxDiff(stereoR, silentR) <= 1e-7;
+        std::cout << "Stereo input, silent right: left peak=" << std::fixed << std::setprecision(4) << peak(stereoL)
+                  << ", right vs silence " << std::setprecision(8) << maxDiff(stereoR, silentR)
+                  << (stereoKeepsSides ? "  PASS" : "  FAIL") << '\n';
 
-        for (int i = 0; i < kBlock; ++i)
-        {
-            const double l = static_cast<double>(outL[static_cast<size_t>(i)]);
-            const double r = static_cast<double>(outR[static_cast<size_t>(i)]);
-            peakL = std::max(peakL, std::abs(l));
-            maxLRDiff = std::max(maxLRDiff, std::abs(l - r));
-        }
+        // Mono, a different signal on the right: ignored; both sides are the left, processed.
+        const auto [monoL, monoR] = run(ChannelLayout::Mono, 493.88);
+        const bool monoOneModel = peak(monoL) > 1e-4 && maxDiff(monoL, monoR) <= 1e-7;
+        std::cout << "Mono input, other signal on the right: left peak=" << std::setprecision(4) << peak(monoL)
+                  << ", maxLRdiff=" << std::setprecision(8) << maxDiff(monoL, monoR)
+                  << (monoOneModel ? "  PASS" : "  FAIL") << '\n';
 
-        const bool active = peakL > 1e-4;
-        const bool dualMono = maxLRDiff <= 1e-6;
-        const bool ok = active && dualMono;
-        std::cout << "NAM forced-mono input mode: peakL=" << std::fixed << std::setprecision(4) << peakL
-                  << ", maxLRdiff=" << std::setprecision(8) << maxLRDiff << (ok ? "  PASS" : "  FAIL") << "\n";
-
-        if (ok)
+        for (const bool ok : {stereoKeepsSides, monoOneModel})
         {
-            ++passed;
-        }
-        else
-        {
-            ++failed;
+            if (ok)
+            {
+                ++passed;
+            }
+            else
+            {
+                ++failed;
+            }
         }
     }
 

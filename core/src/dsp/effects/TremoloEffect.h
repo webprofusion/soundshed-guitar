@@ -75,6 +75,12 @@ inline constexpr double kSliceEdgeMaxShare = 0.35;
 class TremoloEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         if (!ValidatePrepare(sampleRate, maxBlockSize))
@@ -281,13 +287,6 @@ class TremoloEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "modulation";
-    }
-
-    /// Pan moves a mono input between the speakers; every other mode moves both together.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mMode.load(std::memory_order_relaxed) == static_cast<int>(tremolo::Mode::Pan) &&
-               mDepth.load(std::memory_order_relaxed) > 0.0f && mMix.load(std::memory_order_relaxed) > 0.0f;
     }
 
   private:

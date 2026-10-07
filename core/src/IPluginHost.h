@@ -140,5 +140,20 @@ class IPluginHost
     {
         return false;
     }
+
+    /// How many channels the input can supply and the output can reproduce.
+    struct AudioChannelCounts
+    {
+        int inputs = 2;
+        int outputs = 2;
+    };
+
+    /// The DAW's main bus layout, or for the standalone app the audio device's active
+    /// channels. Read when the stream is prepared: whether the chains run in stereo is
+    /// configuration, never measured from the audio.
+    [[nodiscard]] virtual AudioChannelCounts GetAudioChannelCounts() const
+    {
+        return {};
+    }
 };
 } // namespace guitarfx

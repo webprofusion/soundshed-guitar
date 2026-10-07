@@ -641,6 +641,12 @@ Clean stereo digital delay, with its tone filters and drive inside the feedback 
 Time is not smoothed, so changing it (or choosing a preset) jumps the read head; the tape and
 analog delays glide.
 
+**Ping-Pong** feeds the two lines from the input's mid and side: 0.8 of the mid plus the side on
+the left, 0.2 of the mid less the side on the right, and the feedback crosses between them. With
+the same signal on both sides that is a centred feed with a skew for the repeats to bounce on; a
+stereo input keeps its image. Nothing is decided from the samples. In dual mono ping-pong is off
+and each side repeats on its own.
+
 **Reverse** plays each Time-long slice of the input backwards. Two read heads half a slice
 apart each read twice as far back as they are into their slice, so each runs backwards through
 the last slice at normal speed, from now to a slice ago; each is faded in and out with a sin²
@@ -1222,9 +1228,9 @@ The level moved by an LFO, four ways, chosen by **Mode**. Classic is the tremolo
   phase, as the early-60s brown amps did. The level barely moves (3 dB where Classic swings
   60 at full Depth); the tone sweeps instead.
 - **Pan** moves the signal between the sides at constant power: centred, both at unity; hard
-  over, one at +3 dB and the other silent. It is the one mode that makes a mono input stereo,
-  and it says so (`ProducesStereoOutput`), so the nodes after it keep both sides; the others
-  leave a following amp on its mono path.
+  over, one at +3 dB and the other silent. It is the one mode that makes a mono input stereo, so
+  the tremolo is declared able to widen and the nodes after it run in stereo whatever the mode,
+  which lets switching to Pan be heard at once (docs/signal-chain.md, Channel Layout).
 - **Slicer** steps through a sixteen-step pattern, one step per LFO cycle, so with Sync on,
   Division is the step length (1/16 for sixteenths). Played steps pass at unity and cut ones
   drop by Depth; Shape softens the edges from 1.5 ms up to a third of the step. A synced step
@@ -1559,7 +1565,7 @@ in ─┬─ DC block (10 Hz) ─ × carrier ─ high-pass (20 Hz) ─ tone low-
 | LFO | Sweeps the carrier by up to ±3 octaves (in octaves, so the sweep sounds even around any Frequency). The shapes are sine, triangle, square, and Random, which holds a new value each cycle. The output is slewed over 1 ms, so the square and Random shapes slide rather than step. The rate is free (0.05–20 Hz) or synced to the host tempo. |
 | Smoothing | Frequency glides in the log domain over 20 ms, so a MIDI CC does not zipper the sidebands. LFO Depth, Tone, Spread, Level and Mix smooth over 10 ms. Values set before the first block (a preset loading) apply straight away rather than gliding in from the defaults. |
 | Tone | A Butterworth low-pass on the wet signal, from 400 Hz at 0 to 24 kHz at 1 (clamped to 0.49 × the sample rate, so fully open is flat across the audio band). |
-| Stereo Spread | Runs the right channel's LFO up to half a cycle ahead of the left's, and its carrier up to a quarter of a cycle ahead, so a mono input comes out stereo at about the same level on each side. When Spread returns to zero, the right carrier is phase-locked back onto the left over about a second, as a brief detune of at most 10 Hz rather than a jump. After that the effect offers the executor its mono path again. |
+| Stereo Spread | Runs the right channel's LFO up to half a cycle ahead of the left's, and its carrier up to a quarter of a cycle ahead, so a mono input comes out stereo at about the same level on each side. When Spread returns to zero, the right carrier is phase-locked back onto the left over about a second, as a brief detune of at most 10 Hz rather than a jump. Since Spread can widen, a ring modulator always runs both channels and the nodes after it run in stereo. |
 
 The carrier and LFO are computed every 16 samples and the carrier's phase increment ramps
 linearly between updates. A DC offset on the input would otherwise come out as a tone at the
@@ -1918,8 +1924,8 @@ glide to their new intervals.
 **Per voice.** Level and Pan (the voice's mid at equal power, centre at unity on both sides; any
 side the input already had narrows as it moves off centre). Detune adds cents to the interval,
 and Delay plays the voice up to 100 ms late. A unison voice detuned a few cents and 20-30 ms late
-is a double-tracked part. A voice panned off centre makes the node stereo
-(`ProducesStereoOutput`), so a mono rig carries the spread on downstream. Humanize gives every
+is a double-tracked part. A voice can be panned, so the harmonizer is declared able to widen and
+a mono rig carries the spread on downstream (docs/signal-chain.md, Channel Layout). Humanize gives every
 voice a slow random drift of its own, up to 8 cents in pitch and 3 ms in timing at 1, the timing
 rate-limited so it never bends the pitch by more than 7 cents. High Cut is a 12 dB/octave
 low-pass on the harmony only, to soften the voices against the guitar.
@@ -2011,7 +2017,7 @@ Pass-through utility node that renders live diagnostics for the signal entering 
 | dBFS | Live peak/RMS in dBFS |
 | Converted units | Peak/RMS as %FS plus RMS dBu/dBV/Vrms |
 | LUFS | Live momentary, short-term, and integrated loudness per BS.1770-4 K-weighting |
-| Channels | Whether the measured signal is mono or stereo (`channelMode`/`stereo` + `activeChannelCount`). Two channels carrying identical/dual-mono content report as mono; distinct L/R content reports as stereo |
+| Channels | The layout the engine runs the node in, Mono or Stereo, which is configuration (docs/signal-chain.md, Channel Layout). On a stereo layout the measurement adds a hint: "one side silent" when only one channel carries signal, "sides identical" when both carry the same, so a player can switch the input to mono |
 | Spectrogram | Rolling FFT-based spectrogram of node input audio |
 | Bark perception | 24-band Bark critical-band energy visualization for perceptual frequency weighting insight |
 

@@ -416,9 +416,9 @@ void TestStereoSpread()
     const auto input = PinkNoise(9600, 0.3);
     SimpleCabEffect effect;
     effect.Prepare(kSampleRate, 512);
-    Check(!effect.ProducesStereoOutput(), "no spread, no stereo");
-    effect.SetParam("spread", 1.0);
-    Check(effect.ProducesStereoOutput(), "spread makes a mono input stereo");
+    // Spread can turn a mono input stereo, so the type declares it can widen and a graph keeps
+    // what follows a cab in stereo; raising Spread is then heard at once.
+    Check(effect.CanWiden(), "declared able to widen, since Spread does");
 
     const auto [monoL, monoR] = Run({}, input);
     Check(monoL == monoR, "without spread both sides are identical");

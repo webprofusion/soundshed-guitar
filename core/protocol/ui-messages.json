@@ -145,6 +145,7 @@
     "setSetlists",
     "setSetting",
     "setSignalDiagnosticsEnabled",
+    "setSignalPathNodeChannelMode",
     "setSpectrumWatch",
     "setSplitBranchCount",
     "setTheme",

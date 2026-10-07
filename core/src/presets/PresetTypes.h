@@ -85,8 +85,18 @@ struct GraphNode
     // initialisers written before it still line up.
     std::string title;
 
+    // How the node takes a stereo input (see SignalGraphExecutor, "Channel layout"). Empty
+    // follows whatever arrives; kChannelModeMono* fold a stereo input to one channel (summed, or
+    // the left or right alone), run it mono, and put out mono, which is how one amp hears a stereo
+    // effect placed in front of it. After it the chain is mono again, until something widens it.
+    std::string channelMode;
+
     bool operator==(const GraphNode&) const = default;
 };
+
+inline constexpr const char* kChannelModeMono = "mono";
+inline constexpr const char* kChannelModeMonoLeft = "monoLeft";
+inline constexpr const char* kChannelModeMonoRight = "monoRight";
 
 /**
  * An edge connecting two nodes in the signal graph.
@@ -174,7 +184,8 @@ struct GlobalSignalChainConfig
     // Input stage settings
     double inputGain = 0.0; // dB
     bool monoMode = false;
-    int inputChannel = 0; // 0=left, 1=right (when mono)
+    int inputChannel = 0;  // which input mono takes: 0 = input 1, 1 = input 2, 2 = both summed
+    bool dualMono = false; // a stereo input processed as two mono chains, nothing crossing sides
 
     // Output stage settings
     double outputGain = 0.0; // dB (master volume)

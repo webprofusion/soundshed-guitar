@@ -39,6 +39,12 @@ namespace guitarfx
 class TransposeEffect : public EffectProcessor
 {
   public:
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     static constexpr double kPathFadeSeconds = 0.010;
 
     enum class Engine

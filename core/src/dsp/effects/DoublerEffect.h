@@ -16,6 +16,12 @@ namespace guitarfx
 class DoublerEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         mSampleRate = sampleRate;
@@ -124,15 +130,6 @@ class DoublerEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "delay";
-    }
-
-    /// The delayed copy is added on the left and subtracted on the right, so a mono input comes
-    /// out stereo whenever any of it is mixed in. Said here rather than left to the "delay"
-    /// category, which a graph node need not carry: the default global post chain stores its
-    /// doubler as "modulation".
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mMix > 0.0 && mDelaySamples > 0;
     }
 
   private:

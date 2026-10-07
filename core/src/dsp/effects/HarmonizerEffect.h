@@ -211,21 +211,6 @@ class HarmonizerEffect : public EffectProcessor
         }
     }
 
-    /// Any voice panned off centre turns a mono input into stereo.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        for (int v = 0; v < harmonizer::kVoiceCount; ++v)
-        {
-            if (Value(harmonizer::VoiceParam(v, harmonizer::kOn)) >= 0.5 &&
-                Value(harmonizer::VoiceParam(v, harmonizer::kPan)) != 0.0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     // Can run on the audio thread (MIDI and DAW automation): it stores the value and nothing else.
     void SetParam(const std::string& key, double value) override
     {

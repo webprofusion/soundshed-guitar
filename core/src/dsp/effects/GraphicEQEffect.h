@@ -15,6 +15,18 @@ namespace guitarfx
 class GraphicEQEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     static constexpr int kMinBands = 5;
     static constexpr int kMaxBands = 10;
     static constexpr std::array<double, kMaxBands> kDefaultFrequencies = {31.25,  62.5,   125.0,  250.0,  500.0,

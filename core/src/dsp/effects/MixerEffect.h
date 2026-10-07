@@ -30,6 +30,12 @@ namespace guitarfx
 class MixerEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     static constexpr int kMaxInputs = 4;
     static constexpr double kMaxDelayMs = 60.0;
 

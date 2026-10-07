@@ -1,6 +1,7 @@
 #pragma once
 
 #include "presets/PresetTypes.h"
+#include "dsp/ChannelLayout.h"
 #include "dsp/DeferredRebuild.h"
 #include "dsp/RealtimeParallel.h"
 #include "dsp/SignalTelemetry.h"
@@ -37,6 +38,23 @@ struct NoteBlock;
  * of them start theirs, parallel levels included. A player is handed the sources that ran this
  * block and only those: a bypassed source, or one with no input, counts as holding nothing, which
  * is how the player knows to let its notes go. Routing stops at a composite's edge.
+ *
+ * Channel layout: whether each connection carries one signal on both channels (mono) or two
+ * (stereo) is resolved when the plan is built, from the executor's input layout and the effect
+ * types along the path, never from the audio and never from an effect's current settings. The
+ * input node has the input layout; a node's input is stereo if any connection into it is; its
+ * output is stereo if its input is or its type CanWiden(). A node runs its mono path only on a
+ * mono input, and only when its type cannot widen. Since everything after a node that can widen
+ * already runs stereo, a user turning a pan or a width up is heard at once, with nothing to
+ * switch. A mono connection always holds the same samples on both channels.
+ *
+ * Dual mono (SetDualMono): the input is stereo and nothing crosses between the sides anywhere.
+ * A node whose type keeps its channels apart (EffectProcessor::KeepsChannelsSeparate) runs as
+ * usual, with SetDualMono(true) switching off whatever it links. Any other node gets a second
+ * instance: the primary runs on the left input on both channels and keeps its left output, the
+ * second on the right input and keeps its right, so each side hears exactly what a mono input of
+ * its own would make. Every operation on a node reaches both instances. Hosted plugins, which
+ * cannot be kept in step with their own editor, run shared.
  */
 class SignalGraphExecutor
 {
@@ -97,13 +115,47 @@ class SignalGraphExecutor
     // Processing
     void Process(float** inputs, float** outputs, int numSamples);
 
-    /// Whether the last block reached the output as stereo: a stereo input, or a node that
-    /// widens a mono one, with its channels left apart. False when the output copied left over
-    /// right, and before the first block. Read it on the thread that called Process().
-    [[nodiscard]] bool LastOutputWasStereo() const noexcept
+    /// The layout of what Process() is given. Set it before SetGraph() so the plan is built for
+    /// it; setting it on a built graph re-resolves the layout in place, which is cheap and does
+    /// not allocate, but changes what runs, so a running graph takes it under the DSP lock. A
+    /// mono input is read from the left channel alone. Defaults to stereo: a caller that never
+    /// says otherwise gets both channels processed, which can cost CPU but never drops audio.
+    void SetInputLayout(ChannelLayout layout);
+
+    [[nodiscard]] ChannelLayout GetInputLayout() const noexcept
     {
-        return mLastOutputStereo;
+        return mInputLayout;
     }
+
+    /// Whether what reaches the output is stereo, as resolved: a stereo input, or a node on the
+    /// way that can widen. Fixed until the graph or its input layout changes.
+    [[nodiscard]] bool OutputIsStereo() const noexcept
+    {
+        return mOutputStereo;
+    }
+
+    /// Dual mono on or off (see the class comment). Before SetGraph(), or on a graph not yet
+    /// prepared, the second instances are built here. On a running graph this runs under the DSP
+    /// lock and only installs what StageDualMonoTwins() built beforehand, off the lock; a coupled
+    /// node without one runs shared until it has one.
+    void SetDualMono(bool dualMono);
+
+    [[nodiscard]] bool IsDualMono() const noexcept
+    {
+        return mDualMono;
+    }
+
+    /// Off the DSP lock: builds, loads and prepares a second instance for every coupled node that
+    /// has none, composites' inner nodes included, for SetDualMono(true) to install.
+    void StageDualMonoTwins();
+
+    /// Coupled nodes running shared in dual mono for want of a second instance (a hosted plugin,
+    /// or one not staged yet). For the UI to flag, and for tests.
+    [[nodiscard]] std::vector<std::string> DualMonoSharedNodes() const;
+
+    /// Whether any node in the graph can widen (EffectProcessor::CanWiden), composites' inner
+    /// nodes included. What a composite reports for itself.
+    [[nodiscard]] bool AnyNodeCanWiden() const;
 
     // Node control
     void SetNodeEnabled(const std::string& nodeId, bool enabled);
@@ -159,6 +211,8 @@ class SignalGraphExecutor
     struct AutomationTarget
     {
         EffectProcessor* processor = nullptr;
+        /// The node's second instance in dual mono, or null.
+        EffectProcessor* twin = nullptr;
         /// This executor's own copy of the node.
         GraphNode* node = nullptr;
         /// The node's id, shared so that a notification naming the node can outlive the graph.
@@ -207,11 +261,6 @@ class SignalGraphExecutor
     void SetOutputTrim(double dB)
     {
         mOutputTrim = dB;
-    }
-
-    void SetNamInputModeMono(bool mono)
-    {
-        mNamInputModeMono = mono;
     }
 
     // Push the current tempo (BPM) to all nodes that have requiresTempo == true.
@@ -283,6 +332,12 @@ class SignalGraphExecutor
         /// `id` again, shared, for AutomationTarget.
         std::shared_ptr<const std::string> sharedId;
         std::unique_ptr<EffectProcessor> processor;
+        /// Dual mono: the second instance, which runs the right side. Only ever installed or
+        /// replaced under the DSP lock, so the audio thread may read it.
+        std::unique_ptr<EffectProcessor> twin;
+        /// Built off the lock by StageDualMonoTwins(), waiting for SetDualMono(true) to install it.
+        /// The audio thread never reads it.
+        std::unique_ptr<EffectProcessor> pendingTwin;
         /// The node's signal this block: its gathered input until it has run, its output after.
         std::vector<float> bufferLeft;
         std::vector<float> bufferRight;
@@ -290,13 +345,30 @@ class SignalGraphExecutor
         /// no effect processes in place and nothing is copied back.
         std::vector<float> scratchLeft;
         std::vector<float> scratchRight;
+        /// Where the second instance writes, in dual mono.
+        std::vector<float> twinScratchLeft;
+        std::vector<float> twinScratchRight;
         bool hasInput = false;
-        bool hasStereoSignal = false;
+        /// The resolved layout of what reaches this node and of what it puts out (see the class
+        /// comment). Written only when the layout is resolved, under the DSP lock once running.
+        bool inputStereo = false;
+        bool outputStereo = false;
+        /// The node's channel mode (GraphNode::channelMode): None follows its input; the others
+        /// fold a stereo input to one channel, run it mono and put out mono.
+        enum class MonoFold : std::uint8_t
+        {
+            None,
+            Sum,
+            Left,
+            Right,
+        };
+        MonoFold monoFold = MonoFold::None;
         std::atomic<double> peak{0.0};
         std::atomic<double> rms{0.0};
         std::atomic<int> clipCount{0};
-        /// Channels the node carried last block: 0 for a node that had no input, else 1 or 2.
-        /// Published every block, so the message thread never reads the two flags above.
+        /// Channels the node carried last block: 0 for a node that had no input, else 1 or 2 by
+        /// its resolved output layout. Published every block, so the message thread never reads
+        /// hasInput.
         std::atomic<int> channelCount{0};
         // Last block's processing time, or kNodeDidNotRunUs when the node did not run. Published
         // here rather than into a map so the audio thread never allocates; GetPerformanceStats()
@@ -342,8 +414,16 @@ class SignalGraphExecutor
         bool isOutput = false;
         bool isSplitter = false;
         bool isMixer = false;
-        bool mayProduceStereo = false;
-        bool isNam = false;
+        /// Its input is mono (or folded to mono by its channel mode), it has a mono path, and its
+        /// type cannot widen: it runs ProcessMono on the left channel and the result is copied to
+        /// the right. Set by the layout pass.
+        bool runMono = false;
+        /// Channel mode Mono on a stereo input: fold the gathered input before the node runs.
+        bool foldInput = false;
+        /// Channel mode Mono on a type that can widen: sum what it puts out to one channel.
+        bool foldOutput = false;
+        /// Dual mono: the second instance that runs the right side, or null.
+        EffectProcessor* twin = nullptr;
         /// Mixer, or more than one incoming edge: inputs sum rather than overwrite.
         bool accumulateInputs = false;
         /// Note routing (see the class comment). The notes this node makes, if it makes any...
@@ -375,15 +455,39 @@ class SignalGraphExecutor
 
     /// Sorts the graph into levels of independent nodes, which in order are the execution
     /// order, and decides whether it is valid.
+    /// A node's resources, resolved by CreateProcessors() and loaded by LoadPendingResources().
+    struct PendingResourceLoad
+    {
+        EffectProcessor* processor = nullptr;
+        std::vector<ResourceRef> refs;
+        std::vector<std::filesystem::path> paths;
+    };
+
     void BuildExecutionLevels();
     void BuildExecutionPlan();
+    /// Resolves every node's layout from mInputLayout, in execution order, and tells each
+    /// processor its input layout: every one when `notifyAll` (a freshly built plan), else only
+    /// those whose input layout changed. No allocation, so a running graph can redo it.
+    void ResolveChannelLayout(bool notifyAll);
     /// Finds each note player's upstream note sources, once the plan's edges are resolved.
     void ResolveNoteRouting();
     /// Hands `planned`, a note player about to run, the sources that ran this block.
     static void HandNotesTo(PlannedNode& planned);
-    /// Pushes mAppliedTempoBpm to every processor in mTempoAwareProcessors.
+    /// Pushes mAppliedTempoBpm to every node in mTempoAwareStates, second instances included.
     void ApplyTempoToProcessors();
+    /// Creates every node's processor and applies its params and config; the resource loads it
+    /// resolves wait in mPendingResourceLoads for LoadPendingResources().
     void CreateProcessors();
+    /// Loads what CreateProcessors() queued. After the plan is built, so each node already knows
+    /// its input layout: a NAM node on a mono connection loads one model, not two.
+    void LoadPendingResources();
+    /// Applies a node's enabled state, params, config and resources to `processor`: queued in
+    /// `loads`, or loaded at once when it is null.
+    void ConfigureNodeProcessor(EffectProcessor& processor, const GraphNode& node,
+                                std::vector<PendingResourceLoad>* loads);
+    [[nodiscard]] static bool NeedsDualMonoTwin(const NodeState& state);
+    /// A second instance of `node`, configured as the first was.
+    std::unique_ptr<EffectProcessor> CreateDualMonoTwin(const GraphNode& node, std::vector<PendingResourceLoad>* loads);
     void AllocateBuffers(int maxBlockSize);
     [[nodiscard]] NodeState* FindNodeState(const std::string& id);
     [[nodiscard]] const NodeState* FindNodeState(const std::string& id) const;
@@ -396,6 +500,8 @@ class SignalGraphExecutor
     ResourceLibrary* mResourceLibrary = nullptr;
 
     std::map<std::string, NodeState> mNodeStates;
+    std::vector<PendingResourceLoad> mPendingResourceLoads;
+
     // Config applied to every node of a given type at creation — see SetNodeTypeConfigDefault().
     std::map<std::string, std::map<std::string, std::string>> mNodeTypeConfigDefaults;
     std::vector<std::string> mExecutionOrder;
@@ -419,11 +525,12 @@ class SignalGraphExecutor
     };
 
     std::vector<AutomationNode> mAutomationNodes;
-    /// Processors whose type declares requiresTempo, resolved once per plan build.
-    /// SetTempo() runs on the audio thread every block, and asking the registry which
-    /// nodes are tempo-aware there meant a string copy and an EffectTypeInfo copy — a
-    /// deep one, parameter and preset vectors included — per node per block.
-    std::vector<EffectProcessor*> mTempoAwareProcessors;
+    /// Nodes whose type declares requiresTempo, resolved once per plan build. SetTempo() runs
+    /// on the audio thread every block, and asking the registry which nodes are tempo-aware
+    /// there meant a string copy and an EffectTypeInfo copy — a deep one, parameter and preset
+    /// vectors included — per node per block. A node, not a processor: a dual-mono second
+    /// instance installed later hears the tempo too.
+    std::vector<NodeState*> mTempoAwareStates;
     /// Last tempo pushed to those processors. Tracked so an unchanged tempo — every block
     /// but the handful where it actually moves — costs a comparison instead of a SetParam
     /// walk through each effect's string-keyed parameter dispatch.
@@ -453,7 +560,9 @@ class SignalGraphExecutor
     double mOutputTrim = 0.0;
     bool mIsValid = false;
     bool mPrepared = false;
-    bool mLastOutputStereo = false;
+    ChannelLayout mInputLayout = ChannelLayout::Stereo;
+    bool mOutputStereo = false;
+    bool mDualMono = false;
 
     // Last block's totals, published by the audio thread and read by the message thread.
     //
@@ -469,7 +578,6 @@ class SignalGraphExecutor
 
     std::atomic<bool> mSignalDiagnosticsEnabled{true};
     std::atomic<bool> mParallelLevelsEnabled{true};
-    bool mNamInputModeMono = false;
 
     // Parallel node processing within one graph level. Prepare() starts the workers, sized to
     // the widest level, and only for a graph with a level worth fanning out.

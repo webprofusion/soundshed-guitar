@@ -2,13 +2,13 @@
  * @file ModulationStereoTests.cpp
  * @brief Holds the executor to the stereo image modulation effects make from a mono input.
  *
- * Chorus and flanger run the right channel's LFO a quarter cycle ahead of the left, so a mono
- * input comes out stereo. The executor keeps that only when the effect says so through
- * ProducesStereoOutput(); otherwise the next mono-capable node (an amp, a drive pedal) runs on
- * the left channel alone and copies it right, and the output node does the same. Phaser,
- * tremolo and the wahs move both channels together, so they must leave a following amp on its
- * mono path, which is half the cost of the stereo one for a NAM model. The doubler is here too:
- * the default global post chain stores it under "modulation", so its own claim is all it has.
+ * Chorus and flanger run the right channel's LFO a quarter cycle ahead of the left, the doubler
+ * subtracts on the right, tremolo's Pan and the rotary's mics place the signal: each can turn a
+ * mono input stereo, so each type declares that it can widen (EffectProcessor::CanWiden), and the
+ * executor runs everything after it in stereo from the moment the graph is built. Nothing is
+ * decided per block, so turning a Mix or a Depth up from zero is heard at once, with no switch.
+ * Phaser, vibe and the wahs move both channels together: they declare they cannot widen, so a
+ * following amp keeps its mono path, which is half the cost of the stereo one for a NAM model.
  */
 
 #include "dsp/EffectGuids.h"
@@ -82,6 +82,11 @@ class MonoPathProbe : public guitarfx::EffectProcessor
     [[nodiscard]] bool SupportsMonoProcessing() const override
     {
         return true;
+    }
+
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -237,6 +242,7 @@ ChainRun RunGraph(const guitarfx::SignalGraph& graph, const BeforeBlock& beforeB
     RegisterEffects();
 
     guitarfx::SignalGraphExecutor executor;
+    executor.SetInputLayout(guitarfx::ChannelLayout::Mono); // a guitar on one input
     executor.SetGraph(graph);
     executor.Prepare(kSampleRate, kBlock);
 
@@ -281,7 +287,7 @@ ChainRun RunChain(const std::vector<Stage>& stages, const BeforeBlock& beforeBlo
 }
 
 /// Runs the effect on its own, outside the executor, with the same signal on both inputs.
-/// Returns how far apart its two outputs came, and what it said about them.
+/// Returns how far apart its two outputs came, and whether its type declares it can widen.
 std::pair<double, bool> DirectChannelDifference(const std::string& type, const Params& params)
 {
     RegisterEffects();
@@ -315,7 +321,7 @@ std::pair<double, bool> DirectChannelDifference(const std::string& type, const P
         effect->Process(in, out, kBlock);
     }
 
-    return {MaxChannelDifference(left, right), effect->ProducesStereoOutput()};
+    return {MaxChannelDifference(left, right), effect->CanWiden()};
 }
 
 struct ModulationCase
@@ -326,7 +332,14 @@ struct ModulationCase
     const char* label;
 };
 
-/// Each effect's claim about its stereo output must match what it does.
+/// A type that can turn a mono input stereo under some settings declares it can widen; one that
+/// never does declares it cannot.
+bool ExpectedCanWiden(const std::string& type)
+{
+    return type == kDelayDoubler || type == kChorus || type == kFlanger || type == kTremolo || type == kRotary;
+}
+
+/// Each effect does what it says, and its type declares what it can do.
 void TestEffectsDeclareWhatTheyDo()
 {
     const std::vector<ModulationCase> cases = {
@@ -366,13 +379,14 @@ void TestEffectsDeclareWhatTheyDo()
         if (c.stereo)
         {
             Check(difference > kDistinct, std::string(c.label) + ": a mono input comes out stereo" + detail);
-            Check(declared, std::string(c.label) + ": ProducesStereoOutput says so" + detail);
         }
         else
         {
             Check(difference < kIdentical, std::string(c.label) + ": a mono input stays mono" + detail);
-            Check(!declared, std::string(c.label) + ": ProducesStereoOutput says mono" + detail);
         }
+
+        Check(declared == ExpectedCanWiden(c.type), std::string(c.label) + ": the type declares " +
+                                                        (ExpectedCanWiden(c.type) ? "it can" : "it cannot") + " widen");
     }
 }
 
@@ -402,9 +416,8 @@ void TestChorusAndFlangerReachTheOutputStereo()
     }
 }
 
-/// The default global post chain stores its doubler under "modulation", which the executor does
-/// not count as stereo, so on a mono rig the output node used to copy the doubler's left channel
-/// over its right: a comb filter on both sides instead of width.
+/// On a mono rig the output node used to copy the global doubler's left channel over its right: a
+/// comb filter on both sides instead of width.
 void TestGlobalPostChainDoublerReachesTheOutputStereo()
 {
     auto graph = guitarfx::GlobalSignalChainConfig::BuildDefaultPostChainGraph();
@@ -417,8 +430,6 @@ void TestGlobalPostChainDoublerReachesTheOutputStereo()
         return;
     }
 
-    // Stored as "delay", the category alone would keep it stereo and this would prove nothing.
-    Check(doubler->category != "delay", "the default doubler node is not stored as \"delay\"");
     doubler->enabled = true;
 
     const auto run = RunGraph(graph);
@@ -427,8 +438,7 @@ void TestGlobalPostChainDoublerReachesTheOutputStereo()
           "global post-chain doubler keeps its stereo (channels " + std::to_string(difference) + " apart)");
 }
 
-/// Registers a composite (custom effect) wrapping `stages`, under a category the executor does
-/// not count as stereo, so only the composite's own claim can keep its output apart.
+/// Registers a composite (custom effect) wrapping `stages`.
 std::string RegisterComposite(const std::string& id, const std::vector<Stage>& stages)
 {
     RegisterEffects();
@@ -472,7 +482,7 @@ void TestCompositeKeepsItsInteriorStereo()
           "composite chorus -> mono-capable node runs its stereo path (mono " + std::to_string(probed.probeMonoBlocks) +
               ", stereo " + std::to_string(probed.probeStereoBlocks) + ")");
 
-    // And it claims no more than its interior makes.
+    // And it widens no more than its interior can.
     const auto phaser = RegisterComposite("test-composite-phaser", {{"mod", kPhaser, {}}});
     const auto mono = RunChain({{"composite", phaser, {}}, {"probe", kProbeType, {}}});
     Check(mono.probeMonoBlocks == kBlocks && mono.probeStereoBlocks == 0,
@@ -480,30 +490,35 @@ void TestCompositeKeepsItsInteriorStereo()
               std::to_string(mono.probeStereoBlocks) + ")");
 }
 
-/// A chorus or flanger that cannot make the channels differ leaves the next node on its mono path.
-void TestSilentModulationKeepsTheMonoPath()
+/// A widening type keeps what follows it stereo even while it is not widening, so turning it up
+/// later needs nothing to switch. The channels are still identical: stereo with the same samples.
+void TestWideningTypesKeepWhatFollowsStereo()
 {
     const std::vector<std::pair<const char*, Params>> settings = {
         {kChorus, {{"mix", 0.0}}},
         {kChorus, {{"depth", 0.0}}},
         {kFlanger, {{"mix", 0.0}}},
         {kFlanger, {{"depth", 0.0}}},
+        {kTremolo, {}},
+        {kRotary, {{"spread", 0.0}}},
     };
 
     for (const auto& [type, params] : settings)
     {
         const auto run = RunChain({{"mod", type, params}, {"probe", kProbeType, {}}});
-        Check(run.probeMonoBlocks == kBlocks && run.probeStereoBlocks == 0,
-              NameOf(type) + " with " + params.begin()->first + " at zero leaves the next node mono (mono " +
-                  std::to_string(run.probeMonoBlocks) + ", stereo " + std::to_string(run.probeStereoBlocks) + ")");
+        const std::string what = NameOf(type) + (params.empty() ? "" : " with " + params.begin()->first + " at zero");
+        Check(run.probeStereoBlocks == kBlocks && run.probeMonoBlocks == 0,
+              what + " keeps the next node stereo (mono " + std::to_string(run.probeMonoBlocks) + ", stereo " +
+                  std::to_string(run.probeStereoBlocks) + ")");
+        Check(MaxChannelDifference(run.left, run.right) < kIdentical, what + " still puts out identical sides");
     }
 }
 
-/// Phaser, tremolo and the wah on either control must not push a following amp onto its stereo path.
+/// Phaser, vibe and the wah on either control leave a following amp on its mono path.
 void TestMonoModulationKeepsTheMonoPath()
 {
     const std::vector<std::pair<const char*, Params>> stages = {
-        {kPhaser, {}}, {kTremolo, {}}, {kWah, {}}, {kWah, {{"control", 1.0}}}};
+        {kPhaser, {}}, {kVibe, {}}, {kWah, {}}, {kWah, {{"control", 1.0}}}};
 
     for (const auto& [type, params] : stages)
     {
@@ -514,48 +529,44 @@ void TestMonoModulationKeepsTheMonoPath()
     }
 }
 
-/// Mix automated up from zero moves the next node onto its stereo path, and back down returns it.
-void TestAutomatedMixSwitchesThePath()
+/// Mix automated up from zero is heard in the block it lands in, and the node after the chorus
+/// never changes path: it was stereo all along.
+void TestAutomatedMixNeverSwitchesThePath()
 {
     constexpr int kUpAt = 10;
-    constexpr int kDownAt = 25;
-    std::vector<bool> stereoBlocks;
-    int lastStereo = 0;
+    int monoBlocks = -1;
 
-    RunChain({{"mod", kChorus, {{"mix", 0.0}}}, {"probe", kProbeType, {}}},
-             [&](guitarfx::SignalGraphExecutor& executor, int block) {
-                 if (const auto* probe = dynamic_cast<const MonoPathProbe*>(executor.GetNodeProcessor("probe")))
-                 {
-                     if (block > 0)
+    const auto run =
+        RunChain({{"mod", kChorus, {{"mix", 0.0}}}, {"probe", kProbeType, {}}},
+                 [&](guitarfx::SignalGraphExecutor& executor, int block) {
+                     if (const auto* probe = dynamic_cast<const MonoPathProbe*>(executor.GetNodeProcessor("probe")))
                      {
-                         stereoBlocks.push_back(probe->stereoBlocks > lastStereo);
+                         monoBlocks = probe->monoBlocks;
                      }
 
-                     lastStereo = probe->stereoBlocks;
-                 }
-
-                 if (auto* chorus = executor.GetNodeProcessor("mod"))
-                 {
                      if (block == kUpAt)
                      {
-                         chorus->SetParam("mix", 0.3);
+                         if (auto* chorus = executor.GetNodeProcessor("mod"))
+                         {
+                             chorus->SetParam("mix", 0.5);
+                         }
                      }
-                     else if (block == kDownAt)
-                     {
-                         chorus->SetParam("mix", 0.0);
-                     }
-                 }
-             });
+                 });
 
-    // stereoBlocks[b] records block b, for every block but the last.
-    Check(static_cast<int>(stereoBlocks.size()) == kBlocks - 1, "every block was observed");
+    Check(monoBlocks == 0 && run.probeStereoBlocks == kBlocks, "the node after the chorus never runs mono");
 
-    for (int block = 0; block < static_cast<int>(stereoBlocks.size()); ++block)
+    const auto upAt = static_cast<size_t>(kUpAt) * kBlock;
+    std::vector<float> beforeL(run.left.begin(), run.left.begin() + static_cast<std::ptrdiff_t>(upAt));
+    std::vector<float> beforeR(run.right.begin(), run.right.begin() + static_cast<std::ptrdiff_t>(upAt));
+    double after = 0.0;
+
+    for (size_t i = upAt + kBlock; i < run.left.size(); ++i)
     {
-        const bool expected = block >= kUpAt && block < kDownAt;
-        Check(stereoBlocks[static_cast<size_t>(block)] == expected,
-              "block " + std::to_string(block) + " runs the next node " + (expected ? "stereo" : "mono"));
+        after = std::max(after, std::abs(static_cast<double>(run.left[i]) - run.right[i]));
     }
+
+    Check(MaxChannelDifference(beforeL, beforeR) < kIdentical, "with Mix at zero the sides are identical");
+    Check(after > kDistinct, "Mix turned up widens at once (channels " + std::to_string(after) + " apart)");
 }
 } // namespace
 
@@ -565,9 +576,9 @@ int main()
     TestChorusAndFlangerReachTheOutputStereo();
     TestGlobalPostChainDoublerReachesTheOutputStereo();
     TestCompositeKeepsItsInteriorStereo();
-    TestSilentModulationKeepsTheMonoPath();
+    TestWideningTypesKeepWhatFollowsStereo();
     TestMonoModulationKeepsTheMonoPath();
-    TestAutomatedMixSwitchesThePath();
+    TestAutomatedMixNeverSwitchesThePath();
 
     if (gFailures > 0)
     {

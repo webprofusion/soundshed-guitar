@@ -24,6 +24,17 @@ namespace guitarfx
 class DelayEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off ping-pong (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         mSampleRate = sampleRate;
@@ -69,27 +80,10 @@ class DelayEffect : public EffectProcessor
         const float ducking = static_cast<float>(mDucking);
         const float lfoStep = static_cast<float>(mModRate / mSampleRate);
         const float modAmp = static_cast<float>(mModDepth * 0.001 * mSampleRate);
-        const bool pingPong = (mStereoMode == 1);
+        // Dual mono keeps each side's repeats to itself: no ping-pong.
+        const bool pingPong = (mStereoMode == 1) && !mDualMono.load(std::memory_order_relaxed);
         const bool reverse = (mDirection == 1);
         const bool hasRightInput = (inputs[1] != nullptr);
-        bool dualMonoInput = false;
-
-        if (hasRightInput && inputs[0] && inputs[1])
-        {
-            dualMonoInput = true;
-            constexpr float kDualMonoEpsilon = 1.0e-6f;
-
-            for (int i = 0; i < numSamples; ++i)
-            {
-                if (std::abs(inputs[0][i] - inputs[1][i]) > kDualMonoEpsilon)
-                {
-                    dualMonoInput = false;
-                    break;
-                }
-            }
-        }
-
-        const bool monoSource = !hasRightInput || dualMonoInput;
         const size_t bufSize = mBufferL.size();
         const double maxDelay = static_cast<double>(bufSize - 2);
 
@@ -113,19 +107,22 @@ class DelayEffect : public EffectProcessor
             const float inL = inputs[0] ? inputs[0][i] : 0.0f;
             const float inR = hasRightInput ? inputs[1][i] : inL;
 
-            // In ping-pong mode with mono/dual-mono input, keep source energy
-            // centered but add a small side bias so repeats can alternate L/R.
+            // Ping-pong feeds the lines from mid and side: the mid goes in leaning left (0.8 to
+            // 0.2) so the repeats have something to bounce, and the side keeps its place. With
+            // identical sides that is the centred-plus-skew feed a mono source always had; with
+            // a stereo input the image survives. Continuous, so nothing has to decide per block
+            // whether the input is "really" mono.
             float delayInL = inL;
             float delayInR = inR;
 
-            if (pingPong && monoSource)
+            if (pingPong)
             {
-                constexpr float kPingPongSkew = 0.3f;
-                const float monoIn = inL;
-                const float center = monoIn * 0.5f;
-                const float skew = monoIn * kPingPongSkew;
-                delayInL = center + skew;
-                delayInR = center - skew;
+                constexpr float kPingPongLeftShare = 0.8f;
+                constexpr float kPingPongRightShare = 0.2f;
+                const float mid = 0.5f * (inL + inR);
+                const float side = 0.5f * (inL - inR);
+                delayInL = kPingPongLeftShare * mid + side;
+                delayInR = kPingPongRightShare * mid - side;
             }
 
             if (std::abs(inL) > mEnvelopeL)
@@ -372,11 +369,6 @@ class DelayEffect : public EffectProcessor
         return "delay";
     }
 
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mStereoMode == 1;
-    }
-
   private:
     [[nodiscard]] double GetEffectiveDelayMs() const
     {
@@ -480,6 +472,7 @@ class DelayEffect : public EffectProcessor
     double mLowCutHz = 20.0;
     double mBpm = tempo_sync::kDefaultBpm;
     int mStereoMode = 0;
+    std::atomic<bool> mDualMono{false};
     int mDirection = 0;
     int mSyncMode = tempo_sync::kSyncModeOff;
     int mSyncDivision = 4;

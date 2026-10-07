@@ -116,38 +116,6 @@ class RingModEffect : public EffectProcessor
         Render(inL, inR, outputs[0], outputs[1], numSamples);
     }
 
-    /// Mono-capable only while the two channels' carriers are identical.
-    [[nodiscard]] bool SupportsMonoProcessing() const override
-    {
-        return IsLocked();
-    }
-
-    /// Spread gives the two channels different carriers, so a mono input comes out stereo. Stays
-    /// true after Spread returns to zero until the right carrier has locked back onto the left.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return !IsLocked();
-    }
-
-    void ProcessMono(float* input, float* output, int numSamples) override
-    {
-        if (!output || numSamples <= 0)
-        {
-            return;
-        }
-
-        if (!input)
-        {
-            std::fill_n(output, numSamples, 0.0f);
-            return;
-        }
-
-        Render(input, nullptr, output, nullptr, numSamples);
-
-        // The right channel shadows the left, so a later stereo block carries straight on.
-        mChannels[1] = mChannels[0];
-    }
-
     void SetParam(const std::string& key, double value) override
     {
         if (!IsFinite(value))
@@ -529,7 +497,7 @@ class RingModEffect : public EffectProcessor
         return input + mMix * (v2 * mLevel - input);
     }
 
-    /// `inR` null runs the left channel alone (ProcessMono).
+    /// `inR` null runs the left channel alone.
     void Render(const float* inL, const float* inR, float* outL, float* outR, int numSamples)
     {
         ComputeTargets();

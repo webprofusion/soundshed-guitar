@@ -156,6 +156,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `updateSignalPathNodeParam` | `{nodeId, paramId, value}` | Update effect parameter |
 | `updateSignalPathNodeBypass` | `{nodeId, bypassed}` | Bypass/enable effect |
 | `renameSignalPathNode` | `{nodeId, title}` | Give a node a name of the user's own, stored as the node's `title` in every scene. The title is trimmed and capped at 128 bytes; an empty one hands the node back its automatic name. Answered by `state` |
+| `setSignalPathNodeChannelMode` | `{nodeId, channelMode}` | How a node takes a stereo input, stored as the node's `channelMode` in every scene: `""` follows the input; `mono`, `monoLeft` or `monoRight` fold a stereo input (summed, or one side), run the node mono and put out mono. Rebuilds the chain, since layout is resolved when a chain is built. Answered by `state` |
 | `updateNodeResource` | `{nodeId, resource}` | Change node resource |
 | `browseNodeResource` | `{nodeId}` | Browse for node resource |
 | `addActivePreset` | `{presetId}` | Add preset to multi-mixer |
@@ -170,7 +171,7 @@ The UI is a web-based single-page application (SPA) hosted in a native WebView. 
 | `loadCompositePreset` | `{id}` | Replace the mixer with a saved Multi-Rig's slots, levels and mix gain. The instance's output gain is left alone, as with any preset load |
 | `getCompositePresetList` | `{}` | Request `compositePresetList` |
 | `removeCompositePreset` | `{id}` | Delete a saved Multi-Rig preset |
-| `setInputMode` | `{mode}` | Set input mode (mono/stereo) |
+| `setInputMode` | `{mode?, monoMode?, inputChannel?, dualMono?}` | Choose what the chains are fed. `mode` is `mono1`, `mono2`, `monoSum` (mono from input 1, input 2, or both summed), `stereo` or `dualMono`; the older `monoMode` + `inputChannel` (0, 1, or 2 for summed) + `dualMono` still work. In a DAW the track's bus decides mono or stereo and only `dualMono` takes effect. An empty payload just asks for the state. Locked against the audio thread. Replies `inputModeChanged`: `{mode, monoMode, inputChannel, dualMono, effectiveMode, hostControlled, inputChannels, outputChannels, dualMonoShared}`, where `effectiveMode` (`mono`, `stereo`, `dualMono`) is what is in force after the bus, the device's channel counts and the fallbacks (one input is mono; dual mono on one output is the inputs summed). `dualMonoShared` counts the effects still hearing both sides in dual mono: hosted plugins, which cannot be doubled up. Also sent when a device or bus change moves the channel counts |
 | `setAmpCabState` | `{...}` | Set amp/cab enable state |
 | `setMetronome` | `{bpm?, enabled?, volumeDb?, pan?, clickType?, clickConfig?, beatPattern?, timeSigNum?, timeSigDen?, grouping?, subdivision?}` | Update metronome settings. The engine normalises before storing: a grouping that does not add up to the bar is dropped, and a meter change re-seeds `beatPattern` unless the same message carries one. |
 | `tuner` | `{action}` | Start/stop/configure tuner |

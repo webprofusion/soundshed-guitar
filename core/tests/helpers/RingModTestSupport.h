@@ -162,7 +162,7 @@ inline double Amplitude(const std::vector<float>& x, double frequency, double sa
 
 /// The two channels of a mono input agree to rounding, not bit for bit: under /arch:AVX2 with
 /// /fp:fast the compiler may fuse the left and right channels' multiply-adds differently
-/// (measured 7.6e-7 apart). Nothing relies on more; mono-ness is what ProducesStereoOutput says.
+/// (measured 7.6e-7 apart). Nothing relies on more.
 constexpr float kChannelTolerance = 1.0e-5f;
 
 inline float MaxDifference(const std::vector<float>& a, const std::vector<float>& b)

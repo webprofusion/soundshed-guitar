@@ -542,11 +542,9 @@ void TestOutput()
     HarmonizerEffect fx;
     fx.Prepare(kRate, kBlock);
     Check(fx.GetLatencySamples() == 0, "reports no latency: the guitar is not delayed");
-    Check(!fx.ProducesStereoOutput(), "centred voices keep a mono input mono");
-    fx.SetParam("voice1Pan", 0.4);
-    Check(fx.ProducesStereoOutput(), "a voice panned off centre makes it stereo");
-    fx.SetParam("voice1On", 0.0);
-    Check(!fx.ProducesStereoOutput(), "a panned voice that is off does not");
+    // A voice can be panned, so the type declares it can widen and a graph keeps what follows a
+    // harmonizer in stereo; panning a voice is then heard at once.
+    Check(fx.CanWiden(), "declared able to widen, since a voice can be panned");
 
     // High Cut takes the top off the harmony.
     const auto bright = Mono(Render(Line({64}, 0.6), {}));

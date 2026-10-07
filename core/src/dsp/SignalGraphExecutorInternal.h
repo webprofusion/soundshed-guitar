@@ -90,21 +90,6 @@ inline LevelStats ComputeLevelStats(const float* left, const float* right, int n
     return stats;
 }
 
-/// Node types whose output can be stereo even when their input is not, judged by the category
-/// the graph node carries. "modulation" is deliberately absent: most of that category (wah,
-/// phaser, tremolo) moves both channels together, and calling it stereo would put a following
-/// NAM node on its stereo path at about twice the cost. A modulation effect that does widen a
-/// mono input (chorus, flanger, ring mod's Spread) says so through ProducesStereoOutput().
-inline bool NodeMayProduceStereo(const std::string& type, const std::string& category)
-{
-    if (type == kNodeTypeInput || type == kNodeTypeOutput || type == kNodeTypeSplitter || type == kNodeTypeMixer)
-    {
-        return false;
-    }
-
-    return category == "delay" || category == "reverb";
-}
-
 inline bool IsNamNodeType(const std::string& type)
 {
     return type == EffectGuids::kAmpNam || type == EffectGuids::kAmpNamOptimized || type == EffectGuids::kAmpNamBlend ||

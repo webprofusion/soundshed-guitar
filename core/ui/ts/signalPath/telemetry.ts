@@ -226,14 +226,32 @@ export function formatAnalyzerNumeric(value: number, unit: string, fractionDigit
   return `${value.toFixed(fractionDigits)} ${unit}`;
 }
 
-export function formatAnalyzerChannelMode(levels: InputAnalyzerLevelTelemetry): string {
-  const isStereo = typeof levels.channelMode === "string"
+/**
+ * The Channels row: the layout the engine runs this node in (configured, never guessed), with
+ * what the analyzer measures as a hint when the two disagree. A stereo input whose second side
+ * is silent, or carries the same signal, is still processed as two sides; the hint says so, so
+ * the player can switch the input to mono rather than wonder why.
+ */
+export function formatAnalyzerChannelMode(levels: InputAnalyzerLevelTelemetry, configuredChannels?: number): string {
+  const measuredStereo = typeof levels.channelMode === "string"
     ? levels.channelMode.toLowerCase() === "stereo"
     : Boolean(levels.stereo);
-  const label = isStereo ? "Stereo" : "Mono";
-  const channels = levels.activeChannelCount;
-  if (Number.isFinite(channels) && (channels as number) > 0) {
-    return `${label} (${channels} ch)`;
+  const activeChannels = levels.activeChannelCount;
+
+  if (configuredChannels === 1) {
+    return "Mono";
+  }
+
+  if (configuredChannels === 2) {
+    if (Number.isFinite(activeChannels) && activeChannels === 1) {
+      return "Stereo · one side silent";
+    }
+    return measuredStereo ? "Stereo" : "Stereo · sides identical";
+  }
+
+  const label = measuredStereo ? "Stereo" : "Mono";
+  if (Number.isFinite(activeChannels) && (activeChannels as number) > 0) {
+    return `${label} (${activeChannels} ch)`;
   }
   return label;
 }
@@ -412,7 +430,7 @@ export function updateSelectedNodeAnalyzerPanel(): void {
   if (momentaryLufsEl) momentaryLufsEl.textContent = formatAnalyzerLufs(levels.momentaryLufs, levels.loudnessValid !== false);
   if (shortTermLufsEl) shortTermLufsEl.textContent = formatAnalyzerLufs(levels.shortTermLufs, levels.loudnessValid !== false);
   if (integratedLufsEl) integratedLufsEl.textContent = formatAnalyzerLufs(levels.integratedLufs, levels.loudnessValid !== false);
-  if (channelModeEl) channelModeEl.textContent = formatAnalyzerChannelMode(levels);
+  if (channelModeEl) channelModeEl.textContent = formatAnalyzerChannelMode(levels, diagnostics?.channelCount);
   if (peakDbfsEl) peakDbfsEl.textContent = formatAnalyzerNumeric(percentFsToDbfs(levels.peakPercent), "dBFS");
   if (rmsDbfsEl) rmsDbfsEl.textContent = formatAnalyzerNumeric(percentFsToDbfs(levels.rmsPercent), "dBFS");
 

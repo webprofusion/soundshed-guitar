@@ -19,7 +19,7 @@ For normal playback, level handling happens in this order:
 
 1. Raw stereo input enters the mixer.
 2. Raw input diagnostics are measured.
-3. Optional mono mode can copy one input channel to both sides.
+3. The input mode can put one input, or both summed, on both sides (Mono); a DAW's bus decides instead.
 4. The active user input calibration profile applies one fixed gain change.
 5. Legacy mixer-wide auto input could run here, but the controller currently keeps it off.
 6. Input diagnostics are measured again after the active input processing.

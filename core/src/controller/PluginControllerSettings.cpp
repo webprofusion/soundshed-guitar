@@ -12,6 +12,7 @@
 #include "controller/MetronomeService.h"
 
 #include "controller/internal/ControllerUtils.h"
+#include "controller/internal/InputModeSettings.h"
 #include "controller/internal/MetronomeSupport.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
@@ -130,25 +131,13 @@ void PluginController::ApplyInputModeSettingsFromAppSettings()
         return;
     }
 
-    // Key names must match the UI constants in controls.ts:
-    //   INPUT_CHANNEL_SETTING  = "inputChannel.mono"
-    //   MONO_MODE_SETTING      = "inputChannel.monoMode"
-    constexpr auto kMonoModeKey = "inputChannel.monoMode";
-    constexpr auto kInputChanKey = "inputChannel.mono";
-
-    const auto monoIt = mAppSettings.find(kMonoModeKey);
-    const auto chanIt = mAppSettings.find(kInputChanKey);
-
-    const bool storedMonoMode = (monoIt != mAppSettings.end() && monoIt->is_boolean())
-                                    ? monoIt->get<bool>()
-                                    : true; // Default to mono mode so the guitar comes through on startup
-
-    const int storedChannel =
-        (chanIt != mAppSettings.end() && chanIt->is_number_integer()) ? std::clamp(chanIt->get<int>(), 0, 1) : 0;
+    // Key names must match the UI constants in controls.ts (see InputModeSettings.h).
+    const StoredInputMode stored = ReadStoredInputMode(mAppSettings);
 
     std::lock_guard<std::mutex> lock(mDSPMutex);
-    mPresetMixer.SetMonoMode(storedMonoMode);
-    mPresetMixer.SetInputChannel(storedChannel);
+    mPresetMixer.SetMonoMode(stored.monoMode);
+    mPresetMixer.SetInputChannel(stored.inputChannel);
+    mPresetMixer.SetDualMono(stored.dualMono);
 }
 
 void PluginController::ApplyGlobalFxSettingsFromAppSettings()

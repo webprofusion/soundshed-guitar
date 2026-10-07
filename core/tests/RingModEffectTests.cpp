@@ -413,11 +413,11 @@ void TestStereoSpread()
     auto out = RunMono(*ring, input);
     Check(MaxDifference(out.left, out.right) < kChannelTolerance, "without Spread a mono input stays mono",
           "channels within " + Num(MaxDifference(out.left, out.right), 9));
-    Check(!ring->ProducesStereoOutput() && ring->SupportsMonoProcessing(), "and the effect offers the mono path");
+    // Spread can turn a mono input stereo, so the type declares it can widen: a graph keeps what
+    // follows a ring modulator in stereo, and turning Spread up is heard at once.
+    Check(ring->CanWiden(), "declared able to widen, since Spread does");
 
     ring->SetParam("spread", 1.0);
-    Check(ring->ProducesStereoOutput() && !ring->SupportsMonoProcessing(),
-          "turning Spread up reports stereo before the next block");
     out = RunMono(*ring, input);
     const std::size_t half = out.left.size() / 2;
     double difference = 0.0;
@@ -435,42 +435,8 @@ void TestStereoSpread()
     ring->SetParam("spread", 0.0);
     RunMono(*ring, Sines({{330.0, 0.3}}, 2.0));
     out = RunMono(*ring, Sines({{330.0, 0.3}}, 0.5));
-    Check(MaxDifference(out.left, out.right) < kChannelTolerance && !ring->ProducesStereoOutput(),
+    Check(MaxDifference(out.left, out.right) < kChannelTolerance,
           "letting Spread go locks the right carrier back onto the left");
-}
-
-void TestMonoPath()
-{
-    std::cout << "\nMono path" << std::endl;
-    const auto input = Sines({{196.0, 0.4}, {392.0, 0.2}}, 0.5);
-
-    for (const double mode : {0.0, 1.0})
-    {
-        const Params params = {
-            {"frequency", 523.0}, {"waveform", 2.0}, {"lfoDepth", 0.7}, {"lfoShape", 3.0}, {"mode", mode}};
-        const std::string label = mode > 0.0 ? " (Tracking)" : " (Fixed)";
-        auto stereo = MakeRing(params);
-        auto mono = MakeRing(params);
-
-        const auto reference = RunMono(*stereo, input);
-        std::vector<float> monoOut(input.size());
-
-        // The same block boundaries as Run, so both see the same control-rate ticks.
-        for (std::size_t start = 0; start < input.size(); start += kBlockSize)
-        {
-            const int count = static_cast<int>(std::min<std::size_t>(kBlockSize, input.size() - start));
-            mono->ProcessMono(const_cast<float*>(input.data() + start), monoOut.data() + start, count);
-        }
-
-        Check(monoOut == reference.left, "ProcessMono matches the stereo path sample for sample" + label);
-
-        // Then a stereo block carries on from the mono one as if it had run all along.
-        const auto more = Sines({{196.0, 0.4}}, 0.1);
-        const auto a = RunMono(*stereo, more);
-        const auto b = RunMono(*mono, more);
-        Check(a.left == b.left && MaxDifference(a.right, b.right) < kChannelTolerance,
-              "and a stereo block picks up where it left off" + label);
-    }
 }
 
 /// A steady note: harmonics 1 to 5, falling off as 1/k.
@@ -640,7 +606,6 @@ int main()
     TestFrequencySnapAndGlide();
     TestWaveformFade();
     TestStereoSpread();
-    TestMonoPath();
     TestTracking();
     TestLowSampleRate();
     TestNonFiniteRecovery();

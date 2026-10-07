@@ -286,6 +286,7 @@ bool TestExecutorTapsTheNodeInput()
     bool ok = true;
 
     SignalGraphExecutor executor;
+    executor.SetInputLayout(ChannelLayout::Mono); // a guitar on one input
     executor.SetGraph(MakeEqGraph());
     executor.Prepare(kSampleRate, 128);
     SineSource sine(1000.0, 0.5);

@@ -1333,7 +1333,20 @@ namespace guitarfx
         const int totalChannels = mWorkBuffer.getNumChannels();
         // An instrument has no audio input; what it finds in the buffer is its output, which a
         // plugin that mixes its voices in would otherwise add to the guitar.
-        const bool takesAudio = mPlugin && mPlugin->getTotalNumInputChannels() > 0;
+        const int pluginInputs = mPlugin ? mPlugin->getTotalNumInputChannels() : 0;
+        const bool takesAudio = pluginInputs > 0;
+        // A plugin that only loaded with a mono layout hears channel 0 alone, so give it both
+        // sides summed rather than drop the right one. Identical sides sum to exactly the left.
+        if (pluginInputs == 1 && inputs[0] != nullptr && inputs[1] != nullptr)
+        {
+            auto* dest = mWorkBuffer.getWritePointer (0);
+            const float halfGain = 0.5f * inputGain;
+            for (int i = 0; i < numSamples; ++i)
+                dest[i] = (inputs[0][i] + inputs[1][i]) * halfGain;
+            for (int ch = 1; ch < totalChannels; ++ch)
+                mWorkBuffer.clear (ch, 0, numSamples);
+            return;
+        }
         for (int ch = 0; ch < totalChannels; ++ch)
         {
             auto* dest = mWorkBuffer.getWritePointer (ch);
@@ -1353,13 +1366,17 @@ namespace guitarfx
     void JuceHostedPluginEffect::CopyWorkBufferToOutputs (float** inputs, float** outputs, int numSamples)
     {
         const float outputGain = DbToLinear (mOutputGainDb);
+        // A plugin with a mono output writes channel 0 only; whatever is left in channel 1 is
+        // the input, not its output. Both sides take channel 0.
+        const bool monoOutput = mPlugin != nullptr && mPlugin->getTotalNumOutputChannels() == 1;
         for (int ch = 0; ch < 2; ++ch)
         {
             if (!outputs[ch])
                 continue;
 
             const float* dry = inputs[ch];
-            const float* wet = mWorkBuffer.getReadPointer (std::min (ch, mWorkBuffer.getNumChannels() - 1));
+            const int wetChannel = monoOutput ? 0 : std::min (ch, mWorkBuffer.getNumChannels() - 1);
+            const float* wet = mWorkBuffer.getReadPointer (wetChannel);
             for (int i = 0; i < numSamples; ++i)
             {
                 const float drySample = dry ? dry[i] : 0.0f;

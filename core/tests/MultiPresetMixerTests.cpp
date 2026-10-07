@@ -6,6 +6,9 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 using namespace guitarfx;
@@ -294,8 +297,8 @@ int main()
         }
     }
 
-    // A stored input channel beyond the two hardware inputs is held to them: the mono fold and
-    // the tuner both select by it.
+    // A stored input channel beyond input 1, input 2 and the two summed is held to the last: the
+    // mono fold selects by it.
     {
         MultiPresetMixer mixer;
         auto config = GlobalSignalChainConfig::CreateDefault();
@@ -303,11 +306,94 @@ int main()
         config.inputChannel = 7;
         mixer.SetGlobalChainConfig(config);
 
-        if (mixer.GetInputChannel() != 1 || !mixer.IsMonoMode())
+        if (mixer.GetInputChannel() != MultiPresetMixer::kInputChannelSum || !mixer.IsMonoMode())
         {
             std::cerr << "Out-of-range input channel was not clamped" << std::endl;
             allPassed = false;
         }
+    }
+
+    // The input mode decides what the chains hear, never the signal. Mono takes input 1, input 2
+    // or both summed onto both sides; one input is Mono whatever was asked; a mono output gets the
+    // stereo mix summed in rather than its right side dropped; dual mono that cannot be heard on a
+    // mono output falls back to both inputs summed. A passthrough rig at centre pan is -3 dB.
+    {
+        const float centre = static_cast<float>(std::sqrt(0.5));
+        bool layoutOk = true;
+
+        const auto expect = [&](bool condition, const std::string& what) {
+            if (!condition)
+            {
+                std::cerr << "Input layout: " << what << std::endl;
+                layoutOk = false;
+            }
+        };
+
+        // One block of a constant left and right; returns the last output sample of each side.
+        const auto run = [](MultiPresetMixer& mixer, float left, float right, bool rightOutput) {
+            std::vector<float> inL(static_cast<size_t>(kTestBlockSize), left);
+            std::vector<float> inR(static_cast<size_t>(kTestBlockSize), right);
+            std::vector<float> outL(static_cast<size_t>(kTestBlockSize), 0.0f);
+            std::vector<float> outR(static_cast<size_t>(kTestBlockSize), -9.0f);
+            float* inputs[2] = {inL.data(), inR.data()};
+            float* outputs[2] = {outL.data(), rightOutput ? outR.data() : nullptr};
+            mixer.Process(inputs, outputs, kTestBlockSize);
+            return std::pair{outL.back(), outR.back()};
+        };
+
+        const auto near = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
+
+        MultiPresetMixer mixer;
+        ResourceLibrary lib;
+        mixer.SetResourceLibrary(&lib);
+        mixer.Prepare(kTestSampleRate, kTestBlockSize);
+        mixer.AddActivePreset(MakePassthroughPreset("pLayout"), "pLayout", "Layout");
+
+        auto [l, r] = run(mixer, 0.2f, 0.6f, true);
+        expect(mixer.GetEffectiveInputMode() == MultiPresetMixer::InputMode::Stereo, "stereo by default");
+        expect(near(l, 0.2f * centre) && near(r, 0.6f * centre), "stereo keeps each input to its side");
+
+        mixer.SetMonoMode(true);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, true);
+        expect(near(l, 0.2f * centre) && near(r, 0.2f * centre), "Mono input 1 is on both sides");
+
+        mixer.SetInputChannel(MultiPresetMixer::kInputChannelRight);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, true);
+        expect(near(l, 0.6f * centre) && near(r, 0.6f * centre), "Mono input 2 is on both sides");
+
+        mixer.SetInputChannel(MultiPresetMixer::kInputChannelSum);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, true);
+        expect(near(l, 0.4f * centre) && near(r, 0.4f * centre), "Mono summed is half of each input, both sides");
+
+        mixer.SetMonoMode(false);
+        mixer.SetAudioChannelCounts(1, 2);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, true);
+        expect(mixer.GetEffectiveInputMode() == MultiPresetMixer::InputMode::Mono && near(l, 0.2f * centre) &&
+                   near(r, 0.2f * centre),
+               "one input is mono, from input 1, whatever was asked");
+
+        mixer.SetAudioChannelCounts(2, 1);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, false);
+        expect(near(l, 0.4f * centre), "a mono output gets both sides summed, not the left alone");
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, true);
+        expect(near(l, 0.4f * centre) && near(r, 0.4f * centre), "and both channels carry the fold");
+
+        mixer.SetDualMono(true);
+        std::tie(l, r) = run(mixer, 0.2f, 0.6f, false);
+        expect(mixer.GetEffectiveInputMode() == MultiPresetMixer::InputMode::Mono && near(l, 0.4f * centre),
+               "dual mono on a mono output falls back to the inputs summed");
+
+        mixer.SetAudioChannelCounts(2, 2);
+        expect(mixer.GetEffectiveInputMode() == MultiPresetMixer::InputMode::DualMono,
+               "with two outputs it is dual mono again");
+        expect(mixer.GetGlobalChainConfig().dualMono, "and the config the host saves says so");
+
+        if (layoutOk)
+        {
+            std::cout << "MultiPresetMixer input layout test passed" << std::endl;
+        }
+
+        allPassed = allPassed && layoutOk;
     }
 
     // Loading a preset without embedded global chain settings must keep global transpose usable

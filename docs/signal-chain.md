@@ -115,39 +115,86 @@ graph invalid, and an invalid graph outputs silence.
 
 ### Processing Loop
 1. Measure raw input diagnostics.
-2. Apply mono routing and the active user input calibration gain.
+2. Apply the input mode (Mono takes input 1, input 2 or both summed onto both channels) and the
+   active user input calibration gain.
 3. Measure processed input diagnostics.
 4. Process global pre-chain (for example noise gate and transpose).
 5. For each preset: process the preset graph, then mix outputs with pan and mix gain.
 6. Process global post-chain (for example EQ and doubler).
 7. Apply master gain, then final output protection if enabled.
+8. On a mono output, fold the stereo mix into its one channel.
 
 ### Bypass Semantics
 Disabled nodes skip processing; their buffer becomes a pass-through of gathered inputs. The signal path remains connected.
 
-### Stereo Preservation
-When a node's input carries no stereo signal, a node that supports mono processing runs
-`ProcessMono` on the left channel and copies the result to the right, which halves a NAM
-model's cost on a mono guitar. The output node copies left over right on the same condition. So
-an effect that makes a mono input stereo has to say so, or a later node discards its right
-channel:
+### Channel Layout
+Whether each connection carries one signal on both channels (mono) or two (stereo) is decided
+when a graph is built, from the graph's input and the effect types along the path. It is never
+measured from the audio, and it never moves because a knob did.
 
-- **`EffectProcessor::ProducesStereoOutput()`**, checked each block in
-  `SignalGraphExecutorPlan.cpp`, is the mechanism to use. Return `true` only while the channels
-  can actually differ: Chorus and Flanger while Depth and Mix are both above zero, the Doubler
-  while Mix is above zero, the delays and Simple Cab while Spread is on, the IR cab while a
-  slot is panned or L/R split is on, Ring Mod until its right carrier has relocked, 3D Spatial
-  always, and a composite whenever its inner graph's output was stereo.
-- **`NodeMayProduceStereo()`** also treats every node whose category is `delay` or `reverb` as
-  stereo. It reads the category stored on the graph node, not the registry's: the default
-  global post chain stores its Doubler as `modulation`, so that one relies on its own claim.
-  It deliberately leaves out `modulation`: phaser, tremolo and the wahs move both channels
-  together, and counting them as stereo would put a following NAM node on its stereo path at
-  about twice the cost.
+- **The input.** In a DAW the track's bus decides: a mono track is mono, a stereo track stereo,
+  and a mono-in/stereo-out insert is mono in. In the standalone app the input mode decides:
+  Mono takes input 1, input 2 or both summed onto both channels; Stereo and Dual mono keep the
+  two inputs apart. A device with one active input is mono whatever was asked
+  (`MultiPresetMixer::ApplyInputLayout`).
+- **Each effect type declares whether it can widen** (`EffectProcessor::CanWiden`): whether any
+  settings can make its two outputs differ when its two inputs are the same. A pan, a width or
+  spread control, an LFO offset between the sides, or a stereo file all count, even at zero.
+  The default is true, because the mistakes are not alike: a type wrongly left at true costs CPU
+  after it, while one wrongly declared false lets a following mono path drop its right side.
+  `ChannelLayoutTests` drives every type that says false with random settings and holds it to
+  identical outputs. The types that cannot widen are the amps and drives, the EQs, compressors,
+  gate, limiter, gain and input analyzer, the phaser, vibe and wahs, the pitch effects, the
+  synth and Guitar to MIDI.
+- **Resolution** (`SignalGraphExecutor::ResolveChannelLayout`), in execution order: a node's
+  input is stereo if any connection into it is; its output is stereo if its input is or its type
+  can widen. A node runs `ProcessMono` on one channel, copied to the other, only when its input is
+  mono, it has a mono path and its type cannot widen. Everything else runs `Process` on both
+  channels. A mono connection always holds the same samples on both channels: after a node runs
+  in stereo on one, its left is copied over its right.
+- **Between graphs**, the pre-chain takes the input's layout, each rig the pre-chain's output,
+  and the post-chain is stereo, since the Multi-Rig mix bus is.
+- **Changes.** A running graph re-resolves in place when its input layout changes (an input mode
+  or a bus change); anything structural rebuilds the chain anyway. A NAM node on a mono
+  connection loads only its left model; a connection that turns stereo while running builds the
+  right one off the DSP lock (`TakeDeferredRebuild`) while the left covers both sides.
 
-`ModulationStereoTests` holds each modulation effect and the Doubler to what their channels
-actually do, and checks that the image survives a following amp, the output, the default
-global post chain, and being wrapped in a composite.
+Since everything after a node that can widen already runs stereo, turning a pan or a Spread up,
+switching a tremolo to Pan or loading a stereo IR is heard in the block it lands in, with nothing
+to switch. The cost is CPU: an amp placed after a widening effect runs both sides even while that
+effect is not widening. A node's **channel mode** (`GraphNode.channelMode`) is the control for
+that: Mono folds a stereo input (summed, or one side alone), runs the node mono and puts out mono;
+a widening type in Mono has its output summed too. The chain after it is mono again until the next
+type that can widen. Changing it rebuilds the chain.
+
+A mono output (a one-channel bus or device) gets the final mix folded, ½(L+R), rather than its
+right side dropped.
+
+### Dual Mono
+Dual mono keeps a stereo input as two separate chains through the same preset: nothing crosses
+between the sides anywhere, not through a pan and not through a reverb tank. Each side hears what
+a mono input of its own would make (`SignalGraphExecutor::SetDualMono`).
+
+- A type that keeps its channels apart (`EffectProcessor::KeepsChannelsSeparate`) runs as usual.
+  A few of those only keep them apart once `SetDualMono(true)` switches something off: the
+  compressors' and the gate's Stereo Link, the IR cab's slot pan (a balance instead of a fold to
+  mono), the digital delay's ping-pong (each side then repeats on its own), and a true-stereo IR
+  reverb's cross paths.
+- Any other node gets a second instance. The primary runs on the left input, on both channels,
+  and keeps its left output; the second runs on the right and keeps its right. Every operation on
+  a node reaches both: params, bypass, config, resources, deferred rebuilds, automation, tempo,
+  notes. Reverbs, the rotary, 3D Spatial, Ring Mod, the harmonizer, the pitch shifters, Auto Arp,
+  the synth, Guitar to MIDI, the wahs and WASM effects are doubled this way.
+- Hosted plugins cannot be kept in step with their own editor, so they run shared and the input
+  status says so (`dualMonoShared` in `inputModeChanged`).
+- On a running graph the second instances are built off the DSP lock first
+  (`StageDualMonoTwins`), and switching dual mono on only installs them. A node's mono channel
+  mode is off in dual mono, since a fold would cross the sides.
+- It needs two inputs and two outputs; on a mono output it falls back to Mono with both inputs
+  summed. In a DAW it is a per-instance choice for a stereo track, saved with the project.
+
+`DualMonoTests` drives every registered type at its defaults and under random settings and holds
+each side's output to its own input.
 
 ### Note Routing
 Besides audio, the graph carries notes from nodes that make them to nodes that play them

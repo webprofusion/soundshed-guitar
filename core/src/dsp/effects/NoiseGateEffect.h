@@ -42,6 +42,23 @@ namespace guitarfx
 class NoiseGateEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off the stereo link (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     NoiseGateEffect()
     {
         // mSampleRate holds the base class's default until Prepare runs. Derive the
@@ -365,7 +382,9 @@ class NoiseGateEffect : public EffectProcessor
         coefficients.closeThreshold = mCloseThreshold.load(std::memory_order_relaxed);
         coefficients.floorGain = mFloorGain.load(std::memory_order_relaxed);
         coefficients.holdSamples = mHoldSamples.load(std::memory_order_relaxed);
-        coefficients.stereoLink = mStereoLink.load(std::memory_order_relaxed) >= 0.5f;
+        // Dual mono keeps each side to its own detector, whatever Stereo Link says.
+        coefficients.stereoLink =
+            mStereoLink.load(std::memory_order_relaxed) >= 0.5f && !mDualMono.load(std::memory_order_relaxed);
         coefficients.swell = mMode.load(std::memory_order_relaxed) >= 0.5f;
         coefficients.swellStep = mSwellStep.load(std::memory_order_relaxed);
         coefficients.duckCoef = mDuckCoef.load(std::memory_order_relaxed);
@@ -514,6 +533,7 @@ class NoiseGateEffect : public EffectProcessor
     std::atomic<float> mHysteresisDb{4.0f};
     std::atomic<float> mRangeDb{-80.0f};
     std::atomic<float> mStereoLink{1.0f};
+    std::atomic<bool> mDualMono{false};
     std::atomic<float> mMode{0.0f};
     std::atomic<float> mSwellMs{800.0f};
 

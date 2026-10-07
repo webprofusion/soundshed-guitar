@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "dsp/ChannelLayout.h"
 #include "dsp/DeferredRebuild.h"
 #include "presets/PresetTypes.h"
 
@@ -43,18 +44,51 @@ class EffectProcessor
     virtual void Process(float** inputs, float** outputs, int numSamples) = 0;
 
     // Optional mono processing fast path. Effects should override both methods
-    // when they can process a single channel without running stereo code.
+    // when they can process a single channel without running stereo code. The executor only
+    // takes it on a mono connection, and never for a type that CanWiden().
     [[nodiscard]] virtual bool SupportsMonoProcessing() const
     {
         return false;
     }
 
-    // Returns true when this effect instance will produce distinct L and R output
-    // from a mono (identical L=R) input — e.g. due to pan, stereo widening, etc.
-    // The executor uses this to prevent downstream nodes collapsing the stereo field.
-    [[nodiscard]] virtual bool ProducesStereoOutput() const
+    /// Whether any settings of this effect type can make its two outputs differ when its two
+    /// inputs are the same: a pan, a width or spread control, an LFO offset between the sides,
+    /// a stereo file. A fixed fact about the type, not about its current settings: the graph
+    /// turns stereo after every node that can widen, so a user making it stereo later is heard
+    /// at once, with nothing to switch. Defaults to true, because the two mistakes are not
+    /// alike: a type wrongly left at true costs CPU in whatever follows it, while one wrongly
+    /// declared false lets a following mono path drop its right side. ChannelLayoutTests holds
+    /// every type that says false to identical outputs under random settings.
+    [[nodiscard]] virtual bool CanWiden() const
+    {
+        return true;
+    }
+
+    /// Whether this type keeps its two channels apart: output L hears only input L, and output R
+    /// only input R, under any settings, once SetDualMono(true) has switched off whatever it
+    /// links (a shared detector, ping-pong, a pan that folds the sides together). What dual mono
+    /// needs (docs/plans/stereo-input.md, Part 2). A fixed fact about the type. Defaults to false:
+    /// a type left at false gets a second instance in a dual-mono graph, which costs memory and
+    /// CPU but never lets one side reach the other, while one wrongly declared true would.
+    /// ChannelLayoutTests holds every type that says true to it.
+    [[nodiscard]] virtual bool KeepsChannelsSeparate() const
     {
         return false;
+    }
+
+    /// Dual mono on or off. A type that keeps its channels apart only once something is switched
+    /// off (a linked detector, ping-pong, a pan that folds) switches it here. Message thread;
+    /// cheap, and under the DSP lock once the graph is running.
+    virtual void SetDualMono(bool /*dualMono*/)
+    {
+    }
+
+    /// The layout of this node's input, told by the executor when its graph is built and
+    /// whenever its input layout changes (message thread; under the DSP lock once the graph is
+    /// running). A node with a mono path can use it to bring its right side's state level with
+    /// its left before stereo processing starts; a composite hands it to its inner graph.
+    virtual void SetInputLayout(ChannelLayout /*layout*/)
+    {
     }
 
     virtual void ProcessMono(float* input, float* output, int numSamples)
@@ -271,6 +305,16 @@ class PassthroughProcessor : public EffectProcessor
     void Process(float** inputs, float** outputs, int numSamples) override
     {
         CopyStereoInputToOutput(inputs, outputs, numSamples);
+    }
+
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
     }
 
     void SetParam(const std::string&, double) override

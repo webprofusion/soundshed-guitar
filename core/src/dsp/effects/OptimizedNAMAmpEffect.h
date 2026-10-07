@@ -102,6 +102,18 @@ static constexpr double kNamPostDcBlockerQ = 0.7071067811865476;
 class OptimizedNAMAmpEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         rtparallel::DualLaneExecutor::EnsureStarted(); // here, so Process() never starts its thread
@@ -185,7 +197,7 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             mInputBufferR[i] = static_cast<NAM_SAMPLE>(inR * inputGainF);
         }
 
-        if (mModelLeft && mModelRight && mEnabled)
+        if (mModelLeft && mEnabled)
         {
             const float wetMix = static_cast<float>(mMix);
             const float dryMix = 1.0f - wetMix;
@@ -193,7 +205,18 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             const bool toneNeutral = IsToneStackNeutral();
             const bool applyPostDcBlocker = gEnableNamPostDcBlocker;
 
-            ProcessModels(numSamples);
+            if (mModelRight)
+            {
+                ProcessModels(numSamples);
+            }
+            else
+            {
+                // A mono connection turned stereo while running: the right model is on its way
+                // (TakeDeferredRebuild), and until it lands the left one feeds both sides.
+                ProcessModelMono(numSamples);
+                std::copy_n(mOutputBufferL.data(), numSamples, mOutputBufferR.data());
+            }
+
             mDryDelayLeft.Process(mDryBufferL.data(), numSamples);
             mDryDelayRight.Process(mDryBufferR.data(), numSamples);
 
@@ -334,6 +357,82 @@ class OptimizedNAMAmpEffect : public EffectProcessor
     [[nodiscard]] bool SupportsMonoProcessing() const override
     {
         return true;
+    }
+
+    /// The right channel's model is only needed on a stereo connection. Told before the model
+    /// loads when a chain is built, so a mono connection loads one model and prewarms one. When a
+    /// running chain turns stereo (an input mode or a bus change), the right model is built off
+    /// the DSP lock through TakeDeferredRebuild, and the left one covers both sides meanwhile.
+    void SetInputLayout(ChannelLayout layout) override
+    {
+        mStereoInput = (layout == ChannelLayout::Stereo);
+
+        if (!mStereoInput)
+        {
+            // Still being built: a right model nobody will run is freed rather than prewarmed.
+            if (!mPrepared)
+            {
+                mModelRight.reset();
+            }
+
+            return;
+        }
+
+        if (!mModelLeft || mModelRight || mModelPath.empty())
+        {
+            return;
+        }
+
+        if (!mPrepared)
+        {
+            // Off the DSP lock: the chain is still being built.
+            mModelRight = nammodelcache::GetModel(mModelPath);
+            ApplyNamSlimmableSize(mModelRight.get(), mSlimmableSize);
+            mModelsNeedReset = true;
+        }
+        else
+        {
+            mRightModelWanted = true;
+            DeferredRebuild::NoteRequested();
+        }
+    }
+
+    [[nodiscard]] std::unique_ptr<DeferredRebuild> TakeDeferredRebuild() override
+    {
+        if (!mRightModelWanted || !mStereoInput || mModelRight || !mModelLeft || mModelPath.empty())
+        {
+            mRightModelWanted = false;
+            return nullptr;
+        }
+
+        auto work = std::make_unique<RightModelBuild>();
+        work->generation = mModelGeneration;
+        work->path = mModelPath;
+        work->slimmableSize = mSlimmableSize;
+        work->hostSampleRate = mSampleRate;
+        work->modelSampleRate = mBaseModelSampleRate;
+        work->maxBlockSize = mMaxBlockSize;
+        work->oversamplingFactor = NamOversamplingFactorFromIndex(mOversamplingIndex);
+        work->antiAliasPhase = NamAntiAliasPhaseFromIndex(mAntiAliasPhaseIndex);
+        return work;
+    }
+
+    void CommitDeferredRebuild(DeferredRebuild& taken) override
+    {
+        auto* work = dynamic_cast<RightModelBuild*>(&taken);
+
+        // A model reload, or a quality change, since the work was taken outdates it.
+        if (!work || !work->model || work->generation != mModelGeneration || mModelRight || !mStereoInput ||
+            work->oversamplingFactor != NamOversamplingFactorFromIndex(mOversamplingIndex) ||
+            work->modelSampleRate != mBaseModelSampleRate)
+        {
+            return;
+        }
+
+        // Swaps, so whatever is displaced is freed off the lock with the work.
+        std::swap(mModelRight, work->model);
+        std::swap(mOversamplingRight, work->oversampling);
+        mRightModelWanted = false;
     }
 
     [[nodiscard]] int GetLatencySamples() const override
@@ -630,9 +729,10 @@ class OptimizedNAMAmpEffect : public EffectProcessor
         return LoadModelResource(resourcePath, nullptr);
     }
 
+    /// The left model is the resource; the right one is only built for a stereo connection.
     [[nodiscard]] bool HasResource() const override
     {
-        return mModelLeft != nullptr && mModelRight != nullptr;
+        return mModelLeft != nullptr;
     }
 
     [[nodiscard]] std::filesystem::path GetResourcePath() const override
@@ -686,13 +786,14 @@ class OptimizedNAMAmpEffect : public EffectProcessor
                 return false;
             }
 
-            // Both channels run their own model instance, but the parse behind them is shared:
-            // the cache turns the second construction into a struct copy instead of a second
-            // file read and JSON parse. See dsp/NamModelCache.h.
+            // On a stereo connection both channels run their own model instance, but the parse
+            // behind them is shared: the cache turns the second construction into a struct copy
+            // instead of a second file read and JSON parse. See dsp/NamModelCache.h. A mono
+            // connection runs the left one alone, so the right one is not built at all.
             auto modelLeft = nammodelcache::GetModel(resourcePath);
-            auto modelRight = nammodelcache::GetModel(resourcePath);
+            auto modelRight = mStereoInput ? nammodelcache::GetModel(resourcePath) : nullptr;
 
-            if (!modelLeft || !modelRight)
+            if (!modelLeft || (mStereoInput && !modelRight))
             {
                 util::AppendSessionLog("[OptimizedNAMAmpEffect] ERROR: Failed to parse NAM model file: " +
                                        util::PathToUtf8(resourcePath));
@@ -705,6 +806,8 @@ class OptimizedNAMAmpEffect : public EffectProcessor
             mModelLeft = std::move(modelLeft);
             mModelRight = std::move(modelRight);
             mModelPath = resourcePath;
+            ++mModelGeneration;
+            mRightModelWanted = false;
             mModelsNeedReset = true; // Fresh model objects; the next configure must reset them.
             ConfigureModelProcessing();
 
@@ -732,6 +835,42 @@ class OptimizedNAMAmpEffect : public EffectProcessor
 
     std::unique_ptr<::nam::DSP> mModelLeft;
     std::unique_ptr<::nam::DSP> mModelRight;
+
+    /// The right model, built off the DSP lock for a connection that turned stereo while running.
+    class RightModelBuild final : public DeferredRebuild
+    {
+      public:
+        void Build() override
+        {
+            model = nammodelcache::GetModel(path);
+
+            if (!model)
+            {
+                return;
+            }
+
+            ApplyNamSlimmableSize(model.get(), slimmableSize);
+            oversampling.Prepare(*model, hostSampleRate, modelSampleRate, maxBlockSize, oversamplingFactor,
+                                 antiAliasPhase);
+        }
+
+        std::uint64_t generation = 0;
+        std::filesystem::path path;
+        double slimmableSize = 1.0;
+        double hostSampleRate = 48000.0;
+        double modelSampleRate = 48000.0;
+        int maxBlockSize = 512;
+        int oversamplingFactor = 1;
+        dsp::EAntiAliasFilterPhase antiAliasPhase{};
+        std::unique_ptr<::nam::DSP> model;
+        NamOversamplingProcessor oversampling;
+    };
+
+    // Unknown until the executor says, so both models load: never less than a stereo input needs.
+    bool mStereoInput = true;
+    bool mRightModelWanted = false;
+    // Counts model loads, so a right model built for one model is never installed beside another.
+    std::uint64_t mModelGeneration = 0;
 
     std::filesystem::path mModelPath;
     double mBaseModelSampleRate = 44100.0;

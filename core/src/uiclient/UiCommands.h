@@ -64,7 +64,9 @@ public:
     void SetGlobalChainParam(const std::string& path, double value);
     void SetGlobalChainToggle(const std::string& path, bool enabled);
     void SetOutputMuted(bool muted);
-    void SetInputMode(bool monoMode, int inputChannel);
+    /// inputChannel: which input mono takes, 0 input 1, 1 input 2, 2 both summed. dualMono: with
+    /// mono off, run a stereo input as two mono chains.
+    void SetInputMode(bool monoMode, int inputChannel, bool dualMono = false);
 
     // ── Tuner, metronome, demo audio ────────────────────────────────────────
     void SetTunerActive(bool active);

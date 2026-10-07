@@ -279,12 +279,6 @@ class RotaryEffect : public EffectProcessor
         GuardState(wet[0], wet[1]);
     }
 
-    /// The mics hear the rotors from different places, so a mono input comes out stereo.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return Value(rotary::kSpread) > 0.0 && Value(rotary::kDepth) > 0.0 && Value(rotary::kMix) > 0.0;
-    }
-
     // Can run on the audio thread (MIDI and DAW automation): it stores the value and nothing else.
     void SetParam(const std::string& key, double value) override
     {

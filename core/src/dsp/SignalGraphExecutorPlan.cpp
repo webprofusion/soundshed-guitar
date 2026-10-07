@@ -43,7 +43,7 @@ void SignalGraphExecutor::BuildExecutionPlan()
     mExecutionLevelPlan.clear();
     mInputPlanNode = nullptr;
     mOutputPlanNodes.clear();
-    mTempoAwareProcessors.clear();
+    mTempoAwareStates.clear();
 
     const auto boundaryGainDb = [this](const char* nodeId) -> const double* {
         const GraphNode* node = mGraph.FindNode(nodeId);
@@ -83,8 +83,6 @@ void SignalGraphExecutor::BuildExecutionPlan()
         planned.isOutput = (state.type == kNodeTypeOutput) || (id == "__output__");
         planned.isSplitter = (state.type == kNodeTypeSplitter);
         planned.isMixer = (state.type == kNodeTypeMixer);
-        planned.mayProduceStereo = NodeMayProduceStereo(state.type, state.category);
-        planned.isNam = IsNamNodeType(state.type);
 
         if (planned.isMixer && state.processor)
         {
@@ -106,7 +104,7 @@ void SignalGraphExecutor::BuildExecutionPlan()
 
             if (typeInfo && typeInfo->requiresTempo)
             {
-                mTempoAwareProcessors.push_back(state.processor.get());
+                mTempoAwareStates.push_back(&state);
             }
         }
 
@@ -195,6 +193,8 @@ void SignalGraphExecutor::BuildExecutionPlan()
         }
     }
 
+    ResolveChannelLayout(true);
+
     // A node added to a running graph gets a freshly constructed processor that has never
     // seen a tempo, and SetTempo() only pushes on a change — so seed the new set here.
     // Zero means nothing has pushed a tempo yet, and there is nothing to seed with.
@@ -205,6 +205,94 @@ void SignalGraphExecutor::BuildExecutionPlan()
 
     // Likewise a rebuilt node starts out untapped, which would silently end an EQ display.
     ApplySpectrumWatch();
+}
+
+void SignalGraphExecutor::SetInputLayout(ChannelLayout layout)
+{
+    if (layout == mInputLayout)
+    {
+        return;
+    }
+
+    mInputLayout = layout;
+
+    // Before SetGraph() there is no plan yet, and SetGraph() resolves with this layout.
+    if (!mPlan.empty())
+    {
+        ResolveChannelLayout(false);
+    }
+}
+
+void SignalGraphExecutor::ResolveChannelLayout(bool notifyAll)
+{
+    const bool stereoInput = (mInputLayout == ChannelLayout::Stereo);
+
+    // Execution order, so every source is resolved before the nodes it feeds.
+    for (const auto& level : mExecutionLevelPlan)
+    {
+        for (const int planIndex : level)
+        {
+            PlannedNode& planned = mPlan[static_cast<std::size_t>(planIndex)];
+            NodeState& state = *planned.state;
+            EffectProcessor* processor = state.processor.get();
+
+            bool inputStereo = false;
+
+            if (&planned == mInputPlanNode)
+            {
+                inputStereo = stereoInput;
+            }
+            else
+            {
+                for (const PlannedEdge& edge : planned.incoming)
+                {
+                    inputStereo = inputStereo || (edge.source && edge.source->outputStereo);
+                }
+            }
+
+            // Input, output and splitter nodes run a passthrough, which cannot widen; a null
+            // processor passes its input on as well. A node set to a mono channel mode folds a
+            // stereo input to one channel and puts out mono whatever it is.
+            const bool isBoundary = planned.isInput || planned.isOutput || planned.isSplitter;
+            // Dual mono lets nothing cross between the sides, so a mono fold, which would, is off.
+            const bool monoMode = !mDualMono && !isBoundary && state.monoFold != NodeState::MonoFold::None;
+            const bool canWiden = processor && processor->CanWiden();
+            const bool outputStereo = !monoMode && (inputStereo || canWiden);
+            const bool processesMono = !inputStereo || monoMode;
+            const bool inputChanged = (inputStereo != state.inputStereo);
+
+            state.inputStereo = inputStereo;
+            state.outputStereo = outputStereo;
+            // A mixer pans its inputs as it gathers them, so its gathered input is folded too.
+            planned.foldInput = monoMode && (inputStereo || planned.isMixer);
+            planned.foldOutput = monoMode && canWiden;
+            planned.runMono = processesMono && !canWiden && processor && !isBoundary && !planned.isMixer &&
+                              processor->SupportsMonoProcessing();
+            planned.twin = mDualMono ? state.twin.get() : nullptr;
+
+            if (processor && (notifyAll || inputChanged))
+            {
+                processor->SetInputLayout(processesMono ? ChannelLayout::Mono : ChannelLayout::Stereo);
+            }
+        }
+    }
+
+    // Process() takes the first output node that ran; they all see the same graph, so the first
+    // one stands for what reaches the output.
+    mOutputStereo = !mOutputPlanNodes.empty() && mOutputPlanNodes.front()->state->inputStereo;
+}
+
+bool SignalGraphExecutor::AnyNodeCanWiden() const
+{
+    for (const auto& [id, state] : mNodeStates)
+    {
+        if (state.processor && state.processor->CanWiden())
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void SignalGraphExecutor::ResolveNoteRouting()
@@ -280,6 +368,11 @@ void SignalGraphExecutor::HandNotesTo(PlannedNode& planned)
     }
 
     planned.state->processor->SetNoteInput(planned.liveNotes);
+
+    if (planned.twin)
+    {
+        planned.twin->SetNoteInput(planned.liveNotes);
+    }
 }
 
 void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSamples, bool diagnosticsEnabled,
@@ -296,8 +389,6 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
     // and for a mixer each input's own level, pan and delay.
     const bool isMixer = planned.isMixer;
     const bool shouldAccumulate = planned.accumulateInputs;
-    bool incomingStereoSignal = false;
-    bool mixerHasNonCenterPan = false;
 
     MixerEffect* mixerEffect = planned.mixer;
 
@@ -312,7 +403,6 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
 
         const float edgeGain = edge.gain;
         const int inputPort = edge.toPort;
-        incomingStereoSignal = incomingStereoSignal || sourceState->hasStereoSignal;
         state->hasInput = true;
 
         if (isMixer && mixerEffect)
@@ -320,18 +410,6 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
             if (mixerEffect->IsInputMuted(inputPort))
             {
                 continue;
-            }
-
-            const float panL = mixerEffect->GetInputPanL(inputPort);
-            const float panR = mixerEffect->GetInputPanR(inputPort);
-            const float level = mixerEffect->GetInputLevel(inputPort);
-            const float gainL = edgeGain * level * panL;
-            const float gainR = edgeGain * level * panR;
-
-            // An input panned off centre makes the mixer's output stereo even from a mono source.
-            if (std::abs(gainL - gainR) > 1.0e-5f)
-            {
-                mixerHasNonCenterPan = true;
             }
 
             // ProcessInput applies the input's delay along with its level and pan.
@@ -363,13 +441,39 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
         return;
     }
 
-    state->hasStereoSignal = incomingStereoSignal;
-
     // An EQ display shows what arrives at the node, so the tap takes the input before the
     // node processes it -- enabled or not, since a bypassed EQ still has a source to show.
     if (auto* tap = state->spectrumTap.load(std::memory_order_acquire))
     {
-        tap->Push(state->bufferLeft.data(), incomingStereoSignal ? state->bufferRight.data() : nullptr, numSamples);
+        tap->Push(state->bufferLeft.data(), state->inputStereo ? state->bufferRight.data() : nullptr, numSamples);
+    }
+
+    // A mono channel mode folds a stereo input before the node runs, bypassed or not: what it
+    // puts out is mono either way.
+    if (planned.foldInput)
+    {
+        float* left = state->bufferLeft.data();
+        float* right = state->bufferRight.data();
+
+        switch (state->monoFold)
+        {
+        case NodeState::MonoFold::Left:
+            std::copy_n(left, numSamples, right);
+            break;
+        case NodeState::MonoFold::Right:
+            std::copy_n(right, numSamples, left);
+            break;
+        default:
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                const float folded = 0.5f * (left[i] + right[i]);
+                left[i] = folded;
+                right[i] = folded;
+            }
+
+            break;
+        }
     }
 
     // Time the node only when diagnostics are on, and publish into the node's own atomic
@@ -401,6 +505,11 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
             if (!state->notesLastBlock)
             {
                 state->processor->Reset();
+
+                if (planned.twin)
+                {
+                    planned.twin->Reset();
+                }
             }
 
             state->notesThisBlock = true;
@@ -438,7 +547,6 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
             {
                 std::fill_n(state->bufferLeft.data(), numSamples, 0.0f);
                 std::fill_n(state->bufferRight.data(), numSamples, 0.0f);
-                state->hasStereoSignal = false;
             }
         }
         else if (planned.isSplitter)
@@ -447,51 +555,73 @@ void SignalGraphExecutor::ProcessPlannedNode(PlannedNode& planned, int numSample
         }
         else if (planned.isMixer)
         {
+            // The inputs' level, pan and delay were applied as they were gathered, bypassed or
+            // not; the master level is all Process() adds.
             if (enabled)
             {
                 runStereo();
             }
-
-            // The inputs' level, pan and delay were applied as they were gathered, bypassed or
-            // not; the master level is all Process() adds. So the output is stereo whenever an
-            // input was, or was panned, whether the node ran or not.
-            state->hasStereoSignal = incomingStereoSignal || mixerHasNonCenterPan || planned.mayProduceStereo;
-
-            if (!state->hasStereoSignal)
-            {
-                copyLeftToRight();
-            }
         }
         else if (enabled)
         {
-            // Asked before the node runs, so a node that widens its input is judged on the
-            // block before; asked again after, so what it reports is for the block just run.
-            const bool forceNamMonoByInputMode = mNamInputModeMono && planned.isNam;
-            const bool runMono = processor->SupportsMonoProcessing() && !planned.mayProduceStereo &&
-                                 !processor->ProducesStereoOutput() &&
-                                 (!incomingStereoSignal || forceNamMonoByInputMode);
+            // Mono or stereo was settled when the layout was resolved; nothing about this block
+            // changes it.
             routeNotes();
 
-            if (runMono)
+            if (planned.twin)
+            {
+                // Dual mono: each side through its own instance, each on its own input. The
+                // primary keeps the left of what it makes, the second instance the right.
+                float* left = state->bufferLeft.data();
+                float* right = state->bufferRight.data();
+                float* leftIn[2] = {left, left};
+                float* leftOut[2] = {state->scratchLeft.data(), state->scratchRight.data()};
+                float* rightIn[2] = {right, right};
+                float* rightOut[2] = {state->twinScratchLeft.data(), state->twinScratchRight.data()};
+                processTimed([&]() {
+                    processor->Process(leftIn, leftOut, numSamples);
+                    planned.twin->Process(rightIn, rightOut, numSamples);
+                });
+                state->bufferLeft.swap(state->scratchLeft);
+                state->bufferRight.swap(state->twinScratchRight);
+            }
+            else if (planned.runMono)
             {
                 processTimed(
                     [&]() { processor->ProcessMono(state->bufferLeft.data(), state->scratchLeft.data(), numSamples); });
                 state->bufferLeft.swap(state->scratchLeft);
                 copyLeftToRight();
-                state->hasStereoSignal = false;
             }
             else
             {
                 runStereo();
-                state->hasStereoSignal =
-                    incomingStereoSignal || planned.mayProduceStereo || processor->ProducesStereoOutput();
+
+                if (planned.foldOutput)
+                {
+                    // A widening type set to mono: sum its two sides, as a mono speaker would.
+                    for (int i = 0; i < numSamples; ++i)
+                    {
+                        const float folded = 0.5f * (state->bufferLeft[static_cast<size_t>(i)] +
+                                                     state->bufferRight[static_cast<size_t>(i)]);
+                        state->bufferLeft[static_cast<size_t>(i)] = folded;
+                        state->bufferRight[static_cast<size_t>(i)] = folded;
+                    }
+                }
+                else if (!state->outputStereo)
+                {
+                    // A mono connection holds the same samples on both sides, exactly. An effect
+                    // that cannot widen keeps them within rounding, and a pitch shifter's two
+                    // channels can round differently, so the left is copied over the right rather
+                    // than trusted to match.
+                    copyLeftToRight();
+                }
             }
         }
 
-        // A bypassed effect passes its gathered input on, stereo as it arrived.
+        // A bypassed effect passes its gathered input on as it arrived.
     }
 
-    state->channelCount.store(state->hasStereoSignal ? 2 : 1, std::memory_order_relaxed);
+    state->channelCount.store(state->outputStereo ? 2 : 1, std::memory_order_relaxed);
 
     if (collectLevels)
     {

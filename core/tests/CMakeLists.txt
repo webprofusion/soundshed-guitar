@@ -17,6 +17,7 @@ set(TEST_SOURCES
     BlendDefinitionWorkflowTests.cpp
     BlendEffectTests.cpp
     BoundaryNodeGainTests.cpp
+    ChannelLayoutTests.cpp
     CompressorEffectTests.cpp
     ControlSurfaceDrainTests.cpp
     ControllerDisplayFeedTests.cpp
@@ -26,6 +27,7 @@ set(TEST_SOURCES
     DriveLegacyMigrationTests.cpp
     DrivePedalTests.cpp
     DSPPerformanceTests.cpp
+    DualMonoTests.cpp
     EffectAliasParityTests.cpp
     EffectFactoryPresetTests.cpp
     EffectModeTests.cpp

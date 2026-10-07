@@ -32,6 +32,12 @@ namespace guitarfx
 class SimpleCabEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     SimpleCabEffect()
     {
         Configure(mSampleRate);
@@ -145,13 +151,6 @@ class SimpleCabEffect : public EffectProcessor
 
         const std::size_t index = FindParamSpec(simple_cab::kParams, key);
         return index == simple_cab::kParamCount ? 0.0 : mValues[index];
-    }
-
-    /// Spread voices the two sides differently, so a mono input comes out stereo. Stays
-    /// true until a ramp back to identical sides has finished.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mStereo;
     }
 
     [[nodiscard]] bool GetFrequencyResponse(std::span<const double> frequenciesHz,

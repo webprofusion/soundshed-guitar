@@ -287,6 +287,18 @@ class StftTransposeChannel
 class StftTransposeEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         if (!ValidatePrepare(sampleRate, maxBlockSize))

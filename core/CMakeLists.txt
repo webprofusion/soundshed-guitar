@@ -535,6 +535,7 @@ set(GUITARFX_CORE_SOURCES
     src/controller/internal/SplitBranchSupport.cpp
 
     # DSP core
+    src/dsp/ChannelLayout.h
     src/dsp/EffectProcessor.h
     src/dsp/EffectRegistry.h
     src/dsp/EffectRegistry.cpp

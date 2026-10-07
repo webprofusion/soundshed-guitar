@@ -151,10 +151,13 @@ struct Fixture
         mixer.AddActivePreset(MakePreset("presetA"), "presetA", "presetA");
     }
 
-    /// Runs one block of audio. `stereo` decides whether the right channel carries
-    /// its own content, which is what moves a node's reported channel count.
+    /// Runs one block of audio. `stereo` sets the input mode, which is what moves a node's
+    /// reported channel count (never the signal), and whether the right channel carries its own
+    /// content.
     void ProcessBlock(bool stereo)
     {
+        mixer.SetMonoMode(!stereo);
+
         for (int i = 0; i < kBlockSize; ++i)
         {
             const double t = static_cast<double>(i) / kSampleRate;
@@ -193,7 +196,7 @@ struct Fixture
     }
 };
 
-/// A changing signal must not drag the roster along with it.
+/// A changing layout must not drag the roster along with it.
 bool TestRosterIsStableWhileChannelCountMoves()
 {
     std::cout << "\nRoster stability across signal changes\n";
@@ -201,7 +204,7 @@ bool TestRosterIsStableWhileChannelCountMoves()
 
     Fixture fixture;
 
-    // Alternate mono and stereo input. Before channel count moved into the frame,
+    // Alternate the mono and stereo input modes. Before channel count moved into the frame,
     // each flip rebuilt the roster and re-sent it.
     for (int i = 0; i < 6; ++i)
     {
@@ -215,7 +218,7 @@ bool TestRosterIsStableWhileChannelCountMoves()
     ok &= Report("Several frames were sent", frames.size() >= 4, std::to_string(frames.size()) + " frames");
     ok &= Report("The roster was sent exactly once", rosters.size() == 1, std::to_string(rosters.size()) + " rosters");
 
-    // The channel count must still be reported, and must still track the signal --
+    // The channel count must still be reported, and must still track the layout --
     // suppressing the roster churn by freezing the value would be no fix at all.
     bool sawMono = false;
     bool sawStereo = false;
@@ -239,7 +242,7 @@ bool TestRosterIsStableWhileChannelCountMoves()
         }
     }
 
-    ok &= Report("Channel count still tracks the signal", sawMono && sawStereo,
+    ok &= Report("Channel count still tracks the layout", sawMono && sawStereo,
                  std::string("mono=") + (sawMono ? "yes" : "no") + " stereo=" + (sawStereo ? "yes" : "no"));
 
     return ok;

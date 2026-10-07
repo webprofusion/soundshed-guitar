@@ -1063,7 +1063,7 @@ void TestStereoPreservationContract()
         return;
     }
 
-    Check(effect->ProducesStereoOutput(), "declares stereo output so the graph will not collapse the image downstream");
+    Check(effect->CanWiden(), "declared able to widen, so the graph keeps the image downstream");
     Check(!effect->SupportsMonoProcessing(), "does not offer a mono fast path");
     Check(effect->GetCategory() == "modulation", "reports a category the UI already understands");
 

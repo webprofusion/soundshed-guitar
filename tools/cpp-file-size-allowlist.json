@@ -17,7 +17,7 @@
     "core/tests/TransposeBenchmark.cpp": 1580,
     "core/tests/HostedPluginStateWorkflowTests.cpp": 1572,
     "core/src/dsp/effects/Spatial3DEffect.h": 1558,
-    "core/src/dsp/effects/MultiModelNAMAmpEffect.h": 1277,
+    "core/src/dsp/effects/MultiModelNAMAmpEffect.h": 1547,
     "core/src/dsp/effects/ReverbEffect.h": 1494,
     "core/tests/SignalGraphExecutorTests.cpp": 1398,
     "juce/source/PluginProcessorAdapter.cpp": 1227,
@@ -43,6 +43,7 @@
     "core/tests/JsonStoreConcurrencyTests.cpp": 1019,
     "core/src/controller/PluginControllerPresetArchive.cpp": 1001,
     "core/src/dsp/effects/InputAnalyzerEffect.h": 968,
-    "core/tests/FastMathNanTests.cpp": 968
+    "core/tests/FastMathNanTests.cpp": 968,
+    "core/src/dsp/effects/BuiltinAmpEffect.h": 968
   }
 }

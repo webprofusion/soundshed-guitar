@@ -265,37 +265,103 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
 
 void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
 {
-    // In hosted-plugin mode the DAW owns the input configuration; ignore
-    // UI overrides and report the effective (host-controlled) state.
-    if (mHost.IsStandalone())
-    {
-        if (payload.contains("monoMode"))
-        {
-            mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
-        }
-        else if (payload.contains("mono"))
-        {
-            mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
-        }
+    // Dual mono gives coupled nodes second instances; they are built here, off the lock, so the
+    // switch below only installs them.
+    const bool wantsDualMono = (payload.contains("mode") && payload["mode"] == "dualMono") ||
+                               (payload.contains("dualMono") && payload["dualMono"] == true);
 
-        if (payload.contains("inputChannel"))
-        {
-            mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
-        }
-        else if (payload.contains("channel"))
-        {
-            mPresetMixer.SetInputChannel(payload["channel"].get<int>());
-        }
-    }
-    else
+    if (wantsDualMono)
     {
-        AppendSessionLog("Ignoring setInputMode request: input is host-controlled in plugin mode");
+        mPresetMixer.StageDualMono();
     }
 
+    {
+        // The audio thread reads these every block.
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+
+        // `mode` names the whole choice; the older monoMode/inputChannel pair still works. In a
+        // DAW the track's bus decides between mono and stereo, so the mixer ignores Mono there
+        // and only dual mono, a per-instance choice for a stereo track, takes effect.
+        const std::string mode = payload.contains("mode") && payload["mode"].is_string()
+                                     ? payload["mode"].get<std::string>()
+                                     : std::string();
+
+        if (mode == "mono1" || mode == "mono2" || mode == "monoSum")
+        {
+            mPresetMixer.SetMonoMode(true);
+            mPresetMixer.SetDualMono(false);
+            mPresetMixer.SetInputChannel(mode == "mono1"   ? MultiPresetMixer::kInputChannelLeft
+                                         : mode == "mono2" ? MultiPresetMixer::kInputChannelRight
+                                                           : MultiPresetMixer::kInputChannelSum);
+        }
+        else if (mode == "stereo" || mode == "dualMono")
+        {
+            mPresetMixer.SetMonoMode(false);
+            mPresetMixer.SetDualMono(mode == "dualMono");
+        }
+        else
+        {
+            if (payload.contains("monoMode") && payload["monoMode"].is_boolean())
+            {
+                mPresetMixer.SetMonoMode(payload["monoMode"].get<bool>());
+            }
+            else if (payload.contains("mono") && payload["mono"].is_boolean())
+            {
+                mPresetMixer.SetMonoMode(payload["mono"].get<bool>());
+            }
+
+            if (payload.contains("inputChannel") && payload["inputChannel"].is_number_integer())
+            {
+                mPresetMixer.SetInputChannel(payload["inputChannel"].get<int>());
+            }
+            else if (payload.contains("channel") && payload["channel"].is_number_integer())
+            {
+                mPresetMixer.SetInputChannel(payload["channel"].get<int>());
+            }
+
+            if (payload.contains("dualMono") && payload["dualMono"].is_boolean())
+            {
+                mPresetMixer.SetDualMono(payload["dualMono"].get<bool>());
+            }
+        }
+    }
+
+    // A chain that turned stereo builds the right-hand NAM models it now needs, off the lock.
+    ApplyDeferredNodeRebuilds();
+    SendInputModeToUI();
+}
+
+void PluginController::SendInputModeToUI()
+{
     nlohmann::json message;
     message["type"] = "inputModeChanged";
-    message["monoMode"] = mPresetMixer.IsMonoMode();
-    message["inputChannel"] = mPresetMixer.GetInputChannel();
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        const bool mono = mPresetMixer.IsMonoMode();
+        const int channel = mPresetMixer.GetInputChannel();
+        const bool dualMono = mPresetMixer.IsDualMono();
+        message["monoMode"] = mono;
+        message["inputChannel"] = channel;
+        message["dualMono"] = dualMono;
+        message["mode"] = mono ? (channel == MultiPresetMixer::kInputChannelRight ? "mono2"
+                                  : channel == MultiPresetMixer::kInputChannelSum ? "monoSum"
+                                                                                  : "mono1")
+                               : (dualMono ? "dualMono" : "stereo");
+
+        // What is actually in force after the host, the channel counts and the fallbacks, and
+        // what the input and output can carry: the UI offers stereo only where it can be had.
+        const auto effective = mPresetMixer.GetEffectiveInputMode();
+        message["effectiveMode"] = effective == MultiPresetMixer::InputMode::Mono       ? "mono"
+                                   : effective == MultiPresetMixer::InputMode::DualMono ? "dualMono"
+                                                                                        : "stereo";
+        message["hostControlled"] = mPresetMixer.IsHostControlledInput();
+        // Hosted plugins cannot be doubled up for dual mono, so they hear both sides.
+        message["dualMonoShared"] = mPresetMixer.CountDualMonoSharedNodes();
+        message["inputChannels"] = mPresetMixer.GetInputChannelCount();
+        message["outputChannels"] = mPresetMixer.GetOutputChannelCount();
+    }
+
     SendMessageToUI(message.dump());
 }
 

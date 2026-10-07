@@ -197,6 +197,7 @@ export interface GraphNode {
   type: string;
   displayName: string;
   title?: string; // The name the user gave this node; absent or empty shows the automatic one
+  channelMode?: string; // "" or absent follows its input; "mono"/"monoLeft"/"monoRight" fold it
   category: string;
   bypassed: boolean;
   params: Record<string, number>;
@@ -398,7 +399,8 @@ export interface CompositePreset {
 export interface GlobalSignalChainConfig {
   inputGain: number;      // dB
   monoMode: boolean;
-  inputChannel: number;   // 0=left, 1=right
+  inputChannel: number;   // which input mono takes: 0 = input 1, 1 = input 2, 2 = both summed
+  dualMono?: boolean;     // a stereo input processed as two mono chains
   outputGain: number;     // dB (master volume)
   limiterEnabled: boolean;
   preChainGraph: SignalGraph;

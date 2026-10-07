@@ -108,6 +108,12 @@ constexpr double kThruRampSeconds = 0.005;
 class GuitarToMidiEffect : public EffectProcessor
 {
   public:
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     GuitarToMidiEffect()
     {
         for (std::size_t index = 0; index < guitar_to_midi::kParamCount; ++index)

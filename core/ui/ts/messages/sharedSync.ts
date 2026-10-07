@@ -7,7 +7,7 @@ import { renderBlendList } from "../blendManager.js";
 import { replaceAppSettings } from "../appSettingsStore.js";
 import { postMessage } from "../bridge.js";
 import { applyDensityAppSettings } from "../compactMode.js";
-import { applyStoredInputChannel } from "../controls.js";
+import { applyStoredInputChannel } from "../inputMode.js";
 import { handleCustomEffectLibrary } from "../customEffects.js";
 import { applyStoredDemoAudioSelection } from "../demoAudio.js";
 import { refreshFxSelector } from "../fxSelector.js";

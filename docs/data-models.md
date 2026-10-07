@@ -66,8 +66,9 @@ Older presets and saved global chains may still carry `autoLevelInput`/`autoLeve
 | `preChainGraph` | SignalGraph | default pre-chain | Shared graph before all presets |
 | `postChainGraph` | SignalGraph | default post-chain | Shared graph after all presets |
 | `inputGain` | float | 0.0 | Shared input gain in dB |
-| `monoMode` | bool | false | Mono input routing toggle |
-| `inputChannel` | int | 0 | Channel selection used when mono mode is enabled |
+| `monoMode` | bool | false | Mono input: one input (or both summed) on both channels. Standalone only; in a DAW the bus decides |
+| `inputChannel` | int | 0 | Which input mono takes: 0 input 1, 1 input 2, 2 both summed |
+| `dualMono` | bool | false | With two inputs, run them as two mono chains with nothing crossing between the sides. Saved per instance in a DAW |
 | `outputGain` | float | 0.0 | Shared output gain in dB |
 | `limiterEnabled` | bool | false | Final mixer output protection toggle |
 
@@ -86,7 +87,9 @@ Older presets and saved global chains may still carry `autoLevelInput`/`autoLeve
 | `type` | string | Yes | Effect type identifier |
 | `category` | string | No | UI grouping |
 | `label` | string | No | Display name override |
+| `title` | string | No | The name the user gave the node |
 | `enabled` | bool | No | Bypass toggle (default: true) |
+| `channelMode` | string | No | How the node takes a stereo input: absent follows it; `mono`, `monoLeft` or `monoRight` fold it (summed, or one side), run the node mono and put out mono (docs/signal-chain.md, Channel Layout) |
 | `params` | map[string, float] | No | Numeric parameters |
 | `config` | map[string, string] | No | String configuration |
 | `resource` | ResourceRef | No | External resource |

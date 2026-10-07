@@ -146,6 +146,12 @@ static_assert((delay_line::Compander::kControlInterval & (delay_line::Compander:
 class AnalogDelayEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     AnalogDelayEffect()
     {
         for (std::size_t index = 0; index < analog_delay::kParamCount; ++index)
@@ -205,28 +211,6 @@ class AnalogDelayEffect : public EffectProcessor
         mGlide.Snap(TargetDelaySamples());
         UpdateClockFilters(true);
         mPrimed = false;
-    }
-
-    [[nodiscard]] bool SupportsMonoProcessing() const override
-    {
-        return true;
-    }
-
-    void ProcessMono(float* input, float* output, int numSamples) override
-    {
-        if (!output || numSamples <= 0)
-        {
-            return;
-        }
-
-        if (!input || mChannels[0].line.Empty())
-        {
-            std::fill_n(output, numSamples, 0.0f);
-            return;
-        }
-
-        const int count = FillDelaySchedule(numSamples);
-        ProcessChannel(mChannels[0], input, output, count, 0.0);
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -316,11 +300,6 @@ class AnalogDelayEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "delay";
-    }
-
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mValues[analog_delay::kSpread] > 0.0;
     }
 
     /// The BBD clock rate for a given delay, in Hz. Public so tests can hold the

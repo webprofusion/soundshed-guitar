@@ -326,13 +326,13 @@ void TestRotaryStereoAndLevel()
         difference = std::max(difference, static_cast<double>(std::fabs(out.left[i] - out.right[i])));
     }
 
-    Check(stereo.ProducesStereoOutput() && difference > 1.0e-3, "the two mics make a mono input stereo",
+    Check(stereo.CanWiden() && difference > 1.0e-3, "the two mics make a mono input stereo",
           "max |L-R| " + Num(difference, 4));
 
     RotaryEffect mono;
     mono.SetParam("spread", 0.0);
     const auto monoOut = Run(mono, phrase);
-    Check(!mono.ProducesStereoOutput() && monoOut.left == monoOut.right, "Mic Spread 0 is one mic: mono");
+    Check(monoOut.left == monoOut.right, "Mic Spread 0 is one mic: mono");
 
     double worst = 0.0;
     std::string where;
@@ -434,7 +434,7 @@ void TestVibe()
         monoPath.ProcessMono(const_cast<float*>(phrase.data() + start), monoOut.data() + start, kBlock);
     }
 
-    bool same = monoPath.SupportsMonoProcessing() && !monoPath.ProducesStereoOutput();
+    bool same = monoPath.SupportsMonoProcessing() && !monoPath.CanWiden();
 
     for (std::size_t i = 0; i + kBlock <= phrase.size(); ++i)
     {

@@ -28,6 +28,18 @@ namespace guitarfx
 class IRReverbEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off a true-stereo IR's cross paths
+    /// (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         rtparallel::DualLaneExecutor::EnsureStarted(); // here, so Process() never starts its thread
@@ -157,7 +169,10 @@ class IRReverbEffect : public EffectProcessor
             mConvolverRR.Process(mInputBufferR.data(), mOutputBufferRR.data(), numSamples);
         }
 
-        if (mHasTrueStereo)
+        // Dual mono keeps each side to its own impulse: no cross paths.
+        const bool trueStereo = mHasTrueStereo && !mDualMono.load(std::memory_order_relaxed);
+
+        if (trueStereo)
         {
             bool ranTrueStereoParallel = false;
 
@@ -185,8 +200,8 @@ class IRReverbEffect : public EffectProcessor
             const float dryL = inputs[0] ? inputs[0][i] : 0.0f;
             const float dryR = inputs[1] ? inputs[1][i] : dryL;
 
-            float wetL = static_cast<float>(mOutputBufferLL[i] + (mHasTrueStereo ? mOutputBufferLR[i] : 0.0f));
-            float wetR = static_cast<float>(mOutputBufferRR[i] + (mHasTrueStereo ? mOutputBufferRL[i] : 0.0f));
+            float wetL = static_cast<float>(mOutputBufferLL[i] + (trueStereo ? mOutputBufferLR[i] : 0.0f));
+            float wetR = static_cast<float>(mOutputBufferRR[i] + (trueStereo ? mOutputBufferRL[i] : 0.0f));
 
             if (toneCoef < 1.0f)
             {
@@ -899,6 +914,7 @@ class IRReverbEffect : public EffectProcessor
     double mIRSampleRate = 48000.0;
     std::uint16_t mIRChannels = 0;
     bool mHasTrueStereo = false;
+    std::atomic<bool> mDualMono{false};
 
     std::vector<float> mInputBufferL;
     std::vector<float> mInputBufferR;

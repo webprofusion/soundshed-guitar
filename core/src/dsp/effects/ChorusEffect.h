@@ -18,6 +18,12 @@ namespace guitarfx
 class ChorusEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         if (!ValidatePrepare(sampleRate, maxBlockSize))
@@ -199,14 +205,6 @@ class ChorusEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "modulation";
-    }
-
-    /// The right LFO runs a quarter cycle ahead of the left, so a mono input comes out stereo
-    /// whenever the delay is modulated and some of it is heard. Without this the next
-    /// mono-capable node, or the output, would copy the left channel over the right.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mMix.load(std::memory_order_relaxed) > 0.0f && mDepthMs.load(std::memory_order_relaxed) > 0.0f;
     }
 
   private:

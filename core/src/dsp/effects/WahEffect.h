@@ -203,6 +203,12 @@ inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
 class WahEffect : public EffectProcessor
 {
   public:
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     WahEffect()
     {
         for (std::size_t index = 0; index < wah::kParamCount; ++index)

@@ -110,6 +110,11 @@ inline nlohmann::json SerializeNode(const GraphNode& node)
         json["enabled"] = node.enabled;
     }
 
+    if (!node.channelMode.empty())
+    {
+        json["channelMode"] = node.channelMode;
+    }
+
     if (!node.params.empty())
     {
         json["params"] = nlohmann::json::object();
@@ -157,6 +162,11 @@ inline GraphNode DeserializeNode(const nlohmann::json& json)
     if (json.contains("title") && json["title"].is_string())
     {
         node.title = json["title"].get<std::string>();
+    }
+
+    if (json.contains("channelMode") && json["channelMode"].is_string())
+    {
+        node.channelMode = json["channelMode"].get<std::string>();
     }
 
     if (json.contains("enabled"))
@@ -303,6 +313,7 @@ inline void to_json(nlohmann::json& j, const GlobalSignalChainConfig& c)
     j = nlohmann::json{{"inputGain", c.inputGain},
                        {"monoMode", c.monoMode},
                        {"inputChannel", c.inputChannel},
+                       {"dualMono", c.dualMono},
                        {"outputGain", c.outputGain},
                        {"limiterEnabled", c.limiterEnabled},
                        {"preChainGraph", SerializeSignalGraph(c.preChainGraph)},
@@ -314,6 +325,7 @@ inline void from_json(const nlohmann::json& j, GlobalSignalChainConfig& c)
     c.inputGain = j.value("inputGain", 0.0);
     c.monoMode = j.value("monoMode", false);
     c.inputChannel = j.value("inputChannel", 0);
+    c.dualMono = j.value("dualMono", false);
     c.outputGain = j.value("outputGain", 0.0);
     c.limiterEnabled = j.value("limiterEnabled", false);
 

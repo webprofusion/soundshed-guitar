@@ -57,16 +57,39 @@ class CompositeEffectProcessor : public EffectProcessor
         mInnerExecutor.CommitDeferredRebuilds(work);
     }
 
+    /// A composite widens when anything inside it can, so a chorus or a spread delay inside one
+    /// widens a mono input as it would outside one.
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return mInnerExecutor.AnyNodeCanWiden();
+    }
+
+    /// The inner graph resolves its own layout from what this node is given.
+    void SetInputLayout(ChannelLayout layout) override
+    {
+        mInnerExecutor.SetInputLayout(layout);
+    }
+
+    /// Dual mono is the inner graph's to do: it gives its own coupled nodes second instances, so
+    /// the composite as a whole keeps its channels apart.
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mInnerExecutor.SetDualMono(dualMono);
+    }
+
+    /// Off the DSP lock: builds the inner graph's second instances ahead of SetDualMono(true).
+    void StageInnerDualMonoTwins()
+    {
+        mInnerExecutor.StageDualMonoTwins();
+    }
+
     [[nodiscard]] std::string GetType() const override;
     [[nodiscard]] std::string GetCategory() const override;
-
-    /// Stereo whenever the wrapped graph's output was, so a chorus or a spread delay inside a
-    /// composite widens a mono input as it would outside one. The parent asks right after this
-    /// node's Process(), so the answer is for the block just run.
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mEnabled && mInnerExecutor.LastOutputWasStereo();
-    }
 
     [[nodiscard]] bool RequiresResource() const override
     {

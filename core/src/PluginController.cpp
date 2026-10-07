@@ -193,8 +193,24 @@ void PluginController::Initialize()
 
 void PluginController::Prepare(double sampleRate, int blockSize)
 {
+    bool channelCountsChanged = false;
+
+    // A device or bus that now carries two channels can switch dual mono on; its second
+    // instances are built here, off the lock.
+    if (mPresetMixer.IsDualMono())
+    {
+        mPresetMixer.StageDualMono();
+    }
+
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
+        // Before Prepare(), so the chains it builds are built for the layout they will run in.
+        const int inputsBefore = mPresetMixer.GetInputChannelCount();
+        const int outputsBefore = mPresetMixer.GetOutputChannelCount();
+        const auto channels = mHost.GetAudioChannelCounts();
+        mPresetMixer.SetAudioChannelCounts(channels.inputs, channels.outputs);
+        channelCountsChanged = mPresetMixer.GetInputChannelCount() != inputsBefore ||
+                               mPresetMixer.GetOutputChannelCount() != outputsBefore;
         mPresetMixer.Prepare(sampleRate, blockSize);
 
         if (mPracticeTool)
@@ -217,6 +233,15 @@ void PluginController::Prepare(double sampleRate, int blockSize)
     // Report initial latency to the host (e.g. IR cab partition size may be
     // known only after Prepare sets the sample rate).
     UpdateHostLatency();
+
+    // A different device or bus can change what the input mode can be, so the UI hears it, and a
+    // chain that turned stereo builds the right-hand NAM models it now needs. Here rather than
+    // waiting for the editor's idle tick: a DAW can change a bus with the editor closed.
+    if (channelCountsChanged)
+    {
+        ApplyDeferredNodeRebuilds();
+        SendInputModeToUI();
+    }
 }
 
 void PluginController::Reset()

@@ -1,4 +1,5 @@
-import { initializeControls, initializeInputModeControls, initializeAmpCabPowerControls, refreshEqModalVisualization } from "./controls.js";
+import { initializeControls, initializeAmpCabPowerControls, refreshEqModalVisualization } from "./controls.js";
+import { initializeInputModeControls } from "./inputMode.js";
 import {
   initializePresetControls,
   initializePresets,

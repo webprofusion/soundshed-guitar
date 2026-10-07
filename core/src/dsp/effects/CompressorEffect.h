@@ -67,6 +67,23 @@ struct LevelSmoother
 class CompressorEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off the stereo link (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     void Prepare(double sampleRate, int /*maxBlockSize*/) override
     {
         if (!ValidatePrepare(sampleRate, 1))
@@ -98,7 +115,9 @@ class CompressorEffect : public EffectProcessor
         const float attackCoef = mAttackCoef.load(std::memory_order_relaxed);
         const float releaseCoef = mReleaseCoef.load(std::memory_order_relaxed);
         const float levelCoef = mLevelCoef.load(std::memory_order_relaxed);
-        const bool linked = mStereoLink.load(std::memory_order_relaxed) >= 0.5f;
+        // Dual mono keeps each side to its own detector, whatever Stereo Link says.
+        const bool linked =
+            mStereoLink.load(std::memory_order_relaxed) >= 0.5f && !mDualMono.load(std::memory_order_relaxed);
         constexpr float kSoftClipTransparentKnee = 0.995f;
         constexpr float kSoftClipMaxKneeReduction = 0.075f;
         // Move the soft-clip knee from nearly transparent at 0.995 to 0.92 at
@@ -330,6 +349,7 @@ class CompressorEffect : public EffectProcessor
     std::atomic<float> mLevelCoef{1.0f};
 
     std::atomic<float> mStereoLink{1.0f};
+    std::atomic<bool> mDualMono{false};
 
     // State (audio thread only, no synchronization needed)
     std::array<float, 2> mEnvelope = {0.0f, 0.0f}; // gain reduction in dB, per channel
@@ -345,6 +365,23 @@ class CompressorEffect : public EffectProcessor
 class OptoCompressorEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off the stereo link (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     void Prepare(double sampleRate, int /*maxBlockSize*/) override
     {
         if (!ValidatePrepare(sampleRate, 1))
@@ -388,7 +425,9 @@ class OptoCompressorEffect : public EffectProcessor
         const float releaseCoef = mReleaseCoef.load(std::memory_order_relaxed);
         const float detectCoef = mDetectCoef.load(std::memory_order_relaxed);
         const float levelCoef = mLevelCoef.load(std::memory_order_relaxed);
-        const bool linked = mStereoLink.load(std::memory_order_relaxed) >= 0.5f;
+        // Dual mono keeps each side to its own detector, whatever Stereo Link says.
+        const bool linked =
+            mStereoLink.load(std::memory_order_relaxed) >= 0.5f && !mDualMono.load(std::memory_order_relaxed);
         const float clipKnee = 0.995f - 0.075f * std::clamp(softClip, 0.0f, 1.0f);
 
         for (int i = 0; i < numSamples; ++i)
@@ -580,6 +619,7 @@ class OptoCompressorEffect : public EffectProcessor
     std::atomic<float> mDetectCoef{0.0f};
     std::atomic<float> mLevelCoef{1.0f};
     std::atomic<float> mStereoLink{1.0f};
+    std::atomic<bool> mDualMono{false};
 
     std::array<float, 2> mEnvelope = {0.0f, 0.0f};      // mean power, per channel
     std::array<float, 2> mOptoCellState = {0.0f, 0.0f}; // gain reduction in dB, per channel

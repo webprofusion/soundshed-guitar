@@ -778,11 +778,6 @@ class Spatial3DEffect : public EffectProcessor
         return 0.0;
     }
 
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return true;
-    }
-
     [[nodiscard]] bool SupportsMonoProcessing() const override
     {
         return false;

@@ -300,9 +300,9 @@ void UiCommands::SetOutputMuted(bool muted)
     mClient.Send("setOutputMuted", {{"muted", muted}});
 }
 
-void UiCommands::SetInputMode(bool monoMode, int inputChannel)
+void UiCommands::SetInputMode(bool monoMode, int inputChannel, bool dualMono)
 {
-    mClient.Send("setInputMode", {{"monoMode", monoMode}, {"inputChannel", inputChannel}});
+    mClient.Send("setInputMode", {{"monoMode", monoMode}, {"inputChannel", inputChannel}, {"dualMono", dualMono}});
 }
 
 // ── Tuner, metronome, demo audio ─────────────────────────────────────────────

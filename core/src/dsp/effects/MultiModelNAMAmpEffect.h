@@ -60,6 +60,18 @@ struct NamPrewarmReader : ::nam::DSP
 class MultiModelNAMAmpEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     /// How long a model takes to fade fully in or out of the mix.
     static constexpr double kRampSeconds = 0.03;
     /// How long a model that was not running plays unheard before it is faded in, so its

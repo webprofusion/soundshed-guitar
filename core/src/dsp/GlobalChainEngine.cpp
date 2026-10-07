@@ -5,9 +5,11 @@
 namespace guitarfx
 {
 void GlobalChainEngine::Load(SignalGraphExecutor& executor, const SignalGraph& graph, const double* inputTrimDb,
-                             const ExecutorSetup& setup)
+                             ChannelLayout inputLayout, const ExecutorSetup& setup)
 {
     executor.SetResourceLibrary(setup.resourceLibrary);
+    executor.SetInputLayout(inputLayout);
+    executor.SetDualMono(setup.dualMono);
 
     if (setup.nodeTypeConfigDefaults != nullptr)
     {
@@ -46,7 +48,7 @@ void GlobalChainEngine::Rebuild(const ExecutorSetup& setup)
         mConfig.preChainGraph = preGraph;
     }
 
-    Load(*mPre, GlobalChainEditor::LivePreChain(preGraph), &mConfig.inputGain, setup);
+    Load(*mPre, GlobalChainEditor::LivePreChain(preGraph), &mConfig.inputGain, setup.inputLayout, setup);
 
     auto postGraph = mConfig.BuildPostChainGraph();
 
@@ -56,7 +58,7 @@ void GlobalChainEngine::Rebuild(const ExecutorSetup& setup)
         mConfig.postChainGraph = postGraph;
     }
 
-    Load(*mPost, postGraph, nullptr, setup);
+    Load(*mPost, postGraph, nullptr, ChannelLayout::Stereo, setup);
 
     mNeedsRebuild.store(false, std::memory_order_release);
 }
@@ -99,8 +101,8 @@ bool GlobalChainEngine::PrepareSwap(GlobalSignalChainConfig normalized, const Ex
     mPendingPre = std::make_unique<SignalGraphExecutor>();
     mPendingPost = std::make_unique<SignalGraphExecutor>();
     Load(*mPendingPre, GlobalChainEditor::LivePreChain(mPendingConfig->preChainGraph), &mPendingConfig->inputGain,
-         setup);
-    Load(*mPendingPost, mPendingConfig->postChainGraph, nullptr, setup);
+         setup.inputLayout, setup);
+    Load(*mPendingPost, mPendingConfig->postChainGraph, nullptr, ChannelLayout::Stereo, setup);
     return true;
 }
 

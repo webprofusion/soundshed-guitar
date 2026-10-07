@@ -137,6 +137,12 @@ inline constexpr double kTransportHeadroomMs = 8.0;
 class TapeDelayEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
     TapeDelayEffect()
     {
         for (std::size_t index = 0; index < tape_delay::kParamCount; ++index)
@@ -196,28 +202,6 @@ class TapeDelayEffect : public EffectProcessor
         mTransport.Reset();
         mGlide.Snap(TargetDelaySamples());
         mPrimed = false;
-    }
-
-    [[nodiscard]] bool SupportsMonoProcessing() const override
-    {
-        return true;
-    }
-
-    void ProcessMono(float* input, float* output, int numSamples) override
-    {
-        if (!output || numSamples <= 0)
-        {
-            return;
-        }
-
-        if (!input || mChannels[0].line.Empty())
-        {
-            std::fill_n(output, numSamples, 0.0f);
-            return;
-        }
-
-        const int count = FillSchedule(numSamples);
-        ProcessChannel(mChannels[0], input, output, count, 0.0);
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -302,11 +286,6 @@ class TapeDelayEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "delay";
-    }
-
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        return mValues[tape_delay::kSpread] > 0.0;
     }
 
   private:

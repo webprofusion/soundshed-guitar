@@ -15,6 +15,7 @@
 
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/HostedPluginSupport.h"
+#include "controller/internal/InputModeSettings.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
 #include "presets/PresetStorage.h"
@@ -704,15 +705,10 @@ void PluginController::ApplyPreset(const Preset& preset)
 
     if (mHost.IsStandalone())
     {
-        constexpr auto kMonoModeKey = "inputChannel.monoMode";
-        constexpr auto kInputChanKey = "inputChannel.mono";
-
-        const auto monoIt = mAppSettings.find(kMonoModeKey);
-        const auto chanIt = mAppSettings.find(kInputChanKey);
-
-        chainConfig.monoMode = (monoIt != mAppSettings.end() && monoIt->is_boolean()) ? monoIt->get<bool>() : true;
-        chainConfig.inputChannel =
-            (chanIt != mAppSettings.end() && chanIt->is_number_integer()) ? std::clamp(chanIt->get<int>(), 0, 1) : 0;
+        const StoredInputMode stored = ReadStoredInputMode(mAppSettings);
+        chainConfig.monoMode = stored.monoMode;
+        chainConfig.inputChannel = stored.inputChannel;
+        chainConfig.dualMono = stored.dualMono;
     }
 
     Preset normalizedPreset = preset;

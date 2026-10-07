@@ -11,7 +11,9 @@ import { applyDensityAppSettings } from "../compactMode.js";
 import { renderCompositeList } from "../compositeEditor.js";
 import { handleCompositeLibrary } from "../compositeEffects.js";
 import type { CompositeEffectDefinition } from "../compositeTypes.js";
-import { applyOutputMuted, applyStoredInputChannel, handleAmpCabStateChanged, handleInputModeChanged, syncControlsFromState } from "../controls.js";
+import { applyOutputMuted, handleAmpCabStateChanged, syncControlsFromState } from "../controls.js";
+import { applyStoredInputChannel, handleInputModeChanged } from "../inputMode.js";
+import type { InputModeChangedPayload } from "../inputMode.js";
 import { handleCustomEffectLibrary } from "../customEffects.js";
 import { applyDemoClips, applyStoredDemoAudioSelection, refreshDemoAudioSelectors } from "../demoAudio.js";
 import { refreshFxSelector } from "../fxSelector.js";
@@ -283,12 +285,9 @@ export function onTheme(payload: IncomingPayload): void {
 }
 
 export function onInputModeChanged(payload: IncomingPayload): void {
-  const modePayload = payload as { monoMode?: boolean; inputChannel?: number };
-  handleInputModeChanged(
-    modePayload.monoMode ?? true,
-    modePayload.inputChannel ?? 1
-  );
-  appendLog(`Input mode changed: ${modePayload.monoMode ? "Mono" : "Stereo"}, Channel: ${(modePayload.inputChannel ?? 1) + 1}`);
+  const modePayload = payload as InputModeChangedPayload;
+  handleInputModeChanged(modePayload);
+  appendLog(`Input mode changed: ${modePayload.mode ?? "?"} (in force: ${modePayload.effectiveMode ?? "?"})`);
 }
 
 export function onAmpCabStateChanged(payload: IncomingPayload): void {

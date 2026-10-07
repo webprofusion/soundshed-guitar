@@ -86,7 +86,134 @@ ExecutorSetup MultiPresetMixer::MakeExecutorSetup() const
     setup.prepared = mPrepared;
     setup.sampleRate = mSampleRate;
     setup.maxBlockSize = mMaxBlockSize;
+    setup.inputLayout = (mEffectiveInputMode == InputMode::Mono) ? ChannelLayout::Mono : ChannelLayout::Stereo;
+    setup.dualMono = (mEffectiveInputMode == InputMode::DualMono);
     return setup;
+}
+
+std::size_t MultiPresetMixer::CountDualMonoSharedNodes() const
+{
+    std::size_t shared =
+        mGlobalChain.Pre().DualMonoSharedNodes().size() + mGlobalChain.Post().DualMonoSharedNodes().size();
+
+    for (const auto& inst : mVoices.Instances())
+    {
+        if (!inst->IsRetiring())
+        {
+            shared += inst->executor.DualMonoSharedNodes().size();
+        }
+    }
+
+    return shared;
+}
+
+void MultiPresetMixer::StageDualMono()
+{
+    mGlobalChain.Pre().StageDualMonoTwins();
+    mGlobalChain.Post().StageDualMonoTwins();
+
+    // Off the lock: the scope keeps the audio thread from dropping a finished fade-out from
+    // under the walk. Slots are only added or removed on this thread.
+    const PresetVoicePool::ReadScope readScope(mVoices);
+
+    for (auto& inst : mVoices.Instances())
+    {
+        inst->executor.StageDualMonoTwins();
+    }
+}
+
+// The input settings live in the global chain config as well, which is what a DAW saves with
+// its project, so each setter writes them there too.
+void MultiPresetMixer::SetMonoMode(bool mono)
+{
+    mMonoMode = mHostControlledInput ? false : mono;
+    mGlobalChain.Config().monoMode = mMonoMode;
+    ApplyInputLayout();
+}
+
+void MultiPresetMixer::SetDualMono(bool dualMono)
+{
+    mDualMono = dualMono;
+    mGlobalChain.Config().dualMono = dualMono;
+    ApplyInputLayout();
+}
+
+void MultiPresetMixer::SetInputChannel(int channel)
+{
+    mInputChannel = std::clamp(channel, kInputChannelLeft, kInputChannelSum);
+    mGlobalChain.Config().inputChannel = mInputChannel;
+    ApplyInputLayout();
+}
+
+void MultiPresetMixer::SetAudioChannelCounts(int inputs, int outputs)
+{
+    mInputChannelCount = std::max(1, inputs);
+    mOutputChannelCount = std::max(1, outputs);
+    ApplyInputLayout();
+}
+
+void MultiPresetMixer::SetHostControlledInput(bool hostControlled)
+{
+    mHostControlledInput = hostControlled;
+
+    if (hostControlled)
+    {
+        mMonoMode = false;
+    }
+
+    ApplyInputLayout();
+}
+
+void MultiPresetMixer::ApplyInputLayout()
+{
+    const bool twoInputs = mInputChannelCount >= 2;
+    const bool twoOutputs = mOutputChannelCount >= 2;
+
+    // A DAW's bus decides between mono and stereo; the standalone app's input mode does. One
+    // input is mono whatever was asked for. Dual mono needs two outputs to be heard at all, so
+    // without them it is the two inputs summed.
+    if (!twoInputs)
+    {
+        mEffectiveInputMode = InputMode::Mono;
+        mFoldChannel = kInputChannelLeft;
+    }
+    else if (!mHostControlledInput && mMonoMode)
+    {
+        mEffectiveInputMode = InputMode::Mono;
+        mFoldChannel = mInputChannel;
+    }
+    else if (mDualMono && !twoOutputs)
+    {
+        mEffectiveInputMode = InputMode::Mono;
+        mFoldChannel = kInputChannelSum;
+    }
+    else
+    {
+        mEffectiveInputMode = mDualMono ? InputMode::DualMono : InputMode::Stereo;
+        mFoldChannel = kInputChannelLeft;
+    }
+
+    const ChannelLayout inputLayout =
+        (mEffectiveInputMode == InputMode::Mono) ? ChannelLayout::Mono : ChannelLayout::Stereo;
+    const bool dualMono = (mEffectiveInputMode == InputMode::DualMono);
+    mGraphsDualMono.store(dualMono, std::memory_order_release);
+    mGlobalChain.Pre().SetInputLayout(inputLayout);
+    mGlobalChain.Pre().SetDualMono(dualMono);
+    // The Multi-Rig mix bus is stereo, so the post-chain always is.
+    mGlobalChain.Post().SetInputLayout(ChannelLayout::Stereo);
+    mGlobalChain.Post().SetDualMono(dualMono);
+
+    const ChannelLayout rigLayout = mGlobalChain.Pre().OutputIsStereo() || inputLayout == ChannelLayout::Stereo
+                                        ? ChannelLayout::Stereo
+                                        : ChannelLayout::Mono;
+    mRigInputLayout.store(rigLayout, std::memory_order_release);
+
+    // Retiring instances included: a tail still ringing hears the same input as the rest.
+    for (auto& inst : mVoices.Instances())
+    {
+        inst->executor.SetInputLayout(rigLayout);
+        inst->executor.SetDualMono(dualMono);
+    }
 }
 
 GlobalChainEditor MultiPresetMixer::EditGlobalChain()
@@ -106,9 +233,11 @@ std::unique_ptr<PresetInstance> MultiPresetMixer::BuildInstance(const Preset& pr
 
     inst->executor.SetResourceLibrary(mResourceLibrary);
     inst->executor.SeedNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
+    // Before SetGraph, so the plan is built for the layout it will run with.
+    inst->executor.SetInputLayout(mRigInputLayout.load(std::memory_order_acquire));
+    inst->executor.SetDualMono(mGraphsDualMono.load(std::memory_order_acquire));
     inst->executor.SetGraph(normalizedPreset.graph); // CreateProcessors + LoadResources here
     inst->executor.SetSignalDiagnosticsEnabled(mTelemetry.IsEnabled());
-    inst->executor.SetNamInputModeMono(mMonoMode);
     inst->complexityScore = EstimateGraphComplexityScore(inst->executor.GetNodeTypes());
     inst->canRingOut = GraphCanRingOut(inst->executor.GetNodeTypesDeep());
 
@@ -279,6 +408,8 @@ void MultiPresetMixer::EnsureGlobalChainsUpToDate()
     if (mGlobalChain.EnsureUpToDate(MakeExecutorSetup()))
     {
         mMasterGain = std::pow(10.0, mGlobalChain.Config().outputGain / 20.0);
+        // A rebuilt pre-chain may widen where the old one did not, and the rigs follow it.
+        ApplyInputLayout();
     }
 }
 
@@ -289,10 +420,12 @@ void MultiPresetMixer::EnsureGlobalChainsUpToDate()
 void MultiPresetMixer::ApplyGlobalChainScalars(const GlobalSignalChainConfig& config)
 {
     mMonoMode = mHostControlledInput ? false : config.monoMode;
-    mInputChannel = std::clamp(config.inputChannel, 0, 1);
+    mDualMono = config.dualMono;
+    mInputChannel = std::clamp(config.inputChannel, kInputChannelLeft, kInputChannelSum);
     mLimiterEnabled = config.limiterEnabled;
     mMasterGain = std::pow(10.0, config.outputGain / 20.0);
     mGlobalChain.Pre().SetInputTrim(config.inputGain);
+    ApplyInputLayout();
 }
 
 void MultiPresetMixer::SetGlobalChainConfig(const GlobalSignalChainConfig& config)
@@ -307,6 +440,13 @@ void MultiPresetMixer::SetGlobalChainConfig(const GlobalSignalChainConfig& confi
 
 bool MultiPresetMixer::PrepareGlobalChainSwap(const GlobalSignalChainConfig& config)
 {
+    // A restored config that turns dual mono on needs the second instances built here, off the
+    // lock, for the commit to install.
+    if (config.dualMono)
+    {
+        StageDualMono();
+    }
+
     GlobalSignalChainConfig normalized = config;
     GlobalChainEditor::NormalizeConfig(normalized);
     return mGlobalChain.PrepareSwap(std::move(normalized), MakeExecutorSetup());
@@ -747,6 +887,8 @@ void MultiPresetMixer::Prepare(double sampleRate, int maxBlockSize)
     mPreChainOutR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
     mPostChainOutL.resize(static_cast<size_t>(maxBlockSize), 0.0f);
     mPostChainOutR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
+    mFoldOutL.resize(static_cast<size_t>(maxBlockSize), 0.0f);
+    mFoldOutR.resize(static_cast<size_t>(maxBlockSize), 0.0f);
     mTuner->Prepare(sampleRate);
 
     // Build and prepare global signal chains based on current config
@@ -814,6 +956,37 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         return;
     }
 
+    // A mono output (a one-channel bus or device) gets the whole stereo mix folded into it, so
+    // whatever sits on the right side is summed in rather than dropped. A mono mix has the same
+    // samples on both sides and folds to exactly itself.
+    if (mOutputChannelCount < 2 || !outputs[1])
+    {
+        if (outputs[0] && mPrepared && numSamples <= static_cast<int>(mFoldOutL.size()))
+        {
+            float* foldOutputs[2] = {mFoldOutL.data(), mFoldOutR.data()};
+            ProcessStereoBlock(inputs, foldOutputs, numSamples);
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                const float folded =
+                    0.5f * (mFoldOutL[static_cast<std::size_t>(i)] + mFoldOutR[static_cast<std::size_t>(i)]);
+                outputs[0][i] = folded;
+
+                if (outputs[1])
+                {
+                    outputs[1][i] = folded;
+                }
+            }
+
+            return;
+        }
+    }
+
+    ProcessStereoBlock(inputs, outputs, numSamples);
+}
+
+void MultiPresetMixer::ProcessStereoBlock(float** inputs, float** outputs, int numSamples)
+{
     const bool diagnosticsEnabled = mTelemetry.IsEnabled();
 
     // NOTE: Do NOT call EnsureGlobalChainsUpToDate() here.
@@ -846,18 +1019,23 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
         mTelemetry.Record(MixerTelemetry::Stage::RawInput, processInL, processInR, numSamples);
     }
 
-    if (mMonoMode && (processInL || processInR))
+    if (mEffectiveInputMode == InputMode::Mono && (processInL || processInR))
     {
-        // Mono mode: the chosen hardware input on both channels, or silence if it is not there.
-        const float* source = (mInputChannel == 1) ? processInR : processInL;
+        // Mono: the chosen input, or both summed, on both channels. A mono bus hands over no
+        // right channel at all, and a missing one reads as the other.
+        const float* left = processInL ? processInL : processInR;
+        const float* right = processInR ? processInR : processInL;
 
-        if (source)
+        if (mFoldChannel == kInputChannelSum)
         {
-            std::copy_n(source, numSamples, mTempInL.data());
+            for (int i = 0; i < numSamples; ++i)
+            {
+                mTempInL[static_cast<std::size_t>(i)] = 0.5f * (left[i] + right[i]);
+            }
         }
         else
         {
-            std::fill_n(mTempInL.data(), numSamples, 0.0f);
+            std::copy_n(mFoldChannel == kInputChannelRight ? right : left, numSamples, mTempInL.data());
         }
 
         std::copy_n(mTempInL.data(), numSamples, mTempInR.data());
@@ -896,7 +1074,8 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     // Process tuner FIRST (before any processing, uses raw input for accurate pitch detection)
     if (mTuner->IsEnabled())
     {
-        mTuner->Process((mInputChannel == 1) ? processInR : processInL, numSamples);
+        // The folded input in Mono; input 1 otherwise.
+        mTuner->Process(processInL ? processInL : processInR, numSamples);
 
         // If not in live tuner mode, mute the output
         if (!mTuner->IsLiveMode())
@@ -914,10 +1093,6 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
             return;
         }
     }
-
-    const bool namInputModeMono = mMonoMode;
-    mGlobalChain.Pre().SetNamInputModeMono(namInputModeMono);
-    mGlobalChain.Post().SetNamInputModeMono(namInputModeMono);
 
     // ==========================================================================
     // GLOBAL PRE-CHAIN: Input → Noise Gate → Transpose
@@ -1063,7 +1238,6 @@ void MultiPresetMixer::Process(float** inputs, float** outputs, int numSamples)
     // Avoid nested parallelism: if mixer-level fan-out is active, run each preset graph serially.
     for (auto& inst : mVoices.Instances())
     {
-        inst->executor.SetNamInputModeMono(namInputModeMono);
         inst->executor.SetParallelLevelsEnabled(!useParallel);
     }
 

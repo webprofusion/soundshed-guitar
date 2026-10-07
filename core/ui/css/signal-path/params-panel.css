@@ -160,6 +160,17 @@
   flex-wrap: wrap;
 }
 
+/* Channels: how the effect takes a stereo input. As tall as the chips beside it. */
+.default-effect-shell-meta .node-channel-mode-select {
+  height: 20px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+}
+
 /* Icon buttons in the header row (DSP stats, the layout split toggle) stand as tall as the
    20px chips and bypass switch beside them. The compact sheet raises all of them to 26px
    together, and its selector outweighs this one. */

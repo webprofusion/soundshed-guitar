@@ -55,6 +55,18 @@ inline constexpr double kSwitchFadeMs = 8.0;
 template <typename Traits> class DrivePedal : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     static constexpr std::size_t kParamCount = std::tuple_size_v<std::remove_cvref_t<decltype(Traits::kParams)>>;
     using Values = std::array<double, kParamCount>;
     using Coefficients = typename Traits::Coefficients;

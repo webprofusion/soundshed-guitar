@@ -61,13 +61,23 @@ ControlsContent::ControlsContent (NanoContext& contextIn) : context (contextIn)
     addKnob (input, param ("inputGain", "Level", "dB", -12.0, 12.0, 0.0), [chain] { return chain().inputGain; },
              [&commands] (double v) { commands.SetGlobalChainParam ("input.gain", v); });
 
+    // In the standalone app the player picks mono (input 1, input 2 or both summed), stereo or
+    // dual mono; in a DAW the track decides mono or stereo, and dual mono is the one choice left.
     if (context.state().environment.standalone)
     {
         addSwitch (input, "Mono input", [chain] { return chain().monoMode; },
-                   [this, chain] (bool mono) { context.commands.SetInputMode (mono, chain().inputChannel); });
-        addSwitch (input, "Right channel", [chain] { return chain().inputChannel == 1; },
-                   [this, chain] (bool right) { context.commands.SetInputMode (chain().monoMode, right ? 1 : 0); });
+                   [this, chain] (bool mono) { context.commands.SetInputMode (mono, chain().inputChannel, chain().dualMono); });
+        addSwitch (input, "Input 2", [chain] { return chain().inputChannel == 1; },
+                   [this, chain] (bool right) { context.commands.SetInputMode (chain().monoMode, right ? 1 : 0, chain().dualMono); });
+        addSwitch (input, "Both inputs summed", [chain] { return chain().inputChannel == 2; },
+                   [this, chain] (bool sum) { context.commands.SetInputMode (chain().monoMode, sum ? 2 : 0, chain().dualMono); });
     }
+
+    addSwitch (input, "Dual mono", [chain] { return chain().dualMono; },
+               [this, chain] (bool dual) {
+                   // Dual mono needs both inputs kept apart, so it turns mono off.
+                   context.commands.SetInputMode (dual ? false : chain().monoMode, chain().inputChannel, dual);
+               });
 
     auto& gate = addSection ("Noise gate");
     addSwitch (gate, "On", [chain] { return nodeEnabled (chain().preChainGraph, "global_gate"); },

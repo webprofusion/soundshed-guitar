@@ -449,34 +449,32 @@ void TestPresetsStable(const Subject& subject)
 
 void TestStereo(const Subject& subject)
 {
+    // A delay can widen, so a graph keeps whatever follows it in stereo from the start and a
+    // user raising Spread is heard at once (EffectProcessor::CanWiden).
     auto effect = Make(subject, 48000.0, {});
-    Check(!effect->ProducesStereoOutput(), std::string(subject.name) + ": mono out with no Spread");
-    effect->SetParam("spread", 10.0);
-    Check(effect->ProducesStereoOutput(), std::string(subject.name) + ": Spread reports stereo output");
+    Check(effect->CanWiden(), std::string(subject.name) + ": declared able to widen a mono input");
 
-    // The mono fast path and the stereo path's left channel are the same processing.
-    auto mono = Make(subject, 48000.0, {{"feedback", 0.5}});
-    auto stereo = Make(subject, 48000.0, {{"feedback", 0.5}});
+    // And Spread does widen: the same signal on both sides comes out as two.
+    auto stereo = Make(subject, 48000.0, {{"feedback", 0.5}, {"spread", 10.0}});
     auto input = Sine(48000.0, 1.0, 523.0, 0.3);
     std::vector<float> right = input;
-    std::vector<float> outMono(input.size()), outLeft(input.size()), outRight(input.size());
+    std::vector<float> outLeft(input.size()), outRight(input.size());
 
     for (std::size_t n = 0; n + kBlock <= input.size(); n += kBlock)
     {
-        mono->ProcessMono(&input[n], &outMono[n], kBlock);
         float* ins[2] = {&input[n], &right[n]};
         float* outs[2] = {&outLeft[n], &outRight[n]};
         stereo->Process(ins, outs, kBlock);
     }
 
-    double worst = 0.0;
+    double difference = 0.0;
 
     for (std::size_t n = 0; n < input.size(); ++n)
     {
-        worst = std::max(worst, std::fabs(static_cast<double>(outMono[n] - outLeft[n])));
+        difference = std::max(difference, std::fabs(static_cast<double>(outLeft[n] - outRight[n])));
     }
 
-    Check(worst < 1.0e-6, std::string(subject.name) + ": mono path matches the stereo left channel", Num(worst, 9));
+    Check(difference > 1.0e-3, std::string(subject.name) + ": Spread turns a mono input stereo", Num(difference, 6));
 }
 
 // ── Analog ──────────────────────────────────────────────────────────────────────────

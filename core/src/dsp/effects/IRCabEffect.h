@@ -33,6 +33,18 @@ namespace guitarfx
 class IRCabEffect : public EffectProcessor
 {
   public:
+    /// Keeps its channels apart once dual mono switches off the slot pan's fold to mono
+    /// (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    void SetDualMono(bool dualMono) override
+    {
+        mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
     void Prepare(double sampleRate, int maxBlockSize) override
     {
         rtparallel::DualLaneExecutor::EnsureStarted(); // here, so Process() never starts its thread
@@ -390,6 +402,7 @@ class IRCabEffect : public EffectProcessor
         }
 
         const bool hasPanB = hasB && std::abs(mSlotBPan) > 1e-6;
+        const bool dualMono = mDualMono.load(std::memory_order_relaxed);
         double slotBPanL = 1.0, slotBPanR = 1.0;
 
         if (hasPanB)
@@ -426,7 +439,13 @@ class IRCabEffect : public EffectProcessor
                     slotAR = ProcessMicPositionSlotA(slotAR, 1);
                 }
 
-                if (hasPanA)
+                if (hasPanA && dualMono)
+                {
+                    // Dual mono: a balance, each side kept to itself.
+                    slotAL *= slotAPanL;
+                    slotAR *= slotAPanR;
+                }
+                else if (hasPanA)
                 {
                     const double monoA = (slotAL + slotAR) * 0.5;
                     slotAL = monoA * slotAPanL;
@@ -447,7 +466,12 @@ class IRCabEffect : public EffectProcessor
                         slotBR = ProcessMicPositionSlotB(slotBR, 1);
                     }
 
-                    if (hasPanB)
+                    if (hasPanB && dualMono)
+                    {
+                        slotBL *= slotBPanL;
+                        slotBR *= slotBPanR;
+                    }
+                    else if (hasPanB)
                     {
                         const double monoB = (slotBL + slotBR) * 0.5;
                         slotBL = monoB * slotBPanL;
@@ -1075,13 +1099,6 @@ class IRCabEffect : public EffectProcessor
     [[nodiscard]] std::string GetCategory() const override
     {
         return "cab";
-    }
-
-    [[nodiscard]] bool ProducesStereoOutput() const override
-    {
-        // Pan on either slot or L/R split mode produces distinct L and R output.
-        return std::abs(mSlotAPan) > 1e-6 || std::abs(mSlotBPan) > 1e-6 ||
-               (mLRSplitEnabled && mConvolverBL.IsInitialized());
     }
 
   private:
@@ -1923,6 +1940,7 @@ class IRCabEffect : public EffectProcessor
     double mHighCutHz = 20000.0;
     double mSlotAGain = 1.0;
     double mSlotBGain = 1.0;
+    std::atomic<bool> mDualMono{false};
     double mSlotAPan = 0.0; // -1.0 = full left, 0.0 = centre, 1.0 = full right
     double mSlotBPan = 0.0;
     bool mLRSplitEnabled = false; // when true, stereo input is split: L→IR A, R→IR B

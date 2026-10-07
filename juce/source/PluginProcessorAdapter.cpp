@@ -21,6 +21,12 @@
 
 #include "controller/ControllerDisplayFeed.h"
 #include "resources/PluginPathUtils.h"
+
+// Same include order as Main.cpp: the standalone window header expects the audio and GUI
+// modules to be visible before it. Used only to read the standalone device's channels.
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include "util/FileSystem.h"
 #include "util/SessionLog.h"
 
@@ -310,12 +316,18 @@ void PluginProcessorAdapter::applyPendingDAWParamChanges (bool mayBlock)
 
 bool PluginProcessorAdapter::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    const auto isMonoOrStereo = [] (const juce::AudioChannelSet& set) {
+        return set == juce::AudioChannelSet::mono() || set == juce::AudioChannelSet::stereo();
+    };
+
+    if (!isMonoOrStereo (layouts.getMainOutputChannelSet()))
         return false;
 
 #if !JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+    // Mono or stereo in, mono or stereo out, in any pairing. A mono track's insert can then be
+    // mono in, stereo out, which is how a mono guitar keeps its reverb and delay in stereo; a
+    // mono output gets the stereo mix summed (see MultiPresetMixer::Process).
+    if (!isMonoOrStereo (layouts.getMainInputChannelSet()))
         return false;
 #endif
 
@@ -1037,6 +1049,27 @@ bool PluginProcessorAdapter::IsHostPlaying() const
 bool PluginProcessorAdapter::IsStandalone() const
 {
     return wrapperType == wrapperType_Standalone;
+}
+
+guitarfx::IPluginHost::AudioChannelCounts PluginProcessorAdapter::GetAudioChannelCounts() const
+{
+    // The bus layout the host chose. The standalone app's bus is always stereo, but a device
+    // with one active input (or output) only fills (or plays) one of its channels.
+    AudioChannelCounts counts { getMainBusNumInputChannels(), getMainBusNumOutputChannels() };
+
+    if (wrapperType == wrapperType_Standalone)
+    {
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+        {
+            if (auto* device = holder->deviceManager.getCurrentAudioDevice())
+            {
+                counts.inputs = std::min (counts.inputs, device->getActiveInputChannels().countNumberOfSetBits());
+                counts.outputs = std::min (counts.outputs, device->getActiveOutputChannels().countNumberOfSetBits());
+            }
+        }
+    }
+
+    return counts;
 }
 
 void PluginProcessorAdapter::ensureStandaloneProtocolHandlerRegistration()

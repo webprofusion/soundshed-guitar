@@ -212,6 +212,61 @@ void PluginController::HandleRenameSignalPathNodeRequest(const nlohmann::json& p
     NotifyHostStateChanged();
 }
 
+void PluginController::HandleSetSignalPathNodeChannelModeRequest(const nlohmann::json& payload)
+{
+    const std::string nodeId = payload.value("nodeId", "");
+    std::string channelMode = payload.contains("channelMode") && payload["channelMode"].is_string()
+                                  ? payload["channelMode"].get<std::string>()
+                                  : "";
+
+    // Anything but the three mono folds follows the input, the default.
+    if (channelMode != kChannelModeMono && channelMode != kChannelModeMonoLeft && channelMode != kChannelModeMonoRight)
+    {
+        channelMode.clear();
+    }
+
+    auto* graph = ResolveEditTarget();
+    auto* node = graph && !nodeId.empty() ? graph->FindNode(nodeId) : nullptr;
+
+    if (!node || node->channelMode == channelMode)
+    {
+        return;
+    }
+
+    node->channelMode = channelMode;
+
+    if (IsCompositeEditMode())
+    {
+        BroadcastCompositeEditState();
+        return;
+    }
+
+    if (!mActivePreset)
+    {
+        return;
+    }
+
+    // Like a name, a channel mode belongs to the node rather than a scene.
+    for (auto& scene : mActivePreset->scenes)
+    {
+        if (auto* sceneNode = scene.graph.FindNode(nodeId))
+        {
+            sceneNode->channelMode = channelMode;
+        }
+    }
+
+    if (auto* workingNode = mActivePreset->graph.FindNode(nodeId))
+    {
+        workingNode->channelMode = channelMode;
+    }
+
+    // The layout is resolved when a chain is built, so a new channel mode means a rebuild, which
+    // crossfades in like any structural edit.
+    SyncActivePresetSceneGraph();
+    ApplyActivePresetInItsSlot();
+    BroadcastState();
+}
+
 std::string PluginController::ReadLiveNodeConfig(const std::string& presetId, const std::string& nodeId,
                                                  const std::string& key) const
 {

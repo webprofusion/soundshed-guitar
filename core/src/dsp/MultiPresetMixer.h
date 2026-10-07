@@ -231,19 +231,42 @@ class MultiPresetMixer
         return mUserInputCalibrationGainDb;
     }
 
-    void SetMonoMode(bool mono)
-    {
-        mMonoMode = mHostControlledInput ? false : mono;
-    }
+    // ── Input layout ────────────────────────────────────────────────────────────────
+    // Whether the chains see one signal or two is configuration, never measured from the audio
+    // (docs/signal-chain.md, "Channel layout"). In a DAW the bus decides; in the standalone app
+    // the input mode does. Every setter below re-resolves the running graphs' layouts in place,
+    // so a running mixer takes them under the DSP lock.
 
-    void SetInputChannel(int channel)
+    /// What the chains are fed. Mono: one input, or both summed, on both channels. Stereo: both
+    /// inputs, each kept to its side. DualMono: both inputs, with nothing crossing between the
+    /// sides anywhere in a graph (it needs two outputs, and falls back to Mono summed without).
+    enum class InputMode
     {
-        mInputChannel = std::clamp(channel, 0, 1);
-    }
+        Mono,
+        Stereo,
+        DualMono,
+    };
+
+    /// Input channel numbers for SetInputChannel: which input Mono takes, or both summed.
+    static constexpr int kInputChannelLeft = 0;
+    static constexpr int kInputChannelRight = 1;
+    static constexpr int kInputChannelSum = 2;
+
+    /// Standalone: Mono (true) or Stereo/DualMono (false). Ignored when the host controls the input.
+    void SetMonoMode(bool mono);
+    /// Standalone, and per instance in a DAW: process a stereo input as two mono chains.
+    void SetDualMono(bool dualMono);
+    /// Which input Mono takes: kInputChannelLeft, kInputChannelRight or kInputChannelSum.
+    void SetInputChannel(int channel);
 
     [[nodiscard]] bool IsMonoMode() const
     {
         return mMonoMode;
+    }
+
+    [[nodiscard]] bool IsDualMono() const
+    {
+        return mDualMono;
     }
 
     [[nodiscard]] int GetInputChannel() const
@@ -251,17 +274,40 @@ class MultiPresetMixer
         return mInputChannel;
     }
 
-    // When hosted in a DAW the host owns the input configuration: mono
-    // folding/channel selection is disabled and the input is used as provided.
-    void SetHostControlledInput(bool hostControlled)
-    {
-        mHostControlledInput = hostControlled;
+    /// How many channels the input can supply and the output can reproduce: the DAW's main bus,
+    /// or the standalone device's active channels. Read when the stream is prepared. One input
+    /// forces Mono; one output folds the final mix to mono instead of dropping its right side.
+    void SetAudioChannelCounts(int inputs, int outputs);
 
-        if (hostControlled)
-        {
-            mMonoMode = false;
-        }
+    [[nodiscard]] int GetInputChannelCount() const
+    {
+        return mInputChannelCount;
     }
+
+    [[nodiscard]] int GetOutputChannelCount() const
+    {
+        return mOutputChannelCount;
+    }
+
+    /// Off the DSP lock, before dual mono is switched on: builds the second instances every
+    /// running graph will need (SignalGraphExecutor::StageDualMonoTwins), so the switch itself,
+    /// under the lock, only installs them. Cheap when they are already there.
+    void StageDualMono();
+
+    /// In dual mono, how many nodes across every running graph still run shared for want of a
+    /// second instance: hosted plugins, which cannot be kept in step with their own editor.
+    /// Under the DSP lock.
+    [[nodiscard]] std::size_t CountDualMonoSharedNodes() const;
+
+    /// The mode actually in force, after the host, the channel counts and the fallbacks.
+    [[nodiscard]] InputMode GetEffectiveInputMode() const
+    {
+        return mEffectiveInputMode;
+    }
+
+    /// When hosted in a DAW the host owns the input configuration: there is no Mono fold, and
+    /// the bus's channel count says whether the input is stereo.
+    void SetHostControlledInput(bool hostControlled);
 
     [[nodiscard]] bool IsHostControlledInput() const
     {
@@ -529,13 +575,32 @@ class MultiPresetMixer
     double mUserInputCalibrationGainDb = 0.0;
     float mUserInputCalibrationGainLinear = 1.0f;
     bool mMonoMode = false;
-    int mInputChannel = 0;             // 0=left, 1=right (for mono mode)
-    bool mHostControlledInput = false; // true when a DAW host owns the input config
+    bool mDualMono = false;
+    int mInputChannel = kInputChannelLeft; // which input Mono takes, or both summed
+    bool mHostControlledInput = false;     // true when a DAW host owns the input config
+    int mInputChannelCount = 2;
+    int mOutputChannelCount = 2;
+    // Resolved from the settings above by ApplyInputLayout(), under the DSP lock.
+    InputMode mEffectiveInputMode = InputMode::Stereo;
+    int mFoldChannel = kInputChannelLeft;
+    // What every rig's graph is fed: the pre-chain's output layout. Read by BuildInstance(),
+    // which runs off the DSP lock, hence atomic.
+    std::atomic<ChannelLayout> mRigInputLayout{ChannelLayout::Stereo};
+    // Whether every graph runs dual mono, read by BuildInstance() off the lock likewise.
+    std::atomic<bool> mGraphsDualMono{false};
+
+    /// Resolves the effective input mode and fold, and hands each graph its input layout:
+    /// the pre-chain the input's, every rig the pre-chain's output, the post-chain stereo.
+    void ApplyInputLayout();
+    /// One block of at most mMaxBlockSize into a stereo pair (either output may be null).
+    void ProcessStereoBlock(float** inputs, float** outputs, int numSamples);
 
     // Temporary buffers for input processing
     std::vector<float> mTempInL, mTempInR;
     std::vector<float> mPreChainOutL, mPreChainOutR;
     std::vector<float> mPostChainOutL, mPostChainOutR;
+    // The final mix when the output is mono, before it is folded into the one channel.
+    std::vector<float> mFoldOutL, mFoldOutR;
 
     // By pointer so the destructor can stop it first, ahead of everything it reports on.
     std::unique_ptr<TunerEngine> mTuner;

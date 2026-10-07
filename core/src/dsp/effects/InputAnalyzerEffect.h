@@ -26,6 +26,18 @@ namespace guitarfx
 class InputAnalyzerEffect : public EffectProcessor
 {
   public:
+    /// Each channel runs on its own state from the same settings (EffectProcessor::KeepsChannelsSeparate).
+    [[nodiscard]] bool KeepsChannelsSeparate() const override
+    {
+        return true;
+    }
+
+    /// Identical sides in, identical sides out, whatever the settings (EffectProcessor::CanWiden).
+    [[nodiscard]] bool CanWiden() const override
+    {
+        return false;
+    }
+
     static constexpr int kSpectrogramBins = 64;
     static constexpr int kBarkBands = 24;
     static constexpr double kSpectrogramMinDbfs = -120.0;

@@ -48,7 +48,6 @@ namespace guitarfx
 
         [[nodiscard]] std::string GetType() const override { return "plugin_host"; }
         [[nodiscard]] std::string GetCategory() const override { return "utility"; }
-        [[nodiscard]] bool ProducesStereoOutput() const override { return true; }
 
         // A hosted instrument plays the notes of any Guitar to MIDI node upstream of it; an
         // effect that ignores MIDI ignores them. With no note source upstream nothing is sent.

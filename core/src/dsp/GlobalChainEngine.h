@@ -25,6 +25,10 @@ struct ExecutorSetup
     bool prepared = false;
     double sampleRate = 44100.0;
     int maxBlockSize = 512;
+    /// What the pre-chain is fed. The post-chain always takes the stereo mix bus.
+    ChannelLayout inputLayout = ChannelLayout::Stereo;
+    /// Both chains keep the two sides apart (SignalGraphExecutor::SetDualMono).
+    bool dualMono = false;
 };
 
 /// The global pre-chain (input → gate → transpose) and post-chain (EQ → doubler → output)
@@ -107,7 +111,7 @@ class GlobalChainEngine
     /// Loads `graph` into `executor` and prepares it, the same way for a rebuild in place and
     /// for a staged replacement. The input trim is the pre-chain's alone.
     static void Load(SignalGraphExecutor& executor, const SignalGraph& graph, const double* inputTrimDb,
-                     const ExecutorSetup& setup);
+                     ChannelLayout inputLayout, const ExecutorSetup& setup);
 
     DspReaper& mReaper;
     GlobalSignalChainConfig mConfig;

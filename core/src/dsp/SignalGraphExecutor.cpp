@@ -88,60 +88,6 @@ std::optional<std::filesystem::path> ResolveResourcePath(const ResourceRef& ref,
     return std::nullopt;
 }
 
-/// True when the input pair is genuinely stereo: the right channel carries signal of
-/// its own, and the two channels actually differ.
-///
-/// This replaces a silence scan followed by a dual-mono scan. Both decisions are
-/// threshold-on-maximum, so folding them into one pass over the pair gives bit-identical
-/// answers for half the memory traffic -- and it can stop the moment both are decided,
-/// which for real stereo material is within the first few samples.
-bool InputPairIsStereo(const float* left, const float* right, int numSamples)
-{
-    // A missing channel, or both pointers aliasing one buffer, is mono by definition.
-    if (!left || !right || left == right)
-    {
-        return false;
-    }
-
-    // ~-80 dBFS: a mono source on a stereo bus leaves the second channel at digital
-    // silence or just its noise floor, both well below this.
-    constexpr float kSilenceThreshold = 1.0e-4f;
-    constexpr float kMonoEpsilon = 1.0e-6f;
-
-    // Chunked rather than sample-at-a-time: reducing to two maxima is branchless and
-    // vectorises, while testing between chunks keeps the early exit that makes genuinely
-    // stereo material cost almost nothing. Proving material is *mono* needs every sample
-    // either way, and that is the common case for a guitar on one input.
-    constexpr int kChunk = 64;
-
-    bool rightCarriesSignal = false;
-    bool channelsDiffer = false;
-
-    for (int start = 0; start < numSamples; start += kChunk)
-    {
-        const int end = std::min(start + kChunk, numSamples);
-
-        float maxRight = 0.0f;
-        float maxDiff = 0.0f;
-
-        for (int i = start; i < end; ++i)
-        {
-            maxRight = std::max(maxRight, std::abs(right[i]));
-            maxDiff = std::max(maxDiff, std::abs(left[i] - right[i]));
-        }
-
-        rightCarriesSignal = rightCarriesSignal || (maxRight > kSilenceThreshold);
-        channelsDiffer = channelsDiffer || (maxDiff > kMonoEpsilon);
-
-        if (rightCarriesSignal && channelsDiffer)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 bool ShouldUseParallelLevel(int levelCount, int levelScore, int numSamples, bool executorParallelEnabled,
                             bool workersAvailable)
 {
@@ -265,6 +211,8 @@ void SignalGraphExecutor::SetGraph(const SignalGraph& graph)
     // processors it creates. Processors are only ever built there, and mNodeStates is only
     // repopulated here, so this is the single place the plan can go stale.
     BuildExecutionPlan();
+    // After the plan, whose layout pass has told every node its input layout.
+    LoadPendingResources();
 }
 
 void SignalGraphExecutor::BuildExecutionLevels()
@@ -352,18 +300,11 @@ void SignalGraphExecutor::BuildExecutionLevels()
 void SignalGraphExecutor::CreateProcessors()
 {
     auto& registry = EffectRegistry::Instance();
+    auto& resourceWorkItems = mPendingResourceLoads;
+    resourceWorkItems.clear();
 
-    // Work item for Phase 2: resolved refs/paths ready to hand to LoadResources.
-    struct ResourceWork
-    {
-        NodeState* state;
-        std::vector<ResourceRef> refs;
-        std::vector<std::filesystem::path> paths;
-    };
-
-    std::vector<ResourceWork> resourceWorkItems;
-
-    // Phase 1: Create processors, apply params/config, and resolve resource paths.
+    // Create processors, apply params/config, and resolve resource paths. The loads themselves
+    // wait for LoadPendingResources(), after the plan has resolved each node's input layout.
     // Resource path resolution is fast (library lookups only); actual loading is deferred.
     for (const auto& node : mGraph.nodes)
     {
@@ -374,6 +315,10 @@ void SignalGraphExecutor::CreateProcessors()
         state.sharedId = std::make_shared<const std::string>(node.id);
         state.type = node.type;
         state.category = node.category;
+        state.monoFold = node.channelMode == kChannelModeMono        ? NodeState::MonoFold::Sum
+                         : node.channelMode == kChannelModeMonoLeft  ? NodeState::MonoFold::Left
+                         : node.channelMode == kChannelModeMonoRight ? NodeState::MonoFold::Right
+                                                                     : NodeState::MonoFold::None;
 
         // Create processor based on type
         if (node.type == kNodeTypeInput || node.type == kNodeTypeOutput)
@@ -402,103 +347,241 @@ void SignalGraphExecutor::CreateProcessors()
             state.processor = registry.Create(node.type);
         }
 
-        // If this is a composite effect, pass the resource library to its inner executor
         if (state.processor)
         {
-            auto* composite = dynamic_cast<CompositeEffectProcessor*>(state.processor.get());
+            ConfigureNodeProcessor(*state.processor, node, &resourceWorkItems);
+            state.processor->SetDualMono(mDualMono);
 
-            if (composite)
+            // Dual mono runs a coupled node twice, once per side (see the class comment).
+            if (mDualMono && NeedsDualMonoTwin(state))
             {
-                if (mResourceLibrary)
-                {
-                    composite->SetResourceLibrary(mResourceLibrary);
-                }
-
-                // Nodes inside the composite need the same per-instance type defaults
-                // (NAM quality) as top-level nodes.
-                composite->SeedInnerNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
-            }
-        }
-
-        // Apply parameters and resolve resource paths
-        if (state.processor)
-        {
-            state.processor->SetEnabled(node.enabled);
-
-            for (const auto& [key, value] : node.params)
-            {
-                state.processor->SetParam(key, value);
-            }
-
-            // Per-instance type defaults first, so a node's own config still wins.
-            if (const auto typeDefaults = mNodeTypeConfigDefaults.find(node.type);
-                typeDefaults != mNodeTypeConfigDefaults.end())
-            {
-                for (const auto& [key, value] : typeDefaults->second)
-                {
-                    state.processor->SetConfig(key, value);
-                }
-            }
-
-            for (const auto& [key, value] : node.config)
-            {
-                state.processor->SetConfig(key, value);
-            }
-
-            // Resolve resource paths (fast — just library lookups).
-            // Actual LoadResources calls are deferred to Phase 2 for parallel dispatch.
-            if (!node.resources.empty())
-            {
-                std::vector<ResourceRef> resolvedRefs;
-                std::vector<std::filesystem::path> resolvedPaths;
-                resolvedRefs.reserve(node.resources.size());
-                resolvedPaths.reserve(node.resources.size());
-
-                for (std::size_t resourceIndex = 0; resourceIndex < node.resources.size(); ++resourceIndex)
-                {
-                    const auto& res = node.resources[resourceIndex];
-
-                    if (!res.IsValid())
-                    {
-                        continue;
-                    }
-
-                    ResourceRef hydratedRef = HydrateResolvedResourceRef(res, mResourceLibrary);
-                    hydratedRef.metadata["resourceSlotIndex"] = std::to_string(resourceIndex);
-                    auto path = ResolveResourcePath(hydratedRef, mResourceLibrary);
-
-                    if (path)
-                    {
-                        resolvedRefs.push_back(hydratedRef);
-                        resolvedPaths.push_back(*path);
-                    }
-                }
-
-                if (!resolvedPaths.empty())
-                {
-                    resourceWorkItems.push_back({&state, std::move(resolvedRefs), std::move(resolvedPaths)});
-                }
-                else if (state.processor->HasResource())
-                {
-                    // All defined resource slots have been cleared; enqueue an empty load so the
-                    // processor can unload its previously-loaded resource rather than leaving stale state.
-                    resourceWorkItems.push_back({&state, {}, {}});
-                }
+                state.twin = CreateDualMonoTwin(node, &resourceWorkItems);
             }
         }
     }
+}
 
-    // Phase 2: Load resources.
+void SignalGraphExecutor::ConfigureNodeProcessor(EffectProcessor& processor, const GraphNode& node,
+                                                 std::vector<PendingResourceLoad>* loads)
+{
+    // A composite needs the resource library, and the per-instance type defaults (NAM quality),
+    // for the nodes inside it.
+    if (auto* composite = dynamic_cast<CompositeEffectProcessor*>(&processor))
+    {
+        if (mResourceLibrary)
+        {
+            composite->SetResourceLibrary(mResourceLibrary);
+        }
+
+        composite->SeedInnerNodeTypeConfigDefaults(mNodeTypeConfigDefaults);
+    }
+
+    processor.SetEnabled(node.enabled);
+
+    for (const auto& [key, value] : node.params)
+    {
+        processor.SetParam(key, value);
+    }
+
+    // Per-instance type defaults first, so a node's own config still wins.
+    if (const auto typeDefaults = mNodeTypeConfigDefaults.find(node.type);
+        typeDefaults != mNodeTypeConfigDefaults.end())
+    {
+        for (const auto& [key, value] : typeDefaults->second)
+        {
+            processor.SetConfig(key, value);
+        }
+    }
+
+    for (const auto& [key, value] : node.config)
+    {
+        processor.SetConfig(key, value);
+    }
+
+    if (node.resources.empty())
+    {
+        return;
+    }
+
+    // Resolve resource paths (fast — just library lookups).
+    PendingResourceLoad load{&processor, {}, {}};
+    load.refs.reserve(node.resources.size());
+    load.paths.reserve(node.resources.size());
+
+    for (std::size_t resourceIndex = 0; resourceIndex < node.resources.size(); ++resourceIndex)
+    {
+        const auto& res = node.resources[resourceIndex];
+
+        if (!res.IsValid())
+        {
+            continue;
+        }
+
+        ResourceRef hydratedRef = HydrateResolvedResourceRef(res, mResourceLibrary);
+        hydratedRef.metadata["resourceSlotIndex"] = std::to_string(resourceIndex);
+        auto path = ResolveResourcePath(hydratedRef, mResourceLibrary);
+
+        if (path)
+        {
+            load.refs.push_back(hydratedRef);
+            load.paths.push_back(*path);
+        }
+    }
+
+    // All defined resource slots cleared: an empty load lets the processor unload what it had
+    // rather than keep stale state.
+    if (load.paths.empty() && !processor.HasResource())
+    {
+        return;
+    }
+
+    if (loads)
+    {
+        loads->push_back(std::move(load));
+    }
+    else
+    {
+        processor.LoadResources(load.refs, load.paths);
+    }
+}
+
+bool SignalGraphExecutor::NeedsDualMonoTwin(const NodeState& state)
+{
+    // A hosted plugin cannot be kept in step with its own editor, so it runs shared.
+    return state.processor && !state.processor->KeepsChannelsSeparate() && !state.processor->RequiresMainThreadLoad();
+}
+
+std::unique_ptr<EffectProcessor> SignalGraphExecutor::CreateDualMonoTwin(const GraphNode& node,
+                                                                         std::vector<PendingResourceLoad>* loads)
+{
+    auto twin = EffectRegistry::Instance().Create(node.type);
+
+    if (!twin)
+    {
+        return nullptr;
+    }
+
+    ConfigureNodeProcessor(*twin, node, loads);
+    // It hears one side, on both channels.
+    twin->SetInputLayout(ChannelLayout::Mono);
+    return twin;
+}
+
+void SignalGraphExecutor::SetDualMono(bool dualMono)
+{
+    mDualMono = dualMono;
+
+    for (auto& [id, state] : mNodeStates)
+    {
+        if (!state.processor)
+        {
+            continue;
+        }
+
+        if (dualMono && state.pendingTwin && !state.twin)
+        {
+            state.twin = std::move(state.pendingTwin);
+        }
+
+        // Not running yet (a graph being built, or a composite's inside while its parent is):
+        // build what is missing here, off the lock.
+        if (dualMono && !mPrepared && !state.twin && NeedsDualMonoTwin(state))
+        {
+            if (const GraphNode* node = mGraph.FindNode(id))
+            {
+                state.twin = CreateDualMonoTwin(*node, nullptr);
+            }
+        }
+
+        state.processor->SetDualMono(dualMono);
+    }
+
+    if (!mPlan.empty())
+    {
+        ResolveChannelLayout(false);
+    }
+}
+
+void SignalGraphExecutor::StageDualMonoTwins()
+{
+    for (auto& [id, state] : mNodeStates)
+    {
+        if (auto* composite = dynamic_cast<CompositeEffectProcessor*>(state.processor.get()))
+        {
+            composite->StageInnerDualMonoTwins();
+            continue;
+        }
+
+        if (state.twin || state.pendingTwin || !NeedsDualMonoTwin(state))
+        {
+            continue;
+        }
+
+        const GraphNode* node = mGraph.FindNode(id);
+
+        if (!node)
+        {
+            continue;
+        }
+
+        auto twin = CreateDualMonoTwin(*node, nullptr);
+
+        if (!twin)
+        {
+            continue;
+        }
+
+        if (mAppliedTempoBpm > 0.0)
+        {
+            twin->SetParam("bpm", mAppliedTempoBpm);
+        }
+
+        if (mPrepared)
+        {
+            twin->Prepare(mSampleRate, mMaxBlockSize);
+            const auto size = static_cast<std::size_t>(mMaxBlockSize);
+            state.twinScratchLeft.assign(size, 0.0f);
+            state.twinScratchRight.assign(size, 0.0f);
+        }
+
+        state.pendingTwin = std::move(twin);
+    }
+}
+
+std::vector<std::string> SignalGraphExecutor::DualMonoSharedNodes() const
+{
+    std::vector<std::string> shared;
+
+    if (!mDualMono)
+    {
+        return shared;
+    }
+
+    for (const auto& [id, state] : mNodeStates)
+    {
+        if (state.processor && !state.processor->KeepsChannelsSeparate() && !state.twin)
+        {
+            shared.push_back(id);
+        }
+    }
+
+    return shared;
+}
+
+void SignalGraphExecutor::LoadPendingResources()
+{
+    auto& resourceWorkItems = mPendingResourceLoads;
+
     // Effects that require main-thread execution (e.g. plugin hosts using JUCE's
     // MessageManager) must run on the calling thread to avoid deadlocking when
     // MessageManager::callSync is used from within a std::async worker.
     // All other effects (NAM models, IR files) are safe to load concurrently.
-    std::vector<ResourceWork*> mainThreadWork;
-    std::vector<ResourceWork*> parallelWork;
+    std::vector<PendingResourceLoad*> mainThreadWork;
+    std::vector<PendingResourceLoad*> parallelWork;
 
     for (auto& work : resourceWorkItems)
     {
-        if (work.state->processor && work.state->processor->RequiresMainThreadLoad())
+        if (work.processor && work.processor->RequiresMainThreadLoad())
         {
             mainThreadWork.push_back(&work);
         }
@@ -511,7 +594,7 @@ void SignalGraphExecutor::CreateProcessors()
     // Run main-thread-required loads first, serially on the calling thread.
     for (auto* work : mainThreadWork)
     {
-        work->state->processor->LoadResources(work->refs, work->paths);
+        work->processor->LoadResources(work->refs, work->paths);
     }
 
     // Run remaining loads in parallel.
@@ -522,8 +605,8 @@ void SignalGraphExecutor::CreateProcessors()
 
         for (auto* work : parallelWork)
         {
-            futures.push_back(std::async(std::launch::async,
-                                         [work]() { work->state->processor->LoadResources(work->refs, work->paths); }));
+            futures.push_back(
+                std::async(std::launch::async, [work]() { work->processor->LoadResources(work->refs, work->paths); }));
         }
 
         for (auto& f : futures)
@@ -534,8 +617,10 @@ void SignalGraphExecutor::CreateProcessors()
     else if (parallelWork.size() == 1)
     {
         auto* work = parallelWork[0];
-        work->state->processor->LoadResources(work->refs, work->paths);
+        work->processor->LoadResources(work->refs, work->paths);
     }
+
+    resourceWorkItems.clear();
 }
 
 bool SignalGraphExecutor::AnyNodeRequiresMainThreadLoad() const
@@ -607,18 +692,21 @@ void SignalGraphExecutor::Prepare(double sampleRate, int maxBlockSize)
 
     for (auto& [id, state] : mNodeStates)
     {
-        if (!state.processor)
+        for (EffectProcessor* processor : {state.processor.get(), state.twin.get(), state.pendingTwin.get()})
         {
-            continue;
-        }
+            if (!processor)
+            {
+                continue;
+            }
 
-        if (state.processor->RequiresMainThreadLoad())
-        {
-            mainThreadPrepare.push_back(state.processor.get());
-        }
-        else
-        {
-            parallelPrepare.push_back(state.processor.get());
+            if (processor->RequiresMainThreadLoad())
+            {
+                mainThreadPrepare.push_back(processor);
+            }
+            else
+            {
+                parallelPrepare.push_back(processor);
+            }
         }
     }
 
@@ -680,6 +768,11 @@ void SignalGraphExecutor::Reset()
         {
             state.processor->Reset();
         }
+
+        if (state.twin)
+        {
+            state.twin->Reset();
+        }
     }
 }
 
@@ -693,6 +786,12 @@ void SignalGraphExecutor::AllocateBuffers(int maxBlockSize)
         state.bufferRight.assign(size, 0.0f);
         state.scratchLeft.assign(size, 0.0f);
         state.scratchRight.assign(size, 0.0f);
+
+        if (state.twin || state.pendingTwin)
+        {
+            state.twinScratchLeft.assign(size, 0.0f);
+            state.twinScratchRight.assign(size, 0.0f);
+        }
     }
 }
 
@@ -713,7 +812,6 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
 
     // Clamp to allocated buffer size to prevent out-of-bounds writes
     numSamples = std::min(numSamples, mMaxBlockSize);
-    mLastOutputStereo = false;
 
     if (!mIsValid || !mPrepared || !inputs || !outputs)
     {
@@ -759,7 +857,6 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
         std::fill(state.bufferLeft.begin(), state.bufferLeft.begin() + numSamples, 0.0f);
         std::fill(state.bufferRight.begin(), state.bufferRight.begin() + numSamples, 0.0f);
         state.hasInput = false;
-        state.hasStereoSignal = false;
         state.channelCount.store(0, std::memory_order_relaxed);
         state.notesLastBlock = state.notesThisBlock;
         state.notesThisBlock = false;
@@ -795,20 +892,24 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
             }
         }
 
-        if (inputEnabled && inputs[1])
+        // The layout is the caller's word, not something read off the samples: a mono input is
+        // the left channel on both sides, whatever the right pointer holds, and a stereo input
+        // keeps its right channel even while it is silent. Only a stereo input with no right
+        // channel at all falls back to the left.
+        if (inputEnabled && state.outputStereo && inputs[1])
         {
             for (int i = 0; i < numSamples; ++i)
             {
                 state.bufferRight[static_cast<size_t>(i)] = inputs[1][i] * inputGain;
             }
         }
+        else if (inputEnabled)
+        {
+            std::copy_n(state.bufferLeft.data(), numSamples, state.bufferRight.data());
+        }
 
         state.hasInput = true;
-        // A mono source presented on a stereo bus (guitar on input 1, input 2 left
-        // silent) must be reported as mono so downstream mono-capable nodes (e.g. NAM
-        // amps) run a single model instead of processing a dead channel.
-        state.hasStereoSignal = InputPairIsStereo(inputs[0], inputs[1], numSamples);
-        state.channelCount.store(state.hasStereoSignal ? 2 : 1, std::memory_order_relaxed);
+        state.channelCount.store(state.outputStereo ? 2 : 1, std::memory_order_relaxed);
 
         if (collectLevels)
         {
@@ -859,8 +960,9 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
         if (state.hasInput)
         {
             const bool outputEnabled = !state.processor || state.processor->IsEnabled();
-            mLastOutputStereo = outputEnabled && state.hasStereoSignal;
 
+            // Both channels as they are: a mono connection already holds the same samples on
+            // each, so nothing is copied over anything.
             if (outputs[0])
             {
                 for (int i = 0; i < numSamples; ++i)
@@ -871,19 +973,9 @@ void SignalGraphExecutor::Process(float** inputs, float** outputs, int numSample
 
             if (outputs[1])
             {
-                if (outputEnabled && !state.hasStereoSignal && outputs[0])
+                for (int i = 0; i < numSamples; ++i)
                 {
-                    for (int i = 0; i < numSamples; ++i)
-                    {
-                        outputs[1][i] = outputs[0][i];
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < numSamples; ++i)
-                    {
-                        outputs[1][i] = outputEnabled ? (state.bufferRight[static_cast<size_t>(i)] * outputGain) : 0.0f;
-                    }
+                    outputs[1][i] = outputEnabled ? (state.bufferRight[static_cast<size_t>(i)] * outputGain) : 0.0f;
                 }
             }
 
@@ -1140,11 +1232,15 @@ void SignalGraphExecutor::SetNodeEnabled(const std::string& nodeId, bool enabled
         node->enabled = enabled;
     }
 
-    auto* state = FindNodeState(nodeId);
-
-    if (state && state->processor)
+    if (auto* state = FindNodeState(nodeId))
     {
-        state->processor->SetEnabled(enabled);
+        for (EffectProcessor* processor : {state->processor.get(), state->twin.get(), state->pendingTwin.get()})
+        {
+            if (processor)
+            {
+                processor->SetEnabled(enabled);
+            }
+        }
     }
 }
 
@@ -1155,11 +1251,15 @@ void SignalGraphExecutor::SetNodeParam(const std::string& nodeId, const std::str
         node->params[key] = value;
     }
 
-    auto* state = FindNodeState(nodeId);
-
-    if (state && state->processor)
+    if (auto* state = FindNodeState(nodeId))
     {
-        state->processor->SetParam(key, value);
+        for (EffectProcessor* processor : {state->processor.get(), state->twin.get(), state->pendingTwin.get()})
+        {
+            if (processor)
+            {
+                processor->SetParam(key, value);
+            }
+        }
     }
 }
 
@@ -1180,9 +1280,14 @@ void SignalGraphExecutor::SetTempo(double bpm)
 
 void SignalGraphExecutor::ApplyTempoToProcessors()
 {
-    for (EffectProcessor* processor : mTempoAwareProcessors)
+    for (NodeState* state : mTempoAwareStates)
     {
-        processor->SetParam("bpm", mAppliedTempoBpm);
+        state->processor->SetParam("bpm", mAppliedTempoBpm);
+
+        if (state->twin)
+        {
+            state->twin->SetParam("bpm", mAppliedTempoBpm);
+        }
     }
 }
 
@@ -1191,6 +1296,17 @@ void SignalGraphExecutor::SetNodeConfig(const std::string& nodeId, const std::st
     if (auto* processor = RecordNodeConfig(nodeId, key, value))
     {
         processor->SetConfig(key, value);
+
+        if (auto* state = FindNodeState(nodeId))
+        {
+            for (EffectProcessor* twin : {state->twin.get(), state->pendingTwin.get()})
+            {
+                if (twin)
+                {
+                    twin->SetConfig(key, value);
+                }
+            }
+        }
     }
 }
 
@@ -1256,7 +1372,13 @@ void SignalGraphExecutor::SetNodeConfigForType(const std::string& type, const st
 
         if (state.type == type)
         {
-            state.processor->SetConfig(key, value);
+            for (EffectProcessor* processor : {state.processor.get(), state.twin.get(), state.pendingTwin.get()})
+            {
+                if (processor)
+                {
+                    processor->SetConfig(key, value);
+                }
+            }
         }
         else if (auto* composite = dynamic_cast<CompositeEffectProcessor*>(state.processor.get()))
         {
@@ -1304,6 +1426,14 @@ bool SignalGraphExecutor::LoadNodeResource(const std::string& nodeId, const Reso
 
     if (auto path = ResolveResourcePath(hydratedRef, mResourceLibrary))
     {
+        for (EffectProcessor* twin : {state->twin.get(), state->pendingTwin.get()})
+        {
+            if (twin)
+            {
+                twin->LoadResources({hydratedRef}, {*path});
+            }
+        }
+
         return state->processor->LoadResources({hydratedRef}, {*path});
     }
 
@@ -1321,9 +1451,17 @@ std::unique_ptr<DeferredRebuild> SignalGraphExecutor::TakeDeferredRebuilds()
             continue;
         }
 
-        if (auto work = state.processor->TakeDeferredRebuild())
+        for (EffectProcessor* processor : {state.processor.get(), state.twin.get()})
         {
-            graphWork->nodes.push_back({nodeId, state.processor.get(), std::move(work)});
+            if (!processor)
+            {
+                continue;
+            }
+
+            if (auto work = processor->TakeDeferredRebuild())
+            {
+                graphWork->nodes.push_back({nodeId, processor, std::move(work)});
+            }
         }
     }
 
@@ -1349,7 +1487,7 @@ void SignalGraphExecutor::CommitDeferredRebuilds(DeferredRebuild& work)
         // A graph rebuilt in between has new processors, which asked for nothing.
         const auto* state = FindNodeState(node.nodeId);
 
-        if (state && state->processor.get() == node.processor)
+        if (state && (state->processor.get() == node.processor || state->twin.get() == node.processor))
         {
             node.processor->CommitDeferredRebuild(*node.work);
         }
@@ -1416,7 +1554,7 @@ SignalGraphExecutor::AutomationTarget SignalGraphExecutor::FindAutomationTarget(
 
         if (enabled)
         {
-            return {state->processor.get(), node, &state->sharedId};
+            return {state->processor.get(), state->twin.get(), node, &state->sharedId};
         }
     }
 
@@ -1436,6 +1574,11 @@ void SignalGraphExecutor::SetAutomationTargetParam(const AutomationTarget& targe
     if (target.processor)
     {
         target.processor->SetParam(key, value);
+    }
+
+    if (target.twin)
+    {
+        target.twin->SetParam(key, value);
     }
 }
 
@@ -1458,6 +1601,11 @@ bool SignalGraphExecutor::SetAutomatedNodesEnabled(const std::string& canonicalT
         if (state->processor)
         {
             state->processor->SetEnabled(enabled);
+        }
+
+        if (state->twin)
+        {
+            state->twin->SetEnabled(enabled);
         }
 
         found = true;

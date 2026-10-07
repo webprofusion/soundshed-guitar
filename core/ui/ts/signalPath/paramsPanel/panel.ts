@@ -34,6 +34,7 @@ import { applyCustomLayoutScaling, bindLayoutOverlayBypassToggles } from "./layo
 import { buildMixerInputControlsHtml } from "./mixerInput.js";
 import { bindSplitBranchControls, buildSplitBranchControlsHtml } from "./splitBranches.js";
 import { bindBlendModeOverride, bindBypassButton, bindCustomEffectActionControls, bindNodeTitleEdit } from "./nodeActions.js";
+import { bindChannelModeControl, renderChannelModeControl } from "./channelMode.js";
 import { bindNodeParamControls, bindParamTabs, formatParamLabel, isToggleParam } from "./paramControls.js";
 import { isPitchShiftType, semitoneKnobRange } from "./pitchShiftRange.js";
 import { buildNodeResourceSelector, preloadResourceNavigationCaches } from "./resourceSelector.js";
@@ -524,6 +525,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
             <button class="effect-visualization-toolbar-btn default-effect-shell-dsp-toggle dsp-badge-toggle${isDspStatusVisible() ? " is-active" : ""}" type="button" aria-expanded="${isDspStatusVisible()}" title="${isDspStatusVisible() ? "Hide DSP status" : "Show DSP status"}" aria-label="Toggle DSP status">${renderIcon("meter", "effect-visualization-toolbar-icon")}</button>
             ${effectPresetsButton}
             ${calibrationMetadataChip}
+            ${renderChannelModeControl(node)}
             <button
               class="default-effect-shell-toggle node-bypass-btn ${nodeIsBypassed ? "bypassed" : ""}"
               data-node-id="${escapeHtml(node.id)}"
@@ -564,6 +566,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindBlendEditorControls(nodeParamsPanelElement, node);
   bindBlendModeOverride(node);
   bindBypassButton(node, preset);
+  bindChannelModeControl(node);
   bindNodeTitleEdit(node);
   bindSelectedNodeDspStatusToggle();
   bindLayoutSwitchButton(node, preset);

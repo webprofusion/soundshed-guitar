@@ -240,7 +240,7 @@ void TestTremolo()
             phase = phase >= 2.0 * kPi ? std::fmod(phase, 2.0 * kPi) : phase;
         }
 
-        Check(same && !fx.ProducesStereoOutput(), "Classic is the tremolo it was, sample for sample, and mono");
+        Check(same, "Classic is the tremolo it was, sample for sample, and mono");
     }
 
     // Harmonic: a low tone and a high one pulse in opposite phase, so together they barely move.
@@ -293,9 +293,9 @@ void TestTremolo()
               "correlation " + Num(Correlation(left, right), 3));
         Check(SwingDb(total) < 0.5, "at constant power", Num(SwingDb(total), 2) + " dB");
 
-        guitarfx::TremoloEffect classic;
-        Check(fx.ProducesStereoOutput() && !classic.ProducesStereoOutput(),
-              "only Pan tells the chain its mono input is now stereo");
+        // Pan can turn a mono input stereo, so the type declares it can widen: a graph keeps what
+        // follows a tremolo in stereo, and switching to Pan is heard at once.
+        Check(fx.CanWiden(), "a tremolo is declared able to widen, since Pan does");
     }
 
     // Slicer: Pulse at full Depth, an 8 Hz step: on, off, on, off, with hard edges at Shape 0.

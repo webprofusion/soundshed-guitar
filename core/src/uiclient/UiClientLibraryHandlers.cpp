@@ -93,6 +93,7 @@ void UiClient::RegisterLibraryHandlers()
     On("inputModeChanged", [this](const nlohmann::json& m) {
         mState.globalChain.monoMode = m.value("monoMode", mState.globalChain.monoMode);
         mState.globalChain.inputChannel = m.value("inputChannel", mState.globalChain.inputChannel);
+        mState.globalChain.dualMono = m.value("dualMono", mState.globalChain.dualMono);
         Notify(Topic::GlobalChain);
     });
 
