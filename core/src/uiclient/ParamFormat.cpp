@@ -106,6 +106,13 @@ std::string FormatParamValue(const EffectParamInfo& param, double value)
         return FormatTaperedValue(value, param.unit);
     }
 
+    // A parameter that moves in whole steps (a MIDI channel, semitones, a count) shows a whole
+    // number, as the web UI's wholeStepLabel (core/ui/ts/paramLabels.ts) does.
+    if (param.step >= 1.0 && param.step == std::floor(param.step) && std::abs(value - std::round(value)) <= 1.0e-6)
+    {
+        return Fixed(std::round(value), 0) + (param.unit == "amount" ? std::string{} : param.unit);
+    }
+
     return Fixed(value, 2) + (param.unit == "amount" ? std::string{} : param.unit);
 }
 

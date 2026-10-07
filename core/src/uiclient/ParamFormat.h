@@ -5,7 +5,8 @@
  *
  * Formatting follows the web UI's knob (core/ui/ts/signalPath/paramsPanel/paramControls.ts):
  * an enum shows its label, pan shows L/C/R, a log-taper value shows about three significant
- * figures (kHz from 1 kHz up), anything else two decimals with its unit. Travel goes through
+ * figures (kHz from 1 kHz up), one that moves in whole steps a whole number, and anything else
+ * two decimals, each with its unit. Travel goes through
  * the engine's own taper (dsp/ParamTaper.h), which is what MIDI and host automation use, so
  * a control here and an expression pedal agree on where the middle is.
  */

@@ -646,6 +646,15 @@ void TestParamFormatting()
     Expect(FormatParamValue(amount, 0.5) == "0.50", "an amount has no unit");
     Expect(FormatParamValue(db, -0.001) == "0.00dB", "never negative zero");
     Expect(FormatParamValue(toggle, 1) == "On", "a toggle is On or Off");
+    // Guitar to MIDI's MIDI Channel showed "1.00", and its Transpose "-12.00st".
+    EffectParamInfo channel{"channel", "MIDI Channel", "", "", 1, 16, 1, 1};
+    EffectParamInfo transpose{"transpose", "Transpose", "st", "", -24, 24, 0, 1};
+    EffectParamInfo halves{"h", "H", "", "", 0, 10, 0, 2.5};
+    Expect(FormatParamValue(channel, 1) == "1" && FormatParamValue(transpose, -12) == "-12st" &&
+               FormatParamValue(transpose, -1.0e-9) == "0st",
+           "a parameter in whole steps shows a whole number");
+    Expect(FormatParamValue(halves, 5) == "5.00" && FormatParamValue(transpose, 0.5) == "0.50st",
+           "but not one with a fractional step, or a value between steps");
 
     Expect(std::abs(ParamPositionToValue(freq, 0.5) - std::sqrt(20.0 * 20000.0)) < 1e-6, "a log taper's middle is the geometric mean");
     Expect(std::abs(ParamValueToPosition(db, 12) - 0.75) < 1e-9, "a linear taper is linear");

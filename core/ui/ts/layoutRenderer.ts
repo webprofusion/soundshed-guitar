@@ -7,7 +7,7 @@
 import { uiState } from "./state.js";
 import { blendKnobDataAttributes, denormalizeBlendValue, type BlendParamDef } from "./blendUtils.js";
 import { renderIcon } from "./iconAssets.js";
-import { enumLabel } from "./paramLabels.js";
+import { enumLabel, wholeStepLabel } from "./paramLabels.js";
 import { effectiveTaper, formatTaperedValue, valueToTaperPosition, type ParamTaper } from "./paramTaper.js";
 import { escapeHtml } from "./utils.js";
 import { ensureLayoutImagesLoaded } from "./layoutImages.js";
@@ -676,7 +676,8 @@ function renderTextLabels(labels: LayoutTextLabel[]): string {
  * Format a parameter value for display.
  * Returns just the number for generic "amount" units to keep labels compact.
  * Exported so the signal-path renderer and designer preview share identical formatting.
- * A log-taper value, which can run from 1.25 to 18,000, is shown to about three figures.
+ * A log-taper value, which can run from 1.25 to 18,000, is shown to about three figures, and
+ * one that moves in whole steps as a whole number with its unit (wholeStepLabel).
  */
 export function formatParamValue(
   value: number,
@@ -694,6 +695,10 @@ export function formatParamValue(
   }
   if (taper === "log") {
     return formatTaperedValue(value, unit);
+  }
+  const whole = wholeStepLabel(value, unit, step);
+  if (whole !== undefined) {
+    return whole;
   }
   if (unit === "dB" || unit === "ms" || unit === "Hz") {
     return `${value.toFixed(1)}${unit}`;

@@ -4,7 +4,7 @@
  */
 
 import { GenericKnob, enhanceRangeInput } from "../../controls.js";
-import { enumLabel } from "../../paramLabels.js";
+import { enumLabel, wholeStepLabel } from "../../paramLabels.js";
 import { formatTaperedValue, parseParamTaper, taperPositionToValue } from "../../paramTaper.js";
 import { getNodeEffectInfo } from "../../presetV2.js";
 import { BLEND_MAPPING_EPS, buildParameterMapFromLegacy, getBlendState, normalizeBlendValue, updateBlendMatchSummary, updateBlendParamIndicators } from "../../signalPathBlend.js";
@@ -105,8 +105,11 @@ export function bindNodeParamControls(node: GraphNode, preset: Preset): void {
         } else if (valueEl) {
           const paramDef = getNodeEffectInfo(node)?.parameters.find((p) => p.key === paramKey);
           if (paramDef) {
+            const whole = wholeStepLabel(value, paramDef.unit, paramDef.step);
             if (sliderTaper === "log") {
               valueEl.textContent = formatTaperedValue(value, paramDef.unit);
+            } else if (whole !== undefined) {
+              valueEl.textContent = whole;
             } else if (paramDef.unit === "dB" || paramDef.unit === "ms" || paramDef.unit === "Hz") {
               valueEl.textContent = `${value.toFixed(1)}${paramDef.unit}`;
             } else if (paramDef.unit === "enum" && Array.isArray(paramDef.labels)) {
@@ -279,7 +282,7 @@ export function bindNodeParamControls(node: GraphNode, preset: Preset): void {
       if (taper === "log") {
         return formatTaperedValue(rawValue, unit);
       }
-      return `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
+      return wholeStepLabel(rawValue, unit, step) ?? `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
     };
 
     const knobInstance = new GenericKnob({

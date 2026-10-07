@@ -10,7 +10,7 @@ window.IPlugSendMsg = () => undefined;
 
 const { formatParamValue } = await import("../ts/layoutRenderer.js");
 const { buildDefaultParamControlsHtml } = await import("../ts/parameterControlMarkup.js");
-const { enumLabel } = await import("../ts/paramLabels.js");
+const { enumLabel, wholeStepLabel } = await import("../ts/paramLabels.js");
 const { EffectTypeRegistry } = await import("../ts/presetV2.js");
 const { showNodeParamsPanel } = await import("../ts/signalPath/paramsPanel/panel.js");
 
@@ -102,5 +102,54 @@ describe("enum labels", () => {
       showNodeParamsPanel(node, preset);
       expect([knobText("numSteps"), knobText("direction")]).toEqual([shown, "Up-Down"]);
     }
+  });
+});
+
+/** Guitar to MIDI's MIDI Channel and Transpose, as the engine declares them. */
+const channel: ParameterDef = { key: "channel", name: "MIDI Channel", default: 1, min: 1, max: 16, unit: "", step: 1 };
+const transpose: ParameterDef = { key: "transpose", name: "Transpose", default: 0, min: -24, max: 24, unit: "st", step: 1 };
+
+describe("whole-step values", () => {
+  it("shows a whole number with its unit, where the channel showed 1.00", () => {
+    expect(wholeStepLabel(1, "", 1)).toBe("1");
+    expect(wholeStepLabel(-12, "st", 1)).toBe("-12st");
+    expect(wholeStepLabel(-1e-9, "st", 1)).toBe("0st");
+    expect(wholeStepLabel(3, "amount", 1)).toBe("3");
+    expect(formatParamValue(16, "", undefined, undefined, 1, 1)).toBe("16");
+    expect(formatParamValue(7, "st", undefined, undefined, -24, 1)).toBe("7st");
+  });
+
+  it("leaves fractional steps, values between steps, enums and toggles alone", () => {
+    expect(wholeStepLabel(5, "", 2.5)).toBeUndefined();
+    expect(wholeStepLabel(0.5, "st", 1)).toBeUndefined();
+    expect(wholeStepLabel(1, "enum", 1)).toBeUndefined();
+    expect(wholeStepLabel(1, "toggle", 1)).toBeUndefined();
+    expect(wholeStepLabel(1, "", undefined)).toBeUndefined();
+    expect(formatParamValue(0.5, "amount", undefined, undefined, 0, 0.01)).toBe("0.50");
+    expect(formatParamValue(-3, "dB", undefined, undefined, -24, 0.1)).toBe("-3.0dB");
+  });
+
+  it("shows the same text on the params panel's bound knobs", () => {
+    EffectTypeRegistry.register("test-midi", {
+      type: "test-midi",
+      displayName: "Test MIDI",
+      category: "synth",
+      parameters: [channel, transpose],
+    });
+    const panel = document.getElementById("node-params-panel")!;
+    const knobText = (key: string) =>
+      panel.querySelector(`.knob[data-param-key="${key}"]`)?.parentElement?.querySelector(".node-param-value")
+        ?.textContent;
+    const node: GraphNode = {
+      id: "g2m",
+      type: "test-midi",
+      displayName: "",
+      category: "synth",
+      bypassed: false,
+      params: { channel: 10, transpose: -12 },
+      config: {},
+    };
+    showNodeParamsPanel(node, { id: "p", name: "P", graph: { nodes: [node], edges: [] } } as Preset);
+    expect([knobText("channel"), knobText("transpose")]).toEqual(["10", "-12st"]);
   });
 });
