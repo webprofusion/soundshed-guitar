@@ -60,6 +60,7 @@ A big update: nine new effects, fifteen classic drive pedals, a Practice Tool fo
 * **MIDI Learn for this preset** lets one expression pedal do a different job in each preset: a wah in one, a volume pedal in another.
 * Jump straight to Scene 1–4 from a footswitch or DAW automation.
 * Setlist, bank and scene changes from MIDI or DAW automation now work with the plugin window closed.
+* **Bank Select**: a MIDI controller that sends Bank Select (CC0 or CC32) then a Program Change now loads that preset from the setlist with that bank number. A Program Change mapped to a setlist preset, scene or bank arrow now works for every program number (programs 0–63 used to do nothing), as does a softly played note, and MIDI Learn on a footswitch that sends Bank Select picks up its Program Change.
 * Keyboard shortcuts work without the MIDI panel open, and the spacebar always reaches your DAW's transport.
 * MIDI and automation now sweep each effect parameter's full range. If you automated an effect parameter on a custom slot, it now plays back across that full range.
 * Wide frequency knobs now turn on a musical scale, so the knob, an expression pedal and automation all sweep them evenly. This covers the Ring Modulator's Frequency, and Low Cut and High Cut on Digital Delay, IR Cab and Advanced Reverb. Automation you've already recorded on those cuts follows the new curve.

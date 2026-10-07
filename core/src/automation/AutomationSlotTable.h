@@ -22,6 +22,7 @@
  */
 
 #include "automation/AutomationTypes.h"
+#include "automation/BankSelectLatch.h"
 #include "automation/NodeChangeQueue.h"
 #include "automation/ParamRegistry.h"
 
@@ -219,7 +220,10 @@ class AutomationSlotTable
         return mNodeChanges.TakeDroppedCount();
     }
 
-    /// Handle a MIDI event — matches against slot MIDI maps and applies.
+    /// Handle a MIDI event — matches against slot MIDI maps and applies. A Bank Select is held for
+    /// the Program Change that follows it on its channel (see BankSelectLatch.h): one that
+    /// fires a setlist preset selects that bank's setlist first. A Program Change or Note On
+    /// mapped to a trigger always fires it.
     void HandleMidi(const MidiEvent& ev);
 
     /// Check if any slot has a MIDI learn armed.
@@ -264,6 +268,14 @@ class AutomationSlotTable
     /// ApplySlotLocked for a slot with a node.* binding. Allocates nothing.
     bool ApplyNodeSlotLocked(AutomationSlot& slot);
 
+    /// Whether `slot` drives a trigger (a setlist preset, a scene, bank up or down). Allocates
+    /// nothing.
+    [[nodiscard]] bool IsTriggerSlot(const AutomationSlot& slot) const;
+
+    /// Whether the slot armed for MIDI learn is Select Bank, the one target a Bank Select CC can
+    /// be learned for.
+    [[nodiscard]] bool IsLearningSelectBank() const;
+
     /// The registry node.* addresses are resolved with.
     [[nodiscard]] const EffectRegistry& TypeRegistry() const;
 
@@ -301,6 +313,9 @@ class AutomationSlotTable
     // MIDI learn state
     std::optional<std::string> mMidiLearnSlotId;
     std::optional<MidiControlMap> mMidiLearnCapture;
+
+    /// Each channel's Bank Select, waiting for its Program Change. Audio thread, under mDSPMutex.
+    BankSelectLatch mBankSelect;
 
     // Per-preset mappings answer MIDI only while this preset is active
     std::string mActivePresetId;

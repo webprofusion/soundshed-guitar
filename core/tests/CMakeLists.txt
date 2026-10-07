@@ -56,6 +56,7 @@ set(TEST_SOURCES
     MessageDispatchTypeErrorTests.cpp
     MessageHandlerRegistryTests.cpp
     MetronomeServiceTests.cpp
+    MidiBankSelectTests.cpp
     MixerInstanceLockTests.cpp
     MixerTelemetryTests.cpp
     ModulationStereoTests.cpp

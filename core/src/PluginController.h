@@ -278,17 +278,9 @@ class PluginController
     /// Any thread, never with mDSPMutex held: the host's program change and the UI's. From a
     /// host's own thread (an AU factory preset, an LV2 program preset) it is handed to the
     /// message thread and waited for, as a restore is (see DeserializeState), and stays queued
-    /// if that does not start in time. Automation's setlist steps are parked for the message
-    /// thread instead (see DrainControlSurfaceRequests).
+    /// if that does not start in time. Automation's setlist steps, bank changes and scene
+    /// switches are parked for the message thread instead (see DrainControlSurfaceRequests).
     void ApplySetlistPresetByIndex(int index);
-    void SetlistBankUp(int steps);
-    void SetlistBankDown(int steps);
-    void SelectSetlistBank(int bankNumber);
-    /// Select a scene of the active preset by 0-based index. Safe to call from the
-    /// audio thread: when the DSP lock is already held it is parked for the message
-    /// thread, which applies it whether or not the editor is open (see
-    /// DrainControlSurfaceRequests).
-    void SelectSceneByIndex(int index);
     /// 0-based index of the active preset's current scene, or -1 when unavailable.
     [[nodiscard]] int GetActiveSceneIndex() const;
     [[nodiscard]] int GetSetlistLength() const;
@@ -972,6 +964,8 @@ class PluginController
     void ProcessAudioLocked(float** inputs, float** outputs, int numSamples);
     /// Under mDSPMutex: applies the queued MIDI to the automation slots.
     void DrainQueuedMidiLocked();
+    /// Message thread, never with mDSPMutex held: each loads a preset or rewrites the setlist.
+    /// Automation, which applies under the lock, parks these (see DrainControlSurfaceRequests).
     void ApplySetlistPresetByIndexDirect(int index);
     void SetlistBankChangeDirect(int delta);
     void SelectSetlistBankDirect(int bankNumber);

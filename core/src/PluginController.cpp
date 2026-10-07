@@ -159,15 +159,17 @@ void PluginController::Initialize()
     // Initialize automation system
     mAutomationSlots.SetMixer(&mPresetMixer);
     mAutomationSlots.SetEffectRegistry(&EffectRegistry::Instance());
-    // A setlist step from automation arrives under mDSPMutex (MIDI on the audio thread, a DAW
-    // parameter, the UI), and loading its preset takes that lock, so it is parked for the message
-    // thread (see DrainControlSurfaceRequests).
+    // A setlist step, bank change or scene switch from automation arrives under mDSPMutex (MIDI on
+    // the audio thread, a DAW parameter, the UI), and applying it takes that lock, so each is
+    // parked for the message thread (see DrainControlSurfaceRequests).
     mAutomationSlots.InitializeRegistry(
         mPresetMixer, [this]() { return static_cast<double>(mSetlistCursorIndex.load(std::memory_order_relaxed)); },
-        [this](int idx) { mControlSurface->RequestSetlistPreset(idx); }, [this](int steps) { SetlistBankUp(steps); },
-        [this](int steps) { SetlistBankDown(steps); }, [this]() { return GetSetlistLength(); },
-        [this]() { return GetSetlistBankBase(); }, [this](int bankNumber) { SelectSetlistBank(bankNumber); },
-        [this]() { return GetSetlistBankNumber(); }, [this](int index) { SelectSceneByIndex(index); },
+        [this](int idx) { mControlSurface->RequestSetlistPreset(idx); },
+        [this](int steps) { mControlSurface->AddSetlistBankDelta(steps); },
+        [this](int steps) { mControlSurface->AddSetlistBankDelta(-steps); }, [this]() { return GetSetlistLength(); },
+        [this]() { return GetSetlistBankBase(); },
+        [this](int bankNumber) { mControlSurface->RequestSetlistBankSelect(bankNumber); },
+        [this]() { return GetSetlistBankNumber(); }, [this](int index) { mControlSurface->RequestScene(index); },
         [this]() { return GetActiveSceneIndex(); });
 
     // Load automation.json
@@ -550,27 +552,27 @@ void PluginController::DrainControlSurfaceRequests()
     }
 
     // These all load presets or rewrite the setlist, which needs the DSP lock the audio thread
-    // was holding when it asked.
-    const auto pending = mControlSurface->TakePending();
+    // was holding when it asked. In the order they were asked for, so a controller's bank select
+    // lands before the preset it picks in that bank.
+    using Kind = ControlSurfaceQueue::Request::Kind;
 
-    if (pending.setlistPresetIndex.has_value())
+    for (const auto& request : mControlSurface->TakePending())
     {
-        ApplySetlistPresetByIndexDirect(*pending.setlistPresetIndex);
-    }
-
-    if (pending.setlistBankDelta.has_value())
-    {
-        SetlistBankChangeDirect(*pending.setlistBankDelta);
-    }
-
-    if (pending.setlistBankSelect.has_value())
-    {
-        SelectSetlistBankDirect(*pending.setlistBankSelect);
-    }
-
-    if (pending.sceneIndex.has_value())
-    {
-        SelectSceneByIndexDirect(*pending.sceneIndex);
+        switch (request.kind)
+        {
+        case Kind::SetlistPreset:
+            ApplySetlistPresetByIndexDirect(request.value);
+            break;
+        case Kind::SetlistBankDelta:
+            SetlistBankChangeDirect(request.value);
+            break;
+        case Kind::SetlistBankSelect:
+            SelectSetlistBankDirect(request.value);
+            break;
+        case Kind::Scene:
+            SelectSceneByIndexDirect(request.value);
+            break;
+        }
     }
 }
 

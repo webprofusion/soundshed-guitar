@@ -171,7 +171,7 @@ void PluginController::HandleSelectSceneRequest(const nlohmann::json& payload)
 
     // The same switch a footswitch makes: banks the outgoing scene's plugin state, applies
     // the new scene and reports it with "presetLoaded".
-    SelectSceneByIndex(static_cast<int>(it - scenes.begin()));
+    SelectSceneByIndexDirect(static_cast<int>(it - scenes.begin()));
 }
 
 void PluginController::HandleAddSceneRequest(const nlohmann::json& payload)

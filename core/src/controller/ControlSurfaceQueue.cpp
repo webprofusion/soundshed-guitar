@@ -1,5 +1,6 @@
 #include "controller/ControlSurfaceQueue.h"
 
+#include <algorithm>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -41,29 +42,43 @@ ControlSurfaceQueue::ControlSurfaceQueue(SendMessageFn sendMessage) : mSendMessa
 
 void ControlSurfaceQueue::RequestSetlistPreset(int index)
 {
-    std::lock_guard<std::mutex> lock(mPendingMutex);
-    mPending.setlistPresetIndex = index;
-    mHasPending.store(true, std::memory_order_release);
+    Park(Request::Kind::SetlistPreset, index, false);
 }
 
 void ControlSurfaceQueue::AddSetlistBankDelta(int delta)
 {
-    std::lock_guard<std::mutex> lock(mPendingMutex);
-    mPending.setlistBankDelta = mPending.setlistBankDelta.value_or(0) + delta;
-    mHasPending.store(true, std::memory_order_release);
+    Park(Request::Kind::SetlistBankDelta, delta, true);
 }
 
 void ControlSurfaceQueue::RequestSetlistBankSelect(int bankNumber)
 {
-    std::lock_guard<std::mutex> lock(mPendingMutex);
-    mPending.setlistBankSelect = bankNumber;
-    mHasPending.store(true, std::memory_order_release);
+    Park(Request::Kind::SetlistBankSelect, bankNumber, false);
 }
 
 void ControlSurfaceQueue::RequestScene(int index)
 {
+    Park(Request::Kind::Scene, index, false);
+}
+
+void ControlSurfaceQueue::Park(Request::Kind kind, int value, bool accumulate)
+{
     std::lock_guard<std::mutex> lock(mPendingMutex);
-    mPending.sceneIndex = index;
+    auto* const first = mPending.requests.data();
+    auto* const last = first + mPending.count;
+    auto* const earlier = std::find_if(first, last, [kind](const Request& request) { return request.kind == kind; });
+
+    if (earlier != last)
+    {
+        if (accumulate)
+        {
+            value += earlier->value;
+        }
+
+        std::copy(earlier + 1, last, earlier);
+        --mPending.count;
+    }
+
+    mPending.requests[mPending.count++] = Request{kind, value};
     mHasPending.store(true, std::memory_order_release);
 }
 

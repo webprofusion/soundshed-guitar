@@ -427,7 +427,7 @@ Nano's layering is clean. It talks to the engine only through the JSON protocol,
   - `MultiPresetMixer.h:12` includes `ParametricEQEffect.h` without using it, and that reaches 36 TUs through `PluginController.h`. *Removed 3 October.*
   - Executor move-assignment drops the parallel-level scores, so a global chain installed by swap never runs levels in parallel. *Fixed 3 October: `SignalGraphExecutor` is no longer movable; `GlobalChainEngine` holds its executors by pointer and `DspReaper` takes an outgoing one whole, worker threads included.*
 - Controller:
-  - `SelectSceneByIndex` and the setlist bank functions call `try_lock` on a mutex the calling thread may already hold, which is undefined behaviour for `std::mutex`.
+  - `SelectSceneByIndex` and the setlist bank functions call `try_lock` on a mutex the calling thread may already hold, which is undefined behaviour for `std::mutex`. *Fixed 7 October: automation, which always applies under the lock, parks every scene, bank and setlist request for the message thread, and the UI's scene switch calls `SelectSceneByIndexDirect`. The wrappers are gone.*
   - The layout association index is a JSON file outside the store and outside shared sync.
 - Dead code:
   - the composite-preset file API;

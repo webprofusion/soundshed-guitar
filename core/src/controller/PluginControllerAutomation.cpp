@@ -457,19 +457,6 @@ void PluginController::ApplySetlistPresetByIndexDirect(int index)
     SendMessageToUI(msg.dump());
 }
 
-void PluginController::SetlistBankUp(int steps)
-{
-    if (mDSPMutex.try_lock())
-    {
-        mDSPMutex.unlock();
-        SetlistBankChangeDirect(steps);
-    }
-    else
-    {
-        mControlSurface->AddSetlistBankDelta(steps);
-    }
-}
-
 int PluginController::GetActiveSceneIndex() const
 {
     if (!mActivePreset)
@@ -488,24 +475,6 @@ int PluginController::GetActiveSceneIndex() const
     }
 
     return -1;
-}
-
-void PluginController::SelectSceneByIndex(int index)
-{
-    // Same threading contract as ApplySetlistPresetByIndex: reachable from the
-    // audio thread via automation/MIDI apply (already holding mDSPMutex) or from
-    // the UI thread. SelectSceneByIndexDirect ends up in ApplyPreset, which takes
-    // mDSPMutex itself, so park it for the message thread when the lock is already held
-    // (see DrainControlSurfaceRequests).
-    if (mDSPMutex.try_lock())
-    {
-        mDSPMutex.unlock();
-        SelectSceneByIndexDirect(index);
-    }
-    else
-    {
-        mControlSurface->RequestScene(index);
-    }
 }
 
 void PluginController::SelectSceneByIndexDirect(int index)
@@ -554,19 +523,6 @@ void PluginController::SelectSceneByIndexDirect(int index)
     loaded["activePresetIds"] = SnapshotActivePresetIds();
     loaded["sceneId"] = GetResolvedActiveSceneId();
     SendMessageToUI(loaded.dump());
-}
-
-void PluginController::SetlistBankDown(int steps)
-{
-    if (mDSPMutex.try_lock())
-    {
-        mDSPMutex.unlock();
-        SetlistBankChangeDirect(-steps);
-    }
-    else
-    {
-        mControlSurface->AddSetlistBankDelta(-steps);
-    }
 }
 
 void PluginController::SetlistBankChangeDirect(int delta)
@@ -628,19 +584,6 @@ void PluginController::SetlistBankChangeDirect(int delta)
     msg["activeSetlistId"] = newId;
     msg["cursorIndex"] = 0;
     SendMessageToUI(msg.dump());
-}
-
-void PluginController::SelectSetlistBank(int bankNumber)
-{
-    if (mDSPMutex.try_lock())
-    {
-        mDSPMutex.unlock();
-        SelectSetlistBankDirect(bankNumber);
-    }
-    else
-    {
-        mControlSurface->RequestSetlistBankSelect(bankNumber);
-    }
 }
 
 void PluginController::SelectSetlistBankDirect(int bankNumber)

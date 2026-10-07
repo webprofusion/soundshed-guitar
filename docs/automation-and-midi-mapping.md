@@ -126,6 +126,7 @@ Default-slot value semantics are inherited from the address's registry entry (`i
 - `setlist.preset1..8` are triggers → fire on the 0→0.5+ rising edge; each selects the corresponding slot (0..7) of the **active setlist** and loads its preset (`ApplySetlistPresetByIndex`). A slot holding the preset already playing on its own only moves the cursor: reloading it would replace unsaved edits with the stored copy.
 - `setlist.bankUp`/`bankDown` are triggers → fire on the rising edge; switch the active setlist to the next/previous one in UI list order, clamped at the first/last setlist. No preset is loaded on a bank change.
 - `setlist.bankSelect` is stepped (0..127) → selects the setlist whose `bank` number equals the value (a MIDI CC 0..127 picks the bank directly). No-op with a log entry if no setlist claims that bank number.
+- **MIDI Bank Select needs no mapping.** A controller recalls "preset N of bank B" with Bank Select (CC0, CC32 or both) and then a Program Change on the same channel. `AutomationSlotTable::HandleMidi` holds each channel's Bank Select (`automation/BankSelectLatch.h`) for the next Program Change there, which takes it whatever it is mapped to. When that Program Change fires a `setlist.preset*` slot, the setlist whose `bank` equals the bank select's number is selected first, then the slot is loaded from it. If only one half is non-zero, that half is the bank number (controllers use CC0 or CC32, some sending the other as 0); if both are, they make the 14-bit MSB × 128 + LSB. A bank no setlist claims leaves the active setlist to pick from, so a controller that always sends CC0 0 still works without a bank 0. A Program Change sent alone picks from the active setlist.
 - `global.inputTrim`/`outputTrim` are continuous dB.
 
 `cursorIndex` (the selected slot within the active setlist) is added to the existing setlists UI-storage JSON (`setlists.json`), reusing the existing `HandleSetSetlistsRequest` save path. A bank change also persists `activeSetlistId`.
@@ -267,14 +268,18 @@ void PluginController::HandleMidi(const MidiEvent& ev);
 
 Algorithm (audio thread, inside the existing `mDSPMutex` try-lock in `ProcessAudio`):
 
-1. Decode channel + event type (Note/CC/PC/Pitch Bend).
-2. Iterate slot MIDI maps; match on `(channel, eventType, controller)`.
-3. On match, compute new normalized value per `mode`:
-   - `absolute`: `data2/127.f` (CC), `1.0` on Note On velocity>0 (for trigger slots).
+1. Decode channel + event type (Note/CC/PC/Pitch Bend). A Bank Select CC is held for the channel's next Program Change, and a Program Change takes it (§1). A Program Change has one data byte, so its `data2` is ignored: the JUCE adapter copies whatever follows it in the host's buffer.
+2. Iterate slot MIDI maps; match on `(channel, eventType, controller)`. A Program Change matches on its program number.
+3. On match, a press (Program Change, or Note On with velocity > 0) on a trigger slot (a setlist preset, scene, bank up/down) sets `1.0` and fires it, whatever the mode. Before that, a Program Change firing a setlist preset selects the bank it was sent with. Otherwise compute the new normalized value per `mode`:
+   - `absolute`: `data2/127.f` (CC), `program/127.f` (PC, so a PC mapped to Select Bank picks that bank number).
    - `relative`: `value += (data2-64)/64.f * sensitivity`.
    - `toggle`: flip on Note On edge.
    - `pickup`: only if `|value - data2/127| < pickupRange`.
 4. `slot.SetValue(normalized, Source::MIDI)` → routes through `ApplyAutomationLocked`.
+
+Setlist steps, bank changes and scene switches load presets or rewrite the setlist, which takes `mDSPMutex`, so automation (always applied under that lock) parks them in `ControlSurfaceQueue` and the message thread applies them in `DrainControlSurfaceRequests`. Only the newest request of each kind is kept, at the place it was last asked for, and the drain applies them in that order: a bank select or bank step lands before the preset picked in that bank.
+
+MIDI learn captures the next CC, Program Change, Note On or Pitch Bend, as an `absolute` mapping. It skips Bank Select CCs unless Select Bank is the slot learning: a footswitch that sends Bank Select + Program Change maps its Program Change.
 
 MIDI events with no matching map are ignored in v1. (Future: route to hosted-plugin nodes — `fx-library.md` notes MIDI routing to `plugin_host` is not yet implemented; out of scope here.)
 

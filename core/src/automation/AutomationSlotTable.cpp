@@ -926,6 +926,8 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
     MidiControlMap::EventType eventType;
     int controller = 0;
     int dataValue = 0;
+    // For a Program Change: the bank the controller selected ahead of it, if it did.
+    std::optional<int> programBank;
 
     switch (statusType)
     {
@@ -933,11 +935,14 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         eventType = MidiControlMap::EventType::CC;
         controller = ev.data1;
         dataValue = ev.data2;
+        mBankSelect.Note(channel, controller, dataValue);
         break;
     case 0x0C: // Program Change
         eventType = MidiControlMap::EventType::ProgramChange;
         controller = ev.data1;
-        dataValue = ev.data2; // typically 0 for PC
+        // It has one data byte; ev.data2 is whatever followed it in the host's buffer.
+        dataValue = 0;
+        programBank = mBankSelect.Take(channel);
         break;
     case 0x09: // Note On
         // MIDI spec: Note On with velocity 0 is equivalent to Note Off.
@@ -963,8 +968,12 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
     if (mMidiLearnSlotId.has_value() && !mMidiLearnCapture.has_value())
     {
         // Only capture CC, ProgramChange, NoteOn, and PitchBend for learning
-        // (NoteOff is not useful as a controller)
-        if (eventType == MidiControlMap::EventType::NoteOff)
+        // (NoteOff is not useful as a controller). Nor a Bank Select, unless for Select Bank: a
+        // controller sends one ahead of each Program Change, and learning a preset or scene from
+        // its footswitch would catch the bank select instead of the program change.
+        if (eventType == MidiControlMap::EventType::NoteOff ||
+            (eventType == MidiControlMap::EventType::CC && BankSelectLatch::IsBankSelect(controller) &&
+             !IsLearningSelectBank()))
         {
             return;
         }
@@ -1029,6 +1038,26 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
 
         if (mm.eventType != eventType)
         {
+            continue;
+        }
+
+        // A press, a Program Change or a Note On, says "go", not how far, so on a trigger it
+        // fires whatever the mode. Read as a value, programs 0-63 and soft notes never crossed
+        // the trigger's halfway edge.
+        const bool isPress =
+            eventType == MidiControlMap::EventType::ProgramChange || eventType == MidiControlMap::EventType::NoteOn;
+
+        if (isPress && IsTriggerSlot(slot))
+        {
+            // A setlist preset loads from the bank its program change was sent with. Parked
+            // ahead of the preset, so the message thread applies it first.
+            if (programBank && mSelectSetlistBank && slot.address.starts_with("setlist.preset"))
+            {
+                mSelectSetlistBank(*programBank);
+            }
+
+            slot.SetValue(1.0f, AutomationSource::MIDI);
+            ApplySlotLocked(slot);
             continue;
         }
 
@@ -1135,6 +1164,23 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         slot.SetValue(normalized, AutomationSource::MIDI);
         ApplySlotLocked(slot);
     }
+}
+
+bool AutomationSlotTable::IsTriggerSlot(const AutomationSlot& slot) const
+{
+    if (slot.nodeBinding || slot.address.empty())
+    {
+        return false;
+    }
+
+    const auto* entry = mRegistry.Find(slot.address);
+    return entry && entry->isTrigger;
+}
+
+bool AutomationSlotTable::IsLearningSelectBank() const
+{
+    const auto* armed = mMidiLearnSlotId ? FindSlot(*mMidiLearnSlotId) : nullptr;
+    return armed && armed->address == "setlist.bankSelect";
 }
 
 std::optional<MidiControlMap> AutomationSlotTable::PollMidiLearnCapture()

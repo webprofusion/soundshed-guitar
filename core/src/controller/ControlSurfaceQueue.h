@@ -11,7 +11,9 @@
 // editor drives it, and by PluginController::DrainControlSurfaceRequests(),
 // which the plugin runs off a timer of its own, when none does. Only the
 // newest request of each kind survives: a footswitch held down produces one
-// preset load, not a hundred queued ones.
+// preset load, not a hundred queued ones. They are drained in the order they
+// were last asked for, so a bank change lands before the preset picked in that
+// bank, as a controller sending Bank Select then Program Change means it to.
 //
 // Realtime rules for the audio-thread side. EnqueueMidi() never allocates:
 // both vectors are reserved up front and capped, and events past the cap are
@@ -19,11 +21,11 @@
 // log queue's mutex is only taken while the UI's MIDI panel is open, and is
 // held for a single push_back.
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <functional>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,14 +36,39 @@ namespace guitarfx
 class ControlSurfaceQueue
 {
   public:
-    /// Deferred requests: at most one of each kind, except the bank delta,
-    /// which accumulates.
+    /// A request parked for the message thread.
+    struct Request
+    {
+        enum class Kind
+        {
+            SetlistPreset,     ///< value: the slot of the active setlist to load
+            SetlistBankDelta,  ///< value: how many banks to move, up or down
+            SetlistBankSelect, ///< value: the bank number to select
+            Scene,             ///< value: the scene of the active preset to switch to
+        };
+
+        Kind kind = Kind::SetlistPreset;
+        int value = 0;
+    };
+
+    static constexpr std::size_t kRequestKinds = 4;
+
+    /// Deferred requests, oldest first: at most one of each kind, at the place it was last
+    /// asked for. A bank delta accumulates; every other kind keeps only its newest value.
     struct PendingRequests
     {
-        std::optional<int> setlistPresetIndex;
-        std::optional<int> setlistBankDelta;
-        std::optional<int> setlistBankSelect;
-        std::optional<int> sceneIndex;
+        std::array<Request, kRequestKinds> requests{};
+        std::size_t count = 0;
+
+        [[nodiscard]] const Request* begin() const
+        {
+            return requests.data();
+        }
+
+        [[nodiscard]] const Request* end() const
+        {
+            return requests.data() + count;
+        }
     };
 
     using SendMessageFn = std::function<void(const std::string&)>;
@@ -103,6 +130,10 @@ class ControlSurfaceQueue
     /// vectors are reserved to these sizes in the constructor.
     static constexpr std::size_t kMaxMidiToApply = 256;
     static constexpr std::size_t kMaxMidiLog = 512;
+
+    /// Parks `value` for `kind` behind everything already parked, replacing an earlier request
+    /// of that kind, or with `accumulate` adding the earlier one's value to it. Never allocates.
+    void Park(Request::Kind kind, int value, bool accumulate);
 
     SendMessageFn mSendMessage;
 
