@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-A big update: eight new effects, fifteen classic drive pedals, a Practice Tool for learning songs, undo/redo and A/B for your signal chain, gapless preset switching with ringing tails, and right-click MIDI Learn on nearly every control.
+A big update: nine new effects, fifteen classic drive pedals, a Practice Tool for learning songs, undo/redo and A/B for your signal chain, gapless preset switching with ringing tails, and right-click MIDI Learn on nearly every control.
 
 ### New Effects
 * **Wah**: a real pedal wah for your expression pedal or MIDI controller, with 34 factory voicings covering classic, boutique and artist signature wahs. It can switch itself off when you rock back to the heel. Set Control to Auto Wah and your playing sweeps it instead, through any of the voicings. This replaces the old Auto-Wah effect: one already in your presets becomes a wah on Auto Wah with the same sweep and level.
@@ -13,9 +13,7 @@ A big update: eight new effects, fifteen classic drive pedals, a Practice Tool f
 * **Harmonizer**: up to four harmony voices. Pick a key and scale and each voice follows your playing a 3rd, 5th, 6th or octave away, major or minor as the key needs, or set fixed intervals that work on chords too. Each voice has its own level, pan, detune and delay, for twin leads, choirs or a double-tracked part, and the harmony comes in with its own pick instead of a wrong note.
 * **Rotary**: a rotating speaker cabinet, horn and drum, heard through two mics in stereo. Switch between Slow and Fast (or Brake) from a footswitch and hear the rotors spin up and slow down at their own pace, the horn in about a second and the heavy drum over several. Drive the cabinet's amp for grit, and set how far apart and how close the mics are.
 * **Vibe**: the throbbing, lopsided swirl of a photocell vibe, in Chorus or Vibrato mode. Four unequal phase stages swept by a lamp give it the pulse a plain phaser does not have, and the sweep can sync to tempo.
-
-### Experimental
-* **Guitar to MIDI** (turn on Settings → Experimental Effects to find it): play a virtual instrument from your guitar. Put it anywhere before a Plugin Host holding an instrument plugin, and the single notes you play are played on it, as hard as you picked them, with hammer-ons played legato and bends and vibrato followed. It plays one note at a time, so chords come out as one of their notes.
+* **Guitar to MIDI**: play a virtual instrument from your guitar. Put it anywhere before a Plugin Host holding an instrument plugin, and the single notes you play are played on it, as hard as you picked them, with hammer-ons played legato and bends and vibrato followed. It plays one note at a time, so chords mostly don't come through, and a low note picked hard starts about 50 ms after the pick.
 
 ### Better Tone
 * **Heavy American** amp: much more gain on tap, a new Character control running from vintage fuzz to tight modern high gain, and a steady volume as you turn up the gain or Power Drive. Sag now works with Power Drive to squeeze and roughen the notes you dig into, instead of just turning the volume down. Changing Preamp Stages while a note rings no longer clicks.

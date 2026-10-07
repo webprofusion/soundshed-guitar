@@ -16,7 +16,8 @@ namespace soundshed::nano
 /// The effect library: categories in the web UI's order (the shared presentation table), a
 /// search across all of them, and the effects the web UI's FX library offers from the engine's
 /// catalog - the same exclusions (the mixer, blends, experimental effects unless that feature
-/// is on). A tap adds the effect after the node the picker was opened for.
+/// is on), and the plugin host and Guitar to MIDI, which needs one. A tap adds the effect after
+/// the node the picker was opened for.
 class EffectPickerContent final : public juce::Component
 {
 public:

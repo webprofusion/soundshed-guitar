@@ -207,7 +207,7 @@ archive in `core/ui/presets/factory/`. Archive installs and archive sessions ign
 | `delay` | Time-based delay | Digital delay, tape echo, analog (BBD) delay, doubler |
 | `reverb` | Reverberation | Room, chamber, spring, advanced, IR, ambient |
 | `utility` | Utility processing | Gain, splitter, mixer, signal analyzer |
-| `synth` | Synthesized tones, and notes for them | Synth saw, Guitar to MIDI (experimental) |
+| `synth` | Synthesized tones, and notes for them | Synth saw, Guitar to MIDI |
 
 How each category looks in both UIs (the FX library's order, name and colour, its icon, the
 effect view's background and artwork) is defined in `core/ui/data/effect-presentation.json`.
@@ -1671,9 +1671,9 @@ three more features, each of which used to run a brute-force YIN of its own.
 | Tuner (`TunerEngine`) | Runs the tracker on the audio thread (about 2.4 µs per 64-sample block) and averages its detections over each reading, 2048 samples at 48 kHz (43 ms at any rate). A worker thread names the note against the reference pitch and reports it, as before. A new note restarts the average. Averaged, the 5 ms detections read a held note with a third to a tenth of the scatter of the single 85 ms window the tuner used to analyse. So the tuner needs no longer window of its own, and the UI still averages six readings. With white noise 20 dB below an A2, readings scatter by 0.3 cents, where they scattered by 2.6 and sat 1.7 cents sharp. On the DI demo's held notes, 99% of readings are within 10 cents of full-rate YIN, against 75% before, and none is more than 50 cents out, against 24% before. Notes above about 1.1 kHz no longer read an octave low, and 176.4 and 192 kHz work. The worker no longer spends 2.3 ms on YIN every 43 ms. |
 
 ### Guitar to MIDI (`guitar_to_midi`)
-**Experimental**: listed only with Settings → Experimental Effects on. Turns single notes into
-MIDI for a virtual instrument in a Plugin Host downstream of it in the same chain. It makes no
-sound of its own: Guitar Thru passes the guitar on or mutes it.
+Turns single notes into MIDI for a virtual instrument in a Plugin Host downstream of it in the
+same chain. It makes no sound of its own: Guitar Thru passes the guitar on or mutes it. The Nano
+does not offer it, since it cannot add the Plugin Host it needs.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
@@ -1715,6 +1715,19 @@ the pick at the median and within 30 ms at worst; the full range adds about 5 ms
 errors. Threshold cannot usefully go below about -52 dBFS: the tracker reads nothing under
 -55 dBFS RMS.
 
+**On real playing** (the demo clips in `core/ui/demo`, scored against each pick's note read
+offline, 2026-10-07): the C#3 to F#3 notes of Guitar Riff 03 start 30 ms after the pick at the
+median, most within 17–36 ms and a few at 50–65 ms; a hard-picked one can read sharp and start a
+semitone high for 25 ms in Notes mode, which Notes + Bend plays as a bend. The low riffs of
+Guitar Riff 01 and 02 (Eb2 to C3, picked hard) start about 55 ms after the pick at the median and
+86 ms at worst, every note found. That is the pitch tracker's limit, not the note logic's: for
+the first 50 ms after those picks no lag dips under YIN's 0.2 threshold (the minimum sits at
+0.3–0.6), and the note starts one detection, 5 ms, after the tracker first reads it. Until then
+the previous note carries on. `OnsetPitchEstimator`, which the harmonizer uses, finds no more of
+these notes early. Power chords, most of Guitar Riff 03, have no single period in the tracker's
+range: a note often stops 100 ms into the chord and returns as its root a few hundred
+milliseconds later, if at all. `NoteTrackerTests` holds the single-note riffs to this.
+
 **Routing**: the notes reach every Plugin Host downstream, however many nodes lie between, and
 none on a parallel branch that does not pass through this node; they stop at a composite's
 edge. Several Guitar to MIDI nodes can feed one instrument, each on its own channel. The Plugin
@@ -1723,8 +1736,9 @@ note each source holds at the end of every block, so nothing hangs when a source
 removed, a block is dropped while the plugin is busy, or the plugin is reset or replaced; a
 source brought back from bypass starts afresh rather than replaying the note it had.
 
-It is monophonic: a chord comes out as one of its notes, not always the same one. MIDI goes
-only to hosted plugins: it is not sent out of the app or to a DAW.
+It is monophonic: a chord comes out as one of its notes, not always the same one, and often late
+or not at all (above). MIDI goes only to hosted plugins: it is not sent out of the app or to a
+DAW.
 
 ### Pitch Shift (`pitch_shift`)
 Pitch shift, free or snapped to whole semitones, within a range an expression pedal sweeps, on one of two engines.

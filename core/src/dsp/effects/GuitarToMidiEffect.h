@@ -77,14 +77,14 @@ constexpr double kThruRampSeconds = 0.005;
 } // namespace guitar_to_midi
 
 /**
- * Guitar to MIDI (experimental): single notes played into it come out as MIDI notes, for a
- * virtual instrument in a Plugin Host downstream of it in the same chain.
+ * Guitar to MIDI: single notes played into it come out as MIDI notes, for a virtual instrument
+ * in a Plugin Host downstream of it in the same chain.
  *
  * The notes come from the shared note tracker (dsp/NoteTracker.h): a pick starts a note at its
  * pitch, with a velocity from how hard it was picked; a hammer-on, pull-off or slide moves it
  * legato (the new note starts before the old one stops, which mono synths glide or tie); the
  * note stops when the string is muted or dies away under the threshold. It is monophonic: a chord
- * gives its strongest note at best.
+ * gives one of its notes at best, often late, and a power chord often nothing at all.
  *
  * - Notes: pitches are rounded to the nearest note, and a bend that passes the next note by a
  *   little moves to it, legato.
@@ -94,8 +94,10 @@ constexpr double kThruRampSeconds = 0.005;
  *   nearest note and bends on from there.
  *
  * Lowest Note narrows the pitch tracker to the guitar's lowest string: the higher it is, the
- * sooner a note is recognised (about 15-20 ms after the pick at the drop-D default, 25-30 ms
- * across the full 45 Hz range). Guitar Thru passes the guitar on, for an instrument layered with
+ * sooner a note is recognised. At the drop-D default a note from C#3 up starts about 30 ms after
+ * the pick on the demo riffs. A low note picked hard takes about 55 ms: for its first 50 ms the
+ * string is not periodic enough for the tracker to read, and the note starts one detection after
+ * the tracker first reads it. Guitar Thru passes the guitar on, for an instrument layered with
  * it or a chain that carries on; off, only the instrument (through its Plugin Host's Mix) is
  * heard.
  *
@@ -580,8 +582,8 @@ inline void RegisterGuitarToMidiEffect()
     info.aliases = {"guitar_to_midi"};
     info.displayName = "Guitar to MIDI";
     info.category = "synth";
-    info.description = "Experimental: plays single notes into a virtual instrument. Put a Plugin Host with an "
-                       "instrument after it in the chain";
+    info.description = "Plays single notes into a virtual instrument. Put a Plugin Host with an instrument after "
+                       "it in the chain";
     info.requiresResource = false;
     info.parameters = BuildParameterDefs(guitar_to_midi::kParams);
 

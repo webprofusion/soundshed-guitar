@@ -15,7 +15,8 @@
  *   - a muted note stops promptly, a ringing one does not, and noise or silence makes nothing
  *   - the events do not depend on the block size, and a NaN on the input does not stick
  * and on the DI guitar recording, no note is so short, or so quickly corrected, that it looks
- * like a mistake.
+ * like a mistake. On the two single-note demo riffs every note is played, and starts within a
+ * detection or two of the pitch tracker first reading it.
  */
 
 #include <algorithm>
@@ -31,6 +32,7 @@
 #include "DemoAudio.h"
 #include "GuitarPhraseSynth.h"
 #include "dsp/NoteTracker.h"
+#include "dsp/PickAttackDetector.h"
 #include "dsp/PitchTracker.h"
 
 #ifndef GUITARFX_DEMO_AUDIO_DIR
@@ -591,6 +593,169 @@ void TestRealGuitar()
     Check(corrected <= notes / 40, "and few corrected straight away",
           std::to_string(corrected) + " of " + std::to_string(notes));
 }
+
+/// A pick in a real recording and the note it played, read offline as the median of the pitch
+/// tracker's own estimates from 40 ms after the pick to the next pick, where they agree within a
+/// semitone (10th to 90th percentile); and the first estimate on that note, which is as early as
+/// anything built on the tracker can know it.
+struct RiffNote
+{
+    std::size_t pick = 0;
+    std::size_t end = 0;
+    double pitch = 0.0; ///< 0 for no single pitch: a chord, a mute, a scrape
+    std::size_t firstRead = 0;
+};
+
+std::vector<RiffNote> ReadRiffOffline(const std::vector<float>& x, double sampleRate)
+{
+    guitarfx::PickAttackDetector picks;
+    picks.Prepare(sampleRate);
+    PitchTracker tracker;
+    tracker.Prepare(sampleRate);
+    tracker.SetLowestFrequency(kDropD);
+    std::vector<std::size_t> attacks;
+    std::vector<std::pair<std::size_t, double>> estimates;
+    std::uint64_t seen = 0;
+
+    for (std::size_t i = 0; i < x.size(); ++i)
+    {
+        if (picks.Process(x[i]))
+        {
+            attacks.push_back(i);
+        }
+
+        tracker.Push(x[i]);
+
+        if (tracker.DetectionCount() != seen)
+        {
+            seen = tracker.DetectionCount();
+
+            if (tracker.HasPitch() && tracker.RawFrequencyHz() > 0.0)
+            {
+                estimates.emplace_back(i, NoteTracker::MidiFromHz(tracker.RawFrequencyHz()));
+            }
+        }
+    }
+
+    attacks.push_back(x.size());
+    const auto settle = static_cast<std::size_t>(0.04 * sampleRate);
+    std::vector<RiffNote> notes;
+
+    for (std::size_t a = 0; a + 1 < attacks.size(); ++a)
+    {
+        RiffNote note;
+        note.pick = attacks[a];
+        note.end = attacks[a + 1];
+        std::vector<double> settled;
+
+        for (const auto& [at, pitch] : estimates)
+        {
+            if (at >= note.pick + settle && at < note.end)
+            {
+                settled.push_back(pitch);
+            }
+        }
+
+        std::sort(settled.begin(), settled.end());
+
+        if (settled.size() >= 3 && settled[settled.size() * 9 / 10] - settled[settled.size() / 10] < 1.0)
+        {
+            note.pitch = settled[settled.size() / 2];
+
+            for (const auto& [at, pitch] : estimates)
+            {
+                if (at >= note.pick && at < note.end && std::abs(pitch - note.pitch) < 0.6)
+                {
+                    note.firstRead = at;
+                    break;
+                }
+            }
+        }
+
+        notes.push_back(note);
+    }
+
+    return notes;
+}
+
+/// Guitar Riff 01 and 02 are low single notes (Eb2 to C3), picked hard, between muted chugs. After
+/// those picks no lag of the tracker's dips under YIN's threshold for about 50 ms, so a note starts
+/// late, whatever this does; what this owes is to start it one detection after the tracker can
+/// first read it, and to find every one.
+void TestRealRiffs()
+{
+    std::cout << "\nSingle-note riffs" << std::endl;
+
+    for (const char* file : {"guitar-riff-01.wav", "guitar-riff-02.wav"})
+    {
+        double sampleRate = 0.0;
+        const auto guitar = guitarfx::test::LoadDemoClipMono(file, sampleRate);
+
+        if (guitar.empty())
+        {
+            Check(false, std::string("the demo clip loads"), file);
+            continue;
+        }
+
+        const auto truth = ReadRiffOffline(guitar, sampleRate);
+        const auto events = Run(guitar, sampleRate);
+        const double msPerSample = 1000.0 / sampleRate;
+        std::vector<double> afterPick;
+        std::vector<double> afterTracker;
+        int pitched = 0;
+        int missed = 0;
+
+        for (const auto& note : truth)
+        {
+            if (note.pitch == 0.0)
+            {
+                continue;
+            }
+
+            ++pitched;
+            double sounding = 0.0; // the tracker's note at the pick, then as each event moves it
+            std::size_t next = 0;
+
+            while (next < events.size() && events[next].sample <= note.pick)
+            {
+                sounding = events[next].type == Type::Stop ? 0.0 : events[next].pitch;
+                ++next;
+            }
+
+            // A re-pick of the note already sounding starts nothing new; it only has to carry on.
+            const bool alreadyOn = sounding > 0.0 && std::abs(sounding - note.pitch) < 0.5;
+            bool found = alreadyOn;
+
+            for (; !found && next < events.size() && events[next].sample < note.end; ++next)
+            {
+                sounding = events[next].type == Type::Stop ? 0.0 : events[next].pitch;
+
+                if (sounding > 0.0 && std::abs(sounding - note.pitch) < 0.5)
+                {
+                    found = true;
+                    afterPick.push_back(static_cast<double>(events[next].sample - note.pick) * msPerSample);
+                    afterTracker.push_back(
+                        (static_cast<double>(events[next].sample) - static_cast<double>(note.firstRead)) * msPerSample);
+                }
+            }
+
+            missed += found ? 0 : 1;
+        }
+
+        std::sort(afterPick.begin(), afterPick.end());
+        std::sort(afterTracker.begin(), afterTracker.end());
+        const auto median = [](const std::vector<double>& v) { return v.empty() ? 1.0e9 : v[v.size() / 2]; };
+        const auto worst = [](const std::vector<double>& v) { return v.empty() ? 1.0e9 : v.back(); };
+        const std::string name(file);
+        Check(pitched >= 8 && missed == 0, name + ": every single note is played",
+              std::to_string(pitched - missed) + " of " + std::to_string(pitched));
+        Check(median(afterTracker) <= 10.0 && worst(afterTracker) <= 15.0,
+              name + ": a new note starts within a detection or two of the tracker first reading it",
+              Num(median(afterTracker)) + " ms median, " + Num(worst(afterTracker)) + " ms worst");
+        Check(median(afterPick) <= 65.0 && worst(afterPick) <= 100.0, name + ": and so within 100 ms of its pick",
+              Num(median(afterPick)) + " ms median, " + Num(worst(afterPick)) + " ms worst");
+    }
+}
 } // namespace
 
 int main()
@@ -603,6 +768,7 @@ int main()
     TestBlockSizeAndNaN();
     TestLowestFrequency();
     TestRealGuitar();
+    TestRealRiffs();
     std::cout << "\n" << (gChecks - gFailures) << "/" << gChecks << " checks passed" << std::endl;
     return gFailures == 0 ? 0 : 1;
 }

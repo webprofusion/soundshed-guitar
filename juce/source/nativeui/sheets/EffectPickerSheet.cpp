@@ -28,7 +28,7 @@ std::string lower (std::string text)
 std::vector<const EffectTypeInfo*> EffectPickerContent::offeredEffects (const NanoContext& context)
 {
     namespace guids = guitarfx::EffectGuids;
-    const std::set<std::string> experimental { guids::kTransposeStft, guids::kTransposeHybrid, guids::kGuitarToMidi };
+    const std::set<std::string> experimental { guids::kTransposeStft, guids::kTransposeHybrid };
     const bool showExperimental = featureEnabled (context, "experimentalEffects");
     const bool showCustom = featureEnabled (context, "customEffects");
     std::vector<const EffectTypeInfo*> offered;
@@ -36,9 +36,10 @@ std::vector<const EffectTypeInfo*> EffectPickerContent::offeredEffects (const Na
     for (const auto& info : context.state().catalog)
     {
         // As core/ui/ts/fxSelector.ts's getCatalogEffects. The plugin host and composites need
-        // pickers of their own, which live in Soundshed Guitar.
+        // pickers of their own, which live in Soundshed Guitar; Guitar to MIDI only plays a
+        // plugin host's instrument, so it goes with it.
         if (info.type == guids::kMixer || info.type == guids::kAmpNamBlend || info.type == guids::kPluginHost
-            || info.type.rfind ("composite:", 0) == 0)
+            || info.type == guids::kGuitarToMidi || info.type.rfind ("composite:", 0) == 0)
             continue;
 
         if (info.type == guids::kWasmHost && ! showCustom)
