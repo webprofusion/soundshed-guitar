@@ -355,7 +355,7 @@ function biquadMagnitude(freq: number, b0: number, b1: number, b2: number, a1: n
 
 /** Q of a second-order Butterworth section (dsp/BiquadDesign.h's biquad::kButterworthQ):
  * what a plain high-pass/low-pass control designs with. */
-export const BUTTERWORTH_Q = 0.70710678118654752;
+export const BUTTERWORTH_Q = Math.SQRT1_2;
 
 /** The Q an RBJ shelf needs to match the cookbook's slope parameter S, for a control that
  * takes slope rather than Q (dsp/BiquadDesign.h's biquad::ShelfQFromSlope). */
