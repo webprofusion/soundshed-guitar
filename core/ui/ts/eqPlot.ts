@@ -353,6 +353,45 @@ function biquadMagnitude(freq: number, b0: number, b1: number, b2: number, a1: n
   return denMag <= 0 ? 1.0 : numMag / denMag;
 }
 
+/** Q of a second-order Butterworth section (dsp/BiquadDesign.h's biquad::kButterworthQ):
+ * what a plain high-pass/low-pass control designs with. */
+export const BUTTERWORTH_Q = 0.70710678118654752;
+
+/** The Q an RBJ shelf needs to match the cookbook's slope parameter S, for a control that
+ * takes slope rather than Q (dsp/BiquadDesign.h's biquad::ShelfQFromSlope). */
+export function shelfQFromSlope(slope: number, gainDb: number): number {
+  const A = Math.pow(10, gainDb / 40);
+  return 1 / Math.sqrt((A + 1 / A) * (1 / slope - 1) + 2);
+}
+
+/** A Butterworth-style high-pass's magnitude at `freq` (dsp/BiquadDesign.h's biquad::HighPass). */
+export function highPassMagnitude(freq: number, cutoffHz: number, q: number, sampleRate: number): number {
+  if (cutoffHz <= 0) return 1.0;
+  const w0 = 2 * Math.PI * cutoffHz / sampleRate;
+  const cosw0 = Math.cos(w0);
+  const alpha = Math.sin(w0) / (2 * q);
+  const invA0 = 1 / (1 + alpha);
+  const b0 = (1 + cosw0) * 0.5 * invA0;
+  const b1 = -(1 + cosw0) * invA0;
+  const a1 = -2 * cosw0 * invA0;
+  const a2 = (1 - alpha) * invA0;
+  return biquadMagnitude(freq, b0, b1, b0, a1, a2, sampleRate);
+}
+
+/** A Butterworth-style low-pass's magnitude at `freq` (dsp/BiquadDesign.h's biquad::LowPass). */
+export function lowPassMagnitude(freq: number, cutoffHz: number, q: number, sampleRate: number): number {
+  if (cutoffHz <= 0) return 1.0;
+  const w0 = 2 * Math.PI * cutoffHz / sampleRate;
+  const cosw0 = Math.cos(w0);
+  const alpha = Math.sin(w0) / (2 * q);
+  const invA0 = 1 / (1 + alpha);
+  const b0 = (1 - cosw0) * 0.5 * invA0;
+  const b1 = (1 - cosw0) * invA0;
+  const a1 = -2 * cosw0 * invA0;
+  const a2 = (1 - alpha) * invA0;
+  return biquadMagnitude(freq, b0, b1, b0, a1, a2, sampleRate);
+}
+
 function lowShelfMagnitude(freq: number, band: EqBand, sampleRate: number): number {
   if (!band || band.gainDb === 0 || band.freq <= 0) return 1.0;
   const A = Math.pow(10, band.gainDb / 40);

@@ -12,6 +12,7 @@
  */
 
 import { sendAnalyzeIrAlignment } from "./bridge.js";
+import { BUTTERWORTH_Q, bandMagnitude, highPassMagnitude, lowPassMagnitude, shelfQFromSlope } from "./eqPlot.js";
 import type { ResourceRef } from "./types.js";
 
 /** An analysis takes well under a second; one not answered by then has failed. */
@@ -289,25 +290,80 @@ export interface CombinedResponse {
   unrelatedDb: number[];
 }
 
-/** A and B summed with these gains and B moved by `offsetMs`. */
-export function combinedResponse(spectra: AlignmentSpectra, gains: { a: number; b: number }, offsetMs: number): CombinedResponse {
+/** A mic-position slot's magnitude at `hz`: an off-axis HF shelf and a close-mic low-mid
+ * peak, exactly as IRCabEffect::ProcessMicPositionSlotA/B design them (UpdateMicCoefficients),
+ * applied to that slot alone before it joins the blend. */
+function micPositionMagnitude(radial: number, proximity: number, hz: number, sampleRate: number): number {
+  const radialGainDb = Math.max(0, Math.min(1, radial)) * -12;
+  const proximityGainDb = Math.max(0, Math.min(1, proximity)) * 6;
+  const shelf = bandMagnitude(hz, { freq: 4000, gainDb: radialGainDb, q: shelfQFromSlope(0.7, radialGainDb), shelfType: "high" }, sampleRate);
+  const peak = bandMagnitude(hz, { freq: 150, gainDb: proximityGainDb, q: 1.0 }, sampleRate);
+  return shelf * peak;
+}
+
+/** The magnitude at `hz` of what IRCabEffect::Process applies after the blend: Low Cut,
+ * High Cut (ProcessCabFilters, UpdateCabFilterCoefficients), then Air (ProcessAirSample,
+ * UpdateAirCoefficients) in whichever of its three modes is set. Shared by both slots, since
+ * it runs on their sum. */
+function cabPostFilterMagnitude(params: Record<string, number>, hz: number, sampleRate: number): number {
+  let magnitude = 1;
+  const lowCutHz = params.lowCutHz ?? 20;
+  const highCutHz = params.highCutHz ?? 20000;
+  const nyquist = sampleRate / 2;
+  if (lowCutHz > 20.5) {
+    magnitude *= highPassMagnitude(hz, lowCutHz, BUTTERWORTH_Q, sampleRate);
+  }
+  if (highCutHz < 19999.5 && highCutHz < nyquist - 100) {
+    magnitude *= lowPassMagnitude(hz, highCutHz, BUTTERWORTH_Q, sampleRate);
+  }
+  const air = Math.max(0, Math.min(1, params.air ?? 0));
+  if (air > 0.0001) {
+    const airMode = Math.round(params.airMode ?? 0);
+    if (airMode !== 1) {
+      const gainDb = air * 12;
+      magnitude *= bandMagnitude(hz, { freq: 7000, gainDb, q: shelfQFromSlope(0.7, gainDb), shelfType: "high" }, sampleRate);
+    }
+    if (airMode !== 0) {
+      const gainDb = air * 8;
+      magnitude *= bandMagnitude(hz, { freq: 3600, gainDb, q: 1.8 }, sampleRate);
+    }
+  }
+  return magnitude;
+}
+
+/** A and B summed with these gains and B moved by `offsetMs`, shaped the way the node's
+ * current Low Cut/High Cut/Air/Mic Position controls shape it (IRCabEffect::Process):
+ * Mic Position per slot before the sum, Low Cut/High Cut/Air after it. `params` and
+ * `sampleRate` default to off/48kHz so existing callers without them are unaffected. */
+export function combinedResponse(
+  spectra: AlignmentSpectra,
+  gains: { a: number; b: number },
+  offsetMs: number,
+  params: Record<string, number> = {},
+  sampleRate = 48000,
+): CombinedResponse {
   const bands = spectra.frequencies.length;
   const summedDb = new Array<number>(bands);
   const unrelatedDb = new Array<number>(bands);
   const offsetSeconds = offsetMs / 1000;
+  const micOn = (params.micEmulation ?? 0) >= 0.5;
   for (let band = 0; band < bands; band += 1) {
     let summed = 0;
     let unrelated = 0;
     for (let point = 0; point < POINTS_PER_BAND; point += 1) {
       const index = band * POINTS_PER_BAND + point;
+      const hz = spectra.pointHz[index];
+      const post = cabPostFilterMagnitude(params, hz, sampleRate);
+      const gainA = gains.a * post * (micOn ? micPositionMagnitude(params.micRadialA ?? 0, params.micProximityA ?? 0, hz, sampleRate) : 1);
+      const gainB = gains.b * post * (micOn ? micPositionMagnitude(params.micRadialB ?? 0, params.micProximityB ?? 0, hz, sampleRate) : 1);
       // B played later by the offset: its response turns by -2*pi*f*offset.
-      const angle = -2 * Math.PI * spectra.pointHz[index] * offsetSeconds;
+      const angle = -2 * Math.PI * hz * offsetSeconds;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      const aRe = gains.a * spectra.aRe[index];
-      const aIm = gains.a * spectra.aIm[index];
-      const bRe = gains.b * (spectra.bRe[index] * cos - spectra.bIm[index] * sin);
-      const bIm = gains.b * (spectra.bRe[index] * sin + spectra.bIm[index] * cos);
+      const aRe = gainA * spectra.aRe[index];
+      const aIm = gainA * spectra.aIm[index];
+      const bRe = gainB * (spectra.bRe[index] * cos - spectra.bIm[index] * sin);
+      const bIm = gainB * (spectra.bRe[index] * sin + spectra.bIm[index] * cos);
       summed += (aRe + bRe) ** 2 + (aIm + bIm) ** 2;
       unrelated += aRe * aRe + aIm * aIm + bRe * bRe + bIm * bIm;
     }

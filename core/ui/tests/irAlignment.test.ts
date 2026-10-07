@@ -188,3 +188,51 @@ describe("the summed response", () => {
     expect(inverted.summedDb[0]).toBeLessThan(-100);
   });
 });
+
+describe("the response reflects Low Cut, High Cut, Air and Mic Position", () => {
+  const sameIrs = (): IrAlignmentModule.IrAlignmentAnalysis => {
+    const parsed = irAlignment.parseIrAlignment(analysisReply("x", { normalizeGainA: 1, normalizeGainB: 1 }));
+    if (!parsed) throw new Error("no analysis");
+    return parsed;
+  };
+
+  it("leaves the curve alone at the controls' off settings", () => {
+    const spectra = irAlignment.buildAlignmentSpectra(sameIrs(), [100, 900, 8000]);
+    const bare = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0);
+    const off = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0, { lowCutHz: 20, highCutHz: 20000, air: 0 }, 48000);
+    off.summedDb.forEach((db, i) => expect(db).toBeCloseTo(bare.summedDb[i], 6));
+  });
+
+  it("Low Cut pulls down low frequencies but leaves highs alone", () => {
+    const spectra = irAlignment.buildAlignmentSpectra(sameIrs(), [100, 8000]);
+    const bare = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0);
+    const cut = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0, { lowCutHz: 500 }, 48000);
+    expect(cut.summedDb[0]).toBeLessThan(bare.summedDb[0] - 10);
+    expect(cut.summedDb[1]).toBeCloseTo(bare.summedDb[1], 1);
+  });
+
+  it("High Cut pulls down high frequencies but leaves lows alone", () => {
+    const spectra = irAlignment.buildAlignmentSpectra(sameIrs(), [100, 8000]);
+    const bare = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0);
+    const cut = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0, { highCutHz: 2000 }, 48000);
+    expect(cut.summedDb[1]).toBeLessThan(bare.summedDb[1] - 10);
+    expect(cut.summedDb[0]).toBeCloseTo(bare.summedDb[0], 1);
+  });
+
+  it("Air lifts the top end", () => {
+    const spectra = irAlignment.buildAlignmentSpectra(sameIrs(), [7000]);
+    const bare = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0);
+    const lifted = irAlignment.combinedResponse(spectra, { a: 1, b: 1 }, 0, { air: 1, airMode: 0 }, 48000);
+    expect(lifted.summedDb[0]).toBeGreaterThan(bare.summedDb[0] + 3);
+  });
+
+  it("Mic Position's off-axis shelf pulls down the top end of the one slot it's set on", () => {
+    const spectra = irAlignment.buildAlignmentSpectra(sameIrs(), [8000]);
+    const bare = irAlignment.combinedResponse(spectra, { a: 1, b: 0 }, 0);
+    const offAxis = irAlignment.combinedResponse(spectra, { a: 1, b: 0 }, 0, { micEmulation: 1, micRadialA: 1 }, 48000);
+    expect(offAxis.summedDb[0]).toBeLessThan(bare.summedDb[0] - 5);
+    // Slot B is untouched by A's mic settings, so a gain of 0 on it still reads as silent either way.
+    const unaffectedB = irAlignment.combinedResponse(spectra, { a: 0, b: 1 }, 0, { micEmulation: 1, micRadialA: 1 }, 48000);
+    expect(unaffectedB.summedDb[0]).toBeCloseTo(bare.summedDb[0], 1);
+  });
+});

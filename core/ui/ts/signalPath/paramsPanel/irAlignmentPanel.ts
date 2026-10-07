@@ -315,7 +315,13 @@ function drawMatchStrip(canvas: HTMLCanvasElement, analysis: IrAlignmentAnalysis
 
 function drawResponse(canvas: HTMLCanvasElement, spectra: AlignmentSpectra, analysis: IrAlignmentAnalysis, node: GraphNode): void {
   fitCanvasToLayout(canvas);
-  const response = combinedResponse(spectra, slotGains(node.params ?? {}, analysis), offsetOf(node));
+  const response = combinedResponse(
+    spectra,
+    slotGains(node.params ?? {}, analysis),
+    offsetOf(node),
+    node.params ?? {},
+    analysis.sampleRate,
+  );
   const at = (values: number[]) => (freq: number): number => {
     const { frequencies } = response;
     const last = frequencies.length - 1;
