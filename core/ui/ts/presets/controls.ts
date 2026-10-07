@@ -22,20 +22,20 @@ import { createSetlist, renderSetlistPanel, setSetlistExpanded } from "./setlist
 
 export function getActivePresetIndex(): number {
   if (!uiState.activePresetId) return -1;
-  return uiState.presets.findIndex((p) => p.id === uiState.activePresetId);
+  return uiState.filteredPresets.findIndex((p) => p.id === uiState.activePresetId);
 }
 
 export async function selectPreviousPreset(): Promise<void> {
-  if (!uiState.presets.length) return;
+  if (!uiState.filteredPresets.length) return;
 
   let index = getActivePresetIndex();
   if (index <= 0) {
-    index = uiState.presets.length - 1;
+    index = uiState.filteredPresets.length - 1;
   } else {
     index--;
   }
 
-  const preset = uiState.presets[index];
+  const preset = uiState.filteredPresets[index];
   if (preset) {
     await applyPresetFromLibrary(preset.id);
     updatePresetDropdownSelection();
@@ -43,16 +43,16 @@ export async function selectPreviousPreset(): Promise<void> {
 }
 
 export async function selectNextPreset(): Promise<void> {
-  if (!uiState.presets.length) return;
+  if (!uiState.filteredPresets.length) return;
 
   let index = getActivePresetIndex();
-  if (index < 0 || index >= uiState.presets.length - 1) {
+  if (index < 0 || index >= uiState.filteredPresets.length - 1) {
     index = 0;
   } else {
     index++;
   }
 
-  const preset = uiState.presets[index];
+  const preset = uiState.filteredPresets[index];
   if (preset) {
     await applyPresetFromLibrary(preset.id);
     updatePresetDropdownSelection();

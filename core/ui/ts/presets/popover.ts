@@ -10,11 +10,14 @@ import { getCompositePresetList } from "../bridge.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "../featureFlags.js";
 import { presetSearchElement } from "../presets/dom.js";
 import { setFavoriteToggleState } from "../presets/favorites.js";
+import { findFolderForPreset } from "../presets/folders.js";
 import { clonePreset, uiState } from "../state.js";
 import { setActivePresetId } from "../presetLibraryStore.js";
-import { presetChooserLabel, presetControlBar, presetExtraActionsBtn, presetExtraActionsMenu, presetLibraryMultiRigPanel, presetLibraryMultiRigTab, presetLibraryPopover, presetLibraryPresetsPanel, presetLibraryPresetsTab, presetLibraryTabs } from "./dom.js";
+import { presetChooserLabel, presetControlBar, presetExtraActionsBtn, presetExtraActionsMenu, presetFolderTreeElement, presetLibraryMultiRigPanel, presetLibraryMultiRigTab, presetLibraryPopover, presetLibraryPresetsPanel, presetLibraryPresetsTab, presetLibraryTabs, presetListElement } from "./dom.js";
+import { setActivePresetFolder } from "./folderControls.js";
 import { filterPresets, updatePresetDropdownSelection } from "./filter.js";
 import { requestPresetUIRender } from "./refresh.js";
+import { PRESET_FOLDER_ALL_ID } from "./sorting.js";
 import { updatePresetActionButtons } from "./toolbar.js";
 import { setSetlistPanelVisible } from "./setlists.js";
 
@@ -28,6 +31,35 @@ export function syncPresetHeaderPopoverLayer(): void {
 let presetChooserOverride: ((presetId: string) => void | Promise<void>) | null = null;
 
 let presetChooserCloseOverride: (() => void) | null = null;
+
+/**
+ * Switches to whichever folder holds the active preset (if the currently
+ * filtered list doesn't already show it) and scrolls both the folder row and
+ * the preset row into view, so reopening the chooser lands on the preset
+ * that's actually loaded instead of wherever the list was last left scrolled.
+ */
+function revealActivePresetInChooser(): void {
+  const activePresetId = uiState.activePresetId;
+  if (!activePresetId) {
+    return;
+  }
+
+  const alreadyVisible = uiState.filteredPresets.some((preset) => preset.id === activePresetId);
+  if (!alreadyVisible) {
+    const folder = findFolderForPreset(uiState.presetFolders ?? [], activePresetId);
+    setActivePresetFolder(folder ? folder.id : PRESET_FOLDER_ALL_ID);
+  }
+
+  requestAnimationFrame(() => {
+    presetListElement
+      ?.querySelector(`[data-id="${CSS.escape(activePresetId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+    const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+    presetFolderTreeElement
+      ?.querySelector(`[data-folder-id="${CSS.escape(activeFolderId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  });
+}
 
 export function openPresetLibraryPopover(): void {
   if (!presetLibraryPopover) {
@@ -54,6 +86,7 @@ export function openPresetLibraryPopover(): void {
   presetLibraryPopover.setAttribute("aria-hidden", "false");
   presetChooserLabel?.setAttribute("aria-expanded", "true");
   syncPresetHeaderPopoverLayer();
+  revealActivePresetInChooser();
 }
 
 export function closePresetLibraryPopover(): void {
