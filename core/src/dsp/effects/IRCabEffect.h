@@ -9,6 +9,7 @@
 #include "dsp/IRTypes.h"
 #include "dsp/IRWavLoader.h"
 #include "dsp/ImpulseResampler.h"
+#include "dsp/IrSlotAlignment.h"
 #include "dsp/effects/SpeakerDrive.h"
 #include "util/PathEncoding.h"
 #include "util/SessionLog.h"
@@ -51,6 +52,8 @@ class IRCabEffect : public EffectProcessor
         UpdateCabFilterCoefficients();
         UpdateMicCoefficients();
         mSpeakerDrive.Prepare(sampleRate);
+        mAlignment.SetBothSlotsLoaded(!mImpulseL.empty() && !mImpulseBL.empty());
+        mAlignment.Prepare(sampleRate, maxBlockSize);
 
         mInputBufferL.resize(static_cast<size_t>(maxBlockSize));
         mInputBufferR.resize(static_cast<size_t>(maxBlockSize));
@@ -92,6 +95,7 @@ class IRCabEffect : public EffectProcessor
         ResetCabFilterState();
         ResetMicPositionState();
         mSpeakerDrive.Reset();
+        mAlignment.Reset();
         mResourceTransitionSamplesRemaining = 0;
         mPrevHasSlotA = false;
         mPrevHasSlotB = false;
@@ -219,6 +223,14 @@ class IRCabEffect : public EffectProcessor
         // L/R split: slot A takes left input, slot B takes right input (requires both slots loaded).
         const bool useLRSplit = mLRSplitEnabled && hasB;
 
+        // Each slot reads its own copy of the input, the later one delayed by the alignment offset.
+        mAlignment.SetBothSlotsLoaded(hasB);
+        mAlignment.Process(mInputBufferL.data(), mInputBufferR.data(), numSamples);
+        const float* inAL = mAlignment.SlotInput(0, 0);
+        const float* inAR = mAlignment.SlotInput(0, 1);
+        const float* inBL = mAlignment.SlotInput(1, 0);
+        const float* inBR = mAlignment.SlotInput(1, 1);
+
         if (useLRSplit)
         {
             // Run slot A (left) and slot B (right) in parallel
@@ -227,14 +239,14 @@ class IRCabEffect : public EffectProcessor
             if (allowParallel)
             {
                 ran = rtparallel::DualLaneExecutor::Instance().Run(
-                    [&]() { mConvolverBL.Process(mInputBufferR.data(), mOutputBufferBL.data(), numSamples); },
-                    [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
+                    [&]() { mConvolverBL.Process(inBR, mOutputBufferBL.data(), numSamples); },
+                    [&]() { mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples); });
             }
 
             if (!ran)
             {
-                mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
-                mConvolverBL.Process(mInputBufferR.data(), mOutputBufferBL.data(), numSamples);
+                mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples);
+                mConvolverBL.Process(inBR, mOutputBufferBL.data(), numSamples);
             }
         }
         else
@@ -244,14 +256,14 @@ class IRCabEffect : public EffectProcessor
             if (allowParallel)
             {
                 ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                    [&]() { mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples); },
-                    [&]() { mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples); });
+                    [&]() { mConvolverR.Process(inAR, mOutputBufferR.data(), numSamples); },
+                    [&]() { mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples); });
             }
 
             if (!ranParallel)
             {
-                mConvolverL.Process(mInputBufferL.data(), mOutputBufferL.data(), numSamples);
-                mConvolverR.Process(mInputBufferR.data(), mOutputBufferR.data(), numSamples);
+                mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples);
+                mConvolverR.Process(inAR, mOutputBufferR.data(), numSamples);
             }
 
             if (hasB)
@@ -261,14 +273,14 @@ class IRCabEffect : public EffectProcessor
                 if (allowParallel)
                 {
                     ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                        [&]() { mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples); },
-                        [&]() { mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples); });
+                        [&]() { mConvolverBR.Process(inBR, mOutputBufferBR.data(), numSamples); },
+                        [&]() { mConvolverBL.Process(inBL, mOutputBufferBL.data(), numSamples); });
                 }
 
                 if (!ranBParallel)
                 {
-                    mConvolverBL.Process(mInputBufferL.data(), mOutputBufferBL.data(), numSamples);
-                    mConvolverBR.Process(mInputBufferR.data(), mOutputBufferBR.data(), numSamples);
+                    mConvolverBL.Process(inBL, mOutputBufferBL.data(), numSamples);
+                    mConvolverBR.Process(inBR, mOutputBufferBR.data(), numSamples);
                 }
             }
         }
@@ -288,21 +300,19 @@ class IRCabEffect : public EffectProcessor
                         [&]() {
                             if (mPrevHasSlotB)
                             {
-                                mPrevConvolverBL.Process(mInputBufferR.data(), mPrevOutputBufferBL.data(), numSamples);
+                                mPrevConvolverBL.Process(inBR, mPrevOutputBufferBL.data(), numSamples);
                             }
                         },
-                        [&]() {
-                            mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
-                        });
+                        [&]() { mPrevConvolverL.Process(inAL, mPrevOutputBufferL.data(), numSamples); });
                 }
 
                 if (!ran)
                 {
-                    mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
+                    mPrevConvolverL.Process(inAL, mPrevOutputBufferL.data(), numSamples);
 
                     if (mPrevHasSlotB)
                     {
-                        mPrevConvolverBL.Process(mInputBufferR.data(), mPrevOutputBufferBL.data(), numSamples);
+                        mPrevConvolverBL.Process(inBR, mPrevOutputBufferBL.data(), numSamples);
                     }
                 }
             }
@@ -313,16 +323,14 @@ class IRCabEffect : public EffectProcessor
                 if (allowParallel)
                 {
                     ranPrevParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                        [&]() { mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples); },
-                        [&]() {
-                            mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
-                        });
+                        [&]() { mPrevConvolverR.Process(inAR, mPrevOutputBufferR.data(), numSamples); },
+                        [&]() { mPrevConvolverL.Process(inAL, mPrevOutputBufferL.data(), numSamples); });
                 }
 
                 if (!ranPrevParallel)
                 {
-                    mPrevConvolverL.Process(mInputBufferL.data(), mPrevOutputBufferL.data(), numSamples);
-                    mPrevConvolverR.Process(mInputBufferR.data(), mPrevOutputBufferR.data(), numSamples);
+                    mPrevConvolverL.Process(inAL, mPrevOutputBufferL.data(), numSamples);
+                    mPrevConvolverR.Process(inAR, mPrevOutputBufferR.data(), numSamples);
                 }
 
                 if (mPrevHasSlotB)
@@ -332,18 +340,14 @@ class IRCabEffect : public EffectProcessor
                     if (allowParallel)
                     {
                         ranPrevBParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                            [&]() {
-                                mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
-                            },
-                            [&]() {
-                                mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
-                            });
+                            [&]() { mPrevConvolverBR.Process(inBR, mPrevOutputBufferBR.data(), numSamples); },
+                            [&]() { mPrevConvolverBL.Process(inBL, mPrevOutputBufferBL.data(), numSamples); });
                     }
 
                     if (!ranPrevBParallel)
                     {
-                        mPrevConvolverBL.Process(mInputBufferL.data(), mPrevOutputBufferBL.data(), numSamples);
-                        mPrevConvolverBR.Process(mInputBufferR.data(), mPrevOutputBufferBR.data(), numSamples);
+                        mPrevConvolverBL.Process(inBL, mPrevOutputBufferBL.data(), numSamples);
+                        mPrevConvolverBR.Process(inBR, mPrevOutputBufferBR.data(), numSamples);
                     }
                 }
             }
@@ -573,6 +577,10 @@ class IRCabEffect : public EffectProcessor
         {
             mSlotBPan = std::clamp(value, -1.0, 1.0);
         }
+        else if (key == "slotBOffset")
+        {
+            mAlignment.SetOffsetMs(value);
+        }
         else if (key == "lrSplit")
         {
             mLRSplitEnabled = value > 0.5;
@@ -762,6 +770,11 @@ class IRCabEffect : public EffectProcessor
         if (key == "slotBPan")
         {
             return mSlotBPan;
+        }
+
+        if (key == "slotBOffset")
+        {
+            return mAlignment.GetOffsetMs();
         }
 
         if (key == "lrSplit")
@@ -1942,6 +1955,7 @@ class IRCabEffect : public EffectProcessor
     AirMode mAirMode = AirMode::OptionA_Shelf;
     bool mAirActive = false;
     SpeakerDrive mSpeakerDrive;
+    IrSlotAlignment mAlignment; // IR B's time against IR A (slotBOffset)
 
     // Air filter coefficients
     double mAirShelfB0 = 0, mAirShelfB1 = 0, mAirShelfB2 = 0, mAirShelfA1 = 0, mAirShelfA2 = 0;
@@ -2032,6 +2046,8 @@ inline void RegisterIRCabEffect()
                        {"slotBPan", "IR B Pan", 0.0, -1.0, 1.0, "amount", "IR B", true},
                        {"micRadialB", "Mic B Radial", 0.0, 0.0, 1.0, "amount", "IR B", true},
                        {"micProximityB", "Mic B Proximity", 0.0, 0.0, 1.0, "amount", "IR B", true},
+                       {"slotBOffset", "IR B Offset", 0.0, -IrSlotAlignment::kMaxOffsetMs,
+                        IrSlotAlignment::kMaxOffsetMs, "ms", "Alignment", true},
                        {"lowLatency", "Low Latency", 1.0, 0.0, 1.0, "toggle", "Tone", true},
                        {"quality",
                         "Quality",

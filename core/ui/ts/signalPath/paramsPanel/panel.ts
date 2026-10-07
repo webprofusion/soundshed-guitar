@@ -29,6 +29,7 @@ import { getEffectVisualizationEquipmentImage, getEffectVisualizationStockImage,
 import { bindCabResponseControls, buildCabResponseSectionHtml } from "./cabResponse.js";
 import { bindGraphicEqControls } from "./eq.js";
 import { bindHostedPluginActionControls, bindHostedPluginListControls } from "./hostedPlugins.js";
+import { bindIrAlignmentControls, buildIrAlignmentSectionHtml, IR_ALIGNMENT_PARAM_KEYS, isIrCabNode } from "./irAlignmentPanel.js";
 import { applyCustomLayoutScaling, bindLayoutOverlayBypassToggles } from "./layoutOverlay.js";
 import { buildMixerInputControlsHtml } from "./mixerInput.js";
 import { bindSplitBranchControls, buildSplitBranchControlsHtml } from "./splitBranches.js";
@@ -110,6 +111,11 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     paramDefs = [...blendParamDefs, ...nonBlendParams];
   }
   
+  // The IR Cabinet's IR B offset has a section of its own rather than a knob.
+  if (isIrCabNode(node)) {
+    paramDefs = paramDefs.filter((paramDef) => !IR_ALIGNMENT_PARAM_KEYS.includes(paramDef.key));
+  }
+
   const isPitchShift = isPitchShiftType(node.type);
 
   const renderParamControl = (paramDef: BlendParamDef): string => {
@@ -301,6 +307,8 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   ` : "";
 
   const cabResponseSection = buildCabResponseSectionHtml(node);
+  // Under the Main and Advanced tabs rather than in either, so it is in view whichever is open.
+  const irAlignmentSection = buildIrAlignmentSectionHtml(node);
   const mixerInputControls = buildMixerInputControlsHtml(node, preset);
   const splitBranchControls = buildSplitBranchControlsHtml(node, preset);
 
@@ -421,6 +429,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     <div class="default-effect-section default-effect-section-controls default-effect-section-custom-layout">
       ${cabIrResourceSelectors}
       ${customLayoutHtml}
+      ${irAlignmentSection}
     </div>
   ` : (() => {
     // Build the standard default controls HTML
@@ -470,6 +479,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       <div class="default-effect-section default-effect-section-controls">
         ${cabIrResourceSelectors}
         ${renderedControls}
+        ${irAlignmentSection}
       </div>
     `;
   })();
@@ -543,6 +553,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   bindEffectPresetsButton(node);
   bindGraphicEqControls(node, preset);
   bindCabResponseControls(node, preset);
+  bindIrAlignmentControls(node);
   bindSplitBranchControls(node, preset);
   bindLayoutOverlayBypassToggles(node, preset);
   bindResourceControls(node, preset);

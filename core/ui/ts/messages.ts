@@ -12,7 +12,7 @@ import { onAudioDeviceLevels, onAudioDeviceState } from "./messages/audioDeviceH
 import { onDemoAudioRenderFailed, onDemoAudioRenderSaved, onMetronomeBeat, onPracticeToolFileLoaded, onPracticeToolPlaybackEnded, onPracticeToolTransportState, onPreviewComplete, onPreviewStarted, onPreviewStopped, onRiffCaptureCanceled, onRiffCaptureProgress, onRiffCaptureStarted, onRiffCaptureStopped, onRiffLibraryState, onRiffSaved } from "./messages/captureHandlers.js";
 import { onAutomation, onMidiLearnCapture, onMidiLog } from "./messages/controlSurfaceHandlers.js";
 import { DEBUG_SNAPSHOT_SKIP_TYPES, onCaptureDebugSnapshot, onDebugSnapshotWritten, scheduleUiDebugSnapshot } from "./messages/debugSnapshot.js";
-import { onCompositeDefinitionAdded, onCompositeDefinitionRemoved, onCompositeEditModeExited, onCompositeEditState, onCompositeLibrary, onCompositePresetList, onCompositePresetLoaded, onCompositePresetSaved, onCustomEffectLibrary, onCustomEffectSaved, onEffectCatalog, onEffectResponse, onGeneratedCustomEffectBundleExportFailed, onGeneratedCustomEffectBundleExportSaved, onSimpleCabIrMatch } from "./messages/effectHandlers.js";
+import { onCompositeDefinitionAdded, onCompositeDefinitionRemoved, onCompositeEditModeExited, onCompositeEditState, onCompositeLibrary, onCompositePresetList, onCompositePresetLoaded, onCompositePresetSaved, onCustomEffectLibrary, onCustomEffectSaved, onEffectCatalog, onEffectResponse, onGeneratedCustomEffectBundleExportFailed, onGeneratedCustomEffectBundleExportSaved, onIrAlignment, onSimpleCabIrMatch } from "./messages/effectHandlers.js";
 import { onLayoutExportFailed, onLayoutExportSaved, onLayoutImageSelected, onLayoutImagesLoaded, onLayoutLibraryLoaded, onLayoutSaved } from "./messages/layoutHandlers.js";
 import { onNavigateToToneSharingDeepLink } from "./messages/mixerHandlers.js";
 import { onEffectPresets, onPresetArchiveSessionEnded, onPresetArchiveSessionFailed, onPresetArchiveSessionStarted, onPresetData, onPresetDirtyChanged, onPresetExportFailed, onPresetExportSaved, onPresetFavorites, onPresetFolders, onPresetList, onPresetLoaded, onPresetRatings, onPresetRecents, onPresetSaved, onSetlistCursorChanged, onSetlists } from "./messages/presetHandlers.js";
@@ -133,6 +133,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "effectCatalog": onEffectCatalog,
   "effectResponse": onEffectResponse,
   "simpleCabIrMatch": onSimpleCabIrMatch,
+  "irAlignment": onIrAlignment,
   "compositeDefinitionAdded": onCompositeDefinitionAdded,
   "compositeDefinitionRemoved": onCompositeDefinitionRemoved,
   "compositeEditState": onCompositeEditState,

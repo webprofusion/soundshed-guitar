@@ -466,6 +466,33 @@ Speaker Drive is the Simple Cabinet's level-dependent speaker stage (`SpeakerDri
 of the convolution: what an IR, being a linear snapshot, cannot capture. It bends only what
 reaches the IR; the dry mix stays clean. At 0 it is exactly transparent.
 
+**Alignment** (`slotBOffset`, -10..+10 ms, default 0, group "Alignment") is IR B's time against
+IR A, positive when B plays later. Two blended IRs sum like two mics on one speaker: lined up they
+reinforce, a fraction of a millisecond apart they comb-filter, and either can be what is wanted.
+`IrSlotAlignment.h` applies it as a delay on the input of whichever slot plays later (B for a
+positive offset, A for a negative one), so the earlier slot is untouched and the reported latency
+does not change. Being a delay rather than a change to the impulse, it moves without a rebuild,
+so it is safe from automation on the audio thread; a new value glides in over about 20 ms
+(a one-pole), bending pitch briefly instead of clicking. Whole-sample offsets are exact;
+fractional ones use 4-point Lagrange interpolation, linear below one sample. With only one IR
+loaded the offset does nothing, and at 0 the slots read their input untouched, so a node that
+never sets it sounds as it did before it existed. Polarity is the existing `slotAPolarity` and
+`slotBPolarity`.
+
+The web UI shows an **Alignment** section under the Main and Advanced tabs, so it is in view
+whichever tab is open, once both IRs are loaded. It sets the offset by dragging B's waveform over
+A's, by clicking along a strip of how alike the two are at every offset, by typing or by nudging,
+and draws the two summed against the two added without interfering, so a cancellation shows as a
+dip. With one IR loaded the section shows only that IR's response; with only IR B it also says
+B is not heard yet, since without IR A the cab passes its input dry.
+
+**Auto Align** asks the engine (`analyzeIrAlignment`, `dsp/IrAlignment.h`) where B lines up: it band-limits both IRs to 100 Hz-6 kHz, cross-correlates
+them over ±10 ms, takes the largest correlation within 2 ms of the offset that lines up their
+onsets (so a strong resonance or a loud room reflection cannot pull it a period off), and places
+the peak between samples with a parabola. A negative peak means B lines up inverted, and Auto
+Align then sets B's polarity against A's. It runs only when asked, never on an IR change or a
+preset load, so an offset set on purpose stays where it was put.
+
 **Resource**: Audio file (`.wav`)
 
 ### Plugin Host (`plugin_host`)

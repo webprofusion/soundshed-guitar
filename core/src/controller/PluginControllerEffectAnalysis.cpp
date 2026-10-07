@@ -1,8 +1,9 @@
 /**
  * PluginControllerEffectAnalysis.cpp - Offline questions about how an effect sounds.
  *
- * The response curve an effect's panel draws, exporting an effect as an IR, and matching
- * the Simple Cabinet to an IR from the library. Every answer comes from a fresh instance
+ * The response curve an effect's panel draws, exporting an effect as an IR, matching the
+ * Simple Cabinet to an IR from the library, and lining up the IR Cabinet's two IRs (read
+ * from their files, not from the playing cab). Every answer comes from a fresh instance
  * built from the parameters the UI sends (dsp/EffectAnalysis.h), never from a running
  * graph, so none of this takes the DSP lock or depends on the node being in the active
  * preset.
@@ -15,7 +16,11 @@
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/IRWavLoader.h"
+#include "dsp/ImpulseResampler.h"
+#include "dsp/IrAlignment.h"
+#include "dsp/IrSlotAlignment.h"
 #include "dsp/effects/SimpleCabMatch.h"
+#include "presets/PresetTypesJson.h"
 #include "resources/ResourceLibrary.h"
 #include "util/Base64.h"
 #include "util/PathEncoding.h"
@@ -24,8 +29,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <system_error>
 
 using namespace guitarfx::controller_detail;
@@ -71,6 +78,99 @@ std::string StringField(const nlohmann::json& payload, const char* key)
 double RoundCentibel(double db)
 {
     return std::round(db * 100.0) / 100.0;
+}
+
+/// The rate the Alignment section's analysis and waveforms are at. Offsets go back in ms, so the
+/// host's rate does not matter.
+constexpr double kAlignmentRate = 48000.0;
+/// How much of each IR the section draws and works its combined response from: the response
+/// window SmoothedMagnitudeDb uses, plus room for B moved by the largest offset.
+constexpr double kAlignmentWaveformMs = 60.0;
+
+/// One IR as the Alignment section sees it: mono at kAlignmentRate, and the gain the cab's
+/// Normalize applies to it, worked out over its channels the way the cab works it out.
+struct AlignmentImpulse
+{
+    std::vector<float> mono;
+    double normalizeGain = 1.0;
+};
+
+std::optional<AlignmentImpulse> LoadAlignmentImpulse(const std::filesystem::path& path)
+{
+    IRWavData data;
+
+    if (!irwav::LoadAudioFile(path, data) || data.samples.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::vector<float> left;
+    std::vector<float> right;
+
+    if (data.channels >= 2)
+    {
+        irwav::SplitToStereo(data, left, right);
+        right.resize(left.size());
+    }
+    else
+    {
+        left = data.samples;
+    }
+
+    const auto toAnalysisRate = [&data](std::vector<float>& channel) {
+        if (!channel.empty() && std::abs(data.sampleRate - kAlignmentRate) > 1.0)
+        {
+            ResampleImpulseForConvolution(channel, data.sampleRate, kAlignmentRate);
+        }
+    };
+    toAnalysisRate(left);
+    toAnalysisRate(right);
+
+    AlignmentImpulse impulse;
+    double energy = 0.0;
+
+    for (const float sample : left)
+    {
+        energy += static_cast<double>(sample) * sample;
+    }
+
+    if (right.empty())
+    {
+        impulse.mono = std::move(left);
+    }
+    else
+    {
+        for (const float sample : right)
+        {
+            energy += static_cast<double>(sample) * sample;
+        }
+
+        energy *= 0.5;
+        impulse.mono.resize(std::min(left.size(), right.size()));
+
+        for (std::size_t n = 0; n < impulse.mono.size(); ++n)
+        {
+            impulse.mono[n] = 0.5f * (left[n] + right[n]);
+        }
+    }
+
+    impulse.normalizeGain = energy > 1e-12 ? 1.0 / std::sqrt(energy) : 1.0;
+    return impulse;
+}
+
+/// The start of an IR as little-endian float32, base64'd: a fraction of the size of a JSON array.
+std::string EncodeWaveform(const std::vector<float>& samples)
+{
+    const std::size_t count =
+        std::min(samples.size(), static_cast<std::size_t>(kAlignmentWaveformMs * kAlignmentRate / 1000.0));
+    std::vector<std::uint8_t> bytes(count * sizeof(float));
+
+    if (count > 0)
+    {
+        std::memcpy(bytes.data(), samples.data(), bytes.size());
+    }
+
+    return util::EncodeBase64(bytes);
 }
 } // namespace
 
@@ -263,6 +363,112 @@ void PluginController::HandleMatchSimpleCabToIrRequest(const nlohmann::json& pay
 
     reply["params"] = std::move(params);
     reply["rmsErrorDb"] = RoundCentibel(match.rmsErrorDb);
+    SendMessageToUI(reply.dump());
+}
+
+void PluginController::HandleAnalyzeIrAlignmentRequest(const nlohmann::json& payload)
+{
+    nlohmann::json reply;
+    reply["type"] = "irAlignment";
+    reply["requestId"] = StringField(payload, "requestId");
+
+    const auto fail = [this, &reply](const std::string& message) {
+        reply["error"] = message;
+        SendMessageToUI(reply.dump());
+    };
+
+    // The refs come as the node holds them, so a browsed file works as well as a library entry.
+    const auto load = [this](const nlohmann::json& refJson) -> std::optional<AlignmentImpulse> {
+        if (!refJson.is_object())
+        {
+            return std::nullopt;
+        }
+
+        ResourceRef ref = DeserializeResourceRef(refJson);
+
+        if (ref.resourceType.empty())
+        {
+            ref.resourceType = "ir";
+        }
+
+        const auto path = ResolveResourceRef(ref);
+        std::error_code existsError;
+
+        if (!path || path->empty() || !std::filesystem::exists(*path, existsError))
+        {
+            return std::nullopt;
+        }
+
+        return LoadAlignmentImpulse(*path);
+    };
+
+    // A cab with one IR sends only that slot: there is nothing to align, but the UI still draws
+    // the one IR's response.
+    const bool wantA = payload.contains("irA") && payload["irA"].is_object();
+    const bool wantB = payload.contains("irB") && payload["irB"].is_object();
+
+    if (!wantA && !wantB)
+    {
+        fail("No IR to analyse");
+        return;
+    }
+
+    std::optional<AlignmentImpulse> irA;
+    std::optional<AlignmentImpulse> irB;
+
+    if (wantA)
+    {
+        irA = load(payload["irA"]);
+    }
+
+    if (wantB)
+    {
+        irB = load(payload["irB"]);
+    }
+
+    if ((wantA && !irA) || (wantB && !irB))
+    {
+        fail(wantA && !irA ? "IR A could not be read" : "IR B could not be read");
+        return;
+    }
+
+    reply["sampleRate"] = kAlignmentRate;
+
+    if (!irA || !irB)
+    {
+        const AlignmentImpulse& only = irA ? *irA : *irB;
+        reply[irA ? "waveformA" : "waveformB"] = EncodeWaveform(only.mono);
+        reply[irA ? "normalizeGainA" : "normalizeGainB"] = only.normalizeGain;
+        SendMessageToUI(reply.dump());
+        return;
+    }
+
+    const auto analysis = ir_alignment::Analyse(irA->mono, irB->mono, kAlignmentRate, IrSlotAlignment::kMaxOffsetMs);
+
+    if (!analysis.valid)
+    {
+        fail("One of the IRs is silent");
+        return;
+    }
+
+    nlohmann::json matchByOffset = nlohmann::json::array();
+
+    for (const double match : analysis.matchByOffset)
+    {
+        matchByOffset.push_back(std::round(match * 1000.0) / 1000.0);
+    }
+
+    reply["waveformA"] = EncodeWaveform(irA->mono);
+    reply["waveformB"] = EncodeWaveform(irB->mono);
+    reply["normalizeGainA"] = irA->normalizeGain;
+    reply["normalizeGainB"] = irB->normalizeGain;
+    reply["alignedOffsetMs"] = analysis.alignedOffsetMs;
+    reply["invertB"] = analysis.invertB;
+    reply["match"] = analysis.match;
+    reply["onsetAMs"] = analysis.onsetAMs;
+    reply["onsetBMs"] = analysis.onsetBMs;
+    reply["maxOffsetSamples"] = analysis.maxOffsetSamples;
+    reply["matchByOffset"] = std::move(matchByOffset);
     SendMessageToUI(reply.dump());
 }
 } // namespace guitarfx

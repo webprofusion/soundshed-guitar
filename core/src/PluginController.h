@@ -538,6 +538,7 @@ class PluginController
     void HandleGetEffectResponseRequest(const nlohmann::json& payload);
     void HandleExportEffectAsIrRequest(const nlohmann::json& payload);
     void HandleMatchSimpleCabToIrRequest(const nlohmann::json& payload);
+    void HandleAnalyzeIrAlignmentRequest(const nlohmann::json& payload);
 
     // Automation & MIDI mapping (handler methods — called by MessageDispatcher)
     void HandleGetAutomationRequest();

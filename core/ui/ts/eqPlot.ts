@@ -187,6 +187,8 @@ export interface ResponsePlotOptions {
   maxDb?: number;
   /** A horizontal grid line at every multiple of this. */
   gridStepDb?: number;
+  /** A second curve to compare against, drawn thin and dashed under the main one. */
+  reference?: ((freq: number) => number) | null;
 }
 
 /** Draws the grid, the live spectrum when there is one, and the curve that
@@ -244,30 +246,41 @@ export function drawResponsePlot(
     drawSpectrum(ctx, options.spectrum, axis, padding, plotWidth, plotHeight, themeColors);
   }
 
+  const traceCurve = (dbAt: (freq: number) => number): void => {
+    ctx.beginPath();
+    // A frequency with no value (NaN) leaves a gap: nothing is drawn where nothing is known.
+    let penDown = false;
+    for (let i = 0; i <= plotWidth; i += 1) {
+      // Kept inside the audio band: an anchored axis can run past 20 Hz-20 kHz at the edges.
+      const freq = Math.max(10, Math.min(21000, axis.toFreq(padding + i)));
+      const db = dbAt(freq);
+      if (!Number.isFinite(db)) {
+        penDown = false;
+        continue;
+      }
+      const x = padding + i;
+      const y = dbToY(Math.max(minDb, Math.min(maxDb, db)));
+      if (penDown) {
+        ctx.lineTo(x, y);
+      } else {
+        ctx.moveTo(x, y);
+        penDown = true;
+      }
+    }
+    ctx.stroke();
+  };
+
+  if (options.reference) {
+    ctx.strokeStyle = themeColors.spectrumLine;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    traceCurve(options.reference);
+    ctx.setLineDash([]);
+  }
+
   ctx.strokeStyle = themeColors.response;
   ctx.lineWidth = 2;
-  ctx.beginPath();
-
-  // A frequency with no value (NaN) leaves a gap: nothing is drawn where nothing is known.
-  let penDown = false;
-  for (let i = 0; i <= plotWidth; i += 1) {
-    // Kept inside the audio band: an anchored axis can run past 20 Hz-20 kHz at the edges.
-    const freq = Math.max(10, Math.min(21000, axis.toFreq(padding + i)));
-    const db = magnitudeDbAt(freq);
-    if (!Number.isFinite(db)) {
-      penDown = false;
-      continue;
-    }
-    const x = padding + i;
-    const y = dbToY(Math.max(minDb, Math.min(maxDb, db)));
-    if (penDown) {
-      ctx.lineTo(x, y);
-    } else {
-      ctx.moveTo(x, y);
-      penDown = true;
-    }
-  }
-  ctx.stroke();
+  traceCurve(magnitudeDbAt);
 }
 
 /** Draws an EQ's combined band response over the grid and the live spectrum,

@@ -1,0 +1,181 @@
+/* The IR Cabinet's Alignment section (ts/signalPath/paramsPanel/irAlignmentPanel.ts),
+   under the Main and Advanced tabs: IR A and IR B's waveforms, how alike they are
+   at each offset, the offset's controls, and the two summed. It is an inset group
+   panel like the parameter groups above it; the plots share the EQ curve's canvas
+   look, so each theme's canvas background applies to them too. */
+
+.ir-alignment {
+  --ir-alignment-a: rgba(72, 168, 224, 0.95);
+  --ir-alignment-b: rgba(240, 160, 64, 0.95);
+  --ir-alignment-match-fill: rgba(72, 168, 224, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+html[data-density="compact"] .default-effect-shell .ir-alignment {
+  margin-top: 6px;
+}
+
+.theme-light .ir-alignment {
+  --ir-alignment-a: rgba(40, 104, 160, 0.95);
+  --ir-alignment-b: rgba(190, 96, 20, 0.95);
+  --ir-alignment-match-fill: rgba(40, 104, 160, 0.3);
+}
+
+.ir-alignment-header,
+.ir-alignment-controls,
+.ir-alignment-readouts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.ir-alignment-header {
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.ir-alignment-legend {
+  display: inline-flex;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.ir-alignment-key::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+  background: var(--ir-alignment-a);
+}
+
+.ir-alignment-key-b::before {
+  background: var(--ir-alignment-b);
+}
+
+.ir-alignment-status,
+.ir-alignment-distance,
+.ir-alignment-match-readout {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* With one IR the status sits in the response plot's header, and reads like it. */
+.ir-alignment-single .ir-alignment-status {
+  color: inherit;
+  font-size: inherit;
+}
+
+.ir-alignment-match-readout {
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-alignment-match-readout.is-cancelling {
+  color: var(--color-warning, #e0a040);
+}
+
+.ir-alignment .eq-curve-canvas.ir-alignment-waves {
+  height: 120px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.ir-alignment .eq-curve-canvas.ir-alignment-waves.is-dragging {
+  cursor: grabbing;
+}
+
+.ir-alignment .eq-curve-canvas.ir-alignment-match {
+  height: 40px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.ir-alignment-waves:focus-visible,
+.ir-alignment-controls button:focus-visible,
+.ir-alignment-offset-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.ir-alignment-offset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ir-alignment-offset-input {
+  width: 72px;
+  padding: 5px 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-alignment-nudges {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ir-alignment-controls button {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.ir-alignment-controls button:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.ir-alignment-controls button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ir-alignment-controls .ir-alignment-auto {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.ir-alignment-invert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ir-alignment-note:empty {
+  display: none;
+}
+
+.ir-alignment-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}

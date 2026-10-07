@@ -11,6 +11,7 @@ import type { CompositeEffectDefinition } from "../compositeTypes.js";
 import { handleCustomEffectLibrary } from "../customEffects.js";
 import { EffectGuids } from "../effectGuids.js";
 import { applyEffectResponse, applySimpleCabIrMatch } from "../effectResponse.js";
+import { applyIrAlignment } from "../irAlignment.js";
 import { resolveExposedResourceSlot } from "../exposedResourceSlots.js";
 import { refreshFxSelector } from "../fxSelector.js";
 import { appendLog } from "../logging.js";
@@ -65,6 +66,11 @@ export function onEffectResponse(payload: IncomingPayload): void {
 /** The Simple Cabinet settings matched to a library IR, answering matchSimpleCabToIr. */
 export function onSimpleCabIrMatch(payload: IncomingPayload): void {
   applySimpleCabIrMatch(payload);
+}
+
+/** Where the IR Cabinet's IR B lines up with IR A, answering analyzeIrAlignment. */
+export function onIrAlignment(payload: IncomingPayload): void {
+  applyIrAlignment(payload);
 }
 
 export function onEffectCatalog(payload: IncomingPayload): void {

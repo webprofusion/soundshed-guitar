@@ -1,6 +1,7 @@
 import type { EqSpectrumSource } from "./eqSpectrum.js";
 import { appendLog } from "./logging.js";
 import { setPresetDirty, uiState } from "./state.js";
+import type { ResourceRef } from "./types.js";
 
 const NAMBridge = {
   postMessage(message: unknown): void {
@@ -184,6 +185,13 @@ export function sendExportEffectAsIr(
  * "simpleCabIrMatch" with the same requestId. */
 export function sendMatchSimpleCabToIr(requestId: string, resourceId: string): void {
   postMessage({ type: "matchSimpleCabToIr", requestId, resourceId });
+}
+
+/** Asks where IR B lines up with IR A, each a ref as the IR Cabinet node holds it,
+ * or for the one IR alone when the other is null (and left out of the message);
+ * answered by "irAlignment" carrying the same requestId (see irAlignment.ts). */
+export function sendAnalyzeIrAlignment(requestId: string, irA: ResourceRef | null, irB: ResourceRef | null): void {
+  postMessage({ type: "analyzeIrAlignment", requestId, ...(irA ? { irA } : {}), ...(irB ? { irB } : {}) });
 }
 
 /** One request to the standalone app's audio device settings (see settings/audioDevice.ts). */
