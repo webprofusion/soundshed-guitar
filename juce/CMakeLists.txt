@@ -361,6 +361,12 @@ juce_add_plugin("${PROJECT_NAME}"
     NEEDS_MIDI_INPUT TRUE
     # The only MIDI sent is the preset name for the controller's display (ControllerDisplayFeed).
     NEEDS_MIDI_OUTPUT TRUE
+    # The AU stays an audio effect ('aufx'), as 1.5.0 shipped it. Left unset, NEEDS_MIDI_INPUT
+    # makes JUCE register a MIDI-controlled effect ('aumf'), and Logic finds an AU in a saved
+    # project by its type, so every project made with 1.5.0 would report the plugin missing.
+    # JUCE's AU wrapper still takes MIDI from a host that sends it to an effect; Logic sends
+    # MIDI only to 'aumf', as it never could to 1.5.0. Changing this breaks saved projects.
+    AU_MAIN_TYPE kAudioUnitType_Effect
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "Soundshed Guitar needs microphone access to record and process live audio input."
     XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"

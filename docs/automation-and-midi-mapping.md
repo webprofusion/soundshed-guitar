@@ -299,7 +299,7 @@ struct MidiControlMap {
 
 ### MIDI device plumbing
 
-Standalone: JUCE's `AudioDeviceManager` lists the MIDI inputs once `acceptsMidi()=true`, and Settings → Audio & MIDI → MIDI Devices enables and disables them (`juce/source/StandaloneAudioSettings.cpp`; on Android and iOS the holder also opens new ones automatically); the `MidiBuffer` arrives in `processBlock`. Plugin builds receive MIDI from the host track via the same `MidiBuffer`.
+Standalone: JUCE's `AudioDeviceManager` lists the MIDI inputs once `acceptsMidi()=true`, and Settings → Audio & MIDI → MIDI Devices enables and disables them (`juce/source/StandaloneAudioSettingsMidi.cpp`; on Android and iOS the holder also opens new ones automatically); the `MidiBuffer` arrives in `processBlock`. Plugin builds receive MIDI from the host track via the same `MidiBuffer`, except the AU in Logic. The AU is registered as an audio effect (`AU_MAIN_TYPE kAudioUnitType_Effect`, type `aufx`), as 1.5.0 shipped it, because hosts find an AU in a saved project by its type. Logic sends MIDI only to a MIDI-controlled effect (`aumf`), so there the AU gets none. Other hosts that send MIDI to an effect still deliver it.
 
 The same section offers a MIDI output because `producesMidi()` is true (`NEEDS_MIDI_OUTPUT` in `juce/CMakeLists.txt` — the two must agree). The standalone sends whatever `processBlock` leaves in the buffer to the output chosen there. Every incoming message is cleared before that, including while the host bypasses the plugin (`processBlockBypassed`), so nothing is echoed back to the controller.
 

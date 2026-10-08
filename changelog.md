@@ -65,7 +65,7 @@ A big update: nine new effects, fifteen classic drive pedals, a Practice Tool fo
 * MIDI and automation now sweep each effect parameter's full range. If you automated an effect parameter on a custom slot, it now plays back across that full range.
 * Wide frequency knobs now turn on a musical scale, so the knob, an expression pedal and automation all sweep them evenly. This covers the Ring Modulator's Frequency, and Low Cut and High Cut on Digital Delay, IR Cab and Advanced Reverb. Automation you've already recorded on those cuts follows the new curve.
 * Soundshed Go controllers show the loaded preset's name on their display. You can turn this off in MIDI & Automation → Mappings.
-* The plugin tells hosts it accepts MIDI, so routing MIDI to it is easier (credit: diego). Automation values are saved with your DAW project, and MIDI channels read 1–16 everywhere.
+* The plugin tells hosts it accepts MIDI, so routing MIDI to it is easier (credit: diego). In Logic it stays an audio effect, so your existing projects still find it, and Logic still can't send it MIDI from a track. Automation values are saved with your DAW project, and MIDI channels read 1–16 everywhere.
 
 ### Practice & Jam
 * **Practice Tool** in the Jam panel: load a backing track (WAV, AIFF or MP3), slow it down or change its key independently, loop named sections, EQ the track, and save it all as a project (credit: AriKuorikoski, #39).
