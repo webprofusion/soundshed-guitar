@@ -297,9 +297,11 @@ struct Importer
     }
 
     /// Every *.json in a directory becomes one row, keyed by the document's
-    /// own `id` field (falling back to the filename stem).
+    /// own `id` field (falling back to the filename stem). With `keepExisting`,
+    /// a file whose id the store already holds is left out rather than written
+    /// over it.
     void ImportDirectory(const std::filesystem::path& directory, const char* itemType, const std::string& sourceLabel,
-                         const std::string& requiredStemSuffix = {})
+                         const std::string& requiredStemSuffix = {}, bool keepExisting = false)
     {
         // Once a write has failed the database is not accepting data; every
         // later step would just add more rows that the abort throws away.
@@ -317,6 +319,7 @@ struct Importer
 
         std::int64_t imported = 0;
         std::int64_t unreadable = 0;
+        std::int64_t kept = 0;
 
         // Its own error_code, not the one is_directory() used: sharing it made a
         // failure to enumerate look identical to an empty directory, so an
@@ -362,6 +365,12 @@ struct Importer
                     continue;
                 }
 
+                if (keepExisting && store.Has(itemType, id))
+                {
+                    ++kept;
+                    continue;
+                }
+
                 if (!store.Put(itemType, id, *parsed))
                 {
                     return false;
@@ -380,6 +389,12 @@ struct Importer
         }
 
         Note(sourceLabel, imported);
+
+        if (kept > 0)
+        {
+            report.notes.push_back(sourceLabel + ": " + std::to_string(kept) +
+                                   " already in the library, left as they are");
+        }
 
         if (unreadable > 0)
         {
@@ -516,7 +531,8 @@ struct Importer
 /// The import sequence. Split out so MigrateLegacyJsonTree can run it inside
 /// the single transaction that makes the migration exactly-once.
 void RunImport(Importer& importer, const std::filesystem::path& settingsDirectory,
-               const std::filesystem::path& userPresetDirectory)
+               const std::filesystem::path& userPresetDirectory,
+               const std::filesystem::path& legacyCompositePresetDirectory)
 {
     // ── Collections: one row per item ────────────────────────────
     importer.ImportResourceIndex(settingsDirectory / "resources" / "indexes" / "resources-index.json");
@@ -524,7 +540,7 @@ void RunImport(Importer& importer, const std::filesystem::path& settingsDirector
                          ItemType::kCustomEffect, "id", "custom-effects");
     importer.ImportArray(settingsDirectory / "blends" / "library.json", ItemType::kBlend, "id", "blends");
     importer.ImportDirectory(userPresetDirectory, ItemType::kPreset, "presets");
-    importer.ImportDirectory(settingsDirectory / "composite-presets", ItemType::kCompositePreset, "composite-presets",
+    importer.ImportDirectory(legacyCompositePresetDirectory, ItemType::kCompositePreset, "composite-presets",
                              ".composite");
     importer.ImportLayouts(settingsDirectory / "layouts" / "content");
 
@@ -567,7 +583,8 @@ void RunImport(Importer& importer, const std::filesystem::path& settingsDirector
 } // namespace
 
 MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::path& settingsDirectory,
-                                      const std::filesystem::path& userPresetDirectory)
+                                      const std::filesystem::path& userPresetDirectory,
+                                      const std::filesystem::path& legacyCompositePresetDirectory)
 {
     MigrationReport report;
 
@@ -627,7 +644,7 @@ MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::p
         }
 
         report.ran = true;
-        RunImport(importer, settingsDirectory, userPresetDirectory);
+        RunImport(importer, settingsDirectory, userPresetDirectory, legacyCompositePresetDirectory);
 
         // A source that could not be *read* is noted and skipped: the user loses
         // that one file and the rest of the import still stands. A source that
@@ -641,10 +658,12 @@ MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::p
         }
 
         // Stamped inside the same transaction, so the import and the record that
-        // it happened commit together or not at all.
+        // it happened commit together or not at all. The Multi-Rig presets came
+        // from the right folder, so ImportMissedCompositePresets has nothing to do.
         return store.SetMeta(kMetaSchemaVersion, std::to_string(kStorageSchemaVersion)) &&
                store.SetMeta(kMetaMigratedAt, std::to_string(NowMillis())) &&
-               store.SetMeta(kMetaMigratedFrom, util::PathToUtf8(settingsDirectory));
+               store.SetMeta(kMetaMigratedFrom, util::PathToUtf8(settingsDirectory)) &&
+               store.SetMeta(kMetaCompositePresetsImported, std::to_string(NowMillis()));
     });
 
     if (alreadyMigrated)
@@ -669,6 +688,74 @@ MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::p
     if (report.ran)
     {
         WriteLegacyTreeMarker(settingsDirectory, store.Path(), report.itemsImported);
+    }
+
+    return report;
+}
+
+MigrationReport ImportMissedCompositePresets(JsonStore& store,
+                                             const std::filesystem::path& legacyCompositePresetDirectory)
+{
+    MigrationReport report;
+
+    if (!store.IsOpen())
+    {
+        report.failures.push_back("store is not open");
+        return report;
+    }
+
+    // Not migrated yet, because the migration failed and retries next launch: it
+    // imports these itself, and stamps the catch-up as done.
+    if (!store.GetMeta(kMetaSchemaVersion).has_value())
+    {
+        return report;
+    }
+
+    // Every launch after the catch-up has run, and every profile the migration
+    // imported from the right folder: no lock taken on the way past.
+    if (store.GetMeta(kMetaCompositePresetsImported).has_value())
+    {
+        report.succeeded = true;
+        return report;
+    }
+
+    bool alreadyCaughtUp = false;
+    Importer importer{store, report};
+
+    // Under the write lock and checked again there, as the migration is: every
+    // instance in a DAW project starts at once, and exactly one should import.
+    const bool committed = store.Transact([&]() {
+        if (store.GetMeta(kMetaCompositePresetsImported).has_value())
+        {
+            alreadyCaughtUp = true;
+            return true;
+        }
+
+        report.ran = true;
+        importer.ImportDirectory(legacyCompositePresetDirectory, ItemType::kCompositePreset, "composite-presets",
+                                 ".composite", true);
+
+        if (importer.hardFailure)
+        {
+            return false;
+        }
+
+        return store.SetMeta(kMetaCompositePresetsImported, std::to_string(NowMillis()));
+    });
+
+    if (alreadyCaughtUp)
+    {
+        report = MigrationReport{};
+        report.succeeded = true;
+        return report;
+    }
+
+    report.succeeded = committed;
+
+    if (!committed)
+    {
+        report.failures.push_back("the import was rolled back; it will run again next launch");
+        report.itemsImported = 0;
     }
 
     return report;

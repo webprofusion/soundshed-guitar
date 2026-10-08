@@ -16,6 +16,7 @@
 
 namespace fs = std::filesystem;
 namespace ItemType = guitarfx::storage::ItemType;
+using guitarfx::storage::ImportMissedCompositePresets;
 using guitarfx::storage::JsonStore;
 using guitarfx::storage::MigrateLegacyJsonTree;
 
@@ -50,11 +51,16 @@ struct LegacyProfile
 {
     fs::path root;
     fs::path presetDir;
+    fs::path compositeDir;
 
     explicit LegacyProfile(const fs::path& base)
     {
         root = base / "data" / "v1";
         presetDir = root / "presets" / "user";
+
+        // Beside data/, not inside it: 1.5.0 saved Multi-Rig presets to the user data
+        // folder itself, and the migration once looked in data/v1 and found nothing.
+        compositeDir = base / "composite-presets";
 
         WriteFile(root / "resources" / "indexes" / "resources-index.json", R"([
       {"type":"nam","id":"tone3000:52730","name":"Peavey","category":"amp","filePath":"content/a.nam","tags":[]},
@@ -70,7 +76,7 @@ struct LegacyProfile
         WriteFile(presetDir / "user-aaa.json", R"({"id":"user-aaa","name":"Preset A","version":1})");
         WriteFile(presetDir / "user-bbb.json", R"({"id":"user-bbb","name":"Preset B","version":1})");
 
-        WriteFile(root / "composite-presets" / "stack-1.composite.json", R"({"id":"stack-1","name":"Stack"})");
+        WriteFile(compositeDir / "stack-1.composite.json", R"({"id":"stack-1","name":"Stack"})");
 
         WriteFile(root / "layouts" / "content" / "my-layout" / "layout.json",
                   R"({"id":"my-layout","name":"My Layout"})");
@@ -97,7 +103,7 @@ bool TestImportsEverySource()
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
 
-    const auto report = MigrateLegacyJsonTree(store, profile.root, profile.presetDir);
+    const auto report = MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
     ok &= Expect(report.ran, "migration ran");
     ok &= Expect(report.succeeded, "migration succeeded");
 
@@ -111,6 +117,8 @@ bool TestImportsEverySource()
     ok &= Expect(store.Has(ItemType::kPreset, "user-aaa"), "preset keyed by its own id");
     ok &= Expect(store.Count(ItemType::kCompositePreset) == 1, "composite preset imported");
     ok &= Expect(store.Has(ItemType::kCompositePreset, "stack-1"), "composite keyed without the .composite suffix");
+    ok &= Expect(store.GetMeta(guitarfx::storage::kMetaCompositePresetsImported).has_value(),
+                 "Multi-Rig catch-up marked done, since they came from the right folder");
     ok &= Expect(store.Count(ItemType::kLayout) == 1, "layout imported from its subdirectory");
 
     // Settings become one row per key.
@@ -154,7 +162,7 @@ bool TestLeavesLegacyFilesUntouched()
     JsonStore store;
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
-    MigrateLegacyJsonTree(store, profile.root, profile.presetDir);
+    MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
 
     ok &= Expect(fs::exists(indexPath), "legacy index still exists");
     ok &= Expect(fs::exists(presetPath), "legacy preset still exists");
@@ -180,14 +188,14 @@ bool TestRunsOnlyOnce()
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
 
-    const auto first = MigrateLegacyJsonTree(store, profile.root, profile.presetDir);
+    const auto first = MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
     ok &= Expect(first.ran && first.succeeded, "first pass runs");
 
     // Simulate the user renaming a preset after upgrading.
     store.Put(ItemType::kPreset, "user-aaa", {{"id", "user-aaa"}, {"name", "Renamed After Upgrade"}});
     store.Remove(ItemType::kBlend, "blend-1");
 
-    const auto second = MigrateLegacyJsonTree(store, profile.root, profile.presetDir);
+    const auto second = MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
     ok &= Expect(!second.ran, "second pass is a no-op");
     ok &= Expect(second.succeeded, "second pass reports success");
 
@@ -216,11 +224,15 @@ bool TestFreshInstall()
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
 
-    const auto report = MigrateLegacyJsonTree(store, base / "data" / "v1", base / "data" / "v1" / "presets" / "user");
+    const auto report = MigrateLegacyJsonTree(store, base / "data" / "v1", base / "data" / "v1" / "presets" / "user",
+                                              base / "composite-presets");
     ok &= Expect(report.ran, "migration attempts once");
     ok &= Expect(report.succeeded, "no legacy tree is not a failure");
     ok &= Expect(report.itemsImported == 0, "nothing imported");
     ok &= Expect(store.GetMeta(guitarfx::storage::kMetaSchemaVersion).has_value(), "version stamped anyway");
+
+    const auto catchUp = ImportMissedCompositePresets(store, base / "composite-presets");
+    ok &= Expect(!catchUp.ran && catchUp.succeeded, "Multi-Rig catch-up has nothing to do after a fresh migration");
 
     store.Close();
     fs::remove_all(base, ec);
@@ -244,7 +256,7 @@ bool TestCorruptSourceIsIsolated()
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
 
-    const auto report = MigrateLegacyJsonTree(store, profile.root, profile.presetDir);
+    const auto report = MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
     ok &= Expect(report.succeeded, "migration still completes");
     ok &= Expect(store.Count(ItemType::kResource) == 0, "nothing salvaged from the damaged index");
     ok &= Expect(store.Count(ItemType::kPreset) == 2, "presets imported despite the damaged index");
@@ -288,7 +300,7 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
     std::string error;
     bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
 
-    const auto report = MigrateLegacyJsonTree(store, root, root / "presets" / "user");
+    const auto report = MigrateLegacyJsonTree(store, root, root / "presets" / "user", base / "composite-presets");
     ok &= Expect(report.succeeded, "migration completes");
     ok &= Expect(store.Count(ItemType::kResource) == 2, "both resources imported");
 
@@ -320,6 +332,96 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
     fs::remove_all(base, ec);
     return ok;
 }
+
+// A profile migrated before the fix: the schema version is stamped, but the migration
+// looked for Multi-Rig presets in data/v1/composite-presets, where no build ever saved
+// one, so every Multi-Rig the user had saved in 1.5.0 was left behind on disk.
+bool TestCatchUpImportsMissedCompositePresets()
+{
+    const auto base =
+        fs::temp_directory_path() /
+        ("soundshed-migration-catchup-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    LegacyProfile profile(base);
+    WriteFile(profile.compositeDir / "stack-2.composite.json", R"({"id":"stack-2","name":"Second"})");
+    WriteFile(profile.compositeDir / "kept.composite.json", R"({"id":"kept","name":"From 1.5.0"})");
+    const auto legacyBefore = ReadFile(profile.compositeDir / "stack-1.composite.json");
+
+    JsonStore store;
+    std::string error;
+    bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
+
+    // What the old migration left: stamped, without the catch-up mark, and one Multi-Rig
+    // saved since the upgrade under an id a legacy file also has.
+    store.SetMeta(guitarfx::storage::kMetaSchemaVersion, "1");
+    store.Put(ItemType::kCompositePreset, "kept", {{"id", "kept"}, {"name", "Saved since the upgrade"}});
+
+    const auto first = ImportMissedCompositePresets(store, profile.compositeDir);
+    ok &= Expect(first.ran && first.succeeded, "catch-up runs on a profile migrated before the fix");
+    ok &= Expect(first.itemsImported == 2,
+                 "the two missing Multi-Rigs imported, got " + std::to_string(first.itemsImported));
+    ok &= Expect(store.Has(ItemType::kCompositePreset, "stack-1") && store.Has(ItemType::kCompositePreset, "stack-2"),
+                 "missing Multi-Rigs keyed without the .composite suffix");
+    const auto kept = store.Get(ItemType::kCompositePreset, "kept");
+    ok &= Expect(kept.has_value() && (*kept)["name"] == "Saved since the upgrade",
+                 "a Multi-Rig already in the store is not overwritten by its legacy file");
+    ok &= Expect(store.GetMeta(guitarfx::storage::kMetaCompositePresetsImported).has_value(), "catch-up marked done");
+    ok &= Expect(ReadFile(profile.compositeDir / "stack-1.composite.json") == legacyBefore,
+                 "legacy Multi-Rig file left byte-for-byte unchanged");
+
+    // Deleted afterwards, it stays deleted.
+    store.Remove(ItemType::kCompositePreset, "stack-1");
+    const auto second = ImportMissedCompositePresets(store, profile.compositeDir);
+    ok &= Expect(!second.ran && second.succeeded, "catch-up runs only once");
+    ok &= Expect(!store.Has(ItemType::kCompositePreset, "stack-1"),
+                 "a Multi-Rig deleted after the catch-up stays deleted");
+
+    store.Close();
+    std::error_code ec;
+    fs::remove_all(base, ec);
+    return ok;
+}
+
+// The catch-up never stands in for the migration: on a store not migrated yet (the
+// migration failed and retries next launch) it does nothing and leaves no mark, so the
+// migration still imports everything and marks both.
+bool TestCatchUpLeavesUnmigratedStoreAlone()
+{
+    const auto base =
+        fs::temp_directory_path() / ("soundshed-migration-catchup-unmigrated-" +
+                                     std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    LegacyProfile profile(base);
+
+    JsonStore store;
+    std::string error;
+    bool ok = Expect(store.Open(base / "soundshed.db", error), "open: " + error);
+
+    const auto early = ImportMissedCompositePresets(store, profile.compositeDir);
+    ok &= Expect(!early.ran, "catch-up does not run before the migration");
+    ok &= Expect(store.Count(ItemType::kCompositePreset) == 0, "nothing imported ahead of the migration");
+    ok &= Expect(!store.GetMeta(guitarfx::storage::kMetaCompositePresetsImported).has_value(), "no mark left");
+
+    const auto report = MigrateLegacyJsonTree(store, profile.root, profile.presetDir, profile.compositeDir);
+    ok &= Expect(report.ran && report.succeeded, "migration then runs in full");
+    ok &= Expect(store.Has(ItemType::kCompositePreset, "stack-1"), "migration imports the Multi-Rig itself");
+
+    // An old profile with no Multi-Rig folder at all is marked done too, so the
+    // catch-up does not look again on every launch.
+    const auto bare = base / "bare";
+    JsonStore bareStore;
+    ok &= Expect(bareStore.Open(bare / "soundshed.db", error), "open bare: " + error);
+    bareStore.SetMeta(guitarfx::storage::kMetaSchemaVersion, "1");
+    const auto none = ImportMissedCompositePresets(bareStore, bare / "composite-presets");
+    ok &= Expect(none.ran && none.succeeded && none.itemsImported == 0, "catch-up with no folder imports nothing");
+    ok &= Expect(none.notes.empty() && none.failures.empty(), "and has nothing to log");
+    ok &= Expect(bareStore.GetMeta(guitarfx::storage::kMetaCompositePresetsImported).has_value(),
+                 "and is marked done all the same");
+
+    bareStore.Close();
+    store.Close();
+    std::error_code ec;
+    fs::remove_all(base, ec);
+    return ok;
+}
 } // namespace
 
 int main()
@@ -331,6 +433,8 @@ int main()
     ok &= TestFreshInstall();
     ok &= TestCorruptSourceIsIsolated();
     ok &= TestMigratedResourcePathsResolveForBothLegacyConventions();
+    ok &= TestCatchUpImportsMissedCompositePresets();
+    ok &= TestCatchUpLeavesUnmigratedStoreAlone();
 
     if (!ok)
     {

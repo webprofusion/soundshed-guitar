@@ -479,8 +479,8 @@ bool TestSimultaneousMigration()
     for (int i = 0; i < kInstances; ++i)
     {
         threads.emplace_back([&, i]() {
-            const auto report = guitarfx::storage::MigrateLegacyJsonTree(*stores[static_cast<std::size_t>(i)], profile,
-                                                                         profile / "presets" / "user");
+            const auto report = guitarfx::storage::MigrateLegacyJsonTree(
+                *stores[static_cast<std::size_t>(i)], profile, profile / "presets" / "user", dir / "composite-presets");
 
             if (report.ran)
             {

@@ -17,6 +17,7 @@
 #include "PluginController.h"
 
 #include "controller/internal/ControllerUtils.h"
+#include "presets/CompositePresetStorage.h"
 #include "util/FileIO.h"
 #include "util/PathEncoding.h"
 
@@ -123,8 +124,14 @@ void PluginController::OpenDocumentStore() const
     // opened lazily before Initialize() has filled those in, and importing with
     // an empty preset directory would stamp the schema version having silently
     // skipped every preset.
-    const auto report = storage::MigrateLegacyJsonTree(mStore, mFileSystem.ResolveSettingsDirectory(),
-                                                       mFileSystem.ResolvePresetDirectory() / "user");
+    //
+    // Multi-Rig presets are the exception to "everything is under the settings
+    // directory": 1.5.0 saved them to composite-presets/ in the user data folder
+    // itself (its mResourceRoot), beside data/.
+    const auto legacyCompositePresets = mHost.GetUserDataPath() / CompositePresetStorage::kSubdir;
+    const auto report =
+        storage::MigrateLegacyJsonTree(mStore, mFileSystem.ResolveSettingsDirectory(),
+                                       mFileSystem.ResolvePresetDirectory() / "user", legacyCompositePresets);
 
     if (report.ran)
     {
@@ -137,6 +144,29 @@ void PluginController::OpenDocumentStore() const
         }
 
         for (const auto& failure : report.failures)
+        {
+            summary += "\n  ! " + failure;
+        }
+
+        AppendSessionLog(summary);
+    }
+
+    // A profile migrated before the migration looked in the right folder for
+    // Multi-Rig presets: bring them in now, once.
+    const auto catchUp = storage::ImportMissedCompositePresets(mStore, legacyCompositePresets);
+
+    // Quiet when there was no folder to look in, which is nearly everyone.
+    if (catchUp.ran && (!catchUp.notes.empty() || !catchUp.failures.empty()))
+    {
+        std::string summary =
+            "Imported Multi-Rig presets the storage migration had missed: " + std::to_string(catchUp.itemsImported);
+
+        for (const auto& note : catchUp.notes)
+        {
+            summary += "\n  " + note;
+        }
+
+        for (const auto& failure : catchUp.failures)
         {
             summary += "\n  ! " + failure;
         }

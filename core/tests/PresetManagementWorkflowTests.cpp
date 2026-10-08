@@ -4315,6 +4315,72 @@ bool TestCompositePresetRoundTripsMixGain()
     }
 }
 
+// Multi-Rig presets saved by 1.5.0 reach the library after an upgrade. 1.5.0 kept them in
+// composite-presets/ in the user data folder itself, beside data/, and the storage migration
+// once looked inside data/v1 instead and left every one behind. A 1.5.0 profile migrating
+// now, and one an earlier build already migrated, must both list it.
+bool TestLegacyMultiRigPresetsSurviveTheUpgrade()
+{
+    // A Multi-Rig as 1.5.0 wrote it, limiter flag and all.
+    const std::string legacyRig =
+        R"({"createdAt":"2026-07-20T09:38:51Z","description":"","id":"legacy-rig","limiterEnabled":false,)"
+        R"("masterGain":0.5,"modifiedAt":"2026-07-20T09:38:51Z","name":"Legacy Rig","slots":[)"
+        R"({"mix":1.0,"mute":false,"pan":0.0,"presetId":"rig-a","slotId":"rig-a","solo":false},)"
+        R"({"mix":1.0,"mute":false,"pan":0.0,"presetId":"rig-b","slotId":"rig-b","solo":false}],"tags":["live"]})";
+
+    for (const bool migratedByEarlierBuild : {false, true})
+    {
+        const fs::path sandbox = fs::temp_directory_path() / "guitarfx-preset-management-tests" /
+                                 (migratedByEarlierBuild ? "legacy-multi-rig-migrated" : "legacy-multi-rig");
+        std::error_code ec;
+        fs::remove_all(sandbox, ec);
+        SetSettingsEnvRoot(sandbox);
+
+        // The host's user data folder is the profile root, as it is in the app.
+        const fs::path profile = sandbox / "Soundshed Guitar";
+        fs::create_directories(profile / "composite-presets", ec);
+        std::ofstream(profile / "composite-presets" / "legacy-rig.composite.json") << legacyRig;
+
+        if (migratedByEarlierBuild)
+        {
+            // What an earlier build left behind: migrated, without the Multi-Rig catch-up mark.
+            fs::create_directories(profile / "data" / "v1", ec);
+            guitarfx::storage::JsonStore store;
+            std::string error;
+
+            if (!store.Open(profile / "data" / "v1" / "soundshed.db", error) ||
+                !store.SetMeta(guitarfx::storage::kMetaSchemaVersion, "1"))
+            {
+                std::cerr << "Could not stage an already-migrated store: " << error << "\n";
+                return false;
+            }
+        }
+
+        TestHost host(profile);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        controller.HandleUIMessage(nlohmann::json{{"type", "getCompositePresetList"}}.dump());
+
+        const auto list = FindLatestMessageOfType(host.sentMessages, "compositePresetList");
+        bool found = false;
+
+        for (const auto& entry : list ? list->value("compositePresets", nlohmann::json::array()) : nlohmann::json{})
+        {
+            found = found || (entry.value("id", "") == "legacy-rig" && entry.value("name", "") == "Legacy Rig" &&
+                              entry.value("slots", nlohmann::json::array()).size() == 2);
+        }
+
+        if (!found)
+        {
+            std::cerr << "A 1.5.0 Multi-Rig preset was not in the library after upgrading "
+                      << (migratedByEarlierBuild ? "a profile an earlier build migrated" : "a 1.5.0 profile") << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // A preset switch cannot change the resource library, riff library, app settings or effect
 // catalog, so its state broadcast must not carry them — they are ~99% of the full payload.
 bool TestPresetSwitchBroadcastsLightState()
@@ -4498,6 +4564,7 @@ int main()
     run("Setlist cursor switches preset without stacking mixer", TestSetlistCursorSwitchesPresetWithoutStackingMixer());
     run("Setlist step onto playing preset keeps unsaved edits", TestSetlistStepOntoPlayingPresetKeepsUnsavedEdits());
     run("Multi-Rig round-trips its mix gain", TestCompositePresetRoundTripsMixGain());
+    run("1.5.0 Multi-Rig presets survive the upgrade", TestLegacyMultiRigPresetsSurviveTheUpgrade());
     run("Preset switch broadcasts light state", TestPresetSwitchBroadcastsLightState());
 
     std::cout << "\nPreset management workflow tests: " << passed << " passed, " << failed << " failed\n";

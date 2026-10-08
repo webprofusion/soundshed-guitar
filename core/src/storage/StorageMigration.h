@@ -16,6 +16,11 @@ inline constexpr const char* kMetaMigratedAt = "migrated_at";
 inline constexpr const char* kMetaMigratedFrom = "migrated_from";
 inline constexpr const char* kMetaAppVersion = "app_version";
 
+/// Set once the Multi-Rig presets 1.5.0 kept outside the settings directory are in the
+/// store. A profile migrated before that was fixed has the schema version without this,
+/// and ImportMissedCompositePresets() brings them in, once.
+inline constexpr const char* kMetaCompositePresetsImported = "composite_presets_imported";
+
 /**
  * The store's schema version. This exists to gate the one-time import, not to
  * describe the shape of the data: the `items` table is generic, so adding item
@@ -41,6 +46,10 @@ struct MigrationReport
 /**
  * Imports the legacy JSON tree under `settingsDirectory` into `store`, once.
  *
+ * `legacyCompositePresetDirectory` is where 1.5.0 saved Multi-Rig presets: the
+ * profile root's composite-presets/, beside data/ rather than inside the settings
+ * directory.
+ *
  * The legacy files are read only — nothing is deleted, renamed, or rewritten,
  * so a user can downgrade (losing anything done since the upgrade, but never
  * their pre-upgrade library). Re-running after a successful migration is a
@@ -48,5 +57,20 @@ struct MigrationReport
  * retries.
  */
 MigrationReport MigrateLegacyJsonTree(JsonStore& store, const std::filesystem::path& settingsDirectory,
-                                      const std::filesystem::path& userPresetDirectory);
+                                      const std::filesystem::path& userPresetDirectory,
+                                      const std::filesystem::path& legacyCompositePresetDirectory);
+
+/**
+ * Imports the Multi-Rig presets in `legacyCompositePresetDirectory` into a store
+ * that has already been migrated, once.
+ *
+ * The migration used to look for them inside the settings directory, where no
+ * build ever saved them, so a profile it migrated lost every saved Multi-Rig
+ * without a word; the files themselves were left alone. This takes each one the
+ * store does not hold yet and never overwrites one it does, and once it has run a
+ * Multi-Rig the user deletes stays deleted. A store not migrated yet is left to
+ * MigrateLegacyJsonTree, which imports them itself.
+ */
+MigrationReport ImportMissedCompositePresets(JsonStore& store,
+                                             const std::filesystem::path& legacyCompositePresetDirectory);
 } // namespace guitarfx::storage
