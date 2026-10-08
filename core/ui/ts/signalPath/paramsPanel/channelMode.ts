@@ -5,8 +5,13 @@
  * choices fold a stereo input to one channel (summed, or one side alone), run the effect mono
  * and put out mono: one amp after a stereo chorus, the way a single real amp would hear it, and
  * half the CPU of running a model on both sides. The engine rebuilds the chain for a change.
+ *
+ * An advanced control, shown only when Settings > Audio turns it on. Hiding it changes nothing
+ * in the engine: a node's channel mode still applies.
  */
 
+import { getAppSetting } from "../../appSettingsStore.js";
+import { CHANNEL_MODE_CONTROL_SETTING } from "../../settings/keys.js";
 import { escapeHtml } from "../../utils.js";
 import type { GraphNode } from "../../types.js";
 import { sendSignalPathNodeChannelMode } from "../commands.js";
@@ -28,7 +33,7 @@ function nodeChannelMode(node: GraphNode): string {
 }
 
 export function renderChannelModeControl(node: GraphNode): string {
-  if (BOUNDARY_TYPES.has(node.type)) {
+  if (!getAppSetting(CHANNEL_MODE_CONTROL_SETTING) || BOUNDARY_TYPES.has(node.type)) {
     return "";
   }
 

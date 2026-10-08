@@ -105,3 +105,9 @@ export const ZOOM_LEVEL_OPTIONS = [
 ];
 
 export const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
+
+/**
+ * Shows the Channels (Follow/Mono) choice in effect panel headers. Off by default, as an advanced
+ * control; it only hides the choice, and a node's channel mode still applies while it is off.
+ */
+export const CHANNEL_MODE_CONTROL_SETTING = "audio.signalPath.channelModeControl";

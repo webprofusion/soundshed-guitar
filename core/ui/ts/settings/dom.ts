@@ -120,6 +120,8 @@ export const factoryArchiveSettingsSection = document.getElementById("factory-ar
 
 export const updateCheckToggle = document.getElementById("update-check-toggle") as HTMLInputElement | null;
 
+export const channelModeControlToggle = document.getElementById("channel-mode-control-toggle") as HTMLInputElement | null;
+
 export const tone3000UseSoundshedApiToggle = document.getElementById("tone3000-use-soundshed-api-toggle") as HTMLInputElement | null;
 
 export const tone3000ApiKeyRow = document.getElementById("tone3000-api-key-row") as HTMLElement | null;
