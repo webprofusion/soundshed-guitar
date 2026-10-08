@@ -3,7 +3,7 @@
 .default-effect-shell .resource-drop-hint {
   margin-top: 6px;
   font-size: 10px;
-  color: rgba(185, 195, 220, 0.38);
+  color: var(--text-muted);
   letter-spacing: 0.04em;
   pointer-events: none;
   user-select: none;
@@ -18,7 +18,7 @@
 }
 
 .default-effect-shell .node-resource-selector.drag-over .resource-drop-hint {
-  color: rgba(255, 190, 100, 0.7);
+  color: var(--color-accent);
 }
 
 /* Effect visualization drag-over state for NAM/IR nodes */
