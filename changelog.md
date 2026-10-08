@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.6.0 (Oct 8, 2026)
 
 A big update: nine new effects, fifteen classic drive pedals, a Practice Tool for learning songs, undo/redo and A/B for your signal chain, gapless preset switching with ringing tails, and right-click MIDI Learn on nearly every control.
 
