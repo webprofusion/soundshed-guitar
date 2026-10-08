@@ -49,7 +49,7 @@ All effects register via `EffectRegistry` (singleton factory). Effect type IDs, 
 |---------|------|----------|----------------|
 | `amp_nam` | NAM Amp | `.nam` model file | `inputGain` (-24..+24 dB), `outputGain` (-24..+24 dB), advanced `mix` (wet/dry, 0–1) |
 | `cab_ir` | IR Cabinet | `.wav` IR file | `mix` (0–1), `outputGain` (-24..+24 dB), `quality` (0–3: Economy/Standard/High/Full) |
-| `cab_simple` | Cybercab - Cab Sim | none | `bass`, `presence`, `brightness`, `mix` (all 0–1) |
+| `cab_simple` | Simple Cabinet | none | `bass`, `presence`, `brightness`, `mix` (all 0–1) |
 
 ### 2.2 Dynamics
 

@@ -114,7 +114,7 @@ const std::vector<Effect>& Effects()
         // Output is set, to take out what each preset's tone controls add to the amp's level.
         {"Heavy American", EffectGuids::kAmpBuiltin, {}, {}, 3.0},
         // The bass cab sits lowest on a guitar DI, about 5 dB under the default.
-        {"Cybercab", EffectGuids::kCabSimple, {"outputGain"}, {}},
+        {"Simple Cabinet", EffectGuids::kCabSimple, {"outputGain"}, {}},
     };
     return effects;
 }

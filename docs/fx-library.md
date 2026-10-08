@@ -930,7 +930,7 @@ from there at the Decay setting. Map it to a footswitch.
 Factory presets: Wide Bloom (default), Tight Ambience, Lead Halo, Dark Swell, Cloud, Infinite Wash,
 Shimmer (an octave up), Fifth Halo and Deep Shimmer (an octave down, an organ-like swell).
 
-### Cybercab - Cab Sim (`cab_simple`)
+### Simple Cabinet (`cab_simple`)
 Filter-based cabinet with no IR required: five cabinet types, a mic with type, position and
 distance, an optional second mic, speaker drive and stereo spread. Use an IR cabinet when one
 particular speaker and microphone's exact notches matter; the Simple Cab reaches their broad

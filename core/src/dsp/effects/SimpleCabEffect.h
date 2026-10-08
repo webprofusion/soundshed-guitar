@@ -603,7 +603,7 @@ inline void RegisterSimpleCabEffect()
     EffectTypeInfo info;
     info.type = EffectGuids::kCabSimple;
     info.aliases = {"cab_simple"};
-    info.displayName = "Cybercab - Cab Sim";
+    info.displayName = "Simple Cabinet";
     info.category = "cab";
     info.description = "Lightweight cabinet with five cab types, mic type, position and distance, a second mic, "
                        "speaker drive and stereo spread (no IR required)";

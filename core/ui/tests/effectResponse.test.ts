@@ -113,7 +113,7 @@ describe("responseDbAt", () => {
   });
 });
 
-describe("Cybercab IR match", () => {
+describe("Simple Cabinet IR match", () => {
   it("delivers the matched parameters, dropping anything that is not a number", () => {
     const listener = vi.fn();
     effectResponse.requestSimpleCabIrMatch("ir-42", listener);
@@ -162,14 +162,14 @@ describe("export as IR", () => {
 
   it("answers from the resource import carrying its request id", () => {
     const listener = vi.fn();
-    effectResponse.exportEffectAsIr("cab_simple", { cabinet: 1 }, "Cybercab 1x12 Open", listener);
+    effectResponse.exportEffectAsIr("cab_simple", { cabinet: 1 }, "Simple Cab 1x12 Open", listener);
     const [request] = sentOfType("exportEffectAsIr");
-    expect(request).toMatchObject({ effectType: "cab_simple", params: { cabinet: 1 }, name: "Cybercab 1x12 Open" });
+    expect(request).toMatchObject({ effectType: "cab_simple", params: { cabinet: 1 }, name: "Simple Cab 1x12 Open" });
 
     importEvent("resource-browser:resource-imported", { requestId: "another-import", name: "Other" });
     expect(listener).not.toHaveBeenCalled();
-    importEvent("resource-browser:resource-imported", { requestId: request.requestId, name: "Cybercab 1x12 Open 2" });
-    expect(listener).toHaveBeenCalledWith({ ok: true, name: "Cybercab 1x12 Open 2" });
+    importEvent("resource-browser:resource-imported", { requestId: request.requestId, name: "Simple Cab 1x12 Open 2" });
+    expect(listener).toHaveBeenCalledWith({ ok: true, name: "Simple Cab 1x12 Open 2" });
 
     // Answered once: a repeat event, or the timeout, changes nothing.
     importEvent("resource-browser:resource-imported", { requestId: request.requestId, name: "again" });
