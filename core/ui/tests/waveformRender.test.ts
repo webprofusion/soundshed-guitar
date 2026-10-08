@@ -213,6 +213,22 @@ describe("playhead and recording overlay", () => {
     expect(ops[traceIndex()]).toMatchObject({ style: WAVEFORM_COLORS.recordingTrace });
     expect(ops.some((o) => o.op === "stroke" && o.style === WAVEFORM_COLORS.recordingHead)).toBe(true);
   });
+
+  it("draws a marker as a dashed line under the playhead", () => {
+    draw({ lanes: [peaks], playhead: { ratio: 0.4 }, marker: { ratio: 0.25 } });
+
+    const markerIndex = ops.findIndex((o) => o.op === "stroke" && o.dash.length > 0 && o.lines[0] === 250);
+    const headIndex = ops.findIndex((o) => o.op === "stroke" && o.dash.length === 0 && o.lines[0] === 400);
+    expect(ops[markerIndex]).toMatchObject({ style: WAVEFORM_COLORS.playhead, lines: [250, 250] });
+    expect(markerIndex).toBeGreaterThan(-1);
+    expect(markerIndex).toBeLessThan(headIndex);
+  });
+
+  it("draws no marker unless asked", () => {
+    draw({ lanes: [peaks], playhead: { ratio: 0.4 } });
+
+    expect(ops.some((o) => o.op === "stroke" && o.style === WAVEFORM_COLORS.playhead && o.dash.length > 0)).toBe(false);
+  });
 });
 
 describe("backing store", () => {

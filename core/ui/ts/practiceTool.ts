@@ -42,6 +42,13 @@ import {
   renderPracticeToolEqModal,
   setPracticeToolEqChangeListener,
 } from "./practiceTool/eqModal.js";
+import {
+  bindJumpBackButton,
+  clearJumpBackPoint,
+  getJumpBackMarkerSec,
+  renderJumpBackButton,
+  setJumpBackPoint,
+} from "./practiceTool/jumpBack.js";
 
 /** Registered by main.ts, which can reach the preset library without closing an
  * import cycle back through this module. */
@@ -265,6 +272,7 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
 
   candidateRange = null;
   editingLoopId = null;
+  clearJumpBackPoint();
   finalizePendingDelete(); // restoring into a different file's context wouldn't make sense
   playheadBaseSec = 0;
   playheadBaseMs = performance.now();
@@ -361,6 +369,14 @@ function resetPlayheadTo(sec: number): void {
   playheadBaseMs = performance.now();
 }
 
+/** Seeks the track, playing or not, and moves the drawn playhead with it. */
+function jumpTo(sec: number): void {
+  seekPracticeToolFile(sec);
+  resetPlayheadTo(sec);
+  renderWaveform();
+  renderFileInfo();
+}
+
 /**
  * Makes `loop` the active one and puts playback at its very start. Its own
  * track settings go first — Speed among them, which the engine's restart is
@@ -385,6 +401,7 @@ function activateLoop(loop: PracticeToolLoopRegion): void {
   }
   candidateRange = null;
   selectedHandle = "start";
+  clearJumpBackPoint(); // Jump Back now returns to this loop's start
   setPracticeToolLoopRegion({ startSec: loop.startSec, endSec: loop.endSec }, { restart: true });
   resetPlayheadTo(loop.startSec);
 }
@@ -491,6 +508,7 @@ function renderWaveform(): void {
   const hasAudio = player.waveformPeaksL.length > 0 && player.waveformPeaksR.length > 0 && player.durationSec > 0;
   const activeLoop = getActiveLoop();
   const range = getEditableRange();
+  const jumpBackSec = getJumpBackMarkerSec(activeLoop);
 
   drawWaveform(canvas, {
     // Two lanes: a backing track is genuinely stereo, and a collapsed trace
@@ -510,6 +528,7 @@ function renderWaveform(): void {
         }
       : null,
     playhead: hasAudio ? { ratio: getInterpolatedPositionSec() / player.durationSec } : null,
+    marker: hasAudio && jumpBackSec !== null ? { ratio: jumpBackSec / player.durationSec } : null,
   });
 }
 
@@ -565,6 +584,7 @@ function renderTransportControls(): void {
   if (stopBtn) {
     stopBtn.disabled = !hasAudio;
   }
+  renderJumpBackButton(hasAudio);
   if (loopStatus) {
     const activeLoop = getActiveLoop();
     loopStatus.hidden = !hasAudio || !activeLoop;
@@ -954,9 +974,8 @@ function bindWaveformInteractions(): void {
         renderLoopList();
         renderTransportControls();
       }
-      seekPracticeToolFile(sec);
-      resetPlayheadTo(sec);
-      renderFileInfo();
+      setJumpBackPoint(sec);
+      jumpTo(sec);
     },
     onCommit: () => {
       const activeLoop = getActiveLoop();
@@ -1009,6 +1028,7 @@ function bindTransportControls(): void {
     });
   }
 
+  bindJumpBackButton(getActiveLoop, jumpTo);
   bindPracticeToolFaders(ensurePracticeToolState, onFaderChange, renderTransportControls);
 }
 

@@ -122,6 +122,7 @@ export function resetWaveformPalette(): void {
 const HANDLE_RADIUS = 4;
 const SELECTED_RING_RADIUS = 6;
 const LANE_PADDING = 4;
+const MARKER_FLAG_SIZE = 5;
 
 /** What a range means, which is all a caller has to decide. */
 export type WaveformRangeTone = "active" | "candidate";
@@ -162,6 +163,12 @@ export interface WaveformSpec {
    * the whole clip. Ignored in `recording` mode, which owns the head colour.
    */
   playhead?: { ratio: number; tone?: "cursor" | "range" } | null;
+  /**
+   * A cue point the transport can return to (the Practice Tool's Jump Back).
+   * Drawn in the playhead's colour but dashed and flagged at both edges, so it
+   * reads as a mark rather than a second playhead.
+   */
+  marker?: { ratio: number } | null;
   /** Shown instead of a trace when there is nothing to draw. */
   empty?: { text: string; align?: "left" | "center" };
 }
@@ -314,6 +321,29 @@ export function drawWaveform(canvas: HTMLCanvasElement, spec: WaveformSpec): voi
     ctx.beginPath();
     ctx.arc(selectedHandle === "start" ? startX : endX, midY, SELECTED_RING_RADIUS, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  // Under the playhead, which sits right on it the moment the point is set.
+  if (spec.marker) {
+    const x = toX(spec.marker.ratio);
+    ctx.strokeStyle = colors.playhead;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = colors.playhead;
+    ctx.beginPath();
+    ctx.moveTo(x - MARKER_FLAG_SIZE, 0);
+    ctx.lineTo(x + MARKER_FLAG_SIZE, 0);
+    ctx.lineTo(x, MARKER_FLAG_SIZE);
+    ctx.moveTo(x - MARKER_FLAG_SIZE, height);
+    ctx.lineTo(x + MARKER_FLAG_SIZE, height);
+    ctx.lineTo(x, height - MARKER_FLAG_SIZE);
+    ctx.fill();
   }
 
   if (spec.playhead) {
