@@ -17,9 +17,16 @@ export function normalizeFilterValue(value: string): string {
  * Examples: "pedal" matches "Pedal", "FX Pedals", "Pedals"
  *           "full-rig"  matches "Full Rig", "Full-Rig", "Full Rigs"
  *           "amp"       matches "Amp", "Amps", "Amplifiers" (not "Full Rig" entries)
+ *           "cab"       matches "cab" — what the engine files every cabinet IR under
+ *
+ * "ir" is the old name for the cab hint. It is the resource type, not a category: reverb
+ * IRs are type "ir" too, so it must never pick out "Reverb IRs".
  */
 export function resolveLibraryCategoryFromHint(hint: string, availableCategories: string[]): string | null {
-  const normalizedHint = hint.trim().toLowerCase();
+  let normalizedHint = hint.trim().toLowerCase();
+  if (normalizedHint === "ir") {
+    normalizedHint = "cab";
+  }
   if (!normalizedHint) {
     return null;
   }
@@ -34,7 +41,7 @@ export function resolveLibraryCategoryFromHint(hint: string, availableCategories
     if (normalizedHint === "pedal" && lower.includes("pedal")) return cat;
     if (normalizedHint === "full-rig" && (lower.includes("full-rig") || lower.includes("full rig") || lower.includes("fullrig"))) return cat;
     if (normalizedHint === "amp" && lower.includes("amp") && !lower.includes("full")) return cat;
-    if (normalizedHint === "ir" && (lower.includes("ir") || lower.includes("cab"))) return cat;
+    if (normalizedHint === "cab" && lower.includes("cab")) return cat;
     if (normalizedHint === "reverb" && lower.includes("reverb")) return cat;
   }
 

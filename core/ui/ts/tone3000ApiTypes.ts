@@ -2,7 +2,9 @@ export type Tone3000Architecture = "1" | "2" | "custom";
 
 export type Tone3000Platform = "nam" | "ir" | "aida-x" | "aa-snapshot" | "proteus";
 
-export type Tone3000Gear = "amp" | "full-rig" | "pedal" | "outboard" | "ir";
+/// Tones come back as amp, amp-cab (a full rig), pedal, outboard, cab (cab IRs), space
+/// (room and reverb IRs) or experimental. Searches also take full-rig, and ir for every IR.
+export type Tone3000Gear = "amp" | "amp-cab" | "full-rig" | "pedal" | "outboard" | "cab" | "space" | "ir" | "experimental";
 
 export type Tone3000License =
   | "t3k"

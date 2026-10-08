@@ -23,10 +23,12 @@ export function resolveResourceBrowserTone3000CategoryFilter(
   return undefined;
 }
 
+/// The library category an IR slot browses: what the engine files its IRs under. "ir" is the
+/// resource type, not a category, since reverb IRs are type "ir" too.
 export function resolveResourceBrowserLibraryCategoryHint(
   node: GraphNode,
   resourceType: "nam" | "ir",
-): "ir" | "reverb" | undefined {
+): "cab" | "reverb" | undefined {
   if (resourceType !== "ir") {
     return undefined;
   }
@@ -36,7 +38,7 @@ export function resolveResourceBrowserLibraryCategoryHint(
     return "reverb";
   }
   if (category === "cab") {
-    return "ir";
+    return "cab";
   }
 
   return undefined;

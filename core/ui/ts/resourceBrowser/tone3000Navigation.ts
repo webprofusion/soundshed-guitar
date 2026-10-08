@@ -19,6 +19,7 @@ import { fetchTone3000Models, getTone3000ImageUrl } from "../tone3000Shared.js";
 import { arrayBufferToBase64, findResourceById } from "../utils.js";
 import { sanitizeFilename } from "./helpers.js";
 import { DEFAULT_RESOURCE_CONTEXT_KEY } from "./settings.js";
+import { slotImportCategory } from "./slot.js";
 import type { NavigationCacheOptions, ResourceBrowserOptions, ResourceNavigationResult, ResourceType, Tone3000NavigationState } from "./types.js";
 
 let nextImportRequestId = 0;
@@ -91,7 +92,10 @@ export class Tone3000Navigator {
     architectureVersion: string,
     buffer: ArrayBuffer,
     isZip: boolean,
-    resourceType: "nam" | "ir"
+    resourceType: "nam" | "ir",
+    /// The library category to file it under; Tone3000's gear when not given. An IR
+    /// picked for a slot goes to that slot ("cab" or "reverb"), whatever its gear says.
+    category?: string,
   ): Promise<string> {
     const gearFolder = sanitizeFilename(tone.gear ?? "other");
     const toneFolder = sanitizeFilename(tone.title ?? tone.name ?? "tone");
@@ -129,7 +133,7 @@ export class Tone3000Navigator {
           resourceId,
           name: `${tone.title} - ${entry.name}`,
           description: tone.description ?? "",
-          category: tone.gear ?? "",
+          category: category ?? tone.gear ?? "",
           subfolder,
           fileName,
           metadata: {
@@ -176,7 +180,7 @@ export class Tone3000Navigator {
         resourceId,
         name: `${tone.title} - ${modelName}`,
         description: tone.description ?? "",
-        category: tone.gear ?? "",
+        category: category ?? tone.gear ?? "",
         subfolder,
         fileName,
         metadata: {
@@ -217,6 +221,7 @@ export class Tone3000Navigator {
       tones: [...this.host.getTones()],
       architecture: this.host.getSelectedArchitecture(),
       modelsByToneId: new Map(this.host.getModelsCache()),
+      importCategory: options.resourceType === "ir" ? slotImportCategory(options, "") : undefined,
     });
     this.host.rememberNavigationView(this.host.getContextKey(), "tone3000");
     document.dispatchEvent(new CustomEvent("resource-browser:navigation-cache-updated", {
@@ -358,6 +363,7 @@ export class Tone3000Navigator {
         buffer,
         isZip,
         resourceType,
+        state.importCategory,
       );
 
       this.tone3000ImportedResourceIds.set(`${resourceType}:${modelId}`, resourceId);

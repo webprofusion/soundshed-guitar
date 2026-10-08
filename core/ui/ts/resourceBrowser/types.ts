@@ -139,6 +139,9 @@ export interface Tone3000NavigationState {
   tones: Tone3000Tone[];
   architecture: Tone3000Architecture | null;
   modelsByToneId: Map<string, Tone3000Model[]>;
+  /// What a model imported while stepping is filed under: the slot of the picker the set
+  /// came from, for IRs.
+  importCategory?: string;
 }
 
 export interface NavigationCacheOptions {

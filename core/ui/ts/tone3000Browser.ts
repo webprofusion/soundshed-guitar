@@ -53,7 +53,8 @@ const CATEGORIES: CategoryConfig[] = [
   { id: "preamp", label: "Preamps", gear: "outboard", platform: "nam" },
   { id: "amp", label: "Amps", gear: "amp", platform: "nam" },
   { id: "full-rig", label: "Full Rigs", gear: "full-rig", platform: "nam" },
-  { id: "cab", label: "Cab IRs", gear: "ir", platform: "ir" },
+  { id: "cab", label: "Cab IRs", gear: "cab", platform: "ir" },
+  { id: "space", label: "Room & Reverb IRs", gear: "space", platform: "ir" },
 ];
 
 let activeCategory = CATEGORIES[0];

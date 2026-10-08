@@ -178,7 +178,7 @@ export function bindCabResponseControls(node: GraphNode, preset: Preset): void {
     resourceBrowserModal.open({
       resourceType: "ir",
       currentId: lastMatchedIrId,
-      libraryCategoryHint: "ir",
+      libraryCategoryHint: "cab",
       contextKey: "ir-match",
       title: "Match an IR",
       hint: "Double click an IR, or select it and click OK, to match the cabinet to it.",

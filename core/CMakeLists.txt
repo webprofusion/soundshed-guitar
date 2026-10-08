@@ -524,6 +524,8 @@ set(GUITARFX_CORE_SOURCES
     src/controller/internal/MetronomeSupport.h
     src/controller/internal/NamResourceMetadata.h
     src/controller/internal/NamResourceMetadata.cpp
+    src/controller/internal/IrResourceCategory.h
+    src/controller/internal/IrResourceCategory.cpp
     src/controller/internal/OfflineRenderSupport.h
     src/controller/internal/OfflineRenderSupport.cpp
     src/controller/internal/PresetArchiveSupport.h

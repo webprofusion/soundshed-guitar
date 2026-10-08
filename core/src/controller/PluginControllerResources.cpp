@@ -13,6 +13,7 @@
 #include "controller/internal/BlendSupport.h"
 #include "controller/internal/ControllerUtils.h"
 #include "controller/internal/HostedPluginSupport.h"
+#include "controller/internal/IrResourceCategory.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
 #include "presets/PresetStorage.h"
@@ -1210,7 +1211,17 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
 
     if (payload.contains("category"))
     {
-        updated.category = payload.value("category", updated.category);
+        const std::string category = payload.value("category", updated.category);
+
+        // An IR's category is its slot. An edit that names neither keeps the one it had.
+        if (updated.type != "ir")
+        {
+            updated.category = category;
+        }
+        else if (auto mapped = MapToIrLibraryCategory(category))
+        {
+            updated.category = *mapped;
+        }
     }
 
     if (payload.contains("description"))
@@ -1976,6 +1987,28 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
 
     for (auto& resource : allResources)
     {
+        if (resource.type == "ir")
+        {
+            // Older builds filed IRs under whatever the import said: Tone3000's gear,
+            // a folder name, "Local". Settle each on cab or reverb once, keeping a pack
+            // or folder name as a tag so that grouping is not lost.
+            if (IsIrLibraryCategory(resource.category))
+            {
+                continue;
+            }
+
+            if (auto tag = IrCategoryToKeepAsTag(resource.category);
+                tag && std::find(resource.tags.begin(), resource.tags.end(), *tag) == resource.tags.end())
+            {
+                resource.tags.push_back(*tag);
+            }
+
+            resource.category = ResolveIrLibraryCategory(resource, resource.category);
+            mResourceLibrary.UpdateResource(resource.type, resource.id, resource);
+            changed.push_back(resource);
+            continue;
+        }
+
         if (resource.type != "nam")
         {
             continue;

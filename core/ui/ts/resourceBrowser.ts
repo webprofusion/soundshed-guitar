@@ -17,6 +17,7 @@ import { FolderTab } from "./resourceBrowser/folderTab.js";
 import { folderFileLibraryMatch } from "./resourceBrowser/folderRows.js";
 import { normalizeArchitectureBadge, getResourceCreator, getResourceLibraryFacets, getResourceTags, isDoubleClickExempt, normalizeFilterValue, normalizeNamArchitectureBadge, resolveLibraryCategoryFromHint, splitTagValues } from "./resourceBrowser/helpers.js";
 import { DEFAULT_RESOURCE_CONTEXT_KEY, RESOURCE_FAVORITES_SETTING } from "./resourceBrowser/settings.js";
+import { TONE3000_IR_GEAR_OPTIONS, slotImportCategory, slotLibraryCategoryHint, slotStateKey, slotTitle, slotTone3000IrGear } from "./resourceBrowser/slot.js";
 import { Tone3000Tab } from "./resourceBrowser/tone3000Tab.js";
 import type { LibraryFilterSnapshot, NavigationCacheOptions, PersistedResourceBrowserState, PreviewLoadingState, PreviewState, ResourceBrowserOptions, ResourceBrowserTab, ResourceImportedDetail, ResourceNavigationResult, ResourceNavigationState, ResourceType } from "./resourceBrowser/types.js";
 import { deduplicateResourcesByHashAndPath, resolveResourceIdAlias } from "./resourceDedup.js";
@@ -146,10 +147,9 @@ export class ResourceBrowserModal {
   private pendingLibraryNavigationRefreshes: Map<string, number> = new Map();
   private libraryResourceAliases: Map<string, Map<string, string>> = new Map(); // Maps resourceType -> (aliasId -> canonicalId)
   private lastNavigationViewByContext: Map<string, "library" | "folder" | "tone3000"> = new Map();
-  
-  
   private previewLoading: PreviewLoadingState | null = null;
-  private persistedStateByType: Partial<Record<ResourceType, PersistedResourceBrowserState>> = {};
+  /// Per slot (slotStateKey), not per resource type: the cab and reverb pickers both browse IRs.
+  private persistedStateBySlot: Map<string, PersistedResourceBrowserState> = new Map();
   private resourceUsageInfo: Map<string, { inUse: boolean; presetName?: string }> = new Map();
   private requestedUsageKeys: Set<string> = new Set();
   private usageObserver: IntersectionObserver | null = null;
@@ -482,8 +482,8 @@ export class ResourceBrowserModal {
     this.syncAvailableTabs();
   }
 
-  private createDefaultPersistedState(resourceType: ResourceType): PersistedResourceBrowserState {
-    const isIr = resourceType === "ir";
+  private createDefaultPersistedState(options: ResourceBrowserOptions): PersistedResourceBrowserState {
+    const isIr = options.resourceType === "ir";
     return {
       activeTab: "library",
       librarySearch: "",
@@ -493,7 +493,7 @@ export class ResourceBrowserModal {
       libraryTagFilters: [],
       libraryFavoritesOnly: false,
       tone3000Search: "",
-      tone3000Category: isIr ? "ir" : "amp",
+      tone3000Category: isIr ? slotTone3000IrGear(options) : (options.tone3000CategoryFilter ?? "amp"),
       tone3000Sort: "popular",
       tone3000Architecture: isIr ? "all" : "2",
       tone3000FavoritesOnly: false,
@@ -505,23 +505,24 @@ export class ResourceBrowserModal {
     };
   }
 
-  private getOrCreatePersistedState(resourceType: ResourceType): PersistedResourceBrowserState {
-    const existing = this.persistedStateByType[resourceType];
+  private getOrCreatePersistedState(options: ResourceBrowserOptions): PersistedResourceBrowserState {
+    const key = slotStateKey(options);
+    const existing = this.persistedStateBySlot.get(key);
     if (existing) {
       return existing;
     }
-    const created = this.createDefaultPersistedState(resourceType);
-    this.persistedStateByType[resourceType] = created;
+    const created = this.createDefaultPersistedState(options);
+    this.persistedStateBySlot.set(key, created);
     return created;
   }
 
   private saveCurrentStateForResourceType(): void {
-    const resourceType = this.options?.resourceType;
-    if (!resourceType) {
+    if (!this.options) {
       return;
     }
 
-    const persisted = this.getOrCreatePersistedState(resourceType);
+    const resourceType = this.options.resourceType;
+    const persisted = this.getOrCreatePersistedState(this.options);
     persisted.activeTab = this.activeTab;
     persisted.librarySearch = this.librarySearch?.value ?? "";
     persisted.libraryCategory = this.libraryCategory?.value ?? "all";
@@ -533,8 +534,9 @@ export class ResourceBrowserModal {
   }
 
 
-  private restoreStateForResourceType(resourceType: ResourceType): void {
-    const persisted = this.getOrCreatePersistedState(resourceType);
+  private restoreStateForResourceType(options: ResourceBrowserOptions): void {
+    const resourceType = options.resourceType;
+    const persisted = this.getOrCreatePersistedState(options);
 
     if (this.librarySearch) {
       this.librarySearch.value = persisted.librarySearch;
@@ -595,11 +597,7 @@ export class ResourceBrowserModal {
   }
 
   private resolveDefaultImportCategory(fallbackCategory: string): string {
-    if (this.options?.resourceType === "ir" && this.options.libraryCategoryHint === "reverb") {
-      return "reverb";
-    }
-
-    return fallbackCategory.trim() || "Local";
+    return slotImportCategory(this.options, fallbackCategory);
   }
 
   private resolveSelectedResourceCategory(resourceType: ResourceType): string {
@@ -673,32 +671,28 @@ export class ResourceBrowserModal {
     }
     this.folderTab.folderListingFallbackAttempted = false;
     if (this.title) {
-      this.title.textContent = options.title ?? (options.resourceType === "ir"
-        ? "Select IR Cabinet"
-        : "Select Amp Model");
+      this.title.textContent = options.title ?? slotTitle(options);
     }
     if (this.footerHint) {
       this.footerHint.textContent = options.hint ?? this.defaultFooterHint;
     }
     this.libraryBrowseBtn?.toggleAttribute("hidden", !options.nodeId);
-    
-    // Update category options
     this.updateCategoryOptions();
-    this.restoreStateForResourceType(options.resourceType);
+    this.restoreStateForResourceType(options);
 
-    // Pre-select the library category based on effect node type, overriding
-    // any persisted state. This ensures e.g. Neural FX always opens on Pedals.
+    // Pre-select the library category for the slot, overriding any persisted state: Neural
+    // FX opens on Pedals, the IR Reverb on reverbs. A slot whose category the library does
+    // not have yet opens on everything, never on the category another slot left behind.
     if (this.libraryCategory) {
-      const categoryHint = options.libraryCategoryHint
-        ?? (options.resourceType === "ir" ? "ir" : options.tone3000CategoryFilter);
+      const categoryHint = slotLibraryCategoryHint(options);
       const availableCategories = Array.from(this.libraryCategory.options)
         .map((o) => o.value)
         .filter((v) => v !== "all");
       const match = categoryHint
         ? resolveLibraryCategoryFromHint(categoryHint, availableCategories)
         : null;
-      if (match) {
-        this.libraryCategory.value = match;
+      if (categoryHint) {
+        this.libraryCategory.value = match ?? "all";
       }
 
       const selectedCategory = this.resolveSelectedResourceCategory(options.resourceType);
@@ -880,25 +874,21 @@ export class ResourceBrowserModal {
       this.libraryCategory.innerHTML = `<option value="all">All Categories</option>` +
         sorted.map((cat) => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join("");
       this.libraryCategory.disabled = false;
+      const slotHint = this.options ? slotLibraryCategoryHint(this.options) : undefined;
       if (currentCategory !== "all" && sorted.includes(currentCategory)) {
         this.libraryCategory.value = currentCategory;
-      } else if (resourceType === "nam" && tone3000CategoryFilter) {
-        const match = resolveLibraryCategoryFromHint(tone3000CategoryFilter, sorted);
-        this.libraryCategory.value = match ?? "all";
-      } else if (resourceType === "ir") {
-        const match = resolveLibraryCategoryFromHint(this.options?.libraryCategoryHint ?? "ir", sorted);
-        this.libraryCategory.value = match ?? "all";
       } else {
-        this.libraryCategory.value = "all";
+        this.libraryCategory.value = (slotHint && resolveLibraryCategoryFromHint(slotHint, sorted)) || "all";
       }
     }
-    
-    // Tone3000 category options based on resource type
+
+    // Tone3000 searches the slot's gear: cab IRs for the cab, rooms for the reverb.
     if (this.tone3000Tab.tone3000Category) {
-      if (resourceType === "ir") {
-        this.tone3000Tab.tone3000Category.innerHTML = `<option value="ir" selected>Cab IRs</option>`;
-        this.tone3000Tab.tone3000Category.value = "ir";
-        this.tone3000Tab.tone3000Category.disabled = true;
+      if (resourceType === "ir" && this.options) {
+        this.tone3000Tab.tone3000Category.innerHTML = TONE3000_IR_GEAR_OPTIONS
+          .map((gear) => `<option value="${escapeHtml(gear.value)}">${escapeHtml(gear.label)}</option>`).join("");
+        this.tone3000Tab.tone3000Category.value = slotTone3000IrGear(this.options);
+        this.tone3000Tab.tone3000Category.disabled = false;
       } else {
         this.tone3000Tab.tone3000Category.innerHTML = `
           <option value="amp" selected>Amps</option>
@@ -939,8 +929,17 @@ export class ResourceBrowserModal {
     );
   }
 
-  private getLibraryFilterSnapshot(resourceType: ResourceType): LibraryFilterSnapshot {
-    const persisted = this.getOrCreatePersistedState(resourceType);
+  private getLibraryFilterSnapshot(resourceType: ResourceType, options?: NavigationCacheOptions): LibraryFilterSnapshot {
+    const slot: ResourceBrowserOptions = { resourceType, contextKey: options?.contextKey, onSelect: () => {},
+      libraryCategoryHint: resourceType === "ir" ? options?.categoryHint : undefined,
+      tone3000CategoryFilter: resourceType === "nam" ? options?.categoryHint as ResourceBrowserOptions["tone3000CategoryFilter"] : undefined };
+    const persisted = this.getOrCreatePersistedState(slot);
+    // The controls hold the slot the modal was last opened for; another slot's next/prev
+    // filters by what its own browser was left showing.
+    if (!this.options || slotStateKey(this.options) !== slotStateKey(slot)) {
+      return { query: persisted.librarySearch.trim().toLowerCase(), category: persisted.libraryCategory, architecture: persisted.libraryArchitecture,
+        creator: persisted.libraryCreator, tags: [...persisted.libraryTagFilters], favoritesOnly: Boolean(persisted.libraryFavoritesOnly) };
+    }
     return {
       query: (this.librarySearch?.value ?? persisted.librarySearch ?? "").trim().toLowerCase(),
       category: this.libraryCategory?.value ?? persisted.libraryCategory ?? "all",
@@ -981,8 +980,7 @@ export class ResourceBrowserModal {
 
   private buildLibraryNavigationState(resourceType: ResourceType, options?: NavigationCacheOptions): ResourceNavigationState {
     const resources = uiState.resourceLibrary[resourceType] ?? [];
-    const filters = this.getLibraryFilterSnapshot(resourceType);
-    
+    const filters = this.getLibraryFilterSnapshot(resourceType, options);
     // Deduplicate resources by hash and file path
     const dedupResult = deduplicateResourcesByHashAndPath(resources, {
       preferredResourceIds: this.selectedResourceId ? [this.selectedResourceId] : [],
@@ -1264,10 +1262,10 @@ export class ResourceBrowserModal {
     };
     const cacheKey = this.buildLibraryNavigationCacheKey(resourceType, category);
     this.libraryNavigationStates.set(cacheKey, navigationState);
-    // The caller looks this list up by category *hint* ("amp", "ir"), which the
+    // The caller looks this list up by category *hint* ("amp", "cab"), which the
     // modal has already resolved to a concrete category ("Amps"). Register under
     // the hint too so node-panel next/prev sees exactly what the modal is showing.
-    const hint = this.options.libraryCategoryHint ?? this.options.tone3000CategoryFilter;
+    const hint = slotLibraryCategoryHint(this.options);
     const hintCacheKey = this.buildLibraryNavigationCacheKey(resourceType, hint);
     if (hintCacheKey !== cacheKey) {
       this.libraryNavigationStates.set(hintCacheKey, navigationState);
@@ -1728,6 +1726,8 @@ export class ResourceBrowserModal {
     this.editingFolderResourceType = options.folderPath ? options.resourceType : null;
     this.editNameInput.value = options.name.trim() || "Unnamed";
     this.editCategoryInput.value = options.category.trim() || "Local";
+    // An IR is filed under its slot; the engine keeps the old category for anything else.
+    this.editCategoryInput.setAttribute("list", options.resourceType === "ir" ? "resource-browser-ir-categories" : "");
     this.editTagsInput.value = options.tags.join(", ");
     this.editPopover.hidden = false;
     this.editNameInput.focus();
@@ -1939,7 +1939,8 @@ export class ResourceBrowserModal {
         modelArchitecture ?? "",
         buffer,
         isZip,
-        resourceType
+        resourceType,
+        resourceType === "ir" ? slotImportCategory(this.options, "") : undefined,
       );
       
       if (this.tone3000Tab.tone3000Status) {
@@ -2074,17 +2075,10 @@ export class ResourceBrowserModal {
     return toResult(state.items[nextIndex]);
   }
 
-
-
-
-
-
-
-
   /// Navigation options describing the list the modal itself is showing.
   private currentModalNavigationOptions(): NavigationCacheOptions {
     return {
-      categoryHint: this.options?.libraryCategoryHint ?? this.options?.tone3000CategoryFilter,
+      categoryHint: this.options ? slotLibraryCategoryHint(this.options) : undefined,
       contextKey: this.folderTab.folderContextKey,
     };
   }

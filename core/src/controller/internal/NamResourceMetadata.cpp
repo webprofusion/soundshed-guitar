@@ -1,5 +1,6 @@
 #include "controller/internal/NamResourceMetadata.h"
 
+#include "controller/internal/IrResourceCategory.h"
 #include "dsp/EffectGuids.h"
 #include "resources/ResourceLibrary.h"
 #include "util/Utf8.h"
@@ -449,6 +450,11 @@ std::string ResolveResourceLibraryCategory(const guitarfx::LibraryResource& reso
 
         // If no metadata maps cleanly, use the most likely default for NAM.
         return "amp";
+    }
+
+    if (resource.type == "ir")
+    {
+        return ResolveIrLibraryCategory(resource, requestedCategory);
     }
 
     return requestedCategory;

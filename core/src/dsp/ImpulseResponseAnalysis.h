@@ -82,4 +82,100 @@ namespace guitarfx
 
     return magnitudesDb;
 }
+
+/**
+ * How long an impulse response takes, from its peak, for the energy still to come within
+ * `horizonSeconds` to fall `dropDb` below their total (Schroeder's backward integral, read
+ * forwards). At 20 dB it is the time to deliver 99% of that energy.
+ *
+ * The horizon keeps a file holding one IR twice (some packs ship a 500 ms cab back to back)
+ * from reading as a long one, and trailing silence never counts. Returns 0 for a silent or
+ * empty IR.
+ */
+[[nodiscard]] inline double EnergyDecaySeconds(std::span<const float> impulse, double sampleRate, double dropDb = 20.0,
+                                               double horizonSeconds = 0.4)
+{
+    if (impulse.empty() || !(sampleRate > 0.0))
+    {
+        return 0.0;
+    }
+
+    std::size_t peak = 0;
+
+    for (std::size_t n = 1; n < impulse.size(); ++n)
+    {
+        if (std::abs(impulse[n]) > std::abs(impulse[peak]))
+        {
+            peak = n;
+        }
+    }
+
+    const std::size_t end = std::min(impulse.size(), peak + static_cast<std::size_t>(horizonSeconds * sampleRate));
+    double total = 0.0;
+
+    for (std::size_t n = peak; n < end; ++n)
+    {
+        total += static_cast<double>(impulse[n]) * impulse[n];
+    }
+
+    if (!(total > 0.0))
+    {
+        return 0.0;
+    }
+
+    const double target = total * std::pow(10.0, -dropDb / 10.0);
+    double remaining = total;
+    std::size_t n = peak;
+
+    while (n < end && remaining > target)
+    {
+        remaining -= static_cast<double>(impulse[n]) * impulse[n];
+        ++n;
+    }
+
+    return static_cast<double>(n - peak) / sampleRate;
+}
+
+/**
+ * How long after its loudest `windowSeconds` an impulse response's level first falls
+ * `dropDb` below it, in steps of the window. Where EnergyDecaySeconds is pulled long by a
+ * loud early burst, this is pulled short by a gap, so the two read best together. Returns 0
+ * for an empty IR.
+ */
+[[nodiscard]] inline double EnvelopeDecaySeconds(std::span<const float> impulse, double sampleRate,
+                                                 double dropDb = 30.0, double windowSeconds = 0.01)
+{
+    if (impulse.empty() || !(sampleRate > 0.0))
+    {
+        return 0.0;
+    }
+
+    const std::size_t window = std::max<std::size_t>(1, static_cast<std::size_t>(windowSeconds * sampleRate));
+    std::vector<double> envelope;
+    envelope.reserve(impulse.size() / window + 1);
+
+    for (std::size_t start = 0; start < impulse.size(); start += window)
+    {
+        double energy = 0.0;
+
+        for (std::size_t n = start; n < std::min(impulse.size(), start + window); ++n)
+        {
+            energy += static_cast<double>(impulse[n]) * impulse[n];
+        }
+
+        envelope.push_back(energy);
+    }
+
+    const auto loudest =
+        static_cast<std::size_t>(std::max_element(envelope.begin(), envelope.end()) - envelope.begin());
+    const double target = envelope[loudest] * std::pow(10.0, -dropDb / 10.0);
+    std::size_t index = loudest;
+
+    while (index < envelope.size() && envelope[index] > target)
+    {
+        ++index;
+    }
+
+    return static_cast<double>((index - loudest) * window) / sampleRate;
+}
 } // namespace guitarfx

@@ -48,6 +48,7 @@ set(TEST_SOURCES
     IRBuildOnPrepareTests.cpp
     IRCabAutomationRealtimeTests.cpp
     IrAlignmentTests.cpp
+    IrResourceCategoryTests.cpp
     IRConvolutionTests.cpp
     IRReverbAutomationRealtimeTests.cpp
     IRReverbQualityTests.cpp

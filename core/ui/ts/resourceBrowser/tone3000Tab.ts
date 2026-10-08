@@ -15,6 +15,7 @@ import { buildTone3000FavoritesUrl, buildTone3000SearchUrl, extractTone3000Tones
 import type { Tone3000Architecture, Tone3000Model, Tone3000Tone } from "../tone3000ApiTypes.js";
 import { backfillTone3000ResourceImages, fetchTone3000Models, getTone3000ImageUrl } from "../tone3000Shared.js";
 import { escapeHtml } from "../utils.js";
+import { TONE3000_IR_GEAR_OPTIONS } from "./slot.js";
 import { Tone3000Navigator } from "./tone3000Navigation.js";
 import type { PersistedResourceBrowserState, PreviewLoadingState, PreviewState, ResourceBrowserOptions, ResourceType } from "./types.js";
 
@@ -179,7 +180,7 @@ export class Tone3000Tab {
   /** The Tone3000 half of the per-resource-type state the modal remembers. */
   captureTone3000State(persisted: PersistedResourceBrowserState, resourceType: ResourceType): void {
     persisted.tone3000Search = this.tone3000Search?.value ?? "";
-    persisted.tone3000Category = this.tone3000Category?.value ?? (resourceType === "ir" ? "ir" : "amp");
+    persisted.tone3000Category = this.tone3000Category?.value ?? (resourceType === "ir" ? "cab" : "amp");
     persisted.tone3000Sort = this.tone3000Sort?.value ?? "popular";
     persisted.tone3000Architecture = this.tone3000Architecture?.value ?? (resourceType === "ir" ? "all" : "2");
     persisted.tone3000FavoritesOnly = this.tone3000FavoritesOnly;
@@ -195,7 +196,7 @@ export class Tone3000Tab {
     if (this.tone3000Search) {
       this.tone3000Search.value = persisted.tone3000Search;
       this.tone3000Search.placeholder = resourceType === "ir"
-        ? "Search Cab IRs..."
+        ? "Search IRs..."
         : "Search amps and pedals...";
     }
 
@@ -287,12 +288,13 @@ export class Tone3000Tab {
           params.set("query", this.tone3000Query);
         }
         
-        // Set gear filter based on category
-        const categoryValue = this.host.getOptions()?.resourceType === "ir"
-          ? "ir"
-          : (this.tone3000Category?.value ?? this.host.getOptions()?.tone3000CategoryFilter ?? "amp");
-        if (categoryValue === "ir") {
-          params.set("gear", "ir");
+        // Set gear filter based on category. IRs search the select's own gear: cab IRs,
+        // rooms ("space"), or every IR.
+        const isIr = this.host.getOptions()?.resourceType === "ir";
+        const categoryValue = this.tone3000Category?.value
+          ?? (isIr ? "cab" : (this.host.getOptions()?.tone3000CategoryFilter ?? "amp"));
+        if (isIr) {
+          params.set("gear", TONE3000_IR_GEAR_OPTIONS.some((gear) => gear.value === categoryValue) ? categoryValue : "ir");
         } else if (categoryValue === "pedal") {
           params.set("gear", "pedal");
         } else if (categoryValue === "preamp") {

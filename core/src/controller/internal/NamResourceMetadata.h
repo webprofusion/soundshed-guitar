@@ -52,7 +52,8 @@ void EnrichNamResourceMetadata(LibraryResource& resource, const std::filesystem:
 [[nodiscard]] std::optional<std::string> MapToLibraryCategory(const std::string& rawCategory);
 
 /// Final category for a resource: the requested one when it maps cleanly,
-/// otherwise one inferred from the resource's own metadata.
+/// otherwise one inferred from the resource's own metadata. An IR is always
+/// filed under "cab" or "reverb" (IrResourceCategory.h), and may be read to decide.
 [[nodiscard]] std::string ResolveResourceLibraryCategory(const LibraryResource& resource,
                                                          const std::string& requestedCategory);
 

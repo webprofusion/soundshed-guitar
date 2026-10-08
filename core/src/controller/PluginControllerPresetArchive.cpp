@@ -14,6 +14,7 @@
 
 #include "controller/internal/BlendSupport.h"
 #include "controller/internal/EffectPresetArchiveSupport.h"
+#include "controller/internal/IrResourceCategory.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
 #include "presets/PresetStorage.h"
@@ -702,6 +703,17 @@ void PluginController::LoadFactoryPresetArchives()
             libraryResource.metadata["factoryArchiveKey"] = archiveKey;
             libraryResource.metadata["factoryArchiveHash"] = archiveHash;
             libraryResource.metadata["originalId"] = resource.id;
+
+            if (libraryResource.type == "ir")
+            {
+                // The archive files its IRs as "ir", which names no slot. Keep the category
+                // this entry already settled on (or the user chose), so each file is read once
+                // rather than on every launch.
+                const auto known = mResourceLibrary.LookupResource(libraryResource.type, libraryResource.id);
+                libraryResource.category = known && IsIrLibraryCategory(known->category)
+                                               ? known->category
+                                               : ResolveIrLibraryCategory(libraryResource, libraryResource.category);
+            }
 
             if (refreshLibraryEntry || !mResourceLibrary.HasResource(libraryResource.type, libraryResource.id))
             {

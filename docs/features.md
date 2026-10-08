@@ -280,6 +280,10 @@ Central catalog of NAM models and IR files.
 - **ResourceRef resolution priority**: 1) library (resourceType + resourceId), 2) embedded (embeddedId), 3) file path.
 - **Content deduplication**: SHA-256 hash prevents duplicate storage.
 - **Dynamic loading/unloading**: Resources loaded on demand; catalog supports queries by type, category, tags.
+- **Type and category**: a resource's type says what the file is (`nam`, `ir`); its category says what it is for. A NAM capture is filed under `amp`, `preamp`, `pedal` or `full-rig`, from its own metadata first. An IR is filed under exactly `cab` or `reverb` (`controller/internal/IrResourceCategory.h`), since the IR Cabinet and the IR Reverb both load type `ir` files and the category is what tells their pickers apart. `ir` is never a category.
+  - An import picked from a slot's browser is filed under that slot. Anything else (Tone3000's gear `ir`, `pedal` or `outboard`, a folder name, `Local`) is mapped when it names a slot (`cabinet`, Tone3000's `space`), and otherwise settled by measuring the file: a reverb's level takes 140 ms or more to fall 30 dB, or 150 ms or more to deliver 99% of its first 400 ms of energy (`EnvelopeDecaySeconds`, `EnergyDecaySeconds` in `dsp/ImpulseResponseAnalysis.h`). A file that cannot be read is guessed from its old category and its folders.
+  - At startup, an IR whose category is neither is settled once the same way. A pack or folder name it carried is kept as a tag. An edit can move an IR between `cab` and `reverb`, and is ignored when it names anything else.
+- **Browser per slot**: the resource browser opens on its slot's library category and Tone3000 gear (`cab` or `space` for IRs, the node's gear for NAM), and remembers searches, filters and Tone3000 results per slot, not per type (`core/ui/ts/resourceBrowser/slot.ts`). A slot whose category the library lacks opens on all categories.
 
 ---
 
@@ -290,7 +294,7 @@ Central catalog of NAM models and IR files.
 Integration with the Tone3000 cloud amp model library.
 
 - **Authentication**: The API key (`tone3000.apiKey`) is exchanged for OAuth-style tokens at `https://www.tone3000.com/api/v1/auth/session`. Token refresh handled automatically. The key and the connection mode (`tone3000.useSoundshedToneSearchApi`) are account settings: they are kept once, in the shared settings store, whether entered in Settings or in the prompt a Tone3000 import raises, and every instance uses them, the standalone app and plugins alike. A DAW project's saved state never carries them, so an old project cannot bring back an old key, and a plugin editor re-reads them when it opens. A key changed or cleared in one instance drops the others' sessions.
-- **Browse categories**: Pedals/FX, Preamps, Amps, Full Rigs, Cabinet IRs.
+- **Browse categories**: Pedals/FX, Preamps, Amps, Full Rigs, Cab IRs, Room & Reverb IRs (Tone3000 gear `space`).
 - **Search**: Query-based tone search with category filtering.
 - **Import**: Download individual NAM models or IR files into the local resource library.
 - **Blend creation**: Import multiple models from a single tone entry and combine into a blend definition.
