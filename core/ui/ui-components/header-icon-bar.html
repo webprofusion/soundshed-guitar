@@ -53,6 +53,16 @@
       </nav>
       <span class="icon-bar-spacer"></span>
       <div class="jam-player-dock" id="jam-player-dock" aria-hidden="true"></div>
+      <!-- Shown by updateCheck.ts when the update server names a newer release;
+           opens #update-modal. Stays up for the session once shown. -->
+      <button class="header-update-btn" id="header-update-btn" type="button" title="A new version is available" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 4v11" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M5 20h14" />
+        </svg>
+        <span class="header-update-label">Update <span id="header-update-version"></span></span>
+      </button>
       <button class="icon-btn nav-settings-btn" data-panel="settings" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24">
           <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.5" fill="none" />

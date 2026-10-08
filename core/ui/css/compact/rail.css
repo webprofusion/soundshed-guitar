@@ -236,6 +236,26 @@ html[data-density="compact"][data-compact-layout="rail"] .nav-settings-btn svg {
   height: 20px;
 }
 
+/* An icon-only square above the gear; the label would not fit the rail. */
+html[data-density="compact"][data-compact-layout="rail"] .header-update-btn:not([hidden]) {
+  align-self: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+html[data-density="compact"][data-compact-layout="rail"] .header-update-label {
+  display: none;
+}
+
+html[data-density="compact"][data-compact-layout="rail"] .header-update-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* The docked Jam player has nowhere to sit on a 60px rail. With its host hidden,
    jam/player.ts floats the player instead, as it does on any narrow window. */
 html[data-density="compact"][data-compact-layout="rail"] .jam-player-dock {

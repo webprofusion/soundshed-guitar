@@ -4,7 +4,7 @@ import { updateAppSetting } from "./appSettingsStore.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
 import { getApiBaseUrl } from "./apiConfig.js";
-import { refreshSettingsUpdateBanner } from "./settings.js";
+import { refreshSettingsUpdateBanner } from "./settings/updateBanner.js";
 import { escapeHtml } from "./utils.js";
 
 const UPDATE_CHECK_ENABLED_SETTING = "app.updateCheckEnabled";
@@ -12,8 +12,17 @@ const INSTANCE_ID_SETTING = "app.instanceId";
 
 let hasCheckedForUpdates = false;
 
+/**
+ * Runs once per session, from the first app settings that leave the check on.
+ * Called on every app settings arrival, so turning the setting back on in
+ * Settings checks straight away rather than at the next launch.
+ */
 export function triggerUpdateCheck(): void {
   if (hasCheckedForUpdates) return;
+
+  const rawEnabled = uiState.appSettings[UPDATE_CHECK_ENABLED_SETTING];
+  const updateCheckEnabled = rawEnabled === undefined ? true : (rawEnabled === true || rawEnabled === "true");
+  if (!updateCheckEnabled) return;
   hasCheckedForUpdates = true;
 
   // Request app info from backend first
@@ -26,16 +35,9 @@ export function triggerUpdateCheck(): void {
     updateAppSetting(INSTANCE_ID_SETTING, instanceId);
   }
 
-  const rawEnabled = uiState.appSettings[UPDATE_CHECK_ENABLED_SETTING];
-  const updateCheckEnabled = rawEnabled === undefined ? true : (rawEnabled === true || rawEnabled === "true");
-  
-  if (updateCheckEnabled) {
-    setTimeout(() => {
-      void performUpdateCheck(instanceId!);
-    }, 5000); // Delay check by 5 seconds to not block startup
-  } else {
-    console.log("[UpdateCheck] Update check is disabled in settings");
-  }
+  setTimeout(() => {
+    void performUpdateCheck(instanceId!);
+  }, 5000); // Delay check by 5 seconds to not block startup
 }
 
 async function performUpdateCheck(instanceId: string): Promise<void> {
@@ -136,77 +138,91 @@ function isVersionNewer(candidateVersion: string, currentVersion: string): boole
 }
 
 function showUpdateAvailable(data: UpdateCheckResult): void {
-  // Store in UI state so settings panel can show the banner
+  // The settings banner, the header button and the dialog all read this.
   uiState.availableUpdate = {
     version: data.latest_version,
-    downloadUrl: data.download_url,
+    downloadUrl: toHttpUrl(data.download_url) ?? "",
     releaseNotes: data.release_notes ?? "",
   };
   refreshSettingsUpdateBanner();
+  showHeaderUpdateButton(data.latest_version);
 
-  // Create badge in UI
-  const settingsBtn = document.getElementById("footer-settings-btn");
-  if (settingsBtn) {
-    let badge = settingsBtn.querySelector(".update-badge") as HTMLElement | null;
-    if (!badge) {
-      badge = document.createElement("span");
-      badge.className = "update-badge";
-      badge.textContent = "1";
-      badge.style.cssText = "position: absolute; top: -5px; right: -5px; background: var(--accent-color, #ff4444); color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: bold; pointer-events: none;";
-      settingsBtn.style.position = "relative";
-      settingsBtn.appendChild(badge);
-    }
-    
-    // Add click handler to show modal
-    settingsBtn.addEventListener("click", () => {
-      createUpdateModal(data);
-    });
-  }
-
-  // Show notification
   showNotification("Update Available", `Version ${data.latest_version} is available.`);
 }
 
-function createUpdateModal(data: UpdateCheckResult): void {
-  let modal = document.getElementById("update-modal");
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.id = "update-modal";
-    modal.className = "modal-overlay";
-    modal.style.display = "none";
-    
-    modal.innerHTML = `
-      <div class="modal-content" style="max-width: 500px;">
-        <div class="modal-header">
-          <h2>Update Available</h2>
-          <button class="icon-btn" id="update-modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p>A new version of Soundshed Guitar is available: <strong>${escapeHtml(data.latest_version)}</strong></p>
-          <div class="release-notes" style="margin-top: 15px; max-height: 200px; overflow-y: auto; background: var(--bg-color-dark, rgba(0,0,0,0.1)); padding: 10px; border-radius: 4px; font-size: 0.9em;">
-            ${renderMarkdown(data.release_notes || "No release notes provided.")}
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" id="update-modal-later">Later</button>
-          <a href="${escapeHtml(toHttpUrl(data.download_url) ?? "#")}" target="_blank" class="btn primary" id="update-modal-download">Download Update</a>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
+/** Reveals the header's update button; it stays up for the rest of the session. */
+function showHeaderUpdateButton(version: string): void {
+  const button = document.getElementById("header-update-btn") as HTMLButtonElement | null;
+  if (!button) return;
 
-    document.getElementById("update-modal-close")?.addEventListener("click", () => {
-      modal!.style.display = "none";
-    });
-    document.getElementById("update-modal-later")?.addEventListener("click", () => {
-      modal!.style.display = "none";
-    });
-    document.getElementById("update-modal-download")?.addEventListener("click", () => {
-      modal!.style.display = "none";
-    });
+  const versionEl = document.getElementById("header-update-version");
+  if (versionEl) {
+    versionEl.textContent = version;
+  }
+  const label = `Soundshed Guitar ${version} is available`;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.hidden = false;
+
+  if (!button.dataset.bound) {
+    button.dataset.bound = "true";
+    button.addEventListener("click", openUpdateModal);
+  }
+}
+
+let updateModalBound = false;
+
+function closeUpdateModal(): void {
+  const modal = document.getElementById("update-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+function bindUpdateModal(modal: HTMLElement): void {
+  if (updateModalBound) return;
+  updateModalBound = true;
+
+  document.getElementById("update-modal-close")?.addEventListener("click", closeUpdateModal);
+  document.getElementById("update-modal-later")?.addEventListener("click", closeUpdateModal);
+  // main.ts hands the link's URL to the system browser; the dialog has done its job.
+  document.getElementById("update-modal-download")?.addEventListener("click", closeUpdateModal);
+  modal.addEventListener("mousedown", (event) => {
+    if (event.target === modal) {
+      closeUpdateModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && modal.style.display !== "none") {
+      closeUpdateModal();
+    }
+  });
+}
+
+function openUpdateModal(): void {
+  const update = uiState.availableUpdate;
+  const modal = document.getElementById("update-modal");
+  if (!update || !modal) return;
+  bindUpdateModal(modal);
+
+  const versionEl = document.getElementById("update-modal-version");
+  if (versionEl) {
+    versionEl.textContent = update.version;
+  }
+  const currentEl = document.getElementById("update-modal-current");
+  if (currentEl) {
+    currentEl.textContent = uiState.environment?.version ?? "an older version";
+  }
+  const notesEl = document.getElementById("update-modal-notes");
+  if (notesEl) {
+    notesEl.innerHTML = renderMarkdown(update.releaseNotes || "No release notes provided.");
+  }
+  const download = document.getElementById("update-modal-download") as HTMLAnchorElement | null;
+  if (download) {
+    download.href = update.downloadUrl || "#";
+    download.style.display = update.downloadUrl ? "" : "none";
   }
 
-  // Show the modal
   modal.style.display = "flex";
 }
 

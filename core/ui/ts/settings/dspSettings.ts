@@ -8,6 +8,7 @@ import { updateAppSetting } from "../appSettingsStore.js";
 import { showNotification } from "../notifications.js";
 import { clonePreset, uiState } from "../state.js";
 import { cachePreset } from "../presetLibraryStore.js";
+import { triggerUpdateCheck } from "../updateCheck.js";
 import type { Preset } from "../types.js";
 import { dspNominalLevelInput, dspOutputLimiterToggle, dspProtectionCeilingInput, factoryArchiveExportEffectPresetsToggle, factoryArchiveLoadingToggle, namAntiAliasPhaseSelect, namAutoInputCalibrationToggle, namInterfaceCalibrationLevelInput, namOversamplingSelect, namSlimmableSizeInput, presetSwitchTailSelect, updateCheckToggle } from "./dom.js";
 import { DSP_NOMINAL_LEVEL_DEFAULT, DSP_NOMINAL_LEVEL_MAX, DSP_NOMINAL_LEVEL_MIN, DSP_NOMINAL_LEVEL_SETTING, DSP_OUTPUT_LIMITER_SETTING, DSP_PROTECTION_CEILING_DEFAULT, DSP_PROTECTION_CEILING_MAX, DSP_PROTECTION_CEILING_MIN, DSP_PROTECTION_CEILING_SETTING, FACTORY_ARCHIVE_EXPORT_EFFECT_PRESETS_SETTING, FACTORY_ARCHIVE_LOADING_SETTING, NAM_ANTI_ALIAS_PHASE_DEFAULT, NAM_ANTI_ALIAS_PHASE_MAX, NAM_ANTI_ALIAS_PHASE_MIN, NAM_ANTI_ALIAS_PHASE_SETTING, NAM_AUTO_INPUT_CALIBRATION_SETTING, NAM_INTERFACE_CALIBRATION_LEVEL_DEFAULT, NAM_INTERFACE_CALIBRATION_LEVEL_MAX, NAM_INTERFACE_CALIBRATION_LEVEL_MIN, NAM_INTERFACE_CALIBRATION_LEVEL_SETTING, NAM_OVERSAMPLING_DEFAULT, NAM_OVERSAMPLING_MAX, NAM_OVERSAMPLING_MIN, NAM_OVERSAMPLING_SETTING, NAM_SLIMMABLE_SIZE_DEFAULT, NAM_SLIMMABLE_SIZE_MAX, NAM_SLIMMABLE_SIZE_MIN, NAM_SLIMMABLE_SIZE_SETTING, PRESET_SWITCH_TAIL_DEFAULT, PRESET_SWITCH_TAIL_MAX, PRESET_SWITCH_TAIL_MIN, PRESET_SWITCH_TAIL_SETTING, UPDATE_CHECK_ENABLED_SETTING } from "./keys.js";
@@ -24,6 +25,9 @@ export function initUpdateCheckToggle(): void {
   toggle.addEventListener("change", () => {
     const enabled = Boolean(toggle.checked);
     updateAppSetting(UPDATE_CHECK_ENABLED_SETTING, enabled);
+    if (enabled) {
+      triggerUpdateCheck();
+    }
   });
 }
 

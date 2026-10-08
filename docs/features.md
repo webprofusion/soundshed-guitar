@@ -493,7 +493,7 @@ Application configuration panel.
 - **Tone3000 API key**: Enter and persist API key for Tone3000 integration.
 - **Diagnostics**: Real-time signal level and DSP performance streaming stays enabled at all times.
 - **Features tab**: Exposes per-feature toggles for core workflows and power-user tools.
-- **Update check**: Software version checking and notification (`core/ui/ts/updateCheck.ts`).
+- **Update check**: Software version checking and notification (`core/ui/ts/updateCheck.ts`). Five seconds after the first state push, the UI posts its version to `/v1/app/updatecheck` and shows an update only when the reply's `latest_version` is newer. The reply names the newest active row in the server's `app_releases` table, so each release needs a row there. A newer release puts an Update button beside the settings gear for the rest of the session; it opens a dialog with the release notes and the download link. Settings also shows a banner. Turning the setting back on runs the check straight away.
 - **Window state persistence**: Width, height stored in `settings/ui/window-state.json`.
 - **App settings file**: `settings/app.json` (schemaVersion, theme, lastPresetId, feature flags). Shared by the standalone app and every plugin instance — see "Settings Ownership" in `docs/data-models.md` for which settings are shared, which belong to a single plugin instance, and which the standalone app alone writes.
 

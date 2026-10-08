@@ -1,0 +1,20 @@
+<div id="update-modal" class="modal update-modal" style="display: none;">
+      <div class="modal-content update-modal-content" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
+        <div class="modal-header">
+          <h3 id="update-modal-title">Update available</h3>
+          <button class="modal-close" id="update-modal-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="update-modal-summary">
+            Soundshed Guitar <strong id="update-modal-version"></strong> is available.
+            You are running <span id="update-modal-current"></span>.
+          </p>
+          <!-- Release notes from the update server, rendered by updateCheck.ts's renderMarkdown. -->
+          <div class="update-modal-notes" id="update-modal-notes"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary" id="update-modal-later" type="button">Later</button>
+          <a class="btn btn-primary" id="update-modal-download" href="#" target="_blank" rel="noopener noreferrer">Download</a>
+        </div>
+      </div>
+    </div>

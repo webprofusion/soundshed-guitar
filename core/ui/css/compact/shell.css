@@ -54,6 +54,16 @@ html[data-density="compact"] .nav-settings-btn svg {
   height: 16px;
 }
 
+/* "Update" alone: the version is in the dialog it opens. */
+html[data-density="compact"] .header-update-btn {
+  margin-right: 4px;
+  padding: 0 10px 0 8px;
+}
+
+html[data-density="compact"] #header-update-version {
+  display: none;
+}
+
 /* ── Control bar ──────────────────────────────────────────────────────────────
  *
  * The desktop bar is three columns — input trims, preset, output trims — and the
