@@ -2,7 +2,7 @@
  * The Simple Cabinet's section of the params panel: the response the engine
  * will apply, drawn over the live spectrum of the cab's input, and two IR
  * tools — save this voicing to the IR library, and match the voicing to an IR
- * already there.
+ * picked in the resource browser.
  *
  * The curve is the engine's own (effectResponse.ts), including the dry Mix, the
  * second mic and the floor bounce of a distant mic, so what is drawn is what is
@@ -21,10 +21,11 @@ import { drawResponsePlot } from "../../eqPlot.js";
 import { enumLabel } from "../../paramLabels.js";
 import { showNotification } from "../../notifications.js";
 import { EffectTypeRegistry, getNodeEffectInfo } from "../../presetV2.js";
-import { uiState } from "../../state.js";
+import { resourceBrowserModal } from "../../resourceBrowser.js";
 import type { GraphNode, Preset } from "../../types.js";
 import { escapeHtml } from "../../utils.js";
 import { applyEffectPresetParams } from "../effectPresets.js";
+import { getLibraryResourceName } from "../nodeTypes.js";
 import { nodeParamsPanelElement } from "../state.js";
 import { ensureNodeSpectrumWatcher, fitCanvasToLayout } from "./nodeSpectrum.js";
 import { paramsPanelInteractions } from "./state.js";
@@ -38,6 +39,9 @@ const CURVE_GRID_DB = 12;
 /** The curve last received, and which node it belongs to. */
 let shownCurve: { nodeId: string; curve: ResponseCurve } | null = null;
 
+/** The IR last matched, so the browser reopens on it. */
+let lastMatchedIrId = "";
+
 export function isSimpleCabNode(node: GraphNode): boolean {
   return EffectTypeRegistry.resolve(node.type) === EffectGuids.kCabSimple;
 }
@@ -47,12 +51,6 @@ export function buildCabResponseSectionHtml(node: GraphNode): string {
   if (!isSimpleCabNode(node)) {
     return "";
   }
-  const irs = [...(uiState.resourceLibrary.ir ?? [])]
-    .filter((resource) => Boolean(resource?.id))
-    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-  const irOptions = irs
-    .map((resource) => `<option value="${escapeHtml(resource.id)}">${escapeHtml(resource.name || resource.id)}</option>`)
-    .join("");
   return `
     <section class="cab-response" data-node-id="${escapeHtml(node.id)}">
       <div class="eq-visualizer cab-response-visualizer">
@@ -63,18 +61,20 @@ export function buildCabResponseSectionHtml(node: GraphNode): string {
         <canvas class="eq-curve-canvas cab-response-canvas" role="img" aria-label="Cabinet frequency response"></canvas>
       </div>
       <div class="cab-response-tools">
-        <select class="cab-response-ir-select" aria-label="IR to match"${irs.length ? "" : " disabled"}>
-          <option value="">${irs.length ? "Match an IR…" : "No IRs in the library"}</option>
-          ${irOptions}
-        </select>
-        <button type="button" class="cab-response-match-btn" disabled
-          title="Set the cabinet, mic and tone to the closest shape this cab can make">Match</button>
+        <button type="button" class="cab-response-match-btn"
+          title="Pick an IR, and set the cabinet, mic and tone to the closest shape this cab can make">Match an IR…</button>
         <button type="button" class="cab-response-export-btn"
           title="Save this voicing to the IR library, for an IR cabinet or another app">Export as IR</button>
         <span class="cab-response-status" role="status" aria-live="polite"></span>
       </div>
     </section>
   `;
+}
+
+/** This node's section as the panel shows it now, if it shows it at all. */
+function liveSection(nodeId: string): HTMLElement | null {
+  const section = nodeParamsPanelElement?.querySelector<HTMLElement>(".cab-response");
+  return section?.dataset.nodeId === nodeId ? section : null;
 }
 
 function curveCanvas(): HTMLCanvasElement | null {
@@ -132,7 +132,6 @@ export function bindCabResponseControls(node: GraphNode, preset: Preset): void {
   if (!section) {
     return;
   }
-  const select = section.querySelector<HTMLSelectElement>(".cab-response-ir-select");
   const matchButton = section.querySelector<HTMLButtonElement>(".cab-response-match-btn");
   const exportButton = section.querySelector<HTMLButtonElement>(".cab-response-export-btn");
   const status = section.querySelector<HTMLElement>(".cab-response-status");
@@ -142,24 +141,26 @@ export function bindCabResponseControls(node: GraphNode, preset: Preset): void {
     }
   };
 
-  select?.addEventListener("change", () => {
-    if (matchButton) {
-      matchButton.disabled = !select.value;
-    }
-  });
-
-  matchButton?.addEventListener("click", () => {
-    const resourceId = select?.value ?? "";
-    if (!resourceId) {
-      return;
-    }
-    const irName = select?.selectedOptions[0]?.textContent ?? resourceId;
-    matchButton.disabled = true;
-    setStatus("Matching…");
+  const matchIr = (resourceId: string): void => {
+    lastMatchedIrId = resourceId;
+    const irName = getLibraryResourceName("ir", resourceId) || resourceId;
+    // Opening the browser rebuilds the panel, so the controls bound above are
+    // gone by now: show progress on the section on screen at each step.
+    const showMatching = (matching: boolean): void => {
+      const live = liveSection(node.id);
+      const button = live?.querySelector<HTMLButtonElement>(".cab-response-match-btn");
+      const text = live?.querySelector<HTMLElement>(".cab-response-status");
+      if (button) {
+        button.disabled = matching;
+      }
+      if (text) {
+        text.textContent = matching ? "Matching…" : "";
+      }
+    };
+    showMatching(true);
     requestSimpleCabIrMatch(resourceId, (result) => {
       if (!result.ok) {
-        matchButton.disabled = false;
-        setStatus("");
+        showMatching(false);
         showNotification("Match failed", result.error);
         return;
       }
@@ -167,6 +168,21 @@ export function bindCabResponseControls(node: GraphNode, preset: Preset): void {
       applyEffectPresetParams(node, preset, result.params);
       const error = Number.isFinite(result.rmsErrorDb) ? ` (shape within ${result.rmsErrorDb.toFixed(1)} dB)` : "";
       showNotification("Cabinet matched", `${irName}${error}`);
+    });
+  };
+
+  matchButton?.addEventListener("click", () => {
+    // No node: the pick is only an IR to match against, not one to load and
+    // audition. Its own role key keeps this browsing from moving where the IR
+    // cabs' folder and next/prev point.
+    resourceBrowserModal.open({
+      resourceType: "ir",
+      currentId: lastMatchedIrId,
+      libraryCategoryHint: "ir",
+      contextKey: "ir-match",
+      title: "Match an IR",
+      hint: "Double click an IR, or select it and click OK, to match the cabinet to it.",
+      onSelect: matchIr,
     });
   });
 

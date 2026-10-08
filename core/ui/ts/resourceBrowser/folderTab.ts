@@ -689,7 +689,8 @@ export class FolderTab {
 
     this.selectedFolderPath = path;
 
-    if (this.folderPreviewPath !== path || !this.folderPreviewActive) {
+    // Without a node to audition on, a click only selects.
+    if (options.nodeId && (this.folderPreviewPath !== path || !this.folderPreviewActive)) {
       // We now own the node output; clear any library preview tracking.
       this.host.setLibraryPreviewActive(false);
       this.folderPreviewActive = true;

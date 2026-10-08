@@ -966,9 +966,11 @@ voicing exactly, so presets saved before these controls existed sound the same.
 **Panel tools.** The params panel draws the response curve the engine reports
 (`getEffectResponse`) over the live spectrum of the cab's input, and offers **Export as IR**
 (`exportEffectAsIr`: a 48 kHz IR into the library, mono unless spread makes the sides differ;
-Speaker Drive, being level-dependent, is not captured) and **Match** (`matchSimpleCabToIr`:
+Speaker Drive, being level-dependent, is not captured) and **Match an IR…** (`matchSimpleCabToIr`:
 tries every cabinet and mic type and searches the tone controls for the closest 1/6-octave
-shape to a library IR, keeping the node's Output, Auto Level and Speaker Drive).
+shape to a library IR, keeping the node's Output, Auto Level and Speaker Drive). The IR is
+picked in the resource browser, opened without a node so a click selects rather than
+auditions; its Folder and Tone3000 tabs import the pick into the library first.
 
 Twenty-seven factory presets ship with it; the first, **Closed 4x12**, is the defaults and starts new
 nodes. Presets set every control except Output. Besides the seven generic voicings there are twenty

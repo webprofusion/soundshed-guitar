@@ -105,6 +105,7 @@ export class ResourceBrowserModal {
   private cancelBtn: HTMLButtonElement | null = null;
   private selectBtn: HTMLButtonElement | null = null;
   private footerHint: HTMLElement | null = null;
+  private defaultFooterHint = "";
   private editPopover: HTMLElement | null = null;
   private editNameInput: HTMLInputElement | null = null;
   private editCategoryInput: HTMLInputElement | null = null;
@@ -340,6 +341,7 @@ export class ResourceBrowserModal {
     this.cancelBtn = document.getElementById("resource-browser-cancel") as HTMLButtonElement | null;
     this.selectBtn = document.getElementById("resource-browser-select") as HTMLButtonElement | null;
     this.footerHint = this.modal.querySelector(".resource-browser-footer-hint") as HTMLElement | null;
+    this.defaultFooterHint = this.footerHint?.textContent ?? "";
     this.editPopover = document.getElementById("resource-browser-edit-popover");
     this.editNameInput = document.getElementById("resource-browser-edit-name") as HTMLInputElement | null;
     this.editCategoryInput = document.getElementById("resource-browser-edit-category") as HTMLInputElement | null;
@@ -671,10 +673,14 @@ export class ResourceBrowserModal {
     }
     this.folderTab.folderListingFallbackAttempted = false;
     if (this.title) {
-      this.title.textContent = options.resourceType === "ir" 
-        ? "Select IR Cabinet" 
-        : "Select Amp Model";
+      this.title.textContent = options.title ?? (options.resourceType === "ir"
+        ? "Select IR Cabinet"
+        : "Select Amp Model");
     }
+    if (this.footerHint) {
+      this.footerHint.textContent = options.hint ?? this.defaultFooterHint;
+    }
+    this.libraryBrowseBtn?.toggleAttribute("hidden", !options.nodeId);
     
     // Update category options
     this.updateCategoryOptions();
@@ -1648,7 +1654,7 @@ export class ResourceBrowserModal {
   }
 
   private previewLibraryResource(resourceId: string): void {
-    if (!this.options) {
+    if (!this.options?.nodeId) {
       return;
     }
     
@@ -1976,34 +1982,6 @@ export class ResourceBrowserModal {
     this.selectBtn.disabled = !(hasLibrarySelection || hasFolderSelection);
     this.selectBtn.textContent = "OK";
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   /// Returns the library list this context navigates through, building it on
   /// demand. Next/prev must work before the browser modal has ever been opened,

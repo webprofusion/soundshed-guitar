@@ -471,7 +471,9 @@ export class Tone3000Tab {
     const previewingModelId = previewState?.toneId === String(tone.id) ? previewState.modelId : null;
     const previewLoading = this.host.getPreviewLoading();
     const loadingModelId = previewLoading?.toneId === String(tone.id) ? previewLoading.modelId : null;
-    
+    // A preview plays through the node, so a browser opened without one can only select.
+    const canPreview = Boolean(this.host.getOptions()?.nodeId);
+
     return `
       <div class="resource-browser-tone-models">
         ${models.map((model) => {
@@ -492,7 +494,8 @@ export class Tone3000Tab {
                         data-tone-id="${escapeHtml(String(tone.id))}" 
                         data-model-id="${escapeHtml(String(model.id))}"
                         data-model-url="${escapeHtml(model.model_url)}"
-                        ${isLoadingPreview ? "disabled" : ""}>
+                        ${isLoadingPreview ? "disabled" : ""}
+                        ${canPreview ? "" : "hidden"}>
                   ${previewLabel}
                 </button>
                 <button class="resource-browser-model-select" type="button"

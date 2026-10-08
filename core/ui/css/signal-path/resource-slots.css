@@ -428,8 +428,7 @@
 }
 
 .graphic-eq-reset-btn:focus-visible,
-.cab-response-tools button:focus-visible,
-.cab-response-ir-select:focus-visible {
+.cab-response-tools button:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
@@ -451,18 +450,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-.cab-response-ir-select {
-  flex: 1 1 180px;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 11px;
 }
 
 .cab-response-status {

@@ -8,7 +8,14 @@ import type { Tone3000Architecture, Tone3000Model, Tone3000Tone } from "../tone3
 export type ResourceBrowserOptions = {
   resourceType: "nam" | "ir";
   currentId?: string;
+  /// The node a pick is auditioned on. Without one the browser only picks:
+  /// nothing previews through the chain, and File… (which loads straight onto
+  /// a node) is hidden.
   nodeId?: string;
+  /// Replaces "Select IR Cabinet" / "Select Amp Model".
+  title?: string;
+  /// Replaces the footer's hint about previewing in the chain.
+  hint?: string;
   resourceIndex?: number;
   exposedResourceId?: string;
   libraryCategoryHint?: string;
