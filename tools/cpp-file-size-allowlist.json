@@ -16,7 +16,7 @@
     "core/src/controller/PluginControllerRiffs.cpp": 1796,
     "core/tests/TransposeBenchmark.cpp": 1580,
     "core/tests/HostedPluginStateWorkflowTests.cpp": 1572,
-    "core/src/dsp/effects/Spatial3DEffect.h": 1558,
+    "core/src/dsp/effects/Spatial3DEffect.h": 1552,
     "core/src/dsp/effects/MultiModelNAMAmpEffect.h": 1547,
     "core/src/dsp/effects/ReverbEffect.h": 1494,
     "core/tests/SignalGraphExecutorTests.cpp": 1398,

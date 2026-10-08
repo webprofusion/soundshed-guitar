@@ -107,7 +107,7 @@ private:
     [[nodiscard]] std::optional<bool> rememberedMute (const juce::String& pairKey) const;
     void rememberMute (const juce::String& pairKey, bool muted);
 
-    // The MIDI ports the user chose (see the class comment).
+    // The MIDI ports the user chose (see the class comment); defined in StandaloneAudioSettingsMidi.cpp.
     void loadWantedMidiDevices();
     void saveWantedMidiDevices();
     void reconcileMidiDevices();

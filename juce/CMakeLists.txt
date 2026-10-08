@@ -402,6 +402,7 @@ set(CommonSourceFiles
     "${CMAKE_CURRENT_SOURCE_DIR}/source/ProfileFolder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/StandaloneAudioSettings.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/StandaloneAudioSettings.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/StandaloneAudioSettingsMidi.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/SoundshedEditorBase.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/SoundshedEditorBase.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/StartupLog.h"
