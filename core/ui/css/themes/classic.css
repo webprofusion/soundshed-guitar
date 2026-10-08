@@ -270,12 +270,6 @@ body.theme-classic {
 }
 
 
-/* ===== From controls.css ===== */
-.theme-classic .input-channel-selector select {
-  color-scheme: light;
-}
-
-
 /* ===== From settings.css ===== */
 .theme-classic .settings-row select,
 .theme-classic .settings-section select {

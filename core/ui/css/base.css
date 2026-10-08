@@ -132,7 +132,7 @@ p {
 }
 
 /* Standalone-only UI blocks. The input mode stays in a DAW too: the track decides mono or
-   stereo there, and dual mono is the one choice left (see controls.ts). */
+   stereo there, and dual mono is the one choice left (see inputMode.ts). */
 body:not(.is-standalone) .icon-bar .metronome-only,
 body:not(.is-standalone) .main-content .metronome-only {
   display: none;

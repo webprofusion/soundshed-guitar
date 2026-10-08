@@ -362,6 +362,10 @@ export function initializeControlBarTabs(): void {
     if (target && bar.contains(target)) {
       return;
     }
+    // A popover the bar opened but hung from the body (the input mode flyout) is still the bar.
+    if (target instanceof Element && target.closest("[data-control-bar-popover]")) {
+      return;
+    }
     setCompactControlsOpen(false);
   });
 

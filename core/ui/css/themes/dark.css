@@ -182,12 +182,6 @@
 }
 
 
-/* ===== From controls.css ===== */
-.theme-dark .input-channel-selector select {
-  color-scheme: dark;
-}
-
-
 /* ===== From tone-sharing.css ===== */
 .theme-dark .tone-sharing-pack-hero .tone-sharing-card-item-title {
   text-shadow: 0 1px 7px rgba(0, 0, 0, 0.45);

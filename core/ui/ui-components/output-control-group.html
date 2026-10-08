@@ -1,4 +1,20 @@
       <div class="control-bar-group">
+        <!-- The global post-chain in signal order: EQ, then the doubler (PresetTypes.cpp). -->
+        <div class="control-stack eq-control">
+          <div class="toggle-control mini-toggle-control">
+            <span class="toggle-label">EQ</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="eq-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <button class="eq-icon-btn panel-switch" data-panel="eq" title="EQ">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 21v-7M12 21V3M20 21v-11" stroke="currentColor" stroke-width="2" fill="none" />
+            </svg>
+          </button>
+        </div>
+
         <div class="control-stack control-stack-knob">
           <div class="toggle-control mini-toggle-control">
             <span class="toggle-label">DOUBLER</span>

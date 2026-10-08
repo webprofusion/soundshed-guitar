@@ -38,18 +38,29 @@
           </div>
         </div>
 
-        <div class="control-stack input-mode-control">
-          <div class="control-stack-label">INPUT</div>
-          <div class="input-channel-selector">
-            <select id="input-mode-select" title="How the inputs reach the chain">
-              <option value="mono1" selected>Mono · In 1</option>
-              <option value="mono2">Mono · In 2</option>
-              <option value="monoSum">Mono · 1+2</option>
-              <option value="stereo">Stereo</option>
-              <option value="dualMono">Dual mono</option>
-            </select>
-          </div>
-          <span class="input-mode-status" id="input-mode-status">MONO</span>
+        <!-- The input mode: ts/inputMode.ts draws the trigger's icon and label and fills the flyout. -->
+        <div class="control-stack input-mode-stack">
+          <div class="control-stack-label">MODE</div>
+          <button
+            id="input-mode-trigger"
+            class="input-mode-trigger"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="input-mode-flyout"
+            title="Input mode"
+          >
+            <span class="input-mode-trigger-tile">
+              <span class="input-mode-trigger-icon" aria-hidden="true"></span>
+            </span>
+            <span class="input-mode-trigger-value">
+              <span class="input-mode-trigger-label">Mono In 1</span>
+              <svg class="input-mode-trigger-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3.5 5.75 8 10.25l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+          </button>
+          <div id="input-mode-flyout" class="input-mode-flyout" role="menu" aria-label="Input mode" data-control-bar-popover hidden></div>
         </div>
 
         <div class="control-stack control-stack-knob gate-control-stack">
@@ -99,21 +110,6 @@
             </div>
             <span class="knob-value" id="transpose-value">0 st</span>
           </div>
-        </div>
-
-        <div class="control-stack eq-control">
-          <div class="toggle-control mini-toggle-control">
-            <span class="toggle-label">EQ</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="eq-toggle" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <button class="eq-icon-btn panel-switch" data-panel="eq" title="EQ">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 21v-7M12 21V3M20 21v-11" stroke="currentColor" stroke-width="2" fill="none" />
-            </svg>
-          </button>
         </div>
 
       </div>

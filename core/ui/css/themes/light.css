@@ -270,12 +270,6 @@
 }
 
 
-/* ===== From controls.css ===== */
-.theme-light .input-channel-selector select {
-  color-scheme: light;
-}
-
-
 /* ===== From tone-sharing.css ===== */
 .theme-light .tone-sharing-card-item {
   background: var(--bg-card);

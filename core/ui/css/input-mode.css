@@ -1,0 +1,273 @@
+/* The input mode, the MODE control beside the IN knob: a trigger showing the current mode's
+   routing icon with its name beneath, and the flyout that lists every mode with its own
+   (ts/inputMode.ts). The icons come from ts/inputModeIcons.ts and draw in currentColor. */
+
+/* Laid out like a knob below its title: a tile in the knob's 38px where the knob would be, and
+   the name where its readout is, so MODE lines up with IN and GATE and the bar keeps its
+   height. At rest the tile is as quiet as the EQ button beside it, a neutral icon on a faint
+   ground; the accent is for the flyout being open. */
+.input-mode-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.input-mode-trigger:focus-visible {
+  outline: none;
+}
+
+.input-mode-trigger-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 30px;
+  margin: 4px 0;
+  border: 1px solid var(--border-darker);
+  border-radius: var(--radius-md);
+  background: var(--overlay-light);
+  color: var(--text-tertiary);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.input-mode-trigger:hover .input-mode-trigger-tile {
+  background: var(--overlay-medium);
+  color: var(--text-secondary);
+}
+
+.input-mode-trigger[aria-expanded="true"] .input-mode-trigger-tile {
+  background: var(--overlay-medium);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.input-mode-trigger:focus-visible .input-mode-trigger-tile {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 2px;
+}
+
+.input-mode-trigger-icon {
+  display: flex;
+  width: 24px;
+  height: 16px;
+}
+
+.input-mode-trigger-icon svg,
+.input-mode-option-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* The name sits where a knob's readout does, in the same type. It holds the width of the
+   longest name, so a change of mode does not nudge the controls after it. */
+.input-mode-trigger-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.input-mode-trigger-label {
+  min-width: 4.9em; /* "Mono In 1", "Dual mono" */
+  text-align: center;
+}
+
+.input-mode-trigger:hover .input-mode-trigger-value,
+.input-mode-trigger[aria-expanded="true"] .input-mode-trigger-value {
+  color: var(--text-secondary);
+}
+
+.input-mode-trigger-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  transition: transform 140ms ease;
+}
+
+.input-mode-trigger[aria-expanded="true"] .input-mode-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+/* The mode chosen is not what is running: Stereo on a device with one input, say. The one
+   state that should catch the eye at rest. */
+.input-mode-trigger.is-fallback .input-mode-trigger-tile {
+  border-color: color-mix(in srgb, var(--color-warning) 65%, var(--border-darker));
+  color: var(--color-warning);
+}
+
+/* Dual mono with hosted plugins that still hear both inputs. */
+.input-mode-trigger.has-shared-plugins .input-mode-trigger-tile::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  box-shadow: 0 0 0 2px var(--bg-tertiary);
+}
+
+/* An input a mode leaves unused. */
+.input-mode-icon-unused {
+  opacity: 0.4;
+}
+
+/* A child of the body once the page is up, fixed, and placed by positionFlyout() against
+   the trigger. */
+.input-mode-flyout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-popover, 900);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(268px, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border-light);
+  background: var(--bg-elevated, rgba(16, 18, 24, 0.98));
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.42);
+}
+
+.input-mode-flyout[hidden] {
+  display: none;
+}
+
+.input-mode-flyout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--border-dark);
+}
+
+.input-mode-flyout-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* What the chain is running, shown when a fallback makes it differ from the mode ticked. */
+.input-mode-flyout-running {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  color: var(--color-warning);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.input-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.input-mode-option {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.input-mode-option:hover:not(:disabled),
+.input-mode-option:focus-visible {
+  background: var(--overlay-light);
+  outline: none;
+}
+
+.input-mode-option:focus-visible {
+  border-color: var(--accent-primary);
+}
+
+.input-mode-option[aria-checked="true"] {
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.input-mode-option:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.input-mode-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 34px;
+  padding: 5px 4px;
+  border-radius: var(--radius-md);
+  background: var(--overlay-dark);
+  color: var(--text-secondary);
+}
+
+.input-mode-option[aria-checked="true"] .input-mode-option-icon {
+  color: var(--accent-primary);
+}
+
+.input-mode-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.input-mode-option-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.input-mode-option-description {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+.input-mode-option-check {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-primary);
+}
+
+.input-mode-option-check svg {
+  width: 100%;
+  height: 100%;
+}
+
+.input-mode-note {
+  margin: 0;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--border-dark);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
