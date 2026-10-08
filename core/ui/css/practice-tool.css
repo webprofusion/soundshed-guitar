@@ -4,6 +4,66 @@
    Linked immediately after jam.css in index.template.html, so the
    cascade is unchanged from when these rules lived at the end of it. */
 
+/* ── Palette ──────────────────────────────────────────────────────────────
+   The panel's own colours were written for a dark surface, and on the light
+   theme's white cards they washed out: pale text, white-on-white buttons, a
+   grey loop row. The defaults below are those original dark values, which
+   dark and classic keep; light overrides them, as waveform.css does for the
+   canvas. Amber is darkened for light so small text stays above 4.5:1. */
+:root {
+  --practice-field-bg: rgba(8, 12, 22, 0.9);
+  --practice-field-text: rgba(240, 246, 255, 0.94);
+  --practice-field-border: rgba(112, 151, 255, 0.34);
+  --practice-field-border-strong: rgba(112, 151, 255, 0.4);
+  --practice-field-focus: rgba(112, 151, 255, 0.7);
+  --practice-text: rgba(240, 246, 255, 0.85);
+  --practice-text-dim: rgba(210, 225, 255, 0.6);
+  --practice-overlay-text: rgba(210, 225, 255, 0.78);
+  --practice-overlay-bg: rgba(10, 14, 24, 0.55);
+  --practice-overlay-btn-bg: rgba(20, 24, 34, 0.72);
+  --practice-overlay-btn-hover: rgba(38, 45, 64, 0.9);
+  --practice-overlay-btn-text: rgba(240, 246, 255, 0.94);
+  --practice-row-bg: rgba(18, 25, 42, 0.4);
+  --practice-row-border: rgba(104, 142, 255, 0.14);
+  --practice-chip-bg: rgba(255, 255, 255, 0.05);
+  --practice-chip-border: rgba(255, 255, 255, 0.18);
+  --practice-chip-text: rgba(255, 255, 255, 0.8);
+  --practice-amber-text: rgba(255, 204, 102, 0.95);
+  --practice-amber-soft-text: rgba(255, 224, 168, 0.98);
+  --practice-amber-border: rgba(255, 204, 102, 0.55);
+  --practice-amber-tint: rgba(255, 204, 102, 0.08);
+  --practice-eq-active-bg: rgba(112, 151, 255, 0.22);
+  --practice-eq-active-text: rgba(226, 236, 255, 0.98);
+  --practice-icon-disabled-bg: rgba(255, 255, 255, 0.08);
+}
+
+.theme-light {
+  --practice-field-bg: var(--bg-input);
+  --practice-field-text: var(--text-primary);
+  --practice-field-border: var(--border-medium);
+  --practice-field-border-strong: var(--border-strong);
+  --practice-field-focus: rgba(72, 118, 168, 0.85);
+  --practice-text: var(--text-primary);
+  --practice-text-dim: var(--text-secondary);
+  --practice-overlay-text: var(--text-primary);
+  --practice-overlay-bg: rgba(255, 255, 255, 0.85);
+  --practice-overlay-btn-bg: rgba(255, 255, 255, 0.9);
+  --practice-overlay-btn-hover: #ffffff;
+  --practice-overlay-btn-text: var(--text-primary);
+  --practice-row-bg: var(--bg-tertiary);
+  --practice-row-border: var(--border-light);
+  --practice-chip-bg: var(--bg-input);
+  --practice-chip-border: var(--border-medium);
+  --practice-chip-text: var(--text-secondary);
+  --practice-amber-text: #8a5a00;
+  --practice-amber-soft-text: #8a5a00;
+  --practice-amber-border: rgba(176, 116, 8, 0.6);
+  --practice-amber-tint: rgba(224, 160, 32, 0.12);
+  --practice-eq-active-bg: rgba(72, 118, 168, 0.16);
+  --practice-eq-active-text: var(--text-primary);
+  --practice-icon-disabled-bg: var(--text-muted);
+}
+
 .practice-tool-panel {
   display: flex;
   flex-direction: column;
@@ -58,9 +118,9 @@
 .practice-tool-project-name {
   padding: 5px 8px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(112, 151, 255, 0.34);
-  background: rgba(8, 12, 22, 0.9);
-  color: rgba(240, 246, 255, 0.94);
+  border: 1px solid var(--practice-field-border);
+  background: var(--practice-field-bg);
+  color: var(--practice-field-text);
   font-size: 11px;
 }
 
@@ -79,7 +139,7 @@
 .practice-tool-project-select:focus,
 .practice-tool-project-name:focus {
   outline: none;
-  border-color: rgba(112, 151, 255, 0.7);
+  border-color: var(--practice-field-focus);
 }
 
 .practice-tool-project-divider {
@@ -116,11 +176,13 @@
   left: 10px;
   max-width: calc(100% - 130px);
   font-size: 11px;
-  color: rgba(210, 225, 255, 0.78);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--practice-overlay-bg);
+  color: var(--practice-overlay-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
   pointer-events: none;
 }
 
@@ -150,8 +212,8 @@
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-medium);
-  background: rgba(20, 24, 34, 0.72);
-  color: var(--text-primary);
+  background: var(--practice-overlay-btn-bg);
+  color: var(--practice-overlay-btn-text);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -160,7 +222,7 @@
 }
 
 .practice-tool-browse-btn:hover {
-  background: rgba(38, 45, 64, 0.9);
+  background: var(--practice-overlay-btn-hover);
   transform: translateY(-1px);
 }
 
@@ -236,9 +298,9 @@
   gap: 10px;
   padding: 7px 10px;
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 204, 102, 0.3);
-  background: rgba(255, 204, 102, 0.08);
-  color: rgba(240, 246, 255, 0.85);
+  border: 1px solid var(--practice-amber-border);
+  background: var(--practice-amber-tint);
+  color: var(--practice-text);
   font-size: 12px;
   margin-bottom: 6px;
 }
@@ -247,9 +309,9 @@
   flex: 0 0 auto;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 204, 102, 0.5);
-  background: rgba(255, 204, 102, 0.14);
-  color: rgba(255, 224, 168, 0.98);
+  border: 1px solid var(--practice-amber-border);
+  background: var(--practice-amber-tint);
+  color: var(--practice-amber-soft-text);
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -265,18 +327,19 @@
   gap: 8px;
   padding: 8px 10px;
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(104, 142, 255, 0.14);
-  background: rgba(18, 25, 42, 0.4);
+  border: 1px solid var(--practice-row-border);
+  background: var(--practice-row-bg);
+  color: var(--practice-text);
   margin-bottom: 6px;
 }
 
 .practice-tool-loop-row.is-active {
-  border-color: rgba(255, 204, 102, 0.55);
-  background: rgba(255, 204, 102, 0.08);
+  border-color: var(--practice-amber-border);
+  background: var(--practice-amber-tint);
 }
 
 .practice-tool-loop-row.is-editing {
-  border-color: rgba(112, 151, 255, 0.55);
+  border-color: var(--practice-field-focus);
 }
 
 .practice-tool-loop-select-btn {
@@ -284,9 +347,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 204, 102, 0.9);
+  border: 1px solid var(--practice-chip-border);
+  background: var(--practice-chip-bg);
+  color: var(--practice-amber-text);
   cursor: pointer;
 }
 
@@ -297,17 +360,17 @@
   height: 24px;
   padding: 0;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--practice-chip-border);
+  background: var(--practice-chip-bg);
+  color: var(--practice-chip-text);
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
 }
 
 .practice-tool-loop-play-btn.is-playing {
-  border-color: rgba(255, 204, 102, 0.55);
-  color: rgba(255, 204, 102, 0.95);
+  border-color: var(--practice-amber-border);
+  color: var(--practice-amber-text);
 }
 
 .practice-tool-loop-row-main {
@@ -329,7 +392,7 @@
 
 .practice-tool-loop-range {
   font-size: 11px;
-  color: rgba(210, 225, 255, 0.6);
+  color: var(--practice-text-dim);
   flex: 0 0 auto;
 }
 
@@ -338,9 +401,9 @@
   min-width: 0;
   padding: 3px 6px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(112, 151, 255, 0.4);
-  background: rgba(8, 12, 22, 0.9);
-  color: rgba(240, 246, 255, 0.94);
+  border: 1px solid var(--practice-field-border-strong);
+  background: var(--practice-field-bg);
+  color: var(--practice-field-text);
   font-size: 12px;
 }
 
@@ -349,9 +412,9 @@
   width: 56px;
   padding: 3px 5px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(112, 151, 255, 0.4);
-  background: rgba(8, 12, 22, 0.9);
-  color: rgba(240, 246, 255, 0.94);
+  border: 1px solid var(--practice-field-border-strong);
+  background: var(--practice-field-bg);
+  color: var(--practice-field-text);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -360,7 +423,7 @@
 .practice-tool-loop-time-unit {
   flex: 0 0 auto;
   font-size: 11px;
-  color: rgba(210, 225, 255, 0.6);
+  color: var(--practice-text-dim);
 }
 
 .practice-tool-loop-row-actions {
@@ -374,9 +437,9 @@
   width: 22px;
   height: 22px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--practice-chip-border);
+  background: var(--practice-chip-bg);
+  color: var(--practice-chip-text);
   font-size: 11px;
   cursor: pointer;
 }
@@ -401,7 +464,7 @@
 .practice-tool-icon-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--practice-icon-disabled-bg);
 }
 
 /* Sits alongside play/stop but is a labelled button, not a transport icon —
@@ -420,14 +483,14 @@
 }
 
 .practice-tool-eq-btn:hover {
-  border-color: rgba(112, 151, 255, 0.7);
+  border-color: var(--practice-field-focus);
 }
 
 /* Lit only while the EQ is on *and* shaping — see isPracticeToolEqShaping(). */
 .practice-tool-eq-btn.is-active {
-  background: rgba(112, 151, 255, 0.22);
-  border-color: rgba(112, 151, 255, 0.75);
-  color: rgba(226, 236, 255, 0.98);
+  background: var(--practice-eq-active-bg);
+  border-color: var(--practice-field-focus);
+  color: var(--practice-eq-active-text);
 }
 
 .practice-tool-eq-reset {
@@ -441,14 +504,14 @@
 }
 
 .practice-tool-eq-reset:hover {
-  border-color: rgba(112, 151, 255, 0.7);
+  border-color: var(--practice-field-focus);
 }
 
 .practice-tool-loop-status {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  color: rgba(255, 204, 102, 0.95);
+  color: var(--practice-amber-text);
   margin-left: 6px;
 }
 
@@ -471,9 +534,9 @@
   box-sizing: border-box;
   padding: 3px 6px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(112, 151, 255, 0.34);
-  background: rgba(8, 12, 22, 0.9);
-  color: rgba(240, 246, 255, 0.94);
+  border: 1px solid var(--practice-field-border);
+  background: var(--practice-field-bg);
+  color: var(--practice-field-text);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -481,7 +544,7 @@
 
 .practice-tool-slider-value:focus {
   outline: none;
-  border-color: rgba(112, 151, 255, 0.7);
+  border-color: var(--practice-field-focus);
 }
 
 @media (max-width: 760px) {
