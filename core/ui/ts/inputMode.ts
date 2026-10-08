@@ -1,8 +1,8 @@
 /**
  * The input mode control: what the chains are fed (docs/signal-chain.md, "Channel Layout").
  *
- * It is the MODE control beside the IN knob: a trigger showing the current mode's routing icon
- * with its name beneath, and a flyout listing the modes with theirs. In the standalone app the
+ * It is a quiet dropdown under the IN knob's readout: a trigger showing the current mode's name,
+ * and a flyout listing the modes with their routing icons. In the standalone app the
  * player picks it and it is stored in app settings; in a DAW the track's bus decides between mono
  * and stereo, and only dual mono, a per-instance choice for a stereo track, is left to pick. The
  * engine reports what its input and output can carry (inputModeChanged); a mode they cannot
@@ -28,8 +28,8 @@ interface InputCapabilities {
 }
 
 /**
- * How a mode is shown: the trigger has its icon with the name beneath, and the flyout a row of
- * icon, name and description. One name for both, so what was picked reads the same once chosen.
+ * How a mode is shown: the trigger has its name, and the flyout a row of icon, name and
+ * description. One name for both, so what was picked reads the same once chosen.
  */
 interface ModePresentation {
   icon: InputModeIconName;
@@ -225,12 +225,6 @@ function renderTrigger(): void {
   const mode = displayedMode();
   const presentation = presentMode(mode);
   const fallback = intendedEffectiveMode(mode) !== inputCapabilities.effectiveMode;
-
-  const icon = trigger.querySelector<HTMLElement>(".input-mode-trigger-icon");
-  if (icon && icon.dataset.icon !== presentation.icon) {
-    icon.innerHTML = inputModeIcon(presentation.icon);
-    icon.dataset.icon = presentation.icon;
-  }
 
   const label = trigger.querySelector<HTMLElement>(".input-mode-trigger-label");
   if (label) {

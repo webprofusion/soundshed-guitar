@@ -1,5 +1,5 @@
 /**
- * The MODE control beside the IN knob: the trigger shows the mode's icon and name,
+ * The input mode dropdown under the IN readout: the trigger shows the mode's name,
  * the flyout lists the modes with what each needs, choosing one sends it (and stores it in the
  * standalone app), and a DAW leaves only the track's own layout and dual mono.
  */
@@ -27,7 +27,6 @@ const option = (mode: string): HTMLButtonElement => {
 };
 const describedAs = (mode: string): string => option(mode).querySelector(".input-mode-option-description")?.textContent ?? "";
 const triggerLabel = (): string => trigger().querySelector(".input-mode-trigger-label")?.textContent ?? "";
-const triggerIcon = (): string | undefined => trigger().querySelector<HTMLElement>(".input-mode-trigger-icon")?.dataset.icon;
 const inputModeMessages = (): Sent[] => sent.filter((message) => message.type === "setInputMode");
 const settingsWritten = (): Sent[] => sent.filter((message) => message.type === "setSetting");
 
@@ -61,8 +60,10 @@ describe("in the standalone app", () => {
     await start(true, { "inputChannel.monoMode": true, "inputChannel.mono": 1 });
 
     expect(triggerLabel()).toBe("Mono In 2");
-    expect(triggerIcon()).toBe("mono2");
-    expect(trigger().querySelector(".input-mode-trigger-icon svg")).not.toBeNull();
+    expect(trigger().querySelectorAll("svg")).toHaveLength(1); // the chevron, no routing icon
+    // Under the IN readout, but not in its .knob-control, where MIDI learn would find the knob.
+    expect(trigger().previousElementSibling?.id).toBe("input-control");
+    expect(trigger().closest(".knob-control")).toBeNull();
     expect(inputModeMessages().at(-1)).toMatchObject({ mode: "mono2", monoMode: true, inputChannel: 1, dualMono: false });
   });
 
@@ -90,7 +91,6 @@ describe("in the standalone app", () => {
     expect(flyout().hidden).toBe(true);
     expect(document.activeElement).toBe(trigger());
     expect(triggerLabel()).toBe("Stereo");
-    expect(triggerIcon()).toBe("stereo");
   });
 
   it("greys what a one-input device cannot give, and flags the mode that fell back", async () => {
@@ -158,7 +158,7 @@ describe("in a DAW", () => {
 
     inputMode.handleInputModeChanged({ mode: "stereo", hostControlled: true, effectiveMode: "mono", inputChannels: 1, outputChannels: 2 });
     expect(triggerLabel()).toBe("Track");
-    expect(triggerIcon()).toBe("mono");
+    expect(trigger().title).toContain("Mono, as the track is");
     expect(trigger().classList.contains("is-fallback")).toBe(false);
 
     trigger().click();
@@ -171,7 +171,7 @@ describe("in a DAW", () => {
   it("keeps dual mono with the instance, not in shared settings", async () => {
     await start(false);
     inputMode.handleInputModeChanged({ mode: "stereo", hostControlled: true, effectiveMode: "stereo", inputChannels: 2, outputChannels: 2 });
-    expect(triggerIcon()).toBe("stereo");
+    expect(trigger().title).toContain("Stereo, as the track is");
 
     trigger().click();
     sent = [];

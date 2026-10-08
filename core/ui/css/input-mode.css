@@ -1,89 +1,45 @@
-/* The input mode, the MODE control beside the IN knob: a trigger showing the current mode's
-   routing icon with its name beneath, and the flyout that lists every mode with its own
-   (ts/inputMode.ts). The icons come from ts/inputModeIcons.ts and draw in currentColor. */
+/* The input mode: a quiet dropdown under the IN knob's readout, and the flyout that lists every
+   mode with its routing icon (ts/inputMode.ts). The icons come from ts/inputModeIcons.ts and
+   draw in currentColor. */
 
-/* Laid out like a knob below its title: a tile in the knob's 38px where the knob would be, and
-   the name where its readout is, so MODE lines up with IN and GATE and the bar keeps its
-   height. At rest the tile is as quiet as the EQ button beside it, a neutral icon on a faint
-   ground; the accent is for the flyout being open. */
+/* The mode's name and a chevron, in the readout's type and colour, so at rest it reads as a
+   second line of the IN control rather than a button. The stack's gap is for the header; this
+   sits as close under the readout as the knob's own rows do. */
 .input-mode-trigger {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.input-mode-trigger:focus-visible {
-  outline: none;
-}
-
-.input-mode-trigger-tile {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 30px;
-  margin: 4px 0;
-  border: 1px solid var(--border-darker);
-  border-radius: var(--radius-md);
-  background: var(--overlay-light);
-  color: var(--text-tertiary);
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.input-mode-trigger:hover .input-mode-trigger-tile {
-  background: var(--overlay-medium);
-  color: var(--text-secondary);
-}
-
-.input-mode-trigger[aria-expanded="true"] .input-mode-trigger-tile {
-  background: var(--overlay-medium);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-}
-
-.input-mode-trigger:focus-visible .input-mode-trigger-tile {
-  outline: 2px solid var(--accent-primary, #50b878);
-  outline-offset: 2px;
-}
-
-.input-mode-trigger-icon {
-  display: flex;
-  width: 24px;
-  height: 16px;
-}
-
-.input-mode-trigger-icon svg,
-.input-mode-option-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-/* The name sits where a knob's readout does, in the same type. It holds the width of the
-   longest name, so a change of mode does not nudge the controls after it. */
-.input-mode-trigger-value {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  margin-top: calc(2px - var(--control-stack-gap, 8px));
+  padding: 1px 4px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
   font-size: 10px;
+  line-height: 12px;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
+.input-mode-trigger:hover,
+.input-mode-trigger[aria-expanded="true"] {
+  background: var(--overlay-light);
+  color: var(--text-secondary);
+}
+
+.input-mode-trigger:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 1px;
+}
+
+/* Holds the width of the longest name, so a change of mode does not nudge the controls after
+   the IN column. */
 .input-mode-trigger-label {
   min-width: 4.9em; /* "Mono In 1", "Dual mono" */
   text-align: center;
-}
-
-.input-mode-trigger:hover .input-mode-trigger-value,
-.input-mode-trigger[aria-expanded="true"] .input-mode-trigger-value {
-  color: var(--text-secondary);
 }
 
 .input-mode-trigger-chevron {
@@ -99,22 +55,27 @@
 
 /* The mode chosen is not what is running: Stereo on a device with one input, say. The one
    state that should catch the eye at rest. */
-.input-mode-trigger.is-fallback .input-mode-trigger-tile {
-  border-color: color-mix(in srgb, var(--color-warning) 65%, var(--border-darker));
+.input-mode-trigger.is-fallback {
   color: var(--color-warning);
 }
 
-/* Dual mono with hosted plugins that still hear both inputs. */
-.input-mode-trigger.has-shared-plugins .input-mode-trigger-tile::after {
+/* Dual mono with hosted plugins that still hear both inputs: a dot before the name, out of the
+   flow so it does not widen the column. */
+.input-mode-trigger.has-shared-plugins::before {
   content: "";
   position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 7px;
-  height: 7px;
+  top: 50%;
+  left: -3px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--color-warning);
-  box-shadow: 0 0 0 2px var(--bg-tertiary);
+  transform: translateY(-50%);
+}
+
+.input-mode-option-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* An input a mode leaves unused. */

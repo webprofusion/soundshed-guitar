@@ -36,11 +36,8 @@
             </div>
             <span class="knob-value" id="input-value">+0.0 dB</span>
           </div>
-        </div>
-
-        <!-- The input mode: ts/inputMode.ts draws the trigger's icon and label and fills the flyout. -->
-        <div class="control-stack input-mode-stack">
-          <div class="control-stack-label">MODE</div>
+          <!-- The input mode, under the IN readout and outside .knob-control so MIDI learn on it
+               does not find the knob: ts/inputMode.ts writes the label and fills the flyout. -->
           <button
             id="input-mode-trigger"
             class="input-mode-trigger"
@@ -50,15 +47,10 @@
             aria-controls="input-mode-flyout"
             title="Input mode"
           >
-            <span class="input-mode-trigger-tile">
-              <span class="input-mode-trigger-icon" aria-hidden="true"></span>
-            </span>
-            <span class="input-mode-trigger-value">
-              <span class="input-mode-trigger-label">Mono In 1</span>
-              <svg class="input-mode-trigger-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M3.5 5.75 8 10.25l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
+            <span class="input-mode-trigger-label">Mono In 1</span>
+            <svg class="input-mode-trigger-chevron" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M3.5 5.75 8 10.25l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </button>
           <div id="input-mode-flyout" class="input-mode-flyout" role="menu" aria-label="Input mode" data-control-bar-popover hidden></div>
         </div>
