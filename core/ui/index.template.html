@@ -166,6 +166,9 @@
   <link rel="stylesheet" href="css/compact/effect-panel.css" />
   <link rel="stylesheet" href="css/compact/modals.css" />
   <link rel="stylesheet" href="css/compact/overlays.css" />
+  <!-- Every module dist/main.js imports, so they are all requested at once rather
+       than one level of imports at a time (scripts/assemble-html.js fills it in). -->
+  <!--#modulepreloads-->
 </head>
 
 <body>

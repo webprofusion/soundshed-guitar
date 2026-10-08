@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -872,6 +873,113 @@ bool TestDeleteReadsStoredPresetsFresh()
 
     return ExpectDeleteRefused(controller, host, sandbox, *saved, "Used by preset: Saved Elsewhere");
 }
+
+void WriteNamFile(const fs::path& path, const std::string& name, const std::string& gearType)
+{
+    std::ofstream file(path, std::ios::binary);
+    file << R"({"version": "0.5.4", "architecture": "WaveNet", "metadata": {"name": ")" << name
+         << R"(", "gear_type": ")" << gearType << R"(", "modeled_by": "Tester"}, "config": {}, "weights": []})";
+}
+
+std::optional<nlohmann::json> StoredResourceRow(const fs::path& sandbox, const std::string& type, const std::string& id)
+{
+    guitarfx::storage::JsonStore store;
+    std::string error;
+
+    if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
+    {
+        std::cerr << "Could not open the document store: " << error << "\n";
+        return std::nullopt;
+    }
+
+    return store.Get(guitarfx::storage::ItemType::kResource, guitarfx::ResourceLibrary::MakeStoreId(type, id));
+}
+
+/// A NAM row from before imports read the file's metadata gets it at the next start, saved, and
+/// the file is not read again after that. Startup used to read every model's file on every launch
+/// (28 MB on a 440-model library) and keep what it found only when a category changed.
+bool TestStartupBackfillsNamMetadataOnce()
+{
+    const fs::path sandbox = MakeCleanupSandbox("nam-backfill");
+    const SandboxGuard guard{sandbox};
+    std::error_code ec;
+    fs::create_directories(sandbox / "external", ec);
+    const fs::path namFile = sandbox / "external" / "legacy-rig.nam";
+    WriteNamFile(namFile, "Legacy Rig", "amp_cab");
+
+    {
+        // First start creates the store; then a row as an older build wrote it, with no metadata.
+        TestHost host(sandbox);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+    }
+
+    {
+        guitarfx::storage::JsonStore store;
+        std::string error;
+
+        if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
+        {
+            std::cerr << "Could not open the document store: " << error << "\n";
+            return false;
+        }
+
+        guitarfx::LibraryResource legacy;
+        legacy.type = "nam";
+        legacy.id = "legacy-rig";
+        legacy.name = "Legacy Rig";
+        legacy.filePath = namFile;
+
+        if (!guitarfx::ResourceLibrary::PutInStore(store, legacy, sandbox / "resources"))
+        {
+            std::cerr << "Could not write the legacy row\n";
+            return false;
+        }
+    }
+
+    const auto metadataAfterStart = [&]() -> std::map<std::string, std::string> {
+        TestHost host(sandbox);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        const auto resource = controller.GetResourceLibrary().LookupResource("nam", "legacy-rig");
+        return resource ? resource->metadata : std::map<std::string, std::string>{};
+    };
+
+    const auto valueOf = [](const std::map<std::string, std::string>& metadata, const std::string& key) {
+        const auto it = metadata.find(key);
+        return it == metadata.end() ? std::string{} : it->second;
+    };
+
+    const auto backfilled = metadataAfterStart();
+    bool ok = true;
+
+    if (valueOf(backfilled, "namFileVersion") != "0.5.4" || valueOf(backfilled, "gear_type") != "amp_cab" ||
+        valueOf(backfilled, "namName") != "Legacy Rig")
+    {
+        std::cerr << "Startup did not backfill the legacy row's metadata from its file\n";
+        ok = false;
+    }
+
+    const auto row = StoredResourceRow(sandbox, "nam", "legacy-rig");
+
+    if (!row || row->value("metadata", nlohmann::json::object()).value("gear_type", "") != "amp_cab")
+    {
+        std::cerr << "Backfilled metadata was not saved: " << (row ? row->dump() : std::string{"no row"}) << "\n";
+        ok = false;
+    }
+
+    // Read once: a later start keeps what was saved rather than reading the file again.
+    WriteNamFile(namFile, "Changed Since", "pedal");
+    const auto later = metadataAfterStart();
+
+    if (valueOf(later, "gear_type") != "amp_cab" || valueOf(later, "namName") != "Legacy Rig")
+    {
+        std::cerr << "A later start read the model's file again\n";
+        ok = false;
+    }
+
+    return ok;
+}
 } // namespace
 
 int main()
@@ -900,6 +1008,7 @@ int main()
     run("Delete refuses a resource used only by an effect preset", TestDeleteResourceUsedOnlyByEffectPresetIsRefused());
     run("Delete refuses a resource used only by a composite", TestDeleteResourceUsedOnlyByCompositeIsRefused());
     run("Delete reads stored presets fresh, not the usage index", TestDeleteReadsStoredPresetsFresh());
+    run("Startup backfills NAM metadata once and saves it", TestStartupBackfillsNamMetadataOnce());
 
     std::cout << "\nResource library delete workflow tests: " << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;

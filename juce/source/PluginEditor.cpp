@@ -12,6 +12,7 @@
 #include "JucePathConversion.h"
 #include "UiBridge.h"
 #include "editor/StartupLog.h"
+#include "editor/UiResourcePrefetch.h"
 #include "WebView2UserData.h"
 
 namespace
@@ -260,20 +261,12 @@ namespace
 {
     using soundshed::editor::writeStartupLog;
 
-    // The WebView2 profile: one stable per-user folder, shared by the support probe
-    // and the editor itself (WebView2UserData.h says why it is keyed on the runtime's
-    // extra browser arguments). Empty elsewhere, where the option is ignored anyway.
+    // The WebView2 profile: one stable per-user folder, shared by the support probe,
+    // the editor itself and the standalone's launch warm-up (WebView2UserData.h says
+    // why it is keyed on the runtime's extra browser arguments).
     juce::File webView2UserDataFolder()
     {
-#if JUCE_WINDOWS
-        const auto folder = guitarfx::webview2::resolveUserDataFolder (
-            juce::File::getSpecialLocation (juce::File::windowsLocalAppData),
-            juce::SystemStats::getEnvironmentVariable ("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", {}));
-        folder.createDirectory();
-        return folder;
-#else
-        return {};
-#endif
+        return guitarfx::webview2::userDataFolderForThisProcess();
     }
 
 #if JUCE_WINDOWS
@@ -467,6 +460,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
           return options;
       }())
 {
+    // Already under way in the standalone (PluginProcessorAdapter's constructor); in a plugin
+    // host, the WebView takes long enough to come up for most of it to be read first.
+    soundshed::editor::prefetchUiResources (resourceRoot.getChildFile ("ui"));
+
     addAndMakeVisible (webView);
 
     // The standalone's launch curtain (Main.cpp) waits on this to know the page has
@@ -474,7 +471,10 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
     webView.setPageFinishedCallback ([this] (const juce::String& url) {
 #if JUCE_LINUX
         markLinuxWebViewLoaded (url);
+#else
+        juce::ignoreUnused (url);
 #endif
+        soundshed::editor::releasePrefetchedUiResources();
         notifyReadyToShow();
     });
 
@@ -592,6 +592,9 @@ PluginEditor::~PluginEditor()
     // The base destructor then reports the editor hidden (switching the audio thread's
     // metering off), after the page's callback is gone so nothing reaches the dying page.
     processorRef.setWebMessageCallback (nullptr);
+
+    // Closed before its page finished loading: nothing is coming for the rest.
+    soundshed::editor::releasePrefetchedUiResources();
 }
 
 void PluginEditor::idleTick()
@@ -639,9 +642,11 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource (co
     if (resourceRoot.exists())
     {
         const auto file = resourceRoot.getChildFile ("ui").getChildFile (urlToRetrieve);
-        if (file.existsAsFile())
+        auto prefetched = soundshed::editor::takePrefetchedUiResource (file);
+
+        if (prefetched.has_value() || file.existsAsFile())
         {
-            auto data = readFileToVector (file);
+            auto data = prefetched.has_value() ? std::move (*prefetched) : readFileToVector (file);
             const auto mimeType = getMimeForExtension (file.getFileExtension().substring (1));
 
 #if !JUCE_ANDROID

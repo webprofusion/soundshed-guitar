@@ -1,4 +1,5 @@
 #include "JucePathConversion.h"
+#include "LaunchCurtain.h"
 #include "PluginProcessorAdapter.h"
 #include "ProductInfo.h"
 #include "ProfileFolder.h"
@@ -159,61 +160,6 @@ namespace
 } // namespace
 #endif
 
-#if ! JUCE_ANDROID
-//==============================================================================
-// Hides the startup flicker between MainWindow going on screen and the editor having
-// something real to show: on Windows that's JUCE's WebView2 fallback paint (solid white,
-// juce_WebBrowserComponent_windows.cpp), a few frames of the browser surface before its
-// first frame, then its own transparent background, then the page's first paint before
-// the theme class lands on <body> (ThemeSwitcher runs from a module script, after first
-// paint). A plain child Component added on top of the WebView cannot cover any of that:
-// WebView2 owns a real native child HWND, which always draws above its parent's
-// software-painted content regardless of JUCE's z-order ("airspace"). This is its own
-// always-on-top native window instead, a sibling of MainWindow rather than a child of it,
-// so normal OS window-manager z-order hides MainWindow - and whatever it is doing - until
-// the owner takes the curtain down.
-//
-// Self-triggers onTimedOut after a timeout so a WebView that never finishes loading
-// (resource root missing, WebView2 runtime missing) does not leave the window
-// permanently covered.
-class LaunchCurtain : public juce::Component,
-                      private juce::Timer
-{
-public:
-    explicit LaunchCurtain (juce::Rectangle<int> bounds)
-    {
-        // Order matches juce::SplashScreen's own makeVisible(): isAlwaysOnTop() needs to
-        // already be true when addToDesktop() creates the peer, for it to come up topmost.
-        setOpaque (true);
-        setAlwaysOnTop (true);
-        setVisible (true);
-        setBounds (bounds);
-        addToDesktop (juce::ComponentPeer::windowIsTemporary | juce::ComponentPeer::windowIgnoresKeyPresses);
-        toFront (false);
-        startTimer (8000);
-    }
-
-    void paint (juce::Graphics& g) override
-    {
-        // Mirrors core/ui/css/themes/dark.css --bg-primary: the dark theme is the default,
-        // so this is what should already be behind the WebView by the time it is safe to
-        // drop the curtain.
-        g.fillAll (juce::Colour (0xff111116));
-    }
-
-    std::function<void()> onTimedOut;
-
-private:
-    void timerCallback() override
-    {
-        stopTimer();
-
-        if (onTimedOut != nullptr)
-            onTimedOut();
-    }
-};
-#endif
-
 //==============================================================================
 class MainWindow : public juce::DocumentWindow
 #if JUCE_ANDROID
@@ -221,19 +167,29 @@ class MainWindow : public juce::DocumentWindow
 #endif
 {
 public:
-    explicit MainWindow (const juce::String& appName,
-        std::unique_ptr<juce::StandalonePluginHolder> pluginHolderIn)
+    MainWindow (const juce::String& appName,
+        std::unique_ptr<juce::StandalonePluginHolder> pluginHolderIn
+#if !JUCE_ANDROID
+        ,
+        std::unique_ptr<LaunchCurtain> launchCurtain
+#endif
+        )
         : DocumentWindow (appName,
               juce::Desktop::getInstance().getDefaultLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId),
               juce::DocumentWindow::allButtons),
           mPluginHolder (std::move (pluginHolderIn))
     {
 #if !JUCE_ANDROID
-        // Up first, and on screen before anything else below runs: see LaunchCurtain for
-        // why covering MainWindow itself cannot wait until after the editor exists.
+        // Already on screen, put up by the app before the plugin holder (see LaunchCurtain
+        // for why covering MainWindow cannot wait until after the editor exists).
         const auto state = loadWindowState();
-        mLaunchCurtain = std::make_unique<LaunchCurtain> (launchCurtainBounds (state));
-        mLaunchCurtain->onTimedOut = [this] { dismissLaunchCurtain(); };
+        mLaunchCurtain = std::move (launchCurtain);
+
+        if (mLaunchCurtain != nullptr)
+        {
+            mLaunchCurtain->onTimedOut = [this] { dismissLaunchCurtain(); };
+            mLaunchCurtain->coverMainWindow();
+        }
 #endif
 
         // On Android this also matters for layout, not just looks: it is what
@@ -263,7 +219,7 @@ public:
                 setResizable (editor->isResizable(), true);
 
                 if (auto* soundshedEditor = dynamic_cast<soundshed::editor::SoundshedEditorBase*> (editor))
-                    soundshedEditor->onReadyToShow = [this] { dismissLaunchCurtain(); };
+                    soundshedEditor->whenReadyToShow ([this] { dismissLaunchCurtain(); });
                 else
                     // A plain GenericAudioProcessorEditor (processor->hasEditor() was
                     // false): nothing async to wait for, so nothing will ever call
@@ -434,12 +390,14 @@ private:
         return juce::JUCEApplicationBase::getCommandLineParameterArray().contains (flag);
     }
 
+public:
 #if !JUCE_ANDROID
-    // Mirrors the centreWithSize()/setFullScreen() pair below, which only runs once this
-    // window has an editor sized to show - too late for the curtain, which needs to be up
-    // before that work (and the flicker it causes) even starts.
-    static juce::Rectangle<int> launchCurtainBounds (const WindowState& state)
+    // Mirrors the centreWithSize()/setFullScreen() pair in the constructor, which only runs
+    // once this window has an editor sized to show - too late for the curtain, which needs
+    // to be up before that work (and the flicker it causes) even starts.
+    static juce::Rectangle<int> launchCurtainBounds()
     {
+        const auto state = loadWindowState();
         auto* primary = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
         if (primary == nullptr)
             return { state.width, state.height };
@@ -449,10 +407,19 @@ private:
 
         return juce::Rectangle<int> (state.width, state.height).withCentre (primary->userArea.getCentre());
     }
+#endif
 
+private:
+#if !JUCE_ANDROID
     void dismissLaunchCurtain()
     {
-        mLaunchCurtain = nullptr;
+        if (mLaunchCurtain == nullptr)
+            return;
+
+        mLaunchCurtain->dismiss ([safeThis = juce::Component::SafePointer<MainWindow> (this)] {
+            if (safeThis != nullptr)
+                safeThis->mLaunchCurtain = nullptr;
+        });
     }
 #endif
 
@@ -462,17 +429,14 @@ private:
             mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr);
     }
 
-    juce::File getWindowStateFile() const
+    // The profile folder is the adapter's user data path (PluginProcessorAdapter::GetUserDataPath),
+    // read here directly so the curtain can be sized before the adapter exists.
+    static juce::File getWindowStateFile()
     {
-        auto* adapter = getAdapter();
-        if (adapter == nullptr)
-            return {};
-
-        const auto path = adapter->GetUserDataPath() / "data" / "v1" / "settings" / "ui" / soundshed::product::windowStateFileName;
-        return soundshed::toJuceFile (path);
+        return soundshed::profileFolder().getChildFile ("data").getChildFile ("v1").getChildFile ("settings").getChildFile ("ui").getChildFile (soundshed::product::windowStateFileName);
     }
 
-    WindowState loadWindowState() const
+    static WindowState loadWindowState()
     {
         WindowState state;
 
@@ -590,7 +554,16 @@ public:
         }
 #endif
 
+#if ! JUCE_ANDROID
+        // Before the plugin holder, whose constructor initialises the engine and opens the
+        // audio device on this thread: a window now, and (Windows) the WebView's browser
+        // process booting meanwhile. Nano draws natively and has no WebView to warm up.
+        auto launchCurtain = std::make_unique<LaunchCurtain> (MainWindow::launchCurtainBounds(),
+                                                              ! soundshed::product::isNano);
+        mMainWindow = std::make_unique<MainWindow> (getApplicationName(), createPluginHolder(), std::move (launchCurtain));
+#else
         mMainWindow = std::make_unique<MainWindow> (getApplicationName(), createPluginHolder());
+#endif
     }
 
     void shutdown() override

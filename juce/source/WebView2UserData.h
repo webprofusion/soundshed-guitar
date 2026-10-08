@@ -48,6 +48,23 @@ namespace guitarfx::webview2
         return localAppData.getChildFile (kAppDataFolderName).getChildFile (name);
     }
 
+    /** The profile folder every WebView2 in this process uses, created if missing: the
+        editor's, and the standalone's launch warm-up (Main.cpp), which starts the browser
+        process early for the editor to join. Empty on other platforms, where the option is
+        ignored anyway. */
+    inline juce::File userDataFolderForThisProcess()
+    {
+#if JUCE_WINDOWS
+        const auto folder = resolveUserDataFolder (
+            juce::File::getSpecialLocation (juce::File::windowsLocalAppData),
+            juce::SystemStats::getEnvironmentVariable ("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", {}));
+        folder.createDirectory();
+        return folder;
+#else
+        return {};
+#endif
+    }
+
     struct LegacySweepResult
     {
         int removed = 0;

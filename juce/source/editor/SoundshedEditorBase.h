@@ -47,10 +47,12 @@ public:
     /// A deep link handed over by a second launch of the standalone app.
     virtual void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery);
 
-    /// Set by the standalone's MainWindow before the editor has anything worth looking at,
-    /// so it can drop a launch curtain once there is. Fires once, from notifyReadyToShow().
-    /// Unused, and never called, inside a plugin host.
-    std::function<void()> onReadyToShow;
+    /// For the standalone's MainWindow, to drop its launch curtain once the editor has
+    /// something worth looking at: calls `callback` once, from notifyReadyToShow(), or now if
+    /// that has already happened. Nano's editor is ready as its constructor returns, before
+    /// MainWindow can ask, and a callback that only waited kept its curtain up for the whole
+    /// eight-second timeout. Unused, and never called, inside a plugin host.
+    void whenReadyToShow (std::function<void()> callback);
 
 protected:
     /// Call at the end of the derived constructor, once the content exists: applies the
@@ -59,7 +61,8 @@ protected:
 
     /// Call once the derived editor is confident it has real content on screen: the
     /// WebView's first finished page load, or (having no such async step) the native
-    /// editor's own construction. Invokes onReadyToShow, if set, the first time only.
+    /// editor's own construction. Invokes the whenReadyToShow() callback, if set, the first
+    /// time only.
     void notifyReadyToShow();
 
     /// Call from the derived resized(): remembers the size the host left us at.
@@ -96,6 +99,7 @@ private:
     // Guards onReadyToShow so a second notifyReadyToShow() call (the WebView can finish
     // more than one navigation) does not fire it twice.
     bool readyToShowNotified = false;
+    std::function<void()> onReadyToShow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SoundshedEditorBase)
 };

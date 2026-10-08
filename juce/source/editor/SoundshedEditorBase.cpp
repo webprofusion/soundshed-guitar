@@ -54,6 +54,19 @@ void SoundshedEditorBase::notifyReadyToShow()
         onReadyToShow();
 }
 
+void SoundshedEditorBase::whenReadyToShow (std::function<void()> callback)
+{
+    if (readyToShowNotified)
+    {
+        if (callback != nullptr)
+            callback();
+
+        return;
+    }
+
+    onReadyToShow = std::move (callback);
+}
+
 void SoundshedEditorBase::applyInitialEditorSize()
 {
     setResizable (true, true);

@@ -1982,17 +1982,32 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
         }
 
         // Backfill NAM metadata before category resolution so older entries can
-        // be reassigned from file-native metadata (e.g. gear_type).
-        EnrichNamResourceMetadata(resource, resource.filePath);
+        // be reassigned from file-native metadata (e.g. gear_type). Each file is read
+        // once: an import reads it, and so does this pass for an entry from before
+        // imports did, saving what it found. namFileVersion is the file's own
+        // "version", which every model has, so a row carrying it has been read. Reading
+        // every model on every launch cost 28 MB of disk reads on a 440-model library,
+        // seconds from a cold disk.
+        const auto metadataBefore = resource.metadata;
+
+        if (resource.metadata.count("namFileVersion") == 0)
+        {
+            EnrichNamResourceMetadata(resource, resource.filePath);
+        }
 
         const std::string resolvedCategory = ResolveResourceLibraryCategory(resource, resource.category);
+        const bool categoryChanged = !resolvedCategory.empty() && resolvedCategory != resource.category;
 
-        if (resolvedCategory.empty() || resolvedCategory == resource.category)
+        if (!categoryChanged && resource.metadata == metadataBefore)
         {
             continue;
         }
 
-        resource.category = resolvedCategory;
+        if (categoryChanged)
+        {
+            resource.category = resolvedCategory;
+        }
+
         mResourceLibrary.UpdateResource(resource.type, resource.id, resource);
         changed.push_back(resource);
     }
@@ -2001,7 +2016,8 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
     {
         // One transaction for the whole normalization pass: either every row is
         // reclassified or none is, so a crash here cannot leave the library
-        // half-categorized.
+        // half-categorized. A row that only gained metadata is saved too, or the
+        // next launch would read its file again.
         Store().Transact([&]() {
             for (const auto& resource : changed)
             {
@@ -2013,7 +2029,8 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
 
             return true;
         });
-        AppendSessionLog("Normalized resource categories at startup: " + std::to_string(changed.size()));
+        AppendSessionLog("Normalized resource categories or NAM metadata at startup: " +
+                         std::to_string(changed.size()));
     }
 }
 } // namespace guitarfx

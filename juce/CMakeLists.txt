@@ -394,6 +394,8 @@ set(CommonSourceFiles
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JucePathConversion.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/LaunchCurtain.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/LaunchCurtain.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessorAdapter.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessorAdapter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/ProductInfo.h"
@@ -404,6 +406,8 @@ set(CommonSourceFiles
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/SoundshedEditorBase.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/StartupLog.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/StartupLog.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/UiResourcePrefetch.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/editor/UiResourcePrefetch.cpp"
 )
 set(SourceFiles
     ${CommonSourceFiles}

@@ -105,6 +105,7 @@ A big update: nine new effects, fifteen classic drive pedals, a Practice Tool fo
 * The audio engine does far less work: a simple chain now uses about a third of the CPU it did.
 * The interface is quicker to update and does less background work while hidden.
 * Presets that host other plugins switch faster: one with three Plugin Hosts now loads in about half a second instead of up to two.
+* **Starts faster**: the app's window appears as soon as you open it rather than a second or two later, and on Windows the interface is ready about half a second sooner. The first start after a restart or an update gains more: the library no longer reads every NAM model file on each launch, and the interface's files are read in the background while your audio device opens.
 
 ### Requirements
 * macOS: Soundshed Guitar now needs macOS 11 (Big Sur) or later, so Catalina (10.15) is no longer supported, and the installer checks for it. On Big Sur, keep Safari up to date, as the interface relies on its latest web engine.

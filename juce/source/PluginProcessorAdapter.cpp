@@ -11,6 +11,7 @@
 #include "JucePathConversion.h"
 #include "ProductInfo.h"
 #include "ProfileFolder.h"
+#include "editor/UiResourcePrefetch.h"
 
 #if SOUNDSHED_NATIVE_UI
  #include "nativeui/NanoEditor.h"
@@ -265,6 +266,9 @@ PluginProcessorAdapter::PluginProcessorAdapter()
                 .toStdString()));
 #endif
     mAssetRoot = locateAssetsRoot();
+    // The standalone's page loads once the engine and audio device are up; read its files meanwhile.
+    if (! soundshed::product::isNano && wrapperType == wrapperType_Standalone && ! mAssetRoot.empty())
+        soundshed::editor::prefetchUiResources (soundshed::toJuceFile (mAssetRoot).getChildFile ("ui"));
     mController.Initialize();
     registerAutomationParameters();
 

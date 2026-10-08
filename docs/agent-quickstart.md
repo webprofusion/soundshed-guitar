@@ -305,8 +305,14 @@ from `%APPDATA%\Soundshed Guitar\` when done — it's the real user profile.
 ## UI Module Conventions
 
 `core/ui/ts` is plain ES modules compiled by `tsc` with no bundler, so one source
-file is one runtime module fetched through JUCE's resource provider. A few rules
-keep that tractable:
+file is one runtime module fetched through JUCE's resource provider. That handler
+runs on the message thread, one request at a time, so two things keep a launch from
+paying for the module count: `scripts/assemble-html.js` writes a
+`<link rel="modulepreload">` for every module `dist/main.js` imports (requested at
+once, not one import level at a time), and the editor reads the page's files into
+memory on a background thread before it asks for them
+(`juce/source/editor/UiResourcePrefetch.h`). Neither needs anything from a new
+module. A few rules keep the module layout tractable:
 
 - **A feature directory, behind the original module path.** A large feature lives
   in `ts/<feature>/`, and `ts/<feature>.ts` stays as the public facade that
