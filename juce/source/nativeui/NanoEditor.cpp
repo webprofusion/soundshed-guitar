@@ -47,6 +47,10 @@ NanoEditor::NanoEditor (PluginProcessorAdapter& processor)
     context->client.Start();
     reportUiVisible (true);
     soundshed::editor::writeStartupLog ("[Nano] editor started");
+
+    // No WebView, no async page load: the shell is drawn and ready as soon as this
+    // constructor returns, so the standalone's launch curtain can drop immediately.
+    notifyReadyToShow();
 }
 
 NanoEditor::~NanoEditor()

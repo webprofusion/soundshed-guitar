@@ -469,11 +469,16 @@ PluginEditor::PluginEditor (PluginProcessorAdapter& p)
 {
     addAndMakeVisible (webView);
 
-#if JUCE_LINUX
+    // The standalone's launch curtain (Main.cpp) waits on this to know the page has
+    // actually loaded, not just that the native WebView control exists.
     webView.setPageFinishedCallback ([this] (const juce::String& url) {
+#if JUCE_LINUX
         markLinuxWebViewLoaded (url);
+#endif
+        notifyReadyToShow();
     });
 
+#if JUCE_LINUX
     webView.setNetworkErrorCallback ([this] (const juce::String& errorInfo) {
         return handleLinuxWebViewNetworkError (errorInfo);
     });

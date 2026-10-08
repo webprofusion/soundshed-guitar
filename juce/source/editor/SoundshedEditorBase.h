@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <functional>
+
 namespace soundshed::editor
 {
 /// Sends one UI→engine message from the host side of an editor, the way the page or the
@@ -45,10 +47,20 @@ public:
     /// A deep link handed over by a second launch of the standalone app.
     virtual void handleDeepLinkFromAnotherInstance (const juce::String& deepLinkQuery);
 
+    /// Set by the standalone's MainWindow before the editor has anything worth looking at,
+    /// so it can drop a launch curtain once there is. Fires once, from notifyReadyToShow().
+    /// Unused, and never called, inside a plugin host.
+    std::function<void()> onReadyToShow;
+
 protected:
     /// Call at the end of the derived constructor, once the content exists: applies the
     /// resize limits and opens at the remembered or default size.
     void applyInitialEditorSize();
+
+    /// Call once the derived editor is confident it has real content on screen: the
+    /// WebView's first finished page load, or (having no such async step) the native
+    /// editor's own construction. Invokes onReadyToShow, if set, the first time only.
+    void notifyReadyToShow();
 
     /// Call from the derived resized(): remembers the size the host left us at.
     void rememberEditorSize();
@@ -80,6 +92,10 @@ private:
 
     // What was last reported through reportUiVisible, so a repeat is not re-sent.
     int lastReportedVisible = -1;
+
+    // Guards onReadyToShow so a second notifyReadyToShow() call (the WebView can finish
+    // more than one navigation) does not fire it twice.
+    bool readyToShowNotified = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SoundshedEditorBase)
 };

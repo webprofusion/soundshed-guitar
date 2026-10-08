@@ -43,6 +43,17 @@ void SoundshedEditorBase::handleDeepLinkFromAnotherInstance (const juce::String&
         window->toFront (true);
 }
 
+void SoundshedEditorBase::notifyReadyToShow()
+{
+    if (readyToShowNotified)
+        return;
+
+    readyToShowNotified = true;
+
+    if (onReadyToShow != nullptr)
+        onReadyToShow();
+}
+
 void SoundshedEditorBase::applyInitialEditorSize()
 {
     setResizable (true, true);

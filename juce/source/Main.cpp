@@ -159,6 +159,61 @@ namespace
 } // namespace
 #endif
 
+#if ! JUCE_ANDROID
+//==============================================================================
+// Hides the startup flicker between MainWindow going on screen and the editor having
+// something real to show: on Windows that's JUCE's WebView2 fallback paint (solid white,
+// juce_WebBrowserComponent_windows.cpp), a few frames of the browser surface before its
+// first frame, then its own transparent background, then the page's first paint before
+// the theme class lands on <body> (ThemeSwitcher runs from a module script, after first
+// paint). A plain child Component added on top of the WebView cannot cover any of that:
+// WebView2 owns a real native child HWND, which always draws above its parent's
+// software-painted content regardless of JUCE's z-order ("airspace"). This is its own
+// always-on-top native window instead, a sibling of MainWindow rather than a child of it,
+// so normal OS window-manager z-order hides MainWindow - and whatever it is doing - until
+// the owner takes the curtain down.
+//
+// Self-triggers onTimedOut after a timeout so a WebView that never finishes loading
+// (resource root missing, WebView2 runtime missing) does not leave the window
+// permanently covered.
+class LaunchCurtain : public juce::Component,
+                      private juce::Timer
+{
+public:
+    explicit LaunchCurtain (juce::Rectangle<int> bounds)
+    {
+        // Order matches juce::SplashScreen's own makeVisible(): isAlwaysOnTop() needs to
+        // already be true when addToDesktop() creates the peer, for it to come up topmost.
+        setOpaque (true);
+        setAlwaysOnTop (true);
+        setVisible (true);
+        setBounds (bounds);
+        addToDesktop (juce::ComponentPeer::windowIsTemporary | juce::ComponentPeer::windowIgnoresKeyPresses);
+        toFront (false);
+        startTimer (8000);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        // Mirrors core/ui/css/themes/dark.css --bg-primary: the dark theme is the default,
+        // so this is what should already be behind the WebView by the time it is safe to
+        // drop the curtain.
+        g.fillAll (juce::Colour (0xff111116));
+    }
+
+    std::function<void()> onTimedOut;
+
+private:
+    void timerCallback() override
+    {
+        stopTimer();
+
+        if (onTimedOut != nullptr)
+            onTimedOut();
+    }
+};
+#endif
+
 //==============================================================================
 class MainWindow : public juce::DocumentWindow
 #if JUCE_ANDROID
@@ -173,6 +228,14 @@ public:
               juce::DocumentWindow::allButtons),
           mPluginHolder (std::move (pluginHolderIn))
     {
+#if !JUCE_ANDROID
+        // Up first, and on screen before anything else below runs: see LaunchCurtain for
+        // why covering MainWindow itself cannot wait until after the editor exists.
+        const auto state = loadWindowState();
+        mLaunchCurtain = std::make_unique<LaunchCurtain> (launchCurtainBounds (state));
+        mLaunchCurtain->onTimedOut = [this] { dismissLaunchCurtain(); };
+#endif
+
         // On Android this also matters for layout, not just looks: it is what
         // stops ResizableWindow reserving a border and insetting the content by
         // a pixel. Android peers have no decoration to draw anyway.
@@ -198,12 +261,31 @@ public:
                 setContentOwned (editor, true);
 #if !JUCE_ANDROID
                 setResizable (editor->isResizable(), true);
+
+                if (auto* soundshedEditor = dynamic_cast<soundshed::editor::SoundshedEditorBase*> (editor))
+                    soundshedEditor->onReadyToShow = [this] { dismissLaunchCurtain(); };
+                else
+                    // A plain GenericAudioProcessorEditor (processor->hasEditor() was
+                    // false): nothing async to wait for, so nothing will ever call
+                    // notifyReadyToShow() for it.
+                    dismissLaunchCurtain();
 #endif
             }
+#if !JUCE_ANDROID
+            else
+            {
+                dismissLaunchCurtain();
+            }
+#endif
         }
+#if !JUCE_ANDROID
+        else
+        {
+            dismissLaunchCurtain();
+        }
+#endif
 
 #if !JUCE_ANDROID
-        const auto state = loadWindowState();
         centreWithSize (state.width, state.height);
 
         if (state.maximized || hasCommandLineFlag ("--fullscreen"))
@@ -352,6 +434,28 @@ private:
         return juce::JUCEApplicationBase::getCommandLineParameterArray().contains (flag);
     }
 
+#if !JUCE_ANDROID
+    // Mirrors the centreWithSize()/setFullScreen() pair below, which only runs once this
+    // window has an editor sized to show - too late for the curtain, which needs to be up
+    // before that work (and the flicker it causes) even starts.
+    static juce::Rectangle<int> launchCurtainBounds (const WindowState& state)
+    {
+        auto* primary = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+        if (primary == nullptr)
+            return { state.width, state.height };
+
+        if (state.maximized || hasCommandLineFlag ("--fullscreen"))
+            return primary->userArea;
+
+        return juce::Rectangle<int> (state.width, state.height).withCentre (primary->userArea.getCentre());
+    }
+
+    void dismissLaunchCurtain()
+    {
+        mLaunchCurtain = nullptr;
+    }
+#endif
+
     PluginProcessorAdapter* getAdapter() const
     {
         return dynamic_cast<PluginProcessorAdapter*> (
@@ -426,6 +530,10 @@ private:
 
     // After the holder, so it goes first: it listens to the holder's device manager.
     std::unique_ptr<StandaloneAudioSettings> mAudioSettings;
+
+#if !JUCE_ANDROID
+    std::unique_ptr<LaunchCurtain> mLaunchCurtain;
+#endif
 
     juce::Rectangle<int> mLastNonMaximizedBounds { 0, 0, soundshed::product::defaultWindowWidth, soundshed::product::defaultWindowHeight };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
