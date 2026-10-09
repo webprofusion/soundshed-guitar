@@ -19,6 +19,7 @@
  *   node tools/validate-plugins.mjs --formats VST3,CLAP # a missing format is then an error
  *   node tools/validate-plugins.mjs --strictness 8 --skip-gui-tests
  *   node tools/validate-plugins.mjs --artefacts <dir>   # default juce/builds/SoundshedGuitar_artefacts/<config>
+ *   node tools/validate-plugins.mjs --artefacts nanoq/build/Release/products --product "Soundshed Nano Q"   # Nano Q
  *
  * The validators are pinned by version and sha256 below. A copy already on PATH
  * (or, on macOS, in /Applications) is used as is; otherwise the pinned release is
@@ -108,6 +109,7 @@ function parseArgs(argv) {
     strictness: 10,
     skipGuiTests: false,
     artefacts: null,
+    product: null,
     toolsDir: process.env.SSG_VALIDATOR_TOOLS_DIR || path.join(REPO_ROOT, "juce", "builds", "tools"),
     logsDir: path.join(REPO_ROOT, "juce", "builds", "validation"),
     // Outside logsDir: CI uploads logsDir on failure, and a profile is not a log.
@@ -124,6 +126,7 @@ function parseArgs(argv) {
     else if (a === "--strictness") args.strictness = Number(next());
     else if (a === "--skip-gui-tests") args.skipGuiTests = true;
     else if (a === "--artefacts") args.artefacts = path.resolve(next());
+    else if (a === "--product") args.product = next();
     else if (a === "--tools-dir") args.toolsDir = path.resolve(next());
     else if (a === "--logs-dir") args.logsDir = path.resolve(next());
     else if (a === "--help" || a === "-h") {
@@ -362,7 +365,7 @@ function missing(format, target, args) {
 // ---------------------------------------------------------------------------
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const product = productName();
+  const product = args.product ?? productName();
 
   const defaultFormats = { win32: ["VST3", "CLAP"], darwin: ["VST3", "AU", "CLAP"], linux: ["VST3", "CLAP", "LV2"] }[PLATFORM];
   if (!defaultFormats) fail(`unsupported platform ${PLATFORM}`);

@@ -27,6 +27,9 @@ endif()
 option(GUITARFX_CORE_BUILD_TESTS "Build core unit tests" OFF)
 option(GUITARFX_OPTIMISE_NAM_IN_DEBUG "Build the fetched NAM core optimised in Debug too (off to step through it)" ON)
 option(GUITARFX_CORE_ENABLE_WASM_EFFECTS "Build the generic WASM effect host" ON)
+# The web UI bundle (core/ui, built with npm) is for the WebView product; a product with a native UI
+# (Nano Q) has no use for it and turns this off.
+option(GUITARFX_CORE_BUILD_WEB_UI "Build the web UI bundle in core/ui with npm, when npm is found" ON)
 # Declares GUITARFX_CORE_SIMD_LEVEL (avx2/avx/sse2), the deprecated
 # GUITARFX_CORE_ENABLE_AVX2 shim, and guitarfx_apply_simd_arch_flags().
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/GuitarfxSimdLevel.cmake")
@@ -737,8 +740,10 @@ endif()
 
 # Build UI bundle from core/ui with npm when available.
 # Uses a stamp file so the TS build only reruns when sources change.
-find_program(NPM_EXECUTABLE npm)
-if(NPM_EXECUTABLE)
+if(GUITARFX_CORE_BUILD_WEB_UI)
+    find_program(NPM_EXECUTABLE npm)
+endif()
+if(GUITARFX_CORE_BUILD_WEB_UI AND NPM_EXECUTABLE)
     file(GLOB_RECURSE _UI_TS_SOURCES CONFIGURE_DEPENDS
         "${GUITARFX_CORE_ROOT}/ui/ts/*.ts"
         "${GUITARFX_CORE_ROOT}/ui/tsconfig.json"
@@ -766,7 +771,7 @@ if(NPM_EXECUTABLE)
         COMMENT "Building core UI TypeScript bundle")
     add_custom_target(SoundshedGuitarCoreUiBuild DEPENDS "${_UI_STAMP}")
     add_dependencies(SoundshedGuitarCore SoundshedGuitarCoreUiBuild)
-else()
+elseif(GUITARFX_CORE_BUILD_WEB_UI)
     message(WARNING "npm not found; core UI TypeScript build will be skipped.")
 endif()
 
