@@ -70,7 +70,9 @@ function ensureEffectCatalogHydrated(reason: string): void {
 function syncFxSelectorCollapsedState(options?: { focusSearch?: boolean }): void {
   const isCollapsed = fxSelectorPanel?.classList.contains("collapsed") ?? false;
   signalPathBar?.classList.toggle("fx-library-collapsed", isCollapsed);
-  if (!isCollapsed && options?.focusSearch) {
+  // Not on a touch screen, as with the effect dropdown: focusing the field brings up the
+  // on-screen keyboard, which covers the library and scrolls the page to keep the field in view.
+  if (!isCollapsed && options?.focusSearch && !window.matchMedia?.("(pointer: coarse)").matches) {
     fxSearchInput?.focus();
   }
 }
