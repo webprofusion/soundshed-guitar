@@ -6,7 +6,7 @@ import { buildArchiveFileNameWithHash, generateResourceId, requestResourceData, 
 import type { BlendDefinition, Preset, ResourceRef, SignalGraph, ToneSharingOriginMetadata } from "../types.js";
 import { migratePresetNodeTypes } from "../presetV2.js";
 import { postMessage } from "../bridge.js";
-import { showConfirm } from "../dialogs.js";
+import { showAlert, showConfirm } from "../dialogs.js";
 import { registerInstalledToneSharingPack } from "../toneSharingPanel.js";
 import type { InstalledPackMetadata } from "../toneSharingPanel.js";
 import { isTone3000ProxyModeEnabled } from "../tone3000.js";
@@ -1058,11 +1058,13 @@ export async function importPresetArchive(
   }
 
   // Fetch the resources the archive names but does not carry from their providers. A preview
-  // imports none of them: those the library lacks are fetched for the engine to stage.
+  // imports none of them: those the library lacks are fetched for the engine to stage. One
+  // that cannot be had leaves its slot empty; the presets are imported all the same.
+  let unavailableRemote: string[] = [];
   if (previewOnly) {
     await prepareArchiveRemoteResourcesForPreview(remoteResourcesToImport, idMap, options.preview);
   } else if (remoteResourcesToImport.length > 0) {
-    await importArchiveRemoteResources(remoteResourcesToImport, idMap, importedResources);
+    unavailableRemote = await importArchiveRemoteResources(remoteResourcesToImport, idMap, importedResources);
   }
 
   const blendIdMap = new Map<string, string>();
@@ -1184,9 +1186,23 @@ export async function importPresetArchive(
     presetSignatures: buildPresetImportSignatureMap(importedPresets),
     resources: uniqueResources,
   });
-  showNotification(importedPresets.length === 1 ? "Preset imported" : "Presets imported", importedPresets.length === 1
-    ? (latestPreset.name ?? "")
-    : `${importedPresets.length} presets imported`);
+  const importedSummary = importedPresets.length === 1
+    ? `"${latestPreset.name ?? ""}" imported`
+    : `${importedPresets.length} presets imported`;
+  if (unavailableRemote.length > 0 && !suppressNotifications) {
+    // A toast is gone before a list of names can be read.
+    const names = [...new Set(unavailableRemote)];
+    void showAlert(
+      `${importedSummary}, but ${names.length === 1 ? "this model" : "these models"} could not be downloaded `
+        + `and ${names.length === 1 ? "its slot is" : "their slots are"} left empty: ${names.join(", ")}. `
+        + "A model goes missing when its creator removes, replaces or hides it.",
+      "Some models are missing",
+    );
+  } else {
+    showNotification(importedPresets.length === 1 ? "Preset imported" : "Presets imported", importedPresets.length === 1
+      ? (latestPreset.name ?? "")
+      : `${importedPresets.length} presets imported`);
+  }
   requestPresetLibraryRefresh();
 
   return importedPresets;

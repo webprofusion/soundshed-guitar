@@ -11,6 +11,7 @@ import type { ArchivePreview } from "../ts/presets/archiveTypes";
 import type { Preset } from "../ts/types";
 
 vi.mock("../ts/notifications.js", () => ({ clearNotification: vi.fn(), showNotification: vi.fn() }));
+vi.mock("../ts/dialogs.js", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), showAlert: vi.fn(async () => undefined) }));
 
 const sent: Array<Record<string, unknown>> = [];
 window.IPlugSendMsg = (message: string) => sent.push(JSON.parse(message) as Record<string, unknown>);
@@ -133,6 +134,46 @@ describe("importing a shared archive", () => {
     // An import's save stocks the library and leaves the preset playing alone.
     expect(sent[saved]).toMatchObject({ saveMode: "import" });
     expect(loaded).toBeGreaterThan(saved);
+  });
+
+  it("imports the presets when one of their Tone3000 models is gone, and names the missing one", async () => {
+    // A pack's preset names one model that is still listed and one whose tone its creator made
+    // private: Tone3000 answers the listing with a 403.
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("tone_id=tone-gone")) {
+        return { ok: false, status: 403, json: async () => ({}), text: async () => `{"error":"You are not authorized to view these models"}`, headers: new Headers() } as Response;
+      }
+      if (url.includes("tone_id=")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [{ id: "m1", model_url: "https://www.tone3000.com/api/v1/models/m1/download/m1.nam" }], page: 1, total_pages: 1 }),
+          text: async () => "",
+          headers: new Headers(),
+        } as Response;
+      }
+      return okBytes();
+    }) as typeof fetch;
+    const zip = new JSZip();
+    zip.file("presets.json", JSON.stringify({
+      formatVersion: 1,
+      presets: [{ id: "a", name: "Kept" }, { id: "b", name: "Missing Amp" }],
+      tone3000Resources: [
+        { id: "tone3000:m1", name: "Listed Amp", type: "nam", toneId: "tone-1", modelId: "m1" },
+        { id: "tone3000:gone", name: "Private Amp", type: "nam", toneId: "tone-gone", modelId: "gone" },
+      ],
+    }));
+    const file = new File([await zip.generateAsync({ type: "uint8array" })], "pack.soundshed.presets");
+
+    const presets = await importPresetArchive(file, { source: "toneSharingApi", packId: "pack-1" });
+
+    expect(presets.map((preset) => preset.name)).toEqual(["Kept", "Missing Amp"]);
+    expect(sent.filter((message) => message.type === "savePreset")).toHaveLength(2);
+    expect(sent.filter((message) => message.type === "importRemoteResource").map((message) => message.resourceId)).toEqual(["tone3000:m1"]);
+    const { showAlert } = await import("../ts/dialogs.js");
+    expect(showAlert).toHaveBeenCalledWith(expect.stringContaining("Private Amp"), "Some models are missing");
+    expect(vi.mocked(showAlert).mock.calls[0][0]).not.toContain("Listed Amp");
   });
 
   it("previews without downloading, importing or saving anything", async () => {

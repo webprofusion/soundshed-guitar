@@ -283,14 +283,16 @@ export async function prepareArchiveRemoteResourcesForPreview(
 
 /**
  * Brings an archive's remote resources into the library: one already there is reused, the rest
- * are fetched from their providers. Throws when any cannot be fetched, after trying them all.
+ * are fetched from their providers. Returns the names of those that could not be had (a
+ * provider this app cannot fetch from, or a model its creator has since removed or made
+ * private), so the presets can still be imported without them. Throws only when Tone3000
+ * access is needed and the user gives none.
  */
 export async function importArchiveRemoteResources(
   refs: RemoteResourceRef[],
   idMap: Map<string, string>,
   importedResources: Array<{ type: string; id: string }>,
-): Promise<void> {
-  const unsupported = [...new Set(refs.filter((ref) => !FETCHABLE_PROVIDERS.has(ref.provider)).map((ref) => ref.provider))];
+): Promise<string[]> {
   const tone3000Count = refs.filter((ref) => ref.provider === TONE3000).length;
   const needsFetch = refs.some((ref) => {
     const existing = getLibraryResource(ref.type, ref.id);
@@ -300,18 +302,17 @@ export async function importArchiveRemoteResources(
     await ensureTone3000Access(tone3000Count);
   }
 
-  let succeeded = 0;
-  let failed = 0;
+  const unavailable: string[] = [];
   for (const ref of refs) {
     const existing = getLibraryResource(ref.type, ref.id);
     if (existing && !existing.fileMissing) {
       idMap.set(ref.id, existing.id);
       importedResources.push({ type: ref.type, id: existing.id });
-      succeeded += 1;
       continue;
     }
     if (!FETCHABLE_PROVIDERS.has(ref.provider)) {
-      failed += 1;
+      appendLog(`archive resource skipped (${ref.name ?? ref.id}): this app cannot fetch from ${ref.provider}`);
+      unavailable.push(ref.name ?? ref.id);
       continue;
     }
     try {
@@ -336,19 +337,12 @@ export async function importArchiveRemoteResources(
       });
       idMap.set(ref.id, ref.id);
       importedResources.push({ type: ref.type, id: ref.id });
-      succeeded += 1;
       appendLog(`${ref.provider} archive resource imported: ${ref.name ?? ref.id}`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       appendLog(`${ref.provider} archive resource failed (${ref.name ?? ref.id}): ${msg}`);
-      failed += 1;
+      unavailable.push(ref.name ?? ref.id);
     }
   }
-
-  if (unsupported.length) {
-    throw new Error(`This archive needs resources from ${unsupported.join(", ")}, which this version of the app cannot fetch.`);
-  }
-  if (failed > 0) {
-    throw new Error(`Remote resource download incomplete: ${succeeded} succeeded, ${failed} failed.`);
-  }
+  return unavailable;
 }
