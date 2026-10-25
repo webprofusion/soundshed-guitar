@@ -98,11 +98,32 @@ export function normalizeSearchQuery(rawQuery: string): string {
   return `${trimmed} backing track`;
 }
 
+const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" };
+
+/**
+ * YouTube's search API sends titles HTML-escaped ("80&#39;s Rock"). The panel escapes
+ * what it renders, so an undecoded title showed its entities. Favourites and the
+ * search cache saved before this decode too.
+ */
+export function decodeYouTubeText(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (entity, body: string) => {
+    if (body[0] === "#") {
+      const code = body[1] === "x" || body[1] === "X" ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+    }
+    return HTML_ENTITIES[body.toLowerCase()] ?? entity;
+  });
+}
+
 export function normalizeFavorites(value: unknown): JamVideoSummary[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.filter(isJamVideoSummary);
+  return value.filter(isJamVideoSummary).map((video) => ({
+    ...video,
+    title: decodeYouTubeText(video.title),
+    channelTitle: decodeYouTubeText(video.channelTitle),
+  }));
 }
 
 export function normalizeSearchCache(value: unknown): JamSearchCache | null {

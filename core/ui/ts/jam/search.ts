@@ -8,7 +8,7 @@
  */
 
 import type { JamVideoSummary } from "../types.js";
-import { SEARCH_MAX_RESULTS } from "./state.js";
+import { decodeYouTubeText, SEARCH_MAX_RESULTS } from "./state.js";
 
 function getBestThumbnail(snippet: Record<string, unknown> | undefined): string {
   const thumbnails = snippet?.thumbnails as Record<string, { url?: string }> | undefined;
@@ -39,8 +39,8 @@ export function normalizeSearchResults(payload: unknown): JamVideoSummary[] {
       }
       return {
         videoId,
-        title: typeof snippet.title === "string" ? snippet.title : videoId,
-        channelTitle: typeof snippet.channelTitle === "string" ? snippet.channelTitle : "Unknown channel",
+        title: typeof snippet.title === "string" ? decodeYouTubeText(snippet.title) : videoId,
+        channelTitle: typeof snippet.channelTitle === "string" ? decodeYouTubeText(snippet.channelTitle) : "Unknown channel",
         thumbnailUrl: getBestThumbnail(snippet),
       } satisfies JamVideoSummary;
     })
