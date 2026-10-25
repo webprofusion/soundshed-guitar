@@ -61,24 +61,6 @@ if(WIN32
     set(GUITARFX_VST3_AUTO_MANIFEST FALSE)
 endif()
 
-# Register soundshed:// URL scheme on macOS for browser-to-app handoff.
-set(GUITARFX_XCODE_EXTRA_PLIST_ENTRIES "")
-if(APPLE)
-        set(GUITARFX_XCODE_EXTRA_PLIST_ENTRIES [=[
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleURLName</key>
-        <string>com.soundshed.guitar</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>soundshed</string>
-        </array>
-    </dict>
-</array>
-]=])
-endif()
-
 # Oldest macOS the build runs on. 11.0 is the floor anyway for Apple Silicon, and
 # the UI's color-mix() and CSS nesting need the WebKit from Safari 16.5, which
 # Big Sur gets and Catalina (10.15, the old target) doesn't.
@@ -377,13 +359,32 @@ juce_add_plugin("${PROJECT_NAME}"
     AU_MAIN_TYPE kAudioUnitType_Effect
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "Soundshed Guitar needs microphone access to record and process live audio input."
-    XCODE_EXTRA_PLIST_ENTRIES "${GUITARFX_XCODE_EXTRA_PLIST_ENTRIES}"
 
     # The name of your final executable
     # This is how it's listed in the DAW
     # This can be different from PROJECT_NAME and can have spaces!
     # You might want to use v${MAJOR_VERSION} here once you go to v2...
     PRODUCT_NAME "${PRODUCT_NAME}")
+
+# Register the soundshed:// URL scheme (browser-to-app tone-sharing handoff) in the
+# Standalone app's Info.plist, and only there: JUCE's PLIST_TO_MERGE goes into every
+# format's plist, and a plugin bundle has no business claiming the scheme. juceaide writes
+# the plist at configure time and CMake copies it into the bundle at generate time, so
+# patching JUCE's generated copy here lands in the built app. plutil -replace keeps it the
+# same however often this reconfigures. Nano does not register it (registersProtocolHandler
+# in ProductInfo.h), so Launch Services never has two apps to choose between.
+if(APPLE AND TARGET ${PROJECT_NAME}_Standalone)
+    get_target_property(_standalone_plist ${PROJECT_NAME}_Standalone MACOSX_BUNDLE_INFO_PLIST)
+    execute_process(
+        COMMAND /usr/bin/plutil -replace CFBundleURLTypes -xml
+            "<array><dict><key>CFBundleURLName</key><string>${BUNDLE_ID}</string><key>CFBundleURLSchemes</key><array><string>soundshed</string></array></dict></array>"
+            "${_standalone_plist}"
+        RESULT_VARIABLE _plutil_result
+        ERROR_VARIABLE _plutil_error)
+    if(NOT _plutil_result EQUAL 0)
+        message(FATAL_ERROR "Could not add the soundshed:// URL scheme to ${_standalone_plist}: ${_plutil_error}")
+    endif()
+endif()
 
 # This lets us use our code in both the JUCE targets and our Test target
 # Without running into ODR violations
