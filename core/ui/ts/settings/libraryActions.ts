@@ -8,6 +8,7 @@
 
 import { arrayBufferToBase64, sanitizeFilename } from "../archiveUtils.js";
 import { postMessage } from "../bridge.js";
+import { showPrompt } from "../dialogs.js";
 import { showNotification } from "../notifications.js";
 import { copyTextToClipboard, sha256HexFromBase64 } from "../utils.js";
 import { libraryResults } from "./dom.js";
@@ -177,23 +178,23 @@ export async function promptEditLibraryResource(item: LibraryItem): Promise<void
     return;
   }
 
-  const name = window.prompt("Resource title", item.name);
+  const name = await showPrompt("Title", item.name, { title: "Edit Resource" });
   if (name === null) {
     return;
   }
-  const category = window.prompt("Category", item.category);
+  const category = await showPrompt("Category", item.category, { title: "Edit Resource" });
   if (category === null) {
     return;
   }
-  const description = window.prompt("Description", item.description ?? "");
+  const description = await showPrompt("Description", item.description ?? "", { title: "Edit Resource", multiline: true });
   if (description === null) {
     return;
   }
-  const tagsText = window.prompt("Tags (comma-separated)", (item.tags ?? []).join(", "));
+  const tagsText = await showPrompt("Tags (comma-separated)", (item.tags ?? []).join(", "), { title: "Edit Resource" });
   if (tagsText === null) {
     return;
   }
-  const metadataText = window.prompt("Metadata JSON", JSON.stringify(item.metadata ?? {}, null, 2));
+  const metadataText = await showPrompt("Metadata JSON", JSON.stringify(item.metadata ?? {}, null, 2), { title: "Edit Resource", multiline: true });
   if (metadataText === null) {
     return;
   }
@@ -283,7 +284,7 @@ export async function copyLibraryResourcePath(item: LibraryItem): Promise<void> 
     await copyTextToClipboard(path);
     showNotification("Path copied", path);
   } catch {
-    const promptResult = window.prompt("Copy local resource path", path);
+    const promptResult = await showPrompt("Copy this path by hand:", path, { title: "Copy Path" });
     if (promptResult === null) {
       showNotification("Copy cancelled", "Local path was not copied.");
       return;

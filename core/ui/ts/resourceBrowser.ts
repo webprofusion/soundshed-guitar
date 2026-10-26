@@ -9,7 +9,7 @@
  */
 import { postMessage, sendResourceFavorite } from "./bridge.js";
 import { recordAppSetting } from "./appSettingsStore.js";
-import { showConfirm } from "./dialogs.js";
+import { showConfirm, showPrompt } from "./dialogs.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { getPlaySvg } from "./iconAssets.js";
 import { showNotification } from "./notifications.js";
@@ -1140,7 +1140,7 @@ export class ResourceBrowserModal {
       await copyTextToClipboard(path);
       showNotification("Path copied", path);
     } catch {
-      const promptResult = window.prompt("Copy local resource path", path);
+      const promptResult = await showPrompt("Copy this path by hand:", path, { title: "Copy Path" });
       if (promptResult === null) {
         showNotification("Copy cancelled", "Local path was not copied.");
         return;

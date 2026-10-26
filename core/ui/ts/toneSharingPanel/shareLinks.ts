@@ -4,6 +4,7 @@
  */
 
 import { getToneSharingHostActions } from "./hostActions.js";
+import { showPrompt } from "../dialogs.js";
 import { copyTextToClipboard } from "../utils.js";
 import { getApiOrigin } from "./api.js";
 import { loadBrowse } from "./browse.js";
@@ -24,7 +25,7 @@ export async function copyToneSharingShareLink(target: ToneSharingShareTarget): 
     await copyTextToClipboard(link);
     return link;
   } catch {
-    const promptResult = window.prompt("Copy this Tone Sharing link", link);
+    const promptResult = await showPrompt("Copy this link by hand:", link, { title: "Tone Sharing Link" });
     if (promptResult === null) {
       throw new Error("Copy cancelled");
     }

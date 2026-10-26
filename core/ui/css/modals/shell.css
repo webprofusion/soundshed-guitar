@@ -120,6 +120,34 @@
   white-space: pre-wrap;
 }
 
+/* showPrompt's field: an input, or a textarea for multi-line text. */
+.dialog-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--modal-input-border);
+  border-radius: var(--radius-md);
+  background: var(--modal-input-bg);
+  color: var(--modal-input-text);
+  /* Under 16px, iOS zooms the page when the field takes focus. */
+  font-size: 16px;
+  font-family: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+textarea.dialog-input {
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+}
+
+.dialog-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 .custom-effect-designer-content {
   width: min(1120px, 96vw);
   max-height: min(88vh, 960px);

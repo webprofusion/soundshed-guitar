@@ -20,12 +20,12 @@ export function bindCustomEffectActionControls(node: GraphNode): void {
 
   const saveButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".custom-effect-save-btn");
   saveButton?.addEventListener("click", () => {
-    promptSaveCurrentCustomEffect(node, false);
+    void promptSaveCurrentCustomEffect(node, false);
   });
 
   const useButton = nodeParamsPanelElement?.querySelector<HTMLButtonElement>(".custom-effect-use-btn");
   useButton?.addEventListener("click", () => {
-    promptSaveCurrentCustomEffect(node, true);
+    void promptSaveCurrentCustomEffect(node, true);
   });
 }
 

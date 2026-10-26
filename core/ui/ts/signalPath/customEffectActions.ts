@@ -1,12 +1,13 @@
 import type {
   GraphNode,
 } from "../types.js";
+import { showPrompt } from "../dialogs.js";
 import { showNotification } from "../notifications.js";
 import { getNodeEffectInfo } from "../presetV2.js";
 import { saveCurrentCustomEffect } from "../customEffects.js";
 import { getNodeCategory } from "./nodeTypes.js";
 import { getLinkedCustomEffectEntry, getNodeDisplayName, hasCustomEffectModuleSelection } from "./nodeLabels.js";
-export function promptSaveCurrentCustomEffect(node: GraphNode, applyToNode: boolean): void {
+export async function promptSaveCurrentCustomEffect(node: GraphNode, applyToNode: boolean): Promise<void> {
   if (!hasCustomEffectModuleSelection(node)) {
     showNotification("Custom Effect save failed", "Select a WASM module first");
     return;
@@ -19,7 +20,7 @@ export function promptSaveCurrentCustomEffect(node: GraphNode, applyToNode: bool
     || getNodeDisplayName(node)
     || typeInfo?.displayName
     || "Custom Effect";
-  const rawName = window.prompt("Custom Effect name", suggestedName);
+  const rawName = await showPrompt("Name", suggestedName, { title: "Save Custom Effect" });
   if (rawName === null) {
     return;
   }
@@ -34,13 +35,13 @@ export function promptSaveCurrentCustomEffect(node: GraphNode, applyToNode: bool
     || getNodeCategory(node)
     || typeInfo?.category
     || "utility";
-  const rawCategory = window.prompt("Category", suggestedCategory);
+  const rawCategory = await showPrompt("Category", suggestedCategory, { title: "Save Custom Effect" });
   if (rawCategory === null) {
     return;
   }
 
   const descriptionDefault = linkedEntry?.description ?? typeInfo?.description ?? "";
-  const rawDescription = window.prompt("Description", descriptionDefault);
+  const rawDescription = await showPrompt("Description", descriptionDefault, { title: "Save Custom Effect", multiline: true });
   if (rawDescription === null) {
     return;
   }

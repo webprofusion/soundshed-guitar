@@ -3,6 +3,7 @@
  * the moderation verdicts an admin can issue.
  */
 
+import { showPrompt } from "../dialogs.js";
 import { uiState } from "../state.js";
 import { apiFetch, parseApiErrorMessage, toneSharingFetch } from "./api.js";
 import { buildPackArchiveFromDetails } from "./archive.js";
@@ -13,8 +14,9 @@ import { toneSharingState } from "./state.js";
 import type { ToneSharingItem, ToneSharingPack, ToneSharingPackDetails } from "./types.js";
 
 export async function moderateTarget(kind: "item" | "pack", id: string, action: "approve" | "reject"): Promise<void> {
+  // Cancel still rejects, without a reason, as it did when this was window.prompt().
   const notes = action === "reject"
-    ? (window.prompt("Optional rejection reason", "") ?? "").trim()
+    ? ((await showPrompt("Optional rejection reason", "", { title: "Reject" })) ?? "").trim()
     : "";
   const endpoint = kind === "item" ? `/items/${id}/moderate` : `/packs/${id}/moderate`;
   await apiFetch(endpoint, {

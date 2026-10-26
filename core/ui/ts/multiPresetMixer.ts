@@ -18,7 +18,7 @@ import {
 } from "./bridge.js";
 import { escapeHtml } from "./utils.js";
 import { showNotification } from "./notifications.js";
-import { showConfirm } from "./dialogs.js";
+import { showConfirm, showPrompt } from "./dialogs.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { syncPresetLibraryFeatureVisibility, setSetlistPanelVisible } from "./presets.js";
 import { presetSearchElement } from "./presets/dom.js";
@@ -115,8 +115,10 @@ function openSaveCompositePresetModal(): void {
   const editing = findActiveCompositePreset();
 
   if (!multiRigSaveModal || !multiRigNameInput) {
-    const name = (prompt("Multi-Rig name:", editing?.name ?? "") ?? "").trim();
-    if (name) saveCompositePreset(name, editing?.description, editing?.tags, editing?.id);
+    void showPrompt("Multi-Rig name:", editing?.name ?? "", { title: "Save Multi-Rig Mix" }).then((entered) => {
+      const name = (entered ?? "").trim();
+      if (name) saveCompositePreset(name, editing?.description, editing?.tags, editing?.id);
+    });
     return;
   }
 
