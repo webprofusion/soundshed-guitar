@@ -19,6 +19,7 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <miniz.h>
@@ -48,7 +49,11 @@ namespace
 class TestHost final : public guitarfx::IPluginHost
 {
   public:
-    explicit TestHost(fs::path root) : mRoot(std::move(root))
+    explicit TestHost(fs::path root) : mRoot(root), mBundled(std::move(root))
+    {
+    }
+
+    TestHost(fs::path root, fs::path bundled) : mRoot(std::move(root)), mBundled(std::move(bundled))
     {
     }
 
@@ -81,7 +86,7 @@ class TestHost final : public guitarfx::IPluginHost
 
     [[nodiscard]] fs::path GetBundledAssetsPath() const override
     {
-        return mRoot;
+        return mBundled;
     }
 
     [[nodiscard]] double GetSampleRate() const override
@@ -103,6 +108,7 @@ class TestHost final : public guitarfx::IPluginHost
 
   private:
     fs::path mRoot;
+    fs::path mBundled;
 };
 
 int gFailures = 0;
@@ -547,6 +553,79 @@ void TestLongPathsLoad()
 
     Expect(registered, "loadModel adds the long-path model to the library");
 }
+
+/// A profile so deep that a factory archive's extraction folder passes the 248 characters
+/// CreateDirectory allows and its files pass MAX_PATH, while the archive itself sits at a short
+/// path, as an install's does. The files were written, but the existence check after the write
+/// failed, so none reached the library and nodes showed the file's hash name.
+void TestFactoryArchiveUnderLongProfile()
+{
+    const auto bundled = Sandbox("factory-long");
+    const auto packTail =
+        fs::path("Soundshed Guitar") / "data" / "v1" / "resources" / "content" / "factory-archives" / "Long-Pack";
+    const std::size_t shortest = (bundled / "p" / packTail).native().size();
+    const auto profile = bundled / std::string(shortest < 252 ? 253 - shortest : 1, 'p');
+    const auto packDir = profile / packTail;
+    _putenv_s("APPDATA", profile.string().c_str());
+
+    const std::string modelName = kHashA + "-Deep-Model.nam";
+    const std::string irName = kHashB + "-Deep-Cab.wav";
+    const nlohmann::json index = {
+        {"formatVersion", 1},
+        {"presets", {PresetJson("deep-tone", "m1")}},
+        {"resources",
+         {{{"id", "m1"},
+           {"name", "Deep Model"},
+           {"category", "amp"},
+           {"type", "nam"},
+           {"fileName", modelName},
+           {"hash", kHashA}},
+          {{"id", "c1"},
+           {"name", "Deep Cab"},
+           {"category", "ir"},
+           {"type", "ir"},
+           {"fileName", irName},
+           {"hash", kHashB}}}},
+        {"blends", nlohmann::json::array()},
+    };
+    WriteBytes(bundled / "ui" / "presets" / "factory" / "Long-Pack.soundshed.presets",
+               BuildZip({{"presets.json", ToBytes(index.dump())},
+                         {"resources/" + modelName, kModelA},
+                         {"resources/" + irName, Fixture(fs::path("assets") / "ir" / "421 1960.wav")}}));
+    Expect(packDir.native().size() > 248 && (packDir / modelName).native().size() > 260,
+           "the extraction folder passes 248 characters and its files MAX_PATH (" +
+               std::to_string((packDir / modelName).native().size()) + " chars)");
+
+    // The second start finds the files already there and only checks their size.
+    for (const char* start : {"first start", "second start"})
+    {
+        TestHost host(profile, bundled);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        const auto& library = controller.GetResourceLibrary();
+
+        for (const auto& [type, id, name, file] : {std::tuple{"nam", "Long-Pack__m1", "Deep Model", modelName},
+                                                   std::tuple{"ir", "Long-Pack__c1", "Deep Cab", irName}})
+        {
+            const auto resource = library.LookupResource(type, id);
+            Expect(resource.has_value(), std::string(start) + ": " + id + " is in the library");
+
+            if (!resource)
+            {
+                continue;
+            }
+
+            Expect(resource->name == name, std::string(start) + ": " + id + " keeps its name");
+            Expect(resource->filePath.lexically_normal() == (packDir / file).lexically_normal() &&
+                       guitarfx::util::PathExists(resource->filePath),
+                   std::string(start) + ": " + id + " points at its long-path file");
+        }
+
+        const auto resolved = library.ResolveResource(guitarfx::ResourceRef{"nam", "Long-Pack__m1"});
+        Expect(resolved && guitarfx::util::ReadFileBytes(*resolved) == kModelA,
+               std::string(start) + ": the preset's model resolves to the extracted bytes");
+    }
+}
 } // namespace
 
 int main()
@@ -560,6 +639,7 @@ int main()
     TestStartupRenamesDoubledFiles();
 #ifdef _WIN32
     TestLongPathsLoad();
+    TestFactoryArchiveUnderLongProfile();
 #endif
 
     // Some tools cannot delete what sits past MAX_PATH, so nothing is left behind.

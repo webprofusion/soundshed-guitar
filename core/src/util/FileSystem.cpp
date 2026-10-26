@@ -1,5 +1,7 @@
 #include "FileSystem.h"
 
+#include "LongPath.h"
+
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -122,9 +124,11 @@ std::filesystem::path FileSystem::ResolveSettingsFile() const
 
 std::optional<std::filesystem::path> FileSystem::EnsureDirectory(const std::filesystem::path& dir) const
 {
+    // CreateDirectory refuses a folder of 248 characters or more without the \\?\ form.
+    const auto osDir = util::LongPathSafe(dir);
     std::error_code ec;
 
-    if (std::filesystem::create_directories(dir, ec) || std::filesystem::exists(dir))
+    if (std::filesystem::create_directories(osDir, ec) || std::filesystem::exists(osDir, ec))
     {
         return dir;
     }

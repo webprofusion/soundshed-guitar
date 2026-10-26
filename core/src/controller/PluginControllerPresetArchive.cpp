@@ -20,6 +20,7 @@
 #include "presets/PresetStorage.h"
 #include "resources/ResourceLibrary.h"
 #include "util/FileIO.h"
+#include "util/LongPath.h"
 #include "util/PathEncoding.h"
 #include "util/PathSanitizer.h"
 
@@ -552,7 +553,7 @@ void PluginController::LoadFactoryPresetArchives()
 
     const auto factoryDir = ResolveFactoryPresetDirectory(mHost, mResourceRoot);
 
-    if (!std::filesystem::exists(factoryDir))
+    if (!util::PathExists(factoryDir))
     {
         MergeTransientBlends();
         return;
@@ -659,7 +660,9 @@ void PluginController::LoadFactoryPresetArchives()
             const auto archiveExtractDir = extractedRoot / archiveKey;
             [[maybe_unused]] const auto ensuredArchiveDir = mFileSystem.EnsureDirectory(archiveExtractDir);
             const auto targetPath = archiveExtractDir / resolvedName;
-            const bool fileMissing = !std::filesystem::exists(targetPath);
+            // A deep profile puts these past MAX_PATH, which plain std::filesystem calls report
+            // as missing; every check here goes through the long-path helpers.
+            const bool fileMissing = !util::PathExists(targetPath);
             const bool refreshLibraryEntry = archiveChanged || fileMissing;
             bool needsWrite = fileMissing;
 
@@ -673,7 +676,7 @@ void PluginController::LoadFactoryPresetArchives()
                 // is checked — a stat, not a read of every model on every launch —
                 // which still repairs a file an older build left cut short.
                 std::error_code sizeEc;
-                const auto existingSize = std::filesystem::file_size(targetPath, sizeEc);
+                const auto existingSize = std::filesystem::file_size(util::LongPathSafe(targetPath), sizeEc);
                 needsWrite = sizeEc || existingSize != resource.bytes.size() ||
                              (archiveChanged && !util::FileContentEquals(targetPath, resource.bytes));
             }
@@ -684,7 +687,7 @@ void PluginController::LoadFactoryPresetArchives()
                 continue;
             }
 
-            if (!std::filesystem::exists(targetPath))
+            if (!util::PathExists(targetPath))
             {
                 AppendSessionLog("Factory preset archive resource missing after import: " +
                                  util::PathToUtf8(targetPath));
