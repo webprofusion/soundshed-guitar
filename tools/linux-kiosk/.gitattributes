@@ -1,0 +1,3 @@
+# Everything here runs on Linux, much of it copied straight into an image. A CRLF
+# checkout (core.autocrlf on Windows) breaks the shebangs and the systemd units.
+* text eol=lf

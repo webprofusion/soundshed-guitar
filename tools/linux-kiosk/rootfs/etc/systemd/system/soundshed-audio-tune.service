@@ -1,0 +1,12 @@
+[Unit]
+Description=Soundshed Guitar audio latency tuning
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/default/soundshed-kiosk
+ExecStart=/usr/local/lib/soundshed-kiosk/tune-audio
+
+[Install]
+WantedBy=multi-user.target

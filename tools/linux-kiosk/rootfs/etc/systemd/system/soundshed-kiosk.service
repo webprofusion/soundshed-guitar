@@ -1,0 +1,42 @@
+# Boots straight into Soundshed Guitar, full screen, with no desktop.
+#
+# The unit opens a real logind session on tty7 (PAMName=login), which is what gives the
+# kiosk user the seat: DRM for cage or Xorg, input devices, and XDG_RUNTIME_DIR. Settings
+# live in /etc/default/soundshed-kiosk.
+[Unit]
+Description=Soundshed Guitar kiosk
+After=systemd-user-sessions.service plymouth-quit-wait.service soundshed-audio-tune.service
+Wants=soundshed-audio-tune.service
+Conflicts=getty@tty7.service
+After=getty@tty7.service
+# A build that crashes on start must not spin forever; SSH and tty1 stay available.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=soundshed
+PAMName=login
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+# The journal drains stdout and stderr, so the app never blocks on a full pipe.
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty7
+UtmpMode=user
+EnvironmentFile=-/etc/default/soundshed-kiosk
+ExecStartPre=/usr/bin/chvt 7
+ExecStart=/usr/local/lib/soundshed-kiosk/session
+Restart=always
+RestartSec=2
+# The audio callback and the realtime task pool ask for SCHED_FIFO/RR; without these
+# limits the request fails and audio runs at normal priority.
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=graphical.target
+Alias=display-manager.service

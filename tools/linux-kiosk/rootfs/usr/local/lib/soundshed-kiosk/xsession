@@ -1,0 +1,5 @@
+#!/bin/sh
+# The X client for the xorg session: keep the screen on, then become the app.
+# With no window manager, --kiosk sizes the window to the display itself.
+xset s off s noblank -dpms 2>/dev/null || true
+exec "$@"

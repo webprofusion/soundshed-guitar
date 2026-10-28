@@ -1,0 +1,34 @@
+#!/bin/sh
+# Starts the display stack and the app inside it. Runs as the kiosk user, in the logind
+# session soundshed-kiosk.service opened on tty7.
+set -eu
+
+app="${SOUNDSHED_APP:-/opt/Soundshed/soundshed-guitar/soundshed-guitar}"
+
+if [ ! -x "$app" ]; then
+    echo "soundshed-kiosk: no executable at $app" >&2
+    exit 1
+fi
+
+# SOUNDSHED_APP_ARGS is split on spaces on purpose.
+# shellcheck disable=SC2086
+set -- "$app" --kiosk ${SOUNDSHED_APP_ARGS:-}
+
+case "${SOUNDSHED_SESSION:-cage}" in
+    cage)
+        # -d: no client-side decorations. cage shows one toplevel at a time, full screen.
+        exec cage -d -- "$@"
+        ;;
+    xorg)
+        cursor=""
+        [ "${SOUNDSHED_HIDE_CURSOR:-1}" = "1" ] && cursor="-nocursor"
+        # The client must be an absolute path for xinit to take it as the program.
+        # shellcheck disable=SC2086
+        exec xinit /usr/local/lib/soundshed-kiosk/xsession "$@" -- \
+            :0 vt7 -keeptty -nolisten tcp $cursor
+        ;;
+    *)
+        echo "soundshed-kiosk: unknown SOUNDSHED_SESSION '${SOUNDSHED_SESSION}'" >&2
+        exit 1
+        ;;
+esac

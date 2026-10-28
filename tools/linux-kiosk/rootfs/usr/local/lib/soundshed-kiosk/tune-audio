@@ -1,0 +1,29 @@
+#!/bin/sh
+# One-shot latency tuning at boot, run by soundshed-audio-tune.service as root.
+# Each step is best effort: a board without the knob just skips it.
+
+prio="${SOUNDSHED_IRQ_PRIO:-90}"
+
+# No frequency ramps under load. A clock that drops between callbacks turns the next
+# block's DSP into an overrun.
+for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    [ -w "$gov" ] && echo performance > "$gov"
+done
+
+# Wi-Fi power save wakes the radio late and stalls the bus it shares.
+for dev in /sys/class/net/wl*; do
+    [ -e "$dev" ] && iw dev "${dev##*/}" set power_save off 2>/dev/null
+done
+
+# With threadirqs, each interrupt handler is a kernel thread. Raise the USB host
+# controllers' above the app's audio thread so the interface is serviced first. Kernel
+# thread names are cut to 15 characters ("irq/131-xhci-hc"), so match the prefix.
+ps -eo pid=,comm= | while read -r pid comm; do
+    case "$comm" in
+        irq/*-xhci*|irq/*-dwc*)
+            chrt -f -p "$prio" "$pid" && echo "tune-audio: $comm -> FIFO $prio"
+            ;;
+    esac
+done
+
+exit 0

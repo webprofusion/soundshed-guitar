@@ -1,0 +1,24 @@
+# Read by soundshed-kiosk.service and soundshed-audio-tune.service.
+
+# The display stack: "cage" (Wayland kiosk compositor; the app runs under Xwayland, since
+# JUCE's Linux UI is X11 only) or "xorg" (a bare X server with no window manager).
+# Try cage first; xorg is the fallback if the WebView child window misbehaves under it.
+SOUNDSHED_SESSION=cage
+
+SOUNDSHED_APP=/opt/Soundshed/soundshed-guitar/soundshed-guitar
+
+# Extra arguments after --kiosk.
+SOUNDSHED_APP_ARGS=
+
+# Hide the pointer on a touch-only device (xorg session only; cage has no switch for it).
+SOUNDSHED_HIDE_CURSOR=1
+
+# SCHED_FIFO priority for the USB host controller's interrupt threads (needs threadirqs
+# on the kernel command line). Above the app's audio thread, as rtirq does it.
+SOUNDSHED_IRQ_PRIO=90
+
+# WebKitGTK knobs worth trying if the UI draws wrongly or slowly on the Pi's GPU:
+#WEBKIT_DISABLE_COMPOSITING_MODE=1
+#WEBKIT_DISABLE_DMABUF_RENDERER=1
+# Scale for a small, dense touch screen:
+#GDK_SCALE=2

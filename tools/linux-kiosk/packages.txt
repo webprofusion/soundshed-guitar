@@ -1,0 +1,17 @@
+cage
+xwayland
+xserver-xorg-core
+xserver-xorg-input-libinput
+xinit
+x11-xserver-utils
+libgtk-3-0
+libwebkit2gtk-4.1-0
+libasound2
+libcurl4
+libfreetype6
+libfontconfig1
+libgl1
+libegl1
+fonts-dejavu-core
+alsa-utils
+iw
