@@ -77,6 +77,24 @@ const LibraryResource* ClientState::FindLibraryResource(const std::string& type,
         }
     }
 
+    // A reference made under a prefix ("Pack__Folder__<id>", as a pack installs them) finds the
+    // resource by its last part, as the web UI's findResourceById does.
+    if (const auto split = id.rfind("__"); split != std::string::npos && split + 2 < id.size())
+    {
+        const auto suffix = id.substr(split + 2);
+        const auto tail = "__" + suffix;
+
+        for (const auto& resource : it->second)
+        {
+            if (resource.id == suffix ||
+                (resource.id.size() > tail.size() &&
+                 resource.id.compare(resource.id.size() - tail.size(), tail.size(), tail) == 0))
+            {
+                return &resource;
+            }
+        }
+    }
+
     return nullptr;
 }
 

@@ -363,6 +363,53 @@ void TestFactoryArchiveDropsTheRepeat()
            "nothing is written under the doubled name");
 }
 
+/// A relaunch re-imports the factory archives; what the library learned about a model since (its
+/// gear, architecture and calibration) must not be dropped for the archive's own few keys.
+void TestFactoryArchiveKeepsKnownMetadata()
+{
+    const auto root = Sandbox("factory-metadata");
+    const nlohmann::json index = {
+        {"formatVersion", 1},
+        {"presets", {PresetJson("gravity-storm", "e2b2c5ca")}},
+        {"resources",
+         {{{"id", "e2b2c5ca"},
+           {"name", "Dumble"},
+           {"category", "amp"},
+           {"type", "nam"},
+           {"fileName", kHashA + "-Dumble.nam"},
+           {"hash", kHashA}}}},
+        {"blends", nlohmann::json::array()},
+    };
+    WriteBytes(root / "ui" / "presets" / "factory" / "Meta-Pack.soundshed.presets",
+               BuildZip({{"presets.json", ToBytes(index.dump())}, {"resources/" + kHashA + "-Dumble.nam", kModelA}}));
+
+    {
+        TestHost host(root);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        Send(controller, "updateLibraryResource",
+             {{"resourceType", "nam"},
+              {"resourceId", "Meta-Pack__e2b2c5ca"},
+              {"metadata", {{"gearModel", "Overdrive Special"}, {"inputLevelDbu", "16"}}}});
+    }
+
+    TestHost host(root);
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+    const auto resource = controller.GetResourceLibrary().LookupResource("nam", "Meta-Pack__e2b2c5ca");
+    Expect(resource.has_value(), "the factory model is in the library after a relaunch");
+
+    if (resource)
+    {
+        const auto& meta = resource->metadata;
+        Expect(meta.count("gearModel") == 1 && meta.at("gearModel") == "Overdrive Special",
+               "it keeps what the library knew of the model");
+        Expect(meta.count("inputLevelDbu") == 1 && meta.at("inputLevelDbu") == "16", "and its calibration");
+        Expect(meta.count("factoryArchiveKey") == 1 && meta.at("factoryArchiveKey") == "Meta-Pack",
+               "beside the archive's own keys");
+    }
+}
+
 /// A tone shared from such an export, installed through installPresetArchives.
 void TestToneSharingInstallDropsTheRepeat()
 {
@@ -635,6 +682,7 @@ int main()
     TestCollapseRepeatedHashPrefix();
     TestLongPathSafe();
     TestFactoryArchiveDropsTheRepeat();
+    TestFactoryArchiveKeepsKnownMetadata();
     TestToneSharingInstallDropsTheRepeat();
     TestStartupRenamesDoubledFiles();
 #ifdef _WIN32

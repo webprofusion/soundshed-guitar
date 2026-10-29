@@ -710,6 +710,21 @@ void PluginController::LoadFactoryPresetArchives()
             libraryResource.metadata["factoryArchiveHash"] = archiveHash;
             libraryResource.metadata["originalId"] = resource.id;
 
+            // What the library already knows of this file (its header's architecture and
+            // calibration, read once by EnrichNamResourceMetadata; gear the user filled in) stays
+            // while the file is the one it was learned from. Without this a relaunch put back only
+            // the archive's own keys, and the UIs lost the A1/A2 badge and the Calibrated chip
+            // until something read the file again.
+            if (const auto known = needsWrite
+                                       ? std::nullopt
+                                       : mResourceLibrary.LookupResource(libraryResource.type, libraryResource.id))
+            {
+                for (const auto& [key, value] : known->metadata)
+                {
+                    libraryResource.metadata.try_emplace(key, value);
+                }
+            }
+
             if (libraryResource.type == "ir")
             {
                 // The archive files its IRs as "ir", which names no slot. Keep the category
