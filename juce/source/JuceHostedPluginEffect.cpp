@@ -1238,9 +1238,17 @@ namespace guitarfx
         {
             std::string message = DescribeUnsupportedPluginFile (resolvedPath);
             if (message.empty())
+            {
                 message = "No loadable plugin was found at: " + ToDisplayPath (resolvedPath)
                           + ". Check that it is a 64-bit plugin built for this platform. Supported formats: "
                           + GetSupportedPluginFormatsDescription() + ".";
+#if JUCE_MAC
+                // A Library Validation rejection surfaces here as an empty scan, not
+                // as a load error, so name the possibility (issue #54).
+                message += " macOS may also have blocked it because it is signed by a different developer"
+                           " (Library Validation); the system log will show 'Library Validation failed' if so.";
+#endif
+            }
 
             AppendHostedPluginTrace ("LoadPluginFromPath scan failed path=" + ToDisplayPath (resolvedPath)
                                      + ", formatHint='" + FromJuceString (formatHint) + "', registeredFormats="
