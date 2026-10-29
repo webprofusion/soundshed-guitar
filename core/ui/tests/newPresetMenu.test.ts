@@ -9,7 +9,7 @@ import { initializeNewPresetMenu } from "../ts/presets/newPresetMenu.js";
 initializeNewPresetMenu();
 
 beforeEach(() => {
-  window.dispatchEvent(new Event("blur"));
+  window.dispatchEvent(new Event("resize"));
   document.body.innerHTML = `
     <button id="preset-new-btn" aria-expanded="false">New</button>
     <button id="outside">Outside</button>
@@ -67,7 +67,6 @@ describe("new preset flyout", () => {
       () => outside.focus(),
       () => window.dispatchEvent(new Event("resize")),
       () => document.dispatchEvent(new Event("scroll")),
-      () => window.dispatchEvent(new Event("blur")),
     ]) {
       trigger().click();
       expect(options()).toHaveLength(2);
@@ -75,6 +74,37 @@ describe("new preset flyout", () => {
       expect(options()).toHaveLength(0);
     }
     expect(createDefaultPreset).not.toHaveBeenCalled();
+  });
+
+  it("stays open through a scroll elsewhere and a window blur, so the choice still lands", () => {
+    document.body.insertAdjacentHTML("beforeend", '<div id="elsewhere"><p>list</p></div>');
+    trigger().click();
+    document.getElementById("elsewhere")!.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("blur"));
+    expect(options()).toHaveLength(2);
+    options()[1].click();
+    expect(createDefaultPreset).toHaveBeenCalledWith("basic");
+  });
+
+  it("stays open when pressing a template moves focus to the page, as WebKit on macOS does", () => {
+    trigger().click();
+    const [, basic] = options();
+    basic.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    // WebKit does not focus a clicked button: focus leaves the highlighted item for <html>.
+    document.documentElement.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    document.body.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(options()).toHaveLength(2);
+    basic.click();
+    expect(createDefaultPreset).toHaveBeenCalledWith("basic");
+  });
+
+  it("closes when a scroll moves its button", () => {
+    document.body.insertAdjacentHTML("beforeend", '<div id="bar"></div>');
+    const bar = document.getElementById("bar")!;
+    bar.append(trigger());
+    trigger().click();
+    bar.dispatchEvent(new Event("scroll"));
+    expect(options()).toHaveLength(0);
   });
 
   it("handles a dynamically rendered details button and ignores disabled triggers", () => {

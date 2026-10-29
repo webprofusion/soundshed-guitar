@@ -114,16 +114,33 @@ export function initializeNewPresetMenu(): void {
       openMenu(button, event.key === "ArrowUp");
     }
   });
+  // Focus landing on the page itself is focus cleared, not moved: WebKit on macOS does
+  // not focus a button that is clicked, so the press on a template takes focus off the
+  // highlighted item and gives it to <html>. Closing on that lost every choice in the
+  // macOS app (traced in the Standalone), so only focus reaching another element counts.
   document.addEventListener("focusin", (event) => {
-    if (event.target instanceof Node && !menu?.contains(event.target) && !anchor?.contains(event.target)) {
+    const target = event.target;
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+    if (target instanceof Node && !menu?.contains(target) && !anchor?.contains(target)) {
       closeMenu();
     }
   });
+  // Only a scroll that moves the button the menu hangs from closes it. Any scroll
+  // elsewhere in the page (a list, the log, the chain settling its layout) used to
+  // close it too, and one landing between the press on a template and its click
+  // lost the choice. The window losing focus no longer closes it either: choosing a
+  // template did nothing in the macOS WKWebView, and a blur arriving with the press
+  // would do exactly that. Outside presses, Escape and focus moving away still close it.
   document.addEventListener("scroll", (event) => {
-    if (!(event.target instanceof Node) || !menu?.contains(event.target)) {
+    const target = event.target;
+    if (!menu || !anchor || (target instanceof Node && menu.contains(target))) {
+      return;
+    }
+    if (target === document || (target instanceof Node && target.contains(anchor))) {
       closeMenu();
     }
   }, true);
   window.addEventListener("resize", () => closeMenu());
-  window.addEventListener("blur", () => closeMenu());
 }
