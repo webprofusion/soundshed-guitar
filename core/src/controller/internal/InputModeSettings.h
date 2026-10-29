@@ -3,7 +3,8 @@
 /**
  * InputModeSettings.h — the standalone app's input mode, as the app settings store it.
  *
- * Three keys, written by the UI (controls.ts) and read here only:
+ * Three keys, written by setInputMode (PersistInputModeToAppSettings; the web UI's inputMode.ts
+ * also writes them) and read back by ApplyPreset and at startup:
  *   inputChannel.monoMode  bool  Mono (true, the default) or two inputs (false)
  *   inputChannel.mono      int   which input Mono takes: 0 input 1, 1 input 2, 2 both summed
  *   inputChannel.dualMono  bool  with two inputs, run them as two mono chains

@@ -146,6 +146,23 @@ void PluginController::ApplyInputModeSettingsFromAppSettings()
     mPresetMixer.SetDualMono(stored.dualMono);
 }
 
+void PluginController::PersistInputModeToAppSettings()
+{
+    if (!mHost.IsStandalone())
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mAppSettings[kInputMonoModeSettingKey] = mPresetMixer.IsMonoMode();
+        mAppSettings[kInputChannelSettingKey] = mPresetMixer.GetInputChannel();
+        mAppSettings[kInputDualMonoSettingKey] = mPresetMixer.IsDualMono();
+    }
+
+    SaveAppSettings();
+}
+
 void PluginController::ApplyGlobalFxSettingsFromAppSettings()
 {
     if (!mHost.IsStandalone())

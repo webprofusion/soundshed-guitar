@@ -359,6 +359,10 @@ void PluginController::HandleSetInputModeRequest(const nlohmann::json& payload)
         }
     }
 
+    // ApplyPreset puts the stored mode back on every load, so it has to be the one just chosen.
+    // The web UI saves these keys itself, but not every client does (Nano only sends this).
+    PersistInputModeToAppSettings();
+
     // A chain that turned stereo builds the right-hand NAM models it now needs, off the lock.
     ApplyDeferredNodeRebuilds();
     SendInputModeToUI();

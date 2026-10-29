@@ -3839,6 +3839,48 @@ bool TestSharedSyncReloadKeepsStandaloneInputMode()
     return true;
 }
 
+/// Nano chooses the input with setInputMode alone, writing no app settings of its own, and
+/// ApplyPreset reads the stored mode back on every load: Mono In 2 went back to Mono In 1 on the
+/// next preset.
+bool TestStandaloneInputModeSurvivesPresetLoad()
+{
+    const fs::path sandbox =
+        fs::temp_directory_path() / "guitarfx-preset-management-tests" / "standalone-input-mode-preset-load";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox, ec);
+    SetSettingsEnvRoot(sandbox);
+
+    TestHost host(sandbox, {}, /*standalone=*/true);
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    controller.HandleUIMessage(
+        nlohmann::json{{"type", "setInputMode"}, {"monoMode", true}, {"inputChannel", 1}, {"dualMono", false}}
+            .dump());
+
+    if (!controller.GetMixer().IsMonoMode() || controller.GetMixer().GetInputChannel() != 1)
+    {
+        std::cerr << "setInputMode did not select Mono In 2\n";
+        return false;
+    }
+
+    const auto preset = BuildPreset("p-input-mode", "Input Mode");
+    nlohmann::json message;
+    message["type"] = "loadPreset";
+    message["preset"] = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
+    message["presetId"] = preset.id;
+    controller.HandleUIMessage(message.dump());
+
+    if (!controller.GetMixer().IsMonoMode() || controller.GetMixer().GetInputChannel() != 1)
+    {
+        std::cerr << "Loading a preset reset the standalone's input to Mono In 1\n";
+        return false;
+    }
+
+    return true;
+}
+
 guitarfx::Preset BuildChainPreset(const std::string& id)
 {
     using namespace guitarfx;
@@ -4825,6 +4867,7 @@ int main()
     run("Standalone ignores embedded host snapshot", TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot());
     run("Standalone startup keeps selected input channel", TestStandaloneStartupInputModeOverridesRestoredPreset());
     run("Shared-sync reload keeps the standalone's input mode", TestSharedSyncReloadKeepsStandaloneInputMode());
+    run("Standalone input mode survives a preset load", TestStandaloneInputModeSurvivesPresetLoad());
     run("Riff library path normalization", TestRiffLibraryPathNormalization());
     run("Optimized NAM metadata alias parsing", TestOptimizedNamMetadataAliasParsing());
     run("Effect replacement survives later interactions", TestEffectReplacementSurvivesLaterInteractions());

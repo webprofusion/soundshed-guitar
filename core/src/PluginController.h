@@ -784,6 +784,9 @@ class PluginController
     [[nodiscard]] bool ApplySettingsToRuntime(SettingsApplyMode mode);
 
     void ApplyInputModeSettingsFromAppSettings();
+    /// Standalone only: records the mixer's input mode in app settings, which ApplyPreset reads
+    /// back on every preset load. Called by setInputMode, so every UI's choice survives a switch.
+    void PersistInputModeToAppSettings();
     void ApplyGlobalFxSettingsFromAppSettings();
     void PersistGlobalFxSettingsToAppSettings();
     /// Return true when sanitising changed mAppSettings, and never persist — see above.
