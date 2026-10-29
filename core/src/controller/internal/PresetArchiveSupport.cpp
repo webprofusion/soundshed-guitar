@@ -703,7 +703,9 @@ void SanitizeImportedPreset(guitarfx::Preset& preset)
                 resource.filePath.clear();
             }
 
-            if (guitarfx::EffectRegistry::Instance().Resolve(node.type) == guitarfx::EffectGuids::kWasmHost)
+            // Id and alias too: a build without WASM effects registers no host (effect-aliases.json).
+            if (node.type == guitarfx::EffectGuids::kWasmHost || node.type == "wasm_host" ||
+                guitarfx::EffectRegistry::Instance().Resolve(node.type) == guitarfx::EffectGuids::kWasmHost)
             {
                 for (auto& resource : node.resources)
                 {

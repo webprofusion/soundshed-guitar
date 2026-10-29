@@ -74,10 +74,17 @@ std::error_code MoveIntoPlace(const std::filesystem::path& from, const std::file
 
     return {static_cast<int>(GetLastError()), std::system_category()};
 #else
-    // POSIX rename always replaces, and a reader keeps the file it already opened,
-    // so a create-only step would buy nothing.
-    (void)replace;
+    // POSIX rename always replaces, and a reader keeps the file it already opened. The
+    // create-only step is still a check, so a target that already holds these bytes is
+    // left alone here too rather than rewritten for nothing; a racing create is harmless,
+    // as the rename then just replaces it.
     std::error_code ec;
+
+    if (!replace && std::filesystem::exists(to, ec))
+    {
+        return std::make_error_code(std::errc::file_exists);
+    }
+
     std::filesystem::rename(from, to, ec);
     return ec;
 #endif

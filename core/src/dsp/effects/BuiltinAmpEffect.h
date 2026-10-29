@@ -100,8 +100,9 @@ class BuiltinAmpEffect : public EffectProcessor
         }
 
         const float* in[2] = {inputs ? inputs[0] : nullptr, inputs ? inputs[1] : nullptr};
+        const bool inputFinite = AllFinite(in, 2, numSamples); // before Render: it may write in place
         Render<2>(in, outputs, numSamples);
-        ScrubNonFinite(outputs, 2, numSamples);
+        ScrubNonFinite(outputs, 2, numSamples, inputFinite);
     }
 
     // A guitar is mono, and the executor hands a mono signal to effects that
@@ -121,8 +122,9 @@ class BuiltinAmpEffect : public EffectProcessor
 
         const float* in[1] = {input};
         float* out[1] = {output};
+        const bool inputFinite = AllFinite(in, 1, numSamples);
         Render<1>(in, out, numSamples);
-        ScrubNonFinite(out, 1, numSamples);
+        ScrubNonFinite(out, 1, numSamples, inputFinite);
         mRightChannelStale = true;
     }
 
@@ -314,14 +316,32 @@ class BuiltinAmpEffect : public EffectProcessor
         }
     }
 
-    // A non-finite sample from upstream (a hosted plugin on a bad day) latches the stages'
-    // recursive state, and the amp put out NaN, or nothing, until its node was rebuilt. One
-    // check per block, on the last sample, which the filters carry a NaN forward to: start over.
-    void ScrubNonFinite(float* const* outputs, int channels, int numSamples)
+    [[nodiscard]] static bool AllFinite(const float* const* inputs, int channels, int numSamples)
     {
         for (int ch = 0; ch < channels; ++ch)
         {
-            if (!outputs[ch] || IsFinite(outputs[ch][numSamples - 1]))
+            for (int i = 0; inputs[ch] && i < numSamples; ++i)
+            {
+                if (!IsFinite(inputs[ch][i]))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    // A non-finite sample from upstream (a hosted plugin on a bad day) latches the stages'
+    // recursive state, and the amp put out NaN, or nothing, until its node was rebuilt. So start
+    // over after a block that took one in, or whose last sample the filters carried one to. The
+    // output alone is not enough: under -ffast-math the clamps and clipper can turn a NaN finite
+    // on its way out, and the stages stayed poisoned behind a finite, silent output.
+    void ScrubNonFinite(float* const* outputs, int channels, int numSamples, bool inputFinite)
+    {
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            if (!outputs[ch] || (inputFinite && IsFinite(outputs[ch][numSamples - 1])))
             {
                 continue;
             }

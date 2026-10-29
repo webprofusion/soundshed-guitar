@@ -1,6 +1,7 @@
 #include "controller/internal/BlendSupport.h"
 
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "presets/PresetTypes.h"
 
 #include <algorithm>
@@ -40,7 +41,7 @@ ResourceRef BuildMappedModelRef(const nlohmann::json& mapping, std::size_t index
     {
         const double trimDb = mapping["levelTrimDb"].get<double>();
 
-        if (std::isfinite(trimDb) && trimDb != 0.0)
+        if (guitarfx::IsFinite(trimDb) && trimDb != 0.0)
         {
             ref.levelTrimDb = std::clamp(trimDb, kMinBlendLevelTrimDb, kMaxBlendLevelTrimDb);
         }
