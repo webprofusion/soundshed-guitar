@@ -11,7 +11,10 @@
   gap: 0;
 }
 
-.signal-chain-segment > .signal-node {
+/* A split nested in a branch has its splitter and mixer in that branch: they too sit
+   above the routes that tuck under their cards. */
+.signal-chain-segment > .signal-node,
+.parallel-branch > .signal-node {
   z-index: 1;
 }
 

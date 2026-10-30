@@ -251,13 +251,13 @@ Ptr Shell::BuildSplitBranches(const guitarfx::GraphNode& splitter)
             }
         }
 
-        for (const auto& item : BuildChainLayout(mState.activePreset->graph).items)
+        const auto layout = BuildChainLayout(mState.activePreset->graph);
+
+        // At any depth: a split nested in a branch has its Branches control too.
+        if (const auto* item = layout.FindParallel(splitter.id); item != nullptr && item->splitNodeId == splitter.id)
         {
-            if (item.kind == ChainItem::Kind::Parallel && item.splitNodeId == splitter.id)
-            {
-                holding = static_cast<int>(std::count_if(item.branches.begin(), item.branches.end(),
-                                                         [](const ChainBranch& b) { return !b.nodeIds.empty(); }));
-            }
+            holding = static_cast<int>(std::count_if(item->branches.begin(), item->branches.end(),
+                                                     [](const ChainBranch& b) { return !b.nodeIds.empty(); }));
         }
     }
 

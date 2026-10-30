@@ -26,16 +26,12 @@ bool Shell::RemoveChainNode(const std::string& nodeId)
     {
         const auto layout = guitarfx::uiclient::BuildChainLayout(mState.activePreset->graph);
 
-        for (const auto& item : layout.items)
+        if (const auto* item = layout.FindParallel(nodeId); item != nullptr && item->collapsible)
         {
-            if (item.kind == guitarfx::uiclient::ChainItem::Kind::Parallel && item.collapsible &&
-                (item.splitNodeId == nodeId || item.joinNodeId == nodeId))
-            {
-                commands.CollapseSplit(item.splitNodeId);
-                mSelectedNode.clear();
-                mChainFocused = false;
-                return true;
-            }
+            commands.CollapseSplit(item->splitNodeId);
+            mSelectedNode.clear();
+            mChainFocused = false;
+            return true;
         }
 
         return false;

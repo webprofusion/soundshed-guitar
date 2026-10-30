@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 
 namespace nanoq::ui
 {
@@ -66,35 +67,35 @@ std::string Shell::MoveTarget(const std::string& nodeId, int direction) const
         return {};
     };
 
-    std::vector<LaneSlot> mainLane;
+    // A row of items (the main row, or a branch) is a lane; a split nested in a branch is a slot
+    // of that branch's lane, and its own branches lanes of their own.
+    std::function<std::string(const std::vector<ChainItem>&, const std::string&, bool)> search =
+        [&](const std::vector<ChainItem>& row, const std::string& head, bool headIsSplit) -> std::string {
+        std::vector<LaneSlot> lane;
 
-    for (const auto& item : layout.items)
-    {
-        if (item.kind == ChainItem::Kind::Node)
+        for (const auto& item : row)
         {
-            mainLane.push_back({item.nodeId, item.nodeId});
-            continue;
-        }
-
-        mainLane.push_back({item.joinNodeId, {}});
-
-        for (const auto& branch : item.branches)
-        {
-            std::vector<LaneSlot> lane;
-
-            for (const auto& id : branch.nodeIds)
+            if (item.kind == ChainItem::Kind::Node)
             {
-                lane.push_back({id, id});
+                lane.push_back({item.nodeId, item.nodeId});
+                continue;
             }
 
-            if (auto target = moveIn(lane, item.splitNodeId, true); !target.empty())
+            lane.push_back({item.joinNodeId, {}});
+
+            for (const auto& branch : item.branches)
             {
-                return target;
+                if (auto target = search(branch.items, item.splitNodeId, true); !target.empty())
+                {
+                    return target;
+                }
             }
         }
-    }
 
-    return moveIn(mainLane, kInputNodeId, false);
+        return moveIn(lane, head, headIsSplit);
+    };
+
+    return search(layout.items, kInputNodeId, false);
 }
 
 std::string Shell::LastNodeBeforeOutput() const
@@ -153,21 +154,18 @@ void Shell::OpenNodeMenu(const std::string& nodeId)
     {
         const auto layout = guitarfx::uiclient::BuildChainLayout(graph);
 
-        for (const auto& item : layout.items)
+        if (const auto* item = layout.FindParallel(nodeId))
         {
-            if (item.kind == ChainItem::Kind::Parallel && (item.splitNodeId == nodeId || item.joinNodeId == nodeId))
+            if (item->collapsible)
             {
-                if (item.collapsible)
-                {
-                    items.push_back({"Back to one lane", false, false,
-                                     [&commands, splitter = item.splitNodeId] { commands.CollapseSplit(splitter); }});
-                }
+                items.push_back({"Back to one lane", false, false,
+                                 [&commands, splitter = item->splitNodeId] { commands.CollapseSplit(splitter); }});
+            }
 
-                if (!item.joinNodeId.empty())
-                {
-                    items.push_back({"Add effect after the blend...", false, false,
-                                     [this, join = item.joinNodeId] { OpenEffectPicker(join); }});
-                }
+            if (!item->joinNodeId.empty())
+            {
+                items.push_back({"Add effect after the blend...", false, false,
+                                 [this, join = item->joinNodeId] { OpenEffectPicker(join); }});
             }
         }
 

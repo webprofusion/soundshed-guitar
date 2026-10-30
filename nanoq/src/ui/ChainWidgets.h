@@ -1099,6 +1099,13 @@ class Rail final : public el::element, public Focusable
         mRowHeight = height;
     }
 
+    /// Lanes of their own heights, top first: a lane holding a nested split is as tall as its
+    /// branches. Unset, every lane is RowHeight.
+    void LaneHeights(std::vector<float> heights)
+    {
+        mLaneHeights = std::move(heights);
+    }
+
     el::view_limits limits(const el::basic_context&) const override
     {
         const float h = Height();
@@ -1121,14 +1128,25 @@ class Rail final : public el::element, public Focusable
         cnv.begin_path();
         cnv.move_to(outside, mid);
         cnv.line_to(x, mid);
-        const float first = top + mRowHeight * 0.5f;
-        const float last = top + Height() - mRowHeight * 0.5f;
-        cnv.move_to(x, first);
-        cnv.line_to(x, last);
+        // Each lane's middle, where its cable runs.
+        std::vector<float> middles;
+        float laneTop = top;
 
         for (int i = 0; i < mLanes; ++i)
         {
-            const float y = first + static_cast<float>(i) * (mRowHeight + kLaneGap);
+            const float h = LaneHeight(i);
+            middles.push_back(laneTop + h * 0.5f);
+            laneTop += h + kLaneGap;
+        }
+
+        if (!middles.empty())
+        {
+            cnv.move_to(x, middles.front());
+            cnv.line_to(x, middles.back());
+        }
+
+        for (const float y : middles)
+        {
             cnv.move_to(x, y);
             cnv.line_to(inside, y);
         }
@@ -1181,15 +1199,28 @@ class Rail final : public el::element, public Focusable
     }
 
   private:
+    [[nodiscard]] float LaneHeight(int lane) const
+    {
+        return lane < static_cast<int>(mLaneHeights.size()) ? mLaneHeights[static_cast<std::size_t>(lane)] : mRowHeight;
+    }
+
     [[nodiscard]] float Height() const
     {
-        return static_cast<float>(mLanes) * mRowHeight + static_cast<float>(std::max(0, mLanes - 1)) * kLaneGap;
+        float height = static_cast<float>(std::max(0, mLanes - 1)) * kLaneGap;
+
+        for (int i = 0; i < mLanes; ++i)
+        {
+            height += LaneHeight(i);
+        }
+
+        return height;
     }
 
     const Theme& mTheme;
     Icons& mIcons;
     int mLanes;
     float mRowHeight = kCardHeight;
+    std::vector<float> mLaneHeights;
     bool mJoin, mSelected;
     std::function<void()> mOnSelect;
     bool mHover = false;

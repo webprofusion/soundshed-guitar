@@ -6,8 +6,8 @@
  * A preset's graph is a DAG; a chain view draws a row. This walks the graph from the input
  * the way the web UI's renderGraphSignalPath does (core/ui/ts/signalPath.ts): follow each
  * node's primary edge (port 0 first), and where a node fans out, find the first node every
- * branch reaches again and draw the branches stacked between the two. Nested splits are not
- * drawn, as in the web UI; a branch stops at the inner split node.
+ * branch reaches again and draw the branches stacked between the two. A split inside a branch is
+ * laid out the same way within that branch, and the branch carries on from where it joins.
  */
 
 #include "presets/PresetTypes.h"
@@ -17,10 +17,18 @@
 
 namespace guitarfx::uiclient
 {
+struct ChainItem;
+
 struct ChainBranch
 {
     int port = 0;
+
+    /// Every node on the branch in drawing order, a nested split's splitter and branches included.
     std::vector<std::string> nodeIds;
+
+    /// What runs along the branch, as ChainLayout::items does for the main row: a split nested
+    /// here is a Kind::Parallel item followed by its join.
+    std::vector<ChainItem> items;
 };
 
 struct ChainItem
@@ -57,6 +65,9 @@ struct ChainLayout
 
     /// The node drawn just before `nodeId` on the main row or its branch, or the input.
     [[nodiscard]] std::string NodeBefore(const std::string& nodeId) const;
+
+    /// The parallel block that splits or joins at `nodeId`, at any depth; null when none does.
+    [[nodiscard]] const ChainItem* FindParallel(const std::string& nodeId) const;
 };
 
 inline constexpr const char* kInputNodeId = "__input__";

@@ -732,7 +732,12 @@ function renderGraphSignalPath(preset: Preset): void {
 
   const visited = new Set<string>();
 
-  const renderParallelForSplitter = (splitterId: string): { html: string; mixerId: string | null } => {
+  // Deep enough for any split a person builds; it only stops a malformed graph recursing forever
+  // (SplitBranchSupport's kMaxNestedSplits).
+  const MAX_NESTED_SPLITS = 16;
+
+  const renderParallelForSplitter = (splitterId: string, depth = 0): { html: string; mixerId: string | null } => {
+    if (depth > MAX_NESTED_SPLITS) return { html: "", mixerId: null };
     const outs = getOutgoingEdges(splitterId);
     if (outs.length < 2) return { html: "", mixerId: null };
 
@@ -762,12 +767,19 @@ function renderGraphSignalPath(preset: Preset): void {
         }
 
         html += renderNodeElement(node);
+        let continueFrom = node.id;
         if (node.type === EffectGuids.kSplitter || isSplitPoint(node.id)) {
-          // Nested splits are not yet rendered; stop at the node.
-          break;
+          // A split inside this branch draws its own branches and mixer, and the branch
+          // carries on from that mixer.
+          const nested = renderParallelForSplitter(node.id, depth + 1);
+          if (!nested.html || !nested.mixerId || nested.mixerId === joinId) {
+            break;
+          }
+          html += nested.html;
+          continueFrom = nested.mixerId;
         }
 
-        edge = pickPrimaryOutgoingEdge(outgoing, node.id);
+        edge = pickPrimaryOutgoingEdge(outgoing, continueFrom);
       }
       return html;
     };

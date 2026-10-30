@@ -158,6 +158,7 @@ set(TEST_SOURCES
     SpectrumTapTests.cpp
     SpliceTransposerTests.cpp
     SplitBranchTests.cpp
+    NestedSplitTests.cpp
     Spatial3DEffectTests.cpp
     StereoProcessingTests.cpp
     SynthSawEffectTests.cpp

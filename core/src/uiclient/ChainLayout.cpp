@@ -165,8 +165,17 @@ std::string FindJoin(const Graph& graph, const std::string& splitId)
     return {};
 }
 
-bool BuildParallel(const Graph& graph, const std::string& splitId, ChainItem& item)
+/// Deep enough for any split a person builds; it only stops a malformed graph recursing forever
+/// (SplitBranchSupport's kMaxNestedSplits, the web UI's MAX_NESTED_SPLITS).
+constexpr int kMaxNestedSplits = 16;
+
+bool BuildParallel(const Graph& graph, const std::string& splitId, ChainItem& item, int depth)
 {
+    if (depth > kMaxNestedSplits)
+    {
+        return false;
+    }
+
     const auto joinId = FindJoin(graph, splitId);
 
     if (joinId.empty())
@@ -204,12 +213,38 @@ bool BuildParallel(const Graph& graph, const std::string& splitId, ChainItem& it
 
             branch.nodeIds.push_back(node->id);
 
-            // Nested splits are not drawn; the branch stops at the inner split.
+            // A split inside the branch: laid out as the main row lays one out, and the branch
+            // carries on from its join.
             if (IsSplitterType(node->type) || graph.IsSplitPoint(node->id))
             {
-                break;
+                ChainItem nested;
+
+                if (!BuildParallel(graph, node->id, nested, depth + 1) || nested.joinNodeId == joinId)
+                {
+                    ChainItem stop;
+                    stop.nodeId = node->id;
+                    branch.items.push_back(std::move(stop));
+                    break;
+                }
+
+                for (const auto& inner : nested.branches)
+                {
+                    branch.nodeIds.insert(branch.nodeIds.end(), inner.nodeIds.begin(), inner.nodeIds.end());
+                }
+
+                branch.nodeIds.push_back(nested.joinNodeId);
+                ChainItem nestedJoin;
+                nestedJoin.nodeId = nested.joinNodeId;
+                const std::string from = nested.joinNodeId;
+                branch.items.push_back(std::move(nested));
+                branch.items.push_back(std::move(nestedJoin));
+                edge = graph.Primary(from);
+                continue;
             }
 
+            ChainItem step;
+            step.nodeId = node->id;
+            branch.items.push_back(std::move(step));
             edge = graph.Primary(node->id);
         }
 
@@ -259,7 +294,7 @@ ChainLayout BuildChainLayout(const SignalGraph& signalGraph)
             {
                 ChainItem parallel;
 
-                if (BuildParallel(graph, current, parallel))
+                if (BuildParallel(graph, current, parallel, 0))
                 {
                     // The split node is folded into the parallel block (its glyph), and the
                     // join is drawn after it as a node of its own, as the web UI does.
@@ -324,41 +359,80 @@ std::vector<std::string> ChainLayout::DrawnNodeIds() const
     return ids;
 }
 
-std::string ChainLayout::NodeBefore(const std::string& nodeId) const
+namespace
 {
-    std::string previous = kInputNodeId;
-
-    for (const auto& item : items)
+/// NodeBefore within one row of items (the main row or a branch), starting after `previous`.
+bool FindBefore(const std::vector<ChainItem>& row, const std::string& nodeId, std::string previous, std::string& found)
+{
+    for (const auto& item : row)
     {
         if (item.kind == ChainItem::Kind::Node)
         {
             if (item.nodeId == nodeId)
             {
-                return previous;
+                found = previous;
+                return true;
             }
 
             previous = item.nodeId;
             continue;
         }
 
+        if (item.splitNodeId == nodeId)
+        {
+            found = previous;
+            return true;
+        }
+
         for (const auto& branch : item.branches)
         {
-            std::string branchPrevious = item.splitNodeId;
-
-            for (const auto& id : branch.nodeIds)
+            if (FindBefore(branch.items, nodeId, item.splitNodeId, found))
             {
-                if (id == nodeId)
-                {
-                    return branchPrevious;
-                }
-
-                branchPrevious = id;
+                return true;
             }
         }
 
         previous = item.splitNodeId;
     }
 
-    return previous;
+    return false;
+}
+
+const ChainItem* FindParallelIn(const std::vector<ChainItem>& row, const std::string& nodeId)
+{
+    for (const auto& item : row)
+    {
+        if (item.kind != ChainItem::Kind::Parallel)
+        {
+            continue;
+        }
+
+        if (item.splitNodeId == nodeId || item.joinNodeId == nodeId)
+        {
+            return &item;
+        }
+
+        for (const auto& branch : item.branches)
+        {
+            if (const auto* nested = FindParallelIn(branch.items, nodeId))
+            {
+                return nested;
+            }
+        }
+    }
+
+    return nullptr;
+}
+} // namespace
+
+std::string ChainLayout::NodeBefore(const std::string& nodeId) const
+{
+    std::string found;
+    return FindBefore(items, nodeId, kInputNodeId, found) ? found : std::string(kInputNodeId);
+}
+
+const ChainItem* ChainLayout::FindParallel(const std::string& nodeId) const
+{
+    return FindParallelIn(items, nodeId);
 }
 } // namespace guitarfx::uiclient

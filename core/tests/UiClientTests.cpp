@@ -763,6 +763,43 @@ void TestChainLayoutWalksParallelLanes()
            "NodeBefore follows the branch a node is on");
 }
 
+void TestChainLayoutWalksNestedSplits()
+{
+    // drive → split → [ a → inner → [ c | (empty) ] → innerMix → d | b ] → mix → output
+    SignalGraph graph;
+    graph.nodes = {Node("__input__", kNodeTypeInput),     Node("drive", EffectGuids::kOverdrive),
+                   Node("split", EffectGuids::kSplitter), Node("a", EffectGuids::kDelayDigital),
+                   Node("inner", EffectGuids::kSplitter), Node("c", EffectGuids::kChorus),
+                   Node("innerMix", EffectGuids::kMixer), Node("d", EffectGuids::kPhaser),
+                   Node("b", EffectGuids::kReverbRoom),   Node("mix", EffectGuids::kMixer),
+                   Node("__output__", kNodeTypeOutput)};
+    graph.edges = {{"__input__", "drive", 0, 0, 1.0}, {"drive", "split", 0, 0, 1.0}, {"split", "a", 0, 0, 1.0},
+                   {"split", "b", 1, 0, 1.0},         {"a", "inner", 0, 0, 1.0},     {"inner", "c", 0, 0, 1.0},
+                   {"inner", "innerMix", 1, 1, 1.0},  {"c", "innerMix", 0, 0, 1.0},  {"innerMix", "d", 0, 0, 1.0},
+                   {"d", "mix", 0, 0, 1.0},           {"b", "mix", 0, 1, 1.0},       {"mix", "__output__", 0, 0, 1.0}};
+
+    const auto layout = BuildChainLayout(graph);
+    Expect(layout.items.size() == 3 && layout.items[1].joinNodeId == "mix", "the outer split joins at its own mixer");
+    const auto& first = layout.items[1].branches[0];
+    Expect(first.items.size() == 4 && first.items[0].nodeId == "a" &&
+               first.items[1].kind == ChainItem::Kind::Parallel && first.items[1].splitNodeId == "inner" &&
+               first.items[1].joinNodeId == "innerMix" && first.items[2].nodeId == "innerMix" &&
+               first.items[3].nodeId == "d",
+           "the inner split is a parallel block in the branch, and the branch goes on past its mixer");
+    Expect(first.items[1].collapsible && first.items[1].branches.size() == 2 &&
+               first.items[1].branches[0].nodeIds == std::vector<std::string>{"c"} &&
+               first.items[1].branches[1].nodeIds.empty(),
+           "the inner split's own branches");
+    Expect(first.nodeIds == std::vector<std::string>{"a", "inner", "c", "innerMix", "d"},
+           "the branch's nodes, the inner split's included, in drawing order");
+    Expect(layout.FindParallel("innerMix") == &first.items[1] && layout.FindParallel("inner") == &first.items[1] &&
+               layout.FindParallel("mix") == &layout.items[1] && layout.FindParallel("c") == nullptr,
+           "FindParallel finds a block by its split or join at any depth");
+    Expect(layout.NodeBefore("c") == "inner" && layout.NodeBefore("d") == "innerMix" &&
+               layout.NodeBefore("a") == "split",
+           "NodeBefore follows nested branches");
+}
+
 void TestNodeArchitectureBadge()
 {
     ClientState state;
@@ -2263,6 +2300,7 @@ int main()
     TestFactoryPresetParameterOrder();
     TestTelemetryDecoding();
     TestChainLayoutWalksParallelLanes();
+    TestChainLayoutWalksNestedSplits();
     TestChainDropRules();
     TestFeatureFlagsAndFxMarks();
     TestPresetTrail();
