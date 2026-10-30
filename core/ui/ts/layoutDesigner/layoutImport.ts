@@ -10,6 +10,7 @@
 
 import type { EffectLayout, LayoutBackground, LayoutControl, LayoutImageRef, LayoutRectangleOverlay, LayoutTextLabel } from "../layoutTypes.js";
 import { DEFAULT_LAYOUT_DIMENSIONS, normalizeBackgroundLayers, renameLayoutImageIds, sanitizeLayout } from "../layoutTypes.js";
+import { usableControlsArea } from "../layoutControlsArea.js";
 import { cleanCredit, isLayoutImageLicense } from "../layoutImageCredits.js";
 import { arrayBufferToBase64 } from "../utils.js";
 
@@ -198,6 +199,7 @@ export function normalizeImportedLayout(raw: unknown): EffectLayout | null {
     useDefaultControls: raw.useDefaultControls === true ? true : undefined,
     defaultControlsOffset: optionalPoint(raw.defaultControlsOffset, 0),
     defaultControlsScale: optionalPoint(raw.defaultControlsScale, 1),
+    defaultControlsArea: usableControlsArea(raw.defaultControlsArea),
     dimensions: {
       width: finite(dimensions.width, DEFAULT_LAYOUT_DIMENSIONS.width),
       height: finite(dimensions.height, DEFAULT_LAYOUT_DIMENSIONS.height),

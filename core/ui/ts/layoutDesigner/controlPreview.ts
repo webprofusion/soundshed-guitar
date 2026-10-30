@@ -7,6 +7,7 @@
  */
 
 import { GenericKnob } from "../knob.js";
+import { controlsAreaAttributes, fitDefaultControls, usableControlsArea } from "../layoutControlsArea.js";
 import { defaultControlsPanelClass, layoutDefaultControlsHtml } from "../layoutDefaultControls.js";
 import { defaultControlsColorAttrs, imageResolverFor, renderCustomLayoutPreviewLayers } from "../layoutRenderer.js";
 import type { LayoutResourceControlDef } from "../layoutRenderer.js";
@@ -148,9 +149,11 @@ export function defaultControlsPreviewHtml(layout: EffectLayout, paramDefs: Para
   const effectiveOffsetY = Math.round(offsetY * runtimeFitScale);
   const effectiveScaleX = scaleX * runtimeFitScale;
   const effectiveScaleY = scaleY * runtimeFitScale;
-  const hasTransformOrOffset = effectiveOffsetX !== 0 || effectiveOffsetY !== 0 || effectiveScaleX !== 1 || effectiveScaleY !== 1;
-  // Pin wrapper to canvas width so flex-wrap break points are identical in the runtime panel.
-  const wrapperWidth = `width: ${layout.dimensions.width}px;`;
+  const layoutArea = usableControlsArea(layout.defaultControlsArea);
+  const area = layoutArea && { width: layoutArea.width * runtimeFitScale, height: layoutArea.height * runtimeFitScale };
+  const hasTransformOrOffset = effectiveOffsetX !== 0 || effectiveOffsetY !== 0 || effectiveScaleX !== 1 || effectiveScaleY !== 1 || area !== undefined;
+  // Pin wrapper to canvas width (or its area's) so flex-wrap break points are identical in the runtime panel.
+  const wrapperWidth = `width: ${layoutArea ? layoutArea.width / scaleX : layout.dimensions.width}px;`;
   const wrapperStyle = hasTransformOrOffset
     ? `position: absolute; left: ${effectiveOffsetX}px; top: ${effectiveOffsetY}px; transform: scale(${effectiveScaleX}, ${effectiveScaleY}); transform-origin: top left; z-index: 2; ${wrapperWidth}`
     : `position: relative; z-index: 2; ${wrapperWidth}`;
@@ -160,9 +163,20 @@ export function defaultControlsPreviewHtml(layout: EffectLayout, paramDefs: Para
   const themeClass = layout.containerTheme ? ` theme-${layout.containerTheme}` : '';
   const colors = defaultControlsColorAttrs(layout);
 
+  // The area itself, outlined, so the box the controls fit into can be seen against the background.
+  const outline = area
+    ? `<div class="layout-default-controls-area" style="left: ${effectiveOffsetX}px; top: ${effectiveOffsetY}px; width: ${area.width}px; height: ${area.height}px;"></div>`
+    : "";
   return `
-    <div class="layout-default-controls-preview custom-layout-backdrop${escapeHtml(themeClass)}${escapeHtml(colors.classes + defaultControlsPanelClass(layout))}" style="${escapeHtml(wrapperStyle + colors.style)} pointer-events: none;">
+    ${outline}
+    <div class="layout-default-controls-preview custom-layout-backdrop${escapeHtml(themeClass)}${escapeHtml(colors.classes + defaultControlsPanelClass(layout))}" style="${escapeHtml(wrapperStyle + colors.style)} pointer-events: none;"${area ? controlsAreaAttributes(area, effectiveScaleX, effectiveScaleY) : ""}>
       ${layoutDefaultControlsHtml(innerHtml, layout, imageResolverFor(layout))}
     </div>
   `;
+}
+
+/** Draw the default controls preview into the canvas's controls layer, shrunk into their area. */
+export function renderDefaultControlsPreview(layer: HTMLElement, layout: EffectLayout, paramDefs: ParameterDef[], viewportWidth: number): void {
+  layer.innerHTML = defaultControlsPreviewHtml(layout, paramDefs, viewportWidth);
+  layer.querySelectorAll<HTMLElement>("[data-area-w]").forEach(fitDefaultControls);
 }

@@ -17,6 +17,7 @@ import { backgroundImageDrawnWidth, ensureLayoutImagesLoaded, knobFaceDrawnWidth
 import { DEFAULT_KNOB_DIAMETER, imageKnob, imageToggle, imageToggleSize, withLayoutSwitchImage, knobDiameter, overlayImageStyle, sliderAttributes, stripSlider, styledKnobSizeStyle, withLayoutKnobImage, type ImageCssResolver } from "./layoutControlImages.js";
 import { knobShadowSvg, toggleShadowSvg, usableControlShadow } from "./layoutShadows.js";
 import { defaultControlsPanelClass, layoutDefaultControlsHtml } from "./layoutDefaultControls.js";
+import { controlsAreaAttributes, usableControlsArea } from "./layoutControlsArea.js";
 import { layoutCanGrow, scalingAttribute } from "./layoutScaling.js";
 import { isLibraryPickerType, libraryPickerControlsHtml, libraryPickerNavigation, librarySlotHasBrowseButton } from "./resourceSlotMarkup.js";
 import type {
@@ -335,10 +336,11 @@ export function renderCustomLayoutBackdrop(
   const offsetY = layoutNumber(layout.defaultControlsOffset?.y, 0);
   const scaleX = layoutNumber(layout.defaultControlsScale?.x, 1);
   const scaleY = layoutNumber(layout.defaultControlsScale?.y, 1);
-  const hasTransformOrOffset = offsetX !== 0 || offsetY !== 0 || scaleX !== 1 || scaleY !== 1;
-  // Fix the controls wrapper to the design canvas width so flex-wrap break points match
-  // the designer exactly. Uniform outer scaling (applied at runtime) handles fitting.
-  const wrapperWidth = `width: ${w}px;`;
+  const area = usableControlsArea(layout.defaultControlsArea);
+  const hasTransformOrOffset = offsetX !== 0 || offsetY !== 0 || scaleX !== 1 || scaleY !== 1 || area !== undefined;
+  // Fix the controls wrapper to the design canvas width (or its area's) so flex-wrap break points
+  // match the designer exactly. Uniform outer scaling (applied at runtime) handles fitting.
+  const wrapperWidth = `width: ${area ? area.width / scaleX : w}px;`;
   const wrapperStyle = hasTransformOrOffset
     ? `position: absolute; left: ${Math.round(offsetX)}px; top: ${Math.round(offsetY)}px; transform: scale(${scaleX}, ${scaleY}); transform-origin: top left; z-index: 2; ${wrapperWidth}`
     : `position: relative; z-index: 2; ${wrapperWidth}`;
@@ -367,7 +369,7 @@ export function renderCustomLayoutBackdrop(
         <div class="custom-layout-labels" style="position: absolute; inset: 0; z-index: 3; pointer-events: none; margin: 0; padding: 0;">
           ${labels}
         </div>
-        <div class="custom-layout-default-controls${escapeHtml(colors.classes + defaultControlsPanelClass(layout))}" style="${escapeHtml(wrapperStyle + colors.style)}">
+        <div class="custom-layout-default-controls${escapeHtml(colors.classes + defaultControlsPanelClass(layout))}" style="${escapeHtml(wrapperStyle + colors.style)}"${area ? controlsAreaAttributes(area, scaleX, scaleY) : ""}>
           ${layoutDefaultControlsHtml(innerHtml, layout, imageResolverFor(layout))}
         </div>
       </div>

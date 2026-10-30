@@ -10,6 +10,7 @@
  */
 
 import { usableKnobImage, usableToggleImage } from "./layoutControlImages.js";
+import { usableControlsArea } from "./layoutControlsArea.js";
 import { usableStrip } from "./layoutKnobImages.js";
 import { usableControlShadow } from "./layoutShadows.js";
 import { LEGACY_DIMENSION_LIMITS, type EffectLayout } from "./layoutTypes.js";
@@ -73,7 +74,8 @@ export function layoutRequirements(layout: EffectLayout): LayoutFeature[] {
   }
   if (usableControlShadow(layout.controlShadow)) used.add("control-shadow");
   if (usableToggleImage(layout.switchImage)) used.add("switch-image");
-  if (layout.useDefaultControls && (layout.defaultControlsMainOnly === true || layout.defaultControlsPanels === false)) {
+  if (layout.useDefaultControls && (layout.defaultControlsMainOnly === true || layout.defaultControlsPanels === false
+    || usableControlsArea(layout.defaultControlsArea))) {
     used.add("default-controls-style");
   }
 

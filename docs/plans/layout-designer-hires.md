@@ -586,6 +586,21 @@ panels:
   controls', whose standard switch `applySwitchImageToToggles` replaces, the
   input kept. Adds the `switch-image` requirement; older apps draw standard
   toggles. Export, import and the copy on save include its images.
+- **The default controls' area** (`layout.defaultControlsArea`,
+  `layoutControlsArea.ts`). A box in canvas px, its top left at
+  `defaultControlsOffset`, that a `useDefaultControls` layout's controls stay
+  inside, so they no longer run past the background's edges. They wrap at its
+  width (the wrapper is `width / scaleX` wide), and while they are taller
+  than it they shrink, Scale X and Y kept in proportion, to the largest fit
+  at which they are not: an eight-step search measuring the rewrapped height,
+  run once they are in the document and again on any resize
+  (`fitDefaultControlsAreas`, from `applyCustomLayoutScaling`). Unset, they
+  wrap at the canvas width and may run past its foot, as before. The canvas
+  panel sets Width and Height under Default Controls — Position (either alone
+  takes the other out to the canvas edge; Fit to Canvas mirrors the left and
+  top margins), and the designer outlines the box. It counts as
+  `default-controls-style`; older apps wrap at the canvas width. Nano Q does
+  not read it yet.
 - **Image licence and credit** (`layoutImageCredits.ts`). Each user image can
   record the licence it was shared under (CC0 and the CC 4.0 licences, own
   work, other) and a credit line, in Images in this Layout. The engine keeps

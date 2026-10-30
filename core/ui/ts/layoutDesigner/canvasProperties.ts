@@ -6,6 +6,7 @@
  */
 
 import type { LayoutBackground, LayoutScaling } from "../layoutTypes.js";
+import { usableControlsArea } from "../layoutControlsArea.js";
 import { bindKnobImageRows, renderKnobImageRows } from "./controlImageProperties.js";
 import { getLayoutImageUrl } from "./images.js";
 import { bindLayoutAssetsGroup, renderLayoutAssetsGroup } from "./layoutAssets.js";
@@ -30,6 +31,7 @@ export class CanvasProperties {
     const offsetY = layout.defaultControlsOffset?.y ?? 0;
     const scaleX = layout.defaultControlsScale?.x ?? 1;
     const scaleY = layout.defaultControlsScale?.y ?? 1;
+    const area = usableControlsArea(layout.defaultControlsArea);
     const scaling = layout.scaling ?? {};
 
     const backdropSections = isBackdrop ? `
@@ -61,6 +63,25 @@ export class CanvasProperties {
           <div class="layout-property-input">
             <input type="number" id="prop-dc-offset-y" value="${offsetY}" step="1">
           </div>
+        </div>
+        <div class="layout-property-hint">
+          The box the controls stay inside: they wrap at its width and shrink to fit its height. Empty, they wrap at the canvas width and may run past its foot.
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Width (px)</span>
+          <div class="layout-property-input">
+            <input type="number" id="prop-dc-area-w" min="1" step="1" placeholder="Canvas" value="${area?.width ?? ""}" title="Width of the box the controls wrap within">
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <span class="layout-property-label">Height (px)</span>
+          <div class="layout-property-input">
+            <input type="number" id="prop-dc-area-h" min="1" step="1" placeholder="Any" value="${area?.height ?? ""}" title="Height the controls shrink to fit">
+          </div>
+        </div>
+        <div class="layout-property-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="prop-dc-area-fill" title="Size the box to the canvas, with the same margin on the right and bottom as on the left and top">Fit to Canvas</button>
+          ${area ? `<button type="button" class="btn btn-secondary btn-sm" id="prop-dc-area-clear" title="Let the controls wrap at the canvas width, at any height">Clear</button>` : ""}
         </div>
       </div>
       <div class="layout-property-group">
@@ -331,6 +352,40 @@ export class CanvasProperties {
     bindNum("prop-dc-scale-y", (v) => {
       if (!layout) return;
       layout.defaultControlsScale = { x: layout.defaultControlsScale?.x ?? 1, y: Math.max(0.1, v) };
+    });
+
+    // The area: either size alone takes the other from the canvas, out to its edge; emptying either clears it.
+    const canvasRemaining = () => ({
+      width: Math.max(1, layout.dimensions.width - (layout.defaultControlsOffset?.x ?? 0)),
+      height: Math.max(1, layout.dimensions.height - (layout.defaultControlsOffset?.y ?? 0)),
+    });
+    for (const [id, key] of [["prop-dc-area-w", "width"], ["prop-dc-area-h", "height"]] as const) {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      input?.addEventListener("change", () => {
+        this.host.pushSidebarUndoOnce();
+        const value = parseFloat(input.value);
+        if (input.value.trim() === "" || !Number.isFinite(value)) delete layout.defaultControlsArea;
+        else layout.defaultControlsArea = { ...(usableControlsArea(layout.defaultControlsArea) ?? canvasRemaining()), [key]: Math.max(1, Math.round(value)) };
+        this.host.renderCanvas();
+        this.host.renderSidebar(); // The other size and the Clear button
+      });
+    }
+    document.getElementById("prop-dc-area-fill")?.addEventListener("click", () => {
+      this.host.pushUndoState();
+      const x = layout.defaultControlsOffset?.x ?? 0;
+      const y = layout.defaultControlsOffset?.y ?? 0;
+      layout.defaultControlsArea = {
+        width: Math.max(1, layout.dimensions.width - 2 * x),
+        height: Math.max(1, layout.dimensions.height - 2 * y),
+      };
+      this.host.renderCanvas();
+      this.host.renderSidebar();
+    });
+    document.getElementById("prop-dc-area-clear")?.addEventListener("click", () => {
+      this.host.pushUndoState();
+      delete layout.defaultControlsArea;
+      this.host.renderCanvas();
+      this.host.renderSidebar();
     });
 
     const bindCheck = (id: string, apply: (checked: boolean) => void) => {

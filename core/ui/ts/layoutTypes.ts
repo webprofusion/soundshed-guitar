@@ -259,6 +259,12 @@ export interface EffectLayout {
    * wrapper (transform-origin: top left). Values < 1 shrink, > 1 enlarge.
    */
   defaultControlsScale?: { x: number; y: number };
+  /**
+   * When useDefaultControls is true: the box (canvas px, its top left at defaultControlsOffset)
+   * the controls stay inside. They wrap at its width and shrink until they fit its height
+   * (layoutControlsArea.ts). Unset: they wrap at the canvas width and may run past its foot.
+   */
+  defaultControlsArea?: { width: number; height: number };
   /** When useDefaultControls is true: only the Main tab's controls, with no tab bar (layoutDefaultControls.ts). */
   defaultControlsMainOnly?: boolean;
   /**
@@ -452,6 +458,12 @@ export function sanitizeLayout(layout: EffectLayout): EffectLayout {
     layout.defaultControlsOffset = {
       x: Math.round(layout.defaultControlsOffset.x),
       y: Math.round(layout.defaultControlsOffset.y),
+    };
+  }
+  if (layout.defaultControlsArea) {
+    layout.defaultControlsArea = {
+      width: Math.round(layout.defaultControlsArea.width),
+      height: Math.round(layout.defaultControlsArea.height),
     };
   }
 

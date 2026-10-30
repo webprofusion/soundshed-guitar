@@ -708,6 +708,19 @@
   border-color: var(--color-error);
 }
 
+/* The default controls' area (defaultControlsArea), outlined while editing */
+.layout-default-controls-area {
+  position: absolute;
+  outline: 2px dashed var(--color-accent, #4a9eff);
+  outline-offset: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.layout-designer-canvas.preview-mode .layout-default-controls-area {
+  display: none;
+}
+
 /* Preview mode */
 .layout-designer-canvas.preview-mode .layout-control-placeholder {
   border-color: transparent;

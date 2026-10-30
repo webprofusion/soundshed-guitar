@@ -3,6 +3,7 @@
  * and the bypass hotspots on top.
  */
 
+import { fitDefaultControlsAreas } from "../../layoutControlsArea.js";
 import { computeLayoutScale, type LayoutScaling } from "../../layoutScaling.js";
 import type { GraphNode, Preset } from "../../types.js";
 import { toggleSignalPathNodeBypass } from "../bypass.js";
@@ -69,6 +70,9 @@ export function applyCustomLayoutScaling(container: HTMLElement | null): void {
     const designW = parseInt(inner.dataset.designW ?? "0", 10);
     const designH = parseInt(inner.dataset.designH ?? "0", 10);
     if (!designW || !designH) return;
+
+    // Default controls with an area shrink into it; the outer scale below is applied on top.
+    layoutScaleObserverCleanups.push(fitDefaultControlsAreas(inner));
 
     const scaling = readScaling(inner);
     const scroller = scaling?.mode === "fit" ? scrollingAncestor(outer) : null;

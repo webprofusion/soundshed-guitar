@@ -16,7 +16,7 @@ import type { CopiedTextLabelPayload, DragState, LayoutResourceCandidate, Select
 import { ensureLayoutImagesLoaded } from "./layoutImages.js";
 import { bindLayersList, renderLayersList, type LayersListHost } from "./layoutDesigner/layersList.js";
 import { appendWidthHandle, clampControlWidth, measuredMinWidth, previewControlWidth, setControlWidth } from "./layoutDesigner/controlWidth.js";
-import { bindPreviewKnobs, controlPreviewElement, defaultControlsPreviewHtml, designerPreviewNode, designerResourceDefs } from "./layoutDesigner/controlPreview.js";
+import { bindPreviewKnobs, controlPreviewElement, designerPreviewNode, designerResourceDefs, renderDefaultControlsPreview } from "./layoutDesigner/controlPreview.js";
 import { overlayImageStyle } from "./layoutControlImages.js";
 import { colorWithAlpha, imageResolverFor, renderCustomLayoutPreviewLayers, safeCssValue } from "./layoutRenderer.js";
 import { copyOfLayout } from "./layoutPreferences.js";
@@ -834,7 +834,7 @@ export class LayoutDesignerModal {
   private renderDefaultControlsPreview(): void {
     if (!this.controlsLayer || !this.layout) return;
     const viewport = document.getElementById("layout-designer-canvas-container");
-    this.controlsLayer.innerHTML = defaultControlsPreviewHtml(this.layout, this.paramDefs, viewport?.clientWidth ?? this.layout.dimensions.width);
+    renderDefaultControlsPreview(this.controlsLayer, this.layout, this.paramDefs, viewport?.clientWidth ?? this.layout.dimensions.width);
   }
 
   private renderBackgrounds(): void {
@@ -960,7 +960,7 @@ export class LayoutDesignerModal {
     if (!this.controlsLayer || !this.layout) return;
 
     // Clear existing controls
-    this.controlsLayer.querySelectorAll(".layout-control-placeholder, .layout-runtime-preview, .layout-default-controls-placeholder, .layout-default-controls-preview").forEach((el) => el.remove());
+    this.controlsLayer.querySelectorAll(".layout-control-placeholder, .layout-runtime-preview, .layout-default-controls-placeholder, .layout-default-controls-preview, .layout-default-controls-area").forEach((el) => el.remove());
 
     // When useDefaultControls is on, render a live preview of the real controls at the configured position/scale
     if (this.layout.useDefaultControls) {
