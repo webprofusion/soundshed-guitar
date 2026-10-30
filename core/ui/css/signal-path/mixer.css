@@ -114,6 +114,14 @@
   display: none;
 }
 
+/* Full density's top padding leaves the tray its row. Both compact densities trim that
+   padding to a few pixels, which put the tray over the first nodes, so while it shows
+   they keep its height (2px inset, 24px tray, 2px clear). */
+html[data-density="compact"] .signal-path-scene-badges:not([hidden]) ~ .signal-path-scroll,
+.signal-path-bar[data-density="compact"] .signal-path-scene-badges:not([hidden]) ~ .signal-path-scroll {
+  padding-top: 28px;
+}
+
 .scene-badge,
 .scene-badge-add {
   --scene-badge-height: 18px;
@@ -209,6 +217,38 @@
   background: var(--bg-input);
   color: var(--text-primary);
   font: inherit;
+}
+
+/* Dragging a badge to reorder: the badge it would land beside shows which side. */
+.scene-badge.dragging {
+  opacity: 0.4;
+}
+
+.scene-badge.drop-before {
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.scene-badge.drop-after {
+  box-shadow: inset -2px 0 0 var(--color-accent);
+}
+
+.scene-badge-add.drop-before,
+.scene-badge-add.drop-after {
+  border-color: var(--color-accent);
+}
+
+.scene-badge-drag-preview {
+  position: fixed !important;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+body.scene-badge-dragging {
+  cursor: grabbing;
 }
 
 .scene-badge-label:focus-visible,

@@ -139,9 +139,11 @@ bool PresetVoicePool::CommitReplacement(const std::string& id)
     // Crossfade rather than cutting: leave the old slot in place, ramping down, and add
     // the replacement alongside it ramping up. Lookups skip retiring instances, so the
     // shared preset ID still resolves to the new slot from here on.
-    inst->BeginFadeIn(kFadeSamples);
+    const bool outgoingMuted = (*existing)->cfg.mute;
+    const SwapTiming timing = TimeSwap(*inst, outgoingMuted ? 0 : (*existing)->executor.GetTotalLatencySamples());
+    inst->BeginFadeIn(timing.fadeSamples, outgoingMuted ? 0 : timing.warmupSamples);
 
-    if ((*existing)->cfg.mute)
+    if (outgoingMuted)
     {
         // Nothing to fade; retire it outright rather than running a silent chain.
         mReaper.Retire(std::move(*existing));
@@ -150,7 +152,7 @@ bool PresetVoicePool::CommitReplacement(const std::string& id)
     else
     {
         auto& outgoing = **existing;
-        RetireSuperseded(outgoing);
+        RetireSuperseded(outgoing, timing);
         mInstances.push_back(std::move(inst));
         LimitTailing();
         LimitRetiring();
@@ -181,6 +183,19 @@ bool PresetVoicePool::CommitSwap()
         return false;
     }
 
+    // What is heard now is the live, unmuted chains; the swap lines up with the latest of them.
+    int outgoingLatency = 0;
+
+    for (const auto& inst : mInstances)
+    {
+        if (!inst->IsRetiring() && !inst->cfg.mute)
+        {
+            outgoingLatency = std::max(outgoingLatency, inst->executor.GetTotalLatencySamples());
+        }
+    }
+
+    const SwapTiming timing = TimeSwap(*mPending, outgoingLatency);
+
     // Retire everything currently live: ringing out if the tail spill is on, fading out
     // otherwise. An instance already on its way out from an earlier switch is left alone
     // so it carries on from where it is rather than jumping back to full gain, and a tail
@@ -199,7 +214,7 @@ bool PresetVoicePool::CommitSwap()
 
         if (!inst.IsRetiring())
         {
-            RetireSuperseded(inst);
+            RetireSuperseded(inst, timing);
         }
 
         ++it;
@@ -214,10 +229,31 @@ bool PresetVoicePool::CommitSwap()
     // the least likely to be heard going.
     LimitRetiring();
 
-    mPending->BeginFadeIn(kFadeSamples);
+    // With nothing audible going out there is nothing to hold, and no reason to wait.
+    const bool anythingHeard = std::any_of(mInstances.begin(), mInstances.end(), [](const auto& inst) {
+        return inst->phase == InstancePhase::Tailing ||
+               (inst->phase == InstancePhase::FadingOut && inst->fadeSamplesRemaining > 0);
+    });
+    mPending->BeginFadeIn(timing.fadeSamples, anythingHeard ? timing.warmupSamples : 0);
     mInstances.push_back(std::move(mPending));
     mPending.reset();
     return true;
+}
+
+PresetVoicePool::SwapTiming PresetVoicePool::TimeSwap(const PresetInstance& incoming, int outgoingLatency) const
+{
+    const int limit = std::max(kFadeSamples, static_cast<int>(std::lround(kMaxSwapAlignSeconds * mSampleRate)));
+    const int incomingLatency = std::max(0, incoming.executor.GetTotalLatencySamples());
+
+    // A chain with latency has engines that work from a history (a pitch shifter's splice
+    // search, an STFT window), and those settle a little after the latency itself has filled:
+    // Pitch Shift's Low Latency engine clicked about 36 ms in from cold, past its 16 ms.
+    const int settle = incomingLatency > 0 ? static_cast<int>(std::lround(kSwapSettleSeconds * mSampleRate)) : 0;
+
+    SwapTiming timing;
+    timing.warmupSamples = std::min(incomingLatency + settle, limit);
+    timing.fadeSamples = std::clamp(std::abs(std::max(0, outgoingLatency) - incomingLatency), kFadeSamples, limit);
+    return timing;
 }
 
 void PresetVoicePool::SetTailSeconds(double seconds)
@@ -235,7 +271,7 @@ int PresetVoicePool::TailHoldSamples() const
     return static_cast<int>(std::lround(mTailSeconds * mSampleRate));
 }
 
-void PresetVoicePool::RetireSuperseded(PresetInstance& inst)
+void PresetVoicePool::RetireSuperseded(PresetInstance& inst, const SwapTiming& timing)
 {
     // A retiring instance must not influence the live solo decision either way.
     inst.cfg.solo = false;
@@ -244,11 +280,12 @@ void PresetVoicePool::RetireSuperseded(PresetInstance& inst)
 
     if (holdSamples > 0 && inst.canRingOut)
     {
-        inst.BeginTail(kFadeSamples, holdSamples);
+        // The hold counts from when the input starts to ramp away.
+        inst.BeginTail(timing.fadeSamples, holdSamples, timing.warmupSamples);
         return;
     }
 
-    inst.BeginFadeOut(kFadeSamples);
+    inst.BeginFadeOut(timing.fadeSamples, timing.warmupSamples);
 }
 
 void PresetVoicePool::LimitTailing()

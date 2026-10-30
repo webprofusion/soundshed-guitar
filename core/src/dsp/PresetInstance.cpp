@@ -30,15 +30,17 @@ float PresetInstance::CurrentFadeGain() const
     return (phase == InstancePhase::FadingOut) ? fraction : (1.0f - fraction);
 }
 
-void PresetInstance::BeginFadeIn(int fadeSamples)
+void PresetInstance::BeginFadeIn(int fadeSamples, int delaySamples)
 {
     phase = InstancePhase::FadingIn;
     fadeTotalSamples = fadeSamples;
     fadeSamplesRemaining = fadeSamples;
+    rampDelaySamplesRemaining = std::max(0, delaySamples);
 }
 
-void PresetInstance::BeginTail(int inputFadeSamples, int holdSamples)
+void PresetInstance::BeginTail(int inputFadeSamples, int holdSamples, int delaySamples)
 {
+    rampDelaySamplesRemaining = std::max(0, delaySamples);
     // Hold whatever gain the instance is at rather than snapping to unity: an instance
     // superseded halfway through its own fade-in must not get louder on its way out.
     tailGain = CurrentFadeGain();
@@ -57,7 +59,9 @@ void PresetInstance::FillTailInput(const float* inL, const float* inR, int numSa
     // block ended and step down to where the next one starts.
     const float total = static_cast<float>(std::max(1, inputFadeTotalSamples));
     const float start = static_cast<float>(inputFadeSamplesRemaining) / total;
-    const float end = static_cast<float>(std::max(0, inputFadeSamplesRemaining - numSamples)) / total;
+    const int endRemaining =
+        rampDelaySamplesRemaining > 0 ? inputFadeSamplesRemaining : std::max(0, inputFadeSamplesRemaining - numSamples);
+    const float end = static_cast<float>(endRemaining) / total;
     const float step = (end - start) / static_cast<float>(std::max(1, numSamples));
 
     float gain = start;
@@ -70,11 +74,12 @@ void PresetInstance::FillTailInput(const float* inL, const float* inR, int numSa
     }
 }
 
-void PresetInstance::BeginFadeOut(int fadeSamples)
+void PresetInstance::BeginFadeOut(int fadeSamples, int delaySamples)
 {
     // Resume the ramp from the gain we are actually at, so a switch landing mid-fade-in
     // continues smoothly downward instead of jumping to unity first.
     const float gain = CurrentFadeGain();
+    rampDelaySamplesRemaining = std::max(0, delaySamples);
     phase = InstancePhase::FadingOut;
     fadeTotalSamples = std::max(1, fadeSamples);
     fadeSamplesRemaining =
@@ -95,6 +100,13 @@ void PresetInstance::GetFadeGains(int numSamples, float& startGain, float& endGa
     {
         startGain = 1.0f;
         endGain = 1.0f;
+        return;
+    }
+
+    if (rampDelaySamplesRemaining > 0)
+    {
+        startGain = CurrentFadeGain();
+        endGain = startGain;
         return;
     }
 
@@ -121,6 +133,14 @@ void PresetInstance::AdvanceRamps(int numSamples, int releaseSamples)
 {
     if (phase == InstancePhase::Active)
     {
+        return;
+    }
+
+    // Every ramp holds where it is until the delay is spent. The ramps then start on the next
+    // block boundary, at most a block late.
+    if (rampDelaySamplesRemaining > 0)
+    {
+        rampDelaySamplesRemaining = std::max(0, rampDelaySamplesRemaining - numSamples);
         return;
     }
 

@@ -44,6 +44,7 @@ instead of scrolling one enormous one:
 | `controller/PluginControllerNodeControl.cpp`    | Live node control: enable, param, resource; model/IR loading |
 | `controller/PluginControllerTuner.cpp`          | The signal-path test tone (the tuner answers its own messages) |
 | `controller/PluginControllerPresets.cpp`        | Preset load/save/apply, folders, favourites, setlists |
+| `controller/PluginControllerScenes.cpp`         | The active preset's scenes: select, add, rename, move, remove |
 | `controller/PluginControllerSignalPath.cpp`     | Node graph shape: add, remove, reorder; composite edit target |
 | `controller/PluginControllerResources.cpp`      | Resource library: import, edit, delete, usage index   |
 | `controller/PluginControllerCustomEffects.cpp`  | Blends, custom effects, composites                    |

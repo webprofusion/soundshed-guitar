@@ -39,6 +39,7 @@ set(TEST_SOURCES
     FusedWaveNetBenchmark.cpp
     FusedWaveNetTests.cpp
     GaplessSwitchingTests.cpp
+    SwapLatencyAlignmentTests.cpp
     GlobalChainEditorTests.cpp
     GlobalChainEngineTests.cpp
     GuitarToMidiEffectTests.cpp

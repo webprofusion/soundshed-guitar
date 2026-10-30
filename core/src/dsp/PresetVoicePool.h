@@ -128,10 +128,30 @@ class PresetVoicePool
     /// a musical crossfade.
     static constexpr int kFadeSamples = 1024;
 
+    /// The longest a swap's warm-up or latency-spanning crossfade may run.
+    static constexpr double kMaxSwapAlignSeconds = 0.25;
+    /// How much longer than its latency an incoming chain with latency is given to settle.
+    static constexpr double kSwapSettleSeconds = 0.025;
+
   private:
+    /// When a swap's ramps start and how long they run.
+    struct SwapTiming
+    {
+        int warmupSamples = 0;
+        int fadeSamples = kFadeSamples;
+    };
+
+    /// Lines a swap up with the latency on both sides. A freshly built chain is silent for its
+    /// own latency (a pitch shifter's aligned dry path starts empty), so the incoming one stays
+    /// muted, and the outgoing one at its gain, until that has filled; fading in at once left a
+    /// gap and then a step where the signal began. When the two chains' latencies differ, the
+    /// crossfade runs at least that difference, so the stretch of playing one chain has not
+    /// reached yet and the other has already passed is still heard rather than skipped.
+    [[nodiscard]] SwapTiming TimeSwap(const PresetInstance& incoming, int outgoingLatency) const;
+
     /// Retires a superseded instance the way the current settings say to: ringing out when
     /// the tail spill is on and its graph can ring, plain declick fade otherwise.
-    void RetireSuperseded(PresetInstance& inst);
+    void RetireSuperseded(PresetInstance& inst, const SwapTiming& timing);
     /// Pushes the oldest tails into their release once more than kMaxTailingInstances are
     /// ringing at once, so a run of fast switches cannot stack full chains without bound.
     void LimitTailing();

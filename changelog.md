@@ -13,6 +13,13 @@
 * Jam's backing-track titles show apostrophes and ampersands properly instead of codes such as `&#39;`, in favourites saved before too.
 * On a touch screen, opening the FX Library no longer brings up the on-screen keyboard.
 
+### Scenes
+* Switching to or from a scene with a pitch shifter no longer pops. The crossfade now waits out the pitch shifter's latency instead of fading into silence.
+* After a scene switch, the open effect panel shows the new scene's values, and saving keeps the edits you made after the switch.
+* A reopened plugin window shows the scene that is playing, not the first one.
+* At the compact sizes the scene badges no longer cover the first effects in the chain.
+* Scenes can be reordered: drag a scene badge onto another, or press Alt+Left/Right on a focused badge.
+
 ## 1.7.1 (Oct 23,2026)
 * Minor fixes: Window chrome style, plugin hosting performance fixes, fix Jam search tab
 

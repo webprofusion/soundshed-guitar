@@ -25,6 +25,12 @@ bool MessageDispatcher::DispatchPresetEdits(PluginController& c, const nlohmann:
         return true;
     }
 
+    if (type == "moveScene")
+    {
+        c.HandleMoveSceneRequest(msg);
+        return true;
+    }
+
     if (type == "removeScene")
     {
         c.HandleRemoveSceneRequest(msg);

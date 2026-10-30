@@ -67,6 +67,10 @@ struct PresetInstance
     int inputFadeTotalSamples = 0;
     /// What is left of the hold budget.
     int tailSamplesRemaining = 0;
+    /// Blocks the ramps above wait before they start moving: a swap's incoming chain stays
+    /// silent, and the outgoing one stays where it is, until the incoming chain's latency
+    /// has filled with signal. See PresetVoicePool::TimeSwap.
+    int rampDelaySamplesRemaining = 0;
 
     /// Mute, and being soloed out, as a ramp rather than a step: 1 is heard, 0 is silent.
     /// Once silent the chain still runs for muteDrainSamplesRemaining, its delays and
@@ -86,17 +90,18 @@ struct PresetInstance
     /// The instance's current fade multiplier.
     [[nodiscard]] float CurrentFadeGain() const;
 
-    /// Start ramping up from silence over `fadeSamples`, as a freshly installed instance does.
-    void BeginFadeIn(int fadeSamples);
+    /// Start ramping up from silence over `fadeSamples`, as a freshly installed instance does,
+    /// once `delaySamples` have passed.
+    void BeginFadeIn(int fadeSamples, int delaySamples = 0);
 
-    /// Switch to fading out over `fadeSamples`, starting from whatever gain the instance
-    /// is at right now. Switching again while an instance is still fading in must not
-    /// snap it back to full gain — that step is exactly the click being designed out.
-    void BeginFadeOut(int fadeSamples);
+    /// Switch to fading out over `fadeSamples`, after `delaySamples`, starting from whatever
+    /// gain the instance is at right now. Switching again while an instance is still fading
+    /// in must not snap it back to full gain — that step is exactly the click being designed out.
+    void BeginFadeOut(int fadeSamples, int delaySamples = 0);
 
     /// Switch to ringing out: hold the current output gain for up to `holdSamples`
-    /// while the input ramps away over `inputFadeSamples`.
-    void BeginTail(int inputFadeSamples, int holdSamples);
+    /// while the input ramps away over `inputFadeSamples`, after `delaySamples`.
+    void BeginTail(int inputFadeSamples, int holdSamples, int delaySamples = 0);
 
     /// Writes this block's ramped-down input into tailInL/tailInR. Audio thread.
     void FillTailInput(const float* inL, const float* inR, int numSamples);

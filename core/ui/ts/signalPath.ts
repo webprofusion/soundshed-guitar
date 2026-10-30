@@ -6,7 +6,7 @@ import type {
   GraphNode,
   Preset,
 } from "./types.js";
-import { addScene, postMessage, removeScene, renameScene, selectScene } from "./bridge.js";
+import { postMessage } from "./bridge.js";
 import { revealCompactNodeDetail } from "./compactStage.js";
 import { escapeHtml, safeImageDataUrl } from "./utils.js";
 import { EffectTypeRegistry, getNodeEffectInfo } from "./presetV2.js";
@@ -26,7 +26,7 @@ import { resolveNodeDropAction, type NodeDropTarget } from "./signalPathDropTarg
 import { resolveLayoutForNode } from "./layoutPreferences.js";
 import { layoutDesigner } from "./layoutDesigner.js";
 import { closeLayoutPicker } from "./layoutPicker.js";
-import { normalizePresetScenes, selectPresetScene } from "./presetScenes.js";
+import { normalizePresetScenes } from "./presetScenes.js";
 import { isNodeBypassed } from "./graphNodes.js";
 import {
   getLastSelectedNodeCategory,
@@ -56,7 +56,8 @@ import { updateSignalPathClipIndicators } from "./signalPath/telemetry.js";
 import { reanchorAddEffectDropdown, showAddEffectDropdown } from "./signalPath/addEffectDropdown.js";
 import { initSignalPathAddMenu, updateSignalPathAddMenuAvailability } from "./signalPath/addMenu.js";
 import { openReplaceChooser, syncReplaceChooser } from "./signalPath/replaceChooser.js";
-import { clearSceneBadges, renderSceneBadges, type SceneBadgeActions } from "./signalPath/sceneBadges.js";
+import { clearSceneBadges, renderSceneBadges } from "./signalPath/sceneBadges.js";
+import { addSceneFromToolbar, sceneBadgeActions } from "./signalPath/sceneActions.js";
 export { applySignalPathNodeBypassState, isToggleableSignalPathNode } from "./signalPath/bypass.js";
 export { applySpatialPositionUpdate, buildDefaultParamControlsHtml } from "./signalPath/paramsPanel.js";
 export { closeEffectPresetsFlyout, refreshEffectPresetsFlyout } from "./signalPath/effectPresets.js";
@@ -69,6 +70,7 @@ export { isNodeBypassed };
 export { initializeBlendEditorModal, openBlendEditorWithDefinition } from "./signalPathBlend.js";
 
 let lastRenderedPresetId: string | null = null;
+let lastRenderedSceneId: string | null = null;
 
 layoutDesigner.onClose(() => {
   refreshSelectedNodeParams();
@@ -351,7 +353,7 @@ function applyOptimisticNodeReplacement(
   showVisualizerPanel();
 }
 
-function selectNodeForPreset(preset: Preset, presetChanged: boolean): void {
+function selectNodeForPreset(preset: Preset, presetChanged: boolean, sceneChanged: boolean): void {
   const nodes = preset.graph?.nodes ?? [];
   if (!nodes.length) {
     setSelectedNodeId(null);
@@ -370,9 +372,14 @@ function selectNodeForPreset(preset: Preset, presetChanged: boolean): void {
     return;
   }
 
-  // Keep the current node only while rendering the same preset.
+  // Keep the current node only while rendering the same preset. Another scene keeps it too, when
+  // it has the node, but with that scene's settings: the panel is drawn again from its copy.
   const currentNode = getSelectedNodeId() ? nodes.find((node) => node.id === getSelectedNodeId()) : undefined;
   if (!presetChanged && currentNode) {
+    if (sceneChanged) {
+      showNodeParamsPanel(currentNode, preset);
+      return;
+    }
     return redrawNodeParamsPanelIfOutOfDate(currentNode, preset);
   }
 
@@ -578,9 +585,15 @@ function renderSignalPathBarContent(): void {
 
   const editablePreset = getEditableSignalPathPreset(activePreset);
 
+  // Settle the scene first: its graph is the chain drawn below.
+  const activeSceneId = normalizePresetScenes(editablePreset, uiState.activePresetSceneId ?? undefined);
+  setActivePresetSceneId(activeSceneId);
+  const sceneChanged = !presetChanged && activeSceneId !== lastRenderedSceneId;
+  lastRenderedSceneId = activeSceneId;
+
   // Render graph-based signal path (supports parallel paths)
   if (editablePreset.graph?.nodes) {
-    selectNodeForPreset(editablePreset, presetChanged);
+    selectNodeForPreset(editablePreset, presetChanged, sceneChanged);
     renderGraphSignalPath(editablePreset);
   } else {
     // Empty preset - show only input/output
@@ -596,8 +609,6 @@ function renderSignalPathBarContent(): void {
     bindAddButtonHandlers();
   }
 
-  const activeSceneId = normalizePresetScenes(editablePreset, uiState.activePresetSceneId ?? undefined);
-  setActivePresetSceneId(activeSceneId);
   renderSceneBadges(editablePreset, activeSceneId ?? "", !isCompositeEditMode(), sceneBadgeActions(editablePreset));
 
   updateSignalPathClipIndicators();
@@ -1185,46 +1196,6 @@ function updateCompositeEditBanner(): void {
   } else {
     banner.style.display = "none";
   }
-}
-
-// Scene edits are engine commands: the engine changes its working copy and answers with
-// "presetLoaded", which re-renders this bar, and reports the unsaved change itself.
-
-function addSceneFromToolbar(): void {
-  const activePreset = getSignalPathPreset();
-  if (!activePreset) {
-    return;
-  }
-
-  // Makes sure the engine is editing the preset on screen (a focused mixer slot).
-  getEditableSignalPathPreset(activePreset);
-  addScene(uiState.activePresetSceneId);
-}
-
-function sceneBadgeActions(renderedPreset: Preset): SceneBadgeActions {
-  return {
-    select(sceneId) {
-      if (!sceneId || sceneId === uiState.activePresetSceneId) {
-        return;
-      }
-      // Draw the switch now; the engine's reply confirms it once the scene is built. In a
-      // multi-preset mix the engine rebuilds only this preset's slot.
-      const editablePreset = getEditableSignalPathPreset(renderedPreset);
-      setActivePresetSceneId(selectPresetScene(editablePreset, sceneId));
-      selectScene(sceneId);
-      renderSignalPathBar();
-    },
-    rename(sceneId, title) {
-      getEditableSignalPathPreset(renderedPreset);
-      renameScene(sceneId, title);
-    },
-    remove(sceneId) {
-      // Makes sure the engine is editing the preset on screen (a focused mixer slot).
-      getEditableSignalPathPreset(renderedPreset);
-      removeScene(sceneId);
-    },
-    add: addSceneFromToolbar,
-  };
 }
 
 initSignalPathAddMenu({ onAddScene: addSceneFromToolbar });

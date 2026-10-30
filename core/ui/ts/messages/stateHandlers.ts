@@ -45,8 +45,9 @@ import { normalizeGlobalSignalChain, normalizePresetResources } from "./normaliz
 import type { IncomingPayload } from "./types.js";
 
 export function onState(payload: IncomingPayload): void {
+  const activeSceneId = (payload as { activeSceneId?: string }).activeSceneId;
   setActivePresetId((payload as { activePresetId?: string }).activePresetId ?? null);
-  setActivePresetSceneId((payload as { activeSceneId?: string }).activeSceneId ?? uiState.activePresetSceneId ?? null);
+  setActivePresetSceneId(activeSceneId ?? uiState.activePresetSceneId ?? null);
   const parameters = (payload as { parameters?: Record<string, unknown> }).parameters;
   if (parameters) {
     uiState.parameters = {
@@ -205,7 +206,10 @@ export function onState(payload: IncomingPayload): void {
   if (preset) {
     if (!shouldIgnoreStatePreset(preset)) {
       normalizePresetResources(preset);
-      setActivePresetSceneId(normalizePresetScenes(preset, uiState.activePresetSceneId ?? undefined));
+      // The engine's scene, not uiState's: applying the app settings above redraws the chain
+      // from the preset shown before this one, which leaves that preset's scene there. A
+      // reopened editor then opened on the first scene while the last one played.
+      setActivePresetSceneId(normalizePresetScenes(preset, activeSceneId ?? uiState.activePresetSceneId ?? undefined));
       const preserveNewDraft = Boolean(uiState.activePresetIsNew && uiState.activePresetId === preset.id);
       setActivePresetIsNew(preserveNewDraft);
       const snapshot = uiState.activePresetSnapshot;

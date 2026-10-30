@@ -321,6 +321,9 @@ void PluginController::ApplyActivePresetInItsSlot()
     if (!sharesTheMix)
     {
         ApplyPreset(*mActivePreset);
+        // As below. A scene switch reports only "presetLoaded", never a state broadcast, so the
+        // host would otherwise hear of a pitch shifter's latency coming or going some time later.
+        UpdateHostLatency();
         return;
     }
 

@@ -1,4 +1,4 @@
-import { uiState, setPresetDirty } from "../state.js";
+import { getActivePresetForRender, uiState, setPresetDirty } from "../state.js";
 import { postMessage } from "../bridge.js";
 import {
   type SignalPathEdgeRef,
@@ -13,7 +13,23 @@ export function sendSignalPathNodeParamUpdate(nodeId: string, paramKey: string, 
     value,
     ...(presetId ? { presetId } : {}),
   });
+  recordParamInDraft(nodeId, paramKey, value);
   setPresetDirty(true);
+}
+
+/**
+ * Writes a value the engine is about to take into the draft on screen. The panel's controls
+ * write it into the node they were drawn for, but the engine replaces the draft (a scene
+ * switch, a rename, a state broadcast), and a panel drawn before that writes into a copy
+ * nothing reads any more: a save then sent the value from before the edit.
+ */
+function recordParamInDraft(nodeId: string, paramKey: string, value: number): void {
+  const preset = getActivePresetForRender();
+  const node = preset?.graph?.nodes?.find((candidate) => candidate.id === nodeId);
+  if (node) {
+    node.params ??= {};
+    node.params[paramKey] = value;
+  }
 }
 
 export function sendSignalPathNodeBypassUpdate(nodeId: string, presetId: string, bypassed: boolean): void {

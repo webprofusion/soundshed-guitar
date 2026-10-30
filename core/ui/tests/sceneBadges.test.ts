@@ -21,7 +21,7 @@ function presetWithScenes(...titles: string[]): Preset {
 
 // Mock-typed properties, not methods, so expect(actions.select) reads a plain property.
 function makeActions(): { [K in keyof SceneBadgeActions]: Mock } {
-  return { select: vi.fn(), rename: vi.fn(), remove: vi.fn(), add: vi.fn() };
+  return { select: vi.fn(), rename: vi.fn(), remove: vi.fn(), move: vi.fn(), add: vi.fn() };
 }
 
 function host(): HTMLElement {
@@ -87,6 +87,27 @@ describe("scene badges", () => {
 
     host().querySelector<HTMLButtonElement>(".scene-badge-add")!.click();
     expect(actions.add).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects and renames on a click that lands on the badge, as one does after a press", () => {
+    // A press on the label captures the pointer to the badge (a drag may follow), so the
+    // browser fires the click and double-click at the badge rather than the label.
+    const actions = makeActions();
+    renderSceneBadges(presetWithScenes("Rhythm", "Solo"), "s1", true, actions);
+
+    const badge = host().querySelector<HTMLElement>('[data-scene-id="s2"]')!;
+    badge.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(actions.select).toHaveBeenCalledWith("s2");
+
+    badge.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const field = host().querySelector<HTMLInputElement>(".scene-badge-input")!;
+    expect(field).not.toBeNull();
+
+    // Clicks inside the name field are editing, not choosing the scene again.
+    field.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    field.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(actions.select).toHaveBeenCalledTimes(1);
+    expect(host().querySelectorAll(".scene-badge-input")).toHaveLength(1);
   });
 
   it("renames in place on double-click and Enter, trimming the name", () => {

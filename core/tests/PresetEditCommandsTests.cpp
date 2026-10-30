@@ -312,6 +312,34 @@ void TestAddRenameRemoveSceneFollowWebRules()
     Expect(Latest(host, "error").has_value(), "removing the last scene is refused with an error");
 }
 
+void TestMoveSceneReordersWithoutSwitching()
+{
+    TestHost host(Sandbox("scene-move"));
+    guitarfx::PluginController controller(host);
+    controller.Initialize();
+
+    LoadBody(controller, BuildTwoScenePreset("p-move"), "scene-2");
+    Send(controller, "addScene"); // scene-3, a copy of scene-2, now playing
+    Send(controller, "selectScene", {{"sceneId", "scene-1"}});
+
+    Send(controller, "moveScene", {{"sceneId", "scene-3"}, {"toIndex", 0}});
+    auto scenes = Scenes(controller);
+    Expect(scenes.size() == 3 && scenes[0]["id"] == "scene-3" && scenes[1]["id"] == "scene-1" &&
+               scenes[2]["id"] == "scene-2",
+           "moveScene puts the scene at the index asked for");
+    Expect(Latest(host, "presetLoaded")->value("sceneId", std::string{}) == "scene-1",
+           "the scene playing stays selected after a move");
+    Expect(controller.GetActivePreset()->graph.nodes[1].enabled, "and stays the active graph");
+
+    Send(controller, "moveScene", {{"sceneId", "scene-3"}, {"toIndex", 99}});
+    scenes = Scenes(controller);
+    Expect(scenes[2]["id"] == "scene-3", "an index past the end moves the scene to the end");
+
+    Send(controller, "moveScene", {{"sceneId", "scene-9"}, {"toIndex", 0}});
+    Send(controller, "moveScene", {{"sceneId", "scene-1"}});
+    Expect(Scenes(controller) == scenes, "an unknown scene or a missing index changes nothing");
+}
+
 void TestRenameNodeNamesItInEveryScene()
 {
     TestHost host(Sandbox("node-rename"));
@@ -886,6 +914,7 @@ int main()
 {
     TestSelectSceneMatchesLoadWithSceneId();
     TestAddRenameRemoveSceneFollowWebRules();
+    TestMoveSceneReordersWithoutSwitching();
     TestRenameNodeNamesItInEveryScene();
     TestLoadByIdMatchesLoadWithBody();
     TestDirtyFlagFollowsTheWorkingCopy();

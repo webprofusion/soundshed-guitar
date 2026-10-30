@@ -109,6 +109,12 @@ export function renameScene(sceneId: string, title: string): void {
   postMessage({ type: "renameScene", sceneId, title });
 }
 
+/** Moves a scene to `toIndex` in the preset's scene list; the playing scene stays selected. */
+export function moveScene(sceneId: string, toIndex: number): void {
+  postMessage({ type: "moveScene", sceneId, toIndex });
+  appendLog(`moveScene → ${sceneId} to ${toIndex}`);
+}
+
 /** Removes a scene; the engine refuses the last one with an "error". */
 export function removeScene(sceneId: string): void {
   postMessage({ type: "removeScene", sceneId });

@@ -510,6 +510,7 @@ class PluginController
     void HandleSelectSceneRequest(const nlohmann::json& payload);
     void HandleAddSceneRequest(const nlohmann::json& payload);
     void HandleRenameSceneRequest(const nlohmann::json& payload);
+    void HandleMoveSceneRequest(const nlohmann::json& payload);
     void HandleRemoveSceneRequest(const nlohmann::json& payload);
     void HandleNewPresetRequest(const nlohmann::json& payload);
     void HandleSetPresetFavoriteRequest(const nlohmann::json& payload);
