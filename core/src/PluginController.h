@@ -621,6 +621,9 @@ class PluginController
     void ReplaceAutomationSlots(const nlohmann::json& automation, const nlohmann::json* values);
     /// Hands the automation table the active preset id when it has changed (idle tick).
     void SyncAutomationActivePreset();
+    /// Message thread: stores the active scene as the Scene parameter's value when it has
+    /// changed (each drain of the control surface queue).
+    void SyncAutomationSceneValue();
     /// Re-resolves the slots' node.* addresses when effect types have come or gone since (idle
     /// tick). Built off the DSP lock and swapped in under it.
     void RefreshAutomationBindings();
@@ -1405,6 +1408,9 @@ class PluginController
     /// automation.json as this instance last read or wrote it. A DAW project restores its own
     /// slots, so a shared reload replaces them only when the store's have changed since.
     mutable nlohmann::json mStoreAutomationSnapshot = nlohmann::json::object();
+    /// The scene index last stored as the Scene parameter's value (SyncAutomationSceneValue), or
+    /// -1 when the slots have been replaced since. Message thread only.
+    int mAutomationSceneIndexStored = -1;
     /// Written on the message thread; a host reads it as its current program on any thread.
     std::atomic<int> mSetlistCursorIndex{0};
     int mSetlistBankSize = 8;

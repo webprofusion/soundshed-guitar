@@ -596,6 +596,9 @@ void PluginController::DrainControlSurfaceRequests()
     // nothing was asked for.
     ApplyDeferredNodeRebuilds();
 
+    // A scene chosen in the UI, or by a preset load, since the last tick.
+    SyncAutomationSceneValue();
+
     // Polled off the plugin's own timer, so the common case, nothing to do, costs two atomic loads.
     const bool nodeChanges = mAutomationSlots.HasNodeChanges();
 
@@ -644,6 +647,8 @@ void PluginController::DrainControlSurfaceRequests()
             break;
         }
     }
+
+    SyncAutomationSceneValue();
 }
 
 void PluginController::OnWebContentLoaded()

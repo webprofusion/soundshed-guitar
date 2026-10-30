@@ -170,8 +170,11 @@ bool shouldUseHeadlessLv2ManifestEditor(const PluginProcessorAdapter& processor)
 class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProcessorParameter
 {
   public:
-    AutomationSlotParameter(PluginProcessorAdapter& owner, int parameterIndex, juce::String paramID, juce::String label)
-        : mOwner(owner), mParameterIndex(parameterIndex), mParamID(std::move(paramID)), mLabel(std::move(label))
+    /// `sceneSteps` above 0 makes it the Scene parameter: that many steps, each shown as its scene.
+    AutomationSlotParameter(PluginProcessorAdapter& owner, int parameterIndex, juce::String paramID, juce::String label,
+                            int sceneSteps = 0)
+        : mOwner(owner), mParameterIndex(parameterIndex), mParamID(std::move(paramID)), mLabel(std::move(label)),
+          mSceneSteps(sceneSteps)
     {
     }
 
@@ -230,12 +233,12 @@ class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProces
 
     [[nodiscard]] int getNumSteps() const override
     {
-        return juce::AudioProcessorParameter::getNumSteps();
+        return mSceneSteps > 0 ? mSceneSteps : juce::AudioProcessorParameter::getNumSteps();
     }
 
     [[nodiscard]] bool isDiscrete() const override
     {
-        return false;
+        return mSceneSteps > 0;
     }
 
     [[nodiscard]] bool isBoolean() const override
@@ -250,11 +253,23 @@ class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProces
 
     [[nodiscard]] juce::String getText(float value, int) const override
     {
+        if (mSceneSteps > 0)
+        {
+            return "Scene " + juce::String(juce::roundToInt(value * static_cast<float>(mSceneSteps - 1)) + 1);
+        }
+
         return juce::String(value, 3);
     }
 
     [[nodiscard]] float getValueForText(const juce::String& text) const override
     {
+        if (mSceneSteps > 0)
+        {
+            // "Scene 3" or "3".
+            const int scene = juce::jlimit(1, mSceneSteps, text.retainCharacters("0123456789").getIntValue());
+            return static_cast<float>(scene - 1) / static_cast<float>(mSceneSteps - 1);
+        }
+
         return text.getFloatValue();
     }
 
@@ -278,6 +293,7 @@ class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProces
     int mParameterIndex = 0;
     juce::String mParamID;
     juce::String mLabel;
+    int mSceneSteps = 0;
 };
 
 // ════════════════════════════════════════════════════════════════════════
@@ -668,14 +684,18 @@ void PluginProcessorAdapter::registerAutomationParameters()
 
     int paramIndex = 0;
     std::vector<std::string> slotIdsByParameter;
-    const auto addSlotParameter = [&](const juce::String& id, const juce::String& label) {
-        addParameter(new AutomationSlotParameter(*this, paramIndex, id, label));
+    const auto addSlotParameter = [&](const juce::String& id, const juce::String& label, int sceneSteps = 0) {
+        addParameter(new AutomationSlotParameter(*this, paramIndex, id, label, sceneSteps));
         slotIdsByParameter.push_back(id.toStdString());
         ++paramIndex;
     };
     const auto addSlot = [&](const std::string& slotId) {
         const auto* slot = mController.GetAutomationSlots().FindSlot(slotId);
-        addSlotParameter(juce::String(slotId), slot ? juce::String(slot->label) : juce::String(slotId));
+        // A default slot's address never changes, so the Scene parameter stays one for the
+        // host's lifetime of the plugin.
+        const bool isScene = slot != nullptr && slot->isDefault && slot->address == guitarfx::kSceneSelectAddress;
+        addSlotParameter(juce::String(slotId), slot ? juce::String(slot->label) : juce::String(slotId),
+                         isScene ? guitarfx::kSceneSelectSteps : 0);
     };
 
     const int stableDefaultCount =

@@ -121,6 +121,12 @@ class AutomationSlotTable
     /// back on a load would switch presets. Message thread, after a trim changes.
     void SyncGlobalSlotValues();
 
+    /// Stores `sceneIndex` as the value of every slot on the Scene parameter (kSceneSelectAddress),
+    /// without applying it. A plugin wrapper drops a host value equal to the parameter's own, so a
+    /// lane's value for a different scene than the one now playing still gets through on a jump.
+    /// Under the DSP lock, after the active scene changes.
+    void StoreSceneSelectValue(int sceneIndex);
+
     /// Find a slot by ID. Returns nullptr if not found.
     AutomationSlot* FindSlot(const std::string& slotId);
     [[nodiscard]] const AutomationSlot* FindSlot(const std::string& slotId) const;

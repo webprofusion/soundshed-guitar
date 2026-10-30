@@ -142,6 +142,7 @@ set(TEST_SOURCES
     RotaryVibeEffectTests.cpp
     NamResamplerLatencyTests.cpp
     SampleRateConverterTests.cpp
+    SceneSelectAutomationTests.cpp
     SetlistMidiOutTests.cpp
     StorageMigrationTests.cpp
     SignalChainMutationStressTest.cpp

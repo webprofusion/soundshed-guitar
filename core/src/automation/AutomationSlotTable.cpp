@@ -408,6 +408,46 @@ void AutomationSlotTable::InitializeRegistry(
         };
         mRegistry.Register(e);
     }
+
+    // scene.select — one stepped parameter whose value is the scene, for a DAW lane. The
+    // triggers above switch only on a rising edge, so a lane of them does nothing when the
+    // host jumps to a point between its edges. This one switches whenever its value changes,
+    // and a host sends the lane's value on a jump. A step with no scene in the active preset
+    // does nothing, as a trigger for one does. The slot's value follows the scene playing
+    // (StoreSceneSelectValue), so a lane's value is not dropped as unchanged after a scene
+    // was chosen from anywhere else.
+    {
+        ParamRegistryEntry e;
+        e.address = kSceneSelectAddress;
+        e.label = "Scene";
+        e.unit = "";
+        e.minValue = 0.0;
+        e.maxValue = static_cast<double>(kSceneSelectSteps - 1);
+        e.isStepped = true;
+        e.get = [this]() -> double { return mGetActiveSceneIndex ? std::max(0, mGetActiveSceneIndex()) : 0.0; };
+        e.apply = [this](double v, bool) {
+            if (mSelectSceneByIndex)
+            {
+                mSelectSceneByIndex(static_cast<int>(std::round(v)));
+            }
+        };
+        mRegistry.Register(e);
+    }
+}
+
+void AutomationSlotTable::StoreSceneSelectValue(int sceneIndex)
+{
+    const float normalized = static_cast<float>(std::clamp(sceneIndex, 0, kSceneSelectSteps - 1)) /
+                             static_cast<float>(kSceneSelectSteps - 1);
+
+    for (auto& slot : mSlots)
+    {
+        if (slot.address == kSceneSelectAddress)
+        {
+            slot.StoreValue(normalized);
+            slot.lastNormalized.store(normalized);
+        }
+    }
 }
 
 void AutomationSlotTable::CommitSlots(std::vector<AutomationSlot>& slots)

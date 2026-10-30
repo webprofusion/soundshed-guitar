@@ -183,6 +183,7 @@ inline constexpr DefaultSlotDef kDefaultSlots[] = {
     {"default.scene2", "scene.select2", "Scene 2"},
     {"default.scene3", "scene.select3", "Scene 3"},
     {"default.scene4", "scene.select4", "Scene 4"},
+    {"default.scene", "scene.select", "Scene"},
 };
 
 /// Maximum number of custom slots (reserved in the DAW parameter layout).
@@ -212,4 +213,11 @@ inline constexpr int kSetlistPresetsPerBank = 8;
 
 /// Number of directly selectable scene slots exposed to MIDI/automation.
 inline constexpr int kSceneSelectSlots = 4;
+
+/// The one Scene parameter: its value is the scene's position in the active preset, as one of
+/// this many steps whatever the preset's scene count. A fixed range is what keeps a DAW lane
+/// pointing at the same scenes when one is added to the end. Never change it: saved automation
+/// is stored normalised, so a new step count moves every point in every project.
+inline constexpr const char* kSceneSelectAddress = "scene.select";
+inline constexpr int kSceneSelectSteps = 16;
 } // namespace guitarfx

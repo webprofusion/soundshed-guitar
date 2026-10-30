@@ -313,6 +313,24 @@ void PluginController::SyncAutomationActivePreset()
     }
 }
 
+void PluginController::SyncAutomationSceneValue()
+{
+    // The Scene parameter reports the scene playing. Stored when the scene changes, not whenever
+    // the value differs: a lane can ask for a scene the preset does not have, and putting the
+    // value back would have the host send it again on every block, each one parking a switch.
+    // Locked only on a change, as above.
+    const int sceneIndex = GetActiveSceneIndex();
+
+    if (sceneIndex < 0 || sceneIndex == mAutomationSceneIndexStored)
+    {
+        return;
+    }
+
+    mAutomationSceneIndexStored = sceneIndex;
+    std::lock_guard<std::mutex> lock(mDSPMutex);
+    mAutomationSlots.StoreSceneSelectValue(sceneIndex);
+}
+
 void PluginController::RefreshAutomationBindings()
 {
     // A node.* slot keeps the range its effect type declared when the address was set, so the
@@ -462,6 +480,10 @@ void PluginController::ReplaceAutomationSlots(const nlohmann::json& automation, 
         std::lock_guard<std::mutex> lock(mDSPMutex);
         mAutomationSlots.CommitSlots(slots);
     }
+
+    // The new slots' Scene values are whatever was saved, or 0: the next drain stores the
+    // scene playing.
+    mAutomationSceneIndexStored = -1;
 
     // `slots` now holds the ones replaced, freed here, after the lock.
 }
