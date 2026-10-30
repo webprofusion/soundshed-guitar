@@ -1,12 +1,27 @@
 # Changelog
 
-## Unreleased
+## 1.7.3 (Unreleased)
+* **macOS**: choosing a template from **New Preset** now creates the preset. Before, the menu closed as you clicked and nothing happened.
+* **macOS**: the Standalone's Plugin Host can now load third-party VST3, AU and LV2 plugins. macOS rejected every plugin signed by another developer, so scans came back empty. If a plugin is still blocked, the error now says that macOS may be the cause.
+* **macOS**: naming a Multi-Rig mix, saving a Custom Effect and editing a library item's details now ask for the text in the app's own dialog. The Mac app shows no browser prompt, so these did nothing before.
+* **macOS**: soundshed:// links from the browser, which open a Tone Sharing tone in the app, now reach the Standalone app. The link was never registered with macOS.
+* Installing a Tone Sharing pack no longer fails when some of its Tone3000 models have been removed or made private. The presets are installed with those slots empty, and a dialog lists the models it couldn't get.
+* On Windows, the factory presets' models and IRs now show their names when your Windows user folder has a long path. Before, the files were installed but left out of the library, so the presets' amps and cabs showed a 64-character file code instead of the model's name.
+* Factory models keep their details (A1/A2, calibration) across a relaunch, instead of losing them until the file was read again.
+* The Standalone keeps the input mode you choose in Nano (Mono In 2, for example) when you load another preset.
+* The built-in amp no longer goes silent after a bad (non-finite) sample from an earlier effect or hosted plugin until its node is rebuilt.
+* Jam's backing-track titles show apostrophes and ampersands properly instead of codes such as `&#39;`, in favourites saved before too.
+* On a touch screen, opening the FX Library no longer brings up the on-screen keyboard.
+
+## 1.7.1 (Oct 23,2026)
+* Minor fixes: Window chrome style, plugin hosting performance fixes, fix Jam search tab
+
+## 1.7.0 (Oct 22,2026)
 
 ### MIDI
 * The app can now tell your MIDI device when you pick a bank or a setlist slot in the app, so a controller or a second unit following along shows the same selection. Turn on **Send a program change to the MIDI device** in the MIDI & Automation panel's Mappings tab and choose the channel. Picking a slot sends its setlist's bank number as Bank Select, then a Program Change for the slot (slot 1 is program 0); picking a setlist sends its Bank Select alone. Choose CC0 + CC32, CC0 only or CC32 only to suit your device, or no Bank Select at all. Changes made from the MIDI device itself or from your DAW are not sent back to it.
 
 ### New Effects
-* **Verbal**: twelve reverbs in one, for when you want a reverb to be a big part of the sound. Pick a machine (Room, Hall, Plate, Spring, Swell, Bloom, Cloud, Choir, Shimmer, Tape Echo, Nonlinear or Reflections) and the panel shows its own controls alongside the common ones. Decay is in seconds and is what you hear, from a 0.2 s room to a 60 s cloud, and Pre-Delay reaches 1.5 s. Mix adds the reverb to your dry signal rather than trading one for the other, and the top of the knob is fully wet. Hold sustains the tail: Infinite keeps adding what you play, Freeze holds it under whatever comes next. Changing machine lets the old tail ring out. 18 factory presets, from Studio Room to Octave Shimmer and Reverse Reverb.
 * **Noise Reduction**: takes the hum, buzz and hiss out of a guitar or bass pickup without gating it. Put it first in the chain and pick your pickup type. It learns your hum and buzz in the pauses between notes and cancels it all the time, under the playing too, following the mains frequency as it drifts and working out for itself whether you are on 50 or 60 Hz. The hiss stage closes the top end only as a note fades into hiss, so the body of every note and its decay are left alone. No latency. Set Listen to Removed Noise to hear exactly what it takes out.
 
 ### Noise Gate
@@ -27,8 +42,6 @@
 
 ### Tone Sharing
 * Right-click a folder in the preset chooser and pick **Create Pack…** to start a Tone Sharing pack from the folder's presets, its subfolders' included. The pack takes the folder's name, and each preset shows whether it is already on Tone Sharing. Presets that aren't yet are uploaded as drafts when you save, and only go to the moderators when you publish the pack. Presets you installed from someone else's pack are left out.
-* **AI Tone Builder** (Settings → Features → Power Features, off by default; needs a Soundshed sign-in): press **Tone Builder…** in Tone Sharing, name an artist, song or style and pick how hard it should think. It first shows anything Tone Sharing already has for it, then researches the rig, picks NAM captures and IRs, and proposes ready-to-play presets with pack artwork. You review every capture it chose before anything is downloaded; gear no capture covers gets a built-in stand-in. The presets are balanced to the same level as the factory packs, saved to a "Tone Builder" folder, and can be shared on Tone Sharing under your account.
-* The AI Tone Search tab is gone; the Tone Builder replaces it.
 * Imported Tone3000 models now remember their licence and what the capture covers (amp only, full rig, pedal), and shared presets name models from any source, not only Tone3000.
 * Previewing a tone now sounds like the tone. A tone built on Tone3000 models or IRs you didn't already have played without them in a preview, so it often sounded clean until you installed it. The preview now fetches what it needs and plays it, its blends included, and still adds nothing to your library: only installing the tone does that. If it can't get a model (without a Tone3000 key, for example), it tells you which ones it left out.
 
@@ -76,7 +89,6 @@
 * Soundshed Guitar now waits until your DAW has finished loading its settings before telling the DAW its latency has changed. Telling it in the middle of the load, as it did before, can upset a DAW that answers by restarting the plugin there, and may be behind FL Studio's "plugin crashed while loading its settings".
 * On Windows, NAM models and IRs whose full path is 260 characters or longer now load. Before, the app reported them as missing ("Model file not found"), which a deep folder of captures can reach.
 * Model and IR files installed from older preset packs or shared tones no longer carry their 64-character file code twice in their names, which pushed some of them past that limit. Files already installed that way are renamed on the next start.
-* On Windows, the factory presets' models and IRs now show their names when your Windows user folder has a long path. Before, the files were installed but left out of the library, so the presets' amps and cabs showed a 64-character file code instead of the model's name.
 * Deleting Soundshed Guitar from a track's inserts and inserting it again no longer crashes your DAW. Since 1.6.0, once every Soundshed Guitar in the DAW had gone, removed or closed with its project, opening the window of the next one crashed DAWs that keep the plugin loaded, such as Studio One.
 * An IR Cab with an IR in the IR B slot and none in IR A now plays IR B. Before, it let your guitar through with no cab at all. One IR on its own now plays in full whichever slot it is in, whatever IR Blend and L/R Split are set to, as an IR A on its own always has, with its own slot's Level, Pan, Invert and mic settings. A preset saved with only IR B now has its cab. Loading or clearing a cab's second IR also fades smoothly now, where with IR Blend above 0 the level used to jump.
 * A2 captures no longer show as A1 in the library, and calibrated captures no longer show as uncalibrated. An A2 file holds several smaller models, each with details of its own, and trainers write a file's contents in different orders, so the library often read one of the inner models' details, or stopped reading before the file's own: about a quarter of A2 captures showed as A1, and some captures with input and output levels showed none and had no Calibrated chip. They always played correctly. Models already in your library are read again once on the next start.
