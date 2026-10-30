@@ -405,6 +405,7 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kRotary },
   { type: EffectGuids.kVibe },
   { type: EffectGuids.kRingMod },
+  { type: EffectGuids.kDispersal },
   // Pitch
   { type: EffectGuids.kPitchShift },
   { type: EffectGuids.kTranspose },

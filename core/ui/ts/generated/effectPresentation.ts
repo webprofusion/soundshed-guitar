@@ -145,6 +145,7 @@ export const EFFECTS: Readonly<Record<string, EffectPresentation>> = {
   [EffectGuids.kRotary]: { icon: "speaker" },
   [EffectGuids.kVibe]: { icon: "bulb" },
   [EffectGuids.kRingMod]: { icon: "wave" },
+  [EffectGuids.kDispersal]: { icon: "bolt" },
   [EffectGuids.kWah]: { icon: "mixer" },
   [EffectGuids.kOctave]: { icon: "note" },
   [EffectGuids.kHarmonizer]: { icon: "note" },

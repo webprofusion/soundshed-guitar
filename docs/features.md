@@ -89,6 +89,7 @@ Level calibrated so the pedal matches bypass loudness. See the FX library's Driv
 | `rotary` | Rotary (horn and drum cabinet with real spin-up and slow-down, two mics) |
 | `vibe` | Vibe (photocell phaser in the Uni-Vibe style, Chorus or Vibrato) |
 | `ring_mod` | Ring Modulator (fixed or pitch-tracking carrier) |
+| `dispersal` | Dispersal (a long all-pass chain that turns pick attacks into zaps) |
 | `wah` | Wah (swept by a pedal or by the playing level; the former `auto_wah` runs as its Auto Wah control) |
 
 ### 2.6 Pitch

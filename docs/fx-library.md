@@ -91,6 +91,7 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kRotary` | `b1d69469-4d71-47df-8404-d25bdc29a577` | `rotary` |
 | `kVibe` | `fa81f9aa-5bd6-4726-baff-bb3df65a77da` | `vibe` |
 | `kRingMod` | `c13068c1-9c50-4c7c-be9e-eef808990651` | `ring_mod` |
+| `kDispersal` | `83377dc3-04a5-416a-afd7-f75cdf188bba` | `dispersal` |
 | `kAutoWah` | `b06c6d84-01b3-4d0a-ad98-40eecb64438e` | `auto_wah` (retired: runs as `kWah`) |
 | `kWah` | `8ae7a185-8075-466f-a83b-72f8dfa50af0` | `wah` |
 | `kSpatial3D` | `a3196960-a89b-4388-829e-cbf8d8dd91c3` | `spatial_3d` |
@@ -168,7 +169,9 @@ back to linear on both sides.
 Log-taper parameters: `ring_mod` `frequency`; `delay_digital` `highCut` and `lowCut`; `cab_ir`
 `lowCutHz` and `highCutHz`; `reverb_advanced` `lowCut` and `highCut`; `harmonizer` `highCut`;
 `vibe` `rate`; `tremolo` `crossover`; `dynamics_gate` `swell`; `reverb_verbal` `decay`, `preDelay`,
-`riseTime`, `echoTime` and `shapeTime`; `eq_pitch_tracking` `width1`–`width3` and `cutoff`.
+`riseTime`, `echoTime` and `shapeTime`; `eq_pitch_tracking` `width1`–`width3` and `cutoff`;
+`dispersal` `stages`, `frequency` and `focus`. Stages is the one stepped parameter on a log
+taper: both UIs label a whole step before a taper, so it reads "64", not "64.0".
 
 ### Conditional controls
 A parameter that means nothing in some modes can say when it shows: `ParameterDef::visibleWhenKey`
@@ -2442,6 +2445,45 @@ node starts with.
 | Harmonic Ring | Tracking, Interval 0 | — | The note's own harmonics, octave-up heavy; Tone 0.9, Mix 0.8 |
 | Sub-Octave Ring | Tracking, a just fifth (7 st + 2 cents) | — | Odd harmonics of half the note; Tone 0.7, Mix 0.8 |
 | Octave Shimmer | Tracking, +12 st | — | Mix 0.5 keeps the note under the shimmer |
+
+### Dispersal (`dispersal`)
+
+A long chain of second-order all-passes, all centred on one frequency, which holds that band
+of the spectrum back behind the rest. Nothing is boosted or cut: the magnitude response is
+flat and only timing changes. A pick attack holds every frequency at once, so it comes out as
+a sweep: a "pew", a laser zap, a dub drop. A steady note only changes phase and sounds nearly
+dry. Mix below 1 combs the chain against the dry signal, a very deep phaser.
+`DispersalEffect.h` has the processing, `DispersalSupport.h` the parameter table, the stage
+design and the presets. The plan, with what is still to come (an LFO and an envelope on
+Frequency, a group-delay plot), is docs/plans/dispersal.md.
+
+```
+in ─┬─ AP ─ AP ─ … ─ AP ─┬─ tap at Stages (crossfaded on a change) ─ mix ─ out
+    │  ←── Stages ──→    │                                          │
+    └────────────────────┴─────────────────── dry ──────────────────┘
+```
+
+| Behaviour | How |
+|---|---|
+| Stages | Trapezoidal state-variable filters, all-pass output x − 2k·band, which stay bounded while their coefficients move. One stage delays its centre by 2Q(1 + g²)/(g·fs), about 2Q/(π·f₀) well below Nyquist; at Focus 1 it delays DC by half that, so a low Focus holds the lows back too and a high one only a narrow band. The chain delays by Stages times one stage. `dispersal::StageGroupDelaySeconds` gives the delay at any frequency; tone bursts through the effect arrive within 0.05 ms of it at the centre, two octaves above and two below. |
+| Delay at the defaults | 64 stages at 800 Hz and Focus 1 hold 800 Hz back 51 ms, 200 Hz 29 ms and 3.2 kHz 1.8 ms. `GetParam("peakDelayMs")` answers the delay at the centre for the current settings. Long settings ring for a long time: 256 stages at 100 Hz and Focus 6 hold the centre back about 10 s. |
+| All-pass | A noise burst comes out with its energy (within 0.0001 dB, 1–256 stages) and a steady sine at its level, 50 Hz to 12 kHz. |
+| Stages changes | Whole stages, crossfaded over 30 ms from the old count's output to the new one's while the chain runs to the larger count. Half-way between counts one stage apart there is a notch at the centre, and growing the count leaves a gap at the centre until the signal arrives through the new stages, so Stages is a control to set rather than sweep: automating it steps. Stages past the count are not run, and are cleared when they drop out. A sine through 64, 256, 32 and 1 stages never steps by more than 1.25 times its steady slope. |
+| Smoothing | Frequency and Focus glide in the log domain over 20 ms, Stereo in semitones over 20 ms, worked out every 16 samples with the coefficients ramped in between; Mix glides per sample over 20 ms. Values set before the first block apply from sample 0. Sweeping Frequency end to end twice a second at 256 stages and Focus 6 gains no level (0.2 dB over 2 s of noise). |
+| Stereo | Moves the right side's centre up to an octave either way, so the zap reaches each side at a different moment. The sides share settings and nothing else (`KeepsChannelsSeparate`). With Stereo at 0 and a mono input the two chains converge, and once their states agree within 1e-7 only the left is run and copied to the right. |
+| Safety | A non-finite stage state clears that side's chain; the centre is held below 0.45 × the sample rate; state under 1e-12 is flushed at the end of each 64-sample chunk. No latency. |
+| Cost | Release, per 64-sample stereo block at 48 kHz: 18 µs at 64 stages with a mono input, 21 µs with a stereo one (1.3–1.6% of the 1333 µs deadline); 71 µs at 256 stages either way (5.3%). Each stage's recursion is serial, so one chain is latency-bound and a second runs in its shadow: linking the sides saves little. |
+
+**Factory presets**
+
+| Preset | Stages | Frequency | Focus | Other | Delay at the centre |
+|---|---|---|---|---|---|
+| Zap (default) | 64 | 800 Hz | 1.0 | | 51 ms |
+| Laser | 64 | 1.2 kHz | 2.0 | | 68 ms, narrower |
+| Dub Drop | 96 | 250 Hz | 2.0 | | 0.49 s |
+| Soft Attack | 24 | 2 kHz | 0.5 | | 2 ms: rounds the pick attack without a zap |
+| Wide Zap | 96 | 900 Hz | 1.5 | Stereo +7 | 102 ms left, 68 ms right |
+| Comb Phase | 8 | 600 Hz | 0.7 | Mix 0.5 | 8 notches against the dry |
 
 ### Synth Voice (`synth_saw`)
 Tracks the pitch of a single note and plays it on two oscillator voices, shaped by an envelope

@@ -27,12 +27,13 @@ export function formatParamValue(
   if (unit === "enum" && Array.isArray(labels)) {
     return enumLabel(value, labels, min, step) ?? `${Math.round(value)}`;
   }
-  if (taper === "log") {
-    return formatTaperedValue(value, unit);
-  }
+  // Whole steps first, so a stepped count on a log taper (the Dispersal's Stages) reads "64".
   const whole = wholeStepLabel(value, unit, step);
   if (whole !== undefined) {
     return whole;
+  }
+  if (taper === "log") {
+    return formatTaperedValue(value, unit);
   }
   if (unit === "dB" || unit === "ms" || unit === "Hz") {
     return `${value.toFixed(1)}${unit}`;
@@ -67,9 +68,13 @@ export function knobValueFormatter(knob: HTMLElement): (value: number) => string
         ? `L${Math.abs(rawValue * 100).toFixed(0)}`
         : `R${(rawValue * 100).toFixed(0)}`;
     }
+    const whole = wholeStepLabel(rawValue, unit, step);
+    if (whole !== undefined) {
+      return whole;
+    }
     if (taper === "log") {
       return formatTaperedValue(rawValue, unit);
     }
-    return wholeStepLabel(rawValue, unit, step) ?? `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
+    return `${rawValue.toFixed(2)}${unit === "amount" ? "" : unit}`;
   };
 }

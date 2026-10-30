@@ -38,6 +38,7 @@
 #include "dsp/effects/RotaryEffect.h"
 #include "dsp/effects/VibeEffect.h"
 #include "dsp/effects/RingModEffect.h"
+#include "dsp/effects/DispersalEffect.h"
 #include "dsp/effects/WahEffect.h"
 #include "dsp/effects/Spatial3DEffect.h"
 #include "dsp/effects/OctaveEffect.h"
@@ -151,6 +152,7 @@ inline void RegisterAllEffects()
     RegisterRotaryEffect();
     RegisterVibeEffect();
     RegisterRingModEffect();
+    RegisterDispersalEffect();
     RegisterWahEffect();
     RegisterSpatial3DEffect();
     RegisterOctaveEffect();

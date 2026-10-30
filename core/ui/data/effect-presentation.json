@@ -242,6 +242,10 @@
       "guid": "c13068c1-9c50-4c7c-be9e-eef808990651",
       "icon": "wave"
     },
+    "kDispersal": {
+      "guid": "83377dc3-04a5-416a-afd7-f75cdf188bba",
+      "icon": "bolt"
+    },
     "kWah": {
       "guid": "8ae7a185-8075-466f-a83b-72f8dfa50af0",
       "icon": "mixer"

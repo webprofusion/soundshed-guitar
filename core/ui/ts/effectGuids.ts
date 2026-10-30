@@ -65,6 +65,7 @@ export const EffectGuids = {
   kRotary:               "b1d69469-4d71-47df-8404-d25bdc29a577",
   kVibe:                 "fa81f9aa-5bd6-4726-baff-bb3df65a77da",
   kRingMod:             "c13068c1-9c50-4c7c-be9e-eef808990651",
+  kDispersal:            "83377dc3-04a5-416a-afd7-f75cdf188bba",
   // Retired: runs as kWah, whose Envelope control replaced it. Presets still store it.
   kAutoWah:              "b06c6d84-01b3-4d0a-ad98-40eecb64438e",
   kWah:                  "8ae7a185-8075-466f-a83b-72f8dfa50af0",
@@ -142,6 +143,7 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   rotary:                EffectGuids.kRotary,
   vibe:                  EffectGuids.kVibe,
   ring_mod:              EffectGuids.kRingMod,
+  dispersal:             EffectGuids.kDispersal,
   auto_wah:              EffectGuids.kWah,
   wah:                   EffectGuids.kWah,
   arp_auto:              EffectGuids.kAutoArp,
