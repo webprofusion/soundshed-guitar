@@ -16,7 +16,7 @@ builds the app the way `ios/build.sh` builds the JUCE ones ([ios-build.md](../io
 | Layer | Desktop | iOS |
 |---|---|---|
 | Window host | Elements' Cocoa host, `lib/host/macos` (an `NSView`) | A UIKit host, `nanoq/ios/elements_host/` (a `UIView`): touches become Elements' mouse events, a display link polls, the pasteboard is the clipboard, a hardware keyboard types |
-| Drawing | Artist's Quartz 2D backend | The same backend. Its AppKit calls (`NSFont`, `NSFontManager`, `NSColor`, `<Quartz/Quartz.h>`) become Core Text and Core Graphics calls, which iOS has too |
+| Drawing | Artist's Quartz 2D backend | On a device, Artist's Skia backend on the GPU (Ganesh on Metal), with a Skia built for iOS (see "Drawing on the GPU"). Quartz 2D remains for the Simulator and as a fallback: its AppKit calls (`NSFont`, `NSFontManager`, `NSColor`, `<Quartz/Quartz.h>`) become Core Text and Core Graphics calls, which iOS has too |
 | QPlug's view glue | `q_plug/src/macos/host_view.mm` (`NSView`) | `nanoq/ios/q_plug_host_view.mm` (`UIView`) |
 | App and audio | clap-wrapper's standalone, RtAudio and RtMidi | `nanoq/ios/app/`: a UIKit app that hosts the CLAP plugin QPlug builds, linked in statically, and plays it through `AVAudioSession` (PlayAndRecord) and a RemoteIO audio unit |
 | Formats | CLAP, VST3, AUv2, standalone | The app only. An AUv3 is a later, separate piece of work, as for the JUCE apps |
@@ -145,9 +145,15 @@ its own).
 ```bash
 nanoq/ios/build.sh run                       # Simulator, Debug: build, boot an iPad, install, launch
 SOUNDSHED_NANOQ_PROFILE=/tmp/nanoq-ios nanoq/ios/build.sh run   # on a throwaway data root
+nanoq/ios/build-skia.sh                      # once: Skia for the device builds (about 20 min)
 SSG_IOS_DEVELOPMENT_TEAM=<team id> nanoq/ios/build.sh device release reconfigure
 SSG_IOS_DEVELOPMENT_TEAM=<team id> nanoq/ios/build.sh legacy device release reconfigure   # iOS 12
 ```
+
+A device build draws with Skia when `build-skia.sh` has built it, and with Quartz otherwise;
+`skia` or `quartz` chooses (at configure, so with `reconfigure` to switch a tree). A
+Simulator build draws with Quartz: the Skia is arm64 only, and the Simulator on an Intel Mac
+is x86_64.
 
 The tree is `nanoq/ios/build` (`build-legacy` for iOS 12), the app
 `<tree>/<Config>-<sdk>/Soundshed Nano Q.app`. Installing on a device, and the iOS 12
@@ -157,6 +163,36 @@ caveats (registering the device by hand, `ios-deploy`, launching on the device),
 `SOUNDSHED_NANOQ_PROFILE` reaches the app through simctl's `SIMCTL_CHILD_` prefix; the
 Simulator's app can write to a host path, so the profile and logs (`logs/nanoq.log`,
 `data/v1/logs/session-log.txt`) can be read from the Mac directly.
+
+### Drawing on the GPU
+
+Quartz draws on the CPU, and on an A7 that was too slow: selecting a chain node redraws
+nearly the whole window, and on the iPad mini 2 that took 1.2 to 2.5 s, about two thirds of
+it in the blurred shadows (the effect panel's and each card's), which Quartz blurs over the
+whole of each shape. Touches were not the problem: they reached the view in 4 to 15 ms.
+
+So a device build draws with Artist's Skia backend, as Elements' Cocoa host can:
+
+- **Skia for iOS.** Artist publishes prebuilt Skia for macOS, Windows and Linux only.
+  `nanoq/ios/build-skia.sh` builds Skia m148 with Artist's own vcpkg port and the vcpkg
+  Artist pins, for the triplet `nanoq/ios/cmake/vcpkg-triplets/arm64-ios-nanoq.cmake`:
+  static, release, arm64, iOS 12.0, Ganesh on Metal, harfbuzz, png, jpeg and webp. It all
+  goes under `nanoq/ios/skia` (ignored by git). The port gives vcpkg's flags to Skia's C
+  and C++ only, which left the Metal code (Objective-C++) built for the SDK's iOS, its
+  `@available` checks folded away; the script adds gn's `ios_min_target` to the port, and
+  checks every object in `libskia.a` is for 12.0. Skia falls back to Metal's minimum
+  family when it cannot tell an iOS 12 GPU's, which is what an A7 is.
+- **CMake.** `NANOQ_IOS_SKIA` (the installed tree; `build.sh` passes it) turns on
+  `ARTIST_SKIA`, off the prebuilt bundle, and links Metal.
+- **The host.** `nanoq/ios/elements_host/base_view.mm`: the view's layer is a
+  `CAMetalLayer`. The areas invalidated are drawn, each apart and clipped, into a GPU
+  surface that keeps the window, once a frame from the display link; the surface is then
+  copied to the layer's drawable and presented. No GPU work is sent in the background.
+
+**Measured on the iPad mini 2** (2026-10-30, legacy release build): selecting a chain node
+went from 1,230-2,520 ms to 160-260 ms (about 85-180 ms recording the draw on the CPU,
+75-100 ms on the GPU); small redraws (a knob, a light) 7 to 45 ms. The UI looks as it did
+with Quartz. The first draws after launch still take about a second.
 
 **Orientation.** The app is landscape only. In a Simulator held in portrait, iPadOS 26
 shows the landscape window scaled down and letterboxed rather than rotating it, so a
@@ -176,7 +212,7 @@ screenshot taken that way shows a band across the middle: rotate the Simulator
 | Touch | **Works** in the Simulator: a tap selects a chain card and switches pages, a drag turns a knob (and the preset shows unsaved changes), a long press opens a card's menu without selecting the card, a tap on the backdrop closes it, two fingers scroll the preset list in the natural direction, and the transport's Play runs the demo riff through the rig (meters and DSP load move). Two taps at different places 33 ms apart (the test tool firing two calls at once) lost the second; not seen with taps at a human pace |
 | Device (iOS 15+) | Not built separately: the legacy build below is the same arm64 code, compiled, linked and signed for a device |
 | Legacy (iOS 12) device | **Runs on an iPad mini 2** (iOS 12.5.8): the engine starts from the bundle on the NEON NAM kernel and opens the view; presets load by touch; the session gives 48 kHz and a 5.3 ms (256-frame) buffer with input, the unit calls back steadily (617 callbacks in the first 3 s) with the plugin active; the plugin's state is saved on going to the background (the iOS 12 app-delegate path) and the last preset is restored on the next launch. No errors in its logs. How it sounds and whether it glitches under load is for the ear: the logs record neither. **Builds and signs** (`build.sh legacy device release`, team as for the JUCE apps): arm64, `MinimumOSVersion` 12.0, the profile includes the iPad mini 2. std::filesystem is in the binary (no `__fs` imports), and UIScene, UniformTypeIdentifiers and `os_workgroup` are weak imports. Not yet installed or run on the device |
-| Drawing cost (2026-10-27) | Measured on Windows with `SOUNDSHED_NANOQ_DRAWSTATS`: playing, 22.5 windows of area a second (every paint the whole window) down to about 3.5, and to the meters and lights alone with the iOS host's separate areas; a knob drag no longer redraws the whole window on press and release or the editor on each move. On the iPad mini 2 (2026-10-29) the iOS host's separate areas left the window black but for the meters: Core Animation copies back only what lies outside the merged dirty rectangle, so the gaps between areas were never kept. The host now draws the areas into a bitmap of its own that keeps the window and copies the dirty rectangle from it. **Checked on the device**: the window stays drawn while playing and turning knobs, and the meters, lights and knobs update cleanly |
+| Drawing cost (2026-10-27) | Measured on Windows with `SOUNDSHED_NANOQ_DRAWSTATS`: playing, 22.5 windows of area a second (every paint the whole window) down to about 3.5, and to the meters and lights alone with the iOS host's separate areas; a knob drag no longer redraws the whole window on press and release or the editor on each move. On the iPad mini 2 (2026-10-29) the iOS host's separate areas left the window black but for the meters: Core Animation copies back only what lies outside the merged dirty rectangle, so the gaps between areas were never kept. The host now draws the areas into a bitmap of its own that keeps the window and copies the dirty rectangle from it. **Checked on the device**: the window stays drawn while playing and turning knobs, and the meters, lights and knobs update cleanly. Quartz was still too slow on an A7 (1.2-2.5 s to redraw after selecting a node); a device build now draws with Skia on Metal, 160-260 ms (see "Drawing on the GPU") |
 | macOS regression | **Passes**: `nanoq/build/Release` configures and builds all four products, `NanoQEngineDialogTests` passes, and the standalone opens its view and loads its preset. A desktop build applies no patch |
 
 ## Not done yet

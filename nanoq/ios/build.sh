@@ -3,7 +3,7 @@
 # launch it in the Simulator. See docs/plans/nano-q-ios.md; signing, devices and the iOS 12
 # legacy build work as for the JUCE apps (docs/ios-build.md).
 #
-# Usage: nanoq/ios/build.sh [sim|device] [debug|release] [run] [reconfigure] [legacy]
+# Usage: nanoq/ios/build.sh [sim|device] [debug|release] [run] [reconfigure] [legacy] [skia|quartz]
 #
 #   sim | device     The Simulator (default) or an iPhone/iPad. A device build needs a
 #                    development team: SSG_IOS_DEVELOPMENT_TEAM=<team id>.
@@ -16,6 +16,11 @@
 #   reconfigure      Re-run CMake's configure step before building.
 #   legacy           Build for iOS 12 (the iPad mini 2, iPad Air 1, iPhone 5s/6) in a tree of
 #                    its own, nanoq/ios/build-legacy, with std::filesystem built into the app.
+#   skia | quartz    Draw on the GPU with Skia on Metal, or on the CPU with Quartz. Taken at
+#                    configure (pass reconfigure to switch a tree). Skia needs
+#                    nanoq/ios/build-skia.sh run first, and is arm64 only, so a Simulator build
+#                    on an Intel Mac draws with Quartz. Default: Skia for a device when that
+#                    Skia is built, Quartz otherwise.
 #
 # Arguments may appear in any order. The build tree is nanoq/ios/build (Xcode generator); open
 # nanoq/ios/build/SoundshedNanoQ.xcodeproj to work in Xcode (scheme nanoq_ios).
@@ -31,6 +36,8 @@ CONFIG=Debug
 RUN=false
 RECONFIGURE=false
 LEGACY=false
+RENDERER=
+SKIA_DIR="${SCRIPT_DIR}/skia/vcpkg/installed/arm64-ios-nanoq"
 
 TARGET=nanoq_ios
 APP_NAME="Soundshed Nano Q"
@@ -45,8 +52,10 @@ for arg in "$@"; do
         run) RUN=true ;;
         reconfigure) RECONFIGURE=true ;;
         legacy) LEGACY=true ;;
+        skia) RENDERER=skia ;;
+        quartz) RENDERER=quartz ;;
         -h|--help)
-            sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -79,6 +88,23 @@ if [[ "$RECONFIGURE" == true || ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
     if [[ -n "${SSG_IOS_DEVELOPMENT_TEAM:-}" ]]; then
         configure_args+=(-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="${SSG_IOS_DEVELOPMENT_TEAM}")
     fi
+    if [[ -z "$RENDERER" ]]; then
+        if [[ "$PLATFORM" == device && -f "${SKIA_DIR}/share/unofficial-skia/unofficial-skia-config.cmake" ]]; then
+            RENDERER=skia
+        else
+            RENDERER=quartz
+        fi
+    fi
+    if [[ "$RENDERER" == skia ]]; then
+        if [[ ! -f "${SKIA_DIR}/share/unofficial-skia/unofficial-skia-config.cmake" ]]; then
+            echo "No Skia for iOS at ${SKIA_DIR}: run nanoq/ios/build-skia.sh first" >&2
+            exit 2
+        fi
+        configure_args+=(-DNANOQ_IOS_SKIA="${SKIA_DIR}")
+    else
+        configure_args+=(-DNANOQ_IOS_SKIA=)
+    fi
+    echo "Drawing with: ${RENDERER}"
     cmake "${configure_args[@]}"
 fi
 

@@ -1,2 +1,4 @@
 # The iOS 12 build tree made by build.sh legacy (nanoq/.gitignore covers build/).
 /build-legacy/
+# Skia for the iOS build, with vcpkg and its sources (build-skia.sh).
+/skia/

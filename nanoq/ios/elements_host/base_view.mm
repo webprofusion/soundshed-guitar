@@ -7,9 +7,12 @@
    nanoq/CMakeLists.txt points that at this folder. See
    docs/plans/nano-q-ios.md.
 
-   Drawing is Artist's Quartz 2D backend, as on macOS: a UIView's drawRect:
-   context is a CGContext, flipped (origin at the top left) as the Cocoa
-   view is. Input:
+   Drawing is Artist's Skia backend on the GPU (Ganesh on Metal), as
+   Elements' Cocoa host draws with Skia: the view's layer is a CAMetalLayer.
+   Or, built with Artist's Quartz 2D backend, on the CPU: a UIView's
+   drawRect: context is a CGContext, flipped (origin at the top left) as the
+   Cocoa view is. Either way the window is kept between draws (a GPU surface,
+   or a bitmap), and only what changed is drawn into it. Input:
 
    - The first finger is the left mouse button: the cursor moves to it, then
      click down, drag, click up. Other fingers are ignored while it is down.
@@ -34,8 +37,22 @@
 #include <map>
 #include <vector>
 
-#if !defined(ARTIST_QUARTZ_2D)
-# error The UIKit host draws with Artist's Quartz 2D backend only
+#if defined(ARTIST_SKIA)
+# import <Metal/Metal.h>
+# import <QuartzCore/CAMetalLayer.h>
+# include <SkCanvas.h>
+# include <SkColorSpace.h>
+# include <SkImage.h>
+# include <SkSurface.h>
+# include <ganesh/GrBackendSurface.h>
+# include <ganesh/GrDirectContext.h>
+# include <ganesh/SkSurfaceGanesh.h>
+# include <ganesh/mtl/GrMtlBackendContext.h>
+# include <ganesh/mtl/GrMtlBackendSurface.h>
+# include <ganesh/mtl/GrMtlDirectContext.h>
+# include <ganesh/mtl/GrMtlTypes.h>
+#elif !defined(ARTIST_QUARTZ_2D)
+# error The UIKit host draws with Artist's Skia or Quartz 2D backend only
 #endif
 
 #if ! __has_feature(objc_arc)
@@ -197,13 +214,22 @@ namespace
    UIPanGestureRecognizer*          _pan;
    CGPoint                          _pan_last;
 
-   // What was invalidated since the last draw (see drawRect:): each area
-   // apart, or the whole view.
+   // What was invalidated since the last draw: each area apart, or the
+   // whole view.
    std::vector<CGRect>              _pending_rects;
    bool                             _pending_full;
 
+#if defined(ARTIST_SKIA)
+   // Skia on Metal, and the window as last drawn (see render).
+   id<MTLDevice>                    _device;
+   id<MTLCommandQueue>              _queue;
+   sk_sp<GrDirectContext>           _gr_context;
+   sk_sp<SkSurface>                 _surface;
+   bool                             _needs_render;
+#else
    // The window as last drawn (see drawRect:).
    CGContextRef                     _backing;
+#endif
 }
 
 - (void) on_tick;
@@ -232,6 +258,13 @@ namespace
 
 @implementation ElementsView
 
+#if defined(ARTIST_SKIA)
++ (Class) layerClass
+{
+   return [CAMetalLayer class];
+}
+#endif
+
 - (void) elements_init : (ph::base_view*) view_
 {
    cycfi::elements::init_resources();
@@ -239,11 +272,41 @@ namespace
    _view = view_;
    _scale = [UIScreen mainScreen].scale;
    self.contentScaleFactor = _scale;
-   self.contentMode = UIViewContentModeRedraw;
    self.opaque = YES;
+   _pending_full = true;
+#if defined(ARTIST_SKIA)
+   _device = MTLCreateSystemDefaultDevice();
+   _queue = [_device newCommandQueue];
+   if (!_device || !_queue)
+   {
+      ph::error_handler::get().on_resource_error(
+         ph::error_id::no_gpu_device, "No Metal device found");
+      throw std::runtime_error{"No Metal device found"};
+   }
+   auto layer = (CAMetalLayer*) self.layer;
+   layer.device = _device;
+   layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+   // The window is copied in from a surface of our own (see render).
+   layer.framebufferOnly = NO;
+   layer.opaque = YES;
+   layer.contentsScale = _scale;
+
+   GrMtlBackendContext backend{};
+   backend.fDevice.retain((__bridge GrMTLHandle) _device);
+   backend.fQueue.retain((__bridge GrMTLHandle) _queue);
+   _gr_context = GrDirectContexts::MakeMetal(backend);
+   if (!_gr_context)
+   {
+      ph::error_handler::get().on_resource_error(
+         ph::error_id::no_gpu_device, "Failed to create Skia Metal GrDirectContext");
+      throw std::runtime_error{"Failed to create Skia Metal GrDirectContext"};
+   }
+   _needs_render = true;
+#else
+   self.contentMode = UIViewContentModeRedraw;
    // drawRect: covers all of the area it is given, from its own bitmap.
    self.clearsContextBeforeDrawing = NO;
-   _pending_full = true;
+#endif
    self.backgroundColor = [UIColor blackColor];
    self.multipleTouchEnabled = YES;
    self.clipsToBounds = YES;
@@ -279,13 +342,24 @@ namespace
    [_link invalidate];
    [_long_press invalidate];
    _view = nullptr;
+#if defined(ARTIST_SKIA)
+   _surface.reset();
+   if (_gr_context)
+      _gr_context->releaseResourcesAndAbandonContext();
+   _gr_context.reset();
+#else
    CGContextRelease(_backing);
+#endif
 }
 
 - (void) on_tick
 {
    if (_view)
       _view->poll();
+#if defined(ARTIST_SKIA)
+   if (_needs_render)
+      [self render];
+#endif
 }
 
 // The C++ view is gone. A host may keep this UIView alive past it.
@@ -328,6 +402,9 @@ namespace
    {
       // UIKit redraws a resized view itself: all of it, not the areas pending.
       _pending_full = true;
+#if defined(ARTIST_SKIA)
+      _needs_render = true;
+#endif
       if (_view)
          _view->on_size_change({float(size.width), float(size.height)});
    }
@@ -349,6 +426,10 @@ namespace
       _scale = scale;
       _pending_full = true;
       self.contentScaleFactor = scale;
+#if defined(ARTIST_SKIA)
+      self.layer.contentsScale = scale;
+      _needs_render = true;
+#endif
       if (_view)
          _view->on_scale_change(_scale);
    }
@@ -361,6 +442,109 @@ namespace
 {
    return YES;
 }
+
+#if defined(ARTIST_SKIA)
+
+// Draws an area of the window into the surface that keeps it, clipped to it
+// (Elements draws only what meets the clip).
+- (void) draw_surface : (CGRect) area
+{
+   SkCanvas* sk = _surface->getCanvas();
+   sk->save();
+   sk->scale(_scale, _scale);
+   sk->clipRect(SkRect::MakeXYWH(area.origin.x, area.origin.y, area.size.width, area.size.height));
+   sk->drawColor(SK_ColorBLACK, SkBlendMode::kSrc);
+   {
+      auto cnv = canvas{sk};
+      _view->draw(cnv);
+   }
+   sk->restore();
+}
+
+// Once a frame (from on_tick), when something was invalidated: the areas
+// invalidated are drawn, each apart, into a GPU surface that keeps the
+// window, which is then copied to the layer's next drawable and presented.
+// A drawable comes with no contents of its own, so the whole window goes to
+// it each time: a copy on the GPU. What is drawn is only what changed, since
+// the CPU still records every draw. The whole view, a resize or a scale
+// change draws it all, as do more than a few areas (their union).
+- (void) render
+{
+   _needs_render = false;
+   if (!_view || !_gr_context)
+      return;
+   // No GPU work in the background: iOS refuses it.
+   if ([UIApplication sharedApplication].applicationState == UIApplicationStateBackground)
+   {
+      _needs_render = true;
+      return;
+   }
+
+   auto layer = (CAMetalLayer*) self.layer;
+   auto const size = self.bounds.size;
+   int const w = int(std::ceil(size.width * _scale));
+   int const h = int(std::ceil(size.height * _scale));
+   if (w <= 0 || h <= 0)
+      return;
+   if (int(layer.drawableSize.width) != w || int(layer.drawableSize.height) != h)
+      layer.drawableSize = CGSizeMake(w, h);
+
+   if (!_surface || _surface->width() != w || _surface->height() != h)
+   {
+      _surface = SkSurfaces::RenderTarget(
+         _gr_context.get(), skgpu::Budgeted::kYes,
+         SkImageInfo::Make(w, h, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
+         0, kTopLeft_GrSurfaceOrigin, nullptr);
+      _pending_full = true;
+      if (!_surface)
+         return;
+   }
+
+   auto rects = std::move(_pending_rects);
+   _pending_rects.clear();
+   if (_pending_full)
+   {
+      [self draw_surface : self.bounds];
+   }
+   else if (rects.size() > 8)
+   {
+      auto all = rects.front();
+      for (auto const& r : rects)
+         all = CGRectUnion(all, r);
+      [self draw_surface : all];
+   }
+   else
+   {
+      for (auto const& r : rects)
+         [self draw_surface : r];
+   }
+   _pending_full = false;
+
+   id<CAMetalDrawable> drawable = [layer nextDrawable];
+   if (!drawable)
+   {
+      // Drawn into the surface all the same: the copy waits for a drawable.
+      _needs_render = true;
+      return;
+   }
+   GrMtlTextureInfo info;
+   info.fTexture.retain((__bridge GrMTLHandle) drawable.texture);
+   auto target = SkSurfaces::WrapBackendRenderTarget(
+      _gr_context.get(), GrBackendRenderTargets::MakeMtl(w, h, info),
+      kTopLeft_GrSurfaceOrigin, kBGRA_8888_SkColorType, nullptr, nullptr);
+   if (target)
+   {
+      SkPaint copy;
+      copy.setBlendMode(SkBlendMode::kSrc);
+      target->getCanvas()->drawImage(_surface->makeImageSnapshot(), 0, 0, SkSamplingOptions{}, &copy);
+      _gr_context->flushAndSubmit(target.get(), GrSyncCpu::kNo);
+   }
+   id<MTLCommandBuffer> present = [_queue commandBuffer];
+   [present presentDrawable : drawable];
+   [present commit];
+}
+
+#else
 
 // The window as last drawn, at the screen's pixels, with UIKit's top-left
 // origin in points. Made again (and all of it drawn) when the size or scale
@@ -474,11 +658,17 @@ namespace
    CGImageRelease(image);
 }
 
+#endif
+
 - (void) invalidate_all
 {
    _pending_full = true;
    _pending_rects.clear();
+#if defined(ARTIST_SKIA)
+   _needs_render = true;
+#else
    [self setNeedsDisplay];
+#endif
 }
 
 - (void) invalidate_rect : (CGRect) area
@@ -500,7 +690,11 @@ namespace
       if (!merged)
          _pending_rects.push_back(area);
    }
+#if defined(ARTIST_SKIA)
+   _needs_render = true;
+#else
    [self setNeedsDisplayInRect : area];
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -107,6 +107,21 @@ if(NANOQ_IOS)
     set(GUITARFX_CORE_SIMD_LEVEL "sse2" CACHE STRING "" FORCE)
     # Below iOS 13 (ios/build.sh legacy): std::filesystem built into the app. Before the core.
     include("${CMAKE_CURRENT_SOURCE_DIR}/../ios/cmake/IosFilesystemBackDeploy.cmake")
+
+    # Drawing on the GPU: Artist's Skia backend on Metal, with the Skia that ios/build-skia.sh
+    # builds (arm64, so device builds only; ios/build.sh passes it). Without it Artist draws with
+    # Quartz on the CPU, which on an iPad mini 2 took over a second to redraw the window.
+    set(NANOQ_IOS_SKIA "" CACHE PATH "Skia for iOS (vcpkg's installed tree), to draw with Skia on Metal")
+    if(NANOQ_IOS_SKIA)
+        set(ARTIST_SKIA ON CACHE BOOL "" FORCE)
+        set(ARTIST_QUARTZ_2D OFF CACHE BOOL "" FORCE)
+        set(ARTIST_SKIA_PREBUILT OFF CACHE BOOL "" FORCE)
+        list(PREPEND CMAKE_PREFIX_PATH "${NANOQ_IOS_SKIA}")
+        list(PREPEND CMAKE_FIND_ROOT_PATH "${NANOQ_IOS_SKIA}")
+    else()
+        set(ARTIST_SKIA OFF CACHE BOOL "" FORCE)
+        set(ARTIST_QUARTZ_2D ON CACHE BOOL "" FORCE)
+    endif()
 endif()
 
 # ── The engine ──────────────────────────────────────────────────────────────────
@@ -143,6 +158,9 @@ if(NANOQ_IOS)
     set_source_files_properties(${NANOQ_APPLE_SOURCES} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
     # UniformTypeIdentifiers is iOS 14: weak, so a legacy (iOS 12) build still loads.
     set(NANOQ_APPLE_FRAMEWORKS "-framework UIKit" "-weak_framework UniformTypeIdentifiers")
+    if(NANOQ_IOS_SKIA)
+        list(APPEND NANOQ_APPLE_FRAMEWORKS "-framework Metal" "-framework QuartzCore")
+    endif()
     list(APPEND NANOQ_SOURCES ${NANOQ_APPLE_SOURCES})
 elseif(APPLE)
     enable_language(OBJCXX)
