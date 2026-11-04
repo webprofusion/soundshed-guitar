@@ -7,19 +7,37 @@
 * **Multi-band Gate**: a noise gate that splits your signal into six frequency bands and turns down only the bands that have fallen below their own threshold. As a note fades, the hiss up top goes quiet while the body of the note keeps ringing, so you don't get the sudden on/off of an ordinary gate. Mute your strings and press Learn: it listens to your noise for two seconds and sets all six thresholds for you. Offset nudges them all up or down together. No latency.
 * **Dispersal**: turns every pick attack into a zap. It holds one band of frequencies back behind the rest of your sound, so the attack of each note comes out as a quick falling sweep: a laser "pew", or with more Stages a long dub drop. Nothing is boosted or cut, so a held note sounds nearly dry; palm mutes and short notes show it best. Frequency picks the band and Focus how narrow it is (narrower sounds more tonal and rings longer). Stereo moves the right side's band so the zap reaches each side at a different moment, and Mix below full blends in your dry signal for a very deep phaser. No latency. 6 factory presets.
 * **Splitter modes**: a split can now decide what each branch gets. Pick a Mode on the Splitter:
-  * **Blend** sweeps from the top branch to the bottom one with Position. Put it on an expression pedal to morph between two rigs.
-  * **Switch** plays one branch at a time, like an A/B box. The other branches keep running, so a delay or reverb on the rig you left rings out.
-  * **Dynamics** sends soft playing to branch 1 and hard playing to branch 2. Pick holds each note on the branch its pick chose while it rings; Level follows your volume as it goes, so rolling the guitar's volume back moves you to branch 1.
-  * **Pitch** sends notes to branches by range, at the split notes you set: low notes to one rig, high notes to another. A bend over the split note doesn't move the note. It takes about 55 ms to hear a note's pitch, so until then, and for chords, the signal goes where Unpitched says: all branches, the last one used, or one you choose.
-  * **Stereo** sends the left input to branch 1 and the right to branch 2, so two instruments on one stereo input can each have their own rig. Any further branches get both.
+* **Blend** sweeps from the top branch to the bottom one with Position. Put it on an expression pedal to morph between two rigs.
+* **Switch** plays one branch at a time, like an A/B box. The other branches keep running, so a delay or reverb on the rig you left rings out.
+* **Dynamics** sends soft playing to branch 1 and hard playing to branch 2. Pick holds each note on the branch its pick chose while it rings; Level follows your volume as it goes, so rolling the guitar's volume back moves you to branch 1.
+* **Pitch** sends notes to branches by range, at the split notes you set: low notes to one rig, high notes to another. A bend over the split note doesn't move the note. It takes about 55 ms to hear a note's pitch, so until then, and for chords, the signal goes where Unpitched says: all branches, the last one used, or one you choose.
+* **Stereo** sends the left input to branch 1 and the right to branch 2, so two instruments on one stereo input can each have their own rig. Any further branches get both.
 
-  Every change of branch crossfades over Crossfade (10 ms to start with). Copy, which sends everything to every branch as before, is still the default, so your presets sound the same.
+Every change of branch crossfades over Crossfade (10 ms to start with). Copy, which sends everything to every branch as before, is still the default, so your presets sound the same.
 * **Pitch Tracking EQ** (experimental, turn on Experimental Effects to see it): an EQ whose bands follow the note you play. Instead of a frequency, each of its three bands picks a harmonic of the note (the octave, the fifth above it, and so on), so it lifts or cuts the same part of the tone anywhere on the neck. Lift the even harmonics for warmth, cut them for a hollow tone, or push the fundamental for a lead that sings. An optional low-pass follows the note too, so low notes aren't fizzy and high ones aren't dull. It follows single notes; through chords it stays on the last note it heard. 6 factory presets.
 * **Scene automation lane**: a new **Scene** parameter for your DAW picks the scene to play from one lane, with each step labelled Scene 1, Scene 2 and so on. Unlike the Scene 1-4 switches, it follows the lane wherever you start playback or jump to in the song, and moving the lane down to an earlier scene works. Adding a scene to the end of a preset doesn't change which scene earlier points pick.
 * IR Cab now has optional IR list for easy pairing
 * Many updates to the custom layout editor enabling better custom layout designs
 * Riff capture records on the new looper's recorder. An armed take now keeps the 10 ms before your first note, so the pick attack isn't cut, and waits for a note louder than your pickup's hum instead of a fixed level that a single coil's hum could set off. Your riff library and saved takes are unchanged.
 * A split inside a branch of another split now shows in full in the signal chain: the inner split's branches, its mixer and everything after it on that branch. Before, the branch stopped at the inner splitter, so the effects past it couldn't be seen or edited. Add a Splitter on any connection in a branch to nest one, and remove it with the × on its mixer as usual. Soundshed Nano Q draws them too.
+
+## 1.7.3 (Unreleased)
+* **macOS**: choosing a template from **New Preset** now creates the preset. Before, the menu closed as you clicked and nothing happened.
+* **macOS**: the Standalone's Plugin Host can now load third-party VST3, AU and LV2 plugins. macOS rejected every plugin signed by another developer, so scans came back empty. If a plugin is still blocked, the error now says that macOS may be the cause.
+* **macOS**: naming a Multi-Rig mix, saving a Custom Effect and editing a library item's details now ask for the text in the app's own dialog. The Mac app shows no browser prompt, so these did nothing before.
+* **macOS**: soundshed:// links from the browser, which open a Tone Sharing tone in the app, now reach the Standalone app. The link was never registered with macOS.
+* Installing a Tone Sharing pack no longer fails when some of its Tone3000 models have been removed or made private. The presets are installed with those slots empty, and a dialog lists the models it couldn't get.
+* On Windows, the factory presets' models and IRs now show their names when your Windows user folder has a long path. Before, the files were installed but left out of the library, so the presets' amps and cabs showed a 64-character file code instead of the model's name.
+* Factory models keep their details (A1/A2, calibration) across a relaunch, instead of losing them until the file was read again.
+* The Standalone keeps the input mode you choose in Nano (Mono In 2, for example) when you load another preset.
+* The built-in amp no longer goes silent after a bad (non-finite) sample from an earlier effect or hosted plugin until its node is rebuilt.
+* Jam's backing-track titles show apostrophes and ampersands properly instead of codes such as `&#39;`, in favourites saved before too.
+* On a touch screen, opening the FX Library no longer brings up the on-screen keyboard.
+* Switching to or from a scene with a pitch shifter no longer pops. The crossfade now waits out the pitch shifter's latency instead of fading into silence.
+* After a scene switch, the open effect panel shows the new scene's values, and saving keeps the edits you made after the switch.
+* A reopened plugin window shows the scene that is playing, not the first one.
+* At the compact sizes the scene badges no longer cover the first effects in the chain.
+* Scenes can be reordered: drag a scene badge onto another, or press Alt+Left/Right on a focused badge.
 
 ## 1.7.1 (Oct 23,2026)
 * Minor fixes: Window chrome style, plugin hosting performance fixes, fix Jam search tab
