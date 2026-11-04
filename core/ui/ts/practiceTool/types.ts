@@ -69,6 +69,42 @@ export interface PracticeToolProjectLink {
 }
 
 /**
+ * One point that pins the score to the reference: where a bar (in a given pass
+ * through its repeats) starts in the reference's own time. Field for field
+ * alphaTab's `FlatSyncPoint`, so it is handed to `score.applyFlatSyncPoints`
+ * as it is. The reference's time is its media time, not wall-clock time, so the
+ * points survive a change of Speed.
+ */
+export interface PracticeToolTabSyncPoint {
+  barIndex: number;
+  /** 0 on the first pass through the bar, 1 on the second (a repeat), … */
+  barOccurence: number;
+  /** Where in the bar, 0..1. The tab view only sets bar starts (0). */
+  barPosition: number;
+  millisecondOffset: number;
+}
+
+/**
+ * A score shown in the tab view, and how it lines up with one reference. The
+ * file itself is in the engine's document store under `tabId` (its content hash,
+ * see PracticeTabMessages.h); this is only the pointer and the sync.
+ */
+export interface PracticeToolTabBinding {
+  tabId: string;
+  fileName: string;
+  /** Which of the score's tracks is shown. */
+  trackIndex: number;
+  syncPoints: PracticeToolTabSyncPoint[];
+}
+
+/** A YouTube video used as the reference in place of a backing track. */
+export interface PracticeToolYouTubeReference {
+  videoId: string;
+  /** As YouTube reported it once the video loaded; may be empty. */
+  title: string;
+}
+
+/**
  * A saved Practice Tool project: the backing track that was loaded, the loops
  * defined on it, the fader settings, and — if the user opted in at save time —
  * the tone preset that was selected. Purely client-side, stored via
@@ -98,5 +134,10 @@ export interface PracticeToolProject {
   /** Edited on the saved project directly (no Save needed), and carried over
    * when Save overwrites it. Absent until the first link is added. */
   links?: PracticeToolProjectLink[];
+  /** The tab and its sync to this project's reference. Absent when no tab was open. */
+  tab?: PracticeToolTabBinding;
+  /** Set when the project's reference is a YouTube video. `filePath` is then
+   * empty unless a backing track was also loaded. */
+  youtube?: PracticeToolYouTubeReference;
   savedAt: number;
 }

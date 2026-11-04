@@ -32,6 +32,8 @@ enum class BrowseFileType
     AudioFile,
     ArchiveFile,
     PluginFile,
+    /// A score for the Practice Tool's tab view: Guitar Pro, MusicXML, Capella or alphaTex.
+    TablatureFile,
     Folder,
     Any
 };

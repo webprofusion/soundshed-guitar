@@ -1,0 +1,219 @@
+/* ===== Practice Tool: tab view =====
+   The tablature section (ui-components/panels/jam-panel.html, ts/practiceTool/tab/).
+   Linked straight after practice-tool.css, whose palette variables it uses.
+
+   alphaTab draws black notation, so the score sits on a paper-white card in
+   every theme rather than being recoloured per theme. Its "alphaTab.net"
+   attribution is part of what it draws and must stay visible: nothing here may
+   hide, cover or crop it (https://alphatab.net/docs/attribution). */
+
+.practice-tool-tab-section {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The panel scrolls. With a score open the section is tall, and the loops and
+   transport below (which otherwise take the space left over, down to nothing)
+   keep their own height and are scrolled to instead. */
+.practice-tool-panel:has(#practice-tool-tab-viewport:not([hidden]), #practice-tool-tab-video:not([hidden])) .practice-tool-body {
+  flex-shrink: 0;
+}
+
+.practice-tool-tab-section.is-drag-over {
+  outline: 2px dashed var(--practice-field-focus);
+  outline-offset: 2px;
+}
+
+.practice-tool-tab-toolbar,
+.practice-tool-tab-sync-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.practice-tool-tab-toolbar button,
+.practice-tool-tab-sync-bar button {
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.practice-tool-tab-toolbar button:disabled,
+.practice-tool-tab-sync-bar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.practice-tool-tab-toolbar button.is-active {
+  background: var(--practice-eq-active-bg);
+  border-color: var(--practice-field-focus);
+  color: var(--practice-eq-active-text);
+}
+
+.practice-tool-tab-select,
+.practice-tool-tab-youtube-url {
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--practice-field-border);
+  background: var(--practice-field-bg);
+  color: var(--practice-field-text);
+  font-size: 11px;
+}
+
+.practice-tool-tab-select {
+  max-width: 180px;
+}
+
+.practice-tool-tab-youtube-url {
+  width: 230px;
+}
+
+.practice-tool-tab-select:focus,
+.practice-tool-tab-youtube-url:focus {
+  outline: none;
+  border-color: var(--practice-field-focus);
+}
+
+.practice-tool-tab-label {
+  font-size: 11px;
+  color: var(--practice-text-dim);
+}
+
+.practice-tool-tab-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-medium);
+}
+
+.practice-tool-tab-spacer {
+  flex: 1;
+}
+
+.practice-tool-tab-sync-bar {
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--practice-amber-border);
+  background: var(--practice-amber-tint);
+}
+
+.practice-tool-tab-sync-bar .practice-tool-tab-sync-set:not(:disabled) {
+  border-color: var(--practice-amber-border);
+  color: var(--practice-amber-text);
+  font-weight: 600;
+}
+
+.practice-tool-tab-sync-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--practice-amber-soft-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-tool-tab-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.practice-tool-tab-video {
+  flex: 0 0 auto;
+  width: 360px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+
+.practice-tool-tab-video-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.practice-tool-tab-viewport {
+  flex: 1 1 420px;
+  min-width: 0;
+  height: min(60vh, 520px);
+  overflow: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--practice-row-border);
+  background: #fdfdfb;
+}
+
+.practice-tool-tab-surface {
+  position: relative;
+  min-height: 100%;
+}
+
+/* alphaTab's own elements: the beat cursor, the bar highlight and a selection. */
+.practice-tool-tab-surface .at-cursor-bar {
+  background: rgba(255, 196, 64, 0.22);
+}
+
+.practice-tool-tab-surface .at-cursor-beat {
+  width: 3px;
+  background: rgba(64, 120, 220, 0.75);
+}
+
+.practice-tool-tab-surface .at-highlight * {
+  fill: #2a62c9;
+  stroke: #2a62c9;
+}
+
+/* Sync flags: a bar line in amber on each bar with a sync point, and an
+   outline on the bar the next tap sets. Never takes a click from the score. */
+.practice-tool-tab-sync-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.practice-tool-tab-sync-flag {
+  position: absolute;
+  width: 3px;
+  margin-left: -1px;
+  background: rgba(214, 140, 0, 0.9);
+}
+
+.practice-tool-tab-sync-flag::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: -3px;
+  width: 9px;
+  height: 6px;
+  background: rgba(214, 140, 0, 0.9);
+  border-radius: 2px 2px 0 0;
+}
+
+.practice-tool-tab-sync-flag[data-pass]::after {
+  content: "×" attr(data-pass);
+  position: absolute;
+  top: -18px;
+  left: 4px;
+  font-size: 9px;
+  color: #8a5a00;
+}
+
+.practice-tool-tab-sync-target {
+  position: absolute;
+  border: 2px solid rgba(214, 140, 0, 0.85);
+  border-radius: 3px;
+  background: rgba(255, 204, 102, 0.12);
+}
+
+.practice-tool-tab-hint.is-error {
+  color: var(--practice-amber-text);
+}

@@ -8,6 +8,7 @@
  */
 
 import { onScaleGuideCatalog, onScaleGuideView } from "./scaleGuide/panel.js";
+import { onPracticeToolTabFailed, onPracticeToolTabLoaded } from "./practiceTool/tab.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { onGateLearnStatus } from "./gateLearn.js";
 import { onAudioDeviceLevels, onAudioDeviceState } from "./messages/audioDeviceHandlers.js";
@@ -54,6 +55,8 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "practiceToolFileLoaded": onPracticeToolFileLoaded,
   "practiceToolTransportState": onPracticeToolTransportState,
   "practiceToolPlaybackEnded": onPracticeToolPlaybackEnded,
+  "practiceToolTabLoaded": onPracticeToolTabLoaded,
+  "practiceToolTabFailed": onPracticeToolTabFailed,
   "looperState": onLooperState,
   "looperLayers": onLooperLayers,
   "looperWaveforms": onLooperWaveforms,

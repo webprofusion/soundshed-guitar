@@ -77,6 +77,7 @@ set(TEST_SOURCES
     LooperClickTests.cpp
     MixerLooperTests.cpp
     PracticeToolCrossfadeTests.cpp
+    PracticeTabMessagesTests.cpp
     MessageDispatchTypeErrorTests.cpp
     MessageHandlerRegistryTests.cpp
     MetronomeServiceTests.cpp

@@ -19,6 +19,7 @@ import { updateAppSetting } from "../appSettingsStore.js";
 import { uiState } from "../state.js";
 import type { AppSettingValue, PracticeToolLoopRegion, PracticeToolProject, PracticeToolProjectLink } from "../types.js";
 import { sanitizePracticeToolEq } from "./eq.js";
+import { parseTabBinding, parseYouTubeReference } from "./tab/tabState.js";
 
 const LOOPS_SETTING_KEY = "practiceTool.loops";
 const PROJECTS_SETTING_KEY = "practiceTool.projects";
@@ -160,7 +161,10 @@ export function parsePracticeToolProject(value: unknown): PracticeToolProject | 
   const id = typeof record.id === "string" && record.id ? record.id : "";
   const name = typeof record.name === "string" ? record.name.trim() : "";
   const filePath = typeof record.filePath === "string" ? record.filePath : "";
-  if (!id || !name || !filePath) {
+  const youtube = parseYouTubeReference(record.youtube);
+  const tab = parseTabBinding(record.tab);
+  // A project follows a backing track, a YouTube video, or both.
+  if (!id || !name || (!filePath && !youtube)) {
     return null;
   }
   const loops = Array.isArray(record.loops) ? record.loops.filter(isPersistedLoop).map(copyPersistedLoop) : [];
@@ -178,7 +182,7 @@ export function parsePracticeToolProject(value: unknown): PracticeToolProject | 
     filePath,
     fileTitle: typeof record.fileTitle === "string" && record.fileTitle
       ? record.fileTitle
-      : (filePath.split(/[\\/]/).pop() ?? filePath),
+      : (filePath.split(/[\\/]/).pop() || youtube?.title || "YouTube video"),
     durationSec: Math.max(0, readNumber(record.durationSec, 0)),
     loops,
     activeLoopId,
@@ -192,6 +196,8 @@ export function parsePracticeToolProject(value: unknown): PracticeToolProject | 
     ...(presetId ? { presetId } : {}),
     ...(presetId && presetName ? { presetName } : {}),
     ...(links.length ? { links } : {}),
+    ...(tab ? { tab } : {}),
+    ...(youtube ? { youtube } : {}),
     savedAt: Math.max(0, readNumber(record.savedAt, 0)),
   };
 }
@@ -221,16 +227,19 @@ export function findPracticeToolProject(projectId: string): PracticeToolProject 
 /**
  * Builds a project from the live player state. `projectId` overwrites an
  * existing project in place (keeping its id, so nothing else has to be
- * re-pointed); omit it for a new one. Returns null when there is no track
- * loaded to save.
+ * re-pointed); omit it for a new one. Returns null when there is neither a
+ * track loaded nor a YouTube video to save.
  */
 export function capturePracticeToolProject(
   name: string,
-  options: { includePreset: boolean; projectId?: string } = { includePreset: false }
+  options: { includePreset: boolean; projectId?: string; tab?: Pick<PracticeToolProject, "tab" | "youtube"> } = { includePreset: false }
 ): PracticeToolProject | null {
   const player = uiState.practiceTool;
   const trimmedName = name.trim();
-  if (!player || !player.filePath || !trimmedName) {
+  // The tab view's part (practiceTool/tab.ts) is handed in rather than read
+  // here, keeping this module below the tab view.
+  const tabView = options.tab ?? {};
+  if (!player || (!player.filePath && !tabView.youtube) || !trimmedName) {
     return null;
   }
   const presetId = options.includePreset ? uiState.activePresetId : null;
@@ -244,7 +253,7 @@ export function capturePracticeToolProject(
     id: options.projectId ?? generateProjectId(),
     name: trimmedName,
     filePath: player.filePath,
-    fileTitle: player.title || (player.filePath.split(/[\\/]/).pop() ?? player.filePath),
+    fileTitle: player.title || player.filePath.split(/[\\/]/).pop() || tabView.youtube?.title || "YouTube video",
     durationSec: player.durationSec,
     loops: player.loops.map((loop) => ({ ...loop })),
     activeLoopId: player.activeLoopId,
@@ -256,6 +265,7 @@ export function capturePracticeToolProject(
     ...(presetId ? { presetId } : {}),
     ...(presetId && presetName ? { presetName } : {}),
     ...(links.length ? { links: links.map((link) => ({ ...link })) } : {}),
+    ...tabView,
     savedAt: Date.now(),
   };
 }

@@ -13,6 +13,14 @@ const DIST = path.join(ROOT, 'dist');
 
 const FILES = [
   ['jszip/dist/jszip.min.js', 'jszip.min.js'],
+  // The Practice Tool's tab view loads alphaTab on first use (ts/practiceTool/tab/alphaTabLoader.ts),
+  // so it lives under vendor/, which the editor's launch prefetch skips. Only the
+  // Bravura web fonts ship: the player runs in external-media mode, so no soundfont.
+  ['@coderline/alphatab/dist/alphaTab.min.js', 'vendor/alphatab/alphaTab.min.js'],
+  ['@coderline/alphatab/LICENSE', 'vendor/alphatab/LICENSE'],
+  ['@coderline/alphatab/dist/font/Bravura.woff2', 'vendor/alphatab/font/Bravura.woff2'],
+  ['@coderline/alphatab/dist/font/Bravura.woff', 'vendor/alphatab/font/Bravura.woff'],
+  ['@coderline/alphatab/dist/font/Bravura-OFL.txt', 'vendor/alphatab/font/Bravura-OFL.txt'],
 ];
 
 let copied = 0;

@@ -968,6 +968,11 @@ void PluginProcessorAdapter::BrowseFileAsync(guitarfx::BrowseFileType type, cons
         // picking one reports "unsupported format" the same way DemoPreviewService does.
         filters = "*.wav;*.mp3;*.flac;*.ogg;*.aiff;*.aif";
         break;
+    case guitarfx::BrowseFileType::TablatureFile:
+        // What alphaTab imports (core/ui/ts/practiceTool/tab/): Guitar Pro 3-8, MusicXML
+        // (plain and compressed), Capella and alphaTex.
+        filters = "*.gp;*.gpx;*.gp3;*.gp4;*.gp5;*.musicxml;*.mxl;*.xml;*.capx;*.atex;*.alphatex";
+        break;
     case guitarfx::BrowseFileType::ArchiveFile:
         filters = "*.soundshed.preset;*.soundshed.presets;*.zip";
         break;

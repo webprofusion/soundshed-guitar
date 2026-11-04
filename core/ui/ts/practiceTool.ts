@@ -49,6 +49,14 @@ import {
   renderJumpBackButton,
   setJumpBackPoint,
 } from "./practiceTool/jumpBack.js";
+import {
+  getInterpolatedPositionSec,
+  setPlayheadBase,
+  setPracticeToolSeeker,
+  startPlayheadAnim,
+  stopPlayheadAnim,
+} from "./practiceTool/playhead.js";
+import { initializePracticeToolTab, onPracticeToolTabTrackLoaded, renderPracticeToolTab } from "./practiceTool/tab.js";
 
 /** Registered by main.ts, which can reach the preset library without closing an
  * import cycle back through this module. */
@@ -97,11 +105,6 @@ let editingLoopId: string | null = null;
 // supersedes it — only one pending delete is tracked at a time, matching
 // common toast/snackbar UX (a second delete finalizes the first).
 let pendingDeletedLoop: PendingDeletedLoop | null = null;
-
-let playheadAnimFrame: number | null = null;
-let playheadBaseSec = 0;
-let playheadBaseMs = 0;
-let playheadSpeed = 1;
 
 /**
  * Builds a template-derived loop name with an auto-incrementing numeric suffix, e.g.
@@ -189,43 +192,14 @@ function minLoopSpanRatio(durationSec: number): number {
   return durationSec > 0 ? Math.min(0.25, MIN_LOOP_SPAN_SEC / durationSec) : 0.01;
 }
 
-function stopPlayheadAnim(): void {
-  if (playheadAnimFrame !== null) {
-    cancelAnimationFrame(playheadAnimFrame);
-    playheadAnimFrame = null;
+// Jamming along with a track while working in the Play view is the normal case,
+// and the playhead is not on screen then — so the animation keeps running (it
+// must resume the moment the panel comes back) but skips the draw, which is a
+// full canvas repaint plus a forced layout, 60x a second.
+function drawPlayheadFrame(): void {
+  if (isPracticeToolPanelVisible()) {
+    renderWaveform();
   }
-}
-
-function startPlayheadAnim(): void {
-  if (playheadAnimFrame !== null) {
-    return;
-  }
-  const step = () => {
-    const player = ensurePracticeToolState();
-    if (!player.playing) {
-      playheadAnimFrame = null;
-      return;
-    }
-    // Jamming along with a track while working in the Play view is the normal
-    // case, and the playhead is not on screen then — so keep the loop alive
-    // (it must resume the moment the panel comes back) but skip the draw,
-    // which is a full canvas repaint plus a forced layout, 60x a second.
-    if (isPracticeToolPanelVisible()) {
-      renderWaveform();
-    }
-    playheadAnimFrame = requestAnimationFrame(step);
-  };
-  playheadAnimFrame = requestAnimationFrame(step);
-}
-
-function getInterpolatedPositionSec(): number {
-  const player = ensurePracticeToolState();
-  if (!player.playing) {
-    return player.positionSec;
-  }
-  const elapsedSec = (performance.now() - playheadBaseMs) / 1000;
-  const projected = playheadBaseSec + elapsedSec * playheadSpeed;
-  return Math.max(0, Math.min(player.durationSec, projected));
 }
 
 function toNumberArray(value: unknown): number[] {
@@ -274,10 +248,9 @@ export function applyPracticeToolFileLoaded(data: { path?: string; title?: strin
   editingLoopId = null;
   clearJumpBackPoint();
   finalizePendingDelete(); // restoring into a different file's context wouldn't make sense
-  playheadBaseSec = 0;
-  playheadBaseMs = performance.now();
-  playheadSpeed = player.speed;
+  setPlayheadBase(0, player.speed);
   stopPlayheadAnim();
+  onPracticeToolTabTrackLoaded(recalled);
 
   appendLog(`practice tool file loaded ← ${player.title} (${durationSec.toFixed(1)}s)`);
   renderPracticeToolPanel();
@@ -291,12 +264,10 @@ export function applyPracticeToolTransportState(data: { state?: string; position
   if (typeof data.positionSec === "number" && isFinite(data.positionSec)) {
     player.positionSec = Math.max(0, data.positionSec);
   }
-  playheadBaseSec = player.positionSec;
-  playheadBaseMs = performance.now();
-  playheadSpeed = player.speed;
+  setPlayheadBase(player.positionSec, player.speed);
 
   if (playing) {
-    startPlayheadAnim();
+    startPlayheadAnim(drawPlayheadFrame);
   } else {
     stopPlayheadAnim();
   }
@@ -321,8 +292,7 @@ export function applyPracticeToolPlaybackEnded(): void {
   const player = ensurePracticeToolState();
   player.playing = false;
   player.positionSec = 0;
-  playheadBaseSec = 0;
-  playheadBaseMs = performance.now();
+  setPlayheadBase(0);
   stopPlayheadAnim();
   appendLog("practice tool playback ended");
   renderTransportControls();
@@ -347,9 +317,7 @@ const loopRegionSender = debouncedSender(
  * settings — saved on release, not on every tick of a drag. */
 function onFaderChange(id: FaderId, value: number, immediate: boolean): void {
   if (id === "speed") {
-    playheadBaseSec = getInterpolatedPositionSec(); // at the old rate, up to now
-    playheadBaseMs = performance.now();
-    playheadSpeed = value;
+    setPlayheadBase(getInterpolatedPositionSec(), value); // at the old rate, up to now
   }
   const activeLoop = getActiveLoop();
   if (activeLoop) {
@@ -365,8 +333,7 @@ function onFaderChange(id: FaderId, value: number, immediate: boolean): void {
 function resetPlayheadTo(sec: number): void {
   const player = ensurePracticeToolState();
   player.positionSec = sec;
-  playheadBaseSec = sec;
-  playheadBaseMs = performance.now();
+  setPlayheadBase(sec);
 }
 
 /** Seeks the track, playing or not, and moves the drawn playhead with it. */
@@ -376,6 +343,7 @@ function jumpTo(sec: number): void {
   renderWaveform();
   renderFileInfo();
 }
+setPracticeToolSeeker(jumpTo);
 
 /**
  * Makes `loop` the active one and puts playback at its very start. Its own
@@ -1196,10 +1164,12 @@ export function renderPracticeToolPanel(): void {
   renderLoopList();
   renderPracticeToolProjects();
   renderPracticeToolEqModal();
+  renderPracticeToolTab();
   bindAllActions();
 }
 
 export function initializePracticeToolPanel(): void {
   bindAllActions();
+  initializePracticeToolTab();
   renderPracticeToolPanel();
 }

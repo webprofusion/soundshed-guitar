@@ -51,6 +51,7 @@ inline constexpr const char* kPresetRating = "preset-rating";     // id = preset
 inline constexpr const char* kEffectPreset = "effect-preset";     // id = effect preset id
 inline constexpr const char* kEffectLayout = "effect-layout";     // id = effect type
 inline constexpr const char* kAutomationSlot = "automation-slot";
+inline constexpr const char* kPracticeTab = "practice-tab"; // id = content hash of the score file
 /// Singleton documents that have no natural per-item decomposition
 /// (factory-archive bookkeeping, shared-sync state, UI view state).
 inline constexpr const char* kDocument = "document"; // id = logical name

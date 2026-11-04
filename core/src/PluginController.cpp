@@ -29,6 +29,7 @@
 #include "controller/TunerService.h"
 #include "controller/GateLearnService.h"
 #include "controller/LooperService.h"
+#include "controller/PracticeTabMessages.h"
 #include "controller/PracticeToolService.h"
 #include "controller/RiffRecorder.h"
 #include "controller/internal/ControllerUtils.h"
@@ -92,6 +93,11 @@ PluginController::PluginController(IPluginHost& host) : mHost(host)
     mRiffRecorder = std::make_unique<RiffRecorder>();
     CreateLooper(sendToUI);
     mPracticeTool->RegisterMessageHandlers(mMessageHandlers);
+    RegisterPracticeTabMessages(
+        mMessageHandlers, {[this](std::function<void(const BrowseFileResult&)> done) {
+                               mHost.BrowseFileAsync(BrowseFileType::TablatureFile, "Open Tablature", std::move(done));
+                           },
+                           [this]() -> storage::JsonStore& { return Store(); }, sendToUI, onError});
     mHostStateRelay = std::make_unique<HostStateRelay>(mHost);
 }
 

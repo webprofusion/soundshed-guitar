@@ -228,6 +228,50 @@
                     <datalist id="practice-tool-loop-name-templates"></datalist>
                   </div>
 
+                  <!-- Tablature, rendered by alphaTab and synced to the reference
+                       (the backing track above, or a YouTube video) — see
+                       practiceTool/tab/. The whole section is a drop target for a
+                       score file. alphaTab's own attribution must stay visible. -->
+                  <div class="settings-section practice-tool-tab-section" id="practice-tool-tab-section">
+                    <div class="practice-tool-tab-toolbar">
+                      <button id="practice-tool-tab-open" type="button" class="secondary" title="Open a Guitar Pro, MusicXML, Capella or alphaTex file">Open Tab…</button>
+                      <select id="practice-tool-tab-track" class="practice-tool-tab-select" aria-label="Track shown" hidden></select>
+                      <select id="practice-tool-tab-staves" class="practice-tool-tab-select" aria-label="Notation shown" hidden>
+                        <option value="tab">Tab</option>
+                        <option value="scoretab">Notation + Tab</option>
+                        <option value="score">Notation</option>
+                      </select>
+                      <span class="practice-tool-tab-divider" aria-hidden="true"></span>
+                      <label class="practice-tool-tab-label" for="practice-tool-tab-reference">Sync to</label>
+                      <select id="practice-tool-tab-reference" class="practice-tool-tab-select">
+                        <option value="track">Backing track</option>
+                        <option value="youtube">YouTube video</option>
+                      </select>
+                      <input type="text" id="practice-tool-tab-youtube-url" class="practice-tool-tab-youtube-url" placeholder="Paste a YouTube link" aria-label="YouTube link" inputmode="url" spellcheck="false" hidden />
+                      <button id="practice-tool-tab-youtube-load" type="button" class="secondary" hidden>Load Video</button>
+                      <span class="practice-tool-tab-spacer"></span>
+                      <button id="practice-tool-tab-sync-toggle" type="button" class="secondary" aria-pressed="false" title="Mark where bars start in the reference" disabled>Edit Sync</button>
+                      <button id="practice-tool-tab-close" type="button" class="practice-tool-icon-btn practice-tool-tab-close" title="Close the tab" aria-label="Close the tab" hidden>✕</button>
+                    </div>
+                    <div class="practice-tool-tab-sync-bar" id="practice-tool-tab-sync-bar" hidden>
+                      <button id="practice-tool-tab-sync-set" type="button" class="secondary practice-tool-tab-sync-set" title="Shortcut: T">Bar starts here</button>
+                      <button id="practice-tool-tab-sync-remove" type="button" class="secondary" title="Remove the sync point on the outlined bar">Remove</button>
+                      <span class="practice-tool-tab-divider" aria-hidden="true"></span>
+                      <span class="practice-tool-tab-label">Shift all</span>
+                      <button id="practice-tool-tab-sync-earlier" type="button" class="secondary" title="Move every sync point 10 ms earlier">−10 ms</button>
+                      <button id="practice-tool-tab-sync-later" type="button" class="secondary" title="Move every sync point 10 ms later">+10 ms</button>
+                      <button id="practice-tool-tab-sync-clear" type="button" class="secondary">Clear All</button>
+                      <span class="practice-tool-tab-sync-status" id="practice-tool-tab-sync-status"></span>
+                    </div>
+                    <div class="practice-tool-tab-stage" id="practice-tool-tab-stage">
+                      <div class="practice-tool-tab-video" id="practice-tool-tab-video" hidden></div>
+                      <div class="practice-tool-tab-viewport" id="practice-tool-tab-viewport" hidden>
+                        <div class="practice-tool-tab-surface" id="practice-tool-tab-surface"></div>
+                      </div>
+                    </div>
+                    <div class="settings-hint practice-tool-tab-hint" id="practice-tool-tab-hint"></div>
+                  </div>
+
                   <div class="practice-tool-body">
                     <div class="settings-section practice-tool-loop-list-col">
                       <div class="practice-tool-loop-list-header">

@@ -439,6 +439,21 @@ export function loadPracticeToolFileData(fileName: string, dataBase64: string): 
   appendLog(`loadPracticeToolFileData → ${fileName} (${dataBase64.length} b64 chars)`);
 }
 
+/** The tab view's score files (PracticeTabMessages.h): each answers `practiceToolTabLoaded`. */
+export function browsePracticeToolTab(): void {
+  postMessage({ type: "browsePracticeToolTab" });
+  appendLog("browsePracticeToolTab");
+}
+
+export function importPracticeToolTabData(fileName: string, dataBase64: string): void {
+  postMessage({ type: "importPracticeToolTabData", fileName, data: dataBase64 });
+  appendLog(`importPracticeToolTabData → ${fileName} (${dataBase64.length} b64 chars)`);
+}
+
+export function requestPracticeToolTab(id: string): void {
+  postMessage({ type: "requestPracticeToolTab", id });
+}
+
 export function setPracticeToolTransport(action: "play" | "pause" | "stop"): void {
   postMessage({ type: "setPracticeToolTransport", action });
   appendLog(`setPracticeToolTransport → ${action}`);

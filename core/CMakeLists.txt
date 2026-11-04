@@ -526,6 +526,8 @@ set(GUITARFX_CORE_SOURCES
     src/controller/TunerService.cpp
     src/controller/ScaleGuideMessages.h
     src/controller/ScaleGuideMessages.cpp
+    src/controller/PracticeTabMessages.h
+    src/controller/PracticeTabMessages.cpp
     src/controller/GateLearnService.h
     src/controller/GateLearnService.cpp
     src/controller/TelemetryPublisher.h

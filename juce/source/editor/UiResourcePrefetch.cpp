@@ -127,6 +127,10 @@ class Prefetcher final : public juce::DeletedAtShutdown, private juce::Thread
 
     void run() override
     {
+        // Third-party bundles a feature loads when it is first used (alphaTab, ~1.2 MB,
+        // for the Practice Tool's tab view): reading them here would only be let go unused.
+        const auto onDemand = uiFolder.getChildFile("dist").getChildFile("vendor");
+
         for (const auto& rule : kRules)
         {
             const auto folder = juce::String(rule.folder).isEmpty() ? uiFolder : uiFolder.getChildFile(rule.folder);
@@ -136,6 +140,11 @@ class Prefetcher final : public juce::DeletedAtShutdown, private juce::Thread
                 if (threadShouldExit())
                 {
                     return;
+                }
+
+                if (file.isAChildOf(onDemand))
+                {
+                    continue;
                 }
 
                 auto bytes = readWholeFile(file);

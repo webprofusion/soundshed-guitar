@@ -28,6 +28,7 @@ import {
   setPendingProjectRecall,
   storePracticeToolProject,
 } from "./projects.js";
+import { applyPracticeToolProjectTab, capturePracticeToolProjectTab } from "./tab.js";
 
 // Which saved project the bar is pointing at. Not persisted: it is a cursor
 // into the list, not part of the session, and starting fresh each launch keeps
@@ -58,12 +59,18 @@ function buildHintText(projects: readonly PracticeToolProject[]): string {
 
   if (selected) {
     const parts = [`${selected.fileTitle} · ${selected.loops.length} loop${selected.loops.length === 1 ? "" : "s"}`];
+    if (selected.tab) {
+      parts.push(`tab "${selected.tab.fileName}"`);
+    }
+    if (selected.youtube && !selected.filePath) {
+      parts[0] = `YouTube: ${selected.youtube.title || selected.youtube.videoId}`;
+    }
     if (selected.presetName) {
       parts.push(`preset "${selected.presetName}"`);
     } else if (selected.presetId) {
       parts.push("a saved preset");
     }
-    if (getProjectTrackAvailability(selected) === "unavailable") {
+    if (selected.filePath && getProjectTrackAvailability(selected) === "unavailable") {
       return `${parts.join(" · ")} — this track was dragged in, so its file can't be reopened automatically. Open it again, then pick this project again.`;
     }
     return parts.join(" · ");
@@ -122,7 +129,7 @@ export function renderPracticeToolProjects(): void {
   select.disabled = projects.length === 0;
 
   const player = uiState.practiceTool;
-  const hasTrack = Boolean(player?.filePath);
+  const hasTrack = Boolean(player?.filePath) || Boolean(capturePracticeToolProjectTab().youtube);
   const typedName = nameInput?.value.trim() ?? "";
 
   if (deleteBtn) {
@@ -152,8 +159,9 @@ async function saveCurrentProject(): Promise<void> {
   const name = nameInput?.value.trim() ?? "";
   const player = uiState.practiceTool;
 
-  if (!player?.filePath) {
-    showNotification("Nothing to save", "Load a backing track first");
+  const tabView = capturePracticeToolProjectTab();
+  if (!player?.filePath && !tabView.youtube) {
+    showNotification("Nothing to save", "Load a backing track or a YouTube video first");
     return;
   }
   if (!name) {
@@ -170,7 +178,7 @@ async function saveCurrentProject(): Promise<void> {
   }
 
   const includePreset = getIncludePresetToggle()?.checked ?? false;
-  const project = capturePracticeToolProject(name, { includePreset, projectId: existing?.id });
+  const project = capturePracticeToolProject(name, { includePreset, projectId: existing?.id, tab: tabView });
   if (!project) {
     showNotification("Unable to save project", "The Practice Tool has no track loaded");
     return;
@@ -196,7 +204,8 @@ function loadSelectedProject(): void {
     return;
   }
 
-  const availability = getProjectTrackAvailability(project);
+  // A project that follows only a YouTube video has no track to reopen.
+  const availability = project.filePath ? getProjectTrackAvailability(project) : "loaded";
   if (availability === "unavailable") {
     showNotification(
       "Track file unavailable",
@@ -213,8 +222,11 @@ function loadSelectedProject(): void {
     requestPracticeToolPresetRecall(project.presetId);
   }
 
-  if (availability === "loaded") {
+  if (!project.filePath) {
+    applyPracticeToolProjectTab(project);
+  } else if (availability === "loaded") {
     requestPracticeToolProjectApply(project);
+    applyPracticeToolProjectTab(project);
   } else {
     // The settings can only be applied once the engine has the audio; parked
     // here and cashed in by applyPracticeToolFileLoaded.

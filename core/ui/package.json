@@ -23,6 +23,7 @@
     "check:stylesheets": "node scripts/check-stylesheets.js"
   },
   "dependencies": {
+    "@coderline/alphatab": "1.9.0",
     "jszip": "^3.10.1"
   },
   "devDependencies": {

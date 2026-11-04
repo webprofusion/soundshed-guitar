@@ -115,3 +115,26 @@ Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 The full licence text is in `ios/compat/libcxx-filesystem/LICENSE.TXT`.
+
+## alphaTab
+
+Renders tablature and notation in the Practice Tool's tab view (`core/ui`, loaded
+from `dist/vendor/alphatab/`, see `docs/practice-tool-tablature.md`). Used
+unmodified.
+
+Source: https://github.com/CoderLine/alphaTab, npm package `@coderline/alphatab`
+(version pinned in `core/ui/package.json`).
+
+Copyright © 2025, Daniel Kuschny and Contributors. Licensed under the Mozilla
+Public License, v. 2.0 (https://mozilla.org/MPL/2.0/). The full licence text,
+including the licences of the libraries alphaTab integrates, ships beside the
+script as `dist/vendor/alphatab/LICENSE`. The "alphaTab.net" attribution in
+rendered scores must stay visible (https://alphatab.net/docs/attribution).
+
+## Bravura
+
+The SMuFL music font alphaTab draws with, shipped as `dist/vendor/alphatab/font/`.
+
+Copyright © 2015, Steinberg Media Technologies GmbH. Licensed under the SIL Open
+Font License, Version 1.1; the full text ships beside the font as
+`Bravura-OFL.txt`.

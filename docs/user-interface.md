@@ -158,6 +158,8 @@ keeps the existing Library/Folder behavior.
 | `practiceToolFileLoaded` | `{path, title, durationSec, waveformPeaks}` | Practice Tool: backing-track file decoded and ready |
 | `practiceToolTransportState` | `{state, positionSec}` | Practice Tool: playback state/position, pushed periodically while loaded |
 | `practiceToolPlaybackEnded` | `{}` | Practice Tool: playback reached the end of the file (non-looping) |
+| `practiceToolTabLoaded` | `{id, fileName, data}` | Practice Tool tab view: a score file's bytes (base64), just opened or recalled by `id` (its content hash in the document store) |
+| `practiceToolTabFailed` | `{id, error}` | Practice Tool tab view: a recalled score `id` is no longer stored |
 | `audioDeviceState` | `{available, error, state}` | Standalone: the whole audio/MIDI device setup, sent after every `audioDevice` request and every device manager change. `error` is the failed request's reason, else `""`. `available: false` (and no `state`) means a plugin format, where the host owns the devices. See [Audio Device](#audio-device) |
 | `audioDeviceLevels` | `{input, xruns}` | Standalone: raw device input level in dB (floor −100) and the driver's dropout count (−1 if it cannot count), at 15 Hz while a `watchLevels` lease is held |
 | `looperState` | `{available, enabled, state, playing, positionSec, lengthSec, canUndo, canRedo, layerCount, memoryMb, tempoLocked, click, clickBar, settings, projectId, projectTitle, dirty, recoverable, bars?, barIndex?, tempoBpm?, countInBeatsLeft?, armWaitingSec?, recordedSec?, notice?}` | The looper (standalone). `state` is `empty`, `countIn`, `armed`, `recording`, `playing`, `overdubArmed`, `overdubbing` or `stopped`. `bars`, `barIndex` and `tempoBpm` come with a Bars loop, `countInBeatsLeft` while counting in, `armWaitingSec` while armed. `click` is the metronome's on/off, which is the loop's click, and `clickBar` where in the metronome's bar the loop starts (0..1). `settings` is the `setLooper` fields as stored. `projectId` and `projectTitle` name the looper project the loop was saved as or loaded from (empty for an unsaved loop), `dirty` says it has changed since, and `recoverable` that the last session ended with an unsaved loop. `notice` explains something once: a refused press (`disabled`, `noCapture`, `tooLong`, `noSpare`, `noLayerFree`, `noTempo`, `tooShort`, `memory`) or a project outcome (`nothingToSave`, `saveFailed`, `loadFailed`, `exported`, `exportFailed`). Sent on every change, and about 15 times a second while the loop runs or a take records |
@@ -313,6 +315,9 @@ keeps the existing Library/Folder behavior.
 | `browsePracticeToolFile` | `{}` | Practice Tool: open native file browser for a backing track |
 | `loadPracticeToolFile` | `{path}` | Practice Tool: load a backing track by native path |
 | `loadPracticeToolFileData` | `{fileName, data}` | Practice Tool: load a backing track from base64 bytes — used for a drag-and-drop, where WebView2 never exposes the real file path |
+| `browsePracticeToolTab` | `{}` | Practice Tool tab view: open a native file browser for a score (Guitar Pro, MusicXML, Capella, alphaTex); the file is stored and answered with `practiceToolTabLoaded` |
+| `importPracticeToolTabData` | `{fileName, data}` | Practice Tool tab view: store a dropped score from base64 bytes (max 16 MB); answered with `practiceToolTabLoaded` |
+| `requestPracticeToolTab` | `{id}` | Practice Tool tab view: ask for a stored score by id; answered with `practiceToolTabLoaded` or `practiceToolTabFailed` |
 | `setPracticeToolTransport` | `{action}` | Practice Tool: `"play"`, `"pause"`, or `"stop"`. Stop rewinds to the active loop's start while looping, otherwise to the top of the track |
 | `seekPracticeToolFile` | `{seconds}` | Practice Tool: seek to a position |
 | `setPracticeToolSpeed` | `{ratio}` | Practice Tool: time-stretch ratio, clamped `[0.25, 2.0]` |
@@ -1103,6 +1108,9 @@ saved projects) plus the seams the panel can only *request* through,
 state, its engine sends and the binding that points the shared `EqPanel` at it,
 `practiceTool/trackImport.ts` is the drop zone and the reset confirmation the
 Browse button shares with it, and
+`practiceTool/playhead.ts` dead-reckons the track position between transport reports,
+`practiceTool/tab.ts` (over `practiceTool/tab/`) is the tab view (see
+[practice-tool-tablature.md](practice-tool-tablature.md)), and
 `practiceTool/types.ts` holds the state shapes (re-exported from `ts/types.ts`).
 None of those import the facade back. `eq.ts` additionally takes no bridge or
 DOM import at all, because `state.ts` seeds the default EQ from it and

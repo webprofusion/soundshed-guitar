@@ -2,17 +2,17 @@
   "budget": 800,
   "allowed": {
     "ts/resourceBrowser.ts": 2139,
-    "ts/layoutDesigner.ts": 1982,
-    "ts/presets/archive.ts": 1231,
-    "css/tone-sharing.css": 1239,
-    "ts/signalPath.ts": 1325,
+    "ts/layoutDesigner.ts": 1981,
     "ts/views.ts": 1413,
     "ts/riffLibrary.ts": 1382,
-    "ts/practiceTool.ts": 1206,
+    "ts/signalPath.ts": 1308,
+    "css/tone-sharing.css": 1225,
+    "ts/presets/archive.ts": 1210,
+    "ts/practiceTool.ts": 1176,
     "css/settings.css": 1086,
-    "css/modals/resource-browser.css": 932,
-    "css/themes/light.css": 872,
     "ts/performancePads.ts": 965,
-    "css/controls.css": 940
+    "css/modals/resource-browser.css": 927,
+    "css/controls.css": 924,
+    "css/themes/light.css": 836
   }
 }
