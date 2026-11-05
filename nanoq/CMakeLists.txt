@@ -390,3 +390,7 @@ if(WIN32)
     target_link_libraries(NanoQEngineDialogTests PRIVATE ole32 uuid)
 endif()
 add_test(NAME NanoQEngineDialogTests COMMAND NanoQEngineDialogTests)
+
+add_executable(NanoQDragGestureTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/DragGestureTests.cpp")
+target_include_directories(NanoQDragGestureTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+add_test(NAME NanoQDragGestureTests COMMAND NanoQDragGestureTests)

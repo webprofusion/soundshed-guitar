@@ -146,7 +146,7 @@ std::string Describe(const nlohmann::json& metadata, const std::string& category
 
 /// One row of a list: a name with a line under it, an optional icon or picture at the left, and
 /// at the right a note or a button. A click calls `onClick`; a double click `onDouble`.
-class BrowserRow final : public el::element, public Focusable
+class BrowserRow final : public el::element, public Focusable, public TapTarget
 {
   public:
     BrowserRow(const Theme& theme, Icons& icons, std::string title, std::string detail)
@@ -451,6 +451,11 @@ class BrowserRow final : public el::element, public Focusable
         if (btn.state != el::mouse_button::left || btn.down)
         {
             return btn.state == el::mouse_button::left;
+        }
+
+        if (ReleasedAway(btn))
+        {
+            return true; // the list scrolled from here instead
         }
 
         for (std::size_t i = 0; i < mActionRects.size() && i < actions.size(); ++i)

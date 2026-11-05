@@ -236,5 +236,8 @@ off: on Windows it made NAM slower, and nothing has measured it here.
   the device.
 - **Shutdown.** The Pi 4 has no power button, so for now it's `sudo poweroff` over SSH.
   A footswitch or on-screen control for this isn't wired up.
+- **Scrolling by touch.** Nano Q's lists scroll by dragging, and a tap that wanders under 10 px
+  is still a tap. Not tried on a real touch screen: it's tested with X pointer events, which is
+  what a finger becomes under Xorg.
 - **Display scaling** for small touch screens (`GDK_SCALE`, or the app's UI zoom). Nano Q
   has its own zoom, and goes to its compact layout at 980 x 620 or below.

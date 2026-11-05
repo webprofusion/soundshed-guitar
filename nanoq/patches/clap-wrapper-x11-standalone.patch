@@ -157,7 +157,7 @@ index 9ca273e..d9c11f9 100644
  #include <algorithm>
 +#include <cstdlib>
  #include <exception>
-
+ 
 @@ -420,4 +421,12 @@ void StandaloneHost::startAudioThreadOnImpl(unsigned int inputDeviceID, uint32_t
    RtAudio::StreamOptions options;
    options.flags = RTAUDIO_SCHEDULE_REALTIME;

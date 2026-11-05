@@ -11,6 +11,8 @@
 // width of that row. Row() and Col() therefore report no maximum width; a row of fixed buttons
 // then sits at the left of a wide column instead of narrowing it.
 
+#include "ui/DragScroll.h"
+
 #include <elements.hpp>
 
 #include <initializer_list>
@@ -287,9 +289,16 @@ template <el::concepts::Element Subject> class MinSizeElement : public el::proxy
     return el::share(el::vsize(h, el::element{}));
 }
 
+/// Elements' scroller, with a drag on what it holds scrolling it as well (DragScroll.h).
+[[nodiscard]] inline std::shared_ptr<DragScroller> MakeScroller(Ptr content, int traits)
+{
+    using Held = decltype(el::hold_any(content));
+    return el::share(el::proxy<Held, DragScroller>{el::hold_any(std::move(content)), traits});
+}
+
 [[nodiscard]] inline Ptr VScroll(Ptr content)
 {
-    return Expand(el::share(el::vscroller(el::hold_any(std::move(content)))));
+    return Expand(MakeScroller(std::move(content), el::no_hscroll));
 }
 
 /// A VScroll that stays where it was scrolled to when its page is rebuilt: `keep` holds the
@@ -297,7 +306,7 @@ template <el::concepts::Element Subject> class MinSizeElement : public el::proxy
 [[nodiscard]] inline Ptr KeptVScroll(Ptr content, std::weak_ptr<el::port_base>& keep)
 {
     const auto old = keep.lock();
-    auto scroller = el::share(el::vscroller(el::hold_any(std::move(content))));
+    auto scroller = MakeScroller(std::move(content), el::no_hscroll);
     scroller->valign(old ? old->valign() : 0.0);
     keep = scroller;
     return Expand(scroller);
@@ -305,6 +314,6 @@ template <el::concepts::Element Subject> class MinSizeElement : public el::proxy
 
 [[nodiscard]] inline Ptr HScroll(Ptr content)
 {
-    return Expand(el::share(el::hscroller(el::hold_any(std::move(content)))));
+    return Expand(MakeScroller(std::move(content), el::no_vscroll));
 }
 } // namespace nanoq::ui
