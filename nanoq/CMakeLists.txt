@@ -37,6 +37,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Plain char is unsigned on Linux arm64, and WDL (in the resampler) refuses to compile unless it is
+# signed. As Soundshed Guitar's build (juce/CMakeLists.txt): a no-op on x86_64 Linux.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-fsigned-char>
+                        $<$<COMPILE_LANG_AND_ID:C,GNU,Clang>:-fsigned-char>)
+endif()
+
 include(FetchContent)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
@@ -124,12 +131,30 @@ if(NANOQ_IOS)
     endif()
 endif()
 
+# clap-wrapper, declared first for the same reason, at the commit Q pins. Its Linux standalone
+# takes patches/clap-wrapper-x11-standalone.patch: as published its loop never reads its timers, so
+# it spins on a whole core, its window ignores resizes, and it opens ALSA with four periods. The
+# patch also gives the standalone the whole screen when SOUNDSHED_KIOSK is set (tools/linux-kiosk).
+FetchContent_Declare(clap_wrapper
+    GIT_REPOSITORY https://github.com/cycfi/clap-wrapper.git
+    GIT_TAG af23b0fa058b96430354d23b023db9d143467852 # Q v1.5.4's pin
+    SOURCE_SUBDIR do-not-add
+    PATCH_COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/clap-wrapper-x11-standalone.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
+
 # ── The engine ──────────────────────────────────────────────────────────────────
 # nlohmann_json first, so that core and Q share one copy.
 set(GUITARFX_CORE_FETCH_DEPS ON CACHE BOOL "" FORCE)
 # No WebView here, so no web UI bundle to build (and no Node needed).
 set(GUITARFX_CORE_BUILD_WEB_UI OFF CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../core" "${CMAKE_BINARY_DIR}/core")
+
+# Linux draws with Cairo, which Elements would choose anyway, but only on a first configure: after
+# that the cached ARTIST_CAIRO stops it choosing, and it goes looking for OpenGL instead.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ELEMENTS_CAIRO ON CACHE BOOL "" FORCE)
+endif()
 
 FetchContent_MakeAvailable(q)
 q_plug_settings()
@@ -312,6 +337,13 @@ foreach(_format clap vst3 auv2 standalone)
         list(APPEND _commands COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/../core/ui/${_dir}" "${_dest}/ui/${_dir}")
     endforeach()
+    # Elements' X11 host looks for a program's fonts in "resources" beside it, and finds
+    # "<name> Resources" only in a plugin. Without this, a standalone started by its full path
+    # draws in whatever the system falls back to.
+    if(_format STREQUAL "standalone" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        list(APPEND _commands COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "${NANOQ_NAME} Resources" "$<TARGET_FILE_DIR:${_target}>/resources")
+    endif()
     add_custom_command(TARGET ${_target} POST_BUILD ${_commands}
         COMMENT "Copying engine data into ${_target}" VERBATIM)
 endforeach()

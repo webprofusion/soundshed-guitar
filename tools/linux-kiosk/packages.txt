@@ -1,0 +1,13 @@
+# What the kiosk needs with either UI. packages-web.txt or packages-nanoq.txt adds the UI's own.
+cage
+xwayland
+xserver-xorg-core
+xserver-xorg-input-libinput
+xinit
+x11-xserver-utils
+libasound2
+libfreetype6
+libfontconfig1
+fonts-dejavu-core
+alsa-utils
+iw

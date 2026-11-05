@@ -1,0 +1,6 @@
+# Soundshed Guitar: JUCE and the WebView.
+libgtk-3-0
+libwebkit2gtk-4.1-0
+libcurl4
+libgl1
+libegl1

@@ -1,0 +1,164 @@
+diff --git a/src/detail/standalone/linux/x11_gui.cpp b/src/detail/standalone/linux/x11_gui.cpp
+index 7733c88..660691c 100644
+--- a/src/detail/standalone/linux/x11_gui.cpp
++++ b/src/detail/standalone/linux/x11_gui.cpp
+@@ -2,4 +2,5 @@
+ 
+ #include <X11/Xlib.h>
++#include <X11/Xatom.h>
+ #include <X11/Xutil.h>
+ #include <stdio.h>
+@@ -67,4 +68,22 @@ void X11Gui::runloop()
+             ui->set_parent(plugin->_plugin, &win);
+             ui->show(plugin->_plugin);
++            viewShown = true;
++
++            // Now there is a view, it can say whether it resizes, and a window manager may
++            // already have sized the window to something other than what the view asked for.
++            XWindowAttributes attributes;
++            if (XGetWindowAttributes(display, window, &attributes))
++            {
++              setSizeHints(attributes.width, attributes.height);
++              resizeView(attributes.width, attributes.height);
++            }
++          }
++        }
++        break;
++        case ConfigureNotify:
++        {
++          if (e.xconfigure.window == window)
++          {
++            resizeView(e.xconfigure.width, e.xconfigure.height);
+           }
+         }
+@@ -95,5 +114,8 @@ void X11Gui::runloop()
+         if (tfd != fdToTimerId.end())
+         {
+-          if (plugin->_ext._timer)
++          // A timerfd stays readable until its expiries are read, and with it readable
++          // epoll_wait returns at once, so this loop would take a whole core.
++          uint64_t expiries{0};
++          if (read(fd, &expiries, sizeof(expiries)) > 0 && plugin->_ext._timer)
+           {
+             plugin->_ext._timer->on_timer(plugin->_plugin, tfd->second);
+@@ -133,5 +155,15 @@ void X11Gui::setPlugin(std::shared_ptr<Clap::Plugin> p)
+ 
+     int s = DefaultScreen(display);
+-    window = XCreateSimpleWindow(display, RootWindow(display, s), 10, 10, w, h, 1,
++
++    // A kiosk: the whole screen, which with no window manager nothing else would arrange.
++    fullScreen = getenv("SOUNDSHED_KIOSK") != nullptr;
++    if (fullScreen)
++    {
++      w = DisplayWidth(display, s);
++      h = DisplayHeight(display, s);
++    }
++
++    window = XCreateSimpleWindow(display, RootWindow(display, s), fullScreen ? 0 : 10,
++                                 fullScreen ? 0 : 10, w, h, fullScreen ? 0 : 1,
+                                  BlackPixel(display, s), WhitePixel(display, s));
+     XStoreName(display, window, plugin->_plugin->desc->name);
+@@ -142,5 +174,15 @@ void X11Gui::setPlugin(std::shared_ptr<Clap::Plugin> p)
+     XSetWMProtocols(display, window, &wmDeleteMessage, 1);
+ 
+-    resetSizeTo(w, h);
++    if (fullScreen)
++    {
++      Atom wmState = XInternAtom(display, "_NET_WM_STATE", False);
++      Atom wmFullScreen = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
++      XChangeProperty(display, window, wmState, XA_ATOM, 32, PropModeReplace,
++                      reinterpret_cast<unsigned char *>(&wmFullScreen), 1);
++    }
++    else
++    {
++      resetSizeTo(w, h);
++    }
+ 
+     XMapWindow(display, window);
+@@ -270,19 +312,51 @@ bool X11Gui::unregister_fd(int fd)
+ }
+ 
+-bool X11Gui::resetSizeTo(int w, int h)
++void X11Gui::setSizeHints(int w, int h)
+ {
+-  if (!display || window == 0) return false;
+-  XResizeWindow(display, window, w, h);
++  if (fullScreen) return;
+ 
+   XSizeHints *hints = XAllocSizeHints();
+-  hints->flags = PMinSize | PMaxSize;
+-  hints->min_width = w;
+-  hints->max_width = w;
+-  hints->min_height = h;
+-  hints->max_height = h;
++  auto ui = plugin ? plugin->_ext._gui : nullptr;
++
++  // Only a view that resizes can follow the window, and it can only say so once it exists.
++  if (viewShown && ui && ui->can_resize(plugin->_plugin))
++  {
++    hints->flags = 0;
++  }
++  else
++  {
++    hints->flags = PMinSize | PMaxSize;
++    hints->min_width = w;
++    hints->max_width = w;
++    hints->min_height = h;
++    hints->max_height = h;
++  }
+ 
+   // Apply hints to the window
+   XSetWMNormalHints(display, window, hints);
+   XFree(hints);
++}
++
++void X11Gui::resizeView(int w, int h)
++{
++  auto ui = plugin ? plugin->_ext._gui : nullptr;
++  if (!viewShown || !ui || !ui->can_resize(plugin->_plugin)) return;
++
++  uint32_t current[2]{0, 0};
++  ui->get_size(plugin->_plugin, &current[0], &current[1]);
++  if (current[0] != uint32_t(w) || current[1] != uint32_t(h))
++  {
++    uint32_t width = w, height = h;
++    ui->adjust_size(plugin->_plugin, &width, &height);
++    ui->set_size(plugin->_plugin, width, height);
++  }
++}
++
++bool X11Gui::resetSizeTo(int w, int h)
++{
++  // A kiosk's window is the screen's size whatever the view would like.
++  if (!display || window == 0 || fullScreen) return false;
++  XResizeWindow(display, window, w, h);
++  setSizeHints(w, h);
+ 
+   return true;
+diff --git a/src/detail/standalone/linux/x11_gui.h b/src/detail/standalone/linux/x11_gui.h
+index 432ad59..5630fdb 100644
+--- a/src/detail/standalone/linux/x11_gui.h
++++ b/src/detail/standalone/linux/x11_gui.h
+@@ -34,4 +34,9 @@ struct X11Gui
+ 
+   bool resetSizeTo(int w, int h);
++  void setSizeHints(int w, int h);
++  void resizeView(int w, int h);
++
++  bool viewShown{false};
++  bool fullScreen{false};
+ 
+   std::map<int, clap_id> fdToTimerId;
+diff --git a/src/detail/standalone/standalone_host_audio.cpp b/src/detail/standalone/standalone_host_audio.cpp
+index 9ca273e..d9c11f9 100644
+--- a/src/detail/standalone/standalone_host_audio.cpp
++++ b/src/detail/standalone/standalone_host_audio.cpp
+@@ -420,4 +420,8 @@ void StandaloneHost::startAudioThreadOnImpl(unsigned int inputDeviceID, uint32_t
+   RtAudio::StreamOptions options;
+   options.flags = RTAUDIO_SCHEDULE_REALTIME;
++#if defined(__linux__)
++  // Two periods. RtAudio's ALSA default is four, which at 256 frames is 21 ms of output buffer.
++  options.flags |= RTAUDIO_MINIMIZE_LATENCY;
++#endif
+ 
+   if (currentBufferSize == 0)

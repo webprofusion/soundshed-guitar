@@ -1,0 +1,6 @@
+# Soundshed Nano Q: Elements draws with Cairo, on X11.
+libcairo2
+libharfbuzz0b
+libwebp7
+libxcursor1
+libxrandr2
