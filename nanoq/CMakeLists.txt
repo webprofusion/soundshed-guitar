@@ -81,12 +81,21 @@ FetchContent_Declare(q
 # window, nor a press over a scroller's content the whole scrolled area (on iOS, where Quartz
 # draws on the CPU, each tap cost two whole-window draws). And patches/elements-macos-tick.patch:
 # 1.0 polls a macOS view every 1 ms instead of 10, which cost ~6% of a core with the window idle.
+# And patches/elements-x11-present.patch: on X11 Cairo draws in this process, not through the
+# server, and invalidated areas repaint apart, not as one box around them all.
+# patches/elements-x11-skia.patch does the same for Skia on X11 (NANOQ_LINUX_SKIA).
 # An iOS build takes Artist's patch too.
 set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-input-redraws.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
     COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-macos-tick.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-x11-present.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-x11-skia.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 if(NANOQ_IOS)
     # elements-log-clock.patch: Elements' quill loggers stamp messages with quill's TSC, which
@@ -151,9 +160,16 @@ set(GUITARFX_CORE_BUILD_WEB_UI OFF CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../core" "${CMAKE_BINARY_DIR}/core")
 
 # Linux draws with Cairo, which Elements would choose anyway, but only on a first configure: after
-# that the cached ARTIST_CAIRO stops it choosing, and it goes looking for OpenGL instead.
+# that the cached ARTIST_CAIRO stops it choosing, and it goes looking for OpenGL instead. With
+# NANOQ_LINUX_SKIA it draws on the GPU, with a prebuilt Skia, through EGL.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(ELEMENTS_CAIRO ON CACHE BOOL "" FORCE)
+    option(NANOQ_LINUX_SKIA "Draw with Skia on the GPU on Linux, not with Cairo on the CPU" OFF)
+    if(NANOQ_LINUX_SKIA)
+        set(ELEMENTS_SKIA ON CACHE BOOL "" FORCE)
+        set(ELEMENTS_CAIRO OFF CACHE BOOL "" FORCE)
+    else()
+        set(ELEMENTS_CAIRO ON CACHE BOOL "" FORCE)
+    endif()
 endif()
 
 FetchContent_MakeAvailable(q)

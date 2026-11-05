@@ -22,6 +22,7 @@
 // UI tick calls on that thread. ProcessInput and ProcessOutput are the audio thread's.
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -98,12 +99,15 @@ class StandaloneDevices
     void ProcessInput(float* const* channels, int numChannels, int frames);
     /// Adds the test tone, while one is playing.
     void ProcessOutput(float* const* channels, int numChannels, int frames, double sampleRate);
+    /// A block given up because the DSP lock was held.
+    void NoteBlockGivenUp();
 
   private:
     void Handle(const std::string& requestJson);
     void SendState(const std::string& error, bool rescan);
     void SendLevels();
     void WatchLevels(bool enabled);
+    void WriteBlockStats();
 
     Send mSend;
     DeviceBackend* mBackend;
@@ -125,5 +129,15 @@ class StandaloneDevices
     std::int64_t mToneRemaining = 0;
     std::int64_t mToneLength = 0;
     double mTonePhase = 0.0;
+
+    // Block timing, for SOUNDSHED_NANOQ_AUDIOSTATS: a file that gets one line a second telling
+    // why audio broke up. A block that runs over its time is DSP load; one that starts late had
+    // its thread held off (a priority or a system problem); one given up lost the DSP lock.
+    std::string mBlockStatsPath;
+    double mNextBlockStats = 0.0;
+    std::chrono::steady_clock::time_point mBlockStart{}; // audio thread only
+    std::atomic<std::uint32_t> mBlocks{0}, mBlocksOver{0}, mBlocksLate{0}, mBlocksGivenUp{0};
+    std::atomic<std::uint32_t> mBlockBudgetUs{0}, mBlockMaxUs{0}, mBlockGapMaxUs{0};
+    std::atomic<std::uint64_t> mBlockBusyUs{0}, mBlockTimeUs{0};
 };
 } // namespace nanoq

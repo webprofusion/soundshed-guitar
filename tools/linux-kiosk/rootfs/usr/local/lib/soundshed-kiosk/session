@@ -14,6 +14,11 @@ fi
 # arguments, so its copy (nanoq/patches) takes this instead.
 export SOUNDSHED_KIOSK=1
 
+# With no theme X falls back to its core cursor, tiny and black, which can't be seen on a dark
+# UI across a room.
+export XCURSOR_THEME="${XCURSOR_THEME:-DMZ-White}"
+export XCURSOR_SIZE="${XCURSOR_SIZE:-32}"
+
 # SOUNDSHED_APP_ARGS is split on spaces on purpose.
 # shellcheck disable=SC2086
 set -- "$app" --kiosk ${SOUNDSHED_APP_ARGS:-}
@@ -25,7 +30,7 @@ case "${SOUNDSHED_SESSION:-cage}" in
         ;;
     xorg)
         cursor=""
-        [ "${SOUNDSHED_HIDE_CURSOR:-1}" = "1" ] && cursor="-nocursor"
+        [ "${SOUNDSHED_HIDE_CURSOR:-0}" = "1" ] && cursor="-nocursor"
         # The client must be an absolute path for xinit to take it as the program.
         # shellcheck disable=SC2086
         exec xinit /usr/local/lib/soundshed-kiosk/xsession "$@" -- \

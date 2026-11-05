@@ -9,5 +9,6 @@ libasound2
 libfreetype6
 libfontconfig1
 fonts-dejavu-core
+dmz-cursor-theme
 alsa-utils
 iw

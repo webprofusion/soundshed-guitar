@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstdlib>
 #include <optional>
 
 #if defined(_WIN32)
@@ -296,9 +297,14 @@ void RaisePriorityOfThisThreadForAudio() noexcept
                       reinterpret_cast<thread_policy_t>(&policy), THREAD_TIME_CONSTRAINT_POLICY_COUNT);
 #elif defined(__linux__) && !defined(__ANDROID__)
     // Only granted with an rtprio limit (the audio group on most distributions); otherwise the
-    // call fails and the helper stays an ordinary thread, as before.
+    // call fails and the helper stays an ordinary thread, as before. SOUNDSHED_AUDIO_PRIO is the
+    // priority a deployment gives its audio thread (the kiosk does): the audio thread waits on a
+    // helper, so a helper below it would hold it back behind whatever sits between them.
+    const char* const priority = std::getenv("SOUNDSHED_AUDIO_PRIO");
     sched_param param{};
-    param.sched_priority = std::max(1, sched_get_priority_min(SCHED_FIFO));
+    param.sched_priority = std::clamp(priority != nullptr ? std::atoi(priority) : 0,
+                                      std::max(1, sched_get_priority_min(SCHED_FIFO)),
+                                      sched_get_priority_max(SCHED_FIFO));
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
 #endif
 }

@@ -132,20 +132,66 @@ These decide whether the Pi 4 is the right board. Check them before the polish b
    a Pi is probably HDMI or the headphone jack, with no input. Then reboot and check that
    it stays chosen. Nano Q has never opened a real device on Linux.
 3. **DSP headroom.** This is the biggest risk on a Pi 4. Run a typical preset (NAM amp +
-   IR cab + reverb) at 48 kHz / 64 and watch for xruns, then try 128 and 256. The fused
-   NAM NEON path is on by default, but nothing has been measured on the Pi 4's Cortex-A72.
-   An Intel N100 mini PC with the x64 build is the fallback.
+   IR cab + reverb) at 48 kHz / 64 and read the block stats (see
+   [Diagnosing a slow or crackling Pi](#diagnosing-a-slow-or-crackling-pi)), then try 128 and
+   256. The fused NAM NEON path is on by default, but nothing has been measured on the Pi 4's
+   Cortex-A72. An Intel N100 mini PC with the x64 build is the fallback.
 4. **UI cost.** Measure the UI's CPU while playing. Nano Q draws on the CPU, so look at the
    app's main thread with `top -H`. For Soundshed Guitar, read the `/proc/<pid>/stat` of
    the GTK child process, and try the `WEBKIT_*` knobs in `/etc/default/soundshed-kiosk`
    if it draws wrongly or slowly.
-5. **RT actually applied.** `ps -eLo pid,cls,rtprio,comm | grep -i -e soundshed -e irq/`
-   should show FF/RR on the audio threads and FIFO 90 on the xhci IRQ threads.
+5. **RT actually applied.** `sudo soundshed-diag` should show RR 80 on the audio thread, FF 80
+   on its helpers (Nano Q) and FF 90 on the xhci IRQ threads.
    `uname -v` shows whether the kernel is `PREEMPT` or `PREEMPT_RT`. The stock kernel
    with `threadirqs` may be enough. A `PREEMPT_RT` build is the next step if it isn't.
 6. **Throttling.** `tune-audio` holds the `performance` governor. After a long session,
    `vcgencmd get_throttled` should print `throttled=0x0`. Anything else means the board
    ran short of power or cooling, and that shows up as xruns.
+
+## Diagnosing a slow or crackling Pi
+
+To turn on the block and paint stats, uncomment `SOUNDSHED_NANOQ_AUDIOSTATS` and
+`SOUNDSHED_NANOQ_DRAWSTATS` in `/etc/default/soundshed-kiosk`, then restart the kiosk. With audio
+playing, run:
+
+```bash
+sudo systemctl restart soundshed-kiosk
+sudo soundshed-diag
+```
+
+The audio lines tell you which kind of problem it is:
+
+| What the line shows | What it means | What to try |
+| --- | --- | --- |
+| `over` climbing, `load` high | The DSP doesn't fit in a block | A lighter preset or model, or a bigger buffer |
+| `late` climbing, `load` low | The audio thread was held off | Check the priorities and `get_throttled` |
+| `givenup` climbing | The DSP lock was held, so the block went out silent | Note what was happening; this one is a bug |
+| All zero, still crackling | The stream, not the app | `hw_params`: both directions on one device, no second clock |
+
+`SOUNDSHED_ALSA_PERIODS` trades latency for margin: a late block has more time to catch up at 4
+than at 2. In the paint lines, `area` is how many whole windows are redrawn per second. Each one
+costs a full CPU draw, so a high figure is the thing to bring down.
+
+`SOUNDSHED_DISPLAY_MODE` holds the xorg session to 1920x1080, since a 4K screen means four times
+the pixels to draw. Choose the USB interface for both input and output: each card has its own
+clock, so an input on one and an output on another drift apart and crackle at any load, and
+`soundshed-diag` warns about it.
+
+## Nano Q on the GPU
+
+`build-nanoq.sh --gpu` draws with Skia on the GPU, through EGL, instead of with Cairo on the
+CPU. It has its own build tree and goes to `~/nanoq-dist-arm64-gpu`. Pass that folder to
+`install.sh --dist` to try it, and the Cairo folder to go back. Nothing else differs.
+
+It has only run on software GL (llvmpipe), never on a Pi's GPU, so which build is better on a
+Pi 4 is still open. Compare them with the same preset and the stats above:
+
+- `soundshed-diag` must show `V3D` as the renderer. `llvmpipe` means the GPU isn't reachable, so
+  everything is drawn on the CPU, which is slower than Cairo.
+- The first use of each kind of drawing compiles a shader, so a page can stutter the first time
+  it's opened.
+- The GPU shares memory with the CPU, so check the `late` and `over` audio counts as well as the
+  UI. Text also looks slightly different from the Cairo build.
 
 ## Nano Q on Linux
 
@@ -166,9 +212,15 @@ On Linux, for now:
 - **No hosted plugins.** Nano Q doesn't host plugins, on any platform.
 
 The window, timer and ALSA behaviour comes from
-[clap-wrapper-x11-standalone.patch](../../nanoq/patches/clap-wrapper-x11-standalone.patch).
-FetchContent doesn't reapply a changed patch to an existing tree, so run
-`build-nanoq.sh --clean` after editing it.
+[clap-wrapper-x11-standalone.patch](../../nanoq/patches/clap-wrapper-x11-standalone.patch), and
+how frames reach the screen from
+[elements-x11-present.patch](../../nanoq/patches/elements-x11-present.patch). FetchContent
+doesn't reapply a changed patch to an existing tree, so run `build-nanoq.sh --clean` after
+editing either. [elements-x11-skia.patch](../../nanoq/patches/elements-x11-skia.patch) does the
+same job for the GPU build.
+
+An arm64 build from `build-nanoq.sh` is tuned for the Cortex-A72 (`-mcpu=cortex-a72`). LTO stays
+off: on Windows it made NAM slower, and nothing has measured it here.
 
 ## Not done yet
 

@@ -1,0 +1,402 @@
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -391,5 +391,6 @@
+    if (ELEMENTS_CAIRO)
+       pkg_check_modules(CAIRO_XLIB REQUIRED IMPORTED_TARGET cairo-xlib)
+-      target_link_libraries(elements PRIVATE PkgConfig::CAIRO_XLIB)
++      pkg_check_modules(XEXT REQUIRED IMPORTED_TARGET xext)
++      target_link_libraries(elements PRIVATE PkgConfig::CAIRO_XLIB PkgConfig::XEXT)
+    else()
+       find_package(OpenGL REQUIRED COMPONENTS OpenGL)
+diff --git a/lib/host/x11/base_view.cpp b/lib/host/x11/base_view.cpp
+--- a/lib/host/x11/base_view.cpp
++++ b/lib/host/x11/base_view.cpp
+@@ -21,4 +21,10 @@
+ #include <X11/extensions/Xrandr.h>
+ 
++#if defined(ARTIST_CAIRO)
++# include <X11/extensions/XShm.h>
++# include <sys/ipc.h>
++# include <sys/shm.h>
++#endif
++
+ #if defined(ARTIST_SKIA)
+ # include <EGL/egl.h>
+@@ -54,4 +60,5 @@
+ #include <array>
+ #include <algorithm>
++#include <limits>
+ #include <cstdlib>
+ #include <cstdint>
+@@ -152,8 +159,8 @@
+       int               click_count = 0;
+       ::Time            scroll_time = 0;  // last scroll event (acceleration)
+-      ::Pixmap          pixmap = 0;       // offscreen back buffer (no flicker)
++      ::Pixmap          pixmap = 0;       // back buffer when `image` can't be used
+       GC                gc = nullptr;
+       int               pix_w = 0, pix_h = 0;
+-      rect              dirty;               // logical area to repaint next
++      std::vector<rect> dirty;               // logical areas to repaint next
+       bool              has_dirty = false;
+       bool              needs_full = true;   // the backing store is blank
+@@ -162,5 +169,8 @@
+       int               modifiers = 0;
+ #if defined(ARTIST_CAIRO)
+-      cairo_surface_t*  surface = nullptr;  // Cairo surface on the pixmap
++      cairo_surface_t*  surface = nullptr;  // what Cairo draws on
++      XImage*           image = nullptr;    // that surface's pixels, in this process
++      XShmSegmentInfo   shm{};              // the segment holding them, when shared
++      bool              shared = false;     // the server maps those pixels itself
+ #elif defined(ARTIST_SKIA)
+       EGLDisplay        egl_display = EGL_NO_DISPLAY;
+@@ -881,4 +891,152 @@
+ #endif
+ 
++#if defined(ARTIST_CAIRO)
++      // Cairo draws on client memory, not on a server pixmap. Through
++      // cairo-xlib a frame costs twice: each operation crosses to the server,
++      // which runs it on one thread of its own (and what RENDER can't do comes
++      // back as an image to be drawn here and sent again). On a board without
++      // a fast GPU path that second process is as busy as this one. Here a
++      // frame is drawn once, on the UI thread, and only its changed pixels
++      // cross, by shared memory where the server is on this machine.
++
++      // The server's answer to XShmAttach comes as an error event, and an
++      // attach is refused on a remote display even though the extension is
++      // there.
++      bool shm_refused = false;
++
++      int note_shm_refusal(Display*, XErrorEvent*)
++      {
++         shm_refused = true;
++         return 0;
++      }
++
++      bool is_cairo_rgb24(Display* d, Visual* visual, int depth)
++      {
++         return depth == 24
++            && visual->red_mask == 0xff0000
++            && visual->green_mask == 0x00ff00
++            && visual->blue_mask == 0x0000ff
++            && ImageByteOrder(d) == LSBFirst;
++      }
++
++      bool create_shared_image(
++         Display* d, host_view* h, Visual* visual, int depth, int w, int hgt)
++      {
++         if (!XShmQueryExtension(d))
++            return false;
++         XImage* image = XShmCreateImage(
++            d, visual, depth, ZPixmap, nullptr, &h->shm, w, hgt);
++         if (!image)
++            return false;
++         if (image->bits_per_pixel != 32)
++         {
++            XDestroyImage(image);
++            return false;
++         }
++         h->shm.shmid = shmget(
++            IPC_PRIVATE, image->bytes_per_line * hgt, IPC_CREAT | 0600);
++         if (h->shm.shmid < 0)
++         {
++            XDestroyImage(image);
++            return false;
++         }
++         void* const pixels = shmat(h->shm.shmid, nullptr, 0);
++         bool attached = pixels != reinterpret_cast<void*>(-1);
++         if (attached)
++         {
++            h->shm.shmaddr = image->data = static_cast<char*>(pixels);
++            h->shm.readOnly = True;
++            shm_refused = false;
++            auto const previous = XSetErrorHandler(note_shm_refusal);
++            XShmAttach(d, &h->shm);
++            XSync(d, False);
++            XSetErrorHandler(previous);
++            attached = !shm_refused;
++            if (!attached)
++            {
++               shmdt(pixels);
++               image->data = nullptr;
++            }
++         }
++         // Marked now, so the segment goes with the process however it ends.
++         shmctl(h->shm.shmid, IPC_RMID, nullptr);
++         if (!attached)
++         {
++            XDestroyImage(image);
++            return false;
++         }
++         h->image = image;
++         h->shared = true;
++         return true;
++      }
++
++      bool create_plain_image(
++         Display* d, host_view* h, Visual* visual, int depth, int w, int hgt)
++      {
++         int const stride = cairo_format_stride_for_width(CAIRO_FORMAT_RGB24, w);
++         auto* pixels = static_cast<char*>(std::calloc(hgt, stride));
++         if (!pixels)
++            return false;
++         h->image = XCreateImage(
++            d, visual, depth, ZPixmap, 0, pixels, w, hgt, 32, stride);
++         if (!h->image || h->image->bits_per_pixel != 32)
++         {
++            if (h->image)
++               XDestroyImage(h->image);   // frees the pixels too
++            else
++               std::free(pixels);
++            h->image = nullptr;
++            return false;
++         }
++         return true;
++      }
++
++      void free_backing(Display* d, host_view* h)
++      {
++         if (h->surface)
++         {
++            cairo_surface_destroy(h->surface);
++            h->surface = nullptr;
++         }
++         if (h->pixmap)
++         {
++            XFreePixmap(d, h->pixmap);
++            h->pixmap = 0;
++         }
++         if (h->image)
++         {
++            if (h->shared)
++            {
++               XShmDetach(d, &h->shm);
++               XSync(d, False);
++               shmdt(h->shm.shmaddr);
++               h->image->data = nullptr;
++               h->shared = false;
++            }
++            XDestroyImage(h->image);   // frees plain pixels
++            h->image = nullptr;
++         }
++      }
++
++      // Puts part of the back buffer on the window.
++      void present(host_view* h, int x, int y, int w, int hgt)
++      {
++         // An exposed window can be ahead of a resize, and XShmPutImage takes
++         // no source area outside the image.
++         w = std::min(w, h->pix_w - x);
++         hgt = std::min(hgt, h->pix_h - y);
++         if (w <= 0 || hgt <= 0 || !h->gc)
++            return;
++
++         Display* d = plat().display;
++         if (h->shared)
++            XShmPutImage(d, h->window, h->gc, h->image, x, y, x, y, w, hgt, False);
++         else if (h->image)
++            XPutImage(d, h->window, h->gc, h->image, x, y, x, y, w, hgt);
++         else if (h->pixmap)
++            XCopyArea(d, h->pixmap, h->window, h->gc, x, y, w, hgt, x, y);
++      }
++#endif
++
+       void create_backing(host_view* h, int w, int hgt)
+       {
+@@ -889,10 +1047,21 @@
+ 
+ #if defined(ARTIST_CAIRO)
+-         int screen = DefaultScreen(d);
+-         if (h->surface) { cairo_surface_destroy(h->surface); h->surface = nullptr; }
+-         if (h->pixmap)  { XFreePixmap(d, h->pixmap); h->pixmap = 0; }
+-         h->pixmap = XCreatePixmap(d, h->window, w, hgt, DefaultDepth(d, screen));
+-         h->surface = cairo_xlib_surface_create(
+-            d, h->pixmap, DefaultVisual(d, screen), w, hgt);
++         int const screen = DefaultScreen(d);
++         Visual* const visual = DefaultVisual(d, screen);
++         int const depth = DefaultDepth(d, screen);
++         free_backing(d, h);
++         if (is_cairo_rgb24(d, visual, depth)
++            && (create_shared_image(d, h, visual, depth, w, hgt)
++               || create_plain_image(d, h, visual, depth, w, hgt)))
++         {
++            h->surface = cairo_image_surface_create_for_data(
++               reinterpret_cast<unsigned char*>(h->image->data),
++               CAIRO_FORMAT_RGB24, w, hgt, h->image->bytes_per_line);
++         }
++         else
++         {
++            h->pixmap = XCreatePixmap(d, h->window, w, hgt, depth);
++            h->surface = cairo_xlib_surface_create(d, h->pixmap, visual, w, hgt);
++         }
+          cairo_surface_set_device_scale(h->surface, h->scale, h->scale);
+ #elif defined(ARTIST_SKIA)
+@@ -912,21 +1081,84 @@
+       }
+ 
+-      // Add to the area the next render repaints, in logical coordinates.
++      // Each area repainted is a walk of the view, so a few at most.
++      constexpr std::size_t max_dirty_areas = 8;
++
++      float area_of(rect r)
++      {
++         return r.width() * r.height();
++      }
++
++      // Add to what the next render repaints, in logical coordinates. Areas
++      // are kept apart: one box around two meters at opposite edges of the
++      // window repaints everything between them, and on a CPU backend the
++      // area is what costs.
+       void invalidate(host_view* h, rect area)
+       {
+-         h->dirty = h->has_dirty? artist::union_(h->dirty, area) : area;
++         auto& dirty = h->dirty;
++
++         // Whatever this touches is cheaper as one box.
++         for (auto i = dirty.begin(); i != dirty.end();)
++         {
++            auto const both = artist::union_(*i, area);
++            if (area_of(both) <= area_of(*i) + area_of(area))
++            {
++               area = both;
++               i = dirty.erase(i);
++            }
++            else
++            {
++               ++i;
++            }
++         }
++         dirty.push_back(area);
++
++         // Past the limit, join the two areas that waste the least.
++         if (dirty.size() > max_dirty_areas)
++         {
++            std::size_t first = 0, second = 1;
++            float least = std::numeric_limits<float>::max();
++            for (std::size_t i = 0; i < dirty.size(); ++i)
++            {
++               for (std::size_t j = i + 1; j < dirty.size(); ++j)
++               {
++                  float const waste = area_of(artist::union_(dirty[i], dirty[j]))
++                     - area_of(dirty[i]) - area_of(dirty[j]);
++                  if (waste < least)
++                  {
++                     least = waste;
++                     first = i;
++                     second = j;
++                  }
++               }
++            }
++            dirty[first] = artist::union_(dirty[first], dirty[second]);
++            dirty.erase(dirty.begin() + second);
++         }
+          h->has_dirty = true;
+       }
+ 
+-      // Take the area to repaint: what was invalidated since the last render,
++      // Take the areas to repaint: what was invalidated since the last render,
+       // or the whole view when the backing store is new or nothing was.
+-      rect take_dirty(host_view* h)
++      std::vector<rect> take_dirty(host_view* h)
+       {
+          rect const all{0, 0, h->size.x, h->size.y};
+-         rect const area = (h->needs_full || !h->has_dirty)?
+-            all : artist::intersection(h->dirty, all);
++         std::vector<rect> areas;
++         if (h->needs_full || !h->has_dirty)
++         {
++            areas.push_back(all);
++         }
++         else
++         {
++            for (auto const& area : h->dirty)
++            {
++               auto const inside = artist::intersection(area, all);
++               if (inside.width() > 0 && inside.height() > 0)
++                  areas.push_back(inside);
++            }
++         }
++         h->dirty.clear();
+          h->needs_full = false;
+          h->has_dirty = false;
+-         return area;
++         return areas;
+       }
+ 
+@@ -955,28 +1187,36 @@
+             return;
+ 
+-         // The pixmap keeps the last frame, so only the invalidated area is
+-         // drawn, through a clip, and only its pixels go to the window.
+-         auto const area = take_dirty(h);
+-         if (area.width() <= 0 || area.height() <= 0)
++         // The back buffer keeps the last frame, so only the invalidated areas
++         // are drawn, each through a clip, and only their pixels go to the
++         // window.
++         auto const areas = take_dirty(h);
++         if (areas.empty())
+             return;
+ 
+          auto const t0 = std::chrono::steady_clock::now();
+-         auto* cr = cairo_create(h->surface);
+-         auto cnv = canvas{cr};
+-         cnv.add_rect(area);
+-         cnv.clip();
+-         view.draw(cnv);
+-         cairo_destroy(cr);
++         for (auto const& area : areas)
++         {
++            auto* cr = cairo_create(h->surface);
++            auto cnv = canvas{cr};
++            cnv.add_rect(area);
++            cnv.clip();
++            view.draw(cnv);
++            cairo_destroy(cr);
++         }
+          cairo_surface_flush(h->surface);
+          double const draw_flush_ms =
+             std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count();
+-         if (h->pixmap && h->gc)
++         for (auto const& area : areas)
+          {
+             auto const px = pixel_bounds(h->scale, area, h->pix_w, h->pix_h);
+-            XCopyArea(d, h->pixmap, h->window, h->gc,
+-               px.x, px.y, px.w, px.h, px.x, px.y);
++            present(h, px.x, px.y, px.w, px.h);
+          }
+-         XFlush(d);
++         // Shared pixels must not be drawn over while the server is still
++         // copying them, and this keeps a slow server from falling behind.
++         if (h->shared)
++            XSync(d, False);
++         else
++            XFlush(d);
+          perf::record(draw_flush_ms);
+ #elif defined(ARTIST_SKIA)
+@@ -1256,11 +1496,10 @@
+             {
+ #if defined(ARTIST_CAIRO)
+-               // Once the pixmap holds a frame, an exposed part only has to go
+-               // back on the window: nothing is redrawn.
+-               if (h->opened && h->pixmap && h->gc)
++               // Once the back buffer holds a frame, an exposed part only has
++               // to go back on the window: nothing is redrawn.
++               if (h->opened && h->surface)
+                {
+                   auto const& e = ev.xexpose;
+-                  XCopyArea(plat().display, h->pixmap, h->window, h->gc,
+-                     e.x, e.y, e.width, e.height, e.x, e.y);
++                  present(h, e.x, e.y, e.width, e.height);
+                   if (e.count == 0)
+                      XFlush(plat().display);
+@@ -1636,8 +1875,5 @@
+          XDestroyIC(_view->xic);
+ #if defined(ARTIST_CAIRO)
+-      if (_view->surface)
+-         cairo_surface_destroy(_view->surface);
+-      if (_view->pixmap)
+-         XFreePixmap(d, _view->pixmap);
++      free_backing(d, _view);
+       if (_view->gc)
+          XFreeGC(d, _view->gc);

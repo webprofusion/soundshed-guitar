@@ -8,6 +8,8 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <numbers>
 
@@ -120,6 +122,10 @@ DeviceBackend* RegisteredDeviceBackend()
 
 StandaloneDevices::StandaloneDevices(Send send) : mSend(std::move(send)), mBackend(RegisteredDeviceBackend())
 {
+    if (const char* path = std::getenv("SOUNDSHED_NANOQ_AUDIOSTATS"))
+    {
+        mBlockStatsPath = path;
+    }
 }
 
 bool StandaloneDevices::Supported() const
@@ -182,6 +188,12 @@ void StandaloneDevices::Pump()
             mNextLevels = now + kLevelInterval;
             SendLevels();
         }
+    }
+
+    if (!mBlockStatsPath.empty() && now >= mNextBlockStats)
+    {
+        mNextBlockStats = now + 1.0;
+        WriteBlockStats();
     }
 }
 
@@ -391,11 +403,63 @@ void StandaloneDevices::SendLevels()
     mSend(message.dump());
 }
 
+void StandaloneDevices::WriteBlockStats()
+{
+    const auto blocks = mBlocks.exchange(0);
+    const auto over = mBlocksOver.exchange(0);
+    const auto late = mBlocksLate.exchange(0);
+    const auto givenUp = mBlocksGivenUp.exchange(0);
+    const auto maxUs = mBlockMaxUs.exchange(0);
+    const auto gapMaxUs = mBlockGapMaxUs.exchange(0);
+    const auto busyUs = mBlockBusyUs.exchange(0);
+    const auto timeUs = mBlockTimeUs.exchange(0);
+
+    if (std::FILE* f = std::fopen(mBlockStatsPath.c_str(), "a"))
+    {
+        // Load is the time spent as a share of the time the blocks gave; max is the slowest block
+        // against what one block has; gap is the longest from one block's start to the next.
+        std::fprintf(f, "blocks %u  over %u  late %u  givenup %u  load %.0f%%  max %.2f of %.2f ms  gap %.2f ms\n",
+                     blocks, over, late, givenUp,
+                     timeUs > 0 ? 100.0 * static_cast<double>(busyUs) / static_cast<double>(timeUs) : 0.0,
+                     maxUs / 1000.0, mBlockBudgetUs.load() / 1000.0, gapMaxUs / 1000.0);
+        std::fclose(f);
+    }
+}
+
+void StandaloneDevices::NoteBlockGivenUp()
+{
+    mBlocksGivenUp.fetch_add(1, std::memory_order_relaxed);
+}
+
 void StandaloneDevices::ProcessInput(float* const* channels, int numChannels, int frames)
 {
     if (mBackend == nullptr || frames <= 0)
     {
         return;
+    }
+
+    if (!mBlockStatsPath.empty())
+    {
+        const auto start = std::chrono::steady_clock::now();
+
+        if (mBlockStart != std::chrono::steady_clock::time_point{})
+        {
+            const auto gapUs = static_cast<std::uint32_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(start - mBlockStart).count());
+
+            if (gapUs > mBlockGapMaxUs.load(std::memory_order_relaxed))
+            {
+                mBlockGapMaxUs.store(gapUs, std::memory_order_relaxed);
+            }
+
+            // Two blocks' time between starts: this one's thread was held off for a whole block.
+            if (gapUs > 2 * mBlockBudgetUs.load(std::memory_order_relaxed))
+            {
+                mBlocksLate.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
+        mBlockStart = start;
     }
 
     if (mMeterInput.load(std::memory_order_relaxed))
@@ -439,6 +503,29 @@ void StandaloneDevices::ProcessOutput(float* const* channels, int numChannels, i
     if (mBackend == nullptr || frames <= 0 || sampleRate <= 0.0)
     {
         return;
+    }
+
+    if (!mBlockStatsPath.empty())
+    {
+        const auto tookUs = static_cast<std::uint32_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - mBlockStart)
+                .count());
+        const auto budgetUs = static_cast<std::uint32_t>(1.0e6 * frames / sampleRate);
+
+        mBlockBudgetUs.store(budgetUs, std::memory_order_relaxed);
+        mBlocks.fetch_add(1, std::memory_order_relaxed);
+        mBlockBusyUs.fetch_add(tookUs, std::memory_order_relaxed);
+        mBlockTimeUs.fetch_add(budgetUs, std::memory_order_relaxed);
+
+        if (tookUs > mBlockMaxUs.load(std::memory_order_relaxed))
+        {
+            mBlockMaxUs.store(tookUs, std::memory_order_relaxed);
+        }
+
+        if (tookUs > budgetUs)
+        {
+            mBlocksOver.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 
     const auto requests = mToneRequests.load(std::memory_order_relaxed);

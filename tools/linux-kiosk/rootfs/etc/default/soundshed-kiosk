@@ -12,12 +12,29 @@ SOUNDSHED_APP=/opt/Soundshed/soundshed-guitar/soundshed-guitar
 # Extra arguments after --kiosk.
 SOUNDSHED_APP_ARGS=
 
-# Hide the pointer on a touch-only device (xorg session only; cage has no switch for it).
-SOUNDSHED_HIDE_CURSOR=1
+# The screen mode, xorg session only. A 4K TV would otherwise run at 4K, four times the pixels
+# to draw on a Pi 4. Empty keeps the display's own mode.
+SOUNDSHED_DISPLAY_MODE=1920x1080
+
+# 1 hides the pointer, for a touch-only device (xorg session only; cage has no switch for it).
+SOUNDSHED_HIDE_CURSOR=0
 
 # SCHED_FIFO priority for the USB host controller's interrupt threads (needs threadirqs
 # on the kernel command line). Above the app's audio thread, as rtirq does it.
 SOUNDSHED_IRQ_PRIO=90
+
+# Soundshed Nano Q: the audio thread's realtime priority. Above the other interrupt threads
+# (threadirqs runs them at 50), below the USB ones.
+SOUNDSHED_AUDIO_PRIO=80
+
+# Soundshed Nano Q: ALSA periods. Output latency grows with this, and so does the time a late
+# block has to catch up: 2 is the tightest, 4 is RtAudio's default.
+SOUNDSHED_ALSA_PERIODS=3
+
+# Soundshed Nano Q: set each to a file for one line a second on the audio blocks and on UI
+# painting. soundshed-diag prints the end of both.
+#SOUNDSHED_NANOQ_AUDIOSTATS=/tmp/soundshed-audio.txt
+#SOUNDSHED_NANOQ_DRAWSTATS=/tmp/soundshed-draw.txt
 
 # WebKitGTK knobs worth trying if the UI draws wrongly or slowly on the Pi's GPU:
 #WEBKIT_DISABLE_COMPOSITING_MODE=1

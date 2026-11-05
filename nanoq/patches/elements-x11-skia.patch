@@ -1,0 +1,147 @@
+diff --git a/lib/host/x11/base_view.cpp b/lib/host/x11/base_view.cpp
+--- a/lib/host/x11/base_view.cpp
++++ b/lib/host/x11/base_view.cpp
+@@ -179,5 +179,6 @@
+       sk_sp<const GrGLInterface> xface;
+       sk_sp<GrDirectContext>     ctx;
+-      sk_sp<SkSurface>           skia_surface;
++      sk_sp<SkSurface>           skia_surface;   // the window's framebuffer
++      sk_sp<SkSurface>           skia_back;      // keeps the last frame
+ #endif
+       std::unique_ptr<drop_info> _drop_info;
+@@ -827,9 +828,9 @@
+       // For EGL we must pick a config whose native visual matches the window's,
+       // else eglCreateWindowSurface fails with BadMatch.
+-      EGLConfig choose_egl_config(EGLDisplay dpy, VisualID vid)
++      EGLConfig choose_egl_config(EGLDisplay dpy, VisualID vid, EGLint renderable)
+       {
+          EGLint attribs[] = {
+             EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+-            EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
++            EGL_RENDERABLE_TYPE, renderable,
+             EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8,
+             EGL_NONE
+@@ -858,21 +859,55 @@
+          if (h->egl_display == EGL_NO_DISPLAY || !eglInitialize(h->egl_display, nullptr, nullptr))
+             throw std::runtime_error("EGL init failed");
+-         eglBindAPI(EGL_OPENGL_API);
+ 
+          XWindowAttributes attr;
+          XGetWindowAttributes(d, h->window, &attr);
+-         EGLConfig cfg = choose_egl_config(h->egl_display, XVisualIDFromVisual(attr.visual));
+-         if (!cfg)
+-            throw std::runtime_error("No matching EGL config for window visual");
++         auto const visual = XVisualIDFromVisual(attr.visual);
++
++         // GLES 3 first: it is what a small GPU does best (a Pi 4's desktop GL
++         // context stops short of what Skia makes good use of), and desktop GL
++         // when there is none.
++         EGLint const es3_attribs[] = { EGL_CONTEXT_MAJOR_VERSION, 3, EGL_NONE };
++         EGLint const gl_attribs[] = { EGL_NONE };
++         struct { EGLenum api; EGLint renderable; EGLint const* attribs; } const apis[] = {
++            { EGL_OPENGL_ES_API, EGL_OPENGL_ES3_BIT, es3_attribs },
++            { EGL_OPENGL_API,    EGL_OPENGL_BIT,     gl_attribs  },
++         };
++         EGLConfig cfg = nullptr;
++         for (auto const& api : apis)
++         {
++            if (!eglBindAPI(api.api))
++               continue;
++            cfg = choose_egl_config(h->egl_display, visual, api.renderable);
++            if (!cfg)
++               continue;
++            h->egl_context = eglCreateContext(
++               h->egl_display, cfg, EGL_NO_CONTEXT, api.attribs);
++            if (h->egl_context != EGL_NO_CONTEXT)
++               break;
++         }
++         if (h->egl_context == EGL_NO_CONTEXT)
++            throw std::runtime_error("EGL context creation failed");
+ 
+-         EGLint ctx_attribs[] = { EGL_NONE };
+-         h->egl_context = eglCreateContext(h->egl_display, cfg, EGL_NO_CONTEXT, ctx_attribs);
+          h->egl_surface = eglCreateWindowSurface(
+             h->egl_display, cfg, (EGLNativeWindowType)h->window, nullptr);
+-         if (h->egl_context == EGL_NO_CONTEXT || h->egl_surface == EGL_NO_SURFACE)
+-            throw std::runtime_error("EGL context/surface creation failed");
++         if (h->egl_surface == EGL_NO_SURFACE)
++            throw std::runtime_error("EGL surface creation failed");
+          if (!eglMakeCurrent(h->egl_display, h->egl_surface, h->egl_surface, h->egl_context))
+             throw std::runtime_error("eglMakeCurrent failed");
+ 
++         // A driver that can't reach the GPU quietly falls back to drawing on
++         // the CPU, which is the slowest case of all, so say which this is.
++         using get_string = unsigned char const* (*)(unsigned);
++         if (auto const get = reinterpret_cast<get_string>(eglGetProcAddress("glGetString")))
++         {
++            auto const text = [&](unsigned name)
++            {
++               auto const* value = get(name);
++               return value? reinterpret_cast<char const*>(value) : "?";
++            };
++            std::fprintf(stderr, "elements: GL renderer: %s, %s\n",
++               text(GL_RENDERER), text(GL_VERSION));
++         }
++
+          // For benchmarking, don't block the swap on vsync so the frame period
+          // reflects true render throughput rather than the display refresh.
+@@ -1070,4 +1105,5 @@
+          (void)d;
+          h->skia_surface.reset();
++         h->skia_back.reset();
+          eglMakeCurrent(h->egl_display, h->egl_surface, h->egl_surface, h->egl_context);
+          GrGLFramebufferInfo info;
+@@ -1078,4 +1114,7 @@
+             h->ctx.get(), target, kBottomLeft_GrSurfaceOrigin,
+             kRGBA_8888_SkColorType, nullptr, nullptr);
++         h->skia_back = SkSurfaces::RenderTarget(
++            h->ctx.get(), skgpu::Budgeted::kNo,
++            SkImageInfo::Make(w, hgt, kRGBA_8888_SkColorType, kPremul_SkAlphaType));
+ #endif
+       }
+@@ -1222,17 +1261,29 @@
+ #elif defined(ARTIST_SKIA)
+          (void)d;
+-         if (!h->skia_surface)
++         if (!h->skia_surface || !h->skia_back)
++            return;
++
++         // EGL does not keep the back buffer across a swap, so the frame is
++         // kept in a surface of its own. Only the invalidated areas are drawn
++         // there, each through a clip: the GPU fills pixels, but walking the
++         // view to say what to fill is on this thread, and a meter's change
++         // must not walk all of it. The whole frame then goes to the window.
++         auto const areas = take_dirty(h);
++         if (areas.empty())
+             return;
+ 
+-         // EGL does not keep the back buffer across a swap, so every frame is
+-         // drawn whole.
+-         take_dirty(h);
+          auto const t0 = std::chrono::steady_clock::now();
+-         SkCanvas* gpu = h->skia_surface->getCanvas();
+-         gpu->save();
+-         gpu->scale(h->scale, h->scale);   // logical → physical
+-         auto cnv = canvas{gpu};
+-         view.draw(cnv);
+-         gpu->restore();
++         SkCanvas* gpu = h->skia_back->getCanvas();
++         for (auto const& area : areas)
++         {
++            auto const px = pixel_bounds(h->scale, area, h->pix_w, h->pix_h);
++            gpu->save();
++            gpu->clipIRect(SkIRect::MakeXYWH(px.x, px.y, px.w, px.h));
++            gpu->scale(h->scale, h->scale);   // logical → physical
++            auto cnv = canvas{gpu};
++            view.draw(cnv);
++            gpu->restore();
++         }
++         h->skia_back->draw(h->skia_surface->getCanvas(), 0, 0);
+          h->ctx->flushAndSubmit(h->skia_surface.get(),
+             perf::enabled()? GrSyncCpu::kYes : GrSyncCpu::kNo);
+@@ -1880,4 +1931,5 @@
+ #elif defined(ARTIST_SKIA)
+       _view->skia_surface.reset();
++      _view->skia_back.reset();
+       _view->ctx.reset();
+       _view->xface.reset();

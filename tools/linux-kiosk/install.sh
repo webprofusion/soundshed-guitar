@@ -90,11 +90,18 @@ install -D -m 0644 "${ROOTFS_SRC}/etc/security/limits.d/95-soundshed-audio.conf"
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/session" /usr/local/lib/soundshed-kiosk/session
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/xsession" /usr/local/lib/soundshed-kiosk/xsession
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/tune-audio" /usr/local/lib/soundshed-kiosk/tune-audio
+install -D -m 0755 "${ROOTFS_SRC}/usr/local/bin/soundshed-diag" /usr/local/bin/soundshed-diag
 # Keep local edits to the settings file on a re-run.
 if [[ ! -e /etc/default/soundshed-kiosk ]]; then
     install -D -m 0644 "${ROOTFS_SRC}/etc/default/soundshed-kiosk" /etc/default/soundshed-kiosk
     sed -i "s|^SOUNDSHED_SESSION=.*|SOUNDSHED_SESSION=${DEFAULT_SESSION}|" /etc/default/soundshed-kiosk
 fi
+# Settings added since that file was written. Values already there stay as they are.
+while IFS= read -r line; do
+    key="${line%%=*}"
+    key="${key#\#}"
+    grep -qE "^#?${key}=" /etc/default/soundshed-kiosk || echo "$line" >> /etc/default/soundshed-kiosk
+done < <(grep -E '^#?SOUNDSHED_[A-Z_]+=' "${ROOTFS_SRC}/etc/default/soundshed-kiosk")
 # The app is whatever was just installed, so this one line always follows it.
 sed -i "s|^SOUNDSHED_APP=.*|SOUNDSHED_APP=\"${APP_DST}/${APP_NAME}\"|" /etc/default/soundshed-kiosk
 

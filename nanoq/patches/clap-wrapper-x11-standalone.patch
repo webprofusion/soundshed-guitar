@@ -153,12 +153,21 @@ diff --git a/src/detail/standalone/standalone_host_audio.cpp b/src/detail/standa
 index 9ca273e..d9c11f9 100644
 --- a/src/detail/standalone/standalone_host_audio.cpp
 +++ b/src/detail/standalone/standalone_host_audio.cpp
-@@ -420,4 +420,8 @@ void StandaloneHost::startAudioThreadOnImpl(unsigned int inputDeviceID, uint32_t
+@@ -16,3 +16,4 @@
+ #include <algorithm>
++#include <cstdlib>
+ #include <exception>
+
+@@ -420,4 +421,12 @@ void StandaloneHost::startAudioThreadOnImpl(unsigned int inputDeviceID, uint32_t
    RtAudio::StreamOptions options;
    options.flags = RTAUDIO_SCHEDULE_REALTIME;
 +#if defined(__linux__)
-+  // Two periods. RtAudio's ALSA default is four, which at 256 frames is 21 ms of output buffer.
-+  options.flags |= RTAUDIO_MINIMIZE_LATENCY;
++  // The kiosk sets these. RtAudio's defaults are four periods and priority 0, which it clamps to
++  // SCHED_RR 1: below every threaded interrupt handler, which run at 50.
++  if (const char* periods = std::getenv("SOUNDSHED_ALSA_PERIODS"))
++    options.numberOfBuffers = static_cast<unsigned int>(std::atoi(periods));
++  if (const char* priority = std::getenv("SOUNDSHED_AUDIO_PRIO"))
++    options.priority = std::atoi(priority);
 +#endif
  
    if (currentBufferSize == 0)

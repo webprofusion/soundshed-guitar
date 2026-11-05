@@ -1,6 +1,9 @@
-# Soundshed Nano Q: Elements draws with Cairo, on X11.
+# Soundshed Nano Q: Elements draws with Cairo, on X11, or with Skia on the GPU (build-nanoq.sh
+# --gpu), which needs libopengl0 and Mesa. cage and xwayland bring the rest of Mesa.
 libcairo2
 libharfbuzz0b
 libwebp7
+libxext6
 libxcursor1
 libxrandr2
+libopengl0
