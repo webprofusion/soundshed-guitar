@@ -1,0 +1,93 @@
+#!/bin/sh
+# Prints what decides whether the kiosk runs well: power and heat, the screen, how the X server
+# draws, the audio stream, and who has which priority. Run it over SSH with the app running and
+# audio playing: sudo soundshed-diag
+
+section() { printf '\n== %s\n' "$1"; }
+
+section "Board"
+tr -d '\0' < /proc/device-tree/model 2>/dev/null; echo
+uname -r
+if command -v vcgencmd >/dev/null 2>&1; then
+    # 0x0 is clean. Bits 0-3 are happening now, 16-19 have happened since boot:
+    # 0/16 undervoltage, 1/17 frequency capped, 2/18 throttled, 3/19 soft temperature limit.
+    vcgencmd get_throttled
+    vcgencmd measure_temp
+    vcgencmd measure_clock arm
+fi
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null
+cat /proc/cmdline
+uptime
+
+section "Screen"
+for mode in /sys/class/drm/card*-*/modes; do
+    status="$(cat "${mode%/modes}/status" 2>/dev/null)"
+    [ "$status" = "connected" ] && echo "${mode%/modes}: first mode $(head -1 "$mode")"
+done
+log=/home/soundshed/.local/share/xorg/Xorg.0.log
+[ -f "$log" ] || log=/var/log/Xorg.0.log
+if [ -f "$log" ]; then
+    grep -E 'glamor|Shadow|Using EGL|modeset\(0\): (Output|Modeline.*preferred)|Pointer|Mouse|Keyboard' "$log" | head -12
+fi
+
+echo "GPU devices and the kiosk user's groups (needs video and render):"
+ls -l /dev/dri 2>/dev/null | grep -E "card|render"
+id soundshed 2>/dev/null
+
+echo "X server (-nocursor hides the pointer; it follows SOUNDSHED_HIDE_CURSOR):"
+ps -eo args | grep -E '^(/usr/lib/xorg/)?Xorg' | head -1
+grep -E '^SOUNDSHED_(HIDE_CURSOR|DISPLAY_MODE|ALSA_PERIODS|AUDIO_PRIO)=' /etc/default/soundshed-kiosk
+
+echo "Mode in use:"
+grep -E 'Output .* using (initial )?mode|Setting mode' "$log" 2>/dev/null | tail -2
+DISPLAY=:0 XAUTHORITY=/home/soundshed/.Xauthority su -s /bin/sh soundshed -c 'xrandr --query 2>/dev/null' | grep -E '\*' | head -2
+
+echo "GPU build's renderer (llvmpipe or softpipe means it is drawing on the CPU):"
+# The whole journal: on a Pi this line didn't turn up under the kiosk unit.
+journalctl -b --no-pager 2>/dev/null | grep -a 'GL renderer' | tail -1 | sed 's/.*elements: //'
+
+echo "Cairo build's frame segment (none there means frames are copied over the X socket):"
+ipcs -m | grep -E "^0x" || echo "  none"
+
+section "Audio stream"
+cat /proc/asound/cards
+cards="$(for f in /proc/asound/card*/pcm*/sub*/hw_params; do
+    [ -f "$f" ] && ! grep -q closed "$f" && echo "${f#/proc/asound/card}"
+done | cut -d/ -f1 | sort -u | wc -l)"
+if [ "$cards" -gt 1 ]; then
+    echo "WARNING: input and output are on different cards. Each runs on its own clock, so the"
+    echo "stream drifts and crackles whatever the load. Use one interface for both."
+fi
+for f in /proc/asound/card*/pcm*/sub*/hw_params; do
+    [ -f "$f" ] || continue
+    grep -q closed "$f" && continue
+    echo "--- ${f#/proc/asound/}"
+    cat "$f"
+    cat "${f%/hw_params}/status" 2>/dev/null | grep -E 'state|avail_max'
+done
+ls /proc/asound/card*/stream* >/dev/null 2>&1 && cat /proc/asound/card*/stream* | grep -E 'Status|Momentary|Feedback|Interface|Altset' | head -12
+
+section "App threads (top ten by CPU)"
+# Kernel thread names stop at 15 characters. -f would find the session scripts first.
+pid="$(pgrep -o -x 'Soundshed Nano |soundshed-guita')"
+if [ -n "$pid" ]; then
+    echo "Started $(ps -o etimes= -p "$pid" | tr -d ' ') s ago. %CPU is the average since then."
+    ps -L -o tid,cls,rtprio,pcpu,psr,comm -p "$pid" | sort -k4 -n -r | head -11
+    # A process drawing on the GPU holds a DRM device open.
+    for fd in "/proc/$pid/fd"/*; do readlink "$fd"; done 2>/dev/null | grep '^/dev/dri/' | sort -u
+    grep -E 'VmRSS|VmSwap' "/proc/$pid/status"
+else
+    echo "no app running"
+fi
+
+section "Other busy threads"
+ps -eLo cls,rtprio,pcpu,comm --sort=-pcpu | grep -v -E 'Soundshed|^ *TS +- +0\.0' | head -9
+
+section "Realtime threads"
+ps -eLo cls,rtprio,comm | awk '$2 != "-" && $2 > 1' | sort -k2 -n -r | uniq -c | head -14
+
+section "Audio blocks (SOUNDSHED_NANOQ_AUDIOSTATS)"
+[ -f /tmp/soundshed-audio.txt ] && tail -8 /tmp/soundshed-audio.txt || echo "not switched on"
+
+section "UI painting (SOUNDSHED_NANOQ_DRAWSTATS)"
+[ -f /tmp/soundshed-draw.txt ] && tail -8 /tmp/soundshed-draw.txt || echo "not switched on"

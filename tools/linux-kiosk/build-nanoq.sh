@@ -8,10 +8,12 @@
 #   --out <dir>     Where the distribution folder goes, for install.sh and build-image.sh
 #                   --dist. Must be on a Linux filesystem, not /mnt/c, or the executable bit
 #                   is lost (default: ~/nanoq-dist-<arch>)
+#   --gpu           Draw with Skia on the GPU, not with Cairo on the CPU. It keeps its own
+#                   build tree, and goes to ~/nanoq-dist-<arch>-gpu by default
 #   --clean         Start from an empty build tree
 #
-# Needs Docker. The build tree stays in a Docker volume, soundshed-nanoq-<arch>, so a rebuild
-# only compiles what changed. `docker volume rm` it to get the space back.
+# Needs Docker. The build tree stays in a Docker volume, soundshed-nanoq-<arch>[-gpu], so a
+# rebuild only compiles what changed. `docker volume rm` it to get the space back.
 
 set -euo pipefail
 
@@ -21,13 +23,15 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ARCH="arm64"
 OUT_DIR=""
 CLEAN=false
+GPU=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --arch)  ARCH="$2"; shift ;;
         --out)   OUT_DIR="$2"; shift ;;
+        --gpu)   GPU=true ;;
         --clean) CLEAN=true ;;
-        --help)  sed -n '2,15p' "$0"; exit 0 ;;
+        --help)  sed -n '2,17p' "$0"; exit 0 ;;
         *)       echo "Unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -38,9 +42,15 @@ case "$ARCH" in
     x64)   debian_arch=amd64; gnu_triple=x86_64-linux-gnu ;;
     *)     echo "--arch must be arm64 or x64" >&2; exit 1 ;;
 esac
-OUT_DIR="${OUT_DIR:-${HOME}/nanoq-dist-${ARCH}}"
+suffix=""
+backend=""
+if [[ "$GPU" == true ]]; then
+    suffix="-gpu"
+    backend="-DNANOQ_LINUX_SKIA=ON"
+fi
+OUT_DIR="${OUT_DIR:-${HOME}/nanoq-dist-${ARCH}${suffix}}"
 image="soundshed-nanoq-build:${ARCH}"
-volume="soundshed-nanoq-${ARCH}"
+volume="soundshed-nanoq-${ARCH}${suffix}"
 
 echo "▶ Build image ${image}…"
 docker build --platform linux/amd64 -t "$image" - >/dev/null <<EOF
@@ -54,7 +64,8 @@ RUN dpkg --add-architecture ${debian_arch} \
         libharfbuzz-dev:${debian_arch} libwebp-dev:${debian_arch} libpng-dev:${debian_arch} \
         libx11-dev:${debian_arch} libxcursor-dev:${debian_arch} libxrandr-dev:${debian_arch} \
         libxext-dev:${debian_arch} libxi-dev:${debian_arch} libasound2-dev:${debian_arch} \
-        libbrotli-dev:${debian_arch} libbz2-dev:${debian_arch} libcurl4-openssl-dev:${debian_arch}
+        libbrotli-dev:${debian_arch} libbz2-dev:${debian_arch} libcurl4-openssl-dev:${debian_arch} \
+        libegl-dev:${debian_arch} libgl-dev:${debian_arch} libopengl-dev:${debian_arch}
 EOF
 
 if [[ "$CLEAN" == true ]]; then
@@ -64,7 +75,8 @@ docker volume create "$volume" >/dev/null
 
 toolchain=""
 if [[ "$ARCH" == "arm64" ]]; then
-    toolchain="-DCMAKE_TOOLCHAIN_FILE=/w/src/cmake/toolchains/linux-arm64.cmake"
+    # Tuned for the Pi 4's Cortex-A72. The code still runs on any later arm64 core.
+    toolchain="-DCMAKE_TOOLCHAIN_FILE=/w/src/cmake/toolchains/linux-arm64.cmake -DCMAKE_C_FLAGS=-mcpu=cortex-a72 -DCMAKE_CXX_FLAGS=-mcpu=cortex-a72"
 fi
 
 echo "▶ Copying the sources into ${volume}…"
@@ -84,7 +96,7 @@ docker run --rm --platform linux/amd64 -v "${volume}:/w" \
     -e GUITARFX_LINUX_PKG_CONFIG_LIBDIR="/usr/lib/${gnu_triple}/pkgconfig:/usr/share/pkgconfig" \
     "$image" bash -euc "
         git config --global --add safe.directory '*'
-        cmake -S /w/src/nanoq -B /w/build -G Ninja -DCMAKE_BUILD_TYPE=Release ${toolchain}
+        cmake -S /w/src/nanoq -B /w/build -G Ninja -DCMAKE_BUILD_TYPE=Release ${toolchain} ${backend}
         cmake --build /w/build --target nanoq_standalone
         ${gnu_triple}-strip '/w/build/products/Soundshed Nano Q'
         rm -rf /w/dist

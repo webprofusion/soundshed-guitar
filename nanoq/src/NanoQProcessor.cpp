@@ -139,6 +139,8 @@ void NanoQProcessor::process(in_channels const& in, out_channels const& out)
     if (!mCtl.engine().Controller().ProcessAudio(inPtrs, outPtrs, frames))
     {
         // The controller could not take the DSP lock for this block: silence, as in the JUCE adapter.
+        devices.NoteBlockGivenUp();
+
         for (std::size_t ch = 0; ch < 2 && ch < outputs; ++ch)
         {
             std::memset(outPtrs[ch], 0, sizeof(float) * static_cast<std::size_t>(frames));
