@@ -1127,6 +1127,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         file->onClick = [this, b, &commands] {
             commands.BrowseNodeResource(b->nodeId, b->resourceType, b->index);
             b->previewed = true; // a file chosen there is the new choice; Cancel puts back the old
+            b->fillFooter();     // which OK keeps
         };
         row.insert(row.end(),
                    {HGap(6), favourites, HGap(6), Middle(group), HGap(6), Middle(previous), HGap(4), Middle(next)});

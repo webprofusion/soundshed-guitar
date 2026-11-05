@@ -7,13 +7,27 @@
 // one; Soundshed Guitar's JUCE editor is another (juce/source/NativeUiEditor.cpp). Nothing here
 // names a plugin framework, which is what lets the same UI run in either.
 
+#include "IPluginHost.h"
+
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace nanoq::ui
 {
+/// A file dialog for the view to draw, from a host with no native one to call (Linux).
+struct FileDialogRequest
+{
+    bool save = false;
+    guitarfx::BrowseFileType type = guitarfx::BrowseFileType::Any;
+    std::string title;
+    std::string defaultName; // a save's suggested file name
+    /// Called once, on the UI thread, whatever becomes of the dialog: no success is a cancel.
+    std::function<void(const guitarfx::BrowseFileResult&)> done;
+};
+
 class UiLink
 {
   public:
@@ -38,6 +52,13 @@ class UiLink
     /// Per-pump work the host has for the UI thread (Nano Q's standalone device controls).
     virtual void PumpOnUiThread()
     {
+    }
+
+    /// The next file dialog the host wants drawn, if any. The UI thread calls it at every pump; a
+    /// host with dialogs of its own never has one.
+    [[nodiscard]] virtual std::optional<FileDialogRequest> TakeFileDialogRequest()
+    {
+        return std::nullopt;
     }
 };
 } // namespace nanoq::ui

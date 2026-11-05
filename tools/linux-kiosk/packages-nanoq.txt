@@ -1,6 +1,9 @@
 # Soundshed Nano Q: Elements draws with Cairo, on X11.
 libcairo2
 libharfbuzz0b
+# The Tones page and Tone3000, over HTTPS.
+ca-certificates
+libcurl4
 libwebp7
 libxcursor1
 libxrandr2

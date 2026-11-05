@@ -99,6 +99,8 @@ class Engine final : public guitarfx::IPluginHost, public ui::UiLink
         mDevices.Pump();
     }
 
+    [[nodiscard]] std::optional<ui::FileDialogRequest> TakeFileDialogRequest() override;
+
     // ── What the processor reports ──────────────────────────────────────────────
     void SetStreamInfo(double sampleRate, int blockSize, int inputs, int outputs);
     void SetTransport(double tempo, bool playing);
@@ -120,6 +122,7 @@ class Engine final : public guitarfx::IPluginHost, public ui::UiLink
     [[nodiscard]] bool IsMessageThread() const override;
     [[nodiscard]] std::filesystem::path GetUserDataPath() const override;
     [[nodiscard]] std::filesystem::path GetBundledAssetsPath() const override;
+    [[nodiscard]] bool IsOnRemovableDisk(const std::filesystem::path& path) const override;
     [[nodiscard]] double GetSampleRate() const override;
     [[nodiscard]] int GetBlockSize() const override;
     [[nodiscard]] bool IsStandalone() const override;
@@ -131,6 +134,10 @@ class Engine final : public guitarfx::IPluginHost, public ui::UiLink
 
   private:
     void Run(std::promise<void> ready);
+
+    /// Where there is no native dialog: leaves the request for the view's next pump. With no
+    /// view open there is nobody to ask, so it comes back as a cancel.
+    void AskViewForFile(ui::FileDialogRequest request);
 
     std::unique_ptr<guitarfx::PluginController> mController;
     std::filesystem::path mAssetRoot;
@@ -146,6 +153,9 @@ class Engine final : public guitarfx::IPluginHost, public ui::UiLink
     std::mutex mOutboxMutex;
     std::vector<std::string> mOutbox;
     std::atomic<bool> mViewAttached{false};
+
+    std::mutex mFileRequestMutex;
+    std::deque<ui::FileDialogRequest> mFileRequests;
 
     std::atomic<double> mSampleRate{48000.0};
     std::atomic<int> mBlockSize{256};

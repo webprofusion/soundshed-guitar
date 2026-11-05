@@ -378,7 +378,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     std::string resourceId = payload.value("resourceId", "");
     const std::string filePathValue = payload.value("filePath", "");
     const std::string data = payload.value("data", "");
-    const std::string fileName = payload.value("fileName", "");
+    std::string fileName = payload.value("fileName", "");
     const std::string name = payload.value("name", "");
     const std::string description = payload.value("description", "");
     const std::string category = payload.value("category", "");
@@ -396,13 +396,36 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
         return std::nullopt;
     }
 
-    const bool hasFilePath = !filePathValue.empty();
+    bool hasFilePath = !filePathValue.empty();
     const bool hasInlineData = !data.empty();
 
     if (!hasFilePath && !hasInlineData)
     {
         error = "Missing local file path or file data";
         return std::nullopt;
+    }
+
+    // The library keeps a file's path, which is no use once a USB stick has been pulled out, so
+    // one on such a disk is stored as a dropped file's bytes are. A plugin stays where it is.
+    std::vector<std::uint8_t> storedBytes;
+
+    if (hasFilePath && resourceType != "plugin" && mHost.IsOnRemovableDisk(util::PathFromUtf8(filePathValue)))
+    {
+        const auto source = util::PathFromUtf8(filePathValue);
+        storedBytes = util::ReadFileBytes(source);
+
+        if (storedBytes.empty())
+        {
+            error = "Could not read the file from the disk";
+            return std::nullopt;
+        }
+
+        hasFilePath = false;
+
+        if (fileName.empty())
+        {
+            fileName = util::PathToUtf8(source.filename());
+        }
     }
 
     auto allResources = mResourceLibrary.GetAllResources();
@@ -481,7 +504,7 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     }
     else
     {
-        const auto decodedBytes = util::DecodeBase64(data);
+        const auto decodedBytes = storedBytes.empty() ? util::DecodeBase64(data) : storedBytes;
 
         if (decodedBytes.empty())
         {

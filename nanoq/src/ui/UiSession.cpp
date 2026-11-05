@@ -20,13 +20,7 @@ UiSession::UiSession(UiLink& link, cycfi::elements::view& view)
     mLink.SendRequest(R"({"type":"uiVisibility","visible":true})");
 
     guitarfx::uiclient::ToneService::Host host;
-    host.post = [queue = std::weak_ptr<PostQueue>(mPosted)](std::function<void()> fn) {
-        if (const auto q = queue.lock())
-        {
-            std::lock_guard<std::mutex> lock(q->mutex);
-            q->pending.push_back(std::move(fn));
-        }
-    };
+    host.post = Poster();
     host.toast = [this](const std::string& title, const std::string& detail, bool isError) {
         if (onToast)
         {
@@ -49,6 +43,17 @@ UiSession::UiSession(UiLink& link, cycfi::elements::view& view)
 
     mClient.Start();
     Schedule();
+}
+
+std::function<void(std::function<void()>)> UiSession::Poster() const
+{
+    return [queue = std::weak_ptr<PostQueue>(mPosted)](std::function<void()> fn) {
+        if (const auto q = queue.lock())
+        {
+            std::lock_guard<std::mutex> lock(q->mutex);
+            q->pending.push_back(std::move(fn));
+        }
+    };
 }
 
 void UiSession::PostToUi(std::function<void()> fn)

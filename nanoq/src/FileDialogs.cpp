@@ -160,6 +160,15 @@ guitarfx::BrowseFileResult RunDialog(bool save, guitarfx::BrowseFileType type, c
 } // namespace
 #endif
 
+bool HasNativeFileDialogs()
+{
+#if defined(_WIN32) || defined(__APPLE__)
+    return true;
+#else
+    return gHook != nullptr;
+#endif
+}
+
 void ShowOpenDialog(guitarfx::BrowseFileType type, const std::string& title,
                     std::function<void(const guitarfx::BrowseFileResult&)> done)
 {

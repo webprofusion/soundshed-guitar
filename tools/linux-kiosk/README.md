@@ -31,6 +31,7 @@ since it should leave more of the CPU for DSP, but it does less on Linux so far:
 | `rootfs/etc/default/soundshed-kiosk` | The settings: session type, app path and args, IRQ priority, WebKit knobs |
 | `rootfs/usr/local/lib/soundshed-kiosk/tune-audio` + `soundshed-audio-tune.service` | At boot: `performance` governor, Wi-Fi power save off, USB controller IRQ threads to FIFO 90 |
 | `rootfs/etc/security/limits.d/95-soundshed-audio.conf` | rtprio/memlock for the `audio` group, for running the app by hand |
+| `rootfs/etc/udev/rules.d/90-soundshed-usb-storage.rules` | Mounts a USB stick as it is plugged in, for Nano Q's file picker |
 | `build-image.sh` + `pi-gen/stage-soundshed/` | Builds a flashable arm64 image for the Pi 4: pi-gen Lite (pinned tag) plus a stage that runs `install.sh` |
 
 `install.sh` also adds `threadirqs usbcore.autosuspend=-1` to `cmdline.txt`.
@@ -157,13 +158,47 @@ of that says how a Pi 4 performs, and no real X server or audio device has been 
 
 On Linux, for now:
 
-- **No network.** Core has no HTTP transport for Linux (`core/src/net/HttpNone.cpp`), so the
-  Tones page, Tone3000 and tone sharing report that networking isn't available.
-- **No file dialogs.** Open and save report a cancel (`nanoq/src/FileDialogs.cpp`), so the UI
-  can't import a model or an IR, or add a folder. With no network either, that leaves the
-  factory content.
 - **No web views.** The Jam tab's YouTube player is Windows only.
 - **No hosted plugins.** Nano Q doesn't host plugins, on any platform.
+
+### Network
+
+HTTP is libcurl ([HttpCurl.cpp](../../core/src/net/HttpCurl.cpp)), for the Tones page, Tone3000
+and the update check. It reports timeouts, cancels and connection failures as the Windows
+transport does. Nano Q turns it on with `GUITARFX_UICLIENT_CURL`, so the JUCE Linux build gains
+no dependency, and Android stays on `HttpNone.cpp`. HTTPS needs `ca-certificates`, which
+`packages-nanoq.txt` installs.
+
+### Files
+
+Linux has no file dialog to call, and a kiosk no desktop to show one on, so Nano Q draws its own:
+a full-screen picker made for touch ([FilePicker.cpp](../../nanoq/src/ui/FilePicker.cpp)). It
+offers Home, each disk mounted under `/media`, `/run/media` or `/mnt`, and the whole file
+system. A stick shows up within a second of being mounted, and if it is pulled out while the
+picker is showing it, the picker goes back to Home. Hidden files, and the `._` files macOS leaves
+on a stick, aren't listed. The same picker opens, saves and chooses folders; Windows and macOS
+keep their native dialogs.
+
+To bring a model or an IR in from a stick: plug it in, open the slot's chooser, press **File...**,
+tap the file, then **OK**. A file on a mounted disk is copied into the library
+(`resources/content/local` under the settings folder), because elsewhere the library only keeps
+a file's path, and the stick can then be taken away. **Add Folder...** on the Folder tab works too:
+a tap there plays the file from the stick, and **OK** copies it in. **Export preset...** saves to
+the stick.
+
+`90-soundshed-usb-storage.rules` does the mounting, at `/run/media/system/<label>` (spaces in a
+label become underscores). It's an automount with a one-second idle timeout, so that a stick can
+just be pulled out. FAT and exFAT sticks are given to the kiosk user, who can then write to them;
+any other file system keeps its own owners.
+
+Tested on 2026-11-05 at 800x480 under Xvfb, x64, with a tmpfs standing in for the stick at the
+same path: models and IRs imported, the model still there with the stick gone and the app
+restarted, folders, saving, replacing, a stick arriving and leaving with the picker open, and a
+Tone3000 download. Not tested: the udev rule itself. `systemd-mount` accepts its options, but a
+container gets no device units, so nothing has been mounted by it, and no real stick has been
+tried. If a stick doesn't appear, `journalctl -u 'run-media-*'` on the device is the place to look.
+
+### Building
 
 The window, timer and ALSA behaviour comes from
 [clap-wrapper-x11-standalone.patch](../../nanoq/patches/clap-wrapper-x11-standalone.patch).
@@ -175,8 +210,9 @@ FetchContent doesn't reapply a changed patch to an existing tree, so run
 - **Power-cut safety.** Root is writable. A real device wants a read-only root (Pi OS
   overlayfs, `raspi-config nonint enable_overlayfs`) with `/home/soundshed` on its own
   writable partition. That also needs checking that settings writes survive a cut.
-- **On-screen keyboard.** Preset names, Tone3000 search and sign-in need text input. cage
-  and WebKitGTK with a virtual keyboard (e.g. `wvkbd`) are untested.
+- **On-screen keyboard.** Preset names, Tone3000 search, sign-in and the name of a file being
+  saved need text input. cage and WebKitGTK with a virtual keyboard (e.g. `wvkbd`) are
+  untested, and Nano Q on a bare X server has none. Importing from a stick needs no typing.
 - **Wi-Fi setup without a desktop.** For now: `WPA_COUNTRY` at build time, then
   `nmcli` over Ethernet/SSH, or cloud-init's `network-config` on the boot partition
   (pi-gen enables cloud-init by default).

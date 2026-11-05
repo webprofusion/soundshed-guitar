@@ -38,6 +38,101 @@ std::filesystem::path ScratchRoot()
 }
 } // namespace
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+// With no native dialog the view draws the picker: the engine leaves it the request, and a dialog
+// with no view to draw it, or whose view goes, is a cancel, so what asked is never left waiting.
+void TestDialogDrawnByTheView()
+{
+    using guitarfx::BrowseFileResult;
+    using guitarfx::BrowseFileType;
+
+    struct Outcome
+    {
+        std::atomic<int> calls{0};
+        std::atomic<bool> success{false};
+    };
+
+    const auto ask = [](nanoq::Engine& engine, Outcome& outcome) {
+        engine.BrowseFileAsync(BrowseFileType::IRFile, "Choose an IR", [&outcome](const BrowseFileResult& result) {
+            outcome.success = result.success;
+            ++outcome.calls;
+        });
+    };
+    const auto settled = [](const Outcome& outcome) {
+        for (int i = 0; i < 500 && outcome.calls == 0; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        return outcome.calls == 1;
+    };
+
+    nanoq::Engine engine;
+
+    Outcome noView;
+    ask(engine, noView);
+
+    if (!settled(noView) || noView.success)
+    {
+        Fail("a dialog with no view open should be a cancel");
+    }
+
+    engine.SetViewAttached(true);
+    Outcome answered;
+    ask(engine, answered);
+    auto request = engine.TakeFileDialogRequest();
+
+    if (!request || request->type != BrowseFileType::IRFile || request->title != "Choose an IR" || request->save)
+    {
+        Fail("the view should be left the request");
+        return;
+    }
+
+    BrowseFileResult result;
+    result.success = true;
+    request->done(result);
+
+    if (!settled(answered) || !answered.success)
+    {
+        Fail("the view's answer should reach the caller");
+    }
+
+    Outcome saving;
+    engine.SaveFileAsync(BrowseFileType::AudioFile, "Export", "take.wav", [&saving](const BrowseFileResult& r) {
+        saving.success = r.success;
+        ++saving.calls;
+    });
+    request = engine.TakeFileDialogRequest();
+
+    if (!request || !request->save || request->defaultName != "take.wav")
+    {
+        Fail("a save should reach the view as a save");
+        return;
+    }
+
+    request->done({});
+
+    if (!settled(saving) || saving.success)
+    {
+        Fail("a cancelled save should say so");
+    }
+
+    Outcome orphaned;
+    ask(engine, orphaned);
+    engine.SetViewAttached(false);
+
+    if (!settled(orphaned) || orphaned.success)
+    {
+        Fail("a request the view never took should be cancelled when the view goes");
+    }
+
+    if (engine.TakeFileDialogRequest())
+    {
+        Fail("the cancelled request should not still be waiting");
+    }
+}
+#endif
+
 int main()
 {
     // A data root of its own: a test never touches the real profile.
@@ -89,6 +184,9 @@ int main()
     }
 
     nanoq::SetFileDialogHookForTesting(nullptr);
+#if !defined(_WIN32) && !defined(__APPLE__)
+    TestDialogDrawnByTheView();
+#endif
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
 
