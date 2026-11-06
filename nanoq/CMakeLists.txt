@@ -57,6 +57,14 @@ endif()
 set(Q_BUILD_PLUG ON CACHE BOOL "" FORCE)
 set(Q_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(Q_BUILD_TEST OFF CACHE BOOL "" FORCE)
+# Q's IO library is built only for the RtAudio it fetches, which clap-wrapper's standalone takes;
+# nothing here links it. So libremidi's two WinRT backends can only cost: each configure they run
+# C++/WinRT over the whole SDK, from a package unpacked once, and if that folder is lost the full
+# build stops for good on a missing Microsoft.Windows.Devices.Midi2.h. WinMM stays.
+if(WIN32)
+    set(LIBREMIDI_NO_WINMIDI ON CACHE BOOL "" FORCE)
+    set(LIBREMIDI_NO_WINUWP ON CACHE BOOL "" FORCE)
+endif()
 
 # iOS: the libraries are patched for UIKit (nanoq/ios/patches, applied by nanoq/ios/cmake/
 # ApplyPatch.cmake), and Q's IO library is left out: RtAudio and libremidi have no iOS backend,
@@ -223,6 +231,11 @@ target_compile_definitions(nanoq_impl PRIVATE
 # q_plug is PRIVATE on purpose (see Q's example CMakeLists): the format modules link it but must
 # not inherit its compile options. clap is PUBLIC because the entry shim needs it.
 target_link_libraries(nanoq_impl PRIVATE q_plug SoundshedGuitarCore SoundshedUiClient PUBLIC clap)
+# MSVC reads a source with no BOM in the system code page, as clang and gcc do not: the on-screen
+# keyboard's U"€£°§…" came out as other characters, and a U'€' does not compile at all.
+if(MSVC)
+    target_compile_options(nanoq_impl PRIVATE /utf-8)
+endif()
 if(APPLE)
     target_link_libraries(nanoq_impl PRIVATE ${NANOQ_APPLE_FRAMEWORKS})
 endif()
@@ -414,4 +427,7 @@ endif()
 
 add_executable(NanoQKeyboardLayoutTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/KeyboardLayoutTests.cpp")
 target_include_directories(NanoQKeyboardLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+if(MSVC)
+    target_compile_options(NanoQKeyboardLayoutTests PRIVATE /utf-8) # as nanoq_impl
+endif()
 add_test(NAME NanoQKeyboardLayoutTests COMMAND NanoQKeyboardLayoutTests)

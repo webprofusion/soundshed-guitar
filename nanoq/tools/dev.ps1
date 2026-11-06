@@ -4,7 +4,7 @@
 #   powershell -File nanoq/tools/dev.ps1 -Profile <dir> [-Shot out.png] [-Resize 1100x720] [-Wait 8] [-NoRun] [-Target <t>]
 #
 # Builds only the standalone by default, which is all this runs: -Target "" builds every target
-# (CLAP, VST3, tests, and Q's unused q_io, whose libremidi does not build on every PC).
+# (CLAP, VST3, tests, and Q's unused q_io).
 param(
     [Parameter(Mandatory = $true)][string]$Profile,
     [string]$Shot = "",
