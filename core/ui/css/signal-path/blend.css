@@ -26,8 +26,12 @@
   user-select: none;
 }
 
+/* A range input's intrinsic width (about 129px) would otherwise hold it wider than its
+   128px group, pushing the B label and the track over the next control. */
 .node-param-blend-slider {
   flex: 1;
+  width: 0;
+  min-width: 0;
   appearance: none;
   height: 4px;
   border-radius: var(--radius-xs);
