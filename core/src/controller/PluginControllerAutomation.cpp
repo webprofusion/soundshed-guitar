@@ -470,6 +470,10 @@ void PluginController::ReplaceAutomationSlots(const nlohmann::json& automation, 
     // swapped in under it, having been built, and given their values, off it. A host reads
     // its parameters' own cells rather than the slots, and CommitSlots updates those.
     auto slots = mAutomationSlots.BuildSlotsFromJson(automation);
+    const bool sceneValuesGiven =
+        values != nullptr && std::all_of(slots.begin(), slots.end(), [values](const AutomationSlot& slot) {
+            return slot.address != kSceneSelectAddress || values->contains(slot.slotId);
+        });
 
     if (values != nullptr)
     {
@@ -481,9 +485,10 @@ void PluginController::ReplaceAutomationSlots(const nlohmann::json& automation, 
         mAutomationSlots.CommitSlots(slots);
     }
 
-    // The new slots' Scene values are whatever was saved, or 0: the next drain stores the
-    // scene playing.
-    mAutomationSceneIndexStored = -1;
+    // A Scene value given here stands until the scene changes: it can be a step with no scene
+    // (see SyncAutomationSceneValue), and a project has to read back as it was saved. A slot
+    // with none holds 0, so the next drain stores the scene playing.
+    mAutomationSceneIndexStored = sceneValuesGiven ? GetActiveSceneIndex() : -1;
 
     // `slots` now holds the ones replaced, freed here, after the lock.
 }

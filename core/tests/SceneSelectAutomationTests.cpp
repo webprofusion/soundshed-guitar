@@ -11,6 +11,7 @@
  *    sends the lane's value again, which puts the lane's scene back.
  *  - A step with no scene in the preset does nothing, and the value is left as the host set it
  *    rather than put back for the host to send again on every block.
+ *  - A value saved in a project reads back as saved, even one for a step with no scene.
  *  - The range is fixed, so adding a scene to the end leaves every earlier value on its scene.
  */
 
@@ -175,6 +176,26 @@ bool Run(const fs::path& sandbox)
     passed = Check(ScenePlaying(controller) == 1, "lane at scene 5 of three: nothing changes") && passed;
     passed =
         Check(hostReads() == SceneValue(5), "lane at scene 5 of three: the value stays as the host set it") && passed;
+
+    // Saved and reopened. The value is the project's, and a host compares it with what it saved.
+    controller.DeserializeState(controller.SerializeState());
+    host.Pump();
+    Drain(controller);
+    passed = Check(ScenePlaying(controller) == 1 && hostReads() == SceneValue(5),
+                   "reopened: the value reads back as it was saved (" + std::to_string(hostReads()) + ")") &&
+             passed;
+
+    // A project from before the parameter has no value for it, and takes the scene it saved.
+    HostSends(controller, 2);
+    auto olderState = nlohmann::json::parse(controller.SerializeState());
+    olderState["automationValues"].erase(kSceneSlotId);
+    controller.DeserializeState(olderState.dump());
+    host.Pump();
+    Drain(controller);
+    passed = Check(ScenePlaying(controller) == 2 && hostReads() == SceneValue(2),
+                   "older project: the host reads the scene it saved (" + std::to_string(hostReads()) + ")") &&
+             passed;
+    HostSends(controller, 1);
 
     // A fourth scene, added to the end. The add switches to it.
     Send(controller, {{"type", "addScene"}});
