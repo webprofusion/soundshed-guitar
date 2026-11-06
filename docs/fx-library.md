@@ -1617,9 +1617,9 @@ Common controls:
 | `mod` | 0.0–1.0 | 0.4 | — |
 | `lowEnd` | 0.0–1.0 (0.5 neutral) | 0.5 | — |
 | `mix` | 0.0–1.0 | 0.35 | — |
+| `outputGain` | -12..+12 | 0 | dB |
 | `hold` | Off / On | Off | — |
 | `holdMode` | Infinite / Freeze | Infinite | — |
-| `outputGain` | -12..+12 (advanced) | 0 | dB |
 
 Each machine's own controls sit in the Machine group and show only under that machine
 (`visibleWhen`, see Conditional controls): Room `roomSize`, `diffusion`; Hall `hallSize`, `midEq`;

@@ -114,6 +114,7 @@ enum Param : std::size_t
     kMod,
     kLowEnd,
     kMix,
+    kOutputGain,
     kHold,
     kHoldMode,
     kRoomSize,
@@ -146,7 +147,6 @@ enum Param : std::size_t
     kRoomShape,
     kListenerX,
     kListenerY,
-    kOutputGain,
     kParamCount
 };
 
@@ -168,6 +168,7 @@ inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
     {"mod", "Mod", 0.4, 0.0, 1.0, "amount", "Reverb"},
     For({"lowEnd", "Low End", 0.5, 0.0, 1.0, "amount", "Reverb"}, kLowEndMachines),
     {"mix", "Mix", 0.35, 0.0, 1.0, "amount", "Reverb"},
+    {"outputGain", "Output", 0.0, -12.0, 12.0, "dB", "Reverb"},
     {"hold", "Hold", 0.0, 0.0, 1.0, "toggle", "Hold", false, 1.0},
     {"holdMode", "Hold Mode", 0.0, 0.0, 1.0, "enum", "Hold", false, 1.0, kHoldModeLabels},
     For({"roomSize", "Size", 0.0, 0.0, 1.0, "enum", "Machine", false, 1.0, kRoomSizeLabels}, kRoomOnly),
@@ -200,7 +201,6 @@ inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
     For({"roomShape", "Room Shape", 2.0, 0.0, 2.0, "enum", "Machine", false, 1.0, kRoomShapeLabels}, kReflectionsOnly),
     For({"listenerX", "Position L-R", 0.33, 0.0, 1.0, "amount", "Machine"}, kReflectionsOnly),
     For({"listenerY", "Position F-B", 0.0, 0.0, 1.0, "amount", "Machine"}, kReflectionsOnly),
-    {"outputGain", "Output", 0.0, -12.0, 12.0, "dB", "Reverb", true},
 }};
 
 [[nodiscard]] inline std::size_t FindParam(std::string_view key)
