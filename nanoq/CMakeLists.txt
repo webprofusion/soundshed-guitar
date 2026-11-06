@@ -394,6 +394,10 @@ if(WIN32)
 endif()
 add_test(NAME NanoQEngineDialogTests COMMAND NanoQEngineDialogTests)
 
+add_executable(NanoQDragGestureTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/DragGestureTests.cpp")
+target_include_directories(NanoQDragGestureTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+add_test(NAME NanoQDragGestureTests COMMAND NanoQDragGestureTests)
+
 # What the in-app file picker knows, and Linux's HTTP transport against a server on loopback.
 add_executable(NanoQFileBrowsingTests
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/FileBrowsingTests.cpp"

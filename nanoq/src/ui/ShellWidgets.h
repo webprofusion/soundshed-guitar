@@ -24,7 +24,7 @@ namespace nanoq::ui
 /// Hover and press tracking shared by the clickable pieces here: a left click released inside
 /// runs `onClick`. With focus (Focus.h), Enter or Space runs it too, and the Menu key or
 /// Shift+F10 opens `onMenu`. Read as a button unless a subclass says what it is.
-class Pressable : public el::element, public Drawn, public Focusable
+class Pressable : public el::element, public Drawn, public Focusable, public TapTarget
 {
   public:
     std::function<void()> onClick;

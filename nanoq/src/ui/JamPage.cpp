@@ -80,7 +80,7 @@ constexpr float kCardMin = 220.0f; // .jam-results: minmax(220px, 1fr)
 
 /// One backing track as a card (.jam-result-card): the thumbnail with a play mark over it, the
 /// title and channel, and the favourite star. With focus Enter plays it and F stars it.
-class VideoCard final : public el::element, public Focusable
+class VideoCard final : public el::element, public Focusable, public TapTarget
 {
   public:
     VideoCard(const Theme& theme, jam::Video video, bool favorite,

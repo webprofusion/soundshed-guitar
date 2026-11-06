@@ -6,6 +6,7 @@
 // true here: each control is a small Elements element that paints from the theme and reports
 // gestures through a callback. Layout - rows, columns, margins, scrolling - is Elements' own.
 
+#include "ui/DragScroll.h"
 #include "ui/Drawn.h"
 #include "ui/Focus.h"
 #include "ui/InlineEdit.h"
@@ -79,7 +80,7 @@ class Paragraph : public el::element
 };
 
 /// A push button or, with Toggle(), a switch. Text, or text with a leading dot for a state.
-class Button : public el::element, public Drawn, public Focusable
+class Button : public el::element, public Drawn, public Focusable, public TapTarget
 {
   public:
     enum class Style
@@ -401,7 +402,7 @@ class MeterBar : public el::element, public Drawn
 
 /// One row of a list: text at the left, a muted secondary text at the right. With `heading` it
 /// is a caption and does nothing when tapped.
-class ListRow : public el::element, public Focusable
+class ListRow : public el::element, public Focusable, public TapTarget
 {
   public:
     ListRow(const Theme& theme, std::string text, std::string secondary, bool selected, bool heading,

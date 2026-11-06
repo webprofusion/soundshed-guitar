@@ -31,8 +31,6 @@ constexpr float kPathHeight = 44.0f;
 constexpr float kFooterHeight = 60.0f;
 constexpr float kButtonHeight = 40.0f;
 constexpr float kPlaceWidth = 150.0f;
-/// How far a finger moves before a tap has become a drag: a press on glass always wanders a bit.
-constexpr float kDragSlop = 10.0f;
 constexpr float kWheelStep = kRowHeight / 2.0f;
 constexpr double kMountCheckSeconds = 1.0;
 

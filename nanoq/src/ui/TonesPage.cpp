@@ -111,7 +111,7 @@ float DrawChip(artist::canvas& cnv, const std::string& text, float x, float y, e
 /// One tone as a card: its picture or accent, title, chips, description, tags and creator over
 /// a bar of actions. Pictures are fetched as the card is drawn, and drawn once they arrive. With
 /// focus Left and Right pick an action (lit as under the pointer), and Enter or Space runs it.
-class ToneCard final : public el::element, public Focusable
+class ToneCard final : public el::element, public Focusable, public TapTarget
 {
   public:
     struct Action
