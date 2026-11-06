@@ -8,8 +8,8 @@
 // that subscribed to what changed redraw. Exactly as in the JUCE product, messages are applied
 // between UI events and never inside the call that sent a request.
 
-#include "ui/DevDriver.h"
-#include "ui/Theme.h"
+#include "ui/debug/DevDriver.h"
+#include "ui/widgets/Theme.h"
 #include "ui/UiLink.h"
 #include "uiclient/ToneService.h"
 #include "uiclient/UiClient.h"

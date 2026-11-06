@@ -626,7 +626,7 @@ The live product uses named input levelling profiles instead of the older NAM in
 - A profile stores one fixed gain value in dB.
 - The active profile applies that gain once at the mixer input before the pre-chain and preset graphs.
 - While levelling training is active, the live levelling gain is bypassed temporarily so the capture reflects the raw input.
-- The engine owns the profiles, the training and the trim maths (`core/src/controller/PluginControllerInputLevelling.cpp`): it follows the raw input's peak on the audio thread (`InputLevelHold`, armed only while training, so it works with signal diagnostics off), and saves the captured peak under the name the UI sends. The web UI (`core/ui/ts/settings/inputCalibration.ts`) and Soundshed Nano Q (`nanoq/src/ui/InputLevelling.cpp`) only draw what it reports and send commands.
+- The engine owns the profiles, the training and the trim maths (`core/src/controller/PluginControllerInputLevelling.cpp`): it follows the raw input's peak on the audio thread (`InputLevelHold`, armed only while training, so it works with signal diagnostics off), and saves the captured peak under the name the UI sends. The web UI (`core/ui/ts/settings/inputCalibration.ts`) and Soundshed Nano Q (`nanoq/src/ui/settings/InputLevelling.cpp`) only draw what it reports and send commands.
 
 ### Advanced DSP Level Targets
 
@@ -1014,7 +1014,7 @@ it.)
 - **Soundshed Nano Q** draws the same layouts (rendering only; designing stays here).
   `core/src/uiclient/EffectLayouts.h` resolves them by the same rules and setting, sizes
   them by `computeLayoutScale`'s rule and holds the colour and image-knob arithmetic;
-  `nanoq/src/ui/LayoutView.cpp` draws and plays them, and `EffectLayoutPage.cpp` places them
+  `nanoq/src/ui/effects/LayoutView.cpp` draws and plays them, and `EffectLayoutPage.cpp` places them
   in the effect editor with a *Standard / Layout* chooser in its header, which writes the
   rule `selectStandardControls` would (a layout is recorded at the same scope).
 

@@ -130,6 +130,28 @@ fails on a branch name, and CI runs it. To see which pins have newer upstream
 commits or tags, run it with `--upstream`. Bump a pin deliberately, then rebuild and
 run the tests.
 
+## Where the Nano Q UI Lives
+
+`nanoq/src/ui/` is by feature. The folder's root holds only the boundary the rest of the
+tree uses: `UiLink`, `UiRoot`, `UiSession`, `EmbeddedUi` and `Drawn.h` (the repaint rectangle
+`UiSession` serves). `Shell` is one class spread over the feature folders, as
+`PluginController` is. A file that includes `ui/shell/Shell.h` gets the precompiled header.
+
+| Folder        | Owns                                                                    |
+| ------------- | ----------------------------------------------------------------------- |
+| `shell/`      | `Shell`, both frames (`ShellFrame.cpp`, `WideFrame.cpp`), menus, page navigation |
+| `chain/`      | The chain strip, its drag and drop, undo and A/B, Controls, Multi-Rig, the effect picker |
+| `effects/`    | The effect page, custom layouts, plots and the live analysis sections   |
+| `presets/`    | The preset chooser and details                                          |
+| `library/`    | Tones and the resource (model and IR) browser                           |
+| `settings/`   | Settings, devices, input levelling, MIDI and automation                 |
+| `jam/`        | The Jam tab: search, Practice Tool, Scale Guide                         |
+| `performance/`| Looper, riffs, pads, metronome, tuner                                   |
+| `dialogs/`    | The dialog frame, pop-ups, popovers, the in-app file picker             |
+| `input/`      | Focus, shortcuts, the on-screen keyboard, the accessibility bridge      |
+| `widgets/`    | Shared controls and drawing: theme, layout, text, buttons, icons        |
+| `debug/`      | `DevDriver` and `DrawProbe`, for scripted runs and performance work     |
+
 ## Common Agent Tasks
 
 ### Research and Create Artist Presets

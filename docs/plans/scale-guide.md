@@ -10,7 +10,7 @@ arrow keys, the voice-led chord-box strip, and the player's own progressions in 
 phase 4 (LISTEN: `tuner {action: "listen"}` reads the input without turning the tuner on, so a
 muting tuner never silences the player; Scales mode follows the played note, Chords mode matches
 a chroma vector from `dsp/ChromaAnalyzer.h` and a clean strum steps a progression), then phase 5
-(Nano Q: `nanoq/src/ui/ScaleGuidePage.cpp` and `ScaleGuideDraw.cpp` draw the same view model,
+(Nano Q: `nanoq/src/ui/jam/ScaleGuidePage.cpp` and `ScaleGuideDraw.cpp` draw the same view model,
 with the web UI's settings and LISTEN rules ported to `core/src/uiclient/ScaleGuide.h`; the Scales
 web view is gone from Nano Q), and phase 6 (the scalex links removed: `kScalesUrl`, the
 `StaysInWebView` and `isScalexUrl` cases). The optional audio preview was not built. `ScaleGuideTests --dump <tuning> <key 0-11> <chord>` prints the shapes found, for tuning
@@ -20,7 +20,7 @@ the search's scoring.
 
 Jam → Scales embeds scalex.soundshed.com: an iframe in the web UI
 (`core/ui/ui-components/panels/jam-panel.html`, `core/ui/index.html`) and, in Nano Q, a WebView2
-of its own (`nanoq/src/ui/JamPage.cpp`, `uiclient/Jam.h` `kScalesUrl`), which falls back to the
+of its own (`nanoq/src/ui/jam/JamPage.cpp`, `uiclient/Jam.h` `kScalesUrl`), which falls back to the
 system browser off Windows or without the WebView2 Runtime. It needs a network connection, it
 can't see the instrument (no live notes), it carries the site's own analytics and banner, and the
 site draws server-side PNGs from a C# codebase we'd otherwise have to keep alive.

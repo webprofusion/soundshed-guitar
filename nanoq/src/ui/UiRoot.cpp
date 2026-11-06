@@ -1,6 +1,6 @@
 #include "ui/UiRoot.h"
 
-#include "ui/Shell.h"
+#include "ui/shell/Shell.h"
 #include "ui/UiSession.h"
 
 namespace nanoq::ui

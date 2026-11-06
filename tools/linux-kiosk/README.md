@@ -218,7 +218,7 @@ no dependency, and Android stays on `HttpNone.cpp`. HTTPS needs `ca-certificates
 ### Files
 
 Linux has no file dialog to call, and a kiosk no desktop to show one on, so Nano Q draws its own:
-a full-screen picker made for touch ([FilePicker.cpp](../../nanoq/src/ui/FilePicker.cpp)). It
+a full-screen picker made for touch ([FilePicker.cpp](../../nanoq/src/ui/dialogs/FilePicker.cpp)). It
 offers Home, each disk mounted under `/media`, `/run/media` or `/mnt`, and the whole file
 system. A stick shows up within a second of being mounted, and if it is pulled out while the
 picker is showing it, the picker goes back to Home. Hidden files, and the `._` files macOS leaves
@@ -246,7 +246,7 @@ tried. If a stick doesn't appear, `journalctl -u 'run-media-*'` on the device is
 
 ### Typing
 
-Nano Q draws its own on-screen keyboard ([OnScreenKeyboard.h](../../nanoq/src/ui/OnScreenKeyboard.h)),
+Nano Q draws its own on-screen keyboard ([OnScreenKeyboard.h](../../nanoq/src/ui/input/OnScreenKeyboard.h)),
 because a bare X server has no window manager to place a keyboard program beside the app. It comes up across the foot of the
 screen when you tap a text field, type a value into a knob, or open a dialog that asks for text
 (a name, say), and the page or dialog moves up when the field would otherwise be under it. A

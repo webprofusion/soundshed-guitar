@@ -1,7 +1,7 @@
 // The on-screen keyboard's keys, Shift, and how far a field moves to clear the panel
-// (src/ui/KeyboardLayout.h). How it draws and takes presses is driven through the running app.
+// (src/ui/input/KeyboardLayout.h). How it draws and takes presses is driven through the running app.
 
-#include "ui/KeyboardLayout.h"
+#include "ui/input/KeyboardLayout.h"
 
 #include <cmath>
 #include <iostream>

@@ -1,7 +1,7 @@
-// Tap or scroll (src/ui/DragGesture.h): a press on a list stays a tap while a finger wanders a
+// Tap or scroll (src/ui/widgets/DragGesture.h): a press on a list stays a tap while a finger wanders a
 // little, and what it becomes after that is decided once.
 
-#include "ui/DragGesture.h"
+#include "ui/widgets/DragGesture.h"
 
 #include <iostream>
 #include <string>

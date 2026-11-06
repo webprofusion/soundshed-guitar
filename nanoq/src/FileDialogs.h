@@ -12,7 +12,7 @@ namespace nanoq
 /// Windows and macOS (FileDialogs_mac.mm, where `done` comes from the panel's completion handler on
 /// the main thread); iOS opens through a document picker (FileDialogs_ios.mm) and cannot save yet;
 /// elsewhere the dialog reports that nothing was chosen, and the engine asks the view instead
-/// (HasNativeFileDialogs, ui/FilePicker.cpp).
+/// (HasNativeFileDialogs, ui/dialogs/FilePicker.cpp).
 void ShowOpenDialog(guitarfx::BrowseFileType type, const std::string& title,
                     std::function<void(const guitarfx::BrowseFileResult&)> done);
 

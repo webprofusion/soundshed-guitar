@@ -1,6 +1,6 @@
 #pragma once
 
-// What the in-app file picker (ui/FilePicker.cpp) knows about files, with nothing drawn: which
+// What the in-app file picker (ui/dialogs/FilePicker.cpp) knows about files, with nothing drawn: which
 // files a dialog offers, what is in a folder, and where a removable disk has been mounted. Linux
 // has no file dialog to call, and a kiosk no desktop to show one on.
 
