@@ -50,7 +50,6 @@ struct Voicing
     float diffGain;
     double modMs, modHz;
     double highCrossoverHz;
-    double minDecay, maxDecay;
     float makeupDb;
     double decayScale;           ///< measured RT60 over Decay; the Cloud runs long by design
     double toneMinHz, toneMaxHz; ///< Tone sweeps the output low-pass between these
@@ -59,25 +58,25 @@ struct Voicing
 
 // Indexed by Machine, with the alternate Size of Room, Hall and Plate at the end. Columns: line
 // min/max ms, gap ms, ER count, ER end ms, ER decay dB, ER level, ER to tank, diffuser stages,
-// diffuser min/max ms, diffuser gain, mod ms, mod Hz, high crossover Hz, decay min/max s,
-// makeup dB, decay scale, tone low-pass min/max Hz, high-band ratio at Tone 0.
+// diffuser min/max ms, diffuser gain, mod ms, mod Hz, high crossover Hz, makeup dB, decay scale,
+// tone low-pass min/max Hz, high-band ratio at Tone 0.
 // clang-format off
 inline constexpr std::array<Voicing, kMachineCount + 3> kVoicings = {{
-    { 7.0,  29.0, 18.0, 18,  40.0, 10.0, 0.55f, 0.5f, 4, 1.2,  6.0, 0.55f, 0.25,  0.7, 3000.0, 0.2, 20.0, -2.9f, 1.09, 1800.0, 10000.0, 0.18}, // Room
-    {23.0,  71.0, 30.0, 16,  70.0,  8.0, 0.45f, 0.6f, 4, 2.0,  9.0,  0.6f, 0.35,  0.5, 3500.0, 0.5, 20.0, -0.9f, 1.09, 1800.0, 10000.0, 0.18}, // Hall
-    { 9.0,  33.0,  2.0,  0,   0.0,  0.0,  0.0f, 0.0f, 6, 0.8,  7.0,  0.7f,  0.3,  0.9, 6000.0, 0.5, 20.0, -3.2f, 1.09, 5000.0, 20000.0, 0.45}, // Plate
-    {26.0,  54.0, 10.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.0,  0.7, 3000.0, 0.8, 10.0, -4.0f,  1.0, 3000.0, 16000.0, 0.18}, // Spring
-    {23.0,  71.0,  8.0, 12,  60.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f, 0.45,  0.6, 3500.0, 0.5, 20.0, -5.5f, 1.09, 1600.0, 20000.0, 0.18}, // Swell
-    {31.0,  97.0, 25.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.3, 0.45, 4000.0, 0.5, 20.0,  2.0f, 1.07, 1000.0,  9000.0, 0.18}, // Bloom
-    {47.0, 157.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 8, 6.0, 72.0, 0.72f,  0.6, 0.35, 5000.0, 1.0, 50.0,  9.5f,  2.0, 1400.0, 16000.0, 0.25}, // Cloud
-    {23.0,  71.0, 30.0, 12,  60.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f,  0.5,  0.5, 3500.0, 0.5, 20.0,  6.6f, 1.09,  900.0,  4000.0, 0.18}, // Choir
-    {29.0,  89.0, 30.0, 10,  50.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f,  0.4,  0.5, 4500.0, 0.5, 20.0,  0.0f,  1.0, 2200.0, 14000.0, 0.25}, // Shimmer
-    {19.0,  61.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 4, 2.0, 12.0,  0.7f,  0.3,  0.6, 3500.0, 0.5, 10.0,  5.9f, 1.09, 2000.0, 14000.0, 0.18}, // Tape Echo
-    {23.0,  71.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 4, 1.5,  9.0,  0.7f,  0.3,  0.6, 4000.0, 0.3, 20.0,  3.0f, 1.09, 2500.0, 16000.0, 0.18}, // Nonlinear
-    { 5.0,  17.0,  3.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.1,  0.8, 5000.0, 0.2,  2.0, -6.0f,  1.0, 2000.0,  8000.0,  0.3}, // Reflections
-    {11.0,  41.0, 14.0, 22,  55.0,  9.0,  0.6f, 0.5f, 4, 1.5,  8.0, 0.55f,  0.3,  0.7, 3200.0, 0.2, 20.0, -2.9f, 1.09, 1800.0, 10000.0, 0.18}, // Room: Club
-    {33.0, 107.0, 70.0, 20, 140.0,  7.0,  0.4f, 0.6f, 4, 3.0, 14.0,  0.5f,  0.4, 0.45, 3000.0, 0.5, 20.0, -0.9f, 1.09, 1600.0,  9000.0, 0.18}, // Hall: Arena
-    { 5.0,  19.0,  1.0,  0,   0.0,  0.0,  0.0f, 0.0f, 6, 0.6,  5.0, 0.72f,  0.3,  1.0, 5000.0, 0.5, 20.0, -3.2f, 1.09, 5000.0, 20000.0, 0.45}, // Plate: Small
+    { 7.0,  29.0, 18.0, 18,  40.0, 10.0, 0.55f, 0.5f, 4, 1.2,  6.0, 0.55f, 0.25,  0.7, 3000.0, -2.9f, 1.09, 1800.0, 10000.0, 0.18}, // Room
+    {23.0,  71.0, 30.0, 16,  70.0,  8.0, 0.45f, 0.6f, 4, 2.0,  9.0,  0.6f, 0.35,  0.5, 3500.0, -0.9f, 1.09, 1800.0, 10000.0, 0.18}, // Hall
+    { 9.0,  33.0,  2.0,  0,   0.0,  0.0,  0.0f, 0.0f, 6, 0.8,  7.0,  0.7f,  0.3,  0.9, 6000.0, -3.2f, 1.09, 5000.0, 20000.0, 0.45}, // Plate
+    {26.0,  54.0, 10.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.0,  0.7, 3000.0, -4.0f,  1.0, 3000.0, 16000.0, 0.18}, // Spring
+    {23.0,  71.0,  8.0, 12,  60.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f, 0.45,  0.6, 3500.0, -5.5f, 1.09, 1600.0, 20000.0, 0.18}, // Swell
+    {31.0,  97.0, 25.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.3, 0.45, 4000.0,  2.0f, 1.07, 1000.0,  9000.0, 0.18}, // Bloom
+    {47.0, 157.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 8, 6.0, 72.0, 0.72f,  0.6, 0.35, 5000.0,  9.5f,  2.0, 1400.0, 16000.0, 0.25}, // Cloud
+    {23.0,  71.0, 30.0, 12,  60.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f,  0.5,  0.5, 3500.0,  6.6f, 1.09,  900.0,  4000.0, 0.18}, // Choir
+    {29.0,  89.0, 30.0, 10,  50.0,  8.0,  0.3f, 0.6f, 4, 2.0,  9.0,  0.6f,  0.4,  0.5, 4500.0,  0.0f,  1.0, 2200.0, 14000.0, 0.25}, // Shimmer
+    {19.0,  61.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 4, 2.0, 12.0,  0.7f,  0.3,  0.6, 3500.0,  5.9f, 1.09, 2000.0, 14000.0, 0.18}, // Tape Echo
+    {23.0,  71.0,  0.0,  0,   0.0,  0.0,  0.0f, 0.0f, 4, 1.5,  9.0,  0.7f,  0.3,  0.6, 4000.0,  3.0f, 1.09, 2500.0, 16000.0, 0.18}, // Nonlinear
+    { 5.0,  17.0,  3.0,  0,   0.0,  0.0,  0.0f, 0.0f, 0, 1.0,  1.0,  0.0f,  0.1,  0.8, 5000.0, -6.0f,  1.0, 2000.0,  8000.0,  0.3}, // Reflections
+    {11.0,  41.0, 14.0, 22,  55.0,  9.0,  0.6f, 0.5f, 4, 1.5,  8.0, 0.55f,  0.3,  0.7, 3200.0, -2.9f, 1.09, 1800.0, 10000.0, 0.18}, // Room: Club
+    {33.0, 107.0, 70.0, 20, 140.0,  7.0,  0.4f, 0.6f, 4, 3.0, 14.0,  0.5f,  0.4, 0.45, 3000.0, -0.9f, 1.09, 1600.0,  9000.0, 0.18}, // Hall: Arena
+    { 5.0,  19.0,  1.0,  0,   0.0,  0.0,  0.0f, 0.0f, 6, 0.6,  5.0, 0.72f,  0.3,  1.0, 5000.0, -3.2f, 1.09, 5000.0, 20000.0, 0.45}, // Plate: Small
 }};
 // clang-format on
 
@@ -102,6 +101,17 @@ class Engine
     static constexpr double kMaxPreDelayMs = 1500.0;
     static constexpr double kMaxEchoMs = 1500.0;
     static constexpr double kMaxShapeMs = 2000.0;
+    /// A pattern change cross-fades over this; tone-shaping filters ramp over the other.
+    static constexpr double kEarlyFadeMs = 25.0;
+    static constexpr double kFilterRampMs = 30.0;
+    /// The most a tank line holds under Hold, before makeup. Makeup then scales it to the same
+    /// level at the output on every machine.
+    static constexpr float kHoldRail = 1.4f;
+    /// Nonlinear's repeat at the top of Feedback: 3 dB down each time round.
+    static constexpr float kShapeFeedbackMax = 0.7f;
+    /// How much of each input crosses to the other side ahead of Reflections' taps. The room has
+    /// one source, so a hard-panned input still has to light both sides of it.
+    static constexpr float kReflectionsCross = 0.42f;
 
     /// Allocates. Call from Prepare.
     void Prepare(double sampleRate)
@@ -139,6 +149,9 @@ class Engine
         mEchoTime.SetMaxStep(delay_line::kMaxGlideStep);
         mHighCut = biquad::HighPass(25.0, biquad::kButterworthQ, sampleRate);
         mReflectionLfo.SetRate(0.43, sampleRate);
+        mEarlyFadeSamples = static_cast<int>(kEarlyFadeMs * 0.001 * sampleRate);
+        mFilterRampSamples = static_cast<int>(kFilterRampMs * 0.001 * sampleRate);
+        mEase = static_cast<float>(1.0 - std::exp(-1.0 / (0.03 * sampleRate)));
         Configure(mSettings, true);
         Reset();
     }
@@ -186,7 +199,7 @@ class Engine
         const Voicing& v = VoicingFor(s);
         mVoicing = &v;
         const double fs = mSampleRate;
-        const double rt60 = std::clamp(s.decay, v.minDecay, v.maxDecay) * v.decayScale;
+        const double rt60 = s.decay * v.decayScale;
 
         // Tank: lengths spread geometrically and kept coprime, so no two lines share a mode.
         std::array<double, reverb::FdnTank::kLines> lengths{};
@@ -223,6 +236,8 @@ class Engine
         mModDepthSamples = (v.modMs + 1.0 * s.mod * s.mod) * 0.001 * fs;
         mModRateHz = v.modHz * (0.6 + 0.8 * s.mod);
         mTank.SetModulation(mModDepthSamples * (1.0 - 0.7 * mLastHold), mModRateHz);
+        mMakeup = static_cast<float>(std::pow(10.0, v.makeupDb / 20.0));
+        mTank.SetCeiling(kHoldRail / mMakeup);
 
         // Input diffusion: Diffusion moves it on the machines that have the control.
         float diffGain = v.diffGain;
@@ -248,22 +263,27 @@ class Engine
         mBloom.SetModulation(0.3 * s.mod * 0.001 * fs, 0.31);
         mBloomFeedback = static_cast<float>(0.88 * s.bloomFeedback);
 
-        reverb::BuildEarlyPattern(mEarly, v.erCount, 0.5, std::max(1.0, v.erEndMs), v.erDecayDb,
-                                  0x7e5u + static_cast<unsigned>(s.machine) * 31u + (s.roomSize + s.hallSize) * 7u, fs);
-
         if (s.machine == Machine::Reflections)
         {
             constexpr std::array<double, 3> kAspect = {1.0, 1.0 / 1.618, 1.618};
             const double area = 100.0 * std::pow(10.0, std::clamp(s.size, 0.0, 1.0));
-            reverb::BuildRoomImages(mEarly, area, kAspect[static_cast<std::size_t>(std::clamp(s.roomShape, 0, 2))],
+            reverb::BuildRoomImages(mEarlyBuilt, area, kAspect[static_cast<std::size_t>(std::clamp(s.roomShape, 0, 2))],
                                     s.listenerX, s.listenerY, 0.45 - 0.33 * s.tone, fs);
         }
+        else
+        {
+            reverb::BuildEarlyPattern(mEarlyBuilt, v.erCount, 0.5, std::max(1.0, v.erEndMs), v.erDecayDb,
+                                      0x7e5u + static_cast<unsigned>(s.machine) * 31u + (s.roomSize + s.hallSize) * 7u,
+                                      fs);
+        }
 
+        AdoptEarlyPattern(snap);
         mLateTapCoeff = reverb::BandDamping::OnePoleCoeff(1500.0 * std::pow(8.0, s.tone), fs);
-        mReflectionMod = static_cast<float>(0.6 * s.mod * 0.001 * fs);
+        mReflectionModTarget = static_cast<float>(0.6 * s.mod * 0.001 * fs);
         mPreDelay.SetTarget((std::clamp(s.preDelayMs, 0.0, kMaxPreDelayMs) + v.gapMs) * 0.001 * fs);
 
-        mSpring.Configure(std::clamp(s.decay, 0.8, 10.0), s.tone, s.lowEnd, s.mod, s.dwell, s.springs + 1);
+        mSpring.Configure(s.decay, s.tone, s.lowEnd, s.mod, s.dwell, s.springs + 1, snap);
+        mSpring.SetCeiling(kHoldRail / mMakeup);
 
         mFormants.Configure(s.vowel, s.resonance, static_cast<float>(s.mod));
 
@@ -281,6 +301,10 @@ class Engine
         {
             mPreDelay.Snap(mPreDelay.Target());
             mEchoTime.Snap(mEchoTime.Target());
+            mTank.SnapControls();
+            mDiffuser.SnapControls();
+            mBloom.SnapControls();
+            mReflectionMod = mReflectionModTarget;
         }
 
         mTransport.SetWow(static_cast<float>(0.8 * s.mod));
@@ -290,16 +314,31 @@ class Engine
         mEchoFeedback = static_cast<float>(0.995 * std::pow(std::clamp(s.echoFeedback, 0.0, 1.0), 0.4));
         mTapeLpCoeff = reverb::BandDamping::OnePoleCoeff(2000.0 * std::pow(4.5, s.tone), fs);
         mTapeHpCoeff = reverb::BandDamping::OnePoleCoeff(250.0 * std::pow(0.2, s.lowEnd), fs);
-        ConfigureHeads(s.heads, s.spacing);
+        ConfigureHeads(s.heads, s.spacing, snap);
 
-        mShape.Configure(s.shape, std::clamp(s.shapeTimeMs, 50.0, kMaxShapeMs), s.modSpeed, s.mod);
-        mShapeFeedback = static_cast<float>(0.85 * s.shapeFeedback);
+        mShape.Configure(s.shape, std::clamp(s.shapeTimeMs, 50.0, kMaxShapeMs), s.modSpeed, s.mod, snap);
+        mShapeFeedback = kShapeFeedbackMax * static_cast<float>(s.shapeFeedback);
 
-        // Output EQ: Low End as a shelf, Tone as a low-pass, the Hall's Mid EQ as a bell.
-        mLowShelf = biquad::LowShelf(180.0, biquad::kButterworthQ, -9.0 + 12.0 * s.lowEnd, fs);
-        mToneLp = biquad::LowPass(v.toneMinHz * std::pow(v.toneMaxHz / v.toneMinHz, s.tone), 0.6, fs);
-        mMidBell = biquad::Peaking(650.0, 0.7, s.machine == Machine::Hall ? (s.midEq - 0.5) * 16.0 : 0.0, fs);
-        mMakeup = static_cast<float>(std::pow(10.0, v.makeupDb / 20.0));
+        // Output EQ: Low End as a shelf, Tone as a low-pass, the Hall's Mid EQ as a bell. A new
+        // design ramps in: stepped, the filters' state no longer fits and the output clicks.
+        mLowShelf.target = biquad::LowShelf(180.0, biquad::kButterworthQ, -9.0 + 12.0 * s.lowEnd, fs);
+        mToneLp.target = biquad::LowPass(v.toneMinHz * std::pow(v.toneMaxHz / v.toneMinHz, s.tone), 0.6, fs);
+        mMidBell.target = biquad::Peaking(650.0, 0.7, s.machine == Machine::Hall ? (s.midEq - 0.5) * 16.0 : 0.0, fs);
+
+        if (snap)
+        {
+            mLowShelf.Finish();
+            mToneLp.Finish();
+            mMidBell.Finish();
+            mFilterRamp = 0;
+        }
+        else
+        {
+            mLowShelf.Begin(mFilterRampSamples);
+            mToneLp.Begin(mFilterRampSamples);
+            mMidBell.Begin(mFilterRampSamples);
+            mFilterRamp = mFilterRampSamples;
+        }
     }
 
     /// Control-rate work, once a block: the Choir's moving formants.
@@ -326,8 +365,17 @@ class Engine
             mTank.SetModulation(mModDepthSamples * (1.0 - 0.7 * hold), mModRateHz);
         }
 
-        mPreL.Write(inL);
-        mPreR.Write(inR);
+        if (m == Machine::Reflections)
+        {
+            mPreL.Write(inL + kReflectionsCross * (inR - inL));
+            mPreR.Write(inR + kReflectionsCross * (inL - inR));
+        }
+        else
+        {
+            mPreL.Write(inL);
+            mPreR.Write(inR);
+        }
+
         const double pre = mPreDelay.Next();
 
         if (m == Machine::Spring)
@@ -360,7 +408,7 @@ class Engine
             tankR = mPreR.ReadHermite(pre);
             float earlyL = 0.0f;
             float earlyR = 0.0f;
-            ReadTaps(mEarly, pre, earlyL, earlyR, false);
+            ReadEarly(pre, earlyL, earlyR, false);
             tankL += earlyL * mVoicing->erToTank;
             tankR += earlyR * mVoicing->erToTank;
             wetL += earlyL * mVoicing->erLevel;
@@ -387,7 +435,7 @@ class Engine
 
         if (m == Machine::Shimmer)
         {
-            Shimmer(tankL, tankR);
+            Shimmer(tankL, tankR, hold);
         }
 
         float lateL = 0.0f;
@@ -415,12 +463,6 @@ class Engine
         Finish(outL, outR);
     }
 
-    /// The tank's last output level, for retiring a spilled-over engine once it is silent.
-    [[nodiscard]] float Energy() const noexcept
-    {
-        return mTank.Energy() + std::fabs(mLastOut);
-    }
-
     [[nodiscard]] bool Finite() const noexcept
     {
         return mTank.StateFinite() && IsFinite(mLastOut);
@@ -446,14 +488,66 @@ class Engine
         return true;
     }
 
-    void ReadTaps(const reverb::TapSet& taps, double offset, float& l, float& r, bool damped) noexcept
+    /// Takes the pattern just built into mEarlyBuilt. Live, a different pattern cross-fades in;
+    /// one that arrives during a fade waits for that fade to end.
+    void AdoptEarlyPattern(bool snap) noexcept
+    {
+        if (snap)
+        {
+            mEarly[mEarlyNow] = mEarlyBuilt;
+            mEarlyFadeLeft = 0;
+            mEarlyQueued = false;
+        }
+        else if (mEarlyFadeLeft > 0)
+        {
+            mEarlyQueued = !mEarlyBuilt.Same(mEarly[1 - mEarlyNow]);
+        }
+        else if (!mEarlyBuilt.Same(mEarly[mEarlyNow]))
+        {
+            StartEarlyFade();
+        }
+    }
+
+    void StartEarlyFade() noexcept
+    {
+        mEarly[1 - mEarlyNow] = mEarlyBuilt;
+        mEarlyFadeLeft = mEarlyFadeSamples;
+        mEarlyQueued = false;
+    }
+
+    void ReadEarly(double offset, float& l, float& r, bool damped) noexcept
+    {
+        if (mEarlyFadeLeft == 0)
+        {
+            ReadTaps(mEarly[mEarlyNow], offset, 1.0f, l, r, damped);
+            return;
+        }
+
+        // Equal power: the two patterns are different arrivals, so they add as noise does.
+        const float done = 1.0f - static_cast<float>(mEarlyFadeLeft) / static_cast<float>(mEarlyFadeSamples);
+        const float angle = static_cast<float>(0.5 * reverb::kPi) * done;
+        ReadTaps(mEarly[mEarlyNow], offset, std::cos(angle), l, r, damped);
+        ReadTaps(mEarly[1 - mEarlyNow], offset, std::sin(angle), l, r, damped);
+
+        if (--mEarlyFadeLeft == 0)
+        {
+            mEarlyNow = 1 - mEarlyNow;
+
+            if (mEarlyQueued)
+            {
+                StartEarlyFade();
+            }
+        }
+    }
+
+    void ReadTaps(const reverb::TapSet& taps, double offset, float scale, float& l, float& r, bool damped) noexcept
     {
         for (std::size_t i = 0; i < taps.count; ++i)
         {
             const double d = offset + static_cast<double>(taps.delay[i]);
             const double spread = static_cast<double>(taps.spread[i]);
-            const float sl = mPreL.ReadLinear(d - spread);
-            const float sr = mPreR.ReadLinear(d + spread);
+            const float sl = scale * mPreL.ReadLinear(d - spread);
+            const float sr = scale * mPreR.ReadLinear(d + spread);
 
             if (damped)
             {
@@ -472,11 +566,14 @@ class Engine
         }
     }
 
-    void Shimmer(float& tankL, float& tankR) noexcept
+    void Shimmer(float& tankL, float& tankR, float hold) noexcept
     {
         const int mode = mSettings.shimmerMode; // 0 Input, 1 Regen, 2 both
-        const float srcL = mode == 0 ? tankL : mode == 1 ? mRegenL : 0.5f * (tankL + mRegenL);
-        const float srcR = mode == 0 ? tankR : mode == 1 ? mRegenR : 0.5f * (tankR + mRegenR);
+        // Held, the tank's loop is at unity, so anything shifted back in would keep climbing.
+        const float regenL = (1.0f - hold) * mRegenL;
+        const float regenR = (1.0f - hold) * mRegenR;
+        const float srcL = mode == 0 ? tankL : mode == 1 ? regenL : 0.5f * (tankL + regenL);
+        const float srcR = mode == 0 ? tankR : mode == 1 ? regenR : 0.5f * (tankR + regenR);
         float l = mVoices[0].Process(srcL);
         float r = mVoices[1].Process(srcR);
 
@@ -494,8 +591,10 @@ class Engine
         tankR += gain * l;
     }
 
-    void ConfigureHeads(int heads, int spacing) noexcept
+    void ConfigureHeads(int heads, int spacing, bool snap) noexcept
     {
+        // Every head that isn't in use parks at the end of the tape, where the last head always
+        // sits, so a change only ever slides heads along it and fades them in or out.
         static constexpr std::array<std::size_t, 3> kHeadCount = {3, 4, 6};
         static constexpr std::array<std::array<float, 6>, 3> kUneven = {{
             {0.31f, 0.72f, 1.0f, 0.0f, 0.0f, 0.0f},
@@ -503,15 +602,28 @@ class Engine
             {0.13f, 0.29f, 0.44f, 0.62f, 0.83f, 1.0f},
         }};
         const auto h = static_cast<std::size_t>(std::clamp(heads, 0, 2));
-        mHeadCount = kHeadCount[h];
-        mUneven = spacing == 1;
+        const std::size_t count = kHeadCount[h];
+        const bool uneven = spacing == 1;
+        mUneven = uneven ? 1.0f : 0.0f;
+        const float gain = 0.95f / std::sqrt(static_cast<float>(count));
 
-        for (std::size_t i = 0; i < mHeadCount; ++i)
+        for (std::size_t i = 0; i < mHeadTarget.size(); ++i)
         {
-            mHeadFraction[i] = mUneven ? kUneven[h][i] : static_cast<float>(i + 1) / static_cast<float>(mHeadCount);
+            const bool used = i < count;
+            mHeadTarget[i] = !used    ? 1.0f
+                             : uneven ? kUneven[h][i]
+                                      : static_cast<float>(i + 1) / static_cast<float>(count);
+            mHeadLevelTarget[i] = used ? gain : 0.0f;
         }
 
-        mHeadGain = 0.95f / std::sqrt(static_cast<float>(mHeadCount));
+        mHeadCount = count;
+
+        if (snap)
+        {
+            mHeadFraction = mHeadTarget;
+            mHeadLevel = mHeadLevelTarget;
+            mUnevenNow = mUneven;
+        }
     }
 
     void ProcessTape(float inL, float inR, float hold, float& wetL, float& wetR, float& tankL, float& tankR) noexcept
@@ -522,18 +634,33 @@ class Engine
         float r = 0.0f;
         float last = 0.0f;
         float previous = 0.0f;
+        mUnevenNow += (mUneven - mUnevenNow) * mEase;
+        // No head outruns half tape speed, or a long slide would read the tape backwards.
+        const float slide = static_cast<float>(delay_line::kMaxGlideStep / std::max(1.0, time));
 
-        for (std::size_t i = 0; i < mHeadCount; ++i)
+        for (std::size_t i = 0; i < mHeadFraction.size(); ++i)
         {
+            mHeadFraction[i] += std::clamp((mHeadTarget[i] - mHeadFraction[i]) * mEase, -slide, slide);
+            mHeadLevel[i] += (mHeadLevelTarget[i] - mHeadLevel[i]) * mEase;
+
+            if (i >= mHeadCount && mHeadLevel[i] < 1.0e-4f)
+            {
+                continue;
+            }
+
             const float head = mTape.ReadHermite(time * mHeadFraction[i] + wobble);
-            ((i & 1u) ? r : l) += mHeadGain * head;
-            previous = last;
-            last = head;
+            ((i & 1u) ? r : l) += mHeadLevel[i] * head;
+
+            if (i < mHeadCount)
+            {
+                previous = last;
+                last = head;
+            }
         }
 
         // Feedback off the last head, or the last two when the heads are uneven; through the
         // loop's EQ and the tape's own saturation, so each repeat is darker and softer.
-        float fb = mUneven ? 0.5f * (last + previous) : last;
+        float fb = last + mUnevenNow * 0.5f * (previous - last);
         mTapeLoopLp[0] = delay_line::FlushDenormal(mTapeLoopLp[0] + mTapeLpCoeff * (fb - mTapeLoopLp[0]));
         mTapeLoopLp[1] = delay_line::FlushDenormal(mTapeLoopLp[1] + mTapeHpCoeff * (mTapeLoopLp[0] - mTapeLoopLp[1]));
         fb = delay_line::AsymSaturate(mTapeLoopLp[0] - mTapeLoopLp[1], 0.6f, 0.1f);
@@ -553,9 +680,11 @@ class Engine
         float genL = 0.0f;
         float genR = 0.0f;
         mShape.Process(mShapeLine, genL, genR);
-        // Feedback goes round the generator alone, so the shape repeats every Time.
-        mShapeLine.Write(delay_line::FlushDenormal(
-            0.5f * (inL + inR) + mShapeFeedback * delay_line::RailClip(0.5f * (genL + genR), 0.5f, 1.0f)));
+        // Feedback is one read at Time, so the shape repeats every Time. It must not come off the
+        // taps: their sum peaks well above unity at some frequencies, and the loop then sings.
+        const float repeat = mShapeLine.ReadLinear(mShape.TimeSamples());
+        mShapeLine.Write(
+            delay_line::FlushDenormal(0.5f * (inL + inR) + mShapeFeedback * delay_line::RailClip(repeat, 0.5f, 1.0f)));
         mDiffuser.Process(genL, genR);
         wetL = genL;
         wetR = genR;
@@ -568,7 +697,8 @@ class Engine
         mLateTapIn = {};
         // Pre-Delay Mod: the whole pattern drifts against the dry, a slow, random-sounding chorus.
         mReflectionLfo.Advance();
-        ReadTaps(mEarly, pre + static_cast<double>(mReflectionMod * (1.0f + mReflectionLfo.Sin())), wetL, wetR, true);
+        mReflectionMod += (mReflectionModTarget - mReflectionMod) * mEase;
+        ReadEarly(pre + static_cast<double>(mReflectionMod * (1.0f + mReflectionLfo.Sin())), wetL, wetR, true);
 
         for (std::size_t side = 0; side < 2; ++side)
         {
@@ -584,18 +714,38 @@ class Engine
 
     void Finish(float& l, float& r) noexcept
     {
+        if (mFilterRamp > 0)
+        {
+            StepFilterRamp();
+        }
+
         l = Filter(0, l) * mMakeup;
         r = Filter(1, r) * mMakeup;
         mLastOut = std::fabs(l) + std::fabs(r);
+    }
+
+    void StepFilterRamp() noexcept
+    {
+        if (--mFilterRamp == 0)
+        {
+            mLowShelf.Finish();
+            mToneLp.Finish();
+            mMidBell.Finish();
+            return;
+        }
+
+        mLowShelf.Advance();
+        mToneLp.Advance();
+        mMidBell.Advance();
     }
 
     [[nodiscard]] float Filter(std::size_t side, float x) noexcept
     {
         auto& st = mFilterState[side];
         double y = st[0].Process(mHighCut, static_cast<double>(x));
-        y = st[1].Process(mLowShelf, y);
-        y = st[2].Process(mMidBell, y);
-        y = st[3].Process(mToneLp, y);
+        y = st[1].Process(mLowShelf.current, y);
+        y = st[2].Process(mMidBell.current, y);
+        y = st[3].Process(mToneLp.current, y);
         return static_cast<float>(y);
     }
 
@@ -606,7 +756,12 @@ class Engine
     delay_line::FractionalDelayLine mPreL;
     delay_line::FractionalDelayLine mPreR;
     delay_line::GlideRamp mPreDelay;
-    reverb::TapSet mEarly;
+    std::array<reverb::TapSet, 2> mEarly; ///< the pattern in use and, during a fade, the next
+    reverb::TapSet mEarlyBuilt;           ///< the latest asked for
+    std::size_t mEarlyNow = 0;
+    int mEarlyFadeLeft = 0;
+    int mEarlyFadeSamples = 1;
+    bool mEarlyQueued = false;
     reverb::DiffuserChain mDiffuser;
     reverb::DiffuserChain mBloom;
     float mBloomFbL = 0.0f, mBloomFbR = 0.0f, mBloomFeedback = 0.0f;
@@ -624,9 +779,12 @@ class Engine
     delay_line::GlideRamp mEchoTime;
     delay_line::TapeTransport mTransport;
     std::array<float, 6> mHeadFraction{};
+    std::array<float, 6> mHeadTarget{};
+    std::array<float, 6> mHeadLevel{};
+    std::array<float, 6> mHeadLevelTarget{};
     std::size_t mHeadCount = 3;
-    bool mUneven = false;
-    float mHeadGain = 0.5f, mEchoFeedback = 0.5f, mTapeLpCoeff = 0.3f, mTapeHpCoeff = 0.03f;
+    float mUneven = 0.0f, mUnevenNow = 0.0f;
+    float mEchoFeedback = 0.5f, mTapeLpCoeff = 0.3f, mTapeHpCoeff = 0.03f;
     std::array<float, 2> mTapeLoopLp{};
 
     delay_line::FractionalDelayLine mShapeLine;
@@ -637,11 +795,16 @@ class Engine
     std::array<float, 2> mLateTapLp{};
     float mLateTapCoeff = 0.3f;
     float mReflectionMod = 0.0f;
+    float mReflectionModTarget = 0.0f;
     reverb::RotatingPhasor mReflectionLfo;
 
-    BiquadCoefficients mHighCut, mLowShelf, mToneLp, mMidBell;
+    BiquadCoefficients mHighCut;
+    biquad::Ramp mLowShelf, mToneLp, mMidBell;
+    int mFilterRamp = 0;
+    int mFilterRampSamples = 1;
     std::array<std::array<biquad::State, 4>, 2> mFilterState{};
     float mMakeup = 1.0f;
+    float mEase = 0.001f;
     double mModDepthSamples = 0.0;
     double mModRateHz = 0.5;
     float mLastHold = 0.0f;

@@ -20,7 +20,8 @@ namespace guitarfx::reverb
 /**
  * A chain of up to eight allpasses per side, its lengths set per machine. At gain 0 each stage
  * is a plain delay, which is what makes Diffusion 0 sound grainy: discrete arrivals, not a wash.
- * The lengths can be swept by a quadrature LFO, as the Cloud's are.
+ * The lengths can be swept by a quadrature LFO, as the Cloud's are. A change of length, gain or
+ * sweep eases in, so moving a control bends the sound for a moment rather than ticking.
  */
 class DiffuserChain
 {
@@ -30,6 +31,8 @@ class DiffuserChain
     void Prepare(double sampleRate, double maxStageMs)
     {
         mSampleRate = sampleRate;
+        mGlide = 1.0 - std::exp(-1.0 / (0.12 * sampleRate));
+        mEase = static_cast<float>(1.0 - std::exp(-1.0 / (0.03 * sampleRate)));
         const double samples = (maxStageMs + 4.0) * 0.001 * sampleRate;
 
         for (std::size_t i = 0; i < kMaxStages; ++i)
@@ -60,26 +63,44 @@ class DiffuserChain
         for (std::size_t i = 0; i < mStages; ++i)
         {
             // Right a little longer than left, and the two never in a simple ratio.
-            mDelayL[i] = std::min(ms * 0.001 * mSampleRate, mLeft[i].MaxDelay() - 4.0);
-            mDelayR[i] = std::min(ms * 1.0731 * 0.001 * mSampleRate, mRight[i].MaxDelay() - 4.0);
+            mTargetL[i] = std::min(ms * 0.001 * mSampleRate, mLeft[i].MaxDelay() - 4.0);
+            mTargetR[i] = std::min(ms * 1.0731 * 0.001 * mSampleRate, mRight[i].MaxDelay() - 4.0);
+            mMoving = mMoving || mTargetL[i] != mDelayL[i] || mTargetR[i] != mDelayR[i];
             ms *= ratio;
         }
     }
 
     void SetGain(float gain) noexcept
     {
-        mGain = std::clamp(gain, 0.0f, 0.8f);
+        mGainTarget = std::clamp(gain, 0.0f, 0.8f);
+    }
+
+    /// Lands every glide at once, for a fresh machine.
+    void SnapControls() noexcept
+    {
+        mDelayL = mTargetL;
+        mDelayR = mTargetR;
+        mGain = mGainTarget;
+        mModDepth = mModTarget;
+        mMoving = false;
     }
 
     /// Peak swing in samples and rate, applied in quadrature to the two sides.
     void SetModulation(double depthSamples, double rateHz) noexcept
     {
-        mModDepth = static_cast<float>(depthSamples);
+        mModTarget = static_cast<float>(depthSamples);
         mLfo.SetRate(rateHz, mSampleRate);
     }
 
     void Process(float& l, float& r) noexcept
     {
+        if (mMoving)
+        {
+            StepDelays();
+        }
+
+        mGain += (mGainTarget - mGain) * mEase;
+        mModDepth += (mModTarget - mModDepth) * mEase;
         mLfo.Advance();
         const float modL = mModDepth * mLfo.Sin();
         const float modR = mModDepth * mLfo.Cos();
@@ -93,14 +114,43 @@ class DiffuserChain
     }
 
   private:
+    /// Moves each length toward its target, no faster than half real time so a big change
+    /// bends the pitch instead of reading the line backwards.
+    void StepDelays() noexcept
+    {
+        bool moving = false;
+
+        const auto step = [this, &moving](double& delay, double target) {
+            const double move =
+                std::clamp(mGlide * (target - delay), -delay_line::kMaxGlideStep, delay_line::kMaxGlideStep);
+            delay = std::fabs(target - delay) < 0.01 ? target : delay + move;
+            moving = moving || delay != target;
+        };
+
+        for (std::size_t i = 0; i < mStages; ++i)
+        {
+            step(mDelayL[i], mTargetL[i]);
+            step(mDelayR[i], mTargetR[i]);
+        }
+
+        mMoving = moving;
+    }
+
     double mSampleRate = 48000.0;
     std::array<FractionalAllpass, kMaxStages> mLeft;
     std::array<FractionalAllpass, kMaxStages> mRight;
     std::array<double, kMaxStages> mDelayL{};
     std::array<double, kMaxStages> mDelayR{};
+    std::array<double, kMaxStages> mTargetL{};
+    std::array<double, kMaxStages> mTargetR{};
     std::size_t mStages = 0;
+    double mGlide = 0.001;
+    float mEase = 0.001f;
     float mGain = 0.6f;
+    float mGainTarget = 0.6f;
     float mModDepth = 0.0f;
+    float mModTarget = 0.0f;
+    bool mMoving = false;
     RotatingPhasor mLfo;
 };
 
@@ -115,6 +165,26 @@ struct TapSet
     std::array<float, kMaxTaps> gainR{};
     std::array<std::uint8_t, kMaxTaps> late{}; ///< 1 = a later-order tap, darkened by Damping
     std::size_t count = 0;
+
+    /// Whether the two sets read the same taps. Only the first `count` of each array are live.
+    [[nodiscard]] bool Same(const TapSet& other) const noexcept
+    {
+        if (count != other.count)
+        {
+            return false;
+        }
+
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            if (delay[i] != other.delay[i] || spread[i] != other.spread[i] || gainL[i] != other.gainL[i] ||
+                gainR[i] != other.gainR[i] || late[i] != other.late[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 };
 
 /**
@@ -305,6 +375,9 @@ class SvfBandpass
  * The Choir: the tail through a vowel's first three formants plus the singer's formant near
  * 2.8 kHz, in parallel. The double vowels glide between their two, and Random wanders over all
  * five; Mod adds a slow drift to each formant so the voices never sit still.
+ *
+ * The drifts keep phases of their own: a multiple of the vowel's phase that isn't a whole number
+ * would jump every time that phase wraps.
  */
 class FormantBank
 {
@@ -340,8 +413,16 @@ class FormantBank
     /// Advances the vowel motion by one block and recomputes the filters.
     void UpdateBlock(int samples) noexcept
     {
-        mPhase += static_cast<double>(samples) / mSampleRate * 0.11;
+        const double seconds = static_cast<double>(samples) / mSampleRate;
+        mPhase += seconds * 0.11;
         mPhase -= std::floor(mPhase);
+
+        for (std::size_t f = 0; f < mDrift.size(); ++f)
+        {
+            mDrift[f] += seconds * 0.11 * (1.7 + static_cast<double>(f));
+            mDrift[f] -= std::floor(mDrift[f]);
+        }
+
         const double glide = 0.5 - 0.5 * std::cos(kTwoPi * mPhase);
         std::size_t a = 0, b = 0;
         double t = 0.0;
@@ -370,7 +451,7 @@ class FormantBank
             // Random: a slow walk round all five vowels.
             const double walk = mPhase * static_cast<double>(kVowels);
             a = static_cast<std::size_t>(walk) % kVowels;
-            b = (a + 2) % kVowels;
+            b = (a + 1) % kVowels;
             t = 0.5 - 0.5 * std::cos(kPi * (walk - std::floor(walk)));
             break;
         }
@@ -378,7 +459,7 @@ class FormantBank
 
         for (std::size_t f = 0; f < 3; ++f)
         {
-            const double drift = 1.0 + 0.04 * mMod * std::sin(kTwoPi * (mPhase * (1.7 + f) + 0.3 * f));
+            const double drift = 1.0 + 0.04 * mMod * std::sin(kTwoPi * (mDrift[f] + 0.3 * f));
             const double hz = (kFormants[a][f] * (1.0 - t) + kFormants[b][f] * t) * drift;
             mFilters[0][f].Set(hz, mQ, mSampleRate);
             mFilters[1][f].Set(hz * 1.012, mQ, mSampleRate);
@@ -419,15 +500,17 @@ class FormantBank
     std::array<std::array<SvfBandpass, 4>, 2> mFilters;
     double mSampleRate = 48000.0;
     double mPhase = 0.0;
+    std::array<double, 3> mDrift{};
     double mQ = 9.0;
     int mVowel = 0;
     float mMod = 0.4f;
 };
 
 /**
- * The Swell: a gain that restarts from silence at each picked note and rises over Rise Time,
- * like a volume pedal rocked forward after every attack. Onsets are a fast envelope jumping
- * 9 dB over a slow one, with a 60 ms hold-off so one note's ring does not retrigger it.
+ * The Swell: a gain that falls to silence at each picked note and rises over Rise Time, like a
+ * volume pedal rocked back and forward after every attack. Onsets are a fast envelope jumping
+ * 9 dB over a slow one, with a 60 ms hold-off so one note's ring does not retrigger it. The fall
+ * takes a few milliseconds: an instant one would cut whatever is sounding dead.
  */
 class SwellEnvelope
 {
@@ -447,12 +530,18 @@ class SwellEnvelope
         mFast.Reset();
         mSlow.Reset();
         mPosition = 1.0f;
+        mFalling = false;
         mHoldOff = 0;
     }
 
     void SetRiseSeconds(double seconds) noexcept
     {
         mStep = static_cast<float>(1.0 / (std::max(0.01, seconds) * mSampleRate));
+    }
+
+    void SetFallSeconds(double seconds) noexcept
+    {
+        mFallStep = static_cast<float>(1.0 / (std::max(0.0005, seconds) * mSampleRate));
     }
 
     /// The swell gain for this input sample.
@@ -467,11 +556,20 @@ class SwellEnvelope
         }
         else if (fast > 2.8f * slow + 1.0e-4f && fast > 0.003f)
         {
-            mPosition = 0.0f;
+            mFalling = true;
             mHoldOff = static_cast<int>(0.06 * mSampleRate);
         }
 
-        mPosition = std::min(1.0f, mPosition + mStep);
+        if (mFalling)
+        {
+            mPosition = std::max(0.0f, mPosition - mFallStep);
+            mFalling = mPosition > 0.0f;
+        }
+        else
+        {
+            mPosition = std::min(1.0f, mPosition + mStep);
+        }
+
         // Smoothstep: a pedal moves slowly at both ends of its travel.
         return mPosition * mPosition * (3.0f - 2.0f * mPosition);
     }
@@ -482,6 +580,8 @@ class SwellEnvelope
     double mSampleRate = 48000.0;
     float mPosition = 1.0f;
     float mStep = 0.0f;
+    float mFallStep = 1.0f;
+    bool mFalling = false;
     int mHoldOff = 0;
 };
 
@@ -489,7 +589,8 @@ class SwellEnvelope
  * The Nonlinear machine's generator: 48 taps spread over Time, their levels following one of
  * six envelopes (VerbalParams kShapeLabels order), so an impulse comes out as that shape —
  * rising to a cut-off for the reverse shapes, flat then cut for Gate, a bell, an anti-bell.
- * The taps drift slowly at Mod Speed, so the grain is never a fixed pattern.
+ * The taps drift slowly at Mod Speed, so the grain is never a fixed pattern. Time glides and a
+ * new Shape cross-fades its levels, so moving either bends the sound rather than ticking.
  */
 class ShapeGenerator
 {
@@ -500,6 +601,11 @@ class ShapeGenerator
     {
         mSampleRate = sampleRate;
         mLfo.Reset();
+        mTime.Prepare(sampleRate);
+        mTime.SetTimeConstantMs(60.0);
+        mTime.SetMaxStep(delay_line::kMaxGlideStep);
+        mEase = static_cast<float>(1.0 - std::exp(-1.0 / (0.03 * sampleRate)));
+        mGainSettleSamples = static_cast<int>(0.25 * sampleRate);
     }
 
     void Reset() noexcept
@@ -507,7 +613,8 @@ class ShapeGenerator
         mLfo.Reset();
     }
 
-    void Configure(int shape, double timeMs, double modSpeed, double mod) noexcept
+    /// With `snap`, Time and Shape land at once, for a fresh machine.
+    void Configure(int shape, double timeMs, double modSpeed, double mod, bool snap) noexcept
     {
         delay_line::Rng rng;
         rng.Seed(0x51a9e5u);
@@ -516,37 +623,61 @@ class ShapeGenerator
         for (std::size_t i = 0; i < kTaps; ++i)
         {
             const double u = (static_cast<double>(i) + 0.5 + 0.35 * rng.NextBipolar()) / static_cast<double>(kTaps);
-            mTime[i] = static_cast<float>(std::clamp(u, 0.0, 1.0) * timeMs * 0.001 * mSampleRate + 2.0);
+            mFraction[i] = static_cast<float>(std::clamp(u, 0.0, 1.0));
             const double e = Envelope(shape, u);
             const float pan = 0.5f + 0.4f * rng.NextBipolar();
-            mGainL[i] = static_cast<float>(e) * std::sqrt(1.0f - pan) * (rng.NextBipolar() >= 0.0f ? 1.0f : -1.0f);
-            mGainR[i] = static_cast<float>(e) * std::sqrt(pan) * (rng.NextBipolar() >= 0.0f ? 1.0f : -1.0f);
-            norm += mGainL[i] * mGainL[i] + mGainR[i] * mGainR[i];
+            mTargetL[i] = static_cast<float>(e) * std::sqrt(1.0f - pan) * (rng.NextBipolar() >= 0.0f ? 1.0f : -1.0f);
+            mTargetR[i] = static_cast<float>(e) * std::sqrt(pan) * (rng.NextBipolar() >= 0.0f ? 1.0f : -1.0f);
+            norm += mTargetL[i] * mTargetL[i] + mTargetR[i] * mTargetR[i];
         }
 
         const float scale = norm > 0.0f ? 1.0f / std::sqrt(0.5f * norm) : 0.0f;
 
         for (std::size_t i = 0; i < kTaps; ++i)
         {
-            mGainL[i] *= scale;
-            mGainR[i] *= scale;
+            mTargetL[i] *= scale;
+            mTargetR[i] *= scale;
         }
 
-        mModDepth = static_cast<float>((0.2 + 2.5 * mod) * 0.001 * mSampleRate);
+        mTime.SetTarget(timeMs * 0.001 * mSampleRate);
+        mModTarget = static_cast<float>((0.2 + 2.5 * mod) * 0.001 * mSampleRate);
         mLfo.SetRate(0.1 + 4.0 * modSpeed * modSpeed, mSampleRate);
+
+        if (snap)
+        {
+            mTime.Snap(mTime.Target());
+            mGainL = mTargetL;
+            mGainR = mTargetR;
+            mModDepth = mModTarget;
+            mGainsSettling = 0;
+        }
+        else if (shape != mShape)
+        {
+            mGainsSettling = mGainSettleSamples;
+        }
+
+        mShape = shape;
     }
 
     /// Reads the taps off `line` (mono), which the caller writes.
     void Process(const delay_line::FractionalDelayLine& line, float& outL, float& outR) noexcept
     {
+        if (mGainsSettling > 0)
+        {
+            StepGains();
+        }
+
         mLfo.Advance();
+        mModDepth += (mModTarget - mModDepth) * mEase;
+        const auto time = static_cast<float>(mTime.Next());
         float l = 0.0f;
         float r = 0.0f;
 
         for (std::size_t i = 0; i < kTaps; ++i)
         {
             const float wobble = (i & 1u) ? mLfo.Sin() : mLfo.Cos();
-            const float sample = line.ReadLinear(static_cast<double>(mTime[i] + mModDepth * (1.0f + wobble)));
+            const float tap = mFraction[i] * time + 2.0f + mModDepth * (1.0f + wobble);
+            const float sample = line.ReadLinear(static_cast<double>(tap));
             l += mGainL[i] * sample;
             r += mGainR[i] * sample;
         }
@@ -555,12 +686,28 @@ class ShapeGenerator
         outR = r;
     }
 
-    [[nodiscard]] double MaxTimeSamples() const noexcept
+    /// Time as it stands now, in samples: one repeat of the shape.
+    [[nodiscard]] double TimeSamples() const noexcept
     {
-        return static_cast<double>(mTime[kTaps - 1]);
+        return mTime.Value();
     }
 
   private:
+    void StepGains() noexcept
+    {
+        for (std::size_t i = 0; i < kTaps; ++i)
+        {
+            mGainL[i] += (mTargetL[i] - mGainL[i]) * mEase;
+            mGainR[i] += (mTargetR[i] - mGainR[i]) * mEase;
+        }
+
+        if (--mGainsSettling == 0)
+        {
+            mGainL = mTargetL;
+            mGainR = mTargetR;
+        }
+    }
+
     [[nodiscard]] static double Envelope(int shape, double u) noexcept
     {
         switch (shape)
@@ -580,11 +727,19 @@ class ShapeGenerator
         }
     }
 
-    std::array<float, kTaps> mTime{};
+    std::array<float, kTaps> mFraction{};
     std::array<float, kTaps> mGainL{};
     std::array<float, kTaps> mGainR{};
+    std::array<float, kTaps> mTargetL{};
+    std::array<float, kTaps> mTargetR{};
+    delay_line::GlideRamp mTime;
     double mSampleRate = 48000.0;
+    float mEase = 0.001f;
     float mModDepth = 0.0f;
+    float mModTarget = 0.0f;
+    int mShape = -1;
+    int mGainsSettling = 0;
+    int mGainSettleSamples = 1;
     RotatingPhasor mLfo;
 };
 } // namespace guitarfx::reverb

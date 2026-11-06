@@ -7,7 +7,8 @@
  * Each line's loss is solved from the decay time asked for, per band: a line M samples long
  * loses 60·M/(fs·T60) dB a pass, so every line decays at the same rate whatever its length and
  * the measured RT60 lands on the knob. Low End and Tone set the low and high bands' T60 as
- * ratios of the mid band's. Hold takes every band's loss to zero, so what is in the tank rings on.
+ * ratios of the mid band's. Hold takes every band's loss to zero, so what is in the tank rings on,
+ * under a soft ceiling that keeps what is played into it bounded.
  *
  * The two outputs are two different sign patterns over the lines: orthogonal sums, so the left
  * and right tails are uncorrelated even from a mono input.
@@ -40,6 +41,7 @@ class FdnTank
         mMaxLength = mLines[0].MaxDelay() - kMaxModMs * 0.001 * sampleRate - 2.0;
         mGlideCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (0.12 * sampleRate)));
         mGainCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
+        mModCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (0.05 * sampleRate)));
 
         for (std::size_t i = 0; i < kLines; ++i)
         {
@@ -70,9 +72,16 @@ class FdnTank
 
         mLfo.Reset();
         mLfo2.Reset();
+        SnapControls();
+        mEnergy = 0.0f;
+    }
+
+    /// Lands every glide at once, for a fresh machine.
+    void SnapControls() noexcept
+    {
         mLength = mLengthTarget;
         mGains = mGainsTarget;
-        mEnergy = 0.0f;
+        mModDepth = mModTarget;
     }
 
     /// Target line lengths in samples; a change glides over about 120 ms, so Size moves the
@@ -110,12 +119,20 @@ class FdnTank
     }
 
     /// Delay modulation: peak swing in samples and the base rate. The lines use two
-    /// incommensurate LFOs at per-line phases, so no two lines move together.
+    /// incommensurate LFOs at per-line phases, so no two lines move together. A new depth eases
+    /// in over about 50 ms: stepped, every line would jump in the same sample.
     void SetModulation(double depthSamples, double rateHz) noexcept
     {
-        mModDepth = static_cast<float>(std::clamp(depthSamples, 0.0, kMaxModMs * 0.001 * mSampleRate));
+        mModTarget = static_cast<float>(std::clamp(depthSamples, 0.0, kMaxModMs * 0.001 * mSampleRate));
         mLfo.SetRate(rateHz, mSampleRate);
         mLfo2.SetRate(rateHz * 0.37, mSampleRate);
+    }
+
+    /// The most a line may hold while held. Decaying, it may hold twice that: a very long decay
+    /// also builds on sustained playing, but less fast, and should not be touched at normal level.
+    void SetCeiling(float rail) noexcept
+    {
+        mRail = rail;
     }
 
     /// 0 = decaying, 1 = held: every band's loop gain pulled to exactly one.
@@ -130,6 +147,7 @@ class FdnTank
     {
         mLfo.Advance();
         mLfo2.Advance();
+        mModDepth += (mModTarget - mModDepth) * mModCoeff;
         std::array<float, kLines> y{};
 
         for (std::size_t i = 0; i < kLines; ++i)
@@ -163,19 +181,14 @@ class FdnTank
         mEnergy = std::fabs(outL) + std::fabs(outR);
 
         Hadamard16(y);
+        // Held, nothing leaves the tank, so playing into Infinite would build without limit. A
+        // soft ceiling bounds it, set by the owner so it means the same level at the output.
+        const float rail = mRail * (2.0f - mHold);
 
         for (std::size_t i = 0; i < kLines; ++i)
         {
             const float in = (i & 1u) ? inR : inL;
-            float w = y[i] + kInSign[i] * in * kInjectGain;
-
-            // Held, nothing leaves the tank, so playing into Infinite would build without limit.
-            // A soft ceiling well above any decaying tail's level bounds it instead.
-            if (mHold > 0.0f)
-            {
-                w = delay_line::RailClip(w, 0.9f, 1.4f);
-            }
-
+            const float w = delay_line::RailClip(y[i] + kInSign[i] * in * kInjectGain, 0.64f * rail, rail);
             mLines[i].Write(delay_line::FlushDenormal(w));
         }
     }
@@ -242,9 +255,12 @@ class FdnTank
     double mLowRatio = 1.0;
     double mHighRatio = 0.5;
     float mModDepth = 0.0f;
+    float mModTarget = 0.0f;
     float mGlideCoeff = 1.0f;
     float mGainCoeff = 1.0f;
+    float mModCoeff = 1.0f;
     float mHold = 0.0f;
+    float mRail = 1.4f;
     float mEnergy = 0.0f;
 };
 } // namespace guitarfx::reverb

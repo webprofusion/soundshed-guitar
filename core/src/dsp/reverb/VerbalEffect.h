@@ -12,6 +12,10 @@
  *   - Hold sustains the tail. Infinite keeps adding what is played; Freeze closes the input,
  *     so the held tail sits under whatever comes next. Both engage and release on ramps.
  *   - Changing machine lets the old tail ring out on a second engine while the new one starts.
+ *     There are two engines, so a change while a tail still rings fades that tail first,
+ *     unless the running machine has heard nothing, when it simply becomes the new one.
+ *   - Swell in Dry mode runs 10 ms late, the one case with latency: that is what lets the gain
+ *     be down before the pick it reacted to comes out.
  *
  * See docs/fx-library.md, "Verbal".
  */
@@ -56,12 +60,21 @@ class VerbalEffect : public EffectProcessor
         }
 
         mSwell.Prepare(sampleRate);
+        mLookSamples = kSwellLookSeconds * sampleRate;
+        mLookL.Resize(static_cast<std::size_t>(mLookSamples) + 16);
+        mLookR.Resize(static_cast<std::size_t>(mLookSamples) + 16);
+        mTailFadeStep = static_cast<float>(1.0 / (kTailFadeSeconds * sampleRate));
+        mTailQuietLimit = static_cast<int>(kTailQuietSeconds * sampleRate);
         mMix.SetTime(0.02, sampleRate);
         mOutput.SetTime(0.02, sampleRate);
         mHold.SetTime(0.03, sampleRate);
         mIntake.SetTime(0.02, sampleRate);
         mDryL.SetTime(0.03, sampleRate);
         mDryR.SetTime(0.03, sampleRate);
+        mSwellWet.SetTime(0.02, sampleRate);
+        mSwellDry.SetTime(0.02, sampleRate);
+        mHandover.SetTime(0.005, sampleRate);
+        mTailHold.SetTime(0.03, sampleRate);
         mPrepared = true;
         ApplySettings(true);
         Reset();
@@ -75,7 +88,13 @@ class VerbalEffect : public EffectProcessor
         }
 
         mSwell.Reset();
+        mLookL.Clear();
+        mLookR.Clear();
         mTailActive = false;
+        mTailFading = false;
+        // A queued machine change has nothing to wait for now; ApplySettings makes it.
+        mDirty = mDirty || mChangeQueued;
+        mChangeQueued = false;
         SnapSmoothers();
     }
 
@@ -100,6 +119,18 @@ class VerbalEffect : public EffectProcessor
             ApplySettings(false);
         }
 
+        if (mTailActive && mTailFade <= 0.0f)
+        {
+            mTailActive = false;
+            mTailFading = false;
+        }
+
+        if (mChangeQueued && !mTailActive)
+        {
+            mChangeQueued = false;
+            HandOver(BuildSettings());
+        }
+
         verbal::Engine& active = mEngines[mActive];
         verbal::Engine& tail = mEngines[1 - mActive];
         active.BeginBlock(numSamples);
@@ -109,39 +140,51 @@ class VerbalEffect : public EffectProcessor
             tail.BeginBlock(numSamples);
         }
 
-        const bool swell = Machine() == verbal::Machine::Swell;
-        const bool swellDry = swell && mValues[verbal::kSwellMode] >= 0.5;
+        UpdateSwellMode();
+        float activePeak = 0.0f;
         float tailPeak = 0.0f;
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const float inL = reverb::ScrubNonFinite(inputs && inputs[0] ? inputs[0][i] : 0.0f);
-            const float inR = reverb::ScrubNonFinite(inputs && inputs[1] ? inputs[1][i] : inL);
+            const float rawL = reverb::ScrubNonFinite(inputs && inputs[0] ? inputs[0][i] : 0.0f);
+            const float rawR = reverb::ScrubNonFinite(inputs && inputs[1] ? inputs[1][i] : rawL);
             const float mix = mMix.Next();
             const float hold = mHold.Next();
             const float intake = mIntake.Next();
-            const float swellGain = swell ? mSwell.Process(0.5f * (inL + inR)) : 1.0f;
-            // Swell Dry rocks a volume pedal ahead of everything; Swell Wet only behind the tank.
-            const float feedGain = swellDry ? swellGain : 1.0f;
-            const float wetSwell = swell && !swellDry ? swellGain : 1.0f;
+            const float swellGain = mSwell.Process(0.5f * (rawL + rawR)) - 1.0f;
+            const float swellDry = mSwellDry.Next();
+            const float swellWet = mSwellWet.Next();
+            mLookL.Write(rawL);
+            mLookR.Write(rawR);
+            const float inL = rawL + (mLookL.ReadLinear(mLookSamples) - rawL) * swellDry;
+            const float inR = rawR + (mLookR.ReadLinear(mLookSamples) - rawR) * swellDry;
+            // Swell Dry rocks a volume pedal ahead of everything; Swell Wet only behind the tank,
+            // and not over a held tail, which is there to sit under what is played.
+            const float feedGain = 1.0f + swellGain * swellDry;
+            const float wetSwell = 1.0f + swellGain * swellWet * (1.0f - hold);
+            const float handover = mHandover.Next();
 
             float wetL = 0.0f;
             float wetR = 0.0f;
-            active.Process(inL * feedGain, inR * feedGain, intake, hold, wetL, wetR);
+            active.Process(inL * feedGain, inR * feedGain, intake * (1.0f - handover), hold, wetL, wetR);
+            activePeak = std::max(activePeak, std::fabs(rawL) + std::fabs(rawR) + std::fabs(wetL) + std::fabs(wetR));
+            wetL *= wetSwell;
+            wetR *= wetSwell;
 
             if (mTailActive)
             {
                 float tl = 0.0f;
                 float tr = 0.0f;
-                // The outgoing machine takes no more input, and keeps its own decay.
-                tail.Process(0.0f, 0.0f, 0.0f, 0.0f, tl, tr);
-                wetL += tl;
-                wetR += tr;
+                // The outgoing machine's input closes on a short ramp, and it keeps its own decay.
+                tail.Process(inL, inR, intake * handover, mTailHold.Next(), tl, tr);
+                const float gain = TailGain();
+                wetL += tl * gain;
+                wetR += tr * gain;
                 tailPeak = std::max(tailPeak, std::fabs(tl) + std::fabs(tr));
             }
 
             const float dryGain = DryGain(mix) * feedGain;
-            const float wetGain = WetGain(mix) * wetSwell * mOutput.Next();
+            const float wetGain = WetGain(mix) * mOutput.Next();
             const float dryL = mDryL.Next();
             const float dryR = mDryR.Next();
 
@@ -157,9 +200,14 @@ class VerbalEffect : public EffectProcessor
         }
 
         // The spilled-over tail retires once it is inaudible, and is then free for the next change.
-        if (mTailActive && tailPeak < 1.0e-6f && tail.Energy() < 1.0e-6f)
+        // Silent isn't finished until the longest delay has had time to come round.
+        mTailQuiet = tailPeak < kSilence ? mTailQuiet + numSamples : 0;
+        mActiveQuiet = activePeak < kSilence ? std::min(mActiveQuiet + numSamples, mTailQuietLimit) : 0;
+
+        if (mTailActive && mTailQuiet >= mTailQuietLimit)
         {
             mTailActive = false;
+            mTailFading = false;
         }
 
         // One non-finite value inside a loop would circulate for ever; clear it instead.
@@ -209,6 +257,12 @@ class VerbalEffect : public EffectProcessor
         return "reverb";
     }
 
+    [[nodiscard]] int GetLatencySamples() const override
+    {
+        const bool swellDry = mEnabled && Machine() == verbal::Machine::Swell && mValues[verbal::kSwellMode] >= 0.5;
+        return swellDry ? static_cast<int>(std::lround(mLookSamples)) : 0;
+    }
+
     /// The wet level the Mix law gives at `mix`: silent at 0, -24 dB at a tenth, unity from nine
     /// tenths. Between, it follows a curve through -15 dB at 0.3 and -10 dB at a half, so small
     /// settings are usable and the middle of the knob sits the reverb behind the dry.
@@ -251,6 +305,18 @@ class VerbalEffect : public EffectProcessor
     }
 
   private:
+    /// How far Swell Dry runs behind its detector, and how fast each mode's gain falls. The
+    /// detector takes up to about 5 ms, so Dry's fall ends before the pick comes out.
+    static constexpr double kSwellLookSeconds = 0.01;
+    static constexpr double kSwellFallWetSeconds = 0.012;
+    static constexpr double kSwellFallDrySeconds = 0.004;
+    /// A tail that has to make way for a newer change fades over this.
+    static constexpr double kTailFadeSeconds = 0.05;
+    /// Longer than anything can sit in a line unheard: Pre-Delay plus its early pattern, Echo
+    /// Time, the Nonlinear's Time.
+    static constexpr double kTailQuietSeconds = 2.5;
+    static constexpr float kSilence = 1.0e-6f;
+
     [[nodiscard]] verbal::Machine Machine() const noexcept
     {
         return static_cast<verbal::Machine>(static_cast<int>(mValues[verbal::kMachine]));
@@ -298,6 +364,46 @@ class VerbalEffect : public EffectProcessor
         return s;
     }
 
+    /// The tail's gain this sample: one until it is told to make way, then a short fade.
+    [[nodiscard]] float TailGain() noexcept
+    {
+        if (!mTailFading)
+        {
+            return 1.0f;
+        }
+
+        mTailFade = std::max(0.0f, mTailFade - mTailFadeStep);
+        return mTailFade * mTailFade * (3.0f - 2.0f * mTailFade);
+    }
+
+    /// The Swell follows the machine actually running, which a queued change hasn't reached yet.
+    void UpdateSwellMode() noexcept
+    {
+        const bool swell = mEngines[mActive].CurrentSettings().machine == verbal::Machine::Swell;
+        const bool swellDry = swell && mValues[verbal::kSwellMode] >= 0.5;
+        mSwellWet.SetTarget(swell && !swellDry ? 1.0f : 0.0f);
+        mSwellDry.SetTarget(swellDry ? 1.0f : 0.0f);
+        mSwell.SetFallSeconds(swellDry ? kSwellFallDrySeconds : kSwellFallWetSeconds);
+    }
+
+    /// The running machine rings out where it is and the other engine, whose contents are
+    /// finished with, starts the new one.
+    void HandOver(const verbal::Settings& settings) noexcept
+    {
+        mTailHold.Snap(mHold.Value());
+        mTailHold.SetTarget(0.0f);
+        mHandover.Snap(1.0f);
+        mHandover.SetTarget(0.0f);
+        mActive = 1 - mActive;
+        mTailActive = true;
+        mTailFading = false;
+        mTailFade = 1.0f;
+        mTailQuiet = 0;
+        mActiveQuiet = mTailQuietLimit; // a cleared engine has nothing in it to lose
+        mEngines[mActive].Reset();
+        mEngines[mActive].Configure(settings, true);
+    }
+
     /// Hands every control to the engines. On the audio thread when automation drives it, so
     /// nothing here allocates; a machine change resets the incoming engine's buffers, which
     /// is the one costly step and only happens on a deliberate change of machine.
@@ -311,15 +417,26 @@ class VerbalEffect : public EffectProcessor
         const verbal::Settings settings = BuildSettings();
         verbal::Engine& active = mEngines[mActive];
 
-        if (!initial && settings.machine != active.CurrentSettings().machine && !mTailActive)
+        const bool change = !initial && settings.machine != active.CurrentSettings().machine;
+        const bool idle = mActiveQuiet >= mTailQuietLimit;
+        mChangeQueued = change && mTailActive && !idle;
+
+        if (mChangeQueued)
         {
-            // Spill over: the old machine rings out where it is; the other engine takes the new.
-            // While an earlier tail is still ringing the change is made in place instead, since
-            // clearing that engine mid-tail would click.
-            mActive = 1 - mActive;
-            mTailActive = true;
-            mEngines[mActive].Reset();
-            mEngines[mActive].Configure(settings, true);
+            // Both engines are busy, and neither can be retuned where it stands: a machine that
+            // runs apart from the tank would be cut, and a tank left idle would wake with its
+            // old contents. The older tail fades, then Process makes the change.
+            mTailFading = true;
+        }
+        else if (change && mTailActive)
+        {
+            // Nothing has reached the running machine, so the tail can ring on undisturbed.
+            active.Reset();
+            active.Configure(settings, true);
+        }
+        else if (change)
+        {
+            HandOver(settings);
         }
         else
         {
@@ -357,6 +474,7 @@ class VerbalEffect : public EffectProcessor
 
         mDryL.SetTarget(dryL);
         mDryR.SetTarget(dryR);
+        UpdateSwellMode();
 
         if (initial)
         {
@@ -372,16 +490,29 @@ class VerbalEffect : public EffectProcessor
         mIntake.Snap(mIntake.Target());
         mDryL.Snap(mDryL.Target());
         mDryR.Snap(mDryR.Target());
+        mSwellWet.Snap(mSwellWet.Target());
+        mSwellDry.Snap(mSwellDry.Target());
+        mHandover.Snap(0.0f);
     }
 
     std::array<double, verbal::kParamCount> mValues{};
     std::array<verbal::Engine, 2> mEngines;
     std::size_t mActive = 0;
     bool mTailActive = false;
+    bool mTailFading = false;
+    bool mChangeQueued = false;
     bool mDirty = true;
     bool mPrepared = false;
+    float mTailFade = 1.0f;
+    float mTailFadeStep = 0.001f;
+    int mTailQuiet = 0;
+    int mActiveQuiet = 0;
+    int mTailQuietLimit = 1;
     reverb::SwellEnvelope mSwell;
+    delay_line::FractionalDelayLine mLookL, mLookR;
+    double mLookSamples = 0.0;
     reverb::Smoothed mMix, mOutput, mHold, mIntake, mDryL, mDryR;
+    reverb::Smoothed mSwellWet, mSwellDry, mHandover, mTailHold;
 };
 
 inline void RegisterVerbalEffect()

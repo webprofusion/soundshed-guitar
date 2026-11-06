@@ -1634,14 +1634,15 @@ Reflections `size` (100-1000 sq ft), `roomShape` (Square/Rectangle/Oblong), `lis
 
 **The tank.** Every machine but Spring runs through `FdnTank`: sixteen modulated delay lines mixed
 by an orthonormal Hadamard matrix, their lengths spread per machine and kept coprime. Each line's
-loss is solved from the decay asked for in three bands, so **Decay is the measured RT60**: Hall,
-Room, Plate, Bloom and Swell measure within 3% of the knob from 0.6 to 16 s (VerbalTests holds Hall
-and Room to 12% from 1 to 8 s). Low End sets the low band's decay (0.55x to 1.25x the mid's) and a
+loss is solved from the decay asked for in three bands, so **Decay is the measured RT60**: VerbalTests
+holds Hall, Room, Plate, Choir and Spring to 15% of the knob at 1, 3 and 8 s, and Bloom at 3 and 8 s
+(its own envelope outlasts a short Decay: about 1.7 s at the default Length). The whole 0.2-60 s
+range is live on every machine that shows it. Low End sets the low band's decay (0.55x to 1.25x the mid's) and a
 shelf on the output; Tone the high band's decay and an output low-pass whose range is the machine's.
 The two outputs are orthogonal sums of the lines, so the tail is uncorrelated left to right even
 from a mono input (|r| under 0.1), and the late-tail ringing metric (reverb-level-and-ringing in
-the dev notes) reads 0.02-0.06 on the tank machines. The Cloud runs about twice its Decay, by
-design: its eight-stage input diffuser cascade is an early reverb of its own, and at Diffusion 0
+the dev notes) reads 0.02-0.06 on the tank machines. The Cloud runs about twice its Decay, so the
+top of the knob is two minutes, by design: its eight-stage input diffuser cascade is an early reverb of its own, and at Diffusion 0
 those stages are plain delays, so the attack is grainy.
 
 **Mix** adds the reverb to an untouched dry: the dry stays at unity to 0.9 and fades out over the
@@ -1651,26 +1652,42 @@ of where the same kind of reverb sits in a dedicated multi-machine pedal reverb,
 Reflections to +4 dB for Cloud.
 
 **Hold.** Infinite pulls every band's loop gain to one over about 30 ms and keeps the input open,
-so what is played joins the held tail; a soft ceiling in the tank (RailClip at 0.9 to 1.4) bounds
-it. Freeze does the same and also closes the input over 20 ms, so the held tail sits under what is
-played next. Held, the modulation drops to 30% of its depth so the tail does not smear away.
-Releasing either lets the tail decay from where it is.
+so what is played joins the held tail. A soft ceiling on every tank line and Spring loop bounds it,
+scaled by the machine's makeup so it means the same thing at the output: 20 s of hot sustained
+playing peaks between about -4 and +9 dBFS depending on the machine (the Cloud is the highest), and
+a long Decay without Hold has twice that room. Freeze does the same and also closes the input over
+20 ms, so the held tail sits under what is played next. Held, the modulation drops to 30% of its
+depth so the tail does not smear away, and Shimmer stops feeding the tail back through its voices,
+so a held tail stays where it is. Releasing either lets the tail decay from where it is.
 
 **Changing machine** hands the tail to the effect's second engine, which rings out at the old
-machine's decay while the first starts the new one: no cut, no click. A change made while an earlier
-tail is still ringing is applied in place instead, since clearing that engine mid-tail would click.
-The incoming engine's buffers are cleared on the audio thread, which is the one costly step and
-happens only on a deliberate machine change. Size changes glide the tank's lengths over about
-120 ms rather than flushing it.
+machine's decay while the first starts the new one, with the input crossing over 5 ms. An engine's
+machine only ever changes on a cleared engine, because a machine outside the tank's path would be
+cut and a tank left idle would wake with its old contents. So a change made while an earlier tail
+still rings fades that tail over 50 ms first, and the new machine arrives that much later; the
+exception is a running machine that has heard nothing, which simply becomes the new one and leaves
+the tail alone. A tail is retired only after 2.5 s of silence, longer than anything can sit in a
+delay line unheard, so a long Pre-Delay or Echo Time still arrives after a change. The incoming
+engine's buffers are cleared on the audio thread, which is the one costly step and happens only on
+a deliberate machine change.
+
+**Moving controls.** Nothing steps. Size, Bloom Length, Time and Echo Time glide at up to half tape
+speed, so a big move bends the pitch for a moment; Tone, Low End and Mid EQ ramp their filter
+coefficients over 30 ms; Mod eases in, and a new early-reflection pattern (Reflections' Size, Shape
+and Position) cross-fades over 25 ms.
 
 **Machines.**
 - *Spring*: one to three loops a side, each dispersing on every pass through the shared
-  `ChirpDispersion` the Spring Reverb uses. Dwell is a tank preamp from clean to a hard rail: at
+  `ChirpDispersion` the Spring Reverb uses. The loop's low-pass is two-pole so it stays flat through
+  the midrange and leaves Decay alone: broadband T30 is within about 10% of the knob from 0.3 to 20 s
+  and across Tone. Dwell is a tank preamp from clean to a hard rail: at
   Overdrive a -36 dBFS pick comes out about 14 dB hotter than at Clean, and everything from
   -24 dBFS up lands within a couple of dB. Low End's first half is the steep low cut of a real
   tank's drive circuit.
-- *Swell*: a gain that restarts at each picked note and rises over Rise Time. Wet swells the
-  reverb in behind the dry; Dry swells everything, like a volume pedal ahead of the reverb.
+- *Swell*: a gain that falls at each picked note and rises over Rise Time. Wet swells the reverb
+  in behind the dry, fading what is ringing over 12 ms and leaving a held tail alone. Dry swells
+  everything, like a volume pedal ahead of the reverb: it runs 10 ms behind its detector so the gain
+  is down before the pick comes out, the one setting with latency, and reports it to the host.
 - *Bloom*: eight long allpasses ahead of the tank, with feedback round them. Length moves the
   envelope's peak from about 230 to 790 ms; Feedback stretches the tail up to about 4x.
 - *Choir*: the tail through a vowel's first three formants and the singer's formant (2.8 kHz), in
@@ -1683,16 +1700,19 @@ happens only on a deliberate machine change. Size changes glide the tank's lengt
   flutter from `TapeTransport` at Mod's depth, Low End and Tone inside the feedback loop with
   asymmetric tape saturation, and the heads diffused into the tank by Diffusion. Feedback 0.83
   rings for about 15 s at 400 ms. Decay sets the wash.
-- *Nonlinear*: 48 taps over Time, their levels following the Shape, feedback round the generator
-  so the shape repeats, and a late tank at Late Level with Decay as its RT60.
+- *Nonlinear*: 48 taps over Time, their levels following the Shape, and a late tank at Late Level
+  with Decay as its RT60. Feedback is a single read at Time, so the shape repeats every Time, 3 dB
+  down each repeat at the top of the knob. Taking it off the taps' sum would not be stable: that sum
+  peaks above unity at some frequencies.
 - *Reflections*: an image-source model of a 9 ft high room, up to fourth order on the floor plan,
   the strongest 64 images kept, each arriving at each ear with its own delay and level. X pans the
   dry and moves the reflections; Y further back makes the reflections louder against a quieter,
   more central dry. Damping (Tone) is the walls' absorption and darkens the later orders. Mod
-  drifts the whole pattern against the dry.
+  drifts the whole pattern against the dry. The room has one source, so most of each input crosses
+  to the other side first, and a hard-panned input still lights both.
 
-**Cost.** 20-70 µs per 128-sample block at 48 kHz on x64 for every machine except Reflections
-(about 110), measured in the Release harness. The tank machines allocate about 3.5 MB per engine,
+**Cost.** 25-65 µs per 128-sample block at 48 kHz on x64 for every machine except Reflections
+(about 100), and up to about 140 µs with a tail spilling, measured in the Release harness. The tank machines allocate about 3.5 MB per engine,
 two engines per node.
 
 Factory presets: Concert Hall (default), Studio Room, Club Room, Arena, Studio Plate, Small Plate,

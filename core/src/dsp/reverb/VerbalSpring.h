@@ -7,6 +7,7 @@
  * harder, it splashes and then squashes.
  */
 
+#include "dsp/BiquadDesign.h"
 #include "dsp/reverb/ReverbBlocks.h"
 
 #include <array>
@@ -37,7 +38,9 @@ class VerbalSpring
         }
 
         mChirp.Prepare(sampleRate);
-        mDcCoeff = BandDamping::OnePoleCoeff(30.0, sampleRate);
+        mDcCoeff = BandDamping::OnePoleCoeff(12.0, sampleRate);
+        mDampRampSamples = static_cast<int>(0.03 * sampleRate);
+        mEase = static_cast<float>(1.0 - std::exp(-1.0 / (0.03 * sampleRate)));
         mLfo.SetRate(0.7, sampleRate);
         Reset();
     }
@@ -57,30 +60,45 @@ class VerbalSpring
         }
 
         mChirp.Reset();
-        mDampL.fill(0.0f);
-        mDampR.fill(0.0f);
+        mDampL = {};
+        mDampR = {};
         mDcL.fill(0.0f);
         mDcR.fill(0.0f);
         mHpState = {};
         mLfo.Reset();
     }
 
-    /// Decay in seconds; tone, lowEnd and mod 0-1; dwell 0-3; springs 1-3.
-    void Configure(double rt60, double tone, double lowEnd, double mod, int dwell, int springs) noexcept
+    /// Decay in seconds; tone, lowEnd and mod 0-1; dwell 0-3; springs 1-3. With `snap`, Tone lands
+    /// at once, for a fresh machine.
+    void Configure(double rt60, double tone, double lowEnd, double mod, int dwell, int springs, bool snap) noexcept
     {
         mActive = static_cast<std::size_t>(std::clamp(springs, 1, 3));
         // Each extra spring adds its own echoes; scale so the total stays level.
         mOutScale = 1.0f / std::sqrt(static_cast<float>(mActive));
         const double dampHz = 3000.0 * std::pow(4.0, tone);
-        mDamp = BandDamping::OnePoleCoeff(dampHz, mSampleRate);
-        // The loop's low-pass also costs the mids a little every pass; put that back so Decay
-        // still reads as the RT60 in the guitar's midrange (measured at 700 Hz, so the lows do not overshoot).
-        const double lossAt1k = 1.0 / std::sqrt(1.0 + std::pow(700.0 / dampHz, 2.0));
+        mDampFilter.target = biquad::LowPass(dampHz, biquad::kButterworthQ, mSampleRate);
+
+        if (snap)
+        {
+            mDampFilter.Finish();
+            mDampRamp = 0;
+        }
+        else
+        {
+            mDampFilter.Begin(mDampRampSamples);
+            mDampRamp = mDampRampSamples;
+        }
+
         // The first half of Low End is the steep low cut of a real tank's drive circuit.
         const double hpHz = lowEnd < 0.5 ? 420.0 * std::pow(110.0 / 420.0, lowEnd * 2.0)
                                          : 110.0 * std::pow(45.0 / 110.0, (lowEnd - 0.5) * 2.0);
         mHpCoeff = BandDamping::OnePoleCoeff(hpHz, mSampleRate);
-        mModDepth = static_cast<float>(0.5 * mod * 0.001 * mSampleRate);
+        mModTarget = static_cast<float>(0.5 * mod * 0.001 * mSampleRate);
+
+        if (snap)
+        {
+            mModDepth = mModTarget;
+        }
 
         // Clean only rounds off the loudest peaks; Overdrive squashes everything from a light pick up.
         static constexpr std::array<float, 4> kDrive = {1.0f, 1.4f, 2.6f, 5.5f};
@@ -94,14 +112,20 @@ class VerbalSpring
             // The chirp's group delay adds about a millisecond a pass to each loop.
             const double loopL = (kLoopMsL[i] + 1.0) * 0.001;
             const double loopR = (kLoopMsR[i] + 1.0) * 0.001;
-            mGainL[i] = static_cast<float>(std::min(0.999, Rt60LoopGain(loopL, rt60) / lossAt1k));
-            mGainR[i] = static_cast<float>(std::min(0.999, Rt60LoopGain(loopR, rt60) / lossAt1k));
+            mGainL[i] = static_cast<float>(std::min(0.9995, kPassLoss * Rt60LoopGain(loopL, rt60)));
+            mGainR[i] = static_cast<float>(std::min(0.9995, kPassLoss * Rt60LoopGain(loopR, rt60)));
         }
     }
 
     void SetHold(float hold) noexcept
     {
         mHold = hold;
+    }
+
+    /// The most a loop holds while held, and twice that while decaying.
+    void SetCeiling(float rail) noexcept
+    {
+        mRail = rail;
     }
 
     void Process(float inL, float inR, float& outL, float& outR) noexcept
@@ -121,9 +145,14 @@ class VerbalSpring
         }
 
         mLfo.Advance();
-        const float damp = mDamp + (1.0f - mDamp) * mHold;
-        // Held, the DC block drops toward a few hertz: at 30 Hz it bled a held note's fundamental.
+        mModDepth += (mModTarget - mModDepth) * mEase;
+        // Held, the DC block drops toward a few hertz: it would bleed a held note's fundamental.
         const float dc = mDcCoeff * (1.0f - 0.9f * mHold);
+
+        if (mDampRamp > 0)
+        {
+            StepDampRamp();
+        }
         std::array<float, kSprings> loopL{};
         std::array<float, kSprings> loopR{};
 
@@ -132,17 +161,22 @@ class VerbalSpring
             const float wobble = mModDepth * ((i & 1u) ? mLfo.Sin() : mLfo.Cos());
             const float yl = mLoopL[i].ReadHermite(kLoopMsL[i] * 0.001 * mSampleRate + wobble);
             const float yr = mLoopR[i].ReadHermite(kLoopMsR[i] * 0.001 * mSampleRate - wobble);
-            mDampL[i] = delay_line::FlushDenormal(mDampL[i] + damp * (yl - mDampL[i]));
-            mDampR[i] = delay_line::FlushDenormal(mDampR[i] + damp * (yr - mDampR[i]));
-            mDcL[i] = delay_line::FlushDenormal(mDcL[i] + dc * (mDampL[i] - mDcL[i]));
-            mDcR[i] = delay_line::FlushDenormal(mDcR[i] + dc * (mDampR[i] - mDcR[i]));
-            loopL[i] = mDampL[i] - mDcL[i];
-            loopR[i] = mDampR[i] - mDcR[i];
+            // Held, the loop's low-pass opens, so the tail keeps its top end.
+            const auto lpL = static_cast<float>(mDampL[i].Process(mDampFilter.current, static_cast<double>(yl)));
+            const auto lpR = static_cast<float>(mDampR[i].Process(mDampFilter.current, static_cast<double>(yr)));
+            const float dampedL = lpL + mHold * (yl - lpL);
+            const float dampedR = lpR + mHold * (yr - lpR);
+            mDcL[i] = delay_line::FlushDenormal(mDcL[i] + dc * (dampedL - mDcL[i]));
+            mDcR[i] = delay_line::FlushDenormal(mDcR[i] + dc * (dampedR - mDcR[i]));
+            loopL[i] = dampedL - mDcL[i];
+            loopR[i] = dampedR - mDcR[i];
         }
 
         mChirp.ProcessPair(loopL, loopR);
         float sumL = 0.0f;
         float sumR = 0.0f;
+        // Held, a loop loses nothing, so what is played in would otherwise pile up for a minute.
+        const float rail = mRail * (2.0f - mHold);
 
         for (std::size_t i = 0; i < kSprings; ++i)
         {
@@ -156,8 +190,8 @@ class VerbalSpring
             // quarter of a decibel a pass and capped the tail near 6 s.
             const float wl = gL * (kCouple * loopL[i] + kCross * loopR[i]) + feedL;
             const float wr = gR * (kCouple * loopR[i] - kCross * loopL[i]) + feedR;
-            mLoopL[i].Write(delay_line::FlushDenormal(wl));
-            mLoopR[i].Write(delay_line::FlushDenormal(wr));
+            mLoopL[i].Write(delay_line::FlushDenormal(delay_line::RailClip(wl, 0.64f * rail, rail)));
+            mLoopR[i].Write(delay_line::FlushDenormal(delay_line::RailClip(wr, 0.64f * rail, rail)));
 
             if (active)
             {
@@ -176,8 +210,24 @@ class VerbalSpring
     static constexpr std::array<double, kSprings> kLoopMsR = {27.3, 39.4, 52.9};
     static constexpr float kCross = 0.06f;
     static constexpr float kCouple = 0.99819888f; // sqrt(1 - kCross²)
+    /// What a pass loses anyway to the read's interpolation and the DC block, measured from the
+    /// decay; the loop gain makes it up. The loop's low-pass needs no such term: it is two poles
+    /// so that it stays flat through the midrange, and leaves the mids' decay alone.
+    static constexpr double kPassLoss = 1.0025;
     static constexpr std::array<double, kInputStages> kInputMs = {1.3, 3.4};
     static constexpr std::array<float, kSprings> kInject = {0.5f, 0.42f, 0.36f};
+
+    void StepDampRamp() noexcept
+    {
+        if (--mDampRamp == 0)
+        {
+            mDampFilter.Finish();
+        }
+        else
+        {
+            mDampFilter.Advance();
+        }
+    }
 
     [[nodiscard]] float HighPass(std::size_t side, float x) noexcept
     {
@@ -195,8 +245,9 @@ class VerbalSpring
     std::array<FractionalAllpass, kInputStages> mInputL;
     std::array<FractionalAllpass, kInputStages> mInputR;
     ChirpDispersion<kSprings * 2> mChirp;
-    std::array<float, kSprings> mDampL{};
-    std::array<float, kSprings> mDampR{};
+    biquad::Ramp mDampFilter;
+    std::array<biquad::State, kSprings> mDampL{};
+    std::array<biquad::State, kSprings> mDampR{};
     std::array<float, kSprings> mDcL{};
     std::array<float, kSprings> mDcR{};
     std::array<float, kSprings> mGainL{};
@@ -205,12 +256,16 @@ class VerbalSpring
     RotatingPhasor mLfo;
     std::size_t mActive = 2;
     float mOutScale = 0.707f;
-    float mDamp = 0.5f;
     float mDcCoeff = 0.004f;
+    int mDampRamp = 0;
+    int mDampRampSamples = 1;
     float mHpCoeff = 0.01f;
     float mModDepth = 0.0f;
+    float mModTarget = 0.0f;
+    float mEase = 0.001f;
     float mDrive = 1.6f;
     float mCeiling = 0.8f;
     float mHold = 0.0f;
+    float mRail = 1.4f;
 };
 } // namespace guitarfx::reverb
