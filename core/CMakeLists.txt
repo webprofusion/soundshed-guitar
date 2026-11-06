@@ -1032,8 +1032,11 @@ file(GLOB GUITARFX_UICLIENT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/uiclient/*.h")
 
 # HTTP for the native UIs (src/net/Http.h): the portable workers, and this platform's transport.
-# WinHTTP on Windows, NSURLSession on Apple platforms where Objective-C++ is enabled; elsewhere a
-# transport that reports no network, which a product replaces with its own (HttpTransport).
+# WinHTTP on Windows, NSURLSession on Apple platforms where Objective-C++ is enabled, and libcurl on
+# Linux for a product that turns it on (Soundshed Guitar's Linux builds use JUCE's URL, and should
+# not gain a dependency for it); elsewhere a transport that reports no network, which a product
+# replaces with its own (HttpTransport). Android stays there.
+option(GUITARFX_UICLIENT_CURL "Linux: give the native UIs' HTTP a libcurl transport" OFF)
 list(APPEND GUITARFX_UICLIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/net/Http.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/net/Http.cpp")
 get_property(_guitarfx_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
 if(WIN32)
@@ -1041,6 +1044,9 @@ if(WIN32)
 elseif(APPLE AND "OBJCXX" IN_LIST _guitarfx_languages)
     list(APPEND GUITARFX_UICLIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/net/HttpApple.mm")
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/net/HttpApple.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+elseif(GUITARFX_UICLIENT_CURL AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(CURL 7.87 REQUIRED) # CURLOPT_QUICK_EXIT
+    list(APPEND GUITARFX_UICLIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/net/HttpCurl.cpp")
 else()
     list(APPEND GUITARFX_UICLIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/net/HttpNone.cpp")
 endif()
@@ -1051,6 +1057,8 @@ if(WIN32)
     target_link_libraries(SoundshedUiClient PRIVATE winhttp)
 elseif(APPLE AND "OBJCXX" IN_LIST _guitarfx_languages)
     target_link_libraries(SoundshedUiClient PRIVATE "-framework Foundation")
+elseif(GUITARFX_UICLIENT_CURL AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(SoundshedUiClient PRIVATE CURL::libcurl)
 endif()
 target_include_directories(SoundshedUiClient PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_options(SoundshedUiClient PRIVATE $<TARGET_PROPERTY:SoundshedGuitarCore,COMPILE_OPTIONS>)

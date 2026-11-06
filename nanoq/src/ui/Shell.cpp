@@ -75,6 +75,7 @@ Shell::~Shell()
         closed();
     }
 
+    CloseFilePicker({}); // the engine is told it was cancelled
     mSubscriptions.clear();
 }
 
@@ -459,6 +460,7 @@ void Shell::OnTick()
 {
     KeyRouter::Retake(mSession.View());
     TickLooper();
+    TickFilePicker();
     {
         const auto wheel = mState.appSettings.find("ui.mouseWheelAdjustsControls");
         ParamKnob::sWheelAdjusts = wheel == mState.appSettings.end() || !wheel->is_boolean() || wheel->get<bool>();

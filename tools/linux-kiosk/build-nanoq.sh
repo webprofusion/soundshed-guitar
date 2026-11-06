@@ -64,7 +64,7 @@ RUN dpkg --add-architecture ${debian_arch} \
         libharfbuzz-dev:${debian_arch} libwebp-dev:${debian_arch} libpng-dev:${debian_arch} \
         libx11-dev:${debian_arch} libxcursor-dev:${debian_arch} libxrandr-dev:${debian_arch} \
         libxext-dev:${debian_arch} libxi-dev:${debian_arch} libasound2-dev:${debian_arch} \
-        libbrotli-dev:${debian_arch} libbz2-dev:${debian_arch} \
+        libbrotli-dev:${debian_arch} libbz2-dev:${debian_arch} libcurl4-openssl-dev:${debian_arch} \
         libegl-dev:${debian_arch} libgl-dev:${debian_arch} libopengl-dev:${debian_arch}
 EOF
 

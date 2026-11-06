@@ -157,6 +157,8 @@ FetchContent_Declare(clap_wrapper
 set(GUITARFX_CORE_FETCH_DEPS ON CACHE BOOL "" FORCE)
 # No WebView here, so no web UI bundle to build (and no Node needed).
 set(GUITARFX_CORE_BUILD_WEB_UI OFF CACHE BOOL "" FORCE)
+# Nano Q has no other network on Linux (core picks the transport; a no-op elsewhere).
+set(GUITARFX_UICLIENT_CURL ON CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../core" "${CMAKE_BINARY_DIR}/core")
 
 # Linux draws with Cairo, which Elements would choose anyway, but only on a first configure: after
@@ -372,6 +374,7 @@ enable_testing()
 add_executable(NanoQEngineDialogTests
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineDialogLifetimeTests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Engine.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/FileBrowsing.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/FileDialogs.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Paths.cpp"
@@ -394,3 +397,17 @@ add_test(NAME NanoQEngineDialogTests COMMAND NanoQEngineDialogTests)
 add_executable(NanoQDragGestureTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/DragGestureTests.cpp")
 target_include_directories(NanoQDragGestureTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 add_test(NAME NanoQDragGestureTests COMMAND NanoQDragGestureTests)
+
+# What the in-app file picker knows, and Linux's HTTP transport against a server on loopback.
+add_executable(NanoQFileBrowsingTests
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/FileBrowsingTests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/FileBrowsing.cpp")
+target_include_directories(NanoQFileBrowsingTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(NanoQFileBrowsingTests PRIVATE SoundshedGuitarCore)
+add_test(NAME NanoQFileBrowsingTests COMMAND NanoQFileBrowsingTests)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(NanoQHttpCurlTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/HttpCurlTests.cpp")
+    target_link_libraries(NanoQHttpCurlTests PRIVATE SoundshedUiClient)
+    add_test(NAME NanoQHttpCurlTests COMMAND NanoQHttpCurlTests)
+endif()

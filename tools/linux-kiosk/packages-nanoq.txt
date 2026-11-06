@@ -2,6 +2,9 @@
 # --gpu), which needs libopengl0 and Mesa. cage and xwayland bring the rest of Mesa.
 libcairo2
 libharfbuzz0b
+# The Tones page and Tone3000, over HTTPS.
+ca-certificates
+libcurl4
 libwebp7
 libxext6
 libxcursor1

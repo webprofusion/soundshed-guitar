@@ -4,8 +4,9 @@
  * Http.h - HTTP for the native UIs (Soundshed Nano Q, Nano Q), with no UI framework in it.
  *
  * The engine itself makes no requests; the UIs do, for tone sharing and Tone3000. Each platform
- * has a transport of its own (WinHTTP on Windows, NSURLSession on macOS and iOS); a product that
- * already has an HTTP stack it prefers (JUCE's URL, say) can hand in its own HttpTransport
+ * has a transport of its own (WinHTTP on Windows, NSURLSession on macOS and iOS, libcurl on Linux
+ * where the product asks for it); a product that already has an HTTP stack it prefers (JUCE's
+ * URL, say) can hand in its own HttpTransport
  * instead. HttpWorkers runs requests off the UI thread and cuts every one short when it is
  * destroyed, so a UI that closes while a slow network keeps a request waiting is not held up by
  * it.
@@ -78,7 +79,7 @@ class HttpTransport
     [[nodiscard]] virtual HttpResponse Perform(const HttpRequest& request, CancelToken& cancel) = 0;
 };
 
-/// This platform's transport: WinHTTP, NSURLSession, or, where there is none, one that answers
+/// This platform's transport: WinHTTP, NSURLSession, libcurl, or, where there is none, one that answers
 /// every request with status 0 and says so.
 [[nodiscard]] std::shared_ptr<HttpTransport> MakePlatformTransport();
 

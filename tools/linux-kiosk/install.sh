@@ -87,6 +87,7 @@ echo "▶ Kiosk files"
 install -D -m 0644 "${ROOTFS_SRC}/etc/systemd/system/soundshed-kiosk.service" /etc/systemd/system/soundshed-kiosk.service
 install -D -m 0644 "${ROOTFS_SRC}/etc/systemd/system/soundshed-audio-tune.service" /etc/systemd/system/soundshed-audio-tune.service
 install -D -m 0644 "${ROOTFS_SRC}/etc/security/limits.d/95-soundshed-audio.conf" /etc/security/limits.d/95-soundshed-audio.conf
+install -D -m 0644 "${ROOTFS_SRC}/etc/udev/rules.d/90-soundshed-usb-storage.rules" /etc/udev/rules.d/90-soundshed-usb-storage.rules
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/session" /usr/local/lib/soundshed-kiosk/session
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/xsession" /usr/local/lib/soundshed-kiosk/xsession
 install -D -m 0755 "${ROOTFS_SRC}/usr/local/lib/soundshed-kiosk/tune-audio" /usr/local/lib/soundshed-kiosk/tune-audio

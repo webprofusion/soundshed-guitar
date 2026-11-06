@@ -100,6 +100,12 @@ bool Shell::HandleKey(const el::key_info& k)
 
     if (k.key == key_code::escape)
     {
+        if (mFilePicker)
+        {
+            CloseFilePicker({});
+            return true;
+        }
+
         if (mDropdown)
         {
             CloseDropdown();
@@ -116,7 +122,7 @@ bool Shell::HandleKey(const el::key_info& k)
     }
 
     // Under a menu or dialog the page's shortcuts are off, as the web UI's are under a modal.
-    if (mDropdown || mOverlay || !mState.activePreset)
+    if (mFilePicker || mDropdown || mOverlay || !mState.activePreset)
     {
         return false;
     }

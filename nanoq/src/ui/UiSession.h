@@ -79,6 +79,9 @@ class UiSession
     /// Runs `fn` on the UI thread at the next pump. Any thread.
     void PostToUi(std::function<void()> fn);
 
+    /// PostToUi for a thread that may outlive the session: `fn` is then dropped.
+    [[nodiscard]] std::function<void(std::function<void()>)> Poster() const;
+
     /// Shows a transient message; the shell sets it.
     std::function<void(const std::string& title, const std::string& detail, bool isError)> onToast;
 

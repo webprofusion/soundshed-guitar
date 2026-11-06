@@ -1,0 +1,11 @@
+# Mounts a USB stick as it is plugged in, since there is no desktop to do it, so the app's file
+# picker can offer it (it looks in /run/media, where systemd-mount puts one by its label).
+#
+# An automount, unmounted a second after the last access: a stick can simply be pulled out, which
+# is all a kiosk's user can do. --bind-device takes the mount away with the stick; without it the
+# next read would wait for the stick to come back. FAT and exFAT have no owners of their own, so
+# they are given to the kiosk user, who can then save to them as well as read.
+ACTION=="add", SUBSYSTEMS=="usb", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_FS_TYPE}=="vfat|exfat", \
+    RUN{program}+="/usr/bin/systemd-mount --no-block --automount=yes --bind-device --collect --timeout-idle-sec=1s --owner=soundshed $devnode"
+ACTION=="add", SUBSYSTEMS=="usb", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_FS_TYPE}!="vfat|exfat", \
+    RUN{program}+="/usr/bin/systemd-mount --no-block --automount=yes --bind-device --collect --timeout-idle-sec=1s $devnode"

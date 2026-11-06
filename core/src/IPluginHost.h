@@ -88,6 +88,13 @@ class IPluginHost
     /// Root directory for bundled assets (factory presets, default IRs, etc.).
     [[nodiscard]] virtual std::filesystem::path GetBundledAssetsPath() const = 0;
 
+    /// Whether a file is on a disk that can be taken away: a USB stick on a kiosk. The library
+    /// keeps a copy of a file there, where it otherwise keeps the file's path. Any thread.
+    [[nodiscard]] virtual bool IsOnRemovableDisk(const std::filesystem::path& /*path*/) const
+    {
+        return false;
+    }
+
     // ── Audio context ──────────────────────────────────────────────
     [[nodiscard]] virtual double GetSampleRate() const = 0;
     [[nodiscard]] virtual int GetBlockSize() const = 0;

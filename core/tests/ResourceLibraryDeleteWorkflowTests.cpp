@@ -57,6 +57,13 @@ class TestHost final : public guitarfx::IPluginHost
         return mRoot;
     }
 
+    [[nodiscard]] bool IsOnRemovableDisk(const fs::path& path) const override
+    {
+        return path == removableFile;
+    }
+
+    fs::path removableFile; // the one file this host says is on a USB stick
+
     [[nodiscard]] fs::path GetBundledAssetsPath() const override
     {
         return mRoot;
@@ -279,6 +286,75 @@ bool TestDeleteStoredResourceRemovesFileAndIndex()
 /// Two dropped files whose names sanitise alike ("drop 1" and "drop_1"), and a drop that sends no
 /// hash, as a drop onto a node does. The second used to overwrite the first resource's file in
 /// place, so the first entry, and every preset using it, played the second file's bytes.
+// A file on a disk that can be taken away is copied in: the library's copy must outlive the stick.
+bool TestFileOnARemovableDiskIsCopiedIn()
+{
+    const fs::path sandbox = fs::temp_directory_path() / "guitarfx-resource-delete-tests" / "removable-disk";
+    std::error_code ec;
+    fs::remove_all(sandbox, ec);
+    fs::create_directories(sandbox / "stick", ec);
+    SetSettingsEnvRoot(sandbox);
+
+    const auto onStick = sandbox / "stick" / "From The Stick.wasm";
+    const auto onCard = sandbox / "stick" / "Left Here.wasm";
+    {
+        std::ofstream(onStick, std::ios::binary) << "bytes on a stick";
+        std::ofstream(onCard, std::ios::binary) << "bytes on the card";
+    }
+
+    TestHost host(sandbox);
+    host.removableFile = onStick;
+    guitarfx::PluginController controller(host);
+    const auto save = [&](const fs::path& path) {
+        return SaveLocalResource(controller, host,
+                                 nlohmann::json{{"type", "saveLocalLibraryResource"},
+                                                {"resourceType", "wasm"},
+                                                {"name", path.stem().string()},
+                                                {"filePath", path.string()}});
+    };
+
+    const auto copied = save(onStick);
+    const auto again = save(onStick);
+    const auto kept = save(onCard);
+
+    if (!copied || !again || !kept)
+    {
+        std::cerr << "A local resource was not saved\n";
+        return false;
+    }
+
+    if (copied->filePath == onStick || !fs::exists(copied->filePath))
+    {
+        std::cerr << "A file on a removable disk was referenced, not copied in\n";
+        return false;
+    }
+
+    if (copied->id != again->id || copied->filePath != again->filePath)
+    {
+        std::cerr << "Importing the same file again made a second entry\n";
+        return false;
+    }
+
+    if (kept->filePath != onCard)
+    {
+        std::cerr << "A file on a fixed disk should stay where it is\n";
+        return false;
+    }
+
+    fs::remove(onStick, ec);
+
+    std::ifstream file(copied->filePath, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+    if (bytes != "bytes on a stick")
+    {
+        std::cerr << "The library's copy did not outlive the stick\n";
+        return false;
+    }
+
+    return true;
+}
+
 bool TestSameNamedDropsKeepTheirOwnFiles()
 {
     const fs::path sandbox = fs::temp_directory_path() / "guitarfx-resource-delete-tests" / "same-named-drops";
@@ -1153,6 +1229,7 @@ int main()
     };
 
     run("Delete stored resource removes file and index", TestDeleteStoredResourceRemovesFileAndIndex());
+    run("A file on a removable disk is copied in", TestFileOnARemovableDiskIsCopiedIn());
     run("Same-named drops keep their own files", TestSameNamedDropsKeepTheirOwnFiles());
     run("Deleting a gone id leaves other resources alone", TestDeletingAGoneIdLeavesOthersAlone());
     run("Delete external resource keeps file and removes index", TestDeleteExternalResourceKeepsFileButRemovesIndex());

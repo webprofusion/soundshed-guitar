@@ -60,6 +60,8 @@ void AddShellIcons(Icons& icons)
         "ui-folder",
         Svg("0 0 24 24", 1.8f,
             R"(<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>)"));
+    icons.Add("ui-file",
+              Svg("0 0 24 24", 1.8f, R"(<path d="M6 3h8l5 5v13H6z"/><polyline points="14 3 14 8 19 8"/>)"));
     icons.Add("ui-up", Svg("0 0 24 24", 2.0f, R"(<polyline points="6 15 12 9 18 15"/>)"));
     icons.Add("ui-chevron-right", Svg("0 0 24 24", 2.0f, R"(<polyline points="9 6 15 12 9 18"/>)"));
     icons.Add("ui-presets", Svg("0 0 24 24", 1.8f, R"(<path d="M4 6h16M4 12h16M4 18h10"/>)"));

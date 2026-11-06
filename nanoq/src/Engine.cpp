@@ -1,5 +1,6 @@
 #include "Engine.h"
 
+#include "FileBrowsing.h"
 #include "FileDialogs.h"
 #include "Paths.h"
 #include "UiBridge.h"
@@ -146,9 +147,52 @@ void Engine::SetViewAttached(bool attached)
 
     if (!attached)
     {
-        std::lock_guard<std::mutex> lock(mOutboxMutex);
-        mOutbox.clear();
+        {
+            std::lock_guard<std::mutex> lock(mOutboxMutex);
+            mOutbox.clear();
+        }
+
+        // Requests no view will now take. Answered outside the lock: `done` posts to the engine.
+        std::deque<ui::FileDialogRequest> unanswered;
+        {
+            std::lock_guard<std::mutex> lock(mFileRequestMutex);
+            unanswered.swap(mFileRequests);
+        }
+
+        for (auto& request : unanswered)
+        {
+            request.done({});
+        }
     }
+}
+
+std::optional<ui::FileDialogRequest> Engine::TakeFileDialogRequest()
+{
+    std::lock_guard<std::mutex> lock(mFileRequestMutex);
+
+    if (mFileRequests.empty())
+    {
+        return std::nullopt;
+    }
+
+    auto request = std::move(mFileRequests.front());
+    mFileRequests.pop_front();
+    return request;
+}
+
+void Engine::AskViewForFile(ui::FileDialogRequest request)
+{
+    {
+        std::lock_guard<std::mutex> lock(mFileRequestMutex);
+
+        if (mViewAttached.load(std::memory_order_acquire))
+        {
+            mFileRequests.push_back(std::move(request));
+            return;
+        }
+    }
+
+    request.done({});
 }
 
 std::vector<std::string> Engine::TakeMessagesForView()
@@ -203,19 +247,35 @@ void Engine::BrowseFileAsync(guitarfx::BrowseFileType type, const std::string& t
     // The callback is documented to fire on the message thread: bounce the result onto it. The
     // dialog's thread is not the engine's to wait for and may outlive it (the plugin removed with
     // the dialog still up), so it reaches the engine through the handle, not the engine itself.
-    ShowOpenDialog(type, title,
-                   [handle = mHandle, callback = std::move(callback)](const guitarfx::BrowseFileResult& result) {
-                       handle->Post([callback, result] { callback(result); });
-                   });
+    auto done = [handle = mHandle, callback = std::move(callback)](const guitarfx::BrowseFileResult& result) {
+        handle->Post([callback, result] { callback(result); });
+    };
+
+    if (HasNativeFileDialogs())
+    {
+        ShowOpenDialog(type, title, std::move(done));
+    }
+    else
+    {
+        AskViewForFile({false, type, title, {}, std::move(done)});
+    }
 }
 
 void Engine::SaveFileAsync(guitarfx::BrowseFileType type, const std::string& title, const std::string& defaultName,
                            std::function<void(const guitarfx::BrowseFileResult&)> callback)
 {
-    ShowSaveDialog(type, title, defaultName,
-                   [handle = mHandle, callback = std::move(callback)](const guitarfx::BrowseFileResult& result) {
-                       handle->Post([callback, result] { callback(result); });
-                   });
+    auto done = [handle = mHandle, callback = std::move(callback)](const guitarfx::BrowseFileResult& result) {
+        handle->Post([callback, result] { callback(result); });
+    };
+
+    if (HasNativeFileDialogs())
+    {
+        ShowSaveDialog(type, title, defaultName, std::move(done));
+    }
+    else
+    {
+        AskViewForFile({true, type, title, defaultName, std::move(done)});
+    }
 }
 
 void Engine::RunOnMainThread(std::function<void()> fn)
@@ -236,6 +296,11 @@ std::filesystem::path Engine::GetUserDataPath() const
 std::filesystem::path Engine::GetBundledAssetsPath() const
 {
     return mAssetRoot;
+}
+
+bool Engine::IsOnRemovableDisk(const std::filesystem::path& path) const
+{
+    return IsOnMountedDisk(path, ReadMounts());
 }
 
 double Engine::GetSampleRate() const

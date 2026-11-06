@@ -43,6 +43,7 @@
 #include "uiclient/PresetTrail.h"
 #include "uiclient/ScaleGuide.h"
 
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <optional>
@@ -692,6 +693,19 @@ class Shell
     void CloseOverlay();
     /// Esc or a tap outside: the dialog's own close (a Cancel that undoes a preview), else closing.
     void CancelOverlay();
+
+    // FilePicker.cpp
+    /// The file dialog drawn in the view, for a host with none of its own (Linux, where a kiosk
+    /// has no desktop): the whole window, over any dialog that asked for it, and made for touch.
+    struct FilePickerState;
+    void OpenFilePicker(FileDialogRequest request);
+    void CloseFilePicker(const guitarfx::BrowseFileResult& result);
+    /// Takes a request from the host; keeps an open picker's list of disks up to date.
+    void TickFilePicker();
+    void FilePickerGoTo(std::filesystem::path folder);
+    void FilePickerConfirm();
+    void FillFilePickerPlaces();
+
     /// Takes a layer (dialog, dropdown, toast, bar) out of the view once the current event is done,
     /// keeping the keyboard focus on the layer that has it.
     void RemoveLayer(Ptr layer);
@@ -861,6 +875,9 @@ class Shell
     Ptr mOverlay;
     Ptr mDropdown; // a drop-down list: a layer of its own, so one opened from a dialog stacks over it
     Ptr mToast;
+    Ptr mFilePickerLayer; // over everything: a dialog may be what asked for the file
+    std::shared_ptr<FilePickerState> mFilePicker;
+    std::filesystem::path mLastPickedFolder; // where the next picker opens
     std::shared_ptr<bool> mAlive = std::make_shared<bool>(true);
     std::function<void()> mOnOverlayClosed; // runs when the overlay closes
     std::function<void()> mOverlayCancel;   // what Esc and a tap outside do to the dialog: its own Cancel
