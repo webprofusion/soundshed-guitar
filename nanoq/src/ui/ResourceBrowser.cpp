@@ -2027,6 +2027,12 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         CloseOverlay();
     };
 
+    // The list is what this opens for: its search box waits for a tap.
+    if (mKeyboard)
+    {
+        mKeyboard->OpenQuietly();
+    }
+
     const auto view = ViewSize();
     ShowDialog({.title = title.empty() ? b->role.title : title,
                 .body = Col({FixedHeight(38, b->tabs),

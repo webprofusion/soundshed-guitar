@@ -176,6 +176,9 @@ class Shell
     /// A layer of the view's own (a dialog, a drop-down), which takes keys while it has focus,
     /// wrapped so the shortcuts (Esc above all) still reach HandleKey.
     Ptr KeyLayer(Ptr layer);
+    /// A layer at the foot of the view that gives way to the on-screen keyboard.
+    Ptr AvoidKeyboard(Ptr layer);
+    void TickKeyboard();
     /// The standalone window's caption takes the colour of the bar under it (Windows).
     void SyncWindowChrome();
 
@@ -780,6 +783,7 @@ class Shell
 
     Ptr mRoot;
     std::shared_ptr<KeyRouter> mKeys;
+    std::shared_ptr<OnScreenKeyboard> mKeyboard; // null unless the device needs one
     /// What a screen reader sees (AccessBridge.h): made at the first tick, once the view has its
     /// window.
     std::unique_ptr<AccessBridge> mAccess;

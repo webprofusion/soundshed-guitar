@@ -36,6 +36,9 @@ SOUNDSHED_ALSA_PERIODS=3
 #SOUNDSHED_NANOQ_AUDIOSTATS=/tmp/soundshed-audio.txt
 #SOUNDSHED_NANOQ_DRAWSTATS=/tmp/soundshed-draw.txt
 
+# Soundshed Nano Q: 0 turns off the on-screen keyboard, for a device with a real keyboard.
+#SOUNDSHED_NANOQ_KEYBOARD=0
+
 # WebKitGTK knobs worth trying if the UI draws wrongly or slowly on the Pi's GPU:
 #WEBKIT_DISABLE_COMPOSITING_MODE=1
 #WEBKIT_DISABLE_DMABUF_RENDERER=1

@@ -869,6 +869,13 @@ Ptr Shell::PlacePanel(Ptr panel, el::rect anchor, float width, float height, boo
 void Shell::ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above)
 {
     CloseOverlay();
+
+    // A chooser: what is listed comes first, and its search box waits for a tap.
+    if (mKeyboard)
+    {
+        mKeyboard->OpenQuietly();
+    }
+
     mOverlay = KeyLayer(PlacePanel(std::move(panel), anchor, width, height, above, [this] { CloseOverlay(); }));
     mSession.View().add(mOverlay);
 }

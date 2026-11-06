@@ -65,7 +65,34 @@ Ptr Shell::KeyLayer(Ptr layer)
     auto router = std::make_shared<KeyRouter>(std::move(layer), true);
     router->onKey = [this](const el::key_info& k) { return HandleKey(k); };
     router->ringColour = [this] { return mTheme.Accent(); };
+    router->keyboard = mKeyboard;
     return router;
+}
+
+Ptr Shell::AvoidKeyboard(Ptr layer)
+{
+    return mKeyboard ? std::make_shared<BesideKeyboard>(std::move(layer), mKeyboard) : std::move(layer);
+}
+
+void Shell::TickKeyboard()
+{
+    if (!mKeyboard)
+    {
+        return;
+    }
+
+    auto& view = mSession.View();
+    auto* router = KeyRouter::Focused(view);
+    const auto field = router != nullptr ? router->TypingField(view) : std::nullopt;
+
+    if (field)
+    {
+        mKeyboard->Update(view, router, field->field, field->layer, field->valueField);
+    }
+    else
+    {
+        mKeyboard->Update(view, nullptr, std::nullopt, {}, false);
+    }
 }
 
 void Shell::TapTempo()

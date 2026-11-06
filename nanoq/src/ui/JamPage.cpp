@@ -684,8 +684,9 @@ void Shell::SyncJamPlayerBar()
     const float width = std::min(520.0f, std::max(300.0f, ViewSize().x - 24.0f));
     auto content = PadXY(10, 6, Row({icon, HGap(6), text, HGap(8), show, HGap(6), stop}));
     auto face = Over(content, el::share(Surface(mTheme.Elevated(), mTheme.Accent().opacity(0.55f), 10.0f)));
-    mJamPlayerBar = el::share(el::align_bottom(el::align_center(el::margin(
-        {0.0f, 0.0f, 0.0f, kBarAboveFooter}, el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face))))))));
+    mJamPlayerBar = AvoidKeyboard(el::share(el::align_bottom(
+        el::align_center(el::margin({0.0f, 0.0f, 0.0f, kBarAboveFooter},
+                                    el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face)))))))));
     mSession.View().add(mJamPlayerBar, false);
     mSession.View().refresh();
 }

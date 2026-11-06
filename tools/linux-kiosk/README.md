@@ -244,6 +244,27 @@ Tone3000 download. Not tested: the udev rule itself. `systemd-mount` accepts its
 container gets no device units, so nothing has been mounted by it, and no real stick has been
 tried. If a stick doesn't appear, `journalctl -u 'run-media-*'` on the device is the place to look.
 
+### Typing
+
+Nano Q draws its own on-screen keyboard ([OnScreenKeyboard.h](../../nanoq/src/ui/OnScreenKeyboard.h)),
+because a bare X server has no window manager to place a keyboard program beside the app. It comes up across the foot of the
+screen when you tap a text field, type a value into a knob, or open a dialog that asks for text
+(a name, say), and the page or dialog moves up when the field would otherwise be under it. A
+chooser's search box waits for a tap, since the list is what you opened it for.
+
+Enter works as the Enter key and puts the keyboard away. Hide does the same without entering, to
+reach the buttons under it, and a tap on the field brings it back.
+
+It follows `SOUNDSHED_KIOSK`, so desktop and DAW use have none. To turn it off on a device with
+a real keyboard, set `SOUNDSHED_NANOQ_KEYBOARD=0` in `/etc/default/soundshed-kiosk`. Setting it to
+`1` turns it on anywhere, which is handy for trying it on a desktop.
+
+Tested on 2026-11-05 under Xvfb, x64, with a real X pointer and no X keyboard, at 800x480 and
+1920x1080 (the panel stops growing at 1120 wide): a preset named and saved, Tone3000 searched, a
+file named on Export preset, the sign-in prompt, a knob's value. Not tested: a real touch screen,
+or how the keys feel under a finger on the Pi. There are no accented letters, and a negative
+value needs a change of layer, as digits and `-` are on different ones.
+
 ### Building
 
 The window, timer and ALSA behaviour comes from
@@ -262,9 +283,8 @@ off: on Windows it made NAM slower, and nothing has measured it here.
 - **Power-cut safety.** Root is writable. A real device wants a read-only root (Pi OS
   overlayfs, `raspi-config nonint enable_overlayfs`) with `/home/soundshed` on its own
   writable partition. That also needs checking that settings writes survive a cut.
-- **On-screen keyboard.** Preset names, Tone3000 search, sign-in and the name of a file being
-  saved need text input. cage and WebKitGTK with a virtual keyboard (e.g. `wvkbd`) are
-  untested, and Nano Q on a bare X server has none. Importing from a stick needs no typing.
+- **On-screen keyboard for Soundshed Guitar.** Nano Q has its own, but the web UI has none.
+  cage and WebKitGTK with a virtual keyboard (e.g. `wvkbd`) are untested.
 - **Wi-Fi setup without a desktop.** For now: `WPA_COUNTRY` at build time, then
   `nmcli` over Ethernet/SSH, or cloud-init's `network-config` on the boot partition
   (pi-gen enables cloud-init by default).

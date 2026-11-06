@@ -61,6 +61,12 @@ Shell::Shell(UiSession& session)
 Shell::~Shell()
 {
     *mAlive = false;
+
+    if (mKeyboard)
+    {
+        mKeyboard->Detach();
+    }
+
     mAccess.reset(); // before the view's window goes: it unhooks from it
     mSession.Tones().RemoveListener(mToneListener);
     mSession.onToast = nullptr;
@@ -165,7 +171,14 @@ void Shell::BuildRoot()
         frame = std::make_shared<DrawProbe>(frame, stats);
     }
 
+    if (OnScreenKeyboard::Wanted())
+    {
+        mKeyboard = std::make_shared<OnScreenKeyboard>(
+            mTheme, [this](std::function<void()> fn) { mSession.PostToUi(std::move(fn)); });
+    }
+
     mKeys = std::make_shared<KeyRouter>(Over(MinSize(metrics::kMinWidth, metrics::kMinHeight, frame), mBgSlot));
+    mKeys->keyboard = mKeyboard;
     mKeys->onKey = [this](const el::key_info& k) { return HandleKey(k); };
     mKeys->ringColour = [this] { return mTheme.Accent(); };
     mKeys->onPointerDown = [this] { mChainFocused = false; };
@@ -459,6 +472,7 @@ void Shell::Rebuild()
 void Shell::OnTick()
 {
     KeyRouter::Retake(mSession.View());
+    TickKeyboard();
     TickLooper();
     TickFilePicker();
     {

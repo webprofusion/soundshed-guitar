@@ -407,3 +407,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(NanoQHttpCurlTests PRIVATE SoundshedUiClient)
     add_test(NAME NanoQHttpCurlTests COMMAND NanoQHttpCurlTests)
 endif()
+
+add_executable(NanoQKeyboardLayoutTests "${CMAKE_CURRENT_SOURCE_DIR}/tests/KeyboardLayoutTests.cpp")
+target_include_directories(NanoQKeyboardLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+add_test(NAME NanoQKeyboardLayoutTests COMMAND NanoQKeyboardLayoutTests)

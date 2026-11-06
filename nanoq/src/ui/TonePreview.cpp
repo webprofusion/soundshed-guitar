@@ -238,8 +238,9 @@ void Shell::SyncTonePreview()
         10, 6,
         Row({Middle(dot), HGap(6), text, Stretch(nullptr, 0.01), HGap(8), Middle(install), HGap(6), Middle(stop)}));
     auto face = Over(content, el::share(Surface(mTheme.Elevated(), mTheme.Accent().opacity(0.55f), 10.0f)));
-    mTonePreviewBar = el::share(el::align_bottom(el::align_center(el::margin(
-        {0.0f, 0.0f, 0.0f, kBarAboveFooter}, el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face))))))));
+    mTonePreviewBar = AvoidKeyboard(el::share(el::align_bottom(
+        el::align_center(el::margin({0.0f, 0.0f, 0.0f, kBarAboveFooter},
+                                    el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face)))))))));
     view.add(mTonePreviewBar, false);
     view.refresh();
 }

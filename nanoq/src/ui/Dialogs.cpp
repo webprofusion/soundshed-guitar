@@ -329,9 +329,11 @@ void Shell::ShowToast(const std::string& title, const std::string& detail, bool 
         RemoveLayer(std::exchange(mToast, nullptr));
     }
 
-    // At the bottom, centred, above the transport bar. It takes no clicks.
+    // At the bottom, centred, above the transport bar, or above the on-screen keyboard. It takes
+    // no clicks.
+    const float above = mKeyboard && mKeyboard->Showing() ? OnScreenKeyboard::PanelHeight(ViewSize().y) + 8.0f : 64.0f;
     auto toast = std::make_shared<Toast>(mTheme, title, detail, isError);
-    mToast = el::share(el::align_bottom(el::align_center(el::margin({0.0f, 0.0f, 0.0f, 64.0f}, el::hold_any(toast)))));
+    mToast = el::share(el::align_bottom(el::align_center(el::margin({0.0f, 0.0f, 0.0f, above}, el::hold_any(toast)))));
     view.add(mToast, false);
 
     view.post(std::chrono::seconds(isError ? 8 : 4), [&view, shown = mToast, alive = mAlive, this] {

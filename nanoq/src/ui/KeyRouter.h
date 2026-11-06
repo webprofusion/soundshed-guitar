@@ -14,15 +14,22 @@
 // to the first, and never out of a dialog (Focus.h). The arrows move between the rows of a list
 // and the tabs of a row. The router draws the focus ring, and keeps focus on a control that a
 // rebuild replaced by finding the new one with the same role and name.
+//
+// On a touch screen with no keyboard, the router of the focused layer also hosts the on-screen
+// keyboard (OnScreenKeyboard.h): it draws the panel over the layer, takes the presses on it, and
+// moves the layer up so the field stays clear of it.
 
 #include "ui/Focus.h"
+#include "ui/OnScreenKeyboard.h"
 
 #include <elements.hpp>
 
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace nanoq::ui
 {
@@ -64,14 +71,43 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
         if (mFocusContent && req != focus_request::restore_previous)
         {
-            FocusFirstTextBox(subject());
+            const bool hasTextBox = FocusFirstTextBox(subject());
+
+            // Once: Retake comes through here after every tap on the dialog.
+            if (keyboard && hasTextBox && !mOfferedKeyboard)
+            {
+                mOfferedKeyboard = true;
+                keyboard->NoteLayerOpened();
+            }
+        }
+    }
+
+    using proxy_base::prepare_subject;
+
+    // The layer moved up for the on-screen keyboard. Everything goes through here, so drawing and
+    // hit testing move together.
+    void prepare_subject(cycfi::elements::context& ctx) override
+    {
+        if (HostsKeyboard())
+        {
+            ctx.bounds.top -= keyboard->Pan();
+            ctx.bounds.bottom -= keyboard->Pan();
         }
     }
 
     void draw(const cycfi::elements::context& ctx) override
     {
         proxy_base::draw(ctx);
+        DrawFocusRing(ctx);
 
+        if (HostsKeyboard())
+        {
+            keyboard->Draw(ctx);
+        }
+    }
+
+    void DrawFocusRing(const cycfi::elements::context& ctx)
+    {
         if (!Focusable::FocusVisible())
         {
             return;
@@ -147,12 +183,18 @@ class KeyRouter final : public cycfi::elements::proxy_base
     // Only the page's: a press beside a drop-down must still go through to the page under it.
     bool wants_control() const override
     {
-        return !mFocusContent || proxy_base::wants_control();
+        return !mFocusContent || HostsKeyboard() || proxy_base::wants_control();
     }
 
     cycfi::elements::element* hit_test(const cycfi::elements::context& ctx, cycfi::elements::point p, bool leaf,
                                        bool control) override
     {
+        // The router itself: it wants focus, so Elements leaves focus where it is.
+        if (HostsKeyboard() && keyboard->Contains(ctx.bounds, p))
+        {
+            return this;
+        }
+
         if (auto* hit = proxy_base::hit_test(ctx, p, leaf, control))
         {
             return hit;
@@ -163,8 +205,19 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     bool click(const cycfi::elements::context& ctx, cycfi::elements::mouse_button btn) override
     {
+        if (HostsKeyboard() && (keyboard->Tracking() || (btn.down && keyboard->Contains(ctx.bounds, btn.pos))))
+        {
+            keyboard->Click(ctx, btn);
+            return true;
+        }
+
         if (btn.down)
         {
+            if (keyboard)
+            {
+                keyboard->NotePointerDown();
+            }
+
             // The pointer takes over: no ring, and a click leaves no focus on a control.
             if (Focusable::FocusVisible())
             {
@@ -180,7 +233,37 @@ class KeyRouter final : public cycfi::elements::proxy_base
             }
         }
 
-        return proxy_base::click(ctx, btn);
+        const bool used = proxy_base::click(ctx, btn);
+
+        // The press found a field, if one has focus now: Elements ended it otherwise.
+        if (btn.down && keyboard && Typing())
+        {
+            keyboard->Arm();
+        }
+
+        return used;
+    }
+
+    void drag(const cycfi::elements::context& ctx, cycfi::elements::mouse_button btn) override
+    {
+        if (HostsKeyboard() && keyboard->Tracking())
+        {
+            keyboard->Drag(ctx, btn);
+            return;
+        }
+
+        proxy_base::drag(ctx, btn);
+    }
+
+    bool cursor(const cycfi::elements::context& ctx, cycfi::elements::point p,
+                cycfi::elements::cursor_tracking status) override
+    {
+        return !(HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) && proxy_base::cursor(ctx, p, status);
+    }
+
+    bool scroll(const cycfi::elements::context& ctx, cycfi::elements::point dir, cycfi::elements::point p) override
+    {
+        return (HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) || proxy_base::scroll(ctx, dir, p);
     }
 
     // Files dragged in from the desktop are offered to the shell first (a model or IR onto an
@@ -333,6 +416,42 @@ class KeyRouter final : public cycfi::elements::proxy_base
         return TypingUnder(const_cast<cycfi::elements::element&>(subject()));
     }
 
+    /// What is being typed in, for the on-screen keyboard.
+    struct TypingTarget
+    {
+        cycfi::elements::rect field;
+        cycfi::elements::rect layer;
+        bool valueField = false; // a knob's value, not a text box
+    };
+
+    /// Where the field being typed in is, and the bounds of this layer. Nothing when none is, or
+    /// when what holds focus is a text box that cannot be typed in. UI thread.
+    [[nodiscard]] std::optional<TypingTarget> TypingField(cycfi::elements::view& view)
+    {
+        std::optional<TypingTarget> found;
+
+        if (!Typing())
+        {
+            return found;
+        }
+
+        view.in_context_do(*this, [&](const cycfi::elements::context& ctx) {
+            cycfi::elements::context sctx{ctx, &subject(), ctx.bounds};
+            prepare_subject(sctx);
+            WithFocusedLeaf(sctx, subject(), [&](const cycfi::elements::context& lctx, cycfi::elements::element& leaf) {
+                const auto* box = dynamic_cast<const cycfi::elements::basic_text_box*>(&leaf);
+
+                if (box == nullptr || box->editable())
+                {
+                    found = TypingTarget{lctx.bounds, ctx.bounds, box == nullptr};
+                }
+            });
+        });
+        return found;
+    }
+
+    /// The on-screen keyboard, on a device that has one; all the routers share it.
+    std::shared_ptr<OnScreenKeyboard> keyboard;
     /// A key no focused element took. Returns whether it was used.
     std::function<bool(const cycfi::elements::key_info&)> onKey;
     /// Any press of a mouse button, before the element under it hears it.
@@ -344,6 +463,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
     std::function<cycfi::elements::color()> ringColour;
 
   private:
+    [[nodiscard]] bool HostsKeyboard() const
+    {
+        return keyboard && keyboard->HostedBy(this);
+    }
+
     [[nodiscard]] bool TypingInControl() const
     {
         const auto* leaf = FocusedLeaf(const_cast<cycfi::elements::element&>(subject()));
@@ -483,15 +607,20 @@ class KeyRouter final : public cycfi::elements::proxy_base
     }
 
     /// A dialog opening puts the caret in its first text box, as it did before its buttons could
-    /// take focus.
-    static void FocusFirstTextBox(cycfi::elements::element& root)
+    /// take focus. Returns whether it has one.
+    static bool FocusFirstTextBox(cycfi::elements::element& root)
     {
         std::vector<std::pair<cycfi::elements::composite_base*, std::size_t>> path;
         cycfi::elements::element* box = FindTextBox(root, path);
 
-        if (box == nullptr || FocusedLeaf(root) == box)
+        if (box == nullptr)
         {
-            return;
+            return false;
+        }
+
+        if (FocusedLeaf(root) == box)
+        {
+            return true;
         }
 
         root.end_focus();
@@ -502,6 +631,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
         }
 
         box->begin_focus(focus_request::from_top);
+        return true;
     }
 
     static cycfi::elements::element* FindTextBox(
@@ -550,5 +680,6 @@ class KeyRouter final : public cycfi::elements::proxy_base
     std::string mLastKey;
     int mLastOrdinal = 0;
     int mLostTicks = 0;
+    bool mOfferedKeyboard = false;
 };
 } // namespace nanoq::ui
