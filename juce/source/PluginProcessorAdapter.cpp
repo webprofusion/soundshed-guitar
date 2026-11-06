@@ -218,7 +218,13 @@ class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProces
 
     [[nodiscard]] float getDefaultValue() const override
     {
-        return 0.0f;
+        return mDefaultValue;
+    }
+
+    /// The value it holds now becomes its default. Once, before the host has the plugin.
+    void useValueAsDefault()
+    {
+        mDefaultValue = getValue();
     }
 
     [[nodiscard]] juce::String getName(int maximumLength) const override
@@ -294,6 +300,7 @@ class PluginProcessorAdapter::AutomationSlotParameter : public juce::AudioProces
     juce::String mParamID;
     juce::String mLabel;
     int mSceneSteps = 0;
+    float mDefaultValue = 0.0f;
 };
 
 // ════════════════════════════════════════════════════════════════════════
@@ -725,6 +732,13 @@ void PluginProcessorAdapter::registerAutomationParameters()
 
     // Before the host has the plugin, so before any thread can call getValue().
     mController.BindDawParameters(slotIdsByParameter);
+
+    // A parameter's default is where a new instance starts, which a CLAP host checks. Not 0 for
+    // all of them: the trims' slots hold the trims, and 0 is their -40 dB floor.
+    for (auto* parameter : getParameters())
+    {
+        static_cast<AutomationSlotParameter*>(parameter)->useValueAsDefault();
+    }
 
     // The DAW queue resolves parameter indices through this, and is sized for a burst of
     // changes to every parameter several times over before it would have to grow.
