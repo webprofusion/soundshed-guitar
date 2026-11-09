@@ -681,6 +681,18 @@ void TestUiClient()
 
     Expect(hits == 1, "one strum counts once");
 
+    sg::StrumGate ringing;
+    ringing.Push(-70.0, false);
+    ringing.Push(-70.0, false);
+    hits = 0;
+
+    for (int i = 0; i < 20; ++i)
+    {
+        hits += ringing.Push(-20.0 - i * 0.3, true) ? 1 : 0;
+    }
+
+    Expect(hits == 1, "a ringing strum does not re-arm on the quiet before it");
+
     sg::NoteFollower follower;
     Expect(!follower.Push(57) && follower.Push(57) && follower.Current() == 57, "a note shows once read twice");
     follower.Push(60);

@@ -11,12 +11,19 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kWindowSeconds = 0.17;
+// The harmonics that land on another pitch class (the 2nd and 4th are the note's own). The 9th and
+// up are too weak on a guitar to matter below kMaxHz.
+constexpr std::array<double, 4> kForeignHarmonics = {3.0, 5.0, 6.0, 7.0};
+constexpr double kOvertoneStrength = 0.7; // the lower peak's magnitude against this one's
+constexpr double kOvertoneTolerance = 1.0204; // 35 cents: a plucked string's partials run sharp
 } // namespace
 
 ChromaAnalyzer::ChromaAnalyzer(std::size_t size)
     : mSize(size), mFft(std::make_unique<SimdFFT>(size)), mWindow(size), mInput(size), mSpectrum(size),
       mMagnitude(size / 2)
 {
+    mPeaks.reserve(size / 4);
+
     for (std::size_t i = 0; i < size; ++i)
     {
         mWindow[i] =
@@ -63,7 +70,7 @@ ChromaAnalyzer::Chroma ChromaAnalyzer::Analyze(const float* samples, double samp
     const double binHz = sampleRate / static_cast<double>(mSize);
     const auto first = static_cast<std::size_t>(std::max(1.0, std::floor(kMinHz / binHz)));
     const auto last = std::min(mMagnitude.size() - 2, static_cast<std::size_t>(std::ceil(kMaxHz / binHz)));
-    float total = 0.0f;
+    mPeaks.clear();
 
     for (std::size_t k = first; k <= last; ++k)
     {
@@ -80,14 +87,25 @@ ChromaAnalyzer::Chroma ChromaAnalyzer::Analyze(const float* samples, double samp
         const double right = mMagnitude[k + 1];
         const double denominator = left - 2.0 * magnitude + right;
         const double offset = denominator != 0.0 ? std::clamp(0.5 * (left - right) / denominator, -0.5, 0.5) : 0.0;
-        const double frequency = (static_cast<double>(k) + offset) * binHz;
-        const double semitones = 12.0 * std::log2(frequency / referenceHz);
+        mPeaks.push_back({(static_cast<double>(k) + offset) * binHz, magnitude});
+    }
+
+    float total = 0.0f;
+
+    for (std::size_t j = 0; j < mPeaks.size(); ++j)
+    {
+        if (IsOvertone(j))
+        {
+            continue;
+        }
+
+        const double semitones = 12.0 * std::log2(mPeaks[j].frequency / referenceHz);
         const double nearest = std::round(semitones);
         const double weight = 1.0 - std::min(1.0, std::abs(semitones - nearest) * 2.0);
         const int pitchClass = ((static_cast<int>(nearest) + 9) % 12 + 12) % 12; // A = 9
 
-        chroma[static_cast<std::size_t>(pitchClass)] += static_cast<float>(magnitude * weight);
-        total += static_cast<float>(magnitude * weight);
+        chroma[static_cast<std::size_t>(pitchClass)] += static_cast<float>(mPeaks[j].magnitude * weight);
+        total += static_cast<float>(mPeaks[j].magnitude * weight);
     }
 
     if (total > 0.0f)
@@ -99,5 +117,30 @@ ChromaAnalyzer::Chroma ChromaAnalyzer::Analyze(const float* samples, double samp
     }
 
     return chroma;
+}
+
+bool ChromaAnalyzer::IsOvertone(std::size_t index) const
+{
+    const auto& peak = mPeaks[index];
+
+    for (std::size_t i = 0; i < index; ++i)
+    {
+        if (mPeaks[i].magnitude < peak.magnitude * kOvertoneStrength)
+        {
+            continue;
+        }
+
+        for (const double harmonic : kForeignHarmonics)
+        {
+            const double ratio = mPeaks[i].frequency * harmonic / peak.frequency;
+
+            if (ratio > 1.0 / kOvertoneTolerance && ratio < kOvertoneTolerance)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 } // namespace guitarfx

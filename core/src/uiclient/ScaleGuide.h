@@ -79,17 +79,18 @@ struct ChordMatch
 };
 
 /// Whether `chroma` is the chord, at a strictness of "easy", "normal" or "strict": its tones hold
-/// the strictness's share, each (bar a plain 5th) reads its level, and no rival chord on the root
-/// that is not a superset of this one fits better.
+/// the strictness's share, and each (bar a plain 5th) reads its level.
 [[nodiscard]] ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass,
                                     const std::vector<ChordTone>& tones, const std::string& strictness);
 
-/// A clean strum: five clean readings in a row (~200 ms); the next needs a jump in level.
+/// A clean strum: three clean readings in a row (~130 ms); the next needs a jump in level after a
+/// short lockout (~340 ms).
 class StrumGate
 {
   public:
-    static constexpr int kHold = 5;
-    static constexpr double kJumpDb = 4.0;
+    static constexpr int kHold = 3;
+    static constexpr double kJumpDb = 3.0;
+    static constexpr int kRearmReadings = 8;
     static constexpr double kQuietDb = -50.0;
 
     /// True when this reading completes a clean strum.
@@ -100,6 +101,7 @@ class StrumGate
     std::vector<double> mLevels;
     bool mArmed = true;
     int mHeld = 0;
+    int mRearmWait = 0;
 };
 
 /// The note being played, steadied: it shows once read twice, goes after four silent readings,

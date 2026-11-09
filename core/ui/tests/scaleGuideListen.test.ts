@@ -68,6 +68,14 @@ describe("scale guide listen", () => {
     expect(again.filter(Boolean)).toHaveLength(1);
   });
 
+  it("does not count a strum again while it rings over the quiet before it", () => {
+    const gate = new StrumGate();
+    gate.push(-70, false);
+    gate.push(-70, false);
+    const ringing = Array.from({ length: 20 }, (_, i) => gate.push(-20 - i * 0.3, true));
+    expect(ringing.filter(Boolean)).toHaveLength(1);
+  });
+
   it("follows a note once it reads twice, then lets it go into a trail", () => {
     const follower = new NoteFollower();
     expect(follower.push(57)).toBe(false);

@@ -14,10 +14,6 @@ const std::regex kProgression("^[bu]:[\\w-]{1,32}$");
 const std::regex kNumeralStart("^[b#]?(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)");
 constexpr std::size_t kMaxNumeralLength = 16;
 
-/// The common chords on a root, as semitones: a chord rings clean only if none of these fits better.
-const std::vector<std::vector<int>> kRivals = {{0, 4, 7},     {0, 3, 7}, {0, 7},    {0, 4, 7, 10}, {0, 4, 7, 11},
-                                               {0, 3, 7, 10}, {0, 2, 7}, {0, 5, 7}, {0, 3, 6},     {0, 4, 8}};
-
 struct Strictness
 {
     double share;
@@ -28,15 +24,15 @@ Strictness RuleFor(const std::string& strictness)
 {
     if (strictness == "easy")
     {
-        return {0.55, 0.10};
+        return {0.60, 0.03};
     }
 
     if (strictness == "strict")
     {
-        return {0.75, 0.25};
+        return {0.80, 0.07};
     }
 
-    return {0.65, 0.15};
+    return {0.70, 0.05};
 }
 
 int Wrap(int value)
@@ -302,22 +298,7 @@ ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass, c
         }
     }
 
-    bool rival = false;
-
-    for (const auto& set : kRivals)
-    {
-        const bool superset = std::all_of(intervals.begin(), intervals.end(), [&](int interval) {
-            return std::find(set.begin(), set.end(), interval) != set.end();
-        });
-
-        if (!superset && shareOf(set) > match.share + 0.03)
-        {
-            rival = true;
-            break;
-        }
-    }
-
-    match.ok = total > 0.0 && match.share >= rule.share && match.missing.empty() && !rival;
+    match.ok = total > 0.0 && match.share >= rule.share && match.missing.empty();
     return match;
 }
 
@@ -330,7 +311,10 @@ bool StrumGate::Push(double levelDb, bool clean)
         mLevels.erase(mLevels.begin());
     }
 
-    if (levelDb > kQuietDb && levelDb - *std::min_element(mLevels.begin(), mLevels.end()) >= kJumpDb)
+    mRearmWait = std::max(0, mRearmWait - 1);
+
+    if (mRearmWait == 0 && levelDb > kQuietDb &&
+        levelDb - *std::min_element(mLevels.begin(), mLevels.end()) >= kJumpDb)
     {
         mArmed = true;
     }
@@ -341,6 +325,9 @@ bool StrumGate::Push(double levelDb, bool clean)
     {
         mHeld = 0;
         mArmed = false;
+        // The quiet before this strum must not read as a jump while it still rings.
+        mLevels.assign(1, levelDb);
+        mRearmWait = kRearmReadings;
         return true;
     }
 
@@ -352,6 +339,7 @@ void StrumGate::Reset()
     mLevels.clear();
     mArmed = true;
     mHeld = 0;
+    mRearmWait = 0;
 }
 
 bool NoteFollower::Push(std::optional<int> midi)

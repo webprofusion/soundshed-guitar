@@ -362,7 +362,8 @@ bool TestListen()
             return false;
         }
 
-        if (c[0] + c[4] + c[7] < 0.7f)
+        // Without overtone removal E's 3rd harmonic (B) and G's 3rd (D) hold this near 0.87.
+        if (c[0] + c[4] + c[7] < 0.95f)
         {
             std::cerr << "C major's tones hold only " << (c[0] + c[4] + c[7]) << " of its chroma\n";
             return false;

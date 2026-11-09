@@ -164,10 +164,10 @@ state: `scaleGuide.view` (mode, key, scale, chord, tuning, labels, position, han
   on the neck, debounce (two matching reads before moving, a short release, a fading trail of the
   last few notes). The tuner runs while the guide is open with LISTEN on.
 - Chords: a 12-bin chroma of the dry input, a new tap beside the tuner (pitch-class folding of a
-  spectrum is cheap and off the audio thread's critical path). Rule: the chord's tones hold a set
-  share of the energy, each tone but a plain 5th is present, and no rival quality on the same root
-  fits better; held ~200 ms = clean; the next hit needs a fresh strum (a level jump) so repeated
-  chords step once each. Tune thresholds on the demo DI riffs (see the PitchTracker work).
+  spectrum is cheap and off the audio thread's critical path). Rule: with overtones removed, the
+  chord's tones hold a set share of the energy and each tone but a plain 5th is present; held
+  ~130 ms = clean; the next hit needs a fresh strum (a level jump) so repeated chords step once
+  each. Thresholds are measured on labelled real strums: see LISTEN notes below.
 
 ## Clean-up once it ships
 
@@ -201,13 +201,21 @@ those are new work here.
 
 - Readings come about every 43 ms. A note shows once it reads the same twice, goes after four
   silent readings, and the last two stay as a fading trail (`NoteFollower` in listen.ts).
-- Chord match, per strictness (Easy / Normal / Strict): the chord's tones hold 55 / 65 / 75 % of
-  the chroma, each tone bar a plain 5th reads 10 / 15 / 25 %, and no rival chord on the root that
-  is not a superset fits better by more than 3 %. Five clean readings in a row (~200 ms) count;
-  the next count needs a 4 dB jump in level, so a repeated chord steps once per strum.
-- Tested on synthetic chords (TunerEngineTests, scaleGuideListen.test.ts) and live on the demo DI
-  riffs, which are single-note riffs: a clean strum of a real chord on a real guitar is not yet
-  checked, so the thresholds may want tuning against recordings (see the PitchTracker notes).
+- Chord match, per strictness (Easy / Normal / Strict): the chord's tones hold 60 / 70 / 80 % of
+  the chroma and each tone bar a plain 5th reads 3 / 5 / 7 %. Three clean readings in a row
+  (~130 ms) count; the next count needs a 3 dB jump in level after a lockout of eight readings
+  (~340 ms), and the level history restarts at each count so a ringing strum can't re-arm on the
+  quiet before it.
+- The chroma leaves out peaks that are a strong lower peak's 3rd, 5th, 6th or 7th harmonic. They
+  land on notes nobody fretted, and with them counted a well played chord's own tones typically
+  held under 80 %.
+- Measured on GuitarSet (six players, pickup signal, annotated chords; 3,889 well played strums),
+  fitting on three players and checking on the other three. On the check players, correct chords
+  pass 92 / 86 / 75 %; asked for the parallel major or minor instead, the chord is accepted 3.8 /
+  1.2 / 0.6 % of the time, and for the relative major or minor 10.6 / 6.9 / 3.7 %. The relative
+  pair is the hardest: the two chords share two of their three notes.
+- Not measured: LISTEN's single-note following, electric guitars through a DI, and a player
+  following a progression from start to finish in the app.
 
 ## Phases
 

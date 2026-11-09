@@ -9,24 +9,10 @@ export type Strictness = "easy" | "normal" | "strict";
 
 /** How much of the chroma the chord's tones must hold, and how strong each must be. */
 export const STRICTNESS: Readonly<Record<Strictness, { share: number; tone: number }>> = {
-  easy: { share: 0.55, tone: 0.1 },
-  normal: { share: 0.65, tone: 0.15 },
-  strict: { share: 0.75, tone: 0.25 },
+  easy: { share: 0.6, tone: 0.03 },
+  normal: { share: 0.7, tone: 0.05 },
+  strict: { share: 0.8, tone: 0.07 },
 };
-
-/** The common chords on a root, as semitones: a chord only rings clean if none of these fits better. */
-const RIVALS: readonly (readonly number[])[] = [
-  [0, 4, 7],
-  [0, 3, 7],
-  [0, 7],
-  [0, 4, 7, 10],
-  [0, 4, 7, 11],
-  [0, 3, 7, 10],
-  [0, 2, 7],
-  [0, 5, 7],
-  [0, 3, 6],
-  [0, 4, 8],
-];
 
 const NOTE_PITCH_CLASSES: Readonly<Record<string, number>> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
@@ -63,9 +49,8 @@ export interface ChordMatch {
 }
 
 /**
- * Whether `chroma` is the chord: its tones hold at least the strictness's share, each tone (bar a
- * plain 5th, which a chord can lose) reads at least the strictness's level, and no rival chord on
- * the same root that is not a superset of this one fits better.
+ * Whether `chroma` is the chord: its tones hold at least the strictness's share, and each tone (bar
+ * a plain 5th, which a chord can lose) reads at least the strictness's level.
  */
 export function matchChord(chroma: readonly number[], rootPitchClass: number, tones: readonly ChordTone[], strictness: Strictness): ChordMatch {
   const rule = STRICTNESS[strictness];
@@ -77,22 +62,24 @@ export function matchChord(chroma: readonly number[], rootPitchClass: number, to
   const heard = tones.map((tone) => at(tone.pitchClass) >= rule.tone);
   const optional = (tone: ChordTone): boolean => tone.interval === "5" && intervals.length > 2;
   const missing = tones.filter((tone, index) => !heard[index] && !optional(tone)).map((tone) => tone.pitchClass);
-  const rival = RIVALS.some((set) => !intervals.every((interval) => set.includes(interval)) && shareOf(set) > share + 0.03);
-  return { share, heard, missing, ok: total > 0 && share >= rule.share && missing.length === 0 && !rival };
+  return { share, heard, missing, ok: total > 0 && share >= rule.share && missing.length === 0 };
 }
 
 /**
  * Turns clean readings into strums: a chord counts once it has read clean for HOLD readings in a
- * row (about 200 ms), and the next count needs a fresh strum, a jump in level, so a repeated chord
- * (a 12-bar's I7 I7) steps once per strum rather than racing ahead.
+ * row (about 130 ms), and the next count needs a fresh strum, a jump in level after a short lockout
+ * (REARM_READINGS, about 340 ms), so a repeated chord (a 12-bar's I7 I7) steps once per strum
+ * rather than racing ahead.
  */
 export class StrumGate {
-  static readonly HOLD = 5;
-  static readonly JUMP_DB = 4;
+  static readonly HOLD = 3;
+  static readonly JUMP_DB = 3;
+  static readonly REARM_READINGS = 8;
   static readonly QUIET_DB = -50;
   private levels: number[] = [];
   private armed = true;
   private held = 0;
+  private rearmWait = 0;
 
   /** True when this reading completes a clean strum. */
   push(levelDb: number, clean: boolean): boolean {
@@ -102,7 +89,9 @@ export class StrumGate {
       this.levels.shift();
     }
 
-    if (levelDb > StrumGate.QUIET_DB && levelDb - Math.min(...this.levels) >= StrumGate.JUMP_DB) {
+    this.rearmWait = Math.max(0, this.rearmWait - 1);
+
+    if (this.rearmWait === 0 && levelDb > StrumGate.QUIET_DB && levelDb - Math.min(...this.levels) >= StrumGate.JUMP_DB) {
       this.armed = true;
     }
 
@@ -111,6 +100,9 @@ export class StrumGate {
     if (this.held >= StrumGate.HOLD) {
       this.held = 0;
       this.armed = false;
+      // The quiet before this strum must not read as a jump while it still rings.
+      this.levels = [levelDb];
+      this.rearmWait = StrumGate.REARM_READINGS;
       return true;
     }
 
@@ -121,6 +113,7 @@ export class StrumGate {
     this.levels = [];
     this.armed = true;
     this.held = 0;
+    this.rearmWait = 0;
   }
 }
 

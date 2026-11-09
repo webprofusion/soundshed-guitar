@@ -17,8 +17,10 @@ class SimdFFT;
  *
  * A Hann-windowed FFT of the window; each spectral peak between kMinHz and kMaxHz adds its
  * magnitude to the pitch class it is nearest, less the further it sits from that note's centre,
- * so leakage between two notes counts for little. The result sums to 1, or is all zero for
- * silence. Not for the audio thread: it runs on the tuner's worker.
+ * so leakage between two notes counts for little. A peak that is the 3rd, 5th, 6th or 7th harmonic
+ * of a comparably strong lower peak is left out: those land on notes the player did not fret, and
+ * without this a well played chord's own tones typically hold under 80% of the total. The result
+ * sums to 1, or is all zero for silence. Not for the audio thread: it runs on the tuner's worker.
  */
 class ChromaAnalyzer
 {
@@ -47,11 +49,21 @@ class ChromaAnalyzer
     [[nodiscard]] static std::size_t WindowFor(double sampleRate);
 
   private:
+    struct Peak
+    {
+        double frequency;
+        float magnitude;
+    };
+
+    /// Whether mPeaks[index], lowest first, is a foreign harmonic of a peak below it.
+    [[nodiscard]] bool IsOvertone(std::size_t index) const;
+
     std::size_t mSize;
     std::unique_ptr<SimdFFT> mFft;
     std::vector<float> mWindow;
     std::vector<std::complex<float>> mInput;
     std::vector<std::complex<float>> mSpectrum;
     std::vector<float> mMagnitude;
+    std::vector<Peak> mPeaks;
 };
 } // namespace guitarfx
