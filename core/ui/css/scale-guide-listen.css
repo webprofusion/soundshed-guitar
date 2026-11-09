@@ -75,6 +75,73 @@
   color: var(--color-success);
 }
 
+/* Play, beside Listen: a triangle, and a square to stop it. */
+.sg-play::before {
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  background: none;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+  box-shadow: none;
+}
+
+.sg-play.active::before {
+  width: 9px;
+  height: 9px;
+  background: currentColor;
+  border: none;
+  animation: none;
+}
+
+.sg-play:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The tab card's own Play, at the end of its heading. */
+.sg-tab-play {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* A scale's summary plays the scale: it reads as a button on hover and focus. */
+.sg-summary-playable {
+  margin: -6px -10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sg-summary-playable:hover,
+.sg-summary-playable.sg-summary-playing {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.sg-summary-playable:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.sg-dot {
+  cursor: pointer;
+}
+
+.sg-dot.sg-dot-playing {
+  opacity: 1;
+}
+
+.sg-dot.sg-dot-playing circle {
+  fill: var(--sg-root-fill);
+  stroke: var(--sg-dot-text);
+  stroke-width: 3;
+}
+
+.sg-dot.sg-dot-playing text {
+  fill: var(--sg-root-text, #fff);
+}
+
 .sg-dot.sg-hit circle {
   stroke: var(--color-success);
   stroke-width: 4;

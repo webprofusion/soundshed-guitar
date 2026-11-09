@@ -28,9 +28,10 @@
                 <!-- The Scale Guide (ts/scaleGuide/panel.ts): drawn from the engine's
                      scaleGuideView model; docs/plans/scale-guide.md. -->
                 <div class="scale-guide" id="scale-guide">
-                  <div class="sg-tabs" role="group" aria-label="Scales or chords">
+                  <div class="sg-tabs" role="group" aria-label="Scales, chords or arpeggios">
                     <button type="button" class="sg-tab" data-sg-mode="scale">Scales</button>
                     <button type="button" class="sg-tab" data-sg-mode="chord">Chords</button>
+                    <button type="button" class="sg-tab" data-sg-mode="arpeggio">Arpeggios</button>
                     <span class="sg-live" id="sg-live" hidden></span>
                     <span class="sg-title" id="sg-title"></span>
                   </div>
@@ -71,6 +72,8 @@
                           <button type="button" class="sg-segment" data-sg-labels="name">Notes</button>
                           <button type="button" class="sg-segment" data-sg-labels="interval">Intervals</button>
                           <button type="button" class="sg-segment" data-sg-labels="degree">Degrees</button>
+                          <button type="button" class="sg-segment" data-sg-labels="order" data-sg-labels-arp hidden title="The order the run plays its notes">Order</button>
+                          <button type="button" class="sg-segment" data-sg-labels="finger" data-sg-labels-arp hidden title="Which finger plays each note">Fingers</button>
                         </span>
                       </span>
                       <span class="sg-inline">
@@ -79,6 +82,21 @@
                       </span>
                       <label class="sg-check"><input type="checkbox" id="sg-left-handed" /> Left-handed</label>
                       <button type="button" class="sg-listen" id="sg-listen" aria-pressed="false" title="Hears your guitar: marks each note you hit, and steps through a progression as you strum it">Listen</button>
+                      <button type="button" class="sg-listen sg-play" id="sg-play" data-sg-play aria-pressed="false" disabled title="Pick a position to hear it">Play</button>
+                    </div>
+                    <div class="sg-controls-row sg-controls-view" id="sg-arp-row" hidden>
+                      <span class="sg-inline">
+                        <span class="sg-label" id="sg-arp-style-label">Style</span>
+                        <span class="sg-segmented" role="group" aria-labelledby="sg-arp-style-label">
+                          <button type="button" class="sg-segment" data-sg-arp-style="sweep" title="One pick stroke across the strings, a note or two on each">Sweep</button>
+                          <button type="button" class="sg-segment" data-sg-arp-style="two" title="Two notes on every string, climbing the neck">2 per string</button>
+                          <button type="button" class="sg-segment" data-sg-arp-style="box" title="Every chord tone in one hand position">Box</button>
+                        </span>
+                      </span>
+                      <span class="sg-inline" id="sg-arp-strings-field">
+                        <span class="sg-label" id="sg-arp-strings-label">Strings</span>
+                        <span class="sg-segmented" id="sg-arp-strings" role="group" aria-labelledby="sg-arp-strings-label"></span>
+                      </span>
                     </div>
                     <div class="sg-controls-row sg-controls-steps" id="sg-steps-row" hidden>
                       <span class="sg-label" id="sg-steps-label">Steps</span>
@@ -115,9 +133,10 @@
                     </div>
                   </div>
                   <div class="sg-neck" id="sg-neck"><p class="sg-note">Loading the neck…</p></div>
+                  <div class="sg-card sg-arp-tab" id="sg-arp-tab" hidden></div>
                   <div class="sg-boxes" id="sg-boxes" hidden></div>
                   <div class="sg-card sg-summary">
-                    <div class="sg-summary-main">
+                    <div class="sg-summary-main" id="sg-summary-main">
                       <span class="sg-root-badge" id="sg-root-badge" aria-hidden="true"></span>
                       <span class="sg-summary-text">
                         <span class="sg-label" id="sg-summary-label">Scale</span>

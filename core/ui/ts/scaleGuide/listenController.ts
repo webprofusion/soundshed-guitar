@@ -1,7 +1,7 @@
 /**
  * The Scale Guide's LISTEN, wired to the panel through `ListenHost` (panel.ts): asks the engine to
  * listen while LISTEN is on and the guide is on screen (`tuner {action: "listen"}`), follows the
- * played note in Scales mode, and in Chords mode turns chroma readings into clean strums that step a
+ * played note in Scales and Arpeggios mode, and in Chords mode turns chroma readings into clean strums that step a
  * progression on. listen.ts holds the logic, listenView.ts the page writes.
  */
 
@@ -81,7 +81,7 @@ export function renderListen(host: ListenHost): void {
   }
 
   const state = host.settings();
-  showNotes(neck, view, { labels: state.labels, leftHanded: state.leftHanded }, listening && !chordMode ? [follower.current, ...follower.trail] : []);
+  showNotes(neck, view, { labels: state.labels, leftHanded: state.leftHanded, width: neck.clientWidth }, listening && !chordMode ? [follower.current, ...follower.trail] : []);
   showMatch(root, view, null, state.match);
 
   if (!listening) {
@@ -122,7 +122,7 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
     return true;
   }
 
-  if (view.mode === "scale") {
+  if (view.mode !== "chord") {
     if (follower.push(payload.detected === true ? readingMidi(payload.noteName, payload.octave) : null)) {
       renderListen(host);
     }

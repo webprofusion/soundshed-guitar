@@ -9,6 +9,7 @@
  * mirroring for a left-handed player or turning the neck over are the renderer's business alone.
  */
 
+#include "music/Arpeggios.h"
 #include "music/Fretboard.h"
 
 #include <nlohmann/json.hpp>
@@ -27,7 +28,7 @@ constexpr int kMaxProgressionChords = 16;
 
 struct ScaleGuideRequest
 {
-    /// "scale" or "chord".
+    /// "scale", "chord" or "arpeggio".
     std::string mode = "scale";
     /// The key (or the chord's root), as a pitch class.
     int key = 4;
@@ -45,10 +46,13 @@ struct ScaleGuideRequest
     Instrument instrument = Instrument::Guitar;
     int frets = kDefaultFrets;
     int capo = 0;
-    /// 0 is the whole neck (all tones); 1 … n a scale position or chord shape.
+    /// 0 is the whole neck (all tones); 1 … n a scale position, chord shape or arpeggio run.
     int position = 0;
     int notesPerString = 0;
     bool allowInversions = false;
+    ArpeggioStyle arpeggioStyle = ArpeggioStyle::Sweep;
+    /// How many strings an arpeggio plays, from the highest: 0 for the default.
+    int arpeggioStrings = 0;
     /// The shape last shown, as frets per string: when set, a chord takes the shape nearest it.
     std::vector<int> previousFrets;
 };

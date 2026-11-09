@@ -1,0 +1,81 @@
+/* ===== Scale Guide: Arpeggios =====
+   The run's path over the neck and the tab card under it (ts/scaleGuide/arpeggioTab.ts).
+   The tab is SVG whose parts carry classes, so its colours follow the theme here. */
+
+.sg-run-path {
+  fill: none;
+  stroke: var(--sg-root-fill);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.scale-guide .sg-arp-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 8px;
+}
+
+.scale-guide .sg-arp-tab[hidden] {
+  display: none;
+}
+
+.sg-arp-tab-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.sg-arp-tab-frets {
+  color: var(--color-text-secondary, var(--sg-dim-text));
+  font-size: 13px;
+}
+
+.sg-arp-tab-scroll {
+  overflow-x: auto;
+}
+
+.sg-tab-svg {
+  display: block;
+}
+
+.sg-tab-string {
+  stroke: var(--sg-box-line);
+  stroke-width: 1;
+}
+
+.sg-tab-name {
+  fill: var(--sg-dim-text);
+  font-size: 11px;
+}
+
+.sg-tab-fret {
+  fill: var(--sg-dot-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sg-tab-interval {
+  fill: var(--sg-dim-text);
+  font-size: 11px;
+}
+
+.sg-tab-fret.sg-tab-root,
+.sg-tab-interval.sg-tab-root {
+  fill: var(--sg-root-fill);
+}
+
+.sg-tab-stroke {
+  fill: none;
+  stroke: var(--sg-dot-text);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.sg-tab-legato {
+  fill: var(--sg-dot-text);
+  font-size: 13px;
+  font-style: italic;
+}

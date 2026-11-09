@@ -621,6 +621,7 @@ class Shell
     /// Every tick: LISTEN on while the guide shows with it on, and the readings it brings.
     void SyncScaleGuideListen();
     [[nodiscard]] std::vector<int> ScaleGuideHeard() const;
+    [[nodiscard]] bool ScaleGuidePlaying() const;
     nlohmann::json mScaleGuideView;
     std::string mScaleGuideViewKey;
     int mScaleGuideStep = 0;

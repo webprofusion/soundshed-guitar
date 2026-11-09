@@ -16,12 +16,15 @@
 #include "controller/DemoPreviewService.h"
 #include "IPluginHost.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace guitarfx
@@ -336,6 +339,48 @@ std::vector<float> RenderMonoInput(DemoPreviewService& svc, int blockSize, int b
 /// Regression: a mono track in a DAW (Cubase, on a mono audio track) gives the
 /// plugin one input channel, so `inputs[1]` is null. The mix used to write it
 /// unconditionally and took the host down on the first block of a preview.
+bool TestRenderedPreviewReportsOnlyWhenAsked()
+{
+    std::cout << "\nA rendered preview reports itself only when announced\n";
+
+    NullPluginHost host;
+    guitarfx::MultiPresetMixer mixer;
+    std::mutex dspMutex;
+    std::atomic<bool> signalTestActive{false};
+    std::vector<std::string> sent;
+    DemoPreviewService svc(
+        host, mixer, dspMutex, signalTestActive, [](const std::string&, const std::string&) {},
+        [&sent](const std::string& message) { sent.push_back(nlohmann::json::parse(message).value("type", "")); });
+
+    const auto play = [&svc](std::size_t frames) {
+        std::vector<float> left(frames, 0.0f);
+        std::vector<float> right(frames, 0.0f);
+        float* inputs[2] = {left.data(), right.data()};
+        svc.MixIntoInput(inputs, static_cast<int>(frames));
+        return left;
+    };
+
+    bool passed = true;
+    svc.StartPreviewFromSamples(std::vector<float>(256, 0.25f), kSampleRate, "note", "Note", false);
+    passed = passed && sent.empty() && play(64)[0] == 0.25f;
+    play(512);
+    svc.OnIdle();
+    passed = passed && sent.empty() && !svc.IsPreviewActive();
+
+    svc.StartPreviewFromSamples(std::vector<float>(4800, 0.25f), kSampleRate, "run", "Run", true);
+    passed = passed && sent == std::vector<std::string>{"previewStarted"};
+
+    // A note over the run: the run is reported ended, and its level fades under the note's start.
+    play(64);
+    svc.StartPreviewFromSamples(std::vector<float>(4800, 0.5f), kSampleRate, "note", "Note", false);
+    passed = passed && sent == std::vector<std::string>{"previewStarted", "previewStopped"};
+    const auto heard = play(720);
+    passed = passed && std::abs(heard[0] - 0.75f) < 1e-4f && std::abs(heard[719] - 0.5f) < 1e-3f;
+
+    std::cout << (passed ? "  ok" : "  FAILED") << "\n";
+    return passed;
+}
+
 bool TestMonoInputBusFoldsInsteadOfCrashing()
 {
     std::cout << "\nA mono input bus folds the clip instead of crashing\n";
@@ -452,6 +497,11 @@ int main()
     }
 
     if (!TestMonoInputBusFoldsInsteadOfCrashing())
+    {
+        allPassed = false;
+    }
+
+    if (!TestRenderedPreviewReportsOnlyWhenAsked())
     {
         allPassed = false;
     }

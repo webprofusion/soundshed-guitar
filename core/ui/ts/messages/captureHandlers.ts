@@ -10,6 +10,7 @@ import { applyMetronomeBeat } from "../metronome.js";
 import { showNotification } from "../notifications.js";
 import { applyPracticeToolFileLoaded, applyPracticeToolPlaybackEnded, applyPracticeToolTransportState } from "../practiceTool.js";
 import { applyRiffCaptureProgress, applyRiffCaptureState, applyRiffLibraryState, handleCapturedPreviewComplete, handleRiffPreviewPlayback, handleSavedRiffPreviewComplete } from "../riffLibrary.js";
+import { onScaleGuidePlaybackEnded, onScaleGuidePlaybackStarted, SCALE_GUIDE_PREVIEW_ID } from "../scaleGuide/playback.js";
 import { uiState } from "../state.js";
 import type { RiffLibrary } from "../types.js";
 import type { IncomingPayload } from "./types.js";
@@ -134,6 +135,11 @@ export function onPracticeToolPlaybackEnded(): void {
 }
 
 export function onPreviewStarted(payload: IncomingPayload): void {
+  if ((payload as { id?: string }).id === SCALE_GUIDE_PREVIEW_ID) {
+    onScaleGuidePlaybackStarted();
+    return;
+  }
+
   appendLog(`preview started ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
   handleRiffPreviewPlayback("start", (payload as { id?: string }).id ?? "");
   syncDemoAudioSelectionFromPreview((payload as { id?: string }).id ?? null);
@@ -142,6 +148,11 @@ export function onPreviewStarted(payload: IncomingPayload): void {
 }
 
 export function onPreviewComplete(payload: IncomingPayload): void {
+  if ((payload as { id?: string }).id === SCALE_GUIDE_PREVIEW_ID) {
+    onScaleGuidePlaybackEnded();
+    return;
+  }
+
   appendLog(`preview complete ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
   const previewId = (payload as { id?: string }).id ?? "";
   const savedRiffLooped = handleSavedRiffPreviewComplete(previewId);
@@ -159,6 +170,11 @@ export function onPreviewComplete(payload: IncomingPayload): void {
 }
 
 export function onPreviewStopped(payload: IncomingPayload): void {
+  if ((payload as { id?: string }).id === SCALE_GUIDE_PREVIEW_ID) {
+    onScaleGuidePlaybackEnded();
+    return;
+  }
+
   appendLog(`preview stopped ← ${(payload as { title?: string; id?: string }).title ?? (payload as { id?: string }).id ?? "demo"}`);
   handleRiffPreviewPlayback("stop", (payload as { id?: string }).id ?? "");
   onDemoAudioStopped();

@@ -106,6 +106,13 @@ void Shell::Subscribe()
     on(Topic::GlobalChain, kTransport);
     on(Topic::Mixer, kTransport | kScenes | kChain);
     on(Topic::Demo, kTransport);
+    // The Scale Guide's Play button turns to Stop and back (ScaleGuideSignature).
+    mSubscriptions.push_back(client.Subscribe(Topic::Demo, [this] {
+        if (mPage == Page::Jam)
+        {
+            Mark(kPage);
+        }
+    }));
     // The layout library and its pictures, and the setting that picks a layout per effect: the
     // effect page is rebuilt only when what it shows changes (EffectPageSignature).
     mSubscriptions.push_back(client.Subscribe(Topic::EffectLayouts, [this] {

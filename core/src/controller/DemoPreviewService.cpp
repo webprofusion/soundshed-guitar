@@ -380,6 +380,68 @@ void DemoPreviewService::StartDecodedPreview(const std::vector<std::uint8_t>& de
     mSendMessage(startMsg.dump());
 }
 
+void DemoPreviewService::StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
+                                                 const std::string& title, bool announce)
+{
+    if (samples.empty() || sampleRate <= 0.0)
+    {
+        return;
+    }
+
+    // Cut dead, what was playing would click, and a high-gain preset makes a loud thing of a click.
+    const auto previous = std::atomic_load_explicit(&mDemoAudioBuffer, std::memory_order_acquire);
+    const bool interrupting = previous && mDemoAudioActive.load(std::memory_order_acquire);
+
+    if (interrupting && previous->channels > 0)
+    {
+        constexpr double kFadeSeconds = 0.015;
+        const auto& left = previous->channelSamples[0];
+        const std::size_t cursor = mDemoAudioCursor.load(std::memory_order_relaxed);
+        const std::size_t fade = std::min(samples.size(), static_cast<std::size_t>(kFadeSeconds * sampleRate));
+
+        for (std::size_t n = 0; n < fade && cursor + n < left.size(); ++n)
+        {
+            samples[n] += left[cursor + n] * (1.0f - static_cast<float>(n) / static_cast<float>(fade));
+        }
+    }
+
+    auto buffer = std::make_shared<DemoAudioBuffer>();
+    buffer->id = id;
+    buffer->title = title.empty() ? id : title;
+    buffer->sampleRate = sampleRate;
+    buffer->channels = 1;
+    buffer->announce = announce;
+    buffer->channelSamples.push_back(std::move(samples));
+
+    {
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mDemoAudioCursor.store(0, std::memory_order_release);
+        mCarryPos = 0;
+        std::atomic_store_explicit(&mPreviewRegion, std::shared_ptr<const PreviewRegion>{}, std::memory_order_release);
+        std::atomic_store_explicit(&mDemoAudioBuffer, buffer, std::memory_order_release);
+        mDemoAudioActive.store(true, std::memory_order_release);
+    }
+
+    // Replaced, the old one never reaches OnIdle, so its listeners must hear it ended here.
+    if (interrupting && previous->announce)
+    {
+        nlohmann::json stopped;
+        stopped["type"] = "previewStopped";
+        stopped["id"] = previous->id;
+        stopped["title"] = previous->title;
+        mSendMessage(stopped.dump());
+    }
+
+    if (announce)
+    {
+        nlohmann::json started;
+        started["type"] = "previewStarted";
+        started["id"] = buffer->id;
+        started["title"] = buffer->title;
+        mSendMessage(started.dump());
+    }
+}
+
 void DemoPreviewService::StopPreview()
 {
     mDemoAudioActive.store(false, std::memory_order_release);
@@ -407,11 +469,15 @@ void DemoPreviewService::OnIdle()
         return;
     }
 
-    nlohmann::json msg;
-    msg["type"] = "previewComplete";
-    msg["id"] = demoBuffer->id;
-    msg["title"] = demoBuffer->title;
-    mSendMessage(msg.dump());
+    if (demoBuffer->announce)
+    {
+        nlohmann::json msg;
+        msg["type"] = "previewComplete";
+        msg["id"] = demoBuffer->id;
+        msg["title"] = demoBuffer->title;
+        mSendMessage(msg.dump());
+    }
+
     std::atomic_store_explicit(&mDemoAudioBuffer, std::shared_ptr<DemoAudioBuffer>{}, std::memory_order_release);
 }
 

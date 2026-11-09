@@ -4,6 +4,7 @@
 #include <array>
 #include <iterator>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace guitarfx::music
@@ -139,6 +140,137 @@ json ShapeJson(const ChordShape& shape, int capo)
             {"caged", shape.caged}};
 }
 
+/// How a run is named: by where it starts, as a player thinks of an inversion.
+std::string RunName(const ArpeggioShape& shape, const SpelledSet& tones)
+{
+    return shape.startTone == 0 ? std::string("Root position")
+                                : "From the " + tones.notes[shape.startTone].interval.label;
+}
+
+json RunJson(const ArpeggioShape& shape, const SpelledSet& tones, const std::string& name)
+{
+    json notes = json::array();
+
+    for (const auto& note : shape.notes)
+    {
+        const auto& tone = tones.notes[note.tone];
+        notes.push_back({{"string", note.string},
+                         {"fret", note.fret},
+                         {"tone", note.tone},
+                         {"name", tone.name},
+                         {"interval", tone.interval.label},
+                         {"root", note.tone == 0},
+                         {"finger", note.finger}});
+    }
+
+    json steps = json::array();
+
+    for (const auto& step : shape.steps)
+    {
+        steps.push_back({{"note", step.note}, {"stroke", std::string(PickStrokeId(step.stroke))}});
+    }
+
+    return {{"name", name},
+            {"start", tones.notes[shape.startTone].interval.label},
+            {"fretFrom", shape.fretFrom},
+            {"fretTo", shape.fretTo},
+            {"fromString", shape.fromString},
+            {"toString", shape.toString},
+            {"notes", notes},
+            {"steps", steps}};
+}
+
+/// A scale position as a run, so it gets the same tab and playback as an arpeggio: its notes rising
+/// and then falling, alternate-picked. A pitch two strings share in the box is played once.
+ArpeggioShape ScalePositionRun(const Neck& neck, const std::vector<FretPos>& cells,
+                               const std::array<int, kPitchClasses>& toneIndex)
+{
+    const auto pitch = [&neck](const FretPos& cell) { return neck.strings[cell.string] + cell.fret; };
+    auto rising = cells;
+    std::sort(rising.begin(), rising.end(), [&pitch](const FretPos& a, const FretPos& b) {
+        return pitch(a) != pitch(b) ? pitch(a) < pitch(b) : a.string < b.string;
+    });
+    rising.erase(std::unique(rising.begin(), rising.end(),
+                             [&pitch](const FretPos& a, const FretPos& b) { return pitch(a) == pitch(b); }),
+                 rising.end());
+
+    ArpeggioShape run;
+
+    if (rising.empty())
+    {
+        return run;
+    }
+
+    run.fretFrom = rising.front().fret;
+    run.fretTo = rising.front().fret;
+    run.fromString = rising.front().string;
+    run.toString = rising.front().string;
+
+    for (const auto& cell : rising)
+    {
+        run.notes.push_back({cell.string, cell.fret, std::max(0, toneIndex[PitchClass(pitch(cell))]), 0});
+        run.fretFrom = std::min(run.fretFrom, cell.fret);
+        run.fretTo = std::max(run.fretTo, cell.fret);
+        run.fromString = std::min(run.fromString, cell.string);
+        run.toString = std::max(run.toString, cell.string);
+    }
+
+    const int count = static_cast<int>(run.notes.size());
+
+    for (int step = 0; step < 2 * count - 1; ++step)
+    {
+        run.steps.push_back(
+            {step < count ? step : 2 * count - 2 - step, step % 2 == 0 ? PickStroke::Down : PickStroke::Up});
+    }
+
+    run.startTone = run.notes.front().tone;
+    return run;
+}
+
+/// How a style is played, for the page's quick reference.
+std::string ArpeggioAdvice(ArpeggioStyle style)
+{
+    switch (style)
+    {
+    case ArpeggioStyle::TwoPerString:
+        return "Two notes on every string, the hand shifting up the neck as it crosses: pick the first and hammer "
+               "the second, then pick and pull off coming back.";
+    case ArpeggioStyle::Box:
+        return "Every chord tone under one hand position, a good way to learn where they sit. The tab shows one way "
+               "through; try it picked as well as swept.";
+    case ArpeggioStyle::Sweep:
+        break;
+    }
+
+    return "One pick stroke across the strings, down going up and up coming back, with a hammer-on and pull-off "
+           "where a string has two notes. Lift each finger as the next note sounds, so the notes never ring together.";
+}
+
+/// Why a style has nothing to show here.
+std::string ArpeggioEmptyNote(ArpeggioStyle style, const Neck& neck)
+{
+    if (style != ArpeggioStyle::Box && !neck.Ascending())
+    {
+        return "This tuning's strings do not rise in pitch, so a run cannot cross them in one sweep: try Box. "
+               "The neck still marks all the chord's notes.";
+    }
+
+    return "Nothing playable for this chord in this style: try Box. The neck still marks all its notes.";
+}
+
+/// A run over a capo: its frets as the neck numbers them.
+ArpeggioShape OnNeck(ArpeggioShape shape, int capo)
+{
+    for (auto& note : shape.notes)
+    {
+        note.fret += capo;
+    }
+
+    shape.fretFrom += capo;
+    shape.fretTo += capo;
+    return shape;
+}
+
 /// Every chord of a progression with a shape, voice-led from the one showing: walking on from
 /// the current step, each chord takes the shape nearest the last, as stepping through it would.
 json ProgressionStrip(const Neck& neck, const std::vector<SpelledChord>& chords, int step,
@@ -213,7 +345,8 @@ ScaleGuideRequest ParseScaleGuideRequest(const json& object)
         return request;
     }
 
-    request.mode = StringField(object, "mode", request.mode) == "chord" ? "chord" : "scale";
+    const auto mode = StringField(object, "mode", request.mode);
+    request.mode = mode == "chord" || mode == "arpeggio" ? mode : "scale";
     request.key = PitchClass(IntField(object, "key", request.key, -1000, 1000));
     request.scale = StringField(object, "scale", request.scale);
     request.chord = StringField(object, "chord", request.chord);
@@ -226,6 +359,8 @@ ScaleGuideRequest ParseScaleGuideRequest(const json& object)
     request.position = IntField(object, "position", 0, 0, 100);
     request.notesPerString = IntField(object, "notesPerString", 0, 0, 4);
     request.allowInversions = object.value("allowInversions", false);
+    request.arpeggioStyle = ParseArpeggioStyle(StringField(object, "arpeggioStyle", "")).value_or(ArpeggioStyle::Sweep);
+    request.arpeggioStrings = IntField(object, "arpeggioStrings", 0, 0, kMaxStrings);
     request.instrument = ParseInstrument(StringField(object, "instrument", "guitar")).value_or(Instrument::Guitar);
 
     if (const auto it = object.find("progressionChords"); it != object.end() && it->is_array())
@@ -273,9 +408,10 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
     const int capo = std::min(request.capo, neck.frets - kMinFrets / 2);
     const Neck playing = AboveCapo(neck, capo);
     const bool chordMode = request.mode == "chord";
+    const bool arpeggioMode = request.mode == "arpeggio";
 
     json view;
-    view["mode"] = chordMode ? "chord" : "scale";
+    view["mode"] = request.mode;
     view["key"] = request.key;
     view["instrument"] = std::string(InstrumentId(neck.instrument));
     view["tuning"] = {{"id", resolved.tuningId}, {"name", resolved.tuningName}};
@@ -293,9 +429,51 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
 
     SpelledSet tones;
     std::vector<std::vector<FretPos>> positionCells;
+    std::vector<ArpeggioShape> runs;
     int position = request.position;
 
-    if (!chordMode)
+    if (arpeggioMode)
+    {
+        const auto* def = FindChord(request.chord);
+        const auto chord = SpellChord(request.key, def != nullptr ? *def : Chords().front());
+        tones = chord.notes;
+
+        ArpeggioSearch search;
+        search.rootPitchClass = chord.rootPitchClass;
+        search.intervals = chord.def->intervals;
+        search.style = request.arpeggioStyle;
+        // The saved count stands for the next style even where this one plays fewer.
+        const auto stringChoices = ArpeggioStringsWithRuns(playing, search);
+        search.strings = ClosestArpeggioStrings(stringChoices, ArpeggioStringsFor(playing, request.arpeggioStrings));
+        json runsJson = json::array();
+
+        for (auto& shape : ArpeggioShapes(playing, search))
+        {
+            runs.push_back(OnNeck(std::move(shape), capo));
+            std::vector<FretPos> cells;
+
+            for (const auto& note : runs.back().notes)
+            {
+                cells.push_back({note.string, note.fret});
+            }
+
+            positionCells.push_back(std::move(cells));
+            runsJson.push_back(RunJson(runs.back(), tones, RunName(runs.back(), tones)));
+        }
+
+        view["title"] = chord.name + " arpeggio";
+        view["chord"] = {{"id", chord.def->id},
+                         {"name", chord.name},
+                         {"quality", chord.def->name},
+                         {"formula", IntervalLabels(tones)}};
+        view["arpeggio"] = {{"style", std::string(ArpeggioStyleId(request.arpeggioStyle))},
+                            {"strings", search.strings},
+                            {"stringChoices", stringChoices},
+                            {"advice", ArpeggioAdvice(request.arpeggioStyle)},
+                            {"empty", ArpeggioEmptyNote(request.arpeggioStyle, playing)},
+                            {"runs", runsJson}};
+    }
+    else if (!chordMode)
     {
         const auto* scale = FindScale(request.scale);
 
@@ -445,6 +623,18 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
     }
 
     const std::vector<FretPos>* selected = position > 0 ? &positionCells[position - 1] : nullptr;
+    const ArpeggioShape* run = arpeggioMode && position > 0 ? &runs[position - 1] : nullptr;
+
+    if (run != nullptr)
+    {
+        view["run"] = RunJson(*run, tones, RunName(*run, tones));
+    }
+    else if (!chordMode && selected != nullptr)
+    {
+        view["run"] =
+            RunJson(ScalePositionRun(neck, *selected, toneIndex), tones, "Position " + std::to_string(position));
+    }
+
     json dots = json::array();
 
     for (int s = 0; s < static_cast<int>(neck.strings.size()); ++s)
@@ -461,14 +651,30 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
             const auto& note = tones.notes[index];
             const bool inPosition = selected == nullptr ||
                                     std::find(selected->begin(), selected->end(), FretPos{s, fret}) != selected->end();
-            dots.push_back({{"string", s},
-                            {"fret", fret},
-                            {"tone", index},
-                            {"name", note.name},
-                            {"interval", note.interval.label},
-                            {"degree", note.interval.degree},
-                            {"root", index == 0},
-                            {"inPosition", inPosition}});
+            json dot = {{"string", s},
+                        {"fret", fret},
+                        {"tone", index},
+                        {"name", note.name},
+                        {"interval", note.interval.label},
+                        {"degree", note.interval.degree},
+                        {"root", index == 0},
+                        {"inPosition", inPosition}};
+
+            if (run != nullptr && inPosition)
+            {
+                // Its place in the run, so the neck can number the notes or show their fingers.
+                const auto played = std::find_if(run->notes.begin(), run->notes.end(), [&](const ArpeggioNote& n) {
+                    return n.string == s && n.fret == fret;
+                });
+
+                if (played != run->notes.end())
+                {
+                    dot["order"] = static_cast<int>(played - run->notes.begin()) + 1;
+                    dot["finger"] = played->finger;
+                }
+            }
+
+            dots.push_back(std::move(dot));
         }
     }
 

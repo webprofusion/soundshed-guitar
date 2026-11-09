@@ -13,7 +13,8 @@ a chroma vector from `dsp/ChromaAnalyzer.h` and a clean strum steps a progressio
 (Nano Q: `nanoq/src/ui/jam/ScaleGuidePage.cpp` and `ScaleGuideDraw.cpp` draw the same view model,
 with the web UI's settings and LISTEN rules ported to `core/src/uiclient/ScaleGuide.h`; the Scales
 web view is gone from Nano Q), and phase 6 (the scalex links removed: `kScalesUrl`, the
-`StaysInWebView` and `isScalexUrl` cases). The optional audio preview was not built. `ScaleGuideTests --dump <tuning> <key 0-11> <chord>` prints the shapes found, for tuning
+`StaysInWebView` and `isScalexUrl` cases). The optional audio preview was not built. Arpeggios, the third mode, followed on 2026-11-06 in
+`core/src/music/Arpeggios.h` on both UIs (see Arpeggio notes). `ScaleGuideTests --dump <tuning> <key 0-11> <chord>` prints the shapes found, for tuning
 the search's scoring.
 
 ## Why
@@ -30,7 +31,7 @@ We want the scale and chord views drawn by the app itself, the same in the web U
 
 ## What it shows
 
-One neck view, two modes, sharing the key and tuning.
+One neck view, three modes, sharing the key and tuning.
 
 **Scales**
 - Key (12 chips, enharmonic pairs shown as `C♯/D♭`), scale (grouped list), tuning.
@@ -54,14 +55,28 @@ One neck view, two modes, sharing the key and tuning.
   V …), plus the player's own (name + up to 16 chords as degree + quality). STEPS pills with
   prev/next/restart; arrow keys step. Stepping keeps the next shape near the last one.
 
-**Both**
+**Arpeggios**
+- Root + quality, then the runs of that chord across the neck: one per chord tone it can start on,
+  in each octave that fits, sorted up the neck and named (Root position, From the ♭3). Position
+  picks a run; ALL shows every chord tone.
+- Style: Sweep (one pick stroke across the strings, a hammer-on and pull-off where a string has
+  two notes), 2 per string (a note pair on each string, the hand shifting up the neck), or Box
+  (every chord tone once in one hand position). Strings, counted from the highest, set how wide a
+  sweep or 2 per string runs; a box ignores it.
+- The chosen run lies on the neck as a path through its notes, labelled Order or Fingers if asked,
+  with the rest dimmed. Under the neck, a tab card: up the strings and back, pick strokes above,
+  intervals below.
+
+**All three**
+- A chosen position can be heard: Play sends it through the current preset, and a dot on the neck
+  plays that one note.
 - NOTES / INTERVALS / DEGREES / none labels; left-handed (mirrored) view; fret range (0-12,
   0-24, or follow the chosen position); capo (shifts the nut, labels stay concert pitch).
 - LISTEN (phase 4): the neck marks each note you hit, coloured by whether it fits the scale; in
   Chords mode, strumming the current chord steps the progression.
 
 Out of scope: backing tracks (Jam already has search, favourites and the floating player; the
-guide can link to it), tab/notation, a chord-name finder from tapped notes (a later idea).
+guide can link to it), tab/notation beyond the arpeggio runs, a chord-name finder from tapped notes (a later idea).
 
 ## Instruments and tunings
 
@@ -139,6 +154,9 @@ expected dots and shapes) live in core/tests and are what both renderers' tests 
 
 ## Rendering
 
+- **Neck size:** one drawing unit is one CSS pixel once the space is 1000 px or wider, so dots and
+  labels stay UI-sized and follow the app's zoom while the frets spread to fill the width. Below
+  that the whole drawing scales down. Nano Q draws the same way.
 - **Web:** an SVG component under `core/ui/ts/scaleGuide/` in the Jam → Scales section,
   replacing the iframe. Horizontal neck (string 1 on top in the usual tab-like orientation, or
   low string at the bottom: one setting), fret spacing a blend of real 12-TET and even spacing so
@@ -197,6 +215,60 @@ those are new work here.
   (F♭ counts as an accidental). B♭m7, D♭ and the like come out as charts write them.
 - Search time: about 1.3 ms a chord in a Debug build, worst on 8 strings.
 
+## Arpeggio notes
+
+`Arpeggios.h` searches; `ScaleGuideView` turns the result into `view.arpeggio`, so Nano Q and the
+web do no music theory.
+
+- A sweep or 2 per string is a dynamic programme over the rising chord pitches, assigning each to
+  the next string inside a fret window. An extra note on a string costs 1 on the top string, 3 on
+  the first and 4.5 inside, which is what puts a sweep's hammer-on at the ends: Am reads
+  `12 15/14/14/13/12 17`, fingers 1 4 3 3 2 1 4.
+- Fingering is a second one: a move wants a finger gap equal to its fret gap, rolls stay on one
+  finger, and a shift while changing string costs half.
+- Sweeps run root to root. Chords past the octave drop the octave root's rung (R 3 5 7 9) and may
+  end on the 9th. Where no octave ending fits (DADGAD's top strings), any ending that sounded
+  every tone will do.
+- 2 per string needs at least a seventh chord across five strings: a triad would climb 17 frets
+  or more, so `ArpeggioStringsWithRuns` offers only the counts with runs and the view plays the
+  closest. The saved count stays, for the next style or chord.
+- Re-entrant tunings have no sweep or 2 per string; the view says so and shows the chord tones.
+  Boxes work anywhere.
+- `runs` carry `notes` lowest first and `steps` for the way up and back, the top note once.
+- The golden shapes and the rules over every tuning are in `core/tests/ArpeggioTests.cpp`, and
+  `ArpeggioTests --dump <tuning> <key> <chord> <style> <strings>` prints the runs found.
+
+## Play notes
+
+- A chosen scale position gets a `run` in the view model like an arpeggio's (`ScalePositionRun`):
+  its notes rising and falling, alternate-picked, a pitch two strings share played once. That is
+  what the tab card and Play read, so all three stay the same for both modes. A chord plays its
+  shape strummed once. All has nothing to play, so Play is disabled there.
+- Other ways in: a scale's summary (badge, name and notes) plays `ScaleExampleNotes`, one octave
+  from the lowest root in the chosen position's run to the next root and back, taken from the first
+  position when All is showing. A chord box, or a progression's, strums its own frets
+  (`StrummedChord`, action `playChord`), so the chord heard is the box clicked even before the
+  view catches up. The tab card has a Play of its own, the same as the one beside Listen.
+- `music/ScalePlayback.h` renders the notes on the message thread to a mono signal, eighth notes at
+  the metronome's tempo (held to 60-200 BPM), peaking at 0.35 like a DI track.
+  `DemoPreviewService::StartPreviewFromSamples` then mixes it into the input, so it goes through the
+  preset as a demo clip does; the audio thread only copies.
+- The voice is a Karplus-Strong string: a noise burst low-passed and combed by the pick position, a
+  loop that loses the most top a pass can, an all-pass for the fraction of a sample, a comb for the
+  pickup, then the pickup and cable as a two-pole and a one-pole low-pass. It is within 4 cents from
+  E2 to E6 at 44.1, 48 and 96 kHz. Hammer-ons and pull-offs start softer and rounder. A render never
+  varies, so a test can pin it.
+- Its first voicing was harsh: -5 dB of its power above 2.8 kHz, where the demo DI take has -34 dB
+  and the two riff recordings -45 dB. It is now -37 dB, and its octave bands from 63 Hz to 5.6 kHz
+  sit between the DI's and the riffs'. `ScalePlaybackTests --tone` prints the bands side by side,
+  `--wav <file>` writes the sample it measures, and the test holds the voice between the DI's top
+  plus 1 dB and 11 dB under it.
+- Reports use the preview id `scale-guide`, kept out of the demo clip's notifications on the web. A
+  clicked note is not announced at all, and fades over whatever it interrupts, since a hard cut
+  through a high-gain preset is a loud click.
+- The web lights each note from `scaleGuidePlayback`'s timings. Nano Q plays but does not light them
+  yet; it lights the summary, and turns every Play to Stop, while anything plays.
+
 ## LISTEN notes (phase 4)
 
 - Readings come about every 43 ms. A note shows once it reads the same twice, goes after four
@@ -231,6 +303,7 @@ those are new work here.
 5. **Nano Q page.** The drawn neck and box, controls, then LISTEN. Drop the Scales WebView.
 6. **Clean-up** above; optional audio preview (play the scale up/down or strum the shape through
    the app's own output).
+7. **Arpeggios.** The search, the third mode on both UIs, the run path and tab card.
 
 ## Open questions
 

@@ -29,6 +29,15 @@ constexpr float kBoxPadX = 22.0f;
 constexpr float kBoxTop = 30.0f;
 constexpr int kBoxRows = 5;
 
+constexpr float kTabSlot = 30.0f;
+constexpr float kTabLeft = 30.0f;
+constexpr float kTabRight = 12.0f;
+constexpr float kTabStrokesY = 12.0f;
+constexpr float kTabTop = 34.0f;
+constexpr float kTabStringGap = 15.0f;
+constexpr float kTabIntervalGap = 22.0f;
+constexpr float kTabNumberGap = 18.0f;
+
 int IntAt(const nlohmann::json& object, const char* key, int fallback = 0)
 {
     const auto it = object.find(key);
@@ -92,6 +101,27 @@ void Cross(cycfi::artist::canvas& cnv, float x, float y, float half)
     Line(cnv, x - half, y - half, x + half, y + half);
     Line(cnv, x - half, y + half, x + half, y - half);
 }
+
+GuideRun ReadRun(const nlohmann::json& r)
+{
+    GuideRun run;
+    run.name = StringAt(r, "name");
+    run.start = StringAt(r, "start");
+    run.fretFrom = IntAt(r, "fretFrom");
+    run.fretTo = IntAt(r, "fretTo");
+
+    for (const auto& n : r.value("notes", nlohmann::json::array()))
+    {
+        run.notes.push_back({IntAt(n, "string"), IntAt(n, "fret"), StringAt(n, "interval"), n.value("root", false)});
+    }
+
+    for (const auto& s : r.value("steps", nlohmann::json::array()))
+    {
+        run.steps.push_back({IntAt(s, "note"), StringAt(s, "stroke")});
+    }
+
+    return run;
+}
 } // namespace
 
 GuideShape ReadGuideShape(const nlohmann::json& shape)
@@ -128,6 +158,21 @@ GuideModel ReadGuideModel(const nlohmann::json& view)
     m.frets = std::max(1, IntAt(view, "frets", 24));
     m.capo = IntAt(view, "capo");
     m.chord = StringAt(view, "mode") == "chord";
+    m.arpeggio = StringAt(view, "mode") == "arpeggio";
+
+    if (const auto arpeggio = view.find("arpeggio"); arpeggio != view.end())
+    {
+        for (const auto& r : arpeggio->value("runs", nlohmann::json::array()))
+        {
+            m.runs.push_back(ReadRun(r));
+        }
+    }
+
+    if (const auto run = view.find("run"); run != view.end() && run->is_object())
+    {
+        m.chosen = ReadRun(*run);
+    }
+
     m.position = IntAt(view, "position");
     const auto tones = view.value("tones", nlohmann::json::array());
     m.rootPitchClass = !tones.empty() ? IntAt(tones[0], "pitchClass") : 0;
@@ -146,6 +191,8 @@ GuideModel ReadGuideModel(const nlohmann::json& view)
         dot.degree = IntAt(d, "degree", 1);
         dot.root = d.value("root", false);
         dot.inPosition = d.value("inPosition", true);
+        dot.order = IntAt(d, "order");
+        dot.finger = IntAt(d, "finger", -1);
         m.dots.push_back(std::move(dot));
     }
 
@@ -155,6 +202,11 @@ GuideModel ReadGuideModel(const nlohmann::json& view)
     }
 
     return m;
+}
+
+const GuideRun* GuideModel::Run() const
+{
+    return chosen ? &*chosen : nullptr;
 }
 
 ScaleNeck::ScaleNeck(const Theme& theme, GuideModel model, std::string labels, bool leftHanded)
@@ -167,6 +219,53 @@ el::view_limits ScaleNeck::limits(const el::basic_context&) const
     const auto strings = static_cast<float>(std::max<std::size_t>(1, mModel.openMidi.size()));
     const float height = kTop + (strings - 1.0f) * kStringGap + 52.0f;
     return {{560.0f, height}, {el::full_extent, height}};
+}
+
+int ScaleNeck::NoteAt(const el::context& ctx, el::point point) const
+{
+    const auto b = ctx.bounds;
+    const int strings = static_cast<int>(mModel.openMidi.size());
+    const float width = b.width();
+    const float end = width - 8.0f;
+    constexpr float kReach = kDotRadius + 4.0f;
+
+    for (const auto& dot : mModel.dots)
+    {
+        const float value = NoteX(dot.fret, mModel.frets, end);
+        const float cx = b.left + (mLeftHanded ? width - value : value);
+        const float cy = b.top + kTop + static_cast<float>(strings - 1 - dot.string) * kStringGap;
+
+        if (std::hypot(point.x - cx, point.y - cy) <= kReach)
+        {
+            return dot.midi;
+        }
+    }
+
+    return -1;
+}
+
+bool ScaleNeck::click(const el::context& ctx, el::mouse_button btn)
+{
+    if (btn.state != el::mouse_button::left)
+    {
+        return false;
+    }
+
+    if (btn.down)
+    {
+        mPressedNote = NoteAt(ctx, btn.pos);
+        return mPressedNote >= 0;
+    }
+
+    const int note = mPressedNote;
+    mPressedNote = -1;
+
+    if (note >= 0 && note == NoteAt(ctx, btn.pos) && onNote)
+    {
+        onNote(note);
+    }
+
+    return true;
 }
 
 bool ScaleNeck::SetHeard(std::vector<int> notes)
@@ -296,6 +395,37 @@ void ScaleNeck::draw(const el::context& ctx)
     };
     const el::color heardColours[] = {mTheme.Success(), mTheme.Success().opacity(0.55f),
                                       mTheme.Success().opacity(0.3f)};
+    // A scale position has a run too, for the tab; the neck only traces an arpeggio's.
+    const GuideRun* run = mModel.arpeggio ? mModel.Run() : nullptr;
+
+    // The way an arpeggio run goes, under its dots.
+    if (run != nullptr && !run->notes.empty())
+    {
+        cnv.begin_path();
+
+        for (std::size_t i = 0; i < run->notes.size(); ++i)
+        {
+            const float px = x(NoteX(run->notes[i].fret, frets, end));
+            const float py = y(run->notes[i].string);
+
+            if (i == 0)
+            {
+                cnv.move_to(px, py);
+            }
+            else
+            {
+                cnv.line_to(px, py);
+            }
+        }
+
+        cnv.stroke_style(mTheme.Accent().opacity(0.55f));
+        cnv.line_width(2.5f);
+        cnv.stroke();
+    }
+
+    // Order and fingers number one run: with none chosen the neck has only its notes to name.
+    const bool runLabels = mLabels == "order" || mLabels == "finger";
+    const std::string labels = runLabels && run == nullptr ? std::string("name") : mLabels;
 
     for (const auto& dot : mModel.dots)
     {
@@ -326,10 +456,12 @@ void ScaleNeck::draw(const el::context& ctx)
             cnv.stroke();
         }
 
-        const std::string label = mLabels == "interval" ? dot.interval
-                                  : mLabels == "degree" ? std::to_string(dot.degree)
-                                  : mLabels == "none"   ? std::string()
-                                                        : dot.name;
+        const std::string label = labels == "interval" ? dot.interval
+                                  : labels == "degree" ? std::to_string(dot.degree)
+                                  : labels == "none"   ? std::string()
+                                  : labels == "order"  ? (dot.order > 0 ? std::to_string(dot.order) : std::string())
+                                  : labels == "finger" ? (dot.finger >= 0 ? std::to_string(dot.finger) : std::string())
+                                                       : dot.name;
 
         if (!label.empty())
         {
@@ -385,6 +517,107 @@ void ScaleNeck::draw(const el::context& ctx)
     }
 }
 
+RunTabView::RunTabView(const Theme& theme, GuideRun run, std::vector<std::string> stringNames)
+    : mTheme(theme), mRun(std::move(run)), mStringNames(std::move(stringNames))
+{
+}
+
+el::view_limits RunTabView::limits(const el::basic_context&) const
+{
+    const float width = kTabLeft + static_cast<float>(mRun.steps.size()) * kTabSlot + kTabRight;
+    const auto strings = static_cast<float>(std::max<std::size_t>(1, mStringNames.size()));
+    const float height = kTabTop + (strings - 1.0f) * kTabStringGap + kTabIntervalGap + 8.0f;
+    return {{width, height}, {width, height}};
+}
+
+void RunTabView::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds;
+    const int strings = static_cast<int>(mStringNames.size());
+    const auto stringY = [&](int s) { return b.top + kTabTop + static_cast<float>(strings - 1 - s) * kTabStringGap; };
+    const auto slotX = [&](std::size_t slot) {
+        return b.left + kTabLeft + (static_cast<float>(slot) + 0.5f) * kTabSlot;
+    };
+    const float end = b.left + kTabLeft + static_cast<float>(mRun.steps.size()) * kTabSlot + 4.0f;
+    const auto small = Font(Weight::Regular).size(11.0f);
+    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const el::color ink = mTheme.Text();
+
+    // The strings, each broken around its numbers the way printed tab sits on its lines.
+    for (int s = 0; s < strings; ++s)
+    {
+        const float y = stringY(s);
+        float from = b.left + kTabLeft - 8.0f;
+        cnv.stroke_style(line);
+        cnv.line_width(1.0f);
+
+        for (std::size_t slot = 0; slot < mRun.steps.size(); ++slot)
+        {
+            const auto note = static_cast<std::size_t>(mRun.steps[slot].note);
+
+            if (note < mRun.notes.size() && mRun.notes[note].string == s)
+            {
+                Line(cnv, from, y, slotX(slot) - kTabNumberGap * 0.5f, y);
+                from = slotX(slot) + kTabNumberGap * 0.5f;
+            }
+        }
+
+        Line(cnv, from, y, end, y);
+        FillText(cnv, mStringNames[static_cast<std::size_t>(s)], small, mTheme.TextMuted(),
+                 {b.left + 2.0f, y - 8.0f, b.left + 22.0f, y + 8.0f}, HAlign::Centre);
+    }
+
+    const float strokeY = b.top + kTabStrokesY;
+    const float intervalY = stringY(0) + kTabIntervalGap;
+
+    for (std::size_t slot = 0; slot < mRun.steps.size(); ++slot)
+    {
+        const auto& step = mRun.steps[slot];
+        const auto index = static_cast<std::size_t>(step.note);
+
+        if (index >= mRun.notes.size())
+        {
+            continue;
+        }
+
+        const auto& note = mRun.notes[index];
+        const float cx = slotX(slot);
+        cnv.stroke_style(ink);
+        cnv.line_width(1.5f);
+
+        if (step.stroke == "down")
+        {
+            cnv.begin_path();
+            cnv.move_to(cx - 5.0f, strokeY + 5.0f);
+            cnv.line_to(cx - 5.0f, strokeY - 5.0f);
+            cnv.line_to(cx + 5.0f, strokeY - 5.0f);
+            cnv.line_to(cx + 5.0f, strokeY + 5.0f);
+            cnv.stroke();
+        }
+        else if (step.stroke == "up")
+        {
+            cnv.begin_path();
+            cnv.move_to(cx - 5.0f, strokeY - 5.0f);
+            cnv.line_to(cx, strokeY + 5.0f);
+            cnv.line_to(cx + 5.0f, strokeY - 5.0f);
+            cnv.stroke();
+        }
+        else
+        {
+            FillText(cnv, step.stroke == "hammer" ? "h" : "p", Font(Weight::Regular).size(13.0f), ink,
+                     {cx - 8.0f, strokeY - 8.0f, cx + 8.0f, strokeY + 8.0f}, HAlign::Centre);
+        }
+
+        const float y = stringY(note.string);
+        FillText(cnv, std::to_string(note.fret), Font(Weight::SemiBold).size(13.0f), note.root ? mTheme.Accent() : ink,
+                 {cx - 12.0f, y - 8.0f, cx + 12.0f, y + 8.0f}, HAlign::Centre);
+        FillText(cnv, note.interval, small, note.root ? mTheme.Accent() : mTheme.TextMuted(),
+                 {cx - 14.0f, intervalY - 8.0f, cx + 14.0f, intervalY + 8.0f}, HAlign::Centre);
+    }
+}
+
 ChordBoxView::ChordBoxView(const Theme& theme, GuideShape shape, std::vector<int> openMidi, int capo,
                            int rootPitchClass, bool leftHanded, std::string caption, std::string title, bool selected)
     : mTheme(theme), mShape(std::move(shape)), mOpenMidi(std::move(openMidi)), mCapo(capo),
@@ -400,6 +633,22 @@ el::view_limits ChordBoxView::limits(const el::basic_context&) const
     const float width = kBoxPadX * 2.0f + (strings - 1.0f) * kBoxStringGap + 12.0f;
     const float height = (mTitle.empty() ? 0.0f : 18.0f) + kBoxTop + kBoxRows * kBoxFretGap + 26.0f;
     return {{width, height}, {width, height}};
+}
+
+void PlayArea::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+
+    if (!mHover && !mDown && !mPlaying)
+    {
+        return;
+    }
+
+    auto& cnv = ctx.canvas;
+    cnv.begin_path();
+    cnv.add_round_rect(ctx.bounds, 10.0f);
+    cnv.fill_style(mTheme.AccentTint());
+    cnv.fill();
 }
 
 void ChordBoxView::draw(const el::context& ctx)

@@ -852,6 +852,31 @@ void UiCommands::SetMetronomeSubdivision(const std::string& subdivision)
     mClient.Send("setMetronome", {{"subdivision", subdivision}});
 }
 
+void UiCommands::PlayScaleGuide(const nlohmann::json& request)
+{
+    mClient.Send("scaleGuide", {{"action", "play"}, {"request", request}});
+}
+
+void UiCommands::PlayScaleExample(const nlohmann::json& request)
+{
+    mClient.Send("scaleGuide", {{"action", "playScale"}, {"request", request}});
+}
+
+void UiCommands::PlayScaleGuideChord(const nlohmann::json& request, const std::vector<int>& frets)
+{
+    mClient.Send("scaleGuide", {{"action", "playChord"}, {"request", request}, {"frets", frets}});
+}
+
+void UiCommands::PlayScaleGuideNote(int midi)
+{
+    mClient.Send("scaleGuide", {{"action", "playNote"}, {"midi", midi}});
+}
+
+void UiCommands::StopScaleGuide()
+{
+    mClient.Send("scaleGuide", {{"action", "stop"}});
+}
+
 void UiCommands::PreviewDemoClip(const std::string& clipId, bool repeat)
 {
     mClient.Send("previewDemoAudio", {{"clipId", clipId}, {"repeat", repeat}});

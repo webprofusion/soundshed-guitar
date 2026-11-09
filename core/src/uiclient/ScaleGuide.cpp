@@ -81,6 +81,9 @@ bool BoolField(const nlohmann::json& object, const char* key, bool fallback)
 }
 } // namespace
 
+/// The most strings a neck has, as ts/scaleGuide/state.ts keeps it.
+constexpr int kMaxArpeggioStrings = 8;
+
 Settings ParseSettings(const nlohmann::json& stored)
 {
     Settings s;
@@ -90,18 +93,20 @@ Settings ParseSettings(const nlohmann::json& stored)
         return s;
     }
 
-    s.mode = OneOf(stored, "mode", s.mode, {"scale", "chord"});
+    s.mode = OneOf(stored, "mode", s.mode, {"scale", "chord", "arpeggio"});
     s.key = IntField(stored, "key", s.key, 0, 11);
     s.scale = StringField(stored, "scale", s.scale, kId);
     s.chord = StringField(stored, "chord", s.chord, kId);
     s.progression = StringField(stored, "progression", "", kProgression);
     s.tuning = StringField(stored, "tuning", s.tuning, kId);
-    s.labels = OneOf(stored, "labels", s.labels, {"name", "interval", "degree", "none"});
+    s.labels = OneOf(stored, "labels", s.labels, {"name", "interval", "degree", "none", "order", "finger"});
     s.position = IntField(stored, "position", s.position, 0, 99);
     s.capo = IntField(stored, "capo", s.capo, 0, kMaxCapo);
     s.leftHanded = BoolField(stored, "leftHanded", s.leftHanded);
     s.listen = BoolField(stored, "listen", s.listen);
     s.match = OneOf(stored, "match", s.match, {"easy", "normal", "strict"});
+    s.arpeggioStyle = OneOf(stored, "arpeggioStyle", s.arpeggioStyle, {"sweep", "two", "box"});
+    s.arpeggioStrings = IntField(stored, "arpeggioStrings", s.arpeggioStrings, 0, kMaxArpeggioStrings);
     return s;
 }
 
@@ -118,7 +123,9 @@ nlohmann::json SettingsJson(const Settings& s)
             {"capo", s.capo},
             {"leftHanded", s.leftHanded},
             {"listen", s.listen},
-            {"match", s.match}};
+            {"match", s.match},
+            {"arpeggioStyle", s.arpeggioStyle},
+            {"arpeggioStrings", s.arpeggioStrings}};
 }
 
 Settings LoadSettings(const nlohmann::json& appSettings)
@@ -192,8 +199,15 @@ nlohmann::json ProgressionsJson(const std::vector<UserProgression>& progressions
 nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>& progressions, int step,
                            const std::vector<int>& previousFrets)
 {
-    nlohmann::json request = {{"mode", s.mode},     {"key", s.key},   {"scale", s.scale},      {"chord", s.chord},
-                              {"tuning", s.tuning}, {"capo", s.capo}, {"position", s.position}};
+    nlohmann::json request = {{"mode", s.mode},
+                              {"key", s.key},
+                              {"scale", s.scale},
+                              {"chord", s.chord},
+                              {"tuning", s.tuning},
+                              {"capo", s.capo},
+                              {"position", s.position},
+                              {"arpeggioStyle", s.arpeggioStyle},
+                              {"arpeggioStrings", s.arpeggioStrings}};
 
     if (s.mode != "chord")
     {

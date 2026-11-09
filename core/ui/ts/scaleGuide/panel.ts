@@ -8,9 +8,20 @@
 import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
 import { escapeHtml } from "../utils.js";
+import { effectiveLabels, isArpeggioStyle, renderRunCard, renderArpeggioControls } from "./arpeggioView.js";
 import { renderChordBoxSvg } from "./chordBox.js";
 import { onListenReading, renderListen, resetListenForTests, resetRound, syncListening, type ListenHost } from "./listenController.js";
-import { renderNeckSvg } from "./neck.js";
+import {
+  markSummaryPlayable,
+  onScaleGuidePlaybackEnded,
+  playScaleGuideChord,
+  playScaleGuideNote,
+  resetPlaybackForTests,
+  showScaleGuidePlaying,
+  stopScaleGuidePlayback,
+  toggleScaleGuidePlay,
+} from "./playback.js";
+import { neckDrawingWidth, renderNeckSvg } from "./neck.js";
 import { MAX_PROGRESSION_CHORDS, loadProgressions, newProgressionId, romanToken, saveProgressions, type UserProgression } from "./progressions.js";
 import { NEW_PROGRESSION, degreeOptions, editorChordsMarkup, numeralTokens, progressionOptions, qualityOptions, stepsMarkup, stripMarkup } from "./progressionView.js";
 import { loadSettings, MAX_CAPO, saveSettings, viewRequest, type ProgressionRequest } from "./state.js";
@@ -32,6 +43,8 @@ let latestRequestId = 0;
 let catalogRequested = false;
 let pickersBuilt = false;
 let bound = false;
+/** The width the neck was last drawn at, so a resize that changes nothing costs nothing. */
+let drawnNeckWidth = 0;
 /** The progression step showing; the engine wraps it and says where it landed. */
 let step = 0;
 /** The shape to lead from, sent once with the next request after a step. */
@@ -112,6 +125,7 @@ export function renderScaleGuidePanel(): void {
 
   if (!bound) {
     bindEvents(root);
+    watchNeckWidth();
     bound = true;
   }
 
@@ -130,16 +144,16 @@ function requestView(): void {
   postMessage({ type: "scaleGuide", action: "view", requestId: latestRequestId, request: viewRequest(current(), progressionRequest()) });
 }
 
-/** Applies a change: saved, drawn and asked for again. A new scale, chord, tuning or mode starts on the whole neck. */
+/** Applies a change: saved, drawn and asked for again. A new scale, chord, tuning or mode starts on the whole neck; arpeggios on their first run, since a run is what that tab shows. */
 function change(patch: Partial<ScaleGuideSettings>): void {
   const before = current();
   const next = { ...before, ...patch };
-  const reshaped = ["mode", "scale", "chord", "progression", "tuning"].some(
+  const reshaped = ["mode", "scale", "chord", "progression", "tuning", "arpeggioStyle", "arpeggioStrings"].some(
     (key) => key in patch && patch[key as keyof ScaleGuideSettings] !== before[key as keyof ScaleGuideSettings],
   );
 
   if (reshaped && !("position" in patch)) {
-    next.position = 0;
+    next.position = next.mode === "arpeggio" ? 1 : 0;
   }
 
   if (next.mode !== before.mode || next.progression !== before.progression) {
@@ -173,6 +187,8 @@ function change(patch: Partial<ScaleGuideSettings>): void {
     return;
   }
 
+  // What is sounding is no longer what is showing.
+  stopScaleGuidePlayback();
   requestView();
 }
 
@@ -202,10 +218,25 @@ export function onScaleGuideView(payload: IncomingPayload): void {
   renderView();
 }
 
+function togglePlay(action: "play" | "playScale"): void {
+  toggleScaleGuidePlay(action, viewRequest(current(), progressionRequest()));
+}
+
+function playShape(frets: number[] | undefined): void {
+  playScaleGuideChord(viewRequest(current(), progressionRequest()), frets);
+}
+
 function bindEvents(root: HTMLElement): void {
   root.addEventListener("click", (event) => {
+    const dot = (event.target as Element | null)?.closest(".sg-dot");
+
+    if (dot) {
+      playScaleGuideNote(Number(dot.getAttribute("data-midi")));
+      return;
+    }
+
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],#sg-listen",
+      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-play],[data-sg-play-scale],#sg-listen",
     );
 
     if (!target || !root.contains(target)) {
@@ -214,22 +245,40 @@ function bindEvents(root: HTMLElement): void {
 
     const data = target.dataset;
 
+    if (data.sgPlay !== undefined) {
+      togglePlay("play");
+      return;
+    }
+
+    if (data.sgPlayScale !== undefined) {
+      togglePlay("playScale");
+      return;
+    }
+
     if (target.id === "sg-listen") {
       change({ listen: !current().listen });
     } else if (data.sgMatch) {
       change({ match: data.sgMatch as ScaleGuideSettings["match"] });
+    } else if (isArpeggioStyle(data.sgArpStyle)) {
+      change({ arpeggioStyle: data.sgArpStyle });
+    } else if (data.sgArpStrings !== undefined) {
+      change({ arpeggioStrings: Number(data.sgArpStrings) });
     } else if (data.sgMode) {
       change({ mode: data.sgMode as ScaleGuideMode });
     } else if (data.sgLabels) {
       change({ labels: data.sgLabels as ScaleGuideLabels });
     } else if (data.sgPosition !== undefined) {
+      const shape = target.classList.contains("sg-box") ? view?.shapes?.[Number(data.sgPosition) - 1] : undefined;
       change({ position: Number(data.sgPosition) });
+      playShape(shape?.frets);
     } else if (data.sgChordRoot !== undefined) {
       // A chord of the scale: open it in Chords mode.
       change({ mode: "chord", key: Number(data.sgChordRoot), chord: DIATONIC_CHORDS[data.sgChordQuality ?? ""] ?? "maj", progression: "" });
     } else if (data.sgGoto !== undefined) {
       const index = Number(data.sgGoto);
-      goStep(index, target.classList.contains("sg-strip-box") ? (view?.progression?.chords[index]?.shape?.frets ?? undefined) : undefined);
+      const frets = target.classList.contains("sg-strip-box") ? (view?.progression?.chords[index]?.shape?.frets ?? undefined) : undefined;
+      goStep(index, frets);
+      playShape(frets);
     } else if (data.sgStep) {
       if (data.sgStep === "first") {
         resetRound();
@@ -241,6 +290,14 @@ function bindEvents(root: HTMLElement): void {
       step = Math.min(step, Math.max(0, draft.chords.length - 1));
       renderControls();
       requestView();
+    }
+  });
+
+  // The scale's summary plays like a button from the keyboard too.
+  element<HTMLElement>("sg-summary-main")?.addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " ") && (event.currentTarget as HTMLElement).dataset.sgPlayScale !== undefined) {
+      event.preventDefault();
+      togglePlay("playScale");
     }
   });
 
@@ -450,6 +507,8 @@ function buildPickers(): void {
 function renderControls(): void {
   const state = current();
   const chordMode = state.mode === "chord";
+  const arpeggioMode = state.mode === "arpeggio";
+  const labels = effectiveLabels(state);
   buildPickers();
 
   document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-mode]").forEach((button) => {
@@ -457,8 +516,8 @@ function renderControls(): void {
     button.setAttribute("aria-pressed", String(button.dataset.sgMode === state.mode));
   });
   document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-labels]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.sgLabels === state.labels);
-    button.setAttribute("aria-pressed", String(button.dataset.sgLabels === state.labels));
+    button.classList.toggle("active", button.dataset.sgLabels === labels);
+    button.setAttribute("aria-pressed", String(button.dataset.sgLabels === labels));
   });
   document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-match]").forEach((button) => {
     button.classList.toggle("active", button.dataset.sgMatch === state.match);
@@ -477,12 +536,12 @@ function renderControls(): void {
   const singleChord = chordMode && !state.progression && !draft;
 
   if (keyLabel) {
-    keyLabel.textContent = singleChord ? "Root" : "Key";
+    keyLabel.textContent = singleChord || arpeggioMode ? "Root" : "Key";
   }
 
-  element<HTMLElement>("sg-scale-field")?.toggleAttribute("hidden", chordMode);
+  element<HTMLElement>("sg-scale-field")?.toggleAttribute("hidden", state.mode !== "scale");
   element<HTMLElement>("sg-progression-field")?.toggleAttribute("hidden", !chordMode);
-  element<HTMLElement>("sg-chord-field")?.toggleAttribute("hidden", !singleChord);
+  element<HTMLElement>("sg-chord-field")?.toggleAttribute("hidden", !singleChord && !arpeggioMode);
   element<HTMLElement>("sg-progression-edit")?.toggleAttribute("hidden", !chordMode || !state.progression || draft !== null);
 
   const progressionSelect = element<HTMLSelectElement>("sg-progression");
@@ -494,6 +553,12 @@ function renderControls(): void {
   }
 
   renderEditor(state);
+
+  const root = element<HTMLElement>("scale-guide");
+
+  if (root) {
+    renderArpeggioControls(root, state, view);
+  }
 
   const setValue = (id: string, value: string): void => {
     const select = element<HTMLSelectElement>(id);
@@ -524,12 +589,20 @@ function renderControls(): void {
 
 function renderPositions(model: ScaleGuideView): string {
   const chordMode = model.mode === "chord";
-  const count = chordMode ? (model.shapes?.length ?? 0) : (model.positions?.length ?? 0);
+  const runs = model.arpeggio?.runs ?? [];
+  const count = chordMode ? (model.shapes?.length ?? 0) : model.mode === "arpeggio" ? runs.length : (model.positions?.length ?? 0);
   const segment = (position: number, label: string, title: string, hint = ""): string =>
     `<button type="button" class="sg-segment${model.position === position ? " active" : ""}" data-sg-position="${position}" aria-pressed="${model.position === position}" title="${escapeHtml(title)}">${escapeHtml(label)}${hint ? `<small>${escapeHtml(hint)}</small>` : ""}</button>`;
-  const segments = [segment(0, "All", chordMode ? "Every chord tone on the neck" : "The whole neck")];
+  const segments = [segment(0, "All", chordMode || model.mode === "arpeggio" ? "Every chord tone on the neck" : "The whole neck")];
 
   for (let position = 1; position <= count; position += 1) {
+    const run = runs[position - 1];
+
+    if (run) {
+      segments.push(segment(position, String(position), `${run.name}, from fret ${run.fretFrom}`, run.start));
+      continue;
+    }
+
     const caged = chordMode ? (model.shapes?.[position - 1]?.caged ?? "") : "";
     segments.push(segment(position, String(position), caged ? `${caged} shape` : `${chordMode ? "Shape" : "Position"} ${position}`, caged));
   }
@@ -539,7 +612,7 @@ function renderPositions(model: ScaleGuideView): string {
 
 /** The middle of the summary: the scale's chords, or the chord's formula and shape. */
 function renderInfo(model: ScaleGuideView): string {
-  if (model.mode === "chord" && model.chord) {
+  if (model.mode !== "scale" && model.chord) {
     const pills = model.tones.map(
       (tone) => `<span class="sg-pill${tone.root ? " sg-pill-root" : ""}"><b>${escapeHtml(tone.interval)}</b>${escapeHtml(tone.name)}</span>`,
     );
@@ -564,32 +637,70 @@ function setText(id: string, text: string): void {
 
 function renderSummary(model: ScaleGuideView): void {
   const chordMode = model.mode === "chord";
+  const arpeggioMode = model.mode === "arpeggio";
   const root = model.tones[0]?.name ?? "";
   const names = model.tones.map((tone) => tone.name);
   const shape = chordMode && model.position > 0 ? model.shapes?.[model.position - 1] : undefined;
 
   setText("sg-root-badge", root);
-  setText("sg-summary-label", chordMode ? "Chord" : "Scale");
-  setText("sg-summary-name", chordMode ? `${model.chord?.name ?? ""} · ${model.chord?.quality ?? ""}` : (model.scale?.name ?? ""));
+  setText("sg-summary-label", arpeggioMode ? "Arpeggio" : chordMode ? "Chord" : "Scale");
+  setText("sg-summary-name", chordMode || arpeggioMode ? `${model.chord?.name ?? ""} · ${model.chord?.quality ?? ""}` : (model.scale?.name ?? ""));
   // A scale reads up to its octave; a chord is just its tones.
-  setText("sg-tones", (chordMode ? names : [...names, root]).join("  "));
-  setText("sg-info-label", chordMode ? "Formula" : model.scale?.diatonic.length ? "Chords" : "Steps");
+  setText("sg-tones", (chordMode || arpeggioMode ? names : [...names, root]).join("  "));
+  setText("sg-info-label", chordMode || arpeggioMode ? "Formula" : model.scale?.diatonic.length ? "Chords" : "Steps");
   setText(
     "sg-reference",
-    chordMode
-      ? model.progression
-        ? `Next: ${model.progression.next}. ◀ ▶ or the arrow keys step through; each chord takes the shape nearest the last.`
-        : shape
-          ? `${shape.caged ? `The ${shape.caged} shape. ` : ""}Numbers are fingers; × is a string you don't play.`
-          : "Pick a shape to see one way to play it; All shows every chord tone."
-      : `Steps ${model.scale?.steps ?? ""}. Pick a position for one box; All shows the whole neck. Tap a chord to open it.`,
+    arpeggioMode
+      ? (model.arpeggio?.advice ?? "")
+      : chordMode
+        ? model.progression
+          ? `Next: ${model.progression.next}. ◀ ▶ or the arrow keys step through; each chord takes the shape nearest the last.`
+          : shape
+            ? `${shape.caged ? `The ${shape.caged} shape. ` : ""}Numbers are fingers; × is a string you don't play.`
+            : "Pick a shape to see one way to play it; All shows every chord tone."
+        : `Steps ${model.scale?.steps ?? ""}. Pick a position for one box; All shows the whole neck. Tap a chord to open it.`,
   );
+
+  markSummaryPlayable(model.mode === "scale" && model.tones.length > 0);
 
   const info = element<HTMLElement>("sg-info");
 
   if (info) {
-    info.innerHTML = !chordMode && !model.scale?.diatonic.length ? `<span class="sg-steps">${escapeHtml(model.scale?.steps ?? "")}</span>` : renderInfo(model);
+    info.innerHTML = model.mode === "scale" && !model.scale?.diatonic.length ? `<span class="sg-steps">${escapeHtml(model.scale?.steps ?? "")}</span>` : renderInfo(model);
   }
+}
+
+function renderNeck(model: ScaleGuideView, state: ScaleGuideSettings): void {
+  const neck = element<HTMLElement>("sg-neck");
+
+  if (!neck) {
+    return;
+  }
+
+  const options = { labels: effectiveLabels(state), leftHanded: state.leftHanded, width: neck.clientWidth };
+  const noRuns = model.mode === "arpeggio" && model.arpeggio?.runs.length === 0 ? model.arpeggio.empty : "";
+  drawnNeckWidth = neckDrawingWidth(options.width);
+  neck.innerHTML =
+    noRuns || (model.mode === "chord" && (model.shapes?.length ?? 0) === 0)
+      ? `${renderNeckSvg(model, options)}<p class="sg-note">${escapeHtml(noRuns || "No shape fits this tuning, so the neck marks all the chord's notes.")}</p>`
+      : renderNeckSvg(model, options);
+}
+
+/** Redraws the neck when its space changes: a window resize, a zoom, or the panel coming into view. */
+function watchNeckWidth(): void {
+  const neck = element<HTMLElement>("sg-neck");
+
+  if (!neck || typeof ResizeObserver === "undefined") {
+    return;
+  }
+
+  new ResizeObserver(() => {
+    // A hidden panel measures nothing: keep the drawing for when it shows again.
+    if (view && neck.clientWidth > 0 && neckDrawingWidth(neck.clientWidth) !== drawnNeckWidth) {
+      renderNeck(view, current());
+      renderListen(listenHost);
+    }
+  }).observe(neck);
 }
 
 function renderView(): void {
@@ -599,6 +710,14 @@ function renderView(): void {
 
   const state = current();
   const model = view;
+  const play = element<HTMLButtonElement>("sg-play");
+
+  if (play) {
+    const nothingChosen = model.position === 0;
+    play.disabled = nothingChosen;
+    play.title = nothingChosen ? "Pick a position to hear it" : "Hear it played through the current preset";
+  }
+
   setText("sg-title", `${model.title} · ${model.tuning.name}`);
 
   const positions = element<HTMLElement>("sg-positions");
@@ -607,13 +726,18 @@ function renderView(): void {
     positions.innerHTML = renderPositions(model);
   }
 
-  const neck = element<HTMLElement>("sg-neck");
+  renderNeck(model, state);
 
-  if (neck) {
-    neck.innerHTML =
-      model.mode === "chord" && (model.shapes?.length ?? 0) === 0
-        ? `${renderNeckSvg(model, { labels: state.labels, leftHanded: state.leftHanded })}<p class="sg-note">No shape fits this tuning, so the neck marks all the chord's notes.</p>`
-        : renderNeckSvg(model, { labels: state.labels, leftHanded: state.leftHanded });
+  const tab = element<HTMLElement>("sg-arp-tab");
+
+  if (tab) {
+    renderRunCard(tab, model);
+  }
+
+  const root = element<HTMLElement>("scale-guide");
+
+  if (root) {
+    renderArpeggioControls(root, state, model);
   }
 
   const progression = model.mode === "chord" ? model.progression : undefined;
@@ -637,7 +761,7 @@ function renderView(): void {
     boxes.innerHTML = shapes
       .map(
         (shape, index) =>
-          `<button type="button" class="sg-box${model.position === index + 1 ? " active" : ""}" data-sg-position="${index + 1}" aria-pressed="${model.position === index + 1}">${renderChordBoxSvg(shape, model, { leftHanded: state.leftHanded })}</button>`,
+          `<button type="button" class="sg-box${model.position === index + 1 ? " active" : ""}" data-sg-position="${index + 1}" aria-pressed="${model.position === index + 1}" title="Show this shape and hear it strummed">${renderChordBoxSvg(shape, model, { leftHanded: state.leftHanded })}</button>`,
       )
       .join("");
   }
@@ -649,6 +773,7 @@ function renderView(): void {
   }
 
   renderListen(listenHost);
+  showScaleGuidePlaying();
 }
 
 /** For tests: forget everything, as on a fresh page. */
@@ -660,9 +785,12 @@ export function resetScaleGuideForTests(): void {
   catalogRequested = false;
   pickersBuilt = false;
   bound = false;
+  drawnNeckWidth = 0;
   step = 0;
   pendingPrevious = undefined;
   draft = null;
   userProgressions = null;
   resetListenForTests();
+  resetPlaybackForTests();
+  onScaleGuidePlaybackEnded();
 }

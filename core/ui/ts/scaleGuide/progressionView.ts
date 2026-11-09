@@ -75,7 +75,7 @@ export function stripMarkup(view: ScaleGuideView, leftHanded: boolean): string {
       const box = chord.shape
         ? renderChordBoxSvg(chord.shape, view, { leftHanded, chordName: chord.name, rootPitchClass: chord.rootPitchClass, caption: chord.numeral })
         : `<span class="sg-box-empty">No shape</span>`;
-      return `<button type="button" class="sg-box sg-strip-box${active ? " active" : ""}" data-sg-goto="${index}" aria-pressed="${active}"><span class="sg-strip-name">${escapeHtml(chord.name)}</span>${box}</button>`;
+      return `<button type="button" class="sg-box sg-strip-box${active ? " active" : ""}" data-sg-goto="${index}" aria-pressed="${active}" title="Go to this chord and hear it strummed"><span class="sg-strip-name">${escapeHtml(chord.name)}</span>${box}</button>`;
     })
     .join("");
 }

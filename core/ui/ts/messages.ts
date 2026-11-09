@@ -8,6 +8,7 @@
  */
 
 import { onScaleGuideCatalog, onScaleGuideView } from "./scaleGuide/panel.js";
+import { onScaleGuidePlayback } from "./scaleGuide/playback.js";
 import { onPracticeToolTabFailed, onPracticeToolTabLoaded } from "./practiceTool/tab.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { onGateLearnStatus } from "./gateLearn.js";
@@ -134,6 +135,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "tunerStarted": onTunerStarted,
   "scaleGuideCatalog": onScaleGuideCatalog,
   "scaleGuideView": onScaleGuideView,
+  "scaleGuidePlayback": onScaleGuidePlayback,
   "gateLearnStatus": onGateLearnStatus,
   "tunerStopped": onTunerStopped,
   "tunerReferenceChanged": onTunerReferenceChanged,

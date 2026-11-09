@@ -1,6 +1,7 @@
 // The Scale Guide in Jam's Scales section (docs/plans/scale-guide.md), as the web UI draws it
-// (ts/scaleGuide/panel.ts): Scales and Chords, a card of pickers and view controls, a progression's
-// steps, the neck, the chord boxes (a progression's voice-led strip), a summary and LISTEN.
+// (ts/scaleGuide/panel.ts): Scales, Chords and Arpeggios, a card of pickers and view controls, a
+// progression's steps, the neck, the chord boxes (a progression's voice-led strip) or an arpeggio's
+// tab, a summary and LISTEN.
 //
 // The choices are the web UI's own app settings (uiclient/ScaleGuide.h), so either product opens
 // where the other left off. The view model comes from the engine's music library directly, the
@@ -23,6 +24,9 @@ namespace sg = guitarfx::uiclient::scaleguide;
 
 namespace
 {
+/// The engine's id for a position being played, which sets it apart from a demo clip.
+constexpr const char* kPlayedPosition = "scale-guide";
+
 const nlohmann::json& Catalog()
 {
     static const nlohmann::json catalog = guitarfx::music::ScaleGuideCatalogJson();
@@ -103,20 +107,34 @@ std::string Shell::ScaleGuideSignature() const
     const auto progressions = mState.appSettings.find(sg::kProgressionsSetting);
     return (settings != mState.appSettings.end() ? settings->dump() : std::string()) + "|" +
            (progressions != mState.appSettings.end() ? progressions->dump() : std::string()) + "|" +
-           std::to_string(mScaleGuideStep) + "|" + std::to_string(mScaleGuidePrevious.size());
+           std::to_string(mScaleGuideStep) + "|" + std::to_string(mScaleGuidePrevious.size()) +
+           (ScaleGuidePlaying() ? "|playing" : "");
+}
+
+bool Shell::ScaleGuidePlaying() const
+{
+    return mState.demo.playing && mState.demo.previewId == kPlayedPosition;
 }
 
 void Shell::ChangeScaleGuide(const std::function<void(sg::Settings&)>& edit)
 {
+    // What is sounding is no longer what is showing.
+    if (ScaleGuidePlaying())
+    {
+        mSession.Commands().StopScaleGuide();
+    }
+
     const auto before = sg::LoadSettings(mState.appSettings);
     auto next = before;
     edit(next);
 
-    // A new scale, chord, progression, tuning or mode starts on the whole neck and its first step.
+    // A new scale, chord, progression, tuning or mode starts on the whole neck and its first step;
+    // arpeggios on their first run, since a run is what that tab shows.
     if (next.mode != before.mode || next.scale != before.scale || next.chord != before.chord ||
-        next.progression != before.progression || next.tuning != before.tuning)
+        next.progression != before.progression || next.tuning != before.tuning ||
+        next.arpeggioStyle != before.arpeggioStyle || next.arpeggioStrings != before.arpeggioStrings)
     {
-        next.position = next.position == before.position ? 0 : next.position;
+        next.position = next.position != before.position ? next.position : next.mode == "arpeggio" ? 1 : 0;
         mScaleGuideStep = 0;
         mScaleGuideRound = 1;
         mScaleGuideClean = 0;
@@ -166,15 +184,20 @@ Ptr Shell::BuildScaleGuide(float width)
     const auto& view = ScaleGuideView();
     const auto& catalog = Catalog();
     const bool chordMode = settings.mode == "chord";
+    const bool arpeggioMode = settings.mode == "arpeggio";
+    const bool chordInfo = chordMode || arpeggioMode;
+    const bool rootKey = arpeggioMode || (chordMode && settings.progression.empty());
     const auto model = ReadGuideModel(view);
     const auto progression = view.find("progression") != view.end() ? view["progression"] : nlohmann::json();
 
     // ── Tabs: Scales and Chords, LISTEN's readout, the title ──
-    auto mode = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Scales", "Chords"}, 90.0f);
-    mode->AccessName("Scales or chords");
-    mode->Select(chordMode ? 1 : 0);
+    auto mode = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Scales", "Chords", "Arpeggios"}, 90.0f);
+    mode->AccessName("Scales, chords or arpeggios");
+    mode->Select(arpeggioMode ? 2 : chordMode ? 1 : 0);
     mode->onSelect = [this](int index) {
-        ChangeScaleGuide([index](sg::Settings& s) { s.mode = index == 1 ? "chord" : "scale"; });
+        ChangeScaleGuide([index](sg::Settings& s) {
+            s.mode = index == 2 ? "arpeggio" : index == 1 ? "chord" : "scale";
+        });
     };
     auto live = std::make_shared<Text>(mTheme, mScaleGuideReadout, 13.0f, Weight::SemiBold);
     live->Colour(mTheme.Success()).Alignment(Text::Align::Right);
@@ -194,8 +217,7 @@ Ptr Shell::BuildScaleGuide(float width)
         return Col({Label(mTheme, label), VGap(4), control});
     };
     const auto keys = catalog["keys"];
-    auto key = picker(keys[static_cast<std::size_t>(settings.key)].get<std::string>(),
-                      chordMode && settings.progression.empty() ? "Root" : "Key");
+    auto key = picker(keys[static_cast<std::size_t>(settings.key)].get<std::string>(), rootKey ? "Root" : "Key");
     key->onClick = [this, weak = std::weak_ptr<PickerField>(key), keys] {
         const auto key = weak.lock();
 
@@ -217,9 +239,39 @@ Ptr Shell::BuildScaleGuide(float width)
         OpenDropdown(key->Bounds(), std::move(items), 160.0f);
     };
 
+    const auto chordPicker = [&] {
+        auto chord = picker(NameOf(catalog["chords"], settings.chord), "Chord");
+        chord->onClick = [this, weak = std::weak_ptr<PickerField>(chord)] {
+            const auto chord = weak.lock();
+
+            if (!chord)
+
+            {
+                return;
+            }
+
+            std::vector<MenuItem> items;
+            const auto current = sg::LoadSettings(mState.appSettings).chord;
+
+            for (const auto& c : Catalog()["chords"])
+            {
+                const auto id = c.value("id", "");
+                items.push_back({c.value("name", ""), id == current, false,
+                                 [this, id] { ChangeScaleGuide([id](sg::Settings& s) { s.chord = id; }); }});
+            }
+
+            OpenDropdown(chord->Bounds(), std::move(items), 200.0f);
+        };
+        return field("Chord", chord);
+    };
+
     Ptr what;
 
-    if (!chordMode)
+    if (arpeggioMode)
+    {
+        what = chordPicker();
+    }
+    else if (!chordMode)
     {
         auto scale = picker(NameOf(catalog["scales"], settings.scale), "Scale");
         scale->onClick = [this, weak = std::weak_ptr<PickerField>(scale)] {
@@ -326,29 +378,7 @@ Ptr Shell::BuildScaleGuide(float width)
 
         if (settings.progression.empty())
         {
-            auto chord = picker(NameOf(catalog["chords"], settings.chord), "Chord");
-            chord->onClick = [this, weak = std::weak_ptr<PickerField>(chord)] {
-                const auto chord = weak.lock();
-
-                if (!chord)
-
-                {
-                    return;
-                }
-
-                std::vector<MenuItem> items;
-                const auto current = sg::LoadSettings(mState.appSettings).chord;
-
-                for (const auto& c : Catalog()["chords"])
-                {
-                    const auto id = c.value("id", "");
-                    items.push_back({c.value("name", ""), id == current, false,
-                                     [this, id] { ChangeScaleGuide([id](sg::Settings& s) { s.chord = id; }); }});
-                }
-
-                OpenDropdown(chord->Bounds(), std::move(items), 200.0f);
-            };
-            what = Row({Stretch(what), HGap(14), Stretch(field("Chord", chord))});
+            what = Row({Stretch(what), HGap(14), Stretch(chordPicker())});
         }
     }
 
@@ -404,24 +434,37 @@ Ptr Shell::BuildScaleGuide(float width)
     };
 
     // ── View, position or shape, handedness, LISTEN ──
-    auto labels = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Notes", "Intervals", "Degrees"}, 76.0f);
+    // Order and Fingers number an arpeggio's run; the other tabs have no use for them.
+    std::vector<std::string> labelIds{"name", "interval", "degree"};
+    std::vector<std::string> labelNames{"Notes", "Intervals", "Degrees"};
+
+    if (arpeggioMode)
+    {
+        labelIds.insert(labelIds.end(), {"order", "finger"});
+        labelNames.insert(labelNames.end(), {"Order", "Fingers"});
+    }
+
+    auto labels = std::make_shared<Segmented>(mTheme, labelNames, arpeggioMode ? 68.0f : 76.0f);
     labels->AccessName("Labels");
-    labels->Select(settings.labels == "interval" ? 1 : settings.labels == "degree" ? 2 : 0);
-    labels->onSelect = [this](int index) {
-        ChangeScaleGuide([index](sg::Settings& s) {
-            s.labels = index == 1 ? "interval" : index == 2 ? "degree" : "name";
-        });
+    const auto chosenLabels = std::find(labelIds.begin(), labelIds.end(), settings.labels);
+    labels->Select(chosenLabels == labelIds.end() ? 0 : static_cast<int>(chosenLabels - labelIds.begin()));
+    labels->onSelect = [this, labelIds](int index) {
+        ChangeScaleGuide([&](sg::Settings& s) { s.labels = labelIds[static_cast<std::size_t>(index)]; });
     };
     std::vector<std::string> positionNames{"All"};
-    const auto count = chordMode ? model.shapes.size() : view.value("positions", nlohmann::json::array()).size();
+    const auto count = chordMode      ? model.shapes.size()
+                       : arpeggioMode ? model.runs.size()
+                                      : view.value("positions", nlohmann::json::array()).size();
 
     for (std::size_t i = 1; i <= count; ++i)
     {
-        const auto caged = chordMode ? model.shapes[i - 1].caged : std::string();
-        positionNames.push_back(std::to_string(i) + (caged.empty() ? "" : " " + caged));
+        const auto hint = chordMode      ? model.shapes[i - 1].caged
+                          : arpeggioMode ? model.runs[i - 1].start
+                                         : std::string();
+        positionNames.push_back(std::to_string(i) + (hint.empty() ? "" : " " + hint));
     }
 
-    auto positions = std::make_shared<Segmented>(mTheme, positionNames, chordMode ? 44.0f : 36.0f);
+    auto positions = std::make_shared<Segmented>(mTheme, positionNames, chordMode || arpeggioMode ? 44.0f : 36.0f);
     positions->AccessName(chordMode ? "Shape" : "Position");
     positions->Select(model.position);
     positions->onSelect = [this](int index) { ChangeScaleGuide([index](sg::Settings& s) { s.position = index; }); };
@@ -439,16 +482,46 @@ Ptr Shell::BuildScaleGuide(float width)
 
     listen->onClick = [this] { ChangeScaleGuide([](sg::Settings& s) { s.listen = !s.listen; }); };
 
+    // Every play control stops whatever is sounding; otherwise each sounds its own thing, from the
+    // request this view was drawn from, so what sounds is what shows.
+    const bool playing = ScaleGuidePlaying();
+    const auto togglePlay = [this](bool scaleExample) {
+        if (ScaleGuidePlaying())
+        {
+            mSession.Commands().StopScaleGuide();
+        }
+        else if (scaleExample)
+        {
+            mSession.Commands().PlayScaleExample(nlohmann::json::parse(mScaleGuideViewKey));
+        }
+        else
+        {
+            mSession.Commands().PlayScaleGuide(nlohmann::json::parse(mScaleGuideViewKey));
+        }
+    };
+    const auto playButton = [&, togglePlay] {
+        auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        button->Size(84, 30).Label(playing ? "\xE2\x96\xA0 Stop" : "\xE2\x96\xB6 Play", 11.0f).Lit(playing);
+        button->Disabled(model.position == 0);
+        button->AccessName(playing ? "Stop" : "Play");
+        button->onClick = [togglePlay] { togglePlay(false); };
+        return button;
+    };
+    // A chord box strums its shape: the request only says which strings there are.
+    const auto strum = [this](const std::vector<int>& frets) {
+        mSession.Commands().PlayScaleGuideChord(nlohmann::json::parse(mScaleGuideViewKey), frets);
+    };
+    auto play = playButton();
+
     std::vector<Ptr> cardRows = {
-        Row({FixedWidth(110, field(chordMode && settings.progression.empty() ? "Root" : "Key", key)), HGap(14),
-             Stretch(what, 2.0), HGap(14), Stretch(field("Tuning", tuning), 1.4), HGap(14),
-             FixedWidth(96, field("Capo", capo))}),
+        Row({FixedWidth(110, field(rootKey ? "Root" : "Key", key)), HGap(14), Stretch(what, 2.0), HGap(14),
+             Stretch(field("Tuning", tuning), 1.4), HGap(14), FixedWidth(96, field("Capo", capo))}),
         VGap(12)};
     const auto viewRow =
         Row({FixedWidth(44, Middle(Label(mTheme, "View"))), Middle(labels), HGap(18),
              FixedWidth(chordMode ? 54.0f : 70.0f, Middle(Label(mTheme, chordMode ? "Shape" : "Position"))),
              Middle(positions), Stretch()});
-    const auto toggles = Row({Stretch(), Middle(lefty), HGap(12), Middle(listen)});
+    const auto toggles = Row({Stretch(), Middle(lefty), HGap(12), Middle(listen), HGap(8), Middle(play)});
 
     // At the compact size the view controls and the toggles take a row each, as the web UI's wrap.
     if (width >= 1000.0f)
@@ -460,6 +533,46 @@ Ptr Shell::BuildScaleGuide(float width)
         cardRows.push_back(viewRow);
         cardRows.push_back(VGap(10));
         cardRows.push_back(toggles);
+    }
+
+    // ── An arpeggio's style and strings ──
+    if (arpeggioMode)
+    {
+        const std::vector<std::string> styleIds{"sweep", "two", "box"};
+        auto style =
+            std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Sweep", "2 per string", "Box"}, 84.0f);
+        style->AccessName("Style");
+        style->Select(settings.arpeggioStyle == "two" ? 1 : settings.arpeggioStyle == "box" ? 2 : 0);
+        style->onSelect = [this, styleIds](int index) {
+            ChangeScaleGuide([&](sg::Settings& s) { s.arpeggioStyle = styleIds[static_cast<std::size_t>(index)]; });
+        };
+        std::vector<Ptr> row{FixedWidth(44, Middle(Label(mTheme, "Style"))), Middle(style)};
+
+        // A box takes every string under the hand, so there is nothing to choose.
+        if (settings.arpeggioStyle != "box")
+        {
+            const auto choices = view["arpeggio"].value("stringChoices", std::vector<int>{});
+            const int chosen = view["arpeggio"].value("strings", 0);
+            std::vector<std::string> names;
+
+            for (const int choice : choices)
+            {
+                names.push_back(std::to_string(choice));
+            }
+
+            auto strings = std::make_shared<Segmented>(mTheme, names, 36.0f);
+            strings->AccessName("Strings");
+            strings->Select(static_cast<int>(std::find(choices.begin(), choices.end(), chosen) - choices.begin()));
+            strings->onSelect = [this, choices](int index) {
+                ChangeScaleGuide(
+                    [&](sg::Settings& s) { s.arpeggioStrings = choices[static_cast<std::size_t>(index)]; });
+            };
+            row.insert(row.end(), {HGap(18), FixedWidth(60, Middle(Label(mTheme, "Strings"))), Middle(strings)});
+        }
+
+        row.push_back(Stretch());
+        cardRows.push_back(VGap(12));
+        cardRows.push_back(Row(row));
     }
 
     // ── A progression's steps ──
@@ -505,6 +618,7 @@ Ptr Shell::BuildScaleGuide(float width)
     // ── The neck ──
     auto neck = std::make_shared<ScaleNeck>(mTheme, model, settings.labels, settings.leftHanded);
     mScaleNeck = neck;
+    neck->onNote = [this](int midi) { mSession.Commands().PlayScaleGuideNote(midi); };
     // LISTEN follows notes in Scales mode only; a chord is matched, not followed.
     neck->SetHeard(chordMode ? std::vector<int>{} : ScaleGuideHeard());
 
@@ -524,7 +638,11 @@ Ptr Shell::BuildScaleGuide(float width)
                                                           Numeral(c.value("numeral", "")), c.value("name", ""),
                                                           index == progression.value("step", 0));
                 const auto frets = ReadGuideShape(c["shape"]).frets;
-                box->onClick = [this, index, frets] { ScaleGuideStep(index, frets); };
+                box->onClick = [this, index, frets, strum] {
+                    strum(frets);
+                    ScaleGuideStep(index, frets);
+                };
+                box->AccessName(c.value("name", "") + ": go to it and hear it strummed");
                 boxes.push_back(box);
                 boxes.push_back(HGap(8));
             }
@@ -540,11 +658,55 @@ Ptr Shell::BuildScaleGuide(float width)
             auto box = std::make_shared<ChordBoxView>(
                 mTheme, shape, model.openMidi, model.capo, model.rootPitchClass, settings.leftHanded,
                 shape.caged.empty() ? "" : shape.caged + " shape", "", static_cast<int>(i + 1) == model.position);
-            box->onClick = [this, i] {
+            box->onClick = [this, i, strum, frets = shape.frets] {
                 ChangeScaleGuide([i](sg::Settings& s) { s.position = static_cast<int>(i + 1); });
+                strum(frets);
             };
+            box->AccessName((shape.caged.empty() ? "Shape " + std::to_string(i + 1) : shape.caged + " shape") +
+                            ": show it and hear it strummed");
             boxes.push_back(box);
             boxes.push_back(HGap(8));
+        }
+    }
+
+    // ── An arpeggio's run as tab, or why there is none ──
+    const auto face = [this](Ptr content) {
+        return Rounded(mTheme.Pick(el::rgba(255, 255, 255, 7), el::rgba(20, 24, 34, 6)), 12.0f, std::move(content));
+    };
+    Ptr tabCard;
+
+    if (arpeggioMode || model.Run() != nullptr)
+    {
+        const auto note = [&](const std::string& text) {
+            auto p = std::make_shared<Paragraph>(mTheme, text, std::max(200.0f, width - 40.0f), 12.0f);
+            p->Colour(mTheme.TextMuted());
+            return p;
+        };
+        const auto* run = model.Run();
+
+        if (run != nullptr)
+        {
+            auto name = std::make_shared<Text>(mTheme, run->name, 15.0f, Weight::SemiBold);
+            name->Colour(mTheme.Text());
+            auto frets =
+                std::make_shared<Text>(mTheme,
+                                       run->fretFrom == run->fretTo ? "Fret " + std::to_string(run->fretFrom)
+                                                                    : "Frets " + std::to_string(run->fretFrom) +
+                                                                          "\xE2\x80\x93" + std::to_string(run->fretTo),
+                                       13.0f);
+            frets->Colour(mTheme.TextSecondary());
+            tabCard =
+                face(Pad(16, 10, 16, 10,
+                         Col({FixedHeight(30, Row({Middle(FixedWidth(180, name)), HGap(10),
+                                                   Middle(FixedWidth(120, frets)), Stretch(), Middle(playButton())})),
+                              VGap(4), HScroll(std::make_shared<RunTabView>(mTheme, *run, model.stringNames)), VGap(4),
+                              arpeggioMode ? Ptr(note(view["arpeggio"].value("advice", ""))) : Ptr(VGap(0))})));
+        }
+        else
+        {
+            const auto text = model.runs.empty() ? view["arpeggio"].value("empty", "")
+                                                 : "Pick a position to see one run, with its fingers and pick strokes.";
+            tabCard = face(Pad(16, 10, 16, 10, note(text)));
         }
     }
 
@@ -557,7 +719,7 @@ Ptr Shell::BuildScaleGuide(float width)
         notes += (notes.empty() ? "" : "  ") + t.value("name", "");
     }
 
-    if (!chordMode && !tones.empty())
+    if (!chordInfo && !tones.empty())
     {
         notes += "  " + tones[0].value("name", "");
     }
@@ -566,7 +728,7 @@ Ptr Shell::BuildScaleGuide(float width)
         std::make_shared<Text>(mTheme, tones.empty() ? "" : tones[0].value("name", ""), 26.0f, Weight::SemiBold);
     badge->Colour(mTheme.Accent()).Alignment(Text::Align::Centre);
     auto summaryName = std::make_shared<Text>(mTheme,
-                                              chordMode ? view["chord"].value("name", "") + " \xC2\xB7 " +
+                                              chordInfo ? view["chord"].value("name", "") + " \xC2\xB7 " +
                                                               view["chord"].value("quality", "")
                                                         : view["scale"].value("name", ""),
                                               19.0f);
@@ -575,9 +737,9 @@ Ptr Shell::BuildScaleGuide(float width)
     summaryNotes->Colour(mTheme.TextSecondary());
 
     std::vector<Ptr> pills;
-    std::string middleLabel = chordMode ? "Formula" : "Chords";
+    std::string middleLabel = chordInfo ? "Formula" : "Chords";
 
-    if (chordMode)
+    if (chordInfo)
     {
         auto formula = std::make_shared<Text>(mTheme, view["chord"].value("formula", ""), 15.0f, Weight::Medium);
         formula->Colour(mTheme.Text());
@@ -612,15 +774,28 @@ Ptr Shell::BuildScaleGuide(float width)
         }
     }
 
-    auto summary = Row({FixedWidth(56, Middle(FixedHeight(40, badge))), HGap(12),
-                        Stretch(Col({Label(mTheme, chordMode ? "Chord" : "Scale"), VGap(2),
-                                     FixedHeight(26, summaryName), FixedHeight(20, summaryNotes)})),
-                        HGap(18), Stretch(Col({Label(mTheme, middleLabel), VGap(6), Row(pills)}), 1.6)});
+    // Padded so a scale's face, lit on hover, has room round the text.
+    Ptr identity = Pad(8, 4, 8, 4,
+                       Row({FixedWidth(56, Middle(FixedHeight(40, badge))), HGap(12),
+                            Stretch(Col({Label(mTheme, arpeggioMode ? "Arpeggio"
+                                                       : chordMode  ? "Chord"
+                                                                    : "Scale"),
+                                         VGap(2), FixedHeight(26, summaryName), FixedHeight(20, summaryNotes)}))}));
+
+    // A scale's name and notes play it, one octave up and back.
+    if (!chordMode && !arpeggioMode && !tones.empty())
+    {
+        auto area = std::make_shared<PlayArea>(mTheme, playing);
+        area->AccessName("Hear the scale, one octave up and back");
+        area->onClick = [togglePlay] { togglePlay(true); };
+        identity = Over(area, identity);
+    }
+
+    auto summary =
+        Row({Stretch(identity), HGap(18), Stretch(Col({Label(mTheme, middleLabel), VGap(6), Row(pills)}), 1.6)});
 
     // The cards' faces only: a Rounded draws, it never takes a click from what is on it.
-    const auto card = [this](Ptr content) {
-        return Rounded(mTheme.Pick(el::rgba(255, 255, 255, 7), el::rgba(20, 24, 34, 6)), 12.0f, std::move(content));
-    };
+    const auto& card = face;
     std::vector<Ptr> page = {
         Row({Middle(mode), HGap(12), Stretch(Middle(FixedHeight(20, live))), HGap(12), Middle(FixedHeight(18, title))}),
         VGap(12), card(Pad(16, 14, 16, 14, Col(cardRows))), VGap(10),
@@ -631,6 +806,12 @@ Ptr Shell::BuildScaleGuide(float width)
     {
         page.push_back(VGap(10));
         page.push_back(HScroll(Row(boxes)));
+    }
+
+    if (tabCard)
+    {
+        page.push_back(VGap(10));
+        page.push_back(tabCard);
     }
 
     page.push_back(VGap(12));
@@ -726,8 +907,9 @@ void Shell::SyncScaleGuideListen()
         const auto tone =
             std::find_if(tones.begin(), tones.end(), [pc](const auto& t) { return t.value("pitchClass", -1) == pc; });
         setReadout(tone != tones.end()
-                       ? tone->value("name", "") + "  " + tone->value("interval", "") + " \xC2\xB7 of the scale"
-                       : tuner.noteName.substr(0, tuner.noteName.find('/')) + "  outside the scale");
+                       ? tone->value("name", "") + "  " + tone->value("interval", "") + " \xC2\xB7 of the " +
+                             settings.mode
+                       : tuner.noteName.substr(0, tuner.noteName.find('/')) + "  outside the " + settings.mode);
         return;
     }
 

@@ -215,6 +215,15 @@ class UiCommands
     void SetMetronomePan(double pan);
     void SetMetronomeBeatPattern(const std::string& pattern);
     void SetMetronomeSubdivision(const std::string& subdivision);
+    /// Sounds a Scale Guide view request's chosen position through the preset.
+    void PlayScaleGuide(const nlohmann::json& request);
+    /// A short example of the request's scale, one octave up and back.
+    void PlayScaleExample(const nlohmann::json& request);
+    /// A chord shape strummed: one fret per string, -1 for a string not played.
+    void PlayScaleGuideChord(const nlohmann::json& request, const std::vector<int>& frets);
+    /// One note, as a click on the neck.
+    void PlayScaleGuideNote(int midi);
+    void StopScaleGuide();
     void PreviewDemoClip(const std::string& clipId, bool repeat);
     void PreviewRiff(const std::string& takeId);
     void StopDemo();

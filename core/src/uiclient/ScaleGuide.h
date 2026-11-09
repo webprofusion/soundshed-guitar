@@ -24,19 +24,22 @@ inline constexpr int kMaxProgressionChords = 16;
 
 struct Settings
 {
-    std::string mode = "scale"; ///< "scale" or "chord"
+    std::string mode = "scale"; ///< "scale", "chord" or "arpeggio"
     int key = 4;
     std::string scale = "minpent";
     std::string chord = "maj";
     /// "" a single chord, "b:<id>" a built-in progression, "u:<id>" one of the player's own.
     std::string progression;
     std::string tuning = "std";
-    std::string labels = "name"; ///< "name", "interval", "degree" or "none"
+    /// "name", "interval", "degree", "none", or an arpeggio run's "order" or "finger".
+    std::string labels = "name";
     int position = 0;
     int capo = 0;
     bool leftHanded = false;
     bool listen = false;
-    std::string match = "normal"; ///< "easy", "normal" or "strict"
+    std::string match = "normal";        ///< "easy", "normal" or "strict"
+    std::string arpeggioStyle = "sweep"; ///< "sweep", "two" or "box"
+    int arpeggioStrings = 0;             ///< from the highest string; 0 for the default
 };
 
 /// The stored choices, anything missing or malformed taking its default.

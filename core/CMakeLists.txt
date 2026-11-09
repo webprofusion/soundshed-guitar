@@ -768,6 +768,10 @@ set(GUITARFX_CORE_SOURCES
     src/music/Fretboard.h
     src/music/Fretboard.cpp
     src/music/ChordShapes.cpp
+    src/music/Arpeggios.h
+    src/music/Arpeggios.cpp
+    src/music/ScalePlayback.h
+    src/music/ScalePlayback.cpp
     src/music/ScaleGuideView.h
     src/music/ScaleGuideView.cpp
 

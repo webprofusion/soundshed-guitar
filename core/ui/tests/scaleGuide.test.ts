@@ -12,7 +12,7 @@ vi.mock("../ts/appSettingsStore.js", () => ({
 }));
 
 import { boxBaseFret, renderChordBoxSvg } from "../ts/scaleGuide/chordBox";
-import { dotLabel, noteX, renderNeckSvg } from "../ts/scaleGuide/neck";
+import { dotLabel, neckDrawingWidth, noteMarkersSvg, noteX, renderNeckSvg } from "../ts/scaleGuide/neck";
 import { onScaleGuideCatalog, onScaleGuideReading, onScaleGuideView, renderScaleGuidePanel, resetScaleGuideForTests } from "../ts/scaleGuide/panel";
 import { normalizeProgressions, PROGRESSIONS_SETTING, romanToken } from "../ts/scaleGuide/progressions";
 import { DEFAULT_SETTINGS, normalizeSettings, SCALE_GUIDE_SETTING } from "../ts/scaleGuide/state";
@@ -78,6 +78,29 @@ describe("scale guide neck", () => {
     const x = noteX(3, 12);
     expect(right).toContain(`cx="${Math.round(x * 10) / 10}"`);
     expect(left).toContain(`cx="${Math.round((1000 - x) * 10) / 10}"`);
+  });
+
+  it("spreads the frets to fill a wide space and keeps the dots their size", () => {
+    const narrow = renderNeckSvg(ukuleleView(), { labels: "none", leftHanded: false });
+    const wide = renderNeckSvg(ukuleleView(), { labels: "none", leftHanded: false, width: 2400 });
+    const height = /viewBox="0 0 1000 ([0-9]+)"/.exec(narrow)?.[1];
+    expect(wide).toContain(`viewBox="0 0 2400 ${height}"`);
+    expect(wide).toContain('r="13"');
+    expect(wide).toContain(`cx="${Math.round(noteX(3, 12, 2400) * 10) / 10}"`);
+  });
+
+  it("draws no narrower than it can hold, and mirrors at any width", () => {
+    expect(neckDrawingWidth()).toBe(1000);
+    expect(neckDrawingWidth(640)).toBe(1000);
+    expect(neckDrawingWidth(1501.4)).toBe(1501);
+    const left = renderNeckSvg(ukuleleView(), { labels: "none", leftHanded: true, width: 2400 });
+    expect(left).toContain(`cx="${Math.round((2400 - noteX(3, 12, 2400)) * 10) / 10}"`);
+  });
+
+  it("puts LISTEN's rings on the same frets as the drawn neck", () => {
+    const options = { labels: "none", leftHanded: false, width: 2400 } as const;
+    const rings = noteMarkersSvg(ukuleleView(), options, ukuleleView().strings[0].openMidi + 3, "sg-miss");
+    expect(rings).toContain(`cx="${Math.round(noteX(3, 12, 2400) * 10) / 10}"`);
   });
 
   it("marks a chord shape's muted strings and leaves their open dots out", () => {

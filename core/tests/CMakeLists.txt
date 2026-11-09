@@ -1,6 +1,8 @@
 # Tests for SoundshedGuitarCore
 
 set(TEST_SOURCES
+    ArpeggioTests.cpp
+    ScalePlaybackTests.cpp
     AtomicFileWriteTests.cpp
     AudioDeviceRequestTests.cpp
     AutoArpEffectTests.cpp

@@ -34,6 +34,11 @@ class DemoPreviewService
     /// seamlessly until stopped, rather than completing.
     void StartPreviewFromBytes(const std::vector<std::uint8_t>& bytes, const std::string& id, const std::string& title,
                                bool loop);
+    /// Plays a mono signal rendered at `sampleRate` into the input once. With `announce` the UI hears
+    /// that it started and finished, as for any preview; without, it is a sound too short to report,
+    /// such as one note. Whatever was playing gives way, its last moment fading under the new start.
+    void StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
+                                 const std::string& title, bool announce);
     void StopPreview();
     void OnIdle();
     [[nodiscard]] bool IsPreviewActive() const;
@@ -58,6 +63,7 @@ class DemoPreviewService
         double sampleRate = 0.0;
         int channels = 0;
         std::vector<std::vector<float>> channelSamples;
+        bool announce = true;
     };
 
     /// The slice of the clip to play, whether to repeat it, and the wrap

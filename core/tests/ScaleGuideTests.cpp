@@ -593,7 +593,7 @@ void TestMessages()
     guitarfx::MessageHandlerRegistry registry;
     std::vector<nlohmann::json> sent;
     guitarfx::RegisterScaleGuideMessages(
-        registry, [&sent](const std::string& json) { sent.push_back(nlohmann::json::parse(json)); });
+        registry, [&sent](const std::string& json) { sent.push_back(nlohmann::json::parse(json)); }, {});
 
     Expect(registry.Dispatch("scaleGuide", {{"type", "scaleGuide"}, {"action", "catalog"}}), "scaleGuide is handled");
     Expect(sent.size() == 1 && sent[0]["type"] == "scaleGuideCatalog" && sent[0]["scales"].size() > 40,
@@ -615,6 +615,29 @@ void TestMessages()
 
 /// The native UIs' half (uiclient/ScaleGuide.h), held to the web UI's state.ts, progressions.ts and
 /// listen.ts: the same settings, the same request, the same LISTEN rules.
+void TestUiClientArpeggio()
+{
+    namespace sg = guitarfx::uiclient::scaleguide;
+    const auto stored = nlohmann::json{
+        {"mode", "arpeggio"}, {"labels", "order"}, {"arpeggioStyle", "two"}, {"arpeggioStrings", 4}, {"chord", "m7"}};
+    const auto settings = sg::ParseSettings(stored);
+    Expect(settings.mode == "arpeggio" && settings.labels == "order", "the native UIs read the Arpeggios tab");
+    Expect(settings.arpeggioStyle == "two" && settings.arpeggioStrings == 4, "its style and strings");
+
+    const auto again = sg::ParseSettings(sg::SettingsJson(settings));
+    Expect(again.arpeggioStyle == "two" && again.arpeggioStrings == 4, "saving keeps the web UI's choices");
+
+    const auto request = sg::ViewRequest(settings, {}, 0);
+    Expect(request["mode"] == "arpeggio" && request["arpeggioStyle"] == "two" && request["arpeggioStrings"] == 4,
+           "the request carries them");
+
+    const auto view = music::BuildScaleGuideView(music::ParseScaleGuideRequest(request));
+    Expect(view["arpeggio"]["strings"] == 4 && !view["arpeggio"]["runs"].empty(), "and the engine answers it");
+
+    const auto bad = sg::ParseSettings({{"arpeggioStyle", "nonsense"}, {"arpeggioStrings", 99}});
+    Expect(bad.arpeggioStyle == "sweep" && bad.arpeggioStrings == 8, "bad values are made safe");
+}
+
 void TestUiClient()
 {
     namespace sg = guitarfx::uiclient::scaleguide;
@@ -744,6 +767,7 @@ int main(int argc, char** argv)
     TestView();
     TestMessages();
     TestUiClient();
+    TestUiClientArpeggio();
 
     if (gFailures > 0)
     {

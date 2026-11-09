@@ -5,7 +5,7 @@
 
 import { getAppSetting, updateAppSetting } from "../appSettingsStore.js";
 import type { AppSettingValue } from "../types.js";
-import type { ScaleGuideLabels, ScaleGuideMode, ScaleGuideSettings } from "./types.js";
+import type { ArpeggioStyle, ScaleGuideLabels, ScaleGuideMode, ScaleGuideSettings } from "./types.js";
 
 export const SCALE_GUIDE_SETTING = "scaleGuide.view";
 export const MAX_CAPO = 12;
@@ -23,10 +23,14 @@ export const DEFAULT_SETTINGS: Readonly<ScaleGuideSettings> = {
   leftHanded: false,
   listen: false,
   match: "normal",
+  arpeggioStyle: "sweep",
+  arpeggioStrings: 0,
 };
 
-const LABELS: readonly ScaleGuideLabels[] = ["name", "interval", "degree", "none"];
-const MODES: readonly ScaleGuideMode[] = ["scale", "chord"];
+const LABELS: readonly ScaleGuideLabels[] = ["name", "interval", "degree", "none", "order", "finger"];
+const MODES: readonly ScaleGuideMode[] = ["scale", "chord", "arpeggio"];
+const ARPEGGIO_STYLES: readonly ArpeggioStyle[] = ["sweep", "two", "box"];
+const MAX_STRINGS = 8;
 const MATCHES: readonly ScaleGuideSettings["match"][] = ["easy", "normal", "strict"];
 const ID = /^[\w-]{1,32}$/;
 const PROGRESSION = /^[bu]:[\w-]{1,32}$/;
@@ -56,6 +60,8 @@ export function normalizeSettings(value: unknown): ScaleGuideSettings {
     leftHanded: typeof stored.leftHanded === "boolean" ? stored.leftHanded : defaults.leftHanded,
     listen: typeof stored.listen === "boolean" ? stored.listen : defaults.listen,
     match: MATCHES.includes(stored.match as ScaleGuideSettings["match"]) ? (stored.match as ScaleGuideSettings["match"]) : defaults.match,
+    arpeggioStyle: ARPEGGIO_STYLES.includes(stored.arpeggioStyle as ArpeggioStyle) ? (stored.arpeggioStyle as ArpeggioStyle) : defaults.arpeggioStyle,
+    arpeggioStrings: wholeNumber(stored.arpeggioStrings, defaults.arpeggioStrings, 0, MAX_STRINGS),
   };
 }
 
@@ -87,6 +93,8 @@ export function viewRequest(settings: ScaleGuideSettings, progression: Progressi
     tuning: settings.tuning,
     capo: settings.capo,
     position: settings.position,
+    arpeggioStyle: settings.arpeggioStyle,
+    arpeggioStrings: settings.arpeggioStrings,
     ...progression,
   };
 }

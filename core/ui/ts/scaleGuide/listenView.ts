@@ -56,9 +56,9 @@ export function setReadout(readout: HTMLElement, html: string, state: "idle" | "
 
 export function noteReadout(view: ScaleGuideView, midi: number): { html: string; state: "in" | "out" } {
   const note = describeNote(view, midi);
-  const what = view.mode === "chord" ? "chord" : "scale";
+  const what = view.mode;
   return note.inView
-    ? { html: `<b>${escapeHtml(note.name)}</b><span>${escapeHtml(note.interval)} · of the ${what}</span>`, state: "in" }
+    ? { html: `<b>${escapeHtml(note.name)}</b><span>${escapeHtml(note.interval)} of the ${what}</span>`, state: "in" }
     : { html: `<b>${escapeHtml(note.name)}</b><span>outside the ${what}</span>`, state: "out" };
 }
 

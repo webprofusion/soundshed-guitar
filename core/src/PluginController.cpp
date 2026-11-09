@@ -82,7 +82,13 @@ PluginController::PluginController(IPluginHost& host) : mHost(host)
     mPresetLevelMeter->RegisterMessageHandlers(mMessageHandlers);
     mTuner = std::make_unique<TunerService>(sendToUI, mPresetMixer, mDSPMutex);
     mTuner->RegisterMessageHandlers(mMessageHandlers);
-    RegisterScaleGuideMessages(mMessageHandlers, sendToUI);
+    RegisterScaleGuideMessages(
+        mMessageHandlers, sendToUI,
+        {[this] { return mHost.GetSampleRate(); }, [this] { return GetEffectiveTempoBpm(); },
+         [this](std::vector<float> samples, double sampleRate, bool announce) {
+             mDemoPreview->StartPreviewFromSamples(std::move(samples), sampleRate, "scale-guide", "Scale Guide", announce);
+         },
+         [this] { HandleStopDemoRequest(); }});
     mGateLearn = std::make_unique<GateLearnService>(sendToUI, mPresetMixer, mDSPMutex, [this]() {
         return mActivePresetId.empty() ? std::string("p1") : mActivePresetId;
     });

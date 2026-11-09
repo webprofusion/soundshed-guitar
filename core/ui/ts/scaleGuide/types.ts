@@ -4,8 +4,11 @@
  * does no music theory of its own.
  */
 
-export type ScaleGuideMode = "scale" | "chord";
-export type ScaleGuideLabels = "name" | "interval" | "degree" | "none";
+export type ScaleGuideMode = "scale" | "chord" | "arpeggio";
+/** `order` and `finger` belong to an arpeggio's run; other views show notes in their place. */
+export type ScaleGuideLabels = "name" | "interval" | "degree" | "none" | "order" | "finger";
+export type ArpeggioStyle = "sweep" | "two" | "box";
+export type PickStroke = "down" | "up" | "hammer" | "pull";
 
 export interface ScaleGuideCatalog {
   keys: string[];
@@ -24,6 +27,33 @@ export interface ScaleGuideDot {
   degree: number;
   root: boolean;
   inPosition: boolean;
+  /** Where this note comes in the chosen arpeggio run, from 1, and the finger on it (0 open). */
+  order?: number;
+  finger?: number;
+}
+
+export interface ArpeggioNote {
+  string: number;
+  fret: number;
+  tone: number;
+  name: string;
+  interval: string;
+  root: boolean;
+  finger: number;
+}
+
+/** One way through a position, an arpeggio's or a scale's: its notes lowest first, its steps up them and back. */
+export interface GuideRun {
+  /** "Root position", "From the ♭3", "Position 2". */
+  name: string;
+  /** The interval it starts on. */
+  start: string;
+  fretFrom: number;
+  fretTo: number;
+  fromString: number;
+  toString: number;
+  notes: ArpeggioNote[];
+  steps: Array<{ note: number; stroke: PickStroke }>;
 }
 
 export interface ScaleGuideBarre {
@@ -59,6 +89,8 @@ export interface ScaleGuideTone {
 }
 
 export interface ScaleGuideView {
+  /** The chosen arpeggio run or scale position, as tab and Play read it. */
+  run?: GuideRun;
   mode: ScaleGuideMode;
   key: number;
   instrument: string;
@@ -81,6 +113,16 @@ export interface ScaleGuideView {
     diatonic: Array<{ name: string; numeral: string; quality: string; rootPitchClass: number }>;
   };
   chord?: { id: string; name: string; quality: string; formula: string };
+  arpeggio?: {
+    style: ArpeggioStyle;
+    strings: number;
+    stringChoices: number[];
+    /** How the style is played, for the quick reference. */
+    advice: string;
+    /** Why there are no runs, when there are none. */
+    empty: string;
+    runs: GuideRun[];
+  };
   progression?: { id: string; name: string; step: number; next: string; chords: ScaleGuideProgressionChord[] };
 }
 
@@ -94,7 +136,7 @@ export interface ScaleGuideSettings {
   progression: string;
   tuning: string;
   labels: ScaleGuideLabels;
-  /** 0 is the whole neck (all tones); 1 … n a position or shape. */
+  /** 0 is the whole neck (all tones); 1 … n a position, shape or arpeggio run. */
   position: number;
   capo: number;
   leftHanded: boolean;
@@ -102,4 +144,7 @@ export interface ScaleGuideSettings {
   listen: boolean;
   /** How closely a strum has to match its chord. */
   match: "easy" | "normal" | "strict";
+  arpeggioStyle: ArpeggioStyle;
+  /** How many strings an arpeggio plays, from the highest; 0 for the default. */
+  arpeggioStrings: number;
 }
